@@ -623,20 +623,19 @@ pub fn call_exported_func(
 ) -> Array[Value] raise RuntimeError {
   // Find the export
   fn find_export(exports : Array[Export], target : String) -> Export? {
-    fn go(idx : Int) -> Export? {
-      if idx >= exports.length() {
-        None
-      } else {
-        let exp = exports[idx]
-        if exp.name == target {
-          Some(exp)
+    loop 0 {
+      idx =>
+        if idx >= exports.length() {
+          None
         } else {
-          go(idx + 1)
+          let exp = exports[idx]
+          if exp.name == target {
+            Some(exp)
+          } else {
+            continue idx + 1
+          }
         }
-      }
     }
-
-    go(0)
   }
 
   match find_export(instance.exports, name) {

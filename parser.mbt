@@ -73,70 +73,70 @@ fn Parser::read_bytes(self : Parser, n : Int) -> Bytes raise ParserError {
 ///|
 /// Decode unsigned LEB128
 fn Parser::read_leb128_u32(self : Parser) -> Int raise ParserError {
-  fn go(result : Int, shift : Int) -> Int raise ParserError {
-    if shift > 28 {
-      raise LEB128TooLarge
-    }
-    let byte = self.read_byte()
-    let new_result = result | ((byte & 0x7F) << shift)
-    if (byte & 0x80) == 0 {
-      new_result
-    } else {
-      go(new_result, shift + 7)
+  loop (0, 0) {
+    (result, shift) => {
+      if shift > 28 {
+        raise LEB128TooLarge
+      }
+      let byte = self.read_byte()
+      let new_result = result | ((byte & 0x7F) << shift)
+      if (byte & 0x80) == 0 {
+        new_result
+      } else {
+        continue (new_result, shift + 7)
+      }
     }
   }
-
-  go(0, 0)
 }
 
 ///|
 /// Decode signed LEB128
 fn Parser::read_leb128_i32(self : Parser) -> Int raise ParserError {
-  fn go(result : Int, shift : Int) -> Int raise ParserError {
-    if shift > 28 {
-      raise LEB128TooLarge
-    }
-    let byte = self.read_byte()
-    let new_result = result | ((byte & 0x7F) << shift)
-    let new_shift = shift + 7
-    if (byte & 0x80) == 0 {
-      // Sign extend if needed
-      if new_shift < 32 && (byte & 0x40) != 0 {
-        new_result | (-1 << new_shift)
-      } else {
-        new_result
+  loop (0, 0) {
+    (result, shift) => {
+      if shift > 28 {
+        raise LEB128TooLarge
       }
-    } else {
-      go(new_result, new_shift)
+      let byte = self.read_byte()
+      let new_result = result | ((byte & 0x7F) << shift)
+      let new_shift = shift + 7
+      if (byte & 0x80) == 0 {
+        // Sign extend if needed
+        if new_shift < 32 && (byte & 0x40) != 0 {
+          new_result | (-1 << new_shift)
+        } else {
+          new_result
+        }
+      } else {
+        continue (new_result, new_shift)
+      }
     }
   }
-
-  go(0, 0)
 }
 
 ///|
 /// Decode signed LEB128 i64
 fn Parser::read_leb128_i64(self : Parser) -> Int64 raise ParserError {
-  fn go(result : Int64, shift : Int) -> Int64 raise ParserError {
-    if shift > 63 {
-      raise LEB128TooLarge
-    }
-    let byte = self.read_byte()
-    let new_result = result | (byte.land(0x7F).to_int64() << shift)
-    let new_shift = shift + 7
-    if (byte & 0x80) == 0 {
-      // Sign extend if needed
-      if new_shift < 64 && (byte & 0x40) != 0 {
-        new_result | (-1L << new_shift)
-      } else {
-        new_result
+  loop (0L, 0) {
+    (result, shift) => {
+      if shift > 63 {
+        raise LEB128TooLarge
       }
-    } else {
-      go(new_result, new_shift)
+      let byte = self.read_byte()
+      let new_result = result | (byte.land(0x7F).to_int64() << shift)
+      let new_shift = shift + 7
+      if (byte & 0x80) == 0 {
+        // Sign extend if needed
+        if new_shift < 64 && (byte & 0x40) != 0 {
+          new_result | (-1L << new_shift)
+        } else {
+          new_result
+        }
+      } else {
+        continue (new_result, new_shift)
+      }
     }
   }
-
-  go(0L, 0)
 }
 
 // ============================================================
@@ -295,20 +295,18 @@ fn Parser::read_global_type(self : Parser) -> GlobalType raise ParserError {
 
 ///|
 fn Parser::read_expr(self : Parser) -> Array[Instruction] raise ParserError {
-  fn go(
-    instructions : Array[Instruction],
-  ) -> Array[Instruction] raise ParserError {
-    let opcode = self.read_byte()
-    if opcode == 0x0B {
-      // end
-      instructions
-    } else {
-      instructions.push(self.read_instruction(opcode))
-      go(instructions)
+  loop [] {
+    instructions => {
+      let opcode = self.read_byte()
+      if opcode == 0x0B {
+        // end
+        instructions
+      } else {
+        instructions.push(self.read_instruction(opcode))
+        continue instructions
+      }
     }
   }
-
-  go([])
 }
 
 ///|
