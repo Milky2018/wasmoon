@@ -74,10 +74,21 @@
         if condition {
           instructions  // 直接返回（自动跳出循环）
         } else {
-          continue instructions.push(item)  // 继续循环
+          instructions.push(item)      // push 返回 Unit
+          continue instructions         // 继续循环
         }
     }
   }
+  ```
+
+- ⚠️ **重要**: `Array::push()` 返回 `Unit`，不能直接用于 `continue`
+  ```moonbit
+  // ❌ 错误
+  continue instructions.push(item)
+
+  // ✅ 正确
+  instructions.push(item)
+  continue instructions
   ```
 
 - **Loop 语法规则**:
