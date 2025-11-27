@@ -54,6 +54,50 @@
 - ❌ **错误做法**: `let _result = func()`
 - ✅ **正确做法**: `func() |> ignore`
 
+#### 7. 循环的正确写法
+- ❌ **错误做法**: 使用递归辅助函数 `fn go()`
+  ```moonbit
+  fn read_expr(self : Parser) -> Array[Instruction] {
+    fn go(instructions : Array[Instruction]) -> Array[Instruction] {
+      if condition { instructions }
+      else { go(instructions.push(item)) }  // 递归调用
+    }
+    go([])
+  }
+  ```
+
+- ✅ **正确做法**: 使用 MoonBit 的函数式 `loop`
+  ```moonbit
+  fn read_expr(self : Parser) -> Array[Instruction] {
+    loop [] {
+      instructions =>
+        if condition {
+          instructions  // 直接返回（自动跳出循环）
+        } else {
+          continue instructions.push(item)  // 继续循环
+        }
+    }
+  }
+  ```
+
+- **Loop 语法规则**:
+  1. `loop <初始值> { 模式 => 表达式 }`
+  2. 不使用 `continue` 时，表达式的值就是循环返回值（自动跳出）
+  3. 使用 `continue <新值>` 进入下一轮迭代
+  4. 不需要 `break`
+
+- **示例**：阶乘计算
+  ```moonbit
+  fn factorial(n : Int) -> Int {
+    loop (n, 1) {
+      (0, result) => result                      // 返回并跳出
+      (i, result) => continue (i - 1, result * i)  // 继续
+    }
+  }
+  ```
+
+- **参考**: [MoonBit Course Lesson 7-2](https://raw.githubusercontent.com/moonbitlang/moonbit-course/a8ad174ef2b424d843f4fe96a913564d0fe15846/course7/lec7-2.mbt.md)
+
 ---
 
 ### WebAssembly 数值运算实现
