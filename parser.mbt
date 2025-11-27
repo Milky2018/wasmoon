@@ -192,21 +192,36 @@ fn Parser::read_i64(self : Parser) -> Int64 raise ParserError {
 }
 
 ///|
-/// Read f32
+/// Read f32 (IEEE 754, little-endian)
 fn Parser::read_f32(self : Parser) -> Float raise ParserError {
-  let _bytes = self.read_bytes(4)
-  // TODO: Convert bytes to f32 using proper IEEE 754 decoding
-  // For now, return a placeholder
-  0.0
+  let b0 = self.read_byte()
+  let b1 = self.read_byte()
+  let b2 = self.read_byte()
+  let b3 = self.read_byte()
+  let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+  Int::reinterpret_as_float(bits)
 }
 
 ///|
-/// Read f64
+/// Read f64 (IEEE 754, little-endian)
 fn Parser::read_f64(self : Parser) -> Double raise ParserError {
-  let _bytes = self.read_bytes(8)
-  // TODO: Convert bytes to f64 using proper IEEE 754 decoding
-  // For now, return a placeholder
-  0.0
+  let b0 = self.read_byte().to_int64()
+  let b1 = self.read_byte().to_int64()
+  let b2 = self.read_byte().to_int64()
+  let b3 = self.read_byte().to_int64()
+  let b4 = self.read_byte().to_int64()
+  let b5 = self.read_byte().to_int64()
+  let b6 = self.read_byte().to_int64()
+  let b7 = self.read_byte().to_int64()
+  let bits = b0 |
+    (b1 << 8) |
+    (b2 << 16) |
+    (b3 << 24) |
+    (b4 << 32) |
+    (b5 << 40) |
+    (b6 << 48) |
+    (b7 << 56)
+  Int64::reinterpret_as_double(bits)
 }
 
 ///|
@@ -790,4 +805,18 @@ test "peek_byte does not consume" {
   let second = parser.peek_byte()
   let consumed = parser.read_byte()
   inspect((first, second, consumed), content="(66, 66, 66)")
+}
+
+///|
+test "f32 parsing - 1.0" {
+  // IEEE 754: 1.0f = 0x3F800000, little-endian: 00 00 80 3F
+  let parser = Parser::new(b"\x00\x00\x80\x3F")
+  inspect(parser.read_f32(), content="1")
+}
+
+///|
+test "f64 parsing - 1.0" {
+  // IEEE 754: 1.0 = 0x3FF0000000000000, little-endian: 00 00 00 00 00 00 F0 3F
+  let parser = Parser::new(b"\x00\x00\x00\x00\x00\x00\xF0\x3F")
+  inspect(parser.read_f64(), content="1")
 }
