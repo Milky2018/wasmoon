@@ -21,9 +21,10 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] LEB128 编码解码（有符号和无符号）
 - [x] 11 种 Section 解析 (Type, Import, Function, Table, Memory, Global, Export, Start, Element, Code, Data)
 - [x] 错误处理使用 `suberror`/`raise` 模式
-- [x] 递归辅助函数模式（避免 loop/break）
+- [x] 使用 MoonBit 函数式 `loop` 语法
+- [x] IEEE 754 浮点数解码 (f32/f64)
 
-**文件**: `parser.mbt` (697 行)
+**文件**: `parser.mbt` (~800 行)
 
 ### 1.3 运行时数据结构 ✅
 - [x] 操作数栈 (Stack) - 支持类型化 push/pop
@@ -48,29 +49,31 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 **文件**: `executor.mbt` (318 行)
 
 ### 1.5 测试和示例 ✅
-- [x] 4 个测试用例（全部通过）
+- [x] 16 个测试用例（全部通过）
 - [x] 示例程序展示 MVP 功能
 - [x] 简单加法函数
 - [x] 带常量的乘法加法
 - [x] 使用局部变量的复杂表达式
+- [x] i32/i64/f32/f64 数值运算测试
+- [x] Parser 单元测试（LEB128、浮点数解码）
 
-**文件**: `wasmoon_test.mbt`, `cmd/main/main.mbt`
+**文件**: `wasmoon_test.mbt`, `parser.mbt`, `cmd/main/main.mbt`
 
-**MVP 测试结果**: Total tests: 4, passed: 4, failed: 0 ✅
+**测试结果**: Total tests: 16, passed: 16, failed: 0 ✅
 
 ---
 
-## Phase 2: 核心功能扩展 🚧 计划中
+## Phase 2: 核心功能扩展 🚧 进行中
 
-### 2.1 完整的数值运算
-- [ ] i64 算术运算 (add, sub, mul, div, rem)
-- [ ] i64 比较和位运算
-- [ ] f32 浮点运算 (add, sub, mul, div, sqrt, abs, neg, ceil, floor)
-- [ ] f64 浮点运算
+### 2.1 完整的数值运算 ✅ 大部分已完成
+- [x] i64 算术运算 (add, sub, mul, div, rem)
+- [x] i64 比较和位运算
+- [x] f32 浮点运算 (add, sub, mul, div, sqrt, abs, neg, ceil, floor)
+- [x] f64 浮点运算
 - [ ] 数值转换指令 (wrap, extend, trunc, convert, reinterpret)
 - [ ] 饱和转换指令 (trunc_sat)
 
-**预估**: ~200 行代码扩展
+**状态**: 基础运算已完成，转换指令待实现
 
 ### 2.2 内存操作
 - [ ] 完整的 load 指令族 (i32.load, i64.load, f32.load, f64.load)
@@ -233,10 +236,11 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ### 开发原则
 1. **纯函数优先**: 尽可能使用纯函数和不可变数据
-2. **递归模式**: 使用递归辅助函数而非 imperative loops
+2. **函数式循环**: 使用 MoonBit 的 `loop` 语法而非递归辅助函数 `fn go()`
 3. **错误处理**: 使用 `raise`/`suberror` 模式，不使用 Result 类型
 4. **类型安全**: 充分利用 MoonBit 的类型系统
 5. **模式匹配**: 优先使用模式匹配而非条件分支
+6. **参考规范**: 遵循 ERRATA.md 中记录的最佳实践
 
 ### 代码风格
 - 遵循 MoonBit 官方代码风格
@@ -256,5 +260,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ---
 
 **最后更新**: 2025-11-27
-**当前状态**: Phase 1 (MVP) 完成 ✅
-**下一步**: Phase 2.1 (完整数值运算)
+**当前状态**: Phase 2.1 进行中 (数值运算大部分完成)
+**下一步**: Phase 2.1 剩余任务 (数值转换指令) → Phase 2.2 (内存操作)
