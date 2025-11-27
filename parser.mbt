@@ -17,6 +17,7 @@ suberror ParserError {
   UnknownOpcode(Int)
   InvalidImportKind(Int)
   InvalidExportKind(Int)
+  ParseError(String) // Generic error with message
 } derive(Show)
 
 // ============================================================
@@ -36,33 +37,62 @@ pub fn Parser::new(data : Bytes) -> Parser {
 }
 
 ///|
-/// Check if we can read n bytes
-fn Parser::can_read(self : Parser, n : Int) -> Bool {
-  self.pos + n <= self.data.length()
+/// Generic error with position info
+fn[A] Parser::error(self : Parser, msg : String) -> A raise ParserError {
+  raise ParseError("\{msg} at position \{self.pos}")
 }
 
 ///|
-/// Read a single byte
+/// Check if at end of input
+fn Parser::is_eof(self : Parser) -> Bool {
+  self.pos >= self.data.length()
+}
+
+///|
+/// Peek at the next byte without consuming
+fn Parser::peek_byte(self : Parser) -> Int raise ParserError {
+  if self.is_eof() {
+    raise UnexpectedEndOfInput
+  }
+  self.data[self.pos].to_int()
+}
+
+///|
+/// Consume and return the next byte
 fn Parser::read_byte(self : Parser) -> Int raise ParserError {
-  if not(self.can_read(1)) {
+  if self.is_eof() {
     raise UnexpectedEndOfInput
   }
   let byte = self.data[self.pos].to_int()
-  self.pos = self.pos + 1
+  self.pos += 1
   byte
+}
+
+///|
+/// Skip n bytes
+fn Parser::skip(self : Parser, n : Int) -> Unit raise ParserError {
+  if self.pos + n > self.data.length() {
+    raise UnexpectedEndOfInput
+  }
+  self.pos += n
 }
 
 ///|
 /// Read n bytes
 fn Parser::read_bytes(self : Parser, n : Int) -> Bytes raise ParserError {
-  if not(self.can_read(n)) {
+  if self.pos + n > self.data.length() {
     raise UnexpectedEndOfInput
   }
-  let bytes : Array[Byte] = []
-  for i = 0; i < n; i = i + 1 {
-    bytes.push(self.data[self.pos + i])
+  let bytes = loop ([], 0) {
+    (acc, i) =>
+      if i >= n {
+        acc
+      } else {
+        acc.push(self.data[self.pos + i])
+        continue (acc, i + 1)
+      }
   }
-  self.pos = self.pos + n
+  self.pos += n
   Bytes::from_array(bytes)
 }
 
@@ -208,21 +238,17 @@ fn Parser::read_value_type(self : Parser) -> ValueType raise ParserError {
 }
 
 ///|
-/// Read block type
+/// Read block type (uses peek to avoid rewind)
 fn Parser::read_block_type(self : Parser) -> BlockType raise ParserError {
-  let byte = self.read_byte()
+  let byte = self.peek_byte()
   match byte {
-    0x40 => Empty
-    0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F => {
-      self.pos = self.pos - 1 // rewind
-      let vt = self.read_value_type()
-      Value(vt)
+    0x40 => {
+      self.skip(1)
+      Empty
     }
-    _ => {
-      self.pos = self.pos - 1 // rewind
-      let idx = self.read_i32()
-      TypeIndex(idx)
-    }
+    0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F =>
+      Value(self.read_value_type())
+    _ => TypeIndex(self.read_i32())
   }
 }
 
@@ -231,25 +257,31 @@ fn Parser::read_block_type(self : Parser) -> BlockType raise ParserError {
 // ============================================================
 
 ///|
+/// Read a vector of items using a reader function
+fn[T] Parser::read_vec(
+  self : Parser,
+  reader : () -> T raise ParserError,
+) -> Array[T] raise ParserError {
+  let count = self.read_u32()
+  loop ([], 0) {
+    (acc, i) =>
+      if i >= count {
+        acc
+      } else {
+        acc.push(reader())
+        continue (acc, i + 1)
+      }
+  }
+}
+
+///|
 fn Parser::read_func_type(self : Parser) -> FuncType raise ParserError {
   let tag = self.read_byte()
   if tag != 0x60 {
-    raise UnexpectedEndOfInput // TODO: better error
+    self.error("expected function type tag 0x60, got \{tag}")
   }
-
-  // Read parameter types
-  let param_count = self.read_u32()
-  let params : Array[ValueType] = []
-  for i = 0; i < param_count; i = i + 1 {
-    params.push(self.read_value_type())
-  }
-
-  // Read result types
-  let result_count = self.read_u32()
-  let results : Array[ValueType] = []
-  for i = 0; i < result_count; i = i + 1 {
-    results.push(self.read_value_type())
-  }
+  let params = self.read_vec(fn() { self.read_value_type() })
+  let results = self.read_vec(fn() { self.read_value_type() })
   { params, results }
 }
 
@@ -331,24 +363,19 @@ fn Parser::read_instruction(
     0x04 => {
       let bt = self.read_block_type()
       let then_body = self.read_expr()
-      let next = self.read_byte()
-      if next == 0x05 {
-        // else
+      // Check for else clause using peek
+      if self.peek_byte() == 0x05 {
+        self.skip(1) // consume else opcode
         let else_body = self.read_expr()
         If(bt, then_body, else_body)
       } else {
-        self.pos = self.pos - 1
         If(bt, then_body, [])
       }
     }
     0x0C => Br(self.read_u32())
     0x0D => BrIf(self.read_u32())
     0x0E => {
-      let count = self.read_u32()
-      let labels : Array[Int] = []
-      for i = 0; i < count; i = i + 1 {
-        labels.push(self.read_u32())
-      }
+      let labels = self.read_vec(fn() { self.read_u32() })
       let default = self.read_u32()
       BrTable(labels, default)
     }
@@ -582,7 +609,7 @@ pub fn parse_module(data : Bytes) -> Module raise ParserError {
   let mod = Module::new()
 
   // Parse sections
-  while parser.can_read(1) {
+  while not(parser.is_eof()) {
     let section_id = parser.read_byte()
     let section_size = parser.read_u32()
     let section_end = parser.pos + section_size
