@@ -1,0 +1,16 @@
+{
+  "name": "Milky2018/wasmoon",
+  "version": "0.1.0",
+  "deps": {
+    "moonbitlang/x": "0.4.37"
+  },
+  "readme": "README.mbt.md",
+  "repository": "",
+  "license": "Apache-2.0",
+  "keywords": [
+    "wasm",
+    "runtime"
+  ],
+  "description": "",
+  "preferred-target": "native"
+}
