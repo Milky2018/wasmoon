@@ -2,6 +2,7 @@
 // Performance testing for the WebAssembly runtime
 
 // Helper function to create a simple WASM module
+
 ///|
 fn create_test_module(
   code : @wasmoon.FunctionCode,

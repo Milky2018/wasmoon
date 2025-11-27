@@ -112,8 +112,10 @@ fn ExecContext::exec_instr(
       if b == 0 {
         raise DivisionByZero
       }
-      // Unsigned division - treat as unsigned
-      self.stack.push(I32(a / b))
+      // Unsigned division: reinterpret as UInt
+      let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint())
+        |> UInt::reinterpret_as_int
+      self.stack.push(I32(result))
     }
     I32RemS => {
       let b = self.stack.pop_i32()
@@ -122,6 +124,17 @@ fn ExecContext::exec_instr(
         raise DivisionByZero
       }
       self.stack.push(I32(a % b))
+    }
+    I32RemU => {
+      let b = self.stack.pop_i32()
+      let a = self.stack.pop_i32()
+      if b == 0 {
+        raise DivisionByZero
+      }
+      // Unsigned remainder: reinterpret as UInt
+      let result = (a.reinterpret_as_uint() % b.reinterpret_as_uint())
+        |> UInt::reinterpret_as_int
+      self.stack.push(I32(result))
     }
 
     // i32 comparison operations
@@ -189,9 +202,10 @@ fn ExecContext::exec_instr(
     I32ShrU => {
       let b = self.stack.pop_i32()
       let a = self.stack.pop_i32()
-      // Logical shift right - use land with mask to handle unsigned
       let shift = b % 32
-      let result = (a & 0x7FFFFFFF) >> shift
+      // Unsigned right shift: reinterpret as UInt
+      let result = (a.reinterpret_as_uint() >> shift)
+        |> UInt::reinterpret_as_int
       self.stack.push(I32(result))
     }
 
@@ -225,8 +239,11 @@ fn ExecContext::exec_instr(
       if b == 0L {
         raise DivisionByZero
       }
-      // Unsigned division
-      self.stack.push(I64(a / b))
+      // Unsigned division: reinterpret as UInt64
+      let result = (Int64::reinterpret_as_uint64(a) /
+        Int64::reinterpret_as_uint64(b))
+        |> UInt64::reinterpret_as_int64
+      self.stack.push(I64(result))
     }
     I64RemS => {
       let b = self.stack.pop_i64()
@@ -242,8 +259,11 @@ fn ExecContext::exec_instr(
       if b == 0L {
         raise DivisionByZero
       }
-      // Unsigned remainder
-      self.stack.push(I64(a % b))
+      // Unsigned remainder: reinterpret as UInt64
+      let result = (Int64::reinterpret_as_uint64(a) %
+        Int64::reinterpret_as_uint64(b))
+        |> UInt64::reinterpret_as_int64
+      self.stack.push(I64(result))
     }
 
     // i64 comparison operations
@@ -312,9 +332,10 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i64()
       let a = self.stack.pop_i64()
       let shift = b.to_int() % 64
-      // Logical right shift for unsigned i64
-      // For now, use arithmetic shift (TODO: proper unsigned shift)
-      self.stack.push(I64(a >> shift))
+      // Unsigned right shift: reinterpret as UInt64
+      let result = (Int64::reinterpret_as_uint64(a) >> shift)
+        |> UInt64::reinterpret_as_int64
+      self.stack.push(I64(result))
     }
 
     // f32 arithmetic operations

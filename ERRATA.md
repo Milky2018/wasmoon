@@ -141,19 +141,48 @@
   }
   ```
 
-#### 6. 无符号运算处理
-- MoonBit 的 Int/Int64 是有符号类型
-- 无符号除法和取余：目前使用有符号运算（TODO: 需要正确实现）
+#### 6. 无符号运算处理 ✅ 已实现
+- MoonBit 的 Int/Int64 是有符号类型，需要通过类型重新解释来实现无符号运算
+- **i32 无符号运算**：使用 `reinterpret_as_uint()` 和 `UInt::reinterpret_as_int`
   ```moonbit
+  // 无符号除法
   I32DivU => {
     let b = self.stack.pop_i32()
     let a = self.stack.pop_i32()
     if b == 0 { raise DivisionByZero }
-    // TODO: 应该作为无符号数处理
-    self.stack.push(I32(a / b))
+    let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint()) |> UInt::reinterpret_as_int
+    self.stack.push(I32(result))
+  }
+
+  // 无符号右移（注意括号！）
+  I32ShrU => {
+    let shift = b % 32
+    let result = (a.reinterpret_as_uint() >> shift) |> UInt::reinterpret_as_int
+    self.stack.push(I32(result))
   }
   ```
-- 无符号右移：需要特殊处理（TODO: 完善实现）
+
+- **i64 无符号运算**：使用 `Int64::reinterpret_as_uint64()` 和 `UInt64::reinterpret_as_int64`
+  ```moonbit
+  // 无符号除法
+  I64DivU => {
+    if b == 0L { raise DivisionByZero }
+    let result = (Int64::reinterpret_as_uint64(a) / Int64::reinterpret_as_uint64(b)) |> UInt64::reinterpret_as_int64
+    self.stack.push(I64(result))
+  }
+
+  // 无符号右移
+  I64ShrU => {
+    let shift = b.to_int() % 64
+    let result = (Int64::reinterpret_as_uint64(a) >> shift) |> UInt64::reinterpret_as_int64
+    self.stack.push(I64(result))
+  }
+  ```
+
+- ⚠️ **重要**：运算符优先级歧义
+  - 必须用括号包裹算术/位运算，否则 `|>` 会产生歧义
+  - ❌ 错误：`a / b |> UInt::reinterpret_as_int`
+  - ✅ 正确：`(a / b) |> UInt::reinterpret_as_int`
 
 #### 7. 位运算中的移位计数
 - 移位运算需要对移位计数取模，防止溢出
