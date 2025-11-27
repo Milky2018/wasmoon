@@ -347,7 +347,7 @@ fn GlobalInstance::set(
   self : GlobalInstance,
   value : Value,
 ) -> Unit raise RuntimeError {
-  if not(self.type_.mutable) {
+  if !self.type_.mutable {
     raise RuntimeError::TypeMismatch // attempting to mutate immutable global
   }
   self.value = value

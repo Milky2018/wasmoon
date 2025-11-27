@@ -54,7 +54,31 @@
 - ❌ **错误做法**: `let _result = func()`
 - ✅ **正确做法**: `func() |> ignore`
 
-#### 7. 循环的正确写法
+#### 7. 布尔取反
+- ❌ **错误做法**: 使用 `not()` 函数
+  ```moonbit
+  if not(condition) { ... }
+  ```
+- ✅ **正确做法**: 使用 `!` 一元运算符
+  ```moonbit
+  if !(condition) { ... }
+  if !flag { ... }
+  ```
+
+#### 8. 函数调用语法（无感叹号）
+- ❌ **错误做法**: 使用 `!` 后缀调用可能抛出错误的函数
+  ```moonbit
+  inspect!(value, content="expected")
+  func!()
+  ```
+- ✅ **正确做法**: 直接调用，不需要 `!`
+  ```moonbit
+  inspect(value, content="expected")
+  func()
+  ```
+- **说明**: `f!(..)` 语法已废弃，MoonBit 现在自动处理错误传播
+
+#### 9. 循环的正确写法
 - ❌ **错误做法**: 使用递归辅助函数 `fn go()`
   ```moonbit
   fn read_expr(self : Parser) -> Array[Instruction] {
@@ -261,6 +285,7 @@
 
 _请在此处继续添加新的意见和建议_
 
-- [ ] 代码中的TODO仍然没有处理啊
-- [ ] 为 parser 写至少5个测试，就写在 parser.mbt 文件内部
-- [ ] 不要用 not 函数，用一元操作符 `!`
+- [ ] 代码中的TODO仍然没有处理啊（f32/f64 IEEE 754 解析）
+- [x] 为 parser 写至少5个测试，就写在 parser.mbt 文件内部 → 已添加6个测试
+- [x] 不要用 not 函数，用一元操作符 `!` → 已添加到第7条
+- [x] 函数调用不要用 `!` 后缀 → 已添加到第8条

@@ -609,7 +609,7 @@ pub fn parse_module(data : Bytes) -> Module raise ParserError {
   let mod = Module::new()
 
   // Parse sections
-  while not(parser.is_eof()) {
+  while !parser.is_eof() {
     let section_id = parser.read_byte()
     let section_size = parser.read_u32()
     let section_end = parser.pos + section_size
@@ -744,4 +744,50 @@ pub fn parse_module(data : Bytes) -> Module raise ParserError {
     }
   }
   mod
+}
+
+// ============================================================
+// Parser Tests
+// ============================================================
+
+///|
+test "LEB128 u32 decoding - single byte" {
+  let parser = Parser::new(b"\x7F") // 127
+  inspect(parser.read_leb128_u32(), content="127")
+}
+
+///|
+test "LEB128 u32 decoding - multi byte" {
+  let parser = Parser::new(b"\xE5\x8E\x26") // 624485
+  inspect(parser.read_leb128_u32(), content="624485")
+}
+
+///|
+test "LEB128 i32 decoding - negative" {
+  let parser = Parser::new(b"\x7E") // -2
+  inspect(parser.read_leb128_i32(), content="-2")
+}
+
+///|
+test "LEB128 i64 decoding" {
+  let parser = Parser::new(b"\x80\x80\x80\x80\x80\x01") // 2^32
+  inspect(parser.read_leb128_i64(), content="34359738368")
+}
+
+///|
+test "value type parsing" {
+  let parser = Parser::new(b"\x7F\x7E\x7D\x7C")
+  inspect(parser.read_value_type(), content="I32")
+  inspect(parser.read_value_type(), content="I64")
+  inspect(parser.read_value_type(), content="F32")
+  inspect(parser.read_value_type(), content="F64")
+}
+
+///|
+test "peek_byte does not consume" {
+  let parser = Parser::new(b"\x42")
+  let first = parser.peek_byte()
+  let second = parser.peek_byte()
+  let consumed = parser.read_byte()
+  inspect((first, second, consumed), content="(66, 66, 66)")
 }
