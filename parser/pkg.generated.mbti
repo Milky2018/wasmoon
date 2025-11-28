@@ -2,11 +2,11 @@
 package "Milky2018/wasmoon/parser"
 
 import(
-  "Milky2018/wasmoon"
+  "Milky2018/wasmoon/types"
 )
 
 // Values
-fn parse_module(Bytes) -> @wasmoon.Module raise ParserError
+fn parse_module(Bytes) -> @types.Module raise ParserError
 
 // Errors
 type ParserError

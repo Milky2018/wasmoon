@@ -4,7 +4,7 @@
 /// Execute memory load instruction
 fn ExecContext::exec_memory_load(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // i32.load: load 4 bytes as i32
@@ -127,7 +127,7 @@ fn ExecContext::exec_memory_load(
 /// Execute memory store instruction
 fn ExecContext::exec_memory_store(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // i32.store: store i32 as 4 bytes
@@ -210,7 +210,7 @@ fn ExecContext::exec_memory_store(
 /// Execute memory size/grow/bulk instruction
 fn ExecContext::exec_memory_misc(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // memory.size: return current memory size in pages

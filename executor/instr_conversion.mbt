@@ -4,7 +4,7 @@
 /// Execute conversion instruction
 fn ExecContext::exec_conversion(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // i32.wrap_i64: i64 -> i32 (取低32位)
@@ -141,7 +141,7 @@ fn ExecContext::exec_conversion(
 /// Execute saturating truncation instruction
 fn ExecContext::exec_trunc_sat(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // i32.trunc_sat_f32_s: f32 -> i32 (饱和有符号截断)

@@ -1,7 +1,7 @@
 ///|
-/// @wasmoon.Value stack for operands
+/// @types.Value stack for operands
 struct Stack {
-  values : Array[@wasmoon.Value]
+  values : Array[@types.Value]
   mut sp : Int // stack pointer
 } derive(Show)
 
@@ -13,7 +13,7 @@ pub fn Stack::new() -> Stack {
 ///|
 pub fn Stack::push(
   self : Stack,
-  value : @wasmoon.Value,
+  value : @types.Value,
 ) -> Unit raise RuntimeError {
   if self.sp >= 10000 { // arbitrary limit
     raise StackOverflow
@@ -27,7 +27,7 @@ pub fn Stack::push(
 }
 
 ///|
-pub fn Stack::pop(self : Stack) -> @wasmoon.Value raise RuntimeError {
+pub fn Stack::pop(self : Stack) -> @types.Value raise RuntimeError {
   if self.sp <= 0 {
     raise StackUnderflow
   }
@@ -36,7 +36,7 @@ pub fn Stack::pop(self : Stack) -> @wasmoon.Value raise RuntimeError {
 }
 
 ///|
-pub fn Stack::peek(self : Stack) -> @wasmoon.Value raise RuntimeError {
+pub fn Stack::peek(self : Stack) -> @types.Value raise RuntimeError {
   if self.sp <= 0 {
     raise StackUnderflow
   }

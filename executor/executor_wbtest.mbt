@@ -6,22 +6,22 @@ test "execute simple add function" {
   // Function signature: (i32, i32) -> i32
   // Function body: local.get 0, local.get 1, i32.add
 
-  let add_func : @wasmoon.FunctionCode = {
+  let add_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "add", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "add", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [add_func],
@@ -30,7 +30,7 @@ test "execute simple add function" {
 
   // Instantiate and call
   let (store, instance) = instantiate_module(mod)
-  let args = [@wasmoon.Value::I32(5), @wasmoon.Value::I32(10)]
+  let args = [@types.Value::I32(5), @types.Value::I32(10)]
   let results = call_exported_func(store, instance, "add", args)
   match results[0] {
     I32(n) => inspect(n, content="15")
@@ -42,8 +42,8 @@ test "execute simple add function" {
 test "execute function with local variables" {
   // Function: (a, b) => { let tmp = a + b; return tmp * 2 }
 
-  let func : @wasmoon.FunctionCode = {
-    locals: [@wasmoon.ValueType::I32], // one local variable
+  let func : @types.FunctionCode = {
+    locals: [@types.ValueType::I32], // one local variable
     body: [
       LocalGet(0), // get a
       LocalGet(1), // get b
@@ -54,25 +54,25 @@ test "execute function with local variables" {
       I32Mul, // tmp * 2
     ],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "double_sum", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "double_sum", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
     datas: [],
   }
   let (store, instance) = instantiate_module(mod)
-  let args = [@wasmoon.Value::I32(3), @wasmoon.Value::I32(4)]
+  let args = [@types.Value::I32(3), @types.Value::I32(4)]
   let results = call_exported_func(store, instance, "double_sum", args)
   match results[0] {
     I32(n) => inspect(n, content="14") // (3 + 4) * 2 = 14
@@ -83,22 +83,22 @@ test "execute function with local variables" {
 ///|
 test "execute i64 addition" {
   // Test i64 arithmetic: (a, b) => a + b
-  let i64_add_func : @wasmoon.FunctionCode = {
+  let i64_add_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I64Add],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I64, @wasmoon.ValueType::I64],
-    results: [@wasmoon.ValueType::I64],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I64, @types.ValueType::I64],
+    results: [@types.ValueType::I64],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "i64_add", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "i64_add", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [i64_add_func],
@@ -106,8 +106,8 @@ test "execute i64 addition" {
   }
   let (store, instance) = instantiate_module(mod)
   let args = [
-    @wasmoon.Value::I64(1000000000000L),
-    @wasmoon.Value::I64(2000000000000L),
+    @types.Value::I64(1000000000000L),
+    @types.Value::I64(2000000000000L),
   ]
   let results = call_exported_func(store, instance, "i64_add", args)
   match results[0] {
@@ -119,7 +119,7 @@ test "execute i64 addition" {
 ///|
 test "execute f32 arithmetic" {
   // Test f32 operations: (a, b) => a + b * 2.0
-  let f32_func : @wasmoon.FunctionCode = {
+  let f32_func : @types.FunctionCode = {
     locals: [],
     body: [
       LocalGet(1), // b
@@ -129,25 +129,25 @@ test "execute f32 arithmetic" {
       F32Add,
     ],
   } // a + (b * 2.0)
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::F32, @wasmoon.ValueType::F32],
-    results: [@wasmoon.ValueType::F32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F32, @types.ValueType::F32],
+    results: [@types.ValueType::F32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "f32_test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "f32_test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [f32_func],
     datas: [],
   }
   let (store, instance) = instantiate_module(mod)
-  let args = [@wasmoon.Value::F32(3.5), @wasmoon.Value::F32(4.0)]
+  let args = [@types.Value::F32(3.5), @types.Value::F32(4.0)]
   let results = call_exported_func(store, instance, "f32_test", args)
   match results[0] {
     F32(f) => inspect(f, content="11.5") // 3.5 + 4.0 * 2.0 = 11.5
@@ -158,7 +158,7 @@ test "execute f32 arithmetic" {
 ///|
 test "execute f64 arithmetic" {
   // Test f64 operations: (a, b) => (a - b) * 0.5
-  let f64_func : @wasmoon.FunctionCode = {
+  let f64_func : @types.FunctionCode = {
     locals: [],
     body: [
       LocalGet(0), // a
@@ -168,25 +168,25 @@ test "execute f64 arithmetic" {
       F64Mul,
     ],
   } // (a - b) * 0.5
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::F64, @wasmoon.ValueType::F64],
-    results: [@wasmoon.ValueType::F64],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F64, @types.ValueType::F64],
+    results: [@types.ValueType::F64],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "f64_test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "f64_test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [f64_func],
     datas: [],
   }
   let (store, instance) = instantiate_module(mod)
-  let args = [@wasmoon.Value::F64(10.0), @wasmoon.Value::F64(6.0)]
+  let args = [@types.Value::F64(10.0), @types.Value::F64(6.0)]
   let results = call_exported_func(store, instance, "f64_test", args)
   match results[0] {
     F64(d) => inspect(d, content="2") // (10.0 - 6.0) * 0.5 = 2.0
@@ -197,29 +197,29 @@ test "execute f64 arithmetic" {
 ///|
 test "execute i64 comparison" {
   // Test i64 comparison: (a, b) => a < b
-  let i64_cmp_func : @wasmoon.FunctionCode = {
+  let i64_cmp_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I64LtS],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I64, @wasmoon.ValueType::I64],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I64, @types.ValueType::I64],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "i64_lt", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "i64_lt", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [i64_cmp_func],
     datas: [],
   }
   let (store, instance) = instantiate_module(mod)
-  let args = [@wasmoon.Value::I64(100L), @wasmoon.Value::I64(200L)]
+  let args = [@types.Value::I64(100L), @types.Value::I64(200L)]
   let results = call_exported_func(store, instance, "i64_lt", args)
   match results[0] {
     I32(n) => inspect(n, content="1") // 100 < 200 = true (1)
@@ -229,22 +229,22 @@ test "execute i64 comparison" {
 
 ///|
 test "numeric conversion: i32.wrap_i64" {
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), I32WrapI64],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I64],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I64],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "wrap", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "wrap", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -252,7 +252,7 @@ test "numeric conversion: i32.wrap_i64" {
   }
   let (store, instance) = instantiate_module(mod)
   // 0x0000000100000005 -> 0x00000005 = 5
-  let args = [@wasmoon.Value::I64(4294967301L)]
+  let args = [@types.Value::I64(4294967301L)]
   let results = call_exported_func(store, instance, "wrap", args)
   match results[0] {
     I32(n) => inspect(n, content="5")
@@ -262,22 +262,22 @@ test "numeric conversion: i32.wrap_i64" {
 
 ///|
 test "numeric conversion: i64.extend_i32_s" {
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), I64ExtendI32S],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I64],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I64],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "extend_s", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "extend_s", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -285,7 +285,7 @@ test "numeric conversion: i64.extend_i32_s" {
   }
   let (store, instance) = instantiate_module(mod)
   // -1 (i32) -> -1 (i64)
-  let args = [@wasmoon.Value::I32(-1)]
+  let args = [@types.Value::I32(-1)]
   let results = call_exported_func(store, instance, "extend_s", args)
   match results[0] {
     I64(n) => inspect(n, content="-1")
@@ -295,29 +295,29 @@ test "numeric conversion: i64.extend_i32_s" {
 
 ///|
 test "numeric conversion: f64.convert_i32_s" {
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), F64ConvertI32S],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::F64],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::F64],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "convert", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "convert", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
     datas: [],
   }
   let (store, instance) = instantiate_module(mod)
-  let args = [@wasmoon.Value::I32(-42)]
+  let args = [@types.Value::I32(-42)]
   let results = call_exported_func(store, instance, "convert", args)
   match results[0] {
     F64(d) => inspect(d, content="-42")
@@ -327,22 +327,22 @@ test "numeric conversion: f64.convert_i32_s" {
 
 ///|
 test "numeric conversion: i32.reinterpret_f32" {
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), I32ReinterpretF32],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::F32],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "reinterpret", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "reinterpret", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -350,7 +350,7 @@ test "numeric conversion: i32.reinterpret_f32" {
   }
   let (store, instance) = instantiate_module(mod)
   // 1.0f32 的 IEEE 754 表示是 0x3F800000 = 1065353216
-  let args = [@wasmoon.Value::F32(1.0)]
+  let args = [@types.Value::F32(1.0)]
   let results = call_exported_func(store, instance, "reinterpret", args)
   match results[0] {
     I32(n) => inspect(n, content="1065353216")
@@ -360,22 +360,22 @@ test "numeric conversion: i32.reinterpret_f32" {
 
 ///|
 test "saturating truncation: i32.trunc_sat_f32_s overflow" {
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), I32TruncSatF32S],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::F32],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "trunc_sat", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "trunc_sat", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -383,7 +383,7 @@ test "saturating truncation: i32.trunc_sat_f32_s overflow" {
   }
   let (store, instance) = instantiate_module(mod)
   // 超出 i32 最大值，应该饱和到 2147483647
-  let args = [@wasmoon.Value::F32(3000000000.0)]
+  let args = [@types.Value::F32(3000000000.0)]
   let results = call_exported_func(store, instance, "trunc_sat", args)
   match results[0] {
     I32(n) => inspect(n, content="2147483647")
@@ -393,22 +393,22 @@ test "saturating truncation: i32.trunc_sat_f32_s overflow" {
 
 ///|
 test "saturating truncation: i32.trunc_sat_f64_u negative" {
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), I32TruncSatF64U],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::F64],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F64],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "trunc_sat_u", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "trunc_sat_u", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -416,7 +416,7 @@ test "saturating truncation: i32.trunc_sat_f64_u negative" {
   }
   let (store, instance) = instantiate_module(mod)
   // 负数对于无符号饱和截断应该返回 0
-  let args = [@wasmoon.Value::F64(-100.0)]
+  let args = [@types.Value::F64(-100.0)]
   let results = call_exported_func(store, instance, "trunc_sat_u", args)
   match results[0] {
     I32(n) => inspect(n, content="0")
@@ -427,7 +427,7 @@ test "saturating truncation: i32.trunc_sat_f64_u negative" {
 ///|
 test "memory: i32.store and i32.load" {
   // Function: store value 42 at address 0, then load and return it
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(0), // address
@@ -437,18 +437,18 @@ test "memory: i32.store and i32.load" {
       I32Load(2, 0),
     ],
   } // align=2, offset=0
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -464,7 +464,7 @@ test "memory: i32.store and i32.load" {
 
 ///|
 test "memory: i64.store and i64.load" {
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(0), // address
@@ -474,18 +474,18 @@ test "memory: i64.store and i64.load" {
       I64Load(3, 0),
     ],
   } // load
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I64],
+    results: [@types.ValueType::I64],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -501,7 +501,7 @@ test "memory: i64.store and i64.load" {
 
 ///|
 test "memory: f32.store and f32.load" {
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(0), // address
@@ -511,18 +511,18 @@ test "memory: f32.store and f32.load" {
       F32Load(2, 0),
     ],
   } // load
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::F32],
+    results: [@types.ValueType::F32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -543,7 +543,7 @@ test "memory: f32.store and f32.load" {
 ///|
 test "memory: load with offset" {
   // Store 100 at address 8, then load from address 0 with offset 8
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(8), // address
@@ -553,18 +553,18 @@ test "memory: load with offset" {
       I32Load(2, 8),
     ],
   } // load from 0 + offset 8 = 8
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -582,7 +582,7 @@ test "memory: load with offset" {
 test "memory: i32.load8_s sign extension" {
   // Store 0xFF at address 0 (as i32), then load as signed byte
   // 0xFF as signed byte is -1
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(0), // address
@@ -592,18 +592,18 @@ test "memory: i32.load8_s sign extension" {
       I32Load8S(0, 0),
     ],
   } // load as signed byte
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -621,7 +621,7 @@ test "memory: i32.load8_s sign extension" {
 test "memory: i32.load8_u zero extension" {
   // Store 0xFF at address 0, then load as unsigned byte
   // 0xFF as unsigned byte is 255
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(0), // address
@@ -631,18 +631,18 @@ test "memory: i32.load8_u zero extension" {
       I32Load8U(0, 0),
     ],
   } // load as unsigned byte
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -659,7 +659,7 @@ test "memory: i32.load8_u zero extension" {
 ///|
 test "memory: memory.size and memory.grow" {
   // Check initial size (1 page), grow by 2 pages, return new size
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       MemorySize, // get current size (1)
@@ -670,18 +670,18 @@ test "memory: memory.size and memory.grow" {
       MemorySize,
     ],
   } // get new size (3)
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -699,22 +699,22 @@ test "memory: memory.size and memory.grow" {
 test "control flow: simple block" {
   // block returns value from inner expression
   // (block (result i32) (i32.const 42))
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
-    body: [Block(Value(@wasmoon.ValueType::I32), [I32Const(42)])],
+    body: [Block(Value(@types.ValueType::I32), [I32Const(42)])],
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -735,24 +735,24 @@ test "control flow: br exits block" {
   //   (br 0)
   //   (i32.const 20)  ;; unreachable
   // )
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(Value(@wasmoon.ValueType::I32), [I32Const(10), Br(0), I32Const(20)]),
+      Block(Value(@types.ValueType::I32), [I32Const(10), Br(0), I32Const(20)]),
     ],
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -776,10 +776,10 @@ test "control flow: br_if conditional" {
   //     (drop)
   //     (i32.const 200)
   //   ))
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(Value(@wasmoon.ValueType::I32), [
+      Block(Value(@types.ValueType::I32), [
         I32Const(100),
         LocalGet(0),
         BrIf(0),
@@ -788,18 +788,18 @@ test "control flow: br_if conditional" {
       ]),
     ],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -833,8 +833,8 @@ test "control flow: loop with br" {
   //     (br_if 0 (i32.le_s (local.get 0) (i32.const 5)))     ;; if counter <= 5, loop
   //   )
   //   (local.get 1))  ;; return sum
-  let func : @wasmoon.FunctionCode = {
-    locals: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32], // counter, sum
+  let func : @types.FunctionCode = {
+    locals: [@types.ValueType::I32, @types.ValueType::I32], // counter, sum
     body: [
       I32Const(1),
       LocalSet(0), // counter = 1
@@ -857,18 +857,18 @@ test "control flow: loop with br" {
       LocalGet(1),
     ],
   } // return sum
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -888,25 +888,25 @@ test "control flow: if-else" {
   //   (if (result i32) (local.get 0)
   //     (then (i32.const 111))
   //     (else (i32.const 222))))
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       LocalGet(0),
-      If(Value(@wasmoon.ValueType::I32), [I32Const(111)], [I32Const(222)]),
+      If(Value(@types.ValueType::I32), [I32Const(111)], [I32Const(222)]),
     ],
   }
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -935,27 +935,27 @@ test "control flow: nested blocks with br" {
   //     (br 1)  ;; jump to outer
   //   )
   //   (i32.const 99))
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(Value(@wasmoon.ValueType::I32), [
+      Block(Value(@types.ValueType::I32), [
         Block(Empty, [I32Const(50), Br(1)]),
         I32Const(99),
       ]),
     ],
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -973,26 +973,26 @@ test "control flow: nested blocks with br" {
 test "control flow: select" {
   // (func (param i32 i32 i32) (result i32)
   //   (select (local.get 0) (local.get 1) (local.get 2)))
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), LocalGet(2), Select],
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [
-      @wasmoon.ValueType::I32,
-      @wasmoon.ValueType::I32,
-      @wasmoon.ValueType::I32,
+      @types.ValueType::I32,
+      @types.ValueType::I32,
+      @types.ValueType::I32,
     ],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1026,30 +1026,30 @@ test "function call: call instruction" {
   // Module with two functions:
   // func 0: add(a, b) -> a + b
   // func 1: main() -> call add(3, 4)
-  let add_func : @wasmoon.FunctionCode = {
+  let add_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
   }
-  let main_func : @wasmoon.FunctionCode = {
+  let main_func : @types.FunctionCode = {
     locals: [],
     body: [I32Const(3), I32Const(4), Call(0)],
   }
-  let add_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let add_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let main_type : @wasmoon.FuncType = {
+  let main_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [add_type, main_type],
     imports: [],
     funcs: [0, 1], // func 0 has type 0, func 1 has type 1
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: @wasmoon.ExportDesc::Func(1) }],
+    exports: [{ name: "main", desc: @types.ExportDesc::Func(1) }],
     start: None,
     elems: [],
     codes: [add_func, main_func],
@@ -1069,30 +1069,30 @@ test "function call: nested calls" {
   // func 0: double(x) -> x * 2
   // func 1: add_one(x) -> x + 1
   // func 2: main(x) -> add_one(double(x))
-  let double_func : @wasmoon.FunctionCode = {
+  let double_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), I32Const(2), I32Mul],
   }
-  let add_one_func : @wasmoon.FunctionCode = {
+  let add_one_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), I32Const(1), I32Add],
   }
-  let main_func : @wasmoon.FunctionCode = {
+  let main_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), Call(0), Call(1)], // double then add_one
   }
-  let unary_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let unary_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [unary_type],
     imports: [],
     funcs: [0, 0, 0], // all functions have type 0
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: @wasmoon.ExportDesc::Func(2) }],
+    exports: [{ name: "main", desc: @types.ExportDesc::Func(2) }],
     start: None,
     elems: [],
     codes: [double_func, add_one_func, main_func],
@@ -1113,15 +1113,15 @@ test "function call: call_indirect" {
   // func 1: sub(a, b) -> a - b
   // func 2: apply(op, a, b) -> call_indirect(op, a, b)
   // table with [add, sub]
-  let add_func : @wasmoon.FunctionCode = {
+  let add_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
   }
-  let sub_func : @wasmoon.FunctionCode = {
+  let sub_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Sub],
   }
-  let apply_func : @wasmoon.FunctionCode = {
+  let apply_func : @types.FunctionCode = {
     locals: [],
     body: [
       LocalGet(1), // a
@@ -1130,28 +1130,28 @@ test "function call: call_indirect" {
       CallIndirect(0, 0),
     ],
   } // type 0, table 0
-  let binary_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let binary_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let apply_type : @wasmoon.FuncType = {
+  let apply_type : @types.FuncType = {
     params: [
-      @wasmoon.ValueType::I32,
-      @wasmoon.ValueType::I32,
-      @wasmoon.ValueType::I32,
+      @types.ValueType::I32,
+      @types.ValueType::I32,
+      @types.ValueType::I32,
     ],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [binary_type, apply_type],
     imports: [],
     funcs: [0, 0, 1], // add and sub have type 0, apply has type 1
     tables: [
-      { elem_type: @wasmoon.ValueType::FuncRef, limits: { min: 2, max: None } },
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 2, max: None } },
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "apply", desc: @wasmoon.ExportDesc::Func(2) }],
+    exports: [{ name: "apply", desc: @types.ExportDesc::Func(2) }],
     start: None,
     elems: [{ table_idx: 0, offset: [I32Const(0)], init: [0, 1] }],
     codes: [ // table[0] = func 0 (add), table[1] = func 1 (sub)
@@ -1188,7 +1188,7 @@ test "function call: call_indirect" {
 test "host function: simple call" {
   // Create a store and add host function to it
   let store = @runtime.Store::new()
-  let host_fn : (Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise @runtime.RuntimeError = fn(
+  let host_fn : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = fn(
     args,
   ) {
     match args[0] {
@@ -1201,22 +1201,22 @@ test "host function: simple call" {
   // Create a module that imports and calls the host function
   // func 0: imported host function (double)
   // func 1: main(x) -> call double(x)
-  let main_func : @wasmoon.FunctionCode = {
+  let main_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), Call(0)], // call imported function at index 0
   }
-  let unary_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let unary_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [unary_type],
     imports: [{ mod_name: "env", name: "double", desc: Func(0) }],
     funcs: [0], // main has type 0
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: @wasmoon.ExportDesc::Func(1) }], // func 1 is main (after import)
+    exports: [{ name: "main", desc: @types.ExportDesc::Func(1) }], // func 1 is main (after import)
     start: None,
     elems: [],
     codes: [main_func],
@@ -1250,15 +1250,15 @@ test "memory import: shared memory between modules" {
 
   // Create a module that imports this memory and reads from it
   // Function: read value at address 0
-  let read_func : @wasmoon.FunctionCode = {
+  let read_func : @types.FunctionCode = {
     locals: [],
     body: [I32Const(0), I32Load(2, 0)], // load from address 0
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [
       {
@@ -1271,7 +1271,7 @@ test "memory import: shared memory between modules" {
     tables: [],
     memories: [], // No local memories, only imported
     globals: [],
-    exports: [{ name: "read", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "read", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [read_func],
@@ -1300,12 +1300,12 @@ test "memory import: write to imported memory" {
 
   // Create a module that imports this memory and writes to it
   // Function: write value 42 at address 100
-  let write_func : @wasmoon.FunctionCode = {
+  let write_func : @types.FunctionCode = {
     locals: [],
     body: [I32Const(100), I32Const(42), I32Store(2, 0)],
   }
-  let func_type : @wasmoon.FuncType = { params: [], results: [] }
-  let mod : @wasmoon.Module = {
+  let func_type : @types.FuncType = { params: [], results: [] }
+  let mod : @types.Module = {
     types: [func_type],
     imports: [
       {
@@ -1318,7 +1318,7 @@ test "memory import: write to imported memory" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "write", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "write", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [write_func],
@@ -1344,19 +1344,19 @@ test "import validation: missing import raises error" {
   let store = @runtime.Store::new()
 
   // Create a module that requires an import but don't provide it
-  let func : @wasmoon.FunctionCode = { locals: [], body: [I32Const(1)] }
-  let func_type : @wasmoon.FuncType = {
+  let func : @types.FunctionCode = { locals: [], body: [I32Const(1)] }
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [{ mod_name: "env", name: "missing_func", desc: Func(0) }],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(1) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1381,15 +1381,15 @@ test "import validation: missing import raises error" {
 test "table import: call_indirect with imported table" {
   // Create a store with a shared table
   let store = @runtime.Store::new()
-  let shared_table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 2, None)
+  let shared_table = @runtime.Table::new(@types.ValueType::FuncRef, 2, None)
   let table_addr = store.alloc_table(shared_table)
 
   // Create two functions: add and sub
-  let add_func : @wasmoon.FunctionCode = {
+  let add_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
   }
-  let sub_func : @wasmoon.FunctionCode = {
+  let sub_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Sub],
   }
@@ -1399,16 +1399,16 @@ test "table import: call_indirect with imported table" {
   let sub_addr = store.alloc_func(sub_func)
 
   // Set function references in table
-  shared_table.set(0, @wasmoon.Value::FuncRef(add_addr)) catch {
+  shared_table.set(0, @types.Value::FuncRef(add_addr)) catch {
     _ => fail("Failed to set table")
   }
-  shared_table.set(1, @wasmoon.Value::FuncRef(sub_addr)) catch {
+  shared_table.set(1, @types.Value::FuncRef(sub_addr)) catch {
     _ => fail("Failed to set table")
   }
 
   // Create a module that imports the table and uses call_indirect
   // apply(op, a, b) -> call_indirect(op, a, b)
-  let apply_func : @wasmoon.FunctionCode = {
+  let apply_func : @types.FunctionCode = {
     locals: [],
     body: [
       LocalGet(1), // a
@@ -1417,26 +1417,26 @@ test "table import: call_indirect with imported table" {
       CallIndirect(0, 0),
     ],
   } // type 0, table 0
-  let binary_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let binary_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let apply_type : @wasmoon.FuncType = {
+  let apply_type : @types.FuncType = {
     params: [
-      @wasmoon.ValueType::I32,
-      @wasmoon.ValueType::I32,
-      @wasmoon.ValueType::I32,
+      @types.ValueType::I32,
+      @types.ValueType::I32,
+      @types.ValueType::I32,
     ],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [binary_type, apply_type],
     imports: [
       {
         mod_name: "env",
         name: "table",
         desc: Table({
-          elem_type: @wasmoon.ValueType::FuncRef,
+          elem_type: @types.ValueType::FuncRef,
           limits: { min: 2, max: None },
         }),
       },
@@ -1445,7 +1445,7 @@ test "table import: call_indirect with imported table" {
     tables: [], // No local tables, only imported
     memories: [],
     globals: [],
-    exports: [{ name: "apply", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "apply", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [apply_func],
@@ -1482,7 +1482,7 @@ test "table import: call_indirect with imported table" {
 test "global variables: global.get and global.set" {
   // Module with a mutable global initialized to 10
   // Function: increment global and return new value
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       GlobalGet(0), // get global value (10)
@@ -1492,22 +1492,22 @@ test "global variables: global.get and global.set" {
       GlobalGet(0),
     ],
   } // return new value
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let global : @wasmoon.Global = {
-    type_: { value_type: @wasmoon.ValueType::I32, mutable: true },
+  let global : @types.Global = {
+    type_: { value_type: @types.ValueType::I32, mutable: true },
     init: [I32Const(10)],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [global],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1525,30 +1525,30 @@ test "global variables: global.get and global.set" {
 test "global variables: multiple globals" {
   // Module with two globals: counter (mutable) and max (immutable)
   // Function: add counter + max
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [GlobalGet(0), GlobalGet(1), I32Add],
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let counter : @wasmoon.Global = {
-    type_: { value_type: @wasmoon.ValueType::I32, mutable: true },
+  let counter : @types.Global = {
+    type_: { value_type: @types.ValueType::I32, mutable: true },
     init: [I32Const(7)],
   }
-  let max : @wasmoon.Global = {
-    type_: { value_type: @wasmoon.ValueType::I32, mutable: false },
+  let max : @types.Global = {
+    type_: { value_type: @types.ValueType::I32, mutable: false },
     init: [I32Const(100)],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [counter, max],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1565,23 +1565,23 @@ test "global variables: multiple globals" {
 ///|
 test "global variables: i64 global" {
   // Module with an i64 global
-  let func : @wasmoon.FunctionCode = { locals: [], body: [GlobalGet(0)] }
-  let func_type : @wasmoon.FuncType = {
+  let func : @types.FunctionCode = { locals: [], body: [GlobalGet(0)] }
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I64],
+    results: [@types.ValueType::I64],
   }
-  let global : @wasmoon.Global = {
-    type_: { value_type: @wasmoon.ValueType::I64, mutable: false },
+  let global : @types.Global = {
+    type_: { value_type: @types.ValueType::I64, mutable: false },
     init: [I64Const(9999999999L)],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [global],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1600,31 +1600,31 @@ test "global import: imported global" {
   // Create a store with a global
   let store = @runtime.Store::new()
   let global_inst = @runtime.GlobalInstance::new(
-    { value_type: @wasmoon.ValueType::I32, mutable: true },
-    @wasmoon.Value::I32(42),
+    { value_type: @types.ValueType::I32, mutable: true },
+    @types.Value::I32(42),
   )
   let global_addr = store.alloc_global(global_inst)
 
   // Module that imports and uses the global
-  let func : @wasmoon.FunctionCode = { locals: [], body: [GlobalGet(0)] }
-  let func_type : @wasmoon.FuncType = {
+  let func : @types.FunctionCode = { locals: [], body: [GlobalGet(0)] }
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [
       {
         mod_name: "env",
         name: "g",
-        desc: Global({ value_type: @wasmoon.ValueType::I32, mutable: true }),
+        desc: Global({ value_type: @types.ValueType::I32, mutable: true }),
       },
     ],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "get", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "get", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1643,21 +1643,21 @@ test "global import: imported global" {
 ///|
 test "table operations: table.size" {
   // Module with a table, get its size
-  let func : @wasmoon.FunctionCode = { locals: [], body: [TableSize(0)] }
-  let func_type : @wasmoon.FuncType = {
+  let func : @types.FunctionCode = { locals: [], body: [TableSize(0)] }
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [
-      { elem_type: @wasmoon.ValueType::FuncRef, limits: { min: 4, max: None } },
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 4, max: None } },
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1677,11 +1677,11 @@ test "table operations: table.grow" {
   // Note: table.grow needs a reference value on stack. For now, we test via
   // direct store manipulation since ref.null instruction is not implemented yet.
   let store = @runtime.Store::new()
-  let table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 2, None)
+  let table = @runtime.Table::new(@types.ValueType::FuncRef, 2, None)
   let _ = store.alloc_table(table)
 
   // Grow the table directly
-  let old_size = table.grow(3, @wasmoon.Value::Null)
+  let old_size = table.grow(3, @types.Value::Null)
   inspect(old_size, content="2") // old size was 2
   inspect(table.size(), content="5") // new size is 5
 }
@@ -1690,11 +1690,11 @@ test "table operations: table.grow" {
 test "table operations: table.fill" {
   // Test table.fill via direct runtime manipulation
   let store = @runtime.Store::new()
-  let table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 5, None)
+  let table = @runtime.Table::new(@types.ValueType::FuncRef, 5, None)
   let _ = store.alloc_table(table)
 
   // Fill table[1..4] with FuncRef(42)
-  table.fill(1, @wasmoon.Value::FuncRef(42), 3) catch {
+  table.fill(1, @types.Value::FuncRef(42), 3) catch {
     _ => fail("table.fill failed")
   }
 
@@ -1710,17 +1710,17 @@ test "table operations: table.fill" {
 test "table operations: table.copy same table" {
   // Test table.copy within the same table
   let store = @runtime.Store::new()
-  let table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 6, None)
+  let table = @runtime.Table::new(@types.ValueType::FuncRef, 6, None)
   let _ = store.alloc_table(table)
 
   // Set some initial values
-  table.set(0, @wasmoon.Value::FuncRef(10)) catch {
+  table.set(0, @types.Value::FuncRef(10)) catch {
     _ => ()
   }
-  table.set(1, @wasmoon.Value::FuncRef(20)) catch {
+  table.set(1, @types.Value::FuncRef(20)) catch {
     _ => ()
   }
-  table.set(2, @wasmoon.Value::FuncRef(30)) catch {
+  table.set(2, @types.Value::FuncRef(30)) catch {
     _ => ()
   }
 
@@ -1740,16 +1740,16 @@ test "table operations: table.copy same table" {
 test "table operations: table.copy between tables" {
   // Test table.copy between different tables
   let store = @runtime.Store::new()
-  let table1 = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 4, None)
-  let table2 = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 4, None)
+  let table1 = @runtime.Table::new(@types.ValueType::FuncRef, 4, None)
+  let table2 = @runtime.Table::new(@types.ValueType::FuncRef, 4, None)
   let _ = store.alloc_table(table1)
   let _ = store.alloc_table(table2)
 
   // Set values in table1
-  table1.set(0, @wasmoon.Value::FuncRef(100)) catch {
+  table1.set(0, @types.Value::FuncRef(100)) catch {
     _ => ()
   }
-  table1.set(1, @wasmoon.Value::FuncRef(200)) catch {
+  table1.set(1, @types.Value::FuncRef(200)) catch {
     _ => ()
   }
 
@@ -1767,17 +1767,17 @@ test "table operations: table.copy between tables" {
 test "table operations: table.copy overlapping backward" {
   // Test table.copy with overlapping regions (dest > src)
   let store = @runtime.Store::new()
-  let table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 6, None)
+  let table = @runtime.Table::new(@types.ValueType::FuncRef, 6, None)
   let _ = store.alloc_table(table)
 
   // Set initial values: [1, 2, 3, 0, 0, 0]
-  table.set(0, @wasmoon.Value::FuncRef(1)) catch {
+  table.set(0, @types.Value::FuncRef(1)) catch {
     _ => ()
   }
-  table.set(1, @wasmoon.Value::FuncRef(2)) catch {
+  table.set(1, @types.Value::FuncRef(2)) catch {
     _ => ()
   }
-  table.set(2, @wasmoon.Value::FuncRef(3)) catch {
+  table.set(2, @types.Value::FuncRef(3)) catch {
     _ => ()
   }
 
@@ -1799,28 +1799,28 @@ test "module initialization: start function execution" {
   // Module with a start function that sets a global
   // func 0: init() - sets global to 42
   // start: 0
-  let init_func : @wasmoon.FunctionCode = {
+  let init_func : @types.FunctionCode = {
     locals: [],
     body: [I32Const(42), GlobalSet(0)],
   }
-  let get_func : @wasmoon.FunctionCode = { locals: [], body: [GlobalGet(0)] }
-  let init_type : @wasmoon.FuncType = { params: [], results: [] }
-  let get_type : @wasmoon.FuncType = {
+  let get_func : @types.FunctionCode = { locals: [], body: [GlobalGet(0)] }
+  let init_type : @types.FuncType = { params: [], results: [] }
+  let get_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let global : @wasmoon.Global = {
-    type_: { value_type: @wasmoon.ValueType::I32, mutable: true },
+  let global : @types.Global = {
+    type_: { value_type: @types.ValueType::I32, mutable: true },
     init: [I32Const(0)],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [init_type, get_type],
     imports: [],
     funcs: [0, 1],
     tables: [],
     memories: [],
     globals: [global],
-    exports: [{ name: "get", desc: @wasmoon.ExportDesc::Func(1) }],
+    exports: [{ name: "get", desc: @types.ExportDesc::Func(1) }],
     start: Some(0), // start function is func 0
     elems: [],
     codes: [init_func, get_func],
@@ -1840,25 +1840,25 @@ test "module initialization: start function execution" {
 ///|
 test "module initialization: data segment" {
   // Module with a data segment that initializes memory
-  let read_func : @wasmoon.FunctionCode = {
+  let read_func : @types.FunctionCode = {
     locals: [],
     body: [I32Const(0), I32Load(2, 0)], // load i32 from address 0
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
   // Data segment: store bytes [0x2A, 0x00, 0x00, 0x00] at offset 0
   // This is 42 in little-endian
   let data_bytes = Bytes::from_array([b'\x2A', b'\x00', b'\x00', b'\x00'])
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "read", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "read", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [read_func],
@@ -1877,24 +1877,24 @@ test "module initialization: data segment" {
 ///|
 test "module initialization: data segment with offset" {
   // Module with a data segment at non-zero offset
-  let read_func : @wasmoon.FunctionCode = {
+  let read_func : @types.FunctionCode = {
     locals: [],
     body: [I32Const(100), I32Load(2, 0)], // load from address 100
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
   // Data at offset 100: 0x12345678
   let data_bytes = Bytes::from_array([b'\x78', b'\x56', b'\x34', b'\x12'])
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "read", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "read", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [read_func],
@@ -1914,30 +1914,30 @@ test "module initialization: data segment with offset" {
 test "module initialization: element segment" {
   // This test verifies element segment initialization works
   // (already tested in call_indirect test, but let's be explicit)
-  let func0 : @wasmoon.FunctionCode = { locals: [], body: [I32Const(100)] }
-  let func1 : @wasmoon.FunctionCode = { locals: [], body: [I32Const(200)] }
-  let call_func : @wasmoon.FunctionCode = {
+  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(100)] }
+  let func1 : @types.FunctionCode = { locals: [], body: [I32Const(200)] }
+  let call_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), CallIndirect(0, 0)],
   }
-  let ret_type : @wasmoon.FuncType = {
+  let ret_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let call_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let call_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [ret_type, call_type],
     imports: [],
     funcs: [0, 0, 1], // func0, func1 have type 0; call_func has type 1
     tables: [
-      { elem_type: @wasmoon.ValueType::FuncRef, limits: { min: 2, max: None } },
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 2, max: None } },
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "call", desc: @wasmoon.ExportDesc::Func(2) }],
+    exports: [{ name: "call", desc: @types.ExportDesc::Func(2) }],
     start: None,
     elems: [{ table_idx: 0, offset: [I32Const(0)], init: [0, 1] }],
     codes: [func0, func1, call_func],
@@ -1963,7 +1963,7 @@ test "module initialization: element segment" {
 ///|
 test "bulk memory: memory.fill" {
   // Function: fill memory[0..4] with 0x42, then read back
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(0), // dest
@@ -1974,18 +1974,18 @@ test "bulk memory: memory.fill" {
       I32Load(2, 0),
     ],
   } // read back
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -2003,7 +2003,7 @@ test "bulk memory: memory.fill" {
 ///|
 test "bulk memory: memory.copy non-overlapping" {
   // Store 0x12345678 at address 0, then copy to address 100
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(0),
@@ -2017,18 +2017,18 @@ test "bulk memory: memory.copy non-overlapping" {
       I32Load(2, 0),
     ],
   } // read from dest
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -2046,7 +2046,7 @@ test "bulk memory: memory.copy non-overlapping" {
 test "bulk memory: memory.copy overlapping backward" {
   // Fill memory[0..8] with pattern, then copy memory[0..4] to memory[2..6]
   // This tests backward copy when dest > src
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       // Store [0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00] at address 0
@@ -2064,18 +2064,18 @@ test "bulk memory: memory.copy overlapping backward" {
       I32Load(2, 0),
     ],
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -2093,7 +2093,7 @@ test "bulk memory: memory.copy overlapping backward" {
 ///|
 test "bulk memory: memory.init from data segment" {
   // Module with a data segment, use memory.init to copy part of it
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(100), // dest in memory
@@ -2104,20 +2104,20 @@ test "bulk memory: memory.init from data segment" {
       I32Load(2, 0),
     ],
   }
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
   // Data: 0xDEADBEEF in little-endian
   let data_bytes = Bytes::from_array([b'\xEF', b'\xBE', b'\xAD', b'\xDE'])
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -2136,7 +2136,7 @@ test "bulk memory: memory.init from data segment" {
 ///|
 test "bulk memory: memory.init with offset" {
   // Use memory.init with non-zero source offset
-  let func : @wasmoon.FunctionCode = {
+  let func : @types.FunctionCode = {
     locals: [],
     body: [
       I32Const(0), // dest in memory
@@ -2147,20 +2147,20 @@ test "bulk memory: memory.init with offset" {
       I32Load16U(1, 0),
     ],
   } // load 16-bit unsigned
-  let func_type : @wasmoon.FuncType = {
+  let func_type : @types.FuncType = {
     params: [],
-    results: [@wasmoon.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
   // Data: [0x11, 0x22, 0x33, 0x44]
   let data_bytes = Bytes::from_array([b'\x11', b'\x22', b'\x33', b'\x44'])
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [func],

@@ -4,7 +4,7 @@
 /// Execute i32 numeric instruction
 fn ExecContext::exec_i32_numeric(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // i32 arithmetic operations
@@ -136,7 +136,7 @@ fn ExecContext::exec_i32_numeric(
 /// Execute i64 numeric instruction
 fn ExecContext::exec_i64_numeric(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // i64 arithmetic operations
@@ -270,7 +270,7 @@ fn ExecContext::exec_i64_numeric(
 /// Execute f32 numeric instruction
 fn ExecContext::exec_f32_numeric(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // f32 arithmetic operations
@@ -363,7 +363,7 @@ fn ExecContext::exec_f32_numeric(
 /// Execute f64 numeric instruction
 fn ExecContext::exec_f64_numeric(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // f64 arithmetic operations

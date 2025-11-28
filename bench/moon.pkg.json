@@ -1,6 +1,6 @@
 {
   "import": [
-    "Milky2018/wasmoon",
+    "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/executor",
     "Milky2018/wasmoon/runtime"
   ]

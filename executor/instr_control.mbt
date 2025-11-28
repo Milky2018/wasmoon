@@ -4,7 +4,7 @@
 /// Execute control flow instruction
 fn ExecContext::exec_control(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // Block: execute body, br 0 jumps to end
@@ -75,7 +75,7 @@ fn ExecContext::exec_control(
 /// Execute a block body (can raise ControlSignal)
 fn ExecContext::exec_block(
   self : ExecContext,
-  instrs : Array[@wasmoon.Instruction],
+  instrs : Array[@types.Instruction],
 ) -> Unit raise {
   for instr in instrs {
     self.exec_instr(instr)
@@ -86,7 +86,7 @@ fn ExecContext::exec_block(
 /// Execute function body (catches Return signal)
 fn ExecContext::exec_expr(
   self : ExecContext,
-  instrs : Array[@wasmoon.Instruction],
+  instrs : Array[@types.Instruction],
 ) -> Unit raise {
   self.exec_block(instrs) catch {
     Return => () // Normal function return

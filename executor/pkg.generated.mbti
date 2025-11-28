@@ -2,24 +2,24 @@
 package "Milky2018/wasmoon/executor"
 
 import(
-  "Milky2018/wasmoon"
   "Milky2018/wasmoon/runtime"
+  "Milky2018/wasmoon/types"
 )
 
 // Values
-fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise @runtime.RuntimeError
+fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
-fn instantiate_module(@wasmoon.Module) -> (@runtime.Store, @runtime.ModuleInstance)
+fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance)
 
-fn instantiate_module_with_imports(@runtime.Store, @wasmoon.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
-fn instantiate_module_with_init(@wasmoon.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 
 // Errors
 
 // Types and methods
 type ExecContext
-fn ExecContext::call_func(Self, Int, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise
+fn ExecContext::call_func(Self, Int, Array[@types.Value]) -> Array[@types.Value] raise
 impl Show for ExecContext
 
 // Type aliases

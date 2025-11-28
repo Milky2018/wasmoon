@@ -1,19 +1,15 @@
 ///|
 /// WebAssembly table for function references
 struct Table {
-  elem_type : @wasmoon.ValueType
-  elements : Array[@wasmoon.Value]
+  elem_type : @types.ValueType
+  elements : Array[@types.Value]
   mut size : Int
   max : Int?
 } derive(Show)
 
 ///|
-pub fn Table::new(
-  elem_type : @wasmoon.ValueType,
-  min : Int,
-  max : Int?,
-) -> Table {
-  let elements : Array[@wasmoon.Value] = []
+pub fn Table::new(elem_type : @types.ValueType, min : Int, max : Int?) -> Table {
+  let elements : Array[@types.Value] = []
   for _ in 0..<min {
     elements.push(Null)
   }
@@ -21,7 +17,7 @@ pub fn Table::new(
 }
 
 ///|
-pub fn Table::get(self : Table, idx : Int) -> @wasmoon.Value raise RuntimeError {
+pub fn Table::get(self : Table, idx : Int) -> @types.Value raise RuntimeError {
   if idx < 0 || idx >= self.size {
     raise OutOfBoundsTableAccess
   }
@@ -36,7 +32,7 @@ pub fn Table::get(self : Table, idx : Int) -> @wasmoon.Value raise RuntimeError 
 pub fn Table::set(
   self : Table,
   idx : Int,
-  value : @wasmoon.Value,
+  value : @types.Value,
 ) -> Unit raise RuntimeError {
   if idx < 0 || idx >= self.size {
     raise OutOfBoundsTableAccess
@@ -54,7 +50,7 @@ pub fn Table::size(self : Table) -> Int {
 pub fn Table::get_element(
   self : Table,
   idx : Int,
-) -> @wasmoon.Value raise RuntimeError {
+) -> @types.Value raise RuntimeError {
   if idx < 0 || idx >= self.size {
     raise OutOfBoundsTableAccess
   }
@@ -62,7 +58,7 @@ pub fn Table::get_element(
 }
 
 ///|
-pub fn Table::grow(self : Table, delta : Int, init : @wasmoon.Value) -> Int {
+pub fn Table::grow(self : Table, delta : Int, init : @types.Value) -> Int {
   let old_size = self.size
   let new_size = old_size + delta
 
@@ -86,7 +82,7 @@ pub fn Table::grow(self : Table, delta : Int, init : @wasmoon.Value) -> Int {
 pub fn Table::fill(
   self : Table,
   dest : Int,
-  value : @wasmoon.Value,
+  value : @types.Value,
   n : Int,
 ) -> Unit raise RuntimeError {
   if dest < 0 || n < 0 || dest + n > self.size {
