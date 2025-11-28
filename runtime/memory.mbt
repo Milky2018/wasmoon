@@ -11,7 +11,7 @@ pub fn Memory::new(min : Int, max : Int?) -> Memory {
   let page_size = 65536 // 64KB
   let initial_size = min * page_size
   let data : Array[Byte] = []
-  for i = 0; i < initial_size; i = i + 1 {
+  for _ in 0..<initial_size {
     data.push(b'\x00')
   }
   { data, size: min, max }
@@ -98,7 +98,7 @@ pub fn Memory::store_i64(
   if addr + 8 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
-  for i = 0; i < 8; i = i + 1 {
+  for i in 0..<8 {
     let byte_val = (value >> (i * 8)).land(0xFFL).to_int()
     self.store_byte(addr + i, byte_val.to_byte())
   }
@@ -128,7 +128,7 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
   // Grow the memory
   let page_size = 65536
   let new_data_size = delta * page_size
-  for i = 0; i < new_data_size; i = i + 1 {
+  for _ in 0..<new_data_size {
     self.data.push(b'\x00')
   }
   self.size = new_size

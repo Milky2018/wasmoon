@@ -796,8 +796,7 @@ fn ExecContext::exec_expr(
   self : ExecContext,
   instrs : Array[@wasmoon.Instruction],
 ) -> Unit raise @runtime.RuntimeError {
-  for i = 0; i < instrs.length(); i = i + 1 {
-    let instr = instrs[i]
+  for instr in instrs {
     match instr {
       Return => break // Exit early on return
       _ => self.exec_instr(instr)
@@ -822,13 +821,12 @@ pub fn ExecContext::call_func(
   let locals : Array[@wasmoon.Value] = []
 
   // Add parameters
-  for i = 0; i < args.length(); i = i + 1 {
-    locals.push(args[i])
+  for arg in args {
+    locals.push(arg)
   }
 
   // Add local variables (initialized to 0/null)
-  for i = 0; i < func.locals.length(); i = i + 1 {
-    let local_type = func.locals[i]
+  for local_type in func.locals {
     locals.push(
       match local_type {
         I32 => I32(0)
@@ -873,8 +871,8 @@ pub fn instantiate_module(
 
   // Allocate functions
   let func_addrs : Array[Int] = []
-  for i = 0; i < mod.codes.length(); i = i + 1 {
-    let addr = store.alloc_func(mod.codes[i])
+  for code in mod.codes {
+    let addr = store.alloc_func(code)
     func_addrs.push(addr)
   }
 

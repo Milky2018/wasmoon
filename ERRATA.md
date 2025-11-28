@@ -338,6 +338,41 @@
   refactor: split runtime into separate modules
   ```
 
+#### 5. Git 分支工作流
+- ❌ **错误做法**: 直接在 master/main 分支上开发
+- ✅ **正确做法**: 每次改动或添加功能都开新分支
+  ```bash
+  git checkout -b feat/memory-operations   # 新功能
+  git checkout -b fix/trunc-overflow       # 修复 bug
+  git checkout -b refactor/parser-cleanup  # 重构
+  ```
+- 完成后通过 PR 合并到主分支
+
+#### 10. 循环语法优化
+- ❌ **错误做法**: 使用传统 C 风格 for 循环
+  ```moonbit
+  for i = 0; i < n; i = i + 1 {
+    arr.push(items[i])
+  }
+  ```
+- ✅ **正确做法**: 使用 `for-in` 循环
+  ```moonbit
+  // 遍历集合
+  for item in items {
+    arr.push(item)
+  }
+
+  // 需要索引时
+  for i in 0..<n {
+    process(i)
+  }
+
+  // 不需要索引时
+  for _ in 0..<n {
+    arr.push(default_value)
+  }
+  ```
+
 ---
 
 ## 待补充
@@ -351,4 +386,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 更新 README.md 中的内容（85行） → 已完成
 - [x] 完善 `cmd/main`，引入 `moonbitlang/x/sys`，使用 `@sys.get_cli_args()` 获取命令行参数；使用 `moon add TheWaWaR/clap@0.2.6` 引入 clap → 已完成
 - [x] 把 README.mbt.md 中的代码块改成正确的 MoonBit 代码，使用 test block 包裹 → 已完成
-- [ ] 能使用 `for-in` 循环时，不要使用 `for i = 0; i < n; i++`
+- [x] 能使用 `for-in` 循环时，不要使用 `for i = 0; i < n; i++` → 已添加到第10条
