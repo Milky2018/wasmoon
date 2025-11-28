@@ -60,74 +60,88 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-## Phase 3: 模块系统 📦
+## Phase 3: 完整的 WASM 1.0 支持 📦
 
-### 3.1 导入导出
-- [x] 函数导入/导出
-- [x] 主机函数接口 (Host Functions)
-- [x] 内存导入/导出
-- [ ] 表导入/导出
-- [ ] 全局变量导入/导出
-
-### 3.2 模块验证器
-- [ ] 类型检查
-- [ ] 栈高度验证
-- [ ] 控制流验证
-
-### 3.3 模块链接
-- [ ] 多模块支持
-- [ ] 符号解析
-
----
-
-## Phase 4: 高级特性 🚀
-
-### 4.1 全局变量
+### 3.1 全局变量
 - [ ] global.get / global.set
 - [ ] 全局变量初始化表达式
 
-### 4.2 表操作
+### 3.2 导入导出
+- [x] 函数导入/导出
+- [x] 主机函数接口 (Host Functions)
+- [x] 内存导入/导出
+- [x] 表导入/导出
+- [ ] 全局变量导入/导出
+
+### 3.3 表操作
 - [ ] table.get / table.set
 - [ ] table.size / table.grow
 - [ ] table.fill / table.copy
 
-### 4.3 数据段
-- [ ] 数据段初始化
-- [ ] memory.init / memory.copy / memory.fill
+### 3.4 模块初始化
+- [ ] Start function 执行
+- [ ] 数据段初始化 (data segment)
+- [ ] 元素段初始化 (element segment)
 
-### 4.4 引用类型
+### 3.5 批量内存操作
+- [ ] memory.init / memory.copy / memory.fill
+- [ ] data.drop / elem.drop
+
+### 3.6 引用类型
 - [ ] ref.null / ref.is_null / ref.func
+
+### 3.7 多返回值
+- [ ] 函数多返回值支持
+- [ ] block/if 多返回值支持
 
 ---
 
-## Phase 5: 性能优化 ⚡
+## Phase 4: 模块验证与链接 🔗
 
-### 5.1 解释器优化
-- [ ] 直接线程解释 (Direct Threading)
-- [ ] 指令融合 (Instruction Fusion)
-- [ ] 超级指令 (Superinstructions)
-- [ ] 栈缓存优化
+### 4.1 模块验证器
+- [ ] 类型检查
+- [ ] 栈高度验证
+- [ ] 控制流验证
+
+### 4.2 多模块支持
+- [ ] 模块链接
+- [ ] 符号解析
+
+---
+
+## Phase 5: 工具与测试 🛠️
+
+### 5.1 规范兼容性
+- [ ] 通过官方测试套件 (wasm-testsuite)
 
 ### 5.2 工具链
 - [ ] WAT 文本格式支持
 - [ ] WASM 反汇编器
-- [ ] 基准测试套件
 
 ---
 
-## Phase 6: 规范兼容性 📋
+## Phase 6: 性能优化（可选）⚡
 
-### 6.1 WASM 1.0
-- [ ] 通过官方测试套件
+### 6.1 解释器优化
+- [ ] 指令分派优化
+- [ ] 栈缓存优化
+- [ ] 热点函数识别
 
-### 6.2 WASM 2.0 特性
-- [ ] 多值返回
-- [ ] 批量内存操作
-- [ ] 尾调用
+### 6.2 基准测试
+- [ ] 基准测试套件
+- [ ] 性能对比分析
 
-### 6.3 扩展提案（可选）
+---
+
+## Phase 7: 扩展提案（可选）🚀
+
+### 7.1 WASM 2.0+ 特性
+- [ ] 尾调用 (tail-call)
+- [ ] 异常处理 (exception-handling)
+
+### 7.2 高级提案
 - [ ] SIMD (v128)
-- [ ] 异常处理
+- [ ] 线程 (threads)
 
 ---
 
@@ -139,5 +153,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 3.1 进行中 (函数导入/导出已完成)
-**下一步**: 内存/表/全局变量导入导出
+**当前状态**: Phase 3 进行中
+**下一步**: 全局变量 (global.get / global.set)
