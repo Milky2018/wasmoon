@@ -71,6 +71,24 @@ fn ExecContext::exec_instr(
       let old_size = table.grow(delta, init_val)
       self.stack.push(I32(old_size))
     }
+    TableFill(table_idx) => {
+      let n = self.stack.pop_i32()
+      let value = self.stack.pop()
+      let dest = self.stack.pop_i32()
+      let table_addr = self.instance.table_addrs[table_idx]
+      let table = self.store.get_table(table_addr)
+      table.fill(dest, value, n)
+    }
+    TableCopy(dest_table_idx, src_table_idx) => {
+      let n = self.stack.pop_i32()
+      let src = self.stack.pop_i32()
+      let dest = self.stack.pop_i32()
+      let dest_table_addr = self.instance.table_addrs[dest_table_idx]
+      let src_table_addr = self.instance.table_addrs[src_table_idx]
+      let dest_table = self.store.get_table(dest_table_addr)
+      let src_table = self.store.get_table(src_table_addr)
+      dest_table.copy_from(dest, src_table, src, n)
+    }
 
     // Drop
     Drop => {

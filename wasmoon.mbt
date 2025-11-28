@@ -65,6 +65,8 @@ pub(all) enum Instruction {
   TableSet(Int) // table index
   TableSize(Int) // table index
   TableGrow(Int) // table index
+  TableFill(Int) // table index
+  TableCopy(Int, Int) // dest table index, src table index
 
   // Memory instructions
   I32Load(Int, Int) // align, offset

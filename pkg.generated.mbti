@@ -114,6 +114,8 @@ pub(all) enum Instruction {
   TableSet(Int)
   TableSize(Int)
   TableGrow(Int)
+  TableFill(Int)
+  TableCopy(Int, Int)
   I32Load(Int, Int)
   I64Load(Int, Int)
   F32Load(Int, Int)
