@@ -147,7 +147,7 @@ fn Table::get(Self, Int) -> @wasmoon.Value raise RuntimeError
 fn Table::grow(Self, Int, @wasmoon.Value) -> Int
 fn Table::new(@wasmoon.ValueType, Int, Int?) -> Self
 fn Table::set(Self, Int, @wasmoon.Value) -> Unit raise RuntimeError
-fn Table::size_entries(Self) -> Int
+fn Table::size(Self) -> Int
 impl Show for Table
 
 // Type aliases

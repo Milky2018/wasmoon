@@ -45,7 +45,7 @@ pub fn Table::set(
 }
 
 ///|
-pub fn Table::size_entries(self : Table) -> Int {
+pub fn Table::size(self : Table) -> Int {
   self.size
 }
 

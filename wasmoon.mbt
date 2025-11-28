@@ -60,6 +60,12 @@ pub(all) enum Instruction {
   GlobalGet(Int)
   GlobalSet(Int)
 
+  // Table instructions
+  TableGet(Int) // table index
+  TableSet(Int) // table index
+  TableSize(Int) // table index
+  TableGrow(Int) // table index
+
   // Memory instructions
   I32Load(Int, Int) // align, offset
   I64Load(Int, Int)

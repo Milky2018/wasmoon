@@ -1475,3 +1475,211 @@ test "table import: call_indirect with imported table" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "global variables: global.get and global.set" {
+  // Module with a mutable global initialized to 10
+  // Function: increment global and return new value
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      GlobalGet(0), // get global value (10)
+      I32Const(5), // add 5
+      I32Add,
+      GlobalSet(0), // set global to 15
+      GlobalGet(0),
+    ],
+  } // return new value
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let global : @wasmoon.Global = {
+    type_: { value_type: @wasmoon.ValueType::I32, mutable: true },
+    init: [I32Const(10)],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [global],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="15") // 10 + 5 = 15
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "global variables: multiple globals" {
+  // Module with two globals: counter (mutable) and max (immutable)
+  // Function: add counter + max
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [GlobalGet(0), GlobalGet(1), I32Add],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let counter : @wasmoon.Global = {
+    type_: { value_type: @wasmoon.ValueType::I32, mutable: true },
+    init: [I32Const(7)],
+  }
+  let max : @wasmoon.Global = {
+    type_: { value_type: @wasmoon.ValueType::I32, mutable: false },
+    init: [I32Const(100)],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [counter, max],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="107") // 7 + 100 = 107
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "global variables: i64 global" {
+  // Module with an i64 global
+  let func : @wasmoon.FunctionCode = { locals: [], body: [GlobalGet(0)] }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I64],
+  }
+  let global : @wasmoon.Global = {
+    type_: { value_type: @wasmoon.ValueType::I64, mutable: false },
+    init: [I64Const(9999999999L)],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [global],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I64(n) => inspect(n, content="9999999999")
+    _ => fail("Expected I64 result")
+  }
+}
+
+///|
+test "global import: imported global" {
+  // Create a store with a global
+  let store = @runtime.Store::new()
+  let global_inst = @runtime.GlobalInstance::new(
+    { value_type: @wasmoon.ValueType::I32, mutable: true },
+    @wasmoon.Value::I32(42),
+  )
+  let global_addr = store.alloc_global(global_inst)
+
+  // Module that imports and uses the global
+  let func : @wasmoon.FunctionCode = { locals: [], body: [GlobalGet(0)] }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [
+      {
+        mod_name: "env",
+        name: "g",
+        desc: Global({ value_type: @wasmoon.ValueType::I32, mutable: true }),
+      },
+    ],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "get", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let imports = @runtime.Imports::new()
+  imports.add_global("env", "g", global_addr)
+  let instance = instantiate_module_with_imports(store, mod, imports)
+  let results = call_exported_func(store, instance, "get", [])
+  match results[0] {
+    I32(n) => inspect(n, content="42")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "table operations: table.size" {
+  // Module with a table, get its size
+  let func : @wasmoon.FunctionCode = { locals: [], body: [TableSize(0)] }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [
+      { elem_type: @wasmoon.ValueType::FuncRef, limits: { min: 4, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="4") // table size is 4
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "table operations: table.grow" {
+  // Module with a table, grow it and return new size
+  // Note: table.grow needs a reference value on stack. For now, we test via
+  // direct store manipulation since ref.null instruction is not implemented yet.
+  let store = @runtime.Store::new()
+  let table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 2, None)
+  let _ = store.alloc_table(table)
+
+  // Grow the table directly
+  let old_size = table.grow(3, @wasmoon.Value::Null)
+  inspect(old_size, content="2") // old size was 2
+  inspect(table.size(), content="5") // new size is 5
+}
