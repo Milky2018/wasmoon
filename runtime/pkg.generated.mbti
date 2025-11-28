@@ -44,13 +44,32 @@ impl Show for Label
 type Memory
 fn Memory::grow(Self, Int) -> Int
 fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
+fn Memory::load_f32(Self, Int) -> Float raise RuntimeError
+fn Memory::load_f64(Self, Int) -> Double raise RuntimeError
 fn Memory::load_i32(Self, Int) -> Int raise RuntimeError
+fn Memory::load_i32_16s(Self, Int) -> Int raise RuntimeError
+fn Memory::load_i32_16u(Self, Int) -> Int raise RuntimeError
+fn Memory::load_i32_8s(Self, Int) -> Int raise RuntimeError
+fn Memory::load_i32_8u(Self, Int) -> Int raise RuntimeError
 fn Memory::load_i64(Self, Int) -> Int64 raise RuntimeError
+fn Memory::load_i64_16s(Self, Int) -> Int64 raise RuntimeError
+fn Memory::load_i64_16u(Self, Int) -> Int64 raise RuntimeError
+fn Memory::load_i64_32s(Self, Int) -> Int64 raise RuntimeError
+fn Memory::load_i64_32u(Self, Int) -> Int64 raise RuntimeError
+fn Memory::load_i64_8s(Self, Int) -> Int64 raise RuntimeError
+fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
 fn Memory::new(Int, Int?) -> Self
 fn Memory::size_pages(Self) -> Int
 fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
+fn Memory::store_f32(Self, Int, Float) -> Unit raise RuntimeError
+fn Memory::store_f64(Self, Int, Double) -> Unit raise RuntimeError
 fn Memory::store_i32(Self, Int, Int) -> Unit raise RuntimeError
+fn Memory::store_i32_16(Self, Int, Int) -> Unit raise RuntimeError
+fn Memory::store_i32_8(Self, Int, Int) -> Unit raise RuntimeError
 fn Memory::store_i64(Self, Int, Int64) -> Unit raise RuntimeError
+fn Memory::store_i64_16(Self, Int, Int64) -> Unit raise RuntimeError
+fn Memory::store_i64_32(Self, Int, Int64) -> Unit raise RuntimeError
+fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
 impl Show for Memory
 
 pub(all) struct ModuleInstance {
