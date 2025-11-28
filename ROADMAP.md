@@ -75,22 +75,22 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 **状态**: 已完成
 
-### 2.2 内存操作
-- [ ] 完整的 load 指令族 (i32.load, i64.load, f32.load, f64.load)
-- [ ] 扩展的 load 指令 (load8_s, load8_u, load16_s, load16_u, load32_s, load32_u)
-- [ ] 完整的 store 指令族
-- [ ] memory.size 和 memory.grow
+### 2.2 内存操作 ✅ 已完成
+- [x] 完整的 load 指令族 (i32.load, i64.load, f32.load, f64.load)
+- [x] 扩展的 load 指令 (load8_s, load8_u, load16_s, load16_u, load32_s, load32_u)
+- [x] 完整的 store 指令族
+- [x] memory.size 和 memory.grow
 - [ ] 内存边界检查优化
 
-**预估**: ~150 行代码
+**状态**: 已完成
 
-### 2.3 控制流
-- [ ] 结构化控制流 (block, loop, if-else)
-- [ ] 分支指令 (br, br_if, br_table)
-- [ ] 标签栈管理
+### 2.3 控制流 ✅ 已完成
+- [x] 结构化控制流 (block, loop, if-else)
+- [x] 分支指令 (br, br_if, br_table)
+- [x] 标签栈管理
 - [ ] 多返回值支持
 
-**预估**: ~250 行代码
+**状态**: 已完成
 
 ### 2.4 函数调用
 - [ ] 直接函数调用 (call)
@@ -260,5 +260,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ---
 
 **最后更新**: 2025-11-28
-**当前状态**: Phase 2.1 已完成 (完整数值运算)
-**下一步**: Phase 2.2 (内存操作)
+**当前状态**: Phase 2.3 已完成 (控制流)
+**下一步**: Phase 2.4 (函数调用)

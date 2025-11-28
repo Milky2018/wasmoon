@@ -55,7 +55,7 @@ fn ExecContext::get_frame(
 fn ExecContext::exec_instr(
   self : ExecContext,
   instr : @wasmoon.Instruction,
-) -> Unit raise @runtime.RuntimeError {
+) -> Unit raise {
   match instr {
     // Constants
     I32Const(n) => self.stack.push(I32(n))
@@ -1016,24 +1016,101 @@ fn ExecContext::exec_instr(
       self.stack.push(I32(result))
     }
 
-    // Control flow - simplified for MVP
+    // ============================================================
+    // Control Flow Instructions
+    // ============================================================
+
+    // Block: execute body, br 0 jumps to end
+    Block(_bt, body) =>
+      self.exec_block(body) catch {
+        @runtime.Branch(0) => () // Branch to this block = exit
+        @runtime.Branch(n) => raise @runtime.Branch(n - 1) // Propagate
+        e => raise e // Re-raise other errors
+      }
+
+    // Loop: execute body, br 0 jumps to start
+    Loop(_bt, body) =>
+      loop () {
+        _ =>
+          try {
+            self.exec_block(body)
+            break () // Normal exit
+          } catch {
+            @runtime.Branch(0) => continue () // Restart loop
+            @runtime.Branch(n) => raise @runtime.Branch(n - 1)
+            e => raise e
+          }
+      }
+
+    // If-else: pop condition, execute appropriate branch
+    If(_bt, then_body, else_body) => {
+      let cond = self.stack.pop_i32()
+      let body = if cond != 0 { then_body } else { else_body }
+      self.exec_block(body) catch {
+        @runtime.Branch(0) => () // Branch to this if = exit
+        @runtime.Branch(n) => raise @runtime.Branch(n - 1)
+        e => raise e
+      }
+    }
+
+    // Unconditional branch
+    Br(depth) => raise @runtime.Branch(depth)
+
+    // Conditional branch
+    BrIf(depth) => {
+      let cond = self.stack.pop_i32()
+      if cond != 0 {
+        raise @runtime.Branch(depth)
+      }
+    }
+
+    // Table-driven branch
+    BrTable(labels, default) => {
+      let idx = self.stack.pop_i32()
+      let depth = if idx >= 0 && idx < labels.length() {
+        labels[idx]
+      } else {
+        default
+      }
+      raise @runtime.Branch(depth)
+    }
+
+    // Unreachable trap
+    Unreachable => raise @runtime.RuntimeError::Unreachable
+
+    // Select: ternary operator
+    Select => {
+      let cond = self.stack.pop_i32()
+      let val2 = self.stack.pop()
+      let val1 = self.stack.pop()
+      self.stack.push(if cond != 0 { val1 } else { val2 })
+    }
     Nop => ()
-    Return => () // Handled by caller
-    _ => raise @runtime.RuntimeError::Unreachable // Unsupported instruction in MVP
+    Return => raise @runtime.Return
+    _ => raise @runtime.RuntimeError::Unreachable
   }
 }
 
 ///|
-/// Execute a sequence of instructions
+/// Execute a block body (can raise ControlSignal)
+fn ExecContext::exec_block(
+  self : ExecContext,
+  instrs : Array[@wasmoon.Instruction],
+) -> Unit raise {
+  for instr in instrs {
+    self.exec_instr(instr)
+  }
+}
+
+///|
+/// Execute function body (catches Return signal)
 fn ExecContext::exec_expr(
   self : ExecContext,
   instrs : Array[@wasmoon.Instruction],
-) -> Unit raise @runtime.RuntimeError {
-  for instr in instrs {
-    match instr {
-      Return => break // Exit early on return
-      _ => self.exec_instr(instr)
-    }
+) -> Unit raise {
+  self.exec_block(instrs) catch {
+    @runtime.Return => () // Normal function return
+    e => raise e
   }
 }
 
@@ -1047,7 +1124,7 @@ pub fn ExecContext::call_func(
   self : ExecContext,
   func_idx : Int,
   args : Array[@wasmoon.Value],
-) -> Array[@wasmoon.Value] raise @runtime.RuntimeError {
+) -> Array[@wasmoon.Value] raise {
   let func = self.store.get_func(func_idx)
 
   // Create locals array: params + local variables
@@ -1138,7 +1215,7 @@ pub fn call_exported_func(
   instance : @runtime.ModuleInstance,
   name : String,
   args : Array[@wasmoon.Value],
-) -> Array[@wasmoon.Value] raise @runtime.RuntimeError {
+) -> Array[@wasmoon.Value] raise {
   // Find the export
   fn find_export(
     exports : Array[@wasmoon.Export],
@@ -1863,6 +1940,332 @@ test "memory: memory.size and memory.grow" {
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
     I32(n) => inspect(n, content="3")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "control flow: simple block" {
+  // block returns value from inner expression
+  // (block (result i32) (i32.const 42))
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [Block(Value(@wasmoon.ValueType::I32), [I32Const(42)])],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="42")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "control flow: br exits block" {
+  // (block (result i32)
+  //   (i32.const 10)
+  //   (br 0)
+  //   (i32.const 20)  ;; unreachable
+  // )
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      Block(Value(@wasmoon.ValueType::I32), [I32Const(10), Br(0), I32Const(20)]),
+    ],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="10")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "control flow: br_if conditional" {
+  // (func (param i32) (result i32)
+  //   (block (result i32)
+  //     (i32.const 100)
+  //     (local.get 0)
+  //     (br_if 0)  ;; if param != 0, exit with 100
+  //     (drop)
+  //     (i32.const 200)
+  //   ))
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      Block(Value(@wasmoon.ValueType::I32), [
+        I32Const(100),
+        LocalGet(0),
+        BrIf(0),
+        Drop,
+        I32Const(200),
+      ]),
+    ],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // Test with condition true (1) - should return 100
+  let results1 = call_exported_func(store, instance, "test", [I32(1)])
+  match results1[0] {
+    I32(n) => inspect(n, content="100")
+    _ => fail("Expected I32 result")
+  }
+  // Test with condition false (0) - should return 200
+  let results2 = call_exported_func(store, instance, "test", [I32(0)])
+  match results2[0] {
+    I32(n) => inspect(n, content="200")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "control flow: loop with br" {
+  // Sum 1 to 5 using loop
+  // (func (result i32)
+  //   (local i32 i32)  ;; counter, sum
+  //   (local.set 0 (i32.const 1))  ;; counter = 1
+  //   (local.set 1 (i32.const 0))  ;; sum = 0
+  //   (loop
+  //     (local.set 1 (i32.add (local.get 1) (local.get 0)))  ;; sum += counter
+  //     (local.set 0 (i32.add (local.get 0) (i32.const 1)))  ;; counter++
+  //     (br_if 0 (i32.le_s (local.get 0) (i32.const 5)))     ;; if counter <= 5, loop
+  //   )
+  //   (local.get 1))  ;; return sum
+  let func : @wasmoon.FunctionCode = {
+    locals: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32], // counter, sum
+    body: [
+      I32Const(1),
+      LocalSet(0), // counter = 1
+      I32Const(0),
+      LocalSet(1), // sum = 0
+      Loop(Empty, [
+        LocalGet(1),
+        LocalGet(0),
+        I32Add,
+        LocalSet(1), // sum += counter
+        LocalGet(0),
+        I32Const(1),
+        I32Add,
+        LocalSet(0), // counter++
+        LocalGet(0),
+        I32Const(5),
+        I32LeS,
+        BrIf(0),
+      ]), // if counter <= 5, continue
+      LocalGet(1),
+    ],
+  } // return sum
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="15") // 1+2+3+4+5 = 15
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "control flow: if-else" {
+  // (func (param i32) (result i32)
+  //   (if (result i32) (local.get 0)
+  //     (then (i32.const 111))
+  //     (else (i32.const 222))))
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      LocalGet(0),
+      If(Value(@wasmoon.ValueType::I32), [I32Const(111)], [I32Const(222)]),
+    ],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // Test with true (1)
+  let results1 = call_exported_func(store, instance, "test", [I32(1)])
+  match results1[0] {
+    I32(n) => inspect(n, content="111")
+    _ => fail("Expected I32 result")
+  }
+  // Test with false (0)
+  let results2 = call_exported_func(store, instance, "test", [I32(0)])
+  match results2[0] {
+    I32(n) => inspect(n, content="222")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "control flow: nested blocks with br" {
+  // (block $outer (result i32)
+  //   (block $inner
+  //     (i32.const 50)
+  //     (br 1)  ;; jump to outer
+  //   )
+  //   (i32.const 99))
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      Block(Value(@wasmoon.ValueType::I32), [
+        Block(Empty, [I32Const(50), Br(1)]),
+        I32Const(99),
+      ]),
+    ],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="50")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "control flow: select" {
+  // (func (param i32 i32 i32) (result i32)
+  //   (select (local.get 0) (local.get 1) (local.get 2)))
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), LocalGet(2), Select],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [
+      @wasmoon.ValueType::I32,
+      @wasmoon.ValueType::I32,
+      @wasmoon.ValueType::I32,
+    ],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // select(10, 20, 1) -> 10 (condition true)
+  let results1 = call_exported_func(store, instance, "test", [
+    I32(10),
+    I32(20),
+    I32(1),
+  ])
+  match results1[0] {
+    I32(n) => inspect(n, content="10")
+    _ => fail("Expected I32 result")
+  }
+  // select(10, 20, 0) -> 20 (condition false)
+  let results2 = call_exported_func(store, instance, "test", [
+    I32(10),
+    I32(20),
+    I32(0),
+  ])
+  match results2[0] {
+    I32(n) => inspect(n, content="20")
     _ => fail("Expected I32 result")
   }
 }

@@ -8,6 +8,12 @@ import(
 // Values
 
 // Errors
+pub(all) suberror ControlSignal {
+  Branch(Int)
+  Return
+}
+impl Show for ControlSignal
+
 pub(all) suberror RuntimeError {
   StackUnderflow
   StackOverflow
