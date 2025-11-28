@@ -7,7 +7,7 @@ import(
 )
 
 // Values
-fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise @runtime.RuntimeError
+fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise
 
 fn instantiate_module(@wasmoon.Module) -> (@runtime.Store, @runtime.ModuleInstance)
 
@@ -15,7 +15,7 @@ fn instantiate_module(@wasmoon.Module) -> (@runtime.Store, @runtime.ModuleInstan
 
 // Types and methods
 type ExecContext
-fn ExecContext::call_func(Self, Int, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise @runtime.RuntimeError
+fn ExecContext::call_func(Self, Int, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise
 impl Show for ExecContext
 
 // Type aliases
