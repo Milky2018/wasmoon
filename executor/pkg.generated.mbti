@@ -11,6 +11,8 @@ fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@wa
 
 fn instantiate_module(@wasmoon.Module) -> (@runtime.Store, @runtime.ModuleInstance)
 
+fn instantiate_module_with_imports(@runtime.Store, @wasmoon.Module, @runtime.Imports) -> @runtime.ModuleInstance
+
 fn instantiate_module_with_init(@wasmoon.Module) -> (@runtime.Store, @runtime.ModuleInstance)
 
 // Errors

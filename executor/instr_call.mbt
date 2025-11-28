@@ -4,10 +4,10 @@
 /// Execute call instruction: direct function call
 fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
   // Get the function type from the module instance
-  // funcs[func_idx] gives us the type index
-  let type_idx = self.instance.func_addrs[func_idx]
+  // func_addrs[func_idx] gives us the store address
+  let store_addr = self.instance.func_addrs[func_idx]
+  let type_idx = self.instance.func_type_indices[func_idx]
   let func_type = self.instance.types[type_idx]
-  let func = self.store.get_func(func_idx)
 
   // Pop arguments from stack in reverse order
   let num_params = func_type.params.length()
@@ -19,8 +19,9 @@ fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
     args[i] = self.stack.pop()
   }
 
-  // Execute the function
-  self.call_func_internal(func_idx, func, args, func_type.results.length())
+  // Get the function instance and execute
+  let func_inst = self.store.get_func_inst(store_addr)
+  self.call_func_inst(func_inst, args, func_type.results.length())
 }
 
 ///|
@@ -38,17 +39,13 @@ fn ExecContext::exec_call_indirect(
   let elem = table.get(func_ref_idx)
 
   // The element should be a function reference
-  let func_idx = match elem {
+  let store_addr = match elem {
     FuncRef(idx) => idx
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 
   // Get the expected type and the function
   let expected_type = self.instance.types[type_idx]
-  let func = self.store.get_func(func_idx)
-
-  // In a full implementation, we'd verify the function's actual type matches expected_type
-  // For now, we trust the types match
 
   // Pop arguments from stack in reverse order
   let num_params = expected_type.params.length()
@@ -60,15 +57,36 @@ fn ExecContext::exec_call_indirect(
     args[i] = self.stack.pop()
   }
 
-  // Execute the function
-  self.call_func_internal(func_idx, func, args, expected_type.results.length())
+  // Get the function instance and execute
+  let func_inst = self.store.get_func_inst(store_addr)
+  self.call_func_inst(func_inst, args, expected_type.results.length())
 }
 
 ///|
-/// Internal function to execute a function call
-fn ExecContext::call_func_internal(
+/// Call a function instance (WASM or host)
+fn ExecContext::call_func_inst(
   self : ExecContext,
-  func_idx : Int,
+  func_inst : @runtime.FuncInst,
+  args : Array[@wasmoon.Value],
+  num_results : Int,
+) -> Unit raise {
+  match func_inst {
+    WasmFunc(code) => self.call_wasm_func(code, args, num_results)
+    HostFunc(host_fn) => {
+      // Call host function directly
+      let results = host_fn(args)
+      // Push results onto the stack
+      for result in results {
+        self.stack.push(result)
+      }
+    }
+  }
+}
+
+///|
+/// Call a WASM function
+fn ExecContext::call_wasm_func(
+  self : ExecContext,
   func : @wasmoon.FunctionCode,
   args : Array[@wasmoon.Value],
   num_results : Int,
@@ -96,8 +114,8 @@ fn ExecContext::call_func_internal(
     )
   }
 
-  // Create and push frame
-  let frame = @runtime.Frame::new(func_idx, locals, num_results)
+  // Create and push frame (use -1 as func_idx since we don't track it here)
+  let frame = @runtime.Frame::new(-1, locals, num_results)
   self.push_frame(frame)
 
   // Execute function body
