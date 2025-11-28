@@ -146,6 +146,9 @@ pub(all) enum Instruction {
   MemoryCopy
   MemoryFill
   ElemDrop(Int)
+  RefNull(ValueType)
+  RefIsNull
+  RefFunc(Int)
   I32Const(Int)
   I64Const(Int64)
   F32Const(Float)

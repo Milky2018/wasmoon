@@ -2329,3 +2329,183 @@ test "bulk memory: data.drop is idempotent" {
   let _ = call_exported_func(store, instance, "drop", [])
   inspect(instance.dropped_datas[0], content="true")
 }
+
+///|
+test "reference types: ref.null funcref" {
+  // Function: push null funcref and check if it's null
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [RefNull(@types.ValueType::FuncRef), RefIsNull],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="1") // null ref returns 1 for ref.is_null
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "reference types: ref.null externref" {
+  // Function: push null externref and check if it's null
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [RefNull(@types.ValueType::ExternRef), RefIsNull],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="1") // null ref returns 1 for ref.is_null
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "reference types: ref.func" {
+  // Function 0: returns 42
+  // Function 1: get ref to func 0 and check it's not null
+  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
+  let func1 : @types.FunctionCode = {
+    locals: [],
+    body: [RefFunc(0), RefIsNull],
+  }
+  let i32_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [i32_type],
+    imports: [],
+    funcs: [0, 0], // both have type 0
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    start: None,
+    elems: [],
+    codes: [func0, func1],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="0") // non-null ref returns 0 for ref.is_null
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "reference types: ref.is_null with non-null value" {
+  // Test ref.is_null with a FuncRef value (from table)
+  // Function 0: dummy function
+  // Function 1: get funcref from table and check if null
+  let dummy_func : @types.FunctionCode = { locals: [], body: [I32Const(0)] }
+  let check_func : @types.FunctionCode = {
+    locals: [],
+    body: [I32Const(0), TableGet(0), RefIsNull], // get table[0], check if null
+  }
+  let i32_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [i32_type],
+    imports: [],
+    funcs: [0, 0],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    start: None,
+    elems: [{ table_idx: 0, offset: [I32Const(0)], init: [0] }], // table[0] = func 0
+    codes: [dummy_func, check_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="0") // non-null ref returns 0
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "reference types: ref.func used with table.set" {
+  // Create function reference and store it in table, then call via call_indirect
+  // func 0: returns 100
+  // func 1: use ref.func to get reference to func 0, store in table, call via indirect
+  let target_func : @types.FunctionCode = { locals: [], body: [I32Const(100)] }
+  let test_func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      I32Const(0), // table index
+      RefFunc(0), // get reference to func 0
+      TableSet(0), // table[0] = ref to func 0
+      I32Const(0), // table index for call_indirect
+      CallIndirect(0, 0),
+    ],
+  } // call table[0] with type 0
+  let i32_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [i32_type],
+    imports: [],
+    funcs: [0, 0],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    start: None,
+    elems: [],
+    codes: [target_func, test_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="100") // should call func 0 and get 100
+    _ => fail("Expected I32 result")
+  }
+}
