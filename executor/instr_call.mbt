@@ -34,8 +34,9 @@ fn ExecContext::exec_call_indirect(
   // Pop the function index from the stack
   let func_ref_idx = self.stack.pop_i32()
 
-  // Get the table and look up the function reference
-  let table = self.store.get_table(table_idx)
+  // Get the table address from instance and look up the function reference
+  let table_addr = self.instance.table_addrs[table_idx]
+  let table = self.store.get_table(table_addr)
   let elem = table.get(func_ref_idx)
 
   // The element should be a function reference
