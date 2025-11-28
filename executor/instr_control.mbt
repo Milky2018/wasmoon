@@ -1,6 +1,29 @@
 // Control Flow Instructions - block, loop, if, branch, and misc
 
 ///|
+/// Get the number of results for a block type
+fn ExecContext::block_arity(self : ExecContext, bt : @types.BlockType) -> Int {
+  match bt {
+    Empty => 0
+    Value(_) => 1
+    TypeIndex(idx) => self.instance.types[idx].results.length()
+  }
+}
+
+///|
+/// Get the number of params for a block type (used for loop branches)
+fn ExecContext::block_param_arity(
+  self : ExecContext,
+  bt : @types.BlockType,
+) -> Int {
+  match bt {
+    Empty => 0
+    Value(_) => 0 // Single value blocks have no params
+    TypeIndex(idx) => self.instance.types[idx].params.length()
+  }
+}
+
+///|
 /// Execute control flow instruction
 fn ExecContext::exec_control(
   self : ExecContext,
@@ -8,42 +31,64 @@ fn ExecContext::exec_control(
 ) -> Unit raise {
   match instr {
     // Block: execute body, br 0 jumps to end
-    Block(_bt, body) =>
+    Block(bt, body) => {
+      let arity = self.block_arity(bt)
       self.exec_block(body) catch {
-        Branch(0) => () // Branch to this block = exit
-        Branch(n) => raise Branch(n - 1) // Propagate
-        e => raise e // Re-raise other errors
+        BranchWith(0, values) =>
+          // Push the branch values back onto the stack
+          for v in values {
+            self.stack.push(v)
+          }
+        BranchWith(n, values) => raise BranchWith(n - 1, values)
+        e => raise e
       }
+      // After block ends normally, top `arity` values remain on stack
+      ignore(arity)
+    }
     // Loop: execute body, br 0 jumps to start
-    Loop(_bt, body) =>
+    Loop(bt, body) => {
+      let param_arity = self.block_param_arity(bt)
       loop () {
         _ =>
           try {
             self.exec_block(body)
             break () // Normal exit
           } catch {
-            Branch(0) => continue () // Restart loop
-            Branch(n) => raise Branch(n - 1)
+            BranchWith(0, values) => {
+              // For loop, branch to start: push params back and continue
+              for v in values {
+                self.stack.push(v)
+              }
+              continue ()
+            }
+            BranchWith(n, values) => raise BranchWith(n - 1, values)
             e => raise e
           }
       }
+      ignore(param_arity)
+    }
     // If-else: pop condition, execute appropriate branch
-    If(_bt, then_body, else_body) => {
+    If(bt, then_body, else_body) => {
       let cond = self.stack.pop_i32()
       let body = if cond != 0 { then_body } else { else_body }
+      let arity = self.block_arity(bt)
       self.exec_block(body) catch {
-        Branch(0) => () // Branch to this if = exit
-        Branch(n) => raise Branch(n - 1)
+        BranchWith(0, values) =>
+          for v in values {
+            self.stack.push(v)
+          }
+        BranchWith(n, values) => raise BranchWith(n - 1, values)
         e => raise e
       }
+      ignore(arity)
     }
-    // Unconditional branch
-    Br(depth) => raise Branch(depth)
+    // Unconditional branch - need to collect values for multi-value
+    Br(depth) => raise BranchWith(depth, [])
     // Conditional branch
     BrIf(depth) => {
       let cond = self.stack.pop_i32()
       if cond != 0 {
-        raise Branch(depth)
+        raise BranchWith(depth, [])
       }
     }
     // Table-driven branch
@@ -54,7 +99,7 @@ fn ExecContext::exec_control(
       } else {
         default
       }
-      raise Branch(depth)
+      raise BranchWith(depth, [])
     }
     // Unreachable trap
     Unreachable => raise @runtime.RuntimeError::Unreachable

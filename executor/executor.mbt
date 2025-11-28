@@ -494,7 +494,7 @@ pub fn instantiate_module_with_init(
     Some(start_func_idx) => {
       let ctx = ExecContext::new(store, instance)
       let _ = ctx.call_func(start_func_idx, []) catch {
-        Branch(_) | Return => raise @runtime.Unreachable
+        BranchWith(_, _) | Return => raise @runtime.Unreachable
         @runtime.StackUnderflow => raise @runtime.StackUnderflow
         @runtime.StackOverflow => raise @runtime.StackOverflow
         @runtime.TypeMismatch => raise @runtime.TypeMismatch
@@ -655,7 +655,7 @@ pub fn call_exported_func(
           let ctx = ExecContext::new(store, instance)
           // Catch any leaked ControlSignal and convert to RuntimeError
           ctx.call_func(func_idx, args) catch {
-            Branch(_) | Return => raise @runtime.Unreachable
+            BranchWith(_, _) | Return => raise @runtime.Unreachable
             @runtime.StackUnderflow => raise @runtime.StackUnderflow
             @runtime.StackOverflow => raise @runtime.StackOverflow
             @runtime.TypeMismatch => raise @runtime.TypeMismatch
