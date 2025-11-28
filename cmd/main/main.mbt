@@ -1,6 +1,7 @@
+
 ///|
-fn main {
-  println("Wasmoon - WebAssembly Runtime in MoonBit")
+fn run_demo() -> Unit {
+  println("Wasmoon Demo Programs")
   println("=".repeat(50))
   println("")
 
@@ -68,9 +69,7 @@ fn main {
   let (store2, instance2) = @wasmoon.instantiate_module(mod2)
   let args2 = [@wasmoon.Value::I32(7), @wasmoon.Value::I32(6)]
   try {
-    let results = @wasmoon.call_exported_func(
-      store2, instance2, "mul_add", args2,
-    )
+    let results = @wasmoon.call_exported_func(store2, instance2, "mul_add", args2)
     match results[0] {
       I32(n) => println("Result: \{n}")
       _ => println("Error: unexpected result type")
@@ -122,10 +121,51 @@ fn main {
   }
   println("")
   println("=".repeat(50))
-  println("MVP completed successfully!")
+  println("Demo completed successfully!")
   println("Supported features:")
-  println("  - i32 arithmetic operations (add, sub, mul, div)")
-  println("  - i32 comparison and bitwise operations")
+  println("  - i32/i64 arithmetic operations")
+  println("  - f32/f64 floating point operations")
+  println("  - Comparison and bitwise operations")
   println("  - Local variables (get, set, tee)")
   println("  - Function calls with parameters and return values")
+}
+
+///|
+fn main {
+  let parser = @clap.Parser::new(
+    prog="wasmoon",
+    description="WebAssembly Runtime in MoonBit",
+    subcmds={
+      "demo": @clap.SubCommand::new(help="Run built-in demo programs"),
+    },
+  )
+  let help_msg = parser.gen_help_message(["wasmoon"], {})
+  let args = @sys.get_cli_args()
+  if args.length() < 2 {
+    println(help_msg)
+    return
+  }
+  let value = @clap.SimpleValue::new("wasmoon")
+  let cli_args : Array[String] = []
+  for i = 1; i < args.length(); i = i + 1 {
+    cli_args.push(args[i])
+  }
+  let help_msg = try {
+    parser.parse(value, cli_args[:])
+  } catch {
+    e => {
+      println(e)
+      println(help_msg)
+      return
+    }
+  }
+  match help_msg {
+    Some(msg) => println(msg)
+    None =>
+      match value.subcmd {
+        Some({ name: "demo", .. }) => run_demo()
+        Some({ name, .. }) => println("Unknown command: \{name}")
+        None => println("Error: no command")
+      }
+  }
 }
