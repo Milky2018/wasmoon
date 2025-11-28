@@ -1233,3 +1233,106 @@ test "host function: simple call" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "memory import: shared memory between modules" {
+  // Create a store and allocate a shared memory
+  let store = @runtime.Store::new()
+  let shared_mem = @runtime.Memory::new(1, None) // 1 page
+  let mem_addr = store.alloc_mem(shared_mem)
+
+  // Write a value to the shared memory
+  shared_mem.store_i32(0, 12345) catch {
+    _ => fail("Failed to store")
+  }
+
+  // Create a module that imports this memory and reads from it
+  // Function: read value at address 0
+  let read_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [I32Const(0), I32Load(2, 0)], // load from address 0
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [
+      {
+        mod_name: "env",
+        name: "memory",
+        desc: Memory({ limits: { min: 1, max: None } }),
+      },
+    ],
+    funcs: [0],
+    tables: [],
+    memories: [], // No local memories, only imported
+    globals: [],
+    exports: [{ name: "read", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [read_func],
+    datas: [],
+  }
+
+  // Set up imports
+  let imports = @runtime.Imports::new()
+  imports.add_memory("env", "memory", mem_addr)
+
+  // Instantiate with the existing store
+  let instance = instantiate_module_with_imports(store, mod, imports)
+  let results = call_exported_func(store, instance, "read", [])
+  match results[0] {
+    I32(n) => inspect(n, content="12345")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "memory import: write to imported memory" {
+  // Create a store and allocate a shared memory
+  let store = @runtime.Store::new()
+  let shared_mem = @runtime.Memory::new(1, None)
+  let mem_addr = store.alloc_mem(shared_mem)
+
+  // Create a module that imports this memory and writes to it
+  // Function: write value 42 at address 100
+  let write_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [I32Const(100), I32Const(42), I32Store(2, 0)],
+  }
+  let func_type : @wasmoon.FuncType = { params: [], results: [] }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [
+      {
+        mod_name: "env",
+        name: "mem",
+        desc: Memory({ limits: { min: 1, max: None } }),
+      },
+    ],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "write", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [write_func],
+    datas: [],
+  }
+  let imports = @runtime.Imports::new()
+  imports.add_memory("env", "mem", mem_addr)
+  let instance = instantiate_module_with_imports(store, mod, imports)
+  let _ = call_exported_func(store, instance, "write", [])
+
+  // Verify the write by reading from the shared memory directly
+  let value = shared_mem.load_i32(100) catch {
+    _ => {
+      fail("Failed to load")
+      0
+    }
+  }
+  inspect(value, content="42")
+}
