@@ -2176,3 +2176,156 @@ test "bulk memory: memory.init with offset" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "bulk memory: data.drop" {
+  // Test data.drop: after dropping, memory.init with non-zero length should trap
+  // Function 0: drop data segment 0
+  // Function 1: try memory.init with length 0 (should succeed even after drop)
+  // Function 2: try memory.init with length > 0 (should fail after drop)
+  let drop_func : @types.FunctionCode = { locals: [], body: [DataDrop(0)] } // drop data segment 0
+  let init_zero_func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      I32Const(0), // dest
+      I32Const(0), // src offset
+      I32Const(0), // len = 0 (should work even after drop)
+      MemoryInit(0),
+      I32Const(1),
+    ],
+  } // return 1 for success
+  let init_nonzero_func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      I32Const(0), // dest
+      I32Const(0), // src offset
+      I32Const(1), // len = 1 (should fail after drop)
+      MemoryInit(0),
+      I32Const(1),
+    ],
+  }
+  let void_type : @types.FuncType = { params: [], results: [] }
+  let i32_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let data_bytes = Bytes::from_array([b'\x42'])
+  let mod : @types.Module = {
+    types: [void_type, i32_type],
+    imports: [],
+    funcs: [0, 1, 1], // drop has type 0, init funcs have type 1
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [
+      { name: "drop", desc: @types.ExportDesc::Func(0) },
+      { name: "init_zero", desc: @types.ExportDesc::Func(1) },
+      { name: "init_nonzero", desc: @types.ExportDesc::Func(2) },
+    ],
+    start: None,
+    elems: [],
+    codes: [drop_func, init_zero_func, init_nonzero_func],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+
+  // Before drop: init_nonzero should work
+  let result1 = call_exported_func(store, instance, "init_nonzero", [])
+  match result1[0] {
+    I32(n) => inspect(n, content="1")
+    _ => fail("Expected I32 result")
+  }
+
+  // Drop the data segment
+  let _ = call_exported_func(store, instance, "drop", [])
+
+  // After drop: init_zero should still work (length 0 is ok)
+  let result2 = call_exported_func(store, instance, "init_zero", [])
+  match result2[0] {
+    I32(n) => inspect(n, content="1")
+    _ => fail("Expected I32 result")
+  }
+
+  // After drop: init_nonzero should fail
+  let trapped = try {
+    let _ = call_exported_func(store, instance, "init_nonzero", [])
+    false
+  } catch {
+    @runtime.OutOfBoundsMemoryAccess => true
+    _ => false
+  }
+  inspect(trapped, content="true")
+}
+
+///|
+test "bulk memory: elem.drop" {
+  // Test elem.drop: after dropping, the segment is marked as dropped
+  // We verify by checking the instance state directly
+  let drop_func : @types.FunctionCode = { locals: [], body: [ElemDrop(0)] } // drop elem segment 0
+  let void_type : @types.FuncType = { params: [], results: [] }
+  let dummy_func : @types.FunctionCode = { locals: [], body: [I32Const(0)] }
+  let i32_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [void_type, i32_type],
+    imports: [],
+    funcs: [0, 1], // drop has type 0, dummy has type 1
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 2, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "drop", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [{ table_idx: 0, offset: [I32Const(0)], init: [1] }], // elem segment with func 1
+    codes: [drop_func, dummy_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+
+  // Before drop: elem segment should not be dropped
+  inspect(instance.dropped_elems[0], content="false")
+
+  // Drop the elem segment
+  let _ = call_exported_func(store, instance, "drop", [])
+
+  // After drop: elem segment should be marked as dropped
+  inspect(instance.dropped_elems[0], content="true")
+}
+
+///|
+test "bulk memory: data.drop is idempotent" {
+  // Dropping a segment multiple times should be safe
+  let drop_func : @types.FunctionCode = {
+    locals: [],
+    body: [DataDrop(0), DataDrop(0), DataDrop(0)], // drop 3 times
+  }
+  let void_type : @types.FuncType = { params: [], results: [] }
+  let data_bytes = Bytes::from_array([b'\x42'])
+  let mod : @types.Module = {
+    types: [void_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [{ name: "drop", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [drop_func],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+
+  // Calling drop multiple times should not cause error
+  let _ = call_exported_func(store, instance, "drop", [])
+  inspect(instance.dropped_datas[0], content="true")
+}

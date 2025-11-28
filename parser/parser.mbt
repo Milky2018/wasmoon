@@ -615,6 +615,34 @@ fn Parser::read_instruction(
         5 => I64TruncSatF32U
         6 => I64TruncSatF64S
         7 => I64TruncSatF64U
+        // Bulk memory operations
+        8 => {
+          // memory.init: data_idx, memory_idx (memory_idx must be 0)
+          let data_idx = self.read_u32()
+          let _ = self.read_byte() // memory index, must be 0
+          MemoryInit(data_idx)
+        }
+        9 => {
+          // data.drop: data_idx
+          let data_idx = self.read_u32()
+          DataDrop(data_idx)
+        }
+        10 => {
+          // memory.copy: dest_mem, src_mem (both must be 0)
+          let _ = self.read_byte() // dest memory index
+          let _ = self.read_byte() // src memory index
+          MemoryCopy
+        }
+        11 => {
+          // memory.fill: memory_idx (must be 0)
+          let _ = self.read_byte() // memory index
+          MemoryFill
+        }
+        13 => {
+          // elem.drop: elem_idx
+          let elem_idx = self.read_u32()
+          ElemDrop(elem_idx)
+        }
         _ => raise UnknownOpcode(0xFC00 + subopcode)
       }
     }

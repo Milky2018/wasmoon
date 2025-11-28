@@ -95,8 +95,10 @@ pub(all) enum Instruction {
   MemorySize
   MemoryGrow
   MemoryInit(Int) // data segment index
+  DataDrop(Int) // data segment index
   MemoryCopy
   MemoryFill
+  ElemDrop(Int) // element segment index
 
   // Numeric instructions - Constants
   I32Const(Int)

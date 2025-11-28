@@ -142,8 +142,10 @@ pub(all) enum Instruction {
   MemorySize
   MemoryGrow
   MemoryInit(Int)
+  DataDrop(Int)
   MemoryCopy
   MemoryFill
+  ElemDrop(Int)
   I32Const(Int)
   I64Const(Int64)
   F32Const(Float)

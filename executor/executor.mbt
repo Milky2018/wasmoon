@@ -243,8 +243,13 @@ fn ExecContext::exec_instr(
     | I64Store32(_, _) => self.exec_memory_store(instr)
 
     // Memory size/grow and bulk operations
-    MemorySize | MemoryGrow | MemoryInit(_) | MemoryCopy | MemoryFill =>
-      self.exec_memory_misc(instr)
+    MemorySize
+    | MemoryGrow
+    | MemoryInit(_)
+    | DataDrop(_)
+    | MemoryCopy
+    | MemoryFill
+    | ElemDrop(_) => self.exec_memory_misc(instr)
 
     // Control flow operations
     Block(_, _)
@@ -374,6 +379,15 @@ pub fn instantiate_module(
 
   // func_addrs: indices into store.funcs
   // func_type_indices: type index for each function (from mod.funcs)
+  // Initialize dropped arrays with false values
+  let dropped_elems : Array[Bool] = []
+  for _ in 0..<mod.elems.length() {
+    dropped_elems.push(false)
+  }
+  let dropped_datas : Array[Bool] = []
+  for _ in 0..<mod.datas.length() {
+    dropped_datas.push(false)
+  }
   let instance : @runtime.ModuleInstance = {
     types: mod.types,
     func_addrs,
@@ -384,6 +398,8 @@ pub fn instantiate_module(
     exports: mod.exports,
     elem_segments: mod.elems,
     data_segments: mod.datas,
+    dropped_elems,
+    dropped_datas,
   }
   (store, instance)
 }
@@ -554,6 +570,15 @@ pub fn instantiate_module_with_imports(
     let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
   }
+  // Initialize dropped arrays with false values
+  let dropped_elems : Array[Bool] = []
+  for _ in 0..<mod.elems.length() {
+    dropped_elems.push(false)
+  }
+  let dropped_datas : Array[Bool] = []
+  for _ in 0..<mod.datas.length() {
+    dropped_datas.push(false)
+  }
   {
     types: mod.types,
     func_addrs,
@@ -564,6 +589,8 @@ pub fn instantiate_module_with_imports(
     exports: mod.exports,
     elem_segments: mod.elems,
     data_segments: mod.datas,
+    dropped_elems,
+    dropped_datas,
   }
 }
 
