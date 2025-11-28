@@ -143,7 +143,10 @@ fn Store::new() -> Self
 impl Show for Store
 
 type Table
+fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
+fn Table::fill(Self, Int, @wasmoon.Value, Int) -> Unit raise RuntimeError
 fn Table::get(Self, Int) -> @wasmoon.Value raise RuntimeError
+fn Table::get_element(Self, Int) -> @wasmoon.Value raise RuntimeError
 fn Table::grow(Self, Int, @wasmoon.Value) -> Int
 fn Table::new(@wasmoon.ValueType, Int, Int?) -> Self
 fn Table::set(Self, Int, @wasmoon.Value) -> Unit raise RuntimeError

@@ -1683,3 +1683,111 @@ test "table operations: table.grow" {
   inspect(old_size, content="2") // old size was 2
   inspect(table.size(), content="5") // new size is 5
 }
+
+///|
+test "table operations: table.fill" {
+  // Test table.fill via direct runtime manipulation
+  let store = @runtime.Store::new()
+  let table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 5, None)
+  let _ = store.alloc_table(table)
+
+  // Fill table[1..4] with FuncRef(42)
+  table.fill(1, @wasmoon.Value::FuncRef(42), 3) catch {
+    _ => fail("table.fill failed")
+  }
+
+  // Verify: table[0] should be Null, table[1..3] should be FuncRef(42), table[4] should be Null
+  inspect(table.get_element(0), content="Null")
+  inspect(table.get_element(1), content="FuncRef(42)")
+  inspect(table.get_element(2), content="FuncRef(42)")
+  inspect(table.get_element(3), content="FuncRef(42)")
+  inspect(table.get_element(4), content="Null")
+}
+
+///|
+test "table operations: table.copy same table" {
+  // Test table.copy within the same table
+  let store = @runtime.Store::new()
+  let table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 6, None)
+  let _ = store.alloc_table(table)
+
+  // Set some initial values
+  table.set(0, @wasmoon.Value::FuncRef(10)) catch {
+    _ => ()
+  }
+  table.set(1, @wasmoon.Value::FuncRef(20)) catch {
+    _ => ()
+  }
+  table.set(2, @wasmoon.Value::FuncRef(30)) catch {
+    _ => ()
+  }
+
+  // Copy table[0..3] to table[3..6]
+  table.copy_from(3, table, 0, 3) catch {
+    _ => fail("table.copy failed")
+  }
+  inspect(table.get_element(0), content="FuncRef(10)")
+  inspect(table.get_element(1), content="FuncRef(20)")
+  inspect(table.get_element(2), content="FuncRef(30)")
+  inspect(table.get_element(3), content="FuncRef(10)")
+  inspect(table.get_element(4), content="FuncRef(20)")
+  inspect(table.get_element(5), content="FuncRef(30)")
+}
+
+///|
+test "table operations: table.copy between tables" {
+  // Test table.copy between different tables
+  let store = @runtime.Store::new()
+  let table1 = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 4, None)
+  let table2 = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 4, None)
+  let _ = store.alloc_table(table1)
+  let _ = store.alloc_table(table2)
+
+  // Set values in table1
+  table1.set(0, @wasmoon.Value::FuncRef(100)) catch {
+    _ => ()
+  }
+  table1.set(1, @wasmoon.Value::FuncRef(200)) catch {
+    _ => ()
+  }
+
+  // Copy table1[0..2] to table2[1..3]
+  table2.copy_from(1, table1, 0, 2) catch {
+    _ => fail("table.copy failed")
+  }
+  inspect(table2.get_element(0), content="Null")
+  inspect(table2.get_element(1), content="FuncRef(100)")
+  inspect(table2.get_element(2), content="FuncRef(200)")
+  inspect(table2.get_element(3), content="Null")
+}
+
+///|
+test "table operations: table.copy overlapping backward" {
+  // Test table.copy with overlapping regions (dest > src)
+  let store = @runtime.Store::new()
+  let table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 6, None)
+  let _ = store.alloc_table(table)
+
+  // Set initial values: [1, 2, 3, 0, 0, 0]
+  table.set(0, @wasmoon.Value::FuncRef(1)) catch {
+    _ => ()
+  }
+  table.set(1, @wasmoon.Value::FuncRef(2)) catch {
+    _ => ()
+  }
+  table.set(2, @wasmoon.Value::FuncRef(3)) catch {
+    _ => ()
+  }
+
+  // Copy table[0..3] to table[2..5] (overlapping, dest > src)
+  // Expected: [1, 2, 1, 2, 3, 0]
+  table.copy_from(2, table, 0, 3) catch {
+    _ => fail("table.copy failed")
+  }
+  inspect(table.get_element(0), content="FuncRef(1)")
+  inspect(table.get_element(1), content="FuncRef(2)")
+  inspect(table.get_element(2), content="FuncRef(1)")
+  inspect(table.get_element(3), content="FuncRef(2)")
+  inspect(table.get_element(4), content="FuncRef(3)")
+  inspect(table.get_element(5), content="Null")
+}

@@ -73,10 +73,10 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] 表导入/导出
 - [x] 全局变量导入/导出
 
-### 3.3 表操作
+### 3.3 表操作 ✅
 - [x] table.get / table.set
 - [x] table.size / table.grow
-- [ ] table.fill / table.copy
+- [x] table.fill / table.copy
 
 ### 3.4 模块初始化
 - [ ] Start function 执行
@@ -154,4 +154,4 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ---
 
 **当前状态**: Phase 3 进行中
-**下一步**: table.fill / table.copy
+**下一步**: Start function 执行
