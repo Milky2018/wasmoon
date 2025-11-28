@@ -329,6 +329,15 @@
   f.to_int()  // = 1 (数值截断)
   ```
 
+#### 4. Git Commit Message 规范
+- ❌ **错误做法**: 使用中文编写 commit message
+- ✅ **正确做法**: 所有 commit message 使用英文
+  ```
+  feat: implement numeric conversion instructions
+  fix: correct overflow handling in trunc_sat
+  refactor: split runtime into separate modules
+  ```
+
 ---
 
 ## 待补充
