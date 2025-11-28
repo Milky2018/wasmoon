@@ -659,14 +659,14 @@ pub fn parse_module(data : Bytes) -> @wasmoon.Module raise ParserError {
       1 => {
         // Type section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           mod.types.push(parser.read_func_type())
         }
       }
       2 => {
         // Import section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           let mod_name = parser.read_string()
           let name = parser.read_string()
           let kind = parser.read_byte()
@@ -683,28 +683,28 @@ pub fn parse_module(data : Bytes) -> @wasmoon.Module raise ParserError {
       3 => {
         // Function section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           mod.funcs.push(parser.read_u32())
         }
       }
       4 => {
         // Table section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           mod.tables.push(parser.read_table_type())
         }
       }
       5 => {
         // Memory section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           mod.memories.push(parser.read_memory_type())
         }
       }
       6 => {
         // Global section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           let type_ = parser.read_global_type()
           let init = parser.read_expr()
           mod.globals.push({ type_, init })
@@ -713,7 +713,7 @@ pub fn parse_module(data : Bytes) -> @wasmoon.Module raise ParserError {
       7 => {
         // Export section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           let name = parser.read_string()
           let kind = parser.read_byte()
           let desc = match kind {
@@ -732,12 +732,12 @@ pub fn parse_module(data : Bytes) -> @wasmoon.Module raise ParserError {
       9 => {
         // Element section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           let table_idx = parser.read_u32()
           let offset = parser.read_expr()
           let elem_count = parser.read_u32()
           let init : Array[Int] = []
-          for j = 0; j < elem_count; j = j + 1 {
+          for _ in 0..<elem_count {
             init.push(parser.read_u32())
           }
           mod.elems.push({ table_idx, offset, init })
@@ -746,14 +746,14 @@ pub fn parse_module(data : Bytes) -> @wasmoon.Module raise ParserError {
       10 => {
         // Code section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           let _code_size = parser.read_u32()
           let local_count = parser.read_u32()
           let locals : Array[@wasmoon.ValueType] = []
-          for j = 0; j < local_count; j = j + 1 {
+          for _ in 0..<local_count {
             let n = parser.read_u32()
             let vt = parser.read_value_type()
-            for k = 0; k < n; k = k + 1 {
+            for _ in 0..<n {
               locals.push(vt)
             }
           }
@@ -764,7 +764,7 @@ pub fn parse_module(data : Bytes) -> @wasmoon.Module raise ParserError {
       11 => {
         // Data section
         let count = parser.read_u32()
-        for i = 0; i < count; i = i + 1 {
+        for _ in 0..<count {
           let memory_idx = parser.read_u32()
           let offset = parser.read_expr()
           let size = parser.read_u32()

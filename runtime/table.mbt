@@ -14,7 +14,7 @@ pub fn Table::new(
   max : Int?,
 ) -> Table {
   let elements : Array[@wasmoon.Value] = []
-  for i = 0; i < min; i = i + 1 {
+  for _ in 0..<min {
     elements.push(Null)
   }
   { elem_type, elements, size: min, max }
@@ -61,7 +61,7 @@ pub fn Table::grow(self : Table, delta : Int, init : @wasmoon.Value) -> Int {
   }
 
   // Grow the table
-  for i = 0; i < delta; i = i + 1 {
+  for _ in 0..<delta {
     self.elements.push(init)
   }
   self.size = new_size
