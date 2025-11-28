@@ -109,6 +109,8 @@ pub(all) struct ModuleInstance {
   exports : Array[@types.Export]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
+  dropped_elems : Array[Bool]
+  dropped_datas : Array[Bool]
 }
 fn ModuleInstance::new() -> Self
 impl Show for ModuleInstance

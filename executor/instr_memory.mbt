@@ -230,6 +230,14 @@ fn ExecContext::exec_memory_misc(
       let n = self.stack.pop_i32() // length
       let s = self.stack.pop_i32() // source offset in data segment
       let d = self.stack.pop_i32() // destination in memory
+      // Check if segment has been dropped
+      if self.instance.dropped_datas[data_idx] {
+        // Dropped segments behave as if they have zero length
+        if n != 0 {
+          raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
+        }
+        return
+      }
       let mem_addr = self.instance.mem_addrs[0]
       let mem = self.store.get_mem(mem_addr)
       let data_segment = self.instance.data_segments[data_idx]
@@ -242,6 +250,8 @@ fn ExecContext::exec_memory_misc(
         mem.store_byte(d + i, data_segment.init[s + i])
       }
     }
+    // data.drop: mark data segment as dropped
+    DataDrop(data_idx) => self.instance.dropped_datas[data_idx] = true
     // memory.copy: copy within memory
     MemoryCopy => {
       let n = self.stack.pop_i32() // length
@@ -260,6 +270,8 @@ fn ExecContext::exec_memory_misc(
       let mem = self.store.get_mem(mem_addr)
       mem.fill(d, val.land(0xFF).to_byte(), n)
     }
+    // elem.drop: mark element segment as dropped
+    ElemDrop(elem_idx) => self.instance.dropped_elems[elem_idx] = true
     _ => raise @runtime.RuntimeError::Unreachable
   }
 }

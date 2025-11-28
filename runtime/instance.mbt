@@ -10,6 +10,8 @@ pub(all) struct ModuleInstance {
   exports : Array[@types.Export]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
+  dropped_elems : Array[Bool] // true if elem segment has been dropped
+  dropped_datas : Array[Bool] // true if data segment has been dropped
 } derive(Show)
 
 ///|
@@ -24,5 +26,7 @@ pub fn ModuleInstance::new() -> ModuleInstance {
     exports: [],
     elem_segments: [],
     data_segments: [],
+    dropped_elems: [],
+    dropped_datas: [],
   }
 }
