@@ -1336,3 +1336,41 @@ test "memory import: write to imported memory" {
   }
   inspect(value, content="42")
 }
+
+///|
+test "import validation: missing import raises error" {
+  let store = @runtime.Store::new()
+
+  // Create a module that requires an import but don't provide it
+  let func : @wasmoon.FunctionCode = { locals: [], body: [I32Const(1)] }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [{ mod_name: "env", name: "missing_func", desc: Func(0) }],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(1) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+
+  // Empty imports - should fail
+  let imports = @runtime.Imports::new()
+
+  // Should raise UnknownImport
+  let result = try {
+    let _ = instantiate_module_with_imports(store, mod, imports)
+    false // Should not reach here
+  } catch {
+    @runtime.UnknownImport => true // Expected
+    _ => false
+  }
+  inspect(result, content="true")
+}

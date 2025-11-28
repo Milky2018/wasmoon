@@ -344,16 +344,18 @@ pub fn instantiate_module_with_init(
 
 ///|
 /// Create a module instance with imports using an existing store
+/// Raises UnknownImport if any required import is not provided
 pub fn instantiate_module_with_imports(
   store : @runtime.Store,
   mod : @wasmoon.Module,
   imports : @runtime.Imports,
-) -> @runtime.ModuleInstance {
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
   // Process imports first
   let func_addrs : Array[Int] = []
   let func_type_indices : Array[Int] = []
   let mem_addrs : Array[Int] = []
   let table_addrs : Array[Int] = []
+  let global_addrs : Array[Int] = []
 
   // Import functions and memories first (they come before module definitions in the index space)
   for imp in mod.imports {
@@ -364,19 +366,23 @@ pub fn instantiate_module_with_imports(
             func_addrs.push(addr)
             func_type_indices.push(type_idx)
           }
-          _ => () // Import not found, skip for now
+          _ => raise @runtime.UnknownImport
         }
       Memory(_) =>
         match imports.resolve(imp.mod_name, imp.name) {
           Some(Memory(addr)) => mem_addrs.push(addr)
-          _ => () // Import not found, skip for now
+          _ => raise @runtime.UnknownImport
         }
       Table(_) =>
         match imports.resolve(imp.mod_name, imp.name) {
           Some(Table(addr)) => table_addrs.push(addr)
-          _ => () // Import not found, skip for now
+          _ => raise @runtime.UnknownImport
         }
-      _ => () // Handle other import types later
+      Global(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Global(addr)) => global_addrs.push(addr)
+          _ => raise @runtime.UnknownImport
+        }
     }
   }
 
@@ -410,7 +416,7 @@ pub fn instantiate_module_with_imports(
     func_type_indices,
     table_addrs,
     mem_addrs,
-    global_addrs: [],
+    global_addrs,
     exports: mod.exports,
     elem_segments: mod.elems,
     data_segments: mod.datas,
@@ -469,6 +475,7 @@ pub fn call_exported_func(
             @runtime.InvalidConversion => raise @runtime.InvalidConversion
             @runtime.Unreachable => raise @runtime.Unreachable
             @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
+            @runtime.UnknownImport => raise @runtime.UnknownImport
             _ => raise @runtime.Unreachable
           }
         } // Unknown error

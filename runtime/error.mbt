@@ -13,4 +13,5 @@ pub(all) suberror RuntimeError {
   InvalidConversion
   Unreachable
   CallStackExhausted
+  UnknownImport // Import not found during instantiation
 } derive(Show)
