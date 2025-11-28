@@ -603,6 +603,22 @@ fn Parser::read_instruction(
     0xBD => I64ReinterpretF64
     0xBE => F32ReinterpretI32
     0xBF => F64ReinterpretI64
+    // Reference type instructions
+    0xD0 => {
+      // ref.null: read reftype (0x70 = funcref, 0x6F = externref)
+      let reftype = self.read_byte()
+      match reftype {
+        0x70 => RefNull(@types.ValueType::FuncRef)
+        0x6F => RefNull(@types.ValueType::ExternRef)
+        _ => raise UnknownOpcode(0xD000 + reftype)
+      }
+    }
+    0xD1 => RefIsNull
+    0xD2 => {
+      // ref.func: read function index
+      let func_idx = self.read_u32()
+      RefFunc(func_idx)
+    }
     // Saturating truncation instructions (0xFC prefix)
     0xFC => {
       let subopcode = self.read_u32()

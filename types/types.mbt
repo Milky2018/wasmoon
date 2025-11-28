@@ -100,6 +100,11 @@ pub(all) enum Instruction {
   MemoryFill
   ElemDrop(Int) // element segment index
 
+  // Reference type instructions
+  RefNull(ValueType) // ref.null: push null reference of given type
+  RefIsNull // ref.is_null: test if reference is null
+  RefFunc(Int) // ref.func: push reference to function by index
+
   // Numeric instructions - Constants
   I32Const(Int)
   I64Const(Int64)

@@ -96,6 +96,26 @@ fn ExecContext::exec_instr(
 
     }
 
+    // Reference type instructions
+    RefNull(ref_type) =>
+      match ref_type {
+        FuncRef => self.stack.push(Null)
+        ExternRef => self.stack.push(Null)
+        _ => raise @runtime.RuntimeError::TypeMismatch
+      }
+    RefIsNull => {
+      let value = self.stack.pop()
+      match value {
+        Null => self.stack.push(I32(1))
+        _ => self.stack.push(I32(0))
+      }
+    }
+    RefFunc(func_idx) => {
+      // Get the store address for the function
+      let func_addr = self.instance.func_addrs[func_idx]
+      self.stack.push(FuncRef(func_addr))
+    }
+
     // i32 numeric operations
     I32Add
     | I32Sub
