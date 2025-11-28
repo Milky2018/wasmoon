@@ -12,6 +12,6 @@
     "wasm",
     "runtime"
   ],
-  "description": "",
+  "description": "A slow and insecure runtime for WebAssembly",
   "preferred-target": "native"
 }
