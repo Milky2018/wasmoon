@@ -1181,3 +1181,55 @@ test "function call: call_indirect" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "host function: simple call" {
+  // Create a store and add host function to it
+  let store = @runtime.Store::new()
+  let host_fn : (Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise @runtime.RuntimeError = fn(
+    args,
+  ) {
+    match args[0] {
+      I32(n) => [I32(n * 2)]
+      _ => raise @runtime.TypeMismatch
+    }
+  }
+  let host_addr = store.alloc_host_func(host_fn)
+
+  // Create a module that imports and calls the host function
+  // func 0: imported host function (double)
+  // func 1: main(x) -> call double(x)
+  let main_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), Call(0)], // call imported function at index 0
+  }
+  let unary_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [unary_type],
+    imports: [{ mod_name: "env", name: "double", desc: Func(0) }],
+    funcs: [0], // main has type 0
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "main", desc: @wasmoon.ExportDesc::Func(1) }], // func 1 is main (after import)
+    start: None,
+    elems: [],
+    codes: [main_func],
+    datas: [],
+  }
+
+  // Set up imports
+  let imports = @runtime.Imports::new()
+  imports.add_func("env", "double", host_addr)
+
+  // Instantiate with the existing store
+  let instance = instantiate_module_with_imports(store, mod, imports)
+  let results = call_exported_func(store, instance, "main", [I32(21)])
+  match results[0] {
+    I32(n) => inspect(n, content="42") // 21 * 2 = 42
+    _ => fail("Expected I32 result")
+  }
+}

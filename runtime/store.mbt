@@ -1,7 +1,7 @@
 ///|
 /// The store contains all global runtime state
 pub struct Store {
-  funcs : Array[@wasmoon.FunctionCode]
+  funcs : Array[FuncInst]
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
@@ -13,9 +13,21 @@ pub fn Store::new() -> Store {
 }
 
 ///|
+/// Allocate a WASM function
 pub fn Store::alloc_func(self : Store, func : @wasmoon.FunctionCode) -> Int {
   let idx = self.funcs.length()
-  self.funcs.push(func)
+  self.funcs.push(FuncInst::WasmFunc(func))
+  idx
+}
+
+///|
+/// Allocate a host function
+pub fn Store::alloc_host_func(
+  self : Store,
+  func : (Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise RuntimeError,
+) -> Int {
+  let idx = self.funcs.length()
+  self.funcs.push(FuncInst::HostFunc(func))
   idx
 }
 
@@ -41,14 +53,26 @@ pub fn Store::alloc_global(self : Store, global : GlobalInstance) -> Int {
 }
 
 ///|
-pub fn Store::get_func(
+pub fn Store::get_func_inst(
   self : Store,
   idx : Int,
-) -> @wasmoon.FunctionCode raise RuntimeError {
+) -> FuncInst raise RuntimeError {
   if idx < 0 || idx >= self.funcs.length() {
     raise UndefinedElement
   }
   self.funcs[idx]
+}
+
+///|
+/// Get WASM function code (for backward compatibility)
+pub fn Store::get_func(
+  self : Store,
+  idx : Int,
+) -> @wasmoon.FunctionCode raise RuntimeError {
+  match self.get_func_inst(idx) {
+    WasmFunc(code) => code
+    HostFunc(_) => raise TypeMismatch // Cannot get code from host function
+  }
 }
 
 ///|

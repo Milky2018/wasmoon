@@ -299,11 +299,12 @@ pub fn instantiate_module(
     table_addrs.push(addr)
   }
 
-  // Use funcs array (type indices) for func_addrs in instance
-  // This maps function index to its type index
+  // func_addrs: indices into store.funcs
+  // func_type_indices: type index for each function (from mod.funcs)
   let instance : @runtime.ModuleInstance = {
     types: mod.types,
-    func_addrs: mod.funcs,
+    func_addrs,
+    func_type_indices: mod.funcs,
     table_addrs,
     mem_addrs,
     global_addrs: [],
@@ -339,6 +340,71 @@ pub fn instantiate_module_with_init(
     }
   }
   (store, instance)
+}
+
+///|
+/// Create a module instance with imports using an existing store
+pub fn instantiate_module_with_imports(
+  store : @runtime.Store,
+  mod : @wasmoon.Module,
+  imports : @runtime.Imports,
+) -> @runtime.ModuleInstance {
+  // Process imports first
+  let func_addrs : Array[Int] = []
+  let func_type_indices : Array[Int] = []
+
+  // Import functions first (they come before module functions in the index space)
+  for imp in mod.imports {
+    match imp.desc {
+      Func(type_idx) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Func(addr)) => {
+            func_addrs.push(addr)
+            func_type_indices.push(type_idx)
+          }
+          _ => () // Import not found, skip for now
+        }
+      _ => () // Handle other import types later
+    }
+  }
+
+  // Allocate module functions
+  for i, code in mod.codes {
+    let addr = store.alloc_func(code)
+    func_addrs.push(addr)
+    func_type_indices.push(mod.funcs[i])
+  }
+
+  // Allocate memories
+  let mem_addrs : Array[Int] = []
+  for mem_type in mod.memories {
+    let mem = @runtime.Memory::new(mem_type.limits.min, mem_type.limits.max)
+    let addr = store.alloc_mem(mem)
+    mem_addrs.push(addr)
+  }
+
+  // Allocate tables
+  let table_addrs : Array[Int] = []
+  for table_type in mod.tables {
+    let table = @runtime.Table::new(
+      table_type.elem_type,
+      table_type.limits.min,
+      table_type.limits.max,
+    )
+    let addr = store.alloc_table(table)
+    table_addrs.push(addr)
+  }
+  {
+    types: mod.types,
+    func_addrs,
+    func_type_indices,
+    table_addrs,
+    mem_addrs,
+    global_addrs: [],
+    exports: mod.exports,
+    elem_segments: mod.elems,
+    data_segments: mod.datas,
+  }
 }
 
 ///|
