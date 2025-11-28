@@ -66,6 +66,8 @@ type Label
 impl Show for Label
 
 type Memory
+fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
+fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
 fn Memory::grow(Self, Int) -> Int
 fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
 fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError

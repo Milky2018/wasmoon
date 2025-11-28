@@ -1959,3 +1959,220 @@ test "module initialization: element segment" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "bulk memory: memory.fill" {
+  // Function: fill memory[0..4] with 0x42, then read back
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      I32Const(0), // dest
+      I32Const(0x42), // value
+      I32Const(4), // len
+      MemoryFill, // fill
+      I32Const(0),
+      I32Load(2, 0),
+    ],
+  } // read back
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    // 0x42424242 = 1111638594
+    I32(n) => inspect(n, content="1111638594")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "bulk memory: memory.copy non-overlapping" {
+  // Store 0x12345678 at address 0, then copy to address 100
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      I32Const(0),
+      I32Const(0x12345678),
+      I32Store(2, 0), // store at address 0
+      I32Const(100), // dest
+      I32Const(0), // src
+      I32Const(4), // len
+      MemoryCopy, // copy
+      I32Const(100),
+      I32Load(2, 0),
+    ],
+  } // read from dest
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="305419896") // 0x12345678
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "bulk memory: memory.copy overlapping backward" {
+  // Fill memory[0..8] with pattern, then copy memory[0..4] to memory[2..6]
+  // This tests backward copy when dest > src
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      // Store [0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00] at address 0
+      I32Const(0),
+      I32Const(0x04030201),
+      I32Store(2, 0),
+      // Copy from 0 to 2, length 4
+      // Expected: [0x01, 0x02, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00]
+      I32Const(2), // dest
+      I32Const(0), // src
+      I32Const(4), // len
+      MemoryCopy,
+      // Read from address 2
+      I32Const(2),
+      I32Load(2, 0),
+    ],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    // At address 2: [0x01, 0x02, 0x03, 0x04] = 0x04030201
+    I32(n) => inspect(n, content="67305985")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "bulk memory: memory.init from data segment" {
+  // Module with a data segment, use memory.init to copy part of it
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      I32Const(100), // dest in memory
+      I32Const(0), // src offset in data segment
+      I32Const(4), // len
+      MemoryInit(0), // init from data segment 0
+      I32Const(100),
+      I32Load(2, 0),
+    ],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  // Data: 0xDEADBEEF in little-endian
+  let data_bytes = Bytes::from_array([b'\xEF', b'\xBE', b'\xAD', b'\xDE'])
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="-559038737") // 0xDEADBEEF as signed i32
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "bulk memory: memory.init with offset" {
+  // Use memory.init with non-zero source offset
+  let func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      I32Const(0), // dest in memory
+      I32Const(2), // src offset in data segment (skip first 2 bytes)
+      I32Const(2), // len (copy last 2 bytes)
+      MemoryInit(0),
+      I32Const(0),
+      I32Load16U(1, 0),
+    ],
+  } // load 16-bit unsigned
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  // Data: [0x11, 0x22, 0x33, 0x44]
+  let data_bytes = Bytes::from_array([b'\x11', b'\x22', b'\x33', b'\x44'])
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    // Reading [0x33, 0x44] as little-endian u16: 0x4433 = 17459
+    I32(n) => inspect(n, content="17459")
+    _ => fail("Expected I32 result")
+  }
+}

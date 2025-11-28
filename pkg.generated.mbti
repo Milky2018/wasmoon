@@ -141,6 +141,9 @@ pub(all) enum Instruction {
   I64Store32(Int, Int)
   MemorySize
   MemoryGrow
+  MemoryInit(Int)
+  MemoryCopy
+  MemoryFill
   I32Const(Int)
   I64Const(Int64)
   F32Const(Float)

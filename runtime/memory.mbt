@@ -370,3 +370,51 @@ pub fn Memory::init_data(
     self.data[dest + i] = data[i]
   }
 }
+
+///|
+/// Copy memory within the same memory instance
+/// Handles overlapping regions correctly
+pub fn Memory::copy(
+  self : Memory,
+  dest : Int,
+  src : Int,
+  len : Int,
+) -> Unit raise RuntimeError {
+  if dest < 0 ||
+    src < 0 ||
+    dest + len > self.data.length() ||
+    src + len > self.data.length() {
+    raise OutOfBoundsMemoryAccess
+  }
+  if len == 0 {
+    return
+  }
+  // Handle overlapping regions
+  if dest <= src {
+    // Copy forward
+    for i in 0..<len {
+      self.data[dest + i] = self.data[src + i]
+    }
+  } else {
+    // Copy backward to handle overlap when dest > src
+    for i = len - 1; i >= 0; i = i - 1 {
+      self.data[dest + i] = self.data[src + i]
+    }
+  }
+}
+
+///|
+/// Fill memory region with a byte value
+pub fn Memory::fill(
+  self : Memory,
+  dest : Int,
+  value : Byte,
+  len : Int,
+) -> Unit raise RuntimeError {
+  if dest < 0 || dest + len > self.data.length() {
+    raise OutOfBoundsMemoryAccess
+  }
+  for i in 0..<len {
+    self.data[dest + i] = value
+  }
+}

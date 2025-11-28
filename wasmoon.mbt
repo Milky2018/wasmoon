@@ -94,6 +94,9 @@ pub(all) enum Instruction {
   I64Store32(Int, Int)
   MemorySize
   MemoryGrow
+  MemoryInit(Int) // data segment index
+  MemoryCopy
+  MemoryFill
 
   // Numeric instructions - Constants
   I32Const(Int)
