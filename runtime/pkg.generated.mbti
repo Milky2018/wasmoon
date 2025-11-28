@@ -67,6 +67,7 @@ impl Show for Label
 
 type Memory
 fn Memory::grow(Self, Int) -> Int
+fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
 fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
 fn Memory::load_f32(Self, Int) -> Float raise RuntimeError
 fn Memory::load_f64(Self, Int) -> Double raise RuntimeError

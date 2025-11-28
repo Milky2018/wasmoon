@@ -1159,7 +1159,9 @@ test "function call: call_indirect" {
     ],
     datas: [],
   }
-  let (store, instance) = instantiate_module_with_init(mod)
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
   // apply(0, 10, 3) -> add(10, 3) = 13
   let results1 = call_exported_func(store, instance, "apply", [
     I32(0),
@@ -1790,4 +1792,170 @@ test "table operations: table.copy overlapping backward" {
   inspect(table.get_element(3), content="FuncRef(2)")
   inspect(table.get_element(4), content="FuncRef(3)")
   inspect(table.get_element(5), content="Null")
+}
+
+///|
+test "module initialization: start function execution" {
+  // Module with a start function that sets a global
+  // func 0: init() - sets global to 42
+  // start: 0
+  let init_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [I32Const(42), GlobalSet(0)],
+  }
+  let get_func : @wasmoon.FunctionCode = { locals: [], body: [GlobalGet(0)] }
+  let init_type : @wasmoon.FuncType = { params: [], results: [] }
+  let get_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let global : @wasmoon.Global = {
+    type_: { value_type: @wasmoon.ValueType::I32, mutable: true },
+    init: [I32Const(0)],
+  }
+  let mod : @wasmoon.Module = {
+    types: [init_type, get_type],
+    imports: [],
+    funcs: [0, 1],
+    tables: [],
+    memories: [],
+    globals: [global],
+    exports: [{ name: "get", desc: @wasmoon.ExportDesc::Func(1) }],
+    start: Some(0), // start function is func 0
+    elems: [],
+    codes: [init_func, get_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+  // Start function should have set global to 42
+  let results = call_exported_func(store, instance, "get", [])
+  match results[0] {
+    I32(n) => inspect(n, content="42")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "module initialization: data segment" {
+  // Module with a data segment that initializes memory
+  let read_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [I32Const(0), I32Load(2, 0)], // load i32 from address 0
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  // Data segment: store bytes [0x2A, 0x00, 0x00, 0x00] at offset 0
+  // This is 42 in little-endian
+  let data_bytes = Bytes::from_array([b'\x2A', b'\x00', b'\x00', b'\x00'])
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [{ name: "read", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [read_func],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+  let results = call_exported_func(store, instance, "read", [])
+  match results[0] {
+    I32(n) => inspect(n, content="42")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "module initialization: data segment with offset" {
+  // Module with a data segment at non-zero offset
+  let read_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [I32Const(100), I32Load(2, 0)], // load from address 100
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  // Data at offset 100: 0x12345678
+  let data_bytes = Bytes::from_array([b'\x78', b'\x56', b'\x34', b'\x12'])
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [{ name: "read", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [read_func],
+    datas: [{ memory_idx: 0, offset: [I32Const(100)], init: data_bytes }],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+  let results = call_exported_func(store, instance, "read", [])
+  match results[0] {
+    I32(n) => inspect(n, content="305419896") // 0x12345678
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "module initialization: element segment" {
+  // This test verifies element segment initialization works
+  // (already tested in call_indirect test, but let's be explicit)
+  let func0 : @wasmoon.FunctionCode = { locals: [], body: [I32Const(100)] }
+  let func1 : @wasmoon.FunctionCode = { locals: [], body: [I32Const(200)] }
+  let call_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), CallIndirect(0, 0)],
+  }
+  let ret_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let call_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [ret_type, call_type],
+    imports: [],
+    funcs: [0, 0, 1], // func0, func1 have type 0; call_func has type 1
+    tables: [
+      { elem_type: @wasmoon.ValueType::FuncRef, limits: { min: 2, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "call", desc: @wasmoon.ExportDesc::Func(2) }],
+    start: None,
+    elems: [{ table_idx: 0, offset: [I32Const(0)], init: [0, 1] }],
+    codes: [func0, func1, call_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module_with_init(mod) catch {
+    _ => fail("instantiate_module_with_init failed")
+  }
+  // call(0) should call func0, return 100
+  let results1 = call_exported_func(store, instance, "call", [I32(0)])
+  match results1[0] {
+    I32(n) => inspect(n, content="100")
+    _ => fail("Expected I32 result")
+  }
+  // call(1) should call func1, return 200
+  let results2 = call_exported_func(store, instance, "call", [I32(1)])
+  match results2[0] {
+    I32(n) => inspect(n, content="200")
+    _ => fail("Expected I32 result")
+  }
 }

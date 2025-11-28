@@ -78,10 +78,10 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] table.size / table.grow
 - [x] table.fill / table.copy
 
-### 3.4 模块初始化
-- [ ] Start function 执行
-- [ ] 数据段初始化 (data segment)
-- [ ] 元素段初始化 (element segment)
+### 3.4 模块初始化 ✅
+- [x] Start function 执行
+- [x] 数据段初始化 (data segment)
+- [x] 元素段初始化 (element segment)
 
 ### 3.5 批量内存操作
 - [ ] memory.init / memory.copy / memory.fill
@@ -154,4 +154,4 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ---
 
 **当前状态**: Phase 3 进行中
-**下一步**: Start function 执行
+**下一步**: memory.init / memory.copy / memory.fill

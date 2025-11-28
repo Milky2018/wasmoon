@@ -407,25 +407,72 @@ fn eval_const_expr(instrs : Array[@wasmoon.Instruction]) -> @wasmoon.Value {
 /// Create a module instance with element and data segment initialization
 pub fn instantiate_module_with_init(
   mod : @wasmoon.Module,
-) -> (@runtime.Store, @runtime.ModuleInstance) {
+) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
   let (store, instance) = instantiate_module(mod)
+
+  // Initialize data segments (copy data to memory)
+  for data in mod.datas {
+    if instance.mem_addrs.length() > data.memory_idx {
+      let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
+
+      // Evaluate offset expression
+      let offset = match data.offset {
+        [I32Const(n)] => n
+        _ => 0
+      }
+
+      // Copy data to memory
+      mem.init_data(offset, data.init)
+    }
+  }
 
   // Initialize element segments (populate tables with function references)
   for elem in mod.elems {
-    let table = store.get_table(elem.table_idx) catch { _ => continue }
+    if instance.table_addrs.length() > elem.table_idx {
+      let table = store.get_table(instance.table_addrs[elem.table_idx])
 
-    // Evaluate offset expression (for now, assume it's a simple i32.const)
-    let offset = match elem.offset {
-      [I32Const(n)] => n
-      _ => 0
-    }
+      // Evaluate offset expression
+      let offset = match elem.offset {
+        [I32Const(n)] => n
+        _ => 0
+      }
 
-    // Set table entries
-    for i, func_idx in elem.init {
-      table.set(offset + i, @wasmoon.Value::FuncRef(func_idx)) catch {
-        _ => ()
+      // Set table entries
+      for i, func_idx in elem.init {
+        table.set(offset + i, @wasmoon.Value::FuncRef(func_idx)) catch {
+          _ => ()
+        }
       }
     }
+  }
+
+  // Execute start function if present
+  match mod.start {
+    Some(start_func_idx) => {
+      let ctx = ExecContext::new(store, instance)
+      let _ = ctx.call_func(start_func_idx, []) catch {
+        Branch(_) | Return => raise @runtime.Unreachable
+        @runtime.StackUnderflow => raise @runtime.StackUnderflow
+        @runtime.StackOverflow => raise @runtime.StackOverflow
+        @runtime.TypeMismatch => raise @runtime.TypeMismatch
+        @runtime.OutOfBoundsMemoryAccess =>
+          raise @runtime.OutOfBoundsMemoryAccess
+        @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+        @runtime.UndefinedElement => raise @runtime.UndefinedElement
+        @runtime.UninitializedElement => raise @runtime.UninitializedElement
+        @runtime.IndirectCallTypeMismatch =>
+          raise @runtime.IndirectCallTypeMismatch
+        @runtime.DivisionByZero => raise @runtime.DivisionByZero
+        @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
+        @runtime.InvalidConversion => raise @runtime.InvalidConversion
+        @runtime.Unreachable => raise @runtime.Unreachable
+        @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
+        @runtime.UnknownImport => raise @runtime.UnknownImport
+        _ => raise @runtime.Unreachable
+      }
+
+    }
+    None => ()
   }
   (store, instance)
 }
