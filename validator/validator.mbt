@@ -5,6 +5,7 @@
 pub(all) suberror ValidationError {
   TypeMismatch(String) // Expected vs actual type mismatch
   StackUnderflow(String) // Not enough values on validation stack
+  StackHeightMismatch(String) // Stack height doesn't match expected
   InvalidFunctionIndex(Int)
   InvalidTypeIndex(Int)
   InvalidLocalIndex(Int)
@@ -147,6 +148,30 @@ fn OperandStack::set_polymorphic(self : OperandStack) -> Unit {
 }
 
 ///|
+fn OperandStack::height(self : OperandStack) -> Int {
+  self.stack.length()
+}
+
+///|
+fn OperandStack::reset_polymorphic(self : OperandStack) -> Unit {
+  self.polymorphic = false
+}
+
+///|
+/// Check that stack has exactly the expected height
+fn OperandStack::check_height(
+  self : OperandStack,
+  expected : Int,
+  context : String,
+) -> Unit raise ValidationError {
+  if not(self.polymorphic) && self.stack.length() != expected {
+    raise StackHeightMismatch(
+      "\{context}: expected stack height \{expected}, got \{self.stack.length()}",
+    )
+  }
+}
+
+///|
 /// Validate a complete module
 pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   let ctx = ValidationContext::new(mod)
@@ -208,7 +233,11 @@ fn validate_function(
   // Validate function body
   validate_expr(func_ctx, stack, code.body)
 
-  // Check that final stack matches return types
+  // Check that final stack has exactly the return types
+  let expected_height = func_type.results.length()
+  stack.check_height(expected_height, "function return")
+
+  // Pop and verify return types
   for i = func_type.results.length() - 1; i >= 0; i = i - 1 {
     stack.pop(func_type.results[i])
   }
@@ -645,12 +674,27 @@ fn validate_instr(
       }
     }
 
-    // Block, Loop, If - simplified validation (TODO: full control flow validation)
+    // Block, Loop, If - with stack height validation
     Block(bt, body) | Loop(bt, body) => {
       let results = get_block_results(ctx, bt)
-      // Recursively validate body
+      let params = get_block_params(ctx, bt)
+      // Pop input params from outer stack
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(params[i])
+      }
+      // Create inner stack with params
       let block_stack = OperandStack::new()
+      for param in params {
+        block_stack.push(param)
+      }
+      // Validate body
       validate_expr(ctx, block_stack, body)
+      // Check stack height: should have exactly results.length() values
+      block_stack.check_height(results.length(), "block exit")
+      // Verify result types
+      for i = results.length() - 1; i >= 0; i = i - 1 {
+        block_stack.pop(results[i])
+      }
       // Push results onto outer stack
       for result in results {
         stack.push(result)
@@ -659,12 +703,26 @@ fn validate_instr(
     If(bt, then_body, else_body) => {
       stack.pop(@types.ValueType::I32) // condition
       let results = get_block_results(ctx, bt)
-      // Validate both branches
+      let params = get_block_params(ctx, bt)
+      // Pop input params from outer stack
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(params[i])
+      }
+      // Validate then branch
       let then_stack = OperandStack::new()
+      for param in params {
+        then_stack.push(param)
+      }
       validate_expr(ctx, then_stack, then_body)
+      then_stack.check_height(results.length(), "if-then exit")
+      // Validate else branch
       let else_stack = OperandStack::new()
+      for param in params {
+        else_stack.push(param)
+      }
       validate_expr(ctx, else_stack, else_body)
-      // Push results
+      else_stack.check_height(results.length(), "if-else exit")
+      // Push results onto outer stack
       for result in results {
         stack.push(result)
       }
@@ -698,6 +756,23 @@ fn get_block_results(
     TypeIndex(idx) =>
       if idx < ctx.types.length() {
         ctx.types[idx].results
+      } else {
+        []
+      }
+  }
+}
+
+///|
+fn get_block_params(
+  ctx : ValidationContext,
+  bt : @types.BlockType,
+) -> Array[@types.ValueType] {
+  match bt {
+    Empty => []
+    Value(_) => [] // Single value blocks have no params
+    TypeIndex(idx) =>
+      if idx < ctx.types.length() {
+        ctx.types[idx].params
       } else {
         []
       }

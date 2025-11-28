@@ -12,6 +12,7 @@ fn validate_module(@types.Module) -> Unit raise ValidationError
 pub(all) suberror ValidationError {
   TypeMismatch(String)
   StackUnderflow(String)
+  StackHeightMismatch(String)
   InvalidFunctionIndex(Int)
   InvalidTypeIndex(Int)
   InvalidLocalIndex(Int)
