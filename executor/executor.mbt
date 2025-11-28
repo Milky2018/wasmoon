@@ -308,6 +308,11 @@ pub fn ExecContext::call_func(
   let store_addr = self.instance.func_addrs[func_idx]
   let func = self.store.get_func(store_addr)
 
+  // Get the function type to determine return arity
+  let type_idx = self.instance.func_type_indices[func_idx]
+  let func_type = self.instance.types[type_idx]
+  let return_arity = func_type.results.length()
+
   // Create locals array: params + local variables
   let locals : Array[@types.Value] = []
 
@@ -332,7 +337,7 @@ pub fn ExecContext::call_func(
   }
 
   // Create and push frame
-  let frame = @runtime.Frame::new(func_idx, locals, 1) // Assume single return value for MVP
+  let frame = @runtime.Frame::new(func_idx, locals, return_arity)
   self.push_frame(frame)
 
   // Execute function body
@@ -341,11 +346,12 @@ pub fn ExecContext::call_func(
   // Pop frame
   self.pop_frame()
 
-  // Collect return values from stack
+  // Collect return values from stack (in reverse order, then reverse back)
   let results : Array[@types.Value] = []
-  if self.stack.size() > 0 {
+  for i = 0; i < return_arity; i = i + 1 {
     results.push(self.stack.pop())
   }
+  results.rev_inplace()
   results
 }
 

@@ -2509,3 +2509,149 @@ test "reference types: ref.func used with table.set" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "multi-value: function returning two values" {
+  // Function returns (i32, i32) pair
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [I32Const(10), I32Const(20)], // push 10, then 20
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32, @types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  inspect(results.length(), content="2")
+  match results[0] {
+    I32(n) => inspect(n, content="10")
+    _ => fail("Expected I32 result")
+  }
+  match results[1] {
+    I32(n) => inspect(n, content="20")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "multi-value: function returning three values" {
+  // Function returns (i32, i64, f32)
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [I32Const(1), I64Const(2L), F32Const(3.0)],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [
+      @types.ValueType::I32,
+      @types.ValueType::I64,
+      @types.ValueType::F32,
+    ],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  inspect(results.length(), content="3")
+  match results[0] {
+    I32(n) => inspect(n, content="1")
+    _ => fail("Expected I32 result")
+  }
+  match results[1] {
+    I64(n) => inspect(n, content="2")
+    _ => fail("Expected I64 result")
+  }
+  match results[2] {
+    F32(f) => inspect(f, content="3")
+    _ => fail("Expected F32 result")
+  }
+}
+
+///|
+test "multi-value: function returning no values" {
+  // Function returns nothing (void)
+  let func : @types.FunctionCode = { locals: [], body: [Nop] }
+  let func_type : @types.FuncType = { params: [], results: [] }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  inspect(results.length(), content="0")
+}
+
+///|
+test "multi-value: call function with multi-value return" {
+  // func 0: swap(a, b) -> (b, a) - returns two values
+  // func 1: test() -> call swap(10, 20), then add them
+  let swap_func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(1), LocalGet(0)], // return (b, a)
+  }
+  let test_func : @types.FunctionCode = {
+    locals: [],
+    body: [I32Const(10), I32Const(20), Call(0), I32Add], // swap(10, 20) returns (20, 10), then add
+  }
+  let swap_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32, @types.ValueType::I32],
+  }
+  let test_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [swap_type, test_type],
+    imports: [],
+    funcs: [0, 1],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    start: None,
+    elems: [],
+    codes: [swap_func, test_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="30") // 20 + 10 = 30
+    _ => fail("Expected I32 result")
+  }
+}
