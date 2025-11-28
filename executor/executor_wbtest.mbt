@@ -2950,9 +2950,95 @@ test "module linking: import memory from another module" {
 
 ///|
 test "module linking: three modules chain" {
-  // This test is skipped for now as it requires cross-module context switching
-  // which is a more complex feature to implement properly.
-  // The basic import/export between two modules works correctly.
-  // TODO: Implement proper cross-module call context for multi-level imports
-  inspect(true, content="true") // Skip test
+  // Module A exports add(x, y) -> x + y
+  // Module B imports add from A, exports double(x) -> add(x, x)
+  // Module C imports double from B, exports quad(x) -> double(double(x))
+  let linker = @runtime.Linker::new()
+
+  // Module A
+  let add_func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I32Add],
+  }
+  let add_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let mod_a : @types.Module = {
+    types: [add_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "add", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [add_func],
+    datas: [],
+  }
+  let _ = instantiate_with_linker(linker, "math", mod_a) catch {
+    _ => fail("Failed to instantiate math")
+  }
+
+  // Module B: double(x) = add(x, x)
+  let double_func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(0), Call(0)],
+  } // Call imported add
+  let unary_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let mod_b : @types.Module = {
+    types: [add_type, unary_type],
+    imports: [
+      { mod_name: "math", name: "add", desc: @types.ImportDesc::Func(0) },
+    ],
+    funcs: [1], // double uses unary_type
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "double", desc: @types.ExportDesc::Func(1) }],
+    start: None,
+    elems: [],
+    codes: [double_func],
+    datas: [],
+  }
+  let _ = instantiate_with_linker(linker, "utils", mod_b) catch {
+    _ => fail("Failed to instantiate utils")
+  }
+
+  // Module C: quad(x) = double(double(x))
+  let quad_func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), Call(0), Call(0)],
+  } // double(double(x))
+  let mod_c : @types.Module = {
+    types: [unary_type],
+    imports: [
+      { mod_name: "utils", name: "double", desc: @types.ImportDesc::Func(0) },
+    ],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "quad", desc: @types.ExportDesc::Func(1) }],
+    start: None,
+    elems: [],
+    codes: [quad_func],
+    datas: [],
+  }
+  let instance_c = instantiate_with_linker(linker, "app", mod_c) catch {
+    _ => fail("Failed to instantiate app")
+  }
+
+  // quad(5) = double(double(5)) = double(10) = 20
+  let results = call_exported_func(linker.get_store(), instance_c, "quad", [
+    @types.Value::I32(5),
+  ])
+  match results[0] {
+    I32(n) => inspect(n, content="20")
+    _ => fail("Expected I32 result")
+  }
 }

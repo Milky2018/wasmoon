@@ -18,7 +18,12 @@ fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
 
   // Get the function instance and execute
   let func_inst = self.store.get_func_inst(store_addr)
-  self.call_func_inst(func_inst, args, func_type.results.length())
+  self.call_func_inst_with_context(
+    store_addr,
+    func_inst,
+    args,
+    func_type.results.length(),
+  )
 }
 
 ///|
@@ -54,11 +59,49 @@ fn ExecContext::exec_call_indirect(
 
   // Get the function instance and execute
   let func_inst = self.store.get_func_inst(store_addr)
-  self.call_func_inst(func_inst, args, expected_type.results.length())
+  self.call_func_inst_with_context(
+    store_addr,
+    func_inst,
+    args,
+    expected_type.results.length(),
+  )
 }
 
 ///|
-/// Call a function instance (WASM or host)
+/// Call a function instance with proper context switching for cross-module calls
+fn ExecContext::call_func_inst_with_context(
+  self : ExecContext,
+  store_addr : Int,
+  func_inst : @runtime.FuncInst,
+  args : Array[@types.Value],
+  num_results : Int,
+) -> Unit raise {
+  match func_inst {
+    WasmFunc(code) =>
+      // Check if this function belongs to a different module
+      match self.store.get_func_owner(store_addr) {
+        Some(owner_instance) =>
+          // Call with the owner's context
+          self.call_wasm_func_with_instance(
+            owner_instance, code, args, num_results,
+          )
+        None =>
+          // No registered owner, use current instance (backward compatibility)
+          self.call_wasm_func(code, args, num_results)
+      }
+    HostFunc(host_fn) => {
+      // Call host function directly
+      let results = host_fn(args)
+      // Push results onto the stack
+      for result in results {
+        self.stack.push(result)
+      }
+    }
+  }
+}
+
+///|
+/// Call a function instance (WASM or host) - backward compatible version
 fn ExecContext::call_func_inst(
   self : ExecContext,
   func_inst : @runtime.FuncInst,
@@ -76,6 +119,56 @@ fn ExecContext::call_func_inst(
       }
     }
   }
+}
+
+///|
+/// Call a WASM function with a specific module instance context
+fn ExecContext::call_wasm_func_with_instance(
+  self : ExecContext,
+  target_instance : @runtime.ModuleInstance,
+  func : @types.FunctionCode,
+  args : Array[@types.Value],
+  num_results : Int,
+) -> Unit raise {
+  // Create locals array: params + local variables
+  let locals : Array[@types.Value] = []
+
+  // Add parameters first
+  for arg in args {
+    locals.push(arg)
+  }
+
+  // Add local variables (initialized to default values)
+  for local_type in func.locals {
+    locals.push(
+      match local_type {
+        I32 => I32(0)
+        I64 => I64(0L)
+        F32 => F32(0.0)
+        F64 => F64(0.0)
+        FuncRef => Null
+        ExternRef => Null
+        _ => Null
+      },
+    )
+  }
+
+  // Save current instance and switch to target instance
+  let saved_instance = self.instance
+  self.instance = target_instance
+
+  // Create and push frame
+  let frame = @runtime.Frame::new(-1, locals, num_results)
+  self.push_frame(frame)
+
+  // Execute function body
+  self.exec_expr(func.body)
+
+  // Pop frame
+  self.pop_frame()
+
+  // Restore original instance
+  self.instance = saved_instance
 }
 
 ///|

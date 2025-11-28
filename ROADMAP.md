@@ -105,7 +105,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ### 4.2 多模块支持
 - [x] 模块链接
-- [ ] 符号解析
+- [x] 符号解析
 
 ---
 
@@ -153,5 +153,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 4 进行中
-**下一步**: 符号解析
+**当前状态**: Phase 5 进行中
+**下一步**: 通过官方测试套件 (wasm-testsuite)

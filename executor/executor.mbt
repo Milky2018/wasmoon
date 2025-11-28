@@ -695,6 +695,9 @@ pub fn instantiate_with_linker(
   let store = linker.get_store()
   let instance = instantiate_module_with_imports(store, mod, imports)
 
+  // Register the instance with the store for cross-module call resolution
+  let _ = store.register_instance(instance)
+
   // Initialize data segments (copy data to memory)
   for data in mod.datas {
     if instance.mem_addrs.length() > data.memory_idx {

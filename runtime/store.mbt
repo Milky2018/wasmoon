@@ -5,11 +5,23 @@ pub struct Store {
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
+  // Maps function address to its owning module instance address
+  // Used for cross-module call context switching
+  func_owners : Array[Int] // -1 means host function or not yet registered
+  // Registered module instances by their address/index
+  instances : Array[ModuleInstance]
 } derive(Show)
 
 ///|
 pub fn Store::new() -> Store {
-  { funcs: [], tables: [], mems: [], globals: [] }
+  {
+    funcs: [],
+    tables: [],
+    mems: [],
+    globals: [],
+    func_owners: [],
+    instances: [],
+  }
 }
 
 ///|
@@ -17,6 +29,7 @@ pub fn Store::new() -> Store {
 pub fn Store::alloc_func(self : Store, func : @types.FunctionCode) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(FuncInst::WasmFunc(func))
+  self.func_owners.push(-1) // Owner not yet known
   idx
 }
 
@@ -28,6 +41,7 @@ pub fn Store::alloc_host_func(
 ) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(FuncInst::HostFunc(func))
+  self.func_owners.push(-1) // Host functions don't have an owner
   idx
 }
 
@@ -100,4 +114,37 @@ pub fn Store::get_global(
     raise UndefinedElement
   }
   self.globals[idx]
+}
+
+///|
+/// Register a module instance and set ownership for its functions
+/// Only sets ownership for functions that don't already have an owner
+/// (imported functions already belong to their original module)
+pub fn Store::register_instance(self : Store, instance : ModuleInstance) -> Int {
+  let instance_idx = self.instances.length()
+  self.instances.push(instance)
+  // Set ownership only for functions that don't have an owner yet
+  // Imported functions will already have their owner set
+  for func_addr in instance.func_addrs {
+    if func_addr >= 0 && func_addr < self.func_owners.length() {
+      // Only set if not already owned (-1 means unowned)
+      if self.func_owners[func_addr] < 0 {
+        self.func_owners[func_addr] = instance_idx
+      }
+    }
+  }
+  instance_idx
+}
+
+///|
+/// Get the owning module instance for a function address
+pub fn Store::get_func_owner(self : Store, func_addr : Int) -> ModuleInstance? {
+  if func_addr < 0 || func_addr >= self.func_owners.length() {
+    return None
+  }
+  let owner_idx = self.func_owners[func_addr]
+  if owner_idx < 0 || owner_idx >= self.instances.length() {
+    return None
+  }
+  Some(self.instances[owner_idx])
 }
