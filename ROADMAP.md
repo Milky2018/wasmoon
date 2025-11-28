@@ -91,7 +91,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] ref.null / ref.is_null / ref.func
 
 ### 3.7 多返回值
-- [ ] 函数多返回值支持
+- [x] 函数多返回值支持
 - [ ] block/if 多返回值支持
 
 ---
@@ -154,4 +154,4 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ---
 
 **当前状态**: Phase 3 进行中
-**下一步**: 函数多返回值支持
+**下一步**: block/if 多返回值支持
