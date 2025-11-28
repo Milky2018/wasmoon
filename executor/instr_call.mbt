@@ -11,10 +11,7 @@ fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
 
   // Pop arguments from stack in reverse order
   let num_params = func_type.params.length()
-  let args : Array[@wasmoon.Value] = Array::make(
-    num_params,
-    @wasmoon.Value::I32(0),
-  )
+  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.pop()
   }
@@ -50,10 +47,7 @@ fn ExecContext::exec_call_indirect(
 
   // Pop arguments from stack in reverse order
   let num_params = expected_type.params.length()
-  let args : Array[@wasmoon.Value] = Array::make(
-    num_params,
-    @wasmoon.Value::I32(0),
-  )
+  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.pop()
   }
@@ -68,7 +62,7 @@ fn ExecContext::exec_call_indirect(
 fn ExecContext::call_func_inst(
   self : ExecContext,
   func_inst : @runtime.FuncInst,
-  args : Array[@wasmoon.Value],
+  args : Array[@types.Value],
   num_results : Int,
 ) -> Unit raise {
   match func_inst {
@@ -88,12 +82,12 @@ fn ExecContext::call_func_inst(
 /// Call a WASM function
 fn ExecContext::call_wasm_func(
   self : ExecContext,
-  func : @wasmoon.FunctionCode,
-  args : Array[@wasmoon.Value],
+  func : @types.FunctionCode,
+  args : Array[@types.Value],
   num_results : Int,
 ) -> Unit raise {
   // Create locals array: params + local variables
-  let locals : Array[@wasmoon.Value] = []
+  let locals : Array[@types.Value] = []
 
   // Add parameters first
   for arg in args {

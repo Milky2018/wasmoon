@@ -373,6 +373,27 @@
   }
   ```
 
+#### 11. 测试专用依赖
+- ❌ **错误做法**: 在 `import` 中添加仅测试需要的依赖
+  ```json
+  {
+    "import": [
+      "Milky2018/wasmoon/types",
+      "Milky2018/wasmoon/executor"
+    ]
+  }
+  ```
+- ✅ **正确做法**: 使用 `test-import` 声明测试专用依赖
+  ```json
+  {
+    "test-import": [
+      "Milky2018/wasmoon/types",
+      "Milky2018/wasmoon/executor"
+    ]
+  }
+  ```
+- **说明**: `test-import` 中的依赖仅在测试时可用，不会影响正式构建
+
 ---
 
 ## 待补充

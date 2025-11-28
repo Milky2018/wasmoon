@@ -2,9 +2,9 @@
 /// Function instance - either WASM code or host function
 pub(all) enum FuncInst {
   /// WASM function with code
-  WasmFunc(@wasmoon.FunctionCode)
+  WasmFunc(@types.FunctionCode)
   /// Host function provided by the embedder
-  HostFunc((Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise RuntimeError)
+  HostFunc((Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
 }
 
 ///|

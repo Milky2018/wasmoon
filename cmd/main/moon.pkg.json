@@ -1,7 +1,7 @@
 {
   "is-main": true,
   "import": [
-    "Milky2018/wasmoon",
+    "Milky2018/wasmoon/types",
     "moonbitlang/x/sys",
     "TheWaWaR/clap",
     "Milky2018/wasmoon/executor",

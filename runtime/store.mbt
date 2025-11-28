@@ -14,7 +14,7 @@ pub fn Store::new() -> Store {
 
 ///|
 /// Allocate a WASM function
-pub fn Store::alloc_func(self : Store, func : @wasmoon.FunctionCode) -> Int {
+pub fn Store::alloc_func(self : Store, func : @types.FunctionCode) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(FuncInst::WasmFunc(func))
   idx
@@ -24,7 +24,7 @@ pub fn Store::alloc_func(self : Store, func : @wasmoon.FunctionCode) -> Int {
 /// Allocate a host function
 pub fn Store::alloc_host_func(
   self : Store,
-  func : (Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise RuntimeError,
+  func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
 ) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(FuncInst::HostFunc(func))
@@ -68,7 +68,7 @@ pub fn Store::get_func_inst(
 pub fn Store::get_func(
   self : Store,
   idx : Int,
-) -> @wasmoon.FunctionCode raise RuntimeError {
+) -> @types.FunctionCode raise RuntimeError {
   match self.get_func_inst(idx) {
     WasmFunc(code) => code
     HostFunc(_) => raise TypeMismatch // Cannot get code from host function

@@ -9,7 +9,7 @@ struct Label {
 /// Call frame for function execution
 struct Frame {
   func_idx : Int
-  locals : Array[@wasmoon.Value]
+  locals : Array[@types.Value]
   ip : Int // instruction pointer
   return_arity : Int // number of return values
 } derive(Show)
@@ -17,7 +17,7 @@ struct Frame {
 ///|
 pub fn Frame::new(
   func_idx : Int,
-  locals : Array[@wasmoon.Value],
+  locals : Array[@types.Value],
   return_arity : Int,
 ) -> Frame {
   { func_idx, locals, ip: 0, return_arity }
@@ -27,7 +27,7 @@ pub fn Frame::new(
 pub fn Frame::get_local(
   self : Frame,
   idx : Int,
-) -> @wasmoon.Value raise RuntimeError {
+) -> @types.Value raise RuntimeError {
   if idx < 0 || idx >= self.locals.length() {
     raise RuntimeError::TypeMismatch
   }
@@ -38,7 +38,7 @@ pub fn Frame::get_local(
 pub fn Frame::set_local(
   self : Frame,
   idx : Int,
-  value : @wasmoon.Value,
+  value : @types.Value,
 ) -> Unit raise RuntimeError {
   if idx < 0 || idx >= self.locals.length() {
     raise RuntimeError::TypeMismatch

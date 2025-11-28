@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/runtime"
 
 import(
-  "Milky2018/wasmoon"
+  "Milky2018/wasmoon/types"
 )
 
 // Values
@@ -35,21 +35,21 @@ pub(all) enum ExternVal {
 }
 
 type Frame
-fn Frame::get_local(Self, Int) -> @wasmoon.Value raise RuntimeError
-fn Frame::new(Int, Array[@wasmoon.Value], Int) -> Self
-fn Frame::set_local(Self, Int, @wasmoon.Value) -> Unit raise RuntimeError
+fn Frame::get_local(Self, Int) -> @types.Value raise RuntimeError
+fn Frame::new(Int, Array[@types.Value], Int) -> Self
+fn Frame::set_local(Self, Int, @types.Value) -> Unit raise RuntimeError
 impl Show for Frame
 
 pub(all) enum FuncInst {
-  WasmFunc(@wasmoon.FunctionCode)
-  HostFunc((Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise RuntimeError)
+  WasmFunc(@types.FunctionCode)
+  HostFunc((Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
 }
 impl Show for FuncInst
 
 type GlobalInstance
-fn GlobalInstance::get(Self) -> @wasmoon.Value
-fn GlobalInstance::new(@wasmoon.GlobalType, @wasmoon.Value) -> Self
-fn GlobalInstance::set(Self, @wasmoon.Value) -> Unit raise RuntimeError
+fn GlobalInstance::get(Self) -> @types.Value
+fn GlobalInstance::new(@types.GlobalType, @types.Value) -> Self
+fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
 impl Show for GlobalInstance
 
 pub(all) struct Imports {
@@ -100,15 +100,15 @@ fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
 impl Show for Memory
 
 pub(all) struct ModuleInstance {
-  types : Array[@wasmoon.FuncType]
+  types : Array[@types.FuncType]
   func_addrs : Array[Int]
   func_type_indices : Array[Int]
   table_addrs : Array[Int]
   mem_addrs : Array[Int]
   global_addrs : Array[Int]
-  exports : Array[@wasmoon.Export]
-  elem_segments : Array[@wasmoon.Element]
-  data_segments : Array[@wasmoon.Data]
+  exports : Array[@types.Export]
+  elem_segments : Array[@types.Element]
+  data_segments : Array[@types.Data]
 }
 fn ModuleInstance::new() -> Self
 impl Show for ModuleInstance
@@ -116,13 +116,13 @@ impl Show for ModuleInstance
 type Stack
 fn Stack::clear(Self) -> Unit
 fn Stack::new() -> Self
-fn Stack::peek(Self) -> @wasmoon.Value raise RuntimeError
-fn Stack::pop(Self) -> @wasmoon.Value raise RuntimeError
+fn Stack::peek(Self) -> @types.Value raise RuntimeError
+fn Stack::pop(Self) -> @types.Value raise RuntimeError
 fn Stack::pop_f32(Self) -> Float raise RuntimeError
 fn Stack::pop_f64(Self) -> Double raise RuntimeError
 fn Stack::pop_i32(Self) -> Int raise RuntimeError
 fn Stack::pop_i64(Self) -> Int64 raise RuntimeError
-fn Stack::push(Self, @wasmoon.Value) -> Unit raise RuntimeError
+fn Stack::push(Self, @types.Value) -> Unit raise RuntimeError
 fn Stack::size(Self) -> Int
 impl Show for Stack
 
@@ -132,12 +132,12 @@ pub struct Store {
   mems : Array[Memory]
   globals : Array[GlobalInstance]
 }
-fn Store::alloc_func(Self, @wasmoon.FunctionCode) -> Int
+fn Store::alloc_func(Self, @types.FunctionCode) -> Int
 fn Store::alloc_global(Self, GlobalInstance) -> Int
-fn Store::alloc_host_func(Self, (Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise RuntimeError) -> Int
+fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Int
 fn Store::alloc_mem(Self, Memory) -> Int
 fn Store::alloc_table(Self, Table) -> Int
-fn Store::get_func(Self, Int) -> @wasmoon.FunctionCode raise RuntimeError
+fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
 fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
 fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
@@ -147,12 +147,12 @@ impl Show for Store
 
 type Table
 fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
-fn Table::fill(Self, Int, @wasmoon.Value, Int) -> Unit raise RuntimeError
-fn Table::get(Self, Int) -> @wasmoon.Value raise RuntimeError
-fn Table::get_element(Self, Int) -> @wasmoon.Value raise RuntimeError
-fn Table::grow(Self, Int, @wasmoon.Value) -> Int
-fn Table::new(@wasmoon.ValueType, Int, Int?) -> Self
-fn Table::set(Self, Int, @wasmoon.Value) -> Unit raise RuntimeError
+fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
+fn Table::get(Self, Int) -> @types.Value raise RuntimeError
+fn Table::get_element(Self, Int) -> @types.Value raise RuntimeError
+fn Table::grow(Self, Int, @types.Value) -> Int
+fn Table::new(@types.ValueType, Int, Int?) -> Self
+fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
 fn Table::size(Self) -> Int
 impl Show for Table
 

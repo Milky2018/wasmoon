@@ -4,7 +4,7 @@
 /// Execute a single instruction
 fn ExecContext::exec_instr(
   self : ExecContext,
-  instr : @wasmoon.Instruction,
+  instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
     // Constants
@@ -277,14 +277,14 @@ fn ExecContext::exec_instr(
 pub fn ExecContext::call_func(
   self : ExecContext,
   func_idx : Int,
-  args : Array[@wasmoon.Value],
-) -> Array[@wasmoon.Value] raise {
+  args : Array[@types.Value],
+) -> Array[@types.Value] raise {
   // Get the store address from instance
   let store_addr = self.instance.func_addrs[func_idx]
   let func = self.store.get_func(store_addr)
 
   // Create locals array: params + local variables
-  let locals : Array[@wasmoon.Value] = []
+  let locals : Array[@types.Value] = []
 
   // Add parameters
   for arg in args {
@@ -317,7 +317,7 @@ pub fn ExecContext::call_func(
   self.pop_frame()
 
   // Collect return values from stack
-  let results : Array[@wasmoon.Value] = []
+  let results : Array[@types.Value] = []
   if self.stack.size() > 0 {
     results.push(self.stack.pop())
   }
@@ -331,7 +331,7 @@ pub fn ExecContext::call_func(
 ///|
 /// Create a simple module instance from a parsed module
 pub fn instantiate_module(
-  mod : @wasmoon.Module,
+  mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) {
   let store = @runtime.Store::new()
 
@@ -390,7 +390,7 @@ pub fn instantiate_module(
 
 ///|
 /// Evaluate a constant initialization expression
-fn eval_const_expr(instrs : Array[@wasmoon.Instruction]) -> @wasmoon.Value {
+fn eval_const_expr(instrs : Array[@types.Instruction]) -> @types.Value {
   // WebAssembly constant expressions can only contain:
   // - i32.const, i64.const, f32.const, f64.const
   // - ref.null, ref.func
@@ -407,7 +407,7 @@ fn eval_const_expr(instrs : Array[@wasmoon.Instruction]) -> @wasmoon.Value {
 ///|
 /// Create a module instance with element and data segment initialization
 pub fn instantiate_module_with_init(
-  mod : @wasmoon.Module,
+  mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
   let (store, instance) = instantiate_module(mod)
 
@@ -440,7 +440,7 @@ pub fn instantiate_module_with_init(
 
       // Set table entries
       for i, func_idx in elem.init {
-        table.set(offset + i, @wasmoon.Value::FuncRef(func_idx)) catch {
+        table.set(offset + i, @types.Value::FuncRef(func_idx)) catch {
           _ => ()
         }
       }
@@ -483,7 +483,7 @@ pub fn instantiate_module_with_init(
 /// Raises UnknownImport if any required import is not provided
 pub fn instantiate_module_with_imports(
   store : @runtime.Store,
-  mod : @wasmoon.Module,
+  mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
   // Process imports first
@@ -573,13 +573,13 @@ pub fn call_exported_func(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
   name : String,
-  args : Array[@wasmoon.Value],
-) -> Array[@wasmoon.Value] raise @runtime.RuntimeError {
+  args : Array[@types.Value],
+) -> Array[@types.Value] raise @runtime.RuntimeError {
   // Find the export
   fn find_export(
-    exports : Array[@wasmoon.Export],
+    exports : Array[@types.Export],
     target : String,
-  ) -> @wasmoon.Export? {
+  ) -> @types.Export? {
     loop 0 {
       idx =>
         if idx >= exports.length() {

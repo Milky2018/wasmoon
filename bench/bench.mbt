@@ -5,20 +5,20 @@
 
 ///|
 fn create_test_module(
-  code : @wasmoon.FunctionCode,
+  code : @types.FunctionCode,
 ) -> (@runtime.Store, @runtime.ModuleInstance) {
-  let func_type : @wasmoon.FuncType = {
-    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
-    results: [@wasmoon.ValueType::I32],
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
   }
-  let mod : @wasmoon.Module = {
+  let mod : @types.Module = {
     types: [func_type],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @wasmoon.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
     codes: [code],
@@ -31,12 +31,12 @@ fn create_test_module(
 
 ///|
 test "bench_simple_add" (b : @bench.T) {
-  let add_func : @wasmoon.FunctionCode = {
+  let add_func : @types.FunctionCode = {
     locals: [],
-    body: [@wasmoon.LocalGet(0), @wasmoon.LocalGet(1), @wasmoon.I32Add],
+    body: [@types.LocalGet(0), @types.LocalGet(1), @types.I32Add],
   }
   let (store, instance) = create_test_module(add_func)
-  let args = [@wasmoon.Value::I32(42), @wasmoon.Value::I32(58)]
+  let args = [@types.Value::I32(42), @types.Value::I32(58)]
   b.bench(
     fn() {
       try! (@executor.call_exported_func(store, instance, "test", args)
@@ -51,22 +51,22 @@ test "bench_simple_add" (b : @bench.T) {
 ///|
 test "bench_complex_arithmetic" (b : @bench.T) {
   // (a + b) * (a - b) / 2
-  let complex_func : @wasmoon.FunctionCode = {
+  let complex_func : @types.FunctionCode = {
     locals: [],
     body: [
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalGet(1),
-      @wasmoon.I32Add,
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalGet(1),
-      @wasmoon.I32Sub,
-      @wasmoon.I32Mul,
-      @wasmoon.I32Const(2),
-      @wasmoon.I32DivS,
+      @types.LocalGet(0),
+      @types.LocalGet(1),
+      @types.I32Add,
+      @types.LocalGet(0),
+      @types.LocalGet(1),
+      @types.I32Sub,
+      @types.I32Mul,
+      @types.I32Const(2),
+      @types.I32DivS,
     ],
   }
   let (store, instance) = create_test_module(complex_func)
-  let args = [@wasmoon.Value::I32(100), @wasmoon.Value::I32(50)]
+  let args = [@types.Value::I32(100), @types.Value::I32(50)]
   b.bench(
     fn() {
       try! (@executor.call_exported_func(store, instance, "test", args)
@@ -81,27 +81,27 @@ test "bench_complex_arithmetic" (b : @bench.T) {
 ///|
 test "bench_local_variables" (b : @bench.T) {
   // Store to local and retrieve multiple times
-  let local_func : @wasmoon.FunctionCode = {
-    locals: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
+  let local_func : @types.FunctionCode = {
+    locals: [@types.ValueType::I32, @types.ValueType::I32],
     body: [
       // Store a to local 2
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalSet(2),
+      @types.LocalGet(0),
+      @types.LocalSet(2),
       // Store b to local 3
-      @wasmoon.LocalGet(1),
-      @wasmoon.LocalSet(3),
+      @types.LocalGet(1),
+      @types.LocalSet(3),
       // Compute (local2 + local3) * (local2 - local3)
-      @wasmoon.LocalGet(2),
-      @wasmoon.LocalGet(3),
-      @wasmoon.I32Add,
-      @wasmoon.LocalGet(2),
-      @wasmoon.LocalGet(3),
-      @wasmoon.I32Sub,
-      @wasmoon.I32Mul,
+      @types.LocalGet(2),
+      @types.LocalGet(3),
+      @types.I32Add,
+      @types.LocalGet(2),
+      @types.LocalGet(3),
+      @types.I32Sub,
+      @types.I32Mul,
     ],
   }
   let (store, instance) = create_test_module(local_func)
-  let args = [@wasmoon.Value::I32(20), @wasmoon.Value::I32(10)]
+  let args = [@types.Value::I32(20), @types.Value::I32(10)]
   b.bench(
     fn() {
       try! (@executor.call_exported_func(store, instance, "test", args)
@@ -116,20 +116,20 @@ test "bench_local_variables" (b : @bench.T) {
 ///|
 test "bench_bitwise_ops" (b : @bench.T) {
   // (a & b) | (a ^ b)
-  let bitwise_func : @wasmoon.FunctionCode = {
+  let bitwise_func : @types.FunctionCode = {
     locals: [],
     body: [
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalGet(1),
-      @wasmoon.I32And,
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalGet(1),
-      @wasmoon.I32Xor,
-      @wasmoon.I32Or,
+      @types.LocalGet(0),
+      @types.LocalGet(1),
+      @types.I32And,
+      @types.LocalGet(0),
+      @types.LocalGet(1),
+      @types.I32Xor,
+      @types.I32Or,
     ],
   }
   let (store, instance) = create_test_module(bitwise_func)
-  let args = [@wasmoon.Value::I32(0xFF00), @wasmoon.Value::I32(0x00FF)]
+  let args = [@types.Value::I32(0xFF00), @types.Value::I32(0x00FF)]
   b.bench(
     fn() {
       try! (@executor.call_exported_func(store, instance, "test", args)
@@ -145,35 +145,35 @@ test "bench_bitwise_ops" (b : @bench.T) {
 test "bench_comparisons" (b : @bench.T) {
   // (a < b) ? (a + b) : (a - b)
   // Implemented as: (a < b) * (a + b) + (a >= b) * (a - b)
-  let cmp_func : @wasmoon.FunctionCode = {
+  let cmp_func : @types.FunctionCode = {
     locals: [],
     body: [
       // (a < b) as 0 or 1
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalGet(1),
-      @wasmoon.I32LtS,
+      @types.LocalGet(0),
+      @types.LocalGet(1),
+      @types.I32LtS,
       // (a + b)
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalGet(1),
-      @wasmoon.I32Add,
+      @types.LocalGet(0),
+      @types.LocalGet(1),
+      @types.I32Add,
       // multiply
-      @wasmoon.I32Mul,
+      @types.I32Mul,
       // (a >= b) as 0 or 1
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalGet(1),
-      @wasmoon.I32GeS,
+      @types.LocalGet(0),
+      @types.LocalGet(1),
+      @types.I32GeS,
       // (a - b)
-      @wasmoon.LocalGet(0),
-      @wasmoon.LocalGet(1),
-      @wasmoon.I32Sub,
+      @types.LocalGet(0),
+      @types.LocalGet(1),
+      @types.I32Sub,
       // multiply
-      @wasmoon.I32Mul,
+      @types.I32Mul,
       // add both branches
-      @wasmoon.I32Add,
+      @types.I32Add,
     ],
   }
   let (store, instance) = create_test_module(cmp_func)
-  let args = [@wasmoon.Value::I32(30), @wasmoon.Value::I32(20)]
+  let args = [@types.Value::I32(30), @types.Value::I32(20)]
   b.bench(
     fn() {
       try! (@executor.call_exported_func(store, instance, "test", args)
@@ -189,43 +189,43 @@ test "bench_comparisons" (b : @bench.T) {
 test "bench_iterative_sum" (b : @bench.T) {
   // Compute sum from 1 to n using repeated additions
   // We'll approximate with a simpler calculation for now
-  let sum_func : @wasmoon.FunctionCode = {
-    locals: [@wasmoon.ValueType::I32], // accumulator
+  let sum_func : @types.FunctionCode = {
+    locals: [@types.ValueType::I32], // accumulator
     body: [
       // acc = 0
-      @wasmoon.I32Const(0),
-      @wasmoon.LocalSet(2),
+      @types.I32Const(0),
+      @types.LocalSet(2),
       // acc = acc + 1
-      @wasmoon.LocalGet(2),
-      @wasmoon.I32Const(1),
-      @wasmoon.I32Add,
-      @wasmoon.LocalSet(2),
+      @types.LocalGet(2),
+      @types.I32Const(1),
+      @types.I32Add,
+      @types.LocalSet(2),
       // acc = acc + 2
-      @wasmoon.LocalGet(2),
-      @wasmoon.I32Const(2),
-      @wasmoon.I32Add,
-      @wasmoon.LocalSet(2),
+      @types.LocalGet(2),
+      @types.I32Const(2),
+      @types.I32Add,
+      @types.LocalSet(2),
       // acc = acc + 3
-      @wasmoon.LocalGet(2),
-      @wasmoon.I32Const(3),
-      @wasmoon.I32Add,
-      @wasmoon.LocalSet(2),
+      @types.LocalGet(2),
+      @types.I32Const(3),
+      @types.I32Add,
+      @types.LocalSet(2),
       // acc = acc + 4
-      @wasmoon.LocalGet(2),
-      @wasmoon.I32Const(4),
-      @wasmoon.I32Add,
-      @wasmoon.LocalSet(2),
+      @types.LocalGet(2),
+      @types.I32Const(4),
+      @types.I32Add,
+      @types.LocalSet(2),
       // acc = acc + 5
-      @wasmoon.LocalGet(2),
-      @wasmoon.I32Const(5),
-      @wasmoon.I32Add,
-      @wasmoon.LocalSet(2),
+      @types.LocalGet(2),
+      @types.I32Const(5),
+      @types.I32Add,
+      @types.LocalSet(2),
       // return acc
-      @wasmoon.LocalGet(2),
+      @types.LocalGet(2),
     ],
   }
   let (store, instance) = create_test_module(sum_func)
-  let args = [@wasmoon.Value::I32(0), @wasmoon.Value::I32(0)]
+  let args = [@types.Value::I32(0), @types.Value::I32(0)]
   b.bench(
     fn() {
       try! (@executor.call_exported_func(store, instance, "test", args)
@@ -240,32 +240,32 @@ test "bench_iterative_sum" (b : @bench.T) {
 ///|
 test "bench_stack_operations" (b : @bench.T) {
   // Push many values to stack and perform operations
-  let stack_func : @wasmoon.FunctionCode = {
+  let stack_func : @types.FunctionCode = {
     locals: [],
     body: [
-      @wasmoon.I32Const(1),
-      @wasmoon.I32Const(2),
-      @wasmoon.I32Add,
-      @wasmoon.I32Const(3),
-      @wasmoon.I32Add,
-      @wasmoon.I32Const(4),
-      @wasmoon.I32Add,
-      @wasmoon.I32Const(5),
-      @wasmoon.I32Add,
-      @wasmoon.I32Const(6),
-      @wasmoon.I32Add,
-      @wasmoon.I32Const(7),
-      @wasmoon.I32Add,
-      @wasmoon.I32Const(8),
-      @wasmoon.I32Add,
-      @wasmoon.I32Const(9),
-      @wasmoon.I32Add,
-      @wasmoon.I32Const(10),
-      @wasmoon.I32Add,
+      @types.I32Const(1),
+      @types.I32Const(2),
+      @types.I32Add,
+      @types.I32Const(3),
+      @types.I32Add,
+      @types.I32Const(4),
+      @types.I32Add,
+      @types.I32Const(5),
+      @types.I32Add,
+      @types.I32Const(6),
+      @types.I32Add,
+      @types.I32Const(7),
+      @types.I32Add,
+      @types.I32Const(8),
+      @types.I32Add,
+      @types.I32Const(9),
+      @types.I32Add,
+      @types.I32Const(10),
+      @types.I32Add,
     ],
   }
   let (store, instance) = create_test_module(stack_func)
-  let args = [@wasmoon.Value::I32(0), @wasmoon.Value::I32(0)]
+  let args = [@types.Value::I32(0), @types.Value::I32(0)]
   b.bench(
     fn() {
       try! (@executor.call_exported_func(store, instance, "test", args)
@@ -279,9 +279,9 @@ test "bench_stack_operations" (b : @bench.T) {
 
 ///|
 test "bench_module_instantiation" (b : @bench.T) {
-  let simple_func : @wasmoon.FunctionCode = {
+  let simple_func : @types.FunctionCode = {
     locals: [],
-    body: [@wasmoon.LocalGet(0), @wasmoon.LocalGet(1), @wasmoon.I32Add],
+    body: [@types.LocalGet(0), @types.LocalGet(1), @types.I32Add],
   }
   b.bench(
     fn() {
@@ -308,12 +308,12 @@ test "compare_native_vs_wasm" (b : @bench.T) {
   )
 
   // Wasmoon computation
-  let add_func : @wasmoon.FunctionCode = {
+  let add_func : @types.FunctionCode = {
     locals: [],
-    body: [@wasmoon.LocalGet(0), @wasmoon.LocalGet(1), @wasmoon.I32Add],
+    body: [@types.LocalGet(0), @types.LocalGet(1), @types.I32Add],
   }
   let (store, instance) = create_test_module(add_func)
-  let args = [@wasmoon.Value::I32(42), @wasmoon.Value::I32(58)]
+  let args = [@types.Value::I32(42), @types.Value::I32(58)]
   b.bench(
     fn() {
       try! (@executor.call_exported_func(store, instance, "test", args)
