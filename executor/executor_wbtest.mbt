@@ -2655,3 +2655,164 @@ test "multi-value: call function with multi-value return" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "multi-value: block returning two values" {
+  // Block that returns two values
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      Block(
+        @types.BlockType::TypeIndex(0),
+        [I32Const(100), I32Const(200)], // block returns two values
+      ),
+      I32Add,
+    ],
+  } // add them
+  let block_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32, @types.ValueType::I32],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [block_type, func_type],
+    imports: [],
+    funcs: [1],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="300") // 100 + 200 = 300
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "multi-value: if returning two values" {
+  // If-else that returns two values based on condition
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      LocalGet(0), // condition
+      If(
+        @types.BlockType::TypeIndex(0),
+        [I32Const(10), I32Const(20)], // then: (10, 20)
+        [I32Const(30), I32Const(40)], // else: (30, 40)
+      ),
+      I32Add,
+    ],
+  } // add results
+  let block_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32, @types.ValueType::I32],
+  }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [block_type, func_type],
+    imports: [],
+    funcs: [1],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+
+  // Test with true condition
+  let results1 = call_exported_func(store, instance, "test", [I32(1)])
+  match results1[0] {
+    I32(n) => inspect(n, content="30") // 10 + 20 = 30
+    _ => fail("Expected I32 result")
+  }
+
+  // Test with false condition
+  let results2 = call_exported_func(store, instance, "test", [I32(0)])
+  match results2[0] {
+    I32(n) => inspect(n, content="70") // 30 + 40 = 70
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "multi-value: block with single Value type" {
+  // Block with Value(I32) returns single value (existing behavior)
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      Block(@types.BlockType::Value(@types.ValueType::I32), [I32Const(42)]),
+    ],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="42")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "multi-value: empty block" {
+  // Block with Empty type returns nothing
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [Block(@types.BlockType::Empty, [Nop]), I32Const(99)],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="99")
+    _ => fail("Expected I32 result")
+  }
+}
