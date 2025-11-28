@@ -7,7 +7,7 @@ import(
 )
 
 // Values
-fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise
+fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise @runtime.RuntimeError
 
 fn instantiate_module(@wasmoon.Module) -> (@runtime.Store, @runtime.ModuleInstance)
 

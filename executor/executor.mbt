@@ -348,7 +348,7 @@ pub fn call_exported_func(
   instance : @runtime.ModuleInstance,
   name : String,
   args : Array[@wasmoon.Value],
-) -> Array[@wasmoon.Value] raise {
+) -> Array[@wasmoon.Value] raise @runtime.RuntimeError {
   // Find the export
   fn find_export(
     exports : Array[@wasmoon.Export],
@@ -374,8 +374,28 @@ pub fn call_exported_func(
       match exp.desc {
         Func(func_idx) => {
           let ctx = ExecContext::new(store, instance)
-          ctx.call_func(func_idx, args)
-        }
+          // Catch any leaked ControlSignal and convert to RuntimeError
+          ctx.call_func(func_idx, args) catch {
+            @runtime.Branch(_) | @runtime.Return => raise @runtime.Unreachable
+            @runtime.StackUnderflow => raise @runtime.StackUnderflow
+            @runtime.StackOverflow => raise @runtime.StackOverflow
+            @runtime.TypeMismatch => raise @runtime.TypeMismatch
+            @runtime.OutOfBoundsMemoryAccess =>
+              raise @runtime.OutOfBoundsMemoryAccess
+            @runtime.OutOfBoundsTableAccess =>
+              raise @runtime.OutOfBoundsTableAccess
+            @runtime.UndefinedElement => raise @runtime.UndefinedElement
+            @runtime.UninitializedElement => raise @runtime.UninitializedElement
+            @runtime.IndirectCallTypeMismatch =>
+              raise @runtime.IndirectCallTypeMismatch
+            @runtime.DivisionByZero => raise @runtime.DivisionByZero
+            @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
+            @runtime.InvalidConversion => raise @runtime.InvalidConversion
+            @runtime.Unreachable => raise @runtime.Unreachable
+            @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
+            _ => raise @runtime.Unreachable
+          }
+        } // Unknown error
         _ => raise @runtime.UndefinedElement
       }
     None => raise @runtime.UndefinedElement
