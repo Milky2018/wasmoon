@@ -352,8 +352,10 @@ pub fn instantiate_module_with_imports(
   // Process imports first
   let func_addrs : Array[Int] = []
   let func_type_indices : Array[Int] = []
+  let mem_addrs : Array[Int] = []
+  let table_addrs : Array[Int] = []
 
-  // Import functions first (they come before module functions in the index space)
+  // Import functions and memories first (they come before module definitions in the index space)
   for imp in mod.imports {
     match imp.desc {
       Func(type_idx) =>
@@ -362,6 +364,16 @@ pub fn instantiate_module_with_imports(
             func_addrs.push(addr)
             func_type_indices.push(type_idx)
           }
+          _ => () // Import not found, skip for now
+        }
+      Memory(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Memory(addr)) => mem_addrs.push(addr)
+          _ => () // Import not found, skip for now
+        }
+      Table(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Table(addr)) => table_addrs.push(addr)
           _ => () // Import not found, skip for now
         }
       _ => () // Handle other import types later
@@ -375,16 +387,14 @@ pub fn instantiate_module_with_imports(
     func_type_indices.push(mod.funcs[i])
   }
 
-  // Allocate memories
-  let mem_addrs : Array[Int] = []
+  // Allocate memories (after imported memories)
   for mem_type in mod.memories {
     let mem = @runtime.Memory::new(mem_type.limits.min, mem_type.limits.max)
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
 
-  // Allocate tables
-  let table_addrs : Array[Int] = []
+  // Allocate tables (after imported tables)
   for table_type in mod.tables {
     let table = @runtime.Table::new(
       table_type.elem_type,
