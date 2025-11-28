@@ -65,6 +65,21 @@ fn Imports::resolve(Self, String, String) -> ExternVal?
 type Label
 impl Show for Label
 
+pub(all) struct Linker {
+  store : Store
+  modules : Array[(String, ModuleInstance)]
+}
+fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit
+fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Unit
+fn Linker::add_memory(Self, String, String, Memory) -> Unit
+fn Linker::add_table(Self, String, String, Table) -> Unit
+fn Linker::build_imports(Self) -> Imports
+fn Linker::get_module(Self, String) -> ModuleInstance?
+fn Linker::get_store(Self) -> Store
+fn Linker::new() -> Self
+fn Linker::register(Self, String, ModuleInstance) -> Unit
+fn Linker::with_store(Store) -> Self
+
 type Memory
 fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
 fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
