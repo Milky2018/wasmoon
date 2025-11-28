@@ -62,20 +62,20 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ## Phase 3: 完整的 WASM 1.0 支持 📦
 
-### 3.1 全局变量
-- [ ] global.get / global.set
-- [ ] 全局变量初始化表达式
+### 3.1 全局变量 ✅
+- [x] global.get / global.set
+- [x] 全局变量初始化表达式
 
 ### 3.2 导入导出
 - [x] 函数导入/导出
 - [x] 主机函数接口 (Host Functions)
 - [x] 内存导入/导出
 - [x] 表导入/导出
-- [ ] 全局变量导入/导出
+- [x] 全局变量导入/导出
 
 ### 3.3 表操作
-- [ ] table.get / table.set
-- [ ] table.size / table.grow
+- [x] table.get / table.set
+- [x] table.size / table.grow
 - [ ] table.fill / table.copy
 
 ### 3.4 模块初始化
@@ -154,4 +154,4 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ---
 
 **当前状态**: Phase 3 进行中
-**下一步**: 全局变量 (global.get / global.set)
+**下一步**: table.fill / table.copy

@@ -30,6 +30,48 @@ fn ExecContext::exec_instr(
       frame.set_local(idx, value)
     }
 
+    // Global variables
+    GlobalGet(idx) => {
+      let global_addr = self.instance.global_addrs[idx]
+      let global = self.store.get_global(global_addr)
+      self.stack.push(global.get())
+    }
+    GlobalSet(idx) => {
+      let value = self.stack.pop()
+      let global_addr = self.instance.global_addrs[idx]
+      let global = self.store.get_global(global_addr)
+      global.set(value)
+    }
+
+    // Table operations
+    TableGet(table_idx) => {
+      let elem_idx = self.stack.pop_i32()
+      let table_addr = self.instance.table_addrs[table_idx]
+      let table = self.store.get_table(table_addr)
+      let value = table.get(elem_idx)
+      self.stack.push(value)
+    }
+    TableSet(table_idx) => {
+      let value = self.stack.pop()
+      let elem_idx = self.stack.pop_i32()
+      let table_addr = self.instance.table_addrs[table_idx]
+      let table = self.store.get_table(table_addr)
+      table.set(elem_idx, value)
+    }
+    TableSize(table_idx) => {
+      let table_addr = self.instance.table_addrs[table_idx]
+      let table = self.store.get_table(table_addr)
+      self.stack.push(I32(table.size()))
+    }
+    TableGrow(table_idx) => {
+      let delta = self.stack.pop_i32()
+      let init_val = self.stack.pop()
+      let table_addr = self.instance.table_addrs[table_idx]
+      let table = self.store.get_table(table_addr)
+      let old_size = table.grow(delta, init_val)
+      self.stack.push(I32(old_size))
+    }
+
     // Drop
     Drop => {
       let _ = self.stack.pop()
@@ -301,6 +343,16 @@ pub fn instantiate_module(
     table_addrs.push(addr)
   }
 
+  // Allocate globals with initialization
+  let global_addrs : Array[Int] = []
+  for global in mod.globals {
+    // Evaluate init expression (for now, assume simple constant expressions)
+    let init_value = eval_const_expr(global.init)
+    let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
+    let addr = store.alloc_global(global_inst)
+    global_addrs.push(addr)
+  }
+
   // func_addrs: indices into store.funcs
   // func_type_indices: type index for each function (from mod.funcs)
   let instance : @runtime.ModuleInstance = {
@@ -309,12 +361,28 @@ pub fn instantiate_module(
     func_type_indices: mod.funcs,
     table_addrs,
     mem_addrs,
-    global_addrs: [],
+    global_addrs,
     exports: mod.exports,
     elem_segments: mod.elems,
     data_segments: mod.datas,
   }
   (store, instance)
+}
+
+///|
+/// Evaluate a constant initialization expression
+fn eval_const_expr(instrs : Array[@wasmoon.Instruction]) -> @wasmoon.Value {
+  // WebAssembly constant expressions can only contain:
+  // - i32.const, i64.const, f32.const, f64.const
+  // - ref.null, ref.func
+  // - global.get (for imported globals only)
+  match instrs {
+    [I32Const(n)] => I32(n)
+    [I64Const(n)] => I64(n)
+    [F32Const(f)] => F32(f)
+    [F64Const(d)] => F64(d)
+    _ => Null // fallback for unsupported expressions
+  }
 }
 
 ///|
@@ -411,6 +479,14 @@ pub fn instantiate_module_with_imports(
     )
     let addr = store.alloc_table(table)
     table_addrs.push(addr)
+  }
+
+  // Allocate globals (after imported globals)
+  for global in mod.globals {
+    let init_value = eval_const_expr(global.init)
+    let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
+    let addr = store.alloc_global(global_inst)
+    global_addrs.push(addr)
   }
   {
     types: mod.types,
