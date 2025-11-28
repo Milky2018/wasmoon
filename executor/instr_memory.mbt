@@ -207,7 +207,7 @@ fn ExecContext::exec_memory_store(
 }
 
 ///|
-/// Execute memory size/grow instruction
+/// Execute memory size/grow/bulk instruction
 fn ExecContext::exec_memory_misc(
   self : ExecContext,
   instr : @wasmoon.Instruction,
@@ -224,6 +224,41 @@ fn ExecContext::exec_memory_misc(
       let mem = self.store.get_mem(0)
       let result = mem.grow(delta)
       self.stack.push(I32(result))
+    }
+    // memory.init: copy data from data segment to memory
+    MemoryInit(data_idx) => {
+      let n = self.stack.pop_i32() // length
+      let s = self.stack.pop_i32() // source offset in data segment
+      let d = self.stack.pop_i32() // destination in memory
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
+      let data_segment = self.instance.data_segments[data_idx]
+      // Extract the slice from data segment
+      if s < 0 || n < 0 || s + n > data_segment.init.length() {
+        raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
+      }
+      // Copy bytes directly to memory
+      for i in 0..<n {
+        mem.store_byte(d + i, data_segment.init[s + i])
+      }
+    }
+    // memory.copy: copy within memory
+    MemoryCopy => {
+      let n = self.stack.pop_i32() // length
+      let s = self.stack.pop_i32() // source
+      let d = self.stack.pop_i32() // destination
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
+      mem.copy(d, s, n)
+    }
+    // memory.fill: fill memory region with a value
+    MemoryFill => {
+      let n = self.stack.pop_i32() // length
+      let val = self.stack.pop_i32() // value (byte)
+      let d = self.stack.pop_i32() // destination
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
+      mem.fill(d, val.land(0xFF).to_byte(), n)
     }
     _ => raise @runtime.RuntimeError::Unreachable
   }

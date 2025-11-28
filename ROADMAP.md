@@ -83,8 +83,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] 数据段初始化 (data segment)
 - [x] 元素段初始化 (element segment)
 
-### 3.5 批量内存操作
-- [ ] memory.init / memory.copy / memory.fill
+### 3.5 批量内存操作 ✅
+- [x] memory.init / memory.copy / memory.fill
 - [ ] data.drop / elem.drop
 
 ### 3.6 引用类型
@@ -154,4 +154,4 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ---
 
 **当前状态**: Phase 3 进行中
-**下一步**: memory.init / memory.copy / memory.fill
+**下一步**: data.drop / elem.drop

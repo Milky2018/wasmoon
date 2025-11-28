@@ -242,8 +242,9 @@ fn ExecContext::exec_instr(
     | I64Store16(_, _)
     | I64Store32(_, _) => self.exec_memory_store(instr)
 
-    // Memory size/grow
-    MemorySize | MemoryGrow => self.exec_memory_misc(instr)
+    // Memory size/grow and bulk operations
+    MemorySize | MemoryGrow | MemoryInit(_) | MemoryCopy | MemoryFill =>
+      self.exec_memory_misc(instr)
 
     // Control flow operations
     Block(_, _)
