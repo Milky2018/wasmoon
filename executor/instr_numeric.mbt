@@ -29,6 +29,10 @@ fn ExecContext::exec_i32_numeric(
       if b == 0 {
         raise @runtime.DivisionByZero
       }
+      // Check for integer overflow: INT32_MIN / -1 would overflow
+      if a == -2147483648 && b == -1 {
+        raise @runtime.IntegerOverflow
+      }
       self.stack.push(I32(a / b))
     }
     I32DivU => {
@@ -253,6 +257,10 @@ fn ExecContext::exec_i64_numeric(
       let a = self.stack.pop_i64()
       if b == 0L {
         raise @runtime.DivisionByZero
+      }
+      // Check for integer overflow: INT64_MIN / -1 would overflow
+      if a == -9223372036854775808L && b == -1L {
+        raise @runtime.IntegerOverflow
       }
       self.stack.push(I64(a / b))
     }

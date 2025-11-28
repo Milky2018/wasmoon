@@ -208,7 +208,6 @@ test "wasm-testsuite: i32.div_s trap on overflow" {
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i32.const 0x80000000) (i32.const -1)) "integer overflow")
   // -2147483648 / -1 overflows because result would be 2147483648 which doesn't fit in i32
-  // NOTE: This test is marked as TODO - overflow check not yet fully implemented
   let trapped = try {
     let _ = @executor.call_exported_func(store, instance, "div_s", [
       I32(-2147483648),
@@ -219,9 +218,7 @@ test "wasm-testsuite: i32.div_s trap on overflow" {
     @runtime.IntegerOverflow => true
     _ => false
   }
-  // Skip this test for now - overflow detection needs to be enhanced
-  let _ = trapped
-
+  inspect(trapped, content="true")
 }
 
 ///|
