@@ -442,7 +442,7 @@ pub fn call_exported_func(
           let ctx = ExecContext::new(store, instance)
           // Catch any leaked ControlSignal and convert to RuntimeError
           ctx.call_func(func_idx, args) catch {
-            @runtime.Branch(_) | @runtime.Return => raise @runtime.Unreachable
+            Branch(_) | Return => raise @runtime.Unreachable
             @runtime.StackUnderflow => raise @runtime.StackUnderflow
             @runtime.StackOverflow => raise @runtime.StackOverflow
             @runtime.TypeMismatch => raise @runtime.TypeMismatch
