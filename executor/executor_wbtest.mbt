@@ -1374,3 +1374,104 @@ test "import validation: missing import raises error" {
   }
   inspect(result, content="true")
 }
+
+///|
+test "table import: call_indirect with imported table" {
+  // Create a store with a shared table
+  let store = @runtime.Store::new()
+  let shared_table = @runtime.Table::new(@wasmoon.ValueType::FuncRef, 2, None)
+  let table_addr = store.alloc_table(shared_table)
+
+  // Create two functions: add and sub
+  let add_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I32Add],
+  }
+  let sub_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I32Sub],
+  }
+
+  // Allocate the functions in store
+  let add_addr = store.alloc_func(add_func)
+  let sub_addr = store.alloc_func(sub_func)
+
+  // Set function references in table
+  shared_table.set(0, @wasmoon.Value::FuncRef(add_addr)) catch {
+    _ => fail("Failed to set table")
+  }
+  shared_table.set(1, @wasmoon.Value::FuncRef(sub_addr)) catch {
+    _ => fail("Failed to set table")
+  }
+
+  // Create a module that imports the table and uses call_indirect
+  // apply(op, a, b) -> call_indirect(op, a, b)
+  let apply_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      LocalGet(1), // a
+      LocalGet(2), // b
+      LocalGet(0), // op (table index)
+      CallIndirect(0, 0),
+    ],
+  } // type 0, table 0
+  let binary_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let apply_type : @wasmoon.FuncType = {
+    params: [
+      @wasmoon.ValueType::I32,
+      @wasmoon.ValueType::I32,
+      @wasmoon.ValueType::I32,
+    ],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [binary_type, apply_type],
+    imports: [
+      {
+        mod_name: "env",
+        name: "table",
+        desc: Table({
+          elem_type: @wasmoon.ValueType::FuncRef,
+          limits: { min: 2, max: None },
+        }),
+      },
+    ],
+    funcs: [1], // apply has type 1
+    tables: [], // No local tables, only imported
+    memories: [],
+    globals: [],
+    exports: [{ name: "apply", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [apply_func],
+    datas: [],
+  }
+  let imports = @runtime.Imports::new()
+  imports.add_table("env", "table", table_addr)
+  let instance = instantiate_module_with_imports(store, mod, imports)
+
+  // apply(0, 10, 3) -> add(10, 3) = 13
+  let results1 = call_exported_func(store, instance, "apply", [
+    I32(0),
+    I32(10),
+    I32(3),
+  ])
+  match results1[0] {
+    I32(n) => inspect(n, content="13")
+    _ => fail("Expected I32 result")
+  }
+
+  // apply(1, 10, 3) -> sub(10, 3) = 7
+  let results2 = call_exported_func(store, instance, "apply", [
+    I32(1),
+    I32(10),
+    I32(3),
+  ])
+  match results2[0] {
+    I32(n) => inspect(n, content="7")
+    _ => fail("Expected I32 result")
+  }
+}

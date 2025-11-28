@@ -218,7 +218,9 @@ pub fn ExecContext::call_func(
   func_idx : Int,
   args : Array[@wasmoon.Value],
 ) -> Array[@wasmoon.Value] raise {
-  let func = self.store.get_func(func_idx)
+  // Get the store address from instance
+  let store_addr = self.instance.func_addrs[func_idx]
+  let func = self.store.get_func(store_addr)
 
   // Create locals array: params + local variables
   let locals : Array[@wasmoon.Value] = []
