@@ -238,7 +238,9 @@ fn Parser::read_string(self : Parser) -> String raise ParserError {
 // ============================================================
 
 ///|
-fn Parser::read_value_type(self : Parser) -> @wasmoon.ValueType raise ParserError {
+fn Parser::read_value_type(
+  self : Parser,
+) -> @wasmoon.ValueType raise ParserError {
   let byte = self.read_byte()
   match byte {
     0x7F => I32
@@ -254,7 +256,9 @@ fn Parser::read_value_type(self : Parser) -> @wasmoon.ValueType raise ParserErro
 
 ///|
 /// Read block type (uses peek to avoid rewind)
-fn Parser::read_block_type(self : Parser) -> @wasmoon.BlockType raise ParserError {
+fn Parser::read_block_type(
+  self : Parser,
+) -> @wasmoon.BlockType raise ParserError {
   let byte = self.peek_byte()
   match byte {
     0x40 => {
@@ -317,20 +321,26 @@ fn Parser::read_limits(self : Parser) -> @wasmoon.Limits raise ParserError {
 // ============================================================
 
 ///|
-fn Parser::read_table_type(self : Parser) -> @wasmoon.TableType raise ParserError {
+fn Parser::read_table_type(
+  self : Parser,
+) -> @wasmoon.TableType raise ParserError {
   let elem_type = self.read_value_type()
   let limits = self.read_limits()
   { elem_type, limits }
 }
 
 ///|
-fn Parser::read_memory_type(self : Parser) -> @wasmoon.MemoryType raise ParserError {
+fn Parser::read_memory_type(
+  self : Parser,
+) -> @wasmoon.MemoryType raise ParserError {
   let limits = self.read_limits()
   { limits, }
 }
 
 ///|
-fn Parser::read_global_type(self : Parser) -> @wasmoon.GlobalType raise ParserError {
+fn Parser::read_global_type(
+  self : Parser,
+) -> @wasmoon.GlobalType raise ParserError {
   let value_type = self.read_value_type()
   let mutability = self.read_byte()
   { value_type, mutable: mutability == 0x01 }
@@ -341,7 +351,9 @@ fn Parser::read_global_type(self : Parser) -> @wasmoon.GlobalType raise ParserEr
 // ============================================================
 
 ///|
-fn Parser::read_expr(self : Parser) -> Array[@wasmoon.Instruction] raise ParserError {
+fn Parser::read_expr(
+  self : Parser,
+) -> Array[@wasmoon.Instruction] raise ParserError {
   loop [] {
     instructions => {
       let opcode = self.read_byte()
@@ -597,6 +609,21 @@ fn Parser::read_instruction(
     0xBD => I64ReinterpretF64
     0xBE => F32ReinterpretI32
     0xBF => F64ReinterpretI64
+    // Saturating truncation instructions (0xFC prefix)
+    0xFC => {
+      let subopcode = self.read_u32()
+      match subopcode {
+        0 => I32TruncSatF32S
+        1 => I32TruncSatF32U
+        2 => I32TruncSatF64S
+        3 => I32TruncSatF64U
+        4 => I64TruncSatF32S
+        5 => I64TruncSatF32U
+        6 => I64TruncSatF64S
+        7 => I64TruncSatF64U
+        _ => raise UnknownOpcode(0xFC00 + subopcode)
+      }
+    }
     _ => raise UnknownOpcode(opcode)
   }
 }

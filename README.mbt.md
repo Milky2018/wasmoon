@@ -22,10 +22,16 @@ moon add Milky2018/wasmoon
 ## Quick Start
 
 ```moonbit
+///|
 test "add function example" {
   // Create a module with an add function
   let mod : @wasmoon.Module = {
-    types: [{ params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32], results: [@wasmoon.ValueType::I32] }],
+    types: [
+      {
+        params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
+        results: [@wasmoon.ValueType::I32],
+      },
+    ],
     imports: [],
     funcs: [0],
     tables: [],
@@ -34,13 +40,21 @@ test "add function example" {
     exports: [{ name: "add", desc: @wasmoon.ExportDesc::Func(0) }],
     start: None,
     elems: [],
-    codes: [{ locals: [], body: [@wasmoon.LocalGet(0), @wasmoon.LocalGet(1), @wasmoon.I32Add] }],
+    codes: [
+      {
+        locals: [],
+        body: [@wasmoon.LocalGet(0), @wasmoon.LocalGet(1), @wasmoon.I32Add],
+      },
+    ],
     datas: [],
   }
 
   // Instantiate and execute
   let (store, instance) = @executor.instantiate_module(mod)
-  let result = @executor.call_exported_func(store, instance, "add", [@wasmoon.Value::I32(5), @wasmoon.Value::I32(3)])
+  let result = @executor.call_exported_func(store, instance, "add", [
+    @wasmoon.Value::I32(5),
+    @wasmoon.Value::I32(3),
+  ])
   inspect(result, content="[I32(8)]")
 }
 ```

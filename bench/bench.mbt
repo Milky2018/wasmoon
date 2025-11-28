@@ -39,7 +39,8 @@ test "bench_simple_add" (b : @bench.T) {
   let args = [@wasmoon.Value::I32(42), @wasmoon.Value::I32(58)]
   b.bench(
     fn() {
-      try! (@executor.call_exported_func(store, instance, "test", args) |> ignore)
+      try! (@executor.call_exported_func(store, instance, "test", args)
+      |> ignore)
     },
     name="simple_add",
   )
@@ -68,7 +69,8 @@ test "bench_complex_arithmetic" (b : @bench.T) {
   let args = [@wasmoon.Value::I32(100), @wasmoon.Value::I32(50)]
   b.bench(
     fn() {
-      try! (@executor.call_exported_func(store, instance, "test", args) |> ignore)
+      try! (@executor.call_exported_func(store, instance, "test", args)
+      |> ignore)
     },
     name="complex_arithmetic",
   )
@@ -102,7 +104,8 @@ test "bench_local_variables" (b : @bench.T) {
   let args = [@wasmoon.Value::I32(20), @wasmoon.Value::I32(10)]
   b.bench(
     fn() {
-      try! (@executor.call_exported_func(store, instance, "test", args) |> ignore)
+      try! (@executor.call_exported_func(store, instance, "test", args)
+      |> ignore)
     },
     name="local_variables",
   )
@@ -129,7 +132,8 @@ test "bench_bitwise_ops" (b : @bench.T) {
   let args = [@wasmoon.Value::I32(0xFF00), @wasmoon.Value::I32(0x00FF)]
   b.bench(
     fn() {
-      try! (@executor.call_exported_func(store, instance, "test", args) |> ignore)
+      try! (@executor.call_exported_func(store, instance, "test", args)
+      |> ignore)
     },
     name="bitwise_ops",
   )
@@ -172,7 +176,8 @@ test "bench_comparisons" (b : @bench.T) {
   let args = [@wasmoon.Value::I32(30), @wasmoon.Value::I32(20)]
   b.bench(
     fn() {
-      try! (@executor.call_exported_func(store, instance, "test", args) |> ignore)
+      try! (@executor.call_exported_func(store, instance, "test", args)
+      |> ignore)
     },
     name="comparisons",
   )
@@ -223,7 +228,8 @@ test "bench_iterative_sum" (b : @bench.T) {
   let args = [@wasmoon.Value::I32(0), @wasmoon.Value::I32(0)]
   b.bench(
     fn() {
-      try! (@executor.call_exported_func(store, instance, "test", args) |> ignore)
+      try! (@executor.call_exported_func(store, instance, "test", args)
+      |> ignore)
     },
     name="iterative_sum",
   )
@@ -262,7 +268,8 @@ test "bench_stack_operations" (b : @bench.T) {
   let args = [@wasmoon.Value::I32(0), @wasmoon.Value::I32(0)]
   b.bench(
     fn() {
-      try! (@executor.call_exported_func(store, instance, "test", args) |> ignore)
+      try! (@executor.call_exported_func(store, instance, "test", args)
+      |> ignore)
     },
     name="stack_operations",
   )
@@ -309,7 +316,8 @@ test "compare_native_vs_wasm" (b : @bench.T) {
   let args = [@wasmoon.Value::I32(42), @wasmoon.Value::I32(58)]
   b.bench(
     fn() {
-      try! (@executor.call_exported_func(store, instance, "test", args) |> ignore)
+      try! (@executor.call_exported_func(store, instance, "test", args)
+      |> ignore)
     },
     name="wasm_add",
   )

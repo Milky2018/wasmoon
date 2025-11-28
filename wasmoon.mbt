@@ -225,6 +225,16 @@ pub(all) enum Instruction {
   I64ReinterpretF64
   F32ReinterpretI32
   F64ReinterpretI64
+
+  // Saturating truncation instructions (nontrapping float-to-int)
+  I32TruncSatF32S
+  I32TruncSatF32U
+  I32TruncSatF64S
+  I32TruncSatF64U
+  I64TruncSatF32S
+  I64TruncSatF32U
+  I64TruncSatF64S
+  I64TruncSatF64U
 } derive(Eq, Show)
 
 ///|
@@ -368,4 +378,10 @@ pub fn Module::new() -> Module {
     codes: [],
     datas: [],
   }
+}
+
+///|
+test "parse empty module" {
+  let _ = Module::new()
+  inspect(true, content="true")
 }

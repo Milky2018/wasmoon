@@ -293,6 +293,44 @@
 
 ---
 
+## 2025-11-28
+
+### MoonBit 类型转换最佳实践
+
+#### 1. 优先使用直接转换方法
+- ❌ **错误做法**: 使用连续的类型转换链
+  ```moonbit
+  a.to_double().to_uint64().to_uint()  // 冗余
+  a.reinterpret_as_uint().to_int64()   // 冗余
+  ```
+- ✅ **正确做法**: 查找并使用直接转换方法
+  ```moonbit
+  a.to_double().to_uint()              // Double 有 to_uint()
+  a.to_uint64()                        // Int 有 to_uint64()
+  ```
+
+#### 2. 常用类型转换方法速查
+- **Int**: `to_float()`, `to_double()`, `to_int64()`, `to_uint()`, `to_uint64()`, `reinterpret_as_uint()`, `reinterpret_as_float()`
+- **Int64**: `to_int()`, `to_float()`, `to_double()`, `to_uint64()`, `reinterpret_as_uint64()`, `reinterpret_as_double()`
+- **UInt**: `to_int()`, `to_float()`, `to_double()`, `to_uint64()`, `reinterpret_as_int()`, `reinterpret_as_float()`
+- **UInt64**: `to_int()`, `to_int64()`, `to_float()`, `to_double()`, `to_uint()`, `reinterpret_as_int64()`, `reinterpret_as_double()`
+- **Float**: `to_int()`, `to_double()`, `reinterpret_as_int()`, `reinterpret_as_uint()`
+- **Double**: `to_int()`, `to_int64()`, `to_uint()`, `to_uint64()`, `to_float()`, `reinterpret_as_int64()`, `reinterpret_as_uint64()`
+
+#### 3. reinterpret vs 数值转换
+- **reinterpret**: 保持位模式不变，只改变类型解释
+  ```moonbit
+  let f : Float = 1.0
+  f.reinterpret_as_int()  // = 1065353216 (IEEE 754 位模式)
+  ```
+- **数值转换**: 转换数值，可能改变位模式
+  ```moonbit
+  let f : Float = 1.0
+  f.to_int()  // = 1 (数值截断)
+  ```
+
+---
+
 ## 待补充
 
 _请在此处继续添加新的意见和建议_
@@ -304,3 +342,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 更新 README.md 中的内容（85行） → 已完成
 - [x] 完善 `cmd/main`，引入 `moonbitlang/x/sys`，使用 `@sys.get_cli_args()` 获取命令行参数；使用 `moon add TheWaWaR/clap@0.2.6` 引入 clap → 已完成
 - [x] 把 README.mbt.md 中的代码块改成正确的 MoonBit 代码，使用 test block 包裹 → 已完成
+- [ ] 能使用 `for-in` 循环时，不要使用 `for i = 0; i < n; i++`
