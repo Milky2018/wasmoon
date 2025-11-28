@@ -338,6 +338,16 @@
   refactor: split runtime into separate modules
   ```
 
+#### 5. Git 分支工作流
+- ❌ **错误做法**: 直接在 master/main 分支上开发
+- ✅ **正确做法**: 每次改动或添加功能都开新分支
+  ```bash
+  git checkout -b feat/memory-operations   # 新功能
+  git checkout -b fix/trunc-overflow       # 修复 bug
+  git checkout -b refactor/parser-cleanup  # 重构
+  ```
+- 完成后通过 PR 合并到主分支
+
 ---
 
 ## 待补充
