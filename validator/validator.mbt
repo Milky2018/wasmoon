@@ -17,6 +17,21 @@ pub(all) suberror ValidationError {
 } derive(Show)
 
 ///|
+/// Label information for control flow validation
+struct LabelInfo {
+  kind : LabelKind // block or loop
+  block_type : @types.BlockType
+  stack_height : Int // stack height when entering the block
+}
+
+///|
+/// Kind of control structure for label resolution
+enum LabelKind {
+  BlockLabel // br jumps to end, uses results
+  LoopLabel // br jumps to start, uses params
+}
+
+///|
 /// Validation context for a module
 struct ValidationContext {
   types : Array[@types.FuncType]
@@ -25,7 +40,7 @@ struct ValidationContext {
   mems : Array[@types.MemoryType]
   globals : Array[@types.GlobalType]
   locals : Array[@types.ValueType] // current function's locals
-  labels : Array[@types.BlockType] // label stack for control flow
+  labels : Array[LabelInfo] // label stack for control flow
   returns : Array[@types.ValueType] // current function's return types
 }
 
@@ -674,8 +689,8 @@ fn validate_instr(
       }
     }
 
-    // Block, Loop, If - with stack height validation
-    Block(bt, body) | Loop(bt, body) => {
+    // Block, Loop, If - with stack height validation and label tracking
+    Block(bt, body) => {
       let results = get_block_results(ctx, bt)
       let params = get_block_params(ctx, bt)
       // Pop input params from outer stack
@@ -687,10 +702,53 @@ fn validate_instr(
       for param in params {
         block_stack.push(param)
       }
+      // Push label for block (br jumps to end, uses results)
+      let label : LabelInfo = {
+        kind: BlockLabel,
+        block_type: bt,
+        stack_height: params.length(),
+      }
+      ctx.labels.push(label)
       // Validate body
       validate_expr(ctx, block_stack, body)
+      // Pop label
+      let _ = ctx.labels.pop()
       // Check stack height: should have exactly results.length() values
       block_stack.check_height(results.length(), "block exit")
+      // Verify result types
+      for i = results.length() - 1; i >= 0; i = i - 1 {
+        block_stack.pop(results[i])
+      }
+      // Push results onto outer stack
+      for result in results {
+        stack.push(result)
+      }
+    }
+    Loop(bt, body) => {
+      let results = get_block_results(ctx, bt)
+      let params = get_block_params(ctx, bt)
+      // Pop input params from outer stack
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(params[i])
+      }
+      // Create inner stack with params
+      let block_stack = OperandStack::new()
+      for param in params {
+        block_stack.push(param)
+      }
+      // Push label for loop (br jumps to start, uses params)
+      let label : LabelInfo = {
+        kind: LoopLabel,
+        block_type: bt,
+        stack_height: params.length(),
+      }
+      ctx.labels.push(label)
+      // Validate body
+      validate_expr(ctx, block_stack, body)
+      // Pop label
+      let _ = ctx.labels.pop()
+      // Check stack height: should have exactly results.length() values
+      block_stack.check_height(results.length(), "loop exit")
       // Verify result types
       for i = results.length() - 1; i >= 0; i = i - 1 {
         block_stack.pop(results[i])
@@ -708,6 +766,13 @@ fn validate_instr(
       for i = params.length() - 1; i >= 0; i = i - 1 {
         stack.pop(params[i])
       }
+      // Push label for if (br jumps to end, uses results)
+      let label : LabelInfo = {
+        kind: BlockLabel,
+        block_type: bt,
+        stack_height: params.length(),
+      }
+      ctx.labels.push(label)
       // Validate then branch
       let then_stack = OperandStack::new()
       for param in params {
@@ -722,25 +787,77 @@ fn validate_instr(
       }
       validate_expr(ctx, else_stack, else_body)
       else_stack.check_height(results.length(), "if-else exit")
+      // Pop label
+      let _ = ctx.labels.pop()
       // Push results onto outer stack
       for result in results {
         stack.push(result)
       }
     }
 
-    // Branch instructions - simplified (TODO: proper label tracking)
-    Br(_) | BrIf(_) | BrTable(_, _) | Return =>
-      // These require proper label stack tracking
-      // For now, just mark as polymorphic after unconditional branch
-      match instr {
-        Br(_) | Return => stack.set_polymorphic()
-        BrIf(_) => stack.pop(@types.ValueType::I32)
-        BrTable(_, _) => {
-          stack.pop(@types.ValueType::I32) // index
-          stack.set_polymorphic()
-        }
-        _ => ()
+    // Branch instructions with proper label validation
+    Br(label_idx) => {
+      if label_idx >= ctx.labels.length() {
+        raise InvalidLabelIndex(label_idx)
       }
+      // Get label from stack (index 0 is innermost)
+      let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+      let branch_types = get_label_types(ctx, label)
+      // Pop values that will be passed to target
+      for i = branch_types.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(branch_types[i])
+      }
+      stack.set_polymorphic()
+    }
+    BrIf(label_idx) => {
+      stack.pop(@types.ValueType::I32) // condition
+      if label_idx >= ctx.labels.length() {
+        raise InvalidLabelIndex(label_idx)
+      }
+      let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+      let branch_types = get_label_types(ctx, label)
+      // Pop and push values (conditional branch)
+      for i = branch_types.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(branch_types[i])
+      }
+      for ty in branch_types {
+        stack.push(ty)
+      }
+    }
+    BrTable(labels, default_label) => {
+      stack.pop(@types.ValueType::I32) // index
+      // Validate default label
+      if default_label >= ctx.labels.length() {
+        raise InvalidLabelIndex(default_label)
+      }
+      let default_info = ctx.labels[ctx.labels.length() - 1 - default_label]
+      let default_types = get_label_types(ctx, default_info)
+      // Validate all labels have same arity as default
+      for label_idx in labels {
+        if label_idx >= ctx.labels.length() {
+          raise InvalidLabelIndex(label_idx)
+        }
+        let label_info = ctx.labels[ctx.labels.length() - 1 - label_idx]
+        let label_types = get_label_types(ctx, label_info)
+        if label_types.length() != default_types.length() {
+          raise TypeMismatch(
+            "br_table labels must have same arity: expected \{default_types.length()}, got \{label_types.length()}",
+          )
+        }
+      }
+      // Pop values
+      for i = default_types.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(default_types[i])
+      }
+      stack.set_polymorphic()
+    }
+    Return => {
+      // Validate return values match function signature
+      for i = ctx.returns.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(ctx.returns[i])
+      }
+      stack.set_polymorphic()
+    }
     _ => () // Other instructions not yet validated
   }
 }
@@ -776,5 +893,19 @@ fn get_block_params(
       } else {
         []
       }
+  }
+}
+
+///|
+/// Get the types that a branch to this label should carry
+/// For block/if: uses results (br jumps to end)
+/// For loop: uses params (br jumps to start)
+fn get_label_types(
+  ctx : ValidationContext,
+  label : LabelInfo,
+) -> Array[@types.ValueType] {
+  match label.kind {
+    BlockLabel => get_block_results(ctx, label.block_type)
+    LoopLabel => get_block_params(ctx, label.block_type)
   }
 }

@@ -398,3 +398,220 @@ test "validator: stack height - void function with leftover values" {
   }
   inspect(result, content="true")
 }
+
+///|
+test "validator: control flow - valid br in block" {
+  // Block with br that exits with correct value
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      Block(@types.BlockType::Value(@types.ValueType::I32), [
+        I32Const(42),
+        Br(0),
+      ]),
+    ],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  validate_module(mod) // Should pass
+}
+
+///|
+test "validator: control flow - invalid label index" {
+  // br with invalid label index (no enclosing block)
+  let func : @types.FunctionCode = { locals: [], body: [Br(0)] }
+  let func_type : @types.FuncType = { params: [], results: [] }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let result = try {
+    validate_module(mod)
+    false
+  } catch {
+    InvalidLabelIndex(0) => true
+    _ => false
+  }
+  inspect(result, content="true")
+}
+
+///|
+test "validator: control flow - nested blocks with br" {
+  // Nested blocks: inner br jumps to outer block
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      Block(@types.BlockType::Value(@types.ValueType::I32), [
+        Block(
+          @types.BlockType::Empty,
+          [I32Const(100), Br(1)], // br 1 jumps to outer block
+        ),
+        I32Const(0), // unreachable
+      ]),
+    ],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  validate_module(mod) // Should pass
+}
+
+///|
+test "validator: control flow - br_if with correct type" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      Block(@types.BlockType::Value(@types.ValueType::I32), [
+        I32Const(42),
+        I32Const(1), // condition
+        BrIf(0), // conditional branch
+        Drop,
+        I32Const(0),
+      ]),
+    ],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  validate_module(mod) // Should pass
+}
+
+///|
+test "validator: control flow - loop with br back to start" {
+  // Loop that uses br 0 to jump back to start (expects params, not results)
+  let loop_type : @types.FuncType = { params: [], results: [] }
+  let func_type : @types.FuncType = { params: [], results: [] }
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      Loop(
+        @types.BlockType::TypeIndex(0),
+        [Br(0)], // br 0 in loop jumps to start, carries params (empty)
+      ),
+    ],
+  }
+  let mod : @types.Module = {
+    types: [loop_type, func_type],
+    imports: [],
+    funcs: [1],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  validate_module(mod) // Should pass
+}
+
+///|
+test "validator: control flow - return in nested block" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [Block(@types.BlockType::Empty, [I32Const(42), Return]), I32Const(0)],
+  } // unreachable after block with return
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  validate_module(mod) // Should pass
+}
+
+///|
+test "validator: control flow - br_table basic" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [
+      Block(@types.BlockType::Value(@types.ValueType::I32), [
+        I32Const(42), // value to branch with
+        I32Const(0), // index
+        BrTable([0], 0), // all targets go to same block
+      ]),
+    ],
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  validate_module(mod) // Should pass
+}

@@ -25,6 +25,10 @@ pub(all) suberror ValidationError {
 impl Show for ValidationError
 
 // Types and methods
+type LabelInfo
+
+type LabelKind
+
 type OperandStack
 
 type ValidationContext
