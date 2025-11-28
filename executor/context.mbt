@@ -5,13 +5,23 @@
 struct ExecContext {
   stack : @runtime.Stack
   store : @runtime.Store
+  instance : @runtime.ModuleInstance
   frames : Array[@runtime.Frame]
   mut current_frame : Int
 } derive(Show)
 
 ///|
-fn ExecContext::new(store : @runtime.Store) -> ExecContext {
-  { stack: @runtime.Stack::new(), store, frames: [], current_frame: 0 }
+fn ExecContext::new(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+) -> ExecContext {
+  {
+    stack: @runtime.Stack::new(),
+    store,
+    instance,
+    frames: [],
+    current_frame: 0,
+  }
 }
 
 ///|

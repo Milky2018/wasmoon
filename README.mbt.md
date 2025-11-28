@@ -59,17 +59,6 @@ test "add function example" {
 }
 ```
 
-## Project Structure
-
-```
-wasmoon/
-├── wasmoon.mbt      # Core data structures (ValueType, Instruction, Module)
-├── parser.mbt       # Binary format parser
-├── runtime.mbt      # Runtime (Stack, Memory, Table, Store)
-├── executor.mbt     # Instruction execution engine
-└── cmd/main/        # CLI tool
-```
-
 ## Development
 
 ```bash
