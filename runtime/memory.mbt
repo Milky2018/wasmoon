@@ -354,3 +354,19 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
   self.size = new_size
   old_size
 }
+
+///|
+/// Initialize memory with data segment
+pub fn Memory::init_data(
+  self : Memory,
+  dest : Int,
+  data : Bytes,
+) -> Unit raise RuntimeError {
+  let len = data.length()
+  if dest < 0 || dest + len > self.data.length() {
+    raise OutOfBoundsMemoryAccess
+  }
+  for i in 0..<len {
+    self.data[dest + i] = data[i]
+  }
+}
