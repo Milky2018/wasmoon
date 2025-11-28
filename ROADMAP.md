@@ -112,7 +112,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ## Phase 5: 工具与测试 🛠️
 
 ### 5.1 规范兼容性
-- [ ] 通过官方测试套件 (wasm-testsuite)
+- [x] 官方测试套件基础设施 (wasm-testsuite)
+- [ ] 完整通过官方测试套件
 
 ### 5.2 工具链
 - [ ] WAT 文本格式支持
