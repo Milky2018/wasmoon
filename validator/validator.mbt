@@ -365,6 +365,11 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32)
       stack.push(@types.ValueType::I32)
     }
+    // i32 sign-extension operations
+    I32Extend8S | I32Extend16S => {
+      stack.pop(@types.ValueType::I32)
+      stack.push(@types.ValueType::I32)
+    }
 
     // i64 binary operations
     I64Add
@@ -409,6 +414,11 @@ fn validate_instr(
       stack.push(@types.ValueType::I32)
     }
     I64Clz | I64Ctz | I64Popcnt => {
+      stack.pop(@types.ValueType::I64)
+      stack.push(@types.ValueType::I64)
+    }
+    // i64 sign-extension operations
+    I64Extend8S | I64Extend16S | I64Extend32S => {
       stack.pop(@types.ValueType::I64)
       stack.push(@types.ValueType::I64)
     }

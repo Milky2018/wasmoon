@@ -127,16 +127,27 @@ fn ExecContext::exec_instr(
     | I32Eq
     | I32Ne
     | I32LtS
+    | I32LtU
     | I32GtS
+    | I32GtU
     | I32LeS
+    | I32LeU
     | I32GeS
+    | I32GeU
     | I32Eqz
     | I32And
     | I32Or
     | I32Xor
     | I32Shl
     | I32ShrS
-    | I32ShrU => self.exec_i32_numeric(instr)
+    | I32ShrU
+    | I32Rotl
+    | I32Rotr
+    | I32Clz
+    | I32Ctz
+    | I32Popcnt
+    | I32Extend8S
+    | I32Extend16S => self.exec_i32_numeric(instr)
 
     // i64 numeric operations
     I64Add
@@ -149,16 +160,28 @@ fn ExecContext::exec_instr(
     | I64Eq
     | I64Ne
     | I64LtS
+    | I64LtU
     | I64GtS
+    | I64GtU
     | I64LeS
+    | I64LeU
     | I64GeS
+    | I64GeU
     | I64Eqz
     | I64And
     | I64Or
     | I64Xor
     | I64Shl
     | I64ShrS
-    | I64ShrU => self.exec_i64_numeric(instr)
+    | I64ShrU
+    | I64Rotl
+    | I64Rotr
+    | I64Clz
+    | I64Ctz
+    | I64Popcnt
+    | I64Extend8S
+    | I64Extend16S
+    | I64Extend32S => self.exec_i64_numeric(instr)
 
     // f32 numeric operations
     F32Add

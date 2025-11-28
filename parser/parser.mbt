@@ -603,6 +603,12 @@ fn Parser::read_instruction(
     0xBD => I64ReinterpretF64
     0xBE => F32ReinterpretI32
     0xBF => F64ReinterpretI64
+    // Sign-extension operators
+    0xC0 => I32Extend8S
+    0xC1 => I32Extend16S
+    0xC2 => I64Extend8S
+    0xC3 => I64Extend16S
+    0xC4 => I64Extend32S
     // Reference type instructions
     0xD0 => {
       // ref.null: read reftype (0x70 = funcref, 0x6F = externref)

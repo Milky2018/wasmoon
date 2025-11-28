@@ -13,12 +13,7 @@ pub struct TestContext {
 ///|
 pub fn TestContext::new() -> TestContext {
   let linker = @runtime.Linker::new()
-  {
-    store: linker.get_store(),
-    linker,
-    current_module: None,
-    named_modules: {},
-  }
+  { store: linker.get_store(), linker, current_module: None, named_modules: {} }
 }
 
 ///|
@@ -83,9 +78,7 @@ pub fn run_assert_return(
   let runtime_args = args.map(parse_test_value)
   let expected_values = expected.map(parse_test_value)
   // Try to invoke
-  let results = try {
-    ctx.invoke(module_name, func_name, runtime_args)
-  } catch {
+  let results = ctx.invoke(module_name, func_name, runtime_args) catch {
     e => {
       println("Error invoking \{func_name}: \{e}")
       return false
@@ -100,7 +93,9 @@ pub fn run_assert_return(
   }
   for i = 0; i < results.length(); i = i + 1 {
     if not(values_equal(results[i], expected_values[i])) {
-      println("Result \{i} mismatch: expected \{expected_values[i]}, got \{results[i]}")
+      println(
+        "Result \{i} mismatch: expected \{expected_values[i]}, got \{results[i]}",
+      )
       return false
     }
   }

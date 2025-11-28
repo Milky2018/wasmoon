@@ -141,6 +141,9 @@ pub(all) enum Instruction {
   I32ShrU
   I32Rotl
   I32Rotr
+  // Sign-extension operators
+  I32Extend8S
+  I32Extend16S
 
   // Numeric instructions - i64
   I64Eqz
@@ -172,6 +175,10 @@ pub(all) enum Instruction {
   I64ShrU
   I64Rotl
   I64Rotr
+  // Sign-extension operators
+  I64Extend8S
+  I64Extend16S
+  I64Extend32S
 
   // Numeric instructions - f32
   F32Eq
