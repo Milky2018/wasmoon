@@ -1,4 +1,3 @@
-
 ///|
 fn run_demo() -> Unit {
   println("Wasmoon Demo Programs")
@@ -28,10 +27,10 @@ fn run_demo() -> Unit {
     codes: [add_func],
     datas: [],
   }
-  let (store1, instance1) = @wasmoon.instantiate_module(mod1)
+  let (store1, instance1) = @executor.instantiate_module(mod1)
   let args1 = [@wasmoon.Value::I32(5), @wasmoon.Value::I32(10)]
   try {
-    let results = @wasmoon.call_exported_func(store1, instance1, "add", args1)
+    let results = @executor.call_exported_func(store1, instance1, "add", args1)
     match results[0] {
       I32(n) => println("Result: \{n}")
       _ => println("Error: unexpected result type")
@@ -66,10 +65,12 @@ fn run_demo() -> Unit {
     codes: [mul_add_func],
     datas: [],
   }
-  let (store2, instance2) = @wasmoon.instantiate_module(mod2)
+  let (store2, instance2) = @executor.instantiate_module(mod2)
   let args2 = [@wasmoon.Value::I32(7), @wasmoon.Value::I32(6)]
   try {
-    let results = @wasmoon.call_exported_func(store2, instance2, "mul_add", args2)
+    let results = @executor.call_exported_func(
+      store2, instance2, "mul_add", args2,
+    )
     match results[0] {
       I32(n) => println("Result: \{n}")
       _ => println("Error: unexpected result type")
@@ -106,10 +107,10 @@ fn run_demo() -> Unit {
     codes: [local_func],
     datas: [],
   }
-  let (store3, instance3) = @wasmoon.instantiate_module(mod3)
+  let (store3, instance3) = @executor.instantiate_module(mod3)
   let args3 = [@wasmoon.Value::I32(3), @wasmoon.Value::I32(4)]
   try {
-    let results = @wasmoon.call_exported_func(
+    let results = @executor.call_exported_func(
       store3, instance3, "double_sum", args3,
     )
     match results[0] {
@@ -135,9 +136,7 @@ fn main {
   let parser = @clap.Parser::new(
     prog="wasmoon",
     description="WebAssembly Runtime in MoonBit",
-    subcmds={
-      "demo": @clap.SubCommand::new(help="Run built-in demo programs"),
-    },
+    subcmds={ "demo": @clap.SubCommand::new(help="Run built-in demo programs") },
   )
   let help_msg = parser.gen_help_message(["wasmoon"], {})
   let args = @sys.get_cli_args()
@@ -150,9 +149,7 @@ fn main {
   for i = 1; i < args.length(); i = i + 1 {
     cli_args.push(args[i])
   }
-  let help_msg = try {
-    parser.parse(value, cli_args[:])
-  } catch {
+  let help_msg = parser.parse(value, cli_args[:]) catch {
     e => {
       println(e)
       println(help_msg)

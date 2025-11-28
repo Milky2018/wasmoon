@@ -3,6 +3,8 @@
   "import": [
     "Milky2018/wasmoon",
     "moonbitlang/x/sys",
-    "TheWaWaR/clap"
+    "TheWaWaR/clap",
+    "Milky2018/wasmoon/executor",
+    "Milky2018/wasmoon/runtime"
   ]
 }

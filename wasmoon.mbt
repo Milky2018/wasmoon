@@ -248,34 +248,34 @@ pub(all) struct FuncType {
 
 ///|
 /// Limits for memory and tables
-struct Limits {
+pub(all) struct Limits {
   min : Int
   max : Int?
 } derive(Eq, Show)
 
 ///|
 /// Memory type
-struct MemoryType {
+pub(all) struct MemoryType {
   limits : Limits
 } derive(Eq, Show)
 
 ///|
 /// Table type
-struct TableType {
+pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
 } derive(Eq, Show)
 
 ///|
 /// Global type
-struct GlobalType {
+pub(all) struct GlobalType {
   value_type : ValueType
   mutable : Bool
 } derive(Eq, Show)
 
 ///|
 /// Import descriptor
-enum ImportDesc {
+pub(all) enum ImportDesc {
   Func(Int) // type index
   Table(TableType)
   Memory(MemoryType)
@@ -284,7 +284,7 @@ enum ImportDesc {
 
 ///|
 /// Import entry
-struct Import {
+pub(all) struct Import {
   mod_name : String
   name : String
   desc : ImportDesc
@@ -315,14 +315,14 @@ pub(all) struct FunctionCode {
 
 ///|
 /// Global definition
-struct Global {
+pub(all) struct Global {
   type_ : GlobalType
   init : Array[Instruction]
 } derive(Eq, Show)
 
 ///|
 /// Element segment
-struct Element {
+pub(all) struct Element {
   table_idx : Int
   offset : Array[Instruction]
   init : Array[Int] // function indices
@@ -330,7 +330,7 @@ struct Element {
 
 ///|
 /// Data segment
-struct Data {
+pub(all) struct Data {
   memory_idx : Int
   offset : Array[Instruction]
   init : Bytes

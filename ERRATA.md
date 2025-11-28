@@ -303,4 +303,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 函数调用不要用 `!` 后缀 → 已添加到第8条
 - [x] 更新 README.md 中的内容（85行） → 已完成
 - [x] 完善 `cmd/main`，引入 `moonbitlang/x/sys`，使用 `@sys.get_cli_args()` 获取命令行参数；使用 `moon add TheWaWaR/clap@0.2.6` 引入 clap → 已完成
-- [ ] 把 README.mbt.md 中的代码块改成 text 是治标不治本！逃避问题！应该使用语法正确的 MoonBit 代码块，比如用 test block 包裹
+- [x] 把 README.mbt.md 中的代码块改成正确的 MoonBit 代码，使用 test block 包裹 → 已完成

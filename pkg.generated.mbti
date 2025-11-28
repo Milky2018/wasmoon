@@ -2,18 +2,8 @@
 package "Milky2018/wasmoon"
 
 // Values
-fn call_exported_func(Store, ModuleInstance, String, Array[Value]) -> Array[Value] raise RuntimeError
-
-fn instantiate_module(Module) -> (Store, ModuleInstance)
-
-fn parse_module(Bytes) -> Module raise ParserError
 
 // Errors
-type ParserError
-impl Show for ParserError
-
-type RuntimeError
-impl Show for RuntimeError
 
 // Types and methods
 pub(all) enum BlockType {
@@ -24,17 +14,21 @@ pub(all) enum BlockType {
 impl Eq for BlockType
 impl Show for BlockType
 
-type Data
+pub(all) struct Data {
+  memory_idx : Int
+  offset : Array[Instruction]
+  init : Bytes
+}
 impl Eq for Data
 impl Show for Data
 
-type Element
+pub(all) struct Element {
+  table_idx : Int
+  offset : Array[Instruction]
+  init : Array[Int]
+}
 impl Eq for Element
 impl Show for Element
-
-type ExecContext
-fn ExecContext::call_func(Self, Int, Array[Value]) -> Array[Value] raise RuntimeError
-impl Show for ExecContext
 
 pub(all) struct Export {
   name : String
@@ -52,9 +46,6 @@ pub(all) enum ExportDesc {
 impl Eq for ExportDesc
 impl Show for ExportDesc
 
-type Frame
-impl Show for Frame
-
 pub(all) struct FuncType {
   params : Array[ValueType]
   results : Array[ValueType]
@@ -69,22 +60,34 @@ pub(all) struct FunctionCode {
 impl Eq for FunctionCode
 impl Show for FunctionCode
 
-type Global
+pub(all) struct Global {
+  type_ : GlobalType
+  init : Array[Instruction]
+}
 impl Eq for Global
 impl Show for Global
 
-type GlobalInstance
-impl Show for GlobalInstance
-
-type GlobalType
+pub(all) struct GlobalType {
+  value_type : ValueType
+  mutable : Bool
+}
 impl Eq for GlobalType
 impl Show for GlobalType
 
-type Import
+pub(all) struct Import {
+  mod_name : String
+  name : String
+  desc : ImportDesc
+}
 impl Eq for Import
 impl Show for Import
 
-type ImportDesc
+pub(all) enum ImportDesc {
+  Func(Int)
+  Table(TableType)
+  Memory(MemoryType)
+  Global(GlobalType)
+}
 impl Eq for ImportDesc
 impl Show for ImportDesc
 
@@ -263,17 +266,16 @@ pub(all) enum Instruction {
 impl Eq for Instruction
 impl Show for Instruction
 
-type Label
-impl Show for Label
-
-type Limits
+pub(all) struct Limits {
+  min : Int
+  max : Int?
+}
 impl Eq for Limits
 impl Show for Limits
 
-type Memory
-impl Show for Memory
-
-type MemoryType
+pub(all) struct MemoryType {
+  limits : Limits
+}
 impl Eq for MemoryType
 impl Show for MemoryType
 
@@ -293,39 +295,10 @@ pub(all) struct Module {
 fn Module::new() -> Self
 impl Show for Module
 
-pub struct ModuleInstance {
-  types : Array[FuncType]
-  func_addrs : Array[Int]
-  table_addrs : Array[Int]
-  mem_addrs : Array[Int]
-  global_addrs : Array[Int]
-  exports : Array[Export]
-  elem_segments : Array[Element]
-  data_segments : Array[Data]
+pub(all) struct TableType {
+  elem_type : ValueType
+  limits : Limits
 }
-fn ModuleInstance::new() -> Self
-impl Show for ModuleInstance
-
-type Parser
-fn Parser::new(Bytes) -> Self
-impl Show for Parser
-
-type Stack
-impl Show for Stack
-
-pub struct Store {
-  funcs : Array[FunctionCode]
-  tables : Array[Table]
-  mems : Array[Memory]
-  globals : Array[GlobalInstance]
-}
-fn Store::new() -> Self
-impl Show for Store
-
-type Table
-impl Show for Table
-
-type TableType
 impl Eq for TableType
 impl Show for TableType
 

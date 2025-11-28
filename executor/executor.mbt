@@ -8,50 +8,54 @@
 ///|
 /// Execution context for running WASM code
 struct ExecContext {
-  stack : Stack
-  store : Store
-  frames : Array[Frame]
+  stack : @runtime.Stack
+  store : @runtime.Store
+  frames : Array[@runtime.Frame]
   mut current_frame : Int
 } derive(Show)
 
 ///|
-fn ExecContext::new(store : Store) -> ExecContext {
-  { stack: Stack::new(), store, frames: [], current_frame: 0 }
+fn ExecContext::new(store : @runtime.Store) -> ExecContext {
+  { stack: @runtime.Stack::new(), store, frames: [], current_frame: 0 }
 }
 
 ///|
-fn ExecContext::push_frame(self : ExecContext, frame : Frame) -> Unit {
+fn ExecContext::push_frame(self : ExecContext, frame : @runtime.Frame) -> Unit {
   self.frames.push(frame)
   self.current_frame = self.frames.length() - 1
 }
 
 ///|
-fn ExecContext::pop_frame(self : ExecContext) -> Unit raise RuntimeError {
+fn ExecContext::pop_frame(
+  self : ExecContext,
+) -> Unit raise @runtime.RuntimeError {
   if self.frames.length() == 0 {
-    raise CallStackExhausted
+    raise @runtime.CallStackExhausted
   }
   let _ = self.frames.pop()
   self.current_frame = self.frames.length() - 1
 }
 
 ///|
-fn ExecContext::get_frame(self : ExecContext) -> Frame raise RuntimeError {
+fn ExecContext::get_frame(
+  self : ExecContext,
+) -> @runtime.Frame raise @runtime.RuntimeError {
   if self.current_frame < 0 || self.current_frame >= self.frames.length() {
-    raise CallStackExhausted
+    raise @runtime.CallStackExhausted
   }
   self.frames[self.current_frame]
 }
 
 // ============================================================
-// Instruction Execution
+// @wasmoon.Instruction Execution
 // ============================================================
 
 ///|
 /// Execute a single instruction
 fn ExecContext::exec_instr(
   self : ExecContext,
-  instr : Instruction,
-) -> Unit raise RuntimeError {
+  instr : @wasmoon.Instruction,
+) -> Unit raise @runtime.RuntimeError {
   match instr {
     // Constants
     I32Const(n) => self.stack.push(I32(n))
@@ -102,7 +106,7 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i32()
       let a = self.stack.pop_i32()
       if b == 0 {
-        raise DivisionByZero
+        raise @runtime.DivisionByZero
       }
       self.stack.push(I32(a / b))
     }
@@ -110,7 +114,7 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i32()
       let a = self.stack.pop_i32()
       if b == 0 {
-        raise DivisionByZero
+        raise @runtime.DivisionByZero
       }
       // Unsigned division: reinterpret as UInt
       let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint())
@@ -121,7 +125,7 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i32()
       let a = self.stack.pop_i32()
       if b == 0 {
-        raise DivisionByZero
+        raise @runtime.DivisionByZero
       }
       self.stack.push(I32(a % b))
     }
@@ -129,7 +133,7 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i32()
       let a = self.stack.pop_i32()
       if b == 0 {
-        raise DivisionByZero
+        raise @runtime.DivisionByZero
       }
       // Unsigned remainder: reinterpret as UInt
       let result = (a.reinterpret_as_uint() % b.reinterpret_as_uint())
@@ -229,7 +233,7 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i64()
       let a = self.stack.pop_i64()
       if b == 0L {
-        raise DivisionByZero
+        raise @runtime.DivisionByZero
       }
       self.stack.push(I64(a / b))
     }
@@ -237,7 +241,7 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i64()
       let a = self.stack.pop_i64()
       if b == 0L {
-        raise DivisionByZero
+        raise @runtime.DivisionByZero
       }
       // Unsigned division: reinterpret as UInt64
       let result = (Int64::reinterpret_as_uint64(a) /
@@ -249,7 +253,7 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i64()
       let a = self.stack.pop_i64()
       if b == 0L {
-        raise DivisionByZero
+        raise @runtime.DivisionByZero
       }
       self.stack.push(I64(a % b))
     }
@@ -257,7 +261,7 @@ fn ExecContext::exec_instr(
       let b = self.stack.pop_i64()
       let a = self.stack.pop_i64()
       if b == 0L {
-        raise DivisionByZero
+        raise @runtime.DivisionByZero
       }
       // Unsigned remainder: reinterpret as UInt64
       let result = (Int64::reinterpret_as_uint64(a) %
@@ -509,7 +513,7 @@ fn ExecContext::exec_instr(
     // Control flow - simplified for MVP
     Nop => ()
     Return => () // Handled by caller
-    _ => raise RuntimeError::Unreachable // Unsupported instruction in MVP
+    _ => raise @runtime.RuntimeError::Unreachable // Unsupported instruction in MVP
   }
 }
 
@@ -517,8 +521,8 @@ fn ExecContext::exec_instr(
 /// Execute a sequence of instructions
 fn ExecContext::exec_expr(
   self : ExecContext,
-  instrs : Array[Instruction],
-) -> Unit raise RuntimeError {
+  instrs : Array[@wasmoon.Instruction],
+) -> Unit raise @runtime.RuntimeError {
   for i = 0; i < instrs.length(); i = i + 1 {
     let instr = instrs[i]
     match instr {
@@ -537,12 +541,12 @@ fn ExecContext::exec_expr(
 pub fn ExecContext::call_func(
   self : ExecContext,
   func_idx : Int,
-  args : Array[Value],
-) -> Array[Value] raise RuntimeError {
+  args : Array[@wasmoon.Value],
+) -> Array[@wasmoon.Value] raise @runtime.RuntimeError {
   let func = self.store.get_func(func_idx)
 
   // Create locals array: params + local variables
-  let locals : Array[Value] = []
+  let locals : Array[@wasmoon.Value] = []
 
   // Add parameters
   for i = 0; i < args.length(); i = i + 1 {
@@ -566,7 +570,7 @@ pub fn ExecContext::call_func(
   }
 
   // Create and push frame
-  let frame = Frame::new(func_idx, locals, 1) // Assume single return value for MVP
+  let frame = @runtime.Frame::new(func_idx, locals, 1) // Assume single return value for MVP
   self.push_frame(frame)
 
   // Execute function body
@@ -576,7 +580,7 @@ pub fn ExecContext::call_func(
   self.pop_frame()
 
   // Collect return values from stack
-  let results : Array[Value] = []
+  let results : Array[@wasmoon.Value] = []
   if self.stack.size() > 0 {
     results.push(self.stack.pop())
   }
@@ -589,8 +593,10 @@ pub fn ExecContext::call_func(
 
 ///|
 /// Create a simple module instance from a parsed module
-pub fn instantiate_module(mod : Module) -> (Store, ModuleInstance) {
-  let store = Store::new()
+pub fn instantiate_module(
+  mod : @wasmoon.Module,
+) -> (@runtime.Store, @runtime.ModuleInstance) {
+  let store = @runtime.Store::new()
 
   // Allocate functions
   let func_addrs : Array[Int] = []
@@ -600,7 +606,7 @@ pub fn instantiate_module(mod : Module) -> (Store, ModuleInstance) {
   }
 
   // For MVP, we don't handle imports, tables, memories, globals yet
-  let instance : ModuleInstance = {
+  let instance : @runtime.ModuleInstance = {
     types: mod.types,
     func_addrs,
     table_addrs: [],
@@ -616,13 +622,16 @@ pub fn instantiate_module(mod : Module) -> (Store, ModuleInstance) {
 ///|
 /// Find and call an exported function
 pub fn call_exported_func(
-  store : Store,
-  instance : ModuleInstance,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
   name : String,
-  args : Array[Value],
-) -> Array[Value] raise RuntimeError {
+  args : Array[@wasmoon.Value],
+) -> Array[@wasmoon.Value] raise @runtime.RuntimeError {
   // Find the export
-  fn find_export(exports : Array[Export], target : String) -> Export? {
+  fn find_export(
+    exports : Array[@wasmoon.Export],
+    target : String,
+  ) -> @wasmoon.Export? {
     loop 0 {
       idx =>
         if idx >= exports.length() {
@@ -645,8 +654,235 @@ pub fn call_exported_func(
           let ctx = ExecContext::new(store)
           ctx.call_func(func_idx, args)
         }
-        _ => raise UndefinedElement
+        _ => raise @runtime.UndefinedElement
       }
-    None => raise UndefinedElement
+    None => raise @runtime.UndefinedElement
+  }
+}
+
+///|
+test "execute simple add function" {
+  // Create a simple module that adds two i32 values
+  // Function signature: (i32, i32) -> i32
+  // Function body: local.get 0, local.get 1, i32.add
+
+  let add_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I32Add],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "add", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [add_func],
+    datas: [],
+  }
+
+  // Instantiate and call
+  let (store, instance) = instantiate_module(mod)
+  let args = [@wasmoon.Value::I32(5), @wasmoon.Value::I32(10)]
+  let results = call_exported_func(store, instance, "add", args)
+  match results[0] {
+    I32(n) => inspect(n, content="15")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "execute function with local variables" {
+  // Function: (a, b) => { let tmp = a + b; return tmp * 2 }
+
+  let func : @wasmoon.FunctionCode = {
+    locals: [@wasmoon.ValueType::I32], // one local variable
+    body: [
+      LocalGet(0), // get a
+      LocalGet(1), // get b
+      I32Add, // a + b
+      LocalSet(2), // store in local (index 2)
+      LocalGet(2), // get local
+      I32Const(2), // constant 2
+      I32Mul, // tmp * 2
+    ],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "double_sum", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let args = [@wasmoon.Value::I32(3), @wasmoon.Value::I32(4)]
+  let results = call_exported_func(store, instance, "double_sum", args)
+  match results[0] {
+    I32(n) => inspect(n, content="14") // (3 + 4) * 2 = 14
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "execute i64 addition" {
+  // Test i64 arithmetic: (a, b) => a + b
+  let i64_add_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I64Add],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I64, @wasmoon.ValueType::I64],
+    results: [@wasmoon.ValueType::I64],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "i64_add", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [i64_add_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let args = [
+    @wasmoon.Value::I64(1000000000000L),
+    @wasmoon.Value::I64(2000000000000L),
+  ]
+  let results = call_exported_func(store, instance, "i64_add", args)
+  match results[0] {
+    I64(n) => inspect(n, content="3000000000000")
+    _ => fail("Expected I64 result")
+  }
+}
+
+///|
+test "execute f32 arithmetic" {
+  // Test f32 operations: (a, b) => a + b * 2.0
+  let f32_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      LocalGet(1), // b
+      F32Const(2.0), // 2.0
+      F32Mul, // b * 2.0
+      LocalGet(0), // a
+      F32Add,
+    ],
+  } // a + (b * 2.0)
+  let func_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::F32, @wasmoon.ValueType::F32],
+    results: [@wasmoon.ValueType::F32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "f32_test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [f32_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let args = [@wasmoon.Value::F32(3.5), @wasmoon.Value::F32(4.0)]
+  let results = call_exported_func(store, instance, "f32_test", args)
+  match results[0] {
+    F32(f) => inspect(f, content="11.5") // 3.5 + 4.0 * 2.0 = 11.5
+    _ => fail("Expected F32 result")
+  }
+}
+
+///|
+test "execute f64 arithmetic" {
+  // Test f64 operations: (a, b) => (a - b) * 0.5
+  let f64_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      LocalGet(0), // a
+      LocalGet(1), // b
+      F64Sub, // a - b
+      F64Const(0.5), // 0.5
+      F64Mul,
+    ],
+  } // (a - b) * 0.5
+  let func_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::F64, @wasmoon.ValueType::F64],
+    results: [@wasmoon.ValueType::F64],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "f64_test", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [f64_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let args = [@wasmoon.Value::F64(10.0), @wasmoon.Value::F64(6.0)]
+  let results = call_exported_func(store, instance, "f64_test", args)
+  match results[0] {
+    F64(d) => inspect(d, content="2") // (10.0 - 6.0) * 0.5 = 2.0
+    _ => fail("Expected F64 result")
+  }
+}
+
+///|
+test "execute i64 comparison" {
+  // Test i64 comparison: (a, b) => a < b
+  let i64_cmp_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I64LtS],
+  }
+  let func_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I64, @wasmoon.ValueType::I64],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "i64_lt", desc: @wasmoon.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [i64_cmp_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let args = [@wasmoon.Value::I64(100L), @wasmoon.Value::I64(200L)]
+  let results = call_exported_func(store, instance, "i64_lt", args)
+  match results[0] {
+    I32(n) => inspect(n, content="1") // 100 < 200 = true (1)
+    _ => fail("Expected I32 result")
   }
 }

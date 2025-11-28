@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/executor"
+
+import(
+  "Milky2018/wasmoon"
+  "Milky2018/wasmoon/runtime"
+)
+
+// Values
+fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise @runtime.RuntimeError
+
+fn instantiate_module(@wasmoon.Module) -> (@runtime.Store, @runtime.ModuleInstance)
+
+// Errors
+
+// Types and methods
+type ExecContext
+fn ExecContext::call_func(Self, Int, Array[@wasmoon.Value]) -> Array[@wasmoon.Value] raise @runtime.RuntimeError
+impl Show for ExecContext
+
+// Type aliases
+
+// Traits
+

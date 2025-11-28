@@ -6,7 +6,7 @@
 // ============================================================
 
 ///|
-suberror RuntimeError {
+pub(all) suberror RuntimeError {
   StackUnderflow
   StackOverflow
   TypeMismatch
@@ -27,19 +27,19 @@ suberror RuntimeError {
 // ============================================================
 
 ///|
-/// Value stack for operands
+/// @wasmoon.Value stack for operands
 struct Stack {
-  values : Array[Value]
+  values : Array[@wasmoon.Value]
   mut sp : Int // stack pointer
 } derive(Show)
 
 ///|
-fn Stack::new() -> Stack {
+pub fn Stack::new() -> Stack {
   { values: [], sp: 0 }
 }
 
 ///|
-fn Stack::push(self : Stack, value : Value) -> Unit raise RuntimeError {
+pub fn Stack::push(self : Stack, value : @wasmoon.Value) -> Unit raise RuntimeError {
   if self.sp >= 10000 { // arbitrary limit
     raise StackOverflow
   }
@@ -52,7 +52,7 @@ fn Stack::push(self : Stack, value : Value) -> Unit raise RuntimeError {
 }
 
 ///|
-fn Stack::pop(self : Stack) -> Value raise RuntimeError {
+pub fn Stack::pop(self : Stack) -> @wasmoon.Value raise RuntimeError {
   if self.sp <= 0 {
     raise StackUnderflow
   }
@@ -61,7 +61,7 @@ fn Stack::pop(self : Stack) -> Value raise RuntimeError {
 }
 
 ///|
-fn Stack::peek(self : Stack) -> Value raise RuntimeError {
+pub fn Stack::peek(self : Stack) -> @wasmoon.Value raise RuntimeError {
   if self.sp <= 0 {
     raise StackUnderflow
   }
@@ -69,7 +69,7 @@ fn Stack::peek(self : Stack) -> Value raise RuntimeError {
 }
 
 ///|
-fn Stack::pop_i32(self : Stack) -> Int raise RuntimeError {
+pub fn Stack::pop_i32(self : Stack) -> Int raise RuntimeError {
   match self.pop() {
     I32(n) => n
     _ => raise TypeMismatch
@@ -77,7 +77,7 @@ fn Stack::pop_i32(self : Stack) -> Int raise RuntimeError {
 }
 
 ///|
-fn Stack::pop_i64(self : Stack) -> Int64 raise RuntimeError {
+pub fn Stack::pop_i64(self : Stack) -> Int64 raise RuntimeError {
   match self.pop() {
     I64(n) => n
     _ => raise TypeMismatch
@@ -85,7 +85,7 @@ fn Stack::pop_i64(self : Stack) -> Int64 raise RuntimeError {
 }
 
 ///|
-fn Stack::pop_f32(self : Stack) -> Float raise RuntimeError {
+pub fn Stack::pop_f32(self : Stack) -> Float raise RuntimeError {
   match self.pop() {
     F32(f) => f
     _ => raise TypeMismatch
@@ -93,7 +93,7 @@ fn Stack::pop_f32(self : Stack) -> Float raise RuntimeError {
 }
 
 ///|
-fn Stack::pop_f64(self : Stack) -> Double raise RuntimeError {
+pub fn Stack::pop_f64(self : Stack) -> Double raise RuntimeError {
   match self.pop() {
     F64(f) => f
     _ => raise TypeMismatch
@@ -101,12 +101,12 @@ fn Stack::pop_f64(self : Stack) -> Double raise RuntimeError {
 }
 
 ///|
-fn Stack::size(self : Stack) -> Int {
+pub fn Stack::size(self : Stack) -> Int {
   self.sp
 }
 
 ///|
-fn Stack::clear(self : Stack) -> Unit {
+pub fn Stack::clear(self : Stack) -> Unit {
   self.sp = 0
 }
 
@@ -123,7 +123,7 @@ struct Memory {
 } derive(Show)
 
 ///|
-fn Memory::new(min : Int, max : Int?) -> Memory {
+pub fn Memory::new(min : Int, max : Int?) -> Memory {
   let page_size = 65536 // 64KB
   let initial_size = min * page_size
   let data : Array[Byte] = []
@@ -134,7 +134,7 @@ fn Memory::new(min : Int, max : Int?) -> Memory {
 }
 
 ///|
-fn Memory::load_byte(self : Memory, addr : Int) -> Byte raise RuntimeError {
+pub fn Memory::load_byte(self : Memory, addr : Int) -> Byte raise RuntimeError {
   if addr < 0 || addr >= self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
@@ -142,7 +142,7 @@ fn Memory::load_byte(self : Memory, addr : Int) -> Byte raise RuntimeError {
 }
 
 ///|
-fn Memory::store_byte(
+pub fn Memory::store_byte(
   self : Memory,
   addr : Int,
   value : Byte,
@@ -154,7 +154,7 @@ fn Memory::store_byte(
 }
 
 ///|
-fn Memory::load_i32(self : Memory, addr : Int) -> Int raise RuntimeError {
+pub fn Memory::load_i32(self : Memory, addr : Int) -> Int raise RuntimeError {
   if addr + 4 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
@@ -167,7 +167,7 @@ fn Memory::load_i32(self : Memory, addr : Int) -> Int raise RuntimeError {
 }
 
 ///|
-fn Memory::store_i32(
+pub fn Memory::store_i32(
   self : Memory,
   addr : Int,
   value : Int,
@@ -182,7 +182,7 @@ fn Memory::store_i32(
 }
 
 ///|
-fn Memory::load_i64(self : Memory, addr : Int) -> Int64 raise RuntimeError {
+pub fn Memory::load_i64(self : Memory, addr : Int) -> Int64 raise RuntimeError {
   if addr + 8 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
@@ -206,7 +206,7 @@ fn Memory::load_i64(self : Memory, addr : Int) -> Int64 raise RuntimeError {
 }
 
 ///|
-fn Memory::store_i64(
+pub fn Memory::store_i64(
   self : Memory,
   addr : Int,
   value : Int64,
@@ -221,12 +221,12 @@ fn Memory::store_i64(
 }
 
 ///|
-fn Memory::size_pages(self : Memory) -> Int {
+pub fn Memory::size_pages(self : Memory) -> Int {
   self.size
 }
 
 ///|
-fn Memory::grow(self : Memory, delta : Int) -> Int {
+pub fn Memory::grow(self : Memory, delta : Int) -> Int {
   let old_size = self.size
   let new_size = old_size + delta
 
@@ -258,15 +258,15 @@ fn Memory::grow(self : Memory, delta : Int) -> Int {
 ///|
 /// WebAssembly table for function references
 struct Table {
-  elem_type : ValueType
-  elements : Array[Value]
+  elem_type : @wasmoon.ValueType
+  elements : Array[@wasmoon.Value]
   mut size : Int
   max : Int?
 } derive(Show)
 
 ///|
-fn Table::new(elem_type : ValueType, min : Int, max : Int?) -> Table {
-  let elements : Array[Value] = []
+pub fn Table::new(elem_type : @wasmoon.ValueType, min : Int, max : Int?) -> Table {
+  let elements : Array[@wasmoon.Value] = []
   for i = 0; i < min; i = i + 1 {
     elements.push(Null)
   }
@@ -274,7 +274,7 @@ fn Table::new(elem_type : ValueType, min : Int, max : Int?) -> Table {
 }
 
 ///|
-fn Table::get(self : Table, idx : Int) -> Value raise RuntimeError {
+pub fn Table::get(self : Table, idx : Int) -> @wasmoon.Value raise RuntimeError {
   if idx < 0 || idx >= self.size {
     raise OutOfBoundsTableAccess
   }
@@ -286,10 +286,10 @@ fn Table::get(self : Table, idx : Int) -> Value raise RuntimeError {
 }
 
 ///|
-fn Table::set(
+pub fn Table::set(
   self : Table,
   idx : Int,
-  value : Value,
+  value : @wasmoon.Value,
 ) -> Unit raise RuntimeError {
   if idx < 0 || idx >= self.size {
     raise OutOfBoundsTableAccess
@@ -298,12 +298,12 @@ fn Table::set(
 }
 
 ///|
-fn Table::size_entries(self : Table) -> Int {
+pub fn Table::size_entries(self : Table) -> Int {
   self.size
 }
 
 ///|
-fn Table::grow(self : Table, delta : Int, init : Value) -> Int {
+pub fn Table::grow(self : Table, delta : Int, init : @wasmoon.Value) -> Int {
   let old_size = self.size
   let new_size = old_size + delta
 
@@ -328,24 +328,24 @@ fn Table::grow(self : Table, delta : Int, init : Value) -> Int {
 ///|
 /// Runtime representation of a global variable
 struct GlobalInstance {
-  type_ : GlobalType
-  mut value : Value
+  type_ : @wasmoon.GlobalType
+  mut value : @wasmoon.Value
 } derive(Show)
 
 ///|
-fn GlobalInstance::new(type_ : GlobalType, value : Value) -> GlobalInstance {
+pub fn GlobalInstance::new(type_ : @wasmoon.GlobalType, value : @wasmoon.Value) -> GlobalInstance {
   { type_, value }
 }
 
 ///|
-fn GlobalInstance::get(self : GlobalInstance) -> Value {
+pub fn GlobalInstance::get(self : GlobalInstance) -> @wasmoon.Value {
   self.value
 }
 
 ///|
-fn GlobalInstance::set(
+pub fn GlobalInstance::set(
   self : GlobalInstance,
-  value : Value,
+  value : @wasmoon.Value,
 ) -> Unit raise RuntimeError {
   if !self.type_.mutable {
     raise RuntimeError::TypeMismatch // attempting to mutate immutable global
@@ -368,22 +368,22 @@ struct Label {
 /// Call frame for function execution
 struct Frame {
   func_idx : Int
-  locals : Array[Value]
+  locals : Array[@wasmoon.Value]
   ip : Int // instruction pointer
   return_arity : Int // number of return values
 } derive(Show)
 
 ///|
-fn Frame::new(
+pub fn Frame::new(
   func_idx : Int,
-  locals : Array[Value],
+  locals : Array[@wasmoon.Value],
   return_arity : Int,
 ) -> Frame {
   { func_idx, locals, ip: 0, return_arity }
 }
 
 ///|
-fn Frame::get_local(self : Frame, idx : Int) -> Value raise RuntimeError {
+pub fn Frame::get_local(self : Frame, idx : Int) -> @wasmoon.Value raise RuntimeError {
   if idx < 0 || idx >= self.locals.length() {
     raise RuntimeError::TypeMismatch
   }
@@ -391,10 +391,10 @@ fn Frame::get_local(self : Frame, idx : Int) -> Value raise RuntimeError {
 }
 
 ///|
-fn Frame::set_local(
+pub fn Frame::set_local(
   self : Frame,
   idx : Int,
-  value : Value,
+  value : @wasmoon.Value,
 ) -> Unit raise RuntimeError {
   if idx < 0 || idx >= self.locals.length() {
     raise RuntimeError::TypeMismatch
@@ -408,15 +408,15 @@ fn Frame::set_local(
 
 ///|
 /// Runtime instance of a WebAssembly module
-pub struct ModuleInstance {
-  types : Array[FuncType]
+pub(all) struct ModuleInstance {
+  types : Array[@wasmoon.FuncType]
   func_addrs : Array[Int] // indices into function store
   table_addrs : Array[Int] // indices into table store
   mem_addrs : Array[Int] // indices into memory store
   global_addrs : Array[Int] // indices into global store
-  exports : Array[Export]
-  elem_segments : Array[Element]
-  data_segments : Array[Data]
+  exports : Array[@wasmoon.Export]
+  elem_segments : Array[@wasmoon.Element]
+  data_segments : Array[@wasmoon.Data]
 } derive(Show)
 
 ///|
@@ -440,7 +440,7 @@ pub fn ModuleInstance::new() -> ModuleInstance {
 ///|
 /// The store contains all global runtime state
 pub struct Store {
-  funcs : Array[FunctionCode]
+  funcs : Array[@wasmoon.FunctionCode]
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
@@ -452,35 +452,35 @@ pub fn Store::new() -> Store {
 }
 
 ///|
-fn Store::alloc_func(self : Store, func : FunctionCode) -> Int {
+pub fn Store::alloc_func(self : Store, func : @wasmoon.FunctionCode) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(func)
   idx
 }
 
 ///|
-fn Store::alloc_table(self : Store, table : Table) -> Int {
+pub fn Store::alloc_table(self : Store, table : Table) -> Int {
   let idx = self.tables.length()
   self.tables.push(table)
   idx
 }
 
 ///|
-fn Store::alloc_mem(self : Store, mem : Memory) -> Int {
+pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int {
   let idx = self.mems.length()
   self.mems.push(mem)
   idx
 }
 
 ///|
-fn Store::alloc_global(self : Store, global : GlobalInstance) -> Int {
+pub fn Store::alloc_global(self : Store, global : GlobalInstance) -> Int {
   let idx = self.globals.length()
   self.globals.push(global)
   idx
 }
 
 ///|
-fn Store::get_func(self : Store, idx : Int) -> FunctionCode raise RuntimeError {
+pub fn Store::get_func(self : Store, idx : Int) -> @wasmoon.FunctionCode raise RuntimeError {
   if idx < 0 || idx >= self.funcs.length() {
     raise UndefinedElement
   }
@@ -488,7 +488,7 @@ fn Store::get_func(self : Store, idx : Int) -> FunctionCode raise RuntimeError {
 }
 
 ///|
-fn Store::get_table(self : Store, idx : Int) -> Table raise RuntimeError {
+pub fn Store::get_table(self : Store, idx : Int) -> Table raise RuntimeError {
   if idx < 0 || idx >= self.tables.length() {
     raise UndefinedElement
   }
@@ -496,7 +496,7 @@ fn Store::get_table(self : Store, idx : Int) -> Table raise RuntimeError {
 }
 
 ///|
-fn Store::get_mem(self : Store, idx : Int) -> Memory raise RuntimeError {
+pub fn Store::get_mem(self : Store, idx : Int) -> Memory raise RuntimeError {
   if idx < 0 || idx >= self.mems.length() {
     raise UndefinedElement
   }
@@ -504,7 +504,7 @@ fn Store::get_mem(self : Store, idx : Int) -> Memory raise RuntimeError {
 }
 
 ///|
-fn Store::get_global(
+pub fn Store::get_global(
   self : Store,
   idx : Int,
 ) -> GlobalInstance raise RuntimeError {

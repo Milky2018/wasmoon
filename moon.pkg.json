@@ -1,1 +1,6 @@
-{}
+{
+  "test-import": [
+    "Milky2018/wasmoon/runtime",
+    "Milky2018/wasmoon/executor"
+  ]
+}

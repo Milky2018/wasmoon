@@ -1,0 +1,110 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/runtime"
+
+import(
+  "Milky2018/wasmoon"
+)
+
+// Values
+
+// Errors
+pub(all) suberror RuntimeError {
+  StackUnderflow
+  StackOverflow
+  TypeMismatch
+  OutOfBoundsMemoryAccess
+  OutOfBoundsTableAccess
+  UndefinedElement
+  UninitializedElement
+  IndirectCallTypeMismatch
+  DivisionByZero
+  IntegerOverflow
+  InvalidConversion
+  Unreachable
+  CallStackExhausted
+}
+impl Show for RuntimeError
+
+// Types and methods
+type Frame
+fn Frame::get_local(Self, Int) -> @wasmoon.Value raise RuntimeError
+fn Frame::new(Int, Array[@wasmoon.Value], Int) -> Self
+fn Frame::set_local(Self, Int, @wasmoon.Value) -> Unit raise RuntimeError
+impl Show for Frame
+
+type GlobalInstance
+fn GlobalInstance::get(Self) -> @wasmoon.Value
+fn GlobalInstance::new(@wasmoon.GlobalType, @wasmoon.Value) -> Self
+fn GlobalInstance::set(Self, @wasmoon.Value) -> Unit raise RuntimeError
+impl Show for GlobalInstance
+
+type Label
+impl Show for Label
+
+type Memory
+fn Memory::grow(Self, Int) -> Int
+fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
+fn Memory::load_i32(Self, Int) -> Int raise RuntimeError
+fn Memory::load_i64(Self, Int) -> Int64 raise RuntimeError
+fn Memory::new(Int, Int?) -> Self
+fn Memory::size_pages(Self) -> Int
+fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
+fn Memory::store_i32(Self, Int, Int) -> Unit raise RuntimeError
+fn Memory::store_i64(Self, Int, Int64) -> Unit raise RuntimeError
+impl Show for Memory
+
+pub(all) struct ModuleInstance {
+  types : Array[@wasmoon.FuncType]
+  func_addrs : Array[Int]
+  table_addrs : Array[Int]
+  mem_addrs : Array[Int]
+  global_addrs : Array[Int]
+  exports : Array[@wasmoon.Export]
+  elem_segments : Array[@wasmoon.Element]
+  data_segments : Array[@wasmoon.Data]
+}
+fn ModuleInstance::new() -> Self
+impl Show for ModuleInstance
+
+type Stack
+fn Stack::clear(Self) -> Unit
+fn Stack::new() -> Self
+fn Stack::peek(Self) -> @wasmoon.Value raise RuntimeError
+fn Stack::pop(Self) -> @wasmoon.Value raise RuntimeError
+fn Stack::pop_f32(Self) -> Float raise RuntimeError
+fn Stack::pop_f64(Self) -> Double raise RuntimeError
+fn Stack::pop_i32(Self) -> Int raise RuntimeError
+fn Stack::pop_i64(Self) -> Int64 raise RuntimeError
+fn Stack::push(Self, @wasmoon.Value) -> Unit raise RuntimeError
+fn Stack::size(Self) -> Int
+impl Show for Stack
+
+pub struct Store {
+  funcs : Array[@wasmoon.FunctionCode]
+  tables : Array[Table]
+  mems : Array[Memory]
+  globals : Array[GlobalInstance]
+}
+fn Store::alloc_func(Self, @wasmoon.FunctionCode) -> Int
+fn Store::alloc_global(Self, GlobalInstance) -> Int
+fn Store::alloc_mem(Self, Memory) -> Int
+fn Store::alloc_table(Self, Table) -> Int
+fn Store::get_func(Self, Int) -> @wasmoon.FunctionCode raise RuntimeError
+fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
+fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
+fn Store::get_table(Self, Int) -> Table raise RuntimeError
+fn Store::new() -> Self
+impl Show for Store
+
+type Table
+fn Table::get(Self, Int) -> @wasmoon.Value raise RuntimeError
+fn Table::grow(Self, Int, @wasmoon.Value) -> Int
+fn Table::new(@wasmoon.ValueType, Int, Int?) -> Self
+fn Table::set(Self, Int, @wasmoon.Value) -> Unit raise RuntimeError
+fn Table::size_entries(Self) -> Int
+impl Show for Table
+
+// Type aliases
+
+// Traits
+

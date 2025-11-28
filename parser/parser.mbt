@@ -238,7 +238,7 @@ fn Parser::read_string(self : Parser) -> String raise ParserError {
 // ============================================================
 
 ///|
-fn Parser::read_value_type(self : Parser) -> ValueType raise ParserError {
+fn Parser::read_value_type(self : Parser) -> @wasmoon.ValueType raise ParserError {
   let byte = self.read_byte()
   match byte {
     0x7F => I32
@@ -254,7 +254,7 @@ fn Parser::read_value_type(self : Parser) -> ValueType raise ParserError {
 
 ///|
 /// Read block type (uses peek to avoid rewind)
-fn Parser::read_block_type(self : Parser) -> BlockType raise ParserError {
+fn Parser::read_block_type(self : Parser) -> @wasmoon.BlockType raise ParserError {
   let byte = self.peek_byte()
   match byte {
     0x40 => {
@@ -290,7 +290,7 @@ fn[T] Parser::read_vec(
 }
 
 ///|
-fn Parser::read_func_type(self : Parser) -> FuncType raise ParserError {
+fn Parser::read_func_type(self : Parser) -> @wasmoon.FuncType raise ParserError {
   let tag = self.read_byte()
   if tag != 0x60 {
     self.error("expected function type tag 0x60, got \{tag}")
@@ -305,7 +305,7 @@ fn Parser::read_func_type(self : Parser) -> FuncType raise ParserError {
 // ============================================================
 
 ///|
-fn Parser::read_limits(self : Parser) -> Limits raise ParserError {
+fn Parser::read_limits(self : Parser) -> @wasmoon.Limits raise ParserError {
   let flags = self.read_byte()
   let min = self.read_u32()
   let max = if flags == 0x01 { Some(self.read_u32()) } else { None }
@@ -317,20 +317,20 @@ fn Parser::read_limits(self : Parser) -> Limits raise ParserError {
 // ============================================================
 
 ///|
-fn Parser::read_table_type(self : Parser) -> TableType raise ParserError {
+fn Parser::read_table_type(self : Parser) -> @wasmoon.TableType raise ParserError {
   let elem_type = self.read_value_type()
   let limits = self.read_limits()
   { elem_type, limits }
 }
 
 ///|
-fn Parser::read_memory_type(self : Parser) -> MemoryType raise ParserError {
+fn Parser::read_memory_type(self : Parser) -> @wasmoon.MemoryType raise ParserError {
   let limits = self.read_limits()
   { limits, }
 }
 
 ///|
-fn Parser::read_global_type(self : Parser) -> GlobalType raise ParserError {
+fn Parser::read_global_type(self : Parser) -> @wasmoon.GlobalType raise ParserError {
   let value_type = self.read_value_type()
   let mutability = self.read_byte()
   { value_type, mutable: mutability == 0x01 }
@@ -341,7 +341,7 @@ fn Parser::read_global_type(self : Parser) -> GlobalType raise ParserError {
 // ============================================================
 
 ///|
-fn Parser::read_expr(self : Parser) -> Array[Instruction] raise ParserError {
+fn Parser::read_expr(self : Parser) -> Array[@wasmoon.Instruction] raise ParserError {
   loop [] {
     instructions => {
       let opcode = self.read_byte()
@@ -360,7 +360,7 @@ fn Parser::read_expr(self : Parser) -> Array[Instruction] raise ParserError {
 fn Parser::read_instruction(
   self : Parser,
   opcode : Int,
-) -> Instruction raise ParserError {
+) -> @wasmoon.Instruction raise ParserError {
   match opcode {
     // Control instructions
     0x00 => Unreachable
@@ -607,7 +607,7 @@ fn Parser::read_instruction(
 
 ///|
 /// Parse WebAssembly module from bytes
-pub fn parse_module(data : Bytes) -> Module raise ParserError {
+pub fn parse_module(data : Bytes) -> @wasmoon.Module raise ParserError {
   let parser = Parser::new(data)
 
   // Check magic number
@@ -621,7 +621,7 @@ pub fn parse_module(data : Bytes) -> Module raise ParserError {
   if version != b"\x01\x00\x00\x00" {
     raise UnsupportedVersion
   }
-  let mod = Module::new()
+  let mod = @wasmoon.Module::new()
 
   // Parse sections
   while !parser.is_eof() {
@@ -644,10 +644,10 @@ pub fn parse_module(data : Bytes) -> Module raise ParserError {
           let name = parser.read_string()
           let kind = parser.read_byte()
           let desc = match kind {
-            0x00 => ImportDesc::Func(parser.read_u32())
-            0x01 => ImportDesc::Table(parser.read_table_type())
-            0x02 => ImportDesc::Memory(parser.read_memory_type())
-            0x03 => ImportDesc::Global(parser.read_global_type())
+            0x00 => @wasmoon.ImportDesc::Func(parser.read_u32())
+            0x01 => @wasmoon.ImportDesc::Table(parser.read_table_type())
+            0x02 => @wasmoon.ImportDesc::Memory(parser.read_memory_type())
+            0x03 => @wasmoon.ImportDesc::Global(parser.read_global_type())
             _ => raise InvalidImportKind(kind)
           }
           mod.imports.push({ mod_name, name, desc })
@@ -690,10 +690,10 @@ pub fn parse_module(data : Bytes) -> Module raise ParserError {
           let name = parser.read_string()
           let kind = parser.read_byte()
           let desc = match kind {
-            0x00 => ExportDesc::Func(parser.read_u32())
-            0x01 => ExportDesc::Table(parser.read_u32())
-            0x02 => ExportDesc::Memory(parser.read_u32())
-            0x03 => ExportDesc::Global(parser.read_u32())
+            0x00 => @wasmoon.ExportDesc::Func(parser.read_u32())
+            0x01 => @wasmoon.ExportDesc::Table(parser.read_u32())
+            0x02 => @wasmoon.ExportDesc::Memory(parser.read_u32())
+            0x03 => @wasmoon.ExportDesc::Global(parser.read_u32())
             _ => raise InvalidExportKind(kind)
           }
           mod.exports.push({ name, desc })
@@ -722,7 +722,7 @@ pub fn parse_module(data : Bytes) -> Module raise ParserError {
         for i = 0; i < count; i = i + 1 {
           let _code_size = parser.read_u32()
           let local_count = parser.read_u32()
-          let locals : Array[ValueType] = []
+          let locals : Array[@wasmoon.ValueType] = []
           for j = 0; j < local_count; j = j + 1 {
             let n = parser.read_u32()
             let vt = parser.read_value_type()

@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/parser"
+
+import(
+  "Milky2018/wasmoon"
+)
+
+// Values
+fn parse_module(Bytes) -> @wasmoon.Module raise ParserError
+
+// Errors
+type ParserError
+impl Show for ParserError
+
+// Types and methods
+type Parser
+fn Parser::new(Bytes) -> Self
+impl Show for Parser
+
+// Type aliases
+
+// Traits
+
