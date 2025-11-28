@@ -197,6 +197,11 @@ fn ExecContext::exec_instr(
     | Nop
     | Return => self.exec_control(instr)
 
+    // Function call operations
+    Call(func_idx) => self.exec_call(func_idx)
+    CallIndirect(type_idx, table_idx) =>
+      self.exec_call_indirect(type_idx, table_idx)
+
     // Fallback for unimplemented instructions
     _ => raise @runtime.RuntimeError::Unreachable
   }
@@ -282,16 +287,56 @@ pub fn instantiate_module(
     mem_addrs.push(addr)
   }
 
-  // For MVP, we don't handle imports, tables, globals yet
+  // Allocate tables
+  let table_addrs : Array[Int] = []
+  for table_type in mod.tables {
+    let table = @runtime.Table::new(
+      table_type.elem_type,
+      table_type.limits.min,
+      table_type.limits.max,
+    )
+    let addr = store.alloc_table(table)
+    table_addrs.push(addr)
+  }
+
+  // Use funcs array (type indices) for func_addrs in instance
+  // This maps function index to its type index
   let instance : @runtime.ModuleInstance = {
     types: mod.types,
-    func_addrs,
-    table_addrs: [],
+    func_addrs: mod.funcs,
+    table_addrs,
     mem_addrs,
     global_addrs: [],
     exports: mod.exports,
     elem_segments: mod.elems,
     data_segments: mod.datas,
+  }
+  (store, instance)
+}
+
+///|
+/// Create a module instance with element and data segment initialization
+pub fn instantiate_module_with_init(
+  mod : @wasmoon.Module,
+) -> (@runtime.Store, @runtime.ModuleInstance) {
+  let (store, instance) = instantiate_module(mod)
+
+  // Initialize element segments (populate tables with function references)
+  for elem in mod.elems {
+    let table = store.get_table(elem.table_idx) catch { _ => continue }
+
+    // Evaluate offset expression (for now, assume it's a simple i32.const)
+    let offset = match elem.offset {
+      [I32Const(n)] => n
+      _ => 0
+    }
+
+    // Set table entries
+    for i, func_idx in elem.init {
+      table.set(offset + i, @wasmoon.Value::FuncRef(func_idx)) catch {
+        _ => ()
+      }
+    }
   }
   (store, instance)
 }
@@ -328,7 +373,7 @@ pub fn call_exported_func(
     Some(exp) =>
       match exp.desc {
         Func(func_idx) => {
-          let ctx = ExecContext::new(store)
+          let ctx = ExecContext::new(store, instance)
           ctx.call_func(func_idx, args)
         }
         _ => raise @runtime.UndefinedElement

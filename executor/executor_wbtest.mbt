@@ -1020,3 +1020,164 @@ test "control flow: select" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "function call: call instruction" {
+  // Module with two functions:
+  // func 0: add(a, b) -> a + b
+  // func 1: main() -> call add(3, 4)
+  let add_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I32Add],
+  }
+  let main_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [I32Const(3), I32Const(4), Call(0)],
+  }
+  let add_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let main_type : @wasmoon.FuncType = {
+    params: [],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [add_type, main_type],
+    imports: [],
+    funcs: [0, 1], // func 0 has type 0, func 1 has type 1
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "main", desc: @wasmoon.ExportDesc::Func(1) }],
+    start: None,
+    elems: [],
+    codes: [add_func, main_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "main", [])
+  match results[0] {
+    I32(n) => inspect(n, content="7") // 3 + 4 = 7
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "function call: nested calls" {
+  // Module with three functions:
+  // func 0: double(x) -> x * 2
+  // func 1: add_one(x) -> x + 1
+  // func 2: main(x) -> add_one(double(x))
+  let double_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), I32Const(2), I32Mul],
+  }
+  let add_one_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), I32Const(1), I32Add],
+  }
+  let main_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), Call(0), Call(1)], // double then add_one
+  }
+  let unary_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [unary_type],
+    imports: [],
+    funcs: [0, 0, 0], // all functions have type 0
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "main", desc: @wasmoon.ExportDesc::Func(2) }],
+    start: None,
+    elems: [],
+    codes: [double_func, add_one_func, main_func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let results = call_exported_func(store, instance, "main", [I32(5)])
+  match results[0] {
+    I32(n) => inspect(n, content="11") // (5 * 2) + 1 = 11
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "function call: call_indirect" {
+  // Module with:
+  // func 0: add(a, b) -> a + b
+  // func 1: sub(a, b) -> a - b
+  // func 2: apply(op, a, b) -> call_indirect(op, a, b)
+  // table with [add, sub]
+  let add_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I32Add],
+  }
+  let sub_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I32Sub],
+  }
+  let apply_func : @wasmoon.FunctionCode = {
+    locals: [],
+    body: [
+      LocalGet(1), // a
+      LocalGet(2), // b
+      LocalGet(0), // op (table index)
+      CallIndirect(0, 0),
+    ],
+  } // type 0, table 0
+  let binary_type : @wasmoon.FuncType = {
+    params: [@wasmoon.ValueType::I32, @wasmoon.ValueType::I32],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let apply_type : @wasmoon.FuncType = {
+    params: [
+      @wasmoon.ValueType::I32,
+      @wasmoon.ValueType::I32,
+      @wasmoon.ValueType::I32,
+    ],
+    results: [@wasmoon.ValueType::I32],
+  }
+  let mod : @wasmoon.Module = {
+    types: [binary_type, apply_type],
+    imports: [],
+    funcs: [0, 0, 1], // add and sub have type 0, apply has type 1
+    tables: [
+      { elem_type: @wasmoon.ValueType::FuncRef, limits: { min: 2, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "apply", desc: @wasmoon.ExportDesc::Func(2) }],
+    start: None,
+    elems: [{ table_idx: 0, offset: [I32Const(0)], init: [0, 1] }],
+    codes: [ // table[0] = func 0 (add), table[1] = func 1 (sub)
+      add_func, sub_func, apply_func,
+    ],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module_with_init(mod)
+  // apply(0, 10, 3) -> add(10, 3) = 13
+  let results1 = call_exported_func(store, instance, "apply", [
+    I32(0),
+    I32(10),
+    I32(3),
+  ])
+  match results1[0] {
+    I32(n) => inspect(n, content="13")
+    _ => fail("Expected I32 result")
+  }
+  // apply(1, 10, 3) -> sub(10, 3) = 7
+  let results2 = call_exported_func(store, instance, "apply", [
+    I32(1),
+    I32(10),
+    I32(3),
+  ])
+  match results2[0] {
+    I32(n) => inspect(n, content="7")
+    _ => fail("Expected I32 result")
+  }
+}
