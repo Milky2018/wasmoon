@@ -10,8 +10,8 @@ fn ExecContext::exec_control(
     // Block: execute body, br 0 jumps to end
     Block(_bt, body) =>
       self.exec_block(body) catch {
-        @runtime.Branch(0) => () // Branch to this block = exit
-        @runtime.Branch(n) => raise @runtime.Branch(n - 1) // Propagate
+        Branch(0) => () // Branch to this block = exit
+        Branch(n) => raise Branch(n - 1) // Propagate
         e => raise e // Re-raise other errors
       }
     // Loop: execute body, br 0 jumps to start
@@ -22,8 +22,8 @@ fn ExecContext::exec_control(
             self.exec_block(body)
             break () // Normal exit
           } catch {
-            @runtime.Branch(0) => continue () // Restart loop
-            @runtime.Branch(n) => raise @runtime.Branch(n - 1)
+            Branch(0) => continue () // Restart loop
+            Branch(n) => raise Branch(n - 1)
             e => raise e
           }
       }
@@ -32,18 +32,18 @@ fn ExecContext::exec_control(
       let cond = self.stack.pop_i32()
       let body = if cond != 0 { then_body } else { else_body }
       self.exec_block(body) catch {
-        @runtime.Branch(0) => () // Branch to this if = exit
-        @runtime.Branch(n) => raise @runtime.Branch(n - 1)
+        Branch(0) => () // Branch to this if = exit
+        Branch(n) => raise Branch(n - 1)
         e => raise e
       }
     }
     // Unconditional branch
-    Br(depth) => raise @runtime.Branch(depth)
+    Br(depth) => raise Branch(depth)
     // Conditional branch
     BrIf(depth) => {
       let cond = self.stack.pop_i32()
       if cond != 0 {
-        raise @runtime.Branch(depth)
+        raise Branch(depth)
       }
     }
     // Table-driven branch
@@ -54,7 +54,7 @@ fn ExecContext::exec_control(
       } else {
         default
       }
-      raise @runtime.Branch(depth)
+      raise Branch(depth)
     }
     // Unreachable trap
     Unreachable => raise @runtime.RuntimeError::Unreachable
@@ -66,7 +66,7 @@ fn ExecContext::exec_control(
       self.stack.push(if cond != 0 { val1 } else { val2 })
     }
     Nop => ()
-    Return => raise @runtime.Return
+    Return => raise Return
     _ => raise @runtime.RuntimeError::Unreachable
   }
 }
@@ -89,7 +89,7 @@ fn ExecContext::exec_expr(
   instrs : Array[@wasmoon.Instruction],
 ) -> Unit raise {
   self.exec_block(instrs) catch {
-    @runtime.Return => () // Normal function return
+    Return => () // Normal function return
     e => raise e
   }
 }
