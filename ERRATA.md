@@ -395,6 +395,43 @@
   ```
 - **说明**: `test-import` 中的依赖仅在测试时可用，不会影响正式构建
 
+#### 12. 库选择
+- **文件系统操作**:
+  - ❌ **错误做法**: 使用 `moonbitlang/x/fs`
+  - ✅ **正确做法**: 使用 `moonbitlang/async/fs`
+  ```json
+  {
+    "import": [
+      "moonbitlang/async/fs"
+    ]
+  }
+  ```
+
+- **JSON 解析**:
+  - ❌ **错误做法**: 使用 `moonbitlang/x/json`
+  - ✅ **正确做法**: 使用标准库的 `@json`（内置，无需额外导入）
+  ```moonbit
+  // 直接使用标准库
+  let parsed : Json = @json.parse(json_string)
+  ```
+
+#### 13. derive(FromJson) 字段重命名
+- 当 JSON 字段名与 MoonBit 保留字冲突时（如 `type`、`as`、`module`），需要重命名
+- ✅ **正确做法**: 使用 `FromJson(fields(...))` 语法
+  ```moonbit
+  priv struct JsonCommand {
+    type_ : String     // 对应 JSON 中的 "type"
+    as_ : String?      // 对应 JSON 中的 "as"
+    module_ : String?  // 对应 JSON 中的 "module"
+  } derive(FromJson(fields(type_(rename="type"), as_(rename="as"), module_(rename="module"))))
+  ```
+- ❌ **错误做法**: 尝试分开写 `FromJson` 和 `fields`
+  ```moonbit
+  // 这是错误的！
+  } derive(FromJson, fields(type_(rename="type")))
+  ```
+- **说明**: `fields()` 必须放在 `FromJson()` 的括号内
+
 ---
 
 ## 待补充

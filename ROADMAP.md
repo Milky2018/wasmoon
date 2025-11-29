@@ -113,7 +113,17 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ### 5.1 规范兼容性
 - [x] 官方测试套件基础设施 (wasm-testsuite)
+- [x] 自动化测试运行器 (解析 JSON 测试规范，自动执行测试)
+  - 用法: `moon run cmd/main -- test testsuite/data/i32.json`
+  - 当前状态: 基础设施已完成，但许多测试未通过
 - [ ] 完整通过官方测试套件
+
+#### 测试运行器待改进项
+- [ ] 修复 `UndefinedElement` 错误 - 模块加载后函数查找失败
+- [ ] 实现 `assert_return (get)` - 全局变量读取测试
+- [ ] 完善 validator 以正确拒绝 `assert_invalid` 测试用例
+- [ ] 添加更多测试数据文件 (f32.json, f64.json, memory.json 等)
+- [ ] 改进错误消息，显示具体的行号信息
 
 ### 5.2 工具链
 - [ ] WAT 文本格式支持

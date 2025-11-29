@@ -6,7 +6,7 @@
 pub struct TestContext {
   store : @runtime.Store
   linker : @runtime.Linker
-  current_module : @runtime.ModuleInstance?
+  mut current_module : @runtime.ModuleInstance?
   named_modules : Map[String, @runtime.ModuleInstance]
 }
 
@@ -14,6 +14,23 @@ pub struct TestContext {
 pub fn TestContext::new() -> TestContext {
   let linker = @runtime.Linker::new()
   { store: linker.get_store(), linker, current_module: None, named_modules: {} }
+}
+
+///|
+/// Set current module
+pub fn TestContext::set_current_module(
+  self : TestContext,
+  instance : @runtime.ModuleInstance,
+) -> Unit {
+  self.current_module = Some(instance)
+}
+
+///|
+/// Get current module
+pub fn TestContext::get_current_module(
+  self : TestContext,
+) -> @runtime.ModuleInstance? {
+  self.current_module
 }
 
 ///|
