@@ -115,18 +115,28 @@ pub fn TestResult::add_skipped(self : TestResult) -> Unit {
 
 ///|
 /// Parse integer from string with error handling
+/// Handles both signed and unsigned representations
 fn parse_int_safe(s : String) -> Int {
-  @strconv.parse_int(s) catch {
-    _ => 0
+  // First try parsing as unsigned (for values like 4294967295)
+  let uint_result = @strconv.parse_uint(s) catch { _ => 0U }
+  if uint_result != 0U {
+    return uint_result.reinterpret_as_int()
   }
+  // Then try parsing as signed (for negative values or zero)
+  @strconv.parse_int(s) catch { _ => 0 }
 }
 
 ///|
 /// Parse int64 from string with error handling
+/// Handles both signed and unsigned representations
 fn parse_int64_safe(s : String) -> Int64 {
-  @strconv.parse_int64(s) catch {
-    _ => 0L
+  // First try parsing as unsigned (for large positive values)
+  let uint_result = @strconv.parse_uint64(s) catch { _ => 0UL }
+  if uint_result != 0UL {
+    return uint_result.reinterpret_as_int64()
   }
+  // Then try parsing as signed (for negative values or zero)
+  @strconv.parse_int64(s) catch { _ => 0L }
 }
 
 ///|
@@ -155,9 +165,9 @@ pub fn parse_test_value(tv : TestValue) -> @types.Value {
         val.has_prefix("nan:") {
         @types.Value::F32(0.0 / 0.0) // NaN
       } else {
-        // Parse as bits representation
-        let bits = parse_int_safe(val)
-        @types.Value::F32(bits.reinterpret_as_float())
+        // Parse as unsigned bits representation then reinterpret as float
+        let bits = @strconv.parse_uint(val) catch { _ => 0U }
+        @types.Value::F32(bits.reinterpret_as_int().reinterpret_as_float())
       }
     "f64" =>
       if val == "nan:canonical" ||
@@ -165,9 +175,9 @@ pub fn parse_test_value(tv : TestValue) -> @types.Value {
         val.has_prefix("nan:") {
         @types.Value::F64(0.0 / 0.0) // NaN
       } else {
-        // Parse as bits representation
-        let bits = parse_int64_safe(val)
-        @types.Value::F64(bits.reinterpret_as_double())
+        // Parse as unsigned bits representation then reinterpret as double
+        let bits = @strconv.parse_uint64(val) catch { _ => 0UL }
+        @types.Value::F64(bits.reinterpret_as_int64().reinterpret_as_double())
       }
     "funcref" =>
       if val == "null" {

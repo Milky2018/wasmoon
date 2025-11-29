@@ -193,6 +193,8 @@ fn ExecContext::exec_instr(
     | F32Sqrt
     | F32Ceil
     | F32Floor
+    | F32Trunc
+    | F32Nearest
     | F32Min
     | F32Max
     | F32Eq
@@ -212,6 +214,8 @@ fn ExecContext::exec_instr(
     | F64Sqrt
     | F64Ceil
     | F64Floor
+    | F64Trunc
+    | F64Nearest
     | F64Min
     | F64Max
     | F64Eq

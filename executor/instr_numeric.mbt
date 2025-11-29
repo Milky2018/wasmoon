@@ -518,15 +518,46 @@ fn ExecContext::exec_f32_numeric(
       let a = self.stack.pop_f32()
       self.stack.push(F32(a.floor()))
     }
+    F32Trunc => {
+      let a = self.stack.pop_f32()
+      self.stack.push(F32(a.trunc()))
+    }
+    F32Nearest => {
+      let a = self.stack.pop_f32()
+      // Round to nearest even (banker's rounding)
+      self.stack.push(F32(a.round()))
+    }
     F32Min => {
       let b = self.stack.pop_f32()
       let a = self.stack.pop_f32()
-      self.stack.push(F32(if a < b { a } else { b }))
+      // Per WASM spec: if either operand is NaN, return NaN
+      let result : Float = if a.is_nan() || b.is_nan() {
+        (0.0 : Float) / (0.0 : Float) // NaN
+      } else if a == (0.0 : Float) && b == (0.0 : Float) {
+        // Handle -0.0 vs +0.0: min(-0.0, +0.0) = -0.0
+        if a.reinterpret_as_uint() > b.reinterpret_as_uint() { a } else { b }
+      } else if a < b {
+        a
+      } else {
+        b
+      }
+      self.stack.push(F32(result))
     }
     F32Max => {
       let b = self.stack.pop_f32()
       let a = self.stack.pop_f32()
-      self.stack.push(F32(if a > b { a } else { b }))
+      // Per WASM spec: if either operand is NaN, return NaN
+      let result : Float = if a.is_nan() || b.is_nan() {
+        (0.0 : Float) / (0.0 : Float) // NaN
+      } else if a == (0.0 : Float) && b == (0.0 : Float) {
+        // Handle -0.0 vs +0.0: max(-0.0, +0.0) = +0.0
+        if a.reinterpret_as_uint() < b.reinterpret_as_uint() { a } else { b }
+      } else if a > b {
+        a
+      } else {
+        b
+      }
+      self.stack.push(F32(result))
     }
     // f32 comparison operations
     F32Eq => {
@@ -611,15 +642,46 @@ fn ExecContext::exec_f64_numeric(
       let a = self.stack.pop_f64()
       self.stack.push(F64(a.floor()))
     }
+    F64Trunc => {
+      let a = self.stack.pop_f64()
+      self.stack.push(F64(a.trunc()))
+    }
+    F64Nearest => {
+      let a = self.stack.pop_f64()
+      // Round to nearest even (banker's rounding)
+      self.stack.push(F64(a.round()))
+    }
     F64Min => {
       let b = self.stack.pop_f64()
       let a = self.stack.pop_f64()
-      self.stack.push(F64(if a < b { a } else { b }))
+      // Per WASM spec: if either operand is NaN, return NaN
+      let result = if a.is_nan() || b.is_nan() {
+        0.0 / 0.0 // NaN
+      } else if a == 0.0 && b == 0.0 {
+        // Handle -0.0 vs +0.0: min(-0.0, +0.0) = -0.0
+        if a.reinterpret_as_uint64() > b.reinterpret_as_uint64() { a } else { b }
+      } else if a < b {
+        a
+      } else {
+        b
+      }
+      self.stack.push(F64(result))
     }
     F64Max => {
       let b = self.stack.pop_f64()
       let a = self.stack.pop_f64()
-      self.stack.push(F64(if a > b { a } else { b }))
+      // Per WASM spec: if either operand is NaN, return NaN
+      let result = if a.is_nan() || b.is_nan() {
+        0.0 / 0.0 // NaN
+      } else if a == 0.0 && b == 0.0 {
+        // Handle -0.0 vs +0.0: max(-0.0, +0.0) = +0.0
+        if a.reinterpret_as_uint64() < b.reinterpret_as_uint64() { a } else { b }
+      } else if a > b {
+        a
+      } else {
+        b
+      }
+      self.stack.push(F64(result))
     }
     // f64 comparison operations
     F64Eq => {

@@ -284,7 +284,8 @@ async fn run_test_command_async(
       match bytes {
         Some(b) => {
           let valid = try {
-            @parser.parse_module(b) |> ignore
+            let mod = @parser.parse_module(b)
+            @validator.validate_module(mod)
             true
           } catch {
             _ => false

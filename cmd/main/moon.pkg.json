@@ -4,6 +4,7 @@
     "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/testsuite",
     "Milky2018/wasmoon/parser",
+    "Milky2018/wasmoon/validator",
     "moonbitlang/x/sys",
     "moonbitlang/async",
     "moonbitlang/async/fs",

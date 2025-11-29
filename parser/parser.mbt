@@ -438,6 +438,56 @@ fn Parser::read_instruction(
       let offset = self.read_u32()
       F64Load(align, offset)
     }
+    0x2C => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I32Load8S(align, offset)
+    }
+    0x2D => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I32Load8U(align, offset)
+    }
+    0x2E => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I32Load16S(align, offset)
+    }
+    0x2F => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I32Load16U(align, offset)
+    }
+    0x30 => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Load8S(align, offset)
+    }
+    0x31 => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Load8U(align, offset)
+    }
+    0x32 => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Load16S(align, offset)
+    }
+    0x33 => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Load16U(align, offset)
+    }
+    0x34 => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Load32S(align, offset)
+    }
+    0x35 => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Load32U(align, offset)
+    }
     // Memory store instructions
     0x36 => {
       let align = self.read_u32()
@@ -458,6 +508,31 @@ fn Parser::read_instruction(
       let align = self.read_u32()
       let offset = self.read_u32()
       F64Store(align, offset)
+    }
+    0x3A => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I32Store8(align, offset)
+    }
+    0x3B => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I32Store16(align, offset)
+    }
+    0x3C => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Store8(align, offset)
+    }
+    0x3D => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Store16(align, offset)
+    }
+    0x3E => {
+      let align = self.read_u32()
+      let offset = self.read_u32()
+      I64Store32(align, offset)
     }
     0x3F => {
       let _ = self.read_byte() // reserved byte
