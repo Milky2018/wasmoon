@@ -127,16 +127,27 @@ fn ExecContext::exec_instr(
     | I32Eq
     | I32Ne
     | I32LtS
+    | I32LtU
     | I32GtS
+    | I32GtU
     | I32LeS
+    | I32LeU
     | I32GeS
+    | I32GeU
     | I32Eqz
     | I32And
     | I32Or
     | I32Xor
     | I32Shl
     | I32ShrS
-    | I32ShrU => self.exec_i32_numeric(instr)
+    | I32ShrU
+    | I32Rotl
+    | I32Rotr
+    | I32Clz
+    | I32Ctz
+    | I32Popcnt
+    | I32Extend8S
+    | I32Extend16S => self.exec_i32_numeric(instr)
 
     // i64 numeric operations
     I64Add
@@ -149,16 +160,28 @@ fn ExecContext::exec_instr(
     | I64Eq
     | I64Ne
     | I64LtS
+    | I64LtU
     | I64GtS
+    | I64GtU
     | I64LeS
+    | I64LeU
     | I64GeS
+    | I64GeU
     | I64Eqz
     | I64And
     | I64Or
     | I64Xor
     | I64Shl
     | I64ShrS
-    | I64ShrU => self.exec_i64_numeric(instr)
+    | I64ShrU
+    | I64Rotl
+    | I64Rotr
+    | I64Clz
+    | I64Ctz
+    | I64Popcnt
+    | I64Extend8S
+    | I64Extend16S
+    | I64Extend32S => self.exec_i64_numeric(instr)
 
     // f32 numeric operations
     F32Add
@@ -680,4 +703,80 @@ pub fn call_exported_func(
       }
     None => raise @runtime.UndefinedElement
   }
+}
+
+///|
+/// Instantiate a module using a Linker
+/// The linker provides imports from previously registered modules
+/// The instantiated module is automatically registered with the given name
+pub fn instantiate_with_linker(
+  linker : @runtime.Linker,
+  name : String,
+  mod : @types.Module,
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  let imports = linker.build_imports()
+  let store = linker.get_store()
+  let instance = instantiate_module_with_imports(store, mod, imports)
+
+  // Register the instance with the store for cross-module call resolution
+  let _ = store.register_instance(instance)
+
+  // Initialize data segments (copy data to memory)
+  for data in mod.datas {
+    if instance.mem_addrs.length() > data.memory_idx {
+      let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
+      let offset = match data.offset {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      mem.init_data(offset, data.init)
+    }
+  }
+
+  // Initialize element segments (populate tables with function references)
+  for elem in mod.elems {
+    if instance.table_addrs.length() > elem.table_idx {
+      let table = store.get_table(instance.table_addrs[elem.table_idx])
+      let offset = match elem.offset {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      for i, func_idx in elem.init {
+        table.set(offset + i, @types.Value::FuncRef(func_idx)) catch {
+          _ => ()
+        }
+      }
+    }
+  }
+
+  // Execute start function if present
+  match mod.start {
+    Some(start_func_idx) => {
+      let ctx = ExecContext::new(store, instance)
+      let _ = ctx.call_func(start_func_idx, []) catch {
+        BranchWith(_, _) | Return => raise @runtime.Unreachable
+        @runtime.StackUnderflow => raise @runtime.StackUnderflow
+        @runtime.StackOverflow => raise @runtime.StackOverflow
+        @runtime.TypeMismatch => raise @runtime.TypeMismatch
+        @runtime.OutOfBoundsMemoryAccess =>
+          raise @runtime.OutOfBoundsMemoryAccess
+        @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+        @runtime.UndefinedElement => raise @runtime.UndefinedElement
+        @runtime.UninitializedElement => raise @runtime.UninitializedElement
+        @runtime.IndirectCallTypeMismatch =>
+          raise @runtime.IndirectCallTypeMismatch
+        @runtime.DivisionByZero => raise @runtime.DivisionByZero
+        @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
+        @runtime.InvalidConversion => raise @runtime.InvalidConversion
+        @runtime.Unreachable => raise @runtime.Unreachable
+        @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
+        @runtime.UnknownImport => raise @runtime.UnknownImport
+        _ => raise @runtime.Unreachable
+      }
+
+    }
+    None => ()
+  }
+  linker.register(name, instance)
+  instance
 }

@@ -65,6 +65,21 @@ fn Imports::resolve(Self, String, String) -> ExternVal?
 type Label
 impl Show for Label
 
+pub(all) struct Linker {
+  store : Store
+  modules : Array[(String, ModuleInstance)]
+}
+fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit
+fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Unit
+fn Linker::add_memory(Self, String, String, Memory) -> Unit
+fn Linker::add_table(Self, String, String, Table) -> Unit
+fn Linker::build_imports(Self) -> Imports
+fn Linker::get_module(Self, String) -> ModuleInstance?
+fn Linker::get_store(Self) -> Store
+fn Linker::new() -> Self
+fn Linker::register(Self, String, ModuleInstance) -> Unit
+fn Linker::with_store(Store) -> Self
+
 type Memory
 fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
 fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
@@ -133,6 +148,8 @@ pub struct Store {
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
+  func_owners : Array[Int]
+  instances : Array[ModuleInstance]
 }
 fn Store::alloc_func(Self, @types.FunctionCode) -> Int
 fn Store::alloc_global(Self, GlobalInstance) -> Int
@@ -141,10 +158,12 @@ fn Store::alloc_mem(Self, Memory) -> Int
 fn Store::alloc_table(Self, Table) -> Int
 fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
+fn Store::get_func_owner(Self, Int) -> ModuleInstance?
 fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
 fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 fn Store::get_table(Self, Int) -> Table raise RuntimeError
 fn Store::new() -> Self
+fn Store::register_instance(Self, ModuleInstance) -> Int
 impl Show for Store
 
 type Table

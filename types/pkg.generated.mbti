@@ -182,6 +182,8 @@ pub(all) enum Instruction {
   I32ShrU
   I32Rotl
   I32Rotr
+  I32Extend8S
+  I32Extend16S
   I64Eqz
   I64Eq
   I64Ne
@@ -211,6 +213,9 @@ pub(all) enum Instruction {
   I64ShrU
   I64Rotl
   I64Rotr
+  I64Extend8S
+  I64Extend16S
+  I64Extend32S
   F32Eq
   F32Ne
   F32Lt

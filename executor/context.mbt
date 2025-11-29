@@ -5,7 +5,7 @@
 struct ExecContext {
   stack : @runtime.Stack
   store : @runtime.Store
-  instance : @runtime.ModuleInstance
+  mut instance : @runtime.ModuleInstance // mutable for cross-module call context switching
   frames : Array[@runtime.Frame]
   mut current_frame : Int
 } derive(Show)

@@ -29,6 +29,10 @@ fn ExecContext::exec_i32_numeric(
       if b == 0 {
         raise @runtime.DivisionByZero
       }
+      // Check for integer overflow: INT32_MIN / -1 would overflow
+      if a == -2147483648 && b == -1 {
+        raise @runtime.IntegerOverflow
+      }
       self.stack.push(I32(a / b))
     }
     I32DivU => {
@@ -128,6 +132,99 @@ fn ExecContext::exec_i32_numeric(
         |> UInt::reinterpret_as_int
       self.stack.push(I32(result))
     }
+    I32Rotl => {
+      let b = self.stack.pop_i32()
+      let a = self.stack.pop_i32()
+      let k = b % 32
+      // rotl(a, k) = (a << k) | (a >> (32 - k))
+      let au = a.reinterpret_as_uint()
+      let result = if k == 0 { au } else { (au << k) | (au >> (32 - k)) }
+      self.stack.push(I32(result.reinterpret_as_int()))
+    }
+    I32Rotr => {
+      let b = self.stack.pop_i32()
+      let a = self.stack.pop_i32()
+      let k = b % 32
+      // rotr(a, k) = (a >> k) | (a << (32 - k))
+      let au = a.reinterpret_as_uint()
+      let result = if k == 0 { au } else { (au >> k) | (au << (32 - k)) }
+      self.stack.push(I32(result.reinterpret_as_int()))
+    }
+    I32Clz => {
+      let a = self.stack.pop_i32()
+      // Count leading zeros
+      let au = a.reinterpret_as_uint()
+      let count = au.clz()
+      self.stack.push(I32(count))
+    }
+    I32Ctz => {
+      let a = self.stack.pop_i32()
+      // Count trailing zeros
+      let au = a.reinterpret_as_uint()
+      let count = au.ctz()
+      self.stack.push(I32(count))
+    }
+    I32Popcnt => {
+      let a = self.stack.pop_i32()
+      // Count number of 1 bits
+      let au = a.reinterpret_as_uint()
+      let count = au.popcnt()
+      self.stack.push(I32(count))
+    }
+    // i32 unsigned comparison operations
+    I32LtU => {
+      let b = self.stack.pop_i32()
+      let a = self.stack.pop_i32()
+      let result = if a.reinterpret_as_uint() < b.reinterpret_as_uint() {
+        1
+      } else {
+        0
+      }
+      self.stack.push(I32(result))
+    }
+    I32GtU => {
+      let b = self.stack.pop_i32()
+      let a = self.stack.pop_i32()
+      let result = if a.reinterpret_as_uint() > b.reinterpret_as_uint() {
+        1
+      } else {
+        0
+      }
+      self.stack.push(I32(result))
+    }
+    I32LeU => {
+      let b = self.stack.pop_i32()
+      let a = self.stack.pop_i32()
+      let result = if a.reinterpret_as_uint() <= b.reinterpret_as_uint() {
+        1
+      } else {
+        0
+      }
+      self.stack.push(I32(result))
+    }
+    I32GeU => {
+      let b = self.stack.pop_i32()
+      let a = self.stack.pop_i32()
+      let result = if a.reinterpret_as_uint() >= b.reinterpret_as_uint() {
+        1
+      } else {
+        0
+      }
+      self.stack.push(I32(result))
+    }
+    // Sign-extension operators
+    I32Extend8S => {
+      let a = self.stack.pop_i32()
+      // Sign-extend from 8 bits to 32 bits
+      let result = a << 24 >> 24
+      self.stack.push(I32(result))
+    }
+    I32Extend16S => {
+      let a = self.stack.pop_i32()
+      // Sign-extend from 16 bits to 32 bits
+      let result = a << 16 >> 16
+      self.stack.push(I32(result))
+    }
     _ => raise @runtime.RuntimeError::Unreachable
   }
 }
@@ -160,6 +257,10 @@ fn ExecContext::exec_i64_numeric(
       let a = self.stack.pop_i64()
       if b == 0L {
         raise @runtime.DivisionByZero
+      }
+      // Check for integer overflow: INT64_MIN / -1 would overflow
+      if a == -9223372036854775808L && b == -1L {
+        raise @runtime.IntegerOverflow
       }
       self.stack.push(I64(a / b))
     }
@@ -260,6 +361,109 @@ fn ExecContext::exec_i64_numeric(
       let shift = b.to_int() % 64
       let result = (Int64::reinterpret_as_uint64(a) >> shift)
         |> UInt64::reinterpret_as_int64
+      self.stack.push(I64(result))
+    }
+    I64Rotl => {
+      let b = self.stack.pop_i64()
+      let a = self.stack.pop_i64()
+      let k = b.to_int() % 64
+      // rotl(a, k) = (a << k) | (a >> (64 - k))
+      let au = Int64::reinterpret_as_uint64(a)
+      let result = if k == 0 { au } else { (au << k) | (au >> (64 - k)) }
+      self.stack.push(I64(UInt64::reinterpret_as_int64(result)))
+    }
+    I64Rotr => {
+      let b = self.stack.pop_i64()
+      let a = self.stack.pop_i64()
+      let k = b.to_int() % 64
+      // rotr(a, k) = (a >> k) | (a << (64 - k))
+      let au = Int64::reinterpret_as_uint64(a)
+      let result = if k == 0 { au } else { (au >> k) | (au << (64 - k)) }
+      self.stack.push(I64(UInt64::reinterpret_as_int64(result)))
+    }
+    I64Clz => {
+      let a = self.stack.pop_i64()
+      // Count leading zeros
+      let au = Int64::reinterpret_as_uint64(a)
+      let count = au.clz()
+      self.stack.push(I64(count.to_int64()))
+    }
+    I64Ctz => {
+      let a = self.stack.pop_i64()
+      // Count trailing zeros
+      let au = Int64::reinterpret_as_uint64(a)
+      let count = au.ctz()
+      self.stack.push(I64(count.to_int64()))
+    }
+    I64Popcnt => {
+      let a = self.stack.pop_i64()
+      // Count number of 1 bits
+      let au = Int64::reinterpret_as_uint64(a)
+      let count = au.popcnt()
+      self.stack.push(I64(count.to_int64()))
+    }
+    // i64 unsigned comparison operations
+    I64LtU => {
+      let b = self.stack.pop_i64()
+      let a = self.stack.pop_i64()
+      let result = if Int64::reinterpret_as_uint64(a) <
+        Int64::reinterpret_as_uint64(b) {
+        1
+      } else {
+        0
+      }
+      self.stack.push(I32(result))
+    }
+    I64GtU => {
+      let b = self.stack.pop_i64()
+      let a = self.stack.pop_i64()
+      let result = if Int64::reinterpret_as_uint64(a) >
+        Int64::reinterpret_as_uint64(b) {
+        1
+      } else {
+        0
+      }
+      self.stack.push(I32(result))
+    }
+    I64LeU => {
+      let b = self.stack.pop_i64()
+      let a = self.stack.pop_i64()
+      let result = if Int64::reinterpret_as_uint64(a) <=
+        Int64::reinterpret_as_uint64(b) {
+        1
+      } else {
+        0
+      }
+      self.stack.push(I32(result))
+    }
+    I64GeU => {
+      let b = self.stack.pop_i64()
+      let a = self.stack.pop_i64()
+      let result = if Int64::reinterpret_as_uint64(a) >=
+        Int64::reinterpret_as_uint64(b) {
+        1
+      } else {
+        0
+      }
+      self.stack.push(I32(result))
+    }
+    // Sign-extension operators
+    I64Extend8S => {
+      let a = self.stack.pop_i64()
+      // Sign-extend from 8 bits to 64 bits
+      let result = a << 56 >> 56
+      self.stack.push(I64(result))
+    }
+    I64Extend16S => {
+      let a = self.stack.pop_i64()
+      // Sign-extend from 16 bits to 64 bits
+      let result = a << 48 >> 48
+      self.stack.push(I64(result))
+    }
+    I64Extend32S => {
+      let a = self.stack.pop_i64()
+      // Sign-extend from 32 bits to 64 bits
+      let result = a << 32 >> 32
       self.stack.push(I64(result))
     }
     _ => raise @runtime.RuntimeError::Unreachable

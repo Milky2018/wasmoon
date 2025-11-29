@@ -1,0 +1,92 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/testsuite"
+
+import(
+  "Milky2018/wasmoon/runtime"
+  "Milky2018/wasmoon/types"
+  "moonbitlang/core/json"
+)
+
+// Values
+fn parse_json_test_file(String) -> Array[TestCommand] raise TestRunnerError
+
+fn parse_test_value(TestValue) -> @types.Value
+
+fn run_assert_return(TestContext, String?, String, Array[TestValue], Array[TestValue]) -> Bool
+
+fn run_assert_trap(TestContext, String?, String, Array[TestValue], String) -> Bool
+
+fn run_json_tests(String, String, (String) -> Bytes raise) -> TestResult raise TestRunnerError
+
+fn run_test_command(TestContext, TestCommand, TestResult, String, (String) -> Bytes raise) -> Unit raise TestRunnerError
+
+fn values_equal(@types.Value, @types.Value) -> Bool
+
+// Errors
+pub(all) suberror TestRunnerError {
+  FileNotFound(String)
+  ParseError(String)
+  ModuleLoadError(String)
+  TestFailure(String)
+}
+
+// Types and methods
+pub(all) struct JsonValue {
+  type_ : String
+  value : String?
+}
+impl Show for JsonValue
+impl @json.FromJson for JsonValue
+
+pub enum TestAction {
+  Invoke(String?, String, Array[TestValue])
+  Get(String?, String)
+}
+impl Show for TestAction
+
+pub enum TestCommand {
+  Module(String)
+  AssertReturn(TestAction, Array[TestValue])
+  AssertTrap(TestAction, String)
+  AssertInvalid(String, String)
+  AssertMalformed(String, String)
+  AssertUninstantiable(String, String)
+  Register(String, String?)
+  Action(TestAction)
+}
+impl Show for TestCommand
+
+pub struct TestContext {
+  store : @runtime.Store
+  linker : @runtime.Linker
+  mut current_module : @runtime.ModuleInstance?
+  named_modules : Map[String, @runtime.ModuleInstance]
+}
+fn TestContext::get_current_module(Self) -> @runtime.ModuleInstance?
+fn TestContext::invoke(Self, String?, String, Array[@types.Value]) -> Array[@types.Value] raise
+fn TestContext::load_module(Self, Bytes, String?) -> @runtime.ModuleInstance raise
+fn TestContext::new() -> Self
+fn TestContext::set_current_module(Self, @runtime.ModuleInstance) -> Unit
+
+pub struct TestResult {
+  mut passed : Int
+  mut failed : Int
+  mut skipped : Int
+  failures : Array[String]
+}
+fn TestResult::add_failed(Self, String) -> Unit
+fn TestResult::add_passed(Self) -> Unit
+fn TestResult::add_skipped(Self) -> Unit
+fn TestResult::new() -> Self
+impl Show for TestResult
+
+pub struct TestValue {
+  type_ : String
+  value : String?
+}
+impl Show for TestValue
+
+// Type aliases
+
+// Traits
+
