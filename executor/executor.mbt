@@ -706,6 +706,47 @@ pub fn call_exported_func(
 }
 
 ///|
+/// Get the value of an exported global variable
+pub fn get_exported_global(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  name : String,
+) -> @types.Value raise @runtime.RuntimeError {
+  // Find the export
+  fn find_export(
+    exports : Array[@types.Export],
+    target : String,
+  ) -> @types.Export? {
+    loop 0 {
+      idx =>
+        if idx >= exports.length() {
+          None
+        } else {
+          let exp = exports[idx]
+          if exp.name == target {
+            Some(exp)
+          } else {
+            continue idx + 1
+          }
+        }
+    }
+  }
+
+  match find_export(instance.exports, name) {
+    Some(exp) =>
+      match exp.desc {
+        Global(global_idx) => {
+          let global_addr = instance.global_addrs[global_idx]
+          let global = store.get_global(global_addr)
+          global.get()
+        }
+        _ => raise @runtime.UndefinedElement
+      }
+    None => raise @runtime.UndefinedElement
+  }
+}
+
+///|
 /// Instantiate a module using a Linker
 /// The linker provides imports from previously registered modules
 /// The instantiated module is automatically registered with the given name

@@ -229,8 +229,9 @@ fn Parser::read_f64(self : Parser) -> Double raise ParserError {
 fn Parser::read_string(self : Parser) -> String raise ParserError {
   let len = self.read_u32()
   let bytes = self.read_bytes(len)
-  // Convert bytes to string
-  bytes.to_string()
+  // Convert bytes to string (WASM identifiers are typically ASCII)
+  // For UTF-8, we use a simple byte-by-byte conversion that works for ASCII
+  String::from_iter(bytes.iter().map(fn(b) { b.to_char() }))
 }
 
 // ============================================================

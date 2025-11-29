@@ -199,7 +199,7 @@ async fn run_tests_internal(
   let result = @testsuite.TestResult::new()
   let ctx = @testsuite.TestContext::new()
   for cmd in commands {
-    run_test_command_async(ctx, cmd, result, base_dir)
+    run_test_command_async(ctx, cmd.command, cmd.line, result, base_dir)
   }
   result
 }
@@ -220,9 +220,14 @@ async fn read_wasm_file(base_dir : String, filename : String) -> Bytes? {
 async fn run_test_command_async(
   ctx : @testsuite.TestContext,
   cmd : @testsuite.TestCommand,
+  line : Int?,
   result : @testsuite.TestResult,
   base_dir : String,
 ) -> Unit {
+  let line_prefix = match line {
+    Some(n) => "[line \{n}] "
+    None => ""
+  }
   match cmd {
     Module(filename) => {
       let bytes = read_wasm_file(base_dir, filename)
@@ -232,11 +237,11 @@ async fn run_test_command_async(
             let instance = ctx.load_module(b, None)
             ctx.set_current_module(instance)
           } catch {
-            e => result.add_failed("Failed to load module \{filename}: \{e}")
+            e => result.add_failed("\{line_prefix}Failed to load module \{filename}: \{e}")
           }
         None => {
           result.add_skipped()
-          println("File not found: \{filename}")
+          println("\{line_prefix}File not found: \{filename}")
         }
       }
     }
@@ -249,12 +254,12 @@ async fn run_test_command_async(
           if success {
             result.add_passed()
           } else {
-            result.add_failed("assert_return failed: \{func_name}")
+            result.add_failed("\{line_prefix}assert_return failed: \{func_name}")
           }
         }
         Get(_module_name, field) => {
           result.add_skipped()
-          println("Skipping assert_return (get): \{field}")
+          println("\{line_prefix}Skipping assert_return (get): \{field}")
         }
       }
     AssertTrap(action, expected_msg) =>
@@ -266,12 +271,12 @@ async fn run_test_command_async(
           if success {
             result.add_passed()
           } else {
-            result.add_failed("assert_trap failed: \{func_name}")
+            result.add_failed("\{line_prefix}assert_trap failed: \{func_name}")
           }
         }
         Get(_, field) => {
           result.add_skipped()
-          println("Skipping assert_trap (get): \{field}")
+          println("\{line_prefix}Skipping assert_trap (get): \{field}")
         }
       }
     AssertInvalid(filename, _msg) => {
@@ -285,7 +290,7 @@ async fn run_test_command_async(
             _ => false
           }
           if valid {
-            result.add_failed("assert_invalid should have failed: \{filename}")
+            result.add_failed("\{line_prefix}assert_invalid should have failed: \{filename}")
           } else {
             result.add_passed()
           }
@@ -305,7 +310,7 @@ async fn run_test_command_async(
           }
           if parsed {
             result.add_failed(
-              "assert_malformed should have failed: \{filename}",
+              "\{line_prefix}assert_malformed should have failed: \{filename}",
             )
           } else {
             result.add_passed()
@@ -326,7 +331,7 @@ async fn run_test_command_async(
           }
           if instantiated {
             result.add_failed(
-              "assert_uninstantiable should have failed: \{filename}",
+              "\{line_prefix}assert_uninstantiable should have failed: \{filename}",
             )
           } else {
             result.add_passed()
@@ -344,14 +349,14 @@ async fn run_test_command_async(
             None => ()
           }
         }
-        None => println("Warning: Register without current module")
+        None => println("\{line_prefix}Warning: Register without current module")
       }
     Action(action) =>
       match action {
         Invoke(module_name, func_name, args) => {
           let runtime_args = args.map(@testsuite.parse_test_value)
           try ctx.invoke(module_name, func_name, runtime_args) |> ignore catch {
-            e => println("Action invoke error: \{e}")
+            e => println("\{line_prefix}Action invoke error: \{e}")
           }
         }
         Get(_, _) => ()
