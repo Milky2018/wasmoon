@@ -407,6 +407,9 @@ pub(all) struct MachineCode {
   fixups : Array[Fixup]
 }
 fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
+fn MachineCode::align(Self, Int) -> Unit
+fn MachineCode::align_block(Self) -> Unit
+fn MachineCode::align_function(Self) -> Unit
 fn MachineCode::current_pos(Self) -> Int
 fn MachineCode::define_label(Self, Int) -> Unit
 fn MachineCode::emit_byte(Self, Int) -> Unit
