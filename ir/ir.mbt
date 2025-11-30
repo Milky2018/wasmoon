@@ -78,7 +78,7 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 /// Instruction - an SSA instruction that produces a value
 pub(all) struct Inst {
   result : Value? // The value produced (None for void instructions)
-  opcode : Opcode // The operation
+  mut opcode : Opcode // The operation
   operands : Array[Value] // Input values
 } derive(Show)
 

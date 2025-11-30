@@ -210,16 +210,16 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-## Phase 7: IR 优化 ⚡
+## Phase 7: IR 优化 🔨 进行中
 
 > 在高级 IR 上进行目标无关的优化
 
 ### 7.1 基础优化
-- [ ] 死代码消除 (Dead Code Elimination)
-- [ ] 常量折叠 (Constant Folding)
-- [ ] 常量传播 (Constant Propagation)
-- [ ] 复制传播 (Copy Propagation)
-- [ ] 公共子表达式消除 (CSE)
+- [x] 死代码消除 (Dead Code Elimination)
+- [x] 常量折叠 (Constant Folding)
+- [x] 常量传播 (Constant Propagation)
+- [x] 复制传播 (Copy Propagation)
+- [x] 公共子表达式消除 (CSE)
 
 ### 7.2 控制流优化
 - [ ] 分支简化
