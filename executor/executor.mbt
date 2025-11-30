@@ -91,10 +91,7 @@ fn ExecContext::exec_instr(
     }
 
     // Drop
-    Drop => {
-      let _ = self.stack.pop()
-
-    }
+    Drop => self.stack.pop() |> ignore
 
     // Reference type instructions
     RefNull(ref_type) =>
@@ -520,7 +517,7 @@ pub fn instantiate_module_with_init(
   match mod.start {
     Some(start_func_idx) => {
       let ctx = ExecContext::new(store, instance)
-      let _ = ctx.call_func(start_func_idx, []) catch {
+      (ctx.call_func(start_func_idx, []) catch {
         BranchWith(_, _) | Return => raise @runtime.Unreachable
         @runtime.StackUnderflow => raise @runtime.StackUnderflow
         @runtime.StackOverflow => raise @runtime.StackOverflow
@@ -539,8 +536,8 @@ pub fn instantiate_module_with_init(
         @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
         @runtime.UnknownImport => raise @runtime.UnknownImport
         _ => raise @runtime.Unreachable
-      }
-
+      })
+      |> ignore
     }
     None => ()
   }
@@ -764,7 +761,7 @@ pub fn instantiate_with_linker(
   let instance = instantiate_module_with_imports(store, mod, imports)
 
   // Register the instance with the store for cross-module call resolution
-  let _ = store.register_instance(instance)
+  store.register_instance(instance) |> ignore
 
   // Initialize data segments (copy data to memory)
   for data in mod.datas {
@@ -798,7 +795,7 @@ pub fn instantiate_with_linker(
   match mod.start {
     Some(start_func_idx) => {
       let ctx = ExecContext::new(store, instance)
-      let _ = ctx.call_func(start_func_idx, []) catch {
+      (ctx.call_func(start_func_idx, []) catch {
         BranchWith(_, _) | Return => raise @runtime.Unreachable
         @runtime.StackUnderflow => raise @runtime.StackUnderflow
         @runtime.StackOverflow => raise @runtime.StackOverflow
@@ -817,8 +814,8 @@ pub fn instantiate_with_linker(
         @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
         @runtime.UnknownImport => raise @runtime.UnknownImport
         _ => raise @runtime.Unreachable
-      }
-
+      })
+      |> ignore
     }
     None => ()
   }

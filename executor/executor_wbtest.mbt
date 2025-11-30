@@ -1327,8 +1327,7 @@ test "memory import: write to imported memory" {
   let imports = @runtime.Imports::new()
   imports.add_memory("env", "mem", mem_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
-  let _ = call_exported_func(store, instance, "write", [])
-
+  call_exported_func(store, instance, "write", []) |> ignore
   // Verify the write by reading from the shared memory directly
   let value = shared_mem.load_i32(100) catch {
     _ => {
@@ -1368,7 +1367,7 @@ test "import validation: missing import raises error" {
 
   // Should raise UnknownImport
   let result = try {
-    let _ = instantiate_module_with_imports(store, mod, imports)
+    instantiate_module_with_imports(store, mod, imports) |> ignore
     false // Should not reach here
   } catch {
     @runtime.UnknownImport => true // Expected
@@ -1678,8 +1677,7 @@ test "table operations: table.grow" {
   // direct store manipulation since ref.null instruction is not implemented yet.
   let store = @runtime.Store::new()
   let table = @runtime.Table::new(@types.ValueType::FuncRef, 2, None)
-  let _ = store.alloc_table(table)
-
+  store.alloc_table(table) |> ignore
   // Grow the table directly
   let old_size = table.grow(3, @types.Value::Null)
   inspect(old_size, content="2") // old size was 2
@@ -1691,8 +1689,7 @@ test "table operations: table.fill" {
   // Test table.fill via direct runtime manipulation
   let store = @runtime.Store::new()
   let table = @runtime.Table::new(@types.ValueType::FuncRef, 5, None)
-  let _ = store.alloc_table(table)
-
+  store.alloc_table(table) |> ignore
   // Fill table[1..4] with FuncRef(42)
   table.fill(1, @types.Value::FuncRef(42), 3) catch {
     _ => fail("table.fill failed")
@@ -1711,8 +1708,7 @@ test "table operations: table.copy same table" {
   // Test table.copy within the same table
   let store = @runtime.Store::new()
   let table = @runtime.Table::new(@types.ValueType::FuncRef, 6, None)
-  let _ = store.alloc_table(table)
-
+  store.alloc_table(table) |> ignore
   // Set some initial values
   table.set(0, @types.Value::FuncRef(10)) catch {
     _ => ()
@@ -1742,9 +1738,8 @@ test "table operations: table.copy between tables" {
   let store = @runtime.Store::new()
   let table1 = @runtime.Table::new(@types.ValueType::FuncRef, 4, None)
   let table2 = @runtime.Table::new(@types.ValueType::FuncRef, 4, None)
-  let _ = store.alloc_table(table1)
-  let _ = store.alloc_table(table2)
-
+  store.alloc_table(table1) |> ignore
+  store.alloc_table(table2) |> ignore
   // Set values in table1
   table1.set(0, @types.Value::FuncRef(100)) catch {
     _ => ()
@@ -1768,8 +1763,7 @@ test "table operations: table.copy overlapping backward" {
   // Test table.copy with overlapping regions (dest > src)
   let store = @runtime.Store::new()
   let table = @runtime.Table::new(@types.ValueType::FuncRef, 6, None)
-  let _ = store.alloc_table(table)
-
+  store.alloc_table(table) |> ignore
   // Set initial values: [1, 2, 3, 0, 0, 0]
   table.set(0, @types.Value::FuncRef(1)) catch {
     _ => ()
@@ -2239,8 +2233,7 @@ test "bulk memory: data.drop" {
   }
 
   // Drop the data segment
-  let _ = call_exported_func(store, instance, "drop", [])
-
+  call_exported_func(store, instance, "drop", []) |> ignore
   // After drop: init_zero should still work (length 0 is ok)
   let result2 = call_exported_func(store, instance, "init_zero", [])
   match result2[0] {
@@ -2250,7 +2243,7 @@ test "bulk memory: data.drop" {
 
   // After drop: init_nonzero should fail
   let trapped = try {
-    let _ = call_exported_func(store, instance, "init_nonzero", [])
+    call_exported_func(store, instance, "init_nonzero", []) |> ignore
     false
   } catch {
     @runtime.OutOfBoundsMemoryAccess => true
@@ -2293,8 +2286,7 @@ test "bulk memory: elem.drop" {
   inspect(instance.dropped_elems[0], content="false")
 
   // Drop the elem segment
-  let _ = call_exported_func(store, instance, "drop", [])
-
+  call_exported_func(store, instance, "drop", []) |> ignore
   // After drop: elem segment should be marked as dropped
   inspect(instance.dropped_elems[0], content="true")
 }
@@ -2326,7 +2318,7 @@ test "bulk memory: data.drop is idempotent" {
   }
 
   // Calling drop multiple times should not cause error
-  let _ = call_exported_func(store, instance, "drop", [])
+  call_exported_func(store, instance, "drop", []) |> ignore
   inspect(instance.dropped_datas[0], content="true")
 }
 
@@ -2844,10 +2836,10 @@ test "module linking: basic import from another module" {
   }
 
   // Instantiate module A
-  let _ = instantiate_with_linker(linker, "mod_a", mod_a) catch {
+  (instantiate_with_linker(linker, "mod_a", mod_a) catch {
     _ => fail("Failed to instantiate mod_a")
-  }
-
+  })
+  |> ignore
   // Module B: imports "mod_a"."get_value", calls it
   let func_b : @types.FunctionCode = { locals: [], body: [Call(0)] } // Call imported function
   let mod_b : @types.Module = {
@@ -2908,8 +2900,7 @@ test "module linking: import memory from another module" {
   }
 
   // Call store function to write to memory
-  let _ = call_exported_func(linker.get_store(), instance_a, "store", [])
-
+  call_exported_func(linker.get_store(), instance_a, "store", []) |> ignore
   // Module B: imports memory from mod_a, reads from it
   let read_func : @types.FunctionCode = {
     locals: [],
@@ -2977,10 +2968,10 @@ test "module linking: three modules chain" {
     codes: [add_func],
     datas: [],
   }
-  let _ = instantiate_with_linker(linker, "math", mod_a) catch {
+  (instantiate_with_linker(linker, "math", mod_a) catch {
     _ => fail("Failed to instantiate math")
-  }
-
+  })
+  |> ignore
   // Module B: double(x) = add(x, x)
   let double_func : @types.FunctionCode = {
     locals: [],
@@ -3005,9 +2996,10 @@ test "module linking: three modules chain" {
     codes: [double_func],
     datas: [],
   }
-  let _ = instantiate_with_linker(linker, "utils", mod_b) catch {
+  (instantiate_with_linker(linker, "utils", mod_b) catch {
     _ => fail("Failed to instantiate utils")
-  }
+  })
+  |> ignore
 
   // Module C: quad(x) = double(double(x))
   let quad_func : @types.FunctionCode = {

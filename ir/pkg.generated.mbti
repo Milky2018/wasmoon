@@ -6,6 +6,16 @@ import(
 )
 
 // Values
+fn eliminate_common_subexpressions(Function) -> OptResult
+
+fn eliminate_dead_code(Function) -> OptResult
+
+fn fold_constants(Function) -> OptResult
+
+fn optimize(Function) -> OptResult
+
+fn propagate_copies(Function) -> OptResult
+
 fn validate_function(Function) -> ValidationResult
 
 // Errors
@@ -154,7 +164,7 @@ fn IRBuilder::ushr(Self, Value, Value) -> Value
 
 pub(all) struct Inst {
   result : Value?
-  opcode : Opcode
+  mut opcode : Opcode
   operands : Array[Value]
 }
 impl Show for Inst
@@ -225,6 +235,12 @@ pub enum Opcode {
   CallIndirect(Int)
 }
 impl Show for Opcode
+
+pub(all) struct OptResult {
+  mut changed : Bool
+}
+fn OptResult::mark_changed(Self) -> Unit
+fn OptResult::new() -> Self
 
 pub enum Terminator {
   Jump(Int, Array[Value])

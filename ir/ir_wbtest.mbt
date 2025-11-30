@@ -512,3 +512,144 @@ test "cfg dot output" {
     #|
   inspect(dot, content=expected)
 }
+
+// ============ Optimization Tests ============
+
+///|
+test "constant folding basic" {
+  let builder = IRBuilder::new("const_fold")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  // 10 + 20 should fold to 30
+  let c10 = builder.iconst_i32(10)
+  let c20 = builder.iconst_i32(20)
+  let sum = builder.iadd(c10, c20)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = fold_constants(func)
+  assert_true(result.changed)
+  // After folding, the add should become a constant
+  let output = func.print()
+  inspect(
+    output,
+    content=(
+      #|function const_fold() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 10
+      #|    v1:i32 = iconst 20
+      #|    v2:i32 = iconst 30
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "dead code elimination" {
+  let builder = IRBuilder::new("dce_test")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  // c1 is used in return, c2 is unused (dead)
+  let c1 = builder.iconst_i32(42)
+  let c2 = builder.iconst_i32(100) // This should be eliminated
+  builder.return_([c1])
+  let func = builder.get_function()
+  let result = eliminate_dead_code(func)
+  assert_true(result.changed)
+  // After DCE, c2 should be removed
+  let output = func.print()
+  inspect(
+    output,
+    content=(
+      #|function dce_test() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 42
+      #|    return v0
+      #|}
+      #|
+    ),
+  )
+  // Suppress warning
+  ignore(c2)
+}
+
+///|
+test "copy propagation" {
+  let builder = IRBuilder::new("copy_prop")
+  let p0 = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let copy = builder.copy(p0)
+  let one = builder.iconst_i32(1)
+  // Uses 'copy' instead of p0 directly
+  let result = builder.iadd(copy, one)
+  builder.return_([result])
+  let func = builder.get_function()
+  let cp_result = propagate_copies(func)
+  assert_true(cp_result.changed)
+  // After copy propagation, iadd should use p0 directly
+  let block = func.blocks[0]
+  let iadd_inst = block.instructions[2] // v3 = iadd copy, one
+  assert_eq(iadd_inst.operands[0].id, p0.id)
+}
+
+///|
+test "common subexpression elimination" {
+  let builder = IRBuilder::new("cse_test")
+  let p0 = builder.add_param(Type::I32)
+  let p1 = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  // Same computation twice
+  let sum1 = builder.iadd(p0, p1)
+  let sum2 = builder.iadd(p0, p1) // Should become copy of sum1
+  let result = builder.iadd(sum1, sum2)
+  builder.return_([result])
+  let func = builder.get_function()
+  let cse_result = eliminate_common_subexpressions(func)
+  assert_true(cse_result.changed)
+  // After CSE, sum2 should become a copy
+  let block = func.blocks[0]
+  let sum2_inst = block.instructions[1]
+  match sum2_inst.opcode {
+    Copy => assert_true(true) // Expected
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "combined optimizations" {
+  let builder = IRBuilder::new("optimize_test")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  // Dead code: unused computation
+  let unused = builder.iconst_i32(999)
+  // Constant folding opportunity
+  let c5 = builder.iconst_i32(5)
+  let c7 = builder.iconst_i32(7)
+  let sum = builder.iadd(c5, c7) // Should fold to 12
+  builder.return_([sum])
+  let func = builder.get_function()
+  // Run combined optimizations
+  let result = optimize(func)
+  assert_true(result.changed)
+  // After optimization, unused should be removed, sum should be constant,
+  // and c5/c7 should also be removed since they're no longer used
+  let output = func.print()
+  let expected =
+    #|function optimize_test() -> i32 {
+    #|block0:
+    #|    v3:i32 = iconst 12
+    #|    return v3
+    #|}
+    #|
+  inspect(output, content=expected)
+  // Suppress warning
+  ignore(unused)
+}
