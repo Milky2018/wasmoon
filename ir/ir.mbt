@@ -40,6 +40,30 @@ pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
 }
 
 ///|
+/// Create i32 type
+pub fn Type::i32_() -> Type {
+  Type::I32
+}
+
+///|
+/// Create i64 type
+pub fn Type::i64_() -> Type {
+  Type::I64
+}
+
+///|
+/// Create f32 type
+pub fn Type::f32_() -> Type {
+  Type::F32
+}
+
+///|
+/// Create f64 type
+pub fn Type::f64_() -> Type {
+  Type::F64
+}
+
+///|
 /// Block - represents a basic block in the control flow graph
 /// A basic block is a sequence of instructions with:
 /// - One entry point (the first instruction)
@@ -187,6 +211,12 @@ pub enum FloatCC {
   Gt // Greater than (ordered)
   Ge // Greater than or equal (ordered)
 } derive(Show)
+
+///|
+/// Create FloatCC::Lt
+pub fn FloatCC::lt() -> FloatCC {
+  FloatCC::Lt
+}
 
 ///|
 /// Terminator - how a basic block ends

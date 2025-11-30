@@ -250,7 +250,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] 寄存器约束表示
 
 ### 8.2 指令选择 (Lowering)
-- [ ] 高级 IR 到低级 IR 的转换框架
+- [x] 高级 IR 到低级 IR 的转换框架
 - [ ] 模式匹配规则定义 (类似 ISLE DSL)
 - [ ] 指令合并与优化
 - [ ] 目标特定的指令选择规则
@@ -388,5 +388,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 8.1/8.3 已完成，VCode 基础结构和目标架构抽象就绪
-**下一步**: 实现 Phase 8.2 指令选择 (高级 IR 到 VCode 的转换框架)
+**当前状态**: Phase 8.2 基础 lowering 框架已完成，支持 IR 到 VCode 的转换
+**下一步**: 实现 Phase 8.2 模式匹配规则 (指令合并与优化)

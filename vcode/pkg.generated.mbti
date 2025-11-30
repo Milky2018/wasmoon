@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode"
 
+import(
+  "Milky2018/wasmoon/ir"
+)
+
 // Values
 fn aapcs64_arg_fprs() -> Array[PReg]
 
@@ -13,6 +17,8 @@ fn aapcs64_caller_saved() -> Array[PReg]
 fn aapcs64_ret_fprs() -> Array[PReg]
 
 fn aapcs64_ret_gprs() -> Array[PReg]
+
+fn lower_function(@ir.Function) -> VCodeFunction
 
 // Errors
 
@@ -91,6 +97,14 @@ pub enum FCmpKind {
   Ge
 }
 impl Show for FCmpKind
+
+pub(all) struct LoweringContext {
+  ir_func : @ir.Function
+  vcode_func : VCodeFunction
+  value_map : Map[Int, VReg]
+  block_map : Map[Int, Int]
+}
+fn LoweringContext::new(@ir.Function) -> Self
 
 pub enum MemType {
   I8
