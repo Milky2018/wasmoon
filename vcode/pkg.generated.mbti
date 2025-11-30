@@ -29,6 +29,124 @@ fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFram
 
 fn compute_liveness(VCodeFunction) -> LivenessResult
 
+fn cond_al() -> Int
+
+fn cond_eq() -> Int
+
+fn cond_ge() -> Int
+
+fn cond_gt() -> Int
+
+fn cond_hi() -> Int
+
+fn cond_hs() -> Int
+
+fn cond_le() -> Int
+
+fn cond_lo() -> Int
+
+fn cond_ls() -> Int
+
+fn cond_lt() -> Int
+
+fn cond_mi() -> Int
+
+fn cond_ne() -> Int
+
+fn cond_pl() -> Int
+
+fn cond_vc() -> Int
+
+fn cond_vs() -> Int
+
+fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_and_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_asr_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_b(MachineCode, Int) -> Unit
+
+fn emit_b_cond(MachineCode, Int, Int) -> Unit
+
+fn emit_bl(MachineCode, Int) -> Unit
+
+fn emit_cbnz(MachineCode, Int, Int) -> Unit
+
+fn emit_cbz(MachineCode, Int, Int) -> Unit
+
+fn emit_cmp_imm(MachineCode, Int, Int) -> Unit
+
+fn emit_cmp_reg(MachineCode, Int, Int) -> Unit
+
+fn emit_cset(MachineCode, Int, Int) -> Unit
+
+fn emit_eor_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
+
+fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_fmov_d(MachineCode, Int, Int) -> Unit
+
+fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_fsub_d(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_function(VCodeFunction) -> MachineCode
+
+fn emit_ldr_d_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_ldr_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_ldr_w_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_ldrb_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_ldrh_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_load_imm64(MachineCode, Int, Int64) -> Unit
+
+fn emit_lsl_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_lsr_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_mov_reg(MachineCode, Int, Int) -> Unit
+
+fn emit_movk(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_movz(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_mul(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_nop(MachineCode) -> Unit
+
+fn emit_orr_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_ret(MachineCode, Int) -> Unit
+
+fn emit_sdiv(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_str_d_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_str_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_str_w_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_strb_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_strh_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_sub_imm(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_sub_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_udiv(MachineCode, Int, Int, Int) -> Unit
+
 fn get_aarch64_rules() -> Array[RewriteRule]
 
 fn get_optimization_rules() -> Array[RewriteRule]
@@ -236,6 +354,17 @@ pub enum FCmpKind {
 }
 impl Show for FCmpKind
 
+pub(all) struct Fixup {
+  offset : Int
+  target_block : Int
+  kind : FixupKind
+}
+
+pub enum FixupKind {
+  Branch26
+  Branch19
+}
+
 pub(all) struct LinearScanAllocator {
   int_regs : Array[PReg]
   float_regs : Array[PReg]
@@ -270,6 +399,23 @@ pub(all) struct LoweringContext {
   block_map : Map[Int, Int]
 }
 fn LoweringContext::new(@ir.Function) -> Self
+
+pub(all) struct MachineCode {
+  bytes : Array[Int]
+  mut pos : Int
+  labels : Map[Int, Int]
+  fixups : Array[Fixup]
+}
+fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
+fn MachineCode::current_pos(Self) -> Int
+fn MachineCode::define_label(Self, Int) -> Unit
+fn MachineCode::emit_byte(Self, Int) -> Unit
+fn MachineCode::emit_inst(Self, Int, Int, Int, Int) -> Unit
+fn MachineCode::get_bytes(Self) -> Array[Int]
+fn MachineCode::hex_dump(Self) -> String
+fn MachineCode::new() -> Self
+fn MachineCode::resolve_fixups(Self) -> Unit
+fn MachineCode::size(Self) -> Int
 
 pub(all) struct MatchResult {
   values : Array[@ir.Value]
