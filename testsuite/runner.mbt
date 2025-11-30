@@ -82,16 +82,17 @@ pub struct TestValue {
 
 ///|
 /// Test result
-pub struct TestResult {
+pub(all) struct TestResult {
   mut passed : Int
   mut failed : Int
   mut skipped : Int
   failures : Array[String]
+  mut source_filename : String? // Source .wast filename for better error reporting
 } derive(Show)
 
 ///|
 pub fn TestResult::new() -> TestResult {
-  { passed: 0, failed: 0, skipped: 0, failures: [] }
+  { passed: 0, failed: 0, skipped: 0, failures: [], source_filename: None }
 }
 
 ///|
@@ -101,10 +102,14 @@ pub fn TestResult::add_passed(self : TestResult) -> Unit {
 }
 
 ///|
-/// Increment failed count
+/// Increment failed count with source file context
 pub fn TestResult::add_failed(self : TestResult, msg : String) -> Unit {
   self.failed += 1
-  self.failures.push(msg)
+  let full_msg = match self.source_filename {
+    Some(filename) => "[\{filename}] \{msg}"
+    None => msg
+  }
+  self.failures.push(full_msg)
 }
 
 ///|
@@ -293,10 +298,17 @@ fn json_command_to_test_command(
 }
 
 ///|
+/// Parsed test file with source filename and commands
+pub struct ParsedTestFile {
+  source_filename : String?
+  commands : Array[TestCommandWithLine]
+}
+
+///|
 /// Parse a JSON test file into a list of commands
 pub fn parse_json_test_file(
   json_content : String,
-) -> Array[TestCommandWithLine] raise TestRunnerError {
+) -> ParsedTestFile raise TestRunnerError {
   let json = @json.parse(json_content) catch {
     e => raise ParseError("JSON parse error: \{e}")
   }
@@ -307,7 +319,7 @@ pub fn parse_json_test_file(
   for jc in test_file.commands {
     commands.push(json_command_to_test_command(jc))
   }
-  commands
+  { source_filename: test_file.source_filename, commands }
 }
 
 ///|
@@ -555,10 +567,11 @@ pub fn run_json_tests(
   base_dir : String,
   read_file_fn : (String) -> Bytes raise Error,
 ) -> TestResult raise TestRunnerError {
-  let commands = parse_json_test_file(json_content)
+  let parsed = parse_json_test_file(json_content)
   let result = TestResult::new()
+  result.source_filename = parsed.source_filename
   let ctx = TestContext::new()
-  for cmd in commands {
+  for cmd in parsed.commands {
     run_test_command_with_line(ctx, cmd, result, base_dir, read_file_fn)
   }
   result

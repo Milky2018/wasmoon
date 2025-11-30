@@ -195,10 +195,11 @@ async fn run_tests_internal(
   json_content : String,
   base_dir : String,
 ) -> @testsuite.TestResult raise Error {
-  let commands = @testsuite.parse_json_test_file(json_content)
+  let parsed = @testsuite.parse_json_test_file(json_content)
   let result = @testsuite.TestResult::new()
+  result.source_filename = parsed.source_filename
   let ctx = @testsuite.TestContext::new()
-  for cmd in commands {
+  for cmd in parsed.commands {
     run_test_command_async(ctx, cmd.command, cmd.line, result, base_dir)
   }
   result

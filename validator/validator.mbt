@@ -24,7 +24,6 @@ pub(all) suberror ValidationError {
 priv struct LabelInfo {
   kind : LabelKind // block or loop
   block_type : @types.BlockType
-  stack_height : Int // stack height when entering the block
 }
 
 ///|
@@ -163,16 +162,6 @@ fn OperandStack::pop_any(
 ///|
 fn OperandStack::set_polymorphic(self : OperandStack) -> Unit {
   self.polymorphic = true
-}
-
-///|
-fn OperandStack::height(self : OperandStack) -> Int {
-  self.stack.length()
-}
-
-///|
-fn OperandStack::reset_polymorphic(self : OperandStack) -> Unit {
-  self.polymorphic = false
 }
 
 ///|
@@ -801,11 +790,7 @@ fn validate_instr(
         block_stack.push(param)
       }
       // Push label for block (br jumps to end, uses results)
-      let label : LabelInfo = {
-        kind: BlockLabel,
-        block_type: bt,
-        stack_height: params.length(),
-      }
+      let label : LabelInfo = { kind: BlockLabel, block_type: bt }
       ctx.labels.push(label)
       // Validate body
       validate_expr(ctx, block_stack, body)
@@ -835,11 +820,7 @@ fn validate_instr(
         block_stack.push(param)
       }
       // Push label for loop (br jumps to start, uses params)
-      let label : LabelInfo = {
-        kind: LoopLabel,
-        block_type: bt,
-        stack_height: params.length(),
-      }
+      let label : LabelInfo = { kind: LoopLabel, block_type: bt }
       ctx.labels.push(label)
       // Validate body
       validate_expr(ctx, block_stack, body)
@@ -865,11 +846,7 @@ fn validate_instr(
         stack.pop(params[i])
       }
       // Push label for if (br jumps to end, uses results)
-      let label : LabelInfo = {
-        kind: BlockLabel,
-        block_type: bt,
-        stack_height: params.length(),
-      }
+      let label : LabelInfo = { kind: BlockLabel, block_type: bt }
       ctx.labels.push(label)
       // Validate then branch
       let then_stack = OperandStack::new()
