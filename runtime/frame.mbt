@@ -1,11 +1,4 @@
 ///|
-/// Label for structured control flow (blocks, loops, if)
-struct Label {
-  arity : Int // number of values to keep when branching
-  continuation : Int // instruction pointer to jump to
-} derive(Show)
-
-///|
 /// Call frame for function execution
 struct Frame {
   func_idx : Int
