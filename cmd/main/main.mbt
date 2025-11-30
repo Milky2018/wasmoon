@@ -395,6 +395,292 @@ async fn run_disasm(wasm_path : String) -> Unit {
 }
 
 ///|
+/// Format a WASM value for display
+fn format_value(v : @types.Value) -> String {
+  match v {
+    I32(n) => n.to_string()
+    I64(n) => n.to_string()
+    F32(n) => n.to_string()
+    F64(n) => n.to_string()
+    Null => "null"
+    FuncRef(idx) => "funcref(\{idx})"
+    ExternRef(idx) => "externref(\{idx})"
+  }
+}
+
+///|
+/// Run a WASM module
+/// If invoke is specified, call that function with args
+/// Otherwise, run the start function or _start export
+async fn run_wasm(
+  wasm_path : String,
+  invoke : String?,
+  func_args : Array[String],
+  preloads : Array[String],
+) -> Unit {
+  // Create linker for module linking
+  let linker = @runtime.Linker::new()
+  // Load preloaded modules
+  for preload in preloads {
+    // Parse NAME=PATH format
+    let parts = split_preload(preload)
+    match parts {
+      Some((name, path)) => {
+        let preload_mod = load_module_from_path(path) catch {
+          e => {
+            println("Error loading preload module '\{name}': \{e}")
+            return
+          }
+        }
+        let preload_instance = @executor.instantiate_with_linker(
+          linker, name, preload_mod,
+        ) catch {
+          e => {
+            println("Error instantiating preload module '\{name}': \{e}")
+            return
+          }
+        }
+        linker.register(name, preload_instance)
+      }
+      None => {
+        println(
+          "Error: invalid preload format '\{preload}', expected NAME=PATH",
+        )
+        return
+      }
+    }
+  }
+  // Load main module
+  let mod_ = load_module_from_path(wasm_path) catch {
+    e => {
+      println("Error: \{e}")
+      return
+    }
+  }
+  // Instantiate the main module
+  let store = linker.get_store()
+  let imports = linker.build_imports()
+  let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
+    e => {
+      println("Error instantiating module: \{e}")
+      return
+    }
+  }
+  // Determine which function to call
+  let func_name = match invoke {
+    Some(name) => name
+    None => "_start" // Default to WASI-style entry point
+  }
+  // Find the function type to parse arguments correctly
+  let func_type = find_exported_func_type(mod_, func_name)
+  match func_type {
+    Some(ft) => {
+      // Parse arguments according to function type
+      let args = parse_func_args(ft.params, func_args) catch {
+        e => {
+          println("Error parsing arguments: \{e}")
+          return
+        }
+      }
+      // Call the function
+      let results = @executor.call_exported_func(
+        store, instance, func_name, args,
+      ) catch {
+        e => {
+          println("Error: \{e}")
+          return
+        }
+      }
+      // Print results
+      if results.length() > 0 {
+        let result_strs = results.map(format_value)
+        println(result_strs.join(" "))
+      }
+    }
+    None =>
+      // No exported function found, check if there's a start function
+      match invoke {
+        Some(name) => println("Error: function '\{name}' not found")
+        None =>
+          // Module was already initialized with start function if present
+          ()
+      }
+  }
+}
+
+///|
+/// Split preload string in NAME=PATH format
+fn split_preload(s : String) -> (String, String)? {
+  let mut eq_idx = -1
+  for i in 0..<s.length() {
+    if s[i] == '=' {
+      eq_idx = i
+      break
+    }
+  }
+  if eq_idx <= 0 {
+    return None
+  }
+  // Build name and path strings manually
+  let name_builder = StringBuilder::new()
+  for i in 0..<eq_idx {
+    name_builder.write_char(s[i].unsafe_to_char())
+  }
+  let path_builder = StringBuilder::new()
+  for i = eq_idx + 1; i < s.length(); i = i + 1 {
+    path_builder.write_char(s[i].unsafe_to_char())
+  }
+  Some((name_builder.to_string(), path_builder.to_string()))
+}
+
+///|
+/// Load a module from file path (supports both .wasm and .wat)
+async fn load_module_from_path(path : String) -> @types.Module raise Error {
+  let is_wat = path.has_suffix(".wat")
+  if is_wat {
+    let data = @fs.read_file(path)
+    let content = data.text() catch { e => raise e }
+    @wat.parse(content) catch {
+      e => raise e
+    }
+  } else {
+    let data = @fs.read_file(path)
+    let bytes = data.binary()
+    @parser.parse_module(bytes) catch {
+      e => raise e
+    }
+  }
+}
+
+///|
+/// Find the type of an exported function
+fn find_exported_func_type(
+  mod_ : @types.Module,
+  func_name : String,
+) -> @types.FuncType? {
+  for exp in mod_.exports {
+    if exp.name == func_name {
+      match exp.desc {
+        Func(idx) => {
+          // Get the type index for this function
+          // Account for imported functions
+          let num_imports = count_func_imports(mod_.imports)
+          let type_idx = if idx < num_imports {
+            // It's an imported function
+            get_import_func_type_idx(mod_.imports, idx)
+          } else {
+            // It's a defined function
+            let func_idx = idx - num_imports
+            if func_idx < mod_.funcs.length() {
+              Some(mod_.funcs[func_idx])
+            } else {
+              None
+            }
+          }
+          match type_idx {
+            Some(tidx) =>
+              if tidx < mod_.types.length() {
+                return Some(mod_.types[tidx])
+              }
+            None => ()
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Count function imports
+fn count_func_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    match imp.desc {
+      Func(_) => count = count + 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
+/// Get type index for an imported function
+fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
+  let mut func_count = 0
+  for imp in imports {
+    match imp.desc {
+      Func(type_idx) => {
+        if func_count == idx {
+          return Some(type_idx)
+        }
+        func_count = func_count + 1
+      }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+/// Parse function arguments according to parameter types
+fn parse_func_args(
+  params : Array[@types.ValueType],
+  args : Array[String],
+) -> Array[@types.Value] raise Error {
+  if args.length() != params.length() {
+    raise Failure("Expected \{params.length()} arguments, got \{args.length()}")
+  }
+  let result : Array[@types.Value] = []
+  for i, param in params {
+    let arg = args[i]
+    let value = match param {
+      I32 => {
+        let n = @strconv.parse_int(arg) catch {
+          _ => {
+            // Try parsing as unsigned
+            let u = @strconv.parse_uint(arg) catch {
+              _ => raise Failure("Invalid i32 value: \{arg}")
+            }
+            u.reinterpret_as_int()
+          }
+        }
+        @types.Value::I32(n)
+      }
+      I64 => {
+        let n = @strconv.parse_int64(arg) catch {
+          _ => {
+            let u = @strconv.parse_uint64(arg) catch {
+              _ => raise Failure("Invalid i64 value: \{arg}")
+            }
+            u.reinterpret_as_int64()
+          }
+        }
+        @types.Value::I64(n)
+      }
+      F32 => {
+        let n = @strconv.parse_double(arg) catch {
+          _ => raise Failure("Invalid f32 value: \{arg}")
+        }
+        @types.Value::F32(n.to_float())
+      }
+      F64 => {
+        let n = @strconv.parse_double(arg) catch {
+          _ => raise Failure("Invalid f64 value: \{arg}")
+        }
+        @types.Value::F64(n)
+      }
+      FuncRef => raise Failure("Cannot pass funcref as argument")
+      ExternRef => raise Failure("Cannot pass externref as argument")
+      _ => raise Failure("Unknown parameter type")
+    }
+    result.push(value)
+  }
+  result
+}
+
+///|
 /// Parse and display a WAT file
 async fn run_wat(wat_path : String) -> Unit {
   let data = @fs.read_file(wat_path) catch {
@@ -427,6 +713,18 @@ async fn main {
     prog="wasmoon",
     description="WebAssembly Runtime in MoonBit",
     subcmds={
+      "run": @clap.SubCommand::new(help="Run a WebAssembly module", args={
+        "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
+        "invoke": @clap.Arg::named(help="Function to invoke"),
+        "arg": @clap.Arg::named(
+          nargs=@clap.Nargs::Any,
+          help="Arguments to pass to the function (can be repeated)",
+        ),
+        "preload": @clap.Arg::named(
+          nargs=@clap.Nargs::Any,
+          help="Preload module as NAME=PATH (can be repeated)",
+        ),
+      }),
       "demo": @clap.SubCommand::new(help="Run built-in demo programs"),
       "test": @clap.SubCommand::new(help="Run wasm-testsuite JSON spec file", args={
         "file": @clap.Arg::positional(help="Path to JSON spec file"),
@@ -464,6 +762,33 @@ async fn main {
       match value.subcmd {
         Some(sub) =>
           match sub.name {
+            "run" => {
+              let positional = sub.positional_args
+              if positional.length() > 0 {
+                let invoke_opt : String? = match sub.args.get("invoke") {
+                  Some(arr) =>
+                    if arr.length() > 0 {
+                      Some(arr[0])
+                    } else {
+                      None
+                    }
+                  None => None
+                }
+                // Get function arguments from --arg option
+                let func_args : Array[String] = match sub.args.get("arg") {
+                  Some(arr) => arr
+                  None => []
+                }
+                // Get preload modules from --preload option
+                let preloads : Array[String] = match sub.args.get("preload") {
+                  Some(arr) => arr
+                  None => []
+                }
+                run_wasm(positional[0], invoke_opt, func_args, preloads)
+              } else {
+                println("Error: missing file argument")
+              }
+            }
             "demo" => run_demo()
             "test" => {
               let positional = sub.positional_args
