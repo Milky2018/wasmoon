@@ -18,6 +18,10 @@ fn aapcs64_ret_fprs() -> Array[PReg]
 
 fn aapcs64_ret_gprs() -> Array[PReg]
 
+fn apply_aarch64_rule(String, MatchResult, @ir.Inst, LoweringContext) -> AArch64RewriteResult
+
+fn get_aarch64_rules() -> Array[RewriteRule]
+
 fn get_optimization_rules() -> Array[RewriteRule]
 
 fn lower_function(@ir.Function) -> VCodeFunction
@@ -38,6 +42,87 @@ pub(all) struct AArch64 {
 }
 fn AArch64::new() -> Self
 impl TargetISA for AArch64
+
+pub enum AArch64Cond {
+  Eq
+  Ne
+  Cs
+  Cc
+  Mi
+  Pl
+  Vs
+  Vc
+  Hi
+  Ls
+  Ge
+  Lt
+  Gt
+  Le
+  Al
+  Nv
+}
+
+pub enum AArch64Extend {
+  Uxtb
+  Uxth
+  Uxtw
+  Uxtx
+  Sxtb
+  Sxth
+  Sxtw
+  Sxtx
+}
+
+pub enum AArch64Opcode {
+  AddShifted(AArch64Shift, Int)
+  SubShifted(AArch64Shift, Int)
+  AddImm(Int64)
+  SubImm(Int64)
+  AndShifted(AArch64Shift, Int)
+  OrrShifted(AArch64Shift, Int)
+  EorShifted(AArch64Shift, Int)
+  AndImm(Int64)
+  OrrImm(Int64)
+  EorImm(Int64)
+  Madd
+  Msub
+  Mneg
+  LdrOffset(Int)
+  LdrPreIndex(Int)
+  LdrPostIndex(Int)
+  LdrRegister(AArch64Extend)
+  StrOffset(Int)
+  StrPreIndex(Int)
+  StrPostIndex(Int)
+  StrRegister(AArch64Extend)
+  Cbz
+  Cbnz
+  Tbz(Int)
+  Tbnz(Int)
+  Csel(AArch64Cond)
+  Csinc(AArch64Cond)
+  Csneg(AArch64Cond)
+  Csinv(AArch64Cond)
+  Ubfx(Int, Int)
+  Sbfx(Int, Int)
+  Bfi(Int, Int)
+  Bfxil(Int, Int)
+  Movz(Int)
+  Movn(Int)
+  Movk(Int)
+}
+
+pub enum AArch64Pattern {
+  AddWithShift(Int)
+  AddWithExtend(AArch64Extend)
+  MultiplyAdd
+  MultiplySub
+  MultiplyNeg
+  ConditionalSelect(CmpKind)
+  BitFieldExtract(Int, Int)
+  CompareAndBranchZero
+  TestBitAndBranch(Int)
+}
 
 pub(all) struct AArch64Regs {
   placeholder : Int
@@ -61,6 +146,23 @@ fn AArch64Regs::x4(Self) -> PReg
 fn AArch64Regs::x5(Self) -> PReg
 fn AArch64Regs::x6(Self) -> PReg
 fn AArch64Regs::x7(Self) -> PReg
+
+pub enum AArch64RewriteResult {
+  AddShifted(Int, Int, Int)
+  SubShifted(Int, Int, Int)
+  Madd(Int, Int, Int)
+  Msub(Int, Int, Int)
+  Mneg(Int, Int)
+  LogicalShifted(VCodeOpcode, Int, Int, Int)
+  NoMatch
+}
+
+pub enum AArch64Shift {
+  Lsl
+  Lsr
+  Asr
+  Ror
+}
 
 pub enum CallConv {
   SystemV
