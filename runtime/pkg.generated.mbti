@@ -62,9 +62,6 @@ fn Imports::add_table(Self, String, String, Int) -> Unit
 fn Imports::new() -> Self
 fn Imports::resolve(Self, String, String) -> ExternVal?
 
-type Label
-impl Show for Label
-
 pub(all) struct Linker {
   store : Store
   modules : Array[(String, ModuleInstance)]

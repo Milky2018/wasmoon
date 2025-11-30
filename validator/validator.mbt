@@ -21,7 +21,7 @@ pub(all) suberror ValidationError {
 
 ///|
 /// Label information for control flow validation
-struct LabelInfo {
+priv struct LabelInfo {
   kind : LabelKind // block or loop
   block_type : @types.BlockType
   stack_height : Int // stack height when entering the block
@@ -29,14 +29,14 @@ struct LabelInfo {
 
 ///|
 /// Kind of control structure for label resolution
-enum LabelKind {
+priv enum LabelKind {
   BlockLabel // br jumps to end, uses results
   LoopLabel // br jumps to start, uses params
 }
 
 ///|
 /// Validation context for a module
-struct ValidationContext {
+priv struct ValidationContext {
   types : Array[@types.FuncType]
   funcs : Array[Int] // type indices
   tables : Array[@types.TableType]
@@ -108,7 +108,7 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
 ///|
 /// Operand stack for type validation
 /// Uses Option to represent polymorphic stack (after unreachable)
-struct OperandStack {
+priv struct OperandStack {
   stack : Array[@types.ValueType]
   mut polymorphic : Bool // true after unreachable instruction
 }
@@ -956,7 +956,6 @@ fn validate_instr(
       }
       stack.set_polymorphic()
     }
-    _ => () // Other instructions not yet validated
   }
 }
 

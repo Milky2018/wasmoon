@@ -11,7 +11,6 @@ suberror ParserError {
   InvalidMagicNumber
   UnsupportedVersion
   InvalidValueType(Int)
-  InvalidSectionId(Int)
   LEB128TooLarge
   SectionSizeMismatch
   UnknownOpcode(Int)
