@@ -505,6 +505,38 @@
   3. 在 PR review 中无法清楚看到每次修改的内容
 - **例外**: 只有在 commit 尚未推送到远程时，才可以使用 `--amend`
 
+### MoonBit 可见性控制
+
+#### 2. 外部包需要访问 enum 变体时使用 `pub(all) enum`
+- ❌ **错误做法**: 使用 `pub enum` 然后写工厂函数绕过访问限制
+  ```moonbit
+  pub enum Type {
+    I32
+    I64
+    F32
+    F64
+  }
+
+  // 不必要的工厂函数
+  pub fn Type::i32_() -> Type { Type::I32 }
+  pub fn Type::i64_() -> Type { Type::I64 }
+  pub fn Type::f32_() -> Type { Type::F32 }
+  pub fn Type::f64_() -> Type { Type::F64 }
+  ```
+- ✅ **正确做法**: 直接使用 `pub(all) enum`
+  ```moonbit
+  pub(all) enum Type {
+    I32
+    I64
+    F32
+    F64
+  }
+  ```
+- **说明**:
+  - `pub enum` 的变体在外部包中是只读的，外部包不能直接使用 `@pkg.Type::I32`
+  - `pub(all) enum` 允许外部包直接构造和使用变体
+  - 工厂函数是不必要的 workaround，会污染 API
+
 ---
 
 ## 待补充
