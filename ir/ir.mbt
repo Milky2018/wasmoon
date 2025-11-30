@@ -16,7 +16,7 @@ fn Value::new(id : Int, ty : Type) -> Value {
 
 ///|
 /// IR Type system - corresponds to WASM value types
-pub enum Type {
+pub(all) enum Type {
   I32
   I64
   F32
@@ -164,7 +164,7 @@ pub enum Opcode {
 
 ///|
 /// Integer comparison condition codes
-pub enum IntCC {
+pub(all) enum IntCC {
   Eq // Equal
   Ne // Not equal
   Slt // Signed less than
@@ -179,7 +179,7 @@ pub enum IntCC {
 
 ///|
 /// Floating point comparison condition codes
-pub enum FloatCC {
+pub(all) enum FloatCC {
   Eq // Equal (ordered)
   Ne // Not equal (unordered)
   Lt // Less than (ordered)
