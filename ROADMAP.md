@@ -180,14 +180,14 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-## Phase 6: 中间表示层 (IR) 🔨 进行中
+## Phase 6: 中间表示层 (IR) ✅ 已完成
 
 > 这是实现 JIT 编译器的基础，参考 [Cranelift](https://cranelift.dev/) 的设计
 
 ### 6.1 高级 IR (类似 CLIF)
 - [x] SSA (Static Single Assignment) 形式的 IR 定义
 - [x] 基本块 (Basic Block) 数据结构
-- [ ] 控制流图 (CFG) 构建
+- [x] 控制流图 (CFG) 构建
 - [x] IR 类型系统 (与 WASM 类型对应)
 - [x] IR 指令集定义
   - [x] 算术运算指令
@@ -359,8 +359,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | 阶段 | 目标 | 状态 |
 |------|------|------|
 | Phase 1-5 | 完整的 WASM 解释器 | ✅ 已完成 |
-| Phase 6 | 中间表示层设计 | 🔨 下一步 |
-| Phase 7 | IR 优化 | 📋 计划中 |
+| Phase 6 | 中间表示层设计 | ✅ 已完成 |
+| Phase 7 | IR 优化 | 🔨 下一步 |
 | Phase 8-9 | 指令选择与寄存器分配 | 📋 计划中 |
 | Phase 10 | 代码生成 | 📋 计划中 |
 | Phase 11 | JIT 集成 | 📋 计划中 |
@@ -387,5 +387,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 5 已完成，Phase 6 计划中
-**下一步**: 设计并实现中间表示层 (IR)
+**当前状态**: Phase 6 已完成，Phase 7 计划中
+**下一步**: 实现 IR 优化 (死代码消除、常量折叠等)

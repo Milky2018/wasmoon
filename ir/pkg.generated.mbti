@@ -26,6 +26,23 @@ type BlockFrame
 
 type BlockKind
 
+pub(all) struct CFG {
+  num_blocks : Int
+  successors : Array[Array[Int]]
+  predecessors : Array[Array[Int]]
+}
+fn CFG::build(Function) -> Self
+fn CFG::compute_dominators(Self) -> Array[Int]
+fn CFG::dominates(Self, Int, Int) -> Bool
+fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
+fn CFG::get_predecessors(Self, Int) -> Array[Int]
+fn CFG::get_successors(Self, Int) -> Array[Int]
+fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
+fn CFG::is_exit_block(Self, Int) -> Bool
+fn CFG::postorder(Self) -> Array[Int]
+fn CFG::reverse_postorder(Self) -> Array[Int]
+fn CFG::to_dot(Self, String) -> String
+
 pub enum FloatCC {
   Eq
   Ne

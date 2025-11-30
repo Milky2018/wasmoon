@@ -361,3 +361,154 @@ test "validate translated function" {
   let result = validate_function(func)
   assert_true(result.valid)
 }
+
+// ============ CFG Tests ============
+
+///|
+test "cfg linear" {
+  // Simple linear CFG: block0 -> block1 -> return
+  let builder = IRBuilder::new("linear")
+  builder.add_result(Type::I32)
+  let b0 = builder.create_block()
+  let b1 = builder.create_block()
+  builder.switch_to_block(b0)
+  let c = builder.iconst_i32(42)
+  builder.jump(b1, [])
+  builder.switch_to_block(b1)
+  builder.return_([c])
+  let func = builder.get_function()
+  let cfg = CFG::build(func)
+  // Check successors
+  inspect(cfg.get_successors(0), content="[1]")
+  inspect(cfg.get_successors(1), content="[]")
+  // Check predecessors
+  inspect(cfg.get_predecessors(0), content="[]")
+  inspect(cfg.get_predecessors(1), content="[0]")
+}
+
+///|
+test "cfg branching" {
+  // Diamond CFG: block0 -> block1/block2 -> block3
+  let builder = IRBuilder::new("diamond")
+  let cond = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let b0 = builder.create_block()
+  let b1 = builder.create_block()
+  let b2 = builder.create_block()
+  let b3 = builder.create_block()
+  builder.switch_to_block(b0)
+  builder.brnz(cond, b1, b2)
+  builder.switch_to_block(b1)
+  let c1 = builder.iconst_i32(1)
+  builder.jump(b3, [])
+  builder.switch_to_block(b2)
+  let c2 = builder.iconst_i32(2)
+  builder.jump(b3, [])
+  builder.switch_to_block(b3)
+  let result = builder.iconst_i32(0)
+  builder.return_([result])
+  let func = builder.get_function()
+  let cfg = CFG::build(func)
+  // Check successors
+  inspect(cfg.get_successors(0), content="[1, 2]")
+  inspect(cfg.get_successors(1), content="[3]")
+  inspect(cfg.get_successors(2), content="[3]")
+  inspect(cfg.get_successors(3), content="[]")
+  // Check predecessors
+  inspect(cfg.get_predecessors(0), content="[]")
+  inspect(cfg.get_predecessors(1), content="[0]")
+  inspect(cfg.get_predecessors(2), content="[0]")
+  inspect(cfg.get_predecessors(3), content="[1, 2]")
+  // Suppress unused variable warnings
+  ignore(c1)
+  ignore(c2)
+}
+
+///|
+test "cfg loop" {
+  // Loop CFG: block0 -> block1 -> block1/block2
+  let builder = IRBuilder::new("loop")
+  let n = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let loop_header = builder.create_block()
+  let exit = builder.create_block()
+  builder.switch_to_block(entry)
+  let init = builder.iconst_i32(0)
+  builder.jump(loop_header, [])
+  let counter = builder.add_block_param(loop_header, Type::I32)
+  builder.switch_to_block(loop_header)
+  let cmp = builder.icmp_slt(counter, n)
+  builder.brnz(cmp, loop_header, exit)
+  builder.switch_to_block(exit)
+  builder.return_([counter])
+  let func = builder.get_function()
+  let cfg = CFG::build(func)
+  // Check back edge exists (loop_header -> loop_header)
+  let back_edges = cfg.find_back_edges()
+  inspect(back_edges, content="[(1, 1)]")
+  // Check postorder traversal
+  let po = cfg.postorder()
+  inspect(po, content="[2, 1, 0]")
+  // Suppress unused variable warnings
+  ignore(init)
+}
+
+///|
+test "cfg dominators" {
+  // Diamond CFG for dominator testing
+  let builder = IRBuilder::new("dom_test")
+  let cond = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let b0 = builder.create_block()
+  let b1 = builder.create_block()
+  let b2 = builder.create_block()
+  let b3 = builder.create_block()
+  builder.switch_to_block(b0)
+  builder.brnz(cond, b1, b2)
+  builder.switch_to_block(b1)
+  builder.jump(b3, [])
+  builder.switch_to_block(b2)
+  builder.jump(b3, [])
+  builder.switch_to_block(b3)
+  let result = builder.iconst_i32(0)
+  builder.return_([result])
+  let func = builder.get_function()
+  let cfg = CFG::build(func)
+  // Compute dominators
+  let idom = cfg.compute_dominators()
+  // block0 is entry, dominates itself
+  inspect(idom[0], content="0")
+  // block1 is dominated by block0
+  inspect(idom[1], content="0")
+  // block2 is dominated by block0
+  inspect(idom[2], content="0")
+  // block3 is dominated by block0 (common dominator of b1 and b2)
+  inspect(idom[3], content="0")
+  // Check dominates function
+  assert_true(cfg.dominates(0, 3))
+  assert_false(cfg.dominates(1, 2))
+}
+
+///|
+test "cfg dot output" {
+  let builder = IRBuilder::new("dot_test")
+  builder.add_result(Type::I32)
+  let b0 = builder.create_block()
+  let b1 = builder.create_block()
+  builder.switch_to_block(b0)
+  let c = builder.iconst_i32(1)
+  builder.jump(b1, [])
+  builder.switch_to_block(b1)
+  builder.return_([c])
+  let func = builder.get_function()
+  let cfg = CFG::build(func)
+  let dot = cfg.to_dot("dot_test")
+  let expected =
+    #|digraph dot_test {
+    #|  node [shape=box];
+    #|  block0 -> block1;
+    #|}
+    #|
+  inspect(dot, content=expected)
+}
