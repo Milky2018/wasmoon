@@ -63,9 +63,8 @@ pub fn Table::grow(self : Table, delta : Int, init : @types.Value) -> Int {
   let new_size = old_size + delta
 
   // Check max limit
-  match self.max {
-    Some(max) => if new_size > max { return -1 }
-    None => ()
+  if self.max is Some(max) && new_size > max {
+    return -1
   }
 
   // Grow the table

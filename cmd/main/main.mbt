@@ -560,32 +560,25 @@ fn find_exported_func_type(
 ) -> @types.FuncType? {
   for exp in mod_.exports {
     if exp.name == func_name {
-      match exp.desc {
-        Func(idx) => {
-          // Get the type index for this function
-          // Account for imported functions
-          let num_imports = count_func_imports(mod_.imports)
-          let type_idx = if idx < num_imports {
-            // It's an imported function
-            get_import_func_type_idx(mod_.imports, idx)
+      if exp.desc is Func(idx) {
+        // Get the type index for this function
+        // Account for imported functions
+        let num_imports = count_func_imports(mod_.imports)
+        let type_idx = if idx < num_imports {
+          // It's an imported function
+          get_import_func_type_idx(mod_.imports, idx)
+        } else {
+          // It's a defined function
+          let func_idx = idx - num_imports
+          if func_idx < mod_.funcs.length() {
+            Some(mod_.funcs[func_idx])
           } else {
-            // It's a defined function
-            let func_idx = idx - num_imports
-            if func_idx < mod_.funcs.length() {
-              Some(mod_.funcs[func_idx])
-            } else {
-              None
-            }
-          }
-          match type_idx {
-            Some(tidx) =>
-              if tidx < mod_.types.length() {
-                return Some(mod_.types[tidx])
-              }
-            None => ()
+            None
           }
         }
-        _ => ()
+        if type_idx is Some(tidx) && tidx < mod_.types.length() {
+          return Some(mod_.types[tidx])
+        }
       }
     }
   }
@@ -597,9 +590,8 @@ fn find_exported_func_type(
 fn count_func_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    match imp.desc {
-      Func(_) => count = count + 1
-      _ => ()
+    if imp.desc is Func(_) {
+      count = count + 1
     }
   }
   count

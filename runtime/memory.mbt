@@ -335,9 +335,8 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
   let new_size = old_size + delta
 
   // Check max limit
-  match self.max {
-    Some(max) => if new_size > max { return -1 }
-    None => ()
+  if self.max is Some(max) && new_size > max {
+    return -1
   }
 
   // Check absolute limit (65536 pages = 4GB)

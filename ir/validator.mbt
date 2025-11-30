@@ -41,9 +41,8 @@ pub fn validate_function(func : Function) -> ValidationResult {
     for inst in block.instructions {
       validate_instruction(inst, defined_values, result)
       // Add result to defined values
-      match inst.result {
-        Some(v) => defined_values.set(v.id, v.ty)
-        None => ()
+      if inst.result is Some(v) {
+        defined_values.set(v.id, v.ty)
       }
     }
     // Validate terminator

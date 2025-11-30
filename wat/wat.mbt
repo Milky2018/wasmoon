@@ -236,9 +236,8 @@ fn hex_digit_value(c : Char) -> Int? {
 fn Lexer::read_number(self : Lexer) -> String {
   let buf = StringBuilder::new()
   // Handle optional sign
-  match self.peek_char() {
-    Some('-') | Some('+') => buf.write_char(self.next_char().unwrap())
-    _ => ()
+  if self.peek_char() is (Some('-') | Some('+')) {
+    buf.write_char(self.next_char().unwrap())
   }
   // Handle 0x prefix for hex
   if self.pos + 1 < self.input.length() {
@@ -605,39 +604,33 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             let func_idx = mod_.funcs.length()
             mod_.funcs.push(type_idx)
             mod_.codes.push(code)
-            match export_name {
-              Some(name) =>
-                mod_.exports.push({
-                  name,
-                  desc: @types.ExportDesc::Func(func_idx),
-                })
-              None => ()
+            if export_name is Some(name) {
+              mod_.exports.push({
+                name,
+                desc: @types.ExportDesc::Func(func_idx),
+              })
             }
           }
           Keyword("memory") => {
             let (mem, export_name) = self.parse_memory_def()
             let mem_idx = mod_.memories.length()
             mod_.memories.push(mem)
-            match export_name {
-              Some(name) =>
-                mod_.exports.push({
-                  name,
-                  desc: @types.ExportDesc::Memory(mem_idx),
-                })
-              None => ()
+            if export_name is Some(name) {
+              mod_.exports.push({
+                name,
+                desc: @types.ExportDesc::Memory(mem_idx),
+              })
             }
           }
           Keyword("global") => {
             let (global, export_name) = self.parse_global_def()
             let global_idx = mod_.globals.length()
             mod_.globals.push(global)
-            match export_name {
-              Some(name) =>
-                mod_.exports.push({
-                  name,
-                  desc: @types.ExportDesc::Global(global_idx),
-                })
-              None => ()
+            if export_name is Some(name) {
+              mod_.exports.push({
+                name,
+                desc: @types.ExportDesc::Global(global_idx),
+              })
             }
           }
           Keyword("export") => {
@@ -652,13 +645,11 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             let (table, export_name) = self.parse_table_def()
             let table_idx = mod_.tables.length()
             mod_.tables.push(table)
-            match export_name {
-              Some(name) =>
-                mod_.exports.push({
-                  name,
-                  desc: @types.ExportDesc::Table(table_idx),
-                })
-              None => ()
+            if export_name is Some(name) {
+              mod_.exports.push({
+                name,
+                desc: @types.ExportDesc::Table(table_idx),
+              })
             }
           }
           Keyword("start") => {
