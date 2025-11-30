@@ -407,6 +407,6 @@ pub fn Module::new() -> Module {
 
 ///|
 test "parse empty module" {
-  let _ = Module::new()
+  Module::new() |> ignore
   inspect(true, content="true")
 }

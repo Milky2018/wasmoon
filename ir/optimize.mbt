@@ -42,7 +42,7 @@ pub fn eliminate_dead_code(func : Function) -> OptResult {
             if use_counts.get(v.id).unwrap_or(0) == 0 &&
               not(has_side_effects(inst)) {
               // Remove this instruction
-              let _ = block.instructions.remove(i)
+              block.instructions.remove(i) |> ignore
               // Decrement use counts for operands
               for op in inst.operands {
                 let count = use_counts.get(op.id).unwrap_or(0)
@@ -156,10 +156,7 @@ pub fn fold_constants(func : Function) -> OptResult {
               // Replace instruction with constant
               inst.opcode = const_val.to_opcode()
               // Clear operands since this is now a constant
-              while inst.operands.length() > 0 {
-                let _ = inst.operands.pop()
-
-              }
+              inst.operands.clear()
               result.mark_changed()
             }
             None => ()
@@ -550,10 +547,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
               // Replace this instruction with a copy
               inst.opcode = Opcode::Copy
               // Clear operands and add the existing value
-              while inst.operands.length() > 0 {
-                let _ = inst.operands.pop()
-
-              }
+              inst.operands.clear()
               inst.operands.push(existing)
               result.mark_changed()
             }

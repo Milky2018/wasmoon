@@ -944,8 +944,7 @@ fn Parser::parse_folded_instruction(
           // Parse nested folded instructions
           while self.current == LParen {
             self.advance()
-            let _ = self.parse_folded_instruction()
-
+            self.parse_folded_instruction() |> ignore
           }
           self.expect_rparen()
           instr
@@ -1578,7 +1577,7 @@ fn Parser::parse_export_def(
     }
     _ => raise UnexpectedToken("expected export kind")
   }
-  let _ = mod_
+  ignore(mod_)
   self.expect_rparen()
   self.expect_rparen()
   { name, desc }

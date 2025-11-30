@@ -50,9 +50,27 @@
   let mut counter = 0    // 正确，counter 需要重新赋值
   ```
 
-#### 6. 函数调用时不需要结果
-- ❌ **错误做法**: `let _result = func()`
-- ✅ **正确做法**: `func() |> ignore`
+#### 6. 忽略函数返回值
+- ❌ **错误做法**: 使用 `let _ =` 模式
+  ```moonbit
+  let _ = func()
+  let _ = array.pop()
+  let _ = store.alloc_table(table)
+  ```
+- ✅ **正确做法**: 使用 `|> ignore` 管道
+  ```moonbit
+  func() |> ignore
+  array.pop() |> ignore
+  store.alloc_table(table) |> ignore
+  ```
+- ⚠️ **带 catch 块时需要括号**:
+  ```moonbit
+  // ❌ 错误（语法错误）
+  func() catch { _ => () } |> ignore
+
+  // ✅ 正确
+  (func() catch { _ => () }) |> ignore
+  ```
 
 #### 7. 布尔取反
 - ❌ **错误做法**: 使用 `not()` 函数
@@ -470,3 +488,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 完善 `cmd/main`，引入 `moonbitlang/x/sys`，使用 `@sys.get_cli_args()` 获取命令行参数；使用 `moon add TheWaWaR/clap@0.2.6` 引入 clap → 已完成
 - [x] 把 README.mbt.md 中的代码块改成正确的 MoonBit 代码，使用 test block 包裹 → 已完成
 - [x] 能使用 `for-in` 循环时，不要使用 `for i = 0; i < n; i++` → 已添加到第10条
+- [x] 忽略结果的语法，不要使用 `let _ = expr`，而要使用 `ignore(expr)` 或者最好是 `expr |> ignore` → 已更新第6条并修复所有代码

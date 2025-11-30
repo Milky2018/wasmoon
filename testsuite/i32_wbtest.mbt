@@ -190,10 +190,8 @@ test "wasm-testsuite: i32.div_s trap on zero" {
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i32.const 1) (i32.const 0)) "integer divide by zero")
   let trapped = try {
-    let _ = @executor.call_exported_func(store, instance, "div_s", [
-      I32(1),
-      I32(0),
-    ])
+    @executor.call_exported_func(store, instance, "div_s", [I32(1), I32(0)])
+    |> ignore
     false
   } catch {
     @runtime.DivisionByZero => true
@@ -209,10 +207,11 @@ test "wasm-testsuite: i32.div_s trap on overflow" {
   // (assert_trap (invoke "div_s" (i32.const 0x80000000) (i32.const -1)) "integer overflow")
   // -2147483648 / -1 overflows because result would be 2147483648 which doesn't fit in i32
   let trapped = try {
-    let _ = @executor.call_exported_func(store, instance, "div_s", [
+    @executor.call_exported_func(store, instance, "div_s", [
       I32(-2147483648),
       I32(-1),
     ])
+    |> ignore
     false
   } catch {
     @runtime.IntegerOverflow => true

@@ -534,11 +534,11 @@ fn Parser::read_instruction(
       I64Store32(align, offset)
     }
     0x3F => {
-      let _ = self.read_byte() // reserved byte
+      self.read_byte() |> ignore // reserved byte
       MemorySize
     }
     0x40 => {
-      let _ = self.read_byte() // reserved byte
+      self.read_byte() |> ignore // reserved byte
       MemoryGrow
     }
     // Numeric constant instructions
@@ -716,7 +716,7 @@ fn Parser::read_instruction(
         8 => {
           // memory.init: data_idx, memory_idx (memory_idx must be 0)
           let data_idx = self.read_u32()
-          let _ = self.read_byte() // memory index, must be 0
+          self.read_byte() |> ignore // memory index, must be 0
           MemoryInit(data_idx)
         }
         9 => {
@@ -726,13 +726,13 @@ fn Parser::read_instruction(
         }
         10 => {
           // memory.copy: dest_mem, src_mem (both must be 0)
-          let _ = self.read_byte() // dest memory index
-          let _ = self.read_byte() // src memory index
+          self.read_byte() |> ignore // dest memory index
+          self.read_byte() |> ignore // src memory index
           MemoryCopy
         }
         11 => {
           // memory.fill: memory_idx (must be 0)
-          let _ = self.read_byte() // memory index
+          self.read_byte() |> ignore // memory index
           MemoryFill
         }
         13 => {

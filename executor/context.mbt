@@ -37,7 +37,7 @@ fn ExecContext::pop_frame(
   if self.frames.length() == 0 {
     raise @runtime.CallStackExhausted
   }
-  let _ = self.frames.pop()
+  self.frames.pop() |> ignore
   self.current_frame = self.frames.length() - 1
 }
 

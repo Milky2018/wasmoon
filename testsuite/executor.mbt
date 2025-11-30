@@ -131,7 +131,7 @@ pub fn run_assert_trap(
   let runtime_args = args.map(parse_test_value)
   // Should trap
   let trapped = try {
-    let _ = ctx.invoke(module_name, func_name, runtime_args)
+    ctx.invoke(module_name, func_name, runtime_args) |> ignore
     false
   } catch {
     _ => true

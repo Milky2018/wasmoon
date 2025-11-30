@@ -232,10 +232,7 @@ fn Translator::translate_instruction(
     }
 
     // Stack operations
-    Drop => {
-      let _ = self.pop()
-
-    }
+    Drop => self.pop() |> ignore
     Select => {
       let c = self.pop() // condition
       let val2 = self.pop() // false value
@@ -616,8 +613,7 @@ fn Translator::translate_block(
   let continuation = self.builder.create_block()
   // Add block parameters for results
   for ty in result_types {
-    let _ = self.builder.add_block_param(continuation, ty)
-
+    self.builder.add_block_param(continuation, ty) |> ignore
   }
   // Push block frame
   let frame : BlockFrame = {
@@ -633,8 +629,7 @@ fn Translator::translate_block(
     self.translate_instruction(instr)
   }
   // Pop frame
-  let _ = self.block_stack.pop()
-
+  self.block_stack.pop() |> ignore
   // Fall through to continuation
   match self.builder.current_block() {
     Some(block) =>
@@ -673,13 +668,11 @@ fn Translator::translate_loop(
   let continuation = self.builder.create_block()
   // Add loop header parameters
   for ty in param_types {
-    let _ = self.builder.add_block_param(loop_header, ty)
-
+    self.builder.add_block_param(loop_header, ty) |> ignore
   }
   // Add continuation parameters for results
   for ty in result_types {
-    let _ = self.builder.add_block_param(continuation, ty)
-
+    self.builder.add_block_param(continuation, ty) |> ignore
   }
   // Jump to loop header with current stack values
   let header_args : Array[Value] = []
@@ -708,8 +701,7 @@ fn Translator::translate_loop(
     self.translate_instruction(instr)
   }
   // Pop frame
-  let _ = self.block_stack.pop()
-
+  self.block_stack.pop() |> ignore
   // Fall through to continuation
   match self.builder.current_block() {
     Some(block) =>
@@ -749,8 +741,7 @@ fn Translator::translate_if(
   let continuation = self.builder.create_block()
   // Add continuation parameters for results
   for ty in result_types {
-    let _ = self.builder.add_block_param(continuation, ty)
-
+    self.builder.add_block_param(continuation, ty) |> ignore
   }
   // Branch
   self.builder.brnz(cond, then_block, else_block)
@@ -786,8 +777,7 @@ fn Translator::translate_if(
   }
   // Restore stack to original height for else branch
   while self.value_stack.length() > frame.stack_height {
-    let _ = self.pop()
-
+    self.pop() |> ignore
   }
   // Translate else body
   self.builder.switch_to_block(else_block)
@@ -811,8 +801,7 @@ fn Translator::translate_if(
     None => ()
   }
   // Pop frame
-  let _ = self.block_stack.pop()
-
+  self.block_stack.pop() |> ignore
   // Switch to continuation
   self.builder.switch_to_block(continuation)
   // Push results onto stack
@@ -856,8 +845,7 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
     }
     // If we actually take the branch, need to add block params
     for ty in frame.result_types {
-      let _ = self.builder.add_block_param(fallthrough, ty)
-
+      self.builder.add_block_param(fallthrough, ty) |> ignore
     }
     self.builder.brnz(cond, frame.block, fallthrough)
     self.builder.switch_to_block(fallthrough)

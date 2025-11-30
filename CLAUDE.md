@@ -318,3 +318,23 @@ test "sum" {
   inspect(sum(2, 3), content="5")
 }
 ```
+
+---
+
+## Errata / Common Mistakes
+
+记录 Claude 容易犯的错误，避免重复：
+
+### Array 清空
+
+**错误写法**:
+```moonbit
+while arr.length() > 0 {
+  let _ = arr.pop()
+}
+```
+
+**正确写法**:
+```moonbit
+arr.clear()
+```
