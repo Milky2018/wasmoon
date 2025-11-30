@@ -104,8 +104,8 @@ fn variables() -> Unit {
 fn function_expressions() -> Int {
   let add = fn(x, y) { x + y } // fn expression
   let add2 : (Int, Int) -> Int = (x, y) => x + y // arrow function
-  let _ = add(5, 15) + add2(10, 10)
-  let _ = [1, 2, 3].map(_.mul(2)) // _.method(args) form
+  (add(5, 15) + add2(10, 10)) |> ignore
+  [1, 2, 3].map(_.mul(2)) |> ignore // _.method(args) form
   1
 }
 
@@ -338,3 +338,87 @@ while arr.length() > 0 {
 ```moonbit
 arr.clear()
 ```
+
+### 错误处理
+- 使用 `suberror` 定义错误类型，函数内使用 `raise` 抛出错误
+- 忽略错误时：`try! func() |> ignore`
+
+### 忽略返回值
+```moonbit
+// ❌ 错误
+let _ = func()
+
+// ✅ 正确
+func() |> ignore
+```
+
+### 布尔取反
+```moonbit
+// ❌ 错误
+if not(condition) { ... }
+
+// ✅ 正确
+if !condition { ... }
+```
+
+### 函数调用（无感叹号）
+```moonbit
+// ❌ 错误 - f!() 语法已废弃
+inspect!(value)
+
+// ✅ 正确
+inspect(value)
+```
+
+### 循环
+```moonbit
+// ❌ 错误 - C 风格循环
+for i = 0; i < n; i = i + 1 { ... }
+
+// ✅ 正确 - for-in 循环
+for item in items { ... }
+for i in 0..<n { ... }
+```
+
+### if-is 模式匹配
+```moonbit
+// ❌ 错误
+match opt {
+  Some(v) => process(v)
+  None => ()
+}
+
+// ✅ 正确
+if opt is Some(v) {
+  process(v)
+}
+
+// 多模式需要括号
+if char is (Some('-') | Some('+')) { ... }
+```
+
+### 可见性控制
+- struct 用 `pub(all)`，字段保持私有
+- 只对需要重新赋值的变量使用 `let mut`（Array 等可变容器不需要）
+
+### 类型转换
+- **reinterpret**: 保持位模式，改变类型解释
+- **to_xxx()**: 数值转换，可能改变位模式
+- 优先使用直接转换方法，避免转换链
+
+### 无符号运算
+```moonbit
+// i32: reinterpret_as_uint() / UInt::reinterpret_as_int
+// i64: Int64::reinterpret_as_uint64() / UInt64::reinterpret_as_int64
+let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint()) |> UInt::reinterpret_as_int
+```
+
+### 依赖管理
+- 测试专用依赖用 `test-import`
+- 文件系统用 `moonbitlang/async/fs`
+- JSON 用内置 `@json`
+
+### Git 规范
+- Commit message 用英文
+- 每次改动开新分支，通过 PR 合并
+- 不要使用 `git push -f`
