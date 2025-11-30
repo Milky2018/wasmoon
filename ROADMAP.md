@@ -185,15 +185,17 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 > 这是实现 JIT 编译器的基础，参考 [Cranelift](https://cranelift.dev/) 的设计
 
 ### 6.1 高级 IR (类似 CLIF)
-- [ ] SSA (Static Single Assignment) 形式的 IR 定义
-- [ ] 基本块 (Basic Block) 数据结构
+- [x] SSA (Static Single Assignment) 形式的 IR 定义
+- [x] 基本块 (Basic Block) 数据结构
 - [ ] 控制流图 (CFG) 构建
-- [ ] IR 类型系统 (与 WASM 类型对应)
-- [ ] IR 指令集定义
-  - [ ] 算术运算指令
-  - [ ] 内存访问指令
-  - [ ] 控制流指令
-  - [ ] 函数调用指令
+- [x] IR 类型系统 (与 WASM 类型对应)
+- [x] IR 指令集定义
+  - [x] 算术运算指令
+  - [x] 内存访问指令
+  - [x] 控制流指令
+  - [x] 函数调用指令
+- [x] IR Builder API (类似 Cranelift FunctionBuilder)
+- [x] IR 文本格式打印器
 
 ### 6.2 WASM 到 IR 的转换
 - [ ] WASM 指令到 IR 指令的映射

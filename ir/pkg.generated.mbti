@@ -1,0 +1,237 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/ir"
+
+import(
+  "Milky2018/wasmoon/types"
+)
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct Block {
+  id : Int
+  params : Array[(Value, Type)]
+  instructions : Array[Inst]
+  mut terminator : Terminator?
+}
+fn Block::add_inst(Self, Inst) -> Unit
+fn Block::add_param(Self, Value, Type) -> Unit
+fn Block::set_terminator(Self, Terminator) -> Unit
+impl Show for Block
+
+pub enum FloatCC {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+}
+impl Show for FloatCC
+
+pub(all) struct Function {
+  name : String
+  params : Array[(Value, Type)]
+  results : Array[Type]
+  blocks : Array[Block]
+  mut next_value_id : Int
+  mut next_block_id : Int
+}
+fn Function::add_param(Self, Type) -> Value
+fn Function::add_result(Self, Type) -> Unit
+fn Function::new(String) -> Self
+fn Function::new_block(Self) -> Block
+fn Function::new_value(Self, Type) -> Value
+fn Function::print(Self) -> String
+impl Show for Function
+
+pub(all) struct IRBuilder {
+  func : Function
+  mut current_block : Block?
+}
+fn IRBuilder::add_block_param(Self, Block, Type) -> Value
+fn IRBuilder::add_param(Self, Type) -> Value
+fn IRBuilder::add_result(Self, Type) -> Unit
+fn IRBuilder::band(Self, Value, Value) -> Value
+fn IRBuilder::bitcast(Self, Type, Value) -> Value
+fn IRBuilder::bnot(Self, Value) -> Value
+fn IRBuilder::bor(Self, Value, Value) -> Value
+fn IRBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
+fn IRBuilder::brnz(Self, Value, Block, Block) -> Unit
+fn IRBuilder::brz(Self, Value, Block, Block) -> Unit
+fn IRBuilder::bxor(Self, Value, Value) -> Value
+fn IRBuilder::call(Self, Int, Type?, Array[Value]) -> Value?
+fn IRBuilder::call_indirect(Self, Int, Type?, Value, Array[Value]) -> Value?
+fn IRBuilder::copy(Self, Value) -> Value
+fn IRBuilder::create_block(Self) -> Block
+fn IRBuilder::current_block(Self) -> Block?
+fn IRBuilder::fabs(Self, Value) -> Value
+fn IRBuilder::fadd(Self, Value, Value) -> Value
+fn IRBuilder::fceil(Self, Value) -> Value
+fn IRBuilder::fcmp(Self, FloatCC, Value, Value) -> Value
+fn IRBuilder::fconst(Self, Type, Double) -> Value
+fn IRBuilder::fconst_f32(Self, Float) -> Value
+fn IRBuilder::fconst_f64(Self, Double) -> Value
+fn IRBuilder::fcvt_to_sint(Self, Type, Value) -> Value
+fn IRBuilder::fcvt_to_uint(Self, Type, Value) -> Value
+fn IRBuilder::fdemote(Self, Value) -> Value
+fn IRBuilder::fdiv(Self, Value, Value) -> Value
+fn IRBuilder::ffloor(Self, Value) -> Value
+fn IRBuilder::fmax(Self, Value, Value) -> Value
+fn IRBuilder::fmin(Self, Value, Value) -> Value
+fn IRBuilder::fmul(Self, Value, Value) -> Value
+fn IRBuilder::fnearest(Self, Value) -> Value
+fn IRBuilder::fneg(Self, Value) -> Value
+fn IRBuilder::fpromote(Self, Value) -> Value
+fn IRBuilder::fsqrt(Self, Value) -> Value
+fn IRBuilder::fsub(Self, Value, Value) -> Value
+fn IRBuilder::ftrunc(Self, Value) -> Value
+fn IRBuilder::get_function(Self) -> Function
+fn IRBuilder::iadd(Self, Value, Value) -> Value
+fn IRBuilder::icmp(Self, IntCC, Value, Value) -> Value
+fn IRBuilder::icmp_eq(Self, Value, Value) -> Value
+fn IRBuilder::icmp_ne(Self, Value, Value) -> Value
+fn IRBuilder::icmp_sge(Self, Value, Value) -> Value
+fn IRBuilder::icmp_sgt(Self, Value, Value) -> Value
+fn IRBuilder::icmp_sle(Self, Value, Value) -> Value
+fn IRBuilder::icmp_slt(Self, Value, Value) -> Value
+fn IRBuilder::icmp_uge(Self, Value, Value) -> Value
+fn IRBuilder::icmp_ugt(Self, Value, Value) -> Value
+fn IRBuilder::icmp_ule(Self, Value, Value) -> Value
+fn IRBuilder::icmp_ult(Self, Value, Value) -> Value
+fn IRBuilder::iconst(Self, Type, Int64) -> Value
+fn IRBuilder::iconst_i32(Self, Int) -> Value
+fn IRBuilder::iconst_i64(Self, Int64) -> Value
+fn IRBuilder::imul(Self, Value, Value) -> Value
+fn IRBuilder::ireduce(Self, Type, Value) -> Value
+fn IRBuilder::ishl(Self, Value, Value) -> Value
+fn IRBuilder::isub(Self, Value, Value) -> Value
+fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
+fn IRBuilder::load(Self, Type, Value, Int) -> Value
+fn IRBuilder::new(String) -> Self
+fn IRBuilder::print(Self) -> String
+fn IRBuilder::return_(Self, Array[Value]) -> Unit
+fn IRBuilder::rotl(Self, Value, Value) -> Value
+fn IRBuilder::rotr(Self, Value, Value) -> Value
+fn IRBuilder::sdiv(Self, Value, Value) -> Value
+fn IRBuilder::select(Self, Value, Value, Value) -> Value
+fn IRBuilder::sextend(Self, Type, Value) -> Value
+fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
+fn IRBuilder::srem(Self, Value, Value) -> Value
+fn IRBuilder::sshr(Self, Value, Value) -> Value
+fn IRBuilder::store(Self, Type, Value, Value, Int) -> Unit
+fn IRBuilder::switch_to_block(Self, Block) -> Unit
+fn IRBuilder::trap(Self, String) -> Unit
+fn IRBuilder::udiv(Self, Value, Value) -> Value
+fn IRBuilder::uextend(Self, Type, Value) -> Value
+fn IRBuilder::uint_to_fcvt(Self, Type, Value) -> Value
+fn IRBuilder::urem(Self, Value, Value) -> Value
+fn IRBuilder::ushr(Self, Value, Value) -> Value
+
+pub(all) struct Inst {
+  result : Value?
+  opcode : Opcode
+  operands : Array[Value]
+}
+impl Show for Inst
+
+pub enum IntCC {
+  Eq
+  Ne
+  Slt
+  Sle
+  Sgt
+  Sge
+  Ult
+  Ule
+  Ugt
+  Uge
+}
+impl Show for IntCC
+
+pub enum Opcode {
+  Iconst(Int64)
+  Fconst(Double)
+  Iadd
+  Isub
+  Imul
+  Sdiv
+  Udiv
+  Srem
+  Urem
+  Band
+  Bor
+  Bxor
+  Bnot
+  Ishl
+  Sshr
+  Ushr
+  Rotl
+  Rotr
+  Icmp(IntCC)
+  Fadd
+  Fsub
+  Fmul
+  Fdiv
+  Fmin
+  Fmax
+  Fcmp(FloatCC)
+  Fneg
+  Fabs
+  Fsqrt
+  Fceil
+  Ffloor
+  Ftrunc
+  Fnearest
+  Ireduce
+  Sextend
+  Uextend
+  Fpromote
+  Fdemote
+  FcvtToSint
+  FcvtToUint
+  SintToFcvt
+  UintToFcvt
+  Bitcast
+  Load(Type, Int)
+  Store(Type, Int)
+  Select
+  Copy
+  Call(Int)
+  CallIndirect(Int)
+}
+impl Show for Opcode
+
+pub enum Terminator {
+  Jump(Int, Array[Value])
+  Brz(Value, Int, Int)
+  Brnz(Value, Int, Int)
+  BrTable(Value, Array[Int], Int)
+  Return(Array[Value])
+  Trap(String)
+}
+impl Show for Terminator
+
+pub enum Type {
+  I32
+  I64
+  F32
+  F64
+  FuncRef
+  ExternRef
+}
+fn Type::from_wasm(@types.ValueType) -> Self
+impl Show for Type
+
+pub(all) struct Value {
+  id : Int
+  ty : Type
+}
+impl Show for Value
+
+// Type aliases
+
+// Traits
+
