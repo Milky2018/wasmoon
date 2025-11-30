@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wat"
+
+import(
+  "Milky2018/wasmoon/types"
+)
+
+// Values
+fn parse(String) -> @types.Module raise WatError
+
+// Errors
+pub(all) suberror WatError {
+  UnexpectedToken(String)
+  UnexpectedEof
+  InvalidNumber(String)
+  InvalidInstruction(String)
+  UndefinedIdentifier(String)
+  DuplicateIdentifier(String)
+  ParseError(String)
+}
+impl Show for WatError
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

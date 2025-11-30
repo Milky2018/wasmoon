@@ -374,6 +374,53 @@ async fn run_test_command_async(
 }
 
 ///|
+/// Disassemble a WASM file
+async fn run_disasm(wasm_path : String) -> Unit {
+  let data = @fs.read_file(wasm_path) catch {
+    e => {
+      println("Error reading file: \{e}")
+      return
+    }
+  }
+  let bytes = data.binary()
+  let mod_ = @parser.parse_module(bytes) catch {
+    e => {
+      println("Error parsing module: \{e}")
+      return
+    }
+  }
+  let output = @disasm.disassemble(mod_)
+  println(output)
+}
+
+///|
+/// Parse and display a WAT file
+async fn run_wat(wat_path : String) -> Unit {
+  let data = @fs.read_file(wat_path) catch {
+    e => {
+      println("Error reading file: \{e}")
+      return
+    }
+  }
+  let content = data.text() catch {
+    e => {
+      println("Error reading file as text: \{e}")
+      return
+    }
+  }
+  let mod_ = @wat.parse(content) catch {
+    e => {
+      println("Error parsing WAT: \{e}")
+      return
+    }
+  }
+  // Display parsed module using the disassembler
+  let output = @disasm.disassemble(mod_)
+  println("Parsed WAT module:")
+  println(output)
+}
+
+///|
 async fn main {
   let parser = @clap.Parser::new(
     prog="wasmoon",
@@ -382,6 +429,13 @@ async fn main {
       "demo": @clap.SubCommand::new(help="Run built-in demo programs"),
       "test": @clap.SubCommand::new(help="Run wasm-testsuite JSON spec file", args={
         "file": @clap.Arg::positional(help="Path to JSON spec file"),
+      }),
+      "disasm": @clap.SubCommand::new(
+        help="Disassemble WASM file to text format",
+        args={ "file": @clap.Arg::positional(help="Path to WASM file") },
+      ),
+      "wat": @clap.SubCommand::new(help="Parse WAT file and display as text", args={
+        "file": @clap.Arg::positional(help="Path to WAT file"),
       }),
     },
   )
@@ -414,6 +468,22 @@ async fn main {
               let positional = sub.positional_args
               if positional.length() > 0 {
                 run_testsuite(positional[0])
+              } else {
+                println("Error: missing file argument")
+              }
+            }
+            "disasm" => {
+              let positional = sub.positional_args
+              if positional.length() > 0 {
+                run_disasm(positional[0])
+              } else {
+                println("Error: missing file argument")
+              }
+            }
+            "wat" => {
+              let positional = sub.positional_args
+              if positional.length() > 0 {
+                run_wat(positional[0])
               } else {
                 println("Error: missing file argument")
               }
