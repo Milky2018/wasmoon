@@ -120,8 +120,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] 完整通过官方测试套件 (5955 tests passed, 0 failed)
 
 ### 5.2 工具链
-- [ ] WAT 文本格式支持
-- [ ] WASM 反汇编器
+- [x] WASM 反汇编器
+- [x] WAT 文本格式支持
 
 ---
 
