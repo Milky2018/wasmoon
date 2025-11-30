@@ -909,38 +909,38 @@ test "wasm-testsuite: load i32.0.wasm binary" {
     // Magic number: \0asm
     0x00, 0x61, 0x73, 0x6d,
     // Version: 1
-    0x01, 0x00, 0x00, 0x00,
+     0x01, 0x00, 0x00, 0x00,
     // Type section (1)
-    0x01, // section id
-    0x0c, // section size (12 bytes)
-    0x02, // 2 types
+     0x01, // section id
+     0x0c, // section size (12 bytes)
+     0x02, // 2 types
     // type 0: (i32, i32) -> i32
-    0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f,
+     0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f,
     // type 1: (i32) -> i32
-    0x60, 0x01, 0x7f, 0x01, 0x7f,
+     0x60, 0x01, 0x7f, 0x01, 0x7f,
     // Function section (3)
-    0x03, // section id
-    0x02, // section size
-    0x01, // 1 function
-    0x00, // function 0 uses type 0
+     0x03, // section id
+     0x02, // section size
+     0x01, // 1 function
+     0x00, // function 0 uses type 0
     // Export section (7)
-    0x07, // section id
-    0x07, // section size
-    0x01, // 1 export
-    0x03, // name length
-    0x61, 0x64, 0x64, // "add"
-    0x00, // export kind: func
-    0x00, // func index 0
+     0x07, // section id
+     0x07, // section size
+     0x01, // 1 export
+     0x03, // name length
+     0x61, 0x64, 0x64, // "add"
+     0x00, // export kind: func
+     0x00, // func index 0
     // Code section (10)
-    0x0a, // section id
-    0x09, // section size
-    0x01, // 1 code
-    0x07, // code 0 size
-    0x00, // 0 locals
-    0x20, 0x00, // local.get 0
-    0x20, 0x01, // local.get 1
-    0x6a,       // i32.add
-    0x0b,       // end
+     0x0a, // section id
+     0x09, // section size
+     0x01, // 1 code
+     0x07, // code 0 size
+     0x00, // 0 locals
+     0x20, 0x00, // local.get 0
+     0x20, 0x01, // local.get 1
+     0x6a, // i32.add
+     0x0b, // end
   ]
   let bytes_data = Bytes::from_array(bytes)
   let mod = @parser.parse_module(bytes_data)
@@ -948,12 +948,13 @@ test "wasm-testsuite: load i32.0.wasm binary" {
   inspect(mod.funcs.length(), content="1")
   inspect(mod.codes.length(), content="1")
   inspect(mod.exports.length(), content="1")
-  inspect(mod.exports[0].name, content=(
-    "add"
-  ))
+  inspect(mod.exports[0].name, content="add")
   // Now instantiate and call
   let (store, instance) = @executor.instantiate_module(mod)
-  let result = @executor.call_exported_func(store, instance, "add", [I32(3), I32(5)])
+  let result = @executor.call_exported_func(store, instance, "add", [
+    I32(3),
+    I32(5),
+  ])
   inspect(result[0], content="I32(8)")
 }
 
@@ -964,14 +965,14 @@ test "wasm-testsuite: i32.1.wasm should fail validation" {
   // Function with empty stack tries to do i32.eqz
   let bytes : Array[Byte] = [
     0x00, 0x61, 0x73, 0x6d, // magic
-    0x01, 0x00, 0x00, 0x00, // version
-    0x01, 0x04, 0x01, 0x60, 0x00, 0x00, // type section: () -> ()
-    0x03, 0x02, 0x01, 0x00, // func section: 1 function, type 0
-    0x0a, 0x06, 0x01, 0x04, // code section: 1 code, 4 bytes
-    0x00, // 0 locals
-    0x45, // i32.eqz - pops i32, but stack is empty!
-    0x1a, // drop
-    0x0b, // end
+     0x01, 0x00, 0x00, 0x00, // version
+     0x01, 0x04, 0x01, 0x60, 0x00, 0x00, // type section: () -> ()
+     0x03, 0x02, 0x01, 0x00, // func section: 1 function, type 0
+     0x0a, 0x06, 0x01, 0x04, // code section: 1 code, 4 bytes
+     0x00, // 0 locals
+     0x45, // i32.eqz - pops i32, but stack is empty!
+     0x1a, // drop
+     0x0b, // end
   ]
   let bytes_data = Bytes::from_array(bytes)
   let mod = @parser.parse_module(bytes_data)

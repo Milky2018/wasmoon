@@ -9,6 +9,8 @@ import(
 // Values
 fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
+fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
+
 fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance)
 
 fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError

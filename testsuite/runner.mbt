@@ -123,7 +123,9 @@ fn parse_int_safe(s : String) -> Int {
     return uint_result.reinterpret_as_int()
   }
   // Then try parsing as signed (for negative values or zero)
-  @strconv.parse_int(s) catch { _ => 0 }
+  @strconv.parse_int(s) catch {
+    _ => 0
+  }
 }
 
 ///|
@@ -136,7 +138,9 @@ fn parse_int64_safe(s : String) -> Int64 {
     return uint_result.reinterpret_as_int64()
   }
   // Then try parsing as signed (for negative values or zero)
-  @strconv.parse_int64(s) catch { _ => 0L }
+  @strconv.parse_int64(s) catch {
+    _ => 0L
+  }
 }
 
 ///|
@@ -319,7 +323,14 @@ pub fn run_test_command_with_line(
     Some(n) => "[line \{n}] "
     None => ""
   }
-  run_test_command_internal(ctx, cmd_with_line.command, result, base_dir, read_file_fn, line_prefix)
+  run_test_command_internal(
+    ctx,
+    cmd_with_line.command,
+    result,
+    base_dir,
+    read_file_fn,
+    line_prefix,
+  )
 }
 
 ///|
@@ -348,10 +359,16 @@ fn run_test_command_internal(
     Module(filename) => {
       let wasm_path = base_dir + "/" + filename
       let bytes = read_file_fn(wasm_path) catch {
-        e => raise ModuleLoadError("\{line_prefix}Failed to read module \{filename}: \{e}")
+        e =>
+          raise ModuleLoadError(
+            "\{line_prefix}Failed to read module \{filename}: \{e}",
+          )
       }
       let instance = ctx.load_module(bytes, None) catch {
-        e => raise ModuleLoadError("\{line_prefix}Failed to load module \{filename}: \{e}")
+        e =>
+          raise ModuleLoadError(
+            "\{line_prefix}Failed to load module \{filename}: \{e}",
+          )
       }
       ctx.set_current_module(instance)
     }
@@ -365,7 +382,9 @@ fn run_test_command_internal(
             result.passed += 1
           } else {
             result.failed += 1
-            result.failures.push("\{line_prefix}assert_return failed: \{func_name}")
+            result.failures.push(
+              "\{line_prefix}assert_return failed: \{func_name}",
+            )
           }
         }
         Get(module_name, field) => {
@@ -375,15 +394,21 @@ fn run_test_command_internal(
             e => {
               println("\{line_prefix}Error getting global \{field}: \{e}")
               result.failed += 1
-              result.failures.push("\{line_prefix}assert_return (get) failed: \{field}")
+              result.failures.push(
+                "\{line_prefix}assert_return (get) failed: \{field}",
+              )
               return
             }
           }
           // Check result
           if expected_values.length() != 1 {
-            println("\{line_prefix}Expected 1 value for global, got \{expected_values.length()}")
+            println(
+              "\{line_prefix}Expected 1 value for global, got \{expected_values.length()}",
+            )
             result.failed += 1
-            result.failures.push("\{line_prefix}assert_return (get) failed: \{field}")
+            result.failures.push(
+              "\{line_prefix}assert_return (get) failed: \{field}",
+            )
             return
           }
           if not(values_equal(global_value, expected_values[0])) {
@@ -391,7 +416,9 @@ fn run_test_command_internal(
               "\{line_prefix}Global \{field} mismatch: expected \{expected_values[0]}, got \{global_value}",
             )
             result.failed += 1
-            result.failures.push("\{line_prefix}assert_return (get) failed: \{field}")
+            result.failures.push(
+              "\{line_prefix}assert_return (get) failed: \{field}",
+            )
           } else {
             result.passed += 1
           }
@@ -407,7 +434,9 @@ fn run_test_command_internal(
             result.passed += 1
           } else {
             result.failed += 1
-            result.failures.push("\{line_prefix}assert_trap failed: \{func_name}")
+            result.failures.push(
+              "\{line_prefix}assert_trap failed: \{func_name}",
+            )
           }
         }
         Get(_, field) => {
@@ -438,7 +467,9 @@ fn run_test_command_internal(
         result.passed += 1
       } else {
         result.failed += 1
-        result.failures.push("\{line_prefix}assert_invalid should have failed: \{filename}")
+        result.failures.push(
+          "\{line_prefix}assert_invalid should have failed: \{filename}",
+        )
       }
     }
     AssertMalformed(filename, _msg) => {
@@ -459,7 +490,9 @@ fn run_test_command_internal(
       }
       if parsed {
         result.failed += 1
-        result.failures.push("\{line_prefix}assert_malformed should have failed: \{filename}")
+        result.failures.push(
+          "\{line_prefix}assert_malformed should have failed: \{filename}",
+        )
       } else {
         result.passed += 1
       }
@@ -498,7 +531,8 @@ fn run_test_command_internal(
             None => ()
           }
         }
-        None => println("\{line_prefix}Warning: Register without current module")
+        None =>
+          println("\{line_prefix}Warning: Register without current module")
       }
     Action(action) =>
       match action {

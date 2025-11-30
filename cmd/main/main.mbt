@@ -237,7 +237,10 @@ async fn run_test_command_async(
             let instance = ctx.load_module(b, None)
             ctx.set_current_module(instance)
           } catch {
-            e => result.add_failed("\{line_prefix}Failed to load module \{filename}: \{e}")
+            e =>
+              result.add_failed(
+                "\{line_prefix}Failed to load module \{filename}: \{e}",
+              )
           }
         None => {
           result.add_skipped()
@@ -254,7 +257,9 @@ async fn run_test_command_async(
           if success {
             result.add_passed()
           } else {
-            result.add_failed("\{line_prefix}assert_return failed: \{func_name}")
+            result.add_failed(
+              "\{line_prefix}assert_return failed: \{func_name}",
+            )
           }
         }
         Get(_module_name, field) => {
@@ -291,7 +296,9 @@ async fn run_test_command_async(
             _ => false
           }
           if valid {
-            result.add_failed("\{line_prefix}assert_invalid should have failed: \{filename}")
+            result.add_failed(
+              "\{line_prefix}assert_invalid should have failed: \{filename}",
+            )
           } else {
             result.add_passed()
           }
@@ -350,7 +357,8 @@ async fn run_test_command_async(
             None => ()
           }
         }
-        None => println("\{line_prefix}Warning: Register without current module")
+        None =>
+          println("\{line_prefix}Warning: Register without current module")
       }
     Action(action) =>
       match action {

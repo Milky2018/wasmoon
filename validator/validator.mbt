@@ -14,6 +14,9 @@ pub(all) suberror ValidationError {
   InvalidMemoryIndex(Int)
   InvalidLabelIndex(Int)
   UnreachableCode
+  MultipleMemories // More than one memory is not allowed in MVP
+  MultipleTables // More than one table is not allowed in MVP
+  InvalidLimits(String) // Invalid limits (e.g., min > max)
 } derive(Show)
 
 ///|
@@ -191,6 +194,28 @@ fn OperandStack::check_height(
 pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   let ctx = ValidationContext::new(mod)
 
+  // Check for multiple memories (not allowed in MVP)
+  if ctx.mems.length() > 1 {
+    raise MultipleMemories
+  }
+
+  // Check for multiple tables (not allowed in MVP)
+  if ctx.tables.length() > 1 {
+    raise MultipleTables
+  }
+
+  // Validate memory limits
+  for mem in ctx.mems {
+    validate_memory_limits(mem.limits)
+  }
+
+  // Validate data segments reference valid memory
+  for data in mod.datas {
+    if data.memory_idx >= ctx.mems.length() {
+      raise InvalidMemoryIndex(data.memory_idx)
+    }
+  }
+
   // Validate all function bodies
   let num_imports = count_func_imports(mod.imports)
   for i, code in mod.codes {
@@ -201,6 +226,33 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     }
     let func_type = ctx.types[type_idx]
     validate_function(ctx, func_type, code)
+  }
+}
+
+///|
+/// Validate memory limits according to WASM spec
+fn validate_memory_limits(limits : @types.Limits) -> Unit raise ValidationError {
+  let max_pages = 65536 // 4GiB / 64KiB per page
+
+  // Check min doesn't exceed max allowed
+  // Use unsigned comparison since limits can be large values that overflow signed Int
+  if limits.min.reinterpret_as_uint() > max_pages.reinterpret_as_uint() {
+    raise InvalidLimits("memory size must be at most 65536 pages")
+  }
+
+  // Check max if specified
+  match limits.max {
+    Some(max_val) => {
+      // max must not exceed allowed maximum (unsigned comparison)
+      if max_val.reinterpret_as_uint() > max_pages.reinterpret_as_uint() {
+        raise InvalidLimits("memory size must be at most 65536 pages")
+      }
+      // min must not be greater than max (unsigned comparison)
+      if limits.min.reinterpret_as_uint() > max_val.reinterpret_as_uint() {
+        raise InvalidLimits("size minimum must not be greater than maximum")
+      }
+    }
+    None => ()
   }
 }
 
@@ -529,12 +581,15 @@ fn validate_instr(
       stack.push(@types.ValueType::F64)
     }
 
-    // Memory operations
+    // Memory operations - all require memory index 0 to exist
     I32Load(_, _)
     | I32Load8S(_, _)
     | I32Load8U(_, _)
     | I32Load16S(_, _)
     | I32Load16U(_, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I32)
     }
@@ -545,51 +600,84 @@ fn validate_instr(
     | I64Load16U(_, _)
     | I64Load32S(_, _)
     | I64Load32U(_, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I64)
     }
     F32Load(_, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::F32)
     }
     F64Load(_, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::F64)
     }
     I32Store(_, _) | I32Store8(_, _) | I32Store16(_, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I32) // value
       stack.pop(@types.ValueType::I32) // address
     }
     I64Store(_, _) | I64Store8(_, _) | I64Store16(_, _) | I64Store32(_, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I64) // value
       stack.pop(@types.ValueType::I32) // address
     }
     F32Store(_, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::F32) // value
       stack.pop(@types.ValueType::I32) // address
     }
     F64Store(_, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::F64) // value
       stack.pop(@types.ValueType::I32) // address
     }
     MemorySize | MemoryGrow => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       if instr == @types.Instruction::MemoryGrow {
         stack.pop(@types.ValueType::I32) // delta
       }
       stack.push(@types.ValueType::I32)
     }
     MemoryInit(_) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
     }
     DataDrop(_) => ()
     MemoryCopy => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
     }
     MemoryFill => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // val
       stack.pop(@types.ValueType::I32) // d

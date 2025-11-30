@@ -11,7 +11,8 @@ fn ExecContext::exec_memory_load(
     I32Load(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i32(effective_addr)
       self.stack.push(I32(value))
     }
@@ -19,7 +20,8 @@ fn ExecContext::exec_memory_load(
     I64Load(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i64(effective_addr)
       self.stack.push(I64(value))
     }
@@ -27,7 +29,8 @@ fn ExecContext::exec_memory_load(
     F32Load(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_f32(effective_addr)
       self.stack.push(F32(value))
     }
@@ -35,7 +38,8 @@ fn ExecContext::exec_memory_load(
     F64Load(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_f64(effective_addr)
       self.stack.push(F64(value))
     }
@@ -43,7 +47,8 @@ fn ExecContext::exec_memory_load(
     I32Load8S(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i32_8s(effective_addr)
       self.stack.push(I32(value))
     }
@@ -51,7 +56,8 @@ fn ExecContext::exec_memory_load(
     I32Load8U(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i32_8u(effective_addr)
       self.stack.push(I32(value))
     }
@@ -59,7 +65,8 @@ fn ExecContext::exec_memory_load(
     I32Load16S(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i32_16s(effective_addr)
       self.stack.push(I32(value))
     }
@@ -67,7 +74,8 @@ fn ExecContext::exec_memory_load(
     I32Load16U(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i32_16u(effective_addr)
       self.stack.push(I32(value))
     }
@@ -75,7 +83,8 @@ fn ExecContext::exec_memory_load(
     I64Load8S(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i64_8s(effective_addr)
       self.stack.push(I64(value))
     }
@@ -83,7 +92,8 @@ fn ExecContext::exec_memory_load(
     I64Load8U(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i64_8u(effective_addr)
       self.stack.push(I64(value))
     }
@@ -91,7 +101,8 @@ fn ExecContext::exec_memory_load(
     I64Load16S(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i64_16s(effective_addr)
       self.stack.push(I64(value))
     }
@@ -99,7 +110,8 @@ fn ExecContext::exec_memory_load(
     I64Load16U(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i64_16u(effective_addr)
       self.stack.push(I64(value))
     }
@@ -107,7 +119,8 @@ fn ExecContext::exec_memory_load(
     I64Load32S(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i64_32s(effective_addr)
       self.stack.push(I64(value))
     }
@@ -115,7 +128,8 @@ fn ExecContext::exec_memory_load(
     I64Load32U(_align, offset) => {
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let value = mem.load_i64_32u(effective_addr)
       self.stack.push(I64(value))
     }
@@ -135,7 +149,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_i32()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_i32(effective_addr, value)
     }
     // i64.store: store i64 as 8 bytes
@@ -143,7 +158,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_i64()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_i64(effective_addr, value)
     }
     // f32.store: store f32 as 4 bytes
@@ -151,7 +167,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_f32()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_f32(effective_addr, value)
     }
     // f64.store: store f64 as 8 bytes
@@ -159,7 +176,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_f64()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_f64(effective_addr, value)
     }
     // i32.store8: store low 8 bits of i32
@@ -167,7 +185,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_i32()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_i32_8(effective_addr, value)
     }
     // i32.store16: store low 16 bits of i32
@@ -175,7 +194,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_i32()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_i32_16(effective_addr, value)
     }
     // i64.store8: store low 8 bits of i64
@@ -183,7 +203,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_i64()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_i64_8(effective_addr, value)
     }
     // i64.store16: store low 16 bits of i64
@@ -191,7 +212,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_i64()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_i64_16(effective_addr, value)
     }
     // i64.store32: store low 32 bits of i64
@@ -199,7 +221,8 @@ fn ExecContext::exec_memory_store(
       let value = self.stack.pop_i64()
       let base_addr = self.stack.pop_i32()
       let effective_addr = base_addr + offset
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       mem.store_i64_32(effective_addr, value)
     }
     _ => raise @runtime.RuntimeError::Unreachable
@@ -215,13 +238,15 @@ fn ExecContext::exec_memory_misc(
   match instr {
     // memory.size: return current memory size in pages
     MemorySize => {
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       self.stack.push(I32(mem.size_pages()))
     }
     // memory.grow: grow memory by delta pages, return old size or -1 on failure
     MemoryGrow => {
       let delta = self.stack.pop_i32()
-      let mem = self.store.get_mem(0)
+      let mem_addr = self.instance.mem_addrs[0]
+      let mem = self.store.get_mem(mem_addr)
       let result = mem.grow(delta)
       self.stack.push(I32(result))
     }
