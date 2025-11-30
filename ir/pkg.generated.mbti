@@ -14,15 +14,21 @@ fn eliminate_unreachable_code(Function) -> OptResult
 
 fn fold_constants(Function) -> OptResult
 
+fn hoist_loop_invariants(Function) -> OptResult
+
 fn merge_blocks(Function) -> OptResult
 
 fn optimize(Function) -> OptResult
 
 fn propagate_copies(Function) -> OptResult
 
+fn reduce_strength(Function) -> OptResult
+
 fn simplify_branches(Function) -> OptResult
 
 fn thread_jumps(Function) -> OptResult
+
+fn unroll_loops(Function, Int) -> OptResult
 
 fn validate_function(Function) -> ValidationResult
 
@@ -53,6 +59,8 @@ fn CFG::build(Function) -> Self
 fn CFG::compute_dominators(Self) -> Array[Int]
 fn CFG::dominates(Self, Int, Int) -> Bool
 fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
+fn CFG::find_loops(Self) -> Array[Loop]
+fn CFG::get_loop_preheader(Self, Loop) -> Int?
 fn CFG::get_predecessors(Self, Int) -> Array[Int]
 fn CFG::get_successors(Self, Int) -> Array[Int]
 fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
@@ -190,6 +198,13 @@ pub enum IntCC {
   Uge
 }
 impl Show for IntCC
+
+pub(all) struct Loop {
+  header : Int
+  blocks : Array[Int]
+  back_edges : Array[(Int, Int)]
+}
+fn Loop::contains(Self, Int) -> Bool
 
 pub enum Opcode {
   Iconst(Int64)

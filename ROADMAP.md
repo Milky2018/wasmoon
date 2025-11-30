@@ -228,9 +228,9 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] 跳转线程化 (Jump Threading)
 
 ### 7.3 循环优化
-- [ ] 循环不变代码外提 (LICM)
-- [ ] 循环展开 (Loop Unrolling)
-- [ ] 强度削减 (Strength Reduction)
+- [x] 循环不变代码外提 (LICM)
+- [x] 循环展开 (Loop Unrolling)
+- [x] 强度削减 (Strength Reduction)
 
 ### 7.4 高级优化 (可选)
 - [ ] E-graph 统一优化框架 (参考 Cranelift 的创新设计)
@@ -360,7 +360,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 |------|------|------|
 | Phase 1-5 | 完整的 WASM 解释器 | ✅ 已完成 |
 | Phase 6 | 中间表示层设计 | ✅ 已完成 |
-| Phase 7 | IR 优化 | 🔨 下一步 |
+| Phase 7 | IR 优化 | 🔨 进行中 (7.3 完成) |
 | Phase 8-9 | 指令选择与寄存器分配 | 📋 计划中 |
 | Phase 10 | 代码生成 | 📋 计划中 |
 | Phase 11 | JIT 集成 | 📋 计划中 |
@@ -387,5 +387,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 7.2 已完成，Phase 7.3 计划中
-**下一步**: 实现循环优化 (循环不变代码外提、循环展开等)
+**当前状态**: Phase 7.3 已完成，Phase 7.4 计划中
+**下一步**: 实现高级优化 (E-graph 统一优化框架、内联等)
