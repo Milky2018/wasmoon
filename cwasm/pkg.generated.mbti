@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/cwasm"
+
+import(
+  "Milky2018/wasmoon/vcode"
+)
+
+// Values
+fn aarch64_target() -> TargetArch
+
+fn deserialize(Array[Int]) -> PrecompiledModule raise DeserializeError
+
+fn x86_64_target() -> TargetArch
+
+// Errors
+pub suberror DeserializeError String
+
+// Types and methods
+type ByteReader
+
+pub(all) struct CompiledEntry {
+  func_idx : Int
+  name : String
+  code : Array[Int]
+  frame_size : Int
+  entry_offset : Int
+}
+fn CompiledEntry::new(Int, String, Array[Int], Int, Int) -> Self
+fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
+impl Show for CompiledEntry
+
+pub(all) struct PrecompiledModule {
+  version : Int
+  target : TargetArch
+  functions : Array[CompiledEntry]
+}
+fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction) -> Unit
+fn PrecompiledModule::function_count(Self) -> Int
+fn PrecompiledModule::new(TargetArch) -> Self
+fn PrecompiledModule::serialize(Self) -> Array[Int]
+impl Show for PrecompiledModule
+
+pub enum TargetArch {
+  Unknown
+  X86_64
+  AArch64
+}
+impl Show for TargetArch
+
+// Type aliases
+
+// Traits
+

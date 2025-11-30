@@ -673,6 +673,124 @@ fn parse_func_args(
 }
 
 ///|
+/// Generate output path from input path
+fn generate_output_path(input_path : String) -> String {
+  // Replace .wasm or .wat with .cwasm
+  if input_path.has_suffix(".wasm") {
+    let builder = StringBuilder::new()
+    for i = 0; i < input_path.length() - 5; i = i + 1 {
+      builder.write_char(input_path[i].unsafe_to_char())
+    }
+    builder.write_string(".cwasm")
+    builder.to_string()
+  } else if input_path.has_suffix(".wat") {
+    let builder = StringBuilder::new()
+    for i = 0; i < input_path.length() - 4; i = i + 1 {
+      builder.write_char(input_path[i].unsafe_to_char())
+    }
+    builder.write_string(".cwasm")
+    builder.to_string()
+  } else {
+    input_path + ".cwasm"
+  }
+}
+
+///|
+/// Compile a WASM module to precompiled format
+async fn run_compile(
+  input_path : String,
+  output_path : String?,
+  emit_ir : String?,
+) -> Unit {
+  // Load the module
+  let mod_ = load_module_from_path(input_path) catch {
+    e => {
+      println("Error loading module: \{e}")
+      return
+    }
+  }
+
+  // Validate the module
+  @validator.validate_module(mod_) catch {
+    e => {
+      println("Validation error: \{e}")
+      return
+    }
+  }
+
+  // Emit IR if requested
+  match emit_ir {
+    Some(ir_path) => {
+      let ir_output = StringBuilder::new()
+      ir_output.write_string(";; IR for \{input_path}\n")
+      ir_output.write_string(";; Functions: \{mod_.codes.length()}\n\n")
+
+      // For now, just list the functions
+      for i, _code in mod_.codes {
+        let num_imports = count_func_imports(mod_.imports)
+        let func_idx = num_imports + i
+        ir_output.write_string(";; Function \{func_idx}\n")
+      }
+
+      // Convert string to bytes
+      let content = ir_output.to_string()
+      let bytes = Bytes::from_iter(
+        content.iter().map(fn(c) { c.to_int().to_byte() }),
+      )
+
+      // Write IR file
+      @fs.write_file(ir_path, bytes) catch {
+        e => {
+          println("Error writing IR file: \{e}")
+          return
+        }
+      }
+      println("Wrote IR to \{ir_path}")
+    }
+    None => ()
+  }
+
+  // Create precompiled module (placeholder - actual compilation would happen here)
+  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.aarch64_target())
+
+  // For now, we just create an empty precompiled module
+  // In a full implementation, we would:
+  // 1. Translate each function to IR
+  // 2. Apply optimizations
+  // 3. Lower to VCode
+  // 4. Do register allocation
+  // 5. Emit machine code
+
+  println("Compiling \{mod_.codes.length()} functions...")
+
+  // Serialize the precompiled module
+  let cwasm_bytes = precompiled.serialize()
+
+  // Determine output path
+  let out_path = match output_path {
+    Some(p) => p
+    None => generate_output_path(input_path)
+  }
+
+  // Convert to Bytes
+  let out_bytes = Bytes::from_iter(
+    cwasm_bytes.iter().map(fn(b) { b.to_byte() }),
+  )
+
+  // Write to file
+  @fs.write_file(out_path, out_bytes) catch {
+    e => {
+      println("Error writing output: \{e}")
+      return
+    }
+  }
+  println("Wrote precompiled module to \{out_path}")
+  println("Format: cwasm v1 (aarch64)")
+  println("Functions: \{precompiled.function_count()}")
+  println("Size: \{cwasm_bytes.length()} bytes")
+}
+
+///|
 /// Parse and display a WAT file
 async fn run_wat(wat_path : String) -> Unit {
   let data = @fs.read_file(wat_path) catch {
@@ -717,6 +835,14 @@ async fn main {
           help="Preload module as NAME=PATH (can be repeated)",
         ),
       }),
+      "compile": @clap.SubCommand::new(
+        help="Compile WASM to precompiled format",
+        args={
+          "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
+          "output": @clap.Arg::named(help="Output path (default: input.cwasm)"),
+          "emit-ir": @clap.Arg::named(help="Emit IR to specified path"),
+        },
+      ),
       "demo": @clap.SubCommand::new(help="Run built-in demo programs"),
       "test": @clap.SubCommand::new(help="Run wasm-testsuite JSON spec file", args={
         "file": @clap.Arg::positional(help="Path to JSON spec file"),
@@ -777,6 +903,32 @@ async fn main {
                   None => []
                 }
                 run_wasm(positional[0], invoke_opt, func_args, preloads)
+              } else {
+                println("Error: missing file argument")
+              }
+            }
+            "compile" => {
+              let positional = sub.positional_args
+              if positional.length() > 0 {
+                let output_opt : String? = match sub.args.get("output") {
+                  Some(arr) =>
+                    if arr.length() > 0 {
+                      Some(arr[0])
+                    } else {
+                      None
+                    }
+                  None => None
+                }
+                let emit_ir_opt : String? = match sub.args.get("emit-ir") {
+                  Some(arr) =>
+                    if arr.length() > 0 {
+                      Some(arr[0])
+                    } else {
+                      None
+                    }
+                  None => None
+                }
+                run_compile(positional[0], output_opt, emit_ir_opt)
               } else {
                 println("Error: missing file argument")
               }
