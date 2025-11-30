@@ -249,11 +249,11 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] 非 SSA 形式 (允许重定义)
 - [x] 寄存器约束表示
 
-### 8.2 指令选择 (Lowering)
+### 8.2 指令选择 (Lowering) ✅
 - [x] 高级 IR 到低级 IR 的转换框架
-- [ ] 模式匹配规则定义 (类似 ISLE DSL)
-- [ ] 指令合并与优化
-- [ ] 目标特定的指令选择规则
+- [x] 模式匹配规则定义 (类似 ISLE DSL)
+- [x] 指令合并与优化
+- [x] 目标特定的指令选择规则
 
 ### 8.3 目标架构抽象 ✅
 - [x] 目标架构接口 (TargetISA trait)
@@ -263,18 +263,18 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-## Phase 9: 寄存器分配 📊
+## Phase 9: 寄存器分配 🔨 进行中
 
 > 将虚拟寄存器映射到物理寄存器
 
-### 9.1 活跃性分析
-- [ ] 活跃区间 (Live Interval) 计算
-- [ ] 使用-定义链 (Use-Def Chain)
+### 9.1 活跃性分析 ✅
+- [x] 活跃区间 (Live Interval) 计算
+- [x] 使用-定义链 (Use-Def Chain)
 
-### 9.2 寄存器分配算法
-- [ ] 线性扫描分配器 (Linear Scan)
-- [ ] 溢出处理 (Spilling)
-- [ ] 重新加载 (Reloading)
+### 9.2 寄存器分配算法 ✅
+- [x] 线性扫描分配器 (Linear Scan)
+- [x] 溢出处理 (Spilling)
+- [x] 重新加载 (Reloading)
 - [ ] 寄存器合并 (Coalescing)
 
 ### 9.3 栈布局
@@ -361,7 +361,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | Phase 1-5 | 完整的 WASM 解释器 | ✅ 已完成 |
 | Phase 6 | 中间表示层设计 | ✅ 已完成 |
 | Phase 7 | IR 优化 | ✅ 已完成 (7.4 可选跳过) |
-| Phase 8 | 指令选择 | 🔨 进行中 (8.1, 8.3 完成) |
+| Phase 8 | 指令选择 | ✅ 已完成 (8.1, 8.2, 8.3 架构完成) |
 | Phase 9 | 寄存器分配 | 📋 计划中 |
 | Phase 10 | 代码生成 | 📋 计划中 |
 | Phase 11 | JIT 集成 | 📋 计划中 |
@@ -388,5 +388,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 8.2 基础 lowering 框架已完成，支持 IR 到 VCode 的转换
-**下一步**: 实现 Phase 8.2 模式匹配规则 (指令合并与优化)
+**当前状态**: Phase 9.1-9.2 寄存器分配基础实现完成，包括活跃性分析、线性扫描分配器、溢出/重加载
+**下一步**: 实现 Phase 9.3 栈布局 (栈帧布局计算、溢出槽分配)

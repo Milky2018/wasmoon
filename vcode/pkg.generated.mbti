@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/vcode"
 
 import(
   "Milky2018/wasmoon/ir"
+  "moonbitlang/core/set"
 )
 
 // Values
@@ -18,7 +19,27 @@ fn aapcs64_ret_fprs() -> Array[PReg]
 
 fn aapcs64_ret_gprs() -> Array[PReg]
 
+fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
+
+fn apply_aarch64_rule(String, MatchResult, @ir.Inst, LoweringContext) -> AArch64RewriteResult
+
+fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
+
+fn compute_liveness(VCodeFunction) -> LivenessResult
+
+fn get_aarch64_rules() -> Array[RewriteRule]
+
+fn get_optimization_rules() -> Array[RewriteRule]
+
 fn lower_function(@ir.Function) -> VCodeFunction
+
+fn lower_function_optimized(@ir.Function) -> VCodeFunction
+
+fn lower_inst_with_patterns(LoweringContext, @ir.Inst, VCodeBlock, Array[RewriteRule]) -> Bool
+
+fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
+
+fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
 
 // Errors
 
@@ -28,6 +49,87 @@ pub(all) struct AArch64 {
 }
 fn AArch64::new() -> Self
 impl TargetISA for AArch64
+
+pub enum AArch64Cond {
+  Eq
+  Ne
+  Cs
+  Cc
+  Mi
+  Pl
+  Vs
+  Vc
+  Hi
+  Ls
+  Ge
+  Lt
+  Gt
+  Le
+  Al
+  Nv
+}
+
+pub enum AArch64Extend {
+  Uxtb
+  Uxth
+  Uxtw
+  Uxtx
+  Sxtb
+  Sxth
+  Sxtw
+  Sxtx
+}
+
+pub enum AArch64Opcode {
+  AddShifted(AArch64Shift, Int)
+  SubShifted(AArch64Shift, Int)
+  AddImm(Int64)
+  SubImm(Int64)
+  AndShifted(AArch64Shift, Int)
+  OrrShifted(AArch64Shift, Int)
+  EorShifted(AArch64Shift, Int)
+  AndImm(Int64)
+  OrrImm(Int64)
+  EorImm(Int64)
+  Madd
+  Msub
+  Mneg
+  LdrOffset(Int)
+  LdrPreIndex(Int)
+  LdrPostIndex(Int)
+  LdrRegister(AArch64Extend)
+  StrOffset(Int)
+  StrPreIndex(Int)
+  StrPostIndex(Int)
+  StrRegister(AArch64Extend)
+  Cbz
+  Cbnz
+  Tbz(Int)
+  Tbnz(Int)
+  Csel(AArch64Cond)
+  Csinc(AArch64Cond)
+  Csneg(AArch64Cond)
+  Csinv(AArch64Cond)
+  Ubfx(Int, Int)
+  Sbfx(Int, Int)
+  Bfi(Int, Int)
+  Bfxil(Int, Int)
+  Movz(Int)
+  Movn(Int)
+  Movk(Int)
+}
+
+pub enum AArch64Pattern {
+  AddWithShift(Int)
+  AddWithExtend(AArch64Extend)
+  MultiplyAdd
+  MultiplySub
+  MultiplyNeg
+  ConditionalSelect(CmpKind)
+  BitFieldExtract(Int, Int)
+  CompareAndBranchZero
+  TestBitAndBranch(Int)
+}
 
 pub(all) struct AArch64Regs {
   placeholder : Int
@@ -51,6 +153,23 @@ fn AArch64Regs::x4(Self) -> PReg
 fn AArch64Regs::x5(Self) -> PReg
 fn AArch64Regs::x6(Self) -> PReg
 fn AArch64Regs::x7(Self) -> PReg
+
+pub enum AArch64RewriteResult {
+  AddShifted(Int, Int, Int)
+  SubShifted(Int, Int, Int)
+  Madd(Int, Int, Int)
+  Msub(Int, Int, Int)
+  Mneg(Int, Int)
+  LogicalShifted(VCodeOpcode, Int, Int, Int)
+  NoMatch
+}
+
+pub enum AArch64Shift {
+  Lsl
+  Lsr
+  Asr
+  Ror
+}
 
 pub enum CallConv {
   SystemV
@@ -98,6 +217,33 @@ pub enum FCmpKind {
 }
 impl Show for FCmpKind
 
+pub(all) struct LinearScanAllocator {
+  int_regs : Array[PReg]
+  float_regs : Array[PReg]
+  mut active : Array[LiveInterval]
+  mut next_spill_slot : Int
+}
+fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
+fn LinearScanAllocator::new(Array[PReg], Array[PReg]) -> Self
+
+pub(all) struct LiveInterval {
+  vreg : VReg
+  start : ProgPoint
+  mut end : ProgPoint
+  uses : Array[ProgPoint]
+  hint : PReg?
+  mut assigned : PReg?
+  mut spill_slot : Int?
+}
+impl Show for LiveInterval
+
+pub(all) struct LivenessResult {
+  intervals : Map[Int, LiveInterval]
+  use_def : Map[Int, UseDefInfo]
+  live_in : Array[@set.Set[Int]]
+  live_out : Array[@set.Set[Int]]
+}
+
 pub(all) struct LoweringContext {
   ir_func : @ir.Function
   vcode_func : VCodeFunction
@@ -105,6 +251,13 @@ pub(all) struct LoweringContext {
   block_map : Map[Int, Int]
 }
 fn LoweringContext::new(@ir.Function) -> Self
+
+pub(all) struct MatchResult {
+  values : Array[@ir.Value]
+  int_consts : Array[Int64]
+  float_consts : Array[Double]
+  mut matched_inst : @ir.Inst?
+}
 
 pub enum MemType {
   I8
@@ -140,17 +293,107 @@ pub(all) struct PReg {
 }
 impl Show for PReg
 
+pub enum Pattern {
+  Any
+  ConstInt(Int64)
+  ConstFloat(Double)
+  AnyConstInt
+  Inst(PatternOpcode, Array[Pattern])
+  Lowered
+}
+
+pub enum PatternOpcode {
+  Iadd
+  Isub
+  Imul
+  Sdiv
+  Udiv
+  Band
+  Bor
+  Bxor
+  Ishl
+  Sshr
+  Ushr
+  Fadd
+  Fsub
+  Fmul
+  Fdiv
+  Iconst
+  Fconst
+  Icmp
+  Fcmp
+  Load
+  Store
+  Copy
+  Select
+}
+
+pub(all) struct ProgPoint {
+  block : Int
+  inst : Int
+  pos : ProgPos
+}
+impl Show for ProgPoint
+
+pub enum ProgPos {
+  Before
+  After
+}
+
 pub enum Reg {
   Virtual(VReg)
   Physical(PReg)
 }
 impl Show for Reg
 
+pub(all) struct RegAllocResult {
+  assignments : Map[Int, PReg]
+  spill_slots : Map[Int, Int]
+  mut num_spill_slots : Int
+  spills : Array[SpillInfo]
+  reloads : Array[ReloadInfo]
+}
+
 pub enum RegClass {
   Int
   Float
 }
 impl Show for RegClass
+
+pub(all) struct ReloadInfo {
+  vreg : VReg
+  slot : Int
+  preg : PReg
+  point : ProgPoint
+}
+
+pub enum RewriteResult {
+  Rewritten(Array[VCodeInst])
+  Identity(Int)
+  Constant(Int64)
+  ConstantFloat(Double)
+  ShiftLeft(Int, Int)
+  ShiftRight(Int, Int)
+  NoMatch
+}
+
+pub(all) struct RewriteRule {
+  name : String
+  pattern : Pattern
+  priority : Int
+}
+
+pub(all) struct SpillInfo {
+  vreg : VReg
+  slot : Int
+  point : ProgPoint
+}
+
+pub(all) struct UseDefInfo {
+  vreg : VReg
+  mut def_point : ProgPoint?
+  use_points : Array[ProgPoint]
+}
 
 pub(all) struct VCodeBlock {
   id : Int
