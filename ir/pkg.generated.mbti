@@ -10,11 +10,19 @@ fn eliminate_common_subexpressions(Function) -> OptResult
 
 fn eliminate_dead_code(Function) -> OptResult
 
+fn eliminate_unreachable_code(Function) -> OptResult
+
 fn fold_constants(Function) -> OptResult
+
+fn merge_blocks(Function) -> OptResult
 
 fn optimize(Function) -> OptResult
 
 fn propagate_copies(Function) -> OptResult
+
+fn simplify_branches(Function) -> OptResult
+
+fn thread_jumps(Function) -> OptResult
 
 fn validate_function(Function) -> ValidationResult
 

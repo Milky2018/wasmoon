@@ -607,6 +607,358 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
+    // Control flow optimizations
+    let bs_result = simplify_branches(func)
+    if bs_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    let uce_result = eliminate_unreachable_code(func)
+    if uce_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    let bm_result = merge_blocks(func)
+    if bm_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    let jt_result = thread_jumps(func)
+    if jt_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+  }
+  result
+}
+
+// ============ Branch Simplification ============
+
+///|
+/// Branch Simplification
+/// Simplifies conditional branches when the condition is a known constant
+pub fn simplify_branches(func : Function) -> OptResult {
+  let result = OptResult::new()
+  // Build constant map from constant folding
+  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.new()
+  for block in func.blocks {
+    for inst in block.instructions {
+      match inst.opcode {
+        Iconst(v) =>
+          match inst.result {
+            Some(r) =>
+              if r.ty is I32 {
+                constants.set(r.id, ConstValue::I32(v.to_int()))
+              } else {
+                constants.set(r.id, ConstValue::I64(v))
+              }
+            None => ()
+          }
+        _ => ()
+      }
+    }
+  }
+  // Simplify branches
+  for block in func.blocks {
+    match block.terminator {
+      Some(Brz(cond, then_target, else_target)) =>
+        match constants.get(cond.id) {
+          Some(I32(v)) => {
+            // brz: branch if zero
+            let target = if v == 0 { then_target } else { else_target }
+            block.terminator = Some(Terminator::Jump(target, []))
+            result.mark_changed()
+          }
+          Some(I64(v)) => {
+            let target = if v == 0L { then_target } else { else_target }
+            block.terminator = Some(Terminator::Jump(target, []))
+            result.mark_changed()
+          }
+          _ => ()
+        }
+      Some(Brnz(cond, then_target, else_target)) =>
+        match constants.get(cond.id) {
+          Some(I32(v)) => {
+            // brnz: branch if not zero
+            let target = if v != 0 { then_target } else { else_target }
+            block.terminator = Some(Terminator::Jump(target, []))
+            result.mark_changed()
+          }
+          Some(I64(v)) => {
+            let target = if v != 0L { then_target } else { else_target }
+            block.terminator = Some(Terminator::Jump(target, []))
+            result.mark_changed()
+          }
+          _ => ()
+        }
+      Some(BrTable(index, targets, default_target)) =>
+        match constants.get(index.id) {
+          Some(I32(v)) => {
+            // Convert to direct jump if index is constant
+            let target = if v >= 0 && v < targets.length() {
+              targets[v]
+            } else {
+              default_target
+            }
+            block.terminator = Some(Terminator::Jump(target, []))
+            result.mark_changed()
+          }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  result
+}
+
+// ============ Unreachable Code Elimination ============
+
+///|
+/// Unreachable Code Elimination
+/// Removes blocks that cannot be reached from the entry block
+pub fn eliminate_unreachable_code(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() == 0 {
+    return result
+  }
+  // Mark reachable blocks using DFS from entry
+  let reachable : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let worklist : Array[Int] = [0] // Start from entry block (block 0)
+  while worklist.length() > 0 {
+    let block_id = worklist.pop().unwrap()
+    if reachable.get(block_id).unwrap_or(false) {
+      continue
+    }
+    reachable.set(block_id, true)
+    // Find the block and add successors to worklist
+    for block in func.blocks {
+      if block.id == block_id {
+        match block.terminator {
+          Some(term) =>
+            for succ in get_terminator_targets(term) {
+              if not(reachable.get(succ).unwrap_or(false)) {
+                worklist.push(succ)
+              }
+            }
+          None => ()
+        }
+        break
+      }
+    }
+  }
+  // Remove unreachable blocks (iterate backwards to avoid index issues)
+  let mut i = func.blocks.length() - 1
+  while i >= 0 {
+    let block = func.blocks[i]
+    if not(reachable.get(block.id).unwrap_or(false)) {
+      func.blocks.remove(i) |> ignore
+      result.mark_changed()
+    }
+    i = i - 1
+  }
+  result
+}
+
+// ============ Basic Block Merging ============
+
+///|
+/// Basic Block Merging
+/// Merges a block with its unique predecessor if the predecessor has only one successor
+pub fn merge_blocks(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() <= 1 {
+    return result
+  }
+  // Build predecessor and successor counts
+  let pred_count : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let succ_count : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let single_pred : @hashmap.HashMap[Int, Int] = @hashmap.new() // block -> its single predecessor
+  for block in func.blocks {
+    pred_count.set(block.id, 0)
+    succ_count.set(block.id, 0)
+  }
+  for block in func.blocks {
+    match block.terminator {
+      Some(term) => {
+        let targets = get_terminator_targets(term)
+        succ_count.set(block.id, targets.length())
+        for target in targets {
+          let count = pred_count.get(target).unwrap_or(0)
+          pred_count.set(target, count + 1)
+          // Track the predecessor if this is the first one
+          if count == 0 {
+            single_pred.set(target, block.id)
+          } else {
+            // More than one predecessor, clear
+            single_pred.remove(target)
+          }
+        }
+      }
+      None => ()
+    }
+  }
+  // Find mergeable pairs: pred has 1 successor, succ has 1 predecessor
+  let to_merge : Array[(Int, Int)] = [] // (pred_id, succ_id)
+  for block in func.blocks {
+    if block.id == 0 {
+      continue // Don't merge into entry block
+    }
+    let preds = pred_count.get(block.id).unwrap_or(0)
+    if preds == 1 {
+      match single_pred.get(block.id) {
+        Some(pred_id) => {
+          let succs = succ_count.get(pred_id).unwrap_or(0)
+          if succs == 1 {
+            // Check that the jump has no arguments (simple case)
+            for pred_block in func.blocks {
+              if pred_block.id == pred_id {
+                match pred_block.terminator {
+                  Some(Jump(_, args)) =>
+                    if args.length() == 0 {
+                      to_merge.push((pred_id, block.id))
+                    }
+                  _ => ()
+                }
+                break
+              }
+            }
+          }
+        }
+        None => ()
+      }
+    }
+  }
+  // Perform merges
+  for pair in to_merge {
+    let (pred_id, succ_id) = pair
+    let mut pred_block : Block? = None
+    let mut succ_block : Block? = None
+    let mut succ_idx = -1
+    for i, block in func.blocks {
+      if block.id == pred_id {
+        pred_block = Some(block)
+      }
+      if block.id == succ_id {
+        succ_block = Some(block)
+        succ_idx = i
+      }
+    }
+    match (pred_block, succ_block) {
+      (Some(pred), Some(succ)) => {
+        // Append successor's instructions to predecessor
+        for inst in succ.instructions {
+          pred.instructions.push(inst)
+        }
+        // Take successor's terminator
+        pred.terminator = succ.terminator
+        // Remove successor block
+        if succ_idx >= 0 {
+          func.blocks.remove(succ_idx) |> ignore
+          result.mark_changed()
+        }
+      }
+      _ => ()
+    }
+  }
+  result
+}
+
+// ============ Jump Threading ============
+
+///|
+/// Jump Threading
+/// Bypasses blocks that only contain an unconditional jump
+pub fn thread_jumps(func : Function) -> OptResult {
+  let result = OptResult::new()
+  // Find blocks that are just jumps (no instructions, just a jump terminator)
+  let jump_targets : @hashmap.HashMap[Int, Int] = @hashmap.new() // block -> final target
+  for block in func.blocks {
+    if block.instructions.length() == 0 && block.params.length() == 0 {
+      match block.terminator {
+        Some(Jump(target, args)) =>
+          if args.length() == 0 {
+            jump_targets.set(block.id, target)
+          }
+        _ => ()
+      }
+    }
+  }
+  // Follow jump chains to find final target
+  fn resolve_target(
+    block_id : Int,
+    jump_targets : @hashmap.HashMap[Int, Int],
+    visited : @hashmap.HashMap[Int, Bool],
+  ) -> Int {
+    if visited.get(block_id).unwrap_or(false) {
+      return block_id // Cycle detected
+    }
+    match jump_targets.get(block_id) {
+      Some(target) => {
+        visited.set(block_id, true)
+        resolve_target(target, jump_targets, visited)
+      }
+      None => block_id
+    }
+  }
+  // Update terminators to skip intermediate jump blocks
+  for block in func.blocks {
+    match block.terminator {
+      Some(Jump(target, args)) =>
+        if args.length() == 0 {
+          let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+          let final_target = resolve_target(target, jump_targets, visited)
+          if final_target != target {
+            block.terminator = Some(Terminator::Jump(final_target, []))
+            result.mark_changed()
+          }
+        }
+      Some(Brz(cond, then_target, else_target)) => {
+        let visited1 : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+        let visited2 : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+        let new_then = resolve_target(then_target, jump_targets, visited1)
+        let new_else = resolve_target(else_target, jump_targets, visited2)
+        if new_then != then_target || new_else != else_target {
+          block.terminator = Some(Terminator::Brz(cond, new_then, new_else))
+          result.mark_changed()
+        }
+      }
+      Some(Brnz(cond, then_target, else_target)) => {
+        let visited1 : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+        let visited2 : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+        let new_then = resolve_target(then_target, jump_targets, visited1)
+        let new_else = resolve_target(else_target, jump_targets, visited2)
+        if new_then != then_target || new_else != else_target {
+          block.terminator = Some(Terminator::Brnz(cond, new_then, new_else))
+          result.mark_changed()
+        }
+      }
+      Some(BrTable(index, targets, default_target)) => {
+        let new_targets : Array[Int] = []
+        let mut any_changed = false
+        for t in targets {
+          let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+          let new_t = resolve_target(t, jump_targets, visited)
+          new_targets.push(new_t)
+          if new_t != t {
+            any_changed = true
+          }
+        }
+        let visited_default : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+        let new_default = resolve_target(
+          default_target, jump_targets, visited_default,
+        )
+        if new_default != default_target {
+          any_changed = true
+        }
+        if any_changed {
+          block.terminator = Some(
+            Terminator::BrTable(index, new_targets, new_default),
+          )
+          result.mark_changed()
+        }
+      }
+      _ => ()
+    }
   }
   result
 }
