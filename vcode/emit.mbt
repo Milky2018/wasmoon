@@ -138,6 +138,30 @@ pub fn MachineCode::size(self : MachineCode) -> Int {
   self.pos
 }
 
+///|
+/// Align the code buffer to a given boundary
+/// Pads with NOP instructions (AArch64 NOP = 0xD503201F)
+pub fn MachineCode::align(self : MachineCode, alignment : Int) -> Unit {
+  // alignment must be a power of 2
+  guard alignment > 0 && (alignment & (alignment - 1)) == 0 else { return }
+  // Pad until aligned
+  while self.pos % alignment != 0 {
+    emit_nop(self)
+  }
+}
+
+///|
+/// Align to function boundary (typically 16 bytes on AArch64)
+pub fn MachineCode::align_function(self : MachineCode) -> Unit {
+  self.align(16)
+}
+
+///|
+/// Align to basic block boundary (typically 4 bytes for AArch64 instructions)
+pub fn MachineCode::align_block(self : MachineCode) -> Unit {
+  self.align(4)
+}
+
 // ============ AArch64 Instruction Encoding ============
 
 // Helper to build instruction from fields

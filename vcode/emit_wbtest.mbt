@@ -249,3 +249,57 @@ test "machine code: label and fixup" {
   let bytes = mc.get_bytes()
   inspect(bytes.length(), content="8")
 }
+
+///|
+test "machine code: alignment" {
+  let mc = MachineCode::new()
+
+  // Emit a single instruction (4 bytes)
+  emit_nop(mc)
+  inspect(mc.size(), content="4")
+
+  // Align to 16 bytes - should pad with 3 more NOPs
+  mc.align(16)
+  inspect(mc.size(), content="16")
+
+  // Already aligned, should do nothing
+  mc.align(16)
+  inspect(mc.size(), content="16")
+
+  // Emit one more instruction
+  emit_nop(mc)
+  inspect(mc.size(), content="20")
+
+  // Align to 8 bytes - should pad with 1 NOP
+  mc.align(8)
+  inspect(mc.size(), content="24")
+}
+
+///|
+test "machine code: align_function" {
+  let mc = MachineCode::new()
+
+  // Emit 2 instructions (8 bytes)
+  emit_nop(mc)
+  emit_nop(mc)
+  inspect(mc.size(), content="8")
+
+  // Align to function boundary (16 bytes)
+  mc.align_function()
+  inspect(mc.size(), content="16")
+}
+
+///|
+test "machine code: align with invalid alignment" {
+  let mc = MachineCode::new()
+  emit_nop(mc)
+  inspect(mc.size(), content="4")
+
+  // Invalid alignment (not power of 2) should do nothing
+  mc.align(3)
+  inspect(mc.size(), content="4")
+
+  // Zero alignment should do nothing
+  mc.align(0)
+  inspect(mc.size(), content="4")
+}
