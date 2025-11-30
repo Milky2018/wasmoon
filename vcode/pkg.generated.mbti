@@ -18,7 +18,17 @@ fn aapcs64_ret_fprs() -> Array[PReg]
 
 fn aapcs64_ret_gprs() -> Array[PReg]
 
+fn get_optimization_rules() -> Array[RewriteRule]
+
 fn lower_function(@ir.Function) -> VCodeFunction
+
+fn lower_function_optimized(@ir.Function) -> VCodeFunction
+
+fn lower_inst_with_patterns(LoweringContext, @ir.Inst, VCodeBlock, Array[RewriteRule]) -> Bool
+
+fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
+
+fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
 
 // Errors
 
@@ -106,6 +116,13 @@ pub(all) struct LoweringContext {
 }
 fn LoweringContext::new(@ir.Function) -> Self
 
+pub(all) struct MatchResult {
+  values : Array[@ir.Value]
+  int_consts : Array[Int64]
+  float_consts : Array[Double]
+  mut matched_inst : @ir.Inst?
+}
+
 pub enum MemType {
   I8
   I16
@@ -140,6 +157,40 @@ pub(all) struct PReg {
 }
 impl Show for PReg
 
+pub enum Pattern {
+  Any
+  ConstInt(Int64)
+  ConstFloat(Double)
+  Inst(PatternOpcode, Array[Pattern])
+  Lowered
+}
+
+pub enum PatternOpcode {
+  Iadd
+  Isub
+  Imul
+  Sdiv
+  Udiv
+  Band
+  Bor
+  Bxor
+  Ishl
+  Sshr
+  Ushr
+  Fadd
+  Fsub
+  Fmul
+  Fdiv
+  Iconst
+  Fconst
+  Icmp
+  Fcmp
+  Load
+  Store
+  Copy
+  Select
+}
+
 pub enum Reg {
   Virtual(VReg)
   Physical(PReg)
@@ -151,6 +202,20 @@ pub enum RegClass {
   Float
 }
 impl Show for RegClass
+
+pub enum RewriteResult {
+  Rewritten(Array[VCodeInst])
+  Identity(Int)
+  Constant(Int64)
+  ConstantFloat(Double)
+  NoMatch
+}
+
+pub(all) struct RewriteRule {
+  name : String
+  pattern : Pattern
+  priority : Int
+}
 
 pub(all) struct VCodeBlock {
   id : Int
