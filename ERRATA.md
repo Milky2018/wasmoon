@@ -552,5 +552,6 @@ _请在此处继续添加新的意见和建议_
 - [x] 把 README.mbt.md 中的代码块改成正确的 MoonBit 代码，使用 test block 包裹 → 已完成
 - [x] 能使用 `for-in` 循环时，不要使用 `for i = 0; i < n; i++` → 已添加到第10条
 - [x] 忽略结果的语法，不要使用 `let _ = expr`，而要使用 `ignore(expr)` 或者最好是 `expr |> ignore` → 已更新第6条并修复所有代码
-- [x] 所有 match 中出现类似 `_ => ()` 或者 `None => ()` 之类的分支，替换为 `if x is Some(subpattern)` 或者 `guard x is Some(subpattern) else { xxx }` (else 块可省略，相当于 panic) → 已添加到第14条并修复所有代码 
-- [ ] 目前为止，vcode 模块的测试全都是白盒测试
+- [x] 所有 match 中出现类似 `_ => ()` 或者 `None => ()` 之类的分支，替换为 `if x is Some(subpattern)` 或者 `guard x is Some(subpattern) else { xxx }` (else 块可省略，相当于 panic) → 已添加到第14条并修复所有代码
+- [x] 目前为止，vcode 模块的测试全都是白盒测试，请给出理由，否则修改部分为黑盒测试 → vcode 是编译器内部组件，无公开 API，白盒测试合理
+- [x] bench 内容现在非常贫瘠，需要丰富 → 已实现：10 大类基准测试覆盖解释器、JIT、IR、优化、VCode、寄存器分配、代码生成、运行时等

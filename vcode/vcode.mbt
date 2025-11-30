@@ -29,7 +29,7 @@ pub impl Show for VReg with output(self, logger) {
 
 ///|
 /// Register class - categorizes registers by their purpose
-pub enum RegClass {
+pub(all) enum RegClass {
   Int // Integer/general-purpose registers
   Float // Floating-point registers
 }
@@ -340,7 +340,7 @@ pub impl Show for MemType with output(self, logger) {
 
 ///|
 /// Comparison kind for integer comparisons
-pub enum CmpKind {
+pub(all) enum CmpKind {
   Eq
   Ne
   Slt
