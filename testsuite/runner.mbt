@@ -538,9 +538,8 @@ fn run_test_command_internal(
       match ctx.get_current_module() {
         Some(inst) => {
           ctx.named_modules.set(as_, inst)
-          match name {
-            Some(n) => ctx.named_modules.set(n, inst)
-            None => ()
+          if name is Some(n) {
+            ctx.named_modules.set(n, inst)
           }
         }
         None =>

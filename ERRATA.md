@@ -450,6 +450,37 @@
   ```
 - **说明**: `fields()` 必须放在 `FromJson()` 的括号内
 
+#### 14. 使用 `if-is` 替代含 `None => ()` 或 `_ => ()` 的 match
+- ❌ **错误做法**: 使用 match 然后用 `_ => ()` 或 `None => ()` 忽略另一个分支
+  ```moonbit
+  match optional_value {
+    Some(value) => do_something(value)
+    None => ()
+  }
+
+  match enum_value {
+    SomeVariant(data) => process(data)
+    _ => ()
+  }
+  ```
+- ✅ **正确做法**: 使用 `if x is Pattern` 语法
+  ```moonbit
+  if optional_value is Some(value) {
+    do_something(value)
+  }
+
+  if enum_value is SomeVariant(data) {
+    process(data)
+  }
+  ```
+- ⚠️ **注意**: 多模式匹配时需要加括号
+  ```moonbit
+  if char is (Some('-') | Some('+')) {
+    // 处理符号
+  }
+  ```
+- **说明**: `if-is` 语法更简洁，避免了无意义的空分支
+
 ---
 
 ## 2025-11-30
@@ -489,3 +520,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 把 README.mbt.md 中的代码块改成正确的 MoonBit 代码，使用 test block 包裹 → 已完成
 - [x] 能使用 `for-in` 循环时，不要使用 `for i = 0; i < n; i++` → 已添加到第10条
 - [x] 忽略结果的语法，不要使用 `let _ = expr`，而要使用 `ignore(expr)` 或者最好是 `expr |> ignore` → 已更新第6条并修复所有代码
+- [x] 所有 match 中出现类似 `_ => ()` 或者 `None => ()` 之类的分支，替换为 `if x is Some(subpattern)` 或者 `guard x is Some(subpattern) else { xxx }` (else 块可省略，相当于 panic) → 已添加到第14条并修复所有代码 

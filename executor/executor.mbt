@@ -514,32 +514,28 @@ pub fn instantiate_module_with_init(
   }
 
   // Execute start function if present
-  match mod.start {
-    Some(start_func_idx) => {
-      let ctx = ExecContext::new(store, instance)
-      (ctx.call_func(start_func_idx, []) catch {
-        BranchWith(_, _) | Return => raise @runtime.Unreachable
-        @runtime.StackUnderflow => raise @runtime.StackUnderflow
-        @runtime.StackOverflow => raise @runtime.StackOverflow
-        @runtime.TypeMismatch => raise @runtime.TypeMismatch
-        @runtime.OutOfBoundsMemoryAccess =>
-          raise @runtime.OutOfBoundsMemoryAccess
-        @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
-        @runtime.UndefinedElement => raise @runtime.UndefinedElement
-        @runtime.UninitializedElement => raise @runtime.UninitializedElement
-        @runtime.IndirectCallTypeMismatch =>
-          raise @runtime.IndirectCallTypeMismatch
-        @runtime.DivisionByZero => raise @runtime.DivisionByZero
-        @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
-        @runtime.InvalidConversion => raise @runtime.InvalidConversion
-        @runtime.Unreachable => raise @runtime.Unreachable
-        @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-        @runtime.UnknownImport => raise @runtime.UnknownImport
-        _ => raise @runtime.Unreachable
-      })
-      |> ignore
-    }
-    None => ()
+  if mod.start is Some(start_func_idx) {
+    let ctx = ExecContext::new(store, instance)
+    (ctx.call_func(start_func_idx, []) catch {
+      BranchWith(_, _) | Return => raise @runtime.Unreachable
+      @runtime.StackUnderflow => raise @runtime.StackUnderflow
+      @runtime.StackOverflow => raise @runtime.StackOverflow
+      @runtime.TypeMismatch => raise @runtime.TypeMismatch
+      @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
+      @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+      @runtime.UndefinedElement => raise @runtime.UndefinedElement
+      @runtime.UninitializedElement => raise @runtime.UninitializedElement
+      @runtime.IndirectCallTypeMismatch =>
+        raise @runtime.IndirectCallTypeMismatch
+      @runtime.DivisionByZero => raise @runtime.DivisionByZero
+      @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
+      @runtime.InvalidConversion => raise @runtime.InvalidConversion
+      @runtime.Unreachable => raise @runtime.Unreachable
+      @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
+      @runtime.UnknownImport => raise @runtime.UnknownImport
+      _ => raise @runtime.Unreachable
+    })
+    |> ignore
   }
   (store, instance)
 }
@@ -792,32 +788,28 @@ pub fn instantiate_with_linker(
   }
 
   // Execute start function if present
-  match mod.start {
-    Some(start_func_idx) => {
-      let ctx = ExecContext::new(store, instance)
-      (ctx.call_func(start_func_idx, []) catch {
-        BranchWith(_, _) | Return => raise @runtime.Unreachable
-        @runtime.StackUnderflow => raise @runtime.StackUnderflow
-        @runtime.StackOverflow => raise @runtime.StackOverflow
-        @runtime.TypeMismatch => raise @runtime.TypeMismatch
-        @runtime.OutOfBoundsMemoryAccess =>
-          raise @runtime.OutOfBoundsMemoryAccess
-        @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
-        @runtime.UndefinedElement => raise @runtime.UndefinedElement
-        @runtime.UninitializedElement => raise @runtime.UninitializedElement
-        @runtime.IndirectCallTypeMismatch =>
-          raise @runtime.IndirectCallTypeMismatch
-        @runtime.DivisionByZero => raise @runtime.DivisionByZero
-        @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
-        @runtime.InvalidConversion => raise @runtime.InvalidConversion
-        @runtime.Unreachable => raise @runtime.Unreachable
-        @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-        @runtime.UnknownImport => raise @runtime.UnknownImport
-        _ => raise @runtime.Unreachable
-      })
-      |> ignore
-    }
-    None => ()
+  if mod.start is Some(start_func_idx) {
+    let ctx = ExecContext::new(store, instance)
+    (ctx.call_func(start_func_idx, []) catch {
+      BranchWith(_, _) | Return => raise @runtime.Unreachable
+      @runtime.StackUnderflow => raise @runtime.StackUnderflow
+      @runtime.StackOverflow => raise @runtime.StackOverflow
+      @runtime.TypeMismatch => raise @runtime.TypeMismatch
+      @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
+      @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+      @runtime.UndefinedElement => raise @runtime.UndefinedElement
+      @runtime.UninitializedElement => raise @runtime.UninitializedElement
+      @runtime.IndirectCallTypeMismatch =>
+        raise @runtime.IndirectCallTypeMismatch
+      @runtime.DivisionByZero => raise @runtime.DivisionByZero
+      @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
+      @runtime.InvalidConversion => raise @runtime.InvalidConversion
+      @runtime.Unreachable => raise @runtime.Unreachable
+      @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
+      @runtime.UnknownImport => raise @runtime.UnknownImport
+      _ => raise @runtime.Unreachable
+    })
+    |> ignore
   }
   linker.register(name, instance)
   instance
