@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/vcode"
 
 import(
   "Milky2018/wasmoon/ir"
+  "moonbitlang/core/set"
 )
 
 // Values
@@ -18,7 +19,13 @@ fn aapcs64_ret_fprs() -> Array[PReg]
 
 fn aapcs64_ret_gprs() -> Array[PReg]
 
+fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
+
 fn apply_aarch64_rule(String, MatchResult, @ir.Inst, LoweringContext) -> AArch64RewriteResult
+
+fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
+
+fn compute_liveness(VCodeFunction) -> LivenessResult
 
 fn get_aarch64_rules() -> Array[RewriteRule]
 
@@ -210,6 +217,33 @@ pub enum FCmpKind {
 }
 impl Show for FCmpKind
 
+pub(all) struct LinearScanAllocator {
+  int_regs : Array[PReg]
+  float_regs : Array[PReg]
+  mut active : Array[LiveInterval]
+  mut next_spill_slot : Int
+}
+fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
+fn LinearScanAllocator::new(Array[PReg], Array[PReg]) -> Self
+
+pub(all) struct LiveInterval {
+  vreg : VReg
+  start : ProgPoint
+  mut end : ProgPoint
+  uses : Array[ProgPoint]
+  hint : PReg?
+  mut assigned : PReg?
+  mut spill_slot : Int?
+}
+impl Show for LiveInterval
+
+pub(all) struct LivenessResult {
+  intervals : Map[Int, LiveInterval]
+  use_def : Map[Int, UseDefInfo]
+  live_in : Array[@set.Set[Int]]
+  live_out : Array[@set.Set[Int]]
+}
+
 pub(all) struct LoweringContext {
   ir_func : @ir.Function
   vcode_func : VCodeFunction
@@ -294,17 +328,44 @@ pub enum PatternOpcode {
   Select
 }
 
+pub(all) struct ProgPoint {
+  block : Int
+  inst : Int
+  pos : ProgPos
+}
+impl Show for ProgPoint
+
+pub enum ProgPos {
+  Before
+  After
+}
+
 pub enum Reg {
   Virtual(VReg)
   Physical(PReg)
 }
 impl Show for Reg
 
+pub(all) struct RegAllocResult {
+  assignments : Map[Int, PReg]
+  spill_slots : Map[Int, Int]
+  mut num_spill_slots : Int
+  spills : Array[SpillInfo]
+  reloads : Array[ReloadInfo]
+}
+
 pub enum RegClass {
   Int
   Float
 }
 impl Show for RegClass
+
+pub(all) struct ReloadInfo {
+  vreg : VReg
+  slot : Int
+  preg : PReg
+  point : ProgPoint
+}
 
 pub enum RewriteResult {
   Rewritten(Array[VCodeInst])
@@ -320,6 +381,18 @@ pub(all) struct RewriteRule {
   name : String
   pattern : Pattern
   priority : Int
+}
+
+pub(all) struct SpillInfo {
+  vreg : VReg
+  slot : Int
+  point : ProgPoint
+}
+
+pub(all) struct UseDefInfo {
+  vreg : VReg
+  mut def_point : ProgPoint?
+  use_points : Array[ProgPoint]
 }
 
 pub(all) struct VCodeBlock {

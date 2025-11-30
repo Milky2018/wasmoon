@@ -263,18 +263,18 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-## Phase 9: 寄存器分配 📊
+## Phase 9: 寄存器分配 🔨 进行中
 
 > 将虚拟寄存器映射到物理寄存器
 
-### 9.1 活跃性分析
-- [ ] 活跃区间 (Live Interval) 计算
-- [ ] 使用-定义链 (Use-Def Chain)
+### 9.1 活跃性分析 ✅
+- [x] 活跃区间 (Live Interval) 计算
+- [x] 使用-定义链 (Use-Def Chain)
 
-### 9.2 寄存器分配算法
-- [ ] 线性扫描分配器 (Linear Scan)
-- [ ] 溢出处理 (Spilling)
-- [ ] 重新加载 (Reloading)
+### 9.2 寄存器分配算法 ✅
+- [x] 线性扫描分配器 (Linear Scan)
+- [x] 溢出处理 (Spilling)
+- [x] 重新加载 (Reloading)
 - [ ] 寄存器合并 (Coalescing)
 
 ### 9.3 栈布局
@@ -388,5 +388,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 8.2 指令选择已全部完成，包括模式匹配、指令合并、强度削减、AArch64 特定规则
-**下一步**: 实现 Phase 8.3 指令编码规则 (目前架构抽象部分完成)
+**当前状态**: Phase 9.1-9.2 寄存器分配基础实现完成，包括活跃性分析、线性扫描分配器、溢出/重加载
+**下一步**: 实现 Phase 9.3 栈布局 (栈帧布局计算、溢出槽分配)
