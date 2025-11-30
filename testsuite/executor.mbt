@@ -138,3 +138,29 @@ pub fn run_assert_trap(
   }
   trapped
 }
+
+///|
+/// Get an exported global value
+pub fn TestContext::get_global(
+  self : TestContext,
+  module_name : String?,
+  global_name : String,
+) -> @types.Value raise Error {
+  let instance = match module_name {
+    Some(name) =>
+      match self.named_modules.get(name) {
+        Some(inst) => inst
+        None =>
+          match self.linker.get_module(name) {
+            Some(inst) => inst
+            None => fail("Module not found: \{name}")
+          }
+      }
+    None =>
+      match self.current_module {
+        Some(inst) => inst
+        None => fail("No current module")
+      }
+  }
+  @executor.get_exported_global(self.store, instance, global_name)
+}

@@ -21,6 +21,9 @@ pub(all) suberror ValidationError {
   InvalidMemoryIndex(Int)
   InvalidLabelIndex(Int)
   UnreachableCode
+  MultipleMemories
+  MultipleTables
+  InvalidLimits(String)
 }
 impl Show for ValidationError
 

@@ -8,7 +8,7 @@ import(
 )
 
 // Values
-fn parse_json_test_file(String) -> Array[TestCommand] raise TestRunnerError
+fn parse_json_test_file(String) -> Array[TestCommandWithLine] raise TestRunnerError
 
 fn parse_test_value(TestValue) -> @types.Value
 
@@ -19,6 +19,8 @@ fn run_assert_trap(TestContext, String?, String, Array[TestValue], String) -> Bo
 fn run_json_tests(String, String, (String) -> Bytes raise) -> TestResult raise TestRunnerError
 
 fn run_test_command(TestContext, TestCommand, TestResult, String, (String) -> Bytes raise) -> Unit raise TestRunnerError
+
+fn run_test_command_with_line(TestContext, TestCommandWithLine, TestResult, String, (String) -> Bytes raise) -> Unit raise TestRunnerError
 
 fn values_equal(@types.Value, @types.Value) -> Bool
 
@@ -56,6 +58,12 @@ pub enum TestCommand {
 }
 impl Show for TestCommand
 
+pub struct TestCommandWithLine {
+  line : Int?
+  command : TestCommand
+}
+impl Show for TestCommandWithLine
+
 pub struct TestContext {
   store : @runtime.Store
   linker : @runtime.Linker
@@ -63,6 +71,7 @@ pub struct TestContext {
   named_modules : Map[String, @runtime.ModuleInstance]
 }
 fn TestContext::get_current_module(Self) -> @runtime.ModuleInstance?
+fn TestContext::get_global(Self, String?, String) -> @types.Value raise
 fn TestContext::invoke(Self, String?, String, Array[@types.Value]) -> Array[@types.Value] raise
 fn TestContext::load_module(Self, Bytes, String?) -> @runtime.ModuleInstance raise
 fn TestContext::new() -> Self

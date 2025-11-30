@@ -518,15 +518,100 @@ fn ExecContext::exec_f32_numeric(
       let a = self.stack.pop_f32()
       self.stack.push(F32(a.floor()))
     }
+    F32Trunc => {
+      let a = self.stack.pop_f32()
+      // Preserve sign of zero: trunc(-0.0) = -0.0
+      let result = a.trunc()
+      // If result is zero but input was negative, preserve -0.0
+      let final_result : Float = if result == (0.0 : Float) &&
+        a.reinterpret_as_uint() >= 0x80000000U {
+        (-0.0 : Float)
+      } else {
+        result
+      }
+      self.stack.push(F32(final_result))
+    }
+    F32Nearest => {
+      let a = self.stack.pop_f32()
+      // WASM spec: Round to nearest even (banker's rounding)
+      // - If the value is exactly halfway between two integers, round to the even one
+      // - Preserve sign of zero
+
+      // Check for special cases: NaN, infinity
+      if a.is_nan() || a.is_inf() {
+        self.stack.push(F32(a))
+        return
+      }
+
+      // Get the floor and ceiling
+      let floor_val = a.floor()
+      let ceil_val = a.ceil()
+
+      // Calculate distances
+      let diff_floor = a - floor_val
+      let diff_ceil = ceil_val - a
+      let result : Float = if diff_floor < diff_ceil {
+        floor_val
+      } else if diff_floor > diff_ceil {
+        ceil_val
+      } else {
+        // Exactly halfway - round to even
+        let floor_int = floor_val.to_int()
+        if floor_int % 2 == 0 {
+          floor_val
+        } else {
+          ceil_val
+        }
+      }
+
+      // If result is zero but input was negative, preserve -0.0
+      let final_result : Float = if result == (0.0 : Float) &&
+        a.reinterpret_as_uint() >= 0x80000000U {
+        (-0.0 : Float)
+      } else {
+        result
+      }
+      self.stack.push(F32(final_result))
+    }
     F32Min => {
       let b = self.stack.pop_f32()
       let a = self.stack.pop_f32()
-      self.stack.push(F32(if a < b { a } else { b }))
+      // Per WASM spec: if either operand is NaN, return NaN
+      let result : Float = if a.is_nan() || b.is_nan() {
+        (0.0 : Float) / (0.0 : Float) // NaN
+      } else if a == (0.0 : Float) && b == (0.0 : Float) {
+        // Handle -0.0 vs +0.0: min(-0.0, +0.0) = -0.0
+        if a.reinterpret_as_uint() > b.reinterpret_as_uint() {
+          a
+        } else {
+          b
+        }
+      } else if a < b {
+        a
+      } else {
+        b
+      }
+      self.stack.push(F32(result))
     }
     F32Max => {
       let b = self.stack.pop_f32()
       let a = self.stack.pop_f32()
-      self.stack.push(F32(if a > b { a } else { b }))
+      // Per WASM spec: if either operand is NaN, return NaN
+      let result : Float = if a.is_nan() || b.is_nan() {
+        (0.0 : Float) / (0.0 : Float) // NaN
+      } else if a == (0.0 : Float) && b == (0.0 : Float) {
+        // Handle -0.0 vs +0.0: max(-0.0, +0.0) = +0.0
+        if a.reinterpret_as_uint() < b.reinterpret_as_uint() {
+          a
+        } else {
+          b
+        }
+      } else if a > b {
+        a
+      } else {
+        b
+      }
+      self.stack.push(F32(result))
     }
     // f32 comparison operations
     F32Eq => {
@@ -611,15 +696,100 @@ fn ExecContext::exec_f64_numeric(
       let a = self.stack.pop_f64()
       self.stack.push(F64(a.floor()))
     }
+    F64Trunc => {
+      let a = self.stack.pop_f64()
+      // Preserve sign of zero: trunc(-0.0) = -0.0
+      let result = a.trunc()
+      // If result is zero but input was negative, preserve -0.0
+      let final_result = if result == 0.0 &&
+        a.reinterpret_as_uint64() >= 0x8000000000000000UL {
+        -0.0
+      } else {
+        result
+      }
+      self.stack.push(F64(final_result))
+    }
+    F64Nearest => {
+      let a = self.stack.pop_f64()
+      // WASM spec: Round to nearest even (banker's rounding)
+      // - If the value is exactly halfway between two integers, round to the even one
+      // - Preserve sign of zero
+
+      // Check for special cases: NaN, infinity
+      if a.is_nan() || a.is_inf() {
+        self.stack.push(F64(a))
+        return
+      }
+
+      // Get the floor and ceiling
+      let floor_val = a.floor()
+      let ceil_val = a.ceil()
+
+      // Calculate distances
+      let diff_floor = a - floor_val
+      let diff_ceil = ceil_val - a
+      let result = if diff_floor < diff_ceil {
+        floor_val
+      } else if diff_floor > diff_ceil {
+        ceil_val
+      } else {
+        // Exactly halfway - round to even
+        let floor_int = floor_val.to_int64()
+        if floor_int % 2L == 0L {
+          floor_val
+        } else {
+          ceil_val
+        }
+      }
+
+      // If result is zero but input was negative, preserve -0.0
+      let final_result = if result == 0.0 &&
+        a.reinterpret_as_uint64() >= 0x8000000000000000UL {
+        -0.0
+      } else {
+        result
+      }
+      self.stack.push(F64(final_result))
+    }
     F64Min => {
       let b = self.stack.pop_f64()
       let a = self.stack.pop_f64()
-      self.stack.push(F64(if a < b { a } else { b }))
+      // Per WASM spec: if either operand is NaN, return NaN
+      let result = if a.is_nan() || b.is_nan() {
+        0.0 / 0.0 // NaN
+      } else if a == 0.0 && b == 0.0 {
+        // Handle -0.0 vs +0.0: min(-0.0, +0.0) = -0.0
+        if a.reinterpret_as_uint64() > b.reinterpret_as_uint64() {
+          a
+        } else {
+          b
+        }
+      } else if a < b {
+        a
+      } else {
+        b
+      }
+      self.stack.push(F64(result))
     }
     F64Max => {
       let b = self.stack.pop_f64()
       let a = self.stack.pop_f64()
-      self.stack.push(F64(if a > b { a } else { b }))
+      // Per WASM spec: if either operand is NaN, return NaN
+      let result = if a.is_nan() || b.is_nan() {
+        0.0 / 0.0 // NaN
+      } else if a == 0.0 && b == 0.0 {
+        // Handle -0.0 vs +0.0: max(-0.0, +0.0) = +0.0
+        if a.reinterpret_as_uint64() < b.reinterpret_as_uint64() {
+          a
+        } else {
+          b
+        }
+      } else if a > b {
+        a
+      } else {
+        b
+      }
+      self.stack.push(F64(result))
     }
     // f64 comparison operations
     F64Eq => {

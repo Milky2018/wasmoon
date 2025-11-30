@@ -60,6 +60,13 @@ pub enum TestCommand {
 } derive(Show)
 
 ///|
+/// Test command with line number information
+pub struct TestCommandWithLine {
+  line : Int?
+  command : TestCommand
+} derive(Show)
+
+///|
 /// Test action types
 pub enum TestAction {
   Invoke(String?, String, Array[TestValue]) // module name, field, args
@@ -108,7 +115,14 @@ pub fn TestResult::add_skipped(self : TestResult) -> Unit {
 
 ///|
 /// Parse integer from string with error handling
+/// Handles both signed and unsigned representations
 fn parse_int_safe(s : String) -> Int {
+  // First try parsing as unsigned (for values like 4294967295)
+  let uint_result = @strconv.parse_uint(s) catch { _ => 0U }
+  if uint_result != 0U {
+    return uint_result.reinterpret_as_int()
+  }
+  // Then try parsing as signed (for negative values or zero)
   @strconv.parse_int(s) catch {
     _ => 0
   }
@@ -116,7 +130,14 @@ fn parse_int_safe(s : String) -> Int {
 
 ///|
 /// Parse int64 from string with error handling
+/// Handles both signed and unsigned representations
 fn parse_int64_safe(s : String) -> Int64 {
+  // First try parsing as unsigned (for large positive values)
+  let uint_result = @strconv.parse_uint64(s) catch { _ => 0UL }
+  if uint_result != 0UL {
+    return uint_result.reinterpret_as_int64()
+  }
+  // Then try parsing as signed (for negative values or zero)
   @strconv.parse_int64(s) catch {
     _ => 0L
   }
@@ -148,9 +169,9 @@ pub fn parse_test_value(tv : TestValue) -> @types.Value {
         val.has_prefix("nan:") {
         @types.Value::F32(0.0 / 0.0) // NaN
       } else {
-        // Parse as bits representation
-        let bits = parse_int_safe(val)
-        @types.Value::F32(bits.reinterpret_as_float())
+        // Parse as unsigned bits representation then reinterpret as float
+        let bits = @strconv.parse_uint(val) catch { _ => 0U }
+        @types.Value::F32(bits.reinterpret_as_int().reinterpret_as_float())
       }
     "f64" =>
       if val == "nan:canonical" ||
@@ -158,9 +179,9 @@ pub fn parse_test_value(tv : TestValue) -> @types.Value {
         val.has_prefix("nan:") {
         @types.Value::F64(0.0 / 0.0) // NaN
       } else {
-        // Parse as bits representation
-        let bits = parse_int64_safe(val)
-        @types.Value::F64(bits.reinterpret_as_double())
+        // Parse as unsigned bits representation then reinterpret as double
+        let bits = @strconv.parse_uint64(val) catch { _ => 0UL }
+        @types.Value::F64(bits.reinterpret_as_int64().reinterpret_as_double())
       }
     "funcref" =>
       if val == "null" {
@@ -221,15 +242,15 @@ fn json_action_to_test_action(ja : JsonAction) -> TestAction {
 }
 
 ///|
-/// Convert JsonCommand to TestCommand
+/// Convert JsonCommand to TestCommandWithLine
 fn json_command_to_test_command(
   jc : JsonCommand,
-) -> TestCommand raise TestRunnerError {
+) -> TestCommandWithLine raise TestRunnerError {
   let expected = jc.expected
     .map(fn(arr) { arr.map(json_value_to_test_value) })
     .unwrap_or([])
   let text = jc.text.unwrap_or("")
-  match jc.type_ {
+  let command = match jc.type_ {
     "module" => TestCommand::Module(jc.filename.unwrap_or(""))
     "assert_return" =>
       match jc.action {
@@ -268,20 +289,21 @@ fn json_command_to_test_command(
       }
     _ => raise ParseError("Unknown command type: \{jc.type_}")
   }
+  { line: jc.line, command }
 }
 
 ///|
 /// Parse a JSON test file into a list of commands
 pub fn parse_json_test_file(
   json_content : String,
-) -> Array[TestCommand] raise TestRunnerError {
+) -> Array[TestCommandWithLine] raise TestRunnerError {
   let json = @json.parse(json_content) catch {
     e => raise ParseError("JSON parse error: \{e}")
   }
   let test_file : JsonTestFile = @json.from_json(json) catch {
     e => raise ParseError("JSON decode error: \{e}")
   }
-  let commands : Array[TestCommand] = []
+  let commands : Array[TestCommandWithLine] = []
   for jc in test_file.commands {
     commands.push(json_command_to_test_command(jc))
   }
@@ -289,7 +311,30 @@ pub fn parse_json_test_file(
 }
 
 ///|
-/// Run a single test command and update results
+/// Run a single test command with line number info and update results
+pub fn run_test_command_with_line(
+  ctx : TestContext,
+  cmd_with_line : TestCommandWithLine,
+  result : TestResult,
+  base_dir : String,
+  read_file_fn : (String) -> Bytes raise Error,
+) -> Unit raise TestRunnerError {
+  let line_prefix = match cmd_with_line.line {
+    Some(n) => "[line \{n}] "
+    None => ""
+  }
+  run_test_command_internal(
+    ctx,
+    cmd_with_line.command,
+    result,
+    base_dir,
+    read_file_fn,
+    line_prefix,
+  )
+}
+
+///|
+/// Run a single test command and update results (without line info)
 pub fn run_test_command(
   ctx : TestContext,
   cmd : TestCommand,
@@ -297,14 +342,33 @@ pub fn run_test_command(
   base_dir : String,
   read_file_fn : (String) -> Bytes raise Error,
 ) -> Unit raise TestRunnerError {
+  run_test_command_internal(ctx, cmd, result, base_dir, read_file_fn, "")
+}
+
+///|
+/// Run a single test command and update results (internal helper with line prefix)
+fn run_test_command_internal(
+  ctx : TestContext,
+  cmd : TestCommand,
+  result : TestResult,
+  base_dir : String,
+  read_file_fn : (String) -> Bytes raise Error,
+  line_prefix : String,
+) -> Unit raise TestRunnerError {
   match cmd {
     Module(filename) => {
       let wasm_path = base_dir + "/" + filename
       let bytes = read_file_fn(wasm_path) catch {
-        e => raise ModuleLoadError("Failed to read module \{filename}: \{e}")
+        e =>
+          raise ModuleLoadError(
+            "\{line_prefix}Failed to read module \{filename}: \{e}",
+          )
       }
       let instance = ctx.load_module(bytes, None) catch {
-        e => raise ModuleLoadError("Failed to load module \{filename}: \{e}")
+        e =>
+          raise ModuleLoadError(
+            "\{line_prefix}Failed to load module \{filename}: \{e}",
+          )
       }
       ctx.set_current_module(instance)
     }
@@ -318,13 +382,46 @@ pub fn run_test_command(
             result.passed += 1
           } else {
             result.failed += 1
-            result.failures.push("assert_return failed: \{func_name}")
+            result.failures.push(
+              "\{line_prefix}assert_return failed: \{func_name}",
+            )
           }
         }
-        Get(_module_name, field) => {
-          // Get global value test - skip for now as get_exported_global is not implemented
-          result.skipped += 1
-          println("Skipping assert_return (get): \{field}")
+        Get(module_name, field) => {
+          // Get global value test
+          let expected_values = expected.map(parse_test_value)
+          let global_value = ctx.get_global(module_name, field) catch {
+            e => {
+              println("\{line_prefix}Error getting global \{field}: \{e}")
+              result.failed += 1
+              result.failures.push(
+                "\{line_prefix}assert_return (get) failed: \{field}",
+              )
+              return
+            }
+          }
+          // Check result
+          if expected_values.length() != 1 {
+            println(
+              "\{line_prefix}Expected 1 value for global, got \{expected_values.length()}",
+            )
+            result.failed += 1
+            result.failures.push(
+              "\{line_prefix}assert_return (get) failed: \{field}",
+            )
+            return
+          }
+          if not(values_equal(global_value, expected_values[0])) {
+            println(
+              "\{line_prefix}Global \{field} mismatch: expected \{expected_values[0]}, got \{global_value}",
+            )
+            result.failed += 1
+            result.failures.push(
+              "\{line_prefix}assert_return (get) failed: \{field}",
+            )
+          } else {
+            result.passed += 1
+          }
         }
       }
     AssertTrap(action, expected_msg) =>
@@ -337,17 +434,19 @@ pub fn run_test_command(
             result.passed += 1
           } else {
             result.failed += 1
-            result.failures.push("assert_trap failed: \{func_name}")
+            result.failures.push(
+              "\{line_prefix}assert_trap failed: \{func_name}",
+            )
           }
         }
         Get(_, field) => {
           // Get that should trap - skip for now
           result.skipped += 1
-          println("Skipping assert_trap (get): \{field}")
+          println("\{line_prefix}Skipping assert_trap (get): \{field}")
         }
       }
     AssertInvalid(filename, _msg) => {
-      // Should fail to validate
+      // Should fail to validate (parse succeeds, but validation fails)
       let wasm_path = base_dir + "/" + filename
       let bytes = read_file_fn(wasm_path) catch {
         _ => {
@@ -356,17 +455,21 @@ pub fn run_test_command(
           return
         }
       }
-      let valid = try {
-        @parser.parse_module(bytes) |> ignore
-        true
+      let invalid = try {
+        let mod = @parser.parse_module(bytes)
+        // Run validator
+        @validator.validate_module(mod)
+        false // validation passed - not expected
       } catch {
-        _ => false
+        _ => true // parsing or validation failed - expected
       }
-      if valid {
-        result.failed += 1
-        result.failures.push("assert_invalid should have failed: \{filename}")
-      } else {
+      if invalid {
         result.passed += 1
+      } else {
+        result.failed += 1
+        result.failures.push(
+          "\{line_prefix}assert_invalid should have failed: \{filename}",
+        )
       }
     }
     AssertMalformed(filename, _msg) => {
@@ -387,7 +490,9 @@ pub fn run_test_command(
       }
       if parsed {
         result.failed += 1
-        result.failures.push("assert_malformed should have failed: \{filename}")
+        result.failures.push(
+          "\{line_prefix}assert_malformed should have failed: \{filename}",
+        )
       } else {
         result.passed += 1
       }
@@ -410,7 +515,7 @@ pub fn run_test_command(
       if instantiated {
         result.failed += 1
         result.failures.push(
-          "assert_uninstantiable should have failed: \{filename}",
+          "\{line_prefix}assert_uninstantiable should have failed: \{filename}",
         )
       } else {
         result.passed += 1
@@ -426,7 +531,8 @@ pub fn run_test_command(
             None => ()
           }
         }
-        None => println("Warning: Register without current module")
+        None =>
+          println("\{line_prefix}Warning: Register without current module")
       }
     Action(action) =>
       match action {
@@ -434,7 +540,7 @@ pub fn run_test_command(
           // Just invoke without checking result
           let runtime_args = args.map(parse_test_value)
           try ctx.invoke(module_name, func_name, runtime_args) |> ignore catch {
-            e => println("Action invoke error: \{e}")
+            e => println("\{line_prefix}Action invoke error: \{e}")
           }
         }
         Get(_, _) => ()
@@ -453,7 +559,7 @@ pub fn run_json_tests(
   let result = TestResult::new()
   let ctx = TestContext::new()
   for cmd in commands {
-    run_test_command(ctx, cmd, result, base_dir, read_file_fn)
+    run_test_command_with_line(ctx, cmd, result, base_dir, read_file_fn)
   }
   result
 }

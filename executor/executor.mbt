@@ -193,6 +193,8 @@ fn ExecContext::exec_instr(
     | F32Sqrt
     | F32Ceil
     | F32Floor
+    | F32Trunc
+    | F32Nearest
     | F32Min
     | F32Max
     | F32Eq
@@ -212,6 +214,8 @@ fn ExecContext::exec_instr(
     | F64Sqrt
     | F64Ceil
     | F64Floor
+    | F64Trunc
+    | F64Nearest
     | F64Min
     | F64Max
     | F64Eq
@@ -699,6 +703,47 @@ pub fn call_exported_func(
             _ => raise @runtime.Unreachable
           }
         } // Unknown error
+        _ => raise @runtime.UndefinedElement
+      }
+    None => raise @runtime.UndefinedElement
+  }
+}
+
+///|
+/// Get the value of an exported global variable
+pub fn get_exported_global(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  name : String,
+) -> @types.Value raise @runtime.RuntimeError {
+  // Find the export
+  fn find_export(
+    exports : Array[@types.Export],
+    target : String,
+  ) -> @types.Export? {
+    loop 0 {
+      idx =>
+        if idx >= exports.length() {
+          None
+        } else {
+          let exp = exports[idx]
+          if exp.name == target {
+            Some(exp)
+          } else {
+            continue idx + 1
+          }
+        }
+    }
+  }
+
+  match find_export(instance.exports, name) {
+    Some(exp) =>
+      match exp.desc {
+        Global(global_idx) => {
+          let global_addr = instance.global_addrs[global_idx]
+          let global = store.get_global(global_addr)
+          global.get()
+        }
         _ => raise @runtime.UndefinedElement
       }
     None => raise @runtime.UndefinedElement
