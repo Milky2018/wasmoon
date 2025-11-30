@@ -330,6 +330,53 @@ pub enum CmpKind {
 }
 impl Show for CmpKind
 
+pub(all) struct CodeCache {
+  functions : Map[Int, CompiledFunction]
+  mut total_size : Int
+  max_size : Int
+  mut hits : Int
+  mut misses : Int
+}
+fn CodeCache::clear(Self) -> Unit
+fn CodeCache::contains(Self, Int) -> Bool
+fn CodeCache::get(Self, Int) -> CompiledFunction?
+fn CodeCache::insert(Self, Int, CompiledFunction) -> Unit
+fn CodeCache::invalidate(Self, Int) -> Unit
+fn CodeCache::new(Int) -> Self
+fn CodeCache::remove(Self, Int) -> Unit
+fn CodeCache::stats(Self) -> (Int, Int, Int, Int)
+impl Show for CodeCache
+
+pub(all) struct CompiledFunction {
+  name : String
+  code : MachineCode
+  entry_offset : Int
+  code_size : Int
+  frame_size : Int
+  mut valid : Bool
+}
+fn CompiledFunction::get_code(Self) -> Array[Int]
+fn CompiledFunction::invalidate(Self) -> Unit
+fn CompiledFunction::is_valid(Self) -> Bool
+fn CompiledFunction::new(String, MachineCode, Int) -> Self
+impl Show for CompiledFunction
+
+pub(all) struct ExecutableRegion {
+  id : Int
+  base_addr : Int
+  size : Int
+  mut write_pos : Int
+  code : Array[Int]
+  mut finalized : Bool
+}
+fn ExecutableRegion::address_at(Self, Int) -> Int
+fn ExecutableRegion::finalize(Self) -> Unit
+fn ExecutableRegion::new(Int, Int) -> Self
+fn ExecutableRegion::read_at(Self, Int, Int) -> Array[Int]
+fn ExecutableRegion::remaining(Self) -> Int
+fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
+impl Show for ExecutableRegion
+
 pub enum ExtendKind {
   Signed8To32
   Signed8To64
@@ -364,6 +411,20 @@ pub enum FixupKind {
   Branch26
   Branch19
 }
+
+pub(all) struct JITRuntime {
+  cache : CodeCache
+  memory : MemoryManager
+  mut compilations : Int
+  mut recompilations : Int
+}
+fn JITRuntime::clear(Self) -> Unit
+fn JITRuntime::invalidate(Self, Int) -> Unit
+fn JITRuntime::lookup(Self, Int) -> CompiledFunction?
+fn JITRuntime::new(Int, Int) -> Self
+fn JITRuntime::register(Self, Int, CompiledFunction) -> Result[Int, String]
+fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
+impl Show for JITRuntime
 
 pub(all) struct LinearScanAllocator {
   int_regs : Array[PReg]
@@ -436,6 +497,21 @@ pub enum MemType {
   F64
 }
 impl Show for MemType
+
+pub(all) struct MemoryManager {
+  regions : Array[ExecutableRegion]
+  default_region_size : Int
+  mut next_id : Int
+  mut current_region : Int?
+}
+fn MemoryManager::alloc_region(Self, Int) -> ExecutableRegion
+fn MemoryManager::finalize_all(Self) -> Unit
+fn MemoryManager::get_current_region(Self) -> ExecutableRegion
+fn MemoryManager::new(Int) -> Self
+fn MemoryManager::total_allocated(Self) -> Int
+fn MemoryManager::total_used(Self) -> Int
+fn MemoryManager::write_code(Self, MachineCode) -> Result[(ExecutableRegion, Int), String]
+impl Show for MemoryManager
 
 pub(all) struct Operand {
   reg : VReg
