@@ -12,6 +12,37 @@ fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 // Errors
 
 // Types and methods
+pub(all) struct Breakpoint {
+  id : Int
+  func_idx : Int
+  offset : Int
+  mut enabled : Bool
+  mut hit_count : Int
+  condition : String?
+}
+fn Breakpoint::disable(Self) -> Unit
+fn Breakpoint::enable(Self) -> Unit
+fn Breakpoint::hit(Self) -> Unit
+fn Breakpoint::new(Int, Int, Int) -> Self
+fn Breakpoint::with_condition(Int, Int, Int, String) -> Self
+impl Show for Breakpoint
+
+pub(all) struct BreakpointManager {
+  breakpoints : Map[Int, Breakpoint]
+  by_location : Map[Int, Map[Int, Int]]
+  mut next_id : Int
+}
+fn BreakpointManager::add(Self, Int, Int) -> Breakpoint
+fn BreakpointManager::add_conditional(Self, Int, Int, String) -> Breakpoint
+fn BreakpointManager::all(Self) -> Array[Breakpoint]
+fn BreakpointManager::at_location(Self, Int, Int) -> Breakpoint?
+fn BreakpointManager::clear(Self) -> Unit
+fn BreakpointManager::count(Self) -> Int
+fn BreakpointManager::get(Self, Int) -> Breakpoint?
+fn BreakpointManager::new() -> Self
+fn BreakpointManager::remove(Self, Int) -> Bool
+fn BreakpointManager::should_break(Self, Int, Int) -> Bool
+
 pub(all) struct CallCounter {
   counts : Map[Int, Int]
   mut total_calls : Int
@@ -83,6 +114,22 @@ fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
 fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
 impl Show for CompilationStrategy
 
+pub(all) struct DebugContext {
+  source_map : SourceMap
+  breakpoints : BreakpointManager
+  mut enabled : Bool
+  mut step_mode : StepMode
+  mut current_trace : StackTrace?
+}
+fn DebugContext::disable(Self) -> Unit
+fn DebugContext::enable(Self) -> Unit
+fn DebugContext::location_string(Self, Int, Int) -> String
+fn DebugContext::new() -> Self
+fn DebugContext::on_pause(Self, Int, Int) -> Unit
+fn DebugContext::set_step_mode(Self, StepMode) -> Unit
+fn DebugContext::should_pause(Self, Int, Int) -> Bool
+impl Show for DebugContext
+
 pub(all) struct FunctionEntry {
   func_idx : Int
   mut status : CompilationStatus
@@ -143,6 +190,59 @@ fn Profiler::record_call(Self, Int) -> (Int, Bool)
 fn Profiler::should_use_jit(Self, Int) -> Bool
 fn Profiler::stats(Self) -> (Int, Int, Int, Int)
 impl Show for Profiler
+
+pub(all) struct SourceLocation {
+  func_idx : Int
+  offset : Int
+  file : String?
+  line : Int?
+  column : Int?
+}
+fn SourceLocation::new(Int, Int) -> Self
+fn SourceLocation::with_source(Int, Int, String, Int, Int) -> Self
+impl Show for SourceLocation
+
+pub(all) struct SourceMap {
+  mappings : Map[Int, Map[Int, SourceLocation]]
+  func_names : Map[Int, String]
+}
+fn SourceMap::add_func_name(Self, Int, String) -> Unit
+fn SourceMap::add_mapping(Self, Int, Int, SourceLocation) -> Unit
+fn SourceMap::find_nearest(Self, Int, Int) -> SourceLocation?
+fn SourceMap::get_func_name(Self, Int) -> String
+fn SourceMap::get_location(Self, Int, Int) -> SourceLocation?
+fn SourceMap::mapping_count(Self) -> Int
+fn SourceMap::new() -> Self
+
+pub(all) struct StackFrame {
+  index : Int
+  func_idx : Int
+  ip : Int
+  func_name : String
+  location : SourceLocation?
+  local_count : Int
+}
+fn StackFrame::new(Int, Int, Int, String) -> Self
+fn StackFrame::with_location(Int, Int, Int, String, SourceLocation) -> Self
+impl Show for StackFrame
+
+pub(all) struct StackTrace {
+  frames : Array[StackFrame]
+  error : String?
+}
+fn StackTrace::depth(Self) -> Int
+fn StackTrace::new() -> Self
+fn StackTrace::push_frame(Self, StackFrame) -> Unit
+fn StackTrace::with_error(String) -> Self
+impl Show for StackTrace
+
+pub enum StepMode {
+  Continue
+  StepInto
+  StepOver
+  StepOut
+}
+impl Show for StepMode
 
 pub(all) struct TieredConfig {
   baseline_threshold : Int
