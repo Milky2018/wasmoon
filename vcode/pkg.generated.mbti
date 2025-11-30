@@ -161,6 +161,7 @@ pub enum Pattern {
   Any
   ConstInt(Int64)
   ConstFloat(Double)
+  AnyConstInt
   Inst(PatternOpcode, Array[Pattern])
   Lowered
 }
@@ -208,6 +209,8 @@ pub enum RewriteResult {
   Identity(Int)
   Constant(Int64)
   ConstantFloat(Double)
+  ShiftLeft(Int, Int)
+  ShiftRight(Int, Int)
   NoMatch
 }
 

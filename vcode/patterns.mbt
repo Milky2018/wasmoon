@@ -17,6 +17,8 @@ pub enum Pattern {
   // Match a specific constant
   ConstInt(Int64)
   ConstFloat(Double)
+  // Match any integer constant (captures the value)
+  AnyConstInt
   // Match an instruction with specific opcode and operand patterns
   Inst(PatternOpcode, Array[Pattern])
   // Match a value that is already lowered (a VReg)
@@ -170,6 +172,14 @@ fn match_pattern_impl(
       } else {
         false
       }
+    AnyConstInt =>
+      // Match any integer constant
+      if inst.opcode is @ir.Opcode::Iconst(val) {
+        result.add_int_const(val)
+        true
+      } else {
+        false
+      }
     Inst(pat_op, sub_patterns) => {
       // Check if opcode matches
       let inst_pat_op = opcode_to_pattern(inst.opcode)
@@ -218,6 +228,19 @@ fn match_pattern_impl(
                     return false
                   }
                   result.add_float_const(val)
+                } else {
+                  return false
+                }
+              None => return false
+            }
+          }
+          AnyConstInt => {
+            // Match any integer constant
+            let def_inst = find_defining_inst(ctx, operand)
+            match def_inst {
+              Some(def) =>
+                if def.opcode is @ir.Opcode::Iconst(val) {
+                  result.add_int_const(val)
                 } else {
                   return false
                 }
@@ -302,6 +325,26 @@ fn find_defining_inst(ctx : LoweringContext, value : @ir.Value) -> @ir.Inst? {
 // ============ Rewrite Rules ============
 
 ///|
+/// Check if a value is a power of 2 and return the exponent
+fn is_power_of_2(val : Int64) -> Int? {
+  if val <= 0L {
+    return None
+  }
+  // Check if val is a power of 2: (val & (val - 1)) == 0
+  if (val & (val - 1L)) != 0L {
+    return None
+  }
+  // Count trailing zeros to get the exponent
+  let mut n = val.reinterpret_as_uint64()
+  let mut count = 0
+  while (n & 1UL) == 0UL {
+    n = n >> 1
+    count = count + 1
+  }
+  Some(count)
+}
+
+///|
 /// A rewrite rule - matches a pattern and produces optimized VCode
 pub(all) struct RewriteRule {
   name : String
@@ -362,6 +405,12 @@ pub fn get_optimization_rules() -> Array[RewriteRule] {
     RewriteRule::new("fmul_one", Inst(Fmul, [Any, ConstFloat(1.0)]), 5),
     // fmul(1.0, x) -> x (commutative)
     RewriteRule::new("one_fmul", Inst(Fmul, [ConstFloat(1.0), Any]), 5),
+    // Strength reduction: mul(x, power_of_2) -> shl(x, log2)
+    // Use lower priority so specific constants (like 0, 1) match first
+    RewriteRule::new("mul_pow2", Inst(Imul, [Any, AnyConstInt]), 3),
+    RewriteRule::new("pow2_mul", Inst(Imul, [AnyConstInt, Any]), 3),
+    // div(x, power_of_2) -> shr(x, log2) for unsigned
+    RewriteRule::new("udiv_pow2", Inst(Udiv, [Any, AnyConstInt]), 3),
   ]
 }
 
@@ -377,6 +426,10 @@ pub enum RewriteResult {
   // Produce a constant
   Constant(Int64)
   ConstantFloat(Double)
+  // Strength reduction: mul by power of 2 -> shift left
+  ShiftLeft(Int, Int) // operand index, shift amount
+  // Strength reduction: div by power of 2 -> logical shift right
+  ShiftRight(Int, Int) // operand index, shift amount
   // No rewrite applies, use default lowering
   NoMatch
 }
@@ -427,6 +480,40 @@ fn apply_rule(
     "zero_add" | "one_mul" | "zero_or" | "zero_xor" | "one_fmul" => Identity(1)
     // Zero rules - return constant 0
     "mul_zero" | "zero_mul" | "and_zero" | "zero_and" => Constant(0L)
+    // Strength reduction: mul by power of 2 -> shift left
+    "mul_pow2" =>
+      // The constant is captured in result.int_consts[0]
+      if result.int_consts.length() > 0 {
+        let const_val = result.int_consts[0]
+        match is_power_of_2(const_val) {
+          Some(shift) => ShiftLeft(0, shift) // First operand, shift amount
+          None => NoMatch // Not a power of 2, use default lowering
+        }
+      } else {
+        NoMatch
+      }
+    "pow2_mul" =>
+      // Commutative: constant is first operand
+      if result.int_consts.length() > 0 {
+        let const_val = result.int_consts[0]
+        match is_power_of_2(const_val) {
+          Some(shift) => ShiftLeft(1, shift) // Second operand, shift amount
+          None => NoMatch
+        }
+      } else {
+        NoMatch
+      }
+    // Strength reduction: unsigned div by power of 2 -> logical shift right
+    "udiv_pow2" =>
+      if result.int_consts.length() > 0 {
+        let const_val = result.int_consts[0]
+        match is_power_of_2(const_val) {
+          Some(shift) => ShiftRight(0, shift)
+          None => NoMatch
+        }
+      } else {
+        NoMatch
+      }
     // Default - no special handling
     _ => {
       ignore(result)
@@ -484,6 +571,46 @@ pub fn lower_inst_with_patterns(
         let vcode_inst = VCodeInst::new(LoadConstF(val))
         vcode_inst.add_def({ reg: Virtual(dst) })
         block.add_inst(vcode_inst)
+        true
+      } else {
+        false
+      }
+    ShiftLeft(operand_idx, shift_amount) =>
+      // Strength reduction: mul by power of 2 -> shift left
+      if inst.result is Some(result) {
+        let dst = ctx.get_vreg(result)
+        let src = ctx.get_vreg(inst.operands[operand_idx])
+        // Load shift amount as constant
+        let shift_vreg = ctx.vcode_func.new_vreg(Int)
+        let load_shift = VCodeInst::new(LoadConst(shift_amount.to_int64()))
+        load_shift.add_def({ reg: Virtual(shift_vreg) })
+        block.add_inst(load_shift)
+        // Emit shift left
+        let shl_inst = VCodeInst::new(Shl)
+        shl_inst.add_def({ reg: Virtual(dst) })
+        shl_inst.add_use(Virtual(src))
+        shl_inst.add_use(Virtual(shift_vreg))
+        block.add_inst(shl_inst)
+        true
+      } else {
+        false
+      }
+    ShiftRight(operand_idx, shift_amount) =>
+      // Strength reduction: unsigned div by power of 2 -> logical shift right
+      if inst.result is Some(result) {
+        let dst = ctx.get_vreg(result)
+        let src = ctx.get_vreg(inst.operands[operand_idx])
+        // Load shift amount as constant
+        let shift_vreg = ctx.vcode_func.new_vreg(Int)
+        let load_shift = VCodeInst::new(LoadConst(shift_amount.to_int64()))
+        load_shift.add_def({ reg: Virtual(shift_vreg) })
+        block.add_inst(load_shift)
+        // Emit logical shift right
+        let lshr_inst = VCodeInst::new(LShr)
+        lshr_inst.add_def({ reg: Virtual(dst) })
+        lshr_inst.add_use(Virtual(src))
+        lshr_inst.add_use(Virtual(shift_vreg))
+        block.add_inst(lshr_inst)
         true
       } else {
         false
