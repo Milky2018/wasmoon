@@ -4,9 +4,9 @@
 test "lower simple add function" {
   // Build IR function: fn add(a: i32, b: i32) -> i32 { a + b }
   let builder = @ir.IRBuilder::new("add")
-  let a = builder.add_param(@ir.Type::i32_())
-  let b = builder.add_param(@ir.Type::i32_())
-  builder.add_result(@ir.Type::i32_())
+  let a = builder.add_param(@ir.Type::I32)
+  let b = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let result = builder.iadd(a, b)
@@ -28,9 +28,9 @@ test "lower simple add function" {
 ///|
 test "lower integer arithmetic" {
   let builder = @ir.IRBuilder::new("arith")
-  let a = builder.add_param(@ir.Type::i64_())
-  let b = builder.add_param(@ir.Type::i64_())
-  builder.add_result(@ir.Type::i64_())
+  let a = builder.add_param(@ir.Type::I64)
+  let b = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.iadd(a, b)
@@ -54,7 +54,7 @@ test "lower integer arithmetic" {
 ///|
 test "lower constants" {
   let builder = @ir.IRBuilder::new("const_test")
-  builder.add_result(@ir.Type::i32_())
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c1 = builder.iconst_i32(10)
@@ -78,9 +78,9 @@ test "lower constants" {
 ///|
 test "lower float operations" {
   let builder = @ir.IRBuilder::new("float_add")
-  let a = builder.add_param(@ir.Type::f64_())
-  let b = builder.add_param(@ir.Type::f64_())
-  builder.add_result(@ir.Type::f64_())
+  let a = builder.add_param(@ir.Type::F64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::F64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(a, b)
@@ -105,9 +105,9 @@ test "lower float operations" {
 ///|
 test "lower comparison" {
   let builder = @ir.IRBuilder::new("cmp_test")
-  let a = builder.add_param(@ir.Type::i32_())
-  let b = builder.add_param(@ir.Type::i32_())
-  builder.add_result(@ir.Type::i32_())
+  let a = builder.add_param(@ir.Type::I32)
+  let b = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let cmp_result = builder.icmp_sgt(a, b)
@@ -127,9 +127,9 @@ test "lower comparison" {
 ///|
 test "lower conditional branch" {
   let builder = @ir.IRBuilder::new("max")
-  let a = builder.add_param(@ir.Type::i32_())
-  let b = builder.add_param(@ir.Type::i32_())
-  builder.add_result(@ir.Type::i32_())
+  let a = builder.add_param(@ir.Type::I32)
+  let b = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -165,14 +165,14 @@ test "lower conditional branch" {
 ///|
 test "lower memory operations" {
   let builder = @ir.IRBuilder::new("load_store")
-  let addr = builder.add_param(@ir.Type::i64_())
-  builder.add_result(@ir.Type::i32_())
+  let addr = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let loaded = builder.load(@ir.Type::i32_(), addr, 0)
+  let loaded = builder.load(@ir.Type::I32, addr, 0)
   let one = builder.iconst_i32(1)
   let sum = builder.iadd(loaded, one)
-  builder.store(@ir.Type::i32_(), addr, sum, 4)
+  builder.store(@ir.Type::I32, addr, sum, 4)
   builder.return_([sum])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
@@ -192,9 +192,9 @@ test "lower memory operations" {
 ///|
 test "lower bitwise operations" {
   let builder = @ir.IRBuilder::new("bitwise")
-  let a = builder.add_param(@ir.Type::i32_())
-  let b = builder.add_param(@ir.Type::i32_())
-  builder.add_result(@ir.Type::i32_())
+  let a = builder.add_param(@ir.Type::I32)
+  let b = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let and_res = builder.band(a, b)
@@ -218,9 +218,9 @@ test "lower bitwise operations" {
 ///|
 test "lower shift operations" {
   let builder = @ir.IRBuilder::new("shifts")
-  let a = builder.add_param(@ir.Type::i32_())
-  let b = builder.add_param(@ir.Type::i32_())
-  builder.add_result(@ir.Type::i32_())
+  let a = builder.add_param(@ir.Type::I32)
+  let b = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shl_res = builder.ishl(a, b)
@@ -244,9 +244,9 @@ test "lower shift operations" {
 ///|
 test "lower division operations" {
   let builder = @ir.IRBuilder::new("division")
-  let a = builder.add_param(@ir.Type::i32_())
-  let b = builder.add_param(@ir.Type::i32_())
-  builder.add_result(@ir.Type::i32_())
+  let a = builder.add_param(@ir.Type::I32)
+  let b = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sdiv_res = builder.sdiv(a, b)
@@ -270,12 +270,12 @@ test "lower division operations" {
 ///|
 test "lower float comparison" {
   let builder = @ir.IRBuilder::new("fcmp_test")
-  let a = builder.add_param(@ir.Type::f64_())
-  let b = builder.add_param(@ir.Type::f64_())
-  builder.add_result(@ir.Type::i32_())
+  let a = builder.add_param(@ir.Type::F64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let cmp_result = builder.fcmp(@ir.FloatCC::lt(), a, b)
+  let cmp_result = builder.fcmp(@ir.FloatCC::Lt, a, b)
   builder.return_([cmp_result])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
@@ -292,7 +292,7 @@ test "lower float comparison" {
 ///|
 test "lower unconditional jump" {
   let builder = @ir.IRBuilder::new("jump_test")
-  builder.add_result(@ir.Type::i32_())
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   let target = builder.create_block()
   builder.switch_to_block(entry)
@@ -317,7 +317,7 @@ test "lower unconditional jump" {
 ///|
 test "lower trap" {
   let builder = @ir.IRBuilder::new("trap_test")
-  builder.add_result(@ir.Type::i32_())
+  builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   builder.trap("unreachable")
@@ -335,7 +335,7 @@ test "lower trap" {
 ///|
 test "lower float constant" {
   let builder = @ir.IRBuilder::new("fconst_test")
-  builder.add_result(@ir.Type::f64_())
+  builder.add_result(@ir.Type::F64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c = builder.fconst_f64(3.14)

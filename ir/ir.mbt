@@ -16,7 +16,7 @@ fn Value::new(id : Int, ty : Type) -> Value {
 
 ///|
 /// IR Type system - corresponds to WASM value types
-pub enum Type {
+pub(all) enum Type {
   I32
   I64
   F32
@@ -37,30 +37,6 @@ pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
     ExternRef => Type::ExternRef
     _ => Type::I32 // Fallback
   }
-}
-
-///|
-/// Create i32 type
-pub fn Type::i32_() -> Type {
-  Type::I32
-}
-
-///|
-/// Create i64 type
-pub fn Type::i64_() -> Type {
-  Type::I64
-}
-
-///|
-/// Create f32 type
-pub fn Type::f32_() -> Type {
-  Type::F32
-}
-
-///|
-/// Create f64 type
-pub fn Type::f64_() -> Type {
-  Type::F64
 }
 
 ///|
@@ -188,7 +164,7 @@ pub enum Opcode {
 
 ///|
 /// Integer comparison condition codes
-pub enum IntCC {
+pub(all) enum IntCC {
   Eq // Equal
   Ne // Not equal
   Slt // Signed less than
@@ -203,7 +179,7 @@ pub enum IntCC {
 
 ///|
 /// Floating point comparison condition codes
-pub enum FloatCC {
+pub(all) enum FloatCC {
   Eq // Equal (ordered)
   Ne // Not equal (unordered)
   Lt // Less than (ordered)
@@ -211,12 +187,6 @@ pub enum FloatCC {
   Gt // Greater than (ordered)
   Ge // Greater than or equal (ordered)
 } derive(Show)
-
-///|
-/// Create FloatCC::Lt
-pub fn FloatCC::lt() -> FloatCC {
-  FloatCC::Lt
-}
 
 ///|
 /// Terminator - how a basic block ends

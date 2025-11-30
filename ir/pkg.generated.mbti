@@ -69,7 +69,7 @@ fn CFG::postorder(Self) -> Array[Int]
 fn CFG::reverse_postorder(Self) -> Array[Int]
 fn CFG::to_dot(Self, String) -> String
 
-pub enum FloatCC {
+pub(all) enum FloatCC {
   Eq
   Ne
   Lt
@@ -77,7 +77,6 @@ pub enum FloatCC {
   Gt
   Ge
 }
-fn FloatCC::lt() -> Self
 impl Show for FloatCC
 
 pub(all) struct Function {
@@ -186,7 +185,7 @@ pub(all) struct Inst {
 }
 impl Show for Inst
 
-pub enum IntCC {
+pub(all) enum IntCC {
   Eq
   Ne
   Slt
@@ -288,7 +287,7 @@ pub(all) struct Translator {
 fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int) -> Self
 fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
-pub enum Type {
+pub(all) enum Type {
   I32
   I64
   F32
@@ -296,11 +295,7 @@ pub enum Type {
   FuncRef
   ExternRef
 }
-fn Type::f32_() -> Self
-fn Type::f64_() -> Self
 fn Type::from_wasm(@types.ValueType) -> Self
-fn Type::i32_() -> Self
-fn Type::i64_() -> Self
 impl Show for Type
 
 pub(all) struct ValidationResult {
