@@ -434,6 +434,30 @@
 
 ---
 
+## 2025-11-30
+
+### Git 操作规范
+
+#### 1. 不要使用 `git push -f` (force push)
+- ❌ **错误做法**: 使用 `git commit --amend` 修改已推送的 commit，然后 `git push -f`
+  ```bash
+  git commit --amend --no-edit
+  git push -f  # 强制推送，覆盖远程历史
+  ```
+- ✅ **正确做法**: 创建新的 commit 来修复问题
+  ```bash
+  git add -A
+  git commit -m "fix: mark internal types as priv in wat module"
+  git push
+  ```
+- **原因**:
+  1. 如果有人已经基于该分支工作，force push 会导致他们的历史混乱
+  2. 丢失了 commit 历史，难以追溯修改过程
+  3. 在 PR review 中无法清楚看到每次修改的内容
+- **例外**: 只有在 commit 尚未推送到远程时，才可以使用 `--amend`
+
+---
+
 ## 待补充
 
 _请在此处继续添加新的意见和建议_

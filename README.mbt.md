@@ -9,6 +9,8 @@ Wasmoon is a WebAssembly interpreter written in MoonBit, targeting WebAssembly 1
 ## Features
 
 - **Binary Parser**: Full WASM binary format parsing with LEB128 decoding
+- **WAT Parser**: Parse WebAssembly Text Format to WASM modules
+- **Disassembler**: Convert WASM binary to WAT-like text format
 - **Instruction Set**: 190+ instruction variants
 - **Numeric Operations**: i32, i64, f32, f64 arithmetic, comparison, and bitwise operations
 - **Runtime**: Stack-based execution with memory, tables, and globals
@@ -24,30 +26,14 @@ moon add Milky2018/wasmoon
 ```moonbit
 ///|
 test "add function example" {
-  // Create a module with an add function
-  let mod : @types.Module = {
-    types: [
-      {
-        params: [@types.ValueType::I32, @types.ValueType::I32],
-        results: [@types.ValueType::I32],
-      },
-    ],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "add", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [
-      {
-        locals: [],
-        body: [@types.LocalGet(0), @types.LocalGet(1), @types.I32Add],
-      },
-    ],
-    datas: [],
-  }
+  // Define a module using WAT (WebAssembly Text Format)
+  let wat =
+    #|(module
+    #|  (func (export "add") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.add))
+  let mod = @wat.parse(wat)
 
   // Instantiate and execute
   let (store, instance) = @executor.instantiate_module(mod)
