@@ -653,3 +653,172 @@ test "combined optimizations" {
   // Suppress warning
   ignore(unused)
 }
+
+// ============ Control Flow Optimization Tests ============
+
+///|
+test "branch simplification: constant brz" {
+  // Test that brz with constant 0 condition simplifies to jump to then-target
+  let builder = IRBuilder::new("branch_simp_brz")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  builder.switch_to_block(entry)
+  let zero = builder.iconst_i32(0) // condition is constant 0
+  builder.brz(zero, then_block, else_block) // brz 0 -> jump to then_block
+  builder.switch_to_block(then_block)
+  let c1 = builder.iconst_i32(42)
+  builder.return_([c1])
+  builder.switch_to_block(else_block)
+  let c2 = builder.iconst_i32(100)
+  builder.return_([c2])
+  let func = builder.get_function()
+  let result = simplify_branches(func)
+  assert_true(result.changed)
+  // After simplification, brz should become jump
+  match func.blocks[0].terminator {
+    Some(Jump(target, _)) => assert_eq(target, 1) // should jump to then_block (id=1)
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "branch simplification: constant brnz" {
+  // Test that brnz with constant 1 condition simplifies to jump to then-target
+  let builder = IRBuilder::new("branch_simp_brnz")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  builder.switch_to_block(entry)
+  let one = builder.iconst_i32(1) // condition is constant 1
+  builder.brnz(one, then_block, else_block) // brnz 1 -> jump to then_block
+  builder.switch_to_block(then_block)
+  let c1 = builder.iconst_i32(42)
+  builder.return_([c1])
+  builder.switch_to_block(else_block)
+  let c2 = builder.iconst_i32(100)
+  builder.return_([c2])
+  let func = builder.get_function()
+  let result = simplify_branches(func)
+  assert_true(result.changed)
+  // After simplification, brnz should become jump
+  match func.blocks[0].terminator {
+    Some(Jump(target, _)) => assert_eq(target, 1) // should jump to then_block (id=1)
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "unreachable code elimination" {
+  // Create a function with an unreachable block
+  let builder = IRBuilder::new("unreachable_test")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let reachable = builder.create_block()
+  let dead_block = builder.create_block()
+  builder.switch_to_block(entry)
+  let c = builder.iconst_i32(42)
+  builder.jump(reachable, [])
+  builder.switch_to_block(reachable)
+  builder.return_([c])
+  builder.switch_to_block(dead_block)
+  let dead = builder.iconst_i32(999)
+  builder.return_([dead])
+  let func = builder.get_function()
+  assert_eq(func.blocks.length(), 3)
+  let result = eliminate_unreachable_code(func)
+  assert_true(result.changed)
+  // After elimination, unreachable block should be removed
+  assert_eq(func.blocks.length(), 2)
+}
+
+///|
+test "basic block merging" {
+  // Test merging blocks: b0 -> b1 -> b2 where b1 has single pred and succ
+  let builder = IRBuilder::new("merge_test")
+  builder.add_result(Type::I32)
+  let b0 = builder.create_block()
+  let b1 = builder.create_block()
+  let b2 = builder.create_block()
+  builder.switch_to_block(b0)
+  let c1 = builder.iconst_i32(1)
+  builder.jump(b1, [])
+  builder.switch_to_block(b1)
+  let c2 = builder.iconst_i32(2)
+  builder.jump(b2, [])
+  builder.switch_to_block(b2)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  assert_eq(func.blocks.length(), 3)
+  let result = merge_blocks(func)
+  assert_true(result.changed)
+  // After merging, should have fewer blocks
+  assert_true(func.blocks.length() < 3)
+}
+
+///|
+test "jump threading" {
+  // Test threading through jump-only blocks: b0 -> b1 -> b2 where b1 is just a jump
+  let builder = IRBuilder::new("thread_test")
+  builder.add_result(Type::I32)
+  let b0 = builder.create_block()
+  let b1 = builder.create_block()
+  let b2 = builder.create_block()
+  builder.switch_to_block(b0)
+  let c = builder.iconst_i32(42)
+  builder.jump(b1, [])
+  builder.switch_to_block(b1)
+  // b1 has no instructions, just a jump to b2
+  builder.jump(b2, [])
+  builder.switch_to_block(b2)
+  builder.return_([c])
+  let func = builder.get_function()
+  let result = thread_jumps(func)
+  assert_true(result.changed)
+  // After threading, b0 should jump directly to b2
+  match func.blocks[0].terminator {
+    Some(Jump(target, _)) => assert_eq(target, 2) // should jump directly to b2
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "combined control flow optimizations" {
+  // Test that all control flow optimizations work together
+  let builder = IRBuilder::new("combined_cf_test")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let intermediate1 = builder.create_block()
+  let intermediate2 = builder.create_block()
+  let exit = builder.create_block()
+  let dead_block = builder.create_block()
+  builder.switch_to_block(entry)
+  let zero = builder.iconst_i32(0)
+  // brz 0 -> always takes then branch (intermediate1)
+  builder.brz(zero, intermediate1, dead_block)
+  builder.switch_to_block(intermediate1)
+  // Just a jump to next block
+  builder.jump(intermediate2, [])
+  builder.switch_to_block(intermediate2)
+  // Just a jump to exit
+  builder.jump(exit, [])
+  builder.switch_to_block(exit)
+  let result = builder.iconst_i32(42)
+  builder.return_([result])
+  builder.switch_to_block(dead_block)
+  let dead = builder.iconst_i32(999)
+  builder.return_([dead])
+  let func = builder.get_function()
+  let initial_blocks = func.blocks.length()
+  // Run full optimization
+  let opt_result = optimize(func)
+  assert_true(opt_result.changed)
+  // After optimization:
+  // - brz 0 should become jump
+  // - unreachable block should be removed
+  // - intermediate blocks should be threaded/merged
+  assert_true(func.blocks.length() < initial_blocks)
+}
