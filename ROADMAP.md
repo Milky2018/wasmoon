@@ -198,10 +198,10 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] IR 文本格式打印器
 
 ### 6.2 WASM 到 IR 的转换
-- [ ] WASM 指令到 IR 指令的映射
-- [ ] 栈机模型到寄存器模型的转换
-- [ ] 控制流重建 (block/loop/if 到 CFG)
-- [ ] 局部变量和参数处理
+- [x] WASM 指令到 IR 指令的映射
+- [x] 栈机模型到寄存器模型的转换
+- [x] 控制流重建 (block/loop/if 到 CFG)
+- [x] 局部变量和参数处理
 
 ### 6.3 IR 验证
 - [ ] SSA 属性验证

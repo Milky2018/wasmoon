@@ -21,6 +21,10 @@ fn Block::add_param(Self, Value, Type) -> Unit
 fn Block::set_terminator(Self, Terminator) -> Unit
 impl Show for Block
 
+type BlockFrame
+
+type BlockKind
+
 pub enum FloatCC {
   Eq
   Ne
@@ -213,6 +217,18 @@ pub enum Terminator {
   Trap(String)
 }
 impl Show for Terminator
+
+pub(all) struct Translator {
+  builder : IRBuilder
+  value_stack : Array[Value]
+  locals : Array[Value]
+  block_stack : Array[BlockFrame]
+  func_types : Array[@types.FuncType]
+  func_type_indices : Array[Int]
+  num_imports : Int
+}
+fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int) -> Self
+fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub enum Type {
   I32

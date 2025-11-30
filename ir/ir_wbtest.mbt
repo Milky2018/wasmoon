@@ -175,3 +175,138 @@ test "block parameters" {
     #|
   inspect(output, content=expected)
 }
+
+///|
+test "translate simple add function" {
+  // WASM: func add(i32, i32) -> i32 { local.get 0; local.get 1; i32.add }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let instrs : Array[@types.Instruction] = [
+    @types.Instruction::LocalGet(0),
+    @types.Instruction::LocalGet(1),
+    @types.Instruction::I32Add,
+  ]
+  let translator = Translator::new("add", func_type, [], [func_type], [0], 0)
+  let func = translator.translate(instrs)
+  let output = func.print()
+  let expected =
+    #|function add(v0:i32, v1:i32) -> i32 {
+    #|block0:
+    #|    v2:i32 = iadd v0, v1
+    #|    return v2
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "translate multiply and add" {
+  // WASM: func mul_add(i32, i32) -> i32 { local.get 0; local.get 1; i32.mul; i32.const 1; i32.add }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let instrs : Array[@types.Instruction] = [
+    @types.Instruction::LocalGet(0),
+    @types.Instruction::LocalGet(1),
+    @types.Instruction::I32Mul,
+    @types.Instruction::I32Const(1),
+    @types.Instruction::I32Add,
+  ]
+  let translator = Translator::new(
+    "mul_add",
+    func_type,
+    [],
+    [func_type],
+    [0],
+    0,
+  )
+  let func = translator.translate(instrs)
+  let output = func.print()
+  let expected =
+    #|function mul_add(v0:i32, v1:i32) -> i32 {
+    #|block0:
+    #|    v2:i32 = imul v0, v1
+    #|    v3:i32 = iconst 1
+    #|    v4:i32 = iadd v2, v3
+    #|    return v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "translate with local variable" {
+  // WASM: func with_local(i32, i32) -> i32 {
+  //   (local i32)
+  //   local.get 0; local.get 1; i32.add; local.set 2;
+  //   local.get 2; i32.const 2; i32.mul
+  // }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let instrs : Array[@types.Instruction] = [
+    @types.Instruction::LocalGet(0),
+    @types.Instruction::LocalGet(1),
+    @types.Instruction::I32Add,
+    @types.Instruction::LocalSet(2),
+    @types.Instruction::LocalGet(2),
+    @types.Instruction::I32Const(2),
+    @types.Instruction::I32Mul,
+  ]
+  let translator = Translator::new(
+    "with_local",
+    func_type,
+    [@types.ValueType::I32],
+    [func_type],
+    [0],
+    0,
+  )
+  let func = translator.translate(instrs)
+  let output = func.print()
+  let expected =
+    #|function with_local(v0:i32, v1:i32) -> i32 {
+    #|block0:
+    #|    v2:i32 = iconst 0
+    #|    v3:i32 = iadd v0, v1
+    #|    v4:i32 = iconst 2
+    #|    v5:i32 = imul v3, v4
+    #|    return v5
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "translate comparison" {
+  // WASM: func max(i32, i32) -> i32 {
+  //   local.get 0; local.get 1; i32.gt_s; select
+  // }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let instrs : Array[@types.Instruction] = [
+    @types.Instruction::LocalGet(0),
+    @types.Instruction::LocalGet(1),
+    @types.Instruction::LocalGet(0),
+    @types.Instruction::LocalGet(1),
+    @types.Instruction::I32GtS,
+    @types.Instruction::Select,
+  ]
+  let translator = Translator::new("max", func_type, [], [func_type], [0], 0)
+  let func = translator.translate(instrs)
+  let output = func.print()
+  let expected =
+    #|function max(v0:i32, v1:i32) -> i32 {
+    #|block0:
+    #|    v2:i32 = icmp.sgt v0, v1
+    #|    v3:i32 = select v2, v0, v1
+    #|    return v3
+    #|}
+    #|
+  inspect(output, content=expected)
+}
