@@ -123,6 +123,61 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] WASM 反汇编器
 - [x] WAT 文本格式支持
 
+### 5.3 命令行工具 (对齐 wasmtime CLI)
+
+> 参考 `wasmtime --help` 实现完整的命令行接口
+
+#### 核心命令
+- [ ] `run` - 运行 WebAssembly 模块
+  - [ ] 直接运行 `.wasm` 文件
+  - [ ] `--invoke <FUNCTION>` 指定入口函数
+  - [ ] 传递命令行参数给 WASM 模块
+  - [ ] `--preload <NAME=MODULE>` 预加载模块
+- [ ] `compile` - 预编译 WebAssembly 模块 (AOT)
+  - [ ] 输出 `.cwasm` 预编译格式
+  - [ ] `-o, --output <PATH>` 指定输出路径
+  - [ ] `--emit-clif <PATH>` 输出 IR (待 IR 实现后)
+- [ ] `wast` - 运行 WebAssembly 测试脚本
+  - [ ] 支持 `.wast` 格式测试文件
+  - [ ] 替换当前的 JSON 测试格式
+
+#### 现有命令 (已实现)
+- [x] `test` - 运行 JSON 格式测试 (当前实现)
+- [x] `disasm` - 反汇编 WASM 文件
+- [x] `wat` - 解析 WAT 文件
+- [x] `demo` - 运行内置示例
+
+#### 检查与探索命令
+- [ ] `explore` - 探索 WASM 编译过程
+  - [ ] 可视化编译各阶段输出
+  - [ ] 输出 HTML 报告
+- [ ] `objdump` - 检查预编译的 `.cwasm` 文件
+  - [ ] 显示元数据
+  - [ ] 显示段信息
+
+#### 配置与调试选项
+- [ ] `-O, --optimize <KEY=VAL>` 优化选项
+  - [ ] 优化级别 (0-3)
+  - [ ] 特定优化开关
+- [ ] `-D, --debug <KEY=VAL>` 调试选项
+  - [ ] 详细日志输出
+  - [ ] IR 打印
+- [ ] `-W, --wasm <KEY=VAL>` WASM 语义选项
+  - [ ] 启用/禁用特定提案
+  - [ ] 内存限制配置
+
+#### WASI 支持 (需要先实现 WASI)
+- [ ] `-S, --wasi <KEY=VAL>` WASI 选项
+- [ ] `--dir <HOST_DIR[::GUEST_DIR]>` 目录映射
+- [ ] `--env <NAME=VAL>` 环境变量传递
+
+#### 辅助命令
+- [ ] `config` - 配置管理
+  - [ ] `--config <FILE>` 使用 TOML 配置文件
+- [ ] `settings` - 显示可用的编译器设置
+- [ ] `completion` - 生成 shell 补全脚本
+  - [ ] 支持 bash, zsh, fish
+
 ---
 
 ## Phase 6: 中间表示层 (IR) 🔨 进行中
