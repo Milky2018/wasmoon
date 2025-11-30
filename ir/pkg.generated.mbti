@@ -6,6 +6,7 @@ import(
 )
 
 // Values
+fn validate_function(Function) -> ValidationResult
 
 // Errors
 
@@ -240,6 +241,12 @@ pub enum Type {
 }
 fn Type::from_wasm(@types.ValueType) -> Self
 impl Show for Type
+
+pub(all) struct ValidationResult {
+  mut valid : Bool
+  errors : Array[String]
+}
+fn ValidationResult::new() -> Self
 
 pub(all) struct Value {
   id : Int

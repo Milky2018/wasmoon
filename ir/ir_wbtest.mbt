@@ -310,3 +310,54 @@ test "translate comparison" {
     #|
   inspect(output, content=expected)
 }
+
+// ============ Validator Tests ============
+
+///|
+test "validate valid function" {
+  let builder = IRBuilder::new("add")
+  let p0 = builder.add_param(Type::I32)
+  let p1 = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let sum = builder.iadd(p0, p1)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = validate_function(func)
+  assert_true(result.valid)
+  assert_eq(result.errors.length(), 0)
+}
+
+///|
+test "validate function with no blocks" {
+  let func : Function = {
+    name: "empty",
+    params: [],
+    results: [],
+    blocks: [],
+    next_value_id: 0,
+    next_block_id: 0,
+  }
+  let result = validate_function(func)
+  assert_false(result.valid)
+  assert_true(result.errors.length() > 0)
+}
+
+///|
+test "validate translated function" {
+  // Validate a function translated from WASM
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let instrs : Array[@types.Instruction] = [
+    @types.Instruction::LocalGet(0),
+    @types.Instruction::LocalGet(1),
+    @types.Instruction::I32Add,
+  ]
+  let translator = Translator::new("add", func_type, [], [func_type], [0], 0)
+  let func = translator.translate(instrs)
+  let result = validate_function(func)
+  assert_true(result.valid)
+}
