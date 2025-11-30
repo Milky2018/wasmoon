@@ -128,10 +128,10 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 > 参考 `wasmtime --help` 实现完整的命令行接口
 
 #### 核心命令
-- [ ] `run` - 运行 WebAssembly 模块
-  - [ ] 直接运行 `.wasm` 文件
-  - [ ] `--invoke <FUNCTION>` 指定入口函数
-  - [ ] 传递命令行参数给 WASM 模块
+- [x] `run` - 运行 WebAssembly 模块
+  - [x] 直接运行 `.wasm` 文件
+  - [x] `--invoke <FUNCTION>` 指定入口函数
+  - [x] 传递命令行参数给 WASM 模块 (`--arg`)
   - [ ] `--preload <NAME=MODULE>` 预加载模块
 - [ ] `compile` - 预编译 WebAssembly 模块 (AOT)
   - [ ] 输出 `.cwasm` 预编译格式
