@@ -239,15 +239,15 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-## Phase 8: 低级 IR 与指令选择 🔧
+## Phase 8: 低级 IR 与指令选择 🔨 进行中
 
 > 类似 Cranelift 的 VCode，目标相关的低级表示
 
-### 8.1 低级 IR (VCode) 设计
-- [ ] 虚拟寄存器表示
-- [ ] 目标相关的指令格式
-- [ ] 非 SSA 形式 (允许重定义)
-- [ ] 寄存器约束表示
+### 8.1 低级 IR (VCode) 设计 ✅
+- [x] 虚拟寄存器表示
+- [x] 目标相关的指令格式
+- [x] 非 SSA 形式 (允许重定义)
+- [x] 寄存器约束表示
 
 ### 8.2 指令选择 (Lowering)
 - [ ] 高级 IR 到低级 IR 的转换框架
@@ -255,10 +255,10 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [ ] 指令合并与优化
 - [ ] 目标特定的指令选择规则
 
-### 8.3 目标架构抽象
-- [ ] 目标架构接口 (TargetISA trait)
-- [ ] 寄存器描述
-- [ ] 调用约定 (Calling Convention)
+### 8.3 目标架构抽象 ✅
+- [x] 目标架构接口 (TargetISA trait)
+- [x] 寄存器描述
+- [x] 调用约定 (Calling Convention)
 - [ ] 指令编码规则
 
 ---
@@ -360,8 +360,9 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 |------|------|------|
 | Phase 1-5 | 完整的 WASM 解释器 | ✅ 已完成 |
 | Phase 6 | 中间表示层设计 | ✅ 已完成 |
-| Phase 7 | IR 优化 | 🔨 进行中 (7.3 完成) |
-| Phase 8-9 | 指令选择与寄存器分配 | 📋 计划中 |
+| Phase 7 | IR 优化 | ✅ 已完成 (7.4 可选跳过) |
+| Phase 8 | 指令选择 | 🔨 进行中 (8.1, 8.3 完成) |
+| Phase 9 | 寄存器分配 | 📋 计划中 |
 | Phase 10 | 代码生成 | 📋 计划中 |
 | Phase 11 | JIT 集成 | 📋 计划中 |
 | Phase 12 | WASM 扩展 | 📋 未来计划 |
@@ -387,5 +388,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 7.3 已完成，Phase 7.4 计划中
-**下一步**: 实现高级优化 (E-graph 统一优化框架、内联等)
+**当前状态**: Phase 8.1/8.3 已完成，VCode 基础结构和目标架构抽象就绪
+**下一步**: 实现 Phase 8.2 指令选择 (高级 IR 到 VCode 的转换框架)
