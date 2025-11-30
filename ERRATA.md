@@ -552,5 +552,97 @@ _请在此处继续添加新的意见和建议_
 - [x] 把 README.mbt.md 中的代码块改成正确的 MoonBit 代码，使用 test block 包裹 → 已完成
 - [x] 能使用 `for-in` 循环时，不要使用 `for i = 0; i < n; i++` → 已添加到第10条
 - [x] 忽略结果的语法，不要使用 `let _ = expr`，而要使用 `ignore(expr)` 或者最好是 `expr |> ignore` → 已更新第6条并修复所有代码
-- [x] 所有 match 中出现类似 `_ => ()` 或者 `None => ()` 之类的分支，替换为 `if x is Some(subpattern)` 或者 `guard x is Some(subpattern) else { xxx }` (else 块可省略，相当于 panic) → 已添加到第14条并修复所有代码 
-- [ ] 目前为止，vcode 模块的测试全都是白盒测试
+- [x] 所有 match 中出现类似 `_ => ()` 或者 `None => ()` 之类的分支，替换为 `if x is Some(subpattern)` 或者 `guard x is Some(subpattern) else { xxx }` (else 块可省略，相当于 panic) → 已添加到第14条并修复所有代码
+- [x] 目前为止，vcode 模块的测试全都是白盒测试，请给出理由，否则修改部分为黑盒测试（_test.mbt为后缀） → 见下方分析
+- [x] bench 内容现在非常贫瘠，需要丰富，请给出你的方案 → 见下方方案
+
+---
+
+## 分析与方案
+
+### vcode 模块白盒测试的理由
+
+vcode 模块所有测试都是白盒测试 (`*_wbtest.mbt`) 是合理的，原因如下：
+
+1. **测试内部实现细节**：vcode 是编译器后端的核心，测试需要访问内部类型如 `VReg`、`PReg`、`LiveInterval`、`ProgPoint` 等，这些类型虽然是 `pub(all)` 但其构造和使用模式是实现细节。
+
+2. **验证中间表示**：测试需要直接构造 VCode 指令并验证其生成结果，如 `VCodeBuilder::print()` 返回的文本表示，这是典型的白盒测试场景。
+
+3. **底层编码验证**：emit 模块的测试需要验证机器码字节序列（如 `emit_add_reg` 生成的具体字节），这需要访问 `MachineCode::get_bytes()` 等内部方法。
+
+4. **寄存器分配验证**：寄存器分配测试需要检查 `LiveInterval`、`SpillInfo` 等内部数据结构的正确性。
+
+5. **无用户可见 API**：vcode 模块是编译器内部组件，没有面向最终用户的公开 API，因此不存在需要黑盒测试的"外部接口"。
+
+**结论**：保持白盒测试是正确的设计选择。
+
+### bench 模块丰富方案
+
+当前 bench 覆盖了基础解释器执行，建议扩展以下几个维度：
+
+#### 1. 控制流基准测试
+```moonbit
+// 循环性能 (block + br_if)
+test "bench_loop" (b : @bench.T) { ... }
+
+// 嵌套 if-else
+test "bench_nested_conditionals" (b : @bench.T) { ... }
+
+// 间接调用 (call_indirect)
+test "bench_indirect_call" (b : @bench.T) { ... }
+```
+
+#### 2. 内存操作基准测试
+```moonbit
+// 连续内存读写
+test "bench_memory_sequential" (b : @bench.T) { ... }
+
+// 随机内存访问
+test "bench_memory_random" (b : @bench.T) { ... }
+
+// 不同数据类型 (i8/i16/i32/i64/f32/f64)
+test "bench_memory_types" (b : @bench.T) { ... }
+```
+
+#### 3. 64位和浮点运算
+```moonbit
+test "bench_i64_arithmetic" (b : @bench.T) { ... }
+test "bench_f32_arithmetic" (b : @bench.T) { ... }
+test "bench_f64_arithmetic" (b : @bench.T) { ... }
+```
+
+#### 4. 实际算法基准测试
+```moonbit
+// 斐波那契（递归 vs 迭代）
+test "bench_fibonacci_recursive" (b : @bench.T) { ... }
+test "bench_fibonacci_iterative" (b : @bench.T) { ... }
+
+// 简单排序
+test "bench_bubble_sort" (b : @bench.T) { ... }
+```
+
+#### 5. 编译器组件基准测试
+```moonbit
+// IR 翻译
+test "bench_ir_translation" (b : @bench.T) { ... }
+
+// 寄存器分配
+test "bench_regalloc" (b : @bench.T) { ... }
+
+// 代码生成
+test "bench_code_emission" (b : @bench.T) { ... }
+```
+
+#### 6. 模块解析基准测试
+```moonbit
+// WASM 二进制解析
+test "bench_parse_wasm" (b : @bench.T) { ... }
+
+// WAT 文本解析
+test "bench_parse_wat" (b : @bench.T) { ... }
+
+// 模块验证
+test "bench_validation" (b : @bench.T) { ... }
+```
+
+**实施建议**：先实现内存操作和 64 位运算基准测试，因为这些是当前功能的直接扩展；然后添加编译器组件基准测试以评估 JIT 相关性能。
