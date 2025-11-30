@@ -416,45 +416,51 @@ async fn run_wasm(
   wasm_path : String,
   invoke : String?,
   func_args : Array[String],
+  preloads : Array[String],
 ) -> Unit {
-  // Determine if it's a WAT file or WASM file
-  let is_wat = wasm_path.has_suffix(".wat")
-  let mod_ = if is_wat {
-    let data = @fs.read_file(wasm_path) catch {
-      e => {
-        println("Error reading file: \{e}")
-        return
+  // Create linker for module linking
+  let linker = @runtime.Linker::new()
+  // Load preloaded modules
+  for preload in preloads {
+    // Parse NAME=PATH format
+    let parts = split_preload(preload)
+    match parts {
+      Some((name, path)) => {
+        let preload_mod = load_module_from_path(path) catch {
+          e => {
+            println("Error loading preload module '\{name}': \{e}")
+            return
+          }
+        }
+        let preload_instance = @executor.instantiate_with_linker(
+          linker, name, preload_mod,
+        ) catch {
+          e => {
+            println("Error instantiating preload module '\{name}': \{e}")
+            return
+          }
+        }
+        linker.register(name, preload_instance)
       }
-    }
-    let content = data.text() catch {
-      e => {
-        println("Error reading file as text: \{e}")
-        return
-      }
-    }
-    @wat.parse(content) catch {
-      e => {
-        println("Error parsing WAT: \{e}")
-        return
-      }
-    }
-  } else {
-    let data = @fs.read_file(wasm_path) catch {
-      e => {
-        println("Error reading file: \{e}")
-        return
-      }
-    }
-    let bytes = data.binary()
-    @parser.parse_module(bytes) catch {
-      e => {
-        println("Error parsing module: \{e}")
+      None => {
+        println(
+          "Error: invalid preload format '\{preload}', expected NAME=PATH",
+        )
         return
       }
     }
   }
-  // Instantiate the module
-  let (store, instance) = @executor.instantiate_module_with_init(mod_) catch {
+  // Load main module
+  let mod_ = load_module_from_path(wasm_path) catch {
+    e => {
+      println("Error: \{e}")
+      return
+    }
+  }
+  // Instantiate the main module
+  let store = linker.get_store()
+  let imports = linker.build_imports()
+  let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
     e => {
       println("Error instantiating module: \{e}")
       return
@@ -499,6 +505,50 @@ async fn run_wasm(
           // Module was already initialized with start function if present
           ()
       }
+  }
+}
+
+///|
+/// Split preload string in NAME=PATH format
+fn split_preload(s : String) -> (String, String)? {
+  let mut eq_idx = -1
+  for i in 0..<s.length() {
+    if s[i] == '=' {
+      eq_idx = i
+      break
+    }
+  }
+  if eq_idx <= 0 {
+    return None
+  }
+  // Build name and path strings manually
+  let name_builder = StringBuilder::new()
+  for i in 0..<eq_idx {
+    name_builder.write_char(s[i].unsafe_to_char())
+  }
+  let path_builder = StringBuilder::new()
+  for i = eq_idx + 1; i < s.length(); i = i + 1 {
+    path_builder.write_char(s[i].unsafe_to_char())
+  }
+  Some((name_builder.to_string(), path_builder.to_string()))
+}
+
+///|
+/// Load a module from file path (supports both .wasm and .wat)
+async fn load_module_from_path(path : String) -> @types.Module raise Error {
+  let is_wat = path.has_suffix(".wat")
+  if is_wat {
+    let data = @fs.read_file(path)
+    let content = data.text() catch { e => raise e }
+    @wat.parse(content) catch {
+      e => raise e
+    }
+  } else {
+    let data = @fs.read_file(path)
+    let bytes = data.binary()
+    @parser.parse_module(bytes) catch {
+      e => raise e
+    }
   }
 }
 
@@ -670,6 +720,10 @@ async fn main {
           nargs=@clap.Nargs::Any,
           help="Arguments to pass to the function (can be repeated)",
         ),
+        "preload": @clap.Arg::named(
+          nargs=@clap.Nargs::Any,
+          help="Preload module as NAME=PATH (can be repeated)",
+        ),
       }),
       "demo": @clap.SubCommand::new(help="Run built-in demo programs"),
       "test": @clap.SubCommand::new(help="Run wasm-testsuite JSON spec file", args={
@@ -725,7 +779,12 @@ async fn main {
                   Some(arr) => arr
                   None => []
                 }
-                run_wasm(positional[0], invoke_opt, func_args)
+                // Get preload modules from --preload option
+                let preloads : Array[String] = match sub.args.get("preload") {
+                  Some(arr) => arr
+                  None => []
+                }
+                run_wasm(positional[0], invoke_opt, func_args, preloads)
               } else {
                 println("Error: missing file argument")
               }

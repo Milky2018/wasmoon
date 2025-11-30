@@ -132,7 +132,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [x] 直接运行 `.wasm` 文件
   - [x] `--invoke <FUNCTION>` 指定入口函数
   - [x] 传递命令行参数给 WASM 模块 (`--arg`)
-  - [ ] `--preload <NAME=MODULE>` 预加载模块
+  - [x] `--preload <NAME=MODULE>` 预加载模块
 - [ ] `compile` - 预编译 WebAssembly 模块 (AOT)
   - [ ] 输出 `.cwasm` 预编译格式
   - [ ] `-o, --output <PATH>` 指定输出路径
