@@ -271,3 +271,102 @@ pub fn CFG::to_dot(self : CFG, func_name : String) -> String {
   result = result + "}\n"
   result
 }
+
+// ============ Loop Analysis ============
+
+///|
+/// Loop - represents a natural loop in the CFG
+pub(all) struct Loop {
+  header : Int // Loop header block (target of back edge)
+  blocks : Array[Int] // All blocks in the loop body
+  back_edges : Array[(Int, Int)] // Back edges (source, target) for this loop
+}
+
+///|
+/// Find all natural loops in the CFG
+/// Returns a list of loops, each with its header and body blocks
+pub fn CFG::find_loops(self : CFG) -> Array[Loop] {
+  let loops : Array[Loop] = []
+  let back_edges = self.find_back_edges()
+
+  // Group back edges by header
+  let header_to_back_edges : @hashmap.HashMap[Int, Array[(Int, Int)]] = @hashmap.new()
+  for edge in back_edges {
+    let (_, header) = edge
+    match header_to_back_edges.get(header) {
+      Some(edges) => edges.push(edge)
+      None => header_to_back_edges.set(header, [edge])
+    }
+  }
+
+  // For each header, find the loop body
+  header_to_back_edges.each(fn(header, edges) {
+    let body = self.find_loop_body(header, edges)
+    loops.push({ header, blocks: body, back_edges: edges })
+  })
+  loops
+}
+
+///|
+/// Find all blocks in a natural loop given the header and back edges
+fn CFG::find_loop_body(
+  self : CFG,
+  header : Int,
+  back_edges : Array[(Int, Int)],
+) -> Array[Int] {
+  let body : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  body.set(header, true)
+
+  // Worklist for reverse DFS from back edge sources
+  let worklist : Array[Int] = []
+  for edge in back_edges {
+    let (source, _) = edge
+    if source != header {
+      worklist.push(source)
+      body.set(source, true)
+    }
+  }
+
+  // Walk backwards from back edge sources to header
+  while worklist.length() > 0 {
+    let block = worklist.pop().unwrap()
+    for pred in self.predecessors[block] {
+      if !body.get(pred).unwrap_or(false) {
+        body.set(pred, true)
+        worklist.push(pred)
+      }
+    }
+  }
+
+  // Convert to array
+  let result : Array[Int] = []
+  body.each(fn(block_id, _) { result.push(block_id) })
+  result
+}
+
+///|
+/// Check if a block is in a loop
+pub fn Loop::contains(self : Loop, block_id : Int) -> Bool {
+  for b in self.blocks {
+    if b == block_id {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Get the preheader block for a loop (the unique predecessor outside the loop)
+/// Returns None if there isn't a unique preheader
+pub fn CFG::get_loop_preheader(self : CFG, loop_ : Loop) -> Int? {
+  let mut preheader : Int? = None
+  for pred in self.predecessors[loop_.header] {
+    if !loop_.contains(pred) {
+      match preheader {
+        Some(_) => return None // Multiple preheaders
+        None => preheader = Some(pred)
+      }
+    }
+  }
+  preheader
+}
