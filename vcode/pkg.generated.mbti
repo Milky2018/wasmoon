@@ -25,6 +25,8 @@ fn apply_aarch64_rule(String, MatchResult, @ir.Inst, LoweringContext) -> AArch64
 
 fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
 
+fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
+
 fn compute_liveness(VCodeFunction) -> LivenessResult
 
 fn get_aarch64_rules() -> Array[RewriteRule]
@@ -170,6 +172,23 @@ pub enum AArch64Shift {
   Asr
   Ror
 }
+
+pub(all) struct AArch64StackFrame {
+  frame : StackFrame
+  use_fp : Bool
+  mut lr_slot : Int?
+  mut fp_slot : Int?
+}
+fn AArch64StackFrame::alloc_spill(Self, VReg) -> Int
+fn AArch64StackFrame::finalize(Self) -> Unit
+fn AArch64StackFrame::gen_epilogue(Self) -> Array[VCodeInst]
+fn AArch64StackFrame::gen_prologue(Self) -> Array[VCodeInst]
+fn AArch64StackFrame::new() -> Self
+fn AArch64StackFrame::save_callee_reg(Self, PReg) -> Int
+fn AArch64StackFrame::set_has_calls(Self) -> Unit
+fn AArch64StackFrame::setup(Self) -> Unit
+fn AArch64StackFrame::size(Self) -> Int
+impl Show for AArch64StackFrame
 
 pub enum CallConv {
   SystemV
@@ -388,6 +407,50 @@ pub(all) struct SpillInfo {
   slot : Int
   point : ProgPoint
 }
+
+pub(all) struct StackFrame {
+  slots : Array[StackSlot]
+  mut frame_size : Int
+  frame_align : Int
+  mut next_spill_offset : Int
+  mut next_arg_offset : Int
+  callee_saved_regs : Array[PReg]
+  mut has_calls : Bool
+}
+fn StackFrame::add_callee_saved(Self, PReg) -> Int
+fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
+fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
+fn StackFrame::alloc_spill_slot(Self, VReg, Int, Int) -> Int
+fn StackFrame::finalize(Self) -> Unit
+fn StackFrame::get_callee_saved(Self) -> Array[PReg]
+fn StackFrame::new(Int) -> Self
+fn StackFrame::print(Self) -> String
+fn StackFrame::size(Self) -> Int
+impl Show for StackFrame
+
+pub enum StackOpcode {
+  AdjustSP(Int)
+  PushReg(PReg)
+  PopReg(PReg)
+}
+impl Show for StackOpcode
+
+pub(all) struct StackSlot {
+  offset : Int
+  size : Int
+  align : Int
+  kind : StackSlotKind
+}
+impl Show for StackSlot
+
+pub enum StackSlotKind {
+  Spill(VReg)
+  Local(Int)
+  OutgoingArg(Int)
+  CalleeSaved(PReg)
+  ReturnAddress
+}
+impl Show for StackSlotKind
 
 pub(all) struct UseDefInfo {
   vreg : VReg

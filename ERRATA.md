@@ -553,3 +553,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 能使用 `for-in` 循环时，不要使用 `for i = 0; i < n; i++` → 已添加到第10条
 - [x] 忽略结果的语法，不要使用 `let _ = expr`，而要使用 `ignore(expr)` 或者最好是 `expr |> ignore` → 已更新第6条并修复所有代码
 - [x] 所有 match 中出现类似 `_ => ()` 或者 `None => ()` 之类的分支，替换为 `if x is Some(subpattern)` 或者 `guard x is Some(subpattern) else { xxx }` (else 块可省略，相当于 panic) → 已添加到第14条并修复所有代码 
+- [ ] 目前为止，vcode 模块的测试全都是白盒测试
