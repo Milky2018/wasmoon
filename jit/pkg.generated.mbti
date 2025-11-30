@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/jit"
 
 import(
+  "Milky2018/wasmoon/vcode"
   "moonbitlang/core/hashset"
 )
 
@@ -57,6 +58,14 @@ pub(all) struct CompilationRequest {
 fn CompilationRequest::new(Int, CompilationMode) -> Self
 fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
 
+pub enum CompilationStatus {
+  NotCompiled
+  Compiling
+  Compiled
+  Failed(String)
+}
+impl Show for CompilationStatus
+
 pub(all) struct CompilationStrategy {
   profiler : Profiler
   queue : CompilationQueue
@@ -74,6 +83,15 @@ fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
 fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
 impl Show for CompilationStrategy
 
+pub(all) struct FunctionEntry {
+  func_idx : Int
+  mut status : CompilationStatus
+  mut compiled_code : @vcode.CompiledFunction?
+  mut call_count : Int
+}
+fn FunctionEntry::is_compiled(Self) -> Bool
+fn FunctionEntry::new(Int) -> Self
+
 pub enum FunctionTemperature {
   Cold
   Warm
@@ -88,6 +106,26 @@ pub(all) struct HotThreshold {
 fn HotThreshold::aggressive() -> Self
 fn HotThreshold::conservative() -> Self
 fn HotThreshold::default() -> Self
+
+pub(all) struct JITEngine {
+  strategy : CompilationStrategy
+  runtime : @vcode.JITRuntime
+  functions : Map[Int, FunctionEntry]
+  mut total_calls : Int
+  mut jit_calls : Int
+  mut interpreter_calls : Int
+  mut compilation_failures : Int
+}
+fn JITEngine::default() -> Self
+fn JITEngine::get_compiled(Self, Int) -> @vcode.CompiledFunction?
+fn JITEngine::invalidate(Self, Int) -> Unit
+fn JITEngine::is_compiled(Self, Int) -> Bool
+fn JITEngine::mark_compiled(Self, Int, @vcode.CompiledFunction) -> Unit
+fn JITEngine::mark_failed(Self, Int, String) -> Unit
+fn JITEngine::new(TieredConfig) -> Self
+fn JITEngine::on_call(Self, Int) -> Bool
+fn JITEngine::stats(Self) -> (Int, Int, Int, Int, Int)
+impl Show for JITEngine
 
 pub(all) struct Profiler {
   counter : CallCounter
