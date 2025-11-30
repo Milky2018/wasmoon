@@ -1,0 +1,122 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/jit"
+
+import(
+  "moonbitlang/core/hashset"
+)
+
+// Values
+fn get_temperature(Int, HotThreshold) -> FunctionTemperature
+
+// Errors
+
+// Types and methods
+pub(all) struct CallCounter {
+  counts : Map[Int, Int]
+  mut total_calls : Int
+}
+fn CallCounter::clear(Self) -> Unit
+fn CallCounter::get_count(Self, Int) -> Int
+fn CallCounter::increment(Self, Int) -> Int
+fn CallCounter::new() -> Self
+fn CallCounter::reset(Self, Int) -> Unit
+fn CallCounter::total(Self) -> Int
+fn CallCounter::unique_functions(Self) -> Int
+
+pub enum CompilationDecision {
+  Interpret
+  CompileAndExecute(CompilationMode)
+  ExecuteCompiled
+}
+impl Show for CompilationDecision
+
+pub enum CompilationMode {
+  Interpret
+  Baseline
+  Optimized
+}
+impl Show for CompilationMode
+
+pub(all) struct CompilationQueue {
+  requests : Array[CompilationRequest]
+  max_size : Int
+}
+fn CompilationQueue::clear(Self) -> Unit
+fn CompilationQueue::contains(Self, Int) -> Bool
+fn CompilationQueue::dequeue(Self) -> CompilationRequest?
+fn CompilationQueue::enqueue(Self, CompilationRequest) -> Bool
+fn CompilationQueue::is_empty(Self) -> Bool
+fn CompilationQueue::length(Self) -> Int
+fn CompilationQueue::new(Int) -> Self
+
+pub(all) struct CompilationRequest {
+  func_idx : Int
+  mode : CompilationMode
+  priority : Int
+}
+fn CompilationRequest::new(Int, CompilationMode) -> Self
+fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
+
+pub(all) struct CompilationStrategy {
+  profiler : Profiler
+  queue : CompilationQueue
+  config : TieredConfig
+  mut decisions_interpret : Int
+  mut decisions_compile : Int
+  mut decisions_compiled : Int
+}
+fn CompilationStrategy::decide(Self, Int) -> CompilationDecision
+fn CompilationStrategy::is_compiled(Self, Int) -> Bool
+fn CompilationStrategy::mark_compiled(Self, Int) -> Unit
+fn CompilationStrategy::new(TieredConfig) -> Self
+fn CompilationStrategy::next_to_compile(Self) -> CompilationRequest?
+fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
+fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
+impl Show for CompilationStrategy
+
+pub enum FunctionTemperature {
+  Cold
+  Warm
+  Hot
+}
+impl Show for FunctionTemperature
+
+pub(all) struct HotThreshold {
+  warm_threshold : Int
+  hot_threshold : Int
+}
+fn HotThreshold::aggressive() -> Self
+fn HotThreshold::conservative() -> Self
+fn HotThreshold::default() -> Self
+
+pub(all) struct Profiler {
+  counter : CallCounter
+  threshold : HotThreshold
+  hot_functions : @hashset.HashSet[Int]
+  pending_compilation : @hashset.HashSet[Int]
+  compiled_functions : @hashset.HashSet[Int]
+}
+fn Profiler::get_function_temperature(Self, Int) -> FunctionTemperature
+fn Profiler::get_pending(Self) -> Array[Int]
+fn Profiler::is_compiled(Self, Int) -> Bool
+fn Profiler::mark_compiled(Self, Int) -> Unit
+fn Profiler::new(HotThreshold) -> Self
+fn Profiler::record_call(Self, Int) -> (Int, Bool)
+fn Profiler::should_use_jit(Self, Int) -> Bool
+fn Profiler::stats(Self) -> (Int, Int, Int, Int)
+impl Show for Profiler
+
+pub(all) struct TieredConfig {
+  baseline_threshold : Int
+  optimize_threshold : Int
+  synchronous : Bool
+  max_concurrent : Int
+}
+fn TieredConfig::default() -> Self
+fn TieredConfig::deferred() -> Self
+fn TieredConfig::eager() -> Self
+
+// Type aliases
+
+// Traits
+

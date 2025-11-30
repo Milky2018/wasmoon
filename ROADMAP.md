@@ -316,11 +316,11 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 > 将 JIT 编译器集成到 WASM 运行时
 
-### 11.1 编译策略
-- [ ] 解释执行 + JIT 混合模式
-- [ ] 热点检测 (Profiling)
-- [ ] 分层编译 (Tiered Compilation)
-- [ ] 懒编译 (Lazy Compilation)
+### 11.1 编译策略 ✅
+- [x] 解释执行 + JIT 混合模式
+- [x] 热点检测 (Profiling)
+- [x] 分层编译 (Tiered Compilation)
+- [x] 懒编译 (Lazy Compilation)
 
 ### 11.2 运行时接口
 - [ ] 编译函数调用
@@ -364,7 +364,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | Phase 8 | 指令选择 | ✅ 已完成 (8.1, 8.2, 8.3 架构完成) |
 | Phase 9 | 寄存器分配 | ✅ 已完成 |
 | Phase 10 | 代码生成 | ✅ 已完成 |
-| Phase 11 | JIT 集成 | 📋 计划中 |
+| Phase 11 | JIT 集成 | 🔨 进行中 (11.1 完成) |
 | Phase 12 | WASM 扩展 | 📋 未来计划 |
 
 ---
@@ -388,5 +388,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 10 代码生成完成，包括 AArch64 指令编码、代码发射、JIT 运行时支持
-**下一步**: 实现 Phase 11 JIT 运行时集成 (编译策略、运行时接口)
+**当前状态**: Phase 11.1 编译策略完成，包括热点检测、分层编译、懒编译策略
+**下一步**: 实现 Phase 11.2 运行时接口 (编译函数调用、解释器到JIT切换)
