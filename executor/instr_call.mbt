@@ -101,27 +101,6 @@ fn ExecContext::call_func_inst_with_context(
 }
 
 ///|
-/// Call a function instance (WASM or host) - backward compatible version
-fn ExecContext::call_func_inst(
-  self : ExecContext,
-  func_inst : @runtime.FuncInst,
-  args : Array[@types.Value],
-  num_results : Int,
-) -> Unit raise {
-  match func_inst {
-    WasmFunc(code) => self.call_wasm_func(code, args, num_results)
-    HostFunc(host_fn) => {
-      // Call host function directly
-      let results = host_fn(args)
-      // Push results onto the stack
-      for result in results {
-        self.stack.push(result)
-      }
-    }
-  }
-}
-
-///|
 /// Call a WASM function with a specific module instance context
 fn ExecContext::call_wasm_func_with_instance(
   self : ExecContext,
