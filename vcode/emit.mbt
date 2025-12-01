@@ -221,6 +221,167 @@ pub fn emit_add_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 }
 
 ///|
+/// Encode ADD (shifted register with shift amount): ADD Xd, Xn, Xm, shift #amount
+/// Opcode: 0x8B000000 (with shift bits)
+/// shift: 00=LSL, 01=LSR, 10=ASR
+pub fn emit_add_shifted(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : ShiftType,
+  amount : Int,
+) -> Unit {
+  let shift_bits = match shift {
+    Lsl => 0
+    Lsr => 1
+    Asr => 2
+  }
+  let imm6 = amount & 63
+  // Encoding: sf=1 | op=0 | S=0 | 01011 | shift[1:0] | 0 | Rm | imm6 | Rn | Rd
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
+  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b3 = 139 // 0x8B
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode SUB (shifted register with shift amount): SUB Xd, Xn, Xm, shift #amount
+pub fn emit_sub_shifted(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : ShiftType,
+  amount : Int,
+) -> Unit {
+  let shift_bits = match shift {
+    Lsl => 0
+    Lsr => 1
+    Asr => 2
+  }
+  let imm6 = amount & 63
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
+  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b3 = 203 // 0xCB
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode AND (shifted register with shift amount): AND Xd, Xn, Xm, shift #amount
+pub fn emit_and_shifted(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : ShiftType,
+  amount : Int,
+) -> Unit {
+  let shift_bits = match shift {
+    Lsl => 0
+    Lsr => 1
+    Asr => 2
+  }
+  let imm6 = amount & 63
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
+  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b3 = 138 // 0x8A
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode ORR (shifted register with shift amount): ORR Xd, Xn, Xm, shift #amount
+pub fn emit_orr_shifted(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : ShiftType,
+  amount : Int,
+) -> Unit {
+  let shift_bits = match shift {
+    Lsl => 0
+    Lsr => 1
+    Asr => 2
+  }
+  let imm6 = amount & 63
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
+  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b3 = 170 // 0xAA
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode EOR (shifted register with shift amount): EOR Xd, Xn, Xm, shift #amount
+pub fn emit_eor_shifted(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : ShiftType,
+  amount : Int,
+) -> Unit {
+  let shift_bits = match shift {
+    Lsl => 0
+    Lsr => 1
+    Asr => 2
+  }
+  let imm6 = amount & 63
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
+  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b3 = 202 // 0xCA
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode MADD: MADD Xd, Xn, Xm, Xa (Xd = Xa + Xn * Xm)
+/// Opcode: 0x9B000000
+pub fn emit_madd(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  ra : Int,
+) -> Unit {
+  // Encoding: sf=1 | 00 | 11011 | 000 | Rm | o0=0 | Ra | Rn | Rd
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((ra & 31) << 3)
+  let b2 = rm & 31
+  let b3 = 155 // 0x9B
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode MSUB: MSUB Xd, Xn, Xm, Xa (Xd = Xa - Xn * Xm)
+/// Opcode: 0x9B008000
+pub fn emit_msub(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  ra : Int,
+) -> Unit {
+  // Encoding: sf=1 | 00 | 11011 | 000 | Rm | o0=1 | Ra | Rn | Rd
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((ra & 31) << 3) | 128 // o0=1 (bit 7)
+  let b2 = rm & 31
+  let b3 = 155 // 0x9B
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode MNEG: MNEG Xd, Xn, Xm (Xd = -(Xn * Xm)) = MSUB Xd, Xn, Xm, XZR
+/// Opcode: 0x9B00FC00
+pub fn emit_mneg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  emit_msub(mc, rd, rn, rm, 31) // XZR = register 31
+}
+
+///|
 /// Encode ADD (immediate): ADD Xd, Xn, #imm12
 /// Opcode: 0x91000000
 pub fn emit_add_imm(mc : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
@@ -1000,6 +1161,61 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
     }
     Extend(_) | Truncate | IntToFloat | FloatToInt => emit_nop(mc)
     Nop => emit_nop(mc)
+    // AArch64-specific: shifted operand instructions
+    AddShifted(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_add_shifted(mc, rd, rn, rm, shift, amount)
+    }
+    SubShifted(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_sub_shifted(mc, rd, rn, rm, shift, amount)
+    }
+    AndShifted(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_and_shifted(mc, rd, rn, rm, shift, amount)
+    }
+    OrShifted(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_orr_shifted(mc, rd, rn, rm, shift, amount)
+    }
+    XorShifted(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_eor_shifted(mc, rd, rn, rm, shift, amount)
+    }
+    // AArch64-specific: multiply-accumulate instructions
+    Madd => {
+      // Xd = Xa + Xn * Xm, uses: [acc, src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let ra = reg_num(inst.uses[0]) // accumulator
+      let rn = reg_num(inst.uses[1]) // multiplicand
+      let rm = reg_num(inst.uses[2]) // multiplier
+      emit_madd(mc, rd, rn, rm, ra)
+    }
+    Msub => {
+      // Xd = Xa - Xn * Xm, uses: [acc, src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let ra = reg_num(inst.uses[0]) // accumulator
+      let rn = reg_num(inst.uses[1]) // multiplicand
+      let rm = reg_num(inst.uses[2]) // multiplier
+      emit_msub(mc, rd, rn, rm, ra)
+    }
+    Mneg => {
+      // Xd = -(Xn * Xm), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_mneg(mc, rd, rn, rm)
+    }
   }
 }
 

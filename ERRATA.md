@@ -555,4 +555,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 所有 match 中出现类似 `_ => ()` 或者 `None => ()` 之类的分支，替换为 `if x is Some(subpattern)` 或者 `guard x is Some(subpattern) else { xxx }` (else 块可省略，相当于 panic) → 已添加到第14条并修复所有代码
 - [x] 目前为止，vcode 模块的测试全都是白盒测试，请给出理由，否则修改部分为黑盒测试 → vcode 是编译器内部组件，无公开 API，白盒测试合理
 - [x] bench 内容现在非常贫瘠，需要丰富 → 已实现：10 大类基准测试覆盖解释器、JIT、IR、优化、VCode、寄存器分配、代码生成、运行时等
-- [x] vcode/aarch64_patterns.mbt 中有非常多的 never constructed variant. 这是怎么导致的？以后会用到吗？还是永远不会用到？ → 这些是为 AArch64 后端设计的前瞻性 API，代表 ARM64 架构的完整指令集特性（shifted operands、multiply-accumulate、addressing modes、条件码等）。当前 lowering 和 emit 路径使用更底层的函数，这些高层 enum 会在未来优化指令选择时使用
+- [x] vcode/aarch64_patterns.mbt 中有非常多的 never constructed variant. 这是怎么导致的？以后会用到吗？还是永远不会用到？ → **设计决策**：当前采用统一 VCode 方案，AArch64 特定 opcode（Madd、AddShifted 等）直接放入 `VCodeOpcode` 枚举。`aarch64_patterns.mbt` 中的 `AArch64Opcode` 是早期设计残留，应当删除。理想架构是分层设计（VCode 目标无关 → AArch64Inst 目标特定），但考虑到项目只针对 AArch64 单一目标，统一方案更务实。如未来需支持多目标，再重构为分层架构

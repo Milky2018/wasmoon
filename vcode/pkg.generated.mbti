@@ -63,7 +63,11 @@ fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
 
 fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
 
+fn emit_add_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+
 fn emit_and_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_and_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
 fn emit_asr_reg(MachineCode, Int, Int, Int) -> Unit
 
@@ -84,6 +88,8 @@ fn emit_cmp_reg(MachineCode, Int, Int) -> Unit
 fn emit_cset(MachineCode, Int, Int) -> Unit
 
 fn emit_eor_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_eor_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
 fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
 
@@ -115,17 +121,25 @@ fn emit_lsl_reg(MachineCode, Int, Int, Int) -> Unit
 
 fn emit_lsr_reg(MachineCode, Int, Int, Int) -> Unit
 
+fn emit_madd(MachineCode, Int, Int, Int, Int) -> Unit
+
+fn emit_mneg(MachineCode, Int, Int, Int) -> Unit
+
 fn emit_mov_reg(MachineCode, Int, Int) -> Unit
 
 fn emit_movk(MachineCode, Int, Int, Int) -> Unit
 
 fn emit_movz(MachineCode, Int, Int, Int) -> Unit
 
+fn emit_msub(MachineCode, Int, Int, Int, Int) -> Unit
+
 fn emit_mul(MachineCode, Int, Int, Int) -> Unit
 
 fn emit_nop(MachineCode) -> Unit
 
 fn emit_orr_reg(MachineCode, Int, Int, Int) -> Unit
+
+fn emit_orr_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
 fn emit_ret(MachineCode, Int) -> Unit
 
@@ -145,11 +159,19 @@ fn emit_sub_imm(MachineCode, Int, Int, Int) -> Unit
 
 fn emit_sub_reg(MachineCode, Int, Int, Int) -> Unit
 
+fn emit_sub_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+
 fn emit_udiv(MachineCode, Int, Int, Int) -> Unit
 
 fn get_aarch64_rules() -> Array[RewriteRule]
 
 fn get_optimization_rules() -> Array[RewriteRule]
+
+fn is_consecutive_ones(Int64) -> Bool
+
+fn is_valid_add_imm(Int64) -> Bool
+
+fn is_valid_logical_imm(Int64) -> Bool
 
 fn lower_function(@ir.Function) -> VCodeFunction
 
@@ -169,87 +191,6 @@ pub(all) struct AArch64 {
 }
 fn AArch64::new() -> Self
 impl TargetISA for AArch64
-
-pub enum AArch64Cond {
-  Eq
-  Ne
-  Cs
-  Cc
-  Mi
-  Pl
-  Vs
-  Vc
-  Hi
-  Ls
-  Ge
-  Lt
-  Gt
-  Le
-  Al
-  Nv
-}
-
-pub enum AArch64Extend {
-  Uxtb
-  Uxth
-  Uxtw
-  Uxtx
-  Sxtb
-  Sxth
-  Sxtw
-  Sxtx
-}
-
-pub enum AArch64Opcode {
-  AddShifted(AArch64Shift, Int)
-  SubShifted(AArch64Shift, Int)
-  AddImm(Int64)
-  SubImm(Int64)
-  AndShifted(AArch64Shift, Int)
-  OrrShifted(AArch64Shift, Int)
-  EorShifted(AArch64Shift, Int)
-  AndImm(Int64)
-  OrrImm(Int64)
-  EorImm(Int64)
-  Madd
-  Msub
-  Mneg
-  LdrOffset(Int)
-  LdrPreIndex(Int)
-  LdrPostIndex(Int)
-  LdrRegister(AArch64Extend)
-  StrOffset(Int)
-  StrPreIndex(Int)
-  StrPostIndex(Int)
-  StrRegister(AArch64Extend)
-  Cbz
-  Cbnz
-  Tbz(Int)
-  Tbnz(Int)
-  Csel(AArch64Cond)
-  Csinc(AArch64Cond)
-  Csneg(AArch64Cond)
-  Csinv(AArch64Cond)
-  Ubfx(Int, Int)
-  Sbfx(Int, Int)
-  Bfi(Int, Int)
-  Bfxil(Int, Int)
-  Movz(Int)
-  Movn(Int)
-  Movk(Int)
-}
-
-pub enum AArch64Pattern {
-  AddWithShift(Int)
-  AddWithExtend(AArch64Extend)
-  MultiplyAdd
-  MultiplySub
-  MultiplyNeg
-  ConditionalSelect(CmpKind)
-  BitFieldExtract(Int, Int)
-  CompareAndBranchZero
-  TestBitAndBranch(Int)
-}
 
 pub(all) struct AArch64Regs {
   placeholder : Int
@@ -282,13 +223,6 @@ pub enum AArch64RewriteResult {
   Mneg(Int, Int)
   LogicalShifted(VCodeOpcode, Int, Int, Int)
   NoMatch
-}
-
-pub enum AArch64Shift {
-  Lsl
-  Lsr
-  Asr
-  Ror
 }
 
 pub(all) struct AArch64StackFrame {
@@ -627,6 +561,13 @@ pub(all) struct RewriteRule {
   priority : Int
 }
 
+pub(all) enum ShiftType {
+  Lsl
+  Lsr
+  Asr
+}
+impl Show for ShiftType
+
 pub(all) struct SpillInfo {
   vreg : VReg
   slot : Int
@@ -785,6 +726,14 @@ pub enum VCodeOpcode {
   IntToFloat
   FloatToInt
   Nop
+  AddShifted(ShiftType, Int)
+  SubShifted(ShiftType, Int)
+  AndShifted(ShiftType, Int)
+  OrShifted(ShiftType, Int)
+  XorShifted(ShiftType, Int)
+  Madd
+  Msub
+  Mneg
 }
 impl Show for VCodeOpcode
 
