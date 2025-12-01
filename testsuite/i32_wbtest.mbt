@@ -189,15 +189,10 @@ test "wasm-testsuite: i32.div_s trap on zero" {
   let mod = create_i32_arithmetic_module()
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i32.const 1) (i32.const 0)) "integer divide by zero")
-  let trapped = try {
-    @executor.call_exported_func(store, instance, "div_s", [I32(1), I32(0)])
-    |> ignore
-    false
-  } catch {
-    @runtime.DivisionByZero => true
-    _ => false
-  }
-  inspect(trapped, content="true")
+  inspect(
+    try? @executor.call_exported_func(store, instance, "div_s", [I32(1), I32(0)]),
+    content="Err(DivisionByZero)",
+  )
 }
 
 ///|
@@ -206,18 +201,13 @@ test "wasm-testsuite: i32.div_s trap on overflow" {
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i32.const 0x80000000) (i32.const -1)) "integer overflow")
   // -2147483648 / -1 overflows because result would be 2147483648 which doesn't fit in i32
-  let trapped = try {
-    @executor.call_exported_func(store, instance, "div_s", [
+  inspect(
+    try? @executor.call_exported_func(store, instance, "div_s", [
       I32(-2147483648),
       I32(-1),
-    ])
-    |> ignore
-    false
-  } catch {
-    @runtime.IntegerOverflow => true
-    _ => false
-  }
-  inspect(trapped, content="true")
+    ]),
+    content="Err(IntegerOverflow)",
+  )
 }
 
 ///|
@@ -975,11 +965,10 @@ test "wasm-testsuite: i32.1.wasm should fail validation" {
   ]
   let bytes_data = Bytes::from_array(bytes)
   let mod = @parser.parse_module(bytes_data)
-  let validation_failed = try {
-    @validator.validate_module(mod)
-    false
-  } catch {
-    _ => true
-  }
-  inspect(validation_failed, content="true")
+  inspect(
+    try? @validator.validate_module(mod),
+    content=(
+      #|Err(StackUnderflow("Expected I32, but stack is empty"))
+    ),
+  )
 }

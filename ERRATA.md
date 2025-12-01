@@ -481,6 +481,24 @@
   ```
 - **说明**: `if-is` 语法更简洁，避免了无意义的空分支
 
+#### 15. 测试中检查错误的写法
+- ❌ **错误做法**: 使用复杂的 try-catch 模式检查是否抛出错误
+  ```moonbit
+  let result = try {
+    f() |> ignore
+    false // Should not reach here
+  } catch {
+    SomeErr => true // Expected
+    _ => false
+  }
+  inspect(result, content="true")
+  ```
+- ✅ **正确做法**: 使用 `try?` 配合 `inspect`
+  ```moonbit
+  inspect(try? f(), content="Err(SomeErr)")
+  ```
+- **说明**: `try?` 将结果转换为 `Result` 类型，可直接用 `inspect` 检查错误类型
+
 ---
 
 ## 2025-11-30
@@ -560,3 +578,4 @@ _请在此处继续添加新的意见和建议_
 - [x] main.mbt 现在太大了，适当进行拆分 → 已拆分为：demo.mbt, wast.mbt, settings.mbt, config.mbt, html_report.mbt
 - [x] 我完全不理解 `{ "path": "Milky2018/wasmoon/cwasm", "alias": "cwasm" }` 这是在做什么 → 当路径最后一段与 alias 相同时，alias 是多余的。当前项目已移除所有不必要的 alias
 - [x] completion 和项目主要功能无关，可以先删掉 → 已删除 completion.mbt
+- [x] 有非常多如下形式的测试：应使用 `inspect(try? f(), content="Err(...)")` → 已修复所有测试文件（cwasm_wbtest.mbt, i32_wbtest.mbt, i64_wbtest.mbt, executor_wbtest.mbt, validator_wbtest.mbt）

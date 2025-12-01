@@ -101,14 +101,14 @@ async fn run_test_command_async(
       let bytes = read_wasm_file(base_dir, filename)
       match bytes {
         Some(b) =>
-          try {
-            let instance = ctx.load_module(b, None)
-            ctx.set_current_module(instance)
-          } catch {
-            e =>
-              result.add_failed(
-                "\{line_prefix}Failed to load module \{filename}: \{e}",
-              )
+          if (try? {
+              let instance = ctx.load_module(b, None)
+              ctx.set_current_module(instance)
+            })
+            is Err(e) {
+            result.add_failed(
+              "\{line_prefix}Failed to load module \{filename}: \{e}",
+            )
           }
         None => {
           result.add_skipped()
@@ -155,64 +155,46 @@ async fn run_test_command_async(
     AssertInvalid(filename, _msg) => {
       let bytes = read_wasm_file(base_dir, filename)
       match bytes {
-        Some(b) => {
-          let valid = try {
-            let mod = @parser.parse_module(b)
-            @validator.validate_module(mod)
-            true
-          } catch {
-            _ => false
-          }
-          if valid {
+        Some(b) =>
+          if (try? {
+              let mod = @parser.parse_module(b)
+              @validator.validate_module(mod)
+            })
+            is Ok(_) {
             result.add_failed(
               "\{line_prefix}assert_invalid should have failed: \{filename}",
             )
           } else {
             result.add_passed()
           }
-        }
         None => result.add_skipped()
       }
     }
     AssertMalformed(filename, _msg) => {
       let bytes = read_wasm_file(base_dir, filename)
       match bytes {
-        Some(b) => {
-          let parsed = try {
-            @parser.parse_module(b) |> ignore
-            true
-          } catch {
-            _ => false
-          }
-          if parsed {
+        Some(b) =>
+          if (try? @parser.parse_module(b)) is Ok(_) {
             result.add_failed(
               "\{line_prefix}assert_malformed should have failed: \{filename}",
             )
           } else {
             result.add_passed()
           }
-        }
         None => result.add_skipped()
       }
     }
     AssertUninstantiable(filename, _msg) => {
       let bytes = read_wasm_file(base_dir, filename)
       match bytes {
-        Some(b) => {
-          let instantiated = try {
-            ctx.load_module(b, None) |> ignore
-            true
-          } catch {
-            _ => false
-          }
-          if instantiated {
+        Some(b) =>
+          if (try? ctx.load_module(b, None)) is Ok(_) {
             result.add_failed(
               "\{line_prefix}assert_uninstantiable should have failed: \{filename}",
             )
           } else {
             result.add_passed()
           }
-        }
         None => result.add_skipped()
       }
     }

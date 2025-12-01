@@ -144,15 +144,13 @@ test "wasm-testsuite: i64.div_s trap on zero" {
   let mod = create_i64_arithmetic_module()
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i64.const 1) (i64.const 0)) "integer divide by zero")
-  let trapped = try {
-    @executor.call_exported_func(store, instance, "div_s", [I64(1L), I64(0L)])
-    |> ignore
-    false
-  } catch {
-    @runtime.DivisionByZero => true
-    _ => false
-  }
-  inspect(trapped, content="true")
+  inspect(
+    try? @executor.call_exported_func(store, instance, "div_s", [
+      I64(1L),
+      I64(0L),
+    ]),
+    content="Err(DivisionByZero)",
+  )
 }
 
 ///|
@@ -161,18 +159,13 @@ test "wasm-testsuite: i64.div_s trap on overflow" {
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i64.const 0x8000000000000000) (i64.const -1)) "integer overflow")
   // INT64_MIN / -1 overflows
-  let trapped = try {
-    @executor.call_exported_func(store, instance, "div_s", [
+  inspect(
+    try? @executor.call_exported_func(store, instance, "div_s", [
       I64(-9223372036854775808L),
       I64(-1L),
-    ])
-    |> ignore
-    false
-  } catch {
-    @runtime.IntegerOverflow => true
-    _ => false
-  }
-  inspect(trapped, content="true")
+    ]),
+    content="Err(IntegerOverflow)",
+  )
 }
 
 ///|

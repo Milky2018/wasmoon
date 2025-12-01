@@ -467,15 +467,11 @@ fn run_test_command_internal(
           return
         }
       }
-      let invalid = try {
-        let mod = @parser.parse_module(bytes)
-        // Run validator
-        @validator.validate_module(mod)
-        false // validation passed - not expected
-      } catch {
-        _ => true // parsing or validation failed - expected
-      }
-      if invalid {
+      if (try? {
+          let mod = @parser.parse_module(bytes)
+          @validator.validate_module(mod)
+        })
+        is Err(_) {
         result.passed += 1
       } else {
         result.failed += 1
@@ -494,19 +490,13 @@ fn run_test_command_internal(
           return
         }
       }
-      let parsed = try {
-        @parser.parse_module(bytes) |> ignore
-        true
-      } catch {
-        _ => false
-      }
-      if parsed {
+      if (try? @parser.parse_module(bytes)) is Err(_) {
+        result.passed += 1
+      } else {
         result.failed += 1
         result.failures.push(
           "\{line_prefix}assert_malformed should have failed: \{filename}",
         )
-      } else {
-        result.passed += 1
       }
     }
     AssertUninstantiable(filename, _msg) => {
@@ -518,13 +508,7 @@ fn run_test_command_internal(
           return
         }
       }
-      let instantiated = try {
-        ctx.load_module(bytes, None) |> ignore
-        true
-      } catch {
-        _ => false
-      }
-      if instantiated {
+      if (try? ctx.load_module(bytes, None)) is Ok(_) {
         result.failed += 1
         result.failures.push(
           "\{line_prefix}assert_uninstantiable should have failed: \{filename}",

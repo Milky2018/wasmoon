@@ -132,12 +132,11 @@ fn run_wast_command(
     }
     AssertExhaustion(action, _msg) =>
       // Just try to invoke - should cause stack exhaustion
-      try {
-        invoke_action(ctx, action) |> ignore
+      if (try? invoke_action(ctx, action)) is Err(_) {
+        result.passed = result.passed + 1
+      } else {
         result.failed = result.failed + 1
         result.failures.push("assert_exhaustion: expected exhaustion")
-      } catch {
-        _ => result.passed = result.passed + 1
       }
     AssertInvalid(source, _msg) => {
       let valid = validate_module_source(source)
@@ -222,12 +221,7 @@ fn run_assert_trap(
   _expected_msg : String,
 ) -> Bool {
   // Should trap
-  try {
-    invoke_action(ctx, action) |> ignore
-    false // Should have trapped
-  } catch {
-    _ => true // Trapped as expected
-  }
+  (try? invoke_action(ctx, action)) is Err(_)
 }
 
 ///|
@@ -311,34 +305,20 @@ fn values_match(actual : @types.Value, expected : @wast.WastValue) -> Bool {
 fn validate_module_source(source : @wast.WastModuleSource) -> Bool {
   match source {
     Binary(bytes) =>
-      try {
+      (try? {
         let mod_ = @parser.parse_module(bytes)
         @validator.validate_module(mod_)
-        true
-      } catch {
-        _ => false
-      }
+      })
+      is Ok(_)
     Quote(_) => true // Can't easily validate quoted source
-    Inline(mod_) =>
-      try {
-        @validator.validate_module(mod_)
-        true
-      } catch {
-        _ => false
-      }
+    Inline(mod_) => (try? @validator.validate_module(mod_)) is Ok(_)
   }
 }
 
 ///|
 fn parse_module_source(source : @wast.WastModuleSource) -> Bool {
   match source {
-    Binary(bytes) =>
-      try {
-        @parser.parse_module(bytes) |> ignore
-        true
-      } catch {
-        _ => false
-      }
+    Binary(bytes) => (try? @parser.parse_module(bytes)) is Ok(_)
     Quote(_) => false // Quoted source is assumed to fail parsing
     Inline(_) => true // Already parsed successfully
   }
@@ -351,15 +331,13 @@ fn try_instantiate_source(
 ) -> Bool {
   match source {
     Binary(bytes) =>
-      try {
+      (try? {
         let mod_ = @parser.parse_module(bytes)
         let (store, instance) = @executor.instantiate_module(mod_)
         ctx.store = store
         ctx.current_module = Some(instance)
-        true
-      } catch {
-        _ => false
-      }
+      })
+      is Ok(_)
     Inline(mod_) => {
       let (store, instance) = @executor.instantiate_module(mod_)
       ctx.store = store

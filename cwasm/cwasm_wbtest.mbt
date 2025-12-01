@@ -91,14 +91,7 @@ test "serialize and deserialize: multiple functions" {
 ///|
 test "deserialize: invalid magic" {
   let bytes : Array[Int] = [0x00, 0x00, 0x00, 0x00]
-  let result = try {
-    deserialize(bytes) |> ignore
-    false
-  } catch {
-    DeserializeError(_) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(try? deserialize(bytes), content="Err(Invalid magic number)")
 }
 
 ///|
@@ -108,14 +101,7 @@ test "deserialize: unsupported version" {
     0x63, 0x77, 0x61, 0x73, // magic
      0xFF, 0x00, 0x00, 0x00,
   ] // version 255
-  let result = try {
-    deserialize(bytes) |> ignore
-    false
-  } catch {
-    DeserializeError(_) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(try? deserialize(bytes), content="Err(Unsupported version: 255)")
 }
 
 ///|

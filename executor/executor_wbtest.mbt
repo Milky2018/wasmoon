@@ -1366,14 +1366,10 @@ test "import validation: missing import raises error" {
   let imports = @runtime.Imports::new()
 
   // Should raise UnknownImport
-  let result = try {
-    instantiate_module_with_imports(store, mod, imports) |> ignore
-    false // Should not reach here
-  } catch {
-    @runtime.UnknownImport => true // Expected
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(
+    try? instantiate_module_with_imports(store, mod, imports),
+    content="Err(UnknownImport)",
+  )
 }
 
 ///|
@@ -2242,14 +2238,10 @@ test "bulk memory: data.drop" {
   }
 
   // After drop: init_nonzero should fail
-  let trapped = try {
-    call_exported_func(store, instance, "init_nonzero", []) |> ignore
-    false
-  } catch {
-    @runtime.OutOfBoundsMemoryAccess => true
-    _ => false
-  }
-  inspect(trapped, content="true")
+  inspect(
+    try? call_exported_func(store, instance, "init_nonzero", []),
+    content="Err(OutOfBoundsMemoryAccess)",
+  )
 }
 
 ///|
