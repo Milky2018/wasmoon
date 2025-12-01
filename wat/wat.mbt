@@ -901,10 +901,11 @@ fn Parser::parse_instructions(
   while self.current != RParen && self.current != Eof {
     match self.current {
       LParen => {
-        // Folded instruction
+        // Folded instruction - may produce multiple instructions
         self.advance()
-        let instr = self.parse_folded_instruction()
-        instrs.push(instr)
+        for instr in self.parse_folded_instructions() {
+          instrs.push(instr)
+        }
       }
       Keyword(kw) => {
         // Stop on control flow terminators (they are handled by the caller)
@@ -921,24 +922,92 @@ fn Parser::parse_instructions(
 }
 
 ///|
-fn Parser::parse_folded_instruction(
+/// Parse a folded instruction and return all resulting instructions.
+/// For most instructions, returns a single instruction.
+/// For folded `if`, returns condition instructions followed by the if instruction.
+fn Parser::parse_folded_instructions(
   self : Parser,
-) -> @types.Instruction raise WatError {
+) -> Array[@types.Instruction] raise WatError {
   match self.current {
     Keyword(kw) => {
+      // Special handling for "if" in folded form
+      if kw == "if" {
+        self.advance() // skip "if"
+        let bt = self.parse_block_type()
+        let result : Array[@types.Instruction] = []
+        // In folded form, condition operands come first as nested S-expressions
+        while self.current == LParen {
+          // Peek ahead to see if this is (then ...) or (else ...)
+          let saved = self.lexer.pos
+          self.advance()
+          match self.current {
+            Keyword("then") | Keyword("else") => {
+              // Restore and break to handle then/else
+              self.lexer.pos = saved
+              self.current = LParen
+              break
+            }
+            _ => {
+              // Restore to parse as folded operand (condition)
+              self.lexer.pos = saved
+              self.current = LParen
+              self.advance()
+              for instr in self.parse_folded_instructions() {
+                result.push(instr)
+              }
+            }
+          }
+        }
+        // Now parse (then ...) and optionally (else ...)
+        let mut then_body : Array[@types.Instruction] = []
+        let mut else_body : Array[@types.Instruction] = []
+        if self.current == LParen {
+          self.advance()
+          match self.current {
+            Keyword("then") => {
+              self.advance()
+              then_body = self.parse_instructions()
+              self.expect_rparen()
+            }
+            _ => raise UnexpectedToken("expected 'then' in folded if")
+          }
+        }
+        if self.current == LParen {
+          let saved = self.lexer.pos
+          self.advance()
+          match self.current {
+            Keyword("else") => {
+              self.advance()
+              else_body = self.parse_instructions()
+              self.expect_rparen()
+            }
+            _ => {
+              self.lexer.pos = saved
+              self.current = LParen
+            }
+          }
+        }
+        self.expect_rparen() // close if
+        result.push(@types.Instruction::If(bt, then_body, else_body))
+        return result
+      }
       let instr = self.parse_plain_instruction(kw)
       // For control instructions, we've already handled them
       // For other instructions, parse folded operands
       match instr {
-        Block(_, _) | Loop(_, _) | If(_, _, _) => instr
+        Block(_, _) | Loop(_, _) | If(_, _, _) => [instr]
         _ => {
-          // Parse nested folded instructions
+          // Parse nested folded instructions (operands)
+          let result : Array[@types.Instruction] = []
           while self.current == LParen {
             self.advance()
-            self.parse_folded_instruction() |> ignore
+            for i in self.parse_folded_instructions() {
+              result.push(i)
+            }
           }
           self.expect_rparen()
-          instr
+          result.push(instr)
+          result
         }
       }
     }
@@ -970,6 +1039,7 @@ fn Parser::parse_plain_instruction(
     }
     "if" => {
       let bt = self.parse_block_type()
+      // Flat form: if (result type) ... else ... end
       let then_body = self.parse_instructions()
       let else_body : Array[@types.Instruction] = if self.current ==
         Keyword("else") {
