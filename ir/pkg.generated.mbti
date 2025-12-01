@@ -22,6 +22,8 @@ fn optimize(Function) -> OptResult
 
 fn optimize_with_level(Function, OptLevel) -> OptResult
 
+fn optimize_with_toggles(Function, OptToggles) -> OptResult
+
 fn propagate_copies(Function) -> OptResult
 
 fn reduce_strength(Function) -> OptResult
@@ -274,6 +276,24 @@ pub(all) struct OptResult {
 }
 fn OptResult::mark_changed(Self) -> Unit
 fn OptResult::new() -> Self
+
+pub(all) struct OptToggles {
+  mut const_fold : Bool
+  mut copy_prop : Bool
+  mut cse : Bool
+  mut dce : Bool
+  mut branch_simp : Bool
+  mut uce : Bool
+  mut block_merge : Bool
+  mut jump_thread : Bool
+  mut licm : Bool
+  mut loop_unroll : Bool
+  mut strength_red : Bool
+}
+fn OptToggles::disable(Self, String) -> Bool
+fn OptToggles::enable(Self, String) -> Bool
+fn OptToggles::from_level(OptLevel) -> Self
+fn OptToggles::none() -> Self
 
 pub enum Terminator {
   Jump(Int, Array[Value])
