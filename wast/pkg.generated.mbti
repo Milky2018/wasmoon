@@ -1,0 +1,73 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wast"
+
+import(
+  "Milky2018/wasmoon/types"
+  "Milky2018/wasmoon/wat"
+)
+
+// Values
+fn parse(String) -> WastScript raise WastError
+
+// Errors
+pub(all) suberror WastError {
+  UnexpectedToken(String)
+  UnexpectedEof
+  InvalidNumber(String)
+  InvalidInstruction(String)
+  ParseError(String)
+  WatError(@wat.WatError)
+}
+impl Show for WastError
+
+// Types and methods
+pub enum WastAction {
+  Invoke(String?, String, Array[WastValue])
+  Get(String?, String)
+}
+impl Show for WastAction
+
+pub enum WastCommand {
+  Module(@types.Module, String?)
+  ModuleQuote(Array[String])
+  AssertReturn(WastAction, Array[WastValue])
+  AssertTrap(WastAction, String)
+  AssertExhaustion(WastAction, String)
+  AssertInvalid(WastModuleSource, String)
+  AssertMalformed(WastModuleSource, String)
+  AssertUnlinkable(WastModuleSource, String)
+  Register(String, String?)
+  Action(WastAction)
+}
+impl Show for WastCommand
+
+pub enum WastModuleSource {
+  Binary(Bytes)
+  Quote(Array[String])
+  Inline(@types.Module)
+}
+impl Show for WastModuleSource
+
+pub struct WastScript {
+  commands : Array[WastCommand]
+}
+
+pub enum WastValue {
+  I32(Int)
+  I64(Int64)
+  F32(Float)
+  F64(Double)
+  F32CanonicalNan
+  F32ArithmeticNan
+  F64CanonicalNan
+  F64ArithmeticNan
+  RefNull(String)
+  RefExtern(Int)
+  RefFunc
+}
+impl Show for WastValue
+
+// Type aliases
+
+// Traits
+

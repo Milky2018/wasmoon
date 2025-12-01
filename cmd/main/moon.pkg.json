@@ -7,6 +7,7 @@
     "Milky2018/wasmoon/validator",
     "Milky2018/wasmoon/disasm",
     "Milky2018/wasmoon/wat",
+    "Milky2018/wasmoon/wast",
     "Milky2018/wasmoon/cwasm",
     "moonbitlang/x/sys",
     "moonbitlang/async",
