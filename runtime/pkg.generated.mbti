@@ -98,6 +98,9 @@ fn Memory::load_i64_32u(Self, Int) -> Int64 raise RuntimeError
 fn Memory::load_i64_8s(Self, Int) -> Int64 raise RuntimeError
 fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
 fn Memory::new(Int, Int?) -> Self
+fn Memory::read_byte(Self, Int) -> Byte
+fn Memory::read_bytes(Self, Int, Int) -> Bytes
+fn Memory::read_i32(Self, Int) -> Int
 fn Memory::size_pages(Self) -> Int
 fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
 fn Memory::store_f32(Self, Int, Float) -> Unit raise RuntimeError
@@ -109,6 +112,9 @@ fn Memory::store_i64(Self, Int, Int64) -> Unit raise RuntimeError
 fn Memory::store_i64_16(Self, Int, Int64) -> Unit raise RuntimeError
 fn Memory::store_i64_32(Self, Int, Int64) -> Unit raise RuntimeError
 fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
+fn Memory::write_byte(Self, Int, Byte) -> Unit
+fn Memory::write_i32(Self, Int, Int) -> Unit
+fn Memory::write_i64(Self, Int, Int64) -> Unit
 impl Show for Memory
 
 pub(all) struct ModuleInstance {
@@ -158,6 +164,7 @@ fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
 fn Store::get_func_owner(Self, Int) -> ModuleInstance?
 fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
 fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
+fn Store::get_memory(Self, Int) -> Memory
 fn Store::get_table(Self, Int) -> Table raise RuntimeError
 fn Store::new() -> Self
 fn Store::register_instance(Self, ModuleInstance) -> Int

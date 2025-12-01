@@ -1,0 +1,207 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wasi"
+
+import(
+  "Milky2018/wasmoon/runtime"
+)
+
+// Values
+fn args_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+
+fn args_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+
+fn clock_time_get(@runtime.Memory, Int, Int64, Int) -> Int
+
+fn environ_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+
+fn environ_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+
+fn fd_close(WasiContext, Int) -> Int
+
+fn fd_prestat_dir_name(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+
+fn fd_prestat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+
+fn fd_read(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+
+fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+
+fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
+
+fn random_get(@runtime.Memory, Int, Int) -> Int
+
+fn register_wasi(@runtime.Linker, WasiContext) -> Unit
+
+let stderr : Fd
+
+let stdin : Fd
+
+let stdout : Fd
+
+// Errors
+pub(all) suberror WasiExit Int
+
+// Types and methods
+pub(all) struct CIoVec {
+  buf : Int
+  buf_len : Int
+}
+
+pub(all) enum ClockId {
+  Realtime
+  Monotonic
+  ProcessCPUTimeId
+  ThreadCPUTimeId
+}
+fn ClockId::from_i32(Int) -> Self?
+
+pub(all) enum Errno {
+  Success
+  TooBig
+  Acces
+  AddrInUse
+  AddrNotAvail
+  AfNoSupport
+  Again
+  Already
+  Badf
+  BadMsg
+  Busy
+  Canceled
+  Child
+  ConnAborted
+  ConnRefused
+  ConnReset
+  Deadlk
+  DestAddrReq
+  Dom
+  DQuot
+  Exist
+  Fault
+  FBig
+  HostUnreach
+  IdRm
+  IlSeq
+  InProgress
+  Intr
+  Inval
+  IO
+  IsConn
+  IsDir
+  Loop
+  MFile
+  MLink
+  MsgSize
+  MultiHop
+  NameTooLong
+  NetDown
+  NetReset
+  NetUnreach
+  NFile
+  NoBufS
+  NoDev
+  NoEnt
+  NoExec
+  NoLck
+  NoLink
+  NoMem
+  NoMsg
+  NoProtoOpt
+  NoSpc
+  NoSys
+  NotConn
+  NotDir
+  NotEmpty
+  NotRecoverable
+  NotSock
+  NotSup
+  NoTTY
+  NxIO
+  Overflow
+  OwnerDead
+  Perm
+  Pipe
+  Proto
+  ProtoNoSupport
+  Prototype
+  Range
+  ROFS
+  SPipe
+  SRch
+  Stale
+  TimedOut
+  TxtBsy
+  XDev
+  NotCapable
+}
+fn Errno::to_i32(Self) -> Int
+
+pub(all) struct Fd(Int)
+fn Fd::from_int(Int) -> Self
+#deprecated
+fn Fd::inner(Self) -> Int
+fn Fd::to_int(Self) -> Int
+impl Eq for Fd
+impl Show for Fd
+
+pub(all) struct FileSize(Int64)
+#deprecated
+fn FileSize::inner(Self) -> Int64
+fn FileSize::to_int64(Self) -> Int64
+impl Eq for FileSize
+impl Show for FileSize
+
+pub(all) struct IoVec {
+  buf : Int
+  buf_len : Int
+}
+
+pub(all) struct Size(Int)
+#deprecated
+fn Size::inner(Self) -> Int
+fn Size::to_int(Self) -> Int
+impl Eq for Size
+impl Show for Size
+
+pub(all) struct Timestamp(Int64)
+#deprecated
+fn Timestamp::inner(Self) -> Int64
+fn Timestamp::to_int64(Self) -> Int64
+impl Eq for Timestamp
+impl Show for Timestamp
+
+pub(all) struct WasiContext {
+  args : Array[String]
+  env : Array[String]
+  mut exit_code : Int?
+  preopens : Array[(Fd, String, String)]
+  mut next_fd : Int
+  stdout_callback : (Bytes) -> Unit
+  stderr_callback : (Bytes) -> Unit
+  stdin_callback : () -> Bytes
+}
+fn WasiContext::get_exit_code(Self) -> Int?
+fn WasiContext::has_exited(Self) -> Bool
+fn WasiContext::new() -> Self
+
+pub(all) struct WasiContextBuilder {
+  mut args : Array[String]
+  env : Array[String]
+  preopens : Array[(String, String)]
+  mut stdout_callback : ((Bytes) -> Unit)?
+  mut stderr_callback : ((Bytes) -> Unit)?
+  mut stdin_callback : (() -> Bytes)?
+}
+fn WasiContextBuilder::args(Self, Array[String]) -> Self
+fn WasiContextBuilder::build(Self) -> WasiContext
+fn WasiContextBuilder::env(Self, String, String) -> Self
+fn WasiContextBuilder::new() -> Self
+fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
+fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
+fn WasiContextBuilder::stdin(Self, () -> Bytes) -> Self
+fn WasiContextBuilder::stdout(Self, (Bytes) -> Unit) -> Self
+
+// Type aliases
+
+// Traits
+

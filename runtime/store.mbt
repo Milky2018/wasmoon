@@ -106,6 +106,18 @@ pub fn Store::get_mem(self : Store, idx : Int) -> Memory raise RuntimeError {
 }
 
 ///|
+/// Get memory by index (returns None if not found)
+/// This is useful for WASI functions that need memory access
+pub fn Store::get_memory(self : Store, idx : Int) -> Memory {
+  if idx < 0 || idx >= self.mems.length() {
+    // Return a dummy empty memory if not found
+    Memory::new(0, None)
+  } else {
+    self.mems[idx]
+  }
+}
+
+///|
 pub fn Store::get_global(
   self : Store,
   idx : Int,
