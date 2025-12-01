@@ -559,3 +559,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 现在缺乏很多黑盒测试 → 已为 types、runtime、cwasm 模块添加黑盒测试（35 个新测试）
 - [ ] main.mbt 现在太大了，适当进行拆分 → 建议拆分为：demo.mbt, testsuite.mbt, completion.mbt, settings.mbt, config.mbt, wast.mbt, utils.mbt
 - [ ] 我完全不理解 `{ "path": "Milky2018/wasmoon/cwasm", "alias": "cwasm" }` 这是在做什么，alias 是用来提供别名的，可是这两个名字完全一样，根本不必 alias
+- [ ] completion 和项目主要功能无关，可以先删掉，以后再实现

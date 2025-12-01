@@ -58,7 +58,7 @@ fn print_bash_completion() -> Unit {
       #|                COMPREPLY=( $(compgen -W "--output --emit-ir" -- ${cur}) )
       #|                ;;
       #|            explore)
-      #|                COMPREPLY=( $(compgen -W "--func --O" -- ${cur}) )
+      #|                COMPREPLY=( $(compgen -W "--func --O --html" -- ${cur}) )
       #|                ;;
       #|        esac
       #|        return 0
@@ -161,6 +161,7 @@ fn print_fish_completion() -> Unit {
       #|# Options for explore command
       #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l func -d "Function index to explore"
       #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l O -d "Optimization level (0-3)"
+      #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l html -d "Output HTML report to path"
     ),
   )
 }

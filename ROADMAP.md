@@ -152,7 +152,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 #### 检查与探索命令
 - [x] `explore` - 探索 WASM 编译过程
   - [x] 显示编译各阶段输出 (WASM → IR → VCode → 寄存器分配)
-  - [ ] 输出 HTML 报告 (可选，未来增强)
+  - [x] 输出 HTML 报告 (`--html <PATH>`)
 - [x] `objdump` - 检查预编译的 `.cwasm` 文件
   - [x] 显示元数据
   - [x] 显示段信息
@@ -160,20 +160,22 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 #### 配置与调试选项
 - [x] `-O, --optimize` 优化选项
   - [x] 优化级别 (0-3)
-  - [ ] 特定优化开关
-- [ ] `-D, --debug <KEY=VAL>` 调试选项
-  - [ ] 详细日志输出
-  - [ ] IR 打印
-- [ ] `-W, --wasm <KEY=VAL>` WASM 语义选项
-  - [ ] 启用/禁用特定提案
-  - [ ] 内存限制配置
+  - [x] 特定优化开关 (`--opt KEY=VALUE`)
+- [x] `-D, --debug <KEY=VAL>` 调试选项
+  - [x] 详细日志输出 (`-D verbose`)
+  - [x] IR 打印 (`-D print-ir`, `-D print-vcode`, `-D print-regalloc`)
+- [x] `-W, --wasm <KEY=VAL>` WASM 语义选项
+  - [x] 启用/禁用特定提案 (`multi-value`, `bulk-memory`, `simd`, `tail-call`)
+  - [x] 内存限制配置 (`max-memory`, `max-table`, `max-call-depth`)
 
 #### WASI 支持 (参见 Phase 12)
 - [ ] CLI 选项 (`--dir`, `--env`, `-S`) - 依赖 Phase 12 WASI 核心实现
 
 #### 辅助命令
-- [ ] `config` - 配置管理
-  - [ ] `--config <FILE>` 使用 TOML 配置文件
+- [x] `config` - 配置管理
+  - [x] `config show` - 显示配置
+  - [x] `config path` - 显示配置文件路径
+  - [x] `config init` - 初始化配置
 - [x] `settings` - 显示可用的编译器设置
 - [x] `completion` - 生成 shell 补全脚本
   - [x] 支持 bash, zsh, fish
