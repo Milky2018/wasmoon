@@ -6,11 +6,7 @@ import(
 )
 
 // Values
-fn aarch64_target() -> TargetArch
-
 fn deserialize(Array[Int]) -> PrecompiledModule raise DeserializeError
-
-fn x86_64_target() -> TargetArch
 
 // Errors
 pub suberror DeserializeError String
@@ -41,7 +37,7 @@ fn PrecompiledModule::new(TargetArch) -> Self
 fn PrecompiledModule::serialize(Self) -> Array[Int]
 impl Show for PrecompiledModule
 
-pub enum TargetArch {
+pub(all) enum TargetArch {
   Unknown
   X86_64
   AArch64
