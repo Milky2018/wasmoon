@@ -173,8 +173,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [ ] CLI 选项 (`--dir`, `--env`, `-S`) - 依赖 Phase 12 WASI 核心实现
 
 #### 辅助命令
-- [ ] `config` - 配置管理
-  - [ ] `--config <FILE>` 使用 TOML 配置文件
+- [x] `config` - 配置管理
+  - [x] `--config <FILE>` 使用 TOML 配置文件
 - [x] `settings` - 显示可用的编译器设置
 - [x] `completion` - 生成 shell 补全脚本
   - [x] 支持 bash, zsh, fish

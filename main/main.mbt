@@ -1081,7 +1081,7 @@ fn print_bash_completion() -> Unit {
       #|    COMPREPLY=()
       #|    cur="${COMP_WORDS[COMP_CWORD]}"
       #|    prev="${COMP_WORDS[COMP_CWORD-1]}"
-      #|    commands="run compile demo test disasm wat wast explore objdump settings completion"
+      #|    commands="run compile demo test disasm wat wast explore objdump settings completion config"
       #|
       #|    case "${prev}" in
       #|        wasmoon)
@@ -1098,6 +1098,10 @@ fn print_bash_completion() -> Unit {
       #|            ;;
       #|        completion)
       #|            COMPREPLY=( $(compgen -W "bash zsh fish" -- ${cur}) )
+      #|            return 0
+      #|            ;;
+      #|        config|--config)
+      #|            COMPREPLY=( $(compgen -f -X '!*.toml' -- ${cur}) $(compgen -d -- ${cur}) )
       #|            return 0
       #|            ;;
       #|        --invoke|--func)
@@ -1121,6 +1125,9 @@ fn print_bash_completion() -> Unit {
       #|                ;;
       #|            explore)
       #|                COMPREPLY=( $(compgen -W "--func --O --D" -- ${cur}) )
+      #|                ;;
+      #|            config)
+      #|                COMPREPLY=( $(compgen -W "--config" -- ${cur}) )
       #|                ;;
       #|        esac
       #|        return 0
@@ -1151,6 +1158,7 @@ fn print_zsh_completion() -> Unit {
       #|        'objdump:Inspect precompiled .cwasm file'
       #|        'settings:Display available compiler settings'
       #|        'completion:Generate shell completion script'
+      #|        'config:Display or load configuration'
       #|    )
       #|
       #|    _arguments -C \
@@ -1171,6 +1179,9 @@ fn print_zsh_completion() -> Unit {
       #|                    ;;
       #|                completion)
       #|                    _values 'shell' bash zsh fish
+      #|                    ;;
+      #|                config)
+      #|                    _files -g '*.toml'
       #|                    ;;
       #|            esac
       #|            ;;
@@ -1203,6 +1214,7 @@ fn print_fish_completion() -> Unit {
       #|complete -c wasmoon -n "__fish_use_subcommand" -a "objdump" -d "Inspect precompiled .cwasm file"
       #|complete -c wasmoon -n "__fish_use_subcommand" -a "settings" -d "Display available compiler settings"
       #|complete -c wasmoon -n "__fish_use_subcommand" -a "completion" -d "Generate shell completion script"
+      #|complete -c wasmoon -n "__fish_use_subcommand" -a "config" -d "Display or load configuration"
       #|
       #|# File completions for commands that need them
       #|complete -c wasmoon -n "__fish_seen_subcommand_from run compile disasm wat wast explore objdump" -F -a "*.wasm *.wat *.cwasm"
@@ -1224,8 +1236,218 @@ fn print_fish_completion() -> Unit {
       #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l func -d "Function index to explore"
       #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l O -d "Optimization level (0-3)"
       #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l D -d "Debug options: verbose, ir, timing, all"
+      #|
+      #|# Options for config command
+      #|complete -c wasmoon -n "__fish_seen_subcommand_from config" -l config -d "Path to TOML configuration file"
+      #|complete -c wasmoon -n "__fish_seen_subcommand_from config" -F -a "*.toml"
     ),
   )
+}
+
+///|
+/// Configuration for wasmoon
+struct Config {
+  mut optimization_level : Int // 0-3
+  mut target : String // aarch64, x86_64
+  mut debug_verbose : Bool
+  mut debug_ir : Bool
+  mut debug_timing : Bool
+}
+
+///|
+fn Config::default_() -> Config {
+  Config::{
+    optimization_level: 2,
+    target: "aarch64",
+    debug_verbose: false,
+    debug_ir: false,
+    debug_timing: false,
+  }
+}
+
+///|
+/// Parse TOML configuration file
+fn parse_config(content : String) -> Config {
+  let config = Config::default_()
+  let lines = split_lines(content)
+  for line in lines {
+    let trimmed = trim_string(line)
+    // Skip comments and empty lines
+    if trimmed.length() == 0 || trimmed[0] == '#' {
+      continue
+    }
+    // Parse key = value
+    let parts = split_equals(trimmed)
+    match parts {
+      Some((key, value)) => {
+        let k = trim_string(key)
+        let v = trim_string(value)
+        match k {
+          "optimization_level" | "opt_level" | "O" =>
+            config.optimization_level = parse_int_or(v, 2)
+          "target" | "arch" => config.target = strip_quotes(v)
+          "debug.verbose" | "verbose" => config.debug_verbose = parse_bool(v)
+          "debug.ir" | "print_ir" => config.debug_ir = parse_bool(v)
+          "debug.timing" | "timing" => config.debug_timing = parse_bool(v)
+          _ => () // Ignore unknown keys
+        }
+      }
+      None => ()
+    }
+  }
+  config
+}
+
+///|
+fn split_lines(s : String) -> Array[String] {
+  let result : Array[String] = []
+  let builder = StringBuilder::new()
+  for c in s {
+    if c == '\n' {
+      result.push(builder.to_string())
+      builder.reset()
+    } else if c != '\r' {
+      builder.write_char(c)
+    }
+  }
+  if builder.to_string().length() > 0 {
+    result.push(builder.to_string())
+  }
+  result
+}
+
+///|
+fn trim_string(s : String) -> String {
+  let mut start = 0
+  let mut end = s.length()
+  // Trim leading whitespace
+  while start < end && (s[start] == ' ' || s[start] == '\t') {
+    start = start + 1
+  }
+  // Trim trailing whitespace
+  while end > start && (s[end - 1] == ' ' || s[end - 1] == '\t') {
+    end = end - 1
+  }
+  if start >= end {
+    return ""
+  }
+  let builder = StringBuilder::new()
+  for i = start; i < end; i = i + 1 {
+    builder.write_char(s[i].unsafe_to_char())
+  }
+  builder.to_string()
+}
+
+///|
+fn split_equals(s : String) -> (String, String)? {
+  let mut eq_idx = -1
+  for i in 0..<s.length() {
+    if s[i] == '=' {
+      eq_idx = i
+      break
+    }
+  }
+  if eq_idx <= 0 {
+    return None
+  }
+  let key_builder = StringBuilder::new()
+  for i in 0..<eq_idx {
+    key_builder.write_char(s[i].unsafe_to_char())
+  }
+  let value_builder = StringBuilder::new()
+  for i = eq_idx + 1; i < s.length(); i = i + 1 {
+    value_builder.write_char(s[i].unsafe_to_char())
+  }
+  Some((key_builder.to_string(), value_builder.to_string()))
+}
+
+///|
+fn strip_quotes(s : String) -> String {
+  if s.length() >= 2 {
+    let first = s[0]
+    let last = s[s.length() - 1]
+    if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+      let builder = StringBuilder::new()
+      for i = 1; i < s.length() - 1; i = i + 1 {
+        builder.write_char(s[i].unsafe_to_char())
+      }
+      return builder.to_string()
+    }
+  }
+  s
+}
+
+///|
+fn parse_int_or(s : String, default_ : Int) -> Int {
+  @strconv.parse_int(s) catch {
+    _ => default_
+  }
+}
+
+///|
+fn parse_bool(s : String) -> Bool {
+  match s {
+    "true" | "1" | "yes" | "on" => true
+    _ => false
+  }
+}
+
+///|
+/// Display or load configuration
+async fn run_config(config_file : String?) -> Unit {
+  match config_file {
+    Some(path) => {
+      // Load and display configuration from file
+      let data = @fs.read_file(path) catch {
+        e => {
+          println("Error reading config file: \{e}")
+          return
+        }
+      }
+      let content = data.text() catch {
+        e => {
+          println("Error reading file as text: \{e}")
+          return
+        }
+      }
+      let config = parse_config(content)
+      println("Configuration loaded from: \{path}")
+      println("=".repeat(60))
+      display_config(config)
+    }
+    None => {
+      // Display default configuration
+      println("Default Configuration")
+      println("=".repeat(60))
+      display_config(Config::default_())
+      println("")
+      println("To use a config file:")
+      println("  wasmoon config --config <FILE>")
+      println("")
+      println("Example config file (TOML format):")
+      println("  # Wasmoon Configuration")
+      println("  optimization_level = 2")
+      println("  target = \"aarch64\"")
+      println("  debug.verbose = false")
+      println("  debug.ir = false")
+      println("  debug.timing = false")
+    }
+  }
+}
+
+///|
+fn display_config(config : Config) -> Unit {
+  println("")
+  println("== Compilation Settings ==")
+  println("  optimization_level = \{config.optimization_level}")
+  println("  target = \"\{config.target}\"")
+  println("")
+  println("== Debug Settings ==")
+  println("  debug.verbose = \{config.debug_verbose}")
+  println("  debug.ir = \{config.debug_ir}")
+  println("  debug.timing = \{config.debug_timing}")
+  println("")
+  println("=".repeat(60))
 }
 
 ///|
@@ -1730,6 +1952,9 @@ async fn main {
           "shell": @clap.Arg::positional(help="Shell type: bash, zsh, fish"),
         },
       ),
+      "config": @clap.SubCommand::new(help="Display or load configuration", args={
+        "config": @clap.Arg::named(help="Path to TOML configuration file"),
+      }),
     },
   )
   let help_msg = parser.gen_help_message(["wasmoon"], {})
@@ -1894,6 +2119,13 @@ async fn main {
                   "Error: missing shell argument. Usage: wasmoon completion <bash|zsh|fish>",
                 )
               }
+            }
+            "config" => {
+              let config_file : String? = match sub.args.get("config") {
+                Some(arr) => if arr.length() > 0 { Some(arr[0]) } else { None }
+                None => None
+              }
+              run_config(config_file)
             }
             name => println("Unknown command: \{name}")
           }
