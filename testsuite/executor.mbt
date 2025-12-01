@@ -130,13 +130,7 @@ pub fn run_assert_trap(
 ) -> Bool {
   let runtime_args = args.map(parse_test_value)
   // Should trap
-  let trapped = try {
-    ctx.invoke(module_name, func_name, runtime_args) |> ignore
-    false
-  } catch {
-    _ => true
-  }
-  trapped
+  (try? ctx.invoke(module_name, func_name, runtime_args)) is Err(_)
 }
 
 ///|

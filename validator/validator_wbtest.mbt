@@ -74,14 +74,12 @@ test "validator: type mismatch - wrong operand type" {
     codes: [func],
     datas: [],
   }
-  let result = try {
-    validate_module(mod)
-    false
-  } catch {
-    TypeMismatch(_) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(
+    try? validate_module(mod),
+    content=(
+      #|Err(TypeMismatch("Expected I32, got I64"))
+    ),
+  )
 }
 
 ///|
@@ -104,14 +102,12 @@ test "validator: stack underflow" {
     codes: [func],
     datas: [],
   }
-  let result = try {
-    validate_module(mod)
-    false
-  } catch {
-    StackUnderflow(_) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(
+    try? validate_module(mod),
+    content=(
+      #|Err(StackUnderflow("Expected I32, but stack is empty"))
+    ),
+  )
 }
 
 ///|
@@ -131,14 +127,7 @@ test "validator: invalid local index" {
     codes: [func],
     datas: [],
   }
-  let result = try {
-    validate_module(mod)
-    false
-  } catch {
-    InvalidLocalIndex(5) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(try? validate_module(mod), content="Err(InvalidLocalIndex(5))")
 }
 
 ///|
@@ -221,14 +210,12 @@ test "validator: stack height - function returns too many values" {
     codes: [func],
     datas: [],
   }
-  let result = try {
-    validate_module(mod)
-    false
-  } catch {
-    StackHeightMismatch(_) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(
+    try? validate_module(mod),
+    content=(
+      #|Err(StackHeightMismatch("function return: expected stack height 1, got 2"))
+    ),
+  )
 }
 
 ///|
@@ -252,14 +239,10 @@ test "validator: stack height - function returns too few values" {
     codes: [func],
     datas: [],
   }
-  let result = try {
-    validate_module(mod)
-    false
-  } catch {
-    StackHeightMismatch(_) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(
+    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    content="true",
+  )
 }
 
 ///|
@@ -328,14 +311,10 @@ test "validator: stack height - block leaves wrong number of values" {
     codes: [func],
     datas: [],
   }
-  let result = try {
-    validate_module(mod)
-    false
-  } catch {
-    StackHeightMismatch(_) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(
+    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    content="true",
+  )
 }
 
 ///|
@@ -389,14 +368,10 @@ test "validator: stack height - void function with leftover values" {
     codes: [func],
     datas: [],
   }
-  let result = try {
-    validate_module(mod)
-    false
-  } catch {
-    StackHeightMismatch(_) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(
+    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    content="true",
+  )
 }
 
 ///|
@@ -449,14 +424,10 @@ test "validator: control flow - invalid label index" {
     codes: [func],
     datas: [],
   }
-  let result = try {
-    validate_module(mod)
-    false
-  } catch {
-    InvalidLabelIndex(0) => true
-    _ => false
-  }
-  inspect(result, content="true")
+  inspect(
+    (try? validate_module(mod)) is Err(InvalidLabelIndex(0)),
+    content="true",
+  )
 }
 
 ///|
