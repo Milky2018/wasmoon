@@ -351,3 +351,285 @@ test "lower float constant" {
     #|
   inspect(output, content=expected)
 }
+
+// ============ AArch64-Specific Instruction Selection Tests ============
+// Note: Current implementation emits both the constituent instruction (mul/shl)
+// and the fused instruction (madd/add_shifted). A future optimization pass
+// could eliminate the dead constituent instructions via dead code elimination.
+
+///|
+test "lower add(x, mul(y, z)) to madd" {
+  // Pattern: add(x, mul(y, z)) -> MADD: x + y * z
+  let builder = @ir.IRBuilder::new("madd_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  let z = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mul_yz = builder.imul(y, z)
+  let result = builder.iadd(x, mul_yz)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits both mul and madd (madd consumes mul pattern, mul becomes dead code)
+  let expected =
+    #|vcode madd_test(v0:int, v1:int, v2:int) -> int {
+    #|block0:
+    #|    v3 = mul v1, v2
+    #|    v4 = madd v0, v1, v2
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower sub(x, mul(y, z)) to msub" {
+  // Pattern: sub(x, mul(y, z)) -> MSUB: x - y * z
+  let builder = @ir.IRBuilder::new("msub_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  let z = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mul_yz = builder.imul(y, z)
+  let result = builder.isub(x, mul_yz)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits both mul and msub (msub consumes mul pattern)
+  let expected =
+    #|vcode msub_test(v0:int, v1:int, v2:int) -> int {
+    #|block0:
+    #|    v3 = mul v1, v2
+    #|    v4 = msub v0, v1, v2
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower sub(0, mul(x, y)) to mneg" {
+  // Pattern: sub(0, mul(x, y)) -> MNEG: -(x * y)
+  let builder = @ir.IRBuilder::new("mneg_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let zero = builder.iconst_i64(0L)
+  let mul_xy = builder.imul(x, y)
+  let result = builder.isub(zero, mul_xy)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits both mul and mneg
+  let expected =
+    #|vcode mneg_test(v0:int, v1:int) -> int {
+    #|block0:
+    #|    v2 = ldi 0
+    #|    v3 = mul v0, v1
+    #|    v4 = mneg v0, v1
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower add(x, shl(y, n)) to add_shifted" {
+  // Pattern: add(x, shl(y, n)) -> AddShifted: x + (y << n)
+  let builder = @ir.IRBuilder::new("add_shifted_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i64(3L)
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.iadd(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits shl and add_shifted (shl becomes dead code)
+  let expected =
+    #|vcode add_shifted_test(v0:int, v1:int) -> int {
+    #|block0:
+    #|    v2 = ldi 3
+    #|    v3 = shl v1, v2
+    #|    v4 = add.lsl #3 v0, v1
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower sub(x, shl(y, n)) to sub_shifted" {
+  // Pattern: sub(x, shl(y, n)) -> SubShifted: x - (y << n)
+  let builder = @ir.IRBuilder::new("sub_shifted_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i64(2L)
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.isub(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits shl and sub_shifted
+  let expected =
+    #|vcode sub_shifted_test(v0:int, v1:int) -> int {
+    #|block0:
+    #|    v2 = ldi 2
+    #|    v3 = shl v1, v2
+    #|    v4 = sub.lsl #2 v0, v1
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower and(x, shl(y, n)) to and_shifted" {
+  // Pattern: and(x, shl(y, n)) -> AndShifted: x & (y << n)
+  let builder = @ir.IRBuilder::new("and_shifted_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i64(4L)
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.band(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits shl and and_shifted
+  let expected =
+    #|vcode and_shifted_test(v0:int, v1:int) -> int {
+    #|block0:
+    #|    v2 = ldi 4
+    #|    v3 = shl v1, v2
+    #|    v4 = and.lsl #4 v0, v1
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower or(x, shl(y, n)) to or_shifted" {
+  // Pattern: or(x, shl(y, n)) -> OrShifted: x | (y << n)
+  let builder = @ir.IRBuilder::new("or_shifted_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i64(5L)
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.bor(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits shl and or_shifted
+  let expected =
+    #|vcode or_shifted_test(v0:int, v1:int) -> int {
+    #|block0:
+    #|    v2 = ldi 5
+    #|    v3 = shl v1, v2
+    #|    v4 = or.lsl #5 v0, v1
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower xor(x, shl(y, n)) to xor_shifted" {
+  // Pattern: xor(x, shl(y, n)) -> XorShifted: x ^ (y << n)
+  let builder = @ir.IRBuilder::new("xor_shifted_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i64(1L)
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.bxor(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits shl and xor_shifted
+  let expected =
+    #|vcode xor_shifted_test(v0:int, v1:int) -> int {
+    #|block0:
+    #|    v2 = ldi 1
+    #|    v3 = shl v1, v2
+    #|    v4 = xor.lsl #1 v0, v1
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "madd commutative: add(mul(x, y), z) to madd" {
+  // Pattern: add(mul(x, y), z) -> MADD: z + x * y (commutative)
+  let builder = @ir.IRBuilder::new("madd_commutative")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  let z = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mul_xy = builder.imul(x, y)
+  let result = builder.iadd(mul_xy, z)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits both mul and madd (with z as accumulator)
+  let expected =
+    #|vcode madd_commutative(v0:int, v1:int, v2:int) -> int {
+    #|block0:
+    #|    v3 = mul v0, v1
+    #|    v4 = madd v2, v0, v1
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
+  // Pattern: add(shl(x, n), y) -> AddShifted: y + (x << n)
+  let builder = @ir.IRBuilder::new("add_shifted_commutative")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i64(3L)
+  let shl_x = builder.ishl(x, shift_amt)
+  let result = builder.iadd(shl_x, y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  // Emits shl and add_shifted with y as base (commutative)
+  let expected =
+    #|vcode add_shifted_commutative(v0:int, v1:int) -> int {
+    #|block0:
+    #|    v2 = ldi 3
+    #|    v3 = shl v0, v2
+    #|    v4 = add.lsl #3 v1, v0
+    #|    ret v4
+    #|}
+    #|
+  inspect(output, content=expected)
+}

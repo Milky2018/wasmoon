@@ -5,6 +5,7 @@
 // 1. Maps IR values to virtual registers
 // 2. Converts IR opcodes to VCode opcodes
 // 3. Handles control flow translation
+// 4. Performs pattern matching for AArch64-specific instructions
 
 ///|
 /// Lowering context - tracks state during IR to VCode conversion
@@ -81,6 +82,63 @@ fn ir_type_to_mem_type(ty : @ir.Type) -> MemType {
   }
 }
 
+// ============ Pattern Matching Helpers for AArch64 Instruction Selection ============
+
+///|
+/// Check if a value is defined by a shift-left instruction with a constant
+/// Returns (shifted_value, shift_amount) if matched
+fn match_shl_const_value(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> (@ir.Value, Int)? {
+  match find_defining_inst(ctx, value) {
+    Some(inst) =>
+      if inst.opcode is @ir.Opcode::Ishl {
+        // Check if shift amount is a constant
+        let shift_operand = inst.operands[1]
+        match find_defining_inst(ctx, shift_operand) {
+          Some(shift_inst) =>
+            if shift_inst.opcode is @ir.Opcode::Iconst(amount) {
+              let shift_val = amount.to_int()
+              if shift_val >= 0 && shift_val <= 63 {
+                return Some((inst.operands[0], shift_val))
+              }
+            }
+          None => ()
+        }
+      }
+    None => ()
+  }
+  None
+}
+
+///|
+/// Check if a value is defined by a multiply instruction
+/// Returns (lhs, rhs) if matched
+fn match_mul_value(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> (@ir.Value, @ir.Value)? {
+  match find_defining_inst(ctx, value) {
+    Some(inst) =>
+      if inst.opcode is @ir.Opcode::Imul {
+        return Some((inst.operands[0], inst.operands[1]))
+      }
+    None => ()
+  }
+  None
+}
+
+///|
+/// Check if a value is the constant 0
+fn is_const_zero_value(ctx : LoweringContext, value : @ir.Value) -> Bool {
+  match find_defining_inst(ctx, value) {
+    Some(inst) => if inst.opcode is @ir.Opcode::Iconst(val) { return val == 0L }
+    None => ()
+  }
+  false
+}
+
 ///|
 /// Lower an entire IR function to VCode
 pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
@@ -153,17 +211,17 @@ fn lower_inst(
     @ir.Opcode::Iconst(val) => lower_iconst(ctx, inst, block, val)
     @ir.Opcode::Fconst(val) => lower_fconst(ctx, inst, block, val)
 
-    // Integer arithmetic
-    @ir.Opcode::Iadd => lower_binary_int(ctx, inst, block, Add)
-    @ir.Opcode::Isub => lower_binary_int(ctx, inst, block, Sub)
+    // Integer arithmetic - with pattern matching for AArch64
+    @ir.Opcode::Iadd => lower_iadd(ctx, inst, block)
+    @ir.Opcode::Isub => lower_isub(ctx, inst, block)
     @ir.Opcode::Imul => lower_binary_int(ctx, inst, block, Mul)
     @ir.Opcode::Sdiv => lower_binary_int(ctx, inst, block, SDiv)
     @ir.Opcode::Udiv => lower_binary_int(ctx, inst, block, UDiv)
 
-    // Bitwise operations
-    @ir.Opcode::Band => lower_binary_int(ctx, inst, block, And)
-    @ir.Opcode::Bor => lower_binary_int(ctx, inst, block, Or)
-    @ir.Opcode::Bxor => lower_binary_int(ctx, inst, block, Xor)
+    // Bitwise operations - with pattern matching for shifted operands
+    @ir.Opcode::Band => lower_band(ctx, inst, block)
+    @ir.Opcode::Bor => lower_bor(ctx, inst, block)
+    @ir.Opcode::Bxor => lower_bxor(ctx, inst, block)
     @ir.Opcode::Ishl => lower_binary_int(ctx, inst, block, Shl)
     @ir.Opcode::Sshr => lower_binary_int(ctx, inst, block, AShr)
     @ir.Opcode::Ushr => lower_binary_int(ctx, inst, block, LShr)
@@ -261,6 +319,330 @@ fn lower_binary_int(
     }
     None => ()
   }
+}
+
+// ============ AArch64-Specific Lowering with Pattern Matching ============
+
+///|
+/// Lower integer add with pattern matching for MADD and shifted operands
+/// Patterns:
+/// - add(x, mul(y, z)) -> MADD: x + y * z
+/// - add(mul(x, y), z) -> MADD: z + x * y (commutative)
+/// - add(x, shl(y, n)) -> AddShifted: x + (y << n)
+/// - add(shl(x, n), y) -> AddShifted: y + (x << n) (commutative)
+fn lower_iadd(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs_val = inst.operands[0]
+  let rhs_val = inst.operands[1]
+
+  // Pattern: add(x, mul(y, z)) -> MADD
+  match match_mul_value(ctx, rhs_val) {
+    Some((mul_lhs, mul_rhs)) => {
+      let acc = ctx.get_vreg(lhs_val)
+      let src1 = ctx.get_vreg(mul_lhs)
+      let src2 = ctx.get_vreg(mul_rhs)
+      let vcode_inst = VCodeInst::new(Madd)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(acc)) // accumulator
+      vcode_inst.add_use(Virtual(src1)) // multiplicand
+      vcode_inst.add_use(Virtual(src2)) // multiplier
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Pattern: add(mul(x, y), z) -> MADD (commutative)
+  match match_mul_value(ctx, lhs_val) {
+    Some((mul_lhs, mul_rhs)) => {
+      let acc = ctx.get_vreg(rhs_val)
+      let src1 = ctx.get_vreg(mul_lhs)
+      let src2 = ctx.get_vreg(mul_rhs)
+      let vcode_inst = VCodeInst::new(Madd)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(acc))
+      vcode_inst.add_use(Virtual(src1))
+      vcode_inst.add_use(Virtual(src2))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Pattern: add(x, shl(y, n)) -> AddShifted
+  match match_shl_const_value(ctx, rhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(lhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(AddShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Pattern: add(shl(x, n), y) -> AddShifted (commutative)
+  match match_shl_const_value(ctx, lhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(rhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(AddShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Default: regular add
+  let lhs = ctx.get_vreg(lhs_val)
+  let rhs = ctx.get_vreg(rhs_val)
+  let vcode_inst = VCodeInst::new(Add)
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(lhs))
+  vcode_inst.add_use(Virtual(rhs))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower integer sub with pattern matching for MSUB, MNEG, and shifted operands
+/// Patterns:
+/// - sub(x, mul(y, z)) -> MSUB: x - y * z
+/// - sub(0, mul(x, y)) -> MNEG: -(x * y)
+/// - sub(x, shl(y, n)) -> SubShifted: x - (y << n)
+fn lower_isub(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs_val = inst.operands[0]
+  let rhs_val = inst.operands[1]
+
+  // Pattern: sub(0, mul(x, y)) -> MNEG
+  if is_const_zero_value(ctx, lhs_val) {
+    match match_mul_value(ctx, rhs_val) {
+      Some((mul_lhs, mul_rhs)) => {
+        let src1 = ctx.get_vreg(mul_lhs)
+        let src2 = ctx.get_vreg(mul_rhs)
+        let vcode_inst = VCodeInst::new(Mneg)
+        vcode_inst.add_def({ reg: Virtual(dst) })
+        vcode_inst.add_use(Virtual(src1))
+        vcode_inst.add_use(Virtual(src2))
+        block.add_inst(vcode_inst)
+        return
+      }
+      None => ()
+    }
+  }
+
+  // Pattern: sub(x, mul(y, z)) -> MSUB
+  match match_mul_value(ctx, rhs_val) {
+    Some((mul_lhs, mul_rhs)) => {
+      let acc = ctx.get_vreg(lhs_val)
+      let src1 = ctx.get_vreg(mul_lhs)
+      let src2 = ctx.get_vreg(mul_rhs)
+      let vcode_inst = VCodeInst::new(Msub)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(acc))
+      vcode_inst.add_use(Virtual(src1))
+      vcode_inst.add_use(Virtual(src2))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Pattern: sub(x, shl(y, n)) -> SubShifted
+  match match_shl_const_value(ctx, rhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(lhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(SubShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Default: regular sub
+  let lhs = ctx.get_vreg(lhs_val)
+  let rhs = ctx.get_vreg(rhs_val)
+  let vcode_inst = VCodeInst::new(Sub)
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(lhs))
+  vcode_inst.add_use(Virtual(rhs))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower bitwise AND with pattern matching for shifted operands
+fn lower_band(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs_val = inst.operands[0]
+  let rhs_val = inst.operands[1]
+
+  // Pattern: and(x, shl(y, n)) -> AndShifted
+  match match_shl_const_value(ctx, rhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(lhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(AndShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Pattern: and(shl(x, n), y) -> AndShifted (commutative)
+  match match_shl_const_value(ctx, lhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(rhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(AndShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Default: regular and
+  let lhs = ctx.get_vreg(lhs_val)
+  let rhs = ctx.get_vreg(rhs_val)
+  let vcode_inst = VCodeInst::new(And)
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(lhs))
+  vcode_inst.add_use(Virtual(rhs))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower bitwise OR with pattern matching for shifted operands
+fn lower_bor(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs_val = inst.operands[0]
+  let rhs_val = inst.operands[1]
+
+  // Pattern: or(x, shl(y, n)) -> OrShifted
+  match match_shl_const_value(ctx, rhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(lhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(OrShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Pattern: or(shl(x, n), y) -> OrShifted (commutative)
+  match match_shl_const_value(ctx, lhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(rhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(OrShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Default: regular or
+  let lhs = ctx.get_vreg(lhs_val)
+  let rhs = ctx.get_vreg(rhs_val)
+  let vcode_inst = VCodeInst::new(Or)
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(lhs))
+  vcode_inst.add_use(Virtual(rhs))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower bitwise XOR with pattern matching for shifted operands
+fn lower_bxor(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs_val = inst.operands[0]
+  let rhs_val = inst.operands[1]
+
+  // Pattern: xor(x, shl(y, n)) -> XorShifted
+  match match_shl_const_value(ctx, rhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(lhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(XorShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Pattern: xor(shl(x, n), y) -> XorShifted (commutative)
+  match match_shl_const_value(ctx, lhs_val) {
+    Some((shifted, amount)) => {
+      let rn = ctx.get_vreg(rhs_val)
+      let rm = ctx.get_vreg(shifted)
+      let vcode_inst = VCodeInst::new(XorShifted(Lsl, amount))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(rn))
+      vcode_inst.add_use(Virtual(rm))
+      block.add_inst(vcode_inst)
+      return
+    }
+    None => ()
+  }
+
+  // Default: regular xor
+  let lhs = ctx.get_vreg(lhs_val)
+  let rhs = ctx.get_vreg(rhs_val)
+  let vcode_inst = VCodeInst::new(Xor)
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(lhs))
+  vcode_inst.add_use(Virtual(rhs))
+  block.add_inst(vcode_inst)
 }
 
 ///|

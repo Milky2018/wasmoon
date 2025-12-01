@@ -233,6 +233,28 @@ pub impl Show for VCodeInst with output(self, logger) {
 }
 
 ///|
+/// Shift type for shifted operand instructions
+pub(all) enum ShiftType {
+  Lsl // Logical shift left
+  Lsr // Logical shift right
+  Asr // Arithmetic shift right
+}
+
+///|
+fn ShiftType::to_string(self : ShiftType) -> String {
+  match self {
+    Lsl => "lsl"
+    Lsr => "lsr"
+    Asr => "asr"
+  }
+}
+
+///|
+pub impl Show for ShiftType with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
 /// VCode opcode - machine-level operation (target-independent subset)
 pub enum VCodeOpcode {
   // Integer arithmetic
@@ -270,6 +292,17 @@ pub enum VCodeOpcode {
   FloatToInt
   // Special
   Nop
+  // AArch64-specific: shifted operand instructions
+  // These combine an arithmetic/logical op with a shift in one instruction
+  AddShifted(ShiftType, Int) // ADD Xd, Xn, Xm, shift #amount
+  SubShifted(ShiftType, Int) // SUB Xd, Xn, Xm, shift #amount
+  AndShifted(ShiftType, Int) // AND Xd, Xn, Xm, shift #amount
+  OrShifted(ShiftType, Int) // ORR Xd, Xn, Xm, shift #amount
+  XorShifted(ShiftType, Int) // EOR Xd, Xn, Xm, shift #amount
+  // AArch64-specific: multiply-accumulate instructions
+  Madd // Xd = Xa + Xn * Xm (3 uses: acc, src1, src2)
+  Msub // Xd = Xa - Xn * Xm (3 uses: acc, src1, src2)
+  Mneg // Xd = -(Xn * Xm) (2 uses: src1, src2)
 }
 
 ///|
@@ -302,6 +335,15 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     IntToFloat => "i2f"
     FloatToInt => "f2i"
     Nop => "nop"
+    // AArch64-specific
+    AddShifted(shift, amount) => "add.\{shift} #\{amount}"
+    SubShifted(shift, amount) => "sub.\{shift} #\{amount}"
+    AndShifted(shift, amount) => "and.\{shift} #\{amount}"
+    OrShifted(shift, amount) => "or.\{shift} #\{amount}"
+    XorShifted(shift, amount) => "xor.\{shift} #\{amount}"
+    Madd => "madd"
+    Msub => "msub"
+    Mneg => "mneg"
   }
 }
 
