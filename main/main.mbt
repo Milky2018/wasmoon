@@ -852,11 +852,43 @@ fn DebugOptions::parse(opts : Array[String]) -> DebugOptions {
 }
 
 ///|
+/// Parse optimization toggles from CLI args
+/// Format: "+name" to enable, "-name" to disable
+fn parse_opt_toggles(
+  opt_level : Int,
+  toggles : Array[String],
+) -> @ir.OptToggles {
+  let level = @ir.OptLevel::from_int(opt_level)
+  let opts = @ir.OptToggles::from_level(level)
+  for toggle in toggles {
+    if toggle.length() > 1 {
+      let prefix = toggle[0]
+      // Build the name without the prefix
+      let name_builder = StringBuilder::new()
+      for i = 1; i < toggle.length(); i = i + 1 {
+        name_builder.write_char(toggle[i].unsafe_to_char())
+      }
+      let name = name_builder.to_string()
+      if prefix == '+' {
+        opts.enable(name) |> ignore
+      } else if prefix == '-' {
+        opts.disable(name) |> ignore
+      } else {
+        // No prefix, assume enable
+        opts.enable(toggle) |> ignore
+      }
+    }
+  }
+  opts
+}
+
+///|
 /// Explore WASM compilation process
 async fn run_explore(
   wasm_path : String,
   func_index : Int?,
   opt_level : Int,
+  opt_toggles : Array[String],
   debug_opts : DebugOptions,
 ) -> Unit {
   println("Exploring compilation: \{wasm_path}")
@@ -938,9 +970,9 @@ async fn run_explore(
   println("")
 
   // Stage 3: Optimized IR
-  let level = @ir.OptLevel::from_int(opt_level)
+  let toggles = parse_opt_toggles(opt_level, opt_toggles)
   println("== Stage 3: Optimized IR (O\{opt_level}) ==")
-  @ir.optimize_with_level(ir_func, level) |> ignore
+  @ir.optimize_with_toggles(ir_func, toggles) |> ignore
   println(ir_func.print())
   println("")
 
@@ -1480,6 +1512,31 @@ fn run_settings() -> Unit {
   println("     - Loop unrolling (factor 2)")
   println("     - Strength reduction (mul/div by power of 2)")
   println("")
+  println("== Optimization Toggles (--opt) ==")
+  println("  Use --opt to enable/disable specific optimizations:")
+  println("    +name  Enable optimization")
+  println("    -name  Disable optimization")
+  println("")
+  println("  Basic optimizations (O1):")
+  println("    cf     Constant folding")
+  println("    cp     Copy propagation")
+  println("    cse    Common subexpression elimination")
+  println("    dce    Dead code elimination")
+  println("")
+  println("  Control flow optimizations (O2):")
+  println("    bs     Branch simplification")
+  println("    uce    Unreachable code elimination")
+  println("    bm     Block merging")
+  println("    jt     Jump threading")
+  println("")
+  println("  Loop optimizations (O3):")
+  println("    licm   Loop invariant code motion")
+  println("    lu     Loop unrolling")
+  println("    sr     Strength reduction")
+  println("")
+  println("  Example: wasmoon explore test.wasm -O2 --opt -cse --opt +licm")
+  println("           (O2 without CSE, but with LICM)")
+  println("")
   println("== Target Architectures ==")
   println("  aarch64  ARM 64-bit (default)")
   println("  x86_64   Intel/AMD 64-bit (planned)")
@@ -1934,6 +1991,10 @@ async fn main {
             help="Function index to explore (default: 0)",
           ),
           "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
+          "opt": @clap.Arg::named(
+            nargs=@clap.Nargs::Any,
+            help="Optimization toggles: +name to enable, -name to disable (cf, cp, cse, dce, bs, uce, bm, jt, licm, lu, sr)",
+          ),
           "D": @clap.Arg::named(
             nargs=@clap.Nargs::Any,
             help="Debug options: verbose, ir, timing, all",
@@ -2096,7 +2157,17 @@ async fn main {
                   Some(arr) => DebugOptions::parse(arr)
                   None => DebugOptions::new()
                 }
-                run_explore(positional[0], func_idx, opt_level, debug_opts)
+                let opt_toggles : Array[String] = match sub.args.get("opt") {
+                  Some(arr) => arr
+                  None => []
+                }
+                run_explore(
+                  positional[0],
+                  func_idx,
+                  opt_level,
+                  opt_toggles,
+                  debug_opts,
+                )
               } else {
                 println("Error: missing file argument")
               }

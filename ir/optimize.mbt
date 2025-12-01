@@ -601,6 +601,324 @@ pub fn OptLevel::from_int(n : Int) -> OptLevel {
 }
 
 ///|
+/// Optimization toggles for fine-grained control
+pub(all) struct OptToggles {
+  // Basic optimizations (O1)
+  mut const_fold : Bool // Constant folding
+  mut copy_prop : Bool // Copy propagation
+  mut cse : Bool // Common subexpression elimination
+  mut dce : Bool // Dead code elimination
+  // Control flow optimizations (O2)
+  mut branch_simp : Bool // Branch simplification
+  mut uce : Bool // Unreachable code elimination
+  mut block_merge : Bool // Block merging
+  mut jump_thread : Bool // Jump threading
+  // Loop optimizations (O3)
+  mut licm : Bool // Loop invariant code motion
+  mut loop_unroll : Bool // Loop unrolling
+  mut strength_red : Bool // Strength reduction
+}
+
+///|
+/// Create default toggles (all disabled)
+pub fn OptToggles::none() -> OptToggles {
+  OptToggles::{
+    const_fold: false,
+    copy_prop: false,
+    cse: false,
+    dce: false,
+    branch_simp: false,
+    uce: false,
+    block_merge: false,
+    jump_thread: false,
+    licm: false,
+    loop_unroll: false,
+    strength_red: false,
+  }
+}
+
+///|
+/// Create toggles from optimization level
+pub fn OptToggles::from_level(level : OptLevel) -> OptToggles {
+  match level {
+    O0 => OptToggles::none()
+    O1 =>
+      OptToggles::{
+        const_fold: true,
+        copy_prop: true,
+        cse: true,
+        dce: true,
+        branch_simp: false,
+        uce: false,
+        block_merge: false,
+        jump_thread: false,
+        licm: false,
+        loop_unroll: false,
+        strength_red: false,
+      }
+    O2 =>
+      OptToggles::{
+        const_fold: true,
+        copy_prop: true,
+        cse: true,
+        dce: true,
+        branch_simp: true,
+        uce: true,
+        block_merge: true,
+        jump_thread: true,
+        licm: false,
+        loop_unroll: false,
+        strength_red: false,
+      }
+    O3 =>
+      OptToggles::{
+        const_fold: true,
+        copy_prop: true,
+        cse: true,
+        dce: true,
+        branch_simp: true,
+        uce: true,
+        block_merge: true,
+        jump_thread: true,
+        licm: true,
+        loop_unroll: true,
+        strength_red: true,
+      }
+  }
+}
+
+///|
+/// Parse toggle string and enable the specified optimization
+/// Returns true if the toggle was recognized
+pub fn OptToggles::enable(self : OptToggles, name : String) -> Bool {
+  match name {
+    "cf" | "const-fold" | "constant-folding" => {
+      self.const_fold = true
+      true
+    }
+    "cp" | "copy-prop" | "copy-propagation" => {
+      self.copy_prop = true
+      true
+    }
+    "cse" | "common-subexpr" => {
+      self.cse = true
+      true
+    }
+    "dce" | "dead-code" => {
+      self.dce = true
+      true
+    }
+    "bs" | "branch-simp" | "branch-simplification" => {
+      self.branch_simp = true
+      true
+    }
+    "uce" | "unreachable" => {
+      self.uce = true
+      true
+    }
+    "bm" | "block-merge" => {
+      self.block_merge = true
+      true
+    }
+    "jt" | "jump-thread" | "jump-threading" => {
+      self.jump_thread = true
+      true
+    }
+    "licm" | "loop-invariant" => {
+      self.licm = true
+      true
+    }
+    "lu" | "loop-unroll" | "unroll" => {
+      self.loop_unroll = true
+      true
+    }
+    "sr" | "strength-red" | "strength-reduction" => {
+      self.strength_red = true
+      true
+    }
+    "all" => {
+      self.const_fold = true
+      self.copy_prop = true
+      self.cse = true
+      self.dce = true
+      self.branch_simp = true
+      self.uce = true
+      self.block_merge = true
+      self.jump_thread = true
+      self.licm = true
+      self.loop_unroll = true
+      self.strength_red = true
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// Parse toggle string and disable the specified optimization
+/// Returns true if the toggle was recognized
+pub fn OptToggles::disable(self : OptToggles, name : String) -> Bool {
+  match name {
+    "cf" | "const-fold" | "constant-folding" => {
+      self.const_fold = false
+      true
+    }
+    "cp" | "copy-prop" | "copy-propagation" => {
+      self.copy_prop = false
+      true
+    }
+    "cse" | "common-subexpr" => {
+      self.cse = false
+      true
+    }
+    "dce" | "dead-code" => {
+      self.dce = false
+      true
+    }
+    "bs" | "branch-simp" | "branch-simplification" => {
+      self.branch_simp = false
+      true
+    }
+    "uce" | "unreachable" => {
+      self.uce = false
+      true
+    }
+    "bm" | "block-merge" => {
+      self.block_merge = false
+      true
+    }
+    "jt" | "jump-thread" | "jump-threading" => {
+      self.jump_thread = false
+      true
+    }
+    "licm" | "loop-invariant" => {
+      self.licm = false
+      true
+    }
+    "lu" | "loop-unroll" | "unroll" => {
+      self.loop_unroll = false
+      true
+    }
+    "sr" | "strength-red" | "strength-reduction" => {
+      self.strength_red = false
+      true
+    }
+    "all" => {
+      self.const_fold = false
+      self.copy_prop = false
+      self.cse = false
+      self.dce = false
+      self.branch_simp = false
+      self.uce = false
+      self.block_merge = false
+      self.jump_thread = false
+      self.licm = false
+      self.loop_unroll = false
+      self.strength_red = false
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// Run optimizations with specific toggles
+pub fn optimize_with_toggles(
+  func : Function,
+  toggles : OptToggles,
+) -> OptResult {
+  let result = OptResult::new()
+  let mut changed = true
+  let mut iterations = 0
+  let max_iterations = 100
+  while changed && iterations < max_iterations {
+    changed = false
+    iterations = iterations + 1
+
+    // Basic optimizations
+    if toggles.const_fold {
+      let cf_result = fold_constants(func)
+      if cf_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
+    if toggles.copy_prop {
+      let cp_result = propagate_copies(func)
+      if cp_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
+    if toggles.cse {
+      let cse_result = eliminate_common_subexpressions(func)
+      if cse_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
+    if toggles.dce {
+      let dce_result = eliminate_dead_code(func)
+      if dce_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
+
+    // Control flow optimizations
+    if toggles.branch_simp {
+      let bs_result = simplify_branches(func)
+      if bs_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
+    if toggles.uce {
+      let uce_result = eliminate_unreachable_code(func)
+      if uce_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
+    if toggles.block_merge {
+      let bm_result = merge_blocks(func)
+      if bm_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
+    if toggles.jump_thread {
+      let jt_result = thread_jumps(func)
+      if jt_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
+  }
+
+  // Loop optimizations (run once after fixpoint)
+  if toggles.licm {
+    let licm_result = hoist_loop_invariants(func)
+    if licm_result.changed {
+      result.mark_changed()
+    }
+  }
+  if toggles.loop_unroll {
+    let lu_result = unroll_loops(func, 2)
+    if lu_result.changed {
+      result.mark_changed()
+    }
+  }
+  if toggles.strength_red {
+    let sr_result = reduce_strength(func)
+    if sr_result.changed {
+      result.mark_changed()
+    }
+  }
+  result
+}
+
+///|
 /// Run optimizations based on level
 pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
   match level {
