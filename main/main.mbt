@@ -1013,6 +1013,49 @@ fn to_hex_byte(b : Int) -> String {
 }
 
 ///|
+/// Display available compiler settings
+fn run_settings() -> Unit {
+  println("Wasmoon Compiler Settings")
+  println("=".repeat(60))
+  println("")
+  println("== Optimization Levels (-O) ==")
+  println("  0  No optimization")
+  println("     - Fastest compilation, easiest debugging")
+  println("     - IR is not modified after translation")
+  println("")
+  println("  1  Basic optimizations")
+  println("     - Constant folding")
+  println("     - Copy propagation")
+  println("     - Common subexpression elimination (CSE)")
+  println("     - Dead code elimination (DCE)")
+  println("")
+  println("  2  Default optimizations (default)")
+  println("     - All O1 optimizations, plus:")
+  println("     - Branch simplification")
+  println("     - Unreachable code elimination")
+  println("     - Basic block merging")
+  println("     - Jump threading")
+  println("")
+  println("  3  Aggressive optimizations")
+  println("     - All O2 optimizations, plus:")
+  println("     - Loop invariant code motion (LICM)")
+  println("     - Loop unrolling (factor 2)")
+  println("     - Strength reduction (mul/div by power of 2)")
+  println("")
+  println("== Target Architectures ==")
+  println("  aarch64  ARM 64-bit (default)")
+  println("  x86_64   Intel/AMD 64-bit (planned)")
+  println("")
+  println("== File Formats ==")
+  println("  .wasm   WebAssembly binary format")
+  println("  .wat    WebAssembly text format")
+  println("  .wast   WebAssembly test script format")
+  println("  .cwasm  Precompiled WebAssembly module")
+  println("")
+  println("=".repeat(60))
+}
+
+///|
 /// Run a WAST test script
 async fn run_wast(wast_path : String) -> Unit {
   println("Running WAST script: \{wast_path}")
@@ -1450,6 +1493,9 @@ async fn main {
       "objdump": @clap.SubCommand::new(help="Inspect precompiled .cwasm file", args={
         "file": @clap.Arg::positional(help="Path to .cwasm file"),
       }),
+      "settings": @clap.SubCommand::new(
+        help="Display available compiler settings",
+      ),
     },
   )
   let help_msg = parser.gen_help_message(["wasmoon"], {})
@@ -1600,6 +1646,7 @@ async fn main {
                 println("Error: missing file argument")
               }
             }
+            "settings" => run_settings()
             name => println("Unknown command: \{name}")
           }
         None => println("Error: no command")
