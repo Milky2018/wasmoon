@@ -1,2 +1,5 @@
 {
+  "test-import": [
+    { "path": "Milky2018/wasmoon/types", "alias": "types" }
+  ]
 }
