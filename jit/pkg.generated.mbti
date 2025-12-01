@@ -62,7 +62,7 @@ pub enum CompilationDecision {
 }
 impl Show for CompilationDecision
 
-pub enum CompilationMode {
+pub(all) enum CompilationMode {
   Interpret
   Baseline
   Optimized

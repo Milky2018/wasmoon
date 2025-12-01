@@ -9,7 +9,7 @@
 
 ///|
 /// The compilation mode for a function
-pub enum CompilationMode {
+pub(all) enum CompilationMode {
   // Always interpret (never JIT compile)
   Interpret
   // Baseline JIT (fast compilation, less optimization)

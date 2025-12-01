@@ -316,7 +316,7 @@ pub enum CallConv {
 }
 impl Show for CallConv
 
-pub enum CmpKind {
+pub(all) enum CmpKind {
   Eq
   Ne
   Slt
@@ -598,7 +598,7 @@ pub(all) struct RegAllocResult {
   reloads : Array[ReloadInfo]
 }
 
-pub enum RegClass {
+pub(all) enum RegClass {
   Int
   Float
 }
