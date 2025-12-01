@@ -818,6 +818,102 @@ async fn run_wat(wat_path : String) -> Unit {
 }
 
 ///|
+/// Explore WASM compilation process
+async fn run_explore(wasm_path : String, func_index : Int?) -> Unit {
+  println("Exploring compilation: \{wasm_path}")
+  println("=".repeat(60))
+
+  // Load the module
+  let mod_ = load_module_from_path(wasm_path) catch {
+    e => {
+      println("Error loading module: \{e}")
+      return
+    }
+  }
+
+  // Validate the module
+  @validator.validate_module(mod_) catch {
+    e => {
+      println("Validation error: \{e}")
+      return
+    }
+  }
+  println("Module loaded: \{mod_.codes.length()} functions")
+  println("")
+
+  // Determine which function to explore
+  let func_idx = match func_index {
+    Some(idx) => idx
+    None => 0 // Default to first function
+  }
+  if func_idx >= mod_.codes.length() {
+    println(
+      "Error: function index \{func_idx} out of range (0..\{mod_.codes.length()})",
+    )
+    return
+  }
+
+  // Get function info
+  let num_imports = count_func_imports(mod_.imports)
+  let type_idx = mod_.funcs[func_idx]
+  let func_type = mod_.types[type_idx]
+  let code = mod_.codes[func_idx]
+  println("== Function \{func_idx} ==")
+  println("Type: \{format_func_type(func_type)}")
+  println("Locals: \{code.locals.length()}")
+  println("")
+
+  // Stage 1: WASM instructions
+  println("== Stage 1: WASM Instructions ==")
+  println("  Instructions: \{code.body.length()}")
+  for i, instr in code.body {
+    println("    \{i}: \{instr}")
+  }
+  println("")
+
+  // Stage 2: IR (SSA form)
+  println("== Stage 2: IR (SSA Form) ==")
+  let translator = @ir.Translator::new(
+    "func_\{func_idx}",
+    func_type,
+    code.locals,
+    mod_.types,
+    mod_.funcs,
+    num_imports,
+  )
+  let ir_func = translator.translate(code.body)
+  println(ir_func.print())
+  println("")
+
+  // Stage 3: Optimized IR
+  println("== Stage 3: Optimized IR ==")
+  @ir.optimize(ir_func) |> ignore
+  println(ir_func.print())
+  println("")
+
+  // Stage 4: VCode (Low-level IR)
+  println("== Stage 4: VCode (Low-level IR) ==")
+  let vcode_func = @vcode.lower_function(ir_func)
+  println(vcode_func.to_string())
+  println("")
+
+  // Stage 5: Register Allocation
+  println("== Stage 5: After Register Allocation ==")
+  let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+  println(allocated.to_string())
+  println("")
+  println("=".repeat(60))
+  println("Exploration complete!")
+}
+
+///|
+fn format_func_type(ft : @types.FuncType) -> String {
+  let params = ft.params.map(fn(t) { t.to_string() }).join(", ")
+  let results = ft.results.map(fn(t) { t.to_string() }).join(", ")
+  "(\{params}) -> (\{results})"
+}
+
+///|
 /// Run a WAST test script
 async fn run_wast(wast_path : String) -> Unit {
   println("Running WAST script: \{wast_path}")
@@ -1242,6 +1338,15 @@ async fn main {
         help="Run WebAssembly test script (.wast format)",
         args={ "file": @clap.Arg::positional(help="Path to WAST file") },
       ),
+      "explore": @clap.SubCommand::new(
+        help="Explore WASM compilation process (WASM -> IR -> VCode)",
+        args={
+          "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
+          "func": @clap.Arg::named(
+            help="Function index to explore (default: 0)",
+          ),
+        },
+      ),
     },
   )
   let help_msg = parser.gen_help_message(["wasmoon"], {})
@@ -1350,6 +1455,25 @@ async fn main {
               let positional = sub.positional_args
               if positional.length() > 0 {
                 run_wast(positional[0])
+              } else {
+                println("Error: missing file argument")
+              }
+            }
+            "explore" => {
+              let positional = sub.positional_args
+              if positional.length() > 0 {
+                let func_idx : Int? = match sub.args.get("func") {
+                  Some(arr) =>
+                    if arr.length() > 0 {
+                      Some(@strconv.parse_int(arr[0])) catch {
+                        _ => None
+                      }
+                    } else {
+                      None
+                    }
+                  None => None
+                }
+                run_explore(positional[0], func_idx)
               } else {
                 println("Error: missing file argument")
               }
