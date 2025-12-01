@@ -174,7 +174,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 #### 辅助命令
 - [ ] `config` - 配置管理
   - [ ] `--config <FILE>` 使用 TOML 配置文件
-- [ ] `settings` - 显示可用的编译器设置
+- [x] `settings` - 显示可用的编译器设置
 - [ ] `completion` - 生成 shell 补全脚本
   - [ ] 支持 bash, zsh, fish
 
