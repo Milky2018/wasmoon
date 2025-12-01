@@ -557,6 +557,6 @@ _请在此处继续添加新的意见和建议_
 - [x] bench 内容现在非常贫瘠，需要丰富 → 已实现：10 大类基准测试覆盖解释器、JIT、IR、优化、VCode、寄存器分配、代码生成、运行时等
 - [x] vcode/aarch64_patterns.mbt 中有非常多的 never constructed variant. 这是怎么导致的？以后会用到吗？还是永远不会用到？ → **设计决策**：当前采用统一 VCode 方案，AArch64 特定 opcode（Madd、AddShifted 等）直接放入 `VCodeOpcode` 枚举。`aarch64_patterns.mbt` 中的 `AArch64Opcode` 是早期设计残留，应当删除。理想架构是分层设计（VCode 目标无关 → AArch64Inst 目标特定），但考虑到项目只针对 AArch64 单一目标，统一方案更务实。如未来需支持多目标，再重构为分层架构
 - [x] 现在缺乏很多黑盒测试 → 已为 types、runtime、cwasm 模块添加黑盒测试（35 个新测试）
-- [ ] main.mbt 现在太大了，适当进行拆分 → 建议拆分为：demo.mbt, testsuite.mbt, completion.mbt, settings.mbt, config.mbt, wast.mbt, utils.mbt
-- [ ] 我完全不理解 `{ "path": "Milky2018/wasmoon/cwasm", "alias": "cwasm" }` 这是在做什么，alias 是用来提供别名的，可是这两个名字完全一样，根本不必 alias
-- [ ] completion 和项目主要功能无关，可以先删掉，以后再实现
+- [x] main.mbt 现在太大了，适当进行拆分 → 已拆分为：demo.mbt, wast.mbt, settings.mbt, config.mbt, html_report.mbt
+- [x] 我完全不理解 `{ "path": "Milky2018/wasmoon/cwasm", "alias": "cwasm" }` 这是在做什么 → 当路径最后一段与 alias 相同时，alias 是多余的。当前项目已移除所有不必要的 alias
+- [x] completion 和项目主要功能无关，可以先删掉 → 已删除 completion.mbt

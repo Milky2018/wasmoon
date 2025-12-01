@@ -177,8 +177,6 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [x] `config path` - 显示配置文件路径
   - [x] `config init` - 初始化配置
 - [x] `settings` - 显示可用的编译器设置
-- [x] `completion` - 生成 shell 补全脚本
-  - [x] 支持 bash, zsh, fish
 
 ---
 
