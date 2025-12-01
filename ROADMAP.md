@@ -158,8 +158,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [x] 显示段信息
 
 #### 配置与调试选项
-- [ ] `-O, --optimize <KEY=VAL>` 优化选项
-  - [ ] 优化级别 (0-3)
+- [x] `-O, --optimize` 优化选项
+  - [x] 优化级别 (0-3)
   - [ ] 特定优化开关
 - [ ] `-D, --debug <KEY=VAL>` 调试选项
   - [ ] 详细日志输出

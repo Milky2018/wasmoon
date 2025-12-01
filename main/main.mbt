@@ -819,7 +819,11 @@ async fn run_wat(wat_path : String) -> Unit {
 
 ///|
 /// Explore WASM compilation process
-async fn run_explore(wasm_path : String, func_index : Int?) -> Unit {
+async fn run_explore(
+  wasm_path : String,
+  func_index : Int?,
+  opt_level : Int,
+) -> Unit {
   println("Exploring compilation: \{wasm_path}")
   println("=".repeat(60))
 
@@ -886,8 +890,9 @@ async fn run_explore(wasm_path : String, func_index : Int?) -> Unit {
   println("")
 
   // Stage 3: Optimized IR
-  println("== Stage 3: Optimized IR ==")
-  @ir.optimize(ir_func) |> ignore
+  let level = @ir.OptLevel::from_int(opt_level)
+  println("== Stage 3: Optimized IR (O\{opt_level}) ==")
+  @ir.optimize_with_level(ir_func, level) |> ignore
   println(ir_func.print())
   println("")
 
@@ -1439,6 +1444,7 @@ async fn main {
           "func": @clap.Arg::named(
             help="Function index to explore (default: 0)",
           ),
+          "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
         },
       ),
       "objdump": @clap.SubCommand::new(help="Inspect precompiled .cwasm file", args={
@@ -1570,7 +1576,18 @@ async fn main {
                     }
                   None => None
                 }
-                run_explore(positional[0], func_idx)
+                let opt_level : Int = match sub.args.get("O") {
+                  Some(arr) =>
+                    if arr.length() > 0 {
+                      @strconv.parse_int(arr[0]) catch {
+                        _ => 2
+                      }
+                    } else {
+                      2
+                    }
+                  None => 2
+                }
+                run_explore(positional[0], func_idx, opt_level)
               } else {
                 println("Error: missing file argument")
               }
