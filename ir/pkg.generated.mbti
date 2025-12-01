@@ -20,6 +20,8 @@ fn merge_blocks(Function) -> OptResult
 
 fn optimize(Function) -> OptResult
 
+fn optimize_with_level(Function, OptLevel) -> OptResult
+
 fn propagate_copies(Function) -> OptResult
 
 fn reduce_strength(Function) -> OptResult
@@ -258,6 +260,14 @@ pub enum Opcode {
   CallIndirect(Int)
 }
 impl Show for Opcode
+
+pub enum OptLevel {
+  O0
+  O1
+  O2
+  O3
+}
+fn OptLevel::from_int(Int) -> Self
 
 pub(all) struct OptResult {
   mut changed : Bool
