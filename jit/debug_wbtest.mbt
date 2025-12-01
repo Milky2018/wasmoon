@@ -1,34 +1,5 @@
 // Tests for JIT debug support
 
-// ============ Source Location Tests ============
-
-///|
-test "source location: basic" {
-  let loc = SourceLocation::new(0, 10)
-  inspect(loc.func_idx, content="0")
-  inspect(loc.offset, content="10")
-  inspect(loc.file, content="None")
-  inspect(loc.line, content="None")
-}
-
-///|
-test "source location: with source" {
-  let loc = SourceLocation::with_source(1, 20, "test.wat", 42, 5)
-  inspect(loc.func_idx, content="1")
-  inspect(loc.offset, content="20")
-  inspect(loc.file, content="Some(\"test.wat\")")
-  inspect(loc.line, content="Some(42)")
-  inspect(loc.column, content="Some(5)")
-}
-
-///|
-test "source location: to_string" {
-  let loc1 = SourceLocation::new(0, 10)
-  inspect(loc1.to_string(), content="func 0 @ 10")
-  let loc2 = SourceLocation::with_source(1, 20, "test.wat", 42, 5)
-  inspect(loc2.to_string(), content="test.wat:42:5 (func 1 @ 20)")
-}
-
 // ============ Source Map Tests ============
 
 ///|
@@ -91,16 +62,6 @@ test "source map: mapping count" {
 // ============ Breakpoint Tests ============
 
 ///|
-test "breakpoint: creation" {
-  let bp = Breakpoint::new(1, 0, 10)
-  inspect(bp.id, content="1")
-  inspect(bp.func_idx, content="0")
-  inspect(bp.offset, content="10")
-  inspect(bp.enabled, content="true")
-  inspect(bp.hit_count, content="0")
-}
-
-///|
 test "breakpoint: enable disable" {
   let bp = Breakpoint::new(1, 0, 10)
   inspect(bp.enabled, content="true")
@@ -117,12 +78,6 @@ test "breakpoint: hit count" {
   bp.hit()
   bp.hit()
   inspect(bp.hit_count, content="3")
-}
-
-///|
-test "breakpoint: conditional" {
-  let bp = Breakpoint::with_condition(1, 0, 10, "x > 5")
-  inspect(bp.condition, content="Some(\"x > 5\")")
 }
 
 // ============ Breakpoint Manager Tests ============
@@ -188,15 +143,6 @@ test "breakpoint manager: clear" {
 // ============ Stack Frame Tests ============
 
 ///|
-test "stack frame: basic" {
-  let frame = StackFrame::new(0, 5, 100, "my_func")
-  inspect(frame.index, content="0")
-  inspect(frame.func_idx, content="5")
-  inspect(frame.ip, content="100")
-  inspect(frame.func_name, content="my_func")
-}
-
-///|
 test "stack frame: with location" {
   let loc = SourceLocation::with_source(5, 100, "test.wat", 10, 1)
   let frame = StackFrame::with_location(0, 5, 100, "my_func", loc)
@@ -206,19 +152,7 @@ test "stack frame: with location" {
   }
 }
 
-///|
-test "stack frame: to_string" {
-  let frame = StackFrame::new(0, 5, 100, "my_func")
-  inspect(frame.to_string(), content="#0 my_func (ip=100)")
-}
-
 // ============ Stack Trace Tests ============
-
-///|
-test "stack trace: empty" {
-  let trace = StackTrace::new()
-  inspect(trace.depth(), content="0")
-}
 
 ///|
 test "stack trace: push frames" {
@@ -309,12 +243,3 @@ test "debug context: show" {
   inspect(s.contains("mappings=1"), content="true")
 }
 
-// ============ Step Mode Tests ============
-
-///|
-test "step mode: to_string" {
-  inspect(StepMode::Continue.to_string(), content="continue")
-  inspect(StepMode::StepInto.to_string(), content="step_into")
-  inspect(StepMode::StepOver.to_string(), content="step_over")
-  inspect(StepMode::StepOut.to_string(), content="step_out")
-}

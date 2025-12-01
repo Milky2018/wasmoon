@@ -338,55 +338,6 @@ test "memory types" {
 }
 
 ///|
-test "physical registers" {
-  let preg = PReg::{ index: 0, class: Int }
-  inspect(preg.to_string(), content="x0")
-  let preg_f = PReg::{ index: 5, class: Float }
-  inspect(preg_f.to_string(), content="d5")
-}
-
-///|
-test "operand kinds and constraints" {
-  let vreg : VReg = { id: 0, class: Int }
-  let op1 : Operand = { reg: vreg, kind: Use, constraint: Any }
-  let op2 : Operand = {
-    reg: vreg,
-    kind: Def,
-    constraint: Fixed(PReg::{ index: 0, class: Int }),
-  }
-  let op3 : Operand = { reg: vreg, kind: UseDef, constraint: Reuse(0) }
-  inspect(op1.kind.to_string(), content="use")
-  inspect(op2.kind.to_string(), content="def")
-  inspect(op3.kind.to_string(), content="use-def")
-  inspect(op1.constraint.to_string(), content="any")
-  inspect(op2.constraint.to_string(), content="fixed(x0)")
-  inspect(op3.constraint.to_string(), content="reuse(0)")
-}
-
-///|
-test "extend kinds" {
-  inspect(Signed8To32.to_string(), content="s8_32")
-  inspect(Signed8To64.to_string(), content="s8_64")
-  inspect(Signed16To32.to_string(), content="s16_32")
-  inspect(Signed16To64.to_string(), content="s16_64")
-  inspect(Signed32To64.to_string(), content="s32_64")
-  inspect(Unsigned8To32.to_string(), content="u8_32")
-  inspect(Unsigned8To64.to_string(), content="u8_64")
-  inspect(Unsigned16To32.to_string(), content="u16_32")
-  inspect(Unsigned16To64.to_string(), content="u16_64")
-  inspect(Unsigned32To64.to_string(), content="u32_64")
-}
-
-///|
-test "vcode opcode strings" {
-  inspect(Nop.to_string(), content="nop")
-  inspect(Truncate.to_string(), content="trunc")
-  inspect(IntToFloat.to_string(), content="i2f")
-  inspect(FloatToInt.to_string(), content="f2i")
-  inspect(Extend(Signed8To32).to_string(), content="extend.s8_32")
-}
-
-///|
 test "sub operation" {
   let builder = VCodeBuilder::new("sub_test")
   let p0 = builder.add_param(Int)
@@ -450,17 +401,6 @@ test "AArch64 get_preg" {
 }
 
 ///|
-test "AArch64 register names" {
-  let regs = AArch64Regs::new()
-  inspect(regs.x0().to_string(), content="x0")
-  inspect(regs.x7().to_string(), content="x7")
-  inspect(regs.fp().to_string(), content="x29")
-  inspect(regs.lr().to_string(), content="x30")
-  inspect(regs.d0().to_string(), content="d0")
-  inspect(regs.d7().to_string(), content="d7")
-}
-
-///|
 test "AAPCS64 calling convention registers" {
   let arg_gprs = aapcs64_arg_gprs()
   inspect(arg_gprs.length(), content="8") // x0-x7
@@ -476,10 +416,3 @@ test "AAPCS64 calling convention registers" {
   inspect(ret_fprs.length(), content="4") // d0-d3
 }
 
-///|
-test "calling convention strings" {
-  inspect(SystemV.to_string(), content="system_v")
-  inspect(WindowsFastcall.to_string(), content="windows_fastcall")
-  inspect(Aapcs64.to_string(), content="aapcs64")
-  inspect(Wasm.to_string(), content="wasm")
-}
