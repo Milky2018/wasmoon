@@ -284,7 +284,13 @@ async fn run_wasm(
   invoke : String?,
   func_args : Array[String],
   preloads : Array[String],
+  debug_config : DebugConfig,
+  wasm_config : WasmConfig,
 ) -> Unit {
+  ignore(wasm_config) // Will be used in full implementation
+  if debug_config.verbose {
+    println("[DEBUG] Loading module: \{wasm_path}")
+  }
   // Create linker for module linking
   let linker = @runtime.Linker::new()
   // Load preloaded modules
@@ -324,6 +330,11 @@ async fn run_wasm(
       return
     }
   }
+  if debug_config.verbose {
+    println(
+      "[DEBUG] Module loaded: \{mod_.codes.length()} functions, \{mod_.imports.length()} imports",
+    )
+  }
   // Instantiate the main module
   let store = linker.get_store()
   let imports = linker.build_imports()
@@ -333,10 +344,16 @@ async fn run_wasm(
       return
     }
   }
+  if debug_config.verbose {
+    println("[DEBUG] Module instantiated successfully")
+  }
   // Determine which function to call
   let func_name = match invoke {
     Some(name) => name
     None => "_start" // Default to WASI-style entry point
+  }
+  if debug_config.verbose {
+    println("[DEBUG] Calling function: \{func_name}")
   }
   // Find the function type to parse arguments correctly
   let func_type = find_exported_func_type(mod_, func_name)
@@ -568,7 +585,9 @@ async fn run_compile(
   input_path : String,
   output_path : String?,
   emit_ir : String?,
+  config : CompilerConfig,
 ) -> Unit {
+  ignore(config) // Will be used in full implementation
   // Load the module
   let mod_ = load_module_from_path(input_path) catch {
     e => {
@@ -690,9 +709,13 @@ async fn run_explore(
   wasm_path : String,
   func_index : Int?,
   opt_level : Int,
+  html_output : String?,
 ) -> Unit {
-  println("Exploring compilation: \{wasm_path}")
-  println("=".repeat(60))
+  let is_html = html_output is Some(_)
+  if !is_html {
+    println("Exploring compilation: \{wasm_path}")
+    println("=".repeat(60))
+  }
 
   // Load the module
   let mod_ = load_module_from_path(wasm_path) catch {
@@ -709,8 +732,10 @@ async fn run_explore(
       return
     }
   }
-  println("Module loaded: \{mod_.codes.length()} functions")
-  println("")
+  if !is_html {
+    println("Module loaded: \{mod_.codes.length()} functions")
+    println("")
+  }
 
   // Determine which function to explore
   let func_idx = match func_index {
@@ -729,21 +754,22 @@ async fn run_explore(
   let type_idx = mod_.funcs[func_idx]
   let func_type = mod_.types[type_idx]
   let code = mod_.codes[func_idx]
-  println("== Function \{func_idx} ==")
-  println("Type: \{format_func_type(func_type)}")
-  println("Locals: \{code.locals.length()}")
-  println("")
+  if !is_html {
+    println("== Function \{func_idx} ==")
+    println("Type: \{format_func_type(func_type)}")
+    println("Locals: \{code.locals.length()}")
+    println("")
 
-  // Stage 1: WASM instructions
-  println("== Stage 1: WASM Instructions ==")
-  println("  Instructions: \{code.body.length()}")
-  for i, instr in code.body {
-    println("    \{i}: \{instr}")
+    // Stage 1: WASM instructions
+    println("== Stage 1: WASM Instructions ==")
+    println("  Instructions: \{code.body.length()}")
+    for i, instr in code.body {
+      println("    \{i}: \{instr}")
+    }
+    println("")
   }
-  println("")
 
   // Stage 2: IR (SSA form)
-  println("== Stage 2: IR (SSA Form) ==")
   let translator = @ir.Translator::new(
     "func_\{func_idx}",
     func_type,
@@ -753,29 +779,57 @@ async fn run_explore(
     num_imports,
   )
   let ir_func = translator.translate(code.body)
-  println(ir_func.print())
-  println("")
+  let ir_text = ir_func.print()
+  if !is_html {
+    println("== Stage 2: IR (SSA Form) ==")
+    println(ir_text)
+    println("")
+  }
 
   // Stage 3: Optimized IR
   let level = @ir.OptLevel::from_int(opt_level)
-  println("== Stage 3: Optimized IR (O\{opt_level}) ==")
   @ir.optimize_with_level(ir_func, level) |> ignore
-  println(ir_func.print())
-  println("")
+  let ir_optimized = ir_func.print()
+  if !is_html {
+    println("== Stage 3: Optimized IR (O\{opt_level}) ==")
+    println(ir_optimized)
+    println("")
+  }
 
   // Stage 4: VCode (Low-level IR)
-  println("== Stage 4: VCode (Low-level IR) ==")
   let vcode_func = @vcode.lower_function(ir_func)
-  println(vcode_func.to_string())
-  println("")
+  let vcode_text = vcode_func.to_string()
+  if !is_html {
+    println("== Stage 4: VCode (Low-level IR) ==")
+    println(vcode_text)
+    println("")
+  }
 
   // Stage 5: Register Allocation
-  println("== Stage 5: After Register Allocation ==")
   let allocated = @vcode.allocate_registers_aarch64(vcode_func)
-  println(allocated.to_string())
-  println("")
-  println("=".repeat(60))
-  println("Exploration complete!")
+  let allocated_text = allocated.to_string()
+  if !is_html {
+    println("== Stage 5: After Register Allocation ==")
+    println(allocated_text)
+    println("")
+    println("=".repeat(60))
+    println("Exploration complete!")
+  }
+
+  // Generate HTML report if requested
+  if html_output is Some(path) {
+    let html = generate_html_report(
+      wasm_path, func_idx, func_type, code, ir_func, ir_optimized, vcode_text, allocated_text,
+      opt_level,
+    )
+    @fs.write_file(path, html, create=0o644) catch {
+      e => {
+        println("Error writing HTML report: \{e}")
+        return
+      }
+    }
+    println("HTML report written to: \{path}")
+  }
 }
 
 ///|
@@ -896,6 +950,14 @@ async fn main {
           nargs=@clap.Nargs::Any,
           help="Preload module as NAME=PATH (can be repeated)",
         ),
+        "D": @clap.Arg::named(
+          nargs=@clap.Nargs::Any,
+          help="Debug option (e.g., verbose, print-ir, trace-exec)",
+        ),
+        "W": @clap.Arg::named(
+          nargs=@clap.Nargs::Any,
+          help="WASM semantic option (e.g., max-memory=100, simd=true)",
+        ),
       }),
       "compile": @clap.SubCommand::new(
         help="Compile WASM to precompiled format",
@@ -903,6 +965,11 @@ async fn main {
           "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
           "output": @clap.Arg::named(help="Output path (default: input.cwasm)"),
           "emit-ir": @clap.Arg::named(help="Emit IR to specified path"),
+          "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
+          "opt": @clap.Arg::named(
+            nargs=@clap.Nargs::Any,
+            help="Specific optimization flag (e.g., licm=true, dce=false)",
+          ),
         },
       ),
       "demo": @clap.SubCommand::new(help="Run built-in demo programs"),
@@ -928,6 +995,7 @@ async fn main {
             help="Function index to explore (default: 0)",
           ),
           "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
+          "html": @clap.Arg::named(help="Output HTML report to specified path"),
         },
       ),
       "objdump": @clap.SubCommand::new(help="Inspect precompiled .cwasm file", args={
@@ -936,6 +1004,9 @@ async fn main {
       "settings": @clap.SubCommand::new(
         help="Display available compiler settings",
       ),
+      "config": @clap.SubCommand::new(help="Manage configuration", args={
+        "action": @clap.Arg::positional(help="Action: show, path, init"),
+      }),
       "completion": @clap.SubCommand::new(
         help="Generate shell completion script",
         args={
@@ -990,7 +1061,32 @@ async fn main {
                   Some(arr) => arr
                   None => []
                 }
-                run_wasm(positional[0], invoke_opt, func_args, preloads)
+                // Get debug options from -D flag
+                let debug_config = DebugConfig::new()
+                match sub.args.get("D") {
+                  Some(flags) =>
+                    for flag in flags {
+                      debug_config.apply_flag(flag)
+                    }
+                  None => ()
+                }
+                // Get WASM semantic options from -W flag
+                let wasm_config = WasmConfig::default()
+                match sub.args.get("W") {
+                  Some(flags) =>
+                    for flag in flags {
+                      wasm_config.apply_flag(flag)
+                    }
+                  None => ()
+                }
+                run_wasm(
+                  positional[0],
+                  invoke_opt,
+                  func_args,
+                  preloads,
+                  debug_config,
+                  wasm_config,
+                )
               } else {
                 println("Error: missing file argument")
               }
@@ -1016,7 +1112,27 @@ async fn main {
                     }
                   None => None
                 }
-                run_compile(positional[0], output_opt, emit_ir_opt)
+                let opt_level : Int = match sub.args.get("O") {
+                  Some(arr) =>
+                    if arr.length() > 0 {
+                      @strconv.parse_int(arr[0]) catch {
+                        _ => 2
+                      }
+                    } else {
+                      2
+                    }
+                  None => 2
+                }
+                let config = CompilerConfig::from_level(opt_level)
+                // Apply specific optimization flags
+                match sub.args.get("opt") {
+                  Some(flags) =>
+                    for flag in flags {
+                      config.apply_flag(flag)
+                    }
+                  None => ()
+                }
+                run_compile(positional[0], output_opt, emit_ir_opt, config)
               } else {
                 println("Error: missing file argument")
               }
@@ -1079,7 +1195,16 @@ async fn main {
                     }
                   None => 2
                 }
-                run_explore(positional[0], func_idx, opt_level)
+                let html_output : String? = match sub.args.get("html") {
+                  Some(arr) =>
+                    if arr.length() > 0 {
+                      Some(arr[0])
+                    } else {
+                      None
+                    }
+                  None => None
+                }
+                run_explore(positional[0], func_idx, opt_level, html_output)
               } else {
                 println("Error: missing file argument")
               }
@@ -1093,6 +1218,15 @@ async fn main {
               }
             }
             "settings" => run_settings()
+            "config" => {
+              let positional = sub.positional_args
+              let action = if positional.length() > 0 {
+                positional[0]
+              } else {
+                "show"
+              }
+              run_config(action)
+            }
             "completion" => {
               let positional = sub.positional_args
               if positional.length() > 0 {
