@@ -422,3 +422,14 @@ let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint()) |> UInt::reinte
 - Commit message 用英文
 - 每次改动开新分支，通过 PR 合并
 - 不要使用 `git push -f`
+
+### 避免无意义的工厂函数
+```moonbit
+// ❌ 错误 - 无意义的工厂函数
+pub enum TargetArch { AArch64; X86_64 }
+pub fn aarch64_target() -> TargetArch { AArch64 }
+
+// ✅ 正确 - 直接用 pub(all) enum
+pub(all) enum TargetArch { AArch64; X86_64 }
+// 外部包直接使用 @pkg.AArch64
+```

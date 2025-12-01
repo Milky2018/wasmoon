@@ -42,7 +42,7 @@ const CWASM_VERSION : Int = 1
 
 ///|
 /// Target architecture for compiled code
-pub enum TargetArch {
+pub(all) enum TargetArch {
   Unknown
   X86_64
   AArch64
@@ -73,18 +73,6 @@ fn TargetArch::to_string(self : TargetArch) -> String {
     X86_64 => "x86_64"
     AArch64 => "aarch64"
   }
-}
-
-///|
-/// Create AArch64 target
-pub fn aarch64_target() -> TargetArch {
-  AArch64
-}
-
-///|
-/// Create x86_64 target
-pub fn x86_64_target() -> TargetArch {
-  X86_64
 }
 
 ///|

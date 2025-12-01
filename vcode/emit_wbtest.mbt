@@ -122,7 +122,7 @@ test "emit: fadd" {
 test "emit: comparison" {
   let mc = MachineCode::new()
   emit_cmp_reg(mc, 0, 1) // CMP X0, X1
-  emit_cset(mc, 2, cond_eq()) // CSET X2, EQ
+  emit_cset(mc, 2, EQ.to_int()) // CSET X2, EQ
   inspect(mc.size(), content="8")
 }
 

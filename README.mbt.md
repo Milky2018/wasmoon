@@ -45,29 +45,6 @@ test "add function example" {
 }
 ```
 
-## Development
-
-```bash
-# Build
-moon build
-
-# Test
-moon test
-
-# Format
-moon fmt
-```
-
-## Current Status
-
-- Phase 1 (MVP): Complete
-- Phase 2 (Core Features): In progress
-  - Numeric operations: Done
-  - Memory operations: Planned
-  - Control flow: Planned
-
-See [ROADMAP.md](ROADMAP.md) for details.
-
 ## License
 
 Apache-2.0

@@ -29,36 +29,6 @@ fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFram
 
 fn compute_liveness(VCodeFunction) -> LivenessResult
 
-fn cond_al() -> Int
-
-fn cond_eq() -> Int
-
-fn cond_ge() -> Int
-
-fn cond_gt() -> Int
-
-fn cond_hi() -> Int
-
-fn cond_hs() -> Int
-
-fn cond_le() -> Int
-
-fn cond_lo() -> Int
-
-fn cond_ls() -> Int
-
-fn cond_lt() -> Int
-
-fn cond_mi() -> Int
-
-fn cond_ne() -> Int
-
-fn cond_pl() -> Int
-
-fn cond_vc() -> Int
-
-fn cond_vs() -> Int
-
 fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
 
 fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
@@ -294,6 +264,25 @@ fn CompiledFunction::invalidate(Self) -> Unit
 fn CompiledFunction::is_valid(Self) -> Bool
 fn CompiledFunction::new(String, MachineCode, Int) -> Self
 impl Show for CompiledFunction
+
+pub(all) enum CondCode {
+  EQ
+  NE
+  HS
+  LO
+  MI
+  PL
+  VS
+  VC
+  HI
+  LS
+  GE
+  LT
+  GT
+  LE
+  AL
+}
+fn CondCode::to_int(Self) -> Int
 
 pub(all) struct ExecutableRegion {
   id : Int

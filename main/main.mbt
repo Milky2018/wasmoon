@@ -751,7 +751,7 @@ async fn run_compile(
   }
 
   // Create precompiled module (placeholder - actual compilation would happen here)
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.aarch64_target())
+  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
 
   // For now, we just create an empty precompiled module
   // In a full implementation, we would:

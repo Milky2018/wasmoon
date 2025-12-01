@@ -684,7 +684,7 @@ test "bench_emit_branches" (b : @bench.T) {
       let mc = @vcode.MachineCode::new()
       for i in 0..<10 {
         @vcode.emit_b(mc, i * 4)
-        @vcode.emit_b_cond(mc, @vcode.cond_eq(), i * 8)
+        @vcode.emit_b_cond(mc, @vcode.EQ.to_int(), i * 8)
         @vcode.emit_cbz(mc, 0, i * 12)
         @vcode.emit_cbnz(mc, 1, i * 16)
       }
