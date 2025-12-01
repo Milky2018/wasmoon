@@ -137,9 +137,9 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [x] 输出 `.cwasm` 预编译格式
   - [x] `-o, --output <PATH>` 指定输出路径
   - [x] `--emit-ir <PATH>` 输出 IR
-- [ ] `wast` - 运行 WebAssembly 测试脚本
-  - [ ] 支持 `.wast` 格式测试文件
-  - [ ] 替换当前的 JSON 测试格式
+- [x] `wast` - 运行 WebAssembly 测试脚本
+  - [x] 支持 `.wast` 格式测试文件
+  - [x] 可替代当前的 JSON 测试格式
 
 #### 现有命令 (已实现)
 - [x] `test` - 运行 JSON 格式测试 (当前实现)
@@ -166,10 +166,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [ ] 启用/禁用特定提案
   - [ ] 内存限制配置
 
-#### WASI 支持 (需要先实现 WASI)
-- [ ] `-S, --wasi <KEY=VAL>` WASI 选项
-- [ ] `--dir <HOST_DIR[::GUEST_DIR]>` 目录映射
-- [ ] `--env <NAME=VAL>` 环境变量传递
+#### WASI 支持 (参见 Phase 12)
+- [ ] CLI 选项 (`--dir`, `--env`, `-S`) - 依赖 Phase 12 WASI 核心实现
 
 #### 辅助命令
 - [ ] `config` - 配置管理
@@ -248,6 +246,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] 目标相关的指令格式
 - [x] 非 SSA 形式 (允许重定义)
 - [x] 寄存器约束表示
+  - [x] 基本寄存器类型 (Int/Float)
+  - [ ] 操作数约束系统 (`OperandKind::Use/Def/UseDef`, `OperandConstraint::Any/Fixed/Reuse` 已定义但未使用)
 
 ### 8.2 指令选择 (Lowering) ✅
 - [x] 高级 IR 到低级 IR 的转换框架
@@ -259,6 +259,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] 目标架构接口 (TargetISA trait)
 - [x] 寄存器描述
 - [x] 调用约定 (Calling Convention)
+  - [x] 默认调用约定实现
+  - [ ] 多调用约定支持 (`SystemV`, `Aapcs64`, `WindowsFastcall`, `Wasm` 已定义但未使用)
 - [x] 指令编码规则
 
 ---
@@ -280,7 +282,11 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ### 9.3 栈布局 ✅
 - [x] 栈帧布局计算
 - [x] 溢出槽分配
+  - [x] 基本溢出槽类型 (`Spill`, `Arg`)
+  - [ ] 完整栈槽类型 (`ReturnAddress` 已定义但未使用)
 - [x] 调用者/被调用者保存寄存器处理
+  - [x] 基本序言/尾声生成
+  - [ ] 完整序言操作 (`AdjustSP`, `PushReg`, `PopReg` 已定义但未使用)
 
 ---
 
@@ -296,8 +302,16 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ### 10.2 AArch64 后端 ✅
 - [x] 指令编码
+  - [x] 64位整数运算 (ADD, SUB, MUL, SDIV, UDIV)
+  - [x] 64位浮点运算 (FADD, FSUB, FMUL, FDIV)
+  - [x] 64位/32位内存操作 (LDR, STR)
+  - [ ] 8位/16位内存操作 (`MemType::I8/I16` 已定义但未使用)
 - [x] 寄存器使用
 - [x] 条件执行
+- [x] AArch64 特有指令选择
+  - [x] 乘加/乘减指令 (MADD, MSUB, MNEG)
+  - [x] 带移位操作数指令 (ADD/SUB/AND/OR/XOR shifted)
+- [ ] 扩展指令 (`ExtendKind::Signed8To32/Signed8To64/...` 已定义但未使用)
 
 ### 10.3 代码发射 ✅
 - [x] 机器码缓冲区
@@ -330,24 +344,61 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ### 11.3 调试支持 ✅
 - [x] 源码映射
 - [x] 断点支持
+  - [x] 断点管理 API
+  - [ ] 完整调试命令 (`StepInto`, `StepOver`, `StepOut` 已定义但未使用)
 - [x] 堆栈跟踪
 
 ---
 
-## Phase 12: WASM 扩展提案 🌟
+## Phase 12: WASI 支持 📋
 
-### 12.1 WASM 2.0+ 特性
+> WebAssembly System Interface - 使 WASM 模块能够与操作系统交互
+
+### 12.1 WASI Preview 1 (wasi_snapshot_preview1)
+- [ ] 文件系统操作
+  - [ ] `fd_read` / `fd_write` - 文件描述符读写
+  - [ ] `fd_seek` / `fd_tell` - 文件定位
+  - [ ] `fd_close` - 关闭文件描述符
+  - [ ] `path_open` / `path_create_directory` - 路径操作
+  - [ ] `fd_readdir` - 目录读取
+- [ ] 环境访问
+  - [ ] `environ_get` / `environ_sizes_get` - 环境变量
+  - [ ] `args_get` / `args_sizes_get` - 命令行参数
+- [ ] 时钟
+  - [ ] `clock_time_get` - 获取时间
+  - [ ] `clock_res_get` - 时钟精度
+- [ ] 随机数
+  - [ ] `random_get` - 随机数生成
+- [ ] 进程控制
+  - [ ] `proc_exit` - 退出进程
+  - [ ] `sched_yield` - 让出 CPU
+
+### 12.2 WASI 安全模型
+- [ ] 能力机制 (Capability-based security)
+- [ ] 目录预开放 (Pre-opened directories)
+- [ ] 文件描述符权限管理
+
+### 12.3 WASI CLI 集成
+- [ ] `--dir <HOST_DIR[::GUEST_DIR]>` 目录映射
+- [ ] `--env <NAME=VAL>` 环境变量传递
+- [ ] `-S, --wasi <KEY=VAL>` WASI 选项
+
+---
+
+## Phase 13: WASM 扩展提案 🌟
+
+### 13.1 WASM 2.0+ 特性
 - [ ] 尾调用 (tail-call)
 - [ ] 异常处理 (exception-handling)
 - [ ] 垃圾回收 (GC)
 - [ ] 组件模型 (Component Model)
 
-### 12.2 SIMD 支持
+### 13.2 SIMD 支持
 - [ ] v128 类型
 - [ ] SIMD 指令集
 - [ ] 向量化优化
 
-### 12.3 线程支持
+### 13.3 线程支持
 - [ ] 共享内存
 - [ ] 原子操作
 - [ ] 等待/通知
@@ -361,11 +412,12 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | Phase 1-5 | 完整的 WASM 解释器 | ✅ 已完成 |
 | Phase 6 | 中间表示层设计 | ✅ 已完成 |
 | Phase 7 | IR 优化 | ✅ 已完成 (7.4 可选跳过) |
-| Phase 8 | 指令选择 | ✅ 已完成 (8.1, 8.2, 8.3 架构完成) |
-| Phase 9 | 寄存器分配 | ✅ 已完成 |
-| Phase 10 | 代码生成 | ✅ 已完成 |
-| Phase 11 | JIT 集成 | 🔨 进行中 (11.1, 11.2, 11.3 完成) |
-| Phase 12 | WASM 扩展 | 📋 未来计划 |
+| Phase 8 | 指令选择 | ✅ 核心完成 (约束系统/多调用约定定义但未使用) |
+| Phase 9 | 寄存器分配 | ✅ 核心完成 (合并优化待实现) |
+| Phase 10 | 代码生成 | ✅ 核心完成 (8/16位内存操作、扩展指令待实现) |
+| Phase 11 | JIT 集成 | 🔨 进行中 (OSR、完整调试命令待实现) |
+| Phase 12 | WASI 支持 | 📋 未来计划 |
+| Phase 13 | WASM 扩展 | 📋 未来计划 |
 
 ---
 
@@ -388,5 +440,5 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 11.3 调试支持已完成，实现了源码映射、断点管理和堆栈跟踪
-**下一步**: 实现堆栈替换 (OSR) 或开始 Phase 12 WASM 扩展提案
+**当前状态**: Phase 8-11 核心功能已完成，部分高级功能（操作数约束、多调用约定、8/16位内存操作、扩展指令、调试步进命令）已定义接口但未实现
+**下一步**: 实现堆栈替换 (OSR)、完善 8/16 位内存操作，或开始 Phase 12 WASI 支持

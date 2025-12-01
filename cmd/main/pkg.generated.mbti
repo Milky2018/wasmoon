@@ -6,6 +6,9 @@ package "Milky2018/wasmoon/cmd/main"
 // Errors
 
 // Types and methods
+type WastContext
+
+type WastResult
 
 // Type aliases
 
