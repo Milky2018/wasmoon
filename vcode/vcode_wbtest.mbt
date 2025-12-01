@@ -415,4 +415,3 @@ test "AAPCS64 calling convention registers" {
   let ret_fprs = aapcs64_ret_fprs()
   inspect(ret_fprs.length(), content="4") // d0-d3
 }
-

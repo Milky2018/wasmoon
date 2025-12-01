@@ -936,78 +936,44 @@ pub fn emit_nop(mc : MachineCode) -> Unit {
 // ============ Condition Codes ============
 
 ///|
-pub fn cond_eq() -> Int {
-  0
+/// AArch64 condition codes
+pub(all) enum CondCode {
+  EQ // Equal (Z=1)
+  NE // Not equal (Z=0)
+  HS // Unsigned higher or same (C=1), also CS
+  LO // Unsigned lower (C=0), also CC
+  MI // Minus/negative (N=1)
+  PL // Plus/positive or zero (N=0)
+  VS // Overflow (V=1)
+  VC // No overflow (V=0)
+  HI // Unsigned higher (C=1 & Z=0)
+  LS // Unsigned lower or same (C=0 | Z=1)
+  GE // Signed greater or equal (N=V)
+  LT // Signed less than (N!=V)
+  GT // Signed greater than (Z=0 & N=V)
+  LE // Signed less or equal (Z=1 | N!=V)
+  AL // Always
 }
 
 ///|
-pub fn cond_ne() -> Int {
-  1
-}
-
-///|
-pub fn cond_hs() -> Int {
-  2
-}
-
-///|
-pub fn cond_lo() -> Int {
-  3
-}
-
-///|
-pub fn cond_mi() -> Int {
-  4
-}
-
-///|
-pub fn cond_pl() -> Int {
-  5
-}
-
-///|
-pub fn cond_vs() -> Int {
-  6
-}
-
-///|
-pub fn cond_vc() -> Int {
-  7
-}
-
-///|
-pub fn cond_hi() -> Int {
-  8
-}
-
-///|
-pub fn cond_ls() -> Int {
-  9
-}
-
-///|
-pub fn cond_ge() -> Int {
-  10
-}
-
-///|
-pub fn cond_lt() -> Int {
-  11
-}
-
-///|
-pub fn cond_gt() -> Int {
-  12
-}
-
-///|
-pub fn cond_le() -> Int {
-  13
-}
-
-///|
-pub fn cond_al() -> Int {
-  14
+pub fn CondCode::to_int(self : CondCode) -> Int {
+  match self {
+    EQ => 0
+    NE => 1
+    HS => 2
+    LO => 3
+    MI => 4
+    PL => 5
+    VS => 6
+    VC => 7
+    HI => 8
+    LS => 9
+    GE => 10
+    LT => 11
+    GT => 12
+    LE => 13
+    AL => 14
+  }
 }
 
 // ============ VCode to Machine Code ============
@@ -1256,28 +1222,28 @@ fn emit_store(
 ///|
 fn cmp_kind_to_cond(kind : CmpKind) -> Int {
   match kind {
-    Eq => cond_eq()
-    Ne => cond_ne()
-    Slt => cond_lt()
-    Sle => cond_le()
-    Sgt => cond_gt()
-    Sge => cond_ge()
-    Ult => cond_lo()
-    Ule => cond_ls()
-    Ugt => cond_hi()
-    Uge => cond_hs()
+    Eq => EQ.to_int()
+    Ne => NE.to_int()
+    Slt => LT.to_int()
+    Sle => LE.to_int()
+    Sgt => GT.to_int()
+    Sge => GE.to_int()
+    Ult => LO.to_int()
+    Ule => LS.to_int()
+    Ugt => HI.to_int()
+    Uge => HS.to_int()
   }
 }
 
 ///|
 fn fcmp_kind_to_cond(kind : FCmpKind) -> Int {
   match kind {
-    FCmpKind::Eq => cond_eq()
-    FCmpKind::Ne => cond_ne()
-    FCmpKind::Lt => cond_lt()
-    FCmpKind::Le => cond_le()
-    FCmpKind::Gt => cond_gt()
-    FCmpKind::Ge => cond_ge()
+    FCmpKind::Eq => EQ.to_int()
+    FCmpKind::Ne => NE.to_int()
+    FCmpKind::Lt => LT.to_int()
+    FCmpKind::Le => LE.to_int()
+    FCmpKind::Gt => GT.to_int()
+    FCmpKind::Ge => GE.to_int()
   }
 }
 

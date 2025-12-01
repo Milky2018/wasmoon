@@ -242,4 +242,3 @@ test "debug context: show" {
   inspect(s.contains("breakpoints=1"), content="true")
   inspect(s.contains("mappings=1"), content="true")
 }
-
