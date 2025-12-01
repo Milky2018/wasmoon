@@ -122,6 +122,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ### 5.2 工具链
 - [x] WASM 反汇编器
 - [x] WAT 文本格式支持
+  - [x] 基本 WAT 解析 (flat form)
+  - [x] WAT folded form 语法支持 (then/else keywords in if expressions)
 
 ### 5.3 命令行工具 (对齐 wasmtime CLI)
 
