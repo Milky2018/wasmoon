@@ -818,14 +818,54 @@ async fn run_wat(wat_path : String) -> Unit {
 }
 
 ///|
+/// Debug options for compilation
+struct DebugOptions {
+  verbose : Bool // Verbose output
+  print_ir : Bool // Print IR after each pass
+  print_timing : Bool // Print timing information
+}
+
+///|
+fn DebugOptions::new() -> DebugOptions {
+  { verbose: false, print_ir: false, print_timing: false }
+}
+
+///|
+fn DebugOptions::parse(opts : Array[String]) -> DebugOptions {
+  let mut verbose = false
+  let mut print_ir = false
+  let mut print_timing = false
+  for opt in opts {
+    match opt {
+      "verbose" | "v" => verbose = true
+      "ir" => print_ir = true
+      "timing" | "time" => print_timing = true
+      "all" => {
+        verbose = true
+        print_ir = true
+        print_timing = true
+      }
+      _ => ()
+    }
+  }
+  { verbose, print_ir, print_timing }
+}
+
+///|
 /// Explore WASM compilation process
 async fn run_explore(
   wasm_path : String,
   func_index : Int?,
   opt_level : Int,
+  debug_opts : DebugOptions,
 ) -> Unit {
   println("Exploring compilation: \{wasm_path}")
   println("=".repeat(60))
+  if debug_opts.verbose {
+    println(
+      "Debug: verbose=\{debug_opts.verbose}, print_ir=\{debug_opts.print_ir}, timing=\{debug_opts.print_timing}",
+    )
+  }
 
   // Load the module
   let mod_ = load_module_from_path(wasm_path) catch {
@@ -843,6 +883,14 @@ async fn run_explore(
     }
   }
   println("Module loaded: \{mod_.codes.length()} functions")
+  if debug_opts.verbose {
+    println("  Types: \{mod_.types.length()}")
+    println("  Imports: \{mod_.imports.length()}")
+    println("  Exports: \{mod_.exports.length()}")
+    println("  Memories: \{mod_.memories.length()}")
+    println("  Tables: \{mod_.tables.length()}")
+    println("  Globals: \{mod_.globals.length()}")
+  }
   println("")
 
   // Determine which function to explore
@@ -1072,7 +1120,7 @@ fn print_bash_completion() -> Unit {
       #|                COMPREPLY=( $(compgen -W "--output --emit-ir" -- ${cur}) )
       #|                ;;
       #|            explore)
-      #|                COMPREPLY=( $(compgen -W "--func --O" -- ${cur}) )
+      #|                COMPREPLY=( $(compgen -W "--func --O --D" -- ${cur}) )
       #|                ;;
       #|        esac
       #|        return 0
@@ -1175,6 +1223,7 @@ fn print_fish_completion() -> Unit {
       #|# Options for explore command
       #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l func -d "Function index to explore"
       #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l O -d "Optimization level (0-3)"
+      #|complete -c wasmoon -n "__fish_seen_subcommand_from explore" -l D -d "Debug options: verbose, ir, timing, all"
     ),
   )
 }
@@ -1212,6 +1261,14 @@ fn run_settings() -> Unit {
   println("== Target Architectures ==")
   println("  aarch64  ARM 64-bit (default)")
   println("  x86_64   Intel/AMD 64-bit (planned)")
+  println("")
+  println("== Debug Options (-D) ==")
+  println("  verbose  Verbose output (module details, pass info)")
+  println("  ir       Print IR after each optimization pass")
+  println("  timing   Print timing information")
+  println("  all      Enable all debug options")
+  println("")
+  println("  Example: wasmoon explore test.wasm --D verbose --D ir")
   println("")
   println("== File Formats ==")
   println("  .wasm   WebAssembly binary format")
@@ -1655,6 +1712,10 @@ async fn main {
             help="Function index to explore (default: 0)",
           ),
           "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
+          "D": @clap.Arg::named(
+            nargs=@clap.Nargs::Any,
+            help="Debug options: verbose, ir, timing, all",
+          ),
         },
       ),
       "objdump": @clap.SubCommand::new(help="Inspect precompiled .cwasm file", args={
@@ -1806,7 +1867,11 @@ async fn main {
                     }
                   None => 2
                 }
-                run_explore(positional[0], func_idx, opt_level)
+                let debug_opts = match sub.args.get("D") {
+                  Some(arr) => DebugOptions::parse(arr)
+                  None => DebugOptions::new()
+                }
+                run_explore(positional[0], func_idx, opt_level, debug_opts)
               } else {
                 println("Error: missing file argument")
               }
