@@ -1007,12 +1007,6 @@ async fn main {
       "config": @clap.SubCommand::new(help="Manage configuration", args={
         "action": @clap.Arg::positional(help="Action: show, path, init"),
       }),
-      "completion": @clap.SubCommand::new(
-        help="Generate shell completion script",
-        args={
-          "shell": @clap.Arg::positional(help="Shell type: bash, zsh, fish"),
-        },
-      ),
     },
   )
   let help_msg = parser.gen_help_message(["wasmoon"], {})
@@ -1226,16 +1220,6 @@ async fn main {
                 "show"
               }
               run_config(action)
-            }
-            "completion" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                run_completion(positional[0])
-              } else {
-                println(
-                  "Error: missing shell argument. Usage: wasmoon completion <bash|zsh|fish>",
-                )
-              }
             }
             name => println("Unknown command: \{name}")
           }
