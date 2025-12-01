@@ -417,3 +417,71 @@ pub fn Memory::fill(
     self.data[dest + i] = value
   }
 }
+
+///|
+/// Read i32 from memory (non-raising version for WASI)
+pub fn Memory::read_i32(self : Memory, addr : Int) -> Int {
+  if addr < 0 || addr + 4 > self.data.length() {
+    return 0
+  }
+  let b0 = self.data[addr].to_int()
+  let b1 = self.data[addr + 1].to_int()
+  let b2 = self.data[addr + 2].to_int()
+  let b3 = self.data[addr + 3].to_int()
+  b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+}
+
+///|
+/// Write i32 to memory (non-raising version for WASI)
+pub fn Memory::write_i32(self : Memory, addr : Int, value : Int) -> Unit {
+  if addr < 0 || addr + 4 > self.data.length() {
+    return
+  }
+  self.data[addr] = value.land(0xFF).to_byte()
+  self.data[addr + 1] = (value >> 8).land(0xFF).to_byte()
+  self.data[addr + 2] = (value >> 16).land(0xFF).to_byte()
+  self.data[addr + 3] = (value >> 24).land(0xFF).to_byte()
+}
+
+///|
+/// Write i64 to memory (non-raising version for WASI)
+pub fn Memory::write_i64(self : Memory, addr : Int, value : Int64) -> Unit {
+  if addr < 0 || addr + 8 > self.data.length() {
+    return
+  }
+  for i in 0..<8 {
+    let byte_val = (value >> (i * 8)).land(0xFFL).to_int()
+    self.data[addr + i] = byte_val.to_byte()
+  }
+}
+
+///|
+/// Read a byte from memory (non-raising version for WASI)
+pub fn Memory::read_byte(self : Memory, addr : Int) -> Byte {
+  if addr < 0 || addr >= self.data.length() {
+    return b'\x00'
+  }
+  self.data[addr]
+}
+
+///|
+/// Write a byte to memory (non-raising version for WASI)
+pub fn Memory::write_byte(self : Memory, addr : Int, value : Byte) -> Unit {
+  if addr < 0 || addr >= self.data.length() {
+    return
+  }
+  self.data[addr] = value
+}
+
+///|
+/// Read bytes from memory (non-raising version for WASI)
+pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
+  if addr < 0 || len < 0 || addr + len > self.data.length() {
+    return b""
+  }
+  let arr : Array[Byte] = []
+  for i in 0..<len {
+    arr.push(self.data[addr + i])
+  }
+  Bytes::from_array(arr)
+}
