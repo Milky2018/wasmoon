@@ -1,5 +1,9 @@
 {
   "import": [
     "Milky2018/wasmoon/types"
+  ],
+  "test-import": [
+    { "path": "Milky2018/wasmoon/runtime", "alias": "runtime" },
+    { "path": "Milky2018/wasmoon/types", "alias": "types" }
   ]
 }

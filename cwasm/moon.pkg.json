@@ -1,5 +1,8 @@
 {
   "import": [
     "Milky2018/wasmoon/vcode"
+  ],
+  "test-import": [
+    { "path": "Milky2018/wasmoon/cwasm", "alias": "cwasm" }
   ]
 }
