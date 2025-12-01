@@ -258,6 +258,13 @@ fn string_to_bytes(s : String) -> Array[Int] {
 pub suberror DeserializeError String
 
 ///|
+pub impl Show for DeserializeError with output(self, logger) {
+  match self {
+    DeserializeError(msg) => logger.write_string(msg)
+  }
+}
+
+///|
 /// Deserialize a precompiled module from bytes
 pub fn deserialize(
   bytes : Array[Int],

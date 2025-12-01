@@ -153,9 +153,9 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] `explore` - 探索 WASM 编译过程
   - [x] 显示编译各阶段输出 (WASM → IR → VCode → 寄存器分配)
   - [ ] 输出 HTML 报告 (可选，未来增强)
-- [ ] `objdump` - 检查预编译的 `.cwasm` 文件
-  - [ ] 显示元数据
-  - [ ] 显示段信息
+- [x] `objdump` - 检查预编译的 `.cwasm` 文件
+  - [x] 显示元数据
+  - [x] 显示段信息
 
 #### 配置与调试选项
 - [ ] `-O, --optimize <KEY=VAL>` 优化选项
