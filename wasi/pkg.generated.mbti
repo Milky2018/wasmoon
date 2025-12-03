@@ -37,6 +37,10 @@ pub fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
 pub fn native_close(Int) -> Bool
 
+pub fn native_get_errno() -> Int
+
+pub fn native_get_error_message() -> String
+
 pub fn native_open(String, Array[OpenFlags], Int) -> Int?
 
 pub fn native_open_read(String) -> Int?

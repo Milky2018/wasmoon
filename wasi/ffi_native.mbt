@@ -1,36 +1,67 @@
 ///|
 /// Native FFI for file operations
-/// These functions call C standard library functions
+/// These functions call C functions defined in ffi_native.c
+/// which provides cross-platform support for Windows and Unix
 
 ///|
 /// Open a file
 /// Returns file descriptor or -1 on error
 #borrow(path)
-extern "c" fn c_open(path : FixedArray[Byte], flags : Int, mode : Int) -> Int = "open"
+extern "c" fn c_open(path : FixedArray[Byte], flags : Int, mode : Int) -> Int = "wasmoon_wasi_open"
 
 ///|
 /// Close a file descriptor
-extern "c" fn c_close(fd : Int) -> Int = "close"
+extern "c" fn c_close(fd : Int) -> Int = "wasmoon_wasi_close"
 
 ///|
 /// Read from a file descriptor
 /// Returns number of bytes read, 0 for EOF, or -1 on error
 #borrow(buf)
-extern "c" fn c_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "read"
+extern "c" fn c_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_read"
 
 ///|
 /// Write to a file descriptor
 /// Returns number of bytes written or -1 on error
 #borrow(buf)
-extern "c" fn c_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "write"
+extern "c" fn c_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_write"
 
 ///|
 /// Seek in a file
 /// Returns new offset or -1 on error
-extern "c" fn c_lseek(fd : Int, offset : Int64, whence : Int) -> Int64 = "lseek"
+extern "c" fn c_lseek(fd : Int, offset : Int64, whence : Int) -> Int64 = "wasmoon_wasi_lseek"
 
 ///|
-/// File open flags (combined from macOS and Linux)
+/// Get error message for last error
+extern "c" fn c_get_error_message() -> Bytes = "wasmoon_wasi_get_error_message"
+
+///|
+/// Get errno value
+extern "c" fn c_get_errno() -> Int = "wasmoon_wasi_get_errno"
+
+///|
+/// Platform-specific open flags (retrieved from C at runtime)
+extern "c" fn c_o_rdonly() -> Int = "wasmoon_wasi_o_rdonly"
+
+///|
+extern "c" fn c_o_wronly() -> Int = "wasmoon_wasi_o_wronly"
+
+///|
+extern "c" fn c_o_rdwr() -> Int = "wasmoon_wasi_o_rdwr"
+
+///|
+extern "c" fn c_o_creat() -> Int = "wasmoon_wasi_o_creat"
+
+///|
+extern "c" fn c_o_trunc() -> Int = "wasmoon_wasi_o_trunc"
+
+///|
+extern "c" fn c_o_append() -> Int = "wasmoon_wasi_o_append"
+
+///|
+extern "c" fn c_o_excl() -> Int = "wasmoon_wasi_o_excl"
+
+///|
+/// File open flags
 pub(all) enum OpenFlags {
   ReadOnly
   WriteOnly
@@ -43,20 +74,19 @@ pub(all) enum OpenFlags {
 }
 
 ///|
-/// Convert OpenFlags to platform-specific int
-/// macOS values (Darwin)
+/// Convert OpenFlags to platform-specific int using C functions
 fn open_flags_to_int(flags : Array[OpenFlags]) -> Int {
   let mut result = 0
   for flag in flags {
     let v = match flag {
-      ReadOnly => 0 // O_RDONLY
-      WriteOnly => 1 // O_WRONLY
-      ReadWrite => 2 // O_RDWR
-      Create => 0x200 // O_CREAT on macOS
-      Truncate => 0x400 // O_TRUNC on macOS
-      Append => 0x8 // O_APPEND on macOS
-      Exclusive => 0x800 // O_EXCL on macOS
-      Directory => 0x100000 // O_DIRECTORY on macOS
+      ReadOnly => c_o_rdonly()
+      WriteOnly => c_o_wronly()
+      ReadWrite => c_o_rdwr()
+      Create => c_o_creat()
+      Truncate => c_o_trunc()
+      Append => c_o_append()
+      Exclusive => c_o_excl()
+      Directory => 0 // Not commonly used, platform-dependent
     }
     result = result | v
   }
@@ -157,7 +187,20 @@ pub fn native_tell(fd : Int) -> Int64? {
 }
 
 ///|
-/// Convert a MoonBit string to a null-terminated C string
+/// Get the last error message
+pub fn native_get_error_message() -> String {
+  let bytes = c_get_error_message()
+  utf8_bytes_to_string(bytes)
+}
+
+///|
+/// Get the last errno value
+pub fn native_get_errno() -> Int {
+  c_get_errno()
+}
+
+///|
+/// Convert a MoonBit string to a null-terminated C string (UTF-8)
 fn string_to_cstring(s : String) -> FixedArray[Byte] {
   let len = s.length()
   // Estimate UTF-8 byte length (worst case: 4 bytes per char)
@@ -198,4 +241,46 @@ fn string_to_cstring(s : String) -> FixedArray[Byte] {
   }
   buf[pos] = b'\x00' // Null terminator
   buf
+}
+
+///|
+/// Convert UTF-8 bytes to a MoonBit string
+fn utf8_bytes_to_string(bytes : Bytes) -> String {
+  let len = bytes.length()
+  let chars : Array[Char] = []
+  let mut i = 0
+  while i < len {
+    let b = bytes[i].to_int()
+    if b == 0 {
+      break // Stop at null terminator
+    }
+    if b < 0x80 {
+      chars.push(b.unsafe_to_char())
+      i = i + 1
+    } else if b < 0xE0 && i + 1 < len {
+      let c = ((b & 0x1F) << 6) | (bytes[i + 1].to_int() & 0x3F)
+      chars.push(c.unsafe_to_char())
+      i = i + 2
+    } else if b < 0xF0 && i + 2 < len {
+      let c = ((b & 0x0F) << 12) |
+        ((bytes[i + 1].to_int() & 0x3F) << 6) |
+        (bytes[i + 2].to_int() & 0x3F)
+      chars.push(c.unsafe_to_char())
+      i = i + 3
+    } else if b < 0xF8 && i + 3 < len {
+      let codepoint = ((b & 0x07) << 18) |
+        ((bytes[i + 1].to_int() & 0x3F) << 12) |
+        ((bytes[i + 2].to_int() & 0x3F) << 6) |
+        (bytes[i + 3].to_int() & 0x3F)
+      // Convert to surrogate pair
+      let adjusted = codepoint - 0x10000
+      chars.push((0xD800 + (adjusted >> 10)).unsafe_to_char())
+      chars.push((0xDC00 + (adjusted & 0x3FF)).unsafe_to_char())
+      i = i + 4
+    } else {
+      // Invalid UTF-8, skip byte
+      i = i + 1
+    }
+  }
+  String::from_array(chars)
 }

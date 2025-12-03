@@ -47,15 +47,16 @@ fn utf8_to_string(bytes : Bytes, len : Int) -> String {
       buf.write_char(c.unsafe_to_char())
       i = i + 2
     } else if b < 0xF0 {
-      let c = ((b & 0x0F) << 12) | ((bytes[i + 1].to_int() & 0x3F) << 6) | (bytes[
-          i + 2
-        ].to_int() & 0x3F)
+      let c = ((b & 0x0F) << 12) |
+        ((bytes[i + 1].to_int() & 0x3F) << 6) |
+        (bytes[i + 2].to_int() & 0x3F)
       buf.write_char(c.unsafe_to_char())
       i = i + 3
     } else {
-      let codepoint = ((b & 0x07) << 18) | ((bytes[i + 1].to_int() & 0x3F) << 12) | ((bytes[
-            i + 2
-          ].to_int() & 0x3F) << 6) | (bytes[i + 3].to_int() & 0x3F)
+      let codepoint = ((b & 0x07) << 18) |
+        ((bytes[i + 1].to_int() & 0x3F) << 12) |
+        ((bytes[i + 2].to_int() & 0x3F) << 6) |
+        (bytes[i + 3].to_int() & 0x3F)
       // Convert to surrogate pair
       let cp = codepoint - 0x10000
       buf.write_char((0xD800 + (cp >> 10)).unsafe_to_char())
@@ -77,8 +78,8 @@ test "native file operations: write and read" {
     [@wasi.ReadWrite, @wasi.Create, @wasi.Truncate],
     0o666,
   )
-  guard fd is Some(fd) else {
-    return // Skip test if can't create file
+  guard fd is Some(fd) else { // Skip test if can't create file
+    return
   }
 
   // Write content as UTF-8
@@ -92,8 +93,8 @@ test "native file operations: write and read" {
 
   // Open file for reading
   let fd = @wasi.native_open(test_file, [@wasi.ReadOnly], 0)
-  guard fd is Some(fd) else {
-    return // Skip if can't open
+  guard fd is Some(fd) else { // Skip if can't open
+    return
   }
 
   // Read content
@@ -120,8 +121,8 @@ test "native file operations: seek and tell" {
     [@wasi.ReadWrite, @wasi.Create, @wasi.Truncate],
     0o666,
   )
-  guard fd is Some(fd) else {
-    return // Skip test if can't create file
+  guard fd is Some(fd) else { // Skip test if can't create file
+    return
   }
   let bytes = string_to_utf8(content)
   let buf = FixedArray::makei(bytes.length(), fn(i) { bytes[i] })
@@ -130,8 +131,8 @@ test "native file operations: seek and tell" {
 
   // Open for reading and test seek
   let fd = @wasi.native_open(test_file, [@wasi.ReadOnly], 0)
-  guard fd is Some(fd) else {
-    return // Skip if can't open
+  guard fd is Some(fd) else { // Skip if can't open
+    return
   }
 
   // Initial position should be 0
@@ -148,7 +149,6 @@ test "native file operations: seek and tell" {
   let read_buf : FixedArray[Byte] = FixedArray::make(5, b'\x00')
   let read_count = @wasi.native_read(fd, read_buf, 5)
   inspect(read_count, content="Some(5)")
-
   let read_bytes = Bytes::makei(5, fn(i) { read_buf[i] })
   inspect(utf8_to_string(read_bytes, 5), content="56789")
 
@@ -159,7 +159,6 @@ test "native file operations: seek and tell" {
   // Seek from end
   let new_pos = @wasi.native_seek(fd, -2L, @wasi.End)
   inspect(new_pos, content="Some(8)")
-
   @wasi.native_close(fd) |> ignore
 }
 
@@ -171,7 +170,7 @@ test "native file operations: open non-existent file" {
     0,
   )
   guard fd is None else {
-    @wasi.native_close(fd.unwrap()) |> ignore
-    return // File exists unexpectedly
+    @wasi.native_close(fd.unwrap()) |> ignore // File exists unexpectedly
+    return
   }
 }
