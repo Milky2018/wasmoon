@@ -1,6 +1,6 @@
 ///|
 /// Compiler configuration options
-pub(all) struct CompilerConfig {
+priv struct CompilerConfig {
   // Optimization level (0-3)
   opt_level : Int
   // Specific optimization flags
@@ -117,7 +117,7 @@ fn CompilerConfig::apply_flag(self : CompilerConfig, flag : String) -> Unit {
 
 ///|
 /// Debug configuration options
-pub(all) struct DebugConfig {
+priv struct DebugConfig {
   mut verbose : Bool
   mut print_ir : Bool
   mut print_vcode : Bool
@@ -165,7 +165,7 @@ fn DebugConfig::apply_flag(self : DebugConfig, flag : String) -> Unit {
 
 ///|
 /// WASM semantic configuration options
-pub(all) struct WasmConfig {
+priv struct WasmConfig {
   // Memory limits
   mut max_memory_pages : Int // Maximum memory pages (64KB each), 0 = no limit
   mut max_table_size : Int // Maximum table size, 0 = no limit
