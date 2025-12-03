@@ -11,9 +11,7 @@ test "parse simple module" {
     #|)
   let script = parse(input) catch { e => fail("Parse error: \{e}") }
   inspect(script.commands.length(), content="1")
-  if script.commands[0] is Module(_, _) {
-    inspect(true, content="true")
-  } else {
+  guard script.commands[0] is Module(_, _) else {
     fail("Expected Module command")
   }
 }
@@ -64,9 +62,7 @@ test "parse register command" {
     #|(register "M1")
   let script = parse(input) catch { e => fail("Parse error: \{e}") }
   inspect(script.commands.length(), content="2")
-  if script.commands[1] is Register("M1", None) {
-    inspect(true, content="true")
-  } else {
+  guard script.commands[1] is Register("M1", None) else {
     fail("Expected Register command")
   }
 }
