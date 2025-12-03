@@ -1019,6 +1019,7 @@ fn main {
       "config": @clap.SubCommand::new(help="Manage configuration", args={
         "action": @clap.Arg::positional(help="Action: show, path, init"),
       }),
+      "help": @clap.SubCommand::new(help="Display help message"),
     },
   )
   let help_msg = parser.gen_help_message(["wasmoon"], {})
@@ -1032,14 +1033,14 @@ fn main {
   for i = 1; i < args.length(); i = i + 1 {
     cli_args.push(args[i])
   }
-  let help_msg = parser.parse(value, cli_args[:]) catch {
+  let subcmd_help = parser.parse(value, cli_args[:]) catch {
     e => {
       println(e)
       println(help_msg)
       return
     }
   }
-  match help_msg {
+  match subcmd_help {
     Some(msg) => println(msg)
     None =>
       match value.subcmd {
@@ -1233,6 +1234,7 @@ fn main {
               }
               run_config(action)
             }
+            "help" => println(help_msg)
             name => println("Unknown command: \{name}")
           }
         None => println("Error: no command")
