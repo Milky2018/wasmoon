@@ -349,21 +349,102 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     [@types.Value::I32(result)]
   })
 
+  // fd_fdstat_get(fd, fdstat) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "fd_fdstat_get", fn(args) {
+    let fd = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let fdstat_ptr = match args[1] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = fd_fdstat_get(ctx, mem, fd, fdstat_ptr)
+    [@types.Value::I32(result)]
+  })
+
+  // clock_res_get(clock_id, resolution) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "clock_res_get", fn(args) {
+    let clock_id = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let resolution_ptr = match args[1] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = clock_res_get(mem, clock_id, resolution_ptr)
+    [@types.Value::I32(result)]
+  })
+
+  // sched_yield() -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "sched_yield", fn(_args) {
+    let result = sched_yield()
+    [@types.Value::I32(result)]
+  })
+
+  // path_create_directory(fd, path, path_len) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "path_create_directory", fn(
+    args,
+  ) {
+    let dir_fd = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let path_ptr = match args[1] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let path_len = match args[2] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = path_create_directory(ctx, mem, dir_fd, path_ptr, path_len)
+    [@types.Value::I32(result)]
+  })
+
+  // fd_readdir(fd, buf, buf_len, cookie, bufused) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "fd_readdir", fn(args) {
+    let fd = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let buf_ptr = match args[1] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let buf_len = match args[2] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let cookie = match args[3] {
+      I64(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let bufused_ptr = match args[4] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = fd_readdir(ctx, mem, fd, buf_ptr, buf_len, cookie, bufused_ptr)
+    [@types.Value::I32(result)]
+  })
+
   // Stub functions that return ENOSYS (not implemented)
   let stub_funcs = [
     ("fd_advise", 4),
     ("fd_allocate", 3),
     ("fd_datasync", 1),
-    ("fd_fdstat_get", 2),
     ("fd_fdstat_set_flags", 2),
     ("fd_fdstat_set_rights", 3),
     ("fd_filestat_get", 2),
     ("fd_filestat_set_size", 2),
     ("fd_filestat_set_times", 4),
-    ("fd_readdir", 5),
     ("fd_renumber", 2),
     ("fd_sync", 1),
-    ("path_create_directory", 3),
     ("path_filestat_get", 5),
     ("path_filestat_set_times", 7),
     ("path_link", 7),
@@ -373,7 +454,6 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     ("path_symlink", 4),
     ("path_unlink_file", 3),
     ("poll_oneoff", 4),
-    ("sched_yield", 0),
     ("sock_accept", 3),
     ("sock_recv", 6),
     ("sock_send", 5),

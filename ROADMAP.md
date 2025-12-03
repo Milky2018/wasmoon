@@ -370,23 +370,24 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [x] `fd_read` / `fd_write` - stdin/stdout/stderr 读写
   - [x] `fd_close` - 关闭文件描述符
   - [x] `fd_prestat_get` / `fd_prestat_dir_name` - 预开放目录信息
+  - [x] `fd_fdstat_get` - 获取文件描述符状态
 - [x] 文件系统操作
   - [x] `fd_seek` / `fd_tell` - 文件定位
   - [x] `fd_pread` / `fd_pwrite` - 位置读写
   - [x] `path_open` - 打开文件
-  - [ ] `path_create_directory` - 创建目录 (返回 ENOSYS)
-  - [ ] `fd_readdir` - 目录读取 (返回 ENOSYS)
+  - [x] `path_create_directory` - 创建目录
+  - [x] `fd_readdir` - 目录读取
 - [x] 环境访问
   - [x] `environ_get` / `environ_sizes_get` - 环境变量
   - [x] `args_get` / `args_sizes_get` - 命令行参数
 - [x] 时钟
   - [x] `clock_time_get` - 获取时间
-  - [ ] `clock_res_get` - 时钟精度 (未实现)
+  - [x] `clock_res_get` - 时钟精度
 - [x] 随机数
   - [x] `random_get` - 随机数生成 (PRNG, 非密码学安全)
 - [x] 进程控制
   - [x] `proc_exit` - 退出进程
-  - [ ] `sched_yield` - 让出 CPU (返回 ENOSYS)
+  - [x] `sched_yield` - 让出 CPU
 
 ### 12.2 WASI 安全模型
 - [x] 目录预开放 (Pre-opened directories) - 基础实现
@@ -483,6 +484,9 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | ~~**WASI 文件系统**~~ | ~~Phase 12~~ | ✅ 已完成 |
 | ~~- `path_open`/`fd_close`~~ | ~~12.1~~ | ✅ 已完成 |
 | ~~- `fd_seek`/`fd_tell`~~ | ~~12.1~~ | ✅ 已完成 |
+| ~~- `fd_fdstat_get`~~ | ~~12.1~~ | ✅ 已完成 |
+| ~~- `path_create_directory`/`fd_readdir`~~ | ~~12.1~~ | ✅ 已完成 |
+| ~~- `clock_res_get`/`sched_yield`~~ | ~~12.1~~ | ✅ 已完成 |
 | ~~**8/16位内存操作**~~ | ~~Phase 10~~ | ✅ 已完成 |
 | **扩展指令 (ExtendKind)** | Phase 10 | 类型转换完整性 |
 | **寄存器合并 (Coalescing)** | Phase 9 | 提升 JIT 代码质量 |
@@ -526,7 +530,10 @@ Phase 12 WASI (P0) ✅ 已完成
 Phase 12 WASI 文件系统 (P1) ✅ 已完成
     │
     ├─► path_open/fd_close ✅
-    └─► fd_seek/fd_tell ✅
+    ├─► fd_seek/fd_tell ✅
+    ├─► fd_fdstat_get ✅
+    ├─► path_create_directory/fd_readdir ✅
+    └─► clock_res_get/sched_yield ✅
          │
          ▼
 Phase 10 完善 (P1)

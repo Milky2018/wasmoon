@@ -200,6 +200,76 @@ pub fn native_get_errno() -> Int {
 }
 
 ///|
+/// Create a directory
+/// Returns 0 on success, -1 on error
+#borrow(path)
+extern "c" fn c_mkdir(path : FixedArray[Byte], mode : Int) -> Int = "wasmoon_wasi_mkdir"
+
+///|
+/// Read directory entries
+/// Returns serialized entries or null on error
+#borrow(path)
+extern "c" fn c_readdir(path : FixedArray[Byte]) -> Bytes? = "wasmoon_wasi_readdir"
+
+///|
+/// Create a directory
+/// Returns true on success
+pub fn native_mkdir(path : String, mode : Int) -> Bool {
+  let path_bytes = string_to_cstring(path)
+  c_mkdir(path_bytes, mode) == 0
+}
+
+///|
+/// Read directory entries
+/// Returns array of (name, is_dir) tuples or None on error
+pub fn native_readdir(path : String) -> Array[(String, Bool)]? {
+  let path_bytes = string_to_cstring(path)
+  let result = c_readdir(path_bytes)
+  if result is None {
+    return None
+  }
+  let bytes = result.unwrap()
+  if bytes.length() < 4 {
+    return Some([])
+  }
+  // Parse count (little-endian)
+  let count = bytes[0].to_int() |
+    (bytes[1].to_int() << 8) |
+    (bytes[2].to_int() << 16) |
+    (bytes[3].to_int() << 24)
+  let entries : Array[(String, Bool)] = []
+  let mut offset = 4
+  for _ in 0..<count {
+    if offset >= bytes.length() {
+      break
+    }
+    // Read is_dir
+    let is_dir = bytes[offset].to_int() != 0
+    offset = offset + 1
+    // Read name_len (little-endian)
+    if offset + 4 > bytes.length() {
+      break
+    }
+    let name_len = bytes[offset].to_int() |
+      (bytes[offset + 1].to_int() << 8) |
+      (bytes[offset + 2].to_int() << 16) |
+      (bytes[offset + 3].to_int() << 24)
+    offset = offset + 4
+    // Read name
+    if offset + name_len > bytes.length() {
+      break
+    }
+    let name_chars : Array[Char] = []
+    for i in 0..<name_len {
+      name_chars.push(bytes[offset + i].to_int().unsafe_to_char())
+    }
+    offset = offset + name_len
+    entries.push((String::from_array(name_chars), is_dir))
+  }
+  Some(entries)
+}
+
+///|
 /// Convert a MoonBit string to a null-terminated C string (UTF-8)
 fn string_to_cstring(s : String) -> FixedArray[Byte] {
   let len = s.length()

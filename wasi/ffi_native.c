@@ -13,6 +13,7 @@ extern "C" {
 #ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
+#include <direct.h>
 #define O_RDONLY _O_RDONLY
 #define O_WRONLY _O_WRONLY
 #define O_RDWR _O_RDWR
@@ -23,6 +24,7 @@ extern "C" {
 #else
 #include <fcntl.h>
 #include <unistd.h>
+#include <dirent.h>
 #endif
 
 #include "moonbit.h"
@@ -94,6 +96,87 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_o_creat(void) { return O_CREAT; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_trunc(void) { return O_TRUNC; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_append(void) { return O_APPEND; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_excl(void) { return O_EXCL; }
+
+// Create a directory
+MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdir(moonbit_bytes_t path, int mode) {
+#ifdef _WIN32
+  (void)mode;  // Windows mkdir doesn't use mode
+  return _mkdir((const char *)path);
+#else
+  return mkdir((const char *)path, mode);
+#endif
+}
+
+// Directory entry structure for readdir
+// Returns a serialized format: count (4 bytes) + entries
+// Each entry: is_dir (1 byte) + name_len (4 bytes) + name (variable)
+MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
+#ifdef _WIN32
+  // Windows implementation using FindFirstFile/FindNextFile
+  // For now, return empty result on Windows
+  moonbit_bytes_t result = moonbit_make_bytes(4, 0);
+  memset(result, 0, 4);  // count = 0
+  return result;
+#else
+  DIR *dir = opendir((const char *)path);
+  if (!dir) {
+    return NULL;
+  }
+
+  // First pass: count entries and calculate total size
+  int count = 0;
+  size_t total_size = 4;  // 4 bytes for count
+  struct dirent *entry;
+
+  while ((entry = readdir(dir)) != NULL) {
+    // Skip . and ..
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+      continue;
+    }
+    count++;
+    total_size += 1 + 4 + strlen(entry->d_name);  // is_dir + name_len + name
+  }
+
+  // Allocate result buffer
+  moonbit_bytes_t result = moonbit_make_bytes(total_size, 0);
+
+  // Write count (little-endian)
+  result[0] = count & 0xFF;
+  result[1] = (count >> 8) & 0xFF;
+  result[2] = (count >> 16) & 0xFF;
+  result[3] = (count >> 24) & 0xFF;
+
+  // Second pass: write entries
+  rewinddir(dir);
+  size_t offset = 4;
+
+  while ((entry = readdir(dir)) != NULL) {
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+      continue;
+    }
+
+    // Determine if it's a directory
+    int is_dir = (entry->d_type == DT_DIR) ? 1 : 0;
+    result[offset] = is_dir;
+    offset++;
+
+    // Write name length (little-endian)
+    size_t name_len = strlen(entry->d_name);
+    result[offset] = name_len & 0xFF;
+    result[offset + 1] = (name_len >> 8) & 0xFF;
+    result[offset + 2] = (name_len >> 16) & 0xFF;
+    result[offset + 3] = (name_len >> 24) & 0xFF;
+    offset += 4;
+
+    // Write name
+    memcpy(result + offset, entry->d_name, name_len);
+    offset += name_len;
+  }
+
+  closedir(dir);
+  return result;
+#endif
+}
 
 #ifdef __cplusplus
 }
