@@ -11,6 +11,8 @@ pub fn args_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
 pub fn args_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
+pub fn clock_res_get(@runtime.Memory, Int, Int) -> Int
+
 pub fn clock_time_get(@runtime.Memory, Int, Int64, Int) -> Int
 
 pub fn environ_get(WasiContext, @runtime.Memory, Int, Int) -> Int
@@ -18,6 +20,8 @@ pub fn environ_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 pub fn environ_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
 pub fn fd_close(WasiContext, Int) -> Int
+
+pub fn fd_fdstat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
 pub fn fd_pread(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
 
@@ -28,6 +32,8 @@ pub fn fd_prestat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 pub fn fd_pwrite(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
 
 pub fn fd_read(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+
+pub fn fd_readdir(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
 
 pub fn fd_seek(WasiContext, @runtime.Memory, Int, Int64, Int, Int) -> Int
 
@@ -41,6 +47,8 @@ pub fn native_get_errno() -> Int
 
 pub fn native_get_error_message() -> String
 
+pub fn native_mkdir(String, Int) -> Bool
+
 pub fn native_open(String, Array[OpenFlags], Int) -> Int?
 
 pub fn native_open_read(String) -> Int?
@@ -49,11 +57,15 @@ pub fn native_open_write(String) -> Int?
 
 pub fn native_read(Int, FixedArray[Byte], Int) -> Int?
 
+pub fn native_readdir(String) -> Array[(String, Bool)]?
+
 pub fn native_seek(Int, Int64, Whence) -> Int64?
 
 pub fn native_tell(Int) -> Int64?
 
 pub fn native_write(Int, FixedArray[Byte], Int) -> Int?
+
+pub fn path_create_directory(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
 
 pub fn path_open(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int64, Int64, Int, Int) -> Int
 
@@ -62,6 +74,8 @@ pub fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
 pub fn random_get(@runtime.Memory, Int, Int) -> Int
 
 pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit
+
+pub fn sched_yield() -> Int
 
 pub let stderr : Fd
 

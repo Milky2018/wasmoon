@@ -637,6 +637,238 @@ pub fn fd_pwrite(
 }
 
 ///|
+/// fd_fdstat_get - Get file descriptor status
+///
+/// Params:
+/// - fd: File descriptor
+/// - fdstat_ptr: Pointer to store fdstat struct
+///
+/// Returns: errno
+///
+/// fdstat struct layout (24 bytes):
+/// - fs_filetype: u8 (1 byte)
+/// - fs_flags: u16 (2 bytes, offset 2)
+/// - fs_rights_base: u64 (8 bytes, offset 8)
+/// - fs_rights_inheriting: u64 (8 bytes, offset 16)
+pub fn fd_fdstat_get(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  fdstat_ptr : Int,
+) -> Int {
+  // Determine file type
+  let (file_type, flags) : (Int, Int) = if fd == 0 {
+    // stdin - character device, read-only
+    (2, 0) // filetype=2 (character_device)
+  } else if fd == 1 || fd == 2 {
+    // stdout/stderr - character device, append
+    (2, 1) // filetype=2, flags=append
+  } else {
+    match ctx.get_file(fd) {
+      Some(file) => {
+        let ft = match file.file_type {
+          RegularFile => 4 // regular_file
+          Directory => 3 // directory
+          CharacterDevice => 2 // character_device
+        }
+        (ft, file.flags & 0x01) // preserve append flag
+      }
+      None => {
+        // Check if it's a preopen directory
+        for preopen in ctx.preopens {
+          let (preopen_fd, _, _) = preopen
+          if preopen_fd.to_int() == fd {
+            return {
+              // It's a preopen directory
+              mem.write_byte(fdstat_ptr, b'\x03') // fs_filetype = directory (3)
+              mem.write_byte(fdstat_ptr + 1, b'\x00') // padding
+              mem.write_byte(fdstat_ptr + 2, b'\x00') // fs_flags low byte
+              mem.write_byte(fdstat_ptr + 3, b'\x00') // fs_flags high byte
+              mem.write_i32(fdstat_ptr + 4, 0) // padding
+              mem.write_i64(fdstat_ptr + 8, 0x1FFFFFFFL) // fs_rights_base (all rights)
+              mem.write_i64(fdstat_ptr + 16, 0x1FFFFFFFL) // fs_rights_inheriting
+              Errno::Success.to_i32()
+            }
+          }
+        }
+        return Errno::Badf.to_i32()
+      }
+    }
+  }
+  // Write fdstat struct
+  mem.write_byte(fdstat_ptr, file_type.to_byte()) // fs_filetype
+  mem.write_byte(fdstat_ptr + 1, b'\x00') // padding
+  mem.write_byte(fdstat_ptr + 2, (flags & 0xFF).to_byte()) // fs_flags low byte
+  mem.write_byte(fdstat_ptr + 3, ((flags >> 8) & 0xFF).to_byte()) // fs_flags high byte
+  mem.write_i32(fdstat_ptr + 4, 0) // padding
+  mem.write_i64(fdstat_ptr + 8, 0x1FFFFFFFL) // fs_rights_base (all rights for simplicity)
+  mem.write_i64(fdstat_ptr + 16, 0x1FFFFFFFL) // fs_rights_inheriting
+  Errno::Success.to_i32()
+}
+
+///|
+/// clock_res_get - Get clock resolution
+///
+/// Params:
+/// - clock_id: Clock identifier
+/// - resolution_ptr: Pointer to store resolution (nanoseconds)
+///
+/// Returns: errno
+pub fn clock_res_get(
+  mem : @runtime.Memory,
+  clock_id : Int,
+  resolution_ptr : Int,
+) -> Int {
+  let clock = ClockId::from_i32(clock_id)
+  if clock is None {
+    return Errno::Inval.to_i32()
+  }
+  // Return a reasonable resolution (1 millisecond = 1_000_000 nanoseconds)
+  // In a real implementation, this would depend on the system clock
+  mem.write_i64(resolution_ptr, 1000000L)
+  Errno::Success.to_i32()
+}
+
+///|
+/// sched_yield - Yield the processor
+///
+/// Returns: errno
+pub fn sched_yield() -> Int {
+  // In a single-threaded context, this is essentially a no-op
+  // Just return success
+  Errno::Success.to_i32()
+}
+
+///|
+/// path_create_directory - Create a directory
+///
+/// Params:
+/// - dir_fd: Directory fd to create relative to
+/// - path_ptr: Path pointer in memory
+/// - path_len: Path length
+///
+/// Returns: errno
+pub fn path_create_directory(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  dir_fd : Int,
+  path_ptr : Int,
+  path_len : Int,
+) -> Int {
+  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let host_path = ctx.resolve_path(dir_fd, path)
+  if host_path is None {
+    return Errno::Badf.to_i32()
+  }
+  let resolved_path = host_path.unwrap()
+  if native_mkdir(resolved_path, 0o755) {
+    Errno::Success.to_i32()
+  } else {
+    Errno::IO.to_i32()
+  }
+}
+
+///|
+/// fd_readdir - Read directory entries
+///
+/// Params:
+/// - fd: Directory file descriptor
+/// - buf_ptr: Buffer pointer
+/// - buf_len: Buffer length
+/// - cookie: Directory cookie (position)
+/// - bufused_ptr: Pointer to store bytes used
+///
+/// Returns: errno
+pub fn fd_readdir(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  buf_ptr : Int,
+  buf_len : Int,
+  cookie : Int64,
+  bufused_ptr : Int,
+) -> Int {
+  if fd < 3 {
+    return Errno::Badf.to_i32()
+  }
+  let file = ctx.get_file(fd)
+  if file is None {
+    // Check if it's a preopen directory
+    for preopen in ctx.preopens {
+      let (preopen_fd, host_path, _) = preopen
+      if preopen_fd.to_int() == fd {
+        return readdir_impl(
+          mem, host_path, buf_ptr, buf_len, cookie, bufused_ptr,
+        )
+      }
+    }
+    return Errno::Badf.to_i32()
+  }
+  let f = file.unwrap()
+  if f.file_type is Directory {
+    readdir_impl(mem, f.host_path, buf_ptr, buf_len, cookie, bufused_ptr)
+  } else {
+    Errno::NotDir.to_i32()
+  }
+}
+
+///|
+/// Helper: Implement readdir
+fn readdir_impl(
+  mem : @runtime.Memory,
+  dir_path : String,
+  buf_ptr : Int,
+  buf_len : Int,
+  cookie : Int64,
+  bufused_ptr : Int,
+) -> Int {
+  let entries = native_readdir(dir_path)
+  if entries is None {
+    mem.write_i32(bufused_ptr, 0)
+    return Errno::IO.to_i32()
+  }
+  let dir_entries = entries.unwrap()
+  let mut offset = 0
+  let mut entry_idx = 0L
+  for entry in dir_entries {
+    let (name, is_dir) = entry
+    // Skip entries before cookie
+    if entry_idx < cookie {
+      entry_idx = entry_idx + 1L
+      continue
+    }
+    // dirent struct layout (24 bytes + name):
+    // - d_next: u64 (8 bytes) - cookie of next entry
+    // - d_ino: u64 (8 bytes) - inode number
+    // - d_namlen: u32 (4 bytes) - name length
+    // - d_type: u8 (1 byte) - file type
+    // - padding: 3 bytes
+    // - d_name: name bytes (variable)
+    let entry_size = 24 + name.length()
+    if offset + entry_size > buf_len {
+      break // Buffer full
+    }
+    // Write dirent
+    mem.write_i64(buf_ptr + offset, entry_idx + 1L) // d_next
+    mem.write_i64(buf_ptr + offset + 8, entry_idx + 1L) // d_ino (use index as fake inode)
+    mem.write_i32(buf_ptr + offset + 16, name.length()) // d_namlen
+    let file_type : Int = if is_dir { 3 } else { 4 } // 3=directory, 4=regular_file
+    mem.write_byte(buf_ptr + offset + 20, file_type.to_byte()) // d_type
+    mem.write_byte(buf_ptr + offset + 21, b'\x00') // padding
+    mem.write_byte(buf_ptr + offset + 22, b'\x00')
+    mem.write_byte(buf_ptr + offset + 23, b'\x00')
+    // Write name
+    for i in 0..<name.length() {
+      mem.write_byte(buf_ptr + offset + 24 + i, name.code_unit_at(i).to_byte())
+    }
+    offset = offset + entry_size
+    entry_idx = entry_idx + 1L
+  }
+  mem.write_i32(bufused_ptr, offset)
+  Errno::Success.to_i32()
+}
+
+///|
 /// Helper: Read a string from WASM memory
 fn read_string_from_memory(
   mem : @runtime.Memory,
