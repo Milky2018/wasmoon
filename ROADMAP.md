@@ -316,7 +316,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [x] 64位整数运算 (ADD, SUB, MUL, SDIV, UDIV)
   - [x] 64位浮点运算 (FADD, FSUB, FMUL, FDIV)
   - [x] 64位/32位内存操作 (LDR, STR)
-  - [ ] 8位/16位内存操作 (`MemType::I8/I16` 已定义但未使用)
+  - [x] 8位/16位内存操作 (LDRB, LDRH, LDRSB, LDRSH, STRB, STRH)
 - [x] 寄存器使用
 - [x] 条件执行
 - [x] AArch64 特有指令选择
@@ -427,7 +427,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | Phase 7 | IR 优化 | ✅ 已完成 (7.4 可选跳过) |
 | Phase 8 | 指令选择 | ✅ 核心完成 (约束系统/多调用约定定义但未使用) |
 | Phase 9 | 寄存器分配 | ✅ 核心完成 (合并优化待实现) |
-| Phase 10 | 代码生成 | ✅ 核心完成 (8/16位内存操作、扩展指令待实现) |
+| Phase 10 | 代码生成 | ✅ 核心完成 (扩展指令待实现) |
 | Phase 11 | JIT 集成 | 🔨 进行中 (OSR、完整调试命令待实现) |
 | Phase 12 | WASI 支持 | 📋 未来计划 |
 | Phase 13 | WASM 扩展 | 📋 未来计划 |
@@ -453,7 +453,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 8-11 核心功能已完成，部分高级功能（操作数约束、多调用约定、8/16位内存操作、扩展指令、调试步进命令）已定义接口但未实现
+**当前状态**: Phase 8-11 核心功能已完成，部分高级功能（操作数约束、多调用约定、扩展指令、调试步进命令）已定义接口但未实现
 **下一步**: 见下方优先级排序
 
 ---
@@ -481,7 +481,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | **WASI 文件系统** | Phase 12 | 文件操作是常见需求 |
 | - `path_open`/`fd_close` | 12.1 | 文件读写必需 |
 | - `fd_seek`/`fd_tell` | 12.1 | 随机访问文件 |
-| **8/16位内存操作** | Phase 10 | 某些 WASM 程序可能使用 |
+| ~~**8/16位内存操作**~~ | ~~Phase 10~~ | ✅ 已完成 |
 | **扩展指令 (ExtendKind)** | Phase 10 | 类型转换完整性 |
 | **寄存器合并 (Coalescing)** | Phase 9 | 提升 JIT 代码质量 |
 
@@ -529,7 +529,6 @@ Phase 12 WASI 文件系统 (P1)
          ▼
 Phase 10 完善 (P1)
     │
-    ├─► 8/16位内存操作
     └─► ExtendKind 指令
          │
          ▼

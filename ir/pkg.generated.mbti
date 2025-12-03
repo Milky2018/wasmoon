@@ -160,6 +160,12 @@ pub fn IRBuilder::ishl(Self, Value, Value) -> Value
 pub fn IRBuilder::isub(Self, Value, Value) -> Value
 pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
 pub fn IRBuilder::load(Self, Type, Value, Int) -> Value
+pub fn IRBuilder::load16_s(Self, Type, Value, Int) -> Value
+pub fn IRBuilder::load16_u(Self, Type, Value, Int) -> Value
+pub fn IRBuilder::load32_s(Self, Value, Int) -> Value
+pub fn IRBuilder::load32_u(Self, Value, Int) -> Value
+pub fn IRBuilder::load8_s(Self, Type, Value, Int) -> Value
+pub fn IRBuilder::load8_u(Self, Type, Value, Int) -> Value
 pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::print(Self) -> String
 pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
@@ -172,6 +178,9 @@ pub fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
 pub fn IRBuilder::srem(Self, Value, Value) -> Value
 pub fn IRBuilder::sshr(Self, Value, Value) -> Value
 pub fn IRBuilder::store(Self, Type, Value, Value, Int) -> Unit
+pub fn IRBuilder::store16(Self, Value, Value, Int) -> Unit
+pub fn IRBuilder::store32(Self, Value, Value, Int) -> Unit
+pub fn IRBuilder::store8(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
 pub fn IRBuilder::trap(Self, String) -> Unit
 pub fn IRBuilder::udiv(Self, Value, Value) -> Value
@@ -254,6 +263,15 @@ pub enum Opcode {
   Bitcast
   Load(Type, Int)
   Store(Type, Int)
+  Load8S(Type, Int)
+  Load8U(Type, Int)
+  Load16S(Type, Int)
+  Load16U(Type, Int)
+  Load32S(Int)
+  Load32U(Int)
+  Store8(Int)
+  Store16(Int)
+  Store32(Int)
   Select
   Copy
   Call(Int)

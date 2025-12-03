@@ -464,6 +464,58 @@ fn Translator::translate_instruction(
       let result = self.builder.load(Type::F64, addr, offset)
       self.push(result)
     }
+
+    // Narrow load operations (8/16/32-bit with sign/zero extension)
+    I32Load8S(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load8_s(Type::I32, addr, offset)
+      self.push(result)
+    }
+    I32Load8U(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load8_u(Type::I32, addr, offset)
+      self.push(result)
+    }
+    I32Load16S(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load16_s(Type::I32, addr, offset)
+      self.push(result)
+    }
+    I32Load16U(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load16_u(Type::I32, addr, offset)
+      self.push(result)
+    }
+    I64Load8S(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load8_s(Type::I64, addr, offset)
+      self.push(result)
+    }
+    I64Load8U(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load8_u(Type::I64, addr, offset)
+      self.push(result)
+    }
+    I64Load16S(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load16_s(Type::I64, addr, offset)
+      self.push(result)
+    }
+    I64Load16U(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load16_u(Type::I64, addr, offset)
+      self.push(result)
+    }
+    I64Load32S(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load32_s(addr, offset)
+      self.push(result)
+    }
+    I64Load32U(_, offset) => {
+      let addr = self.pop()
+      let result = self.builder.load32_u(addr, offset)
+      self.push(result)
+    }
     I32Store(_, offset) => {
       let value = self.pop()
       let addr = self.pop()
@@ -483,6 +535,33 @@ fn Translator::translate_instruction(
       let value = self.pop()
       let addr = self.pop()
       self.builder.store(Type::F64, addr, value, offset)
+    }
+
+    // Narrow store operations (8/16/32-bit)
+    I32Store8(_, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.builder.store8(addr, value, offset)
+    }
+    I32Store16(_, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.builder.store16(addr, value, offset)
+    }
+    I64Store8(_, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.builder.store8(addr, value, offset)
+    }
+    I64Store16(_, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.builder.store16(addr, value, offset)
+    }
+    I64Store32(_, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.builder.store32(addr, value, offset)
     }
 
     // Control flow

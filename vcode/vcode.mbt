@@ -278,6 +278,13 @@ pub enum VCodeOpcode {
   // Memory operations
   Load(MemType, Int) // type, offset
   Store(MemType, Int) // type, offset
+  // Narrow load operations (8/16-bit with sign/zero extension)
+  Load8S(Int) // Load 8-bit signed, sign-extend to 32/64-bit (offset)
+  Load8U(Int) // Load 8-bit unsigned, zero-extend to 32/64-bit (offset)
+  Load16S(Int) // Load 16-bit signed, sign-extend to 32/64-bit (offset)
+  Load16U(Int) // Load 16-bit unsigned, zero-extend to 32/64-bit (offset)
+  Load32S(Int) // Load 32-bit signed, sign-extend to 64-bit (offset)
+  Load32U(Int) // Load 32-bit unsigned, zero-extend to 64-bit (offset)
   // Moves
   Move
   LoadConst(Int64) // Load immediate
@@ -325,6 +332,12 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FDiv => "fdiv"
     Load(ty, offset) => "load.\{ty} +\{offset}"
     Store(ty, offset) => "store.\{ty} +\{offset}"
+    Load8S(offset) => "load8s +\{offset}"
+    Load8U(offset) => "load8u +\{offset}"
+    Load16S(offset) => "load16s +\{offset}"
+    Load16U(offset) => "load16u +\{offset}"
+    Load32S(offset) => "load32s +\{offset}"
+    Load32U(offset) => "load32u +\{offset}"
     Move => "mov"
     LoadConst(v) => "ldi \{v}"
     LoadConstF(v) => "ldf \{v}"

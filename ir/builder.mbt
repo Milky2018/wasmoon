@@ -477,6 +477,70 @@ pub fn IRBuilder::load(
 }
 
 ///|
+/// Load 8-bit signed value and extend to target type
+pub fn IRBuilder::load8_s(
+  self : IRBuilder,
+  ty : Type,
+  addr : Value,
+  offset : Int,
+) -> Value {
+  self.emit_inst(ty, Opcode::Load8S(ty, offset), [addr])
+}
+
+///|
+/// Load 8-bit unsigned value and extend to target type
+pub fn IRBuilder::load8_u(
+  self : IRBuilder,
+  ty : Type,
+  addr : Value,
+  offset : Int,
+) -> Value {
+  self.emit_inst(ty, Opcode::Load8U(ty, offset), [addr])
+}
+
+///|
+/// Load 16-bit signed value and extend to target type
+pub fn IRBuilder::load16_s(
+  self : IRBuilder,
+  ty : Type,
+  addr : Value,
+  offset : Int,
+) -> Value {
+  self.emit_inst(ty, Opcode::Load16S(ty, offset), [addr])
+}
+
+///|
+/// Load 16-bit unsigned value and extend to target type
+pub fn IRBuilder::load16_u(
+  self : IRBuilder,
+  ty : Type,
+  addr : Value,
+  offset : Int,
+) -> Value {
+  self.emit_inst(ty, Opcode::Load16U(ty, offset), [addr])
+}
+
+///|
+/// Load 32-bit signed value and extend to i64
+pub fn IRBuilder::load32_s(
+  self : IRBuilder,
+  addr : Value,
+  offset : Int,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::Load32S(offset), [addr])
+}
+
+///|
+/// Load 32-bit unsigned value and extend to i64
+pub fn IRBuilder::load32_u(
+  self : IRBuilder,
+  addr : Value,
+  offset : Int,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::Load32U(offset), [addr])
+}
+
+///|
 /// Store to memory
 pub fn IRBuilder::store(
   self : IRBuilder,
@@ -486,6 +550,39 @@ pub fn IRBuilder::store(
   offset : Int,
 ) -> Unit {
   self.emit_void_inst(Opcode::Store(ty, offset), [addr, value])
+}
+
+///|
+/// Store low 8 bits of value
+pub fn IRBuilder::store8(
+  self : IRBuilder,
+  addr : Value,
+  value : Value,
+  offset : Int,
+) -> Unit {
+  self.emit_void_inst(Opcode::Store8(offset), [addr, value])
+}
+
+///|
+/// Store low 16 bits of value
+pub fn IRBuilder::store16(
+  self : IRBuilder,
+  addr : Value,
+  value : Value,
+  offset : Int,
+) -> Unit {
+  self.emit_void_inst(Opcode::Store16(offset), [addr, value])
+}
+
+///|
+/// Store low 32 bits of i64 value
+pub fn IRBuilder::store32(
+  self : IRBuilder,
+  addr : Value,
+  value : Value,
+  offset : Int,
+) -> Unit {
+  self.emit_void_inst(Opcode::Store32(offset), [addr, value])
 }
 
 // ============ Misc Operations ============
