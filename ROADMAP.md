@@ -124,6 +124,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] WAT 文本格式支持
   - [x] 基本 WAT 解析 (flat form)
   - [x] WAT folded form 语法支持 (then/else keywords in if expressions)
+  - [ ] **Import 内联函数签名** - 当前不支持 `(import ... (func (param ...) (result ...)))` 语法，必须使用 `(type $t)` 引用预定义类型
 
 ### 5.3 命令行工具 (对齐 wasmtime CLI)
 
@@ -177,6 +178,12 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [x] `config path` - 显示配置文件路径
   - [x] `config init` - 初始化配置
 - [x] `settings` - 显示可用的编译器设置
+
+#### 错误报告改进
+- [ ] **友好的错误信息** - 当前错误仅显示 `Error::to_string()`，缺乏上下文
+  - [ ] WAT 解析错误应显示行号、列号和相关代码片段
+  - [ ] WASM 验证错误应指明具体位置 (函数索引、指令偏移)
+  - [ ] 运行时错误应包含调用栈信息
 
 ---
 
@@ -467,6 +474,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 | 任务 | 所属阶段 | 理由 |
 |------|----------|------|
+| **WAT Import 内联签名** | Phase 5 | 标准 WAT 语法支持，阻塞 WASI 示例运行 |
+| **友好的错误信息** | Phase 5 | 用户体验，当前报错缺乏行号和上下文 |
 | **WASI 文件系统** | Phase 12 | 文件操作是常见需求 |
 | - `path_open`/`fd_close` | 12.1 | 文件读写必需 |
 | - `fd_seek`/`fd_tell` | 12.1 | 随机访问文件 |
