@@ -185,7 +185,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [x] **友好的错误信息** ✅
   - [x] WAT 解析错误显示行号、列号和相关代码片段 (`format_wat_error`)
   - [x] 运行时错误包含调用栈信息 (`RuntimeErrorContext`)
-  - [ ] WASM 验证错误指明具体位置 (函数索引、指令偏移) - 待实现
+  - [x] WASM 验证错误指明具体位置 (函数索引、指令偏移) (`ValidationErrorContext`, `validate_module_with_context`)
 
 ---
 
@@ -477,7 +477,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | 任务 | 所属阶段 | 理由 |
 |------|----------|------|
 | ~~**友好的错误信息**~~ | ~~Phase 5~~ | ✅ 已完成 |
-| **WASM 验证错误位置** | Phase 5 | 验证错误缺少函数索引和指令偏移 |
+| ~~**WASM 验证错误位置**~~ | ~~Phase 5~~ | ✅ 已完成 |
 | **WASI 文件系统** | Phase 12 | 文件操作是常见需求 |
 | - `path_open`/`fd_close` | 12.1 | 文件读写必需 |
 | - `fd_seek`/`fd_tell` | 12.1 | 随机访问文件 |

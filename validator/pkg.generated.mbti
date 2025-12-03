@@ -6,7 +6,11 @@ import(
 )
 
 // Values
+pub fn format_validation_error(ValidationError) -> String
+
 pub fn validate_module(@types.Module) -> Unit raise ValidationError
+
+pub fn validate_module_with_context(@types.Module) -> Unit raise ValidationError
 
 // Errors
 pub(all) suberror ValidationError {
@@ -24,10 +28,24 @@ pub(all) suberror ValidationError {
   MultipleMemories
   MultipleTables
   InvalidLimits(String)
+  WithContext(ValidationErrorContext)
 }
 pub impl Show for ValidationError
 
 // Types and methods
+pub(all) struct ValidationErrorContext {
+  error_msg : String
+  func_idx : Int?
+  instr_offset : Int?
+  instruction : String?
+}
+pub fn ValidationErrorContext::format(Self) -> String
+pub fn ValidationErrorContext::from_error(ValidationError) -> Self
+pub fn ValidationErrorContext::new(String) -> Self
+pub fn ValidationErrorContext::with_func_idx(Self, Int) -> Self
+pub fn ValidationErrorContext::with_instr_offset(Self, Int) -> Self
+pub fn ValidationErrorContext::with_instruction(Self, String) -> Self
+pub impl Show for ValidationErrorContext
 
 // Type aliases
 
