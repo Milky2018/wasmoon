@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/wasi"
 
 import(
   "Milky2018/wasmoon/runtime"
+  "moonbitlang/core/hashmap"
 )
 
 // Values
@@ -18,13 +19,39 @@ pub fn environ_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
 pub fn fd_close(WasiContext, Int) -> Int
 
+pub fn fd_pread(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
+
 pub fn fd_prestat_dir_name(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
 
 pub fn fd_prestat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
+pub fn fd_pwrite(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
+
 pub fn fd_read(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
+pub fn fd_seek(WasiContext, @runtime.Memory, Int, Int64, Int, Int) -> Int
+
+pub fn fd_tell(WasiContext, @runtime.Memory, Int, Int) -> Int
+
 pub fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+
+pub fn native_close(Int) -> Bool
+
+pub fn native_open(String, Array[OpenFlags], Int) -> Int?
+
+pub fn native_open_read(String) -> Int?
+
+pub fn native_open_write(String) -> Int?
+
+pub fn native_read(Int, FixedArray[Byte], Int) -> Int?
+
+pub fn native_seek(Int, Int64, Whence) -> Int64?
+
+pub fn native_tell(Int) -> Int64?
+
+pub fn native_write(Int, FixedArray[Byte], Int) -> Int?
+
+pub fn path_open(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int64, Int64, Int, Int) -> Int
 
 pub fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
 
@@ -151,9 +178,34 @@ pub fn FileSize::to_int64(Self) -> Int64
 pub impl Eq for FileSize
 pub impl Show for FileSize
 
+pub(all) enum FileType {
+  RegularFile
+  Directory
+  CharacterDevice
+}
+
 pub(all) struct IoVec {
   buf : Int
   buf_len : Int
+}
+
+pub(all) struct OpenFile {
+  native_fd : Int
+  file_type : FileType
+  host_path : String
+  mut position : Int64
+  flags : Int
+}
+
+pub(all) enum OpenFlags {
+  ReadOnly
+  WriteOnly
+  ReadWrite
+  Create
+  Truncate
+  Append
+  Exclusive
+  Directory
 }
 
 pub(all) struct Size(Int)
@@ -176,13 +228,20 @@ pub(all) struct WasiContext {
   mut exit_code : Int?
   preopens : Array[(Fd, String, String)]
   mut next_fd : Int
+  open_files : @hashmap.HashMap[Int, OpenFile]
   stdout_callback : (Bytes) -> Unit
   stderr_callback : (Bytes) -> Unit
   stdin_callback : () -> Bytes
 }
+pub fn WasiContext::alloc_fd(Self, OpenFile) -> Int
+pub fn WasiContext::close_fd(Self, Int) -> Bool
 pub fn WasiContext::get_exit_code(Self) -> Int?
+pub fn WasiContext::get_file(Self, Int) -> OpenFile?
+pub fn WasiContext::get_preopen_host_path(Self, Int) -> String?
 pub fn WasiContext::has_exited(Self) -> Bool
+pub fn WasiContext::is_valid_fd(Self, Int) -> Bool
 pub fn WasiContext::new() -> Self
+pub fn WasiContext::resolve_path(Self, Int, String) -> String?
 
 pub(all) struct WasiContextBuilder {
   mut args : Array[String]
@@ -200,6 +259,12 @@ pub fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
 pub fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
 pub fn WasiContextBuilder::stdin(Self, () -> Bytes) -> Self
 pub fn WasiContextBuilder::stdout(Self, (Bytes) -> Unit) -> Self
+
+pub(all) enum Whence {
+  Set
+  Cur
+  End
+}
 
 // Type aliases
 

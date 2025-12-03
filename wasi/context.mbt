@@ -1,4 +1,30 @@
 ///|
+/// File type for open file descriptors
+pub(all) enum FileType {
+  /// Regular file
+  RegularFile
+  /// Directory
+  Directory
+  /// Stdin/Stdout/Stderr (character device)
+  CharacterDevice
+}
+
+///|
+/// Open file entry
+pub(all) struct OpenFile {
+  /// Native file descriptor
+  native_fd : Int
+  /// File type
+  file_type : FileType
+  /// Host path (for debugging)
+  host_path : String
+  /// Current position (tracked separately for virtual files)
+  mut position : Int64
+  /// File access flags
+  flags : Int
+}
+
+///|
 /// WASI execution context
 /// Maintains state for WASI function calls
 pub(all) struct WasiContext {
@@ -12,6 +38,8 @@ pub(all) struct WasiContext {
   preopens : Array[(Fd, String, String)]
   /// Next available file descriptor
   mut next_fd : Int
+  /// Open files: wasi_fd -> OpenFile
+  open_files : @hashmap.HashMap[Int, OpenFile]
   /// Output callback for stdout
   stdout_callback : (Bytes) -> Unit
   /// Output callback for stderr
@@ -29,6 +57,7 @@ pub fn WasiContext::new() -> WasiContext {
     exit_code: None,
     preopens: [],
     next_fd: 3, // 0=stdin, 1=stdout, 2=stderr
+    open_files: @hashmap.new(),
     stdout_callback: fn(bytes) { print_bytes(bytes) },
     stderr_callback: fn(bytes) { print_bytes(bytes) },
     stdin_callback: fn() { b"" },
@@ -145,10 +174,24 @@ pub fn WasiContextBuilder::stdin(
 /// Build the WasiContext
 pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
   let preopens : Array[(Fd, String, String)] = []
+  let open_files : @hashmap.HashMap[Int, OpenFile] = @hashmap.new()
   let mut fd = 3
   for preopen in self.preopens {
     let (host, guest) = preopen
     preopens.push((Fd(fd), host, guest))
+    // Open the preopen directory with native open
+    let native_fd = native_open(host, [ReadOnly, Directory], 0)
+    match native_fd {
+      Some(nfd) =>
+        open_files.set(fd, {
+          native_fd: nfd,
+          file_type: Directory,
+          host_path: host,
+          position: 0L,
+          flags: 0, // Read-only
+        })
+      None => () // Skip if directory cannot be opened
+    }
     fd = fd + 1
   }
   {
@@ -157,6 +200,7 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
     exit_code: None,
     preopens,
     next_fd: fd,
+    open_files,
     stdout_callback: self.stdout_callback.unwrap_or(fn(bytes) {
       print_bytes(bytes)
     }),
@@ -177,4 +221,93 @@ pub fn WasiContext::has_exited(self : WasiContext) -> Bool {
 /// Get the exit code (if process has exited)
 pub fn WasiContext::get_exit_code(self : WasiContext) -> Int? {
   self.exit_code
+}
+
+///|
+/// Allocate a new file descriptor and register an open file
+pub fn WasiContext::alloc_fd(self : WasiContext, file : OpenFile) -> Int {
+  let fd = self.next_fd
+  self.next_fd = self.next_fd + 1
+  self.open_files.set(fd, file)
+  fd
+}
+
+///|
+/// Get an open file by WASI file descriptor
+pub fn WasiContext::get_file(self : WasiContext, fd : Int) -> OpenFile? {
+  self.open_files.get(fd)
+}
+
+///|
+/// Close a file descriptor and remove it from tracking
+pub fn WasiContext::close_fd(self : WasiContext, fd : Int) -> Bool {
+  match self.open_files.get(fd) {
+    Some(file) => {
+      // Close native file descriptor
+      native_close(file.native_fd) |> ignore
+      self.open_files.remove(fd)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+/// Check if a file descriptor is valid
+pub fn WasiContext::is_valid_fd(self : WasiContext, fd : Int) -> Bool {
+  // stdin, stdout, stderr are always valid
+  fd == 0 || fd == 1 || fd == 2 || self.open_files.contains(fd)
+}
+
+///|
+/// Get the host path for a preopen directory by fd
+pub fn WasiContext::get_preopen_host_path(
+  self : WasiContext,
+  fd : Int,
+) -> String? {
+  for preopen in self.preopens {
+    let (preopen_fd, host_path, _) = preopen
+    if preopen_fd.to_int() == fd {
+      return Some(host_path)
+    }
+  }
+  None
+}
+
+///|
+/// Resolve a path relative to a directory fd
+pub fn WasiContext::resolve_path(
+  self : WasiContext,
+  dir_fd : Int,
+  path : String,
+) -> String? {
+  // If dir_fd is a preopen directory, resolve relative to it
+  match self.get_preopen_host_path(dir_fd) {
+    Some(host_path) =>
+      if path.length() == 0 {
+        Some(host_path)
+      } else if path.has_prefix("/") {
+        // Absolute path - should be restricted, but for simplicity we just use host_path as root
+        Some(host_path + path)
+      } else {
+        Some(host_path + "/" + path)
+      }
+    None =>
+      // Check if it's a regular open directory
+      match self.get_file(dir_fd) {
+        Some(file) =>
+          if file.file_type is Directory {
+            if path.length() == 0 {
+              Some(file.host_path)
+            } else if path.has_prefix("/") {
+              Some(file.host_path + path)
+            } else {
+              Some(file.host_path + "/" + path)
+            }
+          } else {
+            None
+          }
+        None => None
+      }
+  }
 }
