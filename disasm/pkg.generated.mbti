@@ -6,7 +6,7 @@ import(
 )
 
 // Values
-fn disassemble(@types.Module) -> String
+pub fn disassemble(@types.Module) -> String
 
 // Errors
 

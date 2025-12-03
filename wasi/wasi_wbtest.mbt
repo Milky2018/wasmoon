@@ -1,6 +1,6 @@
 ///|
 test "wasi: fd_write to stdout" {
-  let ctx = WasiContextBuilder::new().build()
+  let ctx = WasiContextBuilder::new().stdout(fn(_bytes) {  }).build()
   let mem = @runtime.Memory::new(1, None)
   // Setup iovec at address 0: buf=100, buf_len=5
   mem.write_i32(0, 100) // buf pointer

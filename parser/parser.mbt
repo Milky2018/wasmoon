@@ -198,7 +198,7 @@ fn Parser::read_f32(self : Parser) -> Float raise ParserError {
   let b2 = self.read_byte()
   let b3 = self.read_byte()
   let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
-  Int::reinterpret_as_float(bits)
+  Float::reinterpret_from_int(bits)
 }
 
 ///|

@@ -6,37 +6,37 @@ import(
 )
 
 // Values
-fn args_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn args_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
-fn args_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn args_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
-fn clock_time_get(@runtime.Memory, Int, Int64, Int) -> Int
+pub fn clock_time_get(@runtime.Memory, Int, Int64, Int) -> Int
 
-fn environ_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn environ_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
-fn environ_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn environ_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
-fn fd_close(WasiContext, Int) -> Int
+pub fn fd_close(WasiContext, Int) -> Int
 
-fn fd_prestat_dir_name(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+pub fn fd_prestat_dir_name(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
 
-fn fd_prestat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn fd_prestat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
-fn fd_read(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+pub fn fd_read(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
-fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+pub fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
-fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
+pub fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
 
-fn random_get(@runtime.Memory, Int, Int) -> Int
+pub fn random_get(@runtime.Memory, Int, Int) -> Int
 
-fn register_wasi(@runtime.Linker, WasiContext) -> Unit
+pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit
 
-let stderr : Fd
+pub let stderr : Fd
 
-let stdin : Fd
+pub let stdin : Fd
 
-let stdout : Fd
+pub let stdout : Fd
 
 // Errors
 pub(all) suberror WasiExit Int
@@ -53,7 +53,7 @@ pub(all) enum ClockId {
   ProcessCPUTimeId
   ThreadCPUTimeId
 }
-fn ClockId::from_i32(Int) -> Self?
+pub fn ClockId::from_i32(Int) -> Self?
 
 pub(all) enum Errno {
   Success
@@ -134,22 +134,22 @@ pub(all) enum Errno {
   XDev
   NotCapable
 }
-fn Errno::to_i32(Self) -> Int
+pub fn Errno::to_i32(Self) -> Int
 
 pub(all) struct Fd(Int)
-fn Fd::from_int(Int) -> Self
+pub fn Fd::from_int(Int) -> Self
 #deprecated
-fn Fd::inner(Self) -> Int
-fn Fd::to_int(Self) -> Int
-impl Eq for Fd
-impl Show for Fd
+pub fn Fd::inner(Self) -> Int
+pub fn Fd::to_int(Self) -> Int
+pub impl Eq for Fd
+pub impl Show for Fd
 
 pub(all) struct FileSize(Int64)
 #deprecated
-fn FileSize::inner(Self) -> Int64
-fn FileSize::to_int64(Self) -> Int64
-impl Eq for FileSize
-impl Show for FileSize
+pub fn FileSize::inner(Self) -> Int64
+pub fn FileSize::to_int64(Self) -> Int64
+pub impl Eq for FileSize
+pub impl Show for FileSize
 
 pub(all) struct IoVec {
   buf : Int
@@ -158,17 +158,17 @@ pub(all) struct IoVec {
 
 pub(all) struct Size(Int)
 #deprecated
-fn Size::inner(Self) -> Int
-fn Size::to_int(Self) -> Int
-impl Eq for Size
-impl Show for Size
+pub fn Size::inner(Self) -> Int
+pub fn Size::to_int(Self) -> Int
+pub impl Eq for Size
+pub impl Show for Size
 
 pub(all) struct Timestamp(Int64)
 #deprecated
-fn Timestamp::inner(Self) -> Int64
-fn Timestamp::to_int64(Self) -> Int64
-impl Eq for Timestamp
-impl Show for Timestamp
+pub fn Timestamp::inner(Self) -> Int64
+pub fn Timestamp::to_int64(Self) -> Int64
+pub impl Eq for Timestamp
+pub impl Show for Timestamp
 
 pub(all) struct WasiContext {
   args : Array[String]
@@ -180,9 +180,9 @@ pub(all) struct WasiContext {
   stderr_callback : (Bytes) -> Unit
   stdin_callback : () -> Bytes
 }
-fn WasiContext::get_exit_code(Self) -> Int?
-fn WasiContext::has_exited(Self) -> Bool
-fn WasiContext::new() -> Self
+pub fn WasiContext::get_exit_code(Self) -> Int?
+pub fn WasiContext::has_exited(Self) -> Bool
+pub fn WasiContext::new() -> Self
 
 pub(all) struct WasiContextBuilder {
   mut args : Array[String]
@@ -192,14 +192,14 @@ pub(all) struct WasiContextBuilder {
   mut stderr_callback : ((Bytes) -> Unit)?
   mut stdin_callback : (() -> Bytes)?
 }
-fn WasiContextBuilder::args(Self, Array[String]) -> Self
-fn WasiContextBuilder::build(Self) -> WasiContext
-fn WasiContextBuilder::env(Self, String, String) -> Self
-fn WasiContextBuilder::new() -> Self
-fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
-fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
-fn WasiContextBuilder::stdin(Self, () -> Bytes) -> Self
-fn WasiContextBuilder::stdout(Self, (Bytes) -> Unit) -> Self
+pub fn WasiContextBuilder::args(Self, Array[String]) -> Self
+pub fn WasiContextBuilder::build(Self) -> WasiContext
+pub fn WasiContextBuilder::env(Self, String, String) -> Self
+pub fn WasiContextBuilder::new() -> Self
+pub fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
+pub fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
+pub fn WasiContextBuilder::stdin(Self, () -> Bytes) -> Self
+pub fn WasiContextBuilder::stdout(Self, (Bytes) -> Unit) -> Self
 
 // Type aliases
 

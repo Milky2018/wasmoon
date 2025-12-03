@@ -234,7 +234,7 @@ fn string_to_bytes(s : String) -> Array[Int] {
   let result : Array[Int] = []
   for i in 0..<s.length() {
     // Simple ASCII encoding (for now)
-    result.push(s[i] & 0xFF)
+    result.push(s.code_unit_at(i).to_int() & 0xFF)
   }
   result
 }

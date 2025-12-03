@@ -6,11 +6,11 @@ import(
 )
 
 // Values
-fn deserialize(Array[Int]) -> PrecompiledModule raise DeserializeError
+pub fn deserialize(Array[Int]) -> PrecompiledModule raise DeserializeError
 
 // Errors
 pub suberror DeserializeError String
-impl Show for DeserializeError
+pub impl Show for DeserializeError
 
 // Types and methods
 type ByteReader
@@ -22,27 +22,27 @@ pub(all) struct CompiledEntry {
   frame_size : Int
   entry_offset : Int
 }
-fn CompiledEntry::new(Int, String, Array[Int], Int, Int) -> Self
-fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
-impl Show for CompiledEntry
+pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int) -> Self
+pub fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
+pub impl Show for CompiledEntry
 
 pub(all) struct PrecompiledModule {
   version : Int
   target : TargetArch
   functions : Array[CompiledEntry]
 }
-fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction) -> Unit
-fn PrecompiledModule::function_count(Self) -> Int
-fn PrecompiledModule::new(TargetArch) -> Self
-fn PrecompiledModule::serialize(Self) -> Array[Int]
-impl Show for PrecompiledModule
+pub fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction) -> Unit
+pub fn PrecompiledModule::function_count(Self) -> Int
+pub fn PrecompiledModule::new(TargetArch) -> Self
+pub fn PrecompiledModule::serialize(Self) -> Array[Int]
+pub impl Show for PrecompiledModule
 
 pub(all) enum TargetArch {
   Unknown
   X86_64
   AArch64
 }
-impl Show for TargetArch
+pub impl Show for TargetArch
 
 // Type aliases
 

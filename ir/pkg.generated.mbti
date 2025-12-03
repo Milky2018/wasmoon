@@ -6,33 +6,33 @@ import(
 )
 
 // Values
-fn eliminate_common_subexpressions(Function) -> OptResult
+pub fn eliminate_common_subexpressions(Function) -> OptResult
 
-fn eliminate_dead_code(Function) -> OptResult
+pub fn eliminate_dead_code(Function) -> OptResult
 
-fn eliminate_unreachable_code(Function) -> OptResult
+pub fn eliminate_unreachable_code(Function) -> OptResult
 
-fn fold_constants(Function) -> OptResult
+pub fn fold_constants(Function) -> OptResult
 
-fn hoist_loop_invariants(Function) -> OptResult
+pub fn hoist_loop_invariants(Function) -> OptResult
 
-fn merge_blocks(Function) -> OptResult
+pub fn merge_blocks(Function) -> OptResult
 
-fn optimize(Function) -> OptResult
+pub fn optimize(Function) -> OptResult
 
-fn optimize_with_level(Function, OptLevel) -> OptResult
+pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
-fn propagate_copies(Function) -> OptResult
+pub fn propagate_copies(Function) -> OptResult
 
-fn reduce_strength(Function) -> OptResult
+pub fn reduce_strength(Function) -> OptResult
 
-fn simplify_branches(Function) -> OptResult
+pub fn simplify_branches(Function) -> OptResult
 
-fn thread_jumps(Function) -> OptResult
+pub fn thread_jumps(Function) -> OptResult
 
-fn unroll_loops(Function, Int) -> OptResult
+pub fn unroll_loops(Function, Int) -> OptResult
 
-fn validate_function(Function) -> ValidationResult
+pub fn validate_function(Function) -> ValidationResult
 
 // Errors
 
@@ -43,10 +43,10 @@ pub(all) struct Block {
   instructions : Array[Inst]
   mut terminator : Terminator?
 }
-fn Block::add_inst(Self, Inst) -> Unit
-fn Block::add_param(Self, Value, Type) -> Unit
-fn Block::set_terminator(Self, Terminator) -> Unit
-impl Show for Block
+pub fn Block::add_inst(Self, Inst) -> Unit
+pub fn Block::add_param(Self, Value, Type) -> Unit
+pub fn Block::set_terminator(Self, Terminator) -> Unit
+pub impl Show for Block
 
 type BlockFrame
 
@@ -57,19 +57,19 @@ pub(all) struct CFG {
   successors : Array[Array[Int]]
   predecessors : Array[Array[Int]]
 }
-fn CFG::build(Function) -> Self
-fn CFG::compute_dominators(Self) -> Array[Int]
-fn CFG::dominates(Self, Int, Int) -> Bool
-fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
-fn CFG::find_loops(Self) -> Array[Loop]
-fn CFG::get_loop_preheader(Self, Loop) -> Int?
-fn CFG::get_predecessors(Self, Int) -> Array[Int]
-fn CFG::get_successors(Self, Int) -> Array[Int]
-fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
-fn CFG::is_exit_block(Self, Int) -> Bool
-fn CFG::postorder(Self) -> Array[Int]
-fn CFG::reverse_postorder(Self) -> Array[Int]
-fn CFG::to_dot(Self, String) -> String
+pub fn CFG::build(Function) -> Self
+pub fn CFG::compute_dominators(Self) -> Array[Int]
+pub fn CFG::dominates(Self, Int, Int) -> Bool
+pub fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
+pub fn CFG::find_loops(Self) -> Array[Loop]
+pub fn CFG::get_loop_preheader(Self, Loop) -> Int?
+pub fn CFG::get_predecessors(Self, Int) -> Array[Int]
+pub fn CFG::get_successors(Self, Int) -> Array[Int]
+pub fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
+pub fn CFG::is_exit_block(Self, Int) -> Bool
+pub fn CFG::postorder(Self) -> Array[Int]
+pub fn CFG::reverse_postorder(Self) -> Array[Int]
+pub fn CFG::to_dot(Self, String) -> String
 
 pub(all) enum FloatCC {
   Eq
@@ -79,7 +79,7 @@ pub(all) enum FloatCC {
   Gt
   Ge
 }
-impl Show for FloatCC
+pub impl Show for FloatCC
 
 pub(all) struct Function {
   name : String
@@ -89,103 +89,103 @@ pub(all) struct Function {
   mut next_value_id : Int
   mut next_block_id : Int
 }
-fn Function::add_param(Self, Type) -> Value
-fn Function::add_result(Self, Type) -> Unit
-fn Function::new(String) -> Self
-fn Function::new_block(Self) -> Block
-fn Function::new_value(Self, Type) -> Value
-fn Function::print(Self) -> String
-impl Show for Function
+pub fn Function::add_param(Self, Type) -> Value
+pub fn Function::add_result(Self, Type) -> Unit
+pub fn Function::new(String) -> Self
+pub fn Function::new_block(Self) -> Block
+pub fn Function::new_value(Self, Type) -> Value
+pub fn Function::print(Self) -> String
+pub impl Show for Function
 
 pub(all) struct IRBuilder {
   func : Function
   mut current_block : Block?
 }
-fn IRBuilder::add_block_param(Self, Block, Type) -> Value
-fn IRBuilder::add_param(Self, Type) -> Value
-fn IRBuilder::add_result(Self, Type) -> Unit
-fn IRBuilder::band(Self, Value, Value) -> Value
-fn IRBuilder::bitcast(Self, Type, Value) -> Value
-fn IRBuilder::bnot(Self, Value) -> Value
-fn IRBuilder::bor(Self, Value, Value) -> Value
-fn IRBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
-fn IRBuilder::brnz(Self, Value, Block, Block) -> Unit
-fn IRBuilder::brz(Self, Value, Block, Block) -> Unit
-fn IRBuilder::bxor(Self, Value, Value) -> Value
-fn IRBuilder::call(Self, Int, Type?, Array[Value]) -> Value?
-fn IRBuilder::call_indirect(Self, Int, Type?, Value, Array[Value]) -> Value?
-fn IRBuilder::copy(Self, Value) -> Value
-fn IRBuilder::create_block(Self) -> Block
-fn IRBuilder::current_block(Self) -> Block?
-fn IRBuilder::fabs(Self, Value) -> Value
-fn IRBuilder::fadd(Self, Value, Value) -> Value
-fn IRBuilder::fceil(Self, Value) -> Value
-fn IRBuilder::fcmp(Self, FloatCC, Value, Value) -> Value
-fn IRBuilder::fconst(Self, Type, Double) -> Value
-fn IRBuilder::fconst_f32(Self, Float) -> Value
-fn IRBuilder::fconst_f64(Self, Double) -> Value
-fn IRBuilder::fcvt_to_sint(Self, Type, Value) -> Value
-fn IRBuilder::fcvt_to_uint(Self, Type, Value) -> Value
-fn IRBuilder::fdemote(Self, Value) -> Value
-fn IRBuilder::fdiv(Self, Value, Value) -> Value
-fn IRBuilder::ffloor(Self, Value) -> Value
-fn IRBuilder::fmax(Self, Value, Value) -> Value
-fn IRBuilder::fmin(Self, Value, Value) -> Value
-fn IRBuilder::fmul(Self, Value, Value) -> Value
-fn IRBuilder::fnearest(Self, Value) -> Value
-fn IRBuilder::fneg(Self, Value) -> Value
-fn IRBuilder::fpromote(Self, Value) -> Value
-fn IRBuilder::fsqrt(Self, Value) -> Value
-fn IRBuilder::fsub(Self, Value, Value) -> Value
-fn IRBuilder::ftrunc(Self, Value) -> Value
-fn IRBuilder::get_function(Self) -> Function
-fn IRBuilder::iadd(Self, Value, Value) -> Value
-fn IRBuilder::icmp(Self, IntCC, Value, Value) -> Value
-fn IRBuilder::icmp_eq(Self, Value, Value) -> Value
-fn IRBuilder::icmp_ne(Self, Value, Value) -> Value
-fn IRBuilder::icmp_sge(Self, Value, Value) -> Value
-fn IRBuilder::icmp_sgt(Self, Value, Value) -> Value
-fn IRBuilder::icmp_sle(Self, Value, Value) -> Value
-fn IRBuilder::icmp_slt(Self, Value, Value) -> Value
-fn IRBuilder::icmp_uge(Self, Value, Value) -> Value
-fn IRBuilder::icmp_ugt(Self, Value, Value) -> Value
-fn IRBuilder::icmp_ule(Self, Value, Value) -> Value
-fn IRBuilder::icmp_ult(Self, Value, Value) -> Value
-fn IRBuilder::iconst(Self, Type, Int64) -> Value
-fn IRBuilder::iconst_i32(Self, Int) -> Value
-fn IRBuilder::iconst_i64(Self, Int64) -> Value
-fn IRBuilder::imul(Self, Value, Value) -> Value
-fn IRBuilder::ireduce(Self, Type, Value) -> Value
-fn IRBuilder::ishl(Self, Value, Value) -> Value
-fn IRBuilder::isub(Self, Value, Value) -> Value
-fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
-fn IRBuilder::load(Self, Type, Value, Int) -> Value
-fn IRBuilder::new(String) -> Self
-fn IRBuilder::print(Self) -> String
-fn IRBuilder::return_(Self, Array[Value]) -> Unit
-fn IRBuilder::rotl(Self, Value, Value) -> Value
-fn IRBuilder::rotr(Self, Value, Value) -> Value
-fn IRBuilder::sdiv(Self, Value, Value) -> Value
-fn IRBuilder::select(Self, Value, Value, Value) -> Value
-fn IRBuilder::sextend(Self, Type, Value) -> Value
-fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
-fn IRBuilder::srem(Self, Value, Value) -> Value
-fn IRBuilder::sshr(Self, Value, Value) -> Value
-fn IRBuilder::store(Self, Type, Value, Value, Int) -> Unit
-fn IRBuilder::switch_to_block(Self, Block) -> Unit
-fn IRBuilder::trap(Self, String) -> Unit
-fn IRBuilder::udiv(Self, Value, Value) -> Value
-fn IRBuilder::uextend(Self, Type, Value) -> Value
-fn IRBuilder::uint_to_fcvt(Self, Type, Value) -> Value
-fn IRBuilder::urem(Self, Value, Value) -> Value
-fn IRBuilder::ushr(Self, Value, Value) -> Value
+pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
+pub fn IRBuilder::add_param(Self, Type) -> Value
+pub fn IRBuilder::add_result(Self, Type) -> Unit
+pub fn IRBuilder::band(Self, Value, Value) -> Value
+pub fn IRBuilder::bitcast(Self, Type, Value) -> Value
+pub fn IRBuilder::bnot(Self, Value) -> Value
+pub fn IRBuilder::bor(Self, Value, Value) -> Value
+pub fn IRBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
+pub fn IRBuilder::brnz(Self, Value, Block, Block) -> Unit
+pub fn IRBuilder::brz(Self, Value, Block, Block) -> Unit
+pub fn IRBuilder::bxor(Self, Value, Value) -> Value
+pub fn IRBuilder::call(Self, Int, Type?, Array[Value]) -> Value?
+pub fn IRBuilder::call_indirect(Self, Int, Type?, Value, Array[Value]) -> Value?
+pub fn IRBuilder::copy(Self, Value) -> Value
+pub fn IRBuilder::create_block(Self) -> Block
+pub fn IRBuilder::current_block(Self) -> Block?
+pub fn IRBuilder::fabs(Self, Value) -> Value
+pub fn IRBuilder::fadd(Self, Value, Value) -> Value
+pub fn IRBuilder::fceil(Self, Value) -> Value
+pub fn IRBuilder::fcmp(Self, FloatCC, Value, Value) -> Value
+pub fn IRBuilder::fconst(Self, Type, Double) -> Value
+pub fn IRBuilder::fconst_f32(Self, Float) -> Value
+pub fn IRBuilder::fconst_f64(Self, Double) -> Value
+pub fn IRBuilder::fcvt_to_sint(Self, Type, Value) -> Value
+pub fn IRBuilder::fcvt_to_uint(Self, Type, Value) -> Value
+pub fn IRBuilder::fdemote(Self, Value) -> Value
+pub fn IRBuilder::fdiv(Self, Value, Value) -> Value
+pub fn IRBuilder::ffloor(Self, Value) -> Value
+pub fn IRBuilder::fmax(Self, Value, Value) -> Value
+pub fn IRBuilder::fmin(Self, Value, Value) -> Value
+pub fn IRBuilder::fmul(Self, Value, Value) -> Value
+pub fn IRBuilder::fnearest(Self, Value) -> Value
+pub fn IRBuilder::fneg(Self, Value) -> Value
+pub fn IRBuilder::fpromote(Self, Value) -> Value
+pub fn IRBuilder::fsqrt(Self, Value) -> Value
+pub fn IRBuilder::fsub(Self, Value, Value) -> Value
+pub fn IRBuilder::ftrunc(Self, Value) -> Value
+pub fn IRBuilder::get_function(Self) -> Function
+pub fn IRBuilder::iadd(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp(Self, IntCC, Value, Value) -> Value
+pub fn IRBuilder::icmp_eq(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_ne(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_sge(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_sgt(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_sle(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_slt(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_uge(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_ugt(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_ule(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_ult(Self, Value, Value) -> Value
+pub fn IRBuilder::iconst(Self, Type, Int64) -> Value
+pub fn IRBuilder::iconst_i32(Self, Int) -> Value
+pub fn IRBuilder::iconst_i64(Self, Int64) -> Value
+pub fn IRBuilder::imul(Self, Value, Value) -> Value
+pub fn IRBuilder::ireduce(Self, Type, Value) -> Value
+pub fn IRBuilder::ishl(Self, Value, Value) -> Value
+pub fn IRBuilder::isub(Self, Value, Value) -> Value
+pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
+pub fn IRBuilder::load(Self, Type, Value, Int) -> Value
+pub fn IRBuilder::new(String) -> Self
+pub fn IRBuilder::print(Self) -> String
+pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
+pub fn IRBuilder::rotl(Self, Value, Value) -> Value
+pub fn IRBuilder::rotr(Self, Value, Value) -> Value
+pub fn IRBuilder::sdiv(Self, Value, Value) -> Value
+pub fn IRBuilder::select(Self, Value, Value, Value) -> Value
+pub fn IRBuilder::sextend(Self, Type, Value) -> Value
+pub fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
+pub fn IRBuilder::srem(Self, Value, Value) -> Value
+pub fn IRBuilder::sshr(Self, Value, Value) -> Value
+pub fn IRBuilder::store(Self, Type, Value, Value, Int) -> Unit
+pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
+pub fn IRBuilder::trap(Self, String) -> Unit
+pub fn IRBuilder::udiv(Self, Value, Value) -> Value
+pub fn IRBuilder::uextend(Self, Type, Value) -> Value
+pub fn IRBuilder::uint_to_fcvt(Self, Type, Value) -> Value
+pub fn IRBuilder::urem(Self, Value, Value) -> Value
+pub fn IRBuilder::ushr(Self, Value, Value) -> Value
 
 pub(all) struct Inst {
   result : Value?
   mut opcode : Opcode
   operands : Array[Value]
 }
-impl Show for Inst
+pub impl Show for Inst
 
 pub(all) enum IntCC {
   Eq
@@ -199,14 +199,14 @@ pub(all) enum IntCC {
   Ugt
   Uge
 }
-impl Show for IntCC
+pub impl Show for IntCC
 
 pub(all) struct Loop {
   header : Int
   blocks : Array[Int]
   back_edges : Array[(Int, Int)]
 }
-fn Loop::contains(Self, Int) -> Bool
+pub fn Loop::contains(Self, Int) -> Bool
 
 pub enum Opcode {
   Iconst(Int64)
@@ -259,7 +259,7 @@ pub enum Opcode {
   Call(Int)
   CallIndirect(Int)
 }
-impl Show for Opcode
+pub impl Show for Opcode
 
 pub enum OptLevel {
   O0
@@ -267,13 +267,13 @@ pub enum OptLevel {
   O2
   O3
 }
-fn OptLevel::from_int(Int) -> Self
+pub fn OptLevel::from_int(Int) -> Self
 
 pub(all) struct OptResult {
   mut changed : Bool
 }
-fn OptResult::mark_changed(Self) -> Unit
-fn OptResult::new() -> Self
+pub fn OptResult::mark_changed(Self) -> Unit
+pub fn OptResult::new() -> Self
 
 pub enum Terminator {
   Jump(Int, Array[Value])
@@ -283,7 +283,7 @@ pub enum Terminator {
   Return(Array[Value])
   Trap(String)
 }
-impl Show for Terminator
+pub impl Show for Terminator
 
 pub(all) struct Translator {
   builder : IRBuilder
@@ -294,8 +294,8 @@ pub(all) struct Translator {
   func_type_indices : Array[Int]
   num_imports : Int
 }
-fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int) -> Self
-fn Translator::translate(Self, Array[@types.Instruction]) -> Function
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int) -> Self
+pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {
   I32
@@ -305,20 +305,20 @@ pub(all) enum Type {
   FuncRef
   ExternRef
 }
-fn Type::from_wasm(@types.ValueType) -> Self
-impl Show for Type
+pub fn Type::from_wasm(@types.ValueType) -> Self
+pub impl Show for Type
 
 pub(all) struct ValidationResult {
   mut valid : Bool
   errors : Array[String]
 }
-fn ValidationResult::new() -> Self
+pub fn ValidationResult::new() -> Self
 
 pub(all) struct Value {
   id : Int
   ty : Type
 }
-impl Show for Value
+pub impl Show for Value
 
 // Type aliases
 

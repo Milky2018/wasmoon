@@ -11,31 +11,31 @@ pub(all) enum BlockType {
   Value(ValueType)
   TypeIndex(Int)
 }
-impl Eq for BlockType
-impl Show for BlockType
+pub impl Eq for BlockType
+pub impl Show for BlockType
 
 pub(all) struct Data {
   memory_idx : Int
   offset : Array[Instruction]
   init : Bytes
 }
-impl Eq for Data
-impl Show for Data
+pub impl Eq for Data
+pub impl Show for Data
 
 pub(all) struct Element {
   table_idx : Int
   offset : Array[Instruction]
   init : Array[Int]
 }
-impl Eq for Element
-impl Show for Element
+pub impl Eq for Element
+pub impl Show for Element
 
 pub(all) struct Export {
   name : String
   desc : ExportDesc
 }
-impl Eq for Export
-impl Show for Export
+pub impl Eq for Export
+pub impl Show for Export
 
 pub(all) enum ExportDesc {
   Func(Int)
@@ -43,44 +43,44 @@ pub(all) enum ExportDesc {
   Memory(Int)
   Global(Int)
 }
-impl Eq for ExportDesc
-impl Show for ExportDesc
+pub impl Eq for ExportDesc
+pub impl Show for ExportDesc
 
 pub(all) struct FuncType {
   params : Array[ValueType]
   results : Array[ValueType]
 }
-impl Eq for FuncType
-impl Show for FuncType
+pub impl Eq for FuncType
+pub impl Show for FuncType
 
 pub(all) struct FunctionCode {
   locals : Array[ValueType]
   body : Array[Instruction]
 }
-impl Eq for FunctionCode
-impl Show for FunctionCode
+pub impl Eq for FunctionCode
+pub impl Show for FunctionCode
 
 pub(all) struct Global {
   type_ : GlobalType
   init : Array[Instruction]
 }
-impl Eq for Global
-impl Show for Global
+pub impl Eq for Global
+pub impl Show for Global
 
 pub(all) struct GlobalType {
   value_type : ValueType
   mutable : Bool
 }
-impl Eq for GlobalType
-impl Show for GlobalType
+pub impl Eq for GlobalType
+pub impl Show for GlobalType
 
 pub(all) struct Import {
   mod_name : String
   name : String
   desc : ImportDesc
 }
-impl Eq for Import
-impl Show for Import
+pub impl Eq for Import
+pub impl Show for Import
 
 pub(all) enum ImportDesc {
   Func(Int)
@@ -88,8 +88,8 @@ pub(all) enum ImportDesc {
   Memory(MemoryType)
   Global(GlobalType)
 }
-impl Eq for ImportDesc
-impl Show for ImportDesc
+pub impl Eq for ImportDesc
+pub impl Show for ImportDesc
 
 pub(all) enum Instruction {
   Unreachable
@@ -290,21 +290,21 @@ pub(all) enum Instruction {
   I64TruncSatF64S
   I64TruncSatF64U
 }
-impl Eq for Instruction
-impl Show for Instruction
+pub impl Eq for Instruction
+pub impl Show for Instruction
 
 pub(all) struct Limits {
   min : Int
   max : Int?
 }
-impl Eq for Limits
-impl Show for Limits
+pub impl Eq for Limits
+pub impl Show for Limits
 
 pub(all) struct MemoryType {
   limits : Limits
 }
-impl Eq for MemoryType
-impl Show for MemoryType
+pub impl Eq for MemoryType
+pub impl Show for MemoryType
 
 pub(all) struct Module {
   types : Array[FuncType]
@@ -319,15 +319,15 @@ pub(all) struct Module {
   codes : Array[FunctionCode]
   datas : Array[Data]
 }
-fn Module::new() -> Self
-impl Show for Module
+pub fn Module::new() -> Self
+pub impl Show for Module
 
 pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
 }
-impl Eq for TableType
-impl Show for TableType
+pub impl Eq for TableType
+pub impl Show for TableType
 
 pub(all) enum Value {
   I32(Int)
@@ -338,8 +338,8 @@ pub(all) enum Value {
   ExternRef(Int)
   Null
 }
-impl Eq for Value
-impl Show for Value
+pub impl Eq for Value
+pub impl Show for Value
 
 pub(all) enum ValueType {
   I32
@@ -350,8 +350,8 @@ pub(all) enum ValueType {
   FuncRef
   ExternRef
 }
-impl Eq for ValueType
-impl Show for ValueType
+pub impl Eq for ValueType
+pub impl Show for ValueType
 
 // Type aliases
 

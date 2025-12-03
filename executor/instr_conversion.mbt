@@ -65,22 +65,22 @@ fn ExecContext::exec_conversion(
     // f32.convert_i32_s: i32 -> f32 (有符号转换)
     F32ConvertI32S => {
       let a = self.stack.pop_i32()
-      self.stack.push(F32(a.to_float()))
+      self.stack.push(F32(Float::from_int(a)))
     }
     // f32.convert_i32_u: i32 -> f32 (无符号转换)
     F32ConvertI32U => {
       let a = self.stack.pop_i32()
-      self.stack.push(F32(a.reinterpret_as_uint().to_float()))
+      self.stack.push(F32(Float::from_uint(a.reinterpret_as_uint())))
     }
     // f32.convert_i64_s: i64 -> f32 (有符号转换)
     F32ConvertI64S => {
       let a = self.stack.pop_i64()
-      self.stack.push(F32(a.to_float()))
+      self.stack.push(F32(Float::from_int64(a)))
     }
     // f32.convert_i64_u: i64 -> f32 (无符号转换)
     F32ConvertI64U => {
       let a = self.stack.pop_i64()
-      self.stack.push(F32(a.reinterpret_as_uint64().to_float()))
+      self.stack.push(F32(Float::from_uint64(a.reinterpret_as_uint64())))
     }
     // f64.convert_i32_s: i32 -> f64 (有符号转换)
     F64ConvertI32S => {
@@ -106,7 +106,7 @@ fn ExecContext::exec_conversion(
     // f32.demote_f64: f64 -> f32
     F32DemoteF64 => {
       let a = self.stack.pop_f64()
-      self.stack.push(F32(a.to_float()))
+      self.stack.push(F32(Float::from_double(a)))
     }
     // f64.promote_f32: f32 -> f64
     F64PromoteF32 => {
@@ -126,7 +126,7 @@ fn ExecContext::exec_conversion(
     // f32.reinterpret_i32: i32 的位模式 -> f32
     F32ReinterpretI32 => {
       let a = self.stack.pop_i32()
-      self.stack.push(F32(a.reinterpret_as_float()))
+      self.stack.push(F32(Float::reinterpret_from_int(a)))
     }
     // f64.reinterpret_i64: i64 的位模式 -> f64
     F64ReinterpretI64 => {

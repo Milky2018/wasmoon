@@ -7,151 +7,151 @@ import(
 )
 
 // Values
-fn aapcs64_arg_fprs() -> Array[PReg]
+pub fn aapcs64_arg_fprs() -> Array[PReg]
 
-fn aapcs64_arg_gprs() -> Array[PReg]
+pub fn aapcs64_arg_gprs() -> Array[PReg]
 
-fn aapcs64_callee_saved() -> Array[PReg]
+pub fn aapcs64_callee_saved() -> Array[PReg]
 
-fn aapcs64_caller_saved() -> Array[PReg]
+pub fn aapcs64_caller_saved() -> Array[PReg]
 
-fn aapcs64_ret_fprs() -> Array[PReg]
+pub fn aapcs64_ret_fprs() -> Array[PReg]
 
-fn aapcs64_ret_gprs() -> Array[PReg]
+pub fn aapcs64_ret_gprs() -> Array[PReg]
 
-fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
+pub fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
 
-fn apply_aarch64_rule(String, MatchResult, @ir.Inst, LoweringContext) -> AArch64RewriteResult
+pub fn apply_aarch64_rule(String, MatchResult, @ir.Inst, LoweringContext) -> AArch64RewriteResult
 
-fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
+pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
 
-fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
+pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
 
-fn compute_liveness(VCodeFunction) -> LivenessResult
+pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
-fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_add_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+pub fn emit_add_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
-fn emit_and_reg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_and_reg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_and_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+pub fn emit_and_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
-fn emit_asr_reg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_asr_reg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_b(MachineCode, Int) -> Unit
+pub fn emit_b(MachineCode, Int) -> Unit
 
-fn emit_b_cond(MachineCode, Int, Int) -> Unit
+pub fn emit_b_cond(MachineCode, Int, Int) -> Unit
 
-fn emit_bl(MachineCode, Int) -> Unit
+pub fn emit_bl(MachineCode, Int) -> Unit
 
-fn emit_cbnz(MachineCode, Int, Int) -> Unit
+pub fn emit_cbnz(MachineCode, Int, Int) -> Unit
 
-fn emit_cbz(MachineCode, Int, Int) -> Unit
+pub fn emit_cbz(MachineCode, Int, Int) -> Unit
 
-fn emit_cmp_imm(MachineCode, Int, Int) -> Unit
+pub fn emit_cmp_imm(MachineCode, Int, Int) -> Unit
 
-fn emit_cmp_reg(MachineCode, Int, Int) -> Unit
+pub fn emit_cmp_reg(MachineCode, Int, Int) -> Unit
 
-fn emit_cset(MachineCode, Int, Int) -> Unit
+pub fn emit_cset(MachineCode, Int, Int) -> Unit
 
-fn emit_eor_reg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_eor_reg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_eor_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+pub fn emit_eor_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
-fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
+pub fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
 
-fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_fmov_d(MachineCode, Int, Int) -> Unit
+pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
 
-fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_fsub_d(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_fsub_d(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_function(VCodeFunction) -> MachineCode
+pub fn emit_function(VCodeFunction) -> MachineCode
 
-fn emit_ldr_d_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_ldr_d_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_ldr_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_ldr_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_ldr_w_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_ldr_w_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_ldrb_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_ldrb_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_ldrh_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_ldrh_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_load_imm64(MachineCode, Int, Int64) -> Unit
+pub fn emit_load_imm64(MachineCode, Int, Int64) -> Unit
 
-fn emit_lsl_reg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_lsl_reg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_lsr_reg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_lsr_reg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_madd(MachineCode, Int, Int, Int, Int) -> Unit
+pub fn emit_madd(MachineCode, Int, Int, Int, Int) -> Unit
 
-fn emit_mneg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_mneg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_mov_reg(MachineCode, Int, Int) -> Unit
+pub fn emit_mov_reg(MachineCode, Int, Int) -> Unit
 
-fn emit_movk(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_movk(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_movz(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_movz(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_msub(MachineCode, Int, Int, Int, Int) -> Unit
+pub fn emit_msub(MachineCode, Int, Int, Int, Int) -> Unit
 
-fn emit_mul(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_mul(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_nop(MachineCode) -> Unit
+pub fn emit_nop(MachineCode) -> Unit
 
-fn emit_orr_reg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_orr_reg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_orr_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+pub fn emit_orr_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
-fn emit_ret(MachineCode, Int) -> Unit
+pub fn emit_ret(MachineCode, Int) -> Unit
 
-fn emit_sdiv(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_sdiv(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_str_d_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_str_d_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_str_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_str_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_str_w_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_str_w_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_strb_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_strb_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_strh_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_strh_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_sub_imm(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_sub_imm(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_sub_reg(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_sub_reg(MachineCode, Int, Int, Int) -> Unit
 
-fn emit_sub_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+pub fn emit_sub_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
-fn emit_udiv(MachineCode, Int, Int, Int) -> Unit
+pub fn emit_udiv(MachineCode, Int, Int, Int) -> Unit
 
-fn get_aarch64_rules() -> Array[RewriteRule]
+pub fn get_aarch64_rules() -> Array[RewriteRule]
 
-fn get_optimization_rules() -> Array[RewriteRule]
+pub fn get_optimization_rules() -> Array[RewriteRule]
 
-fn is_consecutive_ones(Int64) -> Bool
+pub fn is_consecutive_ones(Int64) -> Bool
 
-fn is_valid_add_imm(Int64) -> Bool
+pub fn is_valid_add_imm(Int64) -> Bool
 
-fn is_valid_logical_imm(Int64) -> Bool
+pub fn is_valid_logical_imm(Int64) -> Bool
 
-fn lower_function(@ir.Function) -> VCodeFunction
+pub fn lower_function(@ir.Function) -> VCodeFunction
 
-fn lower_function_optimized(@ir.Function) -> VCodeFunction
+pub fn lower_function_optimized(@ir.Function) -> VCodeFunction
 
-fn lower_inst_with_patterns(LoweringContext, @ir.Inst, VCodeBlock, Array[RewriteRule]) -> Bool
+pub fn lower_inst_with_patterns(LoweringContext, @ir.Inst, VCodeBlock, Array[RewriteRule]) -> Bool
 
-fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
+pub fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
 
-fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
+pub fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
 
 // Errors
 
@@ -159,31 +159,31 @@ fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResu
 pub(all) struct AArch64 {
   name : String
 }
-fn AArch64::new() -> Self
-impl TargetISA for AArch64
+pub fn AArch64::new() -> Self
+pub impl TargetISA for AArch64
 
 pub(all) struct AArch64Regs {
   placeholder : Int
 }
-fn AArch64Regs::d0(Self) -> PReg
-fn AArch64Regs::d1(Self) -> PReg
-fn AArch64Regs::d2(Self) -> PReg
-fn AArch64Regs::d3(Self) -> PReg
-fn AArch64Regs::d4(Self) -> PReg
-fn AArch64Regs::d5(Self) -> PReg
-fn AArch64Regs::d6(Self) -> PReg
-fn AArch64Regs::d7(Self) -> PReg
-fn AArch64Regs::fp(Self) -> PReg
-fn AArch64Regs::lr(Self) -> PReg
-fn AArch64Regs::new() -> Self
-fn AArch64Regs::x0(Self) -> PReg
-fn AArch64Regs::x1(Self) -> PReg
-fn AArch64Regs::x2(Self) -> PReg
-fn AArch64Regs::x3(Self) -> PReg
-fn AArch64Regs::x4(Self) -> PReg
-fn AArch64Regs::x5(Self) -> PReg
-fn AArch64Regs::x6(Self) -> PReg
-fn AArch64Regs::x7(Self) -> PReg
+pub fn AArch64Regs::d0(Self) -> PReg
+pub fn AArch64Regs::d1(Self) -> PReg
+pub fn AArch64Regs::d2(Self) -> PReg
+pub fn AArch64Regs::d3(Self) -> PReg
+pub fn AArch64Regs::d4(Self) -> PReg
+pub fn AArch64Regs::d5(Self) -> PReg
+pub fn AArch64Regs::d6(Self) -> PReg
+pub fn AArch64Regs::d7(Self) -> PReg
+pub fn AArch64Regs::fp(Self) -> PReg
+pub fn AArch64Regs::lr(Self) -> PReg
+pub fn AArch64Regs::new() -> Self
+pub fn AArch64Regs::x0(Self) -> PReg
+pub fn AArch64Regs::x1(Self) -> PReg
+pub fn AArch64Regs::x2(Self) -> PReg
+pub fn AArch64Regs::x3(Self) -> PReg
+pub fn AArch64Regs::x4(Self) -> PReg
+pub fn AArch64Regs::x5(Self) -> PReg
+pub fn AArch64Regs::x6(Self) -> PReg
+pub fn AArch64Regs::x7(Self) -> PReg
 
 pub enum AArch64RewriteResult {
   AddShifted(Int, Int, Int)
@@ -201,16 +201,16 @@ pub(all) struct AArch64StackFrame {
   mut lr_slot : Int?
   mut fp_slot : Int?
 }
-fn AArch64StackFrame::alloc_spill(Self, VReg) -> Int
-fn AArch64StackFrame::finalize(Self) -> Unit
-fn AArch64StackFrame::gen_epilogue(Self) -> Array[VCodeInst]
-fn AArch64StackFrame::gen_prologue(Self) -> Array[VCodeInst]
-fn AArch64StackFrame::new() -> Self
-fn AArch64StackFrame::save_callee_reg(Self, PReg) -> Int
-fn AArch64StackFrame::set_has_calls(Self) -> Unit
-fn AArch64StackFrame::setup(Self) -> Unit
-fn AArch64StackFrame::size(Self) -> Int
-impl Show for AArch64StackFrame
+pub fn AArch64StackFrame::alloc_spill(Self, VReg) -> Int
+pub fn AArch64StackFrame::finalize(Self) -> Unit
+pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[VCodeInst]
+pub fn AArch64StackFrame::gen_prologue(Self) -> Array[VCodeInst]
+pub fn AArch64StackFrame::new() -> Self
+pub fn AArch64StackFrame::save_callee_reg(Self, PReg) -> Int
+pub fn AArch64StackFrame::set_has_calls(Self) -> Unit
+pub fn AArch64StackFrame::setup(Self) -> Unit
+pub fn AArch64StackFrame::size(Self) -> Int
+pub impl Show for AArch64StackFrame
 
 pub enum CallConv {
   SystemV
@@ -218,7 +218,7 @@ pub enum CallConv {
   Aapcs64
   Wasm
 }
-impl Show for CallConv
+pub impl Show for CallConv
 
 pub(all) enum CmpKind {
   Eq
@@ -232,7 +232,7 @@ pub(all) enum CmpKind {
   Ugt
   Uge
 }
-impl Show for CmpKind
+pub impl Show for CmpKind
 
 pub(all) struct CodeCache {
   functions : Map[Int, CompiledFunction]
@@ -241,15 +241,15 @@ pub(all) struct CodeCache {
   mut hits : Int
   mut misses : Int
 }
-fn CodeCache::clear(Self) -> Unit
-fn CodeCache::contains(Self, Int) -> Bool
-fn CodeCache::get(Self, Int) -> CompiledFunction?
-fn CodeCache::insert(Self, Int, CompiledFunction) -> Unit
-fn CodeCache::invalidate(Self, Int) -> Unit
-fn CodeCache::new(Int) -> Self
-fn CodeCache::remove(Self, Int) -> Unit
-fn CodeCache::stats(Self) -> (Int, Int, Int, Int)
-impl Show for CodeCache
+pub fn CodeCache::clear(Self) -> Unit
+pub fn CodeCache::contains(Self, Int) -> Bool
+pub fn CodeCache::get(Self, Int) -> CompiledFunction?
+pub fn CodeCache::insert(Self, Int, CompiledFunction) -> Unit
+pub fn CodeCache::invalidate(Self, Int) -> Unit
+pub fn CodeCache::new(Int) -> Self
+pub fn CodeCache::remove(Self, Int) -> Unit
+pub fn CodeCache::stats(Self) -> (Int, Int, Int, Int)
+pub impl Show for CodeCache
 
 pub(all) struct CompiledFunction {
   name : String
@@ -259,11 +259,11 @@ pub(all) struct CompiledFunction {
   frame_size : Int
   mut valid : Bool
 }
-fn CompiledFunction::get_code(Self) -> Array[Int]
-fn CompiledFunction::invalidate(Self) -> Unit
-fn CompiledFunction::is_valid(Self) -> Bool
-fn CompiledFunction::new(String, MachineCode, Int) -> Self
-impl Show for CompiledFunction
+pub fn CompiledFunction::get_code(Self) -> Array[Int]
+pub fn CompiledFunction::invalidate(Self) -> Unit
+pub fn CompiledFunction::is_valid(Self) -> Bool
+pub fn CompiledFunction::new(String, MachineCode, Int) -> Self
+pub impl Show for CompiledFunction
 
 pub(all) enum CondCode {
   EQ
@@ -282,7 +282,7 @@ pub(all) enum CondCode {
   LE
   AL
 }
-fn CondCode::to_int(Self) -> Int
+pub fn CondCode::to_int(Self) -> Int
 
 pub(all) struct ExecutableRegion {
   id : Int
@@ -292,13 +292,13 @@ pub(all) struct ExecutableRegion {
   code : Array[Int]
   mut finalized : Bool
 }
-fn ExecutableRegion::address_at(Self, Int) -> Int
-fn ExecutableRegion::finalize(Self) -> Unit
-fn ExecutableRegion::new(Int, Int) -> Self
-fn ExecutableRegion::read_at(Self, Int, Int) -> Array[Int]
-fn ExecutableRegion::remaining(Self) -> Int
-fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
-impl Show for ExecutableRegion
+pub fn ExecutableRegion::address_at(Self, Int) -> Int
+pub fn ExecutableRegion::finalize(Self) -> Unit
+pub fn ExecutableRegion::new(Int, Int) -> Self
+pub fn ExecutableRegion::read_at(Self, Int, Int) -> Array[Int]
+pub fn ExecutableRegion::remaining(Self) -> Int
+pub fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
+pub impl Show for ExecutableRegion
 
 pub enum ExtendKind {
   Signed8To32
@@ -312,7 +312,7 @@ pub enum ExtendKind {
   Unsigned16To64
   Unsigned32To64
 }
-impl Show for ExtendKind
+pub impl Show for ExtendKind
 
 pub enum FCmpKind {
   Eq
@@ -322,7 +322,7 @@ pub enum FCmpKind {
   Gt
   Ge
 }
-impl Show for FCmpKind
+pub impl Show for FCmpKind
 
 pub(all) struct Fixup {
   offset : Int
@@ -341,13 +341,13 @@ pub(all) struct JITRuntime {
   mut compilations : Int
   mut recompilations : Int
 }
-fn JITRuntime::clear(Self) -> Unit
-fn JITRuntime::invalidate(Self, Int) -> Unit
-fn JITRuntime::lookup(Self, Int) -> CompiledFunction?
-fn JITRuntime::new(Int, Int) -> Self
-fn JITRuntime::register(Self, Int, CompiledFunction) -> Result[Int, String]
-fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
-impl Show for JITRuntime
+pub fn JITRuntime::clear(Self) -> Unit
+pub fn JITRuntime::invalidate(Self, Int) -> Unit
+pub fn JITRuntime::lookup(Self, Int) -> CompiledFunction?
+pub fn JITRuntime::new(Int, Int) -> Self
+pub fn JITRuntime::register(Self, Int, CompiledFunction) -> Result[Int, String]
+pub fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
+pub impl Show for JITRuntime
 
 pub(all) struct LinearScanAllocator {
   int_regs : Array[PReg]
@@ -355,8 +355,8 @@ pub(all) struct LinearScanAllocator {
   mut active : Array[LiveInterval]
   mut next_spill_slot : Int
 }
-fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
-fn LinearScanAllocator::new(Array[PReg], Array[PReg]) -> Self
+pub fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
+pub fn LinearScanAllocator::new(Array[PReg], Array[PReg]) -> Self
 
 pub(all) struct LiveInterval {
   vreg : VReg
@@ -367,7 +367,7 @@ pub(all) struct LiveInterval {
   mut assigned : PReg?
   mut spill_slot : Int?
 }
-impl Show for LiveInterval
+pub impl Show for LiveInterval
 
 pub(all) struct LivenessResult {
   intervals : Map[Int, LiveInterval]
@@ -382,7 +382,7 @@ pub(all) struct LoweringContext {
   value_map : Map[Int, VReg]
   block_map : Map[Int, Int]
 }
-fn LoweringContext::new(@ir.Function) -> Self
+pub fn LoweringContext::new(@ir.Function) -> Self
 
 pub(all) struct MachineCode {
   bytes : Array[Int]
@@ -390,19 +390,19 @@ pub(all) struct MachineCode {
   labels : Map[Int, Int]
   fixups : Array[Fixup]
 }
-fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
-fn MachineCode::align(Self, Int) -> Unit
-fn MachineCode::align_block(Self) -> Unit
-fn MachineCode::align_function(Self) -> Unit
-fn MachineCode::current_pos(Self) -> Int
-fn MachineCode::define_label(Self, Int) -> Unit
-fn MachineCode::emit_byte(Self, Int) -> Unit
-fn MachineCode::emit_inst(Self, Int, Int, Int, Int) -> Unit
-fn MachineCode::get_bytes(Self) -> Array[Int]
-fn MachineCode::hex_dump(Self) -> String
-fn MachineCode::new() -> Self
-fn MachineCode::resolve_fixups(Self) -> Unit
-fn MachineCode::size(Self) -> Int
+pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
+pub fn MachineCode::align(Self, Int) -> Unit
+pub fn MachineCode::align_block(Self) -> Unit
+pub fn MachineCode::align_function(Self) -> Unit
+pub fn MachineCode::current_pos(Self) -> Int
+pub fn MachineCode::define_label(Self, Int) -> Unit
+pub fn MachineCode::emit_byte(Self, Int) -> Unit
+pub fn MachineCode::emit_inst(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::get_bytes(Self) -> Array[Int]
+pub fn MachineCode::hex_dump(Self) -> String
+pub fn MachineCode::new() -> Self
+pub fn MachineCode::resolve_fixups(Self) -> Unit
+pub fn MachineCode::size(Self) -> Int
 
 pub(all) struct MatchResult {
   values : Array[@ir.Value]
@@ -419,7 +419,7 @@ pub enum MemType {
   F32
   F64
 }
-impl Show for MemType
+pub impl Show for MemType
 
 pub(all) struct MemoryManager {
   regions : Array[ExecutableRegion]
@@ -427,14 +427,14 @@ pub(all) struct MemoryManager {
   mut next_id : Int
   mut current_region : Int?
 }
-fn MemoryManager::alloc_region(Self, Int) -> ExecutableRegion
-fn MemoryManager::finalize_all(Self) -> Unit
-fn MemoryManager::get_current_region(Self) -> ExecutableRegion
-fn MemoryManager::new(Int) -> Self
-fn MemoryManager::total_allocated(Self) -> Int
-fn MemoryManager::total_used(Self) -> Int
-fn MemoryManager::write_code(Self, MachineCode) -> Result[(ExecutableRegion, Int), String]
-impl Show for MemoryManager
+pub fn MemoryManager::alloc_region(Self, Int) -> ExecutableRegion
+pub fn MemoryManager::finalize_all(Self) -> Unit
+pub fn MemoryManager::get_current_region(Self) -> ExecutableRegion
+pub fn MemoryManager::new(Int) -> Self
+pub fn MemoryManager::total_allocated(Self) -> Int
+pub fn MemoryManager::total_used(Self) -> Int
+pub fn MemoryManager::write_code(Self, MachineCode) -> Result[(ExecutableRegion, Int), String]
+pub impl Show for MemoryManager
 
 pub(all) struct Operand {
   reg : VReg
@@ -458,7 +458,7 @@ pub(all) struct PReg {
   index : Int
   class : RegClass
 }
-impl Show for PReg
+pub impl Show for PReg
 
 pub enum Pattern {
   Any
@@ -500,7 +500,7 @@ pub(all) struct ProgPoint {
   inst : Int
   pos : ProgPos
 }
-impl Show for ProgPoint
+pub impl Show for ProgPoint
 
 pub enum ProgPos {
   Before
@@ -511,7 +511,7 @@ pub enum Reg {
   Virtual(VReg)
   Physical(PReg)
 }
-impl Show for Reg
+pub impl Show for Reg
 
 pub(all) struct RegAllocResult {
   assignments : Map[Int, PReg]
@@ -525,7 +525,7 @@ pub(all) enum RegClass {
   Int
   Float
 }
-impl Show for RegClass
+pub impl Show for RegClass
 
 pub(all) struct ReloadInfo {
   vreg : VReg
@@ -555,7 +555,7 @@ pub(all) enum ShiftType {
   Lsr
   Asr
 }
-impl Show for ShiftType
+pub impl Show for ShiftType
 
 pub(all) struct SpillInfo {
   vreg : VReg
@@ -572,23 +572,23 @@ pub(all) struct StackFrame {
   callee_saved_regs : Array[PReg]
   mut has_calls : Bool
 }
-fn StackFrame::add_callee_saved(Self, PReg) -> Int
-fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
-fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
-fn StackFrame::alloc_spill_slot(Self, VReg, Int, Int) -> Int
-fn StackFrame::finalize(Self) -> Unit
-fn StackFrame::get_callee_saved(Self) -> Array[PReg]
-fn StackFrame::new(Int) -> Self
-fn StackFrame::print(Self) -> String
-fn StackFrame::size(Self) -> Int
-impl Show for StackFrame
+pub fn StackFrame::add_callee_saved(Self, PReg) -> Int
+pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
+pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
+pub fn StackFrame::alloc_spill_slot(Self, VReg, Int, Int) -> Int
+pub fn StackFrame::finalize(Self) -> Unit
+pub fn StackFrame::get_callee_saved(Self) -> Array[PReg]
+pub fn StackFrame::new(Int) -> Self
+pub fn StackFrame::print(Self) -> String
+pub fn StackFrame::size(Self) -> Int
+pub impl Show for StackFrame
 
 pub enum StackOpcode {
   AdjustSP(Int)
   PushReg(PReg)
   PopReg(PReg)
 }
-impl Show for StackOpcode
+pub impl Show for StackOpcode
 
 pub(all) struct StackSlot {
   offset : Int
@@ -596,7 +596,7 @@ pub(all) struct StackSlot {
   align : Int
   kind : StackSlotKind
 }
-impl Show for StackSlot
+pub impl Show for StackSlot
 
 pub enum StackSlotKind {
   Spill(VReg)
@@ -605,7 +605,7 @@ pub enum StackSlotKind {
   CalleeSaved(PReg)
   ReturnAddress
 }
-impl Show for StackSlotKind
+pub impl Show for StackSlotKind
 
 pub(all) struct UseDefInfo {
   vreg : VReg
@@ -619,48 +619,48 @@ pub(all) struct VCodeBlock {
   params : Array[VReg]
   mut terminator : VCodeTerminator?
 }
-fn VCodeBlock::add_inst(Self, VCodeInst) -> Unit
-fn VCodeBlock::new(Int) -> Self
-fn VCodeBlock::set_terminator(Self, VCodeTerminator) -> Unit
+pub fn VCodeBlock::add_inst(Self, VCodeInst) -> Unit
+pub fn VCodeBlock::new(Int) -> Self
+pub fn VCodeBlock::set_terminator(Self, VCodeTerminator) -> Unit
 
 pub(all) struct VCodeBuilder {
   func : VCodeFunction
   mut current_block : VCodeBlock?
 }
-fn VCodeBuilder::add(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::add_param(Self, RegClass) -> VReg
-fn VCodeBuilder::add_result(Self, RegClass) -> Unit
-fn VCodeBuilder::ashr(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::band(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::bor(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::branch(Self, VReg, VCodeBlock, VCodeBlock) -> Unit
-fn VCodeBuilder::bxor(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::cmp(Self, CmpKind, VReg, VReg) -> VReg
-fn VCodeBuilder::create_block(Self) -> VCodeBlock
-fn VCodeBuilder::current_block(Self) -> VCodeBlock?
-fn VCodeBuilder::fadd(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::fcmp(Self, FCmpKind, VReg, VReg) -> VReg
-fn VCodeBuilder::fconst(Self, Double) -> VReg
-fn VCodeBuilder::fdiv(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::fmul(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::fsub(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::get_function(Self) -> VCodeFunction
-fn VCodeBuilder::iconst(Self, Int64) -> VReg
-fn VCodeBuilder::jump(Self, VCodeBlock) -> Unit
-fn VCodeBuilder::load(Self, MemType, VReg, Int) -> VReg
-fn VCodeBuilder::lshr(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::mov(Self, VReg) -> VReg
-fn VCodeBuilder::mul(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::new(String) -> Self
-fn VCodeBuilder::print(Self) -> String
-fn VCodeBuilder::return_(Self, Array[VReg]) -> Unit
-fn VCodeBuilder::sdiv(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::shl(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::store(Self, MemType, VReg, VReg, Int) -> Unit
-fn VCodeBuilder::sub(Self, VReg, VReg) -> VReg
-fn VCodeBuilder::switch_to_block(Self, VCodeBlock) -> Unit
-fn VCodeBuilder::trap(Self, String) -> Unit
-fn VCodeBuilder::udiv(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::add(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::add_param(Self, RegClass) -> VReg
+pub fn VCodeBuilder::add_result(Self, RegClass) -> Unit
+pub fn VCodeBuilder::ashr(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::band(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::bor(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::branch(Self, VReg, VCodeBlock, VCodeBlock) -> Unit
+pub fn VCodeBuilder::bxor(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::cmp(Self, CmpKind, VReg, VReg) -> VReg
+pub fn VCodeBuilder::create_block(Self) -> VCodeBlock
+pub fn VCodeBuilder::current_block(Self) -> VCodeBlock?
+pub fn VCodeBuilder::fadd(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::fcmp(Self, FCmpKind, VReg, VReg) -> VReg
+pub fn VCodeBuilder::fconst(Self, Double) -> VReg
+pub fn VCodeBuilder::fdiv(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::fmul(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::fsub(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::get_function(Self) -> VCodeFunction
+pub fn VCodeBuilder::iconst(Self, Int64) -> VReg
+pub fn VCodeBuilder::jump(Self, VCodeBlock) -> Unit
+pub fn VCodeBuilder::load(Self, MemType, VReg, Int) -> VReg
+pub fn VCodeBuilder::lshr(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::mov(Self, VReg) -> VReg
+pub fn VCodeBuilder::mul(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::new(String) -> Self
+pub fn VCodeBuilder::print(Self) -> String
+pub fn VCodeBuilder::return_(Self, Array[VReg]) -> Unit
+pub fn VCodeBuilder::sdiv(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::shl(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::store(Self, MemType, VReg, VReg, Int) -> Unit
+pub fn VCodeBuilder::sub(Self, VReg, VReg) -> VReg
+pub fn VCodeBuilder::switch_to_block(Self, VCodeBlock) -> Unit
+pub fn VCodeBuilder::trap(Self, String) -> Unit
+pub fn VCodeBuilder::udiv(Self, VReg, VReg) -> VReg
 
 pub(all) struct VCodeFunction {
   name : String
@@ -669,23 +669,23 @@ pub(all) struct VCodeFunction {
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
 }
-fn VCodeFunction::add_param(Self, RegClass) -> VReg
-fn VCodeFunction::add_result(Self, RegClass) -> Unit
-fn VCodeFunction::new(String) -> Self
-fn VCodeFunction::new_block(Self) -> VCodeBlock
-fn VCodeFunction::new_vreg(Self, RegClass) -> VReg
-fn VCodeFunction::print(Self) -> String
-impl Show for VCodeFunction
+pub fn VCodeFunction::add_param(Self, RegClass) -> VReg
+pub fn VCodeFunction::add_result(Self, RegClass) -> Unit
+pub fn VCodeFunction::new(String) -> Self
+pub fn VCodeFunction::new_block(Self) -> VCodeBlock
+pub fn VCodeFunction::new_vreg(Self, RegClass) -> VReg
+pub fn VCodeFunction::print(Self) -> String
+pub impl Show for VCodeFunction
 
 pub(all) struct VCodeInst {
   opcode : VCodeOpcode
   defs : Array[Writable]
   uses : Array[Reg]
 }
-fn VCodeInst::add_def(Self, Writable) -> Unit
-fn VCodeInst::add_use(Self, Reg) -> Unit
-fn VCodeInst::new(VCodeOpcode) -> Self
-impl Show for VCodeInst
+pub fn VCodeInst::add_def(Self, Writable) -> Unit
+pub fn VCodeInst::add_use(Self, Reg) -> Unit
+pub fn VCodeInst::new(VCodeOpcode) -> Self
+pub impl Show for VCodeInst
 
 pub enum VCodeOpcode {
   Add
@@ -724,7 +724,7 @@ pub enum VCodeOpcode {
   Msub
   Mneg
 }
-impl Show for VCodeOpcode
+pub impl Show for VCodeOpcode
 
 pub enum VCodeTerminator {
   Jump(Int)
@@ -732,18 +732,18 @@ pub enum VCodeTerminator {
   Return(Array[Reg])
   Trap(String)
 }
-impl Show for VCodeTerminator
+pub impl Show for VCodeTerminator
 
 pub(all) struct VReg {
   id : Int
   class : RegClass
 }
-impl Show for VReg
+pub impl Show for VReg
 
 pub(all) struct Writable {
   reg : Reg
 }
-impl Show for Writable
+pub impl Show for Writable
 
 // Type aliases
 

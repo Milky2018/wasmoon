@@ -7,24 +7,24 @@ import(
 )
 
 // Values
-fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+pub fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
-fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
+pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
 
-fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance)
+pub fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance)
 
-fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+pub fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
-fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 
-fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
 // Errors
 
 // Types and methods
 type ExecContext
-fn ExecContext::call_func(Self, Int, Array[@types.Value]) -> Array[@types.Value] raise
-impl Show for ExecContext
+pub fn ExecContext::call_func(Self, Int, Array[@types.Value]) -> Array[@types.Value] raise
+pub impl Show for ExecContext
 
 // Type aliases
 
