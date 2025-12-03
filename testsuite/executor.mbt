@@ -109,7 +109,7 @@ pub fn run_assert_return(
     return false
   }
   for i in 0..<results.length() {
-    if !(values_equal(results[i], expected_values[i])) {
+    if !values_equal(results[i], expected_values[i]) {
       println(
         "Result \{i} mismatch: expected \{expected_values[i]}, got \{results[i]}",
       )

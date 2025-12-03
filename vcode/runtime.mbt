@@ -175,7 +175,7 @@ fn CodeCache::evict_lru(self : CodeCache) -> Unit {
   let mut to_remove : Int? = None
   for entry in self.functions {
     let (idx, func) = entry
-    if not(func.valid) {
+    if !func.valid {
       to_remove = Some(idx)
       break
     }

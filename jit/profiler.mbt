@@ -175,8 +175,8 @@ pub fn Profiler::record_call(self : Profiler, func_idx : Int) -> (Int, Bool) {
   if count == self.threshold.hot_threshold {
     self.hot_functions.add(func_idx)
     // Check if not already compiled or pending
-    if not(self.compiled_functions.contains(func_idx)) &&
-      not(self.pending_compilation.contains(func_idx)) {
+    if !self.compiled_functions.contains(func_idx) &&
+      !self.pending_compilation.contains(func_idx) {
       self.pending_compilation.add(func_idx)
       return (count, true)
     }

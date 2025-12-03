@@ -425,7 +425,7 @@ fn run_test_command_internal(
             )
             return
           }
-          if not(values_equal(global_value, expected_values[0])) {
+          if !values_equal(global_value, expected_values[0]) {
             println(
               "\{line_prefix}Global \{field} mismatch: expected \{expected_values[0]}, got \{global_value}",
             )

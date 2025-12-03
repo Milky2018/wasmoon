@@ -104,9 +104,9 @@ pub(all) struct IRBuilder {
 pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
 pub fn IRBuilder::add_param(Self, Type) -> Value
 pub fn IRBuilder::add_result(Self, Type) -> Unit
+pub fn IRBuilder::b(Self, Value) -> Value raise
 pub fn IRBuilder::band(Self, Value, Value) -> Value
 pub fn IRBuilder::bitcast(Self, Type, Value) -> Value
-pub fn IRBuilder::bnot(Self, Value) -> Value
 pub fn IRBuilder::bor(Self, Value, Value) -> Value
 pub fn IRBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
 pub fn IRBuilder::brnz(Self, Value, Block, Block) -> Unit

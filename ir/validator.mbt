@@ -67,7 +67,7 @@ fn validate_instruction(
 ) -> Unit {
   // Check that all operands are defined
   for op in inst.operands {
-    if not(defined.contains(op.id)) {
+    if !defined.contains(op.id) {
       result.add_error("Operand v\{op.id} is not defined")
     }
   }
@@ -97,12 +97,12 @@ fn validate_instruction(
         let a = inst.operands[0]
         let b = inst.operands[1]
         // Operands should have matching integer types
-        if not(is_integer_type(a.ty)) {
+        if !is_integer_type(a.ty) {
           result.add_error(
             "Binary integer op expects integer operand, got \{a.ty}",
           )
         }
-        if not(types_match(a.ty, b.ty)) {
+        if !types_match(a.ty, b.ty) {
           result.add_error(
             "Binary op operands have mismatched types: \{a.ty} vs \{b.ty}",
           )
@@ -127,7 +127,7 @@ fn validate_instruction(
       // Result should be i32
       match inst.result {
         Some(r) =>
-          if not(types_match(r.ty, Type::I32)) {
+          if !types_match(r.ty, Type::I32) {
             result.add_error("Icmp result should be i32, got \{r.ty}")
           }
         None => ()
@@ -143,10 +143,10 @@ fn validate_instruction(
       } else {
         let a = inst.operands[0]
         let b = inst.operands[1]
-        if not(is_float_type(a.ty)) {
+        if !is_float_type(a.ty) {
           result.add_error("Binary float op expects float operand, got \{a.ty}")
         }
-        if not(types_match(a.ty, b.ty)) {
+        if !types_match(a.ty, b.ty) {
           result.add_error(
             "Binary op operands have mismatched types: \{a.ty} vs \{b.ty}",
           )
@@ -163,7 +163,7 @@ fn validate_instruction(
       // Result should be i32
       match inst.result {
         Some(r) =>
-          if not(types_match(r.ty, Type::I32)) {
+          if !types_match(r.ty, Type::I32) {
             result.add_error("Fcmp result should be i32, got \{r.ty}")
           }
         None => ()
@@ -285,7 +285,7 @@ fn validate_terminator(
       }
       // Check all args are defined
       for arg in args {
-        if not(defined.contains(arg.id)) {
+        if !defined.contains(arg.id) {
           result.add_error("Jump argument v\{arg.id} is not defined")
         }
       }
@@ -293,7 +293,7 @@ fn validate_terminator(
     Brz(cond, then_target, else_target)
     | Brnz(cond, then_target, else_target) => {
       // Check condition is defined
-      if not(defined.contains(cond.id)) {
+      if !defined.contains(cond.id) {
         result.add_error("Branch condition v\{cond.id} is not defined")
       }
       // Check targets exist
@@ -310,7 +310,7 @@ fn validate_terminator(
     }
     BrTable(index, targets, default_target) => {
       // Check index is defined
-      if not(defined.contains(index.id)) {
+      if !defined.contains(index.id) {
         result.add_error("BrTable index v\{index.id} is not defined")
       }
       // Check all targets exist
@@ -334,7 +334,7 @@ fn validate_terminator(
       }
       // Check all values are defined
       for v in values {
-        if not(defined.contains(v.id)) {
+        if !defined.contains(v.id) {
           result.add_error("Return value v\{v.id} is not defined")
         }
       }

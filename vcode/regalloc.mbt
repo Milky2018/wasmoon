@@ -317,7 +317,7 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       for use_reg in inst.uses {
         match use_reg {
           Virtual(vreg) =>
-            if not(def_set.contains(vreg.id)) {
+            if !def_set.contains(vreg.id) {
               use_set.add(vreg.id)
             }
           Physical(_) => ()
@@ -339,7 +339,7 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
           Branch(cond, _, _) =>
             match cond {
               Virtual(vreg) =>
-                if not(def_set.contains(vreg.id)) {
+                if !def_set.contains(vreg.id) {
                   use_set.add(vreg.id)
                 }
               Physical(_) => ()
@@ -348,7 +348,7 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
             for value in values {
               match value {
                 Virtual(vreg) =>
-                  if not(def_set.contains(vreg.id)) {
+                  if !def_set.contains(vreg.id) {
                     use_set.add(vreg.id)
                   }
                 Physical(_) => ()
@@ -385,12 +385,14 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
   while changed {
     changed = false
     // Process blocks in reverse order for faster convergence
-    for block_idx = func.blocks.length() - 1; block_idx >= 0; block_idx = block_idx - 1 {
+    for block_idx = func.blocks.length() - 1
+        block_idx >= 0
+        block_idx = block_idx - 1 {
       // live_out[B] = ∪{S ∈ succ[B]} live_in[S]
       let succs = get_successors(func, block_idx)
       for succ in succs {
         for vreg_id in result.live_in[succ] {
-          if !(result.live_out[block_idx].contains(vreg_id)) {
+          if !result.live_out[block_idx].contains(vreg_id) {
             result.live_out[block_idx].add(vreg_id)
             changed = true
           }
@@ -400,15 +402,15 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       // live_in[B] = use[B] ∪ (live_out[B] - def[B])
       // First add all uses
       for vreg_id in block_use[block_idx] {
-        if not(result.live_in[block_idx].contains(vreg_id)) {
+        if !result.live_in[block_idx].contains(vreg_id) {
           result.live_in[block_idx].add(vreg_id)
           changed = true
         }
       }
       // Then add live-out minus defs
       for vreg_id in result.live_out[block_idx] {
-        if not(block_def[block_idx].contains(vreg_id)) {
-          if not(result.live_in[block_idx].contains(vreg_id)) {
+        if !block_def[block_idx].contains(vreg_id) {
+          if !result.live_in[block_idx].contains(vreg_id) {
             result.live_in[block_idx].add(vreg_id)
             changed = true
           }
@@ -609,13 +611,13 @@ fn LinearScanAllocator::try_allocate_reg(
 
   // Try hint first if available
   match interval.hint {
-    Some(hint) => if not(used.contains(hint.index)) { return Some(hint) }
+    Some(hint) => if !used.contains(hint.index) { return Some(hint) }
     None => ()
   }
 
   // Find a free register
   for preg in avail_regs {
-    if not(used.contains(preg.index)) {
+    if !used.contains(preg.index) {
       return Some(preg)
     }
   }

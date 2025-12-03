@@ -271,7 +271,7 @@ fn OperandStack::check_height(
   expected : Int,
   context : String,
 ) -> Unit raise ValidationError {
-  if not(self.polymorphic) && self.stack.length() != expected {
+  if !self.polymorphic && self.stack.length() != expected {
     raise StackHeightMismatch(
       "\{context}: expected stack height \{expected}, got \{self.stack.length()}",
     )
