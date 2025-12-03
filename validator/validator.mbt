@@ -271,7 +271,7 @@ fn OperandStack::check_height(
   expected : Int,
   context : String,
 ) -> Unit raise ValidationError {
-  if not(self.polymorphic) && self.stack.length() != expected {
+  if !self.polymorphic && self.stack.length() != expected {
     raise StackHeightMismatch(
       "\{context}: expected stack height \{expected}, got \{self.stack.length()}",
     )
@@ -411,7 +411,9 @@ fn validate_function_with_offset(
   }
 
   // Pop and verify return types
-  for i = func_type.results.length() - 1; i >= 0; i = i - 1 {
+  let num_results = func_type.results.length()
+  for offset in 0..<num_results {
+    let i = num_results - 1 - offset
     stack.pop(func_type.results[i]) catch {
       e =>
         raise WithContext(
@@ -518,7 +520,9 @@ fn validate_function(
   stack.check_height(expected_height, "function return")
 
   // Pop and verify return types
-  for i = func_type.results.length() - 1; i >= 0; i = i - 1 {
+  let results_count = func_type.results.length()
+  for offset in 0..<results_count {
+    let i = results_count - 1 - offset
     stack.pop(func_type.results[i])
   }
 }
@@ -975,7 +979,9 @@ fn validate_instr(
       let type_idx = ctx.funcs[func_idx]
       let func_type = ctx.types[type_idx]
       // Pop parameters in reverse order
-      for i = func_type.params.length() - 1; i >= 0; i = i - 1 {
+      let num_params = func_type.params.length()
+      for offset in 0..<num_params {
+        let i = num_params - 1 - offset
         stack.pop(func_type.params[i])
       }
       // Push results
@@ -992,7 +998,9 @@ fn validate_instr(
       }
       stack.pop(@types.ValueType::I32) // table index
       let func_type = ctx.types[type_idx]
-      for i = func_type.params.length() - 1; i >= 0; i = i - 1 {
+      let num_ci_params = func_type.params.length()
+      for offset in 0..<num_ci_params {
+        let i = num_ci_params - 1 - offset
         stack.pop(func_type.params[i])
       }
       for result in func_type.results {

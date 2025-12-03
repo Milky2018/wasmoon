@@ -372,7 +372,7 @@ pub fn ExecContext::call_func(
 
   // Collect return values from stack (in reverse order, then reverse back)
   let results : Array[@types.Value] = []
-  for i = 0; i < return_arity; i = i + 1 {
+  for _ in 0..<return_arity {
     results.push(self.stack.pop())
   }
   results.rev_in_place()

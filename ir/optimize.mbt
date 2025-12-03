@@ -39,8 +39,7 @@ pub fn eliminate_dead_code(func : Function) -> OptResult {
         match inst.result {
           Some(v) =>
             // If the result is never used and the instruction has no side effects
-            if use_counts.get(v.id).unwrap_or(0) == 0 &&
-              not(has_side_effects(inst)) {
+            if use_counts.get(v.id).unwrap_or(0) == 0 && !has_side_effects(inst) {
               // Remove this instruction
               block.instructions.remove(i) |> ignore
               // Decrement use counts for operands
@@ -840,7 +839,7 @@ pub fn eliminate_unreachable_code(func : Function) -> OptResult {
         match block.terminator {
           Some(term) =>
             for succ in get_terminator_targets(term) {
-              if not(reachable.get(succ).unwrap_or(false)) {
+              if !reachable.get(succ).unwrap_or(false) {
                 worklist.push(succ)
               }
             }
@@ -854,7 +853,7 @@ pub fn eliminate_unreachable_code(func : Function) -> OptResult {
   let mut i = func.blocks.length() - 1
   while i >= 0 {
     let block = func.blocks[i]
-    if not(reachable.get(block.id).unwrap_or(false)) {
+    if !reachable.get(block.id).unwrap_or(false) {
       func.blocks.remove(i) |> ignore
       result.mark_changed()
     }

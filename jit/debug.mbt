@@ -553,7 +553,7 @@ pub fn DebugContext::should_pause(
   func_idx : Int,
   offset : Int,
 ) -> Bool {
-  if not(self.enabled) {
+  if !self.enabled {
     return false
   }
   // Check step mode

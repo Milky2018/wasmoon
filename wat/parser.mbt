@@ -190,7 +190,7 @@ fn parse_int(s : String) -> Int raise WatError {
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
     if trimmed.length() > 2 {
       let hex_part = StringBuilder::new()
-      for i = 2; i < trimmed.length(); i = i + 1 {
+      for i in 2..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
       parse_hex_int(hex_part.to_string())
@@ -200,7 +200,7 @@ fn parse_int(s : String) -> Int raise WatError {
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
       let hex_part = StringBuilder::new()
-      for i = 3; i < trimmed.length(); i = i + 1 {
+      for i in 3..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
       -parse_hex_int(hex_part.to_string())
@@ -234,7 +234,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
     if trimmed.length() > 2 {
       let hex_part = StringBuilder::new()
-      for i = 2; i < trimmed.length(); i = i + 1 {
+      for i in 2..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
       parse_hex_int64(hex_part.to_string())
@@ -244,7 +244,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
       let hex_part = StringBuilder::new()
-      for i = 3; i < trimmed.length(); i = i + 1 {
+      for i in 3..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
       -parse_hex_int64(hex_part.to_string())
@@ -1264,14 +1264,14 @@ fn parse_mem_arg(
       Keyword(s) =>
         if s.has_prefix("offset=") {
           let offset_str = StringBuilder::new()
-          for i = 7; i < s.length(); i = i + 1 {
+          for i in 7..<s.length() {
             offset_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           offset = parse_int(offset_str.to_string())
           parser.advance()
         } else if s.has_prefix("align=") {
           let align_str = StringBuilder::new()
-          for i = 6; i < s.length(); i = i + 1 {
+          for i in 6..<s.length() {
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           let a = parse_int(align_str.to_string())

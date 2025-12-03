@@ -35,7 +35,7 @@ test "jit engine: on_call counts" {
   let engine = JITEngine::default()
 
   // First calls should use interpreter
-  for i = 0; i < 10; i = i + 1 {
+  for _ in 0..<10 {
     let use_jit = engine.on_call(0)
     inspect(use_jit, content="false")
   }
