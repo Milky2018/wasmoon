@@ -415,15 +415,23 @@
 
 #### 12. 库选择
 - **文件系统操作**:
-  - ❌ **错误做法**: 使用 `moonbitlang/x/fs`
-  - ✅ **正确做法**: 使用 `moonbitlang/async/fs`
-  ```json
-  {
-    "import": [
-      "moonbitlang/async/fs"
-    ]
-  }
-  ```
+  - ⚠️ **重要**: 不要混用阻塞 API 和异步 API
+  - **同步文件操作**: 使用 `moonbitlang/x/fs`
+    ```json
+    {
+      "import": [
+        "moonbitlang/x/fs"
+      ]
+    }
+    ```
+    ```moonbit
+    let content = @fs.read_file_to_string(path)
+    @fs.write_string_to_file(path, content)
+    let bytes = @fs.read_file_to_bytes(path)
+    @fs.write_bytes_to_file(path, bytes)
+    ```
+  - **异步文件操作**: 使用 `moonbitlang/async/fs`（仅当整个程序使用 async 时）
+  - ❌ **错误做法**: 在非 async 函数中调用 async/fs 的 API
 
 - **JSON 解析**:
   - ❌ **错误做法**: 使用 `moonbitlang/x/json`
@@ -580,3 +588,4 @@ _请在此处继续添加新的意见和建议_
 - [x] completion 和项目主要功能无关，可以先删掉 → 已删除 completion.mbt
 - [x] 有非常多如下形式的测试：应使用 `inspect(try? f(), content="Err(...)")` → 已修复所有测试文件（cwasm_wbtest.mbt, i32_wbtest.mbt, i64_wbtest.mbt, executor_wbtest.mbt, validator_wbtest.mbt）
 - [x] 把所有的 `inspect(true, content="true")` 清除掉，这没有任何意义 → 已修复：wast_wbtest.mbt 使用 guard-is 替代，types.mbt 改为验证实际值
+- [x] 不要混用阻塞 API 和异步 API，把 main 中所有的 moonbitlang/async/fs 换用为 moonbitlang/x/fs → 已完成：main 包已改用同步 API，移除了所有 async fn
