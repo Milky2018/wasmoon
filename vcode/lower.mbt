@@ -242,6 +242,26 @@ fn lower_inst(
     @ir.Opcode::Load(ty, offset) => lower_load(ctx, inst, block, ty, offset)
     @ir.Opcode::Store(ty, offset) => lower_store(ctx, inst, block, ty, offset)
 
+    // Narrow memory operations (8/16/32-bit with sign/zero extension)
+    @ir.Opcode::Load8S(_ty, offset) =>
+      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load8S(o) })
+    @ir.Opcode::Load8U(_ty, offset) =>
+      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load8U(o) })
+    @ir.Opcode::Load16S(_ty, offset) =>
+      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load16S(o) })
+    @ir.Opcode::Load16U(_ty, offset) =>
+      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load16U(o) })
+    @ir.Opcode::Load32S(offset) =>
+      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load32S(o) })
+    @ir.Opcode::Load32U(offset) =>
+      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load32U(o) })
+    @ir.Opcode::Store8(offset) =>
+      lower_store_narrow(ctx, inst, block, offset, I8)
+    @ir.Opcode::Store16(offset) =>
+      lower_store_narrow(ctx, inst, block, offset, I16)
+    @ir.Opcode::Store32(offset) =>
+      lower_store_narrow(ctx, inst, block, offset, I32)
+
     // Conversions
     @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
     @ir.Opcode::Uextend => lower_extend(ctx, inst, block, signed=false)
@@ -782,6 +802,46 @@ fn lower_store(
   let addr = ctx.get_vreg(inst.operands[0])
   let value = ctx.get_vreg(inst.operands[1])
   let mem_ty = ir_type_to_mem_type(ty)
+  let vcode_inst = VCodeInst::new(Store(mem_ty, offset))
+  vcode_inst.add_use(Virtual(addr))
+  vcode_inst.add_use(Virtual(value))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower narrow load instruction (8/16/32-bit with sign/zero extension)
+fn lower_load_narrow(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+  offset : Int,
+  opcode_fn : (Int) -> VCodeOpcode,
+) -> Unit {
+  match inst.result {
+    Some(result) => {
+      let dst = ctx.get_vreg(result)
+      let addr = ctx.get_vreg(inst.operands[0])
+      let vcode_inst = VCodeInst::new(opcode_fn(offset))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(addr))
+      block.add_inst(vcode_inst)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Lower narrow store instruction (8/16/32-bit)
+fn lower_store_narrow(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+  offset : Int,
+  mem_ty : MemType,
+) -> Unit {
+  // Store has no result, just uses: addr, value
+  let addr = ctx.get_vreg(inst.operands[0])
+  let value = ctx.get_vreg(inst.operands[1])
   let vcode_inst = VCodeInst::new(Store(mem_ty, offset))
   vcode_inst.add_use(Virtual(addr))
   vcode_inst.add_use(Virtual(value))

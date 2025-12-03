@@ -117,6 +117,17 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
     // Memory operations
     Load(ty, offset) => "load.\{format_type(ty)} \{ops} +\{offset}"
     Store(ty, offset) => "store.\{format_type(ty)} \{ops} +\{offset}"
+    // Narrow load operations (8/16/32-bit with sign/zero extension)
+    Load8S(ty, offset) => "load8_s.\{format_type(ty)} \{ops} +\{offset}"
+    Load8U(ty, offset) => "load8_u.\{format_type(ty)} \{ops} +\{offset}"
+    Load16S(ty, offset) => "load16_s.\{format_type(ty)} \{ops} +\{offset}"
+    Load16U(ty, offset) => "load16_u.\{format_type(ty)} \{ops} +\{offset}"
+    Load32S(offset) => "load32_s \{ops} +\{offset}"
+    Load32U(offset) => "load32_u \{ops} +\{offset}"
+    // Narrow store operations (8/16/32-bit)
+    Store8(offset) => "store8 \{ops} +\{offset}"
+    Store16(offset) => "store16 \{ops} +\{offset}"
+    Store32(offset) => "store32 \{ops} +\{offset}"
 
     // Misc
     Select => "select \{ops}"

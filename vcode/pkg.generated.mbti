@@ -85,6 +85,16 @@ pub fn emit_ldrb_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_ldrh_imm(MachineCode, Int, Int, Int) -> Unit
 
+pub fn emit_ldrsb_w_imm(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_ldrsb_x_imm(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_ldrsh_w_imm(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_ldrsh_x_imm(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_ldrsw_imm(MachineCode, Int, Int, Int) -> Unit
+
 pub fn emit_load_imm64(MachineCode, Int, Int64) -> Unit
 
 pub fn emit_lsl_reg(MachineCode, Int, Int, Int) -> Unit
@@ -705,6 +715,12 @@ pub enum VCodeOpcode {
   FDiv
   Load(MemType, Int)
   Store(MemType, Int)
+  Load8S(Int)
+  Load8U(Int)
+  Load16S(Int)
+  Load16U(Int)
+  Load32S(Int)
+  Load32U(Int)
   Move
   LoadConst(Int64)
   LoadConstF(Double)

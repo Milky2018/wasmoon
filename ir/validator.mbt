@@ -210,6 +210,27 @@ fn validate_instruction(
         )
       }
 
+    // Narrow load operations need 1 operand (address)
+    Load8S(_, _)
+    | Load8U(_, _)
+    | Load16S(_, _)
+    | Load16U(_, _)
+    | Load32S(_)
+    | Load32U(_) =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "Narrow load expects 1 operand (address), got \{inst.operands.length()}",
+        )
+      }
+
+    // Narrow store operations need 2 operands (address, value)
+    Store8(_) | Store16(_) | Store32(_) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "Narrow store expects 2 operands (address, value), got \{inst.operands.length()}",
+        )
+      }
+
     // Conversions need 1 operand
     Ireduce
     | Sextend

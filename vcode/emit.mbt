@@ -711,6 +711,93 @@ pub fn emit_str_w_imm(
   mc.emit_inst(b0, b1, b2, b3)
 }
 
+// ============ Sign-Extending Load Instructions ============
+
+///|
+/// Encode LDRSB (64-bit result, unsigned offset): LDRSB Xt, [Xn, #imm]
+/// Opcode: 0x39800000
+pub fn emit_ldrsb_x_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let imm = imm12 & 0xFFF
+  let b0 = (rt & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
+  let b2 = ((imm >> 5) & 127) | 128 // bit 7 = 1 for signed + 64-bit
+  let b3 = 57 // 0x39
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode LDRSB (32-bit result, unsigned offset): LDRSB Wt, [Xn, #imm]
+/// Opcode: 0x39C00000
+pub fn emit_ldrsb_w_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let imm = imm12 & 0xFFF
+  let b0 = (rt & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
+  let b2 = ((imm >> 5) & 127) | 192 // bit 7,6 = 11 for signed + 32-bit
+  let b3 = 57 // 0x39
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode LDRSH (64-bit result, unsigned offset): LDRSH Xt, [Xn, #imm]
+/// Opcode: 0x79800000
+pub fn emit_ldrsh_x_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let scaled = (imm12 / 2) & 0xFFF
+  let b0 = (rt & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
+  let b2 = ((scaled >> 5) & 127) | 128 // bit 7 = 1 for signed + 64-bit
+  let b3 = 121 // 0x79
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode LDRSH (32-bit result, unsigned offset): LDRSH Wt, [Xn, #imm]
+/// Opcode: 0x79C00000
+pub fn emit_ldrsh_w_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let scaled = (imm12 / 2) & 0xFFF
+  let b0 = (rt & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
+  let b2 = ((scaled >> 5) & 127) | 192 // bit 7,6 = 11 for signed + 32-bit
+  let b3 = 121 // 0x79
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode LDRSW (unsigned offset): LDRSW Xt, [Xn, #imm]
+/// Opcode: 0xB9800000
+pub fn emit_ldrsw_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let scaled = (imm12 / 4) & 0xFFF
+  let b0 = (rt & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
+  let b2 = ((scaled >> 5) & 127) | 128 // bit 7 = 1 for signed
+  let b3 = 185 // 0xB9
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
 // ============ Branch Instructions ============
 
 ///|
@@ -1098,6 +1185,43 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       let rt = reg_num(inst.uses[0])
       let rn = reg_num(inst.uses[1])
       emit_store(mc, ty, rt, rn, offset)
+    }
+    // Narrow load operations (8/16/32-bit with sign/zero extension)
+    Load8S(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Sign-extend to 64-bit (use LDRSB Xt form)
+      emit_ldrsb_x_imm(mc, rt, rn, offset)
+    }
+    Load8U(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Zero-extend (LDRB already zero-extends)
+      emit_ldrb_imm(mc, rt, rn, offset)
+    }
+    Load16S(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Sign-extend to 64-bit (use LDRSH Xt form)
+      emit_ldrsh_x_imm(mc, rt, rn, offset)
+    }
+    Load16U(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Zero-extend (LDRH already zero-extends)
+      emit_ldrh_imm(mc, rt, rn, offset)
+    }
+    Load32S(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Sign-extend 32-bit to 64-bit
+      emit_ldrsw_imm(mc, rt, rn, offset)
+    }
+    Load32U(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Zero-extend (LDR W already zero-extends to 64-bit)
+      emit_ldr_w_imm(mc, rt, rn, offset)
     }
     Move => {
       let rd = wreg_num(inst.defs[0])

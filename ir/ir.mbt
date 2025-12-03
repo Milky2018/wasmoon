@@ -153,6 +153,17 @@ pub enum Opcode {
   Load(Type, Int) // Load from memory (type, offset)
   Store(Type, Int) // Store to memory (type, offset)
 
+  // Narrow memory operations (8/16-bit with sign/zero extension)
+  Load8S(Type, Int) // Load 8-bit signed and extend to Type (offset)
+  Load8U(Type, Int) // Load 8-bit unsigned and extend to Type (offset)
+  Load16S(Type, Int) // Load 16-bit signed and extend to Type (offset)
+  Load16U(Type, Int) // Load 16-bit unsigned and extend to Type (offset)
+  Load32S(Int) // Load 32-bit signed and extend to i64 (offset)
+  Load32U(Int) // Load 32-bit unsigned and extend to i64 (offset)
+  Store8(Int) // Store low 8 bits (offset)
+  Store16(Int) // Store low 16 bits (offset)
+  Store32(Int) // Store low 32 bits of i64 (offset)
+
   // Misc
   Select // Conditional select (cond ? a : b)
   Copy // Copy value (for register allocation)
