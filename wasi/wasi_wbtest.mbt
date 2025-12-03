@@ -74,8 +74,8 @@ test "wasi: fd_close" {
   inspect(fd_close(ctx, 0), content="8") // Badf
   inspect(fd_close(ctx, 1), content="8") // Badf
   inspect(fd_close(ctx, 2), content="8") // Badf
-  // Other fds can be "closed" (returns success even if not open)
-  inspect(fd_close(ctx, 3), content="0") // Success
+  // fd 3 is not open, so it returns Badf
+  inspect(fd_close(ctx, 3), content="8") // Badf (not open)
 }
 
 ///|

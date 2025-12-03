@@ -20,12 +20,11 @@ fn find_base_dir(path : String) -> String {
 
 ///|
 /// Run testsuite with a JSON spec file
-async fn run_testsuite(json_path : String) -> Unit {
+fn run_testsuite(json_path : String) -> Unit {
   println("Running testsuite: \{json_path}")
   println("=".repeat(50))
   // Read JSON file
-  let json_data = @fs.read_file(json_path)
-  let json_content = json_data.text() catch {
+  let json_content = @fs.read_file_to_string(json_path) catch {
     e => {
       println("Error reading JSON file: \{e}")
       return
@@ -58,7 +57,7 @@ async fn run_testsuite(json_path : String) -> Unit {
 
 ///|
 /// Internal test runner that handles file reading
-async fn run_tests_internal(
+fn run_tests_internal(
   json_content : String,
   base_dir : String,
 ) -> @testsuite.TestResult raise Error {
@@ -67,25 +66,22 @@ async fn run_tests_internal(
   result.source_filename = parsed.source_filename
   let ctx = @testsuite.TestContext::new()
   for cmd in parsed.commands {
-    run_test_command_async(ctx, cmd.command, cmd.line, result, base_dir)
+    run_test_command(ctx, cmd.command, cmd.line, result, base_dir)
   }
   result
 }
 
 ///|
 /// Read wasm file for a command that needs it
-async fn read_wasm_file(base_dir : String, filename : String) -> Bytes? {
+fn read_wasm_file(base_dir : String, filename : String) -> Bytes? {
   let wasm_path = base_dir + "/" + filename
-  let data = Some(@fs.read_file(wasm_path)) catch { _ => None }
-  match data {
-    Some(d) => Some(d.binary())
-    None => None
-  }
+  let data = Some(@fs.read_file_to_bytes(wasm_path)) catch { _ => None }
+  data
 }
 
 ///|
-/// Async wrapper for running a test command - handles file I/O inline
-async fn run_test_command_async(
+/// Wrapper for running a test command - handles file I/O inline
+fn run_test_command(
   ctx : @testsuite.TestContext,
   cmd : @testsuite.TestCommand,
   line : Int?,
@@ -225,14 +221,13 @@ async fn run_test_command_async(
 
 ///|
 /// Disassemble a WASM file
-async fn run_disasm(wasm_path : String) -> Unit {
-  let data = @fs.read_file(wasm_path) catch {
+fn run_disasm(wasm_path : String) -> Unit {
+  let bytes = @fs.read_file_to_bytes(wasm_path) catch {
     e => {
       println("Error reading file: \{e}")
       return
     }
   }
-  let bytes = data.binary()
   let mod_ = @parser.parse_module(bytes) catch {
     e => {
       println("Error parsing module: \{e}")
@@ -261,7 +256,7 @@ fn format_value(v : @types.Value) -> String {
 /// Run a WASM module
 /// If invoke is specified, call that function with args
 /// Otherwise, run the start function or _start export
-async fn run_wasm(
+fn run_wasm(
   wasm_path : String,
   invoke : String?,
   func_args : Array[String],
@@ -334,28 +329,44 @@ async fn run_wasm(
   // Initialize data segments (copy data to memory)
   for data in mod_.datas {
     if instance.mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
+      let mem = store.get_mem(instance.mem_addrs[data.memory_idx]) catch {
+        e => {
+          println("Error getting memory: \{e}")
+          return
+        }
+      }
       let offset = match data.offset {
         [I32Const(n)] => n
         _ => 0
       }
-      mem.init_data(offset, data.init)
+      mem.init_data(offset, data.init) catch {
+        e => {
+          println("Error initializing data segment: \{e}")
+          return
+        }
+      }
     }
   }
 
   // Initialize element segments (populate tables with function references)
   for elem in mod_.elems {
     if instance.table_addrs.length() > elem.table_idx {
-      let table = store.get_table(instance.table_addrs[elem.table_idx])
+      let table = store.get_table(instance.table_addrs[elem.table_idx]) catch {
+        e => {
+          println("Error getting table: \{e}")
+          return
+        }
+      }
       let offset = match elem.offset {
         [I32Const(n)] => n
         _ => 0
       }
       for i, func_idx in elem.init {
-        try
-          table.set(offset + i, @types.Value::FuncRef(func_idx)) |> ignore
-        catch {
-          _ => ()
+        table.set(offset + i, @types.Value::FuncRef(func_idx)) catch {
+          e => {
+            println("Error setting table element: \{e}")
+            return
+          }
         }
       }
     }
@@ -435,17 +446,15 @@ fn split_preload(s : String) -> (String, String)? {
 
 ///|
 /// Load a module from file path (supports both .wasm and .wat)
-async fn load_module_from_path(path : String) -> @types.Module raise Error {
+fn load_module_from_path(path : String) -> @types.Module raise Error {
   let is_wat = path.has_suffix(".wat")
   if is_wat {
-    let data = @fs.read_file(path)
-    let content = data.text() catch { e => raise e }
+    let content = @fs.read_file_to_string(path) catch { e => raise e }
     @wat.parse(content) catch {
       e => raise e
     }
   } else {
-    let data = @fs.read_file(path)
-    let bytes = data.binary()
+    let bytes = @fs.read_file_to_bytes(path) catch { e => raise e }
     @parser.parse_module(bytes) catch {
       e => raise e
     }
@@ -597,7 +606,7 @@ fn generate_output_path(input_path : String) -> String {
 
 ///|
 /// Compile a WASM module to precompiled format
-async fn run_compile(
+fn run_compile(
   input_path : String,
   output_path : String?,
   emit_ir : String?,
@@ -634,14 +643,8 @@ async fn run_compile(
         ir_output.write_string(";; Function \{func_idx}\n")
       }
 
-      // Convert string to bytes
-      let content = ir_output.to_string()
-      let bytes = Bytes::from_iter(
-        content.iter().map(fn(c) { c.to_int().to_byte() }),
-      )
-
       // Write IR file
-      @fs.write_file(ir_path, bytes) catch {
+      @fs.write_string_to_file(ir_path, ir_output.to_string()) catch {
         e => {
           println("Error writing IR file: \{e}")
           return
@@ -680,7 +683,7 @@ async fn run_compile(
   )
 
   // Write to file
-  @fs.write_file(out_path, out_bytes) catch {
+  @fs.write_bytes_to_file(out_path, out_bytes) catch {
     e => {
       println("Error writing output: \{e}")
       return
@@ -694,16 +697,10 @@ async fn run_compile(
 
 ///|
 /// Parse and display a WAT file
-async fn run_wat(wat_path : String) -> Unit {
-  let data = @fs.read_file(wat_path) catch {
+fn run_wat(wat_path : String) -> Unit {
+  let content = @fs.read_file_to_string(wat_path) catch {
     e => {
       println("Error reading file: \{e}")
-      return
-    }
-  }
-  let content = data.text() catch {
-    e => {
-      println("Error reading file as text: \{e}")
       return
     }
   }
@@ -721,7 +718,7 @@ async fn run_wat(wat_path : String) -> Unit {
 
 ///|
 /// Explore WASM compilation process
-async fn run_explore(
+fn run_explore(
   wasm_path : String,
   func_index : Int?,
   opt_level : Int,
@@ -838,7 +835,7 @@ async fn run_explore(
       wasm_path, func_idx, func_type, code, ir_func, ir_optimized, vcode_text, allocated_text,
       opt_level,
     )
-    @fs.write_file(path, html, create=0o644) catch {
+    @fs.write_string_to_file(path, html) catch {
       e => {
         println("Error writing HTML report: \{e}")
         return
@@ -857,18 +854,17 @@ fn format_func_type(ft : @types.FuncType) -> String {
 
 ///|
 /// Inspect a precompiled .cwasm file
-async fn run_objdump(cwasm_path : String) -> Unit {
+fn run_objdump(cwasm_path : String) -> Unit {
   println("Inspecting: \{cwasm_path}")
   println("=".repeat(60))
 
   // Read the file
-  let data = @fs.read_file(cwasm_path) catch {
+  let bytes_raw = @fs.read_file_to_bytes(cwasm_path) catch {
     e => {
       println("Error reading file: \{e}")
       return
     }
   }
-  let bytes_raw = data.binary()
 
   // Convert Bytes to Array[Int]
   let bytes : Array[Int] = []
@@ -950,7 +946,7 @@ fn to_hex_byte(b : Int) -> String {
 }
 
 ///|
-async fn main {
+fn main {
   let parser = @clap.Parser::new(
     prog="wasmoon",
     description="WebAssembly Runtime in MoonBit",

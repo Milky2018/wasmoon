@@ -2,5 +2,9 @@
   "import": [
     "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/runtime"
-  ]
+  ],
+  "targets": {
+    "ffi_native.mbt": ["native"]
+  },
+  "native-stub": ["ffi_native.c"]
 }

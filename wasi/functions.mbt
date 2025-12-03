@@ -310,13 +310,17 @@ pub fn fd_prestat_dir_name(
 /// fd_close - Close a file descriptor
 ///
 /// Returns: errno
-pub fn fd_close(_ctx : WasiContext, fd : Int) -> Int {
+pub fn fd_close(ctx : WasiContext, fd : Int) -> Int {
   // stdin, stdout, stderr cannot be closed
   if fd < 3 {
     return Errno::Badf.to_i32()
   }
-  // For now, we don't track open files, so just return success
-  Errno::Success.to_i32()
+  // Close the file and remove from tracking
+  if ctx.close_fd(fd) {
+    Errno::Success.to_i32()
+  } else {
+    Errno::Badf.to_i32()
+  }
 }
 
 ///|
@@ -331,4 +335,322 @@ pub fn random_get(mem : @runtime.Memory, buf_ptr : Int, buf_len : Int) -> Int {
     mem.write_byte(buf_ptr + i, (seed.val % 256).to_byte())
   }
   Errno::Success.to_i32()
+}
+
+///|
+/// path_open - Open a file or directory
+///
+/// Params:
+/// - fd: Directory fd to open relative to
+/// - dirflags: Path lookup flags
+/// - path: Path pointer in memory
+/// - path_len: Path length
+/// - oflags: Open flags
+/// - fs_rights_base: Requested rights
+/// - fs_rights_inheriting: Inherited rights
+/// - fdflags: FD flags
+/// - opened_fd: Pointer to store opened fd
+///
+/// Returns: errno
+pub fn path_open(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  dir_fd : Int,
+  _dirflags : Int,
+  path_ptr : Int,
+  path_len : Int,
+  oflags : Int,
+  _fs_rights_base : Int64,
+  _fs_rights_inheriting : Int64,
+  fdflags : Int,
+  opened_fd_ptr : Int,
+) -> Int {
+  // Read path from memory
+  let path = read_string_from_memory(mem, path_ptr, path_len)
+  // Resolve the full host path
+  let host_path = ctx.resolve_path(dir_fd, path)
+  if host_path is None {
+    return Errno::Badf.to_i32()
+  }
+  let resolved_path = host_path.unwrap()
+  // Determine open flags
+  let open_flags : Array[OpenFlags] = []
+  // WASI oflags:
+  // 0x01 = O_CREAT, 0x02 = O_DIRECTORY, 0x04 = O_EXCL, 0x08 = O_TRUNC
+  if (oflags & 0x01) != 0 {
+    open_flags.push(Create)
+  }
+  if (oflags & 0x02) != 0 {
+    open_flags.push(Directory)
+  }
+  if (oflags & 0x04) != 0 {
+    open_flags.push(Exclusive)
+  }
+  if (oflags & 0x08) != 0 {
+    open_flags.push(Truncate)
+  }
+  // WASI fdflags:
+  // 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC
+  if (fdflags & 0x01) != 0 {
+    open_flags.push(Append)
+  }
+  // Default to read-write if creating, read-only otherwise
+  if open_flags.is_empty() || (oflags & 0x02) != 0 {
+    open_flags.push(ReadOnly)
+  } else {
+    open_flags.push(ReadWrite)
+  }
+  // Open the file
+  let native_fd = native_open(resolved_path, open_flags, 0o644)
+  if native_fd is None {
+    return Errno::NoEnt.to_i32()
+  }
+  let nfd = native_fd.unwrap()
+  // Determine file type
+  let file_type : FileType = if (oflags & 0x02) != 0 {
+    Directory
+  } else {
+    RegularFile
+  }
+  // Allocate WASI fd
+  let wasi_fd = ctx.alloc_fd({
+    native_fd: nfd,
+    file_type,
+    host_path: resolved_path,
+    position: 0L,
+    flags: oflags,
+  })
+  // Write opened fd to memory
+  mem.write_i32(opened_fd_ptr, wasi_fd)
+  Errno::Success.to_i32()
+}
+
+///|
+/// fd_seek - Move file cursor
+///
+/// Params:
+/// - fd: File descriptor
+/// - offset: Offset to seek
+/// - whence: 0=SET, 1=CUR, 2=END
+/// - newoffset: Pointer to store new offset
+///
+/// Returns: errno
+pub fn fd_seek(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  offset : Int64,
+  whence : Int,
+  newoffset_ptr : Int,
+) -> Int {
+  // stdin, stdout, stderr don't support seeking
+  if fd < 3 {
+    return Errno::SPipe.to_i32()
+  }
+  let file = ctx.get_file(fd)
+  if file is None {
+    return Errno::Badf.to_i32()
+  }
+  let f = file.unwrap()
+  // Convert WASI whence to native
+  let native_whence : Whence = match whence {
+    0 => Set
+    1 => Cur
+    2 => End
+    _ => return Errno::Inval.to_i32()
+  }
+  let new_pos = native_seek(f.native_fd, offset, native_whence)
+  if new_pos is None {
+    return Errno::IO.to_i32()
+  }
+  let pos = new_pos.unwrap()
+  f.position = pos
+  mem.write_i64(newoffset_ptr, pos)
+  Errno::Success.to_i32()
+}
+
+///|
+/// fd_tell - Get current file cursor position
+///
+/// Params:
+/// - fd: File descriptor
+/// - offset: Pointer to store offset
+///
+/// Returns: errno
+pub fn fd_tell(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  offset_ptr : Int,
+) -> Int {
+  // stdin, stdout, stderr don't support tell
+  if fd < 3 {
+    return Errno::SPipe.to_i32()
+  }
+  let file = ctx.get_file(fd)
+  if file is None {
+    return Errno::Badf.to_i32()
+  }
+  let f = file.unwrap()
+  let pos = native_tell(f.native_fd)
+  if pos is None {
+    return Errno::IO.to_i32()
+  }
+  let p = pos.unwrap()
+  f.position = p
+  mem.write_i64(offset_ptr, p)
+  Errno::Success.to_i32()
+}
+
+///|
+/// fd_pread - Read from a file at a specific offset (without moving cursor)
+///
+/// Params:
+/// - fd: File descriptor
+/// - iovs: IO vectors pointer
+/// - iovs_len: Number of IO vectors
+/// - offset: File offset to read from
+/// - nread: Pointer to store bytes read
+///
+/// Returns: errno
+pub fn fd_pread(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  iovs : Int,
+  iovs_len : Int,
+  offset : Int64,
+  nread_ptr : Int,
+) -> Int {
+  if fd < 3 {
+    return Errno::SPipe.to_i32()
+  }
+  let file = ctx.get_file(fd)
+  if file is None {
+    return Errno::Badf.to_i32()
+  }
+  let f = file.unwrap()
+  // Save current position
+  let saved_pos = native_tell(f.native_fd)
+  if saved_pos is None {
+    return Errno::IO.to_i32()
+  }
+  // Seek to offset
+  let seek_result = native_seek(f.native_fd, offset, Set)
+  if seek_result is None {
+    return Errno::IO.to_i32()
+  }
+  // Read data
+  let mut total_read = 0
+  for i in 0..<iovs_len {
+    let iov_offset = iovs + i * 8
+    let buf_ptr = mem.read_i32(iov_offset)
+    let buf_len = mem.read_i32(iov_offset + 4)
+    if buf_len > 0 {
+      let buf = FixedArray::make(buf_len, b'\x00')
+      let n = native_read(f.native_fd, buf, buf_len)
+      if n is None {
+        // Restore position and return error
+        native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
+        return Errno::IO.to_i32()
+      }
+      let bytes_read = n.unwrap()
+      // Copy to WASM memory
+      for j in 0..<bytes_read {
+        mem.write_byte(buf_ptr + j, buf[j])
+      }
+      total_read = total_read + bytes_read
+      if bytes_read < buf_len {
+        break // EOF
+      }
+    }
+  }
+  // Restore position
+  native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
+  mem.write_i32(nread_ptr, total_read)
+  Errno::Success.to_i32()
+}
+
+///|
+/// fd_pwrite - Write to a file at a specific offset (without moving cursor)
+///
+/// Params:
+/// - fd: File descriptor
+/// - iovs: IO vectors pointer
+/// - iovs_len: Number of IO vectors
+/// - offset: File offset to write to
+/// - nwritten: Pointer to store bytes written
+///
+/// Returns: errno
+pub fn fd_pwrite(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  iovs : Int,
+  iovs_len : Int,
+  offset : Int64,
+  nwritten_ptr : Int,
+) -> Int {
+  if fd < 3 {
+    return Errno::SPipe.to_i32()
+  }
+  let file = ctx.get_file(fd)
+  if file is None {
+    return Errno::Badf.to_i32()
+  }
+  let f = file.unwrap()
+  // Save current position
+  let saved_pos = native_tell(f.native_fd)
+  if saved_pos is None {
+    return Errno::IO.to_i32()
+  }
+  // Seek to offset
+  let seek_result = native_seek(f.native_fd, offset, Set)
+  if seek_result is None {
+    return Errno::IO.to_i32()
+  }
+  // Write data
+  let mut total_written = 0
+  for i in 0..<iovs_len {
+    let iov_offset = iovs + i * 8
+    let buf_ptr = mem.read_i32(iov_offset)
+    let buf_len = mem.read_i32(iov_offset + 4)
+    if buf_len > 0 {
+      let buf = FixedArray::make(buf_len, b'\x00')
+      // Copy from WASM memory
+      for j in 0..<buf_len {
+        buf[j] = mem.read_byte(buf_ptr + j)
+      }
+      let n = native_write(f.native_fd, buf, buf_len)
+      if n is None {
+        // Restore position and return error
+        native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
+        return Errno::IO.to_i32()
+      }
+      total_written = total_written + n.unwrap()
+    }
+  }
+  // Restore position
+  native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
+  mem.write_i32(nwritten_ptr, total_written)
+  Errno::Success.to_i32()
+}
+
+///|
+/// Helper: Read a string from WASM memory
+fn read_string_from_memory(
+  mem : @runtime.Memory,
+  ptr : Int,
+  len : Int,
+) -> String {
+  let buf = StringBuilder::new()
+  for i in 0..<len {
+    let c = mem.read_byte(ptr + i).to_int()
+    if c >= 32 && c < 127 {
+      buf.write_char(c.unsafe_to_char())
+    } else if c == 0 {
+      break
+    }
+  }
+  buf.to_string()
 }

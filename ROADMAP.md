@@ -370,10 +370,12 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
   - [x] `fd_read` / `fd_write` - stdin/stdout/stderr 读写
   - [x] `fd_close` - 关闭文件描述符
   - [x] `fd_prestat_get` / `fd_prestat_dir_name` - 预开放目录信息
-- [ ] 文件系统操作 (未实现 - 返回 ENOSYS)
-  - [ ] `fd_seek` / `fd_tell` - 文件定位
-  - [ ] `path_open` / `path_create_directory` - 路径操作
-  - [ ] `fd_readdir` - 目录读取
+- [x] 文件系统操作
+  - [x] `fd_seek` / `fd_tell` - 文件定位
+  - [x] `fd_pread` / `fd_pwrite` - 位置读写
+  - [x] `path_open` - 打开文件
+  - [ ] `path_create_directory` - 创建目录 (返回 ENOSYS)
+  - [ ] `fd_readdir` - 目录读取 (返回 ENOSYS)
 - [x] 环境访问
   - [x] `environ_get` / `environ_sizes_get` - 环境变量
   - [x] `args_get` / `args_sizes_get` - 命令行参数
@@ -392,7 +394,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 - [ ] 文件描述符权限管理 - 未实现
 
 ### 12.3 WASI CLI 集成
-- [ ] `--dir <HOST_DIR[::GUEST_DIR]>` 目录映射
+- [ ] `--dir <HOST_DIR[::GUEST_DIR]>` 目录映射 ⬅️ 需要此功能才能测试完整文件操作
 - [ ] `--env <NAME=VAL>` 环境变量传递
 - [ ] `-S, --wasi <KEY=VAL>` WASI 选项
 
@@ -478,9 +480,9 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 |------|----------|------|
 | ~~**友好的错误信息**~~ | ~~Phase 5~~ | ✅ 已完成 |
 | ~~**WASM 验证错误位置**~~ | ~~Phase 5~~ | ✅ 已完成 |
-| **WASI 文件系统** | Phase 12 | 文件操作是常见需求 |
-| - `path_open`/`fd_close` | 12.1 | 文件读写必需 |
-| - `fd_seek`/`fd_tell` | 12.1 | 随机访问文件 |
+| ~~**WASI 文件系统**~~ | ~~Phase 12~~ | ✅ 已完成 |
+| ~~- `path_open`/`fd_close`~~ | ~~12.1~~ | ✅ 已完成 |
+| ~~- `fd_seek`/`fd_tell`~~ | ~~12.1~~ | ✅ 已完成 |
 | ~~**8/16位内存操作**~~ | ~~Phase 10~~ | ✅ 已完成 |
 | **扩展指令 (ExtendKind)** | Phase 10 | 类型转换完整性 |
 | **寄存器合并 (Coalescing)** | Phase 9 | 提升 JIT 代码质量 |
@@ -513,18 +515,18 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ### 推荐实施路径
 
 ```
-Phase 12 WASI (P0)
+Phase 12 WASI (P0) ✅ 已完成
     │
-    ├─► fd_write/fd_read (stdout/stderr/stdin)
-    ├─► args_get/environ_get
-    ├─► proc_exit
-    └─► clock_time_get
+    ├─► fd_write/fd_read (stdout/stderr/stdin) ✅
+    ├─► args_get/environ_get ✅
+    ├─► proc_exit ✅
+    └─► clock_time_get ✅
          │
          ▼
-Phase 12 WASI 文件系统 (P1)
+Phase 12 WASI 文件系统 (P1) ✅ 已完成
     │
-    ├─► path_open/fd_close
-    └─► fd_seek/fd_tell
+    ├─► path_open/fd_close ✅
+    └─► fd_seek/fd_tell ✅
          │
          ▼
 Phase 10 完善 (P1)

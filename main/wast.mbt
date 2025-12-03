@@ -1,19 +1,13 @@
 ///|
 /// Run a WAST test script
-async fn run_wast(wast_path : String) -> Unit {
+fn run_wast(wast_path : String) -> Unit {
   println("Running WAST script: \{wast_path}")
   println("=".repeat(50))
 
   // Read WAST file
-  let data = @fs.read_file(wast_path) catch {
+  let content = @fs.read_file_to_string(wast_path) catch {
     e => {
       println("Error reading file: \{e}")
-      return
-    }
-  }
-  let content = data.text() catch {
-    e => {
-      println("Error reading file as text: \{e}")
       return
     }
   }

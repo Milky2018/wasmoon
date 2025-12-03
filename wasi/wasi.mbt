@@ -211,6 +211,144 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     [@types.Value::I32(result)]
   })
 
+  // fd_seek(fd, offset, whence, newoffset) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "fd_seek", fn(args) {
+    let fd = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let offset = match args[1] {
+      I64(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let whence = match args[2] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let newoffset_ptr = match args[3] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = fd_seek(ctx, mem, fd, offset, whence, newoffset_ptr)
+    [@types.Value::I32(result)]
+  })
+
+  // fd_tell(fd, offset) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "fd_tell", fn(args) {
+    let fd = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let offset_ptr = match args[1] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = fd_tell(ctx, mem, fd, offset_ptr)
+    [@types.Value::I32(result)]
+  })
+
+  // fd_pread(fd, iovs, iovs_len, offset, nread) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "fd_pread", fn(args) {
+    let fd = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let iovs = match args[1] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let iovs_len = match args[2] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let offset = match args[3] {
+      I64(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let nread_ptr = match args[4] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = fd_pread(ctx, mem, fd, iovs, iovs_len, offset, nread_ptr)
+    [@types.Value::I32(result)]
+  })
+
+  // fd_pwrite(fd, iovs, iovs_len, offset, nwritten) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "fd_pwrite", fn(args) {
+    let fd = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let iovs = match args[1] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let iovs_len = match args[2] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let offset = match args[3] {
+      I64(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let nwritten_ptr = match args[4] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = fd_pwrite(ctx, mem, fd, iovs, iovs_len, offset, nwritten_ptr)
+    [@types.Value::I32(result)]
+  })
+
+  // path_open(fd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inheriting, fdflags, opened_fd) -> errno
+  linker.add_host_func("wasi_snapshot_preview1", "path_open", fn(args) {
+    let dir_fd = match args[0] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let dirflags = match args[1] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let path_ptr = match args[2] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let path_len = match args[3] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let oflags = match args[4] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let fs_rights_base = match args[5] {
+      I64(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let fs_rights_inheriting = match args[6] {
+      I64(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let fdflags = match args[7] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let opened_fd_ptr = match args[8] {
+      I32(v) => v
+      _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+    }
+    let mem = store.get_memory(0)
+    let result = path_open(
+      ctx, mem, dir_fd, dirflags, path_ptr, path_len, oflags, fs_rights_base, fs_rights_inheriting,
+      fdflags, opened_fd_ptr,
+    )
+    [@types.Value::I32(result)]
+  })
+
   // Stub functions that return ENOSYS (not implemented)
   let stub_funcs = [
     ("fd_advise", 4),
@@ -222,18 +360,13 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     ("fd_filestat_get", 2),
     ("fd_filestat_set_size", 2),
     ("fd_filestat_set_times", 4),
-    ("fd_pread", 5),
-    ("fd_pwrite", 5),
     ("fd_readdir", 5),
     ("fd_renumber", 2),
-    ("fd_seek", 4),
     ("fd_sync", 1),
-    ("fd_tell", 2),
     ("path_create_directory", 3),
     ("path_filestat_get", 5),
     ("path_filestat_set_times", 7),
     ("path_link", 7),
-    ("path_open", 9),
     ("path_readlink", 5),
     ("path_remove_directory", 3),
     ("path_rename", 6),

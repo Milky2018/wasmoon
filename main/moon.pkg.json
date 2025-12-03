@@ -13,9 +13,7 @@
     "Milky2018/wasmoon/vcode",
     "Milky2018/wasmoon/wasi",
     "moonbitlang/x/sys",
-    "moonbitlang/async",
-    "moonbitlang/async/fs",
-    "moonbitlang/async/io",
+    "moonbitlang/x/fs",
     "TheWaWaR/clap",
     "Milky2018/wasmoon/executor",
     "Milky2018/wasmoon/runtime"
