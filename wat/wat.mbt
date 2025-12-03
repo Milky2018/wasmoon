@@ -2,16 +2,34 @@
 // Parses WAT text format into WASM Module structures
 
 ///|
-/// WAT Parser errors
+/// WAT Parser errors with location information
 pub(all) suberror WatError {
-  UnexpectedToken(String)
-  UnexpectedEof
-  InvalidNumber(String)
-  InvalidInstruction(String)
-  UndefinedIdentifier(String)
-  DuplicateIdentifier(String)
-  ParseError(String)
-} derive(Show)
+  UnexpectedToken(String, SourceLoc)
+  UnexpectedEof(SourceLoc)
+  InvalidNumber(String, SourceLoc)
+  InvalidInstruction(String, SourceLoc)
+  UndefinedIdentifier(String, SourceLoc)
+  DuplicateIdentifier(String, SourceLoc)
+  ParseError(String, SourceLoc)
+}
+
+///|
+fn WatError::to_string(self : WatError) -> String {
+  match self {
+    UnexpectedToken(msg, loc) => "at \{loc}: unexpected token: \{msg}"
+    UnexpectedEof(loc) => "at \{loc}: unexpected end of file"
+    InvalidNumber(s, loc) => "at \{loc}: invalid number: \{s}"
+    InvalidInstruction(s, loc) => "at \{loc}: invalid instruction: \{s}"
+    UndefinedIdentifier(s, loc) => "at \{loc}: undefined identifier: \{s}"
+    DuplicateIdentifier(s, loc) => "at \{loc}: duplicate identifier: \{s}"
+    ParseError(msg, loc) => "at \{loc}: \{msg}"
+  }
+}
+
+///|
+pub impl Show for WatError with output(self, logger) {
+  logger.write_string(self.to_string())
+}
 
 ///|
 /// Token types for WAT lexer
@@ -26,15 +44,54 @@ priv enum Token {
 } derive(Show, Eq)
 
 ///|
+/// Source location for error reporting
+pub(all) struct SourceLoc {
+  line : Int
+  column : Int
+}
+
+///|
+fn SourceLoc::to_string(self : SourceLoc) -> String {
+  "\{self.line}:\{self.column}"
+}
+
+///|
+pub impl Show for SourceLoc with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// Default source location (for errors without specific location)
+fn default_loc() -> SourceLoc {
+  { line: 0, column: 0 }
+}
+
+///|
 /// WAT Lexer
 priv struct Lexer {
   input : String
   mut pos : Int
+  mut line : Int
+  mut column : Int
+  mut token_start_line : Int
+  mut token_start_column : Int
 }
 
 ///|
 fn Lexer::new(input : String) -> Lexer {
-  { input, pos: 0 }
+  {
+    input,
+    pos: 0,
+    line: 1,
+    column: 1,
+    token_start_line: 1,
+    token_start_column: 1,
+  }
+}
+
+///|
+fn Lexer::current_loc(self : Lexer) -> SourceLoc {
+  { line: self.token_start_line, column: self.token_start_column }
 }
 
 ///|
@@ -58,26 +115,47 @@ fn Lexer::next_char(self : Lexer) -> Char? {
   } else {
     let c = self.input.code_unit_at(self.pos).unsafe_to_char()
     self.pos += 1
+    if c == '\n' {
+      self.line += 1
+      self.column = 1
+    } else {
+      self.column += 1
+    }
     Some(c)
   }
 }
 
 ///|
+/// Advance position by one character, updating line/column
+fn Lexer::advance_pos(self : Lexer) -> Unit {
+  if !self.is_eof() {
+    let c = self.input.code_unit_at(self.pos).unsafe_to_char()
+    self.pos += 1
+    if c == '\n' {
+      self.line += 1
+      self.column = 1
+    } else {
+      self.column += 1
+    }
+  }
+}
+
+///|
 fn Lexer::skip_whitespace(self : Lexer) -> Unit {
-  while not(self.is_eof()) {
+  while !self.is_eof() {
     match self.peek_char() {
-      Some(' ') | Some('\t') | Some('\n') | Some('\r') => self.pos += 1
+      Some(' ') | Some('\t') | Some('\n') | Some('\r') => self.advance_pos()
       Some(';') =>
         // Skip line comment
         if self.pos + 1 < self.input.length() &&
           self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
-          while not(self.is_eof()) {
+          while !self.is_eof() {
             match self.peek_char() {
               Some('\n') => {
-                self.pos += 1
+                self.advance_pos()
                 break
               }
-              _ => self.pos += 1
+              _ => self.advance_pos()
             }
           }
         } else {
@@ -87,23 +165,26 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
         // Check for block comment (; ... ;)
         if self.pos + 1 < self.input.length() &&
           self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
-          self.pos += 2
+          self.advance_pos()
+          self.advance_pos()
           let mut depth = 1
-          while not(self.is_eof()) && depth > 0 {
+          while !self.is_eof() && depth > 0 {
             if self.pos + 1 < self.input.length() {
               let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
               let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
               if c1 == ';' && c2 == ')' {
                 depth -= 1
-                self.pos += 2
+                self.advance_pos()
+                self.advance_pos()
               } else if c1 == '(' && c2 == ';' {
                 depth += 1
-                self.pos += 2
+                self.advance_pos()
+                self.advance_pos()
               } else {
-                self.pos += 1
+                self.advance_pos()
               }
             } else {
-              self.pos += 1
+              self.advance_pos()
             }
           }
         } else {
@@ -147,12 +228,12 @@ fn is_idchar(c : Char) -> Bool {
 ///|
 fn Lexer::read_id_or_keyword(self : Lexer) -> String {
   let buf = StringBuilder::new()
-  while not(self.is_eof()) {
+  while !self.is_eof() {
     match self.peek_char() {
       Some(c) =>
         if is_idchar(c) {
           buf.write_char(c)
-          self.pos += 1
+          self.advance_pos()
         } else {
           break
         }
@@ -165,9 +246,10 @@ fn Lexer::read_id_or_keyword(self : Lexer) -> String {
 ///|
 fn Lexer::read_string(self : Lexer) -> String raise WatError {
   let buf = StringBuilder::new()
+  let start_loc = self.current_loc()
   // Skip opening quote
-  self.pos += 1
-  while not(self.is_eof()) {
+  self.advance_pos()
+  while !self.is_eof() {
     match self.next_char() {
       Some('"') => return buf.to_string()
       Some('\\') =>
@@ -187,21 +269,22 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
                   let hex = String::make(1, c) + String::make(1, c2)
                   match parse_hex_byte(hex) {
                     Some(b) => buf.write_char(b.unsafe_to_char())
-                    None => raise ParseError("Invalid hex escape: \{hex}")
+                    None =>
+                      raise ParseError("Invalid hex escape: \{hex}", start_loc)
                   }
                 }
-                None => raise UnexpectedEof
+                None => raise UnexpectedEof(self.current_loc())
               }
             } else {
               buf.write_char(c)
             }
-          None => raise UnexpectedEof
+          None => raise UnexpectedEof(self.current_loc())
         }
       Some(c) => buf.write_char(c)
-      None => raise UnexpectedEof
+      None => raise UnexpectedEof(self.current_loc())
     }
   }
-  raise UnexpectedEof
+  raise UnexpectedEof(self.current_loc())
 }
 
 ///|
@@ -246,11 +329,12 @@ fn Lexer::read_number(self : Lexer) -> String {
     if c1 == '0' && (c2 == 'x' || c2 == 'X') {
       buf.write_char(c1)
       buf.write_char(c2)
-      self.pos += 2
+      self.advance_pos()
+      self.advance_pos()
     }
   }
   // Read digits
-  while not(self.is_eof()) {
+  while !self.is_eof() {
     match self.peek_char() {
       Some(c) =>
         if (c >= '0' && c <= '9') ||
@@ -267,7 +351,7 @@ fn Lexer::read_number(self : Lexer) -> String {
           if c != '_' {
             buf.write_char(c)
           }
-          self.pos += 1
+          self.advance_pos()
         } else {
           break
         }
@@ -280,20 +364,23 @@ fn Lexer::read_number(self : Lexer) -> String {
 ///|
 fn Lexer::next_token(self : Lexer) -> Token raise WatError {
   self.skip_whitespace()
+  // Save token start position
+  self.token_start_line = self.line
+  self.token_start_column = self.column
   if self.is_eof() {
     return Eof
   }
   match self.peek_char() {
     Some('(') => {
-      self.pos += 1
+      self.advance_pos()
       LParen
     }
     Some(')') => {
-      self.pos += 1
+      self.advance_pos()
       RParen
     }
     Some('$') => {
-      self.pos += 1
+      self.advance_pos()
       let name = self.read_id_or_keyword()
       Id(name)
     }
@@ -309,7 +396,7 @@ fn Lexer::next_token(self : Lexer) -> Token raise WatError {
         let kw = self.read_id_or_keyword()
         Keyword(kw)
       } else {
-        raise UnexpectedToken(String::make(1, c))
+        raise UnexpectedToken(String::make(1, c), self.current_loc())
       }
     None => Eof
   }
@@ -327,6 +414,9 @@ priv struct Parser {
   global_names : Map[String, Int]
   memory_names : Map[String, Int]
   table_names : Map[String, Int]
+  // Label stack for block/loop/if - stores (name, depth) pairs
+  // depth is the index from the innermost block (0 = current block)
+  label_stack : Array[String?]
 }
 
 ///|
@@ -342,7 +432,40 @@ fn Parser::new(input : String) -> Parser raise WatError {
     global_names: {},
     memory_names: {},
     table_names: {},
+    label_stack: [],
   }
+}
+
+///|
+/// Get the current token's source location
+fn Parser::loc(self : Parser) -> SourceLoc {
+  self.lexer.current_loc()
+}
+
+///|
+/// Push a label onto the label stack (for block/loop/if)
+fn Parser::push_label(self : Parser, name : String?) -> Unit {
+  self.label_stack.push(name)
+}
+
+///|
+/// Pop a label from the label stack
+fn Parser::pop_label(self : Parser) -> Unit {
+  self.label_stack.pop() |> ignore
+}
+
+///|
+/// Resolve a named label to its depth index
+/// Returns the number of blocks we need to break out of
+fn Parser::resolve_label(self : Parser, name : String) -> Int? {
+  // Search from the top of the stack (most recent block)
+  for i = self.label_stack.length() - 1; i >= 0; i = i - 1 {
+    if self.label_stack[i] is Some(label_name) && label_name == name {
+      // Depth is distance from top of stack
+      return Some(self.label_stack.length() - 1 - i)
+    }
+  }
+  None
 }
 
 ///|
@@ -351,10 +474,35 @@ fn Parser::advance(self : Parser) -> Unit raise WatError {
 }
 
 ///|
+/// Skip tokens until we find the matching closing parenthesis
+/// Assumes we're currently inside a parenthesized expression
+fn Parser::skip_to_matching_rparen(self : Parser) -> Unit raise WatError {
+  let mut depth = 1
+  while depth > 0 && self.current != Eof {
+    match self.current {
+      LParen => {
+        depth = depth + 1
+        self.advance()
+      }
+      RParen => {
+        depth = depth - 1
+        if depth > 0 {
+          self.advance()
+        }
+      }
+      _ => self.advance()
+    }
+  }
+  if self.current == RParen {
+    self.advance()
+  }
+}
+
+///|
 fn Parser::expect_lparen(self : Parser) -> Unit raise WatError {
   match self.current {
     LParen => self.advance()
-    _ => raise UnexpectedToken("expected '(', got \{self.current}")
+    _ => raise UnexpectedToken("expected '(', got \{self.current}", self.loc())
   }
 }
 
@@ -362,7 +510,7 @@ fn Parser::expect_lparen(self : Parser) -> Unit raise WatError {
 fn Parser::expect_rparen(self : Parser) -> Unit raise WatError {
   match self.current {
     RParen => self.advance()
-    _ => raise UnexpectedToken("expected ')', got \{self.current}")
+    _ => raise UnexpectedToken("expected ')', got \{self.current}", self.loc())
   }
 }
 
@@ -373,9 +521,10 @@ fn Parser::expect_keyword(self : Parser, kw : String) -> Unit raise WatError {
       if k == kw {
         self.advance()
       } else {
-        raise UnexpectedToken("expected '\{kw}', got '\{k}'")
+        raise UnexpectedToken("expected '\{kw}', got '\{k}'", self.loc())
       }
-    _ => raise UnexpectedToken("expected '\{kw}', got \{self.current}")
+    _ =>
+      raise UnexpectedToken("expected '\{kw}', got \{self.current}", self.loc())
   }
 }
 
@@ -386,7 +535,8 @@ fn Parser::parse_u32(self : Parser) -> Int raise WatError {
       self.advance()
       parse_int(s)
     }
-    _ => raise UnexpectedToken("expected number, got \{self.current}")
+    _ =>
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -397,7 +547,8 @@ fn Parser::parse_i32(self : Parser) -> Int raise WatError {
       self.advance()
       parse_int(s)
     }
-    _ => raise UnexpectedToken("expected number, got \{self.current}")
+    _ =>
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -408,7 +559,8 @@ fn Parser::parse_i64(self : Parser) -> Int64 raise WatError {
       self.advance()
       parse_int64(s)
     }
-    _ => raise UnexpectedToken("expected number, got \{self.current}")
+    _ =>
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -419,7 +571,8 @@ fn Parser::parse_f32(self : Parser) -> Float raise WatError {
       self.advance()
       parse_float32(s)
     }
-    _ => raise UnexpectedToken("expected number, got \{self.current}")
+    _ =>
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -430,7 +583,8 @@ fn Parser::parse_f64(self : Parser) -> Double raise WatError {
       self.advance()
       parse_float64(s)
     }
-    _ => raise UnexpectedToken("expected number, got \{self.current}")
+    _ =>
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -445,7 +599,7 @@ fn parse_int(s : String) -> Int raise WatError {
       }
       parse_hex_int(hex_part.to_string())
     } else {
-      raise InvalidNumber(s)
+      raise InvalidNumber(s, default_loc())
     }
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
@@ -455,12 +609,12 @@ fn parse_int(s : String) -> Int raise WatError {
       }
       -parse_hex_int(hex_part.to_string())
     } else {
-      raise InvalidNumber(s)
+      raise InvalidNumber(s, default_loc())
     }
   } else {
     // Parse decimal
     @strconv.parse_int(trimmed) catch {
-      _ => raise InvalidNumber(s)
+      _ => raise InvalidNumber(s, default_loc())
     }
   }
 }
@@ -472,7 +626,7 @@ fn parse_hex_int(s : String) -> Int raise WatError {
     let c = s.code_unit_at(i).unsafe_to_char()
     match hex_digit_value(c) {
       Some(v) => result = result * 16 + v
-      None => raise InvalidNumber(s)
+      None => raise InvalidNumber(s, default_loc())
     }
   }
   result
@@ -489,7 +643,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       }
       parse_hex_int64(hex_part.to_string())
     } else {
-      raise InvalidNumber(s)
+      raise InvalidNumber(s, default_loc())
     }
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
@@ -499,11 +653,11 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       }
       -parse_hex_int64(hex_part.to_string())
     } else {
-      raise InvalidNumber(s)
+      raise InvalidNumber(s, default_loc())
     }
   } else {
     @strconv.parse_int64(trimmed) catch {
-      _ => raise InvalidNumber(s)
+      _ => raise InvalidNumber(s, default_loc())
     }
   }
 }
@@ -515,7 +669,7 @@ fn parse_hex_int64(s : String) -> Int64 raise WatError {
     let c = s.code_unit_at(i).unsafe_to_char()
     match hex_digit_value(c) {
       Some(v) => result = result * 16L + v.to_int64()
-      None => raise InvalidNumber(s)
+      None => raise InvalidNumber(s, default_loc())
     }
   }
   result
@@ -533,7 +687,7 @@ fn parse_float32(s : String) -> Float raise WatError {
     return (0.0 : Float) / (0.0 : Float) // NaN
   }
   (@strconv.parse_double(s) |> Float::from_double) catch {
-    _ => raise InvalidNumber(s)
+    _ => raise InvalidNumber(s, default_loc())
   }
 }
 
@@ -549,7 +703,7 @@ fn parse_float64(s : String) -> Double raise WatError {
     return 0.0 / 0.0 // NaN
   }
   @strconv.parse_double(s) catch {
-    _ => raise InvalidNumber(s)
+    _ => raise InvalidNumber(s, default_loc())
   }
 }
 
@@ -566,11 +720,28 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         "v128" => V128
         "funcref" => FuncRef
         "externref" => ExternRef
-        _ => raise UnexpectedToken("expected value type, got '\{kw}'")
+        _ =>
+          raise UnexpectedToken("expected value type, got '\{kw}'", self.loc())
       }
     }
-    _ => raise UnexpectedToken("expected value type, got \{self.current}")
+    _ =>
+      raise UnexpectedToken(
+        "expected value type, got \{self.current}",
+        self.loc(),
+      )
   }
+}
+
+///|
+/// Count the number of function imports
+fn count_func_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    if imp.desc is @types.ImportDesc::Func(_) {
+      count = count + 1
+    }
+  }
+  count
 }
 
 ///|
@@ -586,9 +757,80 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   self.expect_keyword("module")
   let mod_ = @types.Module::new()
 
-  // First pass: collect type names
-  // For simplicity, we'll do a single pass and handle names as we go
+  // First pass: collect function names (to support forward references)
+  // Save lexer state
+  let saved_pos = self.lexer.pos
+  let saved_line = self.lexer.line
+  let saved_column = self.lexer.column
+  let saved_token_start_line = self.lexer.token_start_line
+  let saved_token_start_column = self.lexer.token_start_column
+  let saved_current = self.current
 
+  // Scan for function definitions and imports to collect names
+  let mut func_idx = 0
+  while self.current != RParen && self.current != Eof {
+    match self.current {
+      LParen => {
+        self.advance()
+        match self.current {
+          Keyword("import") => {
+            self.advance()
+            // Skip module name and import name
+            match self.current {
+              String_(_) => self.advance()
+              _ => ()
+            }
+            match self.current {
+              String_(_) => self.advance()
+              _ => ()
+            }
+            // Check if it's a function import
+            if self.current == LParen {
+              self.advance()
+              if self.current == Keyword("func") {
+                self.advance()
+                // Check for function name
+                if self.current is Id(name) {
+                  self.func_names.set(name, func_idx)
+                  self.advance()
+                }
+                func_idx = func_idx + 1
+                // Skip rest of func definition (depth starts at 1 for this inner paren)
+                self.skip_to_matching_rparen()
+              } else {
+                // Not a func import, skip this inner expression
+                self.skip_to_matching_rparen()
+              }
+            }
+            // Skip to end of import (the outer rparen)
+            self.skip_to_matching_rparen()
+          }
+          Keyword("func") => {
+            self.advance()
+            // Check for function name
+            if self.current is Id(name) {
+              self.func_names.set(name, func_idx)
+            }
+            func_idx = func_idx + 1
+            // Skip to end of func
+            self.skip_to_matching_rparen()
+          }
+          _ => self.skip_to_matching_rparen()
+        }
+      }
+      _ => self.advance()
+    }
+  }
+
+  // Restore lexer state for second pass
+  self.lexer.pos = saved_pos
+  self.lexer.line = saved_line
+  self.lexer.column = saved_column
+  self.lexer.token_start_line = saved_token_start_line
+  self.lexer.token_start_column = saved_token_start_column
+  self.current = saved_current
+
+  // Second pass: actual parsing
   while self.current != RParen && self.current != Eof {
     match self.current {
       LParen => {
@@ -601,7 +843,9 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           }
           Keyword("func") => {
             let (type_idx, code, export_name) = self.parse_func_def(mod_)
-            let func_idx = mod_.funcs.length()
+            // func_idx must account for imported functions
+            let func_idx = count_func_imports(mod_.imports) +
+              mod_.funcs.length()
             mod_.funcs.push(type_idx)
             mod_.codes.push(code)
             if export_name is Some(name) {
@@ -657,11 +901,16 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             mod_.start = Some(func_idx)
             self.expect_rparen()
           }
-          Keyword(kw) => raise UnexpectedToken("unexpected module field: \{kw}")
-          _ => raise UnexpectedToken("expected module field")
+          Keyword("data") => {
+            let data = self.parse_data_def()
+            mod_.datas.push(data)
+          }
+          Keyword(kw) =>
+            raise UnexpectedToken("unexpected module field: \{kw}", self.loc())
+          _ => raise UnexpectedToken("expected module field", self.loc())
         }
       }
-      _ => raise UnexpectedToken("expected '(' in module")
+      _ => raise UnexpectedToken("expected '(' in module", self.loc())
     }
   }
   self.expect_rparen()
@@ -735,7 +984,8 @@ fn Parser::parse_func_def(
 ) -> (Int, @types.FunctionCode, String?) raise WatError {
   self.advance() // skip "func"
   let mut export_name : String? = None
-  let func_idx = mod_.funcs.length()
+  // func_idx must account for imported functions
+  let func_idx = count_func_imports(mod_.imports) + mod_.funcs.length()
 
   // Optional function name
   match self.current {
@@ -761,7 +1011,7 @@ fn Parser::parse_func_def(
             export_name = Some(s)
             self.advance()
           }
-          _ => raise UnexpectedToken("expected export name")
+          _ => raise UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -930,9 +1180,53 @@ fn Parser::parse_folded_instructions(
 ) -> Array[@types.Instruction] raise WatError {
   match self.current {
     Keyword(kw) => {
+      // Special handling for "block" in folded form
+      if kw == "block" {
+        self.advance() // skip "block"
+        // Optional label name
+        let label : String? = match self.current {
+          Id(name) => {
+            self.advance()
+            Some(name)
+          }
+          _ => None
+        }
+        let bt = self.parse_block_type()
+        self.push_label(label)
+        let body = self.parse_instructions()
+        self.pop_label()
+        self.expect_rparen() // close block in folded form (no 'end' keyword)
+        return [@types.Instruction::Block(bt, body)]
+      }
+      // Special handling for "loop" in folded form
+      if kw == "loop" {
+        self.advance() // skip "loop"
+        // Optional label name
+        let label : String? = match self.current {
+          Id(name) => {
+            self.advance()
+            Some(name)
+          }
+          _ => None
+        }
+        let bt = self.parse_block_type()
+        self.push_label(label)
+        let body = self.parse_instructions()
+        self.pop_label()
+        self.expect_rparen() // close loop in folded form (no 'end' keyword)
+        return [@types.Instruction::Loop(bt, body)]
+      }
       // Special handling for "if" in folded form
       if kw == "if" {
         self.advance() // skip "if"
+        // Optional label name
+        let label : String? = match self.current {
+          Id(name) => {
+            self.advance()
+            Some(name)
+          }
+          _ => None
+        }
         let bt = self.parse_block_type()
         let result : Array[@types.Instruction] = []
         // In folded form, condition operands come first as nested S-expressions
@@ -961,6 +1255,7 @@ fn Parser::parse_folded_instructions(
         // Now parse (then ...) and optionally (else ...)
         let mut then_body : Array[@types.Instruction] = []
         let mut else_body : Array[@types.Instruction] = []
+        self.push_label(label)
         if self.current == LParen {
           self.advance()
           match self.current {
@@ -969,7 +1264,8 @@ fn Parser::parse_folded_instructions(
               then_body = self.parse_instructions()
               self.expect_rparen()
             }
-            _ => raise UnexpectedToken("expected 'then' in folded if")
+            _ =>
+              raise UnexpectedToken("expected 'then' in folded if", self.loc())
           }
         }
         if self.current == LParen {
@@ -987,6 +1283,7 @@ fn Parser::parse_folded_instructions(
             }
           }
         }
+        self.pop_label()
         self.expect_rparen() // close if
         result.push(@types.Instruction::If(bt, then_body, else_body))
         return result
@@ -1011,7 +1308,7 @@ fn Parser::parse_folded_instructions(
         }
       }
     }
-    _ => raise UnexpectedToken("expected instruction")
+    _ => raise UnexpectedToken("expected instruction", self.loc())
   }
 }
 
@@ -1026,20 +1323,49 @@ fn Parser::parse_plain_instruction(
     "unreachable" => @types.Instruction::Unreachable
     "nop" => @types.Instruction::Nop
     "block" => {
+      // Optional label name
+      let label : String? = match self.current {
+        Id(name) => {
+          self.advance()
+          Some(name)
+        }
+        _ => None
+      }
       let bt = self.parse_block_type()
+      self.push_label(label)
       let body = self.parse_instructions()
+      self.pop_label()
       self.expect_keyword("end")
       @types.Instruction::Block(bt, body)
     }
     "loop" => {
+      // Optional label name
+      let label : String? = match self.current {
+        Id(name) => {
+          self.advance()
+          Some(name)
+        }
+        _ => None
+      }
       let bt = self.parse_block_type()
+      self.push_label(label)
       let body = self.parse_instructions()
+      self.pop_label()
       self.expect_keyword("end")
       @types.Instruction::Loop(bt, body)
     }
     "if" => {
+      // Optional label name
+      let label : String? = match self.current {
+        Id(name) => {
+          self.advance()
+          Some(name)
+        }
+        _ => None
+      }
       let bt = self.parse_block_type()
       // Flat form: if (result type) ... else ... end
+      self.push_label(label)
       let then_body = self.parse_instructions()
       let else_body : Array[@types.Instruction] = if self.current ==
         Keyword("else") {
@@ -1048,6 +1374,7 @@ fn Parser::parse_plain_instruction(
       } else {
         []
       }
+      self.pop_label()
       self.expect_keyword("end")
       @types.Instruction::If(bt, then_body, else_body)
     }
@@ -1062,7 +1389,7 @@ fn Parser::parse_plain_instruction(
         }
       }
       if labels.length() == 0 {
-        raise ParseError("br_table requires at least one label")
+        raise ParseError("br_table requires at least one label", self.loc())
       }
       let default_label = labels.pop().unwrap()
       @types.Instruction::BrTable(labels, default_label)
@@ -1277,7 +1604,7 @@ fn Parser::parse_plain_instruction(
     "i64.reinterpret_f64" => @types.Instruction::I64ReinterpretF64
     "f32.reinterpret_i32" => @types.Instruction::F32ReinterpretI32
     "f64.reinterpret_i64" => @types.Instruction::F64ReinterpretI64
-    _ => raise InvalidInstruction(kw)
+    _ => raise InvalidInstruction(kw, self.loc())
   }
 }
 
@@ -1363,9 +1690,9 @@ fn Parser::parse_type_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("type $\{name}")
+        None => raise UndefinedIdentifier("type $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected type index")
+    _ => raise UnexpectedToken("expected type index", self.loc())
   }
 }
 
@@ -1382,9 +1709,9 @@ fn Parser::parse_func_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("func $\{name}")
+        None => raise UndefinedIdentifier("func $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected func index")
+    _ => raise UnexpectedToken("expected func index", self.loc())
   }
 }
 
@@ -1401,9 +1728,9 @@ fn Parser::parse_local_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("local $\{name}")
+        None => raise UndefinedIdentifier("local $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected local index")
+    _ => raise UnexpectedToken("expected local index", self.loc())
   }
 }
 
@@ -1420,9 +1747,9 @@ fn Parser::parse_global_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("global $\{name}")
+        None => raise UndefinedIdentifier("global $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected global index")
+    _ => raise UnexpectedToken("expected global index", self.loc())
   }
 }
 
@@ -1433,10 +1760,15 @@ fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
       self.advance()
       parse_int(s)
     }
-    Id(_) =>
-      // For now, just use numeric labels
-      raise ParseError("named labels not yet supported")
-    _ => raise UnexpectedToken("expected label index")
+    Id(name) =>
+      match self.resolve_label(name) {
+        Some(idx) => {
+          self.advance()
+          idx
+        }
+        None => raise UndefinedIdentifier("label $\{name}", self.loc())
+      }
+    _ => raise UnexpectedToken("expected label index", self.loc())
   }
 }
 
@@ -1468,7 +1800,7 @@ fn Parser::parse_memory_def(
             export_name = Some(s)
             self.advance()
           }
-          _ => raise UnexpectedToken("expected export name")
+          _ => raise UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -1517,7 +1849,7 @@ fn Parser::parse_global_def(
             export_name = Some(s)
             self.advance()
           }
-          _ => raise UnexpectedToken("expected export name")
+          _ => raise UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -1573,7 +1905,7 @@ fn Parser::parse_table_def(
             export_name = Some(s)
             self.advance()
           }
-          _ => raise UnexpectedToken("expected export name")
+          _ => raise UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -1606,7 +1938,7 @@ fn Parser::parse_export_def(
       self.advance()
       s
     }
-    _ => raise UnexpectedToken("expected export name")
+    _ => raise UnexpectedToken("expected export name", self.loc())
   }
   self.expect_lparen()
   let desc = match self.current {
@@ -1636,7 +1968,7 @@ fn Parser::parse_export_def(
       let idx = self.parse_global_idx()
       @types.ExportDesc::Global(idx)
     }
-    _ => raise UnexpectedToken("expected export kind")
+    _ => raise UnexpectedToken("expected export kind", self.loc())
   }
   ignore(mod_)
   self.expect_rparen()
@@ -1655,32 +1987,54 @@ fn Parser::parse_import_def(
       self.advance()
       s
     }
-    _ => raise UnexpectedToken("expected module name")
+    _ => raise UnexpectedToken("expected module name", self.loc())
   }
   let name = match self.current {
     String_(s) => {
       self.advance()
       s
     }
-    _ => raise UnexpectedToken("expected import name")
+    _ => raise UnexpectedToken("expected import name", self.loc())
   }
   self.expect_lparen()
   let desc = match self.current {
     Keyword("func") => {
       self.advance()
-      // Optional func name
+      // Optional func name - imported function index is count of function imports so far
       match self.current {
         Id(fname) => {
-          self.func_names.set(fname, mod_.funcs.length())
+          self.func_names.set(fname, count_func_imports(mod_.imports))
           self.advance()
         }
         _ => ()
       }
-      // Parse type
-      self.expect_lparen()
-      self.expect_keyword("type")
-      let type_idx = self.parse_type_idx()
-      self.expect_rparen()
+      // Parse type - either (type $idx) or inline (param ...) (result ...)
+      let type_idx = if self.current == LParen {
+        let saved_pos = self.lexer.pos
+        self.advance()
+        if self.current == Keyword("type") {
+          // (type $idx) syntax
+          self.advance()
+          let idx = self.parse_type_idx()
+          self.expect_rparen()
+          idx
+        } else {
+          // Inline signature - restore position and parse func type
+          self.lexer.pos = saved_pos
+          self.current = LParen
+          let func_type = self.parse_func_type()
+          // Add this type to the module and get its index
+          let idx = mod_.types.length()
+          mod_.types.push(func_type)
+          idx
+        }
+      } else {
+        // No type specified, use empty signature
+        let func_type : @types.FuncType = { params: [], results: [] }
+        let idx = mod_.types.length()
+        mod_.types.push(func_type)
+        idx
+      }
       @types.ImportDesc::Func(type_idx)
     }
     Keyword("memory") => {
@@ -1705,9 +2059,75 @@ fn Parser::parse_import_def(
       }
       @types.ImportDesc::Global({ value_type, mutable })
     }
-    _ => raise UnexpectedToken("expected import kind")
+    _ => raise UnexpectedToken("expected import kind", self.loc())
   }
   self.expect_rparen()
   self.expect_rparen()
   { mod_name, name, desc }
+}
+
+///|
+/// Parse a data segment definition
+/// Syntax: (data (i32.const <offset>) "<string>")
+/// or:     (data (memory <idx>) (offset (i32.const <n>)) "<string>")
+fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
+  self.advance() // skip "data"
+
+  // Check for optional data id
+  match self.current {
+    Id(_) => self.advance()
+    _ => ()
+  }
+
+  // Default memory index is 0
+  let mut memory_idx = 0
+
+  // Parse offset expression or memory reference
+  self.expect_lparen()
+
+  // Check if this is (memory <idx>) or (offset ...) or just an offset expression like (i32.const ...)
+  match self.current {
+    Keyword("memory") => {
+      self.advance()
+      memory_idx = match self.current {
+        Number(_) => self.parse_u32()
+        _ => 0
+      }
+      self.expect_rparen()
+      // Now expect (offset ...)
+      self.expect_lparen()
+      self.expect_keyword("offset")
+    }
+    Keyword("offset") => self.advance()
+    _ => ()
+  }
+
+  // Parse the offset expression (e.g., i32.const 8)
+  let offset = self.parse_instructions()
+  self.expect_rparen()
+
+  // Parse the string literal for init data
+  let init_data = match self.current {
+    String_(s) => {
+      self.advance()
+      string_to_bytes(s)
+    }
+    _ =>
+      raise UnexpectedToken(
+        "expected string literal for data segment",
+        self.loc(),
+      )
+  }
+  self.expect_rparen() // close data
+  { memory_idx, offset, init: init_data }
+}
+
+///|
+/// Convert string to bytes (handles escape sequences)
+fn string_to_bytes(s : String) -> Bytes {
+  let bytes : Array[Byte] = []
+  for i in 0..<s.length() {
+    bytes.push(s.code_unit_at(i).to_byte())
+  }
+  Bytes::from_array(bytes)
 }

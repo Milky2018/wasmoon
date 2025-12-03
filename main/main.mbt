@@ -275,6 +275,10 @@ async fn run_wasm(
   }
   // Create linker for module linking
   let linker = @runtime.Linker::new()
+
+  // Register WASI functions
+  let wasi_ctx = @wasi.WasiContext::new()
+  @wasi.register_wasi(linker, wasi_ctx)
   // Load preloaded modules
   for preload in preloads {
     // Parse NAME=PATH format
@@ -324,6 +328,36 @@ async fn run_wasm(
     e => {
       println("Error instantiating module: \{e}")
       return
+    }
+  }
+
+  // Initialize data segments (copy data to memory)
+  for data in mod_.datas {
+    if instance.mem_addrs.length() > data.memory_idx {
+      let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
+      let offset = match data.offset {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      mem.init_data(offset, data.init)
+    }
+  }
+
+  // Initialize element segments (populate tables with function references)
+  for elem in mod_.elems {
+    if instance.table_addrs.length() > elem.table_idx {
+      let table = store.get_table(instance.table_addrs[elem.table_idx])
+      let offset = match elem.offset {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      for i, func_idx in elem.init {
+        try
+          table.set(offset + i, @types.Value::FuncRef(func_idx)) |> ignore
+        catch {
+          _ => ()
+        }
+      }
     }
   }
   if debug_config.verbose {

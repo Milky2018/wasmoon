@@ -10,17 +10,22 @@ pub fn parse(String) -> @types.Module raise WatError
 
 // Errors
 pub(all) suberror WatError {
-  UnexpectedToken(String)
-  UnexpectedEof
-  InvalidNumber(String)
-  InvalidInstruction(String)
-  UndefinedIdentifier(String)
-  DuplicateIdentifier(String)
-  ParseError(String)
+  UnexpectedToken(String, SourceLoc)
+  UnexpectedEof(SourceLoc)
+  InvalidNumber(String, SourceLoc)
+  InvalidInstruction(String, SourceLoc)
+  UndefinedIdentifier(String, SourceLoc)
+  DuplicateIdentifier(String, SourceLoc)
+  ParseError(String, SourceLoc)
 }
 pub impl Show for WatError
 
 // Types and methods
+pub(all) struct SourceLoc {
+  line : Int
+  column : Int
+}
+pub impl Show for SourceLoc
 
 // Type aliases
 

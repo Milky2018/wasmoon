@@ -177,3 +177,71 @@ test "parse comment" {
   let mod_ = parse(wat)
   inspect(mod_.funcs.length(), content="1")
 }
+
+///|
+test "parse import with inline signature" {
+  let wat =
+    #|(module
+    #|  (import "wasi" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.imports.length(), content="1")
+  inspect(mod_.imports[0].mod_name, content="wasi")
+  inspect(mod_.imports[0].name, content="fd_write")
+  // The inline signature should be added to types
+  inspect(mod_.types.length(), content="1")
+  inspect(mod_.types[0].params.length(), content="4")
+  inspect(mod_.types[0].results.length(), content="1")
+}
+
+///|
+test "parse import with no params" {
+  let wat =
+    #|(module
+    #|  (import "env" "exit" (func $exit (param i32)))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.imports.length(), content="1")
+  inspect(mod_.types.length(), content="1")
+  inspect(mod_.types[0].params.length(), content="1")
+  inspect(mod_.types[0].results.length(), content="0")
+}
+
+///|
+test "parse import with only result" {
+  let wat =
+    #|(module
+    #|  (import "env" "get_time" (func $get_time (result i64)))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.imports.length(), content="1")
+  inspect(mod_.types.length(), content="1")
+  inspect(mod_.types[0].params.length(), content="0")
+  inspect(mod_.types[0].results.length(), content="1")
+}
+
+///|
+test "parse data segment" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (data (i32.const 8) "Hello, World!")
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.memories.length(), content="1")
+  inspect(mod_.datas.length(), content="1")
+  inspect(mod_.datas[0].memory_idx, content="0")
+  inspect(mod_.datas[0].init.length(), content="13")
+}
+
+///|
+test "parse data segment with offset keyword" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (data (offset (i32.const 100)) "test")
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.datas.length(), content="1")
+  inspect(mod_.datas[0].init.length(), content="4")
+}
