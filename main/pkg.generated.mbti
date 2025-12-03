@@ -6,40 +6,6 @@ package "Milky2018/wasmoon/main"
 // Errors
 
 // Types and methods
-pub(all) struct CompilerConfig {
-  opt_level : Int
-  mut const_fold : Bool
-  mut copy_prop : Bool
-  mut cse : Bool
-  mut dce : Bool
-  mut branch_simplify : Bool
-  mut unreachable_elim : Bool
-  mut block_merge : Bool
-  mut jump_thread : Bool
-  mut licm : Bool
-  mut loop_unroll : Bool
-  mut strength_reduce : Bool
-}
-
-pub(all) struct DebugConfig {
-  mut verbose : Bool
-  mut print_ir : Bool
-  mut print_vcode : Bool
-  mut print_regalloc : Bool
-  mut trace_exec : Bool
-}
-
-pub(all) struct WasmConfig {
-  mut max_memory_pages : Int
-  mut max_table_size : Int
-  mut max_call_depth : Int
-  mut multi_value : Bool
-  mut bulk_memory : Bool
-  mut reference_types : Bool
-  mut simd : Bool
-  mut tail_call : Bool
-}
-
 type WastContext
 
 type WastResult
