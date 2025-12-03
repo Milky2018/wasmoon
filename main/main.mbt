@@ -261,6 +261,7 @@ fn run_wasm(
   invoke : String?,
   func_args : Array[String],
   preloads : Array[String],
+  dirs : Array[String],
   debug_config : DebugConfig,
   wasm_config : WasmConfig,
 ) -> Unit {
@@ -271,8 +272,28 @@ fn run_wasm(
   // Create linker for module linking
   let linker = @runtime.Linker::new()
 
+  // Build WASI context with directory mappings
+  let wasi_builder = @wasi.WasiContextBuilder::new()
+  for dir in dirs {
+    let mapping = parse_dir_mapping(dir)
+    match mapping {
+      Some((host_path, guest_path)) => {
+        if debug_config.verbose {
+          println("[DEBUG] Preopen dir: \{host_path} -> \{guest_path}")
+        }
+        wasi_builder.preopen_dir(host_path, guest_path) |> ignore
+      }
+      None => {
+        println(
+          "Error: invalid --dir format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
+        )
+        return
+      }
+    }
+  }
+  let wasi_ctx = wasi_builder.build()
+
   // Register WASI functions
-  let wasi_ctx = @wasi.WasiContext::new()
   @wasi.register_wasi(linker, wasi_ctx)
   // Load preloaded modules
   for preload in preloads {
@@ -442,6 +463,49 @@ fn split_preload(s : String) -> (String, String)? {
     path_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   Some((name_builder.to_string(), path_builder.to_string()))
+}
+
+///|
+/// Parse directory mapping in HOST_DIR or HOST_DIR::GUEST_DIR format
+fn parse_dir_mapping(s : String) -> (String, String)? {
+  // Look for "::" separator
+  let mut sep_idx = -1
+  let len = s.length()
+  let search_end = len - 1
+  for i in 0..<search_end {
+    if s.code_unit_at(i) == ':' && s.code_unit_at(i + 1) == ':' {
+      sep_idx = i
+      break
+    }
+  }
+  if sep_idx < 0 {
+    // No separator, use same path for host and guest
+    if len == 0 {
+      return None
+    }
+    Some((s, s))
+  } else {
+    if sep_idx == 0 {
+      return None // Empty host path
+    }
+    // Build host and guest path strings
+    let host_builder = StringBuilder::new()
+    for i in 0..<sep_idx {
+      host_builder.write_char(s.code_unit_at(i).unsafe_to_char())
+    }
+    let guest_builder = StringBuilder::new()
+    let guest_start = sep_idx + 2
+    for i in guest_start..<len {
+      guest_builder.write_char(s.code_unit_at(i).unsafe_to_char())
+    }
+    let guest_path = guest_builder.to_string()
+    // If guest path is empty, use host path
+    if guest_path.length() == 0 {
+      Some((host_builder.to_string(), host_builder.to_string()))
+    } else {
+      Some((host_builder.to_string(), guest_path))
+    }
+  }
 }
 
 ///|
@@ -962,6 +1026,10 @@ fn main {
           nargs=@clap.Nargs::Any,
           help="Preload module as NAME=PATH (can be repeated)",
         ),
+        "dir": @clap.Arg::named(
+          nargs=@clap.Nargs::Any,
+          help="Grant access to directory (HOST_DIR or HOST_DIR::GUEST_DIR)",
+        ),
         "D": @clap.Arg::named(
           nargs=@clap.Nargs::Any,
           help="Debug option (e.g., verbose, print-ir, trace-exec)",
@@ -1068,6 +1136,11 @@ fn main {
                   Some(arr) => arr
                   None => []
                 }
+                // Get directory mappings from --dir option
+                let dirs : Array[String] = match sub.args.get("dir") {
+                  Some(arr) => arr
+                  None => []
+                }
                 // Get debug options from -D flag
                 let debug_config = DebugConfig::new()
                 match sub.args.get("D") {
@@ -1091,6 +1164,7 @@ fn main {
                   invoke_opt,
                   func_args,
                   preloads,
+                  dirs,
                   debug_config,
                   wasm_config,
                 )
