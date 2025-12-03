@@ -100,3 +100,67 @@ test "Imports resolution for module linking" {
   inspect(imports.resolve("env", "unknown") is Some(_), content="false")
   inspect(imports.resolve("other", "print") is Some(_), content="false")
 }
+
+// ============================================================
+// Error Formatting Tests
+// ============================================================
+
+///|
+test "format_runtime_error provides descriptive message" {
+  let formatted = @runtime.format_runtime_error(@runtime.DivisionByZero)
+  assert_true(formatted.contains("division by zero"))
+}
+
+///|
+test "RuntimeErrorContext formats with call stack" {
+  let ctx = @runtime.RuntimeErrorContext::new(@runtime.OutOfBoundsMemoryAccess).with_call_stack([
+      @runtime.CallStackEntry::{ func_idx: 0, func_name: Some("main") },
+      @runtime.CallStackEntry::{ func_idx: 1, func_name: None },
+      @runtime.CallStackEntry::{ func_idx: 2, func_name: Some("helper") },
+    ],
+  )
+  let formatted = ctx.format()
+  assert_true(formatted.contains("out of bounds memory access"))
+  assert_true(formatted.contains("call stack"))
+  assert_true(formatted.contains("main"))
+  assert_true(formatted.contains("func[1]"))
+  assert_true(formatted.contains("helper"))
+}
+
+///|
+test "RuntimeErrorContext formats with instruction" {
+  let ctx = @runtime.RuntimeErrorContext::new(@runtime.Unreachable)
+    .with_instruction("unreachable")
+    .with_func_idx(5)
+  let formatted = ctx.format()
+  assert_true(formatted.contains("unreachable"))
+  assert_true(formatted.contains("at instruction"))
+  assert_true(formatted.contains("in function"))
+  assert_true(formatted.contains("func[5]"))
+}
+
+///|
+test "all RuntimeError types have descriptive messages" {
+  // Verify each error type produces a non-empty message
+  let errors : Array[@runtime.RuntimeError] = [
+    @runtime.StackUnderflow,
+    @runtime.StackOverflow,
+    @runtime.TypeMismatch,
+    @runtime.OutOfBoundsMemoryAccess,
+    @runtime.OutOfBoundsTableAccess,
+    @runtime.UndefinedElement,
+    @runtime.UninitializedElement,
+    @runtime.IndirectCallTypeMismatch,
+    @runtime.DivisionByZero,
+    @runtime.IntegerOverflow,
+    @runtime.InvalidConversion,
+    @runtime.Unreachable,
+    @runtime.CallStackExhausted,
+    @runtime.UnknownImport,
+  ]
+  for err in errors {
+    let formatted = @runtime.format_runtime_error(err)
+    assert_true(formatted.length() > 20) // Should have meaningful content
+    assert_true(formatted.contains("runtime error"))
+  }
+}

@@ -50,3 +50,26 @@ fn ExecContext::get_frame(
   }
   self.frames[self.current_frame]
 }
+
+///|
+/// Capture the current call stack for error reporting
+fn ExecContext::capture_call_stack(
+  self : ExecContext,
+) -> Array[@runtime.CallStackEntry] {
+  let stack : Array[@runtime.CallStackEntry] = []
+  for frame in self.frames {
+    stack.push({ func_idx: frame.get_func_idx(), func_name: None })
+  }
+  stack
+}
+
+///|
+/// Create a RuntimeErrorContext with the current call stack
+fn ExecContext::make_error_context(
+  self : ExecContext,
+  error : @runtime.RuntimeError,
+) -> @runtime.RuntimeErrorContext {
+  @runtime.RuntimeErrorContext::new(error).with_call_stack(
+    self.capture_call_stack(),
+  )
+}

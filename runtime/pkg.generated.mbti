@@ -6,6 +6,7 @@ import(
 )
 
 // Values
+pub fn format_runtime_error(RuntimeError) -> String
 
 // Errors
 pub(all) suberror RuntimeError {
@@ -27,6 +28,11 @@ pub(all) suberror RuntimeError {
 pub impl Show for RuntimeError
 
 // Types and methods
+pub(all) struct CallStackEntry {
+  func_idx : Int
+  func_name : String?
+}
+
 pub(all) enum ExternVal {
   Func(Int)
   Table(Int)
@@ -35,6 +41,7 @@ pub(all) enum ExternVal {
 }
 
 type Frame
+pub fn Frame::get_func_idx(Self) -> Int
 pub fn Frame::get_local(Self, Int) -> @types.Value raise RuntimeError
 pub fn Frame::new(Int, Array[@types.Value], Int) -> Self
 pub fn Frame::set_local(Self, Int, @types.Value) -> Unit raise RuntimeError
@@ -132,6 +139,19 @@ pub(all) struct ModuleInstance {
 }
 pub fn ModuleInstance::new() -> Self
 pub impl Show for ModuleInstance
+
+pub(all) struct RuntimeErrorContext {
+  error : RuntimeError
+  call_stack : Array[CallStackEntry]
+  instruction : String?
+  func_idx : Int?
+}
+pub fn RuntimeErrorContext::format(Self) -> String
+pub fn RuntimeErrorContext::new(RuntimeError) -> Self
+pub fn RuntimeErrorContext::with_call_stack(Self, Array[CallStackEntry]) -> Self
+pub fn RuntimeErrorContext::with_func_idx(Self, Int) -> Self
+pub fn RuntimeErrorContext::with_instruction(Self, String) -> Self
+pub impl Show for RuntimeErrorContext
 
 type Stack
 pub fn Stack::clear(Self) -> Unit

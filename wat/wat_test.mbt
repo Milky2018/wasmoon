@@ -245,3 +245,56 @@ test "parse data segment with offset keyword" {
   inspect(mod_.datas.length(), content="1")
   inspect(mod_.datas[0].init.length(), content="4")
 }
+
+// ============================================================
+// Error Formatting Tests
+// ============================================================
+
+///|
+test "format_wat_error shows source context" {
+  let source =
+    #|(module
+    #|  (func (result i32)
+    #|    invalid.instruction
+    #|  )
+    #|)
+  let err = WatError::InvalidInstruction("invalid.instruction", SourceLoc::{
+    line: 3,
+    column: 5,
+  })
+  let formatted = format_wat_error(err, source)
+  // Check that it contains the error message
+  assert_true(formatted.contains("invalid instruction"))
+  // Check that it shows line/column info
+  assert_true(formatted.contains("line 3"))
+  assert_true(formatted.contains("column 5"))
+}
+
+///|
+test "format_wat_error with undefined identifier" {
+  let source =
+    #|(module
+    #|  (func
+    #|    call $undefined_func
+    #|  )
+    #|)
+  let err = WatError::UndefinedIdentifier("func $undefined_func", SourceLoc::{
+    line: 3,
+    column: 10,
+  })
+  let formatted = format_wat_error(err, source)
+  assert_true(formatted.contains("undefined identifier"))
+  assert_true(formatted.contains("$undefined_func"))
+}
+
+///|
+test "format_wat_error with unexpected token" {
+  let source = "(module unexpected)"
+  let err = WatError::UnexpectedToken("expected ')', got 'unexpected'", SourceLoc::{
+    line: 1,
+    column: 9,
+  })
+  let formatted = format_wat_error(err, source)
+  assert_true(formatted.contains("unexpected token"))
+  assert_true(formatted.contains("line 1"))
+}

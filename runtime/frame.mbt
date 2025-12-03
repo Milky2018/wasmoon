@@ -17,6 +17,11 @@ pub fn Frame::new(
 }
 
 ///|
+pub fn Frame::get_func_idx(self : Frame) -> Int {
+  self.func_idx
+}
+
+///|
 pub fn Frame::get_local(
   self : Frame,
   idx : Int,
