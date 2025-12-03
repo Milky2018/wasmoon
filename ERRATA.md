@@ -589,3 +589,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 有非常多如下形式的测试：应使用 `inspect(try? f(), content="Err(...)")` → 已修复所有测试文件（cwasm_wbtest.mbt, i32_wbtest.mbt, i64_wbtest.mbt, executor_wbtest.mbt, validator_wbtest.mbt）
 - [x] 把所有的 `inspect(true, content="true")` 清除掉，这没有任何意义 → 已修复：wast_wbtest.mbt 使用 guard-is 替代，types.mbt 改为验证实际值
 - [x] 不要混用阻塞 API 和异步 API，把 main 中所有的 moonbitlang/async/fs 换用为 moonbitlang/x/fs → 已完成：main 包已改用同步 API，移除了所有 async fn
+- [x] 代码中仍然有非常多的 `for <identifier> = <initial>; ` 这样的 c 风格循环 → 已修复所有正向迭代的 C 风格循环（保留反向迭代 `i = i - 1` 因为更简洁）

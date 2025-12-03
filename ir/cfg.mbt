@@ -20,7 +20,7 @@ pub fn CFG::build(func : Function) -> CFG {
   // Initialize empty adjacency lists
   let successors : Array[Array[Int]] = []
   let predecessors : Array[Array[Int]] = []
-  for i = 0; i < num_blocks; i = i + 1 {
+  for _ in 0..<num_blocks {
     successors.push([])
     predecessors.push([])
   }
@@ -106,7 +106,7 @@ pub fn CFG::is_exit_block(self : CFG, block_id : Int) -> Bool {
 /// Returns blocks in post-order (children before parents)
 pub fn CFG::postorder(self : CFG) -> Array[Int] {
   let visited : Array[Bool] = []
-  for i = 0; i < self.num_blocks; i = i + 1 {
+  for _ in 0..<self.num_blocks {
     visited.push(false)
   }
   let result : Array[Int] = []
@@ -153,7 +153,7 @@ pub fn CFG::reverse_postorder(self : CFG) -> Array[Int] {
 pub fn CFG::compute_dominators(self : CFG) -> Array[Int] {
   let idom : Array[Int] = []
   // Initialize all to undefined (-1)
-  for i = 0; i < self.num_blocks; i = i + 1 {
+  for _ in 0..<self.num_blocks {
     idom.push(-1)
   }
   if self.num_blocks == 0 {
@@ -230,7 +230,7 @@ pub fn CFG::dominates(self : CFG, a : Int, b : Int) -> Bool {
 pub fn CFG::find_back_edges(self : CFG) -> Array[(Int, Int)] {
   let idom = self.compute_dominators()
   let back_edges : Array[(Int, Int)] = []
-  for block_id = 0; block_id < self.num_blocks; block_id = block_id + 1 {
+  for block_id in 0..<self.num_blocks {
     for succ in self.successors[block_id] {
       // Check if succ dominates block_id (making this a back edge)
       if dominates_with_idom(idom, succ, block_id) {
@@ -263,7 +263,7 @@ pub fn CFG::to_dot(self : CFG, func_name : String) -> String {
   let mut result = "digraph \{func_name} {\n"
   result = result + "  node [shape=box];\n"
   // Add edges
-  for block_id = 0; block_id < self.num_blocks; block_id = block_id + 1 {
+  for block_id in 0..<self.num_blocks {
     for succ in self.successors[block_id] {
       result = result + "  block\{block_id} -> block\{succ};\n"
     }

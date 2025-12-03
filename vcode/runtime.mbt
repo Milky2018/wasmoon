@@ -312,7 +312,8 @@ pub fn ExecutableRegion::read_at(
   length : Int,
 ) -> Array[Int] {
   let result : Array[Int] = []
-  for i = offset; i < offset + length && i < self.code.length(); i = i + 1 {
+  let end = @cmp.minimum(offset + length, self.code.length())
+  for i in offset..<end {
     result.push(self.code[i])
   }
   result

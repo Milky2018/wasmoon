@@ -385,14 +385,12 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
   while changed {
     changed = false
     // Process blocks in reverse order for faster convergence
-    for block_idx = func.blocks.length() - 1
-        block_idx >= 0
-        block_idx = block_idx - 1 {
+    for block_idx = func.blocks.length() - 1; block_idx >= 0; block_idx = block_idx - 1 {
       // live_out[B] = ∪{S ∈ succ[B]} live_in[S]
       let succs = get_successors(func, block_idx)
       for succ in succs {
         for vreg_id in result.live_in[succ] {
-          if not(result.live_out[block_idx].contains(vreg_id)) {
+          if !(result.live_out[block_idx].contains(vreg_id)) {
             result.live_out[block_idx].add(vreg_id)
             changed = true
           }

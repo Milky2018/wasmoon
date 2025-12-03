@@ -910,7 +910,7 @@ fn parse_int(s : String) -> Int raise WastError {
   if s.has_prefix("0x") || s.has_prefix("0X") {
     if s.length() > 2 {
       let hex_part = StringBuilder::new()
-      for i = 2; i < s.length(); i = i + 1 {
+      for i in 2..<s.length() {
         hex_part.write_char(s.code_unit_at(i).unsafe_to_char())
       }
       parse_hex_int(hex_part.to_string())
@@ -920,7 +920,7 @@ fn parse_int(s : String) -> Int raise WastError {
   } else if s.has_prefix("-0x") || s.has_prefix("-0X") {
     if s.length() > 3 {
       let hex_part = StringBuilder::new()
-      for i = 3; i < s.length(); i = i + 1 {
+      for i in 3..<s.length() {
         hex_part.write_char(s.code_unit_at(i).unsafe_to_char())
       }
       -parse_hex_int(hex_part.to_string())
@@ -930,7 +930,7 @@ fn parse_int(s : String) -> Int raise WastError {
   } else if s.has_prefix("+0x") || s.has_prefix("+0X") {
     if s.length() > 3 {
       let hex_part = StringBuilder::new()
-      for i = 3; i < s.length(); i = i + 1 {
+      for i in 3..<s.length() {
         hex_part.write_char(s.code_unit_at(i).unsafe_to_char())
       }
       parse_hex_int(hex_part.to_string())
@@ -962,7 +962,7 @@ fn parse_int64(s : String) -> Int64 raise WastError {
   if s.has_prefix("0x") || s.has_prefix("0X") {
     if s.length() > 2 {
       let hex_part = StringBuilder::new()
-      for i = 2; i < s.length(); i = i + 1 {
+      for i in 2..<s.length() {
         hex_part.write_char(s.code_unit_at(i).unsafe_to_char())
       }
       parse_hex_int64(hex_part.to_string())
@@ -972,7 +972,7 @@ fn parse_int64(s : String) -> Int64 raise WastError {
   } else if s.has_prefix("-0x") || s.has_prefix("-0X") {
     if s.length() > 3 {
       let hex_part = StringBuilder::new()
-      for i = 3; i < s.length(); i = i + 1 {
+      for i in 3..<s.length() {
         hex_part.write_char(s.code_unit_at(i).unsafe_to_char())
       }
       -parse_hex_int64(hex_part.to_string())
@@ -982,7 +982,7 @@ fn parse_int64(s : String) -> Int64 raise WastError {
   } else if s.has_prefix("+0x") || s.has_prefix("+0X") {
     if s.length() > 3 {
       let hex_part = StringBuilder::new()
-      for i = 3; i < s.length(); i = i + 1 {
+      for i in 3..<s.length() {
         hex_part.write_char(s.code_unit_at(i).unsafe_to_char())
       }
       parse_hex_int64(hex_part.to_string())

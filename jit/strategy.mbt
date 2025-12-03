@@ -96,16 +96,16 @@ pub fn CompilationQueue::enqueue(
   }
   // Insert sorted by priority (highest first)
   let mut inserted = false
-  for i = 0; i < self.requests.length(); i = i + 1 {
+  for i in 0..<self.requests.length() {
     if request.priority > self.requests[i].priority {
       // Insert at position i
       let old = self.requests
       let new_arr : Array[CompilationRequest] = []
-      for j = 0; j < i; j = j + 1 {
+      for j in 0..<i {
         new_arr.push(old[j])
       }
       new_arr.push(request)
-      for j = i; j < old.length(); j = j + 1 {
+      for j in i..<old.length() {
         new_arr.push(old[j])
       }
       // Copy back
@@ -117,7 +117,7 @@ pub fn CompilationQueue::enqueue(
       break
     }
   }
-  if not(inserted) {
+  if !inserted {
     self.requests.push(request)
   }
   true
@@ -134,7 +134,7 @@ pub fn CompilationQueue::dequeue(
   // Pop first (highest priority)
   let first = self.requests[0]
   let new_arr : Array[CompilationRequest] = []
-  for i = 1; i < self.requests.length(); i = i + 1 {
+  for i in 1..<self.requests.length() {
     new_arr.push(self.requests[i])
   }
   self.requests.clear()

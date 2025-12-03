@@ -64,7 +64,7 @@ test "profiler: record calls and detect hot" {
   let profiler = Profiler::new(threshold)
 
   // Cold function
-  for i = 0; i < 9; i = i + 1 {
+  for _ in 0..<9 {
     let (_, should_compile) = profiler.record_call(0)
     inspect(should_compile, content="false")
   }

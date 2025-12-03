@@ -176,7 +176,7 @@ pub fn Translator::translate(
         None => {
           let results = self.builder.get_function().results
           let return_vals : Array[Value] = []
-          for i = 0; i < results.length(); i = i + 1 {
+          for _ in 0..<results.length() {
             if self.value_stack.length() > 0 {
               return_vals.push(self.pop())
             }
@@ -570,7 +570,7 @@ fn Translator::translate_instruction(
     Return => {
       let results = self.builder.get_function().results
       let return_vals : Array[Value] = []
-      for i = 0; i < results.length(); i = i + 1 {
+      for _ in 0..<results.length() {
         return_vals.push(self.pop())
       }
       return_vals.rev_in_place()
@@ -716,7 +716,7 @@ fn Translator::translate_block(
         None => {
           // Collect results from stack
           let args : Array[Value] = []
-          for i = 0; i < result_types.length(); i = i + 1 {
+          for _ in 0..<result_types.length() {
             args.push(self.pop())
           }
           args.rev_in_place()
@@ -755,7 +755,7 @@ fn Translator::translate_loop(
   }
   // Jump to loop header with current stack values
   let header_args : Array[Value] = []
-  for i = 0; i < param_types.length(); i = i + 1 {
+  for _ in 0..<param_types.length() {
     header_args.push(self.pop())
   }
   header_args.rev_in_place()
@@ -787,7 +787,7 @@ fn Translator::translate_loop(
       match block.terminator {
         None => {
           let args : Array[Value] = []
-          for i = 0; i < result_types.length(); i = i + 1 {
+          for _ in 0..<result_types.length() {
             args.push(self.pop())
           }
           args.rev_in_place()
@@ -844,7 +844,7 @@ fn Translator::translate_if(
       match block.terminator {
         None => {
           let args : Array[Value] = []
-          for i = 0; i < result_types.length(); i = i + 1 {
+          for _ in 0..<result_types.length() {
             args.push(self.pop())
           }
           args.rev_in_place()
@@ -869,7 +869,7 @@ fn Translator::translate_if(
       match block.terminator {
         None => {
           let args : Array[Value] = []
-          for i = 0; i < result_types.length(); i = i + 1 {
+          for _ in 0..<result_types.length() {
             args.push(self.pop())
           }
           args.rev_in_place()
@@ -896,7 +896,7 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
     let args : Array[Value] = []
-    for i = 0; i < frame.result_types.length(); i = i + 1 {
+    for _ in 0..<frame.result_types.length() {
       args.push(self.pop())
     }
     args.rev_in_place()
@@ -915,7 +915,7 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
     let fallthrough = self.builder.create_block()
     // Collect values that would be passed on branch
     let args : Array[Value] = []
-    for i = 0; i < frame.result_types.length(); i = i + 1 {
+    for i in 0..<frame.result_types.length() {
       args.push(
         self.value_stack[self.value_stack.length() -
         frame.result_types.length() +
@@ -983,7 +983,7 @@ fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
     let func_type = self.func_types[type_idx]
     // Pop arguments
     let args : Array[Value] = []
-    for i = 0; i < func_type.params.length(); i = i + 1 {
+    for _ in 0..<func_type.params.length() {
       args.push(self.pop())
     }
     args.rev_in_place()
@@ -1014,7 +1014,7 @@ fn Translator::translate_call_indirect(
     let callee = self.pop()
     // Pop arguments
     let args : Array[Value] = []
-    for i = 0; i < func_type.params.length(); i = i + 1 {
+    for _ in 0..<func_type.params.length() {
       args.push(self.pop())
     }
     args.rev_in_place()

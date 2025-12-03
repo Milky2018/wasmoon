@@ -459,7 +459,8 @@ fn split_preload(s : String) -> (String, String)? {
     name_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   let path_builder = StringBuilder::new()
-  for i = eq_idx + 1; i < s.length(); i = i + 1 {
+  let path_start = eq_idx + 1
+  for i in path_start..<s.length() {
     path_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   Some((name_builder.to_string(), path_builder.to_string()))
@@ -651,14 +652,16 @@ fn generate_output_path(input_path : String) -> String {
   // Replace .wasm or .wat with .cwasm
   if input_path.has_suffix(".wasm") {
     let builder = StringBuilder::new()
-    for i = 0; i < input_path.length() - 5; i = i + 1 {
+    let end = input_path.length() - 5
+    for i in 0..<end {
       builder.write_char(input_path.code_unit_at(i).unsafe_to_char())
     }
     builder.write_string(".cwasm")
     builder.to_string()
   } else if input_path.has_suffix(".wat") {
     let builder = StringBuilder::new()
-    for i = 0; i < input_path.length() - 4; i = i + 1 {
+    let end = input_path.length() - 4
+    for i in 0..<end {
       builder.write_char(input_path.code_unit_at(i).unsafe_to_char())
     }
     builder.write_string(".cwasm")
@@ -1098,7 +1101,7 @@ fn main {
   }
   let value = @clap.SimpleValue::new("wasmoon")
   let cli_args : Array[String] = []
-  for i = 1; i < args.length(); i = i + 1 {
+  for i in 1..<args.length() {
     cli_args.push(args[i])
   }
   let subcmd_help = parser.parse(value, cli_args[:]) catch {
