@@ -6,6 +6,8 @@ import(
 )
 
 // Values
+pub fn format_wat_error(WatError, String) -> String
+
 pub fn parse(String) -> @types.Module raise WatError
 
 // Errors
