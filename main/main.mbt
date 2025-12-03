@@ -262,6 +262,7 @@ fn run_wasm(
   func_args : Array[String],
   preloads : Array[String],
   dirs : Array[String],
+  envs : Array[String],
   debug_config : DebugConfig,
   wasm_config : WasmConfig,
 ) -> Unit {
@@ -272,7 +273,7 @@ fn run_wasm(
   // Create linker for module linking
   let linker = @runtime.Linker::new()
 
-  // Build WASI context with directory mappings
+  // Build WASI context with directory mappings and environment variables
   let wasi_builder = @wasi.WasiContextBuilder::new()
   for dir in dirs {
     let mapping = parse_dir_mapping(dir)
@@ -287,6 +288,21 @@ fn run_wasm(
         println(
           "Error: invalid --dir format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
         )
+        return
+      }
+    }
+  }
+  for env_var in envs {
+    let parsed = parse_env_var(env_var)
+    match parsed {
+      Some((key, value)) => {
+        if debug_config.verbose {
+          println("[DEBUG] Environment: \{key}=\{value}")
+        }
+        wasi_builder.env(key, value) |> ignore
+      }
+      None => {
+        println("Error: invalid --env format '\{env_var}', expected NAME=VALUE")
         return
       }
     }
@@ -464,6 +480,32 @@ fn split_preload(s : String) -> (String, String)? {
     path_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   Some((name_builder.to_string(), path_builder.to_string()))
+}
+
+///|
+/// Parse environment variable in NAME=VALUE format
+fn parse_env_var(s : String) -> (String, String)? {
+  let mut eq_idx = -1
+  for i in 0..<s.length() {
+    if s.code_unit_at(i) == '=' {
+      eq_idx = i
+      break
+    }
+  }
+  if eq_idx <= 0 {
+    return None
+  }
+  // Build name and value strings
+  let name_builder = StringBuilder::new()
+  for i in 0..<eq_idx {
+    name_builder.write_char(s.code_unit_at(i).unsafe_to_char())
+  }
+  let value_builder = StringBuilder::new()
+  let value_start = eq_idx + 1
+  for i in value_start..<s.length() {
+    value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
+  }
+  Some((name_builder.to_string(), value_builder.to_string()))
 }
 
 ///|
@@ -1033,6 +1075,10 @@ fn main {
           nargs=@clap.Nargs::Any,
           help="Grant access to directory (HOST_DIR or HOST_DIR::GUEST_DIR)",
         ),
+        "env": @clap.Arg::named(
+          nargs=@clap.Nargs::Any,
+          help="Pass environment variable to WASM module (NAME=VALUE)",
+        ),
         "D": @clap.Arg::named(
           nargs=@clap.Nargs::Any,
           help="Debug option (e.g., verbose, print-ir, trace-exec)",
@@ -1144,6 +1190,11 @@ fn main {
                   Some(arr) => arr
                   None => []
                 }
+                // Get environment variables from --env option
+                let envs : Array[String] = match sub.args.get("env") {
+                  Some(arr) => arr
+                  None => []
+                }
                 // Get debug options from -D flag
                 let debug_config = DebugConfig::new()
                 match sub.args.get("D") {
@@ -1168,6 +1219,7 @@ fn main {
                   func_args,
                   preloads,
                   dirs,
+                  envs,
                   debug_config,
                   wasm_config,
                 )

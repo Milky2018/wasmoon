@@ -396,7 +396,7 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ### 12.3 WASI CLI 集成
 - [x] `--dir <HOST_DIR[::GUEST_DIR]>` 目录映射
-- [ ] `--env <NAME=VAL>` 环境变量传递
+- [x] `--env <NAME=VAL>` 环境变量传递
 - [ ] `-S, --wasi <KEY=VAL>` WASI 选项
 
 ---
