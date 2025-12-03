@@ -24,7 +24,7 @@ pub(all) suberror RuntimeError {
   CallStackExhausted
   UnknownImport
 }
-impl Show for RuntimeError
+pub impl Show for RuntimeError
 
 // Types and methods
 pub(all) enum ExternVal {
@@ -35,87 +35,87 @@ pub(all) enum ExternVal {
 }
 
 type Frame
-fn Frame::get_local(Self, Int) -> @types.Value raise RuntimeError
-fn Frame::new(Int, Array[@types.Value], Int) -> Self
-fn Frame::set_local(Self, Int, @types.Value) -> Unit raise RuntimeError
-impl Show for Frame
+pub fn Frame::get_local(Self, Int) -> @types.Value raise RuntimeError
+pub fn Frame::new(Int, Array[@types.Value], Int) -> Self
+pub fn Frame::set_local(Self, Int, @types.Value) -> Unit raise RuntimeError
+pub impl Show for Frame
 
 pub(all) enum FuncInst {
   WasmFunc(@types.FunctionCode)
   HostFunc((Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
 }
-impl Show for FuncInst
+pub impl Show for FuncInst
 
 type GlobalInstance
-fn GlobalInstance::get(Self) -> @types.Value
-fn GlobalInstance::new(@types.GlobalType, @types.Value) -> Self
-fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
-impl Show for GlobalInstance
+pub fn GlobalInstance::get(Self) -> @types.Value
+pub fn GlobalInstance::new(@types.GlobalType, @types.Value) -> Self
+pub fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
+pub impl Show for GlobalInstance
 
 pub(all) struct Imports {
   entries : Array[(String, String, ExternVal)]
 }
-fn Imports::add_func(Self, String, String, Int) -> Unit
-fn Imports::add_global(Self, String, String, Int) -> Unit
-fn Imports::add_memory(Self, String, String, Int) -> Unit
-fn Imports::add_table(Self, String, String, Int) -> Unit
-fn Imports::new() -> Self
-fn Imports::resolve(Self, String, String) -> ExternVal?
+pub fn Imports::add_func(Self, String, String, Int) -> Unit
+pub fn Imports::add_global(Self, String, String, Int) -> Unit
+pub fn Imports::add_memory(Self, String, String, Int) -> Unit
+pub fn Imports::add_table(Self, String, String, Int) -> Unit
+pub fn Imports::new() -> Self
+pub fn Imports::resolve(Self, String, String) -> ExternVal?
 
 pub(all) struct Linker {
   store : Store
   modules : Array[(String, ModuleInstance)]
 }
-fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit
-fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Unit
-fn Linker::add_memory(Self, String, String, Memory) -> Unit
-fn Linker::add_table(Self, String, String, Table) -> Unit
-fn Linker::build_imports(Self) -> Imports
-fn Linker::get_module(Self, String) -> ModuleInstance?
-fn Linker::get_store(Self) -> Store
-fn Linker::new() -> Self
-fn Linker::register(Self, String, ModuleInstance) -> Unit
-fn Linker::with_store(Store) -> Self
+pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit
+pub fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Unit
+pub fn Linker::add_memory(Self, String, String, Memory) -> Unit
+pub fn Linker::add_table(Self, String, String, Table) -> Unit
+pub fn Linker::build_imports(Self) -> Imports
+pub fn Linker::get_module(Self, String) -> ModuleInstance?
+pub fn Linker::get_store(Self) -> Store
+pub fn Linker::new() -> Self
+pub fn Linker::register(Self, String, ModuleInstance) -> Unit
+pub fn Linker::with_store(Store) -> Self
 
 type Memory
-fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
-fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
-fn Memory::grow(Self, Int) -> Int
-fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
-fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
-fn Memory::load_f32(Self, Int) -> Float raise RuntimeError
-fn Memory::load_f64(Self, Int) -> Double raise RuntimeError
-fn Memory::load_i32(Self, Int) -> Int raise RuntimeError
-fn Memory::load_i32_16s(Self, Int) -> Int raise RuntimeError
-fn Memory::load_i32_16u(Self, Int) -> Int raise RuntimeError
-fn Memory::load_i32_8s(Self, Int) -> Int raise RuntimeError
-fn Memory::load_i32_8u(Self, Int) -> Int raise RuntimeError
-fn Memory::load_i64(Self, Int) -> Int64 raise RuntimeError
-fn Memory::load_i64_16s(Self, Int) -> Int64 raise RuntimeError
-fn Memory::load_i64_16u(Self, Int) -> Int64 raise RuntimeError
-fn Memory::load_i64_32s(Self, Int) -> Int64 raise RuntimeError
-fn Memory::load_i64_32u(Self, Int) -> Int64 raise RuntimeError
-fn Memory::load_i64_8s(Self, Int) -> Int64 raise RuntimeError
-fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
-fn Memory::new(Int, Int?) -> Self
-fn Memory::read_byte(Self, Int) -> Byte
-fn Memory::read_bytes(Self, Int, Int) -> Bytes
-fn Memory::read_i32(Self, Int) -> Int
-fn Memory::size_pages(Self) -> Int
-fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
-fn Memory::store_f32(Self, Int, Float) -> Unit raise RuntimeError
-fn Memory::store_f64(Self, Int, Double) -> Unit raise RuntimeError
-fn Memory::store_i32(Self, Int, Int) -> Unit raise RuntimeError
-fn Memory::store_i32_16(Self, Int, Int) -> Unit raise RuntimeError
-fn Memory::store_i32_8(Self, Int, Int) -> Unit raise RuntimeError
-fn Memory::store_i64(Self, Int, Int64) -> Unit raise RuntimeError
-fn Memory::store_i64_16(Self, Int, Int64) -> Unit raise RuntimeError
-fn Memory::store_i64_32(Self, Int, Int64) -> Unit raise RuntimeError
-fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
-fn Memory::write_byte(Self, Int, Byte) -> Unit
-fn Memory::write_i32(Self, Int, Int) -> Unit
-fn Memory::write_i64(Self, Int, Int64) -> Unit
-impl Show for Memory
+pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
+pub fn Memory::grow(Self, Int) -> Int
+pub fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
+pub fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
+pub fn Memory::load_f32(Self, Int) -> Float raise RuntimeError
+pub fn Memory::load_f64(Self, Int) -> Double raise RuntimeError
+pub fn Memory::load_i32(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_16s(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_16u(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_8s(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_8u(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i64(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_16s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_16u(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_32s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_32u(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_8s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::new(Int, Int?) -> Self
+pub fn Memory::read_byte(Self, Int) -> Byte
+pub fn Memory::read_bytes(Self, Int, Int) -> Bytes
+pub fn Memory::read_i32(Self, Int) -> Int
+pub fn Memory::size_pages(Self) -> Int
+pub fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
+pub fn Memory::store_f32(Self, Int, Float) -> Unit raise RuntimeError
+pub fn Memory::store_f64(Self, Int, Double) -> Unit raise RuntimeError
+pub fn Memory::store_i32(Self, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i32_16(Self, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i32_8(Self, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i64(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_16(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_32(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::write_byte(Self, Int, Byte) -> Unit
+pub fn Memory::write_i32(Self, Int, Int) -> Unit
+pub fn Memory::write_i64(Self, Int, Int64) -> Unit
+pub impl Show for Memory
 
 pub(all) struct ModuleInstance {
   types : Array[@types.FuncType]
@@ -130,21 +130,21 @@ pub(all) struct ModuleInstance {
   dropped_elems : Array[Bool]
   dropped_datas : Array[Bool]
 }
-fn ModuleInstance::new() -> Self
-impl Show for ModuleInstance
+pub fn ModuleInstance::new() -> Self
+pub impl Show for ModuleInstance
 
 type Stack
-fn Stack::clear(Self) -> Unit
-fn Stack::new() -> Self
-fn Stack::peek(Self) -> @types.Value raise RuntimeError
-fn Stack::pop(Self) -> @types.Value raise RuntimeError
-fn Stack::pop_f32(Self) -> Float raise RuntimeError
-fn Stack::pop_f64(Self) -> Double raise RuntimeError
-fn Stack::pop_i32(Self) -> Int raise RuntimeError
-fn Stack::pop_i64(Self) -> Int64 raise RuntimeError
-fn Stack::push(Self, @types.Value) -> Unit raise RuntimeError
-fn Stack::size(Self) -> Int
-impl Show for Stack
+pub fn Stack::clear(Self) -> Unit
+pub fn Stack::new() -> Self
+pub fn Stack::peek(Self) -> @types.Value raise RuntimeError
+pub fn Stack::pop(Self) -> @types.Value raise RuntimeError
+pub fn Stack::pop_f32(Self) -> Float raise RuntimeError
+pub fn Stack::pop_f64(Self) -> Double raise RuntimeError
+pub fn Stack::pop_i32(Self) -> Int raise RuntimeError
+pub fn Stack::pop_i64(Self) -> Int64 raise RuntimeError
+pub fn Stack::push(Self, @types.Value) -> Unit raise RuntimeError
+pub fn Stack::size(Self) -> Int
+pub impl Show for Stack
 
 pub struct Store {
   funcs : Array[FuncInst]
@@ -154,32 +154,32 @@ pub struct Store {
   func_owners : Array[Int]
   instances : Array[ModuleInstance]
 }
-fn Store::alloc_func(Self, @types.FunctionCode) -> Int
-fn Store::alloc_global(Self, GlobalInstance) -> Int
-fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Int
-fn Store::alloc_mem(Self, Memory) -> Int
-fn Store::alloc_table(Self, Table) -> Int
-fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
-fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
-fn Store::get_func_owner(Self, Int) -> ModuleInstance?
-fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
-fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
-fn Store::get_memory(Self, Int) -> Memory
-fn Store::get_table(Self, Int) -> Table raise RuntimeError
-fn Store::new() -> Self
-fn Store::register_instance(Self, ModuleInstance) -> Int
-impl Show for Store
+pub fn Store::alloc_func(Self, @types.FunctionCode) -> Int
+pub fn Store::alloc_global(Self, GlobalInstance) -> Int
+pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Int
+pub fn Store::alloc_mem(Self, Memory) -> Int
+pub fn Store::alloc_table(Self, Table) -> Int
+pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
+pub fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
+pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
+pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
+pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
+pub fn Store::get_memory(Self, Int) -> Memory
+pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
+pub fn Store::new() -> Self
+pub fn Store::register_instance(Self, ModuleInstance) -> Int
+pub impl Show for Store
 
 type Table
-fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
-fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
-fn Table::get(Self, Int) -> @types.Value raise RuntimeError
-fn Table::get_element(Self, Int) -> @types.Value raise RuntimeError
-fn Table::grow(Self, Int, @types.Value) -> Int
-fn Table::new(@types.ValueType, Int, Int?) -> Self
-fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
-fn Table::size(Self) -> Int
-impl Show for Table
+pub fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
+pub fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
+pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError
+pub fn Table::get_element(Self, Int) -> @types.Value raise RuntimeError
+pub fn Table::grow(Self, Int, @types.Value) -> Int
+pub fn Table::new(@types.ValueType, Int, Int?) -> Self
+pub fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Table::size(Self) -> Int
+pub impl Show for Table
 
 // Type aliases
 

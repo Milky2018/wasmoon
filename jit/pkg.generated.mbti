@@ -7,7 +7,7 @@ import(
 )
 
 // Values
-fn get_temperature(Int, HotThreshold) -> FunctionTemperature
+pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
 // Errors
 
@@ -20,74 +20,74 @@ pub(all) struct Breakpoint {
   mut hit_count : Int
   condition : String?
 }
-fn Breakpoint::disable(Self) -> Unit
-fn Breakpoint::enable(Self) -> Unit
-fn Breakpoint::hit(Self) -> Unit
-fn Breakpoint::new(Int, Int, Int) -> Self
-fn Breakpoint::with_condition(Int, Int, Int, String) -> Self
-impl Show for Breakpoint
+pub fn Breakpoint::disable(Self) -> Unit
+pub fn Breakpoint::enable(Self) -> Unit
+pub fn Breakpoint::hit(Self) -> Unit
+pub fn Breakpoint::new(Int, Int, Int) -> Self
+pub fn Breakpoint::with_condition(Int, Int, Int, String) -> Self
+pub impl Show for Breakpoint
 
 pub(all) struct BreakpointManager {
   breakpoints : Map[Int, Breakpoint]
   by_location : Map[Int, Map[Int, Int]]
   mut next_id : Int
 }
-fn BreakpointManager::add(Self, Int, Int) -> Breakpoint
-fn BreakpointManager::add_conditional(Self, Int, Int, String) -> Breakpoint
-fn BreakpointManager::all(Self) -> Array[Breakpoint]
-fn BreakpointManager::at_location(Self, Int, Int) -> Breakpoint?
-fn BreakpointManager::clear(Self) -> Unit
-fn BreakpointManager::count(Self) -> Int
-fn BreakpointManager::get(Self, Int) -> Breakpoint?
-fn BreakpointManager::new() -> Self
-fn BreakpointManager::remove(Self, Int) -> Bool
-fn BreakpointManager::should_break(Self, Int, Int) -> Bool
+pub fn BreakpointManager::add(Self, Int, Int) -> Breakpoint
+pub fn BreakpointManager::add_conditional(Self, Int, Int, String) -> Breakpoint
+pub fn BreakpointManager::all(Self) -> Array[Breakpoint]
+pub fn BreakpointManager::at_location(Self, Int, Int) -> Breakpoint?
+pub fn BreakpointManager::clear(Self) -> Unit
+pub fn BreakpointManager::count(Self) -> Int
+pub fn BreakpointManager::get(Self, Int) -> Breakpoint?
+pub fn BreakpointManager::new() -> Self
+pub fn BreakpointManager::remove(Self, Int) -> Bool
+pub fn BreakpointManager::should_break(Self, Int, Int) -> Bool
 
 pub(all) struct CallCounter {
   counts : Map[Int, Int]
   mut total_calls : Int
 }
-fn CallCounter::clear(Self) -> Unit
-fn CallCounter::get_count(Self, Int) -> Int
-fn CallCounter::increment(Self, Int) -> Int
-fn CallCounter::new() -> Self
-fn CallCounter::reset(Self, Int) -> Unit
-fn CallCounter::total(Self) -> Int
-fn CallCounter::unique_functions(Self) -> Int
+pub fn CallCounter::clear(Self) -> Unit
+pub fn CallCounter::get_count(Self, Int) -> Int
+pub fn CallCounter::increment(Self, Int) -> Int
+pub fn CallCounter::new() -> Self
+pub fn CallCounter::reset(Self, Int) -> Unit
+pub fn CallCounter::total(Self) -> Int
+pub fn CallCounter::unique_functions(Self) -> Int
 
 pub enum CompilationDecision {
   Interpret
   CompileAndExecute(CompilationMode)
   ExecuteCompiled
 }
-impl Show for CompilationDecision
+pub impl Show for CompilationDecision
 
 pub(all) enum CompilationMode {
   Interpret
   Baseline
   Optimized
 }
-impl Show for CompilationMode
+pub impl Show for CompilationMode
 
 pub(all) struct CompilationQueue {
   requests : Array[CompilationRequest]
   max_size : Int
 }
-fn CompilationQueue::clear(Self) -> Unit
-fn CompilationQueue::contains(Self, Int) -> Bool
-fn CompilationQueue::dequeue(Self) -> CompilationRequest?
-fn CompilationQueue::enqueue(Self, CompilationRequest) -> Bool
-fn CompilationQueue::is_empty(Self) -> Bool
-fn CompilationQueue::length(Self) -> Int
-fn CompilationQueue::new(Int) -> Self
+pub fn CompilationQueue::clear(Self) -> Unit
+pub fn CompilationQueue::contains(Self, Int) -> Bool
+pub fn CompilationQueue::dequeue(Self) -> CompilationRequest?
+pub fn CompilationQueue::enqueue(Self, CompilationRequest) -> Bool
+pub fn CompilationQueue::is_empty(Self) -> Bool
+pub fn CompilationQueue::length(Self) -> Int
+pub fn CompilationQueue::new(Int) -> Self
 
 pub(all) struct CompilationRequest {
   func_idx : Int
   mode : CompilationMode
   priority : Int
 }
-fn CompilationRequest::new(Int, CompilationMode) -> Self
-fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
+pub fn CompilationRequest::new(Int, CompilationMode) -> Self
+pub fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
 
 pub enum CompilationStatus {
   NotCompiled
@@ -95,7 +95,7 @@ pub enum CompilationStatus {
   Compiled
   Failed(String)
 }
-impl Show for CompilationStatus
+pub impl Show for CompilationStatus
 
 pub(all) struct CompilationStrategy {
   profiler : Profiler
@@ -105,14 +105,14 @@ pub(all) struct CompilationStrategy {
   mut decisions_compile : Int
   mut decisions_compiled : Int
 }
-fn CompilationStrategy::decide(Self, Int) -> CompilationDecision
-fn CompilationStrategy::is_compiled(Self, Int) -> Bool
-fn CompilationStrategy::mark_compiled(Self, Int) -> Unit
-fn CompilationStrategy::new(TieredConfig) -> Self
-fn CompilationStrategy::next_to_compile(Self) -> CompilationRequest?
-fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
-fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
-impl Show for CompilationStrategy
+pub fn CompilationStrategy::decide(Self, Int) -> CompilationDecision
+pub fn CompilationStrategy::is_compiled(Self, Int) -> Bool
+pub fn CompilationStrategy::mark_compiled(Self, Int) -> Unit
+pub fn CompilationStrategy::new(TieredConfig) -> Self
+pub fn CompilationStrategy::next_to_compile(Self) -> CompilationRequest?
+pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
+pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
+pub impl Show for CompilationStrategy
 
 pub(all) struct DebugContext {
   source_map : SourceMap
@@ -121,14 +121,14 @@ pub(all) struct DebugContext {
   mut step_mode : StepMode
   mut current_trace : StackTrace?
 }
-fn DebugContext::disable(Self) -> Unit
-fn DebugContext::enable(Self) -> Unit
-fn DebugContext::location_string(Self, Int, Int) -> String
-fn DebugContext::new() -> Self
-fn DebugContext::on_pause(Self, Int, Int) -> Unit
-fn DebugContext::set_step_mode(Self, StepMode) -> Unit
-fn DebugContext::should_pause(Self, Int, Int) -> Bool
-impl Show for DebugContext
+pub fn DebugContext::disable(Self) -> Unit
+pub fn DebugContext::enable(Self) -> Unit
+pub fn DebugContext::location_string(Self, Int, Int) -> String
+pub fn DebugContext::new() -> Self
+pub fn DebugContext::on_pause(Self, Int, Int) -> Unit
+pub fn DebugContext::set_step_mode(Self, StepMode) -> Unit
+pub fn DebugContext::should_pause(Self, Int, Int) -> Bool
+pub impl Show for DebugContext
 
 pub(all) struct FunctionEntry {
   func_idx : Int
@@ -136,23 +136,23 @@ pub(all) struct FunctionEntry {
   mut compiled_code : @vcode.CompiledFunction?
   mut call_count : Int
 }
-fn FunctionEntry::is_compiled(Self) -> Bool
-fn FunctionEntry::new(Int) -> Self
+pub fn FunctionEntry::is_compiled(Self) -> Bool
+pub fn FunctionEntry::new(Int) -> Self
 
 pub enum FunctionTemperature {
   Cold
   Warm
   Hot
 }
-impl Show for FunctionTemperature
+pub impl Show for FunctionTemperature
 
 pub(all) struct HotThreshold {
   warm_threshold : Int
   hot_threshold : Int
 }
-fn HotThreshold::aggressive() -> Self
-fn HotThreshold::conservative() -> Self
-fn HotThreshold::default() -> Self
+pub fn HotThreshold::aggressive() -> Self
+pub fn HotThreshold::conservative() -> Self
+pub fn HotThreshold::default() -> Self
 
 pub(all) struct JITEngine {
   strategy : CompilationStrategy
@@ -163,16 +163,16 @@ pub(all) struct JITEngine {
   mut interpreter_calls : Int
   mut compilation_failures : Int
 }
-fn JITEngine::default() -> Self
-fn JITEngine::get_compiled(Self, Int) -> @vcode.CompiledFunction?
-fn JITEngine::invalidate(Self, Int) -> Unit
-fn JITEngine::is_compiled(Self, Int) -> Bool
-fn JITEngine::mark_compiled(Self, Int, @vcode.CompiledFunction) -> Unit
-fn JITEngine::mark_failed(Self, Int, String) -> Unit
-fn JITEngine::new(TieredConfig) -> Self
-fn JITEngine::on_call(Self, Int) -> Bool
-fn JITEngine::stats(Self) -> (Int, Int, Int, Int, Int)
-impl Show for JITEngine
+pub fn JITEngine::default() -> Self
+pub fn JITEngine::get_compiled(Self, Int) -> @vcode.CompiledFunction?
+pub fn JITEngine::invalidate(Self, Int) -> Unit
+pub fn JITEngine::is_compiled(Self, Int) -> Bool
+pub fn JITEngine::mark_compiled(Self, Int, @vcode.CompiledFunction) -> Unit
+pub fn JITEngine::mark_failed(Self, Int, String) -> Unit
+pub fn JITEngine::new(TieredConfig) -> Self
+pub fn JITEngine::on_call(Self, Int) -> Bool
+pub fn JITEngine::stats(Self) -> (Int, Int, Int, Int, Int)
+pub impl Show for JITEngine
 
 pub(all) struct Profiler {
   counter : CallCounter
@@ -181,15 +181,15 @@ pub(all) struct Profiler {
   pending_compilation : @hashset.HashSet[Int]
   compiled_functions : @hashset.HashSet[Int]
 }
-fn Profiler::get_function_temperature(Self, Int) -> FunctionTemperature
-fn Profiler::get_pending(Self) -> Array[Int]
-fn Profiler::is_compiled(Self, Int) -> Bool
-fn Profiler::mark_compiled(Self, Int) -> Unit
-fn Profiler::new(HotThreshold) -> Self
-fn Profiler::record_call(Self, Int) -> (Int, Bool)
-fn Profiler::should_use_jit(Self, Int) -> Bool
-fn Profiler::stats(Self) -> (Int, Int, Int, Int)
-impl Show for Profiler
+pub fn Profiler::get_function_temperature(Self, Int) -> FunctionTemperature
+pub fn Profiler::get_pending(Self) -> Array[Int]
+pub fn Profiler::is_compiled(Self, Int) -> Bool
+pub fn Profiler::mark_compiled(Self, Int) -> Unit
+pub fn Profiler::new(HotThreshold) -> Self
+pub fn Profiler::record_call(Self, Int) -> (Int, Bool)
+pub fn Profiler::should_use_jit(Self, Int) -> Bool
+pub fn Profiler::stats(Self) -> (Int, Int, Int, Int)
+pub impl Show for Profiler
 
 pub(all) struct SourceLocation {
   func_idx : Int
@@ -198,21 +198,21 @@ pub(all) struct SourceLocation {
   line : Int?
   column : Int?
 }
-fn SourceLocation::new(Int, Int) -> Self
-fn SourceLocation::with_source(Int, Int, String, Int, Int) -> Self
-impl Show for SourceLocation
+pub fn SourceLocation::new(Int, Int) -> Self
+pub fn SourceLocation::with_source(Int, Int, String, Int, Int) -> Self
+pub impl Show for SourceLocation
 
 pub(all) struct SourceMap {
   mappings : Map[Int, Map[Int, SourceLocation]]
   func_names : Map[Int, String]
 }
-fn SourceMap::add_func_name(Self, Int, String) -> Unit
-fn SourceMap::add_mapping(Self, Int, Int, SourceLocation) -> Unit
-fn SourceMap::find_nearest(Self, Int, Int) -> SourceLocation?
-fn SourceMap::get_func_name(Self, Int) -> String
-fn SourceMap::get_location(Self, Int, Int) -> SourceLocation?
-fn SourceMap::mapping_count(Self) -> Int
-fn SourceMap::new() -> Self
+pub fn SourceMap::add_func_name(Self, Int, String) -> Unit
+pub fn SourceMap::add_mapping(Self, Int, Int, SourceLocation) -> Unit
+pub fn SourceMap::find_nearest(Self, Int, Int) -> SourceLocation?
+pub fn SourceMap::get_func_name(Self, Int) -> String
+pub fn SourceMap::get_location(Self, Int, Int) -> SourceLocation?
+pub fn SourceMap::mapping_count(Self) -> Int
+pub fn SourceMap::new() -> Self
 
 pub(all) struct StackFrame {
   index : Int
@@ -222,19 +222,19 @@ pub(all) struct StackFrame {
   location : SourceLocation?
   local_count : Int
 }
-fn StackFrame::new(Int, Int, Int, String) -> Self
-fn StackFrame::with_location(Int, Int, Int, String, SourceLocation) -> Self
-impl Show for StackFrame
+pub fn StackFrame::new(Int, Int, Int, String) -> Self
+pub fn StackFrame::with_location(Int, Int, Int, String, SourceLocation) -> Self
+pub impl Show for StackFrame
 
 pub(all) struct StackTrace {
   frames : Array[StackFrame]
   error : String?
 }
-fn StackTrace::depth(Self) -> Int
-fn StackTrace::new() -> Self
-fn StackTrace::push_frame(Self, StackFrame) -> Unit
-fn StackTrace::with_error(String) -> Self
-impl Show for StackTrace
+pub fn StackTrace::depth(Self) -> Int
+pub fn StackTrace::new() -> Self
+pub fn StackTrace::push_frame(Self, StackFrame) -> Unit
+pub fn StackTrace::with_error(String) -> Self
+pub impl Show for StackTrace
 
 pub enum StepMode {
   Continue
@@ -242,7 +242,7 @@ pub enum StepMode {
   StepOver
   StepOut
 }
-impl Show for StepMode
+pub impl Show for StepMode
 
 pub(all) struct TieredConfig {
   baseline_threshold : Int
@@ -250,9 +250,9 @@ pub(all) struct TieredConfig {
   synchronous : Bool
   max_concurrent : Int
 }
-fn TieredConfig::default() -> Self
-fn TieredConfig::deferred() -> Self
-fn TieredConfig::eager() -> Self
+pub fn TieredConfig::default() -> Self
+pub fn TieredConfig::deferred() -> Self
+pub fn TieredConfig::eager() -> Self
 
 // Type aliases
 

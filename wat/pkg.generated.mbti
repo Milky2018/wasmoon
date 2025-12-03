@@ -6,7 +6,7 @@ import(
 )
 
 // Values
-fn parse(String) -> @types.Module raise WatError
+pub fn parse(String) -> @types.Module raise WatError
 
 // Errors
 pub(all) suberror WatError {
@@ -18,7 +18,7 @@ pub(all) suberror WatError {
   DuplicateIdentifier(String)
   ParseError(String)
 }
-impl Show for WatError
+pub impl Show for WatError
 
 // Types and methods
 

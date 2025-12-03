@@ -6,7 +6,7 @@ import(
 )
 
 // Values
-fn validate_module(@types.Module) -> Unit raise ValidationError
+pub fn validate_module(@types.Module) -> Unit raise ValidationError
 
 // Errors
 pub(all) suberror ValidationError {
@@ -25,7 +25,7 @@ pub(all) suberror ValidationError {
   MultipleTables
   InvalidLimits(String)
 }
-impl Show for ValidationError
+pub impl Show for ValidationError
 
 // Types and methods
 

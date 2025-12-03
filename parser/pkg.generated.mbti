@@ -6,16 +6,16 @@ import(
 )
 
 // Values
-fn parse_module(Bytes) -> @types.Module raise ParserError
+pub fn parse_module(Bytes) -> @types.Module raise ParserError
 
 // Errors
 type ParserError
-impl Show for ParserError
+pub impl Show for ParserError
 
 // Types and methods
 type Parser
-fn Parser::new(Bytes) -> Self
-impl Show for Parser
+pub fn Parser::new(Bytes) -> Self
+pub impl Show for Parser
 
 // Type aliases
 
