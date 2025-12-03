@@ -199,7 +199,7 @@ pub fn IRBuilder::bxor(self : IRBuilder, a : Value, b : Value) -> Value {
 
 ///|
 /// Bitwise not
-pub fn IRBuilder::b(self : IRBuilder, a : Value) -> Value raise {
+pub fn IRBuilder::bnot(self : IRBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Opcode::Bnot, [a])
 }
 
