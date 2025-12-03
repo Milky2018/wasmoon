@@ -3,14 +3,14 @@
 fn find_base_dir(path : String) -> String {
   let mut last_slash = -1
   for i in 0..<path.length() {
-    if path[i] == '/' {
+    if path.code_unit_at(i) == '/' {
       last_slash = i
     }
   }
   if last_slash >= 0 {
     let builder = StringBuilder::new()
     for i in 0..<last_slash {
-      builder.write_char(path[i].unsafe_to_char())
+      builder.write_char(path.code_unit_at(i).unsafe_to_char())
     }
     builder.to_string()
   } else {
@@ -379,7 +379,7 @@ async fn run_wasm(
 fn split_preload(s : String) -> (String, String)? {
   let mut eq_idx = -1
   for i in 0..<s.length() {
-    if s[i] == '=' {
+    if s.code_unit_at(i) == '=' {
       eq_idx = i
       break
     }
@@ -390,11 +390,11 @@ fn split_preload(s : String) -> (String, String)? {
   // Build name and path strings manually
   let name_builder = StringBuilder::new()
   for i in 0..<eq_idx {
-    name_builder.write_char(s[i].unsafe_to_char())
+    name_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   let path_builder = StringBuilder::new()
   for i = eq_idx + 1; i < s.length(); i = i + 1 {
-    path_builder.write_char(s[i].unsafe_to_char())
+    path_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   Some((name_builder.to_string(), path_builder.to_string()))
 }
@@ -521,7 +521,7 @@ fn parse_func_args(
         let n = @strconv.parse_double(arg) catch {
           _ => raise Failure("Invalid f32 value: \{arg}")
         }
-        @types.Value::F32(n.to_float())
+        @types.Value::F32(Float::from_double(n))
       }
       F64 => {
         let n = @strconv.parse_double(arg) catch {
@@ -545,14 +545,14 @@ fn generate_output_path(input_path : String) -> String {
   if input_path.has_suffix(".wasm") {
     let builder = StringBuilder::new()
     for i = 0; i < input_path.length() - 5; i = i + 1 {
-      builder.write_char(input_path[i].unsafe_to_char())
+      builder.write_char(input_path.code_unit_at(i).unsafe_to_char())
     }
     builder.write_string(".cwasm")
     builder.to_string()
   } else if input_path.has_suffix(".wat") {
     let builder = StringBuilder::new()
     for i = 0; i < input_path.length() - 4; i = i + 1 {
-      builder.write_char(input_path[i].unsafe_to_char())
+      builder.write_char(input_path.code_unit_at(i).unsafe_to_char())
     }
     builder.write_string(".cwasm")
     builder.to_string()
@@ -911,8 +911,8 @@ fn to_hex_byte(b : Int) -> String {
   let hex_chars = "0123456789abcdef"
   let high = (b >> 4) & 0xF
   let low = b & 0xF
-  String::make(1, hex_chars[high].unsafe_to_char()) +
-  String::make(1, hex_chars[low].unsafe_to_char())
+  String::make(1, hex_chars.code_unit_at(high).unsafe_to_char()) +
+  String::make(1, hex_chars.code_unit_at(low).unsafe_to_char())
 }
 
 ///|

@@ -433,3 +433,15 @@ pub fn aarch64_target() -> TargetArch { AArch64 }
 pub(all) enum TargetArch { AArch64; X86_64 }
 // 外部包直接使用 @pkg.AArch64
 ```
+
+### String 字符访问
+```moonbit
+// ❌ 错误 - String::op_get 已废弃 (deprecated)
+let c = s[i]
+
+// ✅ 正确 - 使用 code_unit_at 替代
+let c = s.code_unit_at(i)  // 返回 Int
+
+// ✅ 正确 - 需要 Char 时用 get_char
+let c = s.get_char(i)  // 返回 Char?
+```
