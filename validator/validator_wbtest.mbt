@@ -586,3 +586,133 @@ test "validator: control flow - br_table basic" {
   }
   validate_module(mod) // Should pass
 }
+
+// ============================================================
+// Error Context Tests
+// ============================================================
+
+///|
+test "validator: format_validation_error provides descriptive message" {
+  let formatted = format_validation_error(InvalidLocalIndex(5))
+  assert_true(formatted.contains("invalid local index"))
+  assert_true(formatted.contains("5"))
+}
+
+///|
+test "validator: ValidationErrorContext formats with function index" {
+  let ctx = ValidationErrorContext::from_error(
+    TypeMismatch("Expected I32, got I64"),
+  ).with_func_idx(3)
+  let formatted = ctx.format()
+  assert_true(formatted.contains("type mismatch"))
+  assert_true(formatted.contains("func[3]"))
+}
+
+///|
+test "validator: ValidationErrorContext formats with instruction offset" {
+  let ctx = ValidationErrorContext::from_error(
+      StackUnderflow("Expected I32, but stack is empty"),
+    )
+    .with_func_idx(2)
+    .with_instr_offset(5)
+    .with_instruction("i32.add")
+  let formatted = ctx.format()
+  assert_true(formatted.contains("stack underflow"))
+  assert_true(formatted.contains("func[2]"))
+  assert_true(formatted.contains("offset: 5"))
+  assert_true(formatted.contains("i32.add"))
+}
+
+///|
+test "validator: validate_module_with_context provides location on error" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [I64Const(1L), I32Const(2), I32Add], // Type mismatch at index 2
+  }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let result = try? validate_module_with_context(mod)
+  // Should fail with context
+  match result {
+    Err(WithContext(ctx)) => {
+      assert_true(ctx.func_idx is Some(0))
+      assert_true(ctx.instr_offset is Some(2))
+      assert_true(ctx.instruction is Some(_))
+    }
+    _ => panic()
+  }
+}
+
+///|
+test "validator: validate_module_with_context reports correct function index" {
+  // First function is valid, second has error
+  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
+  let func1 : @types.FunctionCode = { locals: [], body: [LocalGet(99)] } // Invalid local index
+  let func_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0, 0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func0, func1],
+    datas: [],
+  }
+  let result = try? validate_module_with_context(mod)
+  match result {
+    Err(WithContext(ctx)) => {
+      // Should report error in function 1 (not 0)
+      assert_true(ctx.func_idx is Some(1))
+      assert_true(ctx.instr_offset is Some(0))
+    }
+    _ => panic()
+  }
+}
+
+///|
+test "validator: all ValidationError types have descriptive messages" {
+  // Verify each error type produces a non-empty message
+  let errors : Array[ValidationError] = [
+    TypeMismatch("test"),
+    StackUnderflow("test"),
+    StackHeightMismatch("test"),
+    InvalidFunctionIndex(0),
+    InvalidTypeIndex(0),
+    InvalidLocalIndex(0),
+    InvalidGlobalIndex(0),
+    InvalidTableIndex(0),
+    InvalidMemoryIndex(0),
+    InvalidLabelIndex(0),
+    UnreachableCode,
+    MultipleMemories,
+    MultipleTables,
+    InvalidLimits("test"),
+  ]
+  for err in errors {
+    let formatted = format_validation_error(err)
+    assert_true(formatted.length() > 20) // Should have meaningful content
+    assert_true(formatted.contains("validation error"))
+  }
+}
