@@ -614,6 +614,19 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
+/// Get function name from exports or generate default name
+fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
+  // Look for exported name
+  for exp in mod_.exports {
+    if exp.desc is Func(idx) && idx == func_idx {
+      return exp.name
+    }
+  }
+  // Default name
+  "func_\{func_idx}"
+}
+
+///|
 /// Get type index for an imported function
 fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
   let mut func_count = 0
@@ -721,7 +734,6 @@ fn run_compile(
   emit_ir : String?,
   config : CompilerConfig,
 ) -> Unit {
-  ignore(config) // Will be used in full implementation
   // Load the module
   let mod_ = load_module_from_path(input_path) catch {
     e => {
@@ -738,22 +750,92 @@ fn run_compile(
     }
   }
 
-  // Emit IR if requested
-  match emit_ir {
-    Some(ir_path) => {
-      let ir_output = StringBuilder::new()
-      ir_output.write_string(";; IR for \{input_path}\n")
-      ir_output.write_string(";; Functions: \{mod_.codes.length()}\n\n")
+  // Get optimization level from config
+  let opt_level = @ir.OptLevel::from_int(config.opt_level)
 
-      // For now, just list the functions
-      for i, _code in mod_.codes {
-        let num_imports = count_func_imports(mod_.imports)
-        let func_idx = num_imports + i
-        ir_output.write_string(";; Function \{func_idx}\n")
+  // Create precompiled module
+  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let num_imports = count_func_imports(mod_.imports)
+
+  // IR output buffer (if requested)
+  let ir_output = match emit_ir {
+    Some(_) => Some(StringBuilder::new())
+    None => None
+  }
+  match ir_output {
+    Some(buf) => {
+      buf.write_string(";; IR for \{input_path}\n")
+      buf.write_string(";; Functions: \{mod_.codes.length()}\n")
+      buf.write_string(";; Optimization level: O\{config.opt_level}\n\n")
+    }
+    None => ()
+  }
+  println("Compiling \{mod_.codes.length()} functions...")
+
+  // Compile each function
+  for i, code in mod_.codes {
+    let func_idx = num_imports + i
+    let type_idx = mod_.funcs[i]
+    let func_type = mod_.types[type_idx]
+    let func_name = get_func_name(mod_, func_idx)
+
+    // Stage 1: Translate WASM to IR
+    let translator = @ir.Translator::new(
+      func_name,
+      func_type,
+      code.locals,
+      mod_.types,
+      mod_.funcs,
+      num_imports,
+    )
+    let ir_func = translator.translate(code.body)
+
+    // Record IR before optimization
+    match ir_output {
+      Some(buf) => {
+        buf.write_string(";; Function \{func_idx}: \{func_name}\n")
+        buf.write_string(ir_func.print())
+        buf.write_string("\n")
       }
+      None => ()
+    }
 
-      // Write IR file
-      @fs.write_string_to_file(ir_path, ir_output.to_string()) catch {
+    // Stage 2: Optimize IR
+    @ir.optimize_with_level(ir_func, opt_level) |> ignore
+
+    // Record optimized IR
+    match ir_output {
+      Some(buf) => {
+        buf.write_string(";; After optimization:\n")
+        buf.write_string(ir_func.print())
+        buf.write_string("\n")
+      }
+      None => ()
+    }
+
+    // Stage 3: Lower to VCode
+    let vcode_func = @vcode.lower_function(ir_func)
+
+    // Stage 4: Register allocation
+    let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+
+    // Stage 5: Emit machine code
+    let mc = @vcode.emit_function(allocated)
+
+    // Stage 6: Create compiled function and add to module
+    let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
+    precompiled.add_function(func_idx, func_name, compiled)
+
+    // Progress indicator for large modules
+    if mod_.codes.length() > 10 && (i + 1) % 10 == 0 {
+      println("  Compiled \{i + 1}/\{mod_.codes.length()} functions...")
+    }
+  }
+
+  // Write IR file if requested
+  match (emit_ir, ir_output) {
+    (Some(ir_path), Some(buf)) => {
+      @fs.write_string_to_file(ir_path, buf.to_string()) catch {
         e => {
           println("Error writing IR file: \{e}")
           return
@@ -761,21 +843,8 @@ fn run_compile(
       }
       println("Wrote IR to \{ir_path}")
     }
-    None => ()
+    _ => ()
   }
-
-  // Create precompiled module (placeholder - actual compilation would happen here)
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
-
-  // For now, we just create an empty precompiled module
-  // In a full implementation, we would:
-  // 1. Translate each function to IR
-  // 2. Apply optimizations
-  // 3. Lower to VCode
-  // 4. Do register allocation
-  // 5. Emit machine code
-
-  println("Compiling \{mod_.codes.length()} functions...")
 
   // Serialize the precompiled module
   let cwasm_bytes = precompiled.serialize()
@@ -798,10 +867,17 @@ fn run_compile(
       return
     }
   }
+
+  // Calculate total code size
+  let mut total_code_size = 0
+  for i in 0..<precompiled.function_count() {
+    total_code_size = total_code_size + precompiled.functions[i].code.length()
+  }
   println("Wrote precompiled module to \{out_path}")
-  println("Format: cwasm v1 (aarch64)")
-  println("Functions: \{precompiled.function_count()}")
-  println("Size: \{cwasm_bytes.length()} bytes")
+  println("  Format:    cwasm v1 (aarch64)")
+  println("  Functions: \{precompiled.function_count()}")
+  println("  Code size: \{total_code_size} bytes")
+  println("  File size: \{cwasm_bytes.length()} bytes")
 }
 
 ///|
