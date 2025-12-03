@@ -579,4 +579,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 我完全不理解 `{ "path": "Milky2018/wasmoon/cwasm", "alias": "cwasm" }` 这是在做什么 → 当路径最后一段与 alias 相同时，alias 是多余的。当前项目已移除所有不必要的 alias
 - [x] completion 和项目主要功能无关，可以先删掉 → 已删除 completion.mbt
 - [x] 有非常多如下形式的测试：应使用 `inspect(try? f(), content="Err(...)")` → 已修复所有测试文件（cwasm_wbtest.mbt, i32_wbtest.mbt, i64_wbtest.mbt, executor_wbtest.mbt, validator_wbtest.mbt）
-- [ ] wat.mbt 太长了，适当拆分为多个文件
+- [x] 把所有的 `inspect(true, content="true")` 清除掉，这没有任何意义 → 已修复：wast_wbtest.mbt 使用 guard-is 替代，types.mbt 改为验证实际值

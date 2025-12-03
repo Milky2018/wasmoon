@@ -407,6 +407,8 @@ pub fn Module::new() -> Module {
 
 ///|
 test "parse empty module" {
-  Module::new() |> ignore
-  inspect(true, content="true")
+  let mod = Module::new()
+  inspect(mod.types.length(), content="0")
+  inspect(mod.funcs.length(), content="0")
+  inspect(mod.start, content="None")
 }
