@@ -107,7 +107,7 @@ pub fn Memory::store_i64(
 ///|
 pub fn Memory::load_f32(self : Memory, addr : Int) -> Float raise RuntimeError {
   let bits = self.load_i32(addr)
-  bits.reinterpret_as_float()
+  Float::reinterpret_from_int(bits)
 }
 
 ///|

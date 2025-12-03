@@ -176,7 +176,9 @@ pub fn parse_test_value(tv : TestValue) -> @types.Value {
       } else {
         // Parse as unsigned bits representation then reinterpret as float
         let bits = @strconv.parse_uint(val) catch { _ => 0U }
-        @types.Value::F32(bits.reinterpret_as_int().reinterpret_as_float())
+        @types.Value::F32(
+          Float::reinterpret_from_int(bits.reinterpret_as_int()),
+        )
       }
     "f64" =>
       if val == "nan:canonical" ||

@@ -375,7 +375,7 @@ pub fn ExecContext::call_func(
   for i = 0; i < return_arity; i = i + 1 {
     results.push(self.stack.pop())
   }
-  results.rev_inplace()
+  results.rev_in_place()
   results
 }
 

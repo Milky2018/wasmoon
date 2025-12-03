@@ -47,7 +47,7 @@ fn Lexer::peek_char(self : Lexer) -> Char? {
   if self.is_eof() {
     None
   } else {
-    Some(self.input[self.pos].unsafe_to_char())
+    Some(self.input.code_unit_at(self.pos).unsafe_to_char())
   }
 }
 
@@ -56,7 +56,7 @@ fn Lexer::next_char(self : Lexer) -> Char? {
   if self.is_eof() {
     None
   } else {
-    let c = self.input[self.pos].unsafe_to_char()
+    let c = self.input.code_unit_at(self.pos).unsafe_to_char()
     self.pos += 1
     Some(c)
   }
@@ -70,7 +70,7 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
       Some(';') =>
         // Skip line comment
         if self.pos + 1 < self.input.length() &&
-          self.input[self.pos + 1].unsafe_to_char() == ';' {
+          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
           while not(self.is_eof()) {
             match self.peek_char() {
               Some('\n') => {
@@ -86,13 +86,13 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
       Some('(') =>
         // Check for block comment (; ... ;)
         if self.pos + 1 < self.input.length() &&
-          self.input[self.pos + 1].unsafe_to_char() == ';' {
+          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
           self.pos += 2
           let mut depth = 1
           while not(self.is_eof()) && depth > 0 {
             if self.pos + 1 < self.input.length() {
-              let c1 = self.input[self.pos].unsafe_to_char()
-              let c2 = self.input[self.pos + 1].unsafe_to_char()
+              let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
+              let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
               if c1 == ';' && c2 == ')' {
                 depth -= 1
                 self.pos += 2
@@ -209,8 +209,8 @@ fn parse_hex_byte(s : String) -> Int? {
   if s.length() != 2 {
     return None
   }
-  let c1 = s[0].unsafe_to_char()
-  let c2 = s[1].unsafe_to_char()
+  let c1 = s.code_unit_at(0).unsafe_to_char()
+  let c2 = s.code_unit_at(1).unsafe_to_char()
   let d1 = hex_digit_value(c1)
   let d2 = hex_digit_value(c2)
   match (d1, d2) {
@@ -241,8 +241,8 @@ fn Lexer::read_number(self : Lexer) -> String {
   }
   // Handle 0x prefix for hex
   if self.pos + 1 < self.input.length() {
-    let c1 = self.input[self.pos].unsafe_to_char()
-    let c2 = self.input[self.pos + 1].unsafe_to_char()
+    let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
+    let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
     if c1 == '0' && (c2 == 'x' || c2 == 'X') {
       buf.write_char(c1)
       buf.write_char(c2)
@@ -441,7 +441,7 @@ fn parse_int(s : String) -> Int raise WatError {
     if trimmed.length() > 2 {
       let hex_part = StringBuilder::new()
       for i = 2; i < trimmed.length(); i = i + 1 {
-        hex_part.write_char(trimmed[i].unsafe_to_char())
+        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
       parse_hex_int(hex_part.to_string())
     } else {
@@ -451,7 +451,7 @@ fn parse_int(s : String) -> Int raise WatError {
     if trimmed.length() > 3 {
       let hex_part = StringBuilder::new()
       for i = 3; i < trimmed.length(); i = i + 1 {
-        hex_part.write_char(trimmed[i].unsafe_to_char())
+        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
       -parse_hex_int(hex_part.to_string())
     } else {
@@ -469,7 +469,7 @@ fn parse_int(s : String) -> Int raise WatError {
 fn parse_hex_int(s : String) -> Int raise WatError {
   let mut result = 0
   for i in 0..<s.length() {
-    let c = s[i].unsafe_to_char()
+    let c = s.code_unit_at(i).unsafe_to_char()
     match hex_digit_value(c) {
       Some(v) => result = result * 16 + v
       None => raise InvalidNumber(s)
@@ -485,7 +485,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
     if trimmed.length() > 2 {
       let hex_part = StringBuilder::new()
       for i = 2; i < trimmed.length(); i = i + 1 {
-        hex_part.write_char(trimmed[i].unsafe_to_char())
+        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
       parse_hex_int64(hex_part.to_string())
     } else {
@@ -495,7 +495,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
     if trimmed.length() > 3 {
       let hex_part = StringBuilder::new()
       for i = 3; i < trimmed.length(); i = i + 1 {
-        hex_part.write_char(trimmed[i].unsafe_to_char())
+        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
       -parse_hex_int64(hex_part.to_string())
     } else {
@@ -512,7 +512,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
 fn parse_hex_int64(s : String) -> Int64 raise WatError {
   let mut result = 0L
   for i in 0..<s.length() {
-    let c = s[i].unsafe_to_char()
+    let c = s.code_unit_at(i).unsafe_to_char()
     match hex_digit_value(c) {
       Some(v) => result = result * 16L + v.to_int64()
       None => raise InvalidNumber(s)
@@ -532,7 +532,7 @@ fn parse_float32(s : String) -> Float raise WatError {
   if s == "nan" || s == "+nan" || s == "-nan" {
     return (0.0 : Float) / (0.0 : Float) // NaN
   }
-  @strconv.parse_double(s).to_float() catch {
+  (@strconv.parse_double(s) |> Float::from_double) catch {
     _ => raise InvalidNumber(s)
   }
 }
@@ -1295,14 +1295,14 @@ fn parse_mem_arg(
         if s.has_prefix("offset=") {
           let offset_str = StringBuilder::new()
           for i = 7; i < s.length(); i = i + 1 {
-            offset_str.write_char(s[i].unsafe_to_char())
+            offset_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           offset = parse_int(offset_str.to_string())
           parser.advance()
         } else if s.has_prefix("align=") {
           let align_str = StringBuilder::new()
           for i = 6; i < s.length(); i = i + 1 {
-            align_str.write_char(s[i].unsafe_to_char())
+            align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           let a = parse_int(align_str.to_string())
           // Convert alignment to log2

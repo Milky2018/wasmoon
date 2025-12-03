@@ -142,7 +142,7 @@ pub fn args_get(
     mem.write_i32(argv_ptr + i * 4, argv_buf_ptr + buf_offset)
     // Write argument string (null-terminated)
     for j in 0..<arg.length() {
-      let c = arg[j] // String[Int] returns Int (char code)
+      let c = arg.code_unit_at(j) // String[Int] returns Int (char code)
       mem.write_byte(argv_buf_ptr + buf_offset + j, c.to_byte())
     }
     mem.write_byte(argv_buf_ptr + buf_offset + arg.length(), b'\x00')
@@ -195,7 +195,7 @@ pub fn environ_get(
     mem.write_i32(environ_ptr + i * 4, environ_buf_ptr + buf_offset)
     // Write environment string (null-terminated)
     for j in 0..<env.length() {
-      let c = env[j] // String[Int] returns Int (char code)
+      let c = env.code_unit_at(j) // String[Int] returns Int (char code)
       mem.write_byte(environ_buf_ptr + buf_offset + j, c.to_byte())
     }
     mem.write_byte(environ_buf_ptr + buf_offset + env.length(), b'\x00')
@@ -298,7 +298,7 @@ pub fn fd_prestat_dir_name(
     if preopen_fd.to_int() == fd {
       let to_copy = @cmp.minimum(path_len, guest_path.length())
       for i in 0..<to_copy {
-        mem.write_byte(path_ptr + i, guest_path[i].to_byte())
+        mem.write_byte(path_ptr + i, guest_path.code_unit_at(i).to_byte())
       }
       return Errno::Success.to_i32()
     }

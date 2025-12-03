@@ -139,7 +139,7 @@ pub fn fold_constants(func : Function) -> OptResult {
           match inst.result {
             Some(r) =>
               if r.ty is F32 {
-                constants.set(r.id, ConstValue::F32(v.to_float()))
+                constants.set(r.id, ConstValue::F32(Float::from_double(v)))
               } else {
                 constants.set(r.id, ConstValue::F64(v))
               }
@@ -314,7 +314,11 @@ fn fold_binary_float(
   let b = get_const(inst.operands[1], constants)
   match (a, b) {
     (Some(F32(va)), Some(F32(vb))) =>
-      Some(ConstValue::F32(op(va.to_double(), vb.to_double()).to_float()))
+      Some(
+        ConstValue::F32(
+          op(va.to_double(), vb.to_double()) |> Float::from_double,
+        ),
+      )
     (Some(F64(va)), Some(F64(vb))) => Some(ConstValue::F64(op(va, vb)))
     _ => None
   }

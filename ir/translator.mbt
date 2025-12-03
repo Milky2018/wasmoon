@@ -182,7 +182,7 @@ pub fn Translator::translate(
             }
           }
           // Reverse since we popped in wrong order
-          return_vals.rev_inplace()
+          return_vals.rev_in_place()
           self.builder.return_(return_vals)
         }
         Some(_) => ()
@@ -494,7 +494,7 @@ fn Translator::translate_instruction(
       for i = 0; i < results.length(); i = i + 1 {
         return_vals.push(self.pop())
       }
-      return_vals.rev_inplace()
+      return_vals.rev_in_place()
       self.builder.return_(return_vals)
     }
     Block(block_type, body) => self.translate_block(block_type, body)
@@ -640,7 +640,7 @@ fn Translator::translate_block(
           for i = 0; i < result_types.length(); i = i + 1 {
             args.push(self.pop())
           }
-          args.rev_inplace()
+          args.rev_in_place()
           self.builder.jump(continuation, args)
         }
         Some(_) => ()
@@ -679,7 +679,7 @@ fn Translator::translate_loop(
   for i = 0; i < param_types.length(); i = i + 1 {
     header_args.push(self.pop())
   }
-  header_args.rev_inplace()
+  header_args.rev_in_place()
   self.builder.jump(loop_header, header_args)
   // Switch to loop header
   self.builder.switch_to_block(loop_header)
@@ -711,7 +711,7 @@ fn Translator::translate_loop(
           for i = 0; i < result_types.length(); i = i + 1 {
             args.push(self.pop())
           }
-          args.rev_inplace()
+          args.rev_in_place()
           self.builder.jump(continuation, args)
         }
         Some(_) => ()
@@ -768,7 +768,7 @@ fn Translator::translate_if(
           for i = 0; i < result_types.length(); i = i + 1 {
             args.push(self.pop())
           }
-          args.rev_inplace()
+          args.rev_in_place()
           self.builder.jump(continuation, args)
         }
         Some(_) => ()
@@ -793,7 +793,7 @@ fn Translator::translate_if(
           for i = 0; i < result_types.length(); i = i + 1 {
             args.push(self.pop())
           }
-          args.rev_inplace()
+          args.rev_in_place()
           self.builder.jump(continuation, args)
         }
         Some(_) => ()
@@ -820,7 +820,7 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
     for i = 0; i < frame.result_types.length(); i = i + 1 {
       args.push(self.pop())
     }
-    args.rev_inplace()
+    args.rev_in_place()
     self.builder.jump(frame.block, args)
   }
 }
@@ -907,7 +907,7 @@ fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
     for i = 0; i < func_type.params.length(); i = i + 1 {
       args.push(self.pop())
     }
-    args.rev_inplace()
+    args.rev_in_place()
     // Get result type
     let result_ty : Type? = if func_type.results.length() > 0 {
       Some(Type::from_wasm(func_type.results[0]))
@@ -938,7 +938,7 @@ fn Translator::translate_call_indirect(
     for i = 0; i < func_type.params.length(); i = i + 1 {
       args.push(self.pop())
     }
-    args.rev_inplace()
+    args.rev_in_place()
     // Get result type
     let result_ty : Type? = if func_type.results.length() > 0 {
       Some(Type::from_wasm(func_type.results[0]))

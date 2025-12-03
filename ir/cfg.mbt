@@ -143,7 +143,7 @@ fn postorder_visit(
 /// This is useful for dataflow analysis
 pub fn CFG::reverse_postorder(self : CFG) -> Array[Int] {
   let po = self.postorder()
-  po.rev_inplace()
+  po.rev_in_place()
   po
 }
 
