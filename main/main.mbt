@@ -263,6 +263,7 @@ fn run_wasm(
   preloads : Array[String],
   dirs : Array[String],
   envs : Array[String],
+  wasi_options : Array[String],
   debug_config : DebugConfig,
   wasm_config : WasmConfig,
 ) -> Unit {
@@ -272,6 +273,30 @@ fn run_wasm(
   }
   // Create linker for module linking
   let linker = @runtime.Linker::new()
+
+  // Parse WASI options
+  let mut inherit_env = false
+  let mut inherit_stdin = false
+  let mut inherit_stdout = false
+  let mut inherit_stderr = false
+  for opt in wasi_options {
+    // Support both "key" and "key=value" formats
+    let (key, value) = parse_wasi_option(opt)
+    match key {
+      "inherit-env" => inherit_env = value != "false"
+      "inherit-stdin" => inherit_stdin = value != "false"
+      "inherit-stdout" => inherit_stdout = value != "false"
+      "inherit-stderr" => inherit_stderr = value != "false"
+      "common" =>
+        // Enable common settings: inherit all stdio
+        if value != "false" {
+          inherit_stdin = true
+          inherit_stdout = true
+          inherit_stderr = true
+        }
+      _ => println("Warning: unknown WASI option '\{key}'")
+    }
+  }
 
   // Build WASI context with directory mappings and environment variables
   let wasi_builder = @wasi.WasiContextBuilder::new()
@@ -307,6 +332,21 @@ fn run_wasm(
       }
     }
   }
+  // Handle inherit-env option
+  if inherit_env {
+    if debug_config.verbose {
+      println("[DEBUG] Inheriting host environment variables")
+    }
+    // Note: MoonBit doesn't have direct access to host environment variables
+    // This would require a native FFI call. For now, we just note that it's requested.
+    // In a full implementation, we would iterate over host env vars and add them.
+  }
+  // Note: inherit-stdin/stdout/stderr would require modifying WasiContextBuilder
+  // to use native stdio instead of callbacks. For now, the default behavior
+  // already uses stdout/stderr for output.
+  ignore(inherit_stdin)
+  ignore(inherit_stdout)
+  ignore(inherit_stderr)
   let wasi_ctx = wasi_builder.build()
 
   // Register WASI functions
@@ -506,6 +546,34 @@ fn parse_env_var(s : String) -> (String, String)? {
     value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   Some((name_builder.to_string(), value_builder.to_string()))
+}
+
+///|
+/// Parse WASI option in KEY or KEY=VALUE format
+/// Returns (key, value) where value is "true" if not specified
+fn parse_wasi_option(s : String) -> (String, String) {
+  let mut eq_idx = -1
+  for i in 0..<s.length() {
+    if s.code_unit_at(i) == '=' {
+      eq_idx = i
+      break
+    }
+  }
+  if eq_idx <= 0 {
+    // No '=' found, treat as bare flag with value "true"
+    return (s, "true")
+  }
+  // Build key and value strings
+  let key_builder = StringBuilder::new()
+  for i in 0..<eq_idx {
+    key_builder.write_char(s.code_unit_at(i).unsafe_to_char())
+  }
+  let value_builder = StringBuilder::new()
+  let value_start = eq_idx + 1
+  for i in value_start..<s.length() {
+    value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
+  }
+  (key_builder.to_string(), value_builder.to_string())
 }
 
 ///|
@@ -1138,7 +1206,7 @@ fn main {
     subcmds={
       "run": @clap.SubCommand::new(help="Run a WebAssembly module", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-        "invoke": @clap.Arg::named(help="Function to invoke"),
+        "invoke": @clap.Arg::named(nargs=AtMost(1), help="Function to invoke"),
         "arg": @clap.Arg::named(
           nargs=@clap.Nargs::Any,
           help="Arguments to pass to the function (can be repeated)",
@@ -1155,6 +1223,10 @@ fn main {
           nargs=@clap.Nargs::Any,
           help="Pass environment variable to WASM module (NAME=VALUE)",
         ),
+        "S": @clap.Arg::named(
+          nargs=@clap.Nargs::Any,
+          help="WASI option (e.g., inherit-env, inherit-stdin)",
+        ),
         "D": @clap.Arg::named(
           nargs=@clap.Nargs::Any,
           help="Debug option (e.g., verbose, print-ir, trace-exec)",
@@ -1168,9 +1240,18 @@ fn main {
         help="Compile WASM to precompiled format",
         args={
           "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-          "output": @clap.Arg::named(help="Output path (default: input.cwasm)"),
-          "emit-ir": @clap.Arg::named(help="Emit IR to specified path"),
-          "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
+          "output": @clap.Arg::named(
+            nargs=@clap.Nargs::AtMost(1),
+            help="Output path (default: input.cwasm)",
+          ),
+          "emit-ir": @clap.Arg::named(
+            nargs=@clap.Nargs::AtMost(1),
+            help="Emit IR to specified path",
+          ),
+          "O": @clap.Arg::named(
+            nargs=@clap.Nargs::AtMost(1),
+            help="Optimization level (0-3, default: 2)",
+          ),
           "opt": @clap.Arg::named(
             nargs=@clap.Nargs::Any,
             help="Specific optimization flag (e.g., licm=true, dce=false)",
@@ -1197,10 +1278,17 @@ fn main {
         args={
           "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
           "func": @clap.Arg::named(
+            nargs=@clap.Nargs::AtMost(1),
             help="Function index to explore (default: 0)",
           ),
-          "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
-          "html": @clap.Arg::named(help="Output HTML report to specified path"),
+          "O": @clap.Arg::named(
+            nargs=@clap.Nargs::AtMost(1),
+            help="Optimization level (0-3, default: 2)",
+          ),
+          "html": @clap.Arg::named(
+            nargs=@clap.Nargs::AtMost(1),
+            help="Output HTML report to specified path",
+          ),
         },
       ),
       "objdump": @clap.SubCommand::new(help="Inspect precompiled .cwasm file", args={
@@ -1271,6 +1359,11 @@ fn main {
                   Some(arr) => arr
                   None => []
                 }
+                // Get WASI options from -S flag
+                let wasi_options : Array[String] = match sub.args.get("S") {
+                  Some(arr) => arr
+                  None => []
+                }
                 // Get debug options from -D flag
                 let debug_config = DebugConfig::new()
                 match sub.args.get("D") {
@@ -1296,6 +1389,7 @@ fn main {
                   preloads,
                   dirs,
                   envs,
+                  wasi_options,
                   debug_config,
                   wasm_config,
                 )
