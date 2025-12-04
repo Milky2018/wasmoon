@@ -1206,10 +1206,7 @@ fn main {
     subcmds={
       "run": @clap.SubCommand::new(help="Run a WebAssembly module", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-        "invoke": @clap.Arg::named(
-          nargs=@clap.Nargs::One,
-          help="Function to invoke",
-        ),
+        "invoke": @clap.Arg::named(help="Function to invoke"),
         "arg": @clap.Arg::named(
           nargs=@clap.Nargs::Any,
           help="Arguments to pass to the function (can be repeated)",
@@ -1243,18 +1240,9 @@ fn main {
         help="Compile WASM to precompiled format",
         args={
           "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-          "output": @clap.Arg::named(
-            nargs=@clap.Nargs::One,
-            help="Output path (default: input.cwasm)",
-          ),
-          "emit-ir": @clap.Arg::named(
-            nargs=@clap.Nargs::One,
-            help="Emit IR to specified path",
-          ),
-          "O": @clap.Arg::named(
-            nargs=@clap.Nargs::One,
-            help="Optimization level (0-3, default: 2)",
-          ),
+          "output": @clap.Arg::named(help="Output path (default: input.cwasm)"),
+          "emit-ir": @clap.Arg::named(help="Emit IR to specified path"),
+          "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
           "opt": @clap.Arg::named(
             nargs=@clap.Nargs::Any,
             help="Specific optimization flag (e.g., licm=true, dce=false)",
@@ -1281,17 +1269,10 @@ fn main {
         args={
           "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
           "func": @clap.Arg::named(
-            nargs=@clap.Nargs::One,
             help="Function index to explore (default: 0)",
           ),
-          "O": @clap.Arg::named(
-            nargs=@clap.Nargs::One,
-            help="Optimization level (0-3, default: 2)",
-          ),
-          "html": @clap.Arg::named(
-            nargs=@clap.Nargs::One,
-            help="Output HTML report to specified path",
-          ),
+          "O": @clap.Arg::named(help="Optimization level (0-3, default: 2)"),
+          "html": @clap.Arg::named(help="Output HTML report to specified path"),
         },
       ),
       "objdump": @clap.SubCommand::new(help="Inspect precompiled .cwasm file", args={
