@@ -414,11 +414,15 @@ pub fn path_open(
   path_ptr : Int,
   path_len : Int,
   oflags : Int,
-  _fs_rights_base : Int64,
-  _fs_rights_inheriting : Int64,
+  fs_rights_base : Int64,
+  fs_rights_inheriting : Int64,
   fdflags : Int,
   opened_fd_ptr : Int,
 ) -> Int {
+  // Validate rights - only bits 0-28 are valid
+  if !is_valid_rights(fs_rights_base) || !is_valid_rights(fs_rights_inheriting) {
+    return Errno::Inval.to_i32()
+  }
   // Read path from memory
   let path = read_string_from_memory(mem, path_ptr, path_len)
   // Resolve the full host path

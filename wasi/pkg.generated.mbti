@@ -41,6 +41,8 @@ pub fn fd_tell(WasiContext, @runtime.Memory, Int, Int) -> Int
 
 pub fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
+pub fn is_valid_rights(Int64) -> Bool
+
 pub fn native_close(Int) -> Bool
 
 pub fn native_get_errno() -> Int
@@ -57,6 +59,8 @@ pub fn native_open_write(String) -> Int?
 
 pub fn native_read(Int, FixedArray[Byte], Int) -> Int?
 
+pub fn native_read_to_memory(Int, @runtime.Memory, Int, Int) -> Int?
+
 pub fn native_readdir(String) -> Array[(String, Bool)]?
 
 pub fn native_seek(Int, Int64, Whence) -> Int64?
@@ -69,11 +73,73 @@ pub fn path_create_directory(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
 
 pub fn path_open(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int64, Int64, Int, Int) -> Int
 
+pub fn print_string(String) -> Unit
+
 pub fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
 
 pub fn random_get(@runtime.Memory, Int, Int) -> Int
 
 pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit
+
+pub let right_fd_advise : Int64
+
+pub let right_fd_allocate : Int64
+
+pub let right_fd_datasync : Int64
+
+pub let right_fd_fdstat_set_flags : Int64
+
+pub let right_fd_filestat_get : Int64
+
+pub let right_fd_filestat_set_size : Int64
+
+pub let right_fd_filestat_set_times : Int64
+
+pub let right_fd_read : Int64
+
+pub let right_fd_readdir : Int64
+
+pub let right_fd_seek : Int64
+
+pub let right_fd_sync : Int64
+
+pub let right_fd_tell : Int64
+
+pub let right_fd_write : Int64
+
+pub let right_path_create_directory : Int64
+
+pub let right_path_create_file : Int64
+
+pub let right_path_filestat_get : Int64
+
+pub let right_path_filestat_set_size : Int64
+
+pub let right_path_filestat_set_times : Int64
+
+pub let right_path_link_source : Int64
+
+pub let right_path_link_target : Int64
+
+pub let right_path_open : Int64
+
+pub let right_path_readlink : Int64
+
+pub let right_path_remove_directory : Int64
+
+pub let right_path_rename_source : Int64
+
+pub let right_path_rename_target : Int64
+
+pub let right_path_symlink : Int64
+
+pub let right_path_unlink_file : Int64
+
+pub let right_poll_fd_readwrite : Int64
+
+pub let right_sock_shutdown : Int64
+
+pub let rights_all_valid : Int64
 
 pub fn sched_yield() -> Int
 
