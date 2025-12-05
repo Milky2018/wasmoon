@@ -130,7 +130,7 @@ fn run_wasm(
   // Load main module
   let mod_ = load_module_from_path(wasm_path) catch {
     e => {
-      println("Error: \{e}")
+      println("Error loading main module: \{e}")
       return
     }
   }
@@ -468,9 +468,9 @@ fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
 fn parse_func_args(
   params : Array[@types.ValueType],
   args : Array[String],
-) -> Array[@types.Value] raise Error {
+) -> Array[@types.Value] raise CliError {
   if args.length() != params.length() {
-    raise Failure("Expected \{params.length()} arguments, got \{args.length()}")
+    raise FuncArgNumError(params.length(), args.length())
   }
   let result : Array[@types.Value] = []
   for i, param in params {
@@ -481,7 +481,7 @@ fn parse_func_args(
           _ => {
             // Try parsing as unsigned
             let u = @strconv.parse_uint(arg) catch {
-              _ => raise Failure("Invalid i32 value: \{arg}")
+              _ => raise ArgTypeError(I32, arg)
             }
             u.reinterpret_as_int()
           }
@@ -492,7 +492,7 @@ fn parse_func_args(
         let n = @strconv.parse_int64(arg) catch {
           _ => {
             let u = @strconv.parse_uint64(arg) catch {
-              _ => raise Failure("Invalid i64 value: \{arg}")
+              _ => raise ArgTypeError(I64, arg)
             }
             u.reinterpret_as_int64()
           }
@@ -501,19 +501,17 @@ fn parse_func_args(
       }
       F32 => {
         let n = @strconv.parse_double(arg) catch {
-          _ => raise Failure("Invalid f32 value: \{arg}")
+          _ => raise ArgTypeError(F32, arg)
         }
         @types.Value::F32(Float::from_double(n))
       }
       F64 => {
         let n = @strconv.parse_double(arg) catch {
-          _ => raise Failure("Invalid f64 value: \{arg}")
+          _ => raise ArgTypeError(F64, arg)
         }
         @types.Value::F64(n)
       }
-      FuncRef => raise Failure("Cannot pass funcref as argument")
-      ExternRef => raise Failure("Cannot pass externref as argument")
-      _ => raise Failure("Unknown parameter type")
+      t => raise UnsupportedArgTypeError(t, arg)
     }
     result.push(value)
   }

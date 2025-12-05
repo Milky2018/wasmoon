@@ -25,12 +25,13 @@ pub fn run_test_command_with_line(TestContext, TestCommandWithLine, TestResult, 
 pub fn values_equal(@types.Value, @types.Value) -> Bool
 
 // Errors
-pub(all) suberror TestRunnerError {
+pub suberror TestRunnerError {
   FileNotFound(String)
   ParseError(String)
   ModuleLoadError(String)
   TestFailure(String)
 }
+pub impl Show for TestRunnerError
 
 // Types and methods
 pub(all) struct JsonValue {

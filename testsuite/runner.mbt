@@ -3,12 +3,12 @@
 
 ///|
 /// Test runner error types
-pub(all) suberror TestRunnerError {
+pub suberror TestRunnerError {
   FileNotFound(String)
   ParseError(String)
   ModuleLoadError(String)
   TestFailure(String)
-}
+} derive(Show) // FIXME: show implementation
 
 ///|
 /// JSON test file structure

@@ -61,8 +61,10 @@ fn run_testsuite(json_path : String) -> Unit {
 fn run_tests_internal(
   json_content : String,
   base_dir : String,
-) -> @testsuite.TestResult raise Error {
-  let parsed = @testsuite.parse_json_test_file(json_content)
+) -> @testsuite.TestResult raise CliError {
+  let parsed = @testsuite.parse_json_test_file(json_content) catch {
+    e => raise TestError(e.to_string())
+  }
   let result = @testsuite.TestResult::new()
   result.source_filename = parsed.source_filename
   let ctx = @testsuite.TestContext::new()

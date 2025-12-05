@@ -36,6 +36,13 @@ These examples require the `--dir` flag to grant filesystem access:
 ./wasmoon run examples/wasi_invalid_rights.wat --dir .
 ```
 
+### Benchmark
+
+```bash
+# CPU-intensive benchmark (~10 seconds)
+./wasmoon run examples/benchmark.wat
+```
+
 ## Example Descriptions
 
 | File | Description |
@@ -43,6 +50,7 @@ These examples require the `--dir` flag to grant filesystem access:
 | `add.wat` | Simple addition function, no WASI |
 | `hello_wasi.wat` | Print "Hello, World!" using WASI fd_write |
 | `args_wasi.wat` | Print command line arguments |
+| `benchmark.wat` | CPU-intensive Fibonacci benchmark (~10 seconds) |
 | `wasi_file_io.wat` | Full file I/O test: create, write, read, close |
 | `wasi_file_test.wat` | Test WASI function signatures and error codes |
 | `wasi_invalid_rights.wat` | Test that invalid rights are rejected |
