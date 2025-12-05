@@ -383,6 +383,32 @@ fn write_block_type(buf : StringBuilder, bt : @types.BlockType) -> Unit {
       write_value_type(buf, vt)
       buf.write_string(")")
     }
+    MultiValue(vts) => {
+      buf.write_string(" (result")
+      for vt in vts {
+        buf.write_string(" ")
+        write_value_type(buf, vt)
+      }
+      buf.write_string(")")
+    }
+    InlineType(params, results) => {
+      if params.length() > 0 {
+        buf.write_string(" (param")
+        for vt in params {
+          buf.write_string(" ")
+          write_value_type(buf, vt)
+        }
+        buf.write_string(")")
+      }
+      if results.length() > 0 {
+        buf.write_string(" (result")
+        for vt in results {
+          buf.write_string(" ")
+          write_value_type(buf, vt)
+        }
+        buf.write_string(")")
+      }
+    }
     TypeIndex(idx) => {
       buf.write_string(" (type ")
       buf.write_string(idx.to_string())

@@ -267,6 +267,8 @@ pub(all) enum Instruction {
 pub(all) enum BlockType {
   Empty
   Value(ValueType)
+  MultiValue(Array[ValueType]) // Multi-value results only (e.g., result i32 i64)
+  InlineType(Array[ValueType], Array[ValueType]) // (params, results) for blocks with params
   TypeIndex(Int)
 } derive(Eq, Show)
 
