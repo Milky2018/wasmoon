@@ -12,7 +12,7 @@
   ;; Messages
   (data (i32.const 128) "Running benchmark...\n")
   (data (i32.const 152) "Iteration ")
-  (data (i32.const 164) " of 10\n")
+  (data (i32.const 164) "/10\n")
   (data (i32.const 176) "Benchmark complete!\n")
 
   ;; Print helper
@@ -23,10 +23,19 @@
     drop
   )
 
-  ;; Print a single digit (0-9)
-  (func $print_digit (param $n i32)
-    (i32.store8 (i32.const 200) (i32.add (i32.const 48) (local.get $n)))
-    (call $print (i32.const 200) (i32.const 1))
+  ;; Print a number 1-10 (two characters: space+digit or "10")
+  (func $print_num (param $n i32)
+    (if (i32.eq (local.get $n) (i32.const 10))
+      (then
+        (i32.store8 (i32.const 200) (i32.const 49))  ;; '1'
+        (i32.store8 (i32.const 201) (i32.const 48))  ;; '0'
+      )
+      (else
+        (i32.store8 (i32.const 200) (i32.const 32))  ;; ' '
+        (i32.store8 (i32.const 201) (i32.add (i32.const 48) (local.get $n)))
+      )
+    )
+    (call $print (i32.const 200) (i32.const 2))
   )
 
   ;; Compute fibonacci(n) iteratively
@@ -70,15 +79,14 @@
 
         ;; Print progress
         (call $print (i32.const 152) (i32.const 10))
-        (call $print_digit (i32.add (local.get $outer) (i32.const 1)))
-        (call $print (i32.const 164) (i32.const 7))
+        (call $print_num (i32.add (local.get $outer) (i32.const 1)))
+        (call $print (i32.const 164) (i32.const 4))
 
         ;; Inner loop: compute fib(80) many times
-        ;; ~1 second per outer iteration
         (local.set $inner (i32.const 0))
         (block $inner_done
           (loop $inner_loop
-            (br_if $inner_done (i32.ge_u (local.get $inner) (i32.const 5000000)))
+            (br_if $inner_done (i32.ge_u (local.get $inner) (i32.const 70000)))
             (local.set $result (call $fib (i32.const 80)))
             (local.set $inner (i32.add (local.get $inner) (i32.const 1)))
             (br $inner_loop)
