@@ -17,7 +17,83 @@ suberror ParserError {
   InvalidImportKind(Int)
   InvalidExportKind(Int)
   ParseError(String) // Generic error with message
-} derive(Show)
+}
+
+///|
+/// Convert int to hex string
+fn int_to_hex(n : Int) -> String {
+  if n == 0 {
+    return "0"
+  }
+  let digits = "0123456789abcdef"
+  let buf = StringBuilder::new()
+  let mut val = n
+  while val > 0 {
+    let digit = val % 16
+    buf.write_char(digits.code_unit_at(digit).unsafe_to_char())
+    val = val / 16
+  }
+  // Reverse the string
+  let s = buf.to_string()
+  let len = s.length()
+  let result = StringBuilder::new()
+  for i in 0..<len {
+    result.write_char(s.code_unit_at(len - 1 - i).unsafe_to_char())
+  }
+  result.to_string()
+}
+
+///|
+/// Provide human-readable error messages for parser errors
+pub impl Show for ParserError with output(self, logger) {
+  let msg = match self {
+    UnexpectedEndOfInput => "unexpected end of input"
+    InvalidMagicNumber =>
+      "invalid magic number (expected \\00asm, file may not be a valid WebAssembly module)"
+    UnsupportedVersion => "unsupported WebAssembly version (expected version 1)"
+    InvalidValueType(code) => {
+      let type_hint = match code {
+        0x7F => " (i32)"
+        0x7E => " (i64)"
+        0x7D => " (f32)"
+        0x7C => " (f64)"
+        0x70 => " (funcref)"
+        0x6F => " (externref)"
+        _ => ""
+      }
+      "invalid value type 0x\{int_to_hex(code)}\{type_hint}"
+    }
+    LEB128TooLarge => "LEB128 encoded integer is too large"
+    SectionSizeMismatch =>
+      "section size mismatch (declared size doesn't match actual content)"
+    UnknownOpcode(opcode) =>
+      "unknown opcode 0x\{int_to_hex(opcode)} at current position"
+    InvalidImportKind(kind) => {
+      let kind_hint = match kind {
+        0 => " (expected: 0=func, 1=table, 2=memory, 3=global)"
+        1 => " (table)"
+        2 => " (memory)"
+        3 => " (global)"
+        4 => " (tag/exception - not yet supported)"
+        _ => " (expected: 0=func, 1=table, 2=memory, 3=global)"
+      }
+      "invalid import kind \{kind}\{kind_hint}"
+    }
+    InvalidExportKind(kind) => {
+      let kind_hint = match kind {
+        0 => " (func)"
+        1 => " (table)"
+        2 => " (memory)"
+        3 => " (global)"
+        4 => " (tag/exception - not yet supported)"
+        _ => " (expected: 0=func, 1=table, 2=memory, 3=global)"
+      }
+      "invalid export kind \{kind}\{kind_hint}"
+    }
+    ParseError(msg) => msg
+  }
+  logger.write_string(msg)
+}
 
 // ============================================================
 // Parser State
