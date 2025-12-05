@@ -188,7 +188,7 @@ test "translate simple add function" {
     @types.Instruction::LocalGet(1),
     @types.Instruction::I32Add,
   ]
-  let translator = Translator::new("add", func_type, [], [func_type], [0], 0)
+  let translator = Translator::new("add", func_type, [], [func_type], [0], 0, [])
   let func = translator.translate(instrs)
   let output = func.print()
   let expected =
@@ -222,6 +222,7 @@ test "translate multiply and add" {
     [func_type],
     [0],
     0,
+    [],
   )
   let func = translator.translate(instrs)
   let output = func.print()
@@ -264,6 +265,7 @@ test "translate with local variable" {
     [func_type],
     [0],
     0,
+    [],
   )
   let func = translator.translate(instrs)
   let output = func.print()
@@ -297,7 +299,7 @@ test "translate comparison" {
     @types.Instruction::I32GtS,
     @types.Instruction::Select,
   ]
-  let translator = Translator::new("max", func_type, [], [func_type], [0], 0)
+  let translator = Translator::new("max", func_type, [], [func_type], [0], 0, [])
   let func = translator.translate(instrs)
   let output = func.print()
   let expected =
@@ -356,7 +358,7 @@ test "validate translated function" {
     @types.Instruction::LocalGet(1),
     @types.Instruction::I32Add,
   ]
-  let translator = Translator::new("add", func_type, [], [func_type], [0], 0)
+  let translator = Translator::new("add", func_type, [], [func_type], [0], 0, [])
   let func = translator.translate(instrs)
   let result = validate_function(func)
   assert_true(result.valid)

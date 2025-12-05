@@ -309,8 +309,9 @@ pub(all) struct Translator {
   func_types : Array[@types.FuncType]
   func_type_indices : Array[Int]
   num_imports : Int
+  import_func_type_indices : Array[Int]
 }
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {

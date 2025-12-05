@@ -46,6 +46,14 @@ fn run_explore(
 
   // Get function info
   let num_imports = count_func_imports(mod_.imports)
+
+  // Build import function type indices
+  let import_func_type_indices : Array[Int] = []
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      import_func_type_indices.push(type_idx)
+    }
+  }
   let type_idx = mod_.funcs[func_idx]
   let func_type = mod_.types[type_idx]
   let code = mod_.codes[func_idx]
@@ -72,6 +80,7 @@ fn run_explore(
     mod_.types,
     mod_.funcs,
     num_imports,
+    import_func_type_indices,
   )
   let ir_func = translator.translate(code.body)
   let ir_text = ir_func.print()

@@ -29,6 +29,14 @@ fn run_compile(
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
   let num_imports = count_func_imports(mod_.imports)
 
+  // Build import function type indices
+  let import_func_type_indices : Array[Int] = []
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      import_func_type_indices.push(type_idx)
+    }
+  }
+
   // IR output buffer (if requested)
   let ir_output = match emit_ir {
     Some(_) => Some(StringBuilder::new())
@@ -59,6 +67,7 @@ fn run_compile(
       mod_.types,
       mod_.funcs,
       num_imports,
+      import_func_type_indices,
     )
     let ir_func = translator.translate(code.body)
 
