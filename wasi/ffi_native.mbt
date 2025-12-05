@@ -354,3 +354,45 @@ fn utf8_bytes_to_string(bytes : Bytes) -> String {
   }
   String::from_array(chars)
 }
+
+///|
+/// Print string to stdout without newline
+#borrow(str)
+extern "c" fn c_print_string(str : FixedArray[Byte], len : Int) -> Unit = "wasmoon_print_string"
+
+///|
+/// Print a string to stdout without newline
+pub fn print_string(s : String) -> Unit {
+  let bytes = string_to_cstring(s)
+  // Find actual length (excluding null terminator)
+  let mut len = 0
+  while len < bytes.length() && bytes[len] != b'\x00' {
+    len = len + 1
+  }
+  c_print_string(bytes, len)
+}
+
+///|
+/// Read from a file descriptor directly into WASM memory
+/// This avoids the FixedArray issue by reading byte by byte
+pub fn native_read_to_memory(
+  fd : Int,
+  mem : @runtime.Memory,
+  buf_ptr : Int,
+  count : Int,
+) -> Int? {
+  let buf = FixedArray::make(1, b'\x00')
+  let mut total_read = 0
+  for i in 0..<count {
+    let n = c_read(fd, buf, 1)
+    if n < 0 {
+      return if total_read > 0 { Some(total_read) } else { None }
+    }
+    if n == 0 {
+      break // EOF
+    }
+    mem.write_byte(buf_ptr + i, buf[0])
+    total_read = total_read + 1
+  }
+  Some(total_read)
+}

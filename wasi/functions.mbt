@@ -24,31 +24,56 @@ pub fn fd_write(
   iovs_len : Int,
   nwritten_ptr : Int,
 ) -> Int {
-  // Validate fd
   let fd_val = Fd(fd)
-  if fd_val != stdout && fd_val != stderr {
-    return Errno::Badf.to_i32()
-  }
-  // Collect all data from iovecs
-  let mut total_written = 0
-  for i in 0..<iovs_len {
-    // Each iovec is 8 bytes: buf (4) + buf_len (4)
-    let iov_offset = iovs + i * 8
-    let buf_ptr = mem.read_i32(iov_offset)
-    let buf_len = mem.read_i32(iov_offset + 4)
-    if buf_len > 0 {
-      let data = mem.read_bytes(buf_ptr, buf_len)
-      if fd_val == stdout {
-        (ctx.stdout_callback)(data)
-      } else {
-        (ctx.stderr_callback)(data)
+  // Handle stdout/stderr
+  if fd_val == stdout || fd_val == stderr {
+    let mut total_written = 0
+    for i in 0..<iovs_len {
+      let iov_offset = iovs + i * 8
+      let buf_ptr = mem.read_i32(iov_offset)
+      let buf_len = mem.read_i32(iov_offset + 4)
+      if buf_len > 0 {
+        let data = mem.read_bytes(buf_ptr, buf_len)
+        if fd_val == stdout {
+          (ctx.stdout_callback)(data)
+        } else {
+          (ctx.stderr_callback)(data)
+        }
+        total_written = total_written + buf_len
       }
-      total_written = total_written + buf_len
     }
+    mem.write_i32(nwritten_ptr, total_written)
+    return Errno::Success.to_i32()
   }
-  // Write total bytes written
-  mem.write_i32(nwritten_ptr, total_written)
-  Errno::Success.to_i32()
+  // Handle opened files
+  match ctx.open_files.get(fd) {
+    Some(file_entry) => {
+      let mut total_written = 0
+      for i in 0..<iovs_len {
+        let iov_offset = iovs + i * 8
+        let buf_ptr = mem.read_i32(iov_offset)
+        let buf_len = mem.read_i32(iov_offset + 4)
+        if buf_len > 0 {
+          // Create buffer and copy data
+          let buf = FixedArray::make(buf_len, b'\x00')
+          for j in 0..<buf_len {
+            buf[j] = mem.read_byte(buf_ptr + j)
+          }
+          let written = native_write(file_entry.native_fd, buf, buf_len)
+          match written {
+            Some(n) => total_written = total_written + n
+            None => {
+              mem.write_i32(nwritten_ptr, total_written)
+              return Errno::IO.to_i32()
+            }
+          }
+        }
+      }
+      mem.write_i32(nwritten_ptr, total_written)
+      Errno::Success.to_i32()
+    }
+    None => Errno::Badf.to_i32()
+  }
 }
 
 ///|
@@ -69,33 +94,62 @@ pub fn fd_read(
   iovs_len : Int,
   nread_ptr : Int,
 ) -> Int {
-  // Only stdin (fd 0) is supported for reading
-  if fd != 0 {
-    return Errno::Badf.to_i32()
-  }
-  // Get input data
-  let input_data = (ctx.stdin_callback)()
-  let mut total_read = 0
-  let mut input_offset = 0
-  for i in 0..<iovs_len {
-    if input_offset >= input_data.length() {
-      break
+  // Handle stdin
+  if fd == 0 {
+    let input_data = (ctx.stdin_callback)()
+    let mut total_read = 0
+    let mut input_offset = 0
+    for i in 0..<iovs_len {
+      if input_offset >= input_data.length() {
+        break
+      }
+      let iov_offset = iovs + i * 8
+      let buf_ptr = mem.read_i32(iov_offset)
+      let buf_len = mem.read_i32(iov_offset + 4)
+      let to_copy = @cmp.minimum(buf_len, input_data.length() - input_offset)
+      for j in 0..<to_copy {
+        mem.write_byte(buf_ptr + j, input_data[input_offset + j])
+      }
+      input_offset = input_offset + to_copy
+      total_read = total_read + to_copy
     }
-    // Each iovec is 8 bytes: buf (4) + buf_len (4)
-    let iov_offset = iovs + i * 8
-    let buf_ptr = mem.read_i32(iov_offset)
-    let buf_len = mem.read_i32(iov_offset + 4)
-    // Copy data to buffer
-    let to_copy = @cmp.minimum(buf_len, input_data.length() - input_offset)
-    for j in 0..<to_copy {
-      mem.write_byte(buf_ptr + j, input_data[input_offset + j])
-    }
-    input_offset = input_offset + to_copy
-    total_read = total_read + to_copy
+    mem.write_i32(nread_ptr, total_read)
+    return Errno::Success.to_i32()
   }
-  // Write total bytes read
-  mem.write_i32(nread_ptr, total_read)
-  Errno::Success.to_i32()
+  // Handle opened files
+  match ctx.open_files.get(fd) {
+    Some(file_entry) => {
+      let mut total_read = 0
+      for i in 0..<iovs_len {
+        let iov_offset = iovs + i * 8
+        let buf_ptr = mem.read_i32(iov_offset)
+        let buf_len = mem.read_i32(iov_offset + 4)
+        if buf_len > 0 {
+          let read_result = native_read_to_memory(
+            file_entry.native_fd,
+            mem,
+            buf_ptr,
+            buf_len,
+          )
+          match read_result {
+            Some(n) => {
+              total_read = total_read + n
+              if n < buf_len {
+                break // EOF or partial read
+              }
+            }
+            None => {
+              mem.write_i32(nread_ptr, total_read)
+              return Errno::IO.to_i32()
+            }
+          }
+        }
+      }
+      mem.write_i32(nread_ptr, total_read)
+      Errno::Success.to_i32()
+    }
+    None => Errno::Badf.to_i32()
+  }
 }
 
 ///|

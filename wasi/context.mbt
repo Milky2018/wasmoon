@@ -82,7 +82,7 @@ fn print_bytes(bytes : Bytes) -> Unit {
       buf.write_char('?')
     }
   }
-  println(buf.to_string())
+  print_string(buf.to_string())
 }
 
 ///|
