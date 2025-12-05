@@ -298,3 +298,14 @@ test "format_wat_error with unexpected token" {
   assert_true(formatted.contains("unexpected token"))
   assert_true(formatted.contains("line 1"))
 }
+
+///|
+test "parse inline table elem syntax" {
+  let wat =
+    #|(module
+    #|  (table funcref (elem 0))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables.length(), content="1")
+  inspect(mod_.elems.length(), content="1")
+}

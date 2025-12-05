@@ -323,6 +323,45 @@ fn Lexer::read_number(self : Lexer) -> String {
   if self.peek_char() is (Some('-') | Some('+')) {
     buf.write_char(self.next_char().unwrap())
   }
+  // Handle "inf" after sign (e.g., -inf, +inf)
+  if self.pos + 2 < self.input.length() {
+    let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
+    let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
+    let c3 = self.input.code_unit_at(self.pos + 2).unsafe_to_char()
+    if c1 == 'i' && c2 == 'n' && c3 == 'f' {
+      buf.write_string("inf")
+      self.pos += 3
+      return buf.to_string()
+    }
+    // Handle "nan" after sign (e.g., -nan, +nan, -nan:0x200000)
+    if c1 == 'n' && c2 == 'a' && c3 == 'n' {
+      buf.write_string("nan")
+      self.pos += 3
+      // Check for nan:payload format
+      if !self.is_eof() && self.peek_char() == Some(':') {
+        buf.write_char(':')
+        self.pos += 1
+        // Read payload (hex number)
+        while !self.is_eof() {
+          match self.peek_char() {
+            Some(c) =>
+              if (c >= '0' && c <= '9') ||
+                (c >= 'a' && c <= 'f') ||
+                (c >= 'A' && c <= 'F') ||
+                c == 'x' ||
+                c == 'X' {
+                buf.write_char(c)
+                self.pos += 1
+              } else {
+                break
+              }
+            None => break
+          }
+        }
+      }
+      return buf.to_string()
+    }
+  }
   // Handle 0x prefix for hex
   if self.pos + 1 < self.input.length() {
     let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
@@ -1012,8 +1051,13 @@ fn parse_hex_int64(s : String) -> Int64 raise WastError {
 ///|
 fn parse_float32(s : String) -> Float raise WastError {
   // Handle special values
-  if s == "nan" {
-    return (0.0 : Float) / (0.0 : Float) // NaN
+  if s == "nan" ||
+    s == "+nan" ||
+    s == "-nan" ||
+    s.has_prefix("nan:") ||
+    s.has_prefix("+nan:") ||
+    s.has_prefix("-nan:") {
+    return (0.0 : Float) / (0.0 : Float) // NaN (payload ignored for now)
   }
   if s == "inf" || s == "+inf" {
     return (1.0 : Float) / (0.0 : Float) // positive infinity
@@ -1039,8 +1083,13 @@ fn parse_float32(s : String) -> Float raise WastError {
 ///|
 fn parse_float64(s : String) -> Double raise WastError {
   // Handle special values
-  if s == "nan" {
-    return 0.0 / 0.0 // NaN
+  if s == "nan" ||
+    s == "+nan" ||
+    s == "-nan" ||
+    s.has_prefix("nan:") ||
+    s.has_prefix("+nan:") ||
+    s.has_prefix("-nan:") {
+    return 0.0 / 0.0 // NaN (payload ignored for now)
   }
   if s == "inf" || s == "+inf" {
     return 1.0 / 0.0 // positive infinity

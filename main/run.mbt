@@ -243,22 +243,6 @@ fn run_wasm(
 }
 
 ///|
-/// Read wasm file for a command that needs it
-fn read_wasm_file(base_dir : String, filename : String) -> Bytes? {
-  let wasm_path = base_dir + "/" + filename
-  let data = Some(@fs.read_file_to_bytes(wasm_path)) catch { _ => None }
-  data
-}
-
-///|
-/// Read text file for WAT parsing
-fn read_text_file(base_dir : String, filename : String) -> String? {
-  let path = base_dir + "/" + filename
-  let content = Some(@fs.read_file_to_string(path)) catch { _ => None }
-  content
-}
-
-///|
 /// Split preload string in NAME=PATH format
 fn split_preload(s : String) -> (String, String)? {
   let mut eq_idx = -1

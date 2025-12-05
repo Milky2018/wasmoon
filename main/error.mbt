@@ -9,7 +9,6 @@ priv suberror CliError {
   ModuleNotFound(String)
   NoCurrentModule
   RuntimeError(String)
-  TestError(String)
 }
 
 ///|
@@ -26,7 +25,6 @@ impl Show for CliError with output(self, logger) {
     ModuleNotFound(name) => "module \{name} not found"
     NoCurrentModule => "no current module"
     RuntimeError(e) => "runtime error: \{e}"
-    TestError(e) => "testsuite error: \{e}"
   }
   logger.write_string(msg)
 }

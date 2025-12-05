@@ -2,7 +2,6 @@
   "is-main": true,
   "import": [
     "Milky2018/wasmoon/types",
-    "Milky2018/wasmoon/testsuite",
     "Milky2018/wasmoon/parser",
     "Milky2018/wasmoon/validator",
     "Milky2018/wasmoon/disasm",
