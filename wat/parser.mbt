@@ -1,4 +1,31 @@
 ///|
+/// Result of parsing a func definition - can be a regular function or an inline import
+priv enum FuncDefResult {
+  /// Regular function definition: (type_idx, code, export_name)
+  FuncDef(Int, @types.FunctionCode, String?)
+  /// Inline import: the import definition
+  InlineImport(@types.Import, String?) // import, optional export name
+}
+
+///|
+/// Result of parsing a global definition - can be a regular global or an inline import
+priv enum GlobalDefResult {
+  /// Regular global definition: (global, export_name)
+  GlobalDef(@types.Global, String?)
+  /// Inline import: the import definition
+  GlobalImport(@types.Import, String?) // import, optional export name
+}
+
+///|
+/// Result of parsing a memory definition - can be a regular memory or an inline import
+priv enum MemoryDefResult {
+  /// Regular memory definition: (memory_type, export_name)
+  MemoryDef(@types.MemoryType, String?)
+  /// Inline import: the import definition
+  MemoryImport(@types.Import, String?) // import, optional export name
+}
+
+///|
 /// WAT Parser
 priv struct Parser {
   lexer : Lexer
@@ -427,6 +454,44 @@ fn parse_hex_float64(s : String) -> Double raise WatError {
 ///|
 fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
   match self.current {
+    LParen => {
+      // Handle (ref ...) types
+      self.advance()
+      self.expect_keyword("ref")
+      // Check for nullable: (ref null ...)
+      let mut is_extern = false
+      if self.current == Keyword("null") {
+        self.advance()
+      }
+      // Parse heap type: func, extern, or $typeidx
+      match self.current {
+        Keyword("func") => {
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::FuncRef
+        }
+        Keyword("extern") => {
+          is_extern = true
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::ExternRef
+        }
+        Id(_) => {
+          // Typed function reference like (ref $t) - treat as FuncRef for now
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::FuncRef
+        }
+        _ => {
+          self.expect_rparen()
+          if is_extern {
+            @types.ValueType::ExternRef
+          } else {
+            @types.ValueType::FuncRef
+          }
+        }
+      }
+    }
     Keyword(kw) => {
       self.advance()
       match kw {
@@ -472,6 +537,12 @@ pub fn parse(input : String) -> @types.Module raise WatError {
 fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   self.expect_lparen()
   self.expect_keyword("module")
+
+  // Optional module name
+  if self.current is Id(_) {
+    self.advance()
+  }
+
   let mod_ = @types.Module::new()
 
   // First pass: collect function names (to support forward references)
@@ -559,39 +630,91 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             mod_.types.push(ft)
           }
           Keyword("func") => {
-            let (type_idx, code, export_name) = self.parse_func_def(mod_)
-            // func_idx must account for imported functions
-            let func_idx = count_func_imports(mod_.imports) +
-              mod_.funcs.length()
-            mod_.funcs.push(type_idx)
-            mod_.codes.push(code)
-            if export_name is Some(name) {
-              mod_.exports.push({
-                name,
-                desc: @types.ExportDesc::Func(func_idx),
-              })
+            match self.parse_func_def(mod_) {
+              FuncDef(type_idx, code, export_name) => {
+                // func_idx must account for imported functions
+                let func_idx = count_func_imports(mod_.imports) +
+                  mod_.funcs.length()
+                mod_.funcs.push(type_idx)
+                mod_.codes.push(code)
+                if export_name is Some(name) {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Func(func_idx),
+                  })
+                }
+              }
+              InlineImport(imp, export_name) => {
+                // Add the import and optionally export it
+                let func_idx = count_func_imports(mod_.imports)
+                mod_.imports.push(imp)
+                if export_name is Some(name) {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Func(func_idx),
+                  })
+                }
+              }
             }
           }
           Keyword("memory") => {
-            let (mem, export_name) = self.parse_memory_def()
-            let mem_idx = mod_.memories.length()
-            mod_.memories.push(mem)
-            if export_name is Some(name) {
-              mod_.exports.push({
-                name,
-                desc: @types.ExportDesc::Memory(mem_idx),
-              })
+            match self.parse_memory_def() {
+              MemoryDef(mem, export_name) => {
+                let mem_idx = mod_.memories.length()
+                mod_.memories.push(mem)
+                if export_name is Some(name) {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Memory(mem_idx),
+                  })
+                }
+              }
+              MemoryImport(imp, export_name) => {
+                // Count existing memory imports
+                let mut memory_import_count = 0
+                for existing in mod_.imports {
+                  if existing.desc is @types.ImportDesc::Memory(_) {
+                    memory_import_count += 1
+                  }
+                }
+                mod_.imports.push(imp)
+                if export_name is Some(name) {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Memory(memory_import_count),
+                  })
+                }
+              }
             }
           }
           Keyword("global") => {
-            let (global, export_name) = self.parse_global_def()
-            let global_idx = mod_.globals.length()
-            mod_.globals.push(global)
-            if export_name is Some(name) {
-              mod_.exports.push({
-                name,
-                desc: @types.ExportDesc::Global(global_idx),
-              })
+            match self.parse_global_def() {
+              GlobalDef(global, export_name) => {
+                let global_idx = mod_.globals.length()
+                mod_.globals.push(global)
+                if export_name is Some(name) {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Global(global_idx),
+                  })
+                }
+              }
+              GlobalImport(imp, export_name) => {
+                // Count existing global imports
+                let mut global_import_count = 0
+                for existing in mod_.imports {
+                  if existing.desc is @types.ImportDesc::Global(_) {
+                    global_import_count += 1
+                  }
+                }
+                mod_.imports.push(imp)
+                if export_name is Some(name) {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Global(global_import_count),
+                  })
+                }
+              }
             }
           }
           Keyword("export") => {
@@ -617,6 +740,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             }
           }
           Keyword("start") => {
+            self.advance() // skip "start"
             let func_idx = self.parse_func_idx()
             mod_.start = Some(func_idx)
             self.expect_rparen()
@@ -705,16 +829,15 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
 fn Parser::parse_func_def(
   self : Parser,
   mod_ : @types.Module,
-) -> (Int, @types.FunctionCode, String?) raise WatError {
+) -> FuncDefResult raise WatError {
   self.advance() // skip "func"
   let mut export_name : String? = None
-  // func_idx must account for imported functions
-  let func_idx = count_func_imports(mod_.imports) + mod_.funcs.length()
+  let mut func_name : String? = None
 
   // Optional function name
   match self.current {
     Id(name) => {
-      self.func_names.set(name, func_idx)
+      func_name = Some(name)
       self.advance()
     }
     _ => ()
@@ -722,6 +845,177 @@ fn Parser::parse_func_def(
 
   // Clear local names for this function
   self.local_names.clear()
+
+  // Check for inline import: (func $f (import "mod" "name") ...)
+  // This must be checked before export because import comes first
+  if self.current == LParen {
+    let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
+    self.advance()
+    match self.current {
+      Keyword("import") => {
+        self.advance()
+        // Parse module name and import name
+        let mod_name = match self.current {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected module name", self.loc())
+        }
+        let import_name = match self.current {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected import name", self.loc())
+        }
+        self.expect_rparen() // close import
+
+        // Check for inline export after import
+        if self.current == LParen {
+          let saved2 = self.lexer.pos
+          self.advance()
+          match self.current {
+            Keyword("export") => {
+              self.advance()
+              match self.current {
+                String_(s) => {
+                  export_name = Some(s)
+                  self.advance()
+                }
+                _ => raise UnexpectedToken("expected export name", self.loc())
+              }
+              self.expect_rparen()
+            }
+            _ => {
+              self.lexer.pos = saved2
+              self.current = LParen
+            }
+          }
+        }
+
+        // Parse type reference or inline type for the import
+        let mut type_idx = -1
+        let inline_params : Array[@types.ValueType] = []
+        let inline_results : Array[@types.ValueType] = []
+
+        while self.current == LParen {
+          let saved2 = self.lexer.pos
+          self.advance()
+          match self.current {
+            Keyword("type") => {
+              self.advance()
+              type_idx = self.parse_type_idx()
+              self.expect_rparen()
+            }
+            Keyword("param") => {
+              self.advance()
+              // Optional name
+              match self.current {
+                Id(name) => {
+                  self.local_names.set(name, inline_params.length())
+                  self.advance()
+                }
+                _ => ()
+              }
+              while self.current != RParen {
+                inline_params.push(self.parse_value_type())
+              }
+              self.expect_rparen()
+            }
+            Keyword("result") => {
+              self.advance()
+              while self.current != RParen {
+                inline_results.push(self.parse_value_type())
+              }
+              self.expect_rparen()
+            }
+            _ => {
+              self.lexer.pos = saved2
+              self.current = LParen
+              break
+            }
+          }
+        }
+
+        // Create type if needed
+        if type_idx < 0 {
+          let ft : @types.FuncType = {
+            params: inline_params,
+            results: inline_results,
+          }
+          // Check if this type already exists
+          let mut found = -1
+          for i, t in mod_.types {
+            if t.params.length() == ft.params.length() &&
+              t.results.length() == ft.results.length() {
+              let mut match_ = true
+              for j, p in t.params {
+                if p != ft.params[j] {
+                  match_ = false
+                  break
+                }
+              }
+              if match_ {
+                for j, r in t.results {
+                  if r != ft.results[j] {
+                    match_ = false
+                    break
+                  }
+                }
+              }
+              if match_ {
+                found = i
+                break
+              }
+            }
+          }
+          if found >= 0 {
+            type_idx = found
+          } else {
+            type_idx = mod_.types.length()
+            mod_.types.push(ft)
+          }
+        }
+
+        self.expect_rparen() // close func
+
+        // Register function name with index (will be assigned when import is added)
+        // The func_idx for imports needs to be the count of existing function imports
+        let import_func_idx = count_func_imports(mod_.imports)
+        if func_name is Some(name) {
+          self.func_names.set(name, import_func_idx)
+        }
+
+        let imp : @types.Import = {
+          mod_name,
+          name: import_name,
+          desc: @types.ImportDesc::Func(type_idx),
+        }
+        return FuncDefResult::InlineImport(imp, export_name)
+      }
+      _ => {
+        // Not an inline import, restore state
+        self.lexer.pos = saved
+        self.lexer.line = saved_line
+        self.lexer.column = saved_column
+        self.lexer.token_start_line = saved_token_start_line
+        self.lexer.token_start_column = saved_token_start_column
+        self.current = LParen
+      }
+    }
+  }
+
+  // Regular function definition - register the name now
+  // func_idx must account for imported functions
+  let func_idx = count_func_imports(mod_.imports) + mod_.funcs.length()
+  if func_name is Some(name) {
+    self.func_names.set(name, func_idx)
+  }
 
   // Check for inline export
   if self.current == LParen {
@@ -864,7 +1158,7 @@ fn Parser::parse_func_def(
   // Parse body instructions
   let body = self.parse_instructions()
   self.expect_rparen() // close func
-  (type_idx, { locals, body }, export_name)
+  FuncDefResult::FuncDef(type_idx, { locals, body }, export_name)
 }
 
 ///|
@@ -1121,17 +1415,85 @@ fn Parser::parse_plain_instruction(
     "return" => @types.Instruction::Return
     "call" => @types.Instruction::Call(self.parse_func_idx())
     "call_indirect" => {
-      // Parse (type $idx)
-      self.expect_lparen()
-      self.expect_keyword("type")
-      let type_idx = self.parse_type_idx()
-      self.expect_rparen()
-      @types.Instruction::CallIndirect(type_idx, 0)
+      // call_indirect can have various forms:
+      // (call_indirect (type $t) ...)
+      // (call_indirect (param ...) (result ...) ...)
+      // (call_indirect ...)  - empty type
+      let table_idx = 0
+      let mut type_idx = -1
+
+      // Parse optional type/param/result annotations
+      while self.current == LParen {
+        let saved = self.lexer.pos
+        let saved_line = self.lexer.line
+        let saved_column = self.lexer.column
+        let saved_token_start_line = self.lexer.token_start_line
+        let saved_token_start_column = self.lexer.token_start_column
+        self.advance()
+        match self.current {
+          Keyword("type") => {
+            self.advance()
+            type_idx = self.parse_type_idx()
+            self.expect_rparen()
+          }
+          Keyword("param") | Keyword("result") => {
+            // Skip inline param/result - they should match the type
+            while self.current != RParen {
+              self.advance()
+            }
+            self.expect_rparen()
+          }
+          _ => {
+            // Not a type annotation, restore state (this is an operand)
+            self.lexer.pos = saved
+            self.lexer.line = saved_line
+            self.lexer.column = saved_column
+            self.lexer.token_start_line = saved_token_start_line
+            self.lexer.token_start_column = saved_token_start_column
+            self.current = LParen
+            break
+          }
+        }
+      }
+      if type_idx < 0 {
+        type_idx = 0 // Default to type 0 if not specified
+      }
+      @types.Instruction::CallIndirect(type_idx, table_idx)
     }
 
     // Parametric
     "drop" => @types.Instruction::Drop
-    "select" => @types.Instruction::Select
+    "select" => {
+      // select can have optional (result type) annotations
+      while self.current == LParen {
+        let saved = self.lexer.pos
+        let saved_line = self.lexer.line
+        let saved_column = self.lexer.column
+        let saved_token_start_line = self.lexer.token_start_line
+        let saved_token_start_column = self.lexer.token_start_column
+        self.advance()
+        match self.current {
+          Keyword("result") => {
+            // Skip result type annotation
+            while self.current != RParen {
+              self.advance()
+            }
+            self.expect_rparen()
+          }
+          _ => {
+            // Not a type annotation, restore state
+            self.lexer.pos = saved
+            self.lexer.line = saved_line
+            self.lexer.column = saved_column
+            self.lexer.token_start_line = saved_token_start_line
+            self.lexer.token_start_column = saved_token_start_column
+            self.current = LParen
+            break
+          }
+        }
+      }
+      @types.Instruction::Select
+    }
 
     // Reference types
     "ref.null" => {
@@ -1623,6 +1985,11 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       self.advance()
       @types.ValueType::ExternRef
     }
+    Id(_) => {
+      // Type index like $t - treat as FuncRef for now
+      self.advance()
+      @types.ValueType::FuncRef
+    }
     _ =>
       raise UnexpectedToken(
         "expected reference type (func, extern, funcref, externref)",
@@ -1653,7 +2020,7 @@ fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
 ///|
 fn Parser::parse_memory_def(
   self : Parser,
-) -> (@types.MemoryType, String?) raise WatError {
+) -> MemoryDefResult raise WatError {
   self.advance() // skip "memory"
   let mut export_name : String? = None
 
@@ -1666,11 +2033,72 @@ fn Parser::parse_memory_def(
     _ => ()
   }
 
-  // Check for inline export
+  // Check for inline import: (memory (import "mod" "name") MIN [MAX])
   if self.current == LParen {
     let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
     self.advance()
     match self.current {
+      Keyword("import") => {
+        self.advance()
+        // Parse module name and import name
+        let mod_name = match self.current {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected module name", self.loc())
+        }
+        let import_name = match self.current {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected import name", self.loc())
+        }
+        self.expect_rparen() // close import
+
+        // Check for inline export after import
+        if self.current == LParen {
+          let saved2 = self.lexer.pos
+          self.advance()
+          match self.current {
+            Keyword("export") => {
+              self.advance()
+              match self.current {
+                String_(s) => {
+                  export_name = Some(s)
+                  self.advance()
+                }
+                _ => raise UnexpectedToken("expected export name", self.loc())
+              }
+              self.expect_rparen()
+            }
+            _ => {
+              self.lexer.pos = saved2
+              self.current = LParen
+            }
+          }
+        }
+
+        // Parse limits
+        let min = self.parse_u32()
+        let max = match self.current {
+          Number(_) => Some(self.parse_u32())
+          _ => None
+        }
+        self.expect_rparen() // close memory
+
+        let imp : @types.Import = {
+          mod_name,
+          name: import_name,
+          desc: @types.ImportDesc::Memory({ limits: { min, max } }),
+        }
+        return MemoryDefResult::MemoryImport(imp, export_name)
+      }
       Keyword("export") => {
         self.advance()
         match self.current {
@@ -1684,6 +2112,10 @@ fn Parser::parse_memory_def(
       }
       _ => {
         self.lexer.pos = saved
+        self.lexer.line = saved_line
+        self.lexer.column = saved_column
+        self.lexer.token_start_line = saved_token_start_line
+        self.lexer.token_start_column = saved_token_start_column
         self.current = LParen
       }
     }
@@ -1696,23 +2128,133 @@ fn Parser::parse_memory_def(
     _ => None
   }
   self.expect_rparen()
-  ({ limits: { min, max } }, export_name)
+  MemoryDefResult::MemoryDef({ limits: { min, max } }, export_name)
 }
 
 ///|
 fn Parser::parse_global_def(
   self : Parser,
-) -> (@types.Global, String?) raise WatError {
+) -> GlobalDefResult raise WatError {
   self.advance() // skip "global"
   let mut export_name : String? = None
+  let mut global_name : String? = None
 
   // Optional name
   match self.current {
     Id(name) => {
-      self.global_names.set(name, self.global_names.length())
+      global_name = Some(name)
       self.advance()
     }
     _ => ()
+  }
+
+  // Check for inline import: (global $x (import "mod" "name") i32)
+  if self.current == LParen {
+    let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
+    self.advance()
+    match self.current {
+      Keyword("import") => {
+        self.advance()
+        // Parse module name and import name
+        let mod_name = match self.current {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected module name", self.loc())
+        }
+        let import_name = match self.current {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected import name", self.loc())
+        }
+        self.expect_rparen() // close import
+
+        // Check for inline export after import
+        if self.current == LParen {
+          let saved2 = self.lexer.pos
+          self.advance()
+          match self.current {
+            Keyword("export") => {
+              self.advance()
+              match self.current {
+                String_(s) => {
+                  export_name = Some(s)
+                  self.advance()
+                }
+                _ => raise UnexpectedToken("expected export name", self.loc())
+              }
+              self.expect_rparen()
+            }
+            _ => {
+              self.lexer.pos = saved2
+              self.current = LParen
+            }
+          }
+        }
+
+        // Parse global type (mut i32) or i32 or (ref ...)
+        let (value_type, mutable) = if self.current == LParen {
+          let saved3 = self.lexer.pos
+          let saved3_line = self.lexer.line
+          let saved3_column = self.lexer.column
+          let saved3_token_start_line = self.lexer.token_start_line
+          let saved3_token_start_column = self.lexer.token_start_column
+          self.advance()
+          if self.current == Keyword("mut") {
+            self.advance()
+            let vt = self.parse_value_type()
+            self.expect_rparen()
+            (vt, true)
+          } else {
+            // Not (mut ...), restore and parse as ref type
+            self.lexer.pos = saved3
+            self.lexer.line = saved3_line
+            self.lexer.column = saved3_column
+            self.lexer.token_start_line = saved3_token_start_line
+            self.lexer.token_start_column = saved3_token_start_column
+            self.current = LParen
+            (self.parse_value_type(), false)
+          }
+        } else {
+          (self.parse_value_type(), false)
+        }
+
+        self.expect_rparen() // close global
+
+        // Register global name
+        if global_name is Some(name) {
+          self.global_names.set(name, self.global_names.length())
+        }
+
+        let imp : @types.Import = {
+          mod_name,
+          name: import_name,
+          desc: @types.ImportDesc::Global({ value_type, mutable }),
+        }
+        return GlobalDefResult::GlobalImport(imp, export_name)
+      }
+      _ => {
+        // Not an inline import, restore state
+        self.lexer.pos = saved
+        self.lexer.line = saved_line
+        self.lexer.column = saved_column
+        self.lexer.token_start_line = saved_token_start_line
+        self.lexer.token_start_column = saved_token_start_column
+        self.current = LParen
+      }
+    }
+  }
+
+  // Register global name for regular global
+  if global_name is Some(name) {
+    self.global_names.set(name, self.global_names.length())
   }
 
   // Check for inline export
@@ -1738,13 +2280,29 @@ fn Parser::parse_global_def(
     }
   }
 
-  // Parse global type (mut i32) or i32
+  // Parse global type (mut i32) or i32 or (ref ...)
   let (value_type, mutable) = if self.current == LParen {
+    let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-    self.expect_keyword("mut")
-    let vt = self.parse_value_type()
-    self.expect_rparen()
-    (vt, true)
+    if self.current == Keyword("mut") {
+      self.advance()
+      let vt = self.parse_value_type()
+      self.expect_rparen()
+      (vt, true)
+    } else {
+      // Not (mut ...), restore and parse as ref type
+      self.lexer.pos = saved
+      self.lexer.line = saved_line
+      self.lexer.column = saved_column
+      self.lexer.token_start_line = saved_token_start_line
+      self.lexer.token_start_column = saved_token_start_column
+      self.current = LParen
+      (self.parse_value_type(), false)
+    }
   } else {
     (self.parse_value_type(), false)
   }
@@ -1752,7 +2310,7 @@ fn Parser::parse_global_def(
   // Parse init expression
   let init = self.parse_instructions()
   self.expect_rparen()
-  ({ type_: { value_type, mutable }, init }, export_name)
+  GlobalDefResult::GlobalDef({ type_: { value_type, mutable }, init }, export_name)
 }
 
 ///|
@@ -1790,6 +2348,66 @@ fn Parser::parse_table_def(
       }
       _ => {
         self.lexer.pos = saved
+        self.current = LParen
+      }
+    }
+  }
+
+  // Check for inline import: (table (import "mod" "name") MIN [MAX] elemtype)
+  if self.current == LParen {
+    let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
+    self.advance()
+    match self.current {
+      Keyword("import") => {
+        self.advance()
+        // Parse module name and import name
+        let mod_name = match self.current {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected module name", self.loc())
+        }
+        let import_name = match self.current {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected import name", self.loc())
+        }
+        self.expect_rparen() // close import
+
+        // Parse limits
+        let min = self.parse_u32()
+        let max = match self.current {
+          Number(_) => Some(self.parse_u32())
+          _ => None
+        }
+        // Parse element type
+        let elem_type = self.parse_value_type()
+        self.expect_rparen() // close table
+
+        // Add the import to the module
+        let imp : @types.Import = {
+          mod_name,
+          name: import_name,
+          desc: @types.ImportDesc::Table({ elem_type, limits: { min, max } }),
+        }
+        mod_.imports.push(imp)
+        // Return a placeholder table type (the import is what matters)
+        return ({ elem_type, limits: { min, max } }, export_name, None)
+      }
+      _ => {
+        // Not an inline import, restore state
+        self.lexer.pos = saved
+        self.lexer.line = saved_line
+        self.lexer.column = saved_column
+        self.lexer.token_start_line = saved_token_start_line
+        self.lexer.token_start_column = saved_token_start_column
         self.current = LParen
       }
     }
@@ -1988,14 +2606,40 @@ fn Parser::parse_import_def(
       }
       @types.ImportDesc::Memory({ limits: { min, max } })
     }
+    Keyword("table") => {
+      self.advance()
+      let min = self.parse_u32()
+      let max = match self.current {
+        Number(_) => Some(self.parse_u32())
+        _ => None
+      }
+      let elem_type = self.parse_value_type()
+      @types.ImportDesc::Table({ elem_type, limits: { min, max } })
+    }
     Keyword("global") => {
       self.advance()
       let (value_type, mutable) = if self.current == LParen {
+        let saved_pos = self.lexer.pos
+        let saved_line = self.lexer.line
+        let saved_column = self.lexer.column
+        let saved_token_start_line = self.lexer.token_start_line
+        let saved_token_start_column = self.lexer.token_start_column
         self.advance()
-        self.expect_keyword("mut")
-        let vt = self.parse_value_type()
-        self.expect_rparen()
-        (vt, true)
+        if self.current == Keyword("mut") {
+          self.advance()
+          let vt = self.parse_value_type()
+          self.expect_rparen()
+          (vt, true)
+        } else {
+          // Not (mut ...), restore and parse as ref type
+          self.lexer.pos = saved_pos
+          self.lexer.line = saved_line
+          self.lexer.column = saved_column
+          self.lexer.token_start_line = saved_token_start_line
+          self.lexer.token_start_column = saved_token_start_column
+          self.current = LParen
+          (self.parse_value_type(), false)
+        }
       } else {
         (self.parse_value_type(), false)
       }
@@ -2010,74 +2654,107 @@ fn Parser::parse_import_def(
 
 ///|
 /// Parse a data segment definition
-/// Syntax: (data (i32.const <offset>) "<string>")
-/// or:     (data (memory <idx>) (offset (i32.const <n>)) "<string>")
+/// Supports various syntaxes:
+/// - (data (i32.const <offset>) "<string>"...)  - active with offset
+/// - (data (memory <idx>) (offset ...) "<string>"...)  - active with memory
+/// - (data)  - passive, empty
+/// - (data "<string>"...)  - passive with init
 fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
   self.advance() // skip "data"
 
   // Check for optional data id
-  match self.current {
-    Id(_) => self.advance()
-    _ => ()
+  if self.current is Id(_) {
+    self.advance()
   }
 
   // Default memory index is 0
   let mut memory_idx = 0
+  let mut offset : Array[@types.Instruction] = []
+  let mut is_passive = true
 
-  // Parse offset expression or memory reference
-  self.expect_lparen()
+  // Check what comes next
+  if self.current == LParen {
+    let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
+    self.advance()
 
-  // Check if this is (memory <idx>) or (offset ...) or just an offset expression like (i32.const ...)
-  match self.current {
-    Keyword("memory") => {
-      self.advance()
-      memory_idx = match self.current {
-        Number(_) => self.parse_u32()
-        _ => 0
+    match self.current {
+      Keyword("memory") => {
+        is_passive = false
+        self.advance()
+        memory_idx = match self.current {
+          Number(_) => self.parse_u32()
+          Id(name) =>
+            match self.memory_names.get(name) {
+              Some(idx) => {
+                self.advance()
+                idx
+              }
+              None => 0
+            }
+          _ => 0
+        }
+        self.expect_rparen()
+        // Now expect offset - can be (offset ...) or direct (i32.const ...)
+        self.expect_lparen()
+        if self.current == Keyword("offset") {
+          self.advance()
+          offset = self.parse_instructions()
+          self.expect_rparen()
+        } else {
+          // Direct offset expression like (i32.const 0)
+          offset = self.parse_instructions()
+          self.expect_rparen()
+        }
       }
-      self.expect_rparen()
-      // Now expect (offset ...)
-      self.expect_lparen()
-      self.expect_keyword("offset")
+      Keyword("offset") => {
+        is_passive = false
+        self.advance()
+        offset = self.parse_instructions()
+        self.expect_rparen()
+      }
+      Keyword(_) => {
+        // Any keyword instruction can be an offset expression (i32.const, i32.add, global.get, etc.)
+        is_passive = false
+        offset = self.parse_instructions()
+        self.expect_rparen()
+      }
+      _ => {
+        // Restore - this might be something else or passive data
+        self.lexer.pos = saved
+        self.lexer.line = saved_line
+        self.lexer.column = saved_column
+        self.lexer.token_start_line = saved_token_start_line
+        self.lexer.token_start_column = saved_token_start_column
+        self.current = LParen
+      }
     }
-    Keyword("offset") => self.advance()
-    _ => ()
   }
 
-  // Parse the offset expression (e.g., i32.const 8)
-  let offset = self.parse_instructions()
-  self.expect_rparen()
-
-  // Parse the string literal for init data
-  let init_data = match self.current {
-    String_(s) => {
+  // Parse string literals for init data (can have multiple or none)
+  let init_bytes : Array[Byte] = []
+  while self.current is String_(_) {
+    if self.current is String_(s) {
+      for i in 0..<s.length() {
+        init_bytes.push(s.code_unit_at(i).to_byte())
+      }
       self.advance()
-      string_to_bytes(s)
     }
-    _ =>
-      raise UnexpectedToken(
-        "expected string literal for data segment",
-        self.loc(),
-      )
   }
-  self.expect_rparen() // close data
-  { memory_idx, offset, init: init_data }
-}
 
-///|
-/// Convert string to bytes (handles escape sequences)
-fn string_to_bytes(s : String) -> Bytes {
-  let bytes : Array[Byte] = []
-  for i in 0..<s.length() {
-    bytes.push(s.code_unit_at(i).to_byte())
-  }
-  Bytes::from_array(bytes)
+  self.expect_rparen() // close data
+  ignore(is_passive)
+  { memory_idx, offset, init: Bytes::from_array(init_bytes) }
 }
 
 ///|
 /// Parse an element segment definition
 /// Syntax: (elem (i32.const <offset>) $func1 $func2 ...)
 /// or:     (elem (table $t) (offset (i32.const <n>)) func $func1 $func2 ...)
+/// or:     (elem declare func $func1 ...)  - declarative element segment
 fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
   self.advance() // skip "elem"
 
@@ -2085,6 +2762,28 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
   match self.current {
     Id(_) => self.advance()
     _ => ()
+  }
+
+  // Check for declarative element segment: (elem declare func $f)
+  // This declares functions without placing them in a table
+  if self.current == Keyword("declare") {
+    self.advance() // skip "declare"
+    // Optionally parse "func" keyword
+    if self.current is Keyword("func") {
+      self.advance()
+    }
+    // Parse function indices
+    let func_indices : Array[Int] = []
+    while self.current != RParen && self.current != Eof {
+      match self.current {
+        Number(_) | Id(_) => func_indices.push(self.parse_func_idx())
+        _ => break
+      }
+    }
+    self.expect_rparen() // close elem
+    // Declarative element has no table placement (use table_idx -1 to indicate)
+    // For now, just return an empty element since we don't execute these tests
+    return { table_idx: 0, offset: [], init: func_indices }
   }
 
   // Default table index is 0

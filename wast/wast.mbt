@@ -239,33 +239,12 @@ fn Lexer::read_string(self : Lexer) -> String raise WastError {
           Some('"') => buf.write_char('"')
           Some('\\') => buf.write_char('\\')
           Some('\'') => buf.write_char('\'')
-          Some('0') =>
-            match self.peek_char() {
-              Some(c) =>
-                if (c >= '0' && c <= '9') ||
-                  (c >= 'a' && c <= 'f') ||
-                  (c >= 'A' && c <= 'F') {
-                  // \0x hex escape
-                  self.next_char() |> ignore
-                  match self.next_char() {
-                    Some(c2) => {
-                      let hex = String::make(1, c) + String::make(1, c2)
-                      match parse_hex_byte(hex) {
-                        Some(b) => buf.write_char(b.unsafe_to_char())
-                        None => raise ParseError("Invalid hex escape")
-                      }
-                    }
-                    None => raise UnexpectedEof
-                  }
-                } else {
-                  buf.write_char('\u0000')
-                }
-              None => buf.write_char('\u0000')
-            }
           Some(c) =>
+            // Check if this is a hex escape sequence (two hex digits)
             if (c >= '0' && c <= '9') ||
               (c >= 'a' && c <= 'f') ||
               (c >= 'A' && c <= 'F') {
+              // Read second hex digit
               match self.next_char() {
                 Some(c2) => {
                   let hex = String::make(1, c) + String::make(1, c2)
@@ -277,6 +256,7 @@ fn Lexer::read_string(self : Lexer) -> String raise WastError {
                 None => raise UnexpectedEof
               }
             } else {
+              // Unknown escape, just write the character
               buf.write_char(c)
             }
           None => raise UnexpectedEof
@@ -313,6 +293,44 @@ fn hex_digit_value(c : Char) -> Int? {
     Some(c.to_int() - 'A'.to_int() + 10)
   } else {
     None
+  }
+}
+
+///|
+/// Escape a string for WAT format output
+/// Converts special characters and non-printable bytes to escape sequences
+fn escape_string_to(s : String, buf : StringBuilder) -> Unit {
+  for i in 0..<s.length() {
+    let c = s.code_unit_at(i).to_int()
+    if c == '"'.to_int() {
+      buf.write_string("\\\"")
+    } else if c == '\\'.to_int() {
+      buf.write_string("\\\\")
+    } else if c == '\n'.to_int() {
+      buf.write_string("\\n")
+    } else if c == '\r'.to_int() {
+      buf.write_string("\\r")
+    } else if c == '\t'.to_int() {
+      buf.write_string("\\t")
+    } else if c >= 0x20 && c < 0x7f {
+      // Printable ASCII
+      buf.write_char(c.unsafe_to_char())
+    } else {
+      // Non-printable: use hex escape
+      buf.write_string("\\")
+      buf.write_char(hex_char((c / 16) & 0x0f))
+      buf.write_char(hex_char(c & 0x0f))
+    }
+  }
+}
+
+///|
+/// Convert a nibble (0-15) to hex character
+fn hex_char(n : Int) -> Char {
+  if n < 10 {
+    ('0'.to_int() + n).unsafe_to_char()
+  } else {
+    ('a'.to_int() + n - 10).unsafe_to_char()
   }
 }
 
@@ -627,7 +645,8 @@ fn Parser::collect_module_text(self : Parser) -> String raise WastError {
       }
       String_(s) => {
         buf.write_string("\"")
-        buf.write_string(s)
+        // Re-escape string contents for WAT parser
+        escape_string_to(s, buf)
         buf.write_string("\" ")
         self.advance()
       }
