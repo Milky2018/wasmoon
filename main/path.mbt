@@ -1,16 +1,20 @@
 ///|
 /// Load a module from file path (supports both .wasm and .wat)
-fn load_module_from_path(path : String) -> @types.Module raise Error {
+fn load_module_from_path(path : String) -> @types.Module raise CliError {
   let is_wat = path.has_suffix(".wat")
   if is_wat {
-    let content = @fs.read_file_to_string(path) catch { e => raise e }
+    let content = @fs.read_file_to_string(path) catch {
+      IOError(_e) => raise FileNotFound(path)
+    }
     @wat.parse(content) catch {
-      e => raise e
+      e => raise ParseWatError(e.to_string())
     }
   } else {
-    let bytes = @fs.read_file_to_bytes(path) catch { e => raise e }
+    let bytes = @fs.read_file_to_bytes(path) catch {
+      IOError(_e) => raise FileNotFound(path)
+    }
     @parser.parse_module(bytes) catch {
-      e => raise e
+      e => raise ParseModuleError(e.to_string())
     }
   }
 }

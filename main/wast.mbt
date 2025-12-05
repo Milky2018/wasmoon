@@ -42,7 +42,7 @@ fn run_wast(wast_path : String) -> Unit {
 
 ///|
 /// Result of running WAST commands
-struct WastResult {
+priv struct WastResult {
   mut passed : Int
   mut failed : Int
   mut skipped : Int
@@ -56,7 +56,7 @@ fn WastResult::new() -> WastResult {
 
 ///|
 /// WAST execution context
-struct WastContext {
+priv struct WastContext {
   mut store : @runtime.Store
   mut current_module : @runtime.ModuleInstance?
   named_modules : Map[String, @runtime.ModuleInstance]
@@ -222,42 +222,46 @@ fn run_assert_trap(
 fn invoke_action(
   ctx : WastContext,
   action : @wast.WastAction,
-) -> Array[@types.Value] raise Error {
+) -> Array[@types.Value] raise CliError {
   match action {
     Invoke(module_name, func_name, args) => {
       let instance = match module_name {
         Some(name) =>
           match ctx.named_modules.get(name) {
             Some(inst) => inst
-            None => raise Failure("Module not found: \{name}")
+            None => raise ModuleNotFound(name)
           }
         None =>
           match ctx.current_module {
             Some(inst) => inst
-            None => raise Failure("No current module")
+            None => raise NoCurrentModule
           }
       }
       let runtime_args = args.map(wast_value_to_runtime)
-      @executor.call_exported_func(ctx.store, instance, func_name, runtime_args)
+      @executor.call_exported_func(ctx.store, instance, func_name, runtime_args) catch {
+        e => raise RuntimeError(e.to_string())
+      }
     }
     Get(module_name, global_name) => {
       let instance = match module_name {
         Some(name) =>
           match ctx.named_modules.get(name) {
             Some(inst) => inst
-            None => raise Failure("Module not found: \{name}")
+            None => raise ModuleNotFound(name)
           }
         None =>
           match ctx.current_module {
             Some(inst) => inst
-            None => raise Failure("No current module")
+            None => raise NoCurrentModule
           }
       }
       let value = @executor.get_exported_global(
         ctx.store,
         instance,
         global_name,
-      )
+      ) catch {
+        e => raise RuntimeError(e.to_string())
+      }
       [value]
     }
   }

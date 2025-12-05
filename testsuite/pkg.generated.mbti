@@ -25,12 +25,11 @@ pub fn run_test_command_with_line(TestContext, TestCommandWithLine, TestResult, 
 pub fn values_equal(@types.Value, @types.Value) -> Bool
 
 // Errors
-pub(all) suberror TestRunnerError {
-  FileNotFound(String)
+pub suberror TestRunnerError {
   ParseError(String)
   ModuleLoadError(String)
-  TestFailure(String)
 }
+pub impl Show for TestRunnerError
 
 // Types and methods
 pub(all) struct JsonValue {
@@ -87,11 +86,12 @@ pub(all) struct TestResult {
   mut failed : Int
   mut skipped : Int
   failures : Array[String]
+  skip_reasons : Array[String]
   mut source_filename : String?
 }
 pub fn TestResult::add_failed(Self, String) -> Unit
 pub fn TestResult::add_passed(Self) -> Unit
-pub fn TestResult::add_skipped(Self) -> Unit
+pub fn TestResult::add_skipped(Self, String) -> Unit
 pub fn TestResult::new() -> Self
 pub impl Show for TestResult
 
