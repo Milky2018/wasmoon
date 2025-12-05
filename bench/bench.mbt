@@ -341,6 +341,7 @@ test "bench_ir_translate_simple" (b : @bench.T) {
         [func_type],
         [0],
         0,
+        [],
       )
       translator.translate(instructions) |> ignore
     },
@@ -379,6 +380,7 @@ test "bench_ir_translate_complex" (b : @bench.T) {
         [func_type],
         [0],
         0,
+        [],
       )
       translator.translate(instructions) |> ignore
     },
@@ -430,6 +432,7 @@ test "bench_ir_translate_with_control_flow" (b : @bench.T) {
         [func_type],
         [0],
         0,
+        [],
       )
       translator.translate(instructions) |> ignore
     },
@@ -783,6 +786,7 @@ test "bench_pipeline_translate_only" (b : @bench.T) {
         [func_type],
         [0],
         0,
+        [],
       )
       translator.translate(instructions) |> ignore
     },
@@ -814,6 +818,7 @@ test "bench_pipeline_translate_and_optimize" (b : @bench.T) {
         [func_type],
         [0],
         0,
+        [],
       )
       let ir_func = translator.translate(instructions)
       @ir.optimize(ir_func) |> ignore
@@ -846,6 +851,7 @@ test "bench_pipeline_translate_optimize_lower" (b : @bench.T) {
         [func_type],
         [0],
         0,
+        [],
       )
       let ir_func = translator.translate(instructions)
       @ir.optimize(ir_func) |> ignore
@@ -879,6 +885,7 @@ test "bench_pipeline_full" (b : @bench.T) {
         [func_type],
         [0],
         0,
+        [],
       )
       let ir_func = translator.translate(instructions)
       @ir.optimize(ir_func) |> ignore
@@ -957,6 +964,7 @@ test "bench_compare_compilation_overhead" (b : @bench.T) {
         [func_type],
         [0],
         0,
+        [],
       )
       let ir_func = translator.translate(instructions)
       @ir.optimize(ir_func) |> ignore

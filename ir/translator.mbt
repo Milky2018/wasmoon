@@ -17,6 +17,8 @@ pub(all) struct Translator {
   func_type_indices : Array[Int]
   // Number of imported functions
   num_imports : Int
+  // Type indices for imported functions
+  import_func_type_indices : Array[Int]
 }
 
 ///|
@@ -49,6 +51,7 @@ pub fn Translator::new(
   func_types : Array[@types.FuncType],
   func_type_indices : Array[Int],
   num_imports : Int,
+  import_func_type_indices : Array[Int],
 ) -> Translator {
   let builder = IRBuilder::new(name)
   // Add function parameters
@@ -80,6 +83,7 @@ pub fn Translator::new(
     func_types,
     func_type_indices,
     num_imports,
+    import_func_type_indices,
   }
 }
 
@@ -975,8 +979,12 @@ fn Translator::translate_br_table(
 fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
   // Get function type
   let type_idx = if func_idx < self.num_imports {
-    // This would need to look up import types
-    0 // Placeholder
+    // Look up import function type
+    if func_idx < self.import_func_type_indices.length() {
+      self.import_func_type_indices[func_idx]
+    } else {
+      0 // Fallback
+    }
   } else {
     let local_idx = func_idx - self.num_imports
     if local_idx < self.func_type_indices.length() {
