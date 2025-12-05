@@ -116,6 +116,8 @@ fn get_block_result_types(
   match block_type {
     Empty => []
     Value(vt) => [Type::from_wasm(vt)]
+    MultiValue(vts) => vts.map(Type::from_wasm)
+    InlineType(_, results) => results.map(Type::from_wasm)
     TypeIndex(idx) =>
       if idx < func_types.length() {
         func_types[idx].results.map(Type::from_wasm)
@@ -134,6 +136,8 @@ fn get_block_param_types(
   match block_type {
     Empty => []
     Value(_) => [] // Simple block types have no params
+    MultiValue(_) => [] // MultiValue blocks have no params (result-only)
+    InlineType(params, _) => params.map(Type::from_wasm)
     TypeIndex(idx) =>
       if idx < func_types.length() {
         func_types[idx].params.map(Type::from_wasm)

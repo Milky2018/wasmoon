@@ -9,6 +9,8 @@ package "Milky2018/wasmoon/types"
 pub(all) enum BlockType {
   Empty
   Value(ValueType)
+  MultiValue(Array[ValueType])
+  InlineType(Array[ValueType], Array[ValueType])
   TypeIndex(Int)
 }
 pub impl Eq for BlockType

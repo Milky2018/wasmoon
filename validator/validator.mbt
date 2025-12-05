@@ -1176,6 +1176,8 @@ fn get_block_results(
   match bt {
     Empty => []
     Value(t) => [t]
+    MultiValue(types) => types
+    InlineType(_, results) => results
     TypeIndex(idx) =>
       if idx < ctx.types.length() {
         ctx.types[idx].results
@@ -1193,6 +1195,8 @@ fn get_block_params(
   match bt {
     Empty => []
     Value(_) => [] // Single value blocks have no params
+    MultiValue(_) => [] // MultiValue blocks have no params (result-only)
+    InlineType(params, _) => params
     TypeIndex(idx) =>
       if idx < ctx.types.length() {
         ctx.types[idx].params

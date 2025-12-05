@@ -1424,24 +1424,72 @@ fn log2(n : Int) -> Int {
 
 ///|
 fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
-  // Check for (result type)
-  if self.current == LParen {
+  let params : Array[@types.ValueType] = []
+  let results : Array[@types.ValueType] = []
+  let mut type_idx : Int? = None
+
+  // Parse optional (type $idx) and/or (param ...) (result ...)
+  while self.current == LParen {
     let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
     self.advance()
     match self.current {
+      Keyword("type") => {
+        // (type $idx) - explicit type reference
+        self.advance()
+        type_idx = Some(self.parse_type_idx())
+        self.expect_rparen()
+        // Continue to parse any inline param/result annotations (they are optional redundant info)
+      }
+      Keyword("param") => {
+        self.advance()
+        // Skip optional name
+        if self.current is Id(_) {
+          self.advance()
+        }
+        while self.current != RParen {
+          params.push(self.parse_value_type())
+        }
+        self.expect_rparen()
+      }
       Keyword("result") => {
         self.advance()
-        let vt = self.parse_value_type()
+        while self.current != RParen {
+          results.push(self.parse_value_type())
+        }
         self.expect_rparen()
-        return @types.BlockType::Value(vt)
       }
       _ => {
+        // Not a block type annotation, restore state
         self.lexer.pos = saved
+        self.lexer.line = saved_line
+        self.lexer.column = saved_column
+        self.lexer.token_start_line = saved_token_start_line
+        self.lexer.token_start_column = saved_token_start_column
         self.current = LParen
+        break
       }
     }
   }
-  @types.BlockType::Empty
+
+  // Determine the block type variant
+  // If we have explicit type index, use it (param/result are just annotations)
+  if type_idx is Some(idx) {
+    return @types.BlockType::TypeIndex(idx)
+  }
+  if params.length() > 0 {
+    // Has parameters - use InlineType
+    @types.BlockType::InlineType(params, results)
+  } else if results.length() == 0 {
+    @types.BlockType::Empty
+  } else if results.length() == 1 {
+    @types.BlockType::Value(results[0])
+  } else {
+    @types.BlockType::MultiValue(results)
+  }
 }
 
 ///|
