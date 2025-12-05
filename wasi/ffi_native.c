@@ -178,6 +178,12 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
 #endif
 }
 
+// Print string to stdout without newline
+MOONBIT_FFI_EXPORT void wasmoon_print_string(moonbit_bytes_t str, int len) {
+  fwrite(str, 1, len, stdout);
+  fflush(stdout);
+}
+
 #ifdef __cplusplus
 }
 #endif
