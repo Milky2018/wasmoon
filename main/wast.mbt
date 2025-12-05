@@ -57,9 +57,11 @@ fn WastResult::new() -> WastResult {
 ///|
 /// WAST execution context
 priv struct WastContext {
-  mut store : @runtime.Store
+  store : @runtime.Store
   mut current_module : @runtime.ModuleInstance?
   named_modules : Map[String, @runtime.ModuleInstance]
+  // Registered modules for imports (module_name -> exports)
+  registered_modules : Map[String, @runtime.ModuleInstance]
 }
 
 ///|
@@ -68,7 +70,39 @@ fn WastContext::new() -> WastContext {
     store: @runtime.Store::new(),
     current_module: None,
     named_modules: Map::new(),
+    registered_modules: Map::new(),
   }
+}
+
+///|
+/// Build imports from registered modules
+fn WastContext::build_imports(self : WastContext) -> @runtime.Imports {
+  let imports = @runtime.Imports::new()
+  for entry in self.registered_modules.iter() {
+    let (mod_name, instance) = entry
+    // Add all exports from this module as imports
+    for exp in instance.exports {
+      match exp.desc {
+        Func(func_idx) => {
+          let addr = instance.func_addrs[func_idx]
+          imports.add_func(mod_name, exp.name, addr)
+        }
+        Memory(mem_idx) => {
+          let addr = instance.mem_addrs[mem_idx]
+          imports.add_memory(mod_name, exp.name, addr)
+        }
+        Table(table_idx) => {
+          let addr = instance.table_addrs[table_idx]
+          imports.add_table(mod_name, exp.name, addr)
+        }
+        Global(global_idx) => {
+          let addr = instance.global_addrs[global_idx]
+          imports.add_global(mod_name, exp.name, addr)
+        }
+      }
+    }
+  }
+  imports
 }
 
 ///|
@@ -95,9 +129,18 @@ fn run_wast_command(
   ignore(base_dir)
   match cmd {
     Module(mod_, name) => {
-      // Instantiate the module
-      let (store, instance) = @executor.instantiate_module(mod_)
-      ctx.store = store
+      // Build imports from registered modules
+      let imports = ctx.build_imports()
+      // Instantiate the module with imports using shared store
+      let instance = @executor.instantiate_module_with_imports(
+        ctx.store, mod_, imports,
+      ) catch {
+        _ => {
+          // If instantiation fails, skip this module
+          result.skipped = result.skipped + 1
+          return
+        }
+      }
       ctx.current_module = Some(instance)
       if name is Some(n) {
         ctx.named_modules.set(n, instance)
@@ -166,22 +209,22 @@ fn run_wast_command(
         result.passed = result.passed + 1
       }
     }
-    Register(name, module_name) =>
-      // Register current module or named module
-      match module_name {
+    Register(name, module_name) => {
+      // Register module for imports
+      let inst : @runtime.ModuleInstance? = match module_name {
         Some(n) =>
           match ctx.named_modules.get(n) {
-            Some(inst) => ctx.named_modules.set(name, inst)
-            None =>
-              if ctx.current_module is Some(inst) {
-                ctx.named_modules.set(name, inst)
-              }
+            Some(i) => Some(i)
+            None => ctx.current_module
           }
-        None =>
-          if ctx.current_module is Some(inst) {
-            ctx.named_modules.set(name, inst)
-          }
+        None => ctx.current_module
       }
+      if inst is Some(i) {
+        ctx.registered_modules.set(name, i)
+        // Also add to named_modules for later reference
+        ctx.named_modules.set(name, i)
+      }
+    }
     Action(action) =>
       // Just invoke the action, ignore result
       try invoke_action(ctx, action) |> ignore catch {
@@ -327,21 +370,25 @@ fn try_instantiate_source(
   ctx : WastContext,
   source : @wast.WastModuleSource,
 ) -> Bool {
+  let imports = ctx.build_imports()
   match source {
     Binary(bytes) =>
       (try? {
         let mod_ = @parser.parse_module(bytes)
-        let (store, instance) = @executor.instantiate_module(mod_)
-        ctx.store = store
+        let instance = @executor.instantiate_module_with_imports(
+          ctx.store, mod_, imports,
+        )
         ctx.current_module = Some(instance)
       })
       is Ok(_)
-    Inline(mod_) => {
-      let (store, instance) = @executor.instantiate_module(mod_)
-      ctx.store = store
-      ctx.current_module = Some(instance)
-      true
-    }
+    Inline(mod_) =>
+      (try? {
+        let instance = @executor.instantiate_module_with_imports(
+          ctx.store, mod_, imports,
+        )
+        ctx.current_module = Some(instance)
+      })
+      is Ok(_)
     Quote(_) => false
   }
 }
