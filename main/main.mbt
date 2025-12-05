@@ -1258,7 +1258,6 @@ fn main {
           ),
         },
       ),
-      "demo": @clap.SubCommand::new(help="Run built-in demo programs"),
       "test": @clap.SubCommand::new(help="Run wasm-testsuite JSON spec file", args={
         "file": @clap.Arg::positional(help="Path to JSON spec file"),
       }),
@@ -1443,7 +1442,6 @@ fn main {
                 println("Error: missing file argument")
               }
             }
-            "demo" => run_demo()
             "test" => {
               let positional = sub.positional_args
               if positional.length() > 0 {
