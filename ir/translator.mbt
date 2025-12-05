@@ -21,6 +21,7 @@ pub(all) struct Translator {
 
 ///|
 /// Block frame for tracking control flow constructs
+#warnings("-unused_field")
 struct BlockFrame {
   kind : BlockKind
   block : Block // The continuation block
@@ -33,7 +34,8 @@ struct BlockFrame {
 
 ///|
 /// Kind of block frame
-enum BlockKind {
+#warnings("-unused_constructor")
+priv enum BlockKind {
   Block
   Loop
   If(Block?) // else block if present

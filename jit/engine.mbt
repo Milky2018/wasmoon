@@ -9,6 +9,7 @@
 
 ///|
 /// Status of a function's compilation
+#warnings("-unused_constructor")
 pub enum CompilationStatus {
   // Never compiled, use interpreter
   NotCompiled

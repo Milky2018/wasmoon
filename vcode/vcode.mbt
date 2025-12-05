@@ -115,6 +115,7 @@ pub(all) struct Operand {
 
 ///|
 /// Operand kind - how the operand is used
+#warnings("-unused_constructor")
 pub enum OperandKind {
   Use // Read from
   Def // Written to
@@ -122,6 +123,7 @@ pub enum OperandKind {
 }
 
 ///|
+#warnings("-unused_value")
 fn OperandKind::to_string(self : OperandKind) -> String {
   match self {
     Use => "use"
@@ -132,6 +134,7 @@ fn OperandKind::to_string(self : OperandKind) -> String {
 
 ///|
 /// Operand constraint - register allocation constraint
+#warnings("-unused_constructor")
 pub enum OperandConstraint {
   Any // Any register in the class
   Fixed(PReg) // Must be this specific physical register
@@ -139,6 +142,7 @@ pub enum OperandConstraint {
 }
 
 ///|
+#warnings("-unused_value")
 fn OperandConstraint::to_string(self : OperandConstraint) -> String {
   match self {
     Any => "any"
@@ -256,6 +260,7 @@ pub impl Show for ShiftType with output(self, logger) {
 
 ///|
 /// VCode opcode - machine-level operation (target-independent subset)
+#warnings("-unused_constructor")
 pub enum VCodeOpcode {
   // Integer arithmetic
   Add
@@ -459,6 +464,7 @@ pub impl Show for FCmpKind with output(self, logger) {
 
 ///|
 /// Extend kind - how to extend a value
+#warnings("-unused_constructor")
 pub enum ExtendKind {
   Signed8To32
   Signed8To64

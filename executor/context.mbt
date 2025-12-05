@@ -65,6 +65,7 @@ fn ExecContext::capture_call_stack(
 
 ///|
 /// Create a RuntimeErrorContext with the current call stack
+#warnings("-unused_value")
 fn ExecContext::make_error_context(
   self : ExecContext,
   error : @runtime.RuntimeError,

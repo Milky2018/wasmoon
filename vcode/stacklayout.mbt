@@ -24,6 +24,7 @@ pub(all) struct StackSlot {
 
 ///|
 /// Kind of stack slot
+#warnings("-unused_constructor")
 pub enum StackSlotKind {
   // Spilled register
   Spill(VReg)
@@ -499,6 +500,7 @@ fn is_call_instruction(inst : VCodeInst) -> Bool {
 
 ///|
 /// Extended opcode for stack operations
+#warnings("-unused_constructor")
 pub enum StackOpcode {
   AdjustSP(Int) // Adjust SP by immediate (negative = grow, positive = shrink)
   PushReg(PReg) // Push register to stack

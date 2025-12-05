@@ -167,6 +167,7 @@ pub fn MachineCode::align_block(self : MachineCode) -> Unit {
 // Helper to build instruction from fields
 
 ///|
+#warnings("-unused_value")
 fn build_inst(
   b3 : Int,
   b2 : Int,
