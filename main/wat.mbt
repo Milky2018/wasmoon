@@ -53,6 +53,13 @@ fn run_testsuite(json_path : String) -> Unit {
       println("  - \{failure}")
     }
   }
+  if result.skip_reasons.length() > 0 {
+    println("")
+    println("Skipped:")
+    for reason in result.skip_reasons {
+      println("  - \{reason}")
+    }
+  }
   println("=".repeat(50))
 }
 
@@ -101,10 +108,7 @@ fn run_test_command(
               "\{line_prefix}Failed to load module \{filename}: \{e}",
             )
           }
-        None => {
-          result.add_skipped()
-          println("\{line_prefix}File not found: \{filename}")
-        }
+        None => result.add_skipped("module file not found: \{filename}")
       }
     }
     AssertReturn(action, expected) =>
@@ -121,10 +125,8 @@ fn run_test_command(
             )
           }
         }
-        Get(_module_name, field) => {
-          result.add_skipped()
-          println("\{line_prefix}Skipping assert_return (get): \{field}")
-        }
+        Get(_module_name, field) =>
+          result.add_skipped("assert_return (get) not implemented: \{field}")
       }
     AssertTrap(action, expected_msg) =>
       match action {
@@ -138,10 +140,8 @@ fn run_test_command(
             result.add_failed("\{line_prefix}assert_trap failed: \{func_name}")
           }
         }
-        Get(_, field) => {
-          result.add_skipped()
-          println("\{line_prefix}Skipping assert_trap (get): \{field}")
-        }
+        Get(_, field) =>
+          result.add_skipped("assert_trap (get) not implemented: \{field}")
       }
     AssertInvalid(filename, _msg) => {
       let bytes = read_wasm_file(base_dir, filename)
@@ -158,7 +158,8 @@ fn run_test_command(
           } else {
             result.add_passed()
           }
-        None => result.add_skipped()
+        None =>
+          result.add_skipped("assert_invalid: file not found: \{filename}")
       }
     }
     AssertMalformed(filename, _msg) => {
@@ -172,7 +173,8 @@ fn run_test_command(
           } else {
             result.add_passed()
           }
-        None => result.add_skipped()
+        None =>
+          result.add_skipped("assert_malformed: file not found: \{filename}")
       }
     }
     AssertUninstantiable(filename, _msg) => {
@@ -186,7 +188,10 @@ fn run_test_command(
           } else {
             result.add_passed()
           }
-        None => result.add_skipped()
+        None =>
+          result.add_skipped(
+            "assert_uninstantiable: file not found: \{filename}",
+          )
       }
     }
     Register(as_, name) =>

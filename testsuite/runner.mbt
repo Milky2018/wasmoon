@@ -4,11 +4,9 @@
 ///|
 /// Test runner error types
 pub suberror TestRunnerError {
-  FileNotFound(String)
   ParseError(String)
   ModuleLoadError(String)
-  TestFailure(String)
-} derive(Show) // FIXME: show implementation
+} derive(Show)
 
 ///|
 /// JSON test file structure
@@ -87,12 +85,20 @@ pub(all) struct TestResult {
   mut failed : Int
   mut skipped : Int
   failures : Array[String]
+  skip_reasons : Array[String]
   mut source_filename : String? // Source .wast filename for better error reporting
 } derive(Show)
 
 ///|
 pub fn TestResult::new() -> TestResult {
-  { passed: 0, failed: 0, skipped: 0, failures: [], source_filename: None }
+  {
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    failures: [],
+    skip_reasons: [],
+    source_filename: None,
+  }
 }
 
 ///|
@@ -113,9 +119,14 @@ pub fn TestResult::add_failed(self : TestResult, msg : String) -> Unit {
 }
 
 ///|
-/// Increment skipped count
-pub fn TestResult::add_skipped(self : TestResult) -> Unit {
+/// Increment skipped count with reason
+pub fn TestResult::add_skipped(self : TestResult, reason : String) -> Unit {
   self.skipped += 1
+  let full_reason = match self.source_filename {
+    Some(filename) => "[\{filename}] \{reason}"
+    None => reason
+  }
+  self.skip_reasons.push(full_reason)
 }
 
 ///|
@@ -453,11 +464,9 @@ fn run_test_command_internal(
             )
           }
         }
-        Get(_, field) => {
+        Get(_, field) =>
           // Get that should trap - skip for now
-          result.skipped += 1
-          println("\{line_prefix}Skipping assert_trap (get): \{field}")
-        }
+          result.add_skipped("assert_trap (get) not implemented: \{field}")
       }
     AssertInvalid(filename, _msg) => {
       // Should fail to validate (parse succeeds, but validation fails)
@@ -465,7 +474,7 @@ fn run_test_command_internal(
       let bytes = read_file_fn(wasm_path) catch {
         _ => {
           // File not found, skip
-          result.skipped += 1
+          result.add_skipped("assert_invalid: file not found: \{filename}")
           return
         }
       }
@@ -488,7 +497,7 @@ fn run_test_command_internal(
       let bytes = read_file_fn(wasm_path) catch {
         _ => {
           // File not found, skip
-          result.skipped += 1
+          result.add_skipped("assert_malformed: file not found: \{filename}")
           return
         }
       }
@@ -506,7 +515,9 @@ fn run_test_command_internal(
       let wasm_path = base_dir + "/" + filename
       let bytes = read_file_fn(wasm_path) catch {
         _ => {
-          result.skipped += 1
+          result.add_skipped(
+            "assert_uninstantiable: file not found: \{filename}",
+          )
           return
         }
       }
