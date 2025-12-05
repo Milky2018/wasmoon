@@ -1,6 +1,10 @@
 // Execution Context - manages stack, store, and call frames
 
 ///|
+/// Maximum call stack depth to prevent stack overflow
+let max_call_stack_depth : Int = 1000
+
+///|
 /// Execution context for running WASM code
 struct ExecContext {
   stack : @runtime.Stack
@@ -25,7 +29,13 @@ fn ExecContext::new(
 }
 
 ///|
-fn ExecContext::push_frame(self : ExecContext, frame : @runtime.Frame) -> Unit {
+fn ExecContext::push_frame(
+  self : ExecContext,
+  frame : @runtime.Frame,
+) -> Unit raise @runtime.RuntimeError {
+  if self.frames.length() >= max_call_stack_depth {
+    raise @runtime.CallStackExhausted
+  }
   self.frames.push(frame)
   self.current_frame = self.frames.length() - 1
 }
