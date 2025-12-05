@@ -117,6 +117,7 @@ fn CompilerConfig::apply_flag(self : CompilerConfig, flag : String) -> Unit {
 
 ///|
 /// Debug configuration options
+#warnings("-unused_field")
 priv struct DebugConfig {
   mut verbose : Bool
   mut print_ir : Bool
@@ -165,6 +166,7 @@ fn DebugConfig::apply_flag(self : DebugConfig, flag : String) -> Unit {
 
 ///|
 /// WASM semantic configuration options
+#warnings("-unused_field")
 priv struct WasmConfig {
   // Memory limits
   mut max_memory_pages : Int // Maximum memory pages (64KB each), 0 = no limit
@@ -218,6 +220,7 @@ fn WasmConfig::apply_flag(self : WasmConfig, flag : String) -> Unit {
 }
 
 ///|
+#warnings("-unused_value")
 fn CompilerConfig::to_string(self : CompilerConfig) -> String {
   let sb = StringBuilder::new()
   sb.write_string("CompilerConfig {\n")

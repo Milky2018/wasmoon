@@ -310,7 +310,7 @@ pub fn deserialize(
 
 ///|
 /// Helper for reading bytes
-struct ByteReader {
+priv struct ByteReader {
   bytes : Array[Int]
   mut pos : Int
 }

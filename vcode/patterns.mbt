@@ -11,6 +11,7 @@
 ///|
 /// A pattern that matches IR instruction trees
 /// Patterns can match opcodes, operands, and constants
+#warnings("-unused_constructor")
 pub enum Pattern {
   // Match any value (captures into a variable)
   Any
@@ -418,6 +419,7 @@ pub fn get_optimization_rules() -> Array[RewriteRule] {
 
 ///|
 /// Result of applying a rewrite rule
+#warnings("-unused_constructor")
 pub enum RewriteResult {
   // The instruction was optimized - emit the given VCode instructions
   Rewritten(Array[VCodeInst])

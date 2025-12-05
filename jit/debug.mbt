@@ -499,6 +499,7 @@ pub(all) struct DebugContext {
 
 ///|
 /// Step modes for debugging
+#warnings("-unused_constructor")
 pub enum StepMode {
   // Normal execution
   Continue

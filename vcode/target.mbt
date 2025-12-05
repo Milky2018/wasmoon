@@ -19,6 +19,7 @@ pub(open) trait TargetISA {
 
 ///|
 /// Calling convention - how function calls are made
+#warnings("-unused_constructor")
 pub enum CallConv {
   /// System V AMD64 ABI (Linux, macOS on x86-64)
   SystemV

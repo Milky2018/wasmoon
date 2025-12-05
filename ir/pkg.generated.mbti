@@ -50,8 +50,6 @@ pub impl Show for Block
 
 type BlockFrame
 
-type BlockKind
-
 pub(all) struct CFG {
   num_blocks : Int
   successors : Array[Array[Int]]

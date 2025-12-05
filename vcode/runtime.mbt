@@ -532,7 +532,6 @@ pub fn JITRuntime::stats(
 ) -> (Int, Int, Int, Int, Int, Int, Int) {
   let (cache_size, cache_count, hits, misses) = self.cache.stats()
   let mem_used = self.memory.total_used()
-  let mem_alloc = self.memory.total_allocated()
   (
     self.compilations,
     self.recompilations,

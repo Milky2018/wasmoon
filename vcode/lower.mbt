@@ -44,6 +44,7 @@ fn LoweringContext::get_vreg(self : LoweringContext, value : @ir.Value) -> VReg 
 
 ///|
 /// Create a new VReg with the given class
+#warnings("-unused_value")
 fn LoweringContext::new_vreg(self : LoweringContext, class : RegClass) -> VReg {
   self.vcode_func.new_vreg(class)
 }

@@ -13,8 +13,6 @@ pub suberror DeserializeError String
 pub impl Show for DeserializeError
 
 // Types and methods
-type ByteReader
-
 pub(all) struct CompiledEntry {
   func_idx : Int
   name : String
