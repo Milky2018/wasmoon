@@ -133,7 +133,9 @@ fn run_wast_command(
       let imports = ctx.build_imports()
       // Instantiate the module with imports using shared store
       let instance = @executor.instantiate_module_with_imports(
-        ctx.store, mod_, imports,
+        ctx.store,
+        mod_,
+        imports,
       ) catch {
         _ => {
           // If instantiation fails, skip this module
@@ -376,7 +378,9 @@ fn try_instantiate_source(
       (try? {
         let mod_ = @parser.parse_module(bytes)
         let instance = @executor.instantiate_module_with_imports(
-          ctx.store, mod_, imports,
+          ctx.store,
+          mod_,
+          imports,
         )
         ctx.current_module = Some(instance)
       })
@@ -384,7 +388,9 @@ fn try_instantiate_source(
     Inline(mod_) =>
       (try? {
         let instance = @executor.instantiate_module_with_imports(
-          ctx.store, mod_, imports,
+          ctx.store,
+          mod_,
+          imports,
         )
         ctx.current_module = Some(instance)
       })

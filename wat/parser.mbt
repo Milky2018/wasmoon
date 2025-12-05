@@ -542,7 +542,6 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   if self.current is Id(_) {
     self.advance()
   }
-
   let mod_ = @types.Module::new()
 
   // First pass: collect function names (to support forward references)
@@ -629,7 +628,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.type_names.set("\{mod_.types.length()}", mod_.types.length())
             mod_.types.push(ft)
           }
-          Keyword("func") => {
+          Keyword("func") =>
             match self.parse_func_def(mod_) {
               FuncDef(type_idx, code, export_name) => {
                 // func_idx must account for imported functions
@@ -656,8 +655,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 }
               }
             }
-          }
-          Keyword("memory") => {
+          Keyword("memory") =>
             match self.parse_memory_def() {
               MemoryDef(mem, export_name) => {
                 let mem_idx = mod_.memories.length()
@@ -686,8 +684,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 }
               }
             }
-          }
-          Keyword("global") => {
+          Keyword("global") =>
             match self.parse_global_def() {
               GlobalDef(global, export_name) => {
                 let global_idx = mod_.globals.length()
@@ -716,7 +713,6 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 }
               }
             }
-          }
           Keyword("export") => {
             let exp = self.parse_export_def(mod_)
             mod_.exports.push(exp)
@@ -902,7 +898,6 @@ fn Parser::parse_func_def(
         let mut type_idx = -1
         let inline_params : Array[@types.ValueType] = []
         let inline_results : Array[@types.ValueType] = []
-
         while self.current == LParen {
           let saved2 = self.lexer.pos
           self.advance()
@@ -981,7 +976,6 @@ fn Parser::parse_func_def(
             mod_.types.push(ft)
           }
         }
-
         self.expect_rparen() // close func
 
         // Register function name with index (will be assigned when import is added)
@@ -990,7 +984,6 @@ fn Parser::parse_func_def(
         if func_name is Some(name) {
           self.func_names.set(name, import_func_idx)
         }
-
         let imp : @types.Import = {
           mod_name,
           name: import_name,
@@ -2018,9 +2011,7 @@ fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
-fn Parser::parse_memory_def(
-  self : Parser,
-) -> MemoryDefResult raise WatError {
+fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   self.advance() // skip "memory"
   let mut export_name : String? = None
 
@@ -2091,7 +2082,6 @@ fn Parser::parse_memory_def(
           _ => None
         }
         self.expect_rparen() // close memory
-
         let imp : @types.Import = {
           mod_name,
           name: import_name,
@@ -2132,9 +2122,7 @@ fn Parser::parse_memory_def(
 }
 
 ///|
-fn Parser::parse_global_def(
-  self : Parser,
-) -> GlobalDefResult raise WatError {
+fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   self.advance() // skip "global"
   let mut export_name : String? = None
   let mut global_name : String? = None
@@ -2225,14 +2213,12 @@ fn Parser::parse_global_def(
         } else {
           (self.parse_value_type(), false)
         }
-
         self.expect_rparen() // close global
 
         // Register global name
         if global_name is Some(name) {
           self.global_names.set(name, self.global_names.length())
         }
-
         let imp : @types.Import = {
           mod_name,
           name: import_name,
@@ -2310,7 +2296,10 @@ fn Parser::parse_global_def(
   // Parse init expression
   let init = self.parse_instructions()
   self.expect_rparen()
-  GlobalDefResult::GlobalDef({ type_: { value_type, mutable }, init }, export_name)
+  GlobalDefResult::GlobalDef(
+    { type_: { value_type, mutable }, init },
+    export_name,
+  )
 }
 
 ///|
@@ -2680,7 +2669,6 @@ fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
     let saved_token_start_line = self.lexer.token_start_line
     let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-
     match self.current {
       Keyword("memory") => {
         is_passive = false
@@ -2744,7 +2732,6 @@ fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
       self.advance()
     }
   }
-
   self.expect_rparen() // close data
   ignore(is_passive)
   { memory_idx, offset, init: Bytes::from_array(init_bytes) }
