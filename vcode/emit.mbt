@@ -545,7 +545,7 @@ pub fn emit_movz(mc : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
   let imm = imm16 & 0xFFFF
   let b0 = (rd & 31) | ((imm & 7) << 5)
   let b1 = (imm >> 3) & 255
-  let b2 = ((imm >> 11) & 31) | ((hw & 3) << 5)
+  let b2 = ((imm >> 11) & 31) | ((hw & 3) << 5) | 128 // 0x80 is part of the opcode
   let xd2 = 210 // 0xD2
   let b3 = xd2 | ((hw >> 2) & 1)
   mc.emit_inst(b0, b1, b2, b3)
@@ -559,7 +559,7 @@ pub fn emit_movk(mc : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
   let imm = imm16 & 0xFFFF
   let b0 = (rd & 31) | ((imm & 7) << 5)
   let b1 = (imm >> 3) & 255
-  let b2 = ((imm >> 11) & 31) | ((hw & 3) << 5)
+  let b2 = ((imm >> 11) & 31) | ((hw & 3) << 5) | 128 // 0x80 is part of the opcode
   let xf2 = 242 // 0xF2
   let b3 = xf2 | ((hw >> 2) & 1)
   mc.emit_inst(b0, b1, b2, b3)
@@ -568,11 +568,11 @@ pub fn emit_movk(mc : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
 ///|
 /// Load a 64-bit immediate using MOVZ/MOVK sequence
 pub fn emit_load_imm64(mc : MachineCode, rd : Int, imm : Int64) -> Unit {
-  let v = imm.to_int()
-  let v0 = v & 0xFFFF
-  let v1 = (v >> 16) & 0xFFFF
-  let v2 = (v >> 32) & 0xFFFF
-  let v3 = (v >> 48) & 0xFFFF
+  // Work with Int64 to avoid issues with shifts on narrower types
+  let v0 = (imm & 0xFFFFL).to_int()
+  let v1 = ((imm >> 16) & 0xFFFFL).to_int()
+  let v2 = ((imm >> 32) & 0xFFFFL).to_int()
+  let v3 = ((imm >> 48) & 0xFFFFL).to_int()
   let mut started = false
   if v0 != 0 || (v1 == 0 && v2 == 0 && v3 == 0) {
     emit_movz(mc, rd, v0, 0)
@@ -837,8 +837,12 @@ pub fn emit_cbnz(mc : MachineCode, rt : Int, target_block : Int) -> Unit {
 /// Encode RET: RET Xn
 /// Opcode: 0xD65F0000 (with Rn in bits [9:5])
 pub fn emit_ret(mc : MachineCode, rn : Int) -> Unit {
-  let b0 = (rn & 3) << 5
-  let b1 = (rn >> 2) & 7
+  // Rn goes in bits [9:5] of the instruction
+  // In little-endian bytes:
+  // byte0 bits [7:5] = Rn[2:0]
+  // byte1 bits [2:0] = Rn[4:3]
+  let b0 = (rn & 7) << 5 // Rn[2:0] in bits [7:5]
+  let b1 = (rn >> 3) & 3 // Rn[4:3] in bits [1:0]
   mc.emit_inst(b0, b1, 95, 214) // 0x5F, 0xD6
 }
 
