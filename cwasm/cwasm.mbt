@@ -36,7 +36,9 @@ const CWASM_MAGIC_3 : Int = 0x73 // 's'
 
 ///|
 /// Current format version
-const CWASM_VERSION : Int = 1
+/// v1: Initial format
+/// v2: Added num_params and num_results to function entries
+const CWASM_VERSION : Int = 2
 
 // ============ Target Architecture ============
 
@@ -95,6 +97,10 @@ pub(all) struct CompiledEntry {
   frame_size : Int
   // Entry point offset within code
   entry_offset : Int
+  // Number of parameters
+  num_params : Int
+  // Number of results (0 or 1 for WASM 1.0)
+  num_results : Int
 }
 
 ///|
@@ -104,8 +110,10 @@ pub fn CompiledEntry::new(
   code : Array[Int],
   frame_size : Int,
   entry_offset : Int,
+  num_params : Int,
+  num_results : Int,
 ) -> CompiledEntry {
-  { func_idx, name, code, frame_size, entry_offset }
+  { func_idx, name, code, frame_size, entry_offset, num_params, num_results }
 }
 
 ///|
@@ -143,6 +151,8 @@ pub fn PrecompiledModule::add_function(
   func_idx : Int,
   name : String,
   compiled : @vcode.CompiledFunction,
+  num_params : Int,
+  num_results : Int,
 ) -> Unit {
   let entry = CompiledEntry::new(
     func_idx,
@@ -150,6 +160,8 @@ pub fn PrecompiledModule::add_function(
     compiled.get_code(),
     compiled.frame_size,
     compiled.entry_offset,
+    num_params,
+    num_results,
   )
   self.functions.push(entry)
 }
@@ -215,6 +227,10 @@ pub fn PrecompiledModule::serialize(self : PrecompiledModule) -> Array[Int] {
 
     // Entry offset
     write_u32(result, entry.entry_offset)
+
+    // Function signature: num_params and num_results
+    write_u32(result, entry.num_params)
+    write_u32(result, entry.num_results)
   }
   result
 }
@@ -299,8 +315,20 @@ pub fn deserialize(
 
     // Entry offset
     let entry_offset = reader.read_u32()
+
+    // Function signature
+    let num_params = reader.read_u32()
+    let num_results = reader.read_u32()
     functions.push(
-      CompiledEntry::new(func_idx, name, code, frame_size, entry_offset),
+      CompiledEntry::new(
+        func_idx,
+        name,
+        code,
+        frame_size,
+        entry_offset,
+        num_params,
+        num_results,
+      ),
     )
   }
   { version, target, functions }

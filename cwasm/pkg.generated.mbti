@@ -19,8 +19,10 @@ pub(all) struct CompiledEntry {
   code : Array[Int]
   frame_size : Int
   entry_offset : Int
+  num_params : Int
+  num_results : Int
 }
-pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int) -> Self
+pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int) -> Self
 pub fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
 pub impl Show for CompiledEntry
 
@@ -29,7 +31,7 @@ pub(all) struct PrecompiledModule {
   target : TargetArch
   functions : Array[CompiledEntry]
 }
-pub fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction) -> Unit
+pub fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction, Int, Int) -> Unit
 pub fn PrecompiledModule::function_count(Self) -> Int
 pub fn PrecompiledModule::new(TargetArch) -> Self
 pub fn PrecompiledModule::serialize(Self) -> Array[Int]

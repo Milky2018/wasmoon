@@ -209,14 +209,17 @@ fn wreg_num(wreg : Writable) -> Int {
 /// Encode ADD (shifted register): ADD Xd, Xn, Xm
 /// Opcode: 0x8B000000 = 10001011 00000000 00000000 00000000
 pub fn emit_add_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  // sf=1 | 00 | 01011 | shift=00 | 0 | Rm[4:0] | imm6=0 | Rn[4:0] | Rd[4:0]
-  // Byte 3: 0x8B = 139
-  // Byte 2: 0 | Rm[4] | 0000 | Rm[3:0] >> 4
-  // Byte 1: Rm[3:0] << 4 | 0 | Rn[4:2]
-  // Byte 0: Rn[1:0] << 5 | Rd[4:0]
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // AArch64 ADD (shifted register) encoding:
+  // | 31 | 30-29 | 28 | 27-24 | 23-22 | 21 | 20-16 | 15-10 | 9-5 | 4-0 |
+  // | sf |  op   | S  | 01011 | shift | 0  |  Rm   | imm6  | Rn  | Rd  |
+  // With sf=1, op=00, S=0, shift=00 (LSL), imm6=0:
+  // Byte 0 (bits 7-0): Rd[4:0] | Rn[2:0] << 5
+  // Byte 1 (bits 15-8): Rn[4:3] | imm6[5:0] << 2
+  // Byte 2 (bits 23-16): Rm[4:0] | 0 << 5 | shift[1:0] << 6
+  // Byte 3 (bits 31-24): 0x8B
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 139 // 0x8B
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -399,9 +402,10 @@ pub fn emit_add_imm(mc : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
 /// Encode SUB (shifted register): SUB Xd, Xn, Xm
 /// Opcode: 0xCB000000
 pub fn emit_sub_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding as ADD but with opcode 0xCB
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 203 // 0xCB
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -463,9 +467,10 @@ pub fn emit_udiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode AND (shifted register): AND Xd, Xn, Xm
 /// Opcode: 0x8A000000
 pub fn emit_and_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding format as ADD/SUB but with opcode 0x8A
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 138 // 0x8A
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -474,9 +479,10 @@ pub fn emit_and_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode ORR (shifted register): ORR Xd, Xn, Xm
 /// Opcode: 0xAA000000
 pub fn emit_orr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding format as ADD/SUB but with opcode 0xAA
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 170 // 0xAA
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -485,9 +491,10 @@ pub fn emit_orr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode EOR (shifted register): EOR Xd, Xn, Xm
 /// Opcode: 0xCA000000
 pub fn emit_eor_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding format as ADD/SUB but with opcode 0xCA
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 202 // 0xCA
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -861,10 +868,10 @@ pub fn emit_bl(mc : MachineCode, target_block : Int) -> Unit {
 /// Opcode: 0xEB00001F
 pub fn emit_cmp_reg(mc : MachineCode, rn : Int, rm : Int) -> Unit {
   // SUBS with Rd=31 (XZR)
-  let x1f = 31 // 0x1F
-  let b0 = x1f | ((rn & 3) << 5) // Rd=31
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding as SUB (shifted register) but with S=1 (opcode 0xEB instead of 0xCB)
+  let b0 = 31 | ((rn & 7) << 5) // Rd=31 (XZR)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0
   let b3 = 235 // 0xEB
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -1385,7 +1392,17 @@ fn emit_terminator(mc : MachineCode, term : VCodeTerminator) -> Unit {
       emit_cbnz(mc, rt, then_b)
       emit_b(mc, else_b)
     }
-    Return(_) => emit_ret(mc, 30)
+    Return(values) => {
+      // Move return values to their ABI registers (X0, X1, etc.)
+      for i, value in values {
+        let src = reg_num(value)
+        if src != i {
+          // Only emit mov if source != destination
+          emit_mov_reg(mc, i, src)
+        }
+      }
+      emit_ret(mc, 30)
+    }
     Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000
   }
 }
