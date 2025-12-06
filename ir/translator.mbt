@@ -693,6 +693,10 @@ fn Translator::translate_fcmp(self : Translator, cc : FloatCC) -> Unit {
 
 ///|
 /// Translate a block construct
+///
+/// For proper SSA form, we need to pass all mutable locals through the
+/// continuation block as parameters. This ensures locals modified inside the
+/// block (or nested loops) are properly threaded through phi nodes.
 fn Translator::translate_block(
   self : Translator,
   block_type : @types.BlockType,
@@ -700,10 +704,18 @@ fn Translator::translate_block(
 ) -> Unit {
   let result_types = get_block_result_types(block_type, self.func_types)
   let continuation = self.builder.create_block()
-  // Add block parameters for results
+
+  // Add block parameters for explicit results
   for ty in result_types {
     self.builder.add_block_param(continuation, ty) |> ignore
   }
+
+  // Add block parameters for ALL locals (SSA phi nodes)
+  let local_param_start = result_types.length()
+  for loc in self.locals {
+    self.builder.add_block_param(continuation, loc.ty) |> ignore
+  }
+
   // Push block frame
   let frame : BlockFrame = {
     kind: BlockKind::Block,
@@ -713,12 +725,15 @@ fn Translator::translate_block(
     stack_height: self.value_stack.length(),
   }
   self.block_stack.push(frame)
+
   // Translate body
   for instr in body {
     self.translate_instruction(instr)
   }
+
   // Pop frame
   self.block_stack.pop() |> ignore
+
   // Fall through to continuation
   match self.builder.current_block() {
     Some(block) =>
@@ -730,22 +745,36 @@ fn Translator::translate_block(
             args.push(self.pop())
           }
           args.rev_in_place()
+          // Then, all locals
+          for loc in self.locals {
+            args.push(loc)
+          }
           self.builder.jump(continuation, args)
         }
         Some(_) => ()
       }
     None => ()
   }
+
   // Switch to continuation
   self.builder.switch_to_block(continuation)
+
   // Push block results onto stack
   for i, _ty in result_types {
     self.push(continuation.params[i].0)
+  }
+
+  // Update locals to use the continuation's phi values
+  for i, _loc in self.locals {
+    self.locals[i] = continuation.params[local_param_start + i].0
   }
 }
 
 ///|
 /// Translate a loop construct
+///
+/// For proper SSA form, we need to pass all mutable locals through the loop
+/// header as parameters. This creates phi nodes for loop-carried variables.
 fn Translator::translate_loop(
   self : Translator,
   block_type : @types.BlockType,
@@ -755,28 +784,51 @@ fn Translator::translate_loop(
   let param_types = get_block_param_types(block_type, self.func_types)
   let loop_header = self.builder.create_block()
   let continuation = self.builder.create_block()
-  // Add loop header parameters
+
+  // Add loop header parameters for explicit block params
   for ty in param_types {
     self.builder.add_block_param(loop_header, ty) |> ignore
   }
+
+  // Add loop header parameters for ALL locals (SSA phi nodes for loop-carried values)
+  let local_param_start = param_types.length()
+  for loc in self.locals {
+    self.builder.add_block_param(loop_header, loc.ty) |> ignore
+  }
+
   // Add continuation parameters for results
   for ty in result_types {
     self.builder.add_block_param(continuation, ty) |> ignore
   }
-  // Jump to loop header with current stack values
+
+  // Jump to loop header with current stack values AND current local values
   let header_args : Array[Value] = []
+  // First, explicit block params from stack
   for _ in 0..<param_types.length() {
     header_args.push(self.pop())
   }
   header_args.rev_in_place()
+  // Then, all locals
+  for loc in self.locals {
+    header_args.push(loc)
+  }
   self.builder.jump(loop_header, header_args)
+
   // Switch to loop header
   self.builder.switch_to_block(loop_header)
+
   // Push header params onto stack
   for i, _ty in param_types {
     self.push(loop_header.params[i].0)
   }
+
+  // Update locals to use the loop header's phi values
+  for i, _loc in self.locals {
+    self.locals[i] = loop_header.params[local_param_start + i].0
+  }
+
   // Push block frame (br targets loop header for loops)
+  // Store local_param_start so br can pass locals too
   let frame : BlockFrame = {
     kind: BlockKind::Loop,
     block: loop_header, // Loop's br target is the header
@@ -785,12 +837,15 @@ fn Translator::translate_loop(
     stack_height: self.value_stack.length(),
   }
   self.block_stack.push(frame)
+
   // Translate body
   for instr in body {
     self.translate_instruction(instr)
   }
+
   // Pop frame
   self.block_stack.pop() |> ignore
+
   // Fall through to continuation
   match self.builder.current_block() {
     Some(block) =>
@@ -807,6 +862,7 @@ fn Translator::translate_loop(
       }
     None => ()
   }
+
   // Switch to continuation
   self.builder.switch_to_block(continuation)
   // Push results onto stack
@@ -817,6 +873,9 @@ fn Translator::translate_loop(
 
 ///|
 /// Translate an if-else construct
+///
+/// For proper SSA form, we need to pass all mutable locals through the
+/// continuation block as parameters.
 fn Translator::translate_if(
   self : Translator,
   block_type : @types.BlockType,
@@ -828,12 +887,21 @@ fn Translator::translate_if(
   let then_block = self.builder.create_block()
   let else_block = self.builder.create_block()
   let continuation = self.builder.create_block()
-  // Add continuation parameters for results
+
+  // Add continuation parameters for explicit results
   for ty in result_types {
     self.builder.add_block_param(continuation, ty) |> ignore
   }
+
+  // Add continuation parameters for ALL locals (SSA phi nodes)
+  let local_param_start = result_types.length()
+  for loc in self.locals {
+    self.builder.add_block_param(continuation, loc.ty) |> ignore
+  }
+
   // Branch
   self.builder.brnz(cond, then_block, else_block)
+
   // Push frame for then branch (else block as the "else" continuation)
   let frame : BlockFrame = {
     kind: BlockKind::If(Some(else_block)),
@@ -843,12 +911,17 @@ fn Translator::translate_if(
     stack_height: self.value_stack.length(),
   }
   self.block_stack.push(frame)
+
+  // Save locals at entry for else branch
+  let saved_locals = self.locals.copy()
+
   // Translate then body
   self.builder.switch_to_block(then_block)
   for instr in then_body {
     self.translate_instruction(instr)
   }
-  // Jump to continuation from then block
+
+  // Jump to continuation from then block with locals
   match self.builder.current_block() {
     Some(block) =>
       match block.terminator {
@@ -858,22 +931,34 @@ fn Translator::translate_if(
             args.push(self.pop())
           }
           args.rev_in_place()
+          // Pass locals
+          for loc in self.locals {
+            args.push(loc)
+          }
           self.builder.jump(continuation, args)
         }
         Some(_) => ()
       }
     None => ()
   }
+
   // Restore stack to original height for else branch
   while self.value_stack.length() > frame.stack_height {
     self.pop() |> ignore
   }
+
+  // Restore locals to entry state for else branch
+  for i, loc in saved_locals {
+    self.locals[i] = loc
+  }
+
   // Translate else body
   self.builder.switch_to_block(else_block)
   for instr in else_body {
     self.translate_instruction(instr)
   }
-  // Jump to continuation from else block
+
+  // Jump to continuation from else block with locals
   match self.builder.current_block() {
     Some(block) =>
       match block.terminator {
@@ -883,46 +968,67 @@ fn Translator::translate_if(
             args.push(self.pop())
           }
           args.rev_in_place()
+          // Pass locals
+          for loc in self.locals {
+            args.push(loc)
+          }
           self.builder.jump(continuation, args)
         }
         Some(_) => ()
       }
     None => ()
   }
+
   // Pop frame
   self.block_stack.pop() |> ignore
+
   // Switch to continuation
   self.builder.switch_to_block(continuation)
+
   // Push results onto stack
   for i, _ty in result_types {
     self.push(continuation.params[i].0)
+  }
+
+  // Update locals to use the continuation's phi values
+  for i, _loc in self.locals {
+    self.locals[i] = continuation.params[local_param_start + i].0
   }
 }
 
 ///|
 /// Translate a br instruction
+/// We need to pass both explicit params AND current local values
 fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
   let idx = self.block_stack.length() - 1 - depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
     let args : Array[Value] = []
+    // Pop explicit block params
     for _ in 0..<frame.result_types.length() {
       args.push(self.pop())
     }
     args.rev_in_place()
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
     self.builder.jump(frame.block, args)
   }
 }
 
 ///|
 /// Translate a br_if instruction
+/// Critical edge splitting is needed because brnz doesn't support block args
 fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
   let cond = self.pop()
   let idx = self.block_stack.length() - 1 - depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
-    // For br_if, we need a fallthrough block
+    // For br_if, we need a fallthrough block and a taken block (critical edge split)
     let fallthrough = self.builder.create_block()
+    let taken = self.builder.create_block()
+
     // Collect values that would be passed on branch
     let args : Array[Value] = []
     for i in 0..<frame.result_types.length() {
@@ -932,11 +1038,25 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
         i],
       )
     }
-    // If we actually take the branch, need to add block params
+
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
+
+    // If we actually take the branch, need to add block params to fallthrough
     for ty in frame.result_types {
       self.builder.add_block_param(fallthrough, ty) |> ignore
     }
-    self.builder.brnz(cond, frame.block, fallthrough)
+
+    // Branch: taken goes to intermediate block, not-taken falls through
+    self.builder.brnz(cond, taken, fallthrough)
+
+    // Critical edge split: taken block jumps to target with args
+    self.builder.switch_to_block(taken)
+    self.builder.jump(frame.block, args)
+
+    // Continue with fallthrough
     self.builder.switch_to_block(fallthrough)
     // Push the fallthrough values back
     for i, _ty in frame.result_types {

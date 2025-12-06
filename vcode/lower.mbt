@@ -165,28 +165,34 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
     ctx.vcode_func.add_result(class)
   }
 
-  // Phase 4: Lower each block
+  // Phase 3.5: Pre-register all block parameters
+  // This is critical: when processing jumps/branches, we need to know
+  // the vreg IDs of target block parameters BEFORE lowering those blocks.
   for i, ir_block in ir_func.blocks {
-    lower_block(ctx, ir_block, ctx.vcode_func.blocks[i])
+    for param in ir_block.params {
+      let (value, ty) = param
+      let class = ir_type_to_reg_class(ty)
+      let vreg = ctx.vcode_func.new_vreg(class)
+      ctx.value_map.set(value.id, vreg)
+      ctx.vcode_func.blocks[i].params.push(vreg)
+    }
+  }
+
+  // Phase 4: Lower each block (instructions and terminators only, params already done)
+  for i, ir_block in ir_func.blocks {
+    lower_block_body(ctx, ir_block, ctx.vcode_func.blocks[i])
   }
   ctx.vcode_func
 }
 
 ///|
-/// Lower a single IR block to VCode
-fn lower_block(
+/// Lower a single IR block to VCode (body only, params handled in pre-registration)
+fn lower_block_body(
   ctx : LoweringContext,
   ir_block : @ir.Block,
   vcode_block : VCodeBlock,
 ) -> Unit {
-  // Lower block parameters
-  for param in ir_block.params {
-    let (value, ty) = param
-    let class = ir_type_to_reg_class(ty)
-    let vreg = ctx.vcode_func.new_vreg(class)
-    ctx.value_map.set(value.id, vreg)
-    vcode_block.params.push(vreg)
-  }
+  // Block parameters are already handled in pre-registration phase
 
   // Lower instructions
   for inst in ir_block.instructions {
@@ -1014,8 +1020,29 @@ fn lower_terminator(
   block : VCodeBlock,
 ) -> Unit {
   match term {
-    @ir.Terminator::Jump(target, _args) => {
+    @ir.Terminator::Jump(target, args) => {
       let target_id = ctx.get_block_id(target)
+      // Generate moves for block arguments
+      // Find the target block's parameters
+      for tb in ctx.ir_func.blocks {
+        if tb.id == target {
+          for i, param_info in tb.params {
+            if i < args.length() {
+              // Get the source value's vreg
+              let src = ctx.get_vreg(args[i])
+              // Get the destination param's vreg
+              let (param_value, _param_ty) = param_info
+              let dst = ctx.get_vreg(param_value)
+              // Emit a move instruction
+              let mov_inst = VCodeInst::new(Move)
+              mov_inst.add_def({ reg: Virtual(dst) })
+              mov_inst.add_use(Virtual(src))
+              block.add_inst(mov_inst)
+            }
+          }
+          break
+        }
+      }
       block.set_terminator(Jump(target_id))
     }
     @ir.Terminator::Brz(cond, then_block, else_block) => {

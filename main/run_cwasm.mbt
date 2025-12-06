@@ -25,15 +25,10 @@ fn run_cwasm(
       return
     }
   }
-  // Build func_types array from the precompiled module
-  // We need to determine (num_params, has_result) for each function
-  // For now, assume the function signature based on the function index
-  // Functions stored in precompiled are indexed by func_idx
+  // Build func_types array from the precompiled module using stored signature info
   let func_types : Array[(Int, Bool)] = []
-  for _ in precompiled.functions {
-    // Default: assume (0, true) for void->result functions
-    // This is a limitation - proper fix would store type info in .cwasm
-    func_types.push((0, true))
+  for entry in precompiled.functions {
+    func_types.push((entry.num_params, entry.num_results > 0))
   }
   // Load the JIT module
   let jit_module = @jit.JITModule::load(precompiled, func_types)

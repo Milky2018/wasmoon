@@ -29,6 +29,8 @@ pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64Stack
 
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
+pub fn debug_liveness(LivenessResult) -> String
+
 pub fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
