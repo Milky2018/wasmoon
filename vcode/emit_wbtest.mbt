@@ -41,7 +41,20 @@ test "emit: movz immediate" {
   let mc = MachineCode::new()
   emit_movz(mc, 0, 0x1234, 0) // MOVZ X0, #0x1234
   let bytes = mc.get_bytes()
-  // MOVZ X0, #0x1234: 0xD2824680
+  // MOVZ X0, #0x1234: 0xD2824680 (little-endian: 80 46 82 D2)
+  inspect(bytes[3], content="210") // 0xD2
+  inspect(bytes[2], content="130") // 0x82
+}
+
+///|
+test "emit: movz immediate 42" {
+  let mc = MachineCode::new()
+  emit_movz(mc, 0, 42, 0) // MOVZ X0, #42
+  let bytes = mc.get_bytes()
+  // MOVZ X0, #42: 0xD2800540 (little-endian: 40 05 80 D2)
+  inspect(bytes[0], content="64") // 0x40
+  inspect(bytes[1], content="5") // 0x05
+  inspect(bytes[2], content="128") // 0x80
   inspect(bytes[3], content="210") // 0xD2
 }
 
@@ -90,9 +103,9 @@ test "emit: ret" {
   let mc = MachineCode::new()
   emit_ret(mc, 30) // RET X30
   let bytes = mc.get_bytes()
-  // RET X30: 0xD65F03C0
-  inspect(bytes[0], content="64") // 0xC0
-  inspect(bytes[1], content="7") // 0x03
+  // RET X30: 0xD65F03C0 (little-endian: C0 03 5F D6)
+  inspect(bytes[0], content="192") // 0xC0
+  inspect(bytes[1], content="3") // 0x03
   inspect(bytes[2], content="95") // 0x5F
   inspect(bytes[3], content="214") // 0xD6
 }

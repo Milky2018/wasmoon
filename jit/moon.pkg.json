@@ -1,5 +1,11 @@
 {
   "import": [
-    "Milky2018/wasmoon/vcode"
-  ]
+    "Milky2018/wasmoon/vcode",
+    "Milky2018/wasmoon/cwasm"
+  ],
+  "targets": {
+    "ffi_jit.mbt": ["native"],
+    "jit_runtime.mbt": ["native"]
+  },
+  "native-stub": ["ffi_jit.c"]
 }

@@ -129,6 +129,7 @@ fn main {
             "run" => {
               let positional = sub.positional_args
               if positional.length() > 0 {
+                let file_path = positional[0]
                 let invoke_opt : String? = match sub.args.get("invoke") {
                   Some(arr) =>
                     if arr.length() > 0 {
@@ -143,26 +144,6 @@ fn main {
                   Some(arr) => arr
                   None => []
                 }
-                // Get preload modules from --preload option
-                let preloads : Array[String] = match sub.args.get("preload") {
-                  Some(arr) => arr
-                  None => []
-                }
-                // Get directory mappings from --dir option
-                let dirs : Array[String] = match sub.args.get("dir") {
-                  Some(arr) => arr
-                  None => []
-                }
-                // Get environment variables from --env option
-                let envs : Array[String] = match sub.args.get("env") {
-                  Some(arr) => arr
-                  None => []
-                }
-                // Get WASI options from -S flag
-                let wasi_options : Array[String] = match sub.args.get("S") {
-                  Some(arr) => arr
-                  None => []
-                }
                 // Get debug options from -D flag
                 let debug_config = DebugConfig::new()
                 match sub.args.get("D") {
@@ -172,26 +153,44 @@ fn main {
                     }
                   None => ()
                 }
-                // Get WASM semantic options from -W flag
-                let wasm_config = WasmConfig::default()
-                match sub.args.get("W") {
-                  Some(flags) =>
-                    for flag in flags {
-                      wasm_config.apply_flag(flag)
-                    }
-                  None => ()
+                // Check if it's a .cwasm file
+                if file_path.has_suffix(".cwasm") {
+                  run_cwasm(file_path, invoke_opt, func_args, debug_config)
+                } else {
+                  // Get preload modules from --preload option
+                  let preloads : Array[String] = match sub.args.get("preload") {
+                    Some(arr) => arr
+                    None => []
+                  }
+                  // Get directory mappings from --dir option
+                  let dirs : Array[String] = match sub.args.get("dir") {
+                    Some(arr) => arr
+                    None => []
+                  }
+                  // Get environment variables from --env option
+                  let envs : Array[String] = match sub.args.get("env") {
+                    Some(arr) => arr
+                    None => []
+                  }
+                  // Get WASI options from -S flag
+                  let wasi_options : Array[String] = match sub.args.get("S") {
+                    Some(arr) => arr
+                    None => []
+                  }
+                  // Get WASM semantic options from -W flag
+                  let wasm_config = WasmConfig::default()
+                  match sub.args.get("W") {
+                    Some(flags) =>
+                      for flag in flags {
+                        wasm_config.apply_flag(flag)
+                      }
+                    None => ()
+                  }
+                  run_wasm(
+                    file_path, invoke_opt, func_args, preloads, dirs, envs, wasi_options,
+                    debug_config, wasm_config,
+                  )
                 }
-                run_wasm(
-                  positional[0],
-                  invoke_opt,
-                  func_args,
-                  preloads,
-                  dirs,
-                  envs,
-                  wasi_options,
-                  debug_config,
-                  wasm_config,
-                )
               } else {
                 println("Error: missing file argument")
               }
