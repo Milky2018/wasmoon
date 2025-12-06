@@ -35,7 +35,15 @@ test "deserialize invalid data raises error" {
 test "PrecompiledModule serialize roundtrip with multiple functions" {
   let pcm = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
   let entry1 = @cwasm.CompiledEntry::new(0, "func0", [1, 2, 3, 4], 16, 0, 0, 0)
-  let entry2 = @cwasm.CompiledEntry::new(1, "func1", [5, 6, 7, 8, 9], 32, 4, 1, 1)
+  let entry2 = @cwasm.CompiledEntry::new(
+    1,
+    "func1",
+    [5, 6, 7, 8, 9],
+    32,
+    4,
+    1,
+    1,
+  )
   pcm.add_function(0, "func0", entry1.to_compiled_function(), 0, 0)
   pcm.add_function(1, "func1", entry2.to_compiled_function(), 1, 1)
   // Serialize and deserialize

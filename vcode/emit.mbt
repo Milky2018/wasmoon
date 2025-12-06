@@ -218,7 +218,7 @@ pub fn emit_add_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   // Byte 2 (bits 23-16): Rm[4:0] | 0 << 5 | shift[1:0] << 6
   // Byte 3 (bits 31-24): 0x8B
   let b0 = (rd & 31) | ((rn & 7) << 5)
-  let b1 = ((rn >> 3) & 3) // imm6 = 0
+  let b1 = (rn >> 3) & 3 // imm6 = 0
   let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 139 // 0x8B
   mc.emit_inst(b0, b1, b2, b3)

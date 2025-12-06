@@ -321,13 +321,7 @@ pub fn deserialize(
     let num_results = reader.read_u32()
     functions.push(
       CompiledEntry::new(
-        func_idx,
-        name,
-        code,
-        frame_size,
-        entry_offset,
-        num_params,
-        num_results,
+        func_idx, name, code, frame_size, entry_offset, num_params, num_results,
       ),
     )
   }

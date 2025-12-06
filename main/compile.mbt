@@ -107,7 +107,9 @@ fn run_compile(
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
-    precompiled.add_function(func_idx, func_name, compiled, num_params, num_results)
+    precompiled.add_function(
+      func_idx, func_name, compiled, num_params, num_results,
+    )
 
     // Progress indicator for large modules
     if mod_.codes.length() > 10 && (i + 1) % 10 == 0 {
