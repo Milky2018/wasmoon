@@ -45,6 +45,7 @@ pub enum WastModuleSource {
   Binary(Bytes)
   Quote(Array[String])
   Inline(@types.Module)
+  FailedToParse(String)
 }
 pub impl Show for WastModuleSource
 

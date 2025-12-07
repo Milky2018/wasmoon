@@ -151,15 +151,15 @@ fn run_wast_command(
     ModuleQuote(_parts) =>
       // Quoted modules are for malformed tests, skip for now
       result.skipped = result.skipped + 1
-    AssertReturn(action, expected) => {
-      let success = run_assert_return(ctx, action, expected)
-      if success {
-        result.passed = result.passed + 1
-      } else {
-        result.failed = result.failed + 1
-        result.failures.push("assert_return failed")
+    AssertReturn(action, expected) =>
+      match run_assert_return(ctx, action, expected) {
+        None => result.passed = result.passed + 1
+        Some(err) => {
+          result.failed = result.failed + 1
+          let action_desc = format_action(action)
+          result.failures.push("assert_return \{action_desc}: \{err}")
+        }
       }
-    }
     AssertTrap(action, expected_msg) => {
       let success = run_assert_trap(ctx, action, expected_msg)
       if success {
@@ -177,35 +177,37 @@ fn run_wast_command(
         result.failed = result.failed + 1
         result.failures.push("assert_exhaustion: expected exhaustion")
       }
-    AssertInvalid(source, _msg) => {
+    AssertInvalid(source, msg) => {
       let valid = validate_module_source(source)
       if valid {
         result.failed = result.failed + 1
-        result.failures.push("assert_invalid: module should have been invalid")
+        result.failures.push(
+          "assert_invalid: module should have been invalid (expected: \{msg})",
+        )
       } else {
         result.passed = result.passed + 1
       }
     }
-    AssertMalformed(source, _msg) => {
+    AssertMalformed(source, msg) => {
       // For quoted sources, we can't easily test malformation
       // For binary/inline sources, try parsing
       let parsed = parse_module_source(source)
       if parsed {
         result.failed = result.failed + 1
         result.failures.push(
-          "assert_malformed: module should have been malformed",
+          "assert_malformed: module should have been malformed (expected: \{msg})",
         )
       } else {
         result.passed = result.passed + 1
       }
     }
-    AssertUnlinkable(source, _msg) => {
+    AssertUnlinkable(source, msg) => {
       // Try to instantiate - should fail during linking
       let linked = try_instantiate_source(ctx, source)
       if linked {
         result.failed = result.failed + 1
         result.failures.push(
-          "assert_unlinkable: module should have been unlinkable",
+          "assert_unlinkable: module should have been unlinkable (expected: \{msg})",
         )
       } else {
         result.passed = result.passed + 1
@@ -236,21 +238,43 @@ fn run_wast_command(
 }
 
 ///|
+fn format_action(action : @wast.WastAction) -> String {
+  match action {
+    Invoke(module_name, func_name, _args) =>
+      match module_name {
+        Some(m) => "(\{m}.\{func_name})"
+        None => "(\{func_name})"
+      }
+    Get(module_name, global_name) =>
+      match module_name {
+        Some(m) => "(get \{m}.\{global_name})"
+        None => "(get \{global_name})"
+      }
+  }
+}
+
+///|
 fn run_assert_return(
   ctx : WastContext,
   action : @wast.WastAction,
   expected : Array[@wast.WastValue],
-) -> Bool {
-  let results = invoke_action(ctx, action) catch { _ => return false }
+) -> String? {
+  let results = invoke_action(ctx, action) catch {
+    e => return Some("invoke failed: \{e}")
+  }
   if results.length() != expected.length() {
-    return false
+    return Some(
+      "result count mismatch: expected \{expected.length()}, got \{results.length()}",
+    )
   }
   for i in 0..<results.length() {
     if !values_match(results[i], expected[i]) {
-      return false
+      return Some(
+        "result[\{i}] mismatch: expected \{expected[i]}, got \{results[i]}",
+      )
     }
   }
-  true
+  None // success
 }
 
 ///|
@@ -365,6 +389,7 @@ fn validate_module_source(source : @wast.WastModuleSource) -> Bool {
       is Ok(_)
     }
     Inline(mod_) => (try? @validator.validate_module(mod_)) is Ok(_)
+    FailedToParse(_) => false // Module failed to parse, so it's invalid
   }
 }
 
@@ -374,6 +399,7 @@ fn parse_module_source(source : @wast.WastModuleSource) -> Bool {
     Binary(bytes) => (try? @parser.parse_module(bytes)) is Ok(_)
     Quote(_) => false // Quoted source is assumed to fail parsing
     Inline(_) => true // Already parsed successfully
+    FailedToParse(_) => false // Module failed to parse
   }
 }
 
@@ -406,5 +432,6 @@ fn try_instantiate_source(
       })
       is Ok(_)
     Quote(_) => false
+    FailedToParse(_) => false // Module failed to parse, can't instantiate
   }
 }

@@ -235,10 +235,21 @@ fn parse_int(s : String) -> Int raise WatError {
       raise InvalidNumber(s, default_loc())
     }
   } else {
-    // Parse decimal
-    @strconv.parse_int(trimmed) catch {
-      _ => raise InvalidNumber(s, default_loc())
+    // Try signed first, then unsigned (for values like 4294967295 which is -1 in i32)
+    let result = @strconv.parse_int(trimmed) catch {
+      _ => {
+        // Try parsing as unsigned and reinterpret
+        let u64 = @strconv.parse_uint64(trimmed) catch {
+          _ => raise InvalidNumber(s, default_loc())
+        }
+        // Check if it fits in u32 range
+        if u64 > 0xFFFFFFFFUL {
+          raise InvalidNumber(s, default_loc())
+        }
+        u64.reinterpret_as_int64().to_int()
+      }
     }
+    result
   }
 }
 
@@ -247,6 +258,9 @@ fn parse_hex_int(s : String) -> Int raise WatError {
   let mut result = 0
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue // Skip underscores (WAT number separator)
+    }
     match hex_digit_value(c) {
       Some(v) => result = result * 16 + v
       None => raise InvalidNumber(s, default_loc())
@@ -276,7 +290,7 @@ fn parse_u32(s : String) -> Int raise WatError {
     let u64 = @strconv.parse_uint64(trimmed) catch {
       _ => raise InvalidNumber(s, default_loc())
     }
-    // Check if value exceeds u32 max (4294967295)
+    // Check if value exceeds u32 max
     if u64 > 0xFFFFFFFFUL {
       raise InvalidNumber(s, default_loc())
     }
@@ -287,15 +301,26 @@ fn parse_u32(s : String) -> Int raise WatError {
 ///|
 fn parse_hex_u32(s : String) -> Int raise WatError {
   let mut result : UInt64 = 0UL
+  let mut overflow = false
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue // Skip underscores (WAT number separator)
+    }
     match hex_digit_value(c) {
-      Some(v) => result = result * 16UL + v.to_int64().reinterpret_as_uint64()
+      Some(v) => {
+        let new_result = result * 16UL + v.to_int64().reinterpret_as_uint64()
+        // Detect overflow
+        if new_result < result {
+          overflow = true
+        }
+        result = new_result
+      }
       None => raise InvalidNumber(s, default_loc())
     }
   }
   // Check if value exceeds u32 max
-  if result > 0xFFFFFFFFUL {
+  if result > 0xFFFFFFFFUL || overflow {
     raise InvalidNumber(s, default_loc())
   }
   result.reinterpret_as_int64().to_int()
@@ -325,9 +350,17 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       raise InvalidNumber(s, default_loc())
     }
   } else {
-    @strconv.parse_int64(trimmed) catch {
-      _ => raise InvalidNumber(s, default_loc())
+    // Try signed first, then unsigned (for values like 18446744073709551615 which is -1 in i64)
+    let result = @strconv.parse_int64(trimmed) catch {
+      _ => {
+        // Try parsing as unsigned and reinterpret
+        let u64 = @strconv.parse_uint64(trimmed) catch {
+          _ => raise InvalidNumber(s, default_loc())
+        }
+        u64.reinterpret_as_int64()
+      }
     }
+    result
   }
 }
 
@@ -336,6 +369,9 @@ fn parse_hex_int64(s : String) -> Int64 raise WatError {
   let mut result = 0L
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue // Skip underscores (WAT number separator)
+    }
     match hex_digit_value(c) {
       Some(v) => result = result * 16L + v.to_int64()
       None => raise InvalidNumber(s, default_loc())

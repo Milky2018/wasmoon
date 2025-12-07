@@ -86,7 +86,7 @@
         (local.set $inner (i32.const 0))
         (block $inner_done
           (loop $inner_loop
-            (br_if $inner_done (i32.ge_u (local.get $inner) (i32.const 70000)))
+            (br_if $inner_done (i32.ge_u (local.get $inner) (i32.const 1000000)))
             (local.set $result (call $fib (i32.const 80)))
             (local.set $inner (i32.add (local.get $inner) (i32.const 1)))
             (br $inner_loop)

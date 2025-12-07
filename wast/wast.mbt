@@ -54,6 +54,8 @@ pub enum WastModuleSource {
   Binary(Bytes)
   Quote(Array[String])
   Inline(@types.Module)
+  /// Module that failed to parse (used for assert_invalid/malformed tests)
+  FailedToParse(String)
 } derive(Show)
 
 ///|
@@ -793,7 +795,10 @@ fn Parser::parse_module_source(
     _ => {
       // Inline module
       let wat_text = self.collect_module_text()
-      let mod_ = @wat.parse(wat_text) catch { e => raise WatError(e) }
+      // Try to parse; if it fails, store the error for assert_invalid/malformed
+      let mod_ = @wat.parse(wat_text) catch {
+        e => return FailedToParse(e.to_string())
+      }
       Inline(mod_)
     }
   }
@@ -996,9 +1001,19 @@ fn parse_int(s : String) -> Int raise WastError {
       raise InvalidNumber(s)
     }
   } else {
-    @strconv.parse_int(s) catch {
-      _ => raise InvalidNumber(s)
+    // Try signed first, then unsigned (for values like 4294967295 which is -1 in i32)
+    let result = @strconv.parse_int(s) catch {
+      _ => {
+        // Try parsing as unsigned and reinterpret
+        let u64 = @strconv.parse_uint64(s) catch { _ => raise InvalidNumber(s) }
+        // Check if it fits in u32 range
+        if u64 > 0xFFFFFFFFUL {
+          raise InvalidNumber(s)
+        }
+        u64.reinterpret_as_int64().to_int()
+      }
     }
+    result
   }
 }
 
@@ -1007,6 +1022,9 @@ fn parse_hex_int(s : String) -> Int raise WastError {
   let mut result = 0
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue // Skip underscores (WAT number separator)
+    }
     match hex_digit_value(c) {
       Some(v) => result = result * 16 + v
       None => raise InvalidNumber(s)
@@ -1048,9 +1066,15 @@ fn parse_int64(s : String) -> Int64 raise WastError {
       raise InvalidNumber(s)
     }
   } else {
-    @strconv.parse_int64(s) catch {
-      _ => raise InvalidNumber(s)
+    // Try signed first, then unsigned (for values like 18446744073709551615 which is -1 in i64)
+    let result = @strconv.parse_int64(s) catch {
+      _ => {
+        // Try parsing as unsigned and reinterpret
+        let u64 = @strconv.parse_uint64(s) catch { _ => raise InvalidNumber(s) }
+        u64.reinterpret_as_int64()
+      }
     }
+    result
   }
 }
 
@@ -1059,6 +1083,9 @@ fn parse_hex_int64(s : String) -> Int64 raise WastError {
   let mut result = 0L
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue // Skip underscores (WAT number separator)
+    }
     match hex_digit_value(c) {
       Some(v) => result = result * 16L + v.to_int64()
       None => raise InvalidNumber(s)

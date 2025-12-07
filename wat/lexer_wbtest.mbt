@@ -106,3 +106,37 @@ test "read_number: negative zero hex float" {
   let lexer = Lexer::new("-0x0p+0 abc")
   inspect(lexer.read_number(), content="-0x0p+0")
 }
+
+///|
+test "read_number: nan without sign" {
+  let lexer = Lexer::new("nan abc")
+  inspect(lexer.read_number(), content="nan")
+}
+
+///|
+test "read_number: nan with payload and underscores" {
+  let lexer = Lexer::new("nan:0x7f_ffff abc")
+  // Underscores are skipped in the payload
+  inspect(lexer.read_number(), content="nan:0x7fffff")
+}
+
+///|
+test "next_token: nan without sign is Number" {
+  let lexer = Lexer::new("nan")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok, content="Number(\"nan\")")
+}
+
+///|
+test "next_token: nan:payload without sign is Number" {
+  let lexer = Lexer::new("nan:0x1")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok, content="Number(\"nan:0x1\")")
+}
+
+///|
+test "next_token: inf without sign is Number" {
+  let lexer = Lexer::new("inf")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok, content="Number(\"inf\")")
+}

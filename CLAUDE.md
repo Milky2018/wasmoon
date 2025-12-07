@@ -421,7 +421,7 @@ let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint()) |> UInt::reinte
 ### Git 规范
 - Commit message 用英文
 - 每次改动开新分支，通过 PR 合并
-- 不要使用 `git push -f`
+- 不要用 commit --amend 和 push --force，而是用新的 commit 来修补
 
 ### 避免无意义的工厂函数
 ```moonbit
@@ -445,3 +445,7 @@ let c = s.code_unit_at(i)  // 返回 Int
 // ✅ 正确 - 需要 Char 时用 get_char
 let c = s.get_char(i)  // 返回 Char?
 ```
+
+### 构建和运行
+- `moon build` 后需要执行 `./install.sh` 才能使用 `./wasmoon` 二进制文件
+- 批量运行 WAST 测试：`python3 scripts/run_all_wast.py`
