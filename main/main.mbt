@@ -35,6 +35,9 @@ fn main {
           nargs=@clap.Nargs::Any,
           help="WASM semantic option (e.g., max-memory=100, simd=true)",
         ),
+        "no-jit": @clap.Arg::flag(
+          help="Disable JIT compilation (use interpreter)",
+        ),
       }),
       "compile": @clap.SubCommand::new(
         help="Compile WASM to precompiled format",
@@ -186,9 +189,11 @@ fn main {
                       }
                     None => ()
                   }
+                  // Check if JIT is disabled (default: enabled)
+                  let use_jit = !sub.args.contains("no-jit")
                   run_wasm(
                     file_path, invoke_opt, func_args, preloads, dirs, envs, wasi_options,
-                    debug_config, wasm_config,
+                    debug_config, wasm_config, use_jit,
                   )
                 }
               } else {
