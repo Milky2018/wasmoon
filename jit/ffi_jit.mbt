@@ -30,6 +30,7 @@ extern "c" fn c_jit_ctx_set_memory(
 
 ///|
 /// Get memory base from context
+#warnings("-unused_value")
 extern "c" fn c_jit_ctx_get_memory(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_memory"
 
 ///|
@@ -79,6 +80,7 @@ extern "c" fn c_jit_call_ctx_void_i64(
 
 ///|
 /// Call JIT function with context: (i64) -> i64
+#warnings("-unused_value")
 extern "c" fn c_jit_call_ctx_i64_i64(
   func_ptr : Int64,
   func_table_ptr : Int64,
@@ -87,6 +89,7 @@ extern "c" fn c_jit_call_ctx_i64_i64(
 
 ///|
 /// Call JIT function with context: (i64, i64) -> i64
+#warnings("-unused_value")
 extern "c" fn c_jit_call_ctx_i64i64_i64(
   func_ptr : Int64,
   func_table_ptr : Int64,
@@ -103,6 +106,7 @@ extern "c" fn c_jit_call_ctx_void_void(
 
 ///|
 /// Call JIT function with context: (i64) -> void
+#warnings("-unused_value")
 extern "c" fn c_jit_call_ctx_i64_void(
   func_ptr : Int64,
   func_table_ptr : Int64,
@@ -111,6 +115,7 @@ extern "c" fn c_jit_call_ctx_i64_void(
 
 ///|
 /// Call JIT function with context: (i64, i64) -> void
+#warnings("-unused_value")
 extern "c" fn c_jit_call_ctx_i64i64_void(
   func_ptr : Int64,
   func_table_ptr : Int64,

@@ -1757,30 +1757,6 @@ fn fcmp_kind_to_cond(kind : FCmpKind) -> Int {
 }
 
 ///|
-fn emit_terminator(mc : MachineCode, term : VCodeTerminator) -> Unit {
-  match term {
-    Jump(target) => emit_b(mc, target)
-    Branch(cond, then_b, else_b) => {
-      let rt = reg_num(cond)
-      emit_cbnz(mc, rt, then_b)
-      emit_b(mc, else_b)
-    }
-    Return(values) => {
-      // Move return values to their ABI registers (X0, X1, etc.)
-      for i, value in values {
-        let src = reg_num(value)
-        if src != i {
-          // Only emit mov if source != destination
-          emit_mov_reg(mc, i, src)
-        }
-      }
-      emit_ret(mc, 30)
-    }
-    Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000
-  }
-}
-
-///|
 /// Emit terminator with epilogue for Return
 fn emit_terminator_with_epilogue(
   mc : MachineCode,

@@ -176,16 +176,6 @@ test "lower memory operations" {
   builder.return_([sum])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode load_store(v0:int) -> int {
-    #|block0:
-    #|    v1 = load.i32 +0 v0
-    #|    v2 = ldi 1
-    #|    v3 = add v1, v2
-    #|    store.i32 +4 v0, v3
-    #|    ret v3
-    #|}
-    #|
   inspect(
     output,
     content=(
