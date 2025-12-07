@@ -209,14 +209,17 @@ fn wreg_num(wreg : Writable) -> Int {
 /// Encode ADD (shifted register): ADD Xd, Xn, Xm
 /// Opcode: 0x8B000000 = 10001011 00000000 00000000 00000000
 pub fn emit_add_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  // sf=1 | 00 | 01011 | shift=00 | 0 | Rm[4:0] | imm6=0 | Rn[4:0] | Rd[4:0]
-  // Byte 3: 0x8B = 139
-  // Byte 2: 0 | Rm[4] | 0000 | Rm[3:0] >> 4
-  // Byte 1: Rm[3:0] << 4 | 0 | Rn[4:2]
-  // Byte 0: Rn[1:0] << 5 | Rd[4:0]
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // AArch64 ADD (shifted register) encoding:
+  // | 31 | 30-29 | 28 | 27-24 | 23-22 | 21 | 20-16 | 15-10 | 9-5 | 4-0 |
+  // | sf |  op   | S  | 01011 | shift | 0  |  Rm   | imm6  | Rn  | Rd  |
+  // With sf=1, op=00, S=0, shift=00 (LSL), imm6=0:
+  // Byte 0 (bits 7-0): Rd[4:0] | Rn[2:0] << 5
+  // Byte 1 (bits 15-8): Rn[4:3] | imm6[5:0] << 2
+  // Byte 2 (bits 23-16): Rm[4:0] | 0 << 5 | shift[1:0] << 6
+  // Byte 3 (bits 31-24): 0x8B
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 139 // 0x8B
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -386,22 +389,33 @@ pub fn emit_mneg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode ADD (immediate): ADD Xd, Xn, #imm12
 /// Opcode: 0x91000000
 pub fn emit_add_imm(mc : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
-  // sf=1 | 00 | 100010 | sh=0 | imm12[11:0] | Rn[4:0] | Rd[4:0]
+  // sf=1 | op=0 | S=0 | 100010 | sh=0 | imm12[11:0] | Rn[4:0] | Rd[4:0]
+  // Build as 32-bit instruction
   let imm = imm12 & 0xFFF
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
-  let b2 = (imm >> 5) & 127
-  let b3 = 145 // 0x91
-  mc.emit_inst(b0, b1, b2, b3)
+  let inst = (0b1 << 31) |
+    (0 << 30) |
+    (0 << 29) |
+    (0b100010 << 23) |
+    (0 << 22) |
+    (imm << 10) |
+    ((rn & 31) << 5) |
+    (rd & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
 }
 
 ///|
 /// Encode SUB (shifted register): SUB Xd, Xn, Xm
 /// Opcode: 0xCB000000
 pub fn emit_sub_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding as ADD but with opcode 0xCB
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 203 // 0xCB
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -410,12 +424,23 @@ pub fn emit_sub_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode SUB (immediate): SUB Xd, Xn, #imm12
 /// Opcode: 0xD1000000
 pub fn emit_sub_imm(mc : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
+  // sf=1 | op=1 | S=0 | 100010 | sh=0 | imm12[11:0] | Rn[4:0] | Rd[4:0]
+  // Build as 32-bit instruction
   let imm = imm12 & 0xFFF
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
-  let b2 = (imm >> 5) & 127
-  let b3 = 209 // 0xD1
-  mc.emit_inst(b0, b1, b2, b3)
+  let inst = (0b1 << 31) |
+    (1 << 30) |
+    (0 << 29) |
+    (0b100010 << 23) |
+    (0 << 22) |
+    (imm << 10) |
+    ((rn & 31) << 5) |
+    (rd & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
 }
 
 ///|
@@ -463,9 +488,10 @@ pub fn emit_udiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode AND (shifted register): AND Xd, Xn, Xm
 /// Opcode: 0x8A000000
 pub fn emit_and_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding format as ADD/SUB but with opcode 0x8A
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 138 // 0x8A
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -474,9 +500,10 @@ pub fn emit_and_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode ORR (shifted register): ORR Xd, Xn, Xm
 /// Opcode: 0xAA000000
 pub fn emit_orr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding format as ADD/SUB but with opcode 0xAA
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 170 // 0xAA
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -485,9 +512,10 @@ pub fn emit_orr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode EOR (shifted register): EOR Xd, Xn, Xm
 /// Opcode: 0xCA000000
 pub fn emit_eor_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding format as ADD/SUB but with opcode 0xCA
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
   let b3 = 202 // 0xCA
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -609,25 +637,54 @@ pub fn emit_load_imm64(mc : MachineCode, rd : Int, imm : Int64) -> Unit {
 /// Encode LDR (64-bit, unsigned offset): LDR Xt, [Xn, #imm]
 /// Opcode: 0xF9400000
 pub fn emit_ldr_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+  // AArch64 LDR (immediate, unsigned offset) encoding:
+  // [31:30] = size = 11 (64-bit)
+  // [29:27] = 111 (fixed)
+  // [26] = V = 0 (general purpose register)
+  // [25:24] = 01 (fixed for unsigned offset)
+  // [23:22] = opc = 01 (LDR)
+  // [21:10] = imm12 (scaled offset, divided by 8 for 64-bit)
+  // [9:5] = Rn (base register)
+  // [4:0] = Rt (destination register)
   let scaled = (imm12 / 8) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = (scaled >> 5) & 127
-  let xf9 = 249 // 0xF9
-  let b3 = xf9 | ((scaled >> 12) & 1)
-  mc.emit_inst(b0, b1, b2, b3)
+  // Build instruction as 32-bit value then extract bytes
+  let inst = (0b11 << 30) |
+    (0b111 << 27) |
+    (0 << 26) |
+    (0b01 << 24) |
+    (0b01 << 22) |
+    (scaled << 10) |
+    ((rn & 31) << 5) |
+    (rt & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
 }
 
 ///|
 /// Encode STR (64-bit, unsigned offset): STR Xt, [Xn, #imm]
 /// Opcode: 0xF9000000
 pub fn emit_str_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+  // AArch64 STR (immediate, unsigned offset) encoding:
+  // Same as LDR but opc = 00 instead of 01
   let scaled = (imm12 / 8) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = (scaled >> 5) & 127
-  let b3 = 249 // 0xF9
-  mc.emit_inst(b0, b1, b2, b3)
+  let inst = (0b11 << 30) |
+    (0b111 << 27) |
+    (0 << 26) |
+    (0b01 << 24) |
+    (0b00 << 22) |
+    (scaled << 10) |
+    ((rn & 31) << 5) |
+    (rt & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
 }
 
 ///|
@@ -635,9 +692,9 @@ pub fn emit_str_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
 /// Opcode: 0x39400000
 pub fn emit_ldrb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
   let imm = imm12 & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
-  let b2 = ((imm >> 5) & 127) | 64 // bit pattern for LDR = 0x40
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
+  let b2 = ((imm >> 6) & 63) | 64 // bit pattern for LDR = 0x40
   let b3 = 57 // 0x39
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -647,9 +704,9 @@ pub fn emit_ldrb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit 
 /// Opcode: 0x79400000
 pub fn emit_ldrh_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
   let scaled = (imm12 / 2) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = ((scaled >> 5) & 127) | 64 // 0x40
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 64 // 0x40
   let b3 = 121 // 0x79
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -664,9 +721,9 @@ pub fn emit_ldr_w_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 4) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = ((scaled >> 5) & 127) | 64 // 0x40
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 64 // 0x40
   let b3 = 185 // 0xB9
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -676,9 +733,9 @@ pub fn emit_ldr_w_imm(
 /// Opcode: 0x39000000
 pub fn emit_strb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
   let imm = imm12 & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
-  let b2 = (imm >> 5) & 127
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
+  let b2 = (imm >> 6) & 63
   let b3 = 57 // 0x39
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -688,9 +745,9 @@ pub fn emit_strb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit 
 /// Opcode: 0x79000000
 pub fn emit_strh_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
   let scaled = (imm12 / 2) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = (scaled >> 5) & 127
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = (scaled >> 6) & 63
   let b3 = 121 // 0x79
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -705,11 +762,95 @@ pub fn emit_str_w_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 4) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = (scaled >> 5) & 127
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = (scaled >> 6) & 63
   let b3 = 185 // 0xB9
   mc.emit_inst(b0, b1, b2, b3)
+}
+
+// ============ Stack Pair Instructions (for prologue/epilogue) ============
+
+///|
+/// Encode STP (Store Pair, pre-indexed): STP Xt1, Xt2, [SP, #imm]!
+/// Used in function prologue to save callee-saved registers
+/// Opcode: 0xA9800000 base + pre-index flag
+/// imm7 is signed, scaled by 8 (range: -512 to 504)
+pub fn emit_stp_pre(
+  mc : MachineCode,
+  rt1 : Int,
+  rt2 : Int,
+  rn : Int,
+  imm : Int,
+) -> Unit {
+  // STP (pre-indexed) encoding for 64-bit:
+  // Instruction format: 1 0 1 0 1 0 0 1 1 | imm7 | Rt2 | Rn | Rt1
+  // [31:30] = 10 (opc for 64-bit)
+  // [29:27] = 101
+  // [26] = 0 (integer, not SIMD)
+  // [25:23] = 011 (pre-indexed)
+  // [22] = 0 (store, not load)
+  // [21:15] = imm7
+  // [14:10] = Rt2
+  // [9:5] = Rn
+  // [4:0] = Rt1
+  // So opcode base is 0xA9800000 for pre-indexed STP
+  let imm7 = (imm / 8) & 0x7F
+  // Build 32-bit instruction
+  let inst = (0b10 << 30) |
+    (0b101 << 27) |
+    (0 << 26) |
+    (0b011 << 23) |
+    (0 << 22) |
+    (imm7 << 15) |
+    ((rt2 & 31) << 10) |
+    ((rn & 31) << 5) |
+    (rt1 & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
+}
+
+///|
+/// Encode LDP (Load Pair, post-indexed): LDP Xt1, Xt2, [SP], #imm
+/// Used in function epilogue to restore callee-saved registers
+/// Opcode: 0xA8C00000 base
+pub fn emit_ldp_post(
+  mc : MachineCode,
+  rt1 : Int,
+  rt2 : Int,
+  rn : Int,
+  imm : Int,
+) -> Unit {
+  // LDP (post-indexed) encoding for 64-bit:
+  // [31:30] = 10 (opc for 64-bit)
+  // [29:27] = 101
+  // [26] = 0 (integer)
+  // [25:23] = 001 (post-indexed)
+  // [22] = 1 (load)
+  // [21:15] = imm7
+  // [14:10] = Rt2
+  // [9:5] = Rn
+  // [4:0] = Rt1
+  let imm7 = (imm / 8) & 0x7F
+  let inst = (0b10 << 30) |
+    (0b101 << 27) |
+    (0 << 26) |
+    (0b001 << 23) |
+    (1 << 22) |
+    (imm7 << 15) |
+    ((rt2 & 31) << 10) |
+    ((rn & 31) << 5) |
+    (rt1 & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
 }
 
 // ============ Sign-Extending Load Instructions ============
@@ -724,9 +865,9 @@ pub fn emit_ldrsb_x_imm(
   imm12 : Int,
 ) -> Unit {
   let imm = imm12 & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
-  let b2 = ((imm >> 5) & 127) | 128 // bit 7 = 1 for signed + 64-bit
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
+  let b2 = ((imm >> 6) & 63) | 128 // bit 7 = 1 for signed + 64-bit
   let b3 = 57 // 0x39
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -741,9 +882,9 @@ pub fn emit_ldrsb_w_imm(
   imm12 : Int,
 ) -> Unit {
   let imm = imm12 & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
-  let b2 = ((imm >> 5) & 127) | 192 // bit 7,6 = 11 for signed + 32-bit
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
+  let b2 = ((imm >> 6) & 63) | 192 // bit 7,6 = 11 for signed + 32-bit
   let b3 = 57 // 0x39
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -758,9 +899,9 @@ pub fn emit_ldrsh_x_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 2) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = ((scaled >> 5) & 127) | 128 // bit 7 = 1 for signed + 64-bit
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 128 // bit 7 = 1 for signed + 64-bit
   let b3 = 121 // 0x79
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -775,9 +916,9 @@ pub fn emit_ldrsh_w_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 2) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = ((scaled >> 5) & 127) | 192 // bit 7,6 = 11 for signed + 32-bit
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 192 // bit 7,6 = 11 for signed + 32-bit
   let b3 = 121 // 0x79
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -792,9 +933,9 @@ pub fn emit_ldrsw_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 4) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = ((scaled >> 5) & 127) | 128 // bit 7 = 1 for signed
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 128 // bit 7 = 1 for signed
   let b3 = 185 // 0xB9
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -854,6 +995,20 @@ pub fn emit_bl(mc : MachineCode, target_block : Int) -> Unit {
   mc.add_fixup(target_block, Branch26)
 }
 
+///|
+/// Encode BLR (branch with link to register): BLR Xn
+/// Opcode: 0xD63F0000
+/// The register goes in bits [9:5]
+pub fn emit_blr(mc : MachineCode, rn : Int) -> Unit {
+  // BLR Xn encoding: 0xD63F0000 with Rn in bits [9:5]
+  // In little-endian bytes:
+  // byte0 bits [7:5] = Rn[2:0], bits [4:0] = 0
+  // byte1 bits [1:0] = Rn[4:3], rest is opcode
+  let b0 = (rn & 7) << 5 // Rn[2:0] in bits [7:5]
+  let b1 = (rn >> 3) & 3 // Rn[4:3] in bits [1:0]
+  mc.emit_inst(b0, b1, 63, 214) // 0x3F, 0xD6
+}
+
 // ============ Comparison Instructions ============
 
 ///|
@@ -861,10 +1016,10 @@ pub fn emit_bl(mc : MachineCode, target_block : Int) -> Unit {
 /// Opcode: 0xEB00001F
 pub fn emit_cmp_reg(mc : MachineCode, rn : Int, rm : Int) -> Unit {
   // SUBS with Rd=31 (XZR)
-  let x1f = 31 // 0x1F
-  let b0 = x1f | ((rn & 3) << 5) // Rd=31
-  let b1 = ((rn >> 2) & 7) | ((rm & 15) << 4)
-  let b2 = (rm >> 4) & 1
+  // Same encoding as SUB (shifted register) but with S=1 (opcode 0xEB instead of 0xCB)
+  let b0 = 31 | ((rn & 7) << 5) // Rd=31 (XZR)
+  let b1 = (rn >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0
   let b3 = 235 // 0xEB
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -1071,16 +1226,201 @@ pub fn CondCode::to_int(self : CondCode) -> Int {
 // ============ VCode to Machine Code ============
 
 ///|
+/// Check if a register index is a callee-saved register that we use for allocation
+fn is_callee_saved_alloc(reg : Int) -> Bool {
+  // X19, X22-X28 are callee-saved registers we allocate
+  // X20, X21 are reserved for func_table and memory_base
+  reg == 19 || (reg >= 22 && reg <= 28)
+}
+
+///|
+/// Collect all callee-saved registers that are defined in the function
+/// Also includes LR (X30) if the function makes any calls
+fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
+  let used : @hashset.HashSet[Int] = @hashset.new()
+  let mut has_calls = false
+  for block in func.blocks {
+    for inst in block.insts {
+      // Check if this instruction is a function call
+      match inst.opcode {
+        CallIndirect(_, _) => has_calls = true
+        _ => ()
+      }
+      for def in inst.defs {
+        match def.reg {
+          Physical(preg) =>
+            if is_callee_saved_alloc(preg.index) {
+              used.add(preg.index)
+            }
+          Virtual(_) => ()
+        }
+      }
+    }
+  }
+  // If the function makes any calls, we must save LR (X30)
+  if has_calls {
+    used.add(30)
+  }
+  // Sort the registers for consistent ordering
+  let result : Array[Int] = []
+  for reg in used {
+    result.push(reg)
+  }
+  result.sort()
+  result
+}
+
+///|
+/// Emit prologue to save callee-saved registers
+/// Returns the stack frame size used
+fn emit_prologue(mc : MachineCode, clobbered : Array[Int]) -> Int {
+  // Save func_table_ptr and memory_base to callee-saved registers
+  emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
+  emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
+  // If no callee-saved registers are clobbered, no need to save anything
+  if clobbered.length() == 0 {
+    return 0
+  }
+  // Round up to even number for STP (store pairs)
+  let num_regs = clobbered.length()
+  let num_pairs = (num_regs + 1) / 2
+  let frame_size = num_pairs * 16 // 16 bytes per pair
+  // Allocate stack frame first using SUB
+  emit_sub_imm(mc, 31, 31, frame_size)
+  // Save registers using STP with signed offset
+  let mut i = 0
+  let mut pair_idx = 0
+  while i < num_regs {
+    let reg1 = clobbered[i]
+    let reg2 = if i + 1 < num_regs { clobbered[i + 1] } else { 31 } // XZR as padding
+    let offset = pair_idx * 16
+    emit_stp_offset(mc, reg1, reg2, 31, offset)
+    i = i + 2
+    pair_idx = pair_idx + 1
+  }
+  frame_size
+}
+
+///|
+/// Emit STP with signed offset (not pre/post indexed)
+fn emit_stp_offset(
+  mc : MachineCode,
+  rt1 : Int,
+  rt2 : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit {
+  // STP (signed offset) encoding for 64-bit:
+  // [31:30] = 10 (opc for 64-bit)
+  // [29:27] = 101
+  // [26] = 0 (integer)
+  // [25:23] = 010 (signed offset)
+  // [22] = 0 (store)
+  // [21:15] = imm7
+  // [14:10] = Rt2
+  // [9:5] = Rn
+  // [4:0] = Rt1
+  let imm7 = (offset / 8) & 0x7F
+  let inst = (0b10 << 30) |
+    (0b101 << 27) |
+    (0 << 26) |
+    (0b010 << 23) |
+    (0 << 22) |
+    (imm7 << 15) |
+    ((rt2 & 31) << 10) |
+    ((rn & 31) << 5) |
+    (rt1 & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
+}
+
+///|
+/// Emit LDP with signed offset (not pre/post indexed)
+fn emit_ldp_offset(
+  mc : MachineCode,
+  rt1 : Int,
+  rt2 : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit {
+  let imm7 = (offset / 8) & 0x7F
+  let inst = (0b10 << 30) |
+    (0b101 << 27) |
+    (0 << 26) |
+    (0b010 << 23) |
+    (1 << 22) |
+    (imm7 << 15) |
+    ((rt2 & 31) << 10) |
+    ((rn & 31) << 5) |
+    (rt1 & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
+}
+
+///|
+/// Emit epilogue to restore callee-saved registers
+fn emit_epilogue(
+  mc : MachineCode,
+  clobbered : Array[Int],
+  frame_size : Int,
+) -> Unit {
+  if clobbered.length() == 0 {
+    return
+  }
+  let num_regs = clobbered.length()
+  let num_pairs = (num_regs + 1) / 2
+  // Restore registers using LDP
+  let mut i = 0
+  let mut pair_idx = 0
+  while i < num_regs {
+    let reg1 = clobbered[i]
+    let reg2 = if i + 1 < num_regs { clobbered[i + 1] } else { 31 }
+    let offset = pair_idx * 16
+    if pair_idx == num_pairs - 1 {
+      // Last LDP with post-indexed to deallocate stack
+      // But we still need to load from the correct offset first
+      if pair_idx == 0 {
+        // Only one pair, use post-indexed directly
+        emit_ldp_post(mc, reg1, reg2, 31, frame_size)
+      } else {
+        // Multiple pairs: load from offset, then add to SP
+        emit_ldp_offset(mc, reg1, reg2, 31, offset)
+        // Add frame_size to SP
+        emit_add_imm(mc, 31, 31, frame_size)
+      }
+    } else {
+      emit_ldp_offset(mc, reg1, reg2, 31, offset)
+    }
+    i = i + 2
+    pair_idx = pair_idx + 1
+  }
+}
+
+///|
 /// Emit machine code for a VCode function
 pub fn emit_function(func : VCodeFunction) -> MachineCode {
   let mc = MachineCode::new()
+  // Collect callee-saved registers that this function clobbers
+  let clobbered = collect_used_callee_saved(func)
+  // Emit prologue: save callee-saved registers and set up X20/X21
+  let frame_size = emit_prologue(mc, clobbered)
+  // Emit function body
   for block in func.blocks {
     mc.define_label(block.id)
     for inst in block.insts {
       emit_instruction(mc, inst)
     }
     match block.terminator {
-      Some(term) => emit_terminator(mc, term)
+      Some(term) =>
+        emit_terminator_with_epilogue(mc, term, clobbered, frame_size)
       None => ()
     }
   }
@@ -1187,8 +1527,9 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       emit_load(mc, ty, rt, rn, offset)
     }
     Store(ty, offset) => {
-      let rt = reg_num(inst.uses[0])
-      let rn = reg_num(inst.uses[1])
+      // uses[0] = address (Rn), uses[1] = value (Rt)
+      let rn = reg_num(inst.uses[0]) // base address
+      let rt = reg_num(inst.uses[1]) // value to store
       emit_store(mc, ty, rt, rn, offset)
     }
     // Narrow load operations (8/16/32-bit with sign/zero extension)
@@ -1311,6 +1652,45 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       let rm = reg_num(inst.uses[1])
       emit_mneg(mc, rd, rn, rm)
     }
+    CallIndirect(num_args, has_result) => {
+      // Call through a function pointer in a register
+      // Our JIT ABI: X0 = func_table_ptr, X1 = memory_base, args in X2-X7, return in X0
+      // Uses: [func_ptr, arg0, arg1, ...]
+      let func_ptr = reg_num(inst.uses[0])
+      // First, save function pointer to a safe temp register (X9)
+      // This is necessary because the arg moving below may overwrite the func_ptr register
+      emit_mov_reg(mc, 9, func_ptr) // MOV X9, func_ptr
+      // Move arguments to ABI registers (starting at X2, since X0/X1 are reserved)
+      // We need to handle parallel moves carefully to avoid overwriting source values.
+      // Strategy: first copy all args to temp registers (X10-X17), then to final destinations
+      // This avoids the problem of e.g. MOV X2, X3; MOV X3, X4 where X3 gets clobbered.
+      if num_args > 0 {
+        // Step 1: Copy all args to temp registers X10, X11, ...
+        for i in 0..<num_args {
+          let src = reg_num(inst.uses[i + 1])
+          let temp = 10 + i // X10, X11, X12, ...
+          emit_mov_reg(mc, temp, src)
+        }
+        // Step 2: Copy from temp registers to final ABI registers X2, X3, ...
+        for i in 0..<num_args {
+          let temp = 10 + i
+          let dst = i + 2 // X2, X3, X4, ...
+          emit_mov_reg(mc, dst, temp)
+        }
+      }
+      // Set up context: X0 = func_table (X20), X1 = memory_base (X21)
+      emit_mov_reg(mc, 0, 20) // MOV X0, X20
+      emit_mov_reg(mc, 1, 21) // MOV X1, X21
+      // Call the function (from saved X9)
+      emit_blr(mc, 9)
+      // Move result to destination if needed
+      if has_result && inst.defs.length() > 0 {
+        let rd = wreg_num(inst.defs[0])
+        if rd != 0 {
+          emit_mov_reg(mc, rd, 0) // Move X0 to result
+        }
+      }
+    }
   }
 }
 
@@ -1385,7 +1765,49 @@ fn emit_terminator(mc : MachineCode, term : VCodeTerminator) -> Unit {
       emit_cbnz(mc, rt, then_b)
       emit_b(mc, else_b)
     }
-    Return(_) => emit_ret(mc, 30)
+    Return(values) => {
+      // Move return values to their ABI registers (X0, X1, etc.)
+      for i, value in values {
+        let src = reg_num(value)
+        if src != i {
+          // Only emit mov if source != destination
+          emit_mov_reg(mc, i, src)
+        }
+      }
+      emit_ret(mc, 30)
+    }
+    Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000
+  }
+}
+
+///|
+/// Emit terminator with epilogue for Return
+fn emit_terminator_with_epilogue(
+  mc : MachineCode,
+  term : VCodeTerminator,
+  clobbered : Array[Int],
+  frame_size : Int,
+) -> Unit {
+  match term {
+    Jump(target) => emit_b(mc, target)
+    Branch(cond, then_b, else_b) => {
+      let rt = reg_num(cond)
+      emit_cbnz(mc, rt, then_b)
+      emit_b(mc, else_b)
+    }
+    Return(values) => {
+      // Move return values to their ABI registers (X0, X1, etc.)
+      for i, value in values {
+        let src = reg_num(value)
+        if src != i {
+          // Only emit mov if source != destination
+          emit_mov_reg(mc, i, src)
+        }
+      }
+      // Emit epilogue to restore callee-saved registers before return
+      emit_epilogue(mc, clobbered, frame_size)
+      emit_ret(mc, 30)
+    }
     Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000
   }
 }

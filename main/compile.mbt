@@ -29,11 +29,19 @@ fn run_compile(
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
   let num_imports = count_func_imports(mod_.imports)
 
-  // Build import function type indices
+  // Build import function type indices and record imports in precompiled module
   let import_func_type_indices : Array[Int] = []
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
       import_func_type_indices.push(type_idx)
+      // Record import in the precompiled module
+      let func_type = mod_.types[type_idx]
+      precompiled.add_import(
+        imp.mod_name,
+        imp.name,
+        func_type.params.length(),
+        func_type.results.length(),
+      )
     }
   }
 
@@ -105,7 +113,11 @@ fn run_compile(
 
     // Stage 6: Create compiled function and add to module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
-    precompiled.add_function(func_idx, func_name, compiled)
+    let num_params = func_type.params.length()
+    let num_results = func_type.results.length()
+    precompiled.add_function(
+      func_idx, func_name, compiled, num_params, num_results,
+    )
 
     // Progress indicator for large modules
     if mod_.codes.length() > 10 && (i + 1) % 10 == 0 {
@@ -155,7 +167,8 @@ fn run_compile(
     total_code_size = total_code_size + precompiled.functions[i].code.length()
   }
   println("Wrote precompiled module to \{out_path}")
-  println("  Format:    cwasm v1 (aarch64)")
+  println("  Format:    cwasm v3 (aarch64)")
+  println("  Imports:   \{precompiled.import_count()}")
   println("  Functions: \{precompiled.function_count()}")
   println("  Code size: \{total_code_size} bytes")
   println("  File size: \{cwasm_bytes.length()} bytes")

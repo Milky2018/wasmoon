@@ -186,7 +186,22 @@ test "lower memory operations" {
     #|    ret v3
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode load_store(v0:int) -> int {
+      #|block0:
+      #|    v2 = add x21, v0
+      #|    v1 = load.i32 +0 v2
+      #|    v3 = ldi 1
+      #|    v4 = add v1, v3
+      #|    v5 = add x21, v0
+      #|    store.i32 +4 v5, v4
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|

@@ -29,6 +29,8 @@ pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64Stack
 
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
+pub fn debug_liveness(LivenessResult) -> String
+
 pub fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
@@ -46,6 +48,8 @@ pub fn emit_b(MachineCode, Int) -> Unit
 pub fn emit_b_cond(MachineCode, Int, Int) -> Unit
 
 pub fn emit_bl(MachineCode, Int) -> Unit
+
+pub fn emit_blr(MachineCode, Int) -> Unit
 
 pub fn emit_cbnz(MachineCode, Int, Int) -> Unit
 
@@ -74,6 +78,8 @@ pub fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
 pub fn emit_fsub_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_function(VCodeFunction) -> MachineCode
+
+pub fn emit_ldp_post(MachineCode, Int, Int, Int, Int) -> Unit
 
 pub fn emit_ldr_d_imm(MachineCode, Int, Int, Int) -> Unit
 
@@ -124,6 +130,8 @@ pub fn emit_orr_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 pub fn emit_ret(MachineCode, Int) -> Unit
 
 pub fn emit_sdiv(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_stp_pre(MachineCode, Int, Int, Int, Int) -> Unit
 
 pub fn emit_str_d_imm(MachineCode, Int, Int, Int) -> Unit
 
@@ -739,6 +747,7 @@ pub enum VCodeOpcode {
   Madd
   Msub
   Mneg
+  CallIndirect(Int, Bool)
 }
 pub impl Show for VCodeOpcode
 

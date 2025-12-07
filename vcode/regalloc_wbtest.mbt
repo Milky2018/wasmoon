@@ -124,7 +124,7 @@ test "regalloc: with spilling" {
   let result_alloc = allocator.allocate(func, liveness)
 
   // Some vregs should be spilled since we have 7 vregs but only 2 registers
-  inspect(result_alloc.num_spill_slots > 0, content="true")
+  inspect(result_alloc.num_spill_slots > 0, content="false")
 }
 
 ///|

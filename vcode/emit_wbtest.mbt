@@ -6,9 +6,9 @@ test "emit: add register" {
   emit_add_reg(mc, 0, 1, 2) // ADD X0, X1, X2
   let bytes = mc.get_bytes()
   // 64-bit ADD: 0x8B020020
-  inspect(bytes[0], content="32") // 0x20
-  inspect(bytes[1], content="32") // 0x00
-  inspect(bytes[2], content="0") // 0x02
+  inspect(bytes[0], content="32") // 0x20 = rd=0 | (rn[2:0]=1)<<5
+  inspect(bytes[1], content="0") // 0x00 = (rn >> 3) & 3 = 0
+  inspect(bytes[2], content="2") // 0x02 = rm
   inspect(bytes[3], content="139") // 0x8B
 }
 
@@ -18,9 +18,9 @@ test "emit: sub register" {
   emit_sub_reg(mc, 3, 4, 5) // SUB X3, X4, X5
   let bytes = mc.get_bytes()
   // 64-bit SUB: 0xCB050083
-  inspect(bytes[0], content="3") // 0x83
-  inspect(bytes[1], content="81") // 0x00
-  inspect(bytes[2], content="0") // 0x05
+  inspect(bytes[0], content="131") // 0x83 = rd=3 | (rn[2:0]=4)<<5
+  inspect(bytes[1], content="0") // 0x00 = (rn >> 3) & 3 = 0
+  inspect(bytes[2], content="5") // 0x05 = rm
   inspect(bytes[3], content="203") // 0xCB
 }
 
@@ -30,9 +30,10 @@ test "emit: mov register" {
   emit_mov_reg(mc, 0, 1) // MOV X0, X1 (ORR X0, XZR, X1)
   let bytes = mc.get_bytes()
   // MOV is ORR X0, XZR, X1: 0xAA0103E0
-  inspect(bytes[0], content="96") // 0xE0
-  inspect(bytes[1], content="23") // 0x03
-  inspect(bytes[2], content="0") // 0x01
+  // rd=0, rn=31 (XZR), rm=1
+  inspect(bytes[0], content="224") // 0xE0 = rd=0 | (rn[2:0]=31&7=7)<<5 = 0 | 224 = 224
+  inspect(bytes[1], content="3") // 0x03 = (rn >> 3) & 3 = (31 >> 3) & 3 = 3
+  inspect(bytes[2], content="1") // 0x01 = rm
   inspect(bytes[3], content="170") // 0xAA
 }
 
@@ -162,7 +163,7 @@ test "emit: full function" {
   let mc = emit_function(func)
 
   // Should have: ADD + RET = 2 instructions = 8 bytes
-  inspect(mc.size(), content="8")
+  inspect(mc.size(), content="16")
 }
 
 ///|

@@ -11,6 +11,7 @@ extern "C" {
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -24,6 +25,242 @@ extern "C" {
 #endif
 
 #include "moonbit.h"
+
+// ============ JIT Context for function calls ============
+
+// JIT execution context - holds function table and memory pointer
+typedef struct {
+    void **func_table;      // Array of function pointers
+    int func_count;         // Number of entries in func_table
+    uint8_t *memory_base;   // WebAssembly linear memory base
+    size_t memory_size;     // Memory size in bytes
+} jit_context_t;
+
+// Global JIT context (set before calling JIT functions)
+static jit_context_t *g_jit_context = NULL;
+
+// Set the global JIT context
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_context(int64_t ctx_ptr) {
+    g_jit_context = (jit_context_t *)ctx_ptr;
+}
+
+// Get the global JIT context
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context(void) {
+    return (int64_t)g_jit_context;
+}
+
+// Allocate a JIT context
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
+    jit_context_t *ctx = (jit_context_t *)malloc(sizeof(jit_context_t));
+    if (!ctx) return 0;
+
+    ctx->func_table = (void **)calloc(func_count, sizeof(void *));
+    if (!ctx->func_table) {
+        free(ctx);
+        return 0;
+    }
+    ctx->func_count = func_count;
+    ctx->memory_base = NULL;
+    ctx->memory_size = 0;
+
+    return (int64_t)ctx;
+}
+
+// Set a function pointer in the context
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func(int64_t ctx_ptr, int idx, int64_t func_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (ctx && idx >= 0 && idx < ctx->func_count) {
+        ctx->func_table[idx] = (void *)func_ptr;
+    }
+}
+
+// Set memory in the context
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem_ptr, int64_t mem_size) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (ctx) {
+        ctx->memory_base = (uint8_t *)mem_ptr;
+        ctx->memory_size = (size_t)mem_size;
+    }
+}
+
+// Get function table base address
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (ctx) {
+        return (int64_t)ctx->func_table;
+    }
+    return 0;
+}
+
+// Free a JIT context
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (ctx) {
+        if (ctx->func_table) {
+            free(ctx->func_table);
+        }
+        free(ctx);
+    }
+}
+
+// ============ WASI Trampolines ============
+// These trampolines use the JIT ABI:
+// X0 = func_table_ptr (ignored), X1 = memory_base (ignored since we use global context)
+// X2, X3, ... = actual WASM arguments
+
+// fd_write trampoline: (func_table, mem_base, fd, iovs, iovs_len, nwritten) -> errno
+// Note: The first two args (func_table, mem_base) are passed by JIT calling convention
+// but we use the global context for memory access
+static int64_t wasi_fd_write_impl(int64_t func_table, int64_t mem_base, int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nwritten_ptr) {
+    (void)func_table;  // unused
+    (void)mem_base;    // we use global context instead
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+    int32_t total_written = 0;
+
+    // Only handle stdout (1) and stderr (2)
+    if (fd != 1 && fd != 2) {
+        return 8; // ERRNO_BADF
+    }
+
+    for (int64_t i = 0; i < iovs_len; i++) {
+        int32_t iov_offset = (int32_t)(iovs + i * 8);
+        int32_t buf_ptr = *(int32_t *)(mem + iov_offset);
+        int32_t buf_len = *(int32_t *)(mem + iov_offset + 4);
+
+        if (buf_len > 0) {
+            // Write to stdout/stderr
+            fwrite(mem + buf_ptr, 1, buf_len, (fd == 1) ? stdout : stderr);
+            fflush((fd == 1) ? stdout : stderr);
+            total_written += buf_len;
+        }
+    }
+
+    // Write the number of bytes written
+    if (nwritten_ptr > 0) {
+        *(int32_t *)(mem + nwritten_ptr) = total_written;
+    }
+
+    return 0; // Success
+}
+
+// proc_exit trampoline: (func_table, mem_base, exit_code) -> noreturn
+// Note: The first two args are JIT calling convention overhead
+static int64_t wasi_proc_exit_impl(int64_t func_table, int64_t mem_base, int64_t exit_code) {
+    (void)func_table;
+    (void)mem_base;
+    exit((int)exit_code);
+    return 0; // Never reached
+}
+
+// Get fd_write trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) {
+    return (int64_t)wasi_fd_write_impl;
+}
+
+// Get proc_exit trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) {
+    return (int64_t)wasi_proc_exit_impl;
+}
+
+// ============ Linear Memory Allocation ============
+
+// Allocate linear memory for WASM (returns 0 on failure)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory(int64_t size) {
+    if (size <= 0) return 0;
+    void *mem = calloc(1, (size_t)size);
+    return (int64_t)mem;
+}
+
+// Free linear memory
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory(int64_t mem_ptr) {
+    if (mem_ptr) {
+        free((void *)mem_ptr);
+    }
+}
+
+// Copy data to linear memory at offset
+MOONBIT_FFI_EXPORT int wasmoon_jit_memory_init(int64_t mem_ptr, int64_t offset, moonbit_bytes_t data, int size) {
+    if (!mem_ptr || !data || size <= 0) return -1;
+    uint8_t *mem = (uint8_t *)mem_ptr;
+    memcpy(mem + offset, data, (size_t)size);
+    return 0;
+}
+
+// Get memory base from context
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (ctx) {
+        return (int64_t)ctx->memory_base;
+    }
+    return 0;
+}
+
+// ============ Call JIT functions with context ============
+
+// Function pointer type that receives (func_table_ptr, memory_base_ptr) as first two args
+// On AArch64: X0 = func_table, X1 = memory_base
+// Prologue saves them to X20 and X21 respectively
+typedef int64_t (*jit_func_ctx2_i64)(int64_t func_table, int64_t mem_base);
+typedef int64_t (*jit_func_ctx2_i64_i64)(int64_t func_table, int64_t mem_base, int64_t arg0);
+typedef int64_t (*jit_func_ctx2_i64i64_i64)(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1);
+typedef void (*jit_func_ctx2_void)(int64_t func_table, int64_t mem_base);
+typedef void (*jit_func_ctx2_i64_void)(int64_t func_table, int64_t mem_base, int64_t arg0);
+typedef void (*jit_func_ctx2_i64i64_void)(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1);
+
+// Call JIT function with context: () -> i64
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_void_i64(int64_t func_ptr, int64_t func_table_ptr) {
+    if (!func_ptr) return 0;
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    jit_func_ctx2_i64 func = (jit_func_ctx2_i64)func_ptr;
+    return func(func_table_ptr, mem_base);
+}
+
+// Call JIT function with context: (i64) -> i64
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_i64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
+    if (!func_ptr) return 0;
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    jit_func_ctx2_i64_i64 func = (jit_func_ctx2_i64_i64)func_ptr;
+    return func(func_table_ptr, mem_base, arg0);
+}
+
+// Call JIT function with context: (i64, i64) -> i64
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64i64_i64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
+    if (!func_ptr) return 0;
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    jit_func_ctx2_i64i64_i64 func = (jit_func_ctx2_i64i64_i64)func_ptr;
+    return func(func_table_ptr, mem_base, arg0, arg1);
+}
+
+// Call JIT function with context: () -> void
+MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_void_void(int64_t func_ptr, int64_t func_table_ptr) {
+    if (!func_ptr) return;
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    jit_func_ctx2_void func = (jit_func_ctx2_void)func_ptr;
+    func(func_table_ptr, mem_base);
+}
+
+// Call JIT function with context: (i64) -> void
+MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64_void(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
+    if (!func_ptr) return;
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    jit_func_ctx2_i64_void func = (jit_func_ctx2_i64_void)func_ptr;
+    func(func_table_ptr, mem_base, arg0);
+}
+
+// Call JIT function with context: (i64, i64) -> void
+MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64i64_void(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
+    if (!func_ptr) return;
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    jit_func_ctx2_i64i64_void func = (jit_func_ctx2_i64i64_void)func_ptr;
+    func(func_table_ptr, mem_base, arg0, arg1);
+}
+
+// ============ Executable memory management ============
 
 // Executable memory block
 typedef struct {

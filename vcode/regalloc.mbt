@@ -128,6 +128,48 @@ fn UseDefInfo::new(vreg : VReg) -> UseDefInfo {
 // ============ Liveness Analysis ============
 
 ///|
+/// Debug: print liveness info
+pub fn debug_liveness(liveness : LivenessResult) -> String {
+  let mut result = "=== Liveness Debug ===\n"
+
+  // Print use-def chains
+  result = result + "Use-Def Chains:\n"
+  for entry in liveness.use_def {
+    let (vreg_id, info) = entry
+    result = result + "  v\{vreg_id}: def=\{info.def_point}, uses=["
+    for i, use_point in info.use_points {
+      if i > 0 {
+        result = result + ", "
+      }
+      result = result + "\{use_point}"
+    }
+    result = result + "]\n"
+  }
+
+  // Print live-in/out
+  result = result + "\nLive-in/out:\n"
+  for i, live_in_set in liveness.live_in {
+    let in_list : Array[Int] = []
+    for v in live_in_set {
+      in_list.push(v)
+    }
+    let out_list : Array[Int] = []
+    for v in liveness.live_out[i] {
+      out_list.push(v)
+    }
+    result = result + "  block\{i}: in=\{in_list}, out=\{out_list}\n"
+  }
+
+  // Print intervals
+  result = result + "\nIntervals:\n"
+  for entry in liveness.intervals {
+    let (_, interval) = entry
+    result = result + "  \{interval}\n"
+  }
+  result
+}
+
+///|
 /// Liveness analysis result
 pub(all) struct LivenessResult {
   // Live intervals for each vreg
@@ -228,11 +270,16 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
                 new_info
               }
             }
-            info.def_point = Some({
-              block: block_idx,
-              inst: inst_idx,
-              pos: After,
-            })
+            // Only set def_point if not already set (keep earliest definition)
+            // This is important for block parameters that may be redefined
+            // in parallel copy moves
+            if info.def_point is None {
+              info.def_point = Some({
+                block: block_idx,
+                inst: inst_idx,
+                pos: After,
+              })
+            }
           }
           Physical(_) => ()
         }
@@ -443,6 +490,18 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
       interval.extend(use_point)
     }
 
+    // Extend to cover live-in blocks - the interval needs to span from
+    // block entry through all uses in that block
+    for block_idx, live_in_set in result.live_in {
+      if live_in_set.contains(vreg_id) {
+        // The vreg is live at the start of this block
+        // Extend from block entry
+        let entry_point = { block: block_idx, inst: -1, pos: Before }
+        interval.extend(entry_point)
+        // Also extend to end of block if live-out (already handled below)
+      }
+    }
+
     // Extend to cover live-out of blocks where this vreg is live
     for block_idx, live_out_set in result.live_out {
       if live_out_set.contains(vreg_id) {
@@ -527,10 +586,33 @@ pub fn LinearScanAllocator::allocate(
     reloads: [],
   }
 
+  // Pre-assign function parameters to ABI registers
+  // JIT ABI: X0 = func_table, X1 = memory_base, args in X2-X7
+  // So WASM parameters start at X2
+  for i, param in func.params {
+    let preg = match param.class {
+      Int => { index: i + 2, class: Int } // X2, X3, X4, ...
+      Float => { index: i, class: Float } // D0, D1, D2, ... (float params)
+    }
+    result.assignments.set(param.id, preg)
+    // Mark the register as initially occupied
+    match liveness.intervals.get(param.id) {
+      Some(interval) => {
+        interval.assigned = Some(preg)
+        self.active.push(interval)
+      }
+      None => ()
+    }
+  }
+
   // Sort intervals by start point
   let intervals : Array[LiveInterval] = []
   for entry in liveness.intervals {
     let (_, interval) = entry
+    // Skip already-assigned parameters
+    if interval.assigned is Some(_) {
+      continue
+    }
     intervals.push(interval)
   }
   intervals.sort_by(fn(a, b) { a.start.compare(b.start) })
