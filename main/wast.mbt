@@ -353,7 +353,17 @@ fn validate_module_source(source : @wast.WastModuleSource) -> Bool {
         @validator.validate_module(mod_)
       })
       is Ok(_)
-    Quote(_) => true // Can't easily validate quoted source
+    Quote(parts) => {
+      // Join quoted parts and parse as WAT
+      let wat_source = "(module " +
+        parts.iter().fold(init="", fn(acc, s) { acc + s }) +
+        ")"
+      (try? {
+        let mod_ = @wat.parse(wat_source)
+        @validator.validate_module(mod_)
+      })
+      is Ok(_)
+    }
     Inline(mod_) => (try? @validator.validate_module(mod_)) is Ok(_)
   }
 }

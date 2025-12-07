@@ -39,7 +39,7 @@ pub fn Memory::store_byte(
 
 ///|
 pub fn Memory::load_i32(self : Memory, addr : Int) -> Int raise RuntimeError {
-  if addr + 4 > self.data.length() {
+  if addr < 0 || addr + 4 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   let b0 = self.data[addr].to_int()
@@ -56,7 +56,7 @@ pub fn Memory::store_i32(
   addr : Int,
   value : Int,
 ) -> Unit raise RuntimeError {
-  if addr + 4 > self.data.length() {
+  if addr < 0 || addr + 4 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   self.store_byte(addr, value.land(0xFF).to_byte())
@@ -67,7 +67,7 @@ pub fn Memory::store_i32(
 
 ///|
 pub fn Memory::load_i64(self : Memory, addr : Int) -> Int64 raise RuntimeError {
-  if addr + 8 > self.data.length() {
+  if addr < 0 || addr + 8 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   let b0 = self.data[addr].to_int64()
@@ -95,7 +95,7 @@ pub fn Memory::store_i64(
   addr : Int,
   value : Int64,
 ) -> Unit raise RuntimeError {
-  if addr + 8 > self.data.length() {
+  if addr < 0 || addr + 8 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   for i in 0..<8 {
@@ -160,7 +160,7 @@ pub fn Memory::load_i32_16s(
   self : Memory,
   addr : Int,
 ) -> Int raise RuntimeError {
-  if addr + 2 > self.data.length() {
+  if addr < 0 || addr + 2 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   let b0 = self.data[addr].to_int()
@@ -180,7 +180,7 @@ pub fn Memory::load_i32_16u(
   self : Memory,
   addr : Int,
 ) -> Int raise RuntimeError {
-  if addr + 2 > self.data.length() {
+  if addr < 0 || addr + 2 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   let b0 = self.data[addr].to_int()
@@ -218,7 +218,7 @@ pub fn Memory::load_i64_16s(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  if addr + 2 > self.data.length() {
+  if addr < 0 || addr + 2 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   let b0 = self.data[addr].to_int64()
@@ -238,7 +238,7 @@ pub fn Memory::load_i64_16u(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  if addr + 2 > self.data.length() {
+  if addr < 0 || addr + 2 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   let b0 = self.data[addr].to_int64()
@@ -283,7 +283,7 @@ pub fn Memory::store_i32_16(
   addr : Int,
   value : Int,
 ) -> Unit raise RuntimeError {
-  if addr + 2 > self.data.length() {
+  if addr < 0 || addr + 2 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   self.store_byte(addr, value.land(0xFF).to_byte())
@@ -307,7 +307,7 @@ pub fn Memory::store_i64_16(
   addr : Int,
   value : Int64,
 ) -> Unit raise RuntimeError {
-  if addr + 2 > self.data.length() {
+  if addr < 0 || addr + 2 > self.data.length() {
     raise OutOfBoundsMemoryAccess
   }
   self.store_byte(addr, value.land(0xFFL).to_int().to_byte())
