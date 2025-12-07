@@ -23,15 +23,18 @@ fn main {
           nargs=@clap.Nargs::Any,
           help="Pass environment variable to WASM module (NAME=VALUE)",
         ),
-        "S": @clap.Arg::named(
+        "wasi": @clap.Arg::named(
+          short='S',
           nargs=@clap.Nargs::Any,
           help="WASI option (e.g., inherit-env, inherit-stdin)",
         ),
-        "D": @clap.Arg::named(
+        "debug": @clap.Arg::named(
+          short='D',
           nargs=@clap.Nargs::Any,
           help="Debug option (e.g., verbose, print-ir, trace-exec)",
         ),
-        "W": @clap.Arg::named(
+        "wasm-opt": @clap.Arg::named(
+          short='W',
           nargs=@clap.Nargs::Any,
           help="WASM semantic option (e.g., max-memory=100, simd=true)",
         ),
@@ -149,12 +152,10 @@ fn main {
                 }
                 // Get debug options from -D flag
                 let debug_config = DebugConfig::new()
-                match sub.args.get("D") {
-                  Some(flags) =>
-                    for flag in flags {
-                      debug_config.apply_flag(flag)
-                    }
-                  None => ()
+                if sub.args.get("debug") is Some(flags) {
+                  for flag in flags {
+                    debug_config.apply_flag(flag)
+                  }
                 }
                 // Check if it's a .cwasm file
                 if file_path.has_suffix(".cwasm") {
@@ -176,22 +177,23 @@ fn main {
                     None => []
                   }
                   // Get WASI options from -S flag
-                  let wasi_options : Array[String] = match sub.args.get("S") {
+                  let wasi_options : Array[String] = match
+                    sub.args.get("wasi") {
                     Some(arr) => arr
                     None => []
                   }
                   // Get WASM semantic options from -W flag
                   let wasm_config = WasmConfig::default()
-                  match sub.args.get("W") {
-                    Some(flags) =>
-                      for flag in flags {
-                        wasm_config.apply_flag(flag)
-                      }
-                    None => ()
+                  if sub.args.get("wasm-opt") is Some(flags) {
+                    for flag in flags {
+                      wasm_config.apply_flag(flag)
+                    }
                   }
                   // Check if JIT is disabled (default: enabled)
-                  let has_no_jit = sub.flags.contains("no-jit")
-                  let use_jit = !has_no_jit
+                  let use_jit = match sub.flags.get("no-jit") {
+                    Some(true) => false
+                    _ => true
+                  }
                   run_wasm(
                     file_path, invoke_opt, func_args, preloads, dirs, envs, wasi_options,
                     debug_config, wasm_config, use_jit,

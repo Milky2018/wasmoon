@@ -173,6 +173,12 @@ fn get_import_trampoline(module_name : String, field_name : String) -> Int64 {
 }
 
 ///|
+/// Check if an import has a JIT trampoline implementation
+pub fn has_import_trampoline(module_name : String, field_name : String) -> Bool {
+  get_import_trampoline(module_name, field_name) != 0L
+}
+
+///|
 /// Get a function by index
 pub fn JITModule::get_func(self : JITModule, func_idx : Int) -> JITFunction? {
   self.functions.get(func_idx)
