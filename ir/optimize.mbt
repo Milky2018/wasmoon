@@ -102,8 +102,8 @@ fn get_terminator_uses(term : Terminator) -> Array[Value] {
 /// Check if an instruction has side effects
 fn has_side_effects(inst : Inst) -> Bool {
   match inst.opcode {
-    // Store has side effects (modifies memory)
-    Store(_, _) => true
+    // All Store variants have side effects (modify memory)
+    Store(_, _) | Store8(_) | Store16(_) | Store32(_) => true
     // Calls may have side effects
     Call(_) | CallIndirect(_) => true
     // Other instructions are pure
@@ -387,12 +387,15 @@ fn eval_icmp_i64(cc : IntCC, a : Int64, b : Int64) -> Bool {
 ///|
 /// Copy Propagation
 /// Replaces uses of copied values with the original value
+/// Note: This is local copy propagation - only propagates within the same basic block
+/// to avoid incorrectly using values from non-dominating blocks (e.g., sibling branches)
 pub fn propagate_copies(func : Function) -> OptResult {
   let result = OptResult::new()
-  // Map from copy destination to copy source
-  let copies : @hashmap.HashMap[Int, Value] = @hashmap.new()
-  // First pass: collect all copy instructions
+  // Process each block independently to avoid cross-block copy propagation issues
   for block in func.blocks {
+    // Map from copy destination to copy source (local to this block)
+    let copies : @hashmap.HashMap[Int, Value] = @hashmap.new()
+    // First pass: collect copy instructions in this block
     for inst in block.instructions {
       match inst.opcode {
         Copy =>
@@ -406,9 +409,7 @@ pub fn propagate_copies(func : Function) -> OptResult {
         _ => ()
       }
     }
-  }
-  // Second pass: replace uses of copied values
-  for block in func.blocks {
+    // Second pass: replace uses of copied values in this block
     for inst in block.instructions {
       for i, op in inst.operands {
         match resolve_copy(op, copies) {
@@ -529,11 +530,14 @@ fn propagate_copies_in_terminator(
 ///|
 /// Common Subexpression Elimination (CSE)
 /// Replaces duplicate computations with references to the first computation
+/// Note: This is local CSE - expressions are only reused within the same basic block
+/// to avoid incorrectly using values from non-dominating blocks (e.g., sibling branches)
 pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
   let result = OptResult::new()
-  // Map from expression signature to value
-  let expressions : @hashmap.HashMap[String, Value] = @hashmap.new()
   for block in func.blocks {
+    // Reset expressions map for each block to avoid cross-block CSE issues
+    // (e.g., using values defined in sibling branches of if-else)
+    let expressions : @hashmap.HashMap[String, Value] = @hashmap.new()
     let mut i = 0
     while i < block.instructions.length() {
       let inst = block.instructions[i]
