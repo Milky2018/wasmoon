@@ -5,6 +5,17 @@
 let max_call_stack_depth : Int = 1000
 
 ///|
+/// Label info for tracking block arity during branching
+/// is_loop: true for loops (branch goes to start, uses param arity)
+/// arity: number of values to carry when branching
+/// stack_height: stack depth when the block was entered (for stack unwinding)
+priv struct LabelInfo {
+  is_loop : Bool
+  arity : Int
+  stack_height : Int
+} derive(Show)
+
+///|
 /// Execution context for running WASM code
 struct ExecContext {
   stack : @runtime.Stack
@@ -12,6 +23,7 @@ struct ExecContext {
   mut instance : @runtime.ModuleInstance // mutable for cross-module call context switching
   frames : Array[@runtime.Frame]
   mut current_frame : Int
+  labels : Array[LabelInfo] // Stack of labels for tracking branch arities
 } derive(Show)
 
 ///|
@@ -25,6 +37,50 @@ fn ExecContext::new(
     instance,
     frames: [],
     current_frame: 0,
+    labels: [],
+  }
+}
+
+///|
+/// Push a label for a block/loop/if
+fn ExecContext::push_label(
+  self : ExecContext,
+  is_loop : Bool,
+  arity : Int,
+) -> Unit {
+  self.labels.push(LabelInfo::{
+    is_loop,
+    arity,
+    stack_height: self.stack.size(),
+  })
+}
+
+///|
+/// Pop a label when exiting a block/loop/if
+fn ExecContext::pop_label(self : ExecContext) -> Unit {
+  if self.labels.length() > 0 {
+    self.labels.pop() |> ignore
+  }
+}
+
+///|
+/// Get the arity for a branch to the given depth
+fn ExecContext::get_branch_arity(self : ExecContext, depth : Int) -> Int {
+  let label_idx = self.labels.length() - 1 - depth
+  if label_idx >= 0 && label_idx < self.labels.length() {
+    self.labels[label_idx].arity
+  } else {
+    0
+  }
+}
+
+///|
+/// Restore stack to the given height (discard values above it)
+fn ExecContext::restore_stack_to(self : ExecContext, height : Int) -> Unit {
+  while self.stack.size() > height {
+    try self.stack.pop() |> ignore catch {
+      _ => break
+    }
   }
 }
 

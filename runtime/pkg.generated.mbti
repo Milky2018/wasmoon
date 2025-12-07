@@ -162,6 +162,7 @@ pub fn Stack::pop_f32(Self) -> Float raise RuntimeError
 pub fn Stack::pop_f64(Self) -> Double raise RuntimeError
 pub fn Stack::pop_i32(Self) -> Int raise RuntimeError
 pub fn Stack::pop_i64(Self) -> Int64 raise RuntimeError
+pub fn Stack::pop_n(Self, Int) -> Array[@types.Value] raise RuntimeError
 pub fn Stack::push(Self, @types.Value) -> Unit raise RuntimeError
 pub fn Stack::size(Self) -> Int
 pub impl Show for Stack

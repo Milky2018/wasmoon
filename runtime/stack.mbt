@@ -84,3 +84,24 @@ pub fn Stack::size(self : Stack) -> Int {
 pub fn Stack::clear(self : Stack) -> Unit {
   self.sp = 0
 }
+
+///|
+/// Pop n values from the stack, returning them in order (first popped is last in array)
+pub fn Stack::pop_n(
+  self : Stack,
+  n : Int,
+) -> Array[@types.Value] raise RuntimeError {
+  if n <= 0 {
+    return []
+  }
+  if self.sp < n {
+    raise StackUnderflow
+  }
+  let values : Array[@types.Value] = Array::make(n, @types.Value::I32(0))
+  // Pop in reverse order so the array maintains stack order
+  for i = n - 1; i >= 0; i = i - 1 {
+    self.sp = self.sp - 1
+    values[i] = self.values[self.sp]
+  }
+  values
+}
