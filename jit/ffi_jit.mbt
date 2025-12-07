@@ -2,6 +2,124 @@
 /// JIT runtime FFI for executable memory management and code execution
 /// These functions call C functions defined in ffi_jit.c
 
+// ============ JIT Context Management ============
+
+///|
+/// Allocate a JIT context with function table
+extern "c" fn c_jit_alloc_context(func_count : Int) -> Int64 = "wasmoon_jit_alloc_context"
+
+///|
+/// Free a JIT context
+extern "c" fn c_jit_free_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_context"
+
+///|
+/// Set a function pointer in the context's function table
+extern "c" fn c_jit_ctx_set_func(
+  ctx_ptr : Int64,
+  idx : Int,
+  func_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_set_func"
+
+///|
+/// Set memory in the context
+extern "c" fn c_jit_ctx_set_memory(
+  ctx_ptr : Int64,
+  mem_ptr : Int64,
+  mem_size : Int64,
+) -> Unit = "wasmoon_jit_ctx_set_memory"
+
+///|
+/// Get memory base from context
+extern "c" fn c_jit_ctx_get_memory(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_memory"
+
+///|
+/// Allocate linear memory for WASM
+extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_memory"
+
+///|
+/// Free linear memory
+extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory"
+
+///|
+/// Copy data to linear memory at offset
+#borrow(data)
+extern "c" fn c_jit_memory_init(
+  mem_ptr : Int64,
+  offset : Int64,
+  data : FixedArray[Byte],
+  size : Int,
+) -> Int = "wasmoon_jit_memory_init"
+
+///|
+/// Get function table base address from context
+extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
+
+///|
+/// Set the global JIT context (for WASI trampolines)
+extern "c" fn c_jit_set_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context"
+
+// ============ WASI Trampoline Pointers ============
+
+///|
+/// Get fd_write trampoline pointer
+extern "c" fn c_jit_get_fd_write_ptr() -> Int64 = "wasmoon_jit_get_fd_write_ptr"
+
+///|
+/// Get proc_exit trampoline pointer
+extern "c" fn c_jit_get_proc_exit_ptr() -> Int64 = "wasmoon_jit_get_proc_exit_ptr"
+
+// ============ Context-aware JIT function calls ============
+
+///|
+/// Call JIT function with context: () -> i64
+extern "c" fn c_jit_call_ctx_void_i64(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+) -> Int64 = "wasmoon_jit_call_ctx_void_i64"
+
+///|
+/// Call JIT function with context: (i64) -> i64
+extern "c" fn c_jit_call_ctx_i64_i64(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  arg0 : Int64,
+) -> Int64 = "wasmoon_jit_call_ctx_i64_i64"
+
+///|
+/// Call JIT function with context: (i64, i64) -> i64
+extern "c" fn c_jit_call_ctx_i64i64_i64(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Int64 = "wasmoon_jit_call_ctx_i64i64_i64"
+
+///|
+/// Call JIT function with context: () -> void
+extern "c" fn c_jit_call_ctx_void_void(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+) -> Unit = "wasmoon_jit_call_ctx_void_void"
+
+///|
+/// Call JIT function with context: (i64) -> void
+extern "c" fn c_jit_call_ctx_i64_void(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  arg0 : Int64,
+) -> Unit = "wasmoon_jit_call_ctx_i64_void"
+
+///|
+/// Call JIT function with context: (i64, i64) -> void
+extern "c" fn c_jit_call_ctx_i64i64_void(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Unit = "wasmoon_jit_call_ctx_i64i64_void"
+
+// ============ Legacy JIT function calls (without context) ============
+
 ///|
 /// Allocate executable memory
 /// Returns pointer as Int64 (0 on failure)
@@ -95,6 +213,110 @@ extern "c" fn c_jit_call_i64i64i64i64_void(
 ///|
 /// Debug: print machine code bytes
 extern "c" fn c_jit_debug_print_code(ptr : Int64, size : Int) -> Unit = "wasmoon_jit_debug_print_code"
+
+// ============ JIT Context Wrapper ============
+
+///|
+/// JIT execution context
+pub(all) struct JITContext {
+  ctx_ptr : Int64
+  func_table_ptr : Int64
+}
+
+///|
+/// Create a new JIT context
+pub fn JITContext::new(total_funcs : Int) -> JITContext? {
+  let ctx_ptr = c_jit_alloc_context(total_funcs)
+  if ctx_ptr == 0L {
+    return None
+  }
+  let func_table_ptr = c_jit_ctx_get_func_table(ctx_ptr)
+  Some(JITContext::{ ctx_ptr, func_table_ptr })
+}
+
+///|
+/// Set a function pointer in the context
+pub fn JITContext::set_func(
+  self : JITContext,
+  idx : Int,
+  func_ptr : Int64,
+) -> Unit {
+  c_jit_ctx_set_func(self.ctx_ptr, idx, func_ptr)
+}
+
+///|
+/// Set memory in the context
+pub fn JITContext::set_memory(
+  self : JITContext,
+  mem_ptr : Int64,
+  mem_size : Int64,
+) -> Unit {
+  c_jit_ctx_set_memory(self.ctx_ptr, mem_ptr, mem_size)
+}
+
+///|
+/// Allocate linear memory for WASM (returns 0 on failure)
+pub fn alloc_memory(size : Int64) -> Int64 {
+  c_jit_alloc_memory(size)
+}
+
+///|
+/// Free linear memory
+pub fn free_memory(mem_ptr : Int64) -> Unit {
+  c_jit_free_memory(mem_ptr)
+}
+
+///|
+/// Initialize memory with data at offset
+pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
+  let size = data.length()
+  if size == 0 {
+    return true
+  }
+  let bytes = FixedArray::make(size, b'\x00')
+  for i in 0..<size {
+    bytes[i] = data[i]
+  }
+  c_jit_memory_init(mem_ptr, offset, bytes, size) == 0
+}
+
+///|
+/// Activate this context for WASI calls
+pub fn JITContext::activate(self : JITContext) -> Unit {
+  c_jit_set_context(self.ctx_ptr)
+}
+
+///|
+/// Call a JIT function with this context: () -> i64
+pub fn JITContext::call_void_i64(self : JITContext, func_ptr : Int64) -> Int64 {
+  c_jit_call_ctx_void_i64(func_ptr, self.func_table_ptr)
+}
+
+///|
+/// Call a JIT function with this context: () -> void
+pub fn JITContext::call_void_void(self : JITContext, func_ptr : Int64) -> Unit {
+  c_jit_call_ctx_void_void(func_ptr, self.func_table_ptr)
+}
+
+///|
+/// Free the context
+pub fn JITContext::free(self : JITContext) -> Unit {
+  c_jit_free_context(self.ctx_ptr)
+}
+
+///|
+/// Get fd_write trampoline pointer
+pub fn get_fd_write_ptr() -> Int64 {
+  c_jit_get_fd_write_ptr()
+}
+
+///|
+/// Get proc_exit trampoline pointer
+pub fn get_proc_exit_ptr() -> Int64 {
+  c_jit_get_proc_exit_ptr()
+}
+
+// ============ Executable Code Block ============
 
 ///|
 /// Executable code block

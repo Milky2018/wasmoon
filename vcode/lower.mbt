@@ -282,6 +282,10 @@ fn lower_inst(
     @ir.Opcode::Copy => lower_copy(ctx, inst, block)
     @ir.Opcode::Select => lower_select(ctx, inst, block)
 
+    // Function calls
+    @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
+    @ir.Opcode::CallIndirect(_type_idx) => lower_call_indirect(ctx, inst, block)
+
     // Unimplemented opcodes - emit nop for now
     _ => ()
   }
@@ -775,6 +779,7 @@ fn lower_fcmp(
 
 ///|
 /// Lower load instruction
+/// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
 fn lower_load(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -785,11 +790,19 @@ fn lower_load(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let addr = ctx.get_vreg(inst.operands[0])
+      let wasm_addr = ctx.get_vreg(inst.operands[0])
+      // Compute effective address: memory_base (X21) + wasm_addr
+      let effective_addr = ctx.vcode_func.new_vreg(Int)
+      let add_inst = VCodeInst::new(Add)
+      add_inst.add_def({ reg: Virtual(effective_addr) })
+      add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+      add_inst.add_use(Virtual(wasm_addr))
+      block.add_inst(add_inst)
+      // Now load from effective_addr + offset
       let mem_ty = ir_type_to_mem_type(ty)
       let vcode_inst = VCodeInst::new(Load(mem_ty, offset))
       vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(addr))
+      vcode_inst.add_use(Virtual(effective_addr))
       block.add_inst(vcode_inst)
     }
     None => ()
@@ -798,6 +811,7 @@ fn lower_load(
 
 ///|
 /// Lower store instruction
+/// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
 fn lower_store(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -806,17 +820,26 @@ fn lower_store(
   offset : Int,
 ) -> Unit {
   // Store has no result, just uses: addr, value
-  let addr = ctx.get_vreg(inst.operands[0])
+  let wasm_addr = ctx.get_vreg(inst.operands[0])
   let value = ctx.get_vreg(inst.operands[1])
+  // Compute effective address: memory_base (X21) + wasm_addr
+  let effective_addr = ctx.vcode_func.new_vreg(Int)
+  let add_inst = VCodeInst::new(Add)
+  add_inst.add_def({ reg: Virtual(effective_addr) })
+  add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+  add_inst.add_use(Virtual(wasm_addr))
+  block.add_inst(add_inst)
+  // Now store to effective_addr + offset
   let mem_ty = ir_type_to_mem_type(ty)
   let vcode_inst = VCodeInst::new(Store(mem_ty, offset))
-  vcode_inst.add_use(Virtual(addr))
+  vcode_inst.add_use(Virtual(effective_addr))
   vcode_inst.add_use(Virtual(value))
   block.add_inst(vcode_inst)
 }
 
 ///|
 /// Lower narrow load instruction (8/16/32-bit with sign/zero extension)
+/// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
 fn lower_load_narrow(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -827,10 +850,18 @@ fn lower_load_narrow(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let addr = ctx.get_vreg(inst.operands[0])
+      let wasm_addr = ctx.get_vreg(inst.operands[0])
+      // Compute effective address: memory_base (X21) + wasm_addr
+      let effective_addr = ctx.vcode_func.new_vreg(Int)
+      let add_inst = VCodeInst::new(Add)
+      add_inst.add_def({ reg: Virtual(effective_addr) })
+      add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+      add_inst.add_use(Virtual(wasm_addr))
+      block.add_inst(add_inst)
+      // Now load from effective_addr + offset
       let vcode_inst = VCodeInst::new(opcode_fn(offset))
       vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(addr))
+      vcode_inst.add_use(Virtual(effective_addr))
       block.add_inst(vcode_inst)
     }
     None => ()
@@ -839,6 +870,7 @@ fn lower_load_narrow(
 
 ///|
 /// Lower narrow store instruction (8/16/32-bit)
+/// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
 fn lower_store_narrow(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -847,10 +879,18 @@ fn lower_store_narrow(
   mem_ty : MemType,
 ) -> Unit {
   // Store has no result, just uses: addr, value
-  let addr = ctx.get_vreg(inst.operands[0])
+  let wasm_addr = ctx.get_vreg(inst.operands[0])
   let value = ctx.get_vreg(inst.operands[1])
+  // Compute effective address: memory_base (X21) + wasm_addr
+  let effective_addr = ctx.vcode_func.new_vreg(Int)
+  let add_inst = VCodeInst::new(Add)
+  add_inst.add_def({ reg: Virtual(effective_addr) })
+  add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+  add_inst.add_use(Virtual(wasm_addr))
+  block.add_inst(add_inst)
+  // Now store to effective_addr + offset
   let vcode_inst = VCodeInst::new(Store(mem_ty, offset))
-  vcode_inst.add_use(Virtual(addr))
+  vcode_inst.add_use(Virtual(effective_addr))
   vcode_inst.add_use(Virtual(value))
   block.add_inst(vcode_inst)
 }
@@ -1075,4 +1115,126 @@ fn lower_terminator(
       ignore(targets)
     }
   }
+}
+
+///|
+/// Lower a direct function call
+/// Generates code to:
+/// 1. Load the function pointer from the function table (base at X20)
+/// 2. Call through the function pointer with arguments
+fn lower_call(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+  func_idx : Int,
+) -> Unit {
+  // Collect argument vregs
+  let arg_vregs : Array[VReg] = []
+  for operand in inst.operands {
+    arg_vregs.push(ctx.get_vreg(operand))
+  }
+  let num_args = arg_vregs.length()
+  let has_result = inst.result is Some(_)
+
+  // Create a temporary vreg for the function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+
+  // Step 1: Load function pointer from table
+  // Function table base is assumed to be in X20 (a callee-saved register)
+  // func_ptr = [X20 + func_idx * 8]
+  let offset = func_idx * 8
+  let load_inst = VCodeInst::new(Load(I64, offset))
+  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  // We use physical register X20 as the function table base
+  load_inst.add_use(Physical({ index: 20, class: Int }))
+  block.add_inst(load_inst)
+
+  // Step 2: Emit CallIndirect instruction
+  let call_inst = VCodeInst::new(CallIndirect(num_args, has_result))
+  // Result (if any)
+  match inst.result {
+    Some(result) => {
+      let dst = ctx.get_vreg(result)
+      call_inst.add_def({ reg: Virtual(dst) })
+    }
+    None => ()
+  }
+  // Uses: function pointer first, then arguments
+  call_inst.add_use(Virtual(func_ptr_vreg))
+  for arg_vreg in arg_vregs {
+    call_inst.add_use(Virtual(arg_vreg))
+  }
+  block.add_inst(call_inst)
+}
+
+///|
+/// Lower an indirect function call (call_indirect)
+/// The callee is already on the stack as a function table index
+fn lower_call_indirect(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  // For call_indirect, the last operand is the table index
+  // which we need to convert to a function pointer
+  if inst.operands.length() == 0 {
+    return
+  }
+
+  // Last operand is the table index
+  let table_idx_vreg = ctx.get_vreg(inst.operands[inst.operands.length() - 1])
+
+  // Arguments are all operands except the last one
+  let arg_vregs : Array[VReg] = []
+  for i in 0..<(inst.operands.length() - 1) {
+    arg_vregs.push(ctx.get_vreg(inst.operands[i]))
+  }
+  let num_args = arg_vregs.length()
+  let has_result = inst.result is Some(_)
+
+  // Create temporaries for calculation
+  let offset_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+
+  // Step 1: Calculate offset = table_idx * 8
+  let const_8_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_8 = VCodeInst::new(LoadConst(8L))
+  load_8.add_def({ reg: Virtual(const_8_vreg) })
+  block.add_inst(load_8)
+  let mul_inst = VCodeInst::new(Mul)
+  mul_inst.add_def({ reg: Virtual(offset_vreg) })
+  mul_inst.add_use(Virtual(table_idx_vreg))
+  mul_inst.add_use(Virtual(const_8_vreg))
+  block.add_inst(mul_inst)
+
+  // Step 2: Calculate address = X20 + offset
+  let addr_vreg = ctx.vcode_func.new_vreg(Int)
+  let add_inst = VCodeInst::new(Add)
+  add_inst.add_def({ reg: Virtual(addr_vreg) })
+  add_inst.add_use(Physical({ index: 20, class: Int }))
+  add_inst.add_use(Virtual(offset_vreg))
+  block.add_inst(add_inst)
+
+  // Step 3: Load function pointer from address
+  let load_inst = VCodeInst::new(Load(I64, 0))
+  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_inst.add_use(Virtual(addr_vreg))
+  block.add_inst(load_inst)
+
+  // Step 4: Emit CallIndirect instruction
+  let call_inst = VCodeInst::new(CallIndirect(num_args, has_result))
+  // Result (if any)
+  match inst.result {
+    Some(result) => {
+      let dst = ctx.get_vreg(result)
+      call_inst.add_def({ reg: Virtual(dst) })
+    }
+    None => ()
+  }
+  // Uses: function pointer first, then arguments
+  call_inst.add_use(Virtual(func_ptr_vreg))
+  for arg_vreg in arg_vregs {
+    call_inst.add_use(Virtual(arg_vreg))
+  }
+  block.add_inst(call_inst)
 }

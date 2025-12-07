@@ -8,7 +8,17 @@ import(
 )
 
 // Values
+pub fn alloc_memory(Int64) -> Int64
+
+pub fn free_memory(Int64) -> Unit
+
+pub fn get_fd_write_ptr() -> Int64
+
+pub fn get_proc_exit_ptr() -> Int64
+
 pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
+
+pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 // Errors
 
@@ -174,6 +184,18 @@ pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
 pub fn HotThreshold::default() -> Self
 
+pub(all) struct JITContext {
+  ctx_ptr : Int64
+  func_table_ptr : Int64
+}
+pub fn JITContext::activate(Self) -> Unit
+pub fn JITContext::call_void_i64(Self, Int64) -> Int64
+pub fn JITContext::call_void_void(Self, Int64) -> Unit
+pub fn JITContext::free(Self) -> Unit
+pub fn JITContext::new(Int) -> Self?
+pub fn JITContext::set_func(Self, Int, Int64) -> Unit
+pub fn JITContext::set_memory(Self, Int64, Int64) -> Unit
+
 pub(all) struct JITEngine {
   strategy : CompilationStrategy
   runtime : @vcode.JITRuntime
@@ -210,7 +232,10 @@ pub fn JITFunction::new(String, Int, ExecCode, Int, Int, Bool) -> Self
 pub(all) struct JITModule {
   functions : Map[Int, JITFunction]
   by_name : Map[String, Int]
+  mut context : JITContext?
+  mut num_imports : Int
 }
+pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Int64?
 pub fn JITModule::free(Self) -> Unit
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?

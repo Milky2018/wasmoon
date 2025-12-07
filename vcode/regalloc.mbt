@@ -586,10 +586,33 @@ pub fn LinearScanAllocator::allocate(
     reloads: [],
   }
 
+  // Pre-assign function parameters to ABI registers
+  // JIT ABI: X0 = func_table, X1 = memory_base, args in X2-X7
+  // So WASM parameters start at X2
+  for i, param in func.params {
+    let preg = match param.class {
+      Int => { index: i + 2, class: Int } // X2, X3, X4, ...
+      Float => { index: i, class: Float } // D0, D1, D2, ... (float params)
+    }
+    result.assignments.set(param.id, preg)
+    // Mark the register as initially occupied
+    match liveness.intervals.get(param.id) {
+      Some(interval) => {
+        interval.assigned = Some(preg)
+        self.active.push(interval)
+      }
+      None => ()
+    }
+  }
+
   // Sort intervals by start point
   let intervals : Array[LiveInterval] = []
   for entry in liveness.intervals {
     let (_, interval) = entry
+    // Skip already-assigned parameters
+    if interval.assigned is Some(_) {
+      continue
+    }
     intervals.push(interval)
   }
   intervals.sort_by(fn(a, b) { a.start.compare(b.start) })

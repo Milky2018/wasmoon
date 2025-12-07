@@ -315,6 +315,12 @@ pub enum VCodeOpcode {
   Madd // Xd = Xa + Xn * Xm (3 uses: acc, src1, src2)
   Msub // Xd = Xa - Xn * Xm (3 uses: acc, src1, src2)
   Mneg // Xd = -(Xn * Xm) (2 uses: src1, src2)
+  // Function calls
+  // CallIndirect: call through a function pointer in a register
+  // Uses: [func_ptr, arg0, arg1, ...]
+  // Defs: [result] (if has_result)
+  // Parameters: num_args, has_result
+  CallIndirect(Int, Bool)
 }
 
 ///|
@@ -362,6 +368,10 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Madd => "madd"
     Msub => "msub"
     Mneg => "mneg"
+    CallIndirect(num_args, has_result) => {
+      let ret_ty = if has_result { "i64" } else { "void" }
+      "call_indirect(\{num_args}) -> \{ret_ty}"
+    }
   }
 }
 

@@ -26,13 +26,25 @@ pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int) -> Self
 pub fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
 pub impl Show for CompiledEntry
 
+pub(all) struct ImportEntry {
+  module_name : String
+  func_name : String
+  num_params : Int
+  num_results : Int
+}
+pub fn ImportEntry::new(String, String, Int, Int) -> Self
+pub impl Show for ImportEntry
+
 pub(all) struct PrecompiledModule {
   version : Int
   target : TargetArch
+  imports : Array[ImportEntry]
   functions : Array[CompiledEntry]
 }
 pub fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction, Int, Int) -> Unit
+pub fn PrecompiledModule::add_import(Self, String, String, Int, Int) -> Unit
 pub fn PrecompiledModule::function_count(Self) -> Int
+pub fn PrecompiledModule::import_count(Self) -> Int
 pub fn PrecompiledModule::new(TargetArch) -> Self
 pub fn PrecompiledModule::serialize(Self) -> Array[Int]
 pub impl Show for PrecompiledModule

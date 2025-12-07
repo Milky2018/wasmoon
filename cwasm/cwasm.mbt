@@ -38,7 +38,8 @@ const CWASM_MAGIC_3 : Int = 0x73 // 's'
 /// Current format version
 /// v1: Initial format
 /// v2: Added num_params and num_results to function entries
-const CWASM_VERSION : Int = 2
+/// v3: Added import table for WASI/external function support
+const CWASM_VERSION : Int = 3
 
 // ============ Target Architecture ============
 
@@ -79,6 +80,41 @@ fn TargetArch::to_string(self : TargetArch) -> String {
 
 ///|
 pub impl Show for TargetArch with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+// ============ Import Entry ============
+
+///|
+/// An imported function entry in the .cwasm file
+pub(all) struct ImportEntry {
+  // Module name (e.g., "wasi_snapshot_preview1")
+  module_name : String
+  // Function name (e.g., "fd_write")
+  func_name : String
+  // Number of parameters
+  num_params : Int
+  // Number of results (0 or 1)
+  num_results : Int
+}
+
+///|
+pub fn ImportEntry::new(
+  module_name : String,
+  func_name : String,
+  num_params : Int,
+  num_results : Int,
+) -> ImportEntry {
+  { module_name, func_name, num_params, num_results }
+}
+
+///|
+fn ImportEntry::to_string(self : ImportEntry) -> String {
+  "\{self.module_name}::\{self.func_name}(\{self.num_params}) -> \{self.num_results}"
+}
+
+///|
+pub impl Show for ImportEntry with output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -135,13 +171,29 @@ pub(all) struct PrecompiledModule {
   version : Int
   // Target architecture
   target : TargetArch
+  // Imported functions
+  imports : Array[ImportEntry]
   // Compiled functions
   functions : Array[CompiledEntry]
 }
 
 ///|
 pub fn PrecompiledModule::new(target : TargetArch) -> PrecompiledModule {
-  { version: CWASM_VERSION, target, functions: [] }
+  { version: CWASM_VERSION, target, imports: [], functions: [] }
+}
+
+///|
+/// Add an imported function
+pub fn PrecompiledModule::add_import(
+  self : PrecompiledModule,
+  module_name : String,
+  func_name : String,
+  num_params : Int,
+  num_results : Int,
+) -> Unit {
+  self.imports.push(
+    ImportEntry::new(module_name, func_name, num_params, num_results),
+  )
 }
 
 ///|
@@ -167,6 +219,12 @@ pub fn PrecompiledModule::add_function(
 }
 
 ///|
+/// Get number of imports
+pub fn PrecompiledModule::import_count(self : PrecompiledModule) -> Int {
+  self.imports.length()
+}
+
+///|
 /// Get number of compiled functions
 pub fn PrecompiledModule::function_count(self : PrecompiledModule) -> Int {
   self.functions.length()
@@ -174,7 +232,7 @@ pub fn PrecompiledModule::function_count(self : PrecompiledModule) -> Int {
 
 ///|
 fn PrecompiledModule::to_string(self : PrecompiledModule) -> String {
-  "PrecompiledModule(v\{self.version}, \{self.target}, \{self.functions.length()} functions)"
+  "PrecompiledModule(v\{self.version}, \{self.target}, \{self.imports.length()} imports, \{self.functions.length()} functions)"
 }
 
 ///|
@@ -200,6 +258,30 @@ pub fn PrecompiledModule::serialize(self : PrecompiledModule) -> Array[Int] {
 
   // Write target architecture
   result.push(self.target.to_byte())
+
+  // Write number of imports
+  write_u32(result, self.imports.length())
+
+  // Write each import
+  for imp in self.imports {
+    // Module name
+    let module_bytes = string_to_bytes(imp.module_name)
+    write_u32(result, module_bytes.length())
+    for b in module_bytes {
+      result.push(b)
+    }
+
+    // Function name
+    let func_bytes = string_to_bytes(imp.func_name)
+    write_u32(result, func_bytes.length())
+    for b in func_bytes {
+      result.push(b)
+    }
+
+    // Signature
+    write_u32(result, imp.num_params)
+    write_u32(result, imp.num_results)
+  }
 
   // Write number of functions
   write_u32(result, self.functions.length())
@@ -286,12 +368,34 @@ pub fn deserialize(
 
   // Read version
   let version = reader.read_u32()
-  if version != CWASM_VERSION {
+  if version != CWASM_VERSION && version != 2 {
     raise DeserializeError("Unsupported version: \{version}")
   }
 
   // Read target architecture
   let target = TargetArch::from_byte(reader.read_byte())
+
+  // Read imports (v3+)
+  let imports : Array[ImportEntry] = []
+  if version >= 3 {
+    let import_count = reader.read_u32()
+    for _ in 0..<import_count {
+      // Module name
+      let module_name_len = reader.read_u32()
+      let module_name = reader.read_string(module_name_len)
+
+      // Function name
+      let func_name_len = reader.read_u32()
+      let func_name = reader.read_string(func_name_len)
+
+      // Signature
+      let num_params = reader.read_u32()
+      let num_results = reader.read_u32()
+      imports.push(
+        ImportEntry::new(module_name, func_name, num_params, num_results),
+      )
+    }
+  }
 
   // Read number of functions
   let func_count = reader.read_u32()
@@ -325,7 +429,7 @@ pub fn deserialize(
       ),
     )
   }
-  { version, target, functions }
+  { version: CWASM_VERSION, target, imports, functions }
 }
 
 // ============ Byte Reader ============
