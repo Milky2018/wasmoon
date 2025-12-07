@@ -220,7 +220,13 @@ fn run_wasm(
         }
       }
       // Call the function
-      if use_jit {
+      // Check if JIT can handle all imports
+      let can_use_jit = if use_jit {
+        check_jit_import_support(mod_, debug_config)
+      } else {
+        false
+      }
+      if can_use_jit {
         // JIT execution path
         let jit_result = run_with_jit(
           mod_, instance, store, func_name, args, debug_config,
@@ -699,4 +705,31 @@ fn parse_func_args(
     result.push(value)
   }
   result
+}
+
+///|
+/// Check if all imports are supported by JIT trampolines
+fn check_jit_import_support(
+  mod_ : @types.Module,
+  debug_config : DebugConfig,
+) -> Bool {
+  let unsupported : Array[String] = []
+  for imp in mod_.imports {
+    if imp.desc is Func(_) {
+      if !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+        unsupported.push("\{imp.mod_name}.\{imp.name}")
+      }
+    }
+  }
+  if unsupported.length() > 0 {
+    if debug_config.verbose {
+      let joined = unsupported.join(", ")
+      println(
+        "[DEBUG] JIT: Falling back to interpreter - unsupported imports: \{joined}",
+      )
+    }
+    false
+  } else {
+    true
+  }
 }

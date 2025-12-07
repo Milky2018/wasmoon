@@ -18,6 +18,8 @@ pub fn get_proc_exit_ptr() -> Int64
 
 pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
+pub fn has_import_trampoline(String, String) -> Bool
+
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 // Errors
