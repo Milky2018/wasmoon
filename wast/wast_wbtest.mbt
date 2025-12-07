@@ -268,3 +268,69 @@ test "parse hex numbers" {
     fail("Expected AssertReturn")
   }
 }
+
+// ============================================================
+// Integer parsing tests for unsigned values
+// ============================================================
+
+///|
+test "parse_int: unsigned i32 max (4294967295)" {
+  // 4294967295 is u32::MAX, which should be interpreted as -1 in i32
+  let result = parse_int("4294967295") catch { e => fail("Parse error: \{e}") }
+  inspect(result, content="-1")
+}
+
+///|
+test "parse_int: unsigned i32 boundary" {
+  // 2147483648 is INT_MAX + 1, should be interpreted as INT_MIN
+  let result = parse_int("2147483648") catch { e => fail("Parse error: \{e}") }
+  inspect(result, content="-2147483648")
+}
+
+///|
+test "parse_int64: unsigned i64 max (18446744073709551615)" {
+  // 18446744073709551615 is u64::MAX, which should be interpreted as -1 in i64
+  let result = parse_int64("18446744073709551615") catch {
+    e => fail("Parse error: \{e}")
+  }
+  inspect(result, content="-1")
+}
+
+///|
+test "parse_int64: unsigned i64 boundary" {
+  // 9223372036854775808 is INT64_MAX + 1, should be INT64_MIN
+  let result = parse_int64("9223372036854775808") catch {
+    e => fail("Parse error: \{e}")
+  }
+  inspect(result, content="-9223372036854775808")
+}
+
+///|
+test "parse_hex_int: with underscores" {
+  let result = parse_hex_int("FFFF_FFFF") catch {
+    e => fail("Parse error: \{e}")
+  }
+  inspect(result, content="-1")
+}
+
+///|
+test "parse_hex_int64: with underscores" {
+  let result = parse_hex_int64("FFFF_FFFF_FFFF_FFFF") catch {
+    e => fail("Parse error: \{e}")
+  }
+  inspect(result, content="-1")
+}
+
+///|
+test "parse_hex_int: simple hex" {
+  let result = parse_hex_int("FF") catch { e => fail("Parse error: \{e}") }
+  inspect(result, content="255")
+}
+
+///|
+test "parse_hex_int64: simple hex" {
+  let result = parse_hex_int64("1_0000_0000") catch {
+    e => fail("Parse error: \{e}")
+  }
+  inspect(result, content="4294967296")
+}

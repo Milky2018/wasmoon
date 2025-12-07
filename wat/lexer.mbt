@@ -260,6 +260,19 @@ fn hex_digit_value(c : Char) -> Int? {
 }
 
 ///|
+/// Check if the next characters are "nan" or "inf" (special float literals)
+fn Lexer::check_nan_or_inf(self : Lexer) -> Bool {
+  if self.pos + 2 >= self.input.length() {
+    return false
+  }
+  let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
+  let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
+  let c3 = self.input.code_unit_at(self.pos + 2).unsafe_to_char()
+  // Check for "nan" or "inf"
+  (c1 == 'n' && c2 == 'a' && c3 == 'n') || (c1 == 'i' && c2 == 'n' && c3 == 'f')
+}
+
+///|
 fn Lexer::read_number(self : Lexer) -> String {
   let buf = StringBuilder::new()
   // Handle optional sign
@@ -286,7 +299,7 @@ fn Lexer::read_number(self : Lexer) -> String {
       if !self.is_eof() && self.peek_char() == Some(':') {
         buf.write_char(':')
         self.advance_pos()
-        // Read payload (hex number)
+        // Read payload (hex number with optional underscores)
         while !self.is_eof() {
           match self.peek_char() {
             Some(c) =>
@@ -294,8 +307,12 @@ fn Lexer::read_number(self : Lexer) -> String {
                 (c >= 'a' && c <= 'f') ||
                 (c >= 'A' && c <= 'F') ||
                 c == 'x' ||
-                c == 'X' {
-                buf.write_char(c)
+                c == 'X' ||
+                c == '_' {
+                // Skip underscores but consume them
+                if c != '_' {
+                  buf.write_char(c)
+                }
                 self.advance_pos()
               } else {
                 break
@@ -377,6 +394,17 @@ fn Lexer::next_token(self : Lexer) -> Token raise WatError {
       if (c >= '0' && c <= '9') || c == '-' || c == '+' {
         let num = self.read_number()
         Number(num)
+      } else if c == 'n' || c == 'i' {
+        // Check for nan or inf (special float literals)
+        if self.check_nan_or_inf() {
+          let num = self.read_number()
+          Number(num)
+        } else if is_idchar(c) {
+          let kw = self.read_id_or_keyword()
+          Keyword(kw)
+        } else {
+          raise UnexpectedToken(String::make(1, c), self.current_loc())
+        }
       } else if is_idchar(c) {
         let kw = self.read_id_or_keyword()
         Keyword(kw)
