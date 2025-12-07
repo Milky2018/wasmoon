@@ -190,7 +190,8 @@ fn main {
                     None => ()
                   }
                   // Check if JIT is disabled (default: enabled)
-                  let use_jit = !sub.args.contains("no-jit")
+                  let has_no_jit = sub.flags.contains("no-jit")
+                  let use_jit = !has_no_jit
                   run_wasm(
                     file_path, invoke_opt, func_args, preloads, dirs, envs, wasi_options,
                     debug_config, wasm_config, use_jit,
