@@ -625,6 +625,40 @@ pub fn instantiate_module_with_imports(
   for _ in 0..<mod.datas.length() {
     dropped_datas.push(false)
   }
+
+  // Initialize active data segments (copy data to memory)
+  for data in mod.datas {
+    // Active data segments have a non-empty offset expression
+    if data.offset.length() > 0 && mem_addrs.length() > data.memory_idx {
+      let mem = store.get_mem(mem_addrs[data.memory_idx])
+      // Evaluate offset expression
+      let offset = match data.offset {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      // Copy data to memory
+      mem.init_data(offset, data.init)
+    }
+  }
+
+  // Initialize active element segments (populate tables with function references)
+  for elem in mod.elems {
+    // Active element segments have a non-empty offset expression
+    if elem.offset.length() > 0 && table_addrs.length() > elem.table_idx {
+      let table = store.get_table(table_addrs[elem.table_idx])
+      // Evaluate offset expression
+      let offset = match elem.offset {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      // Set table entries
+      for i, func_idx in elem.init {
+        table.set(offset + i, @types.Value::FuncRef(func_idx)) catch {
+          _ => ()
+        }
+      }
+    }
+  }
   {
     types: mod.types,
     func_addrs,

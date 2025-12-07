@@ -256,6 +256,52 @@ fn parse_hex_int(s : String) -> Int raise WatError {
 }
 
 ///|
+/// Parse an unsigned 32-bit integer (for offset/align values)
+/// Returns Int but interprets large values as unsigned
+/// Raises error if value exceeds u32 max (4294967295)
+fn parse_u32(s : String) -> Int raise WatError {
+  let trimmed = s
+  if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
+    if trimmed.length() > 2 {
+      let hex_part = StringBuilder::new()
+      for i in 2..<trimmed.length() {
+        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
+      }
+      parse_hex_u32(hex_part.to_string())
+    } else {
+      raise InvalidNumber(s, default_loc())
+    }
+  } else {
+    // Parse decimal as unsigned 64-bit first to check range
+    let u64 = @strconv.parse_uint64(trimmed) catch {
+      _ => raise InvalidNumber(s, default_loc())
+    }
+    // Check if value exceeds u32 max (4294967295)
+    if u64 > 0xFFFFFFFFUL {
+      raise InvalidNumber(s, default_loc())
+    }
+    u64.reinterpret_as_int64().to_int()
+  }
+}
+
+///|
+fn parse_hex_u32(s : String) -> Int raise WatError {
+  let mut result : UInt64 = 0UL
+  for i in 0..<s.length() {
+    let c = s.code_unit_at(i).unsafe_to_char()
+    match hex_digit_value(c) {
+      Some(v) => result = result * 16UL + v.to_int64().reinterpret_as_uint64()
+      None => raise InvalidNumber(s, default_loc())
+    }
+  }
+  // Check if value exceeds u32 max
+  if result > 0xFFFFFFFFUL {
+    raise InvalidNumber(s, default_loc())
+  }
+  result.reinterpret_as_int64().to_int()
+}
+
+///|
 fn parse_int64(s : String) -> Int64 raise WatError {
   let trimmed = s
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
@@ -1746,14 +1792,15 @@ fn parse_mem_arg(
           for i in 7..<s.length() {
             offset_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
-          offset = parse_int(offset_str.to_string())
+          // Use parse_u32 for offset (can be up to 0xFFFFFFFF)
+          offset = parse_u32(offset_str.to_string())
           parser.advance()
         } else if s.has_prefix("align=") {
           let align_str = StringBuilder::new()
           for i in 6..<s.length() {
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
-          let a = parse_int(align_str.to_string())
+          let a = parse_u32(align_str.to_string())
           // Convert alignment to log2
           align = log2(a)
           parser.advance()
