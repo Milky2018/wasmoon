@@ -16,6 +16,7 @@ suberror ParserError {
   UnknownOpcode(Int)
   InvalidImportKind(Int)
   InvalidExportKind(Int)
+  MalformedMemopFlags // alignment value too large
   ParseError(String) // Generic error with message
 }
 
@@ -90,6 +91,7 @@ pub impl Show for ParserError with output(self, logger) {
       }
       "invalid export kind \{kind}\{kind_hint}"
     }
+    MalformedMemopFlags => "malformed memop flags"
     ParseError(msg) => msg
   }
   logger.write_string(msg)
@@ -252,6 +254,19 @@ fn Parser::read_leb128_i64(self : Parser) -> Int64 raise ParserError {
 /// Read a u32
 fn Parser::read_u32(self : Parser) -> Int raise ParserError {
   self.read_leb128_u32()
+}
+
+///|
+/// Read memory argument (align, offset) with validation
+/// Alignment values >= 32 are reserved and should be rejected as malformed
+fn Parser::read_memarg(self : Parser) -> (Int, Int) raise ParserError {
+  let align = self.read_leb128_u32()
+  // WebAssembly spec: alignment values >= 32 are reserved
+  if align >= 32 {
+    raise MalformedMemopFlags
+  }
+  let offset = self.read_leb128_u32()
+  (align, offset)
 }
 
 ///|
@@ -492,121 +507,98 @@ fn Parser::read_instruction(
     0x22 => LocalTee(self.read_u32())
     0x23 => GlobalGet(self.read_u32())
     0x24 => GlobalSet(self.read_u32())
-    // Memory instructions
+    // Memory instructions (with alignment validation)
     0x28 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I32Load(align, offset)
     }
     0x29 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Load(align, offset)
     }
     0x2A => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       F32Load(align, offset)
     }
     0x2B => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       F64Load(align, offset)
     }
     0x2C => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I32Load8S(align, offset)
     }
     0x2D => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I32Load8U(align, offset)
     }
     0x2E => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I32Load16S(align, offset)
     }
     0x2F => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I32Load16U(align, offset)
     }
     0x30 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Load8S(align, offset)
     }
     0x31 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Load8U(align, offset)
     }
     0x32 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Load16S(align, offset)
     }
     0x33 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Load16U(align, offset)
     }
     0x34 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Load32S(align, offset)
     }
     0x35 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Load32U(align, offset)
     }
-    // Memory store instructions
+    // Memory store instructions (with alignment validation)
     0x36 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I32Store(align, offset)
     }
     0x37 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Store(align, offset)
     }
     0x38 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       F32Store(align, offset)
     }
     0x39 => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       F64Store(align, offset)
     }
     0x3A => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I32Store8(align, offset)
     }
     0x3B => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I32Store16(align, offset)
     }
     0x3C => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Store8(align, offset)
     }
     0x3D => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Store16(align, offset)
     }
     0x3E => {
-      let align = self.read_u32()
-      let offset = self.read_u32()
+      let (align, offset) = self.read_memarg()
       I64Store32(align, offset)
     }
     0x3F => {

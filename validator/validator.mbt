@@ -17,6 +17,7 @@ pub(all) suberror ValidationError {
   MultipleMemories // More than one memory is not allowed in MVP
   MultipleTables // More than one table is not allowed in MVP
   InvalidLimits(String) // Invalid limits (e.g., min > max)
+  InvalidAlignment(String) // Alignment must not be larger than natural
   // Error with location context
   WithContext(ValidationErrorContext)
 } derive(Show)
@@ -54,6 +55,7 @@ pub fn ValidationErrorContext::from_error(
     MultipleMemories => "multiple memories not allowed in MVP"
     MultipleTables => "multiple tables not allowed in MVP"
     InvalidLimits(m) => "invalid limits: \{m}"
+    InvalidAlignment(m) => "alignment must not be larger than natural: \{m}"
     WithContext(ctx) => ctx.error_msg
   }
   { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
@@ -799,68 +801,219 @@ fn validate_instr(
     }
 
     // Memory operations - all require memory index 0 to exist
-    I32Load(_, _)
-    | I32Load8S(_, _)
-    | I32Load8U(_, _)
-    | I32Load16S(_, _)
-    | I32Load16U(_, _) => {
+    // Natural alignment: 8-bit=0, 16-bit=1, 32-bit=2, 64-bit=3
+    I32Load(align, _) => {
       if ctx.mems.length() == 0 {
         raise InvalidMemoryIndex(0)
+      }
+      if align > 2 {
+        raise InvalidAlignment(
+          "i32.load alignment \{align} exceeds natural alignment 2",
+        )
       }
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I32)
     }
-    I64Load(_, _)
-    | I64Load8S(_, _)
-    | I64Load8U(_, _)
-    | I64Load16S(_, _)
-    | I64Load16U(_, _)
-    | I64Load32S(_, _)
-    | I64Load32U(_, _) => {
+    I32Load8S(align, _) | I32Load8U(align, _) => {
       if ctx.mems.length() == 0 {
         raise InvalidMemoryIndex(0)
+      }
+      if align > 0 {
+        raise InvalidAlignment(
+          "i32.load8 alignment \{align} exceeds natural alignment 0",
+        )
+      }
+      stack.pop(@types.ValueType::I32) // address
+      stack.push(@types.ValueType::I32)
+    }
+    I32Load16S(align, _) | I32Load16U(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 1 {
+        raise InvalidAlignment(
+          "i32.load16 alignment \{align} exceeds natural alignment 1",
+        )
+      }
+      stack.pop(@types.ValueType::I32) // address
+      stack.push(@types.ValueType::I32)
+    }
+    I64Load(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 3 {
+        raise InvalidAlignment(
+          "i64.load alignment \{align} exceeds natural alignment 3",
+        )
       }
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I64)
     }
-    F32Load(_, _) => {
+    I64Load8S(align, _) | I64Load8U(align, _) => {
       if ctx.mems.length() == 0 {
         raise InvalidMemoryIndex(0)
+      }
+      if align > 0 {
+        raise InvalidAlignment(
+          "i64.load8 alignment \{align} exceeds natural alignment 0",
+        )
+      }
+      stack.pop(@types.ValueType::I32) // address
+      stack.push(@types.ValueType::I64)
+    }
+    I64Load16S(align, _) | I64Load16U(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 1 {
+        raise InvalidAlignment(
+          "i64.load16 alignment \{align} exceeds natural alignment 1",
+        )
+      }
+      stack.pop(@types.ValueType::I32) // address
+      stack.push(@types.ValueType::I64)
+    }
+    I64Load32S(align, _) | I64Load32U(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 2 {
+        raise InvalidAlignment(
+          "i64.load32 alignment \{align} exceeds natural alignment 2",
+        )
+      }
+      stack.pop(@types.ValueType::I32) // address
+      stack.push(@types.ValueType::I64)
+    }
+    F32Load(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 2 {
+        raise InvalidAlignment(
+          "f32.load alignment \{align} exceeds natural alignment 2",
+        )
       }
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::F32)
     }
-    F64Load(_, _) => {
+    F64Load(align, _) => {
       if ctx.mems.length() == 0 {
         raise InvalidMemoryIndex(0)
+      }
+      if align > 3 {
+        raise InvalidAlignment(
+          "f64.load alignment \{align} exceeds natural alignment 3",
+        )
       }
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::F64)
     }
-    I32Store(_, _) | I32Store8(_, _) | I32Store16(_, _) => {
+    I32Store(align, _) => {
       if ctx.mems.length() == 0 {
         raise InvalidMemoryIndex(0)
+      }
+      if align > 2 {
+        raise InvalidAlignment(
+          "i32.store alignment \{align} exceeds natural alignment 2",
+        )
       }
       stack.pop(@types.ValueType::I32) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    I64Store(_, _) | I64Store8(_, _) | I64Store16(_, _) | I64Store32(_, _) => {
+    I32Store8(align, _) => {
       if ctx.mems.length() == 0 {
         raise InvalidMemoryIndex(0)
+      }
+      if align > 0 {
+        raise InvalidAlignment(
+          "i32.store8 alignment \{align} exceeds natural alignment 0",
+        )
+      }
+      stack.pop(@types.ValueType::I32) // value
+      stack.pop(@types.ValueType::I32) // address
+    }
+    I32Store16(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 1 {
+        raise InvalidAlignment(
+          "i32.store16 alignment \{align} exceeds natural alignment 1",
+        )
+      }
+      stack.pop(@types.ValueType::I32) // value
+      stack.pop(@types.ValueType::I32) // address
+    }
+    I64Store(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 3 {
+        raise InvalidAlignment(
+          "i64.store alignment \{align} exceeds natural alignment 3",
+        )
       }
       stack.pop(@types.ValueType::I64) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    F32Store(_, _) => {
+    I64Store8(align, _) => {
       if ctx.mems.length() == 0 {
         raise InvalidMemoryIndex(0)
+      }
+      if align > 0 {
+        raise InvalidAlignment(
+          "i64.store8 alignment \{align} exceeds natural alignment 0",
+        )
+      }
+      stack.pop(@types.ValueType::I64) // value
+      stack.pop(@types.ValueType::I32) // address
+    }
+    I64Store16(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 1 {
+        raise InvalidAlignment(
+          "i64.store16 alignment \{align} exceeds natural alignment 1",
+        )
+      }
+      stack.pop(@types.ValueType::I64) // value
+      stack.pop(@types.ValueType::I32) // address
+    }
+    I64Store32(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 2 {
+        raise InvalidAlignment(
+          "i64.store32 alignment \{align} exceeds natural alignment 2",
+        )
+      }
+      stack.pop(@types.ValueType::I64) // value
+      stack.pop(@types.ValueType::I32) // address
+    }
+    F32Store(align, _) => {
+      if ctx.mems.length() == 0 {
+        raise InvalidMemoryIndex(0)
+      }
+      if align > 2 {
+        raise InvalidAlignment(
+          "f32.store alignment \{align} exceeds natural alignment 2",
+        )
       }
       stack.pop(@types.ValueType::F32) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    F64Store(_, _) => {
+    F64Store(align, _) => {
       if ctx.mems.length() == 0 {
         raise InvalidMemoryIndex(0)
+      }
+      if align > 3 {
+        raise InvalidAlignment(
+          "f64.store alignment \{align} exceeds natural alignment 3",
+        )
       }
       stack.pop(@types.ValueType::F64) // value
       stack.pop(@types.ValueType::I32) // address

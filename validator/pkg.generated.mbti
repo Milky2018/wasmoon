@@ -28,6 +28,7 @@ pub(all) suberror ValidationError {
   MultipleMemories
   MultipleTables
   InvalidLimits(String)
+  InvalidAlignment(String)
   WithContext(ValidationErrorContext)
 }
 pub impl Show for ValidationError
