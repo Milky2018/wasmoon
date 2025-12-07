@@ -12,10 +12,13 @@ fn run_wasm(
   wasi_options : Array[String],
   debug_config : DebugConfig,
   wasm_config : WasmConfig,
+  use_jit : Bool,
 ) -> Unit {
   ignore(wasm_config) // Will be used in full implementation
   if debug_config.verbose {
     println("[DEBUG] Loading module: \{wasm_path}")
+    let jit_status = if use_jit { "enabled" } else { "disabled" }
+    println("[DEBUG] JIT: \{jit_status}")
   }
   // Create linker for module linking
   let linker = @runtime.Linker::new()
@@ -217,18 +220,30 @@ fn run_wasm(
         }
       }
       // Call the function
-      let results = @executor.call_exported_func(
-        store, instance, func_name, args,
-      ) catch {
-        e => {
-          println("Error: \{e}")
-          return
+      if use_jit {
+        // JIT execution path
+        let jit_result = run_with_jit(
+          mod_, instance, store, func_name, args, debug_config,
+        )
+        match jit_result {
+          Some(r) => println(r.to_string())
+          None => ()
         }
-      }
-      // Print results
-      if results.length() > 0 {
-        let result_strs = results.map(format_value)
-        println(result_strs.join(" "))
+      } else {
+        // Interpreter execution path
+        let results = @executor.call_exported_func(
+          store, instance, func_name, args,
+        ) catch {
+          e => {
+            println("Error: \{e}")
+            return
+          }
+        }
+        // Print results
+        if results.length() > 0 {
+          let result_strs = results.map(format_value)
+          println(result_strs.join(" "))
+        }
       }
     }
     None =>
@@ -453,6 +468,182 @@ fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
     }
   }
   None
+}
+
+///|
+/// Run a function using JIT compilation
+fn run_with_jit(
+  mod_ : @types.Module,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+  func_name : String,
+  args : Array[@types.Value],
+  debug_config : DebugConfig,
+) -> Int64? {
+  if debug_config.verbose {
+    println("[DEBUG] JIT: Compiling module...")
+  }
+  // Compile module to precompiled format in memory
+  let precompiled = compile_module_to_jit(mod_, debug_config)
+  match precompiled {
+    None => {
+      println("Error: JIT compilation failed")
+      return None
+    }
+    Some(pc) => {
+      // Build func_types array for JITModule::load
+      let func_types : Array[(Int, Bool)] = []
+      for entry in pc.functions {
+        func_types.push((entry.num_params, entry.num_results > 0))
+      }
+      // Load JIT module
+      let jit_module = @jit.JITModule::load(pc, func_types)
+      match jit_module {
+        None => {
+          println("Error: Failed to load JIT module")
+          return None
+        }
+        Some(jm) => {
+          // Allocate linear memory
+          let mem_size = get_memory_size(instance, store)
+          let mem_ptr = @jit.alloc_memory(mem_size)
+          if mem_ptr == 0L {
+            println("Error: Failed to allocate linear memory")
+            jm.free()
+            return None
+          }
+          // Initialize data segments
+          init_data_segments(mod_, mem_ptr)
+          // Set memory in JIT context
+          match jm.context {
+            Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
+            None => ()
+          }
+          // Find and call the function
+          let jit_func = jm.get_func_by_name(func_name)
+          match jit_func {
+            Some(f) => {
+              // Convert args to Int64
+              let i64_args : Array[Int64] = []
+              for arg in args {
+                let v = match arg {
+                  I32(n) => n.to_int64()
+                  I64(n) => n
+                  F32(n) => n.reinterpret_as_int().to_int64()
+                  F64(n) => n.reinterpret_as_int64()
+                  _ => 0L
+                }
+                i64_args.push(v)
+              }
+              if debug_config.verbose {
+                println("[DEBUG] JIT: Calling function '\{func_name}'")
+              }
+              let result = jm.call_with_context(f, i64_args)
+              // Cleanup
+              @jit.free_memory(mem_ptr)
+              jm.free()
+              result
+            }
+            None => {
+              println("Error: Function '\{func_name}' not found in JIT module")
+              @jit.free_memory(mem_ptr)
+              jm.free()
+              None
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Compile a WASM module to precompiled format in memory
+fn compile_module_to_jit(
+  mod_ : @types.Module,
+  debug_config : DebugConfig,
+) -> @cwasm.PrecompiledModule? {
+  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let num_imports = count_func_imports(mod_.imports)
+  // Build import function type indices and record imports
+  let import_func_type_indices : Array[Int] = []
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      import_func_type_indices.push(type_idx)
+      let func_type = mod_.types[type_idx]
+      precompiled.add_import(
+        imp.mod_name,
+        imp.name,
+        func_type.params.length(),
+        func_type.results.length(),
+      )
+    }
+  }
+  // Compile each function
+  for i, code in mod_.codes {
+    let func_idx = num_imports + i
+    let type_idx = mod_.funcs[i]
+    let func_type = mod_.types[type_idx]
+    let func_name = get_func_name(mod_, func_idx)
+    // Stage 1: Translate WASM to IR
+    let translator = @ir.Translator::new(
+      func_name,
+      func_type,
+      code.locals,
+      mod_.types,
+      mod_.funcs,
+      num_imports,
+      import_func_type_indices,
+    )
+    let ir_func = translator.translate(code.body)
+    // Stage 2: Optimize IR (O2 level)
+    @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
+    // Stage 3: Lower to VCode
+    let vcode_func = @vcode.lower_function(ir_func)
+    // Stage 4: Register allocation
+    let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+    // Stage 5: Emit machine code
+    let mc = @vcode.emit_function(allocated)
+    // Stage 6: Add to precompiled module
+    let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
+    let num_params = func_type.params.length()
+    let num_results = func_type.results.length()
+    precompiled.add_function(
+      func_idx, func_name, compiled, num_params, num_results,
+    )
+    if debug_config.verbose && mod_.codes.length() > 10 && (i + 1) % 10 == 0 {
+      println("[DEBUG] JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
+    }
+  }
+  Some(precompiled)
+}
+
+///|
+/// Get memory size from module instance
+fn get_memory_size(
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+) -> Int64 {
+  if instance.mem_addrs.length() > 0 {
+    let mem = store.get_mem(instance.mem_addrs[0]) catch {
+      _ => return 65536L // Default 1 page
+    }
+    mem.size_pages().to_int64() * 65536L // pages to bytes
+  } else {
+    65536L // Default 1 page = 64KB
+  }
+}
+
+///|
+/// Initialize data segments in JIT memory
+fn init_data_segments(mod_ : @types.Module, mem_ptr : Int64) -> Unit {
+  for data in mod_.datas {
+    let offset = match data.offset {
+      [I32Const(n)] => n.to_int64()
+      _ => 0L
+    }
+    @jit.memory_init(mem_ptr, offset, data.init) |> ignore
+  }
 }
 
 ///|
