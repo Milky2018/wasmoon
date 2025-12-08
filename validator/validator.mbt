@@ -319,8 +319,8 @@ fn validate_const_expr(
       F64Const(_) => result_type = Some(@types.ValueType::F64)
       RefNull(t) => result_type = Some(t)
       RefFunc(func_idx) => {
-        // Check function exists if funcs array is provided
-        if funcs.length() > 0 && func_idx >= funcs.length() {
+        // Check function index is valid
+        if func_idx >= funcs.length() {
           raise InvalidFunctionIndex(func_idx)
         }
         result_type = Some(@types.ValueType::FuncRef)

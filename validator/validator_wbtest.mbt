@@ -1141,3 +1141,32 @@ test "validator: elem init with wrong type should fail" {
   }
   inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
 }
+
+///|
+test "validator: elem with unknown function should fail" {
+  // call_indirect.wast line 1037: (module (table funcref (elem 0 0)))
+  // elem segment references function index 0, but no functions are defined
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 2, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [
+      {
+        mode: Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(0)], [RefFunc(0)]], // references func 0, which doesn't exist
+      },
+    ],
+    codes: [],
+    datas: [],
+  }
+  // Should fail with "unknown function" error
+  inspect((try? validate_module(mod)) is Err(_), content="true")
+}
