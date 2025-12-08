@@ -591,3 +591,4 @@ _请在此处继续添加新的意见和建议_
 - [x] 不要混用阻塞 API 和异步 API，把 main 中所有的 moonbitlang/async/fs 换用为 moonbitlang/x/fs → 已完成：main 包已改用同步 API，移除了所有 async fn
 - [x] 代码中仍然有非常多的 `for <identifier> = <initial>; ` 这样的 c 风格循环 → 已修复所有正向迭代的 C 风格循环（保留反向迭代 `i = i - 1` 因为更简洁）
 - [x] JIT太奇怪了，干的完全是AOT的活儿，怎么处理更合适？ → **调研结论**：Wasmtime/Wasmer 的"JIT"也是在加载时编译所有函数，不是传统的热点 JIT。Wasmtime 虽有 Winch（快速编译）和 Cranelift（优化编译）两层，但目前不支持自动分层——模块全部用一种编译器。wasmoon 当前实现与业界一致，保留"JIT"命名，在文档中说明是"预编译 JIT"（eager JIT）而非热点 JIT。参考：[Cranelift Progress 2022](https://bytecodealliance.org/articles/cranelift-progress-2022)
+- [x] LEB128 的 parsing 缺乏相关测试 → 已添加 9 个 LEB128 验证测试，覆盖 u32/i32/i64 的边界情况和错误检测

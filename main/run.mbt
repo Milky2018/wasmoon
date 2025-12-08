@@ -176,28 +176,37 @@ fn run_wasm(
 
   // Initialize element segments (populate tables with function references)
   for elem in mod_.elems {
-    if instance.table_addrs.length() > elem.table_idx {
-      let table = store.get_table(instance.table_addrs[elem.table_idx]) catch {
-        e => {
-          println("Error getting table: \{e}")
-          return
-        }
-      }
-      let offset = match elem.offset {
-        [I32Const(n)] => n
-        _ => 0
-      }
-      for i, func_idx in elem.init {
-        // Convert module function index to store address
-        let store_addr = if func_idx < instance.func_addrs.length() {
-          instance.func_addrs[func_idx]
-        } else {
-          func_idx // fallback, should not happen for valid modules
-        }
-        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
+    // Only process active element segments
+    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+      if instance.table_addrs.length() > table_idx {
+        let table = store.get_table(instance.table_addrs[table_idx]) catch {
           e => {
-            println("Error setting table element: \{e}")
+            println("Error getting table: \{e}")
             return
+          }
+        }
+        let offset = match offset_expr {
+          [I32Const(n)] => n
+          _ => 0
+        }
+        for i, init_expr in elem.init {
+          // Extract function index from init expression
+          let func_idx = match init_expr {
+            [RefFunc(idx)] => idx
+            [I32Const(idx)] => idx
+            _ => continue
+          }
+          // Convert module function index to store address
+          let store_addr = if func_idx < instance.func_addrs.length() {
+            instance.func_addrs[func_idx]
+          } else {
+            func_idx // fallback, should not happen for valid modules
+          }
+          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
+            e => {
+              println("Error setting table element: \{e}")
+              return
+            }
           }
         }
       }

@@ -17,6 +17,14 @@ suberror ParserError {
   InvalidImportKind(Int)
   InvalidExportKind(Int)
   MalformedMemopFlags // alignment value too large
+  TooManyLocals // local count exceeds reasonable limit
+  MalformedSectionId(Int) // invalid section id
+  MalformedLimitsFlags(Int) // invalid limits flags
+  FunctionCodeMismatch // function and code section counts differ
+  DataCountMismatch // data count and data section have inconsistent lengths
+  UnexpectedContent // unexpected content after last section
+  DuplicateSection(Int) // non-custom section appears multiple times or out of order
+  MalformedReferenceType(Int) // element segment has non-reference type
   ParseError(String) // Generic error with message
 }
 
@@ -92,6 +100,15 @@ pub impl Show for ParserError with output(self, logger) {
       "invalid export kind \{kind}\{kind_hint}"
     }
     MalformedMemopFlags => "malformed memop flags"
+    TooManyLocals => "too many locals"
+    MalformedSectionId(id) => "malformed section id: \{id}"
+    MalformedLimitsFlags(flags) => "malformed limits flags: \{flags}"
+    FunctionCodeMismatch =>
+      "function and code section have inconsistent lengths"
+    DataCountMismatch => "data count and data section have inconsistent lengths"
+    UnexpectedContent => "unexpected content after last section"
+    DuplicateSection(_) => "unexpected content after last section"
+    MalformedReferenceType(_) => "malformed reference type"
     ParseError(msg) => msg
   }
   logger.write_string(msg)
@@ -186,6 +203,11 @@ fn Parser::read_leb128_u32(self : Parser) -> Int raise ParserError {
         raise LEB128TooLarge
       }
       let byte = self.read_byte()
+      // For the 5th byte (shift=28), only lower 4 bits can be used for u32
+      // If the value is >= 16 (0x10), it would overflow u32
+      if shift == 28 && (byte & 0x7F) > 0x0F {
+        raise LEB128TooLarge
+      }
       let new_result = result | ((byte & 0x7F) << shift)
       if (byte & 0x80) == 0 {
         new_result
@@ -205,6 +227,25 @@ fn Parser::read_leb128_i32(self : Parser) -> Int raise ParserError {
         raise LEB128TooLarge
       }
       let byte = self.read_byte()
+      // For the 5th byte (shift=28), validate sign extension
+      // Bits 4-6 must be sign-extended from bit 3
+      if shift == 28 {
+        let sign_bit = (byte & 0x08) != 0 // bit 3 is sign
+        let upper_bits = byte & 0x70 // bits 4-6 must be sign-extended
+        if sign_bit {
+          // Negative: bits 4-6 must all be 1 (0x70)
+          if upper_bits != 0x70 {
+            raise LEB128TooLarge
+          }
+          // Non-negative: bits 4-6 must all be 0 (0x00)
+        } else if upper_bits != 0x00 {
+          raise LEB128TooLarge
+        }
+        // Also, 5th byte cannot have continuation bit
+        if (byte & 0x80) != 0 {
+          raise LEB128TooLarge
+        }
+      }
       let new_result = result | ((byte & 0x7F) << shift)
       let new_shift = shift + 7
       if (byte & 0x80) == 0 {
@@ -230,6 +271,25 @@ fn Parser::read_leb128_i64(self : Parser) -> Int64 raise ParserError {
         raise LEB128TooLarge
       }
       let byte = self.read_byte()
+      // For the 10th byte (shift=63), validate sign extension
+      // Only bit 0 is used for value (bit 63), bits 1-6 must be sign-extended from bit 0
+      if shift == 63 {
+        let sign_bit = (byte & 0x01) != 0 // bit 0 is sign (bit 63 of i64)
+        let upper_bits = byte & 0x7E // bits 1-6 must be sign-extended
+        if sign_bit {
+          // Negative: bits 1-6 must all be 1 (0x7E)
+          if upper_bits != 0x7E {
+            raise LEB128TooLarge
+          }
+          // Non-negative: bits 1-6 must all be 0 (0x00)
+        } else if upper_bits != 0x00 {
+          raise LEB128TooLarge
+        }
+        // Also, 10th byte cannot have continuation bit
+        if (byte & 0x80) != 0 {
+          raise LEB128TooLarge
+        }
+      }
       let new_result = result | (byte.land(0x7F).to_int64() << shift)
       let new_shift = shift + 7
       if (byte & 0x80) == 0 {
@@ -398,8 +458,16 @@ fn Parser::read_func_type(self : Parser) -> @types.FuncType raise ParserError {
 ///|
 fn Parser::read_limits(self : Parser) -> @types.Limits raise ParserError {
   let flags = self.read_byte()
+  // Valid flags: 0x00 (no max), 0x01 (has max), 0x03 (shared memory with max)
+  if flags != 0x00 && flags != 0x01 && flags != 0x03 {
+    raise MalformedLimitsFlags(flags)
+  }
   let min = self.read_u32()
-  let max = if flags == 0x01 { Some(self.read_u32()) } else { None }
+  let max = if flags == 0x01 || flags == 0x03 {
+    Some(self.read_u32())
+  } else {
+    None
+  }
   { min, max }
 }
 
@@ -429,6 +497,84 @@ fn Parser::read_global_type(
   let value_type = self.read_value_type()
   let mutability = self.read_byte()
   { value_type, mutable: mutability == 0x01 }
+}
+
+// ============================================================
+// Element Segment Parsing
+// ============================================================
+
+///|
+/// Read element segment based on flags
+/// Returns (mode, elem_type, init_exprs)
+fn Parser::read_elem_segment(
+  self : Parser,
+  flags : Int,
+) -> (@types.ElemMode, @types.ValueType, Array[Array[@types.Instruction]]) raise ParserError {
+  // Flags encoding:
+  // bit 0: 0 = active, 1 = passive/declarative
+  // bit 1: 0 = implicit table 0, 1 = explicit table index (only if active)
+  // bit 2: 0 = func indices, 1 = expressions
+  // For passive: bit 1 distinguishes passive (0) from declarative (1)
+  let is_passive_or_declarative = (flags & 0x01) != 0
+  let has_table_index_or_is_declarative = (flags & 0x02) != 0
+  let uses_expressions = (flags & 0x04) != 0
+  let mode : @types.ElemMode = if is_passive_or_declarative {
+    if has_table_index_or_is_declarative {
+      @types.ElemMode::Declarative
+    } else {
+      @types.ElemMode::Passive
+    }
+  } else {
+    // Active segment
+    let table_idx = if has_table_index_or_is_declarative {
+      self.read_u32()
+    } else {
+      0
+    }
+    let offset = self.read_expr()
+    @types.ElemMode::Active(table_idx, offset)
+  }
+
+  // Read element type
+  // flags encoding for elem type:
+  // - flags 0: no elemkind (implicit funcref)
+  // - flags 1, 2, 3: has elemkind byte (0x00 = funcref)
+  // - flags 4, 5, 6, 7: has reftype byte (0x70=funcref, 0x6F=externref)
+  let has_elemkind = flags == 1 || flags == 2 || flags == 3
+  let elem_type : @types.ValueType = if uses_expressions {
+    // flags 4-7: has reftype
+    let type_byte = self.read_byte()
+    match type_byte {
+      0x70 => @types.ValueType::FuncRef
+      0x6F => @types.ValueType::ExternRef
+      _ => raise MalformedReferenceType(type_byte)
+    }
+  } else if has_elemkind {
+    // flags 1, 2, 3: has elemkind
+    let kind = self.read_byte()
+    if kind != 0x00 {
+      raise ParseError("unsupported element kind: \{kind}")
+    }
+    @types.ValueType::FuncRef
+  } else {
+    // flags 0: no elemkind, implicit funcref
+    @types.ValueType::FuncRef
+  }
+
+  // Read init expressions or function indices
+  let elem_count = self.read_u32()
+  let init : Array[Array[@types.Instruction]] = []
+  for _ in 0..<elem_count {
+    if uses_expressions {
+      // Read expression
+      init.push(self.read_expr())
+    } else {
+      // Read function index, convert to ref.func expression
+      let func_idx = self.read_u32()
+      init.push([@types.Instruction::RefFunc(func_idx)])
+    }
+  }
+  (mode, elem_type, init)
 }
 
 // ============================================================
@@ -837,11 +983,25 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
   }
   let mod = @types.Module::new()
 
+  // Track last seen non-custom section id for ordering check
+  let mut last_section_id = 0
+  // Track data count from section 12 (if present)
+  let mut data_count : Int? = None
+
   // Parse sections
   while !parser.is_eof() {
     let section_id = parser.read_byte()
     let section_size = parser.read_u32()
     let section_end = parser.pos + section_size
+
+    // Check section ordering (non-custom sections must be in order, no duplicates)
+    if section_id != 0 {
+      // Custom sections (id=0) can appear anywhere
+      if section_id <= last_section_id {
+        raise DuplicateSection(section_id)
+      }
+      last_section_id = section_id
+    }
     match section_id {
       1 => {
         // Type section
@@ -917,17 +1077,12 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         // Start section
         mod.start = Some(parser.read_u32())
       9 => {
-        // Element section
+        // Element section (supports WebAssembly 1.0+ formats)
         let count = parser.read_u32()
         for _ in 0..<count {
-          let table_idx = parser.read_u32()
-          let offset = parser.read_expr()
-          let elem_count = parser.read_u32()
-          let init : Array[Int] = []
-          for _ in 0..<elem_count {
-            init.push(parser.read_u32())
-          }
-          mod.elems.push({ table_idx, offset, init })
+          let flags = parser.read_u32()
+          let (mode, elem_type, init) = parser.read_elem_segment(flags)
+          mod.elems.push({ mode, type_: elem_type, init })
         }
       }
       10 => {
@@ -937,9 +1092,17 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
           let _code_size = parser.read_u32()
           let local_count = parser.read_u32()
           let locals : Array[@types.ValueType] = []
+          let mut total_locals : Int64 = 0L
           for _ in 0..<local_count {
             let n = parser.read_u32()
             let vt = parser.read_value_type()
+            // Check for too many locals before accumulating
+            // Treat n as unsigned by reinterpreting
+            let n_unsigned = n.reinterpret_as_uint().to_int64()
+            total_locals = total_locals + n_unsigned
+            if total_locals > 1000000L {
+              raise TooManyLocals
+            }
             for _ in 0..<n {
               locals.push(vt)
             }
@@ -959,18 +1122,44 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
           mod.datas.push({ memory_idx, offset, init })
         }
       }
-      0 =>
-        // Custom section - skip for now
+      0 => {
+        // Custom section - parse name to validate LEB128, then skip rest
+        parser.read_u32() |> ignore // This validates the LEB128 encoding
+        // Skip past the name bytes and any remaining custom section content
+        parser.pos = section_end
+      }
+      12 =>
+        // Data count section (bulk memory)
+        data_count = Some(parser.read_u32())
+      13 =>
+        // Tag section (exception handling) - skip for now
         parser.pos = section_end
       _ =>
-        // Unknown section - skip
-        parser.pos = section_end
+        // Invalid section id (valid range is 0-13)
+        raise MalformedSectionId(section_id)
     }
 
     // Ensure we're at the expected position
     if parser.pos != section_end {
       raise SectionSizeMismatch
     }
+  }
+
+  // Verify function and code section counts match
+  if mod.funcs.length() != mod.codes.length() {
+    raise FunctionCodeMismatch
+  }
+
+  // Verify data count and data section counts match (if data count section present)
+  if data_count is Some(count) {
+    if count != mod.datas.length() {
+      raise DataCountMismatch
+    }
+  }
+
+  // Check for unexpected content after last section
+  if !parser.is_eof() {
+    raise UnexpectedContent
   }
   mod
 }
@@ -1001,6 +1190,84 @@ test "LEB128 i32 decoding - negative" {
 test "LEB128 i64 decoding" {
   let parser = Parser::new(b"\x80\x80\x80\x80\x80\x01") // 2^32
   inspect(parser.read_leb128_i64(), content="34359738368")
+}
+
+///|
+test "LEB128 u32 - too long (6 bytes)" {
+  // 6 bytes encoding value 3: \x83\x80\x80\x80\x80\x00
+  let parser = Parser::new(b"\x83\x80\x80\x80\x80\x00")
+  inspect(
+    try? parser.read_leb128_u32(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
+}
+
+///|
+test "LEB128 u32 - 5th byte with unused bits set" {
+  // Value 3 with 5th byte having bit 4 set: \x83\x80\x80\x80\x10
+  let parser = Parser::new(b"\x83\x80\x80\x80\x10")
+  inspect(
+    try? parser.read_leb128_u32(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
+}
+
+///|
+test "LEB128 u32 - valid 5 byte encoding" {
+  // Maximum u32 (0xFFFFFFFF): \xFF\xFF\xFF\xFF\x0F
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x0F")
+  inspect(parser.read_leb128_u32(), content="-1") // -1 as signed = 0xFFFFFFFF
+}
+
+///|
+test "LEB128 i32 - unused bits not sign-extended (positive)" {
+  // i32.const 0 with 5th byte = 0x70 (bits 4-6 should be 0 for positive)
+  let parser = Parser::new(b"\x80\x80\x80\x80\x70")
+  inspect(
+    try? parser.read_leb128_i32(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
+}
+
+///|
+test "LEB128 i32 - unused bits not sign-extended (negative)" {
+  // i32.const -1 with 5th byte = 0x0F (bits 4-6 should be 1 for negative)
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x0F")
+  inspect(
+    try? parser.read_leb128_i32(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
+}
+
+///|
+test "LEB128 i32 - valid positive 5 byte" {
+  // Maximum positive i32 (0x7FFFFFFF): bits 4-6 = 0 in 5th byte
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x07")
+  inspect(parser.read_leb128_i32(), content="2147483647")
+}
+
+///|
+test "LEB128 i32 - valid negative 5 byte" {
+  // -1 with proper sign extension: bits 4-6 = 1 in 5th byte
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x7F")
+  inspect(parser.read_leb128_i32(), content="-1")
+}
+
+///|
+test "LEB128 i64 - unused bits not sign-extended" {
+  // i64.const 0 with 10th byte = 0x7E (bits 1-6 should be 0 for positive)
+  let parser = Parser::new(b"\x80\x80\x80\x80\x80\x80\x80\x80\x80\x7E")
+  inspect(
+    try? parser.read_leb128_i64(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
+}
+
+///|
+test "LEB128 i64 - valid maximum positive" {
+  // Maximum positive i64: 0x7FFFFFFFFFFFFFFF
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00")
+  inspect(parser.read_leb128_i64(), content="9223372036854775807")
 }
 
 ///|

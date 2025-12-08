@@ -24,10 +24,18 @@ pub(all) struct Data {
 pub impl Eq for Data
 pub impl Show for Data
 
+pub(all) enum ElemMode {
+  Active(Int, Array[Instruction])
+  Passive
+  Declarative
+}
+pub impl Eq for ElemMode
+pub impl Show for ElemMode
+
 pub(all) struct Element {
-  table_idx : Int
-  offset : Array[Instruction]
-  init : Array[Int]
+  mode : ElemMode
+  type_ : ValueType
+  init : Array[Array[Instruction]]
 }
 pub impl Eq for Element
 pub impl Show for Element

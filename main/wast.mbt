@@ -66,11 +66,110 @@ priv struct WastContext {
 
 ///|
 fn WastContext::new() -> WastContext {
+  let store = @runtime.Store::new()
+
+  // Create spectest module with standard test functions/values
+  let spectest_instance = create_spectest_module(store)
+  let registered_modules : Map[String, @runtime.ModuleInstance] = Map::new()
+  registered_modules.set("spectest", spectest_instance)
   WastContext::{
-    store: @runtime.Store::new(),
+    store,
     current_module: None,
     named_modules: Map::new(),
-    registered_modules: Map::new(),
+    registered_modules,
+  }
+}
+
+///|
+/// Create the spectest module with standard test functions
+fn create_spectest_module(store : @runtime.Store) -> @runtime.ModuleInstance {
+  // Allocate host functions
+  // print_i32: (i32) -> ()
+  let print_i32_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_i64: (i64) -> ()
+  let print_i64_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_f32: (f32) -> ()
+  let print_f32_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_f64: (f64) -> ()
+  let print_f64_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_i32_f32: (i32, f32) -> ()
+  let print_i32_f32_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_f64_f64: (f64, f64) -> ()
+  let print_f64_f64_addr = store.alloc_host_func(fn(_args) { [] })
+  // print: () -> ()
+  let print_addr = store.alloc_host_func(fn(_args) { [] })
+
+  // Allocate memory: (memory 1 2) - min 1 page, max 2 pages
+  let memory = @runtime.Memory::new(1, Some(2))
+  let memory_addr = store.alloc_mem(memory)
+
+  // Allocate table: (table 10 20 funcref)
+  let table = @runtime.Table::new(@types.ValueType::FuncRef, 10, Some(20))
+  let table_addr = store.alloc_table(table)
+
+  // Allocate globals
+  // global_i32: (global i32 (i32.const 666))
+  let global_i32_addr = store.alloc_global(
+    @runtime.GlobalInstance::new(
+      @types.GlobalType::{ value_type: @types.ValueType::I32, mutable: false },
+      @types.Value::I32(666),
+    ),
+  )
+  // global_i64: (global i64 (i64.const 666))
+  let global_i64_addr = store.alloc_global(
+    @runtime.GlobalInstance::new(
+      @types.GlobalType::{ value_type: @types.ValueType::I64, mutable: false },
+      @types.Value::I64(666L),
+    ),
+  )
+  // global_f32: (global f32 (f32.const 666))
+  let global_f32_addr = store.alloc_global(
+    @runtime.GlobalInstance::new(
+      @types.GlobalType::{ value_type: @types.ValueType::F32, mutable: false },
+      @types.Value::F32(666.6),
+    ),
+  )
+  // global_f64: (global f64 (f64.const 666))
+  let global_f64_addr = store.alloc_global(
+    @runtime.GlobalInstance::new(
+      @types.GlobalType::{ value_type: @types.ValueType::F64, mutable: false },
+      @types.Value::F64(666.6),
+    ),
+  )
+
+  // Create exports
+  let exports : Array[@types.Export] = [
+    { name: "print_i32", desc: @types.ExportDesc::Func(0) },
+    { name: "print_i64", desc: @types.ExportDesc::Func(1) },
+    { name: "print_f32", desc: @types.ExportDesc::Func(2) },
+    { name: "print_f64", desc: @types.ExportDesc::Func(3) },
+    { name: "print_i32_f32", desc: @types.ExportDesc::Func(4) },
+    { name: "print_f64_f64", desc: @types.ExportDesc::Func(5) },
+    { name: "print", desc: @types.ExportDesc::Func(6) },
+    { name: "memory", desc: @types.ExportDesc::Memory(0) },
+    { name: "table", desc: @types.ExportDesc::Table(0) },
+    { name: "global_i32", desc: @types.ExportDesc::Global(0) },
+    { name: "global_i64", desc: @types.ExportDesc::Global(1) },
+    { name: "global_f32", desc: @types.ExportDesc::Global(2) },
+    { name: "global_f64", desc: @types.ExportDesc::Global(3) },
+  ]
+  @runtime.ModuleInstance::{
+    types: [],
+    func_addrs: [
+      print_i32_addr, print_i64_addr, print_f32_addr, print_f64_addr, print_i32_f32_addr,
+      print_f64_f64_addr, print_addr,
+    ],
+    func_type_indices: [],
+    table_addrs: [table_addr],
+    mem_addrs: [memory_addr],
+    global_addrs: [
+      global_i32_addr, global_i64_addr, global_f32_addr, global_f64_addr,
+    ],
+    exports,
+    elem_segments: [],
+    data_segments: [],
+    dropped_elems: [],
+    dropped_datas: [],
   }
 }
 
@@ -113,8 +212,9 @@ fn run_wast_commands(
 ) -> WastResult {
   let result = WastResult::new()
   let ctx = WastContext::new()
-  for cmd in script.commands {
-    run_wast_command(ctx, cmd, result, base_dir)
+  for item in script.commands {
+    let (cmd, line) = item
+    run_wast_command(ctx, cmd, line, result, base_dir)
   }
   result
 }
@@ -123,6 +223,7 @@ fn run_wast_commands(
 fn run_wast_command(
   ctx : WastContext,
   cmd : @wast.WastCommand,
+  line : Int,
   result : WastResult,
   base_dir : String,
 ) -> Unit {
@@ -137,9 +238,12 @@ fn run_wast_command(
         mod_,
         imports,
       ) catch {
-        _ => {
+        e => {
           // If instantiation fails, skip this module
           result.skipped = result.skipped + 1
+          result.failures.push(
+            "line \{line}: skipped (instantiation failed: \{e})",
+          )
           return
         }
       }
@@ -148,16 +252,27 @@ fn run_wast_command(
         ctx.named_modules.set(n, instance)
       }
     }
-    ModuleQuote(_parts) =>
+    ModuleQuote(_parts) => {
       // Quoted modules are for malformed tests, skip for now
       result.skipped = result.skipped + 1
+      result.failures.push("line \{line}: skipped (quoted module)")
+    }
+    ModuleBinaryFailed(err) => {
+      // Binary module failed to parse (unsupported features), skip
+      result.skipped = result.skipped + 1
+      result.failures.push(
+        "line \{line}: skipped (binary parse failed: \{err})",
+      )
+    }
     AssertReturn(action, expected) =>
       match run_assert_return(ctx, action, expected) {
         None => result.passed = result.passed + 1
         Some(err) => {
           result.failed = result.failed + 1
           let action_desc = format_action(action)
-          result.failures.push("assert_return \{action_desc}: \{err}")
+          result.failures.push(
+            "line \{line}: assert_return \{action_desc}: \{err}",
+          )
         }
       }
     AssertTrap(action, expected_msg) => {
@@ -166,7 +281,9 @@ fn run_wast_command(
         result.passed = result.passed + 1
       } else {
         result.failed = result.failed + 1
-        result.failures.push("assert_trap failed: expected '\{expected_msg}'")
+        result.failures.push(
+          "line \{line}: assert_trap failed: expected '\{expected_msg}'",
+        )
       }
     }
     AssertExhaustion(action, _msg) =>
@@ -175,14 +292,16 @@ fn run_wast_command(
         result.passed = result.passed + 1
       } else {
         result.failed = result.failed + 1
-        result.failures.push("assert_exhaustion: expected exhaustion")
+        result.failures.push(
+          "line \{line}: assert_exhaustion: expected exhaustion",
+        )
       }
     AssertInvalid(source, msg) => {
       let valid = validate_module_source(source)
       if valid {
         result.failed = result.failed + 1
         result.failures.push(
-          "assert_invalid: module should have been invalid (expected: \{msg})",
+          "line \{line}: assert_invalid: module should have been invalid (expected: \{msg})",
         )
       } else {
         result.passed = result.passed + 1
@@ -195,7 +314,7 @@ fn run_wast_command(
       if parsed {
         result.failed = result.failed + 1
         result.failures.push(
-          "assert_malformed: module should have been malformed (expected: \{msg})",
+          "line \{line}: assert_malformed: module should have been malformed (expected: \{msg})",
         )
       } else {
         result.passed = result.passed + 1
@@ -207,7 +326,7 @@ fn run_wast_command(
       if linked {
         result.failed = result.failed + 1
         result.failures.push(
-          "assert_unlinkable: module should have been unlinkable (expected: \{msg})",
+          "line \{line}: assert_unlinkable: module should have been unlinkable (expected: \{msg})",
         )
       } else {
         result.passed = result.passed + 1

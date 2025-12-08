@@ -2532,10 +2532,14 @@ fn Parser::parse_table_def(
           self.expect_rparen() // close elem
           self.expect_rparen() // close table
           let table_idx = mod_.tables.length()
-          let elem = @types.Element::{
-            table_idx,
-            offset: [@types.Instruction::I32Const(0)],
-            init: func_indices,
+          let elem : @types.Element = {
+            mode: @types.ElemMode::Active(table_idx, [
+              @types.Instruction::I32Const(0),
+            ]),
+            type_: @types.ValueType::FuncRef,
+            init: func_indices.map(fn(idx) {
+              [@types.Instruction::RefFunc(idx)]
+            }),
           }
           let table_type : @types.TableType = {
             elem_type,
@@ -2855,9 +2859,12 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
       }
     }
     self.expect_rparen() // close elem
-    // Declarative element has no table placement (use table_idx -1 to indicate)
-    // For now, just return an empty element since we don't execute these tests
-    return { table_idx: 0, offset: [], init: func_indices }
+    // Declarative element has no table placement
+    return {
+      mode: @types.ElemMode::Declarative,
+      type_: @types.ValueType::FuncRef,
+      init: func_indices.map(fn(idx) { [@types.Instruction::RefFunc(idx)] }),
+    }
   }
 
   // Default table index is 0
@@ -2909,5 +2916,9 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
     }
   }
   self.expect_rparen() // close elem
-  { table_idx, offset, init: func_indices }
+  {
+    mode: @types.ElemMode::Active(table_idx, offset),
+    type_: @types.ValueType::FuncRef,
+    init: func_indices.map(fn(idx) { [@types.Instruction::RefFunc(idx)] }),
+  }
 }

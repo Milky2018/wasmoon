@@ -30,6 +30,7 @@ pub impl Show for WastAction
 pub enum WastCommand {
   Module(@types.Module, String?)
   ModuleQuote(Array[String])
+  ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])
   AssertTrap(WastAction, String)
   AssertExhaustion(WastAction, String)
@@ -50,7 +51,7 @@ pub enum WastModuleSource {
 pub impl Show for WastModuleSource
 
 pub struct WastScript {
-  commands : Array[WastCommand]
+  commands : Array[(WastCommand, Int)]
 }
 
 pub enum WastValue {

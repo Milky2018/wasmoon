@@ -105,14 +105,26 @@ pub fn disassemble(mod_ : @types.Module) -> String {
   for i, elem in mod_.elems {
     buf.write_string("  (elem (;")
     buf.write_string(i.to_string())
-    buf.write_string(";) (table ")
-    buf.write_string(elem.table_idx.to_string())
-    buf.write_string(") (")
-    write_instructions_inline(buf, elem.offset)
-    buf.write_string(") func")
-    for func_idx in elem.init {
+    buf.write_string(";) ")
+    match elem.mode {
+      @types.ElemMode::Active(table_idx, offset) => {
+        buf.write_string("(table ")
+        buf.write_string(table_idx.to_string())
+        buf.write_string(") (")
+        write_instructions_inline(buf, offset)
+        buf.write_string(") func")
+      }
+      @types.ElemMode::Passive => buf.write_string("func")
+      @types.ElemMode::Declarative => buf.write_string("declare func")
+    }
+    for init_expr in elem.init {
       buf.write_string(" ")
-      buf.write_string(func_idx.to_string())
+      // Extract function index from init expression
+      match init_expr {
+        [@types.Instruction::RefFunc(idx)] => buf.write_string(idx.to_string())
+        [@types.Instruction::I32Const(idx)] => buf.write_string(idx.to_string())
+        _ => buf.write_string("?")
+      }
     }
     buf.write_string(")\n")
   }

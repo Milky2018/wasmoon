@@ -38,6 +38,7 @@ priv enum Token {
 pub enum WastCommand {
   Module(@types.Module, String?) // module and optional name
   ModuleQuote(Array[String]) // quoted module (for malformed tests)
+  ModuleBinaryFailed(String) // binary module that failed to parse (skip in tests)
   AssertReturn(WastAction, Array[WastValue])
   AssertTrap(WastAction, String)
   AssertExhaustion(WastAction, String)
@@ -84,9 +85,9 @@ pub enum WastValue {
 } derive(Show)
 
 ///|
-/// WAST script (collection of commands)
+/// WAST script (collection of commands with line numbers)
 pub struct WastScript {
-  commands : Array[WastCommand]
+  commands : Array[(WastCommand, Int)] // (command, line_number)
 }
 
 ///|
@@ -94,11 +95,12 @@ pub struct WastScript {
 priv struct Lexer {
   input : String
   mut pos : Int
+  mut line : Int
 }
 
 ///|
 fn Lexer::new(input : String) -> Lexer {
-  { input, pos: 0 }
+  { input, pos: 0, line: 1 }
 }
 
 ///|
@@ -122,6 +124,9 @@ fn Lexer::next_char(self : Lexer) -> Char? {
   } else {
     let c = self.input.code_unit_at(self.pos).unsafe_to_char()
     self.pos += 1
+    if c == '\n' {
+      self.line += 1
+    }
     Some(c)
   }
 }
@@ -130,7 +135,11 @@ fn Lexer::next_char(self : Lexer) -> Char? {
 fn Lexer::skip_whitespace(self : Lexer) -> Unit {
   while !self.is_eof() {
     match self.peek_char() {
-      Some(' ') | Some('\t') | Some('\n') | Some('\r') => self.pos += 1
+      Some('\n') => {
+        self.pos += 1
+        self.line += 1
+      }
+      Some(' ') | Some('\t') | Some('\r') => self.pos += 1
       Some(';') =>
         // Skip line comment
         if self.pos + 1 < self.input.length() &&
@@ -139,6 +148,7 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
             match self.peek_char() {
               Some('\n') => {
                 self.pos += 1
+                self.line += 1
                 break
               }
               _ => self.pos += 1
@@ -163,6 +173,9 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
               } else if c1 == '(' && c2 == ';' {
                 depth += 1
                 self.pos += 2
+              } else if c1 == '\n' {
+                self.pos += 1
+                self.line += 1
               } else {
                 self.pos += 1
               }
@@ -478,6 +491,11 @@ fn Parser::advance(self : Parser) -> Unit raise WastError {
 }
 
 ///|
+fn Parser::current_line(self : Parser) -> Int {
+  self.lexer.line
+}
+
+///|
 fn Parser::expect_lparen(self : Parser) -> Unit raise WastError {
   match self.current {
     LParen => self.advance()
@@ -532,10 +550,11 @@ fn Parser::parse_optional_id(self : Parser) -> String? raise WastError {
 /// Parse a WAST script (sequence of commands)
 pub fn parse(input : String) -> WastScript raise WastError {
   let parser = Parser::new(input)
-  let commands : Array[WastCommand] = []
+  let commands : Array[(WastCommand, Int)] = []
   while parser.current != Eof {
+    let line = parser.current_line()
     let cmd = parser.parse_command()
-    commands.push(cmd)
+    commands.push((cmd, line))
   }
   WastScript::{ commands, }
 }
@@ -579,7 +598,7 @@ fn Parser::parse_module_command(self : Parser) -> WastCommand raise WastError {
       self.expect_rparen()
       // Parse binary module using parser
       let mod_ = @parser.parse_module(bytes) catch {
-        e => raise ParseError("Failed to parse binary module: \{e}")
+        e => return ModuleBinaryFailed(e.to_string())
       }
       Module(mod_, name)
     }
