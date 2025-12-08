@@ -1,5 +1,19 @@
 // Conversion Instructions - type conversion and reinterpret operations
 
+// Constants for conversion bounds (using powers of 2 for precision)
+
+///|
+let pow2_32 : Double = 4294967296.0 // 2^32, exactly representable
+
+///|
+let pow2_31 : Double = 2147483648.0 // 2^31, exactly representable
+
+///|
+let pow2_63 : Double = 2.0.pow(63.0) // 2^63, exactly representable
+
+///|
+let pow2_64 : Double = 2.0.pow(64.0) // 2^64, exactly representable
+
 ///|
 /// Execute conversion instruction
 fn ExecContext::exec_conversion(
@@ -20,9 +34,7 @@ fn ExecContext::exec_conversion(
     // i64.extend_i32_u: i32 -> i64 (无符号扩展)
     I64ExtendI32U => {
       let a = self.stack.pop_i32()
-      // Reinterpret i32 as u32, then zero-extend to i64
-      let u32_val = a.reinterpret_as_uint()
-      self.stack.push(I64(u32_val.to_int64()))
+      self.stack.push(I64(a.reinterpret_as_uint().to_int64()))
     }
     // i32.trunc_f32_s: f32 -> i32 (有符号截断)
     I32TruncF32S => {
@@ -31,7 +43,7 @@ fn ExecContext::exec_conversion(
         raise @runtime.InvalidConversion
       }
       let d = a.to_double()
-      if d >= 2147483648.0 || d < -2147483648.0 {
+      if d >= pow2_31 || d < -pow2_31 {
         raise @runtime.IntegerOverflow
       }
       self.stack.push(I32(a.to_int()))
@@ -43,7 +55,8 @@ fn ExecContext::exec_conversion(
         raise @runtime.InvalidConversion
       }
       let d = a.to_double()
-      if d >= 4294967296.0 || d < 0.0 {
+      // Values in (-1, 0) truncate to 0, only d <= -1 is overflow
+      if d >= pow2_32 || d <= -1.0 {
         raise @runtime.IntegerOverflow
       }
       self.stack.push(I32(d.to_uint().reinterpret_as_int()))
@@ -54,7 +67,9 @@ fn ExecContext::exec_conversion(
       if a.is_nan() {
         raise @runtime.InvalidConversion
       }
-      if a >= 2147483648.0 || a < -2147483648.0 {
+      // -2147483649.0 would truncate to -2147483649 (out of range)
+      // -2147483648.9 would truncate to -2147483648 (in range)
+      if a >= pow2_31 || a <= -(pow2_31 + 1.0) {
         raise @runtime.IntegerOverflow
       }
       self.stack.push(I32(a.to_int()))
@@ -65,7 +80,7 @@ fn ExecContext::exec_conversion(
       if a.is_nan() {
         raise @runtime.InvalidConversion
       }
-      if a >= 4294967296.0 || a < 0.0 {
+      if a >= pow2_32 || a <= -1.0 {
         raise @runtime.IntegerOverflow
       }
       self.stack.push(I32(a.to_uint().reinterpret_as_int()))
@@ -77,7 +92,7 @@ fn ExecContext::exec_conversion(
         raise @runtime.InvalidConversion
       }
       let d = a.to_double()
-      if d >= 9223372036854775808.0 || d < -9223372036854775808.0 {
+      if d >= pow2_63 || d < -pow2_63 {
         raise @runtime.IntegerOverflow
       }
       self.stack.push(I64(d.to_int64()))
@@ -89,10 +104,17 @@ fn ExecContext::exec_conversion(
         raise @runtime.InvalidConversion
       }
       let d = a.to_double()
-      if d >= 18446744073709551616.0 || d < 0.0 {
+      if d >= pow2_64 || d <= -1.0 {
         raise @runtime.IntegerOverflow
       }
-      self.stack.push(I64(d.to_uint64().reinterpret_as_int64()))
+      // For values >= 2^63, manually compute as: (d - 2^63) + MIN_I64
+      let result = if d >= pow2_63 {
+        let offset = (d - pow2_63).to_int64()
+        offset + -9223372036854775808L
+      } else {
+        d.to_int64()
+      }
+      self.stack.push(I64(result))
     }
     // i64.trunc_f64_s: f64 -> i64 (有符号截断)
     I64TruncF64S => {
@@ -100,7 +122,7 @@ fn ExecContext::exec_conversion(
       if a.is_nan() {
         raise @runtime.InvalidConversion
       }
-      if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
+      if a >= pow2_63 || a < -pow2_63 {
         raise @runtime.IntegerOverflow
       }
       self.stack.push(I64(a.to_int64()))
@@ -111,10 +133,17 @@ fn ExecContext::exec_conversion(
       if a.is_nan() {
         raise @runtime.InvalidConversion
       }
-      if a >= 18446744073709551616.0 || a < 0.0 {
+      if a >= pow2_64 || a <= -1.0 {
         raise @runtime.IntegerOverflow
       }
-      self.stack.push(I64(a.to_uint64().reinterpret_as_int64()))
+      // For values >= 2^63, manually compute as: (a - 2^63) + MIN_I64
+      let result = if a >= pow2_63 {
+        let offset = (a - pow2_63).to_int64()
+        offset + -9223372036854775808L
+      } else {
+        a.to_int64()
+      }
+      self.stack.push(I64(result))
     }
     // f32.convert_i32_s: i32 -> f32 (有符号转换)
     F32ConvertI32S => {
@@ -154,8 +183,7 @@ fn ExecContext::exec_conversion(
     // f64.convert_i64_u: i64 -> f64 (无符号转换)
     F64ConvertI64U => {
       let a = self.stack.pop_i64()
-      let unsigned = a.reinterpret_as_uint64()
-      self.stack.push(F64(unsigned.to_double()))
+      self.stack.push(F64(a.reinterpret_as_uint64().to_double()))
     }
     // f32.demote_f64: f64 -> f32
     F32DemoteF64 => {
@@ -256,9 +284,9 @@ fn ExecContext::exec_trunc_sat(
       let d = a.to_double()
       let result = if a.is_nan() {
         0L
-      } else if d >= 9223372036854775807.0 {
+      } else if d >= pow2_63 {
         9223372036854775807L
-      } else if d <= -9223372036854775808.0 {
+      } else if d <= -pow2_63 {
         -9223372036854775808L
       } else {
         d.to_int64()
@@ -271,10 +299,13 @@ fn ExecContext::exec_trunc_sat(
       let d = a.to_double()
       let result = if a.is_nan() || d <= 0.0 {
         0L
-      } else if d >= 18446744073709551615.0 {
+      } else if d >= pow2_64 {
         -1L // 0xFFFFFFFFFFFFFFFF as signed
+      } else if d >= pow2_63 {
+        let offset = (d - pow2_63).to_int64()
+        offset + -9223372036854775808L
       } else {
-        d.to_uint64().reinterpret_as_int64()
+        d.to_int64()
       }
       self.stack.push(I64(result))
     }
@@ -283,9 +314,9 @@ fn ExecContext::exec_trunc_sat(
       let a = self.stack.pop_f64()
       let result = if a.is_nan() {
         0L
-      } else if a >= 9223372036854775807.0 {
+      } else if a >= pow2_63 {
         9223372036854775807L
-      } else if a <= -9223372036854775808.0 {
+      } else if a <= -pow2_63 {
         -9223372036854775808L
       } else {
         a.to_int64()
@@ -297,10 +328,13 @@ fn ExecContext::exec_trunc_sat(
       let a = self.stack.pop_f64()
       let result = if a.is_nan() || a <= 0.0 {
         0L
-      } else if a >= 18446744073709551615.0 {
+      } else if a >= pow2_64 {
         -1L // 0xFFFFFFFFFFFFFFFF as signed
+      } else if a >= pow2_63 {
+        let offset = (a - pow2_63).to_int64()
+        offset + -9223372036854775808L
       } else {
-        a.to_uint64().reinterpret_as_int64()
+        a.to_int64()
       }
       self.stack.push(I64(result))
     }

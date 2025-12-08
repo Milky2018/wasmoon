@@ -3208,3 +3208,207 @@ test "call_indirect type index bug reproduction" {
     _ => fail("Expected I32 result")
   }
 }
+
+// ============================================================
+// Conversion instruction tests for boundary cases
+// ============================================================
+
+///|
+test "i32.trunc_f64_u: value in (-1, 0) truncates to 0" {
+  // Values in (-1, 0) should truncate to 0, not overflow
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), I32TruncF64U],
+  }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F64],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "trunc", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // -0.9 should truncate to 0
+  let results = call_exported_func(store, instance, "trunc", [F64(-0.9)])
+  match results[0] {
+    I32(n) => inspect(n, content="0")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "i32.trunc_f32_u: value in (-1, 0) truncates to 0" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), I32TruncF32U],
+  }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F32],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "trunc", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // -0.5f should truncate to 0
+  let results = call_exported_func(store, instance, "trunc", [F32(-0.5)])
+  match results[0] {
+    I32(n) => inspect(n, content="0")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "i64.trunc_f64_u: large value near 2^64" {
+  // Test that values close to but below 2^64 work correctly
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), I64TruncF64U],
+  }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F64],
+    results: [@types.ValueType::I64],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "trunc", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // 2^63 = 9223372036854775808.0 should convert correctly
+  let pow2_63 = 2.0.pow(63.0)
+  let results = call_exported_func(store, instance, "trunc", [F64(pow2_63)])
+  match results[0] {
+    // 2^63 as unsigned i64, reinterpreted as signed = -9223372036854775808
+    I64(n) => inspect(n, content="-9223372036854775808")
+    _ => fail("Expected I64 result")
+  }
+}
+
+///|
+test "i64.trunc_sat_f64_u: large value saturates correctly" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), I64TruncSatF64U],
+  }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F64],
+    results: [@types.ValueType::I64],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "trunc_sat", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // Value >= 2^64 should saturate to u64::MAX (-1 as i64)
+  let pow2_64 = 2.0.pow(64.0)
+  let results = call_exported_func(store, instance, "trunc_sat", [F64(pow2_64)])
+  match results[0] {
+    I64(n) => inspect(n, content="-1") // u64::MAX = -1 as signed
+    _ => fail("Expected I64 result")
+  }
+}
+
+///|
+test "i64.trunc_sat_f64_u: value in range converts correctly" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), I64TruncSatF64U],
+  }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F64],
+    results: [@types.ValueType::I64],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "trunc_sat", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // 2^63 should convert to -9223372036854775808 (as signed)
+  let pow2_63 = 2.0.pow(63.0)
+  let results = call_exported_func(store, instance, "trunc_sat", [F64(pow2_63)])
+  match results[0] {
+    I64(n) => inspect(n, content="-9223372036854775808")
+    _ => fail("Expected I64 result")
+  }
+}
+
+///|
+test "i32.trunc_f64_s: boundary near INT32_MIN" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), I32TruncF64S],
+  }
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::F64],
+    results: [@types.ValueType::I32],
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: "trunc", desc: @types.ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // -2147483648.0 is exactly INT32_MIN, should work
+  let results = call_exported_func(store, instance, "trunc", [
+    F64(-2147483648.0),
+  ])
+  match results[0] {
+    I32(n) => inspect(n, content="-2147483648")
+    _ => fail("Expected I32 result")
+  }
+}

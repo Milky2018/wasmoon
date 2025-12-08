@@ -113,6 +113,34 @@ test "parse_float32: nan with payload" {
 }
 
 ///|
+test "parse_float32: nan with max payload preserves bits" {
+  // -nan:0x7fffff should have all mantissa bits set (except quiet bit)
+  // Expected bit pattern: 0xff800000 | 0x7fffff = 0xffffffff = -1 as i32
+  let result = parse_float32("-nan:0x7fffff") catch {
+    _ => fail("unexpected error")
+  }
+  inspect(result.reinterpret_as_int(), content="-1")
+}
+
+///|
+test "parse_float32: positive nan with payload preserves bits" {
+  // nan:0x200000 should produce 0x7f800000 | 0x200000 = 0x7fa00000 = 2141192192
+  let result = parse_float32("nan:0x200000") catch {
+    _ => fail("unexpected error")
+  }
+  inspect(result.reinterpret_as_int(), content="2141192192")
+}
+
+///|
+test "parse_float32: negative nan with payload preserves bits" {
+  // -nan:0x200000 should produce 0xff800000 | 0x200000 = 0xffa00000 = -6291456
+  let result = parse_float32("-nan:0x200000") catch {
+    _ => fail("unexpected error")
+  }
+  inspect(result.reinterpret_as_int(), content="-6291456")
+}
+
+///|
 test "parse_float32: hex float zero" {
   let result = parse_float32("0x0p+0") catch { _ => fail("unexpected error") }
   inspect(result, content="0")
@@ -149,6 +177,34 @@ test "parse_float64: nan with payload" {
     _ => fail("unexpected error")
   }
   inspect(result.is_nan(), content="true")
+}
+
+///|
+test "parse_float64: nan with max payload preserves bits" {
+  // -nan:0xfffffffffffff should have all mantissa bits set
+  // Expected: 0xfff0000000000000 | 0xfffffffffffff = 0xffffffffffffffff = -1 as i64
+  let result = parse_float64("-nan:0xfffffffffffff") catch {
+    _ => fail("unexpected error")
+  }
+  inspect(result.reinterpret_as_int64(), content="-1")
+}
+
+///|
+test "parse_float64: positive nan with payload preserves bits" {
+  // nan:0x4000000000000 should produce 0x7ff0000000000000 | 0x4000000000000 = 9219994337134247936
+  let result = parse_float64("nan:0x4000000000000") catch {
+    _ => fail("unexpected error")
+  }
+  inspect(result.reinterpret_as_int64(), content="9219994337134247936")
+}
+
+///|
+test "parse_float64: negative nan with payload preserves bits" {
+  // -nan:0x4000000000000 should produce 0xfff0000000000000 | 0x4000000000000 = -3377699720527872
+  let result = parse_float64("-nan:0x4000000000000") catch {
+    _ => fail("unexpected error")
+  }
+  inspect(result.reinterpret_as_int64(), content="-3377699720527872")
 }
 
 ///|
