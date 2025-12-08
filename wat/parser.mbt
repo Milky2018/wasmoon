@@ -706,8 +706,9 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
         self.advance()
         match self.current {
           Keyword("type") => {
-            let ft = self.parse_type_def()
-            self.type_names.set("\{mod_.types.length()}", mod_.types.length())
+            let type_idx = mod_.types.length()
+            let ft = self.parse_type_def(type_idx)
+            self.type_names.set("\{type_idx}", type_idx)
             mod_.types.push(ft)
           }
           Keyword("func") =>
@@ -844,13 +845,16 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
 }
 
 ///|
-fn Parser::parse_type_def(self : Parser) -> @types.FuncType raise WatError {
+fn Parser::parse_type_def(
+  self : Parser,
+  type_idx : Int,
+) -> @types.FuncType raise WatError {
   self.advance() // skip "type"
   // Optional type name
   match self.current {
     Id(name) => {
       self.advance()
-      self.type_names.set(name, self.type_names.length())
+      self.type_names.set(name, type_idx)
     }
     _ => ()
   }
