@@ -918,3 +918,226 @@ test "validator: data segment with immutable global offset should pass" {
   }
   inspect(try? validate_module(mod), content="Ok(())")
 }
+
+// ============================================================
+// Elem segment offset validation tests (elem.wast regression)
+// ============================================================
+
+///|
+test "validator: elem segment with i64 offset should fail" {
+  // elem.wast line 732: (elem (i64.const 0)) - type mismatch
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [
+      {
+        mode: Active(0, [I64Const(0L)]),
+        type_: @types.ValueType::FuncRef,
+        init: [],
+      },
+    ],
+    codes: [],
+    datas: [],
+  }
+  inspect(
+    try? validate_module(mod),
+    content=(
+      #|Err(TypeMismatch("constant expression: expected I32, got I64"))
+    ),
+  )
+}
+
+///|
+test "validator: elem segment with non-constant instruction should fail" {
+  // elem.wast line 783: (elem (i32.ctz (i32.const 0))) - constant expression required
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [
+      { mode: Active(0, [I32Ctz]), type_: @types.ValueType::FuncRef, init: [] },
+    ],
+    codes: [],
+    datas: [],
+  }
+  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+}
+
+///|
+test "validator: elem segment with unknown global should fail" {
+  // elem.wast line 824: (elem (global.get 0)) with no globals
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [
+      {
+        mode: Active(0, [GlobalGet(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [],
+      },
+    ],
+    codes: [],
+    datas: [],
+  }
+  inspect(try? validate_module(mod), content="Err(InvalidGlobalIndex(0))")
+}
+
+///|
+test "validator: elem segment with mutable global offset should fail" {
+  // elem.wast line 841: global must be immutable for constant expression
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [
+      {
+        type_: { value_type: @types.ValueType::I32, mutable: true },
+        init: [I32Const(0)],
+      },
+    ],
+    exports: [],
+    start: None,
+    elems: [
+      {
+        mode: Active(0, [GlobalGet(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [],
+      },
+    ],
+    codes: [],
+    datas: [],
+  }
+  inspect(try? validate_module(mod), content="Err(MutableGlobalInConstExpr)")
+}
+
+///|
+test "validator: elem segment with invalid table index should fail" {
+  // elem.wast line 721: (elem (i32.const 0) $f) with no table
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [
+      {
+        mode: Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [],
+      },
+    ],
+    codes: [],
+    datas: [],
+  }
+  inspect(try? validate_module(mod), content="Err(InvalidTableIndex(0))")
+}
+
+///|
+test "validator: elem segment type mismatch with table should fail" {
+  // elem.wast line 978: funcref elem on externref table
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [
+      { elem_type: @types.ValueType::ExternRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [
+      {
+        mode: Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [],
+      },
+    ],
+    codes: [],
+    datas: [],
+  }
+  inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
+}
+
+///|
+test "validator: elem segment with valid i32 const offset should pass" {
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [
+      {
+        mode: Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [],
+      },
+    ],
+    codes: [],
+    datas: [],
+  }
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "validator: elem init with wrong type should fail" {
+  // elem.wast line 853: (elem funcref (ref.null extern)) - type mismatch
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [
+      {
+        mode: Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefNull(@types.ValueType::ExternRef)]],
+      },
+    ],
+    codes: [],
+    datas: [],
+  }
+  inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
+}
