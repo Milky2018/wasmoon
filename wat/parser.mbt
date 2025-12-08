@@ -2644,10 +2644,7 @@ fn Parser::parse_table_def(
             self.lexer.token_start_line = saved_token_start_line
             self.lexer.token_start_column = saved_token_start_column
             self.current = LParen
-            raise UnexpectedToken(
-              "expected elem in inline table",
-              self.loc(),
-            )
+            raise UnexpectedToken("expected elem in inline table", self.loc())
           }
         }
       } else {
