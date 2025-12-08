@@ -234,3 +234,14 @@ test "parse_u32: decimal overflow raises error" {
   let result = try? parse_u32("4294967296")
   inspect(result is Err(_), content="true")
 }
+
+///|
+test "parse WAT: multiple inline exports on func" {
+  // Test: (module (func (export "a") (export "b") (export "c")))
+  let wat = "(module (func (export \"a\") (export \"b\") (export \"c\")))"
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.exports.length(), content="3")
+  inspect(mod.exports[0].name, content="a")
+  inspect(mod.exports[1].name, content="b")
+  inspect(mod.exports[2].name, content="c")
+}
