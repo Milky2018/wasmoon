@@ -716,3 +716,184 @@ test "validator: all ValidationError types have descriptive messages" {
     assert_true(formatted.contains("validation error"))
   }
 }
+
+// ============================================================
+// Data segment offset validation tests (data.wast regression)
+// ============================================================
+
+///|
+test "validator: data segment with i64 offset should fail" {
+  // data.wast line 414: (data (i64.const 0)) - type mismatch
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [I64Const(0L)], init: b"" }],
+  }
+  inspect(try? validate_module(mod), content=(
+    #|Err(TypeMismatch("constant expression: expected I32, got I64"))
+  ))
+}
+
+///|
+test "validator: data segment with ref.null offset should fail" {
+  // data.wast line 422: (data (ref.null func)) - type mismatch
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [RefNull(@types.ValueType::FuncRef)], init: b"" }],
+  }
+  inspect(try? validate_module(mod), content=(
+    #|Err(TypeMismatch("constant expression: expected I32, got FuncRef"))
+  ))
+}
+
+///|
+test "validator: data segment with empty offset should fail" {
+  // data.wast line 430: (data (offset)) - type mismatch (empty expression)
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [], init: b"" }],
+  }
+  inspect(try? validate_module(mod), content=(
+    #|Err(TypeMismatch("empty constant expression"))
+  ))
+}
+
+///|
+test "validator: data segment with non-constant instruction should fail" {
+  // data.wast line 464: (data (i32.ctz (i32.const 0))) - constant expression required
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [I32Ctz], init: b"" }],
+  }
+  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+}
+
+///|
+test "validator: data segment with nop offset should fail" {
+  // data.wast line 472: (data (nop)) - constant expression required
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [Nop], init: b"" }],
+  }
+  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+}
+
+///|
+test "validator: data segment with unknown global should fail" {
+  // data.wast line 505: (data (global.get 0)) with no globals - unknown global 0
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"" }],
+  }
+  inspect(try? validate_module(mod), content="Err(InvalidGlobalIndex(0))")
+}
+
+///|
+test "validator: data segment with mutable global offset should fail" {
+  // data.wast line 522: global must be immutable for constant expression
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [{ type_: { value_type: @types.ValueType::I32, mutable: true }, init: [I32Const(0)] }],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"" }],
+  }
+  inspect(try? validate_module(mod), content="Err(MutableGlobalInConstExpr)")
+}
+
+///|
+test "validator: data segment with valid i32 const offset should pass" {
+  // Valid data segment with i32.const offset
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: b"hello" }],
+  }
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "validator: data segment with immutable global offset should pass" {
+  // Valid data segment with immutable global.get offset
+  let mod : @types.Module = {
+    types: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [{ limits: { min: 1, max: None } }],
+    globals: [{ type_: { value_type: @types.ValueType::I32, mutable: false }, init: [I32Const(0)] }],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"hello" }],
+  }
+  inspect(try? validate_module(mod), content="Ok(())")
+}
