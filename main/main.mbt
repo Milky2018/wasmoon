@@ -1,5 +1,14 @@
 ///|
 fn main {
+  // Define choices for debug options
+  let debug_choices = @hashset.HashSet::from_array([
+    "verbose", "print-ir", "print-vcode", "print-regalloc", "trace-exec",
+  ])
+
+  // Define choices for config action
+  let config_action_choices = @hashset.HashSet::from_array([
+    "show", "path", "init",
+  ])
   let parser = @clap.Parser::new(
     prog="wasmoon",
     description="WebAssembly Runtime in MoonBit",
@@ -31,7 +40,8 @@ fn main {
         "debug": @clap.Arg::named(
           short='D',
           nargs=@clap.Nargs::Any,
-          help="Debug option (e.g., verbose, print-ir, trace-exec)",
+          choices=debug_choices,
+          help="Debug option (verbose, print-ir, print-vcode, print-regalloc, trace-exec)",
         ),
         "wasm-opt": @clap.Arg::named(
           short='W',
@@ -64,9 +74,10 @@ fn main {
           ),
         },
       ),
-      "test": @clap.SubCommand::new(help="Run wasm-testsuite JSON spec file", args={
-        "file": @clap.Arg::positional(help="Path to JSON spec file"),
-      }),
+      "test": @clap.SubCommand::new(
+        help="Run WebAssembly test script (.wast format)",
+        args={ "file": @clap.Arg::positional(help="Path to WAST file") },
+      ),
       "disasm": @clap.SubCommand::new(
         help="Disassemble WASM file to text format",
         args={ "file": @clap.Arg::positional(help="Path to WASM file") },
@@ -103,7 +114,10 @@ fn main {
         help="Display available compiler settings",
       ),
       "config": @clap.SubCommand::new(help="Manage configuration", args={
-        "action": @clap.Arg::positional(help="Action: show, path, init"),
+        "action": @clap.Arg::positional(
+          choices=config_action_choices,
+          help="Action: show, path, init",
+        ),
       }),
       "help": @clap.SubCommand::new(help="Display help message"),
     },
