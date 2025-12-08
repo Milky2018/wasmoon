@@ -51,7 +51,7 @@ pub enum WastModuleSource {
 pub impl Show for WastModuleSource
 
 pub struct WastScript {
-  commands : Array[WastCommand]
+  commands : Array[(WastCommand, Int)]
 }
 
 pub enum WastValue {

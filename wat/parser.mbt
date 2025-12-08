@@ -2533,12 +2533,13 @@ fn Parser::parse_table_def(
           self.expect_rparen() // close table
           let table_idx = mod_.tables.length()
           let elem : @types.Element = {
-            mode: @types.ElemMode::Active(
-              table_idx,
-              [@types.Instruction::I32Const(0)],
-            ),
+            mode: @types.ElemMode::Active(table_idx, [
+              @types.Instruction::I32Const(0),
+            ]),
             type_: @types.ValueType::FuncRef,
-            init: func_indices.map(fn(idx) { [@types.Instruction::RefFunc(idx)] }),
+            init: func_indices.map(fn(idx) {
+              [@types.Instruction::RefFunc(idx)]
+            }),
           }
           let table_type : @types.TableType = {
             elem_type,

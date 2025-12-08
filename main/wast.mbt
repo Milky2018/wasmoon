@@ -158,7 +158,9 @@ fn run_wast_command(
     ModuleBinaryFailed(err) => {
       // Binary module failed to parse (unsupported features), skip
       result.skipped = result.skipped + 1
-      result.failures.push("line \{line}: skipped (binary parse failed: \{err})")
+      result.failures.push(
+        "line \{line}: skipped (binary parse failed: \{err})",
+      )
     }
     AssertReturn(action, expected) =>
       match run_assert_return(ctx, action, expected) {
@@ -166,7 +168,9 @@ fn run_wast_command(
         Some(err) => {
           result.failed = result.failed + 1
           let action_desc = format_action(action)
-          result.failures.push("line \{line}: assert_return \{action_desc}: \{err}")
+          result.failures.push(
+            "line \{line}: assert_return \{action_desc}: \{err}",
+          )
         }
       }
     AssertTrap(action, expected_msg) => {
@@ -186,7 +190,9 @@ fn run_wast_command(
         result.passed = result.passed + 1
       } else {
         result.failed = result.failed + 1
-        result.failures.push("line \{line}: assert_exhaustion: expected exhaustion")
+        result.failures.push(
+          "line \{line}: assert_exhaustion: expected exhaustion",
+        )
       }
     AssertInvalid(source, msg) => {
       let valid = validate_module_source(source)

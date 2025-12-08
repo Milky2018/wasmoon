@@ -104,7 +104,8 @@ pub impl Show for ParserError with output(self, logger) {
     TooManyLocals => "too many locals"
     MalformedSectionId(id) => "malformed section id: \{id}"
     MalformedLimitsFlags(flags) => "malformed limits flags: \{flags}"
-    FunctionCodeMismatch => "function and code section have inconsistent lengths"
+    FunctionCodeMismatch =>
+      "function and code section have inconsistent lengths"
     DataCountMismatch => "data count and data section have inconsistent lengths"
     UnexpectedContent => "unexpected content after last section"
     DuplicateSection(_) => "unexpected content after last section"
@@ -238,11 +239,9 @@ fn Parser::read_leb128_i32(self : Parser) -> Int raise ParserError {
           if upper_bits != 0x70 {
             raise LEB128TooLarge
           }
-        } else {
           // Non-negative: bits 4-6 must all be 0 (0x00)
-          if upper_bits != 0x00 {
-            raise LEB128TooLarge
-          }
+        } else if upper_bits != 0x00 {
+          raise LEB128TooLarge
         }
         // Also, 5th byte cannot have continuation bit
         if (byte & 0x80) != 0 {
@@ -284,11 +283,9 @@ fn Parser::read_leb128_i64(self : Parser) -> Int64 raise ParserError {
           if upper_bits != 0x7E {
             raise LEB128TooLarge
           }
-        } else {
           // Non-negative: bits 1-6 must all be 0 (0x00)
-          if upper_bits != 0x00 {
-            raise LEB128TooLarge
-          }
+        } else if upper_bits != 0x00 {
+          raise LEB128TooLarge
         }
         // Also, 10th byte cannot have continuation bit
         if (byte & 0x80) != 0 {
@@ -523,7 +520,6 @@ fn Parser::read_elem_segment(
   let is_passive_or_declarative = (flags & 0x01) != 0
   let has_table_index_or_is_declarative = (flags & 0x02) != 0
   let uses_expressions = (flags & 0x04) != 0
-
   let mode : @types.ElemMode = if is_passive_or_declarative {
     if has_table_index_or_is_declarative {
       @types.ElemMode::Declarative
@@ -542,7 +538,8 @@ fn Parser::read_elem_segment(
   }
 
   // Read element type
-  let elem_type : @types.ValueType = if is_passive_or_declarative || uses_expressions {
+  let elem_type : @types.ValueType = if is_passive_or_declarative ||
+    uses_expressions {
     // Has explicit elem kind or reftype
     if uses_expressions {
       // When using expressions, must be a reference type (funcref or externref)
@@ -578,7 +575,6 @@ fn Parser::read_elem_segment(
       init.push([@types.Instruction::RefFunc(func_idx)])
     }
   }
-
   (mode, elem_type, init)
 }
 
@@ -1007,7 +1003,6 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
       }
       last_section_id = section_id
     }
-
     match section_id {
       1 => {
         // Type section
@@ -1134,10 +1129,9 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         // Skip past the name bytes and any remaining custom section content
         parser.pos = section_end
       }
-      12 => {
+      12 =>
         // Data count section (bulk memory)
         data_count = Some(parser.read_u32())
-      }
       13 =>
         // Tag section (exception handling) - skip for now
         parser.pos = section_end
@@ -1168,7 +1162,6 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
   if !parser.is_eof() {
     raise UnexpectedContent
   }
-
   mod
 }
 

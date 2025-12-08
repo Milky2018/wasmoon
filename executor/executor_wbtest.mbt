@@ -1153,11 +1153,13 @@ test "function call: call_indirect" {
     globals: [],
     exports: [{ name: "apply", desc: @types.ExportDesc::Func(2) }],
     start: None,
-    elems: [{
-      mode: @types.ElemMode::Active(0, [I32Const(0)]),
-      type_: @types.ValueType::FuncRef,
-      init: [[RefFunc(0)], [RefFunc(1)]],
-    }],
+    elems: [
+      {
+        mode: @types.ElemMode::Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(0)], [RefFunc(1)]],
+      },
+    ],
     codes: [ // table[0] = func 0 (add), table[1] = func 1 (sub)
       add_func, sub_func, apply_func,
     ],
@@ -1933,11 +1935,13 @@ test "module initialization: element segment" {
     globals: [],
     exports: [{ name: "call", desc: @types.ExportDesc::Func(2) }],
     start: None,
-    elems: [{
-      mode: @types.ElemMode::Active(0, [I32Const(0)]),
-      type_: @types.ValueType::FuncRef,
-      init: [[RefFunc(0)], [RefFunc(1)]],
-    }],
+    elems: [
+      {
+        mode: @types.ElemMode::Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(0)], [RefFunc(1)]],
+      },
+    ],
     codes: [func0, func1, call_func],
     datas: [],
   }
@@ -2274,11 +2278,13 @@ test "bulk memory: elem.drop" {
     globals: [],
     exports: [{ name: "drop", desc: @types.ExportDesc::Func(0) }],
     start: None,
-    elems: [{
-      mode: @types.ElemMode::Active(0, [I32Const(0)]),
-      type_: @types.ValueType::FuncRef,
-      init: [[RefFunc(1)]],
-    }], // elem segment with func 1
+    elems: [
+      {
+        mode: @types.ElemMode::Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(1)]],
+      },
+    ], // elem segment with func 1
     codes: [drop_func, dummy_func],
     datas: [],
   }
@@ -2449,11 +2455,13 @@ test "reference types: ref.is_null with non-null value" {
     globals: [],
     exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
     start: None,
-    elems: [{
-      mode: @types.ElemMode::Active(0, [I32Const(0)]),
-      type_: @types.ValueType::FuncRef,
-      init: [[RefFunc(0)]],
-    }], // table[0] = func 0
+    elems: [
+      {
+        mode: @types.ElemMode::Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(0)]],
+      },
+    ], // table[0] = func 0
     codes: [dummy_func, check_func],
     datas: [],
   }
@@ -3063,11 +3071,13 @@ test "call_indirect with imports path" {
     globals: [],
     exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
     start: None,
-    elems: [{
-      mode: @types.ElemMode::Active(0, [I32Const(0)]),
-      type_: @types.ValueType::FuncRef,
-      init: [[RefFunc(0)]],
-    }],
+    elems: [
+      {
+        mode: @types.ElemMode::Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(0)]],
+      },
+    ],
     codes: [func_code, test_code],
     datas: [],
   }
@@ -3118,11 +3128,13 @@ test "call_indirect with multiple funcs and explicit type" {
     exports: [{ name: "test", desc: @types.ExportDesc::Func(3) }],
     start: None,
     // elem init contains func index 2 ($func)
-    elems: [{
-      mode: @types.ElemMode::Active(0, [I32Const(0)]),
-      type_: @types.ValueType::FuncRef,
-      init: [[RefFunc(2)]],
-    }],
+    elems: [
+      {
+        mode: @types.ElemMode::Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(2)]],
+      },
+    ],
     codes: [dummy_func, test1_func, func_code, test_code],
     datas: [],
   }
@@ -3175,11 +3187,13 @@ test "call_indirect type index bug reproduction" {
     exports: [{ name: "test", desc: @types.ExportDesc::Func(2) }],
     start: None,
     // elem init: func index 1 ($func)
-    elems: [{
-      mode: @types.ElemMode::Active(0, [I32Const(0)]),
-      type_: @types.ValueType::FuncRef,
-      init: [[RefFunc(1)]],
-    }],
+    elems: [
+      {
+        mode: @types.ElemMode::Active(0, [I32Const(0)]),
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(1)]],
+      },
+    ],
     codes: [dummy_func, func_code, test_code],
     datas: [],
   }
