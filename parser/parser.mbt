@@ -403,8 +403,37 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
     0x7B => V128
     0x70 => FuncRef
     0x6F => ExternRef
+    0x64 => {
+      // Non-null reference type: (ref heaptype)
+      let heap_type = self.read_heap_type()
+      match heap_type {
+        0x70 => RefFunc // (ref func)
+        0x6F => RefExtern // (ref extern)
+        _ => RefFunc // Default to RefFunc for typed references
+      }
+    }
+    0x63 => {
+      // Nullable reference type: (ref null heaptype)
+      let heap_type = self.read_heap_type()
+      match heap_type {
+        0x70 => FuncRef // (ref null func) = funcref
+        0x6F => ExternRef // (ref null extern) = externref
+        _ => FuncRef // Default to FuncRef
+      }
+    }
     _ => raise InvalidValueType(byte)
   }
+}
+
+///|
+/// Read a heap type (signed LEB128 type index or abstract heap type)
+fn Parser::read_heap_type(self : Parser) -> Int raise ParserError {
+  // Heap types are encoded as signed LEB128
+  // Negative values represent abstract heap types:
+  //   -0x10 (0x70) = func
+  //   -0x11 (0x6F) = extern
+  // Positive values represent type indices
+  self.read_i32()
 }
 
 ///|
@@ -416,7 +445,7 @@ fn Parser::read_block_type(self : Parser) -> @types.BlockType raise ParserError 
       self.skip(1)
       Empty
     }
-    0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F =>
+    0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F | 0x64 | 0x63 =>
       Value(self.read_value_type())
     _ => TypeIndex(self.read_i32())
   }
@@ -481,9 +510,27 @@ fn Parser::read_limits(self : Parser) -> @types.Limits raise ParserError {
 
 ///|
 fn Parser::read_table_type(self : Parser) -> @types.TableType raise ParserError {
-  let elem_type = self.read_value_type()
-  let limits = self.read_limits()
-  { elem_type, limits }
+  // Check for extended table type encoding (typed function references)
+  let first_byte = self.peek_byte()
+  if first_byte == 0x40 {
+    // Extended encoding: 0x40 0x00 reftype limits expr
+    self.skip(1) // consume 0x40
+    let second_byte = self.read_byte()
+    if second_byte != 0x00 {
+      raise MalformedReferenceType(second_byte)
+    }
+    let elem_type = self.read_value_type()
+    let limits = self.read_limits()
+    // Read and discard the initialization expression
+    // (We don't support table initializers yet, but need to parse past them)
+    self.read_expr() |> ignore
+    { elem_type, limits }
+  } else {
+    // Standard encoding: reftype limits
+    let elem_type = self.read_value_type()
+    let limits = self.read_limits()
+    { elem_type, limits }
+  }
 }
 
 ///|
@@ -541,16 +588,36 @@ fn Parser::read_elem_segment(
 
   // Read element type
   // flags encoding for elem type:
-  // - flags 0: no elemkind (implicit funcref)
+  // - flags 0, 4: no elemkind/reftype (implicit funcref)
   // - flags 1, 2, 3: has elemkind byte (0x00 = funcref)
-  // - flags 4, 5, 6, 7: has reftype byte (0x70=funcref, 0x6F=externref)
+  // - flags 5, 6, 7: has reftype byte (0x70=funcref, 0x6F=externref, etc.)
+  // Note: flags 4 uses expressions but has NO reftype byte (implicit funcref)
   let has_elemkind = flags == 1 || flags == 2 || flags == 3
-  let elem_type : @types.ValueType = if uses_expressions {
-    // flags 4-7: has reftype
+  let has_reftype = flags == 5 || flags == 6 || flags == 7
+  let elem_type : @types.ValueType = if has_reftype {
+    // flags 5, 6, 7: has explicit reftype
     let type_byte = self.read_byte()
     match type_byte {
       0x70 => @types.ValueType::FuncRef
       0x6F => @types.ValueType::ExternRef
+      0x64 => {
+        // Non-null reference type: (ref heaptype)
+        let heap_type = self.read_heap_type()
+        match heap_type {
+          0x70 => @types.ValueType::RefFunc
+          0x6F => @types.ValueType::RefExtern
+          _ => @types.ValueType::RefFunc
+        }
+      }
+      0x63 => {
+        // Nullable reference type: (ref null heaptype)
+        let heap_type = self.read_heap_type()
+        match heap_type {
+          0x70 => @types.ValueType::FuncRef
+          0x6F => @types.ValueType::ExternRef
+          _ => @types.ValueType::FuncRef
+        }
+      }
       _ => raise MalformedReferenceType(type_byte)
     }
   } else if has_elemkind {

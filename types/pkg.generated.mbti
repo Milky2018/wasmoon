@@ -360,6 +360,8 @@ pub(all) enum ValueType {
   V128
   FuncRef
   ExternRef
+  RefFunc
+  RefExtern
 }
 pub impl Eq for ValueType
 pub impl Show for ValueType

@@ -1464,9 +1464,9 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
       // Handle (ref ...) types
       self.advance()
       self.expect_keyword("ref")
-      // Check for nullable: (ref null ...)
-      let mut is_extern = false
-      if self.current == Keyword("null") {
+      // Check for nullable: (ref null ...) vs non-null: (ref ...)
+      let is_nullable = self.current == Keyword("null")
+      if is_nullable {
         self.advance()
       }
       // Parse heap type: func, extern, or $typeidx
@@ -1474,26 +1474,38 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         Keyword("func") => {
           self.advance()
           self.expect_rparen()
-          @types.ValueType::FuncRef
+          if is_nullable {
+            @types.ValueType::FuncRef
+          } else {
+            @types.ValueType::RefFunc
+          }
         }
         Keyword("extern") => {
-          is_extern = true
           self.advance()
           self.expect_rparen()
-          @types.ValueType::ExternRef
+          if is_nullable {
+            @types.ValueType::ExternRef
+          } else {
+            @types.ValueType::RefExtern
+          }
         }
         Id(_) => {
           // Typed function reference like (ref $t) - treat as FuncRef for now
           self.advance()
           self.expect_rparen()
-          @types.ValueType::FuncRef
+          if is_nullable {
+            @types.ValueType::FuncRef
+          } else {
+            @types.ValueType::RefFunc
+          }
         }
         _ => {
           self.expect_rparen()
-          if is_extern {
-            @types.ValueType::ExternRef
-          } else {
+          // Default to FuncRef/RefFunc based on nullability
+          if is_nullable {
             @types.ValueType::FuncRef
+          } else {
+            @types.ValueType::RefFunc
           }
         }
       }

@@ -44,6 +44,7 @@ fn ExecContext::exec_call_indirect(
   // The element should be a function reference
   let store_addr = match elem {
     FuncRef(idx) => idx
+    Null => raise @runtime.UninitializedElement // Null function reference
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 

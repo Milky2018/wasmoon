@@ -13,8 +13,10 @@ pub(all) enum ValueType {
   F32
   F64
   V128 // SIMD
-  FuncRef
-  ExternRef
+  FuncRef // nullable function reference (ref null func)
+  ExternRef // nullable external reference (ref null extern)
+  RefFunc // non-null function reference (ref func)
+  RefExtern // non-null external reference (ref extern)
 } derive(Eq, Show)
 
 ///|
