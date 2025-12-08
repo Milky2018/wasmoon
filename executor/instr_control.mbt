@@ -163,13 +163,20 @@ fn ExecContext::exec_block(
 }
 
 ///|
-/// Execute function body (catches Return signal)
+/// Execute function body (catches Return signal and branch to function)
 fn ExecContext::exec_expr(
   self : ExecContext,
   instrs : Array[@types.Instruction],
 ) -> Unit raise {
   self.exec_block(instrs) catch {
-    Return => () // Normal function return
+    Return => () // Explicit return
+    BranchWith(0, values) => {
+      // Branch to function (br 0 from outermost block) acts like return
+      // Push the return values back onto the stack
+      for v in values {
+        self.stack.push(v)
+      }
+    }
     e => raise e
   }
 }
