@@ -18,6 +18,8 @@ pub(all) suberror ValidationError {
   MultipleTables // More than one table is not allowed in MVP
   InvalidLimits(String) // Invalid limits (e.g., min > max)
   InvalidAlignment(String) // Alignment must not be larger than natural
+  ConstantExpressionRequired // Non-constant instruction in init expression
+  MutableGlobalInConstExpr // Mutable global referenced in constant expression
   // Error with location context
   WithContext(ValidationErrorContext)
 } derive(Show)
@@ -56,6 +58,8 @@ pub fn ValidationErrorContext::from_error(
     MultipleTables => "multiple tables not allowed in MVP"
     InvalidLimits(m) => "invalid limits: \{m}"
     InvalidAlignment(m) => "alignment must not be larger than natural: \{m}"
+    ConstantExpressionRequired => "constant expression required"
+    MutableGlobalInConstExpr => "constant expression required"
     WithContext(ctx) => ctx.error_msg
   }
   { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
@@ -281,6 +285,67 @@ fn OperandStack::check_height(
 }
 
 ///|
+/// Validate a constant expression (used in data/elem offsets and global init)
+/// Returns the result type of the expression
+fn validate_const_expr(
+  globals : Array[@types.GlobalType],
+  expr : Array[@types.Instruction],
+  expected_type : @types.ValueType,
+) -> Unit raise ValidationError {
+  // Constant expressions must be exactly one instruction that produces a value
+  // Valid constant instructions: i32.const, i64.const, f32.const, f64.const,
+  // ref.null, ref.func, global.get (of immutable import)
+  if expr.is_empty() {
+    raise TypeMismatch("empty constant expression")
+  }
+
+  // Check each instruction is a valid constant instruction
+  let mut result_type : @types.ValueType? = None
+  for instr in expr {
+    match instr {
+      I32Const(_) => result_type = Some(@types.ValueType::I32)
+      I64Const(_) => result_type = Some(@types.ValueType::I64)
+      F32Const(_) => result_type = Some(@types.ValueType::F32)
+      F64Const(_) => result_type = Some(@types.ValueType::F64)
+      RefNull(t) => result_type = Some(t)
+      RefFunc(_) => result_type = Some(@types.ValueType::FuncRef)
+      GlobalGet(idx) => {
+        // Check global exists
+        if idx >= globals.length() {
+          raise InvalidGlobalIndex(idx)
+        }
+        let global = globals[idx]
+        // Global must be immutable for constant expression
+        if global.mutable {
+          raise MutableGlobalInConstExpr
+        }
+        result_type = Some(global.value_type)
+      }
+      _ =>
+        // Any other instruction is not allowed in constant expressions
+        raise ConstantExpressionRequired
+    }
+  }
+
+  // Constant expression must produce exactly one value
+  // Multiple instructions would produce multiple values on the stack
+  if expr.length() > 1 {
+    raise TypeMismatch("constant expression must be single instruction")
+  }
+
+  // Check the result type matches expected
+  match result_type {
+    Some(t) =>
+      if t != expected_type {
+        raise TypeMismatch(
+          "constant expression: expected \{expected_type}, got \{t}",
+        )
+      }
+    None => raise TypeMismatch("constant expression produces no value")
+  }
+}
+
+///|
 /// Validate a complete module
 pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   let ctx = ValidationContext::new(mod)
@@ -300,11 +365,13 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     validate_memory_limits(mem.limits)
   }
 
-  // Validate data segments reference valid memory
+  // Validate data segments reference valid memory and have valid offset expressions
   for data in mod.datas {
     if data.memory_idx >= ctx.mems.length() {
       raise InvalidMemoryIndex(data.memory_idx)
     }
+    // Validate offset expression is a constant expression producing i32
+    validate_const_expr(ctx.globals, data.offset, @types.ValueType::I32)
   }
 
   // Validate elem segments reference valid functions
@@ -356,12 +423,16 @@ pub fn validate_module_with_context(
     }
   }
 
-  // Validate data segments reference valid memory
+  // Validate data segments reference valid memory and have valid offset expressions
   for data in mod.datas {
     if data.memory_idx >= ctx.mems.length() {
       raise WithContext(
         ValidationErrorContext::from_error(InvalidMemoryIndex(data.memory_idx)),
       )
+    }
+    // Validate offset expression is a constant expression producing i32
+    validate_const_expr(ctx.globals, data.offset, @types.ValueType::I32) catch {
+      e => raise WithContext(ValidationErrorContext::from_error(e))
     }
   }
 
