@@ -660,7 +660,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   }
   let mod_ = @types.Module::new()
 
-  // First pass: collect function names (to support forward references)
+  // First pass: collect function and type names (to support forward references)
   // Save lexer state
   let saved_pos = self.lexer.pos
   let saved_line = self.lexer.line
@@ -669,13 +669,25 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   let saved_token_start_column = self.lexer.token_start_column
   let saved_current = self.current
 
-  // Scan for function definitions and imports to collect names
+  // Scan for function and type definitions to collect names
   let mut func_idx = 0
+  let mut type_idx = 0
   while self.current != RParen && self.current != Eof {
     match self.current {
       LParen => {
         self.advance()
         match self.current {
+          Keyword("type") => {
+            self.advance()
+            // Check for type name
+            if self.current is Id(name) {
+              self.type_names.set(name, type_idx)
+              self.advance()
+            }
+            type_idx = type_idx + 1
+            // Skip to end of type
+            self.skip_to_matching_rparen()
+          }
           Keyword("import") => {
             self.advance()
             // Skip module name and import name
@@ -2552,68 +2564,99 @@ fn Parser::parse_table_def(
     }
   }
 
-  // Check for inline elem syntax: (table funcref (elem ...))
+  // Check for inline elem syntax: (table elemtype (elem ...))
   // In this syntax, the element type comes first, followed by inline elem
+  // Element type can be a keyword (funcref, externref) or a reference type (ref null $t)
   match self.current {
     Keyword("funcref")
     | Keyword("func")
     | Keyword("externref")
-    | Keyword("extern") => {
+    | Keyword("extern")
+    | LParen => {
+      // Could be inline elem syntax or reference type followed by inline elem
       let elem_type = self.parse_value_type()
-      // Parse inline elem
-      self.expect_lparen()
-      match self.current {
-        Keyword("elem") => {
-          self.advance()
-          // Parse function indices
-          let func_indices : Array[Int] = []
-          while self.current != RParen {
-            match self.current {
-              Id(name) =>
-                // Named function reference like $f
-                match self.func_names.get(name) {
-                  Some(idx) => {
-                    func_indices.push(idx)
-                    self.advance()
+      // Check if followed by inline elem
+      if self.current == LParen {
+        let saved = self.lexer.pos
+        let saved_line = self.lexer.line
+        let saved_column = self.lexer.column
+        let saved_token_start_line = self.lexer.token_start_line
+        let saved_token_start_column = self.lexer.token_start_column
+        self.advance()
+        match self.current {
+          Keyword("elem") => {
+            self.advance()
+            // Parse function indices
+            let func_indices : Array[Int] = []
+            while self.current != RParen {
+              match self.current {
+                Id(name) =>
+                  // Named function reference like $f
+                  match self.func_names.get(name) {
+                    Some(idx) => {
+                      func_indices.push(idx)
+                      self.advance()
+                    }
+                    None =>
+                      // Function might be declared later, use placeholder
+                      // For now, just skip - this is for assert_invalid tests
+                      self.advance()
                   }
-                  None =>
-                    // Function might be declared later, use placeholder
-                    // For now, just skip - this is for assert_invalid tests
-                    self.advance()
+                Number(_) => {
+                  let idx = self.parse_u32()
+                  func_indices.push(idx)
                 }
-              Number(_) => {
-                let idx = self.parse_u32()
-                func_indices.push(idx)
+                _ =>
+                  raise UnexpectedToken(
+                    "expected function index in elem",
+                    self.loc(),
+                  )
               }
-              _ =>
-                raise UnexpectedToken(
-                  "expected function index in elem",
-                  self.loc(),
-                )
             }
+            self.expect_rparen() // close elem
+            self.expect_rparen() // close table
+            let table_idx = mod_.tables.length()
+            let elem : @types.Element = {
+              mode: @types.ElemMode::Active(table_idx, [
+                @types.Instruction::I32Const(0),
+              ]),
+              type_: elem_type,
+              init: func_indices.map(fn(idx) {
+                [@types.Instruction::RefFunc(idx)]
+              }),
+            }
+            let table_type : @types.TableType = {
+              elem_type,
+              limits: {
+                min: func_indices.length(),
+                max: Some(func_indices.length()),
+              },
+            }
+            return (table_type, export_name, Some(elem), table_name)
           }
-          self.expect_rparen() // close elem
-          self.expect_rparen() // close table
-          let table_idx = mod_.tables.length()
-          let elem : @types.Element = {
-            mode: @types.ElemMode::Active(table_idx, [
-              @types.Instruction::I32Const(0),
-            ]),
-            type_: @types.ValueType::FuncRef,
-            init: func_indices.map(fn(idx) {
-              [@types.Instruction::RefFunc(idx)]
-            }),
+          _ => {
+            // Not an inline elem, restore state and fall through to standard syntax
+            // But we already parsed elem_type, so we need a different approach
+            // This case shouldn't happen for valid WAT - (ref null $t) followed by something other than (elem ...)
+            self.lexer.pos = saved
+            self.lexer.line = saved_line
+            self.lexer.column = saved_column
+            self.lexer.token_start_line = saved_token_start_line
+            self.lexer.token_start_column = saved_token_start_column
+            self.current = LParen
+            raise UnexpectedToken("expected elem in inline table", self.loc())
           }
-          let table_type : @types.TableType = {
-            elem_type,
-            limits: {
-              min: func_indices.length(),
-              max: Some(func_indices.length()),
-            },
-          }
-          (table_type, export_name, Some(elem), table_name)
         }
-        _ => raise UnexpectedToken("expected elem in inline table", self.loc())
+      } else {
+        // Just element type followed by closing paren (no inline elem, no limits)
+        self.expect_rparen()
+        // This is a table with implicit size 0, no elements
+        return (
+          { elem_type, limits: { min: 0, max: None } },
+          export_name,
+          None,
+          table_name,
+        )
       }
     }
     _ => {
