@@ -592,4 +592,5 @@ _请在此处继续添加新的意见和建议_
 - [x] 代码中仍然有非常多的 `for <identifier> = <initial>; ` 这样的 c 风格循环 → 已修复所有正向迭代的 C 风格循环（保留反向迭代 `i = i - 1` 因为更简洁）
 - [x] JIT太奇怪了，干的完全是AOT的活儿，怎么处理更合适？ → **调研结论**：Wasmtime/Wasmer 的"JIT"也是在加载时编译所有函数，不是传统的热点 JIT。Wasmtime 虽有 Winch（快速编译）和 Cranelift（优化编译）两层，但目前不支持自动分层——模块全部用一种编译器。wasmoon 当前实现与业界一致，保留"JIT"命名，在文档中说明是"预编译 JIT"（eager JIT）而非热点 JIT。参考：[Cranelift Progress 2022](https://bytecodealliance.org/articles/cranelift-progress-2022)
 - [x] LEB128 的 parsing 缺乏相关测试 → 已添加 9 个 LEB128 验证测试，覆盖 u32/i32/i64 的边界情况和错误检测
-- [x] 把 cwasm 后缀纳入 gitignore，并清除已经被 git 跟踪的 cwasm 文件 → 已将 `*.cwasm` 添加到 .gitignore，并用 `git rm --cached` 移除了 5 个已跟踪的 cwasm 文件 
+- [x] 把 cwasm 后缀纳入 gitignore，并清除已经被 git 跟踪的 cwasm 文件 → 已将 `*.cwasm` 添加到 .gitignore，并用 `git rm --cached` 移除了 5 个已跟踪的 cwasm 文件
+- [x] CLI 的诸多命令描述有误，比如现在的 test 命令和 wast 命令实际上是一回事，而且都和 json 无关。`debug` 等参数应该有 choices 参数。在 `.mooncakes/TheWaWaR/clap/src/clap.mbti` 中查看 named 函数的声明。 → 已修复：更新 test 命令描述为 "Run WebAssembly test script (.wast format)"，为 debug 和 config action 参数添加 choices
