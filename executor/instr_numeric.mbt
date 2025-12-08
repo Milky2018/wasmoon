@@ -644,6 +644,16 @@ fn ExecContext::exec_f32_numeric(
       let a = self.stack.pop_f32()
       self.stack.push(I32(if a >= b { 1 } else { 0 }))
     }
+    F32Copysign => {
+      let b = self.stack.pop_f32()
+      let a = self.stack.pop_f32()
+      // Copy sign of b to magnitude of a
+      let a_bits = a.reinterpret_as_uint()
+      let b_bits = b.reinterpret_as_uint()
+      // Clear sign bit of a, then set it to sign bit of b
+      let result_bits = (a_bits & 0x7FFFFFFFU) | (b_bits & 0x80000000U)
+      self.stack.push(F32(Float::reinterpret_from_uint(result_bits)))
+    }
     _ => raise @runtime.RuntimeError::Unreachable
   }
 }
@@ -821,6 +831,17 @@ fn ExecContext::exec_f64_numeric(
       let b = self.stack.pop_f64()
       let a = self.stack.pop_f64()
       self.stack.push(I32(if a >= b { 1 } else { 0 }))
+    }
+    F64Copysign => {
+      let b = self.stack.pop_f64()
+      let a = self.stack.pop_f64()
+      // Copy sign of b to magnitude of a
+      let a_bits = a.reinterpret_as_uint64()
+      let b_bits = b.reinterpret_as_uint64()
+      // Clear sign bit of a, then set it to sign bit of b
+      let result_bits = (a_bits & 0x7FFFFFFFFFFFFFFFUL) |
+        (b_bits & 0x8000000000000000UL)
+      self.stack.push(F64(result_bits.reinterpret_as_double()))
     }
     _ => raise @runtime.RuntimeError::Unreachable
   }

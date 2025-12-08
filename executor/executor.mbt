@@ -194,6 +194,7 @@ fn ExecContext::exec_instr(
     | F32Nearest
     | F32Min
     | F32Max
+    | F32Copysign
     | F32Eq
     | F32Ne
     | F32Lt
@@ -215,6 +216,7 @@ fn ExecContext::exec_instr(
     | F64Nearest
     | F64Min
     | F64Max
+    | F64Copysign
     | F64Eq
     | F64Ne
     | F64Lt
@@ -311,9 +313,6 @@ fn ExecContext::exec_instr(
     Call(func_idx) => self.exec_call(func_idx)
     CallIndirect(type_idx, table_idx) =>
       self.exec_call_indirect(type_idx, table_idx)
-
-    // Fallback for unimplemented instructions
-    _ => raise @runtime.RuntimeError::Unreachable
   }
 }
 
@@ -504,9 +503,14 @@ pub fn instantiate_module_with_init(
         _ => 0
       }
 
-      // Set table entries
+      // Set table entries - convert module function index to store address
       for i, func_idx in elem.init {
-        table.set(offset + i, @types.Value::FuncRef(func_idx)) catch {
+        let store_addr = if func_idx < instance.func_addrs.length() {
+          instance.func_addrs[func_idx]
+        } else {
+          func_idx // fallback, should not happen for valid modules
+        }
+        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
           _ => ()
         }
       }
@@ -651,9 +655,14 @@ pub fn instantiate_module_with_imports(
         [I32Const(n)] => n
         _ => 0
       }
-      // Set table entries
+      // Set table entries - convert module function index to store address
       for i, func_idx in elem.init {
-        table.set(offset + i, @types.Value::FuncRef(func_idx)) catch {
+        let store_addr = if func_idx < func_addrs.length() {
+          func_addrs[func_idx]
+        } else {
+          func_idx // fallback, should not happen for valid modules
+        }
+        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
           _ => ()
         }
       }
@@ -813,8 +822,14 @@ pub fn instantiate_with_linker(
         [I32Const(n)] => n
         _ => 0
       }
+      // Convert module function index to store address
       for i, func_idx in elem.init {
-        table.set(offset + i, @types.Value::FuncRef(func_idx)) catch {
+        let store_addr = if func_idx < instance.func_addrs.length() {
+          instance.func_addrs[func_idx]
+        } else {
+          func_idx // fallback, should not happen for valid modules
+        }
+        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
           _ => ()
         }
       }
