@@ -17,6 +17,7 @@ suberror ParserError {
   InvalidImportKind(Int)
   InvalidExportKind(Int)
   MalformedMemopFlags // alignment value too large
+  TooManyLocals // local count exceeds reasonable limit
   ParseError(String) // Generic error with message
 }
 
@@ -92,6 +93,7 @@ pub impl Show for ParserError with output(self, logger) {
       "invalid export kind \{kind}\{kind_hint}"
     }
     MalformedMemopFlags => "malformed memop flags"
+    TooManyLocals => "too many locals"
     ParseError(msg) => msg
   }
   logger.write_string(msg)
@@ -937,9 +939,15 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
           let _code_size = parser.read_u32()
           let local_count = parser.read_u32()
           let locals : Array[@types.ValueType] = []
+          let mut total_locals = 0
           for _ in 0..<local_count {
             let n = parser.read_u32()
             let vt = parser.read_value_type()
+            // Check for too many locals (WebAssembly limit is 2^32-1, but we use a practical limit)
+            total_locals = total_locals + n
+            if total_locals > 1000000 {
+              raise TooManyLocals
+            }
             for _ in 0..<n {
               locals.push(vt)
             }

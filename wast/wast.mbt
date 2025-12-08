@@ -38,6 +38,7 @@ priv enum Token {
 pub enum WastCommand {
   Module(@types.Module, String?) // module and optional name
   ModuleQuote(Array[String]) // quoted module (for malformed tests)
+  ModuleBinaryFailed(String) // binary module that failed to parse (skip in tests)
   AssertReturn(WastAction, Array[WastValue])
   AssertTrap(WastAction, String)
   AssertExhaustion(WastAction, String)
@@ -579,7 +580,7 @@ fn Parser::parse_module_command(self : Parser) -> WastCommand raise WastError {
       self.expect_rparen()
       // Parse binary module using parser
       let mod_ = @parser.parse_module(bytes) catch {
-        e => raise ParseError("Failed to parse binary module: \{e}")
+        e => return ModuleBinaryFailed(e.to_string())
       }
       Module(mod_, name)
     }

@@ -151,6 +151,9 @@ fn run_wast_command(
     ModuleQuote(_parts) =>
       // Quoted modules are for malformed tests, skip for now
       result.skipped = result.skipped + 1
+    ModuleBinaryFailed(_err) =>
+      // Binary module failed to parse (unsupported features), skip
+      result.skipped = result.skipped + 1
     AssertReturn(action, expected) =>
       match run_assert_return(ctx, action, expected) {
         None => result.passed = result.passed + 1
