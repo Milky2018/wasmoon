@@ -888,9 +888,24 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
   // The top bit is at position bit_len - 1
   // We want bits [bit_len - 24, bit_len - 1) for the 23-bit mantissa
   let mantissa_start = bit_len - 24
-  let raw_mantissa = sig.extract_bits(mantissa_start, 23)
-  let round_bit = sig.extract_bits(mantissa_start - 1, 1)
-  let sticky = sig.has_bits_below(mantissa_start - 1)
+
+  // Handle small numbers where bit_len < 24
+  // In this case, we need to shift sig left to align the bits properly
+  let (raw_mantissa, round_bit, sticky) = if mantissa_start < 0 {
+    // Shift sig left to align the leading bit at position 23
+    let shift = -mantissa_start
+    let shifted_sig = sig << shift
+    // Extract mantissa (bits 0-22, removing the implicit leading 1 at bit 23)
+    let mantissa = shifted_sig.extract_bits(0, 23)
+    // No round bit or sticky bits since we're shifting left (adding zeros)
+    (mantissa, 0UL, false)
+  } else {
+    // Normal case: extract bits from the correct position
+    let mantissa = sig.extract_bits(mantissa_start, 23)
+    let round = sig.extract_bits(mantissa_start - 1, 1)
+    let sticky_bits = sig.has_bits_below(mantissa_start - 1)
+    (mantissa, round, sticky_bits)
+  }
 
   // Round to nearest, ties to even
   let mut final_mantissa = raw_mantissa.reinterpret_as_int64().to_int()
