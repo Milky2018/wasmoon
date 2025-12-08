@@ -170,13 +170,12 @@ fn ExecContext::exec_expr(
 ) -> Unit raise {
   self.exec_block(instrs) catch {
     Return => () // Explicit return
-    BranchWith(0, values) => {
+    BranchWith(0, values) =>
       // Branch to function (br 0 from outermost block) acts like return
       // Push the return values back onto the stack
       for v in values {
         self.stack.push(v)
       }
-    }
     e => raise e
   }
 }
