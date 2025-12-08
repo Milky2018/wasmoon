@@ -8,6 +8,8 @@
 ///|
 suberror ParserError {
   UnexpectedEndOfInput
+  UnexpectedEnd // For custom sections that are truncated
+  LengthOutOfBounds // Section size exceeds available data
   InvalidMagicNumber
   UnsupportedVersion
   InvalidValueType(Int)
@@ -57,6 +59,8 @@ fn int_to_hex(n : Int) -> String {
 pub impl Show for ParserError with output(self, logger) {
   let msg = match self {
     UnexpectedEndOfInput => "unexpected end of input"
+    UnexpectedEnd => "unexpected end"
+    LengthOutOfBounds => "length out of bounds"
     InvalidMagicNumber =>
       "invalid magic number (expected \\00asm, file may not be a valid WebAssembly module)"
     UnsupportedVersion => "unsupported WebAssembly version (expected version 1)"
@@ -994,6 +998,11 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
     let section_size = parser.read_u32()
     let section_end = parser.pos + section_size
 
+    // Validate section_end doesn't exceed data length
+    if section_end > parser.data.length() {
+      raise LengthOutOfBounds
+    }
+
     // Check section ordering (non-custom sections must be in order, no duplicates)
     if section_id != 0 {
       // Custom sections (id=0) can appear anywhere
@@ -1123,8 +1132,16 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         }
       }
       0 => {
-        // Custom section - parse name to validate LEB128, then skip rest
-        parser.read_u32() |> ignore // This validates the LEB128 encoding
+        // Custom section - parse name to validate, then skip rest
+        // Custom section must have at least a name (which requires at least 1 byte for length)
+        if section_size == 0 {
+          raise UnexpectedEnd
+        }
+        let name_len = parser.read_u32()
+        // Check that name doesn't exceed section bounds
+        if parser.pos + name_len > section_end {
+          raise UnexpectedEnd
+        }
         // Skip past the name bytes and any remaining custom section content
         parser.pos = section_end
       }
@@ -1300,4 +1317,32 @@ test "f64 parsing - 1.0" {
   // IEEE 754: 1.0 = 0x3FF0000000000000, little-endian: 00 00 00 00 00 00 F0 3F
   let parser = Parser::new(b"\x00\x00\x00\x00\x00\x00\xF0\x3F")
   inspect(parser.read_f64(), content="1")
+}
+
+// ============================================================
+// Custom Section Validation Tests (custom.wast regression)
+// ============================================================
+
+///|
+test "custom section - empty section should fail" {
+  // custom.wast line 76: \00asm \01\00\00\00 \00\00
+  // section_id=0, section_size=0, but custom section must have a name
+  let bytes = b"\x00asm\x01\x00\x00\x00\x00\x00"
+  inspect(try? parse_module(bytes), content="Err(unexpected end)")
+}
+
+///|
+test "custom section - length out of bounds" {
+  // custom.wast line 84: section claims 0x26=38 bytes but only 36 available
+  // \00asm \01\00\00\00 \00\26\10 "a custom section" "this is the payload"
+  let bytes = b"\x00asm\x01\x00\x00\x00\x00\x26\x10a custom sectionthis is the payload"
+  inspect(try? parse_module(bytes), content="Err(length out of bounds)")
+}
+
+///|
+test "custom section - concatenated modules" {
+  // custom.wast line 114: two wasm modules concatenated
+  // \00asm\01\00\00\00 \00asm\01\00\00\00
+  let bytes = b"\x00asm\x01\x00\x00\x00\x00asm\x01\x00\x00\x00"
+  inspect(try? parse_module(bytes), content="Err(length out of bounds)")
 }
