@@ -3026,3 +3026,143 @@ test "module linking: three modules chain" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "call_indirect with imports path" {
+  // This simulates the path used by run.mbt with instantiate_module_with_imports
+  let type_ : @types.FuncType = { params: [], results: [@types.ValueType::I32] }
+  let func_code : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
+  let test_code : @types.FunctionCode = {
+    locals: [],
+    body: [I32Const(0), CallIndirect(0, 0)],
+  }
+  let mod : @types.Module = {
+    types: [type_],
+    imports: [],
+    funcs: [0, 0], // Both functions have type 0
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    start: None,
+    elems: [{ table_idx: 0, offset: [I32Const(0)], init: [0] }],
+    codes: [func_code, test_code],
+    datas: [],
+  }
+
+  // Use instantiate_module_with_imports (same path as run.mbt)
+  let store = @runtime.Store::new()
+  let imports = @runtime.Imports::new()
+  let instance = instantiate_module_with_imports(store, mod, imports) catch {
+    _ => fail("instantiate failed")
+  }
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="42")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "call_indirect with multiple funcs and explicit type" {
+  // This simulates the issue where $check type index was wrong
+  let type_empty : @types.FuncType = { params: [], results: [] }
+  let type_result_i32 : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let type_binary : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  // Types: 0 = () -> (), 1 = () -> i32, 2 = (i32, i32) -> i32, 3 = (i32, i32) -> i32
+  let dummy_func : @types.FunctionCode = { locals: [], body: [] }
+  let test1_func : @types.FunctionCode = { locals: [], body: [I32Const(1)] }
+  let func_code : @types.FunctionCode = { locals: [], body: [LocalGet(0)] }
+  let test_code : @types.FunctionCode = {
+    locals: [],
+    // call_indirect with type 3 (which is type_binary)
+    body: [I32Const(1), I32Const(2), I32Const(0), CallIndirect(3, 0)],
+  }
+  let mod : @types.Module = {
+    types: [type_empty, type_result_i32, type_binary, type_binary],
+    imports: [],
+    funcs: [0, 1, 2, 1], // dummy=0, test1=1, func=2, test=1
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(3) }],
+    start: None,
+    // elem init contains func index 2 ($func)
+    elems: [{ table_idx: 0, offset: [I32Const(0)], init: [2] }],
+    codes: [dummy_func, test1_func, func_code, test_code],
+    datas: [],
+  }
+  let store = @runtime.Store::new()
+  let imports = @runtime.Imports::new()
+  let instance = instantiate_module_with_imports(store, mod, imports) catch {
+    _ => fail("instantiate failed")
+  }
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="1")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
+test "call_indirect type index bug reproduction" {
+  // Exact module structure from the failing test:
+  // funcs: [0, 1, 3]  (type indices)
+  // types: [() -> (), (i32,i32)->i32, (i32,i32)->i32, ()->i32]
+  // elem init: [1] (func index 1, which is $func)
+  // call_indirect type_idx: 2 ($check)
+
+  let type0 : @types.FuncType = { params: [], results: [] }
+  let type1 : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let type2 : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let type3 : @types.FuncType = { params: [], results: [@types.ValueType::I32] }
+  let dummy_func : @types.FunctionCode = { locals: [], body: [] }
+  let func_code : @types.FunctionCode = { locals: [], body: [LocalGet(0)] }
+  let test_code : @types.FunctionCode = {
+    locals: [],
+    // call_indirect (type $check) where $check is type index 2
+    body: [I32Const(1), I32Const(2), I32Const(0), CallIndirect(2, 0)],
+  }
+  let mod : @types.Module = {
+    types: [type0, type1, type2, type3],
+    imports: [],
+    funcs: [0, 1, 3], // dummy=type0, $func=type1, test=type3
+    tables: [
+      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+    ],
+    memories: [],
+    globals: [],
+    exports: [{ name: "test", desc: @types.ExportDesc::Func(2) }],
+    start: None,
+    // elem init: func index 1 ($func)
+    elems: [{ table_idx: 0, offset: [I32Const(0)], init: [1] }],
+    codes: [dummy_func, func_code, test_code],
+    datas: [],
+  }
+  let store = @runtime.Store::new()
+  let imports = @runtime.Imports::new()
+  let instance = instantiate_module_with_imports(store, mod, imports) catch {
+    _ => fail("instantiate failed")
+  }
+  let results = call_exported_func(store, instance, "test", [])
+  match results[0] {
+    I32(n) => inspect(n, content="1")
+    _ => fail("Expected I32 result")
+  }
+}

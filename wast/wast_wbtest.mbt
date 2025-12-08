@@ -334,3 +334,37 @@ test "parse_hex_int64: simple hex" {
   }
   inspect(result, content="4294967296")
 }
+
+///|
+test "collect_module_text reconstruction" {
+  let wast_text =
+    #|(module
+    #|  (func $dummy)
+    #|  (func $func (param i32 i32) (result i32) (local.get 0))
+    #|  (type $check (func (param i32 i32) (result i32)))
+    #|  (table funcref (elem $func))
+    #|  (func (export "test") (result i32)
+    #|    (call_indirect (type $check)
+    #|      (i32.const 1) (i32.const 2) (i32.const 0)
+    #|    )
+    #|  )
+    #|)
+    #|(assert_return (invoke "test") (i32.const 1))
+  let script = parse(wast_text)
+  match script.commands[0] {
+    Module(mod_, _) => {
+      inspect(mod_.types.length(), content="4")
+      inspect(mod_.funcs.length(), content="3")
+      inspect(mod_.elems.length(), content="1")
+      // Check elem init is correct (should be 1, func index of $func)
+      inspect(mod_.elems[0].init[0], content="1")
+      // Check call_indirect type index (should be 2, index of $check)
+      let test_func = mod_.codes[mod_.codes.length() - 1]
+      inspect(
+        test_func.body,
+        content="[I32Const(1), I32Const(2), I32Const(0), CallIndirect(2, 0)]",
+      )
+    }
+    _ => fail("expected module")
+  }
+}

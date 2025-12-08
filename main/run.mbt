@@ -188,7 +188,13 @@ fn run_wasm(
         _ => 0
       }
       for i, func_idx in elem.init {
-        table.set(offset + i, @types.Value::FuncRef(func_idx)) catch {
+        // Convert module function index to store address
+        let store_addr = if func_idx < instance.func_addrs.length() {
+          instance.func_addrs[func_idx]
+        } else {
+          func_idx // fallback, should not happen for valid modules
+        }
+        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
           e => {
             println("Error setting table element: \{e}")
             return

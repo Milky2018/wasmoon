@@ -1097,13 +1097,13 @@ fn parse_hex_int64(s : String) -> Int64 raise WastError {
 ///|
 fn parse_float32(s : String) -> Float raise WastError {
   // Handle special values
-  if s == "nan" ||
-    s == "+nan" ||
-    s == "-nan" ||
-    s.has_prefix("nan:") ||
-    s.has_prefix("+nan:") ||
-    s.has_prefix("-nan:") {
-    return (0.0 : Float) / (0.0 : Float) // NaN (payload ignored for now)
+  if s == "nan" || s == "+nan" || s.has_prefix("nan:") || s.has_prefix("+nan:") {
+    return (0.0 : Float) / (0.0 : Float) // positive NaN
+  }
+  if s == "-nan" || s.has_prefix("-nan:") {
+    // Negative NaN: set sign bit on canonical NaN
+    // Canonical NaN is 0x7FC00000, negative NaN is 0xFFC00000
+    return Float::reinterpret_from_uint(0xFFC00000U)
   }
   if s == "inf" || s == "+inf" {
     return (1.0 : Float) / (0.0 : Float) // positive infinity
@@ -1129,13 +1129,13 @@ fn parse_float32(s : String) -> Float raise WastError {
 ///|
 fn parse_float64(s : String) -> Double raise WastError {
   // Handle special values
-  if s == "nan" ||
-    s == "+nan" ||
-    s == "-nan" ||
-    s.has_prefix("nan:") ||
-    s.has_prefix("+nan:") ||
-    s.has_prefix("-nan:") {
-    return 0.0 / 0.0 // NaN (payload ignored for now)
+  if s == "nan" || s == "+nan" || s.has_prefix("nan:") || s.has_prefix("+nan:") {
+    return 0.0 / 0.0 // positive NaN
+  }
+  if s == "-nan" || s.has_prefix("-nan:") {
+    // Negative NaN: set sign bit on canonical NaN
+    // Canonical NaN is 0x7FF8000000000000, negative NaN is 0xFFF8000000000000
+    return 0xFFF8000000000000UL.reinterpret_as_double()
   }
   if s == "inf" || s == "+inf" {
     return 1.0 / 0.0 // positive infinity

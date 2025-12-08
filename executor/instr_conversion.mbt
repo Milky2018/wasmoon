@@ -20,46 +20,100 @@ fn ExecContext::exec_conversion(
     // i64.extend_i32_u: i32 -> i64 (无符号扩展)
     I64ExtendI32U => {
       let a = self.stack.pop_i32()
-      self.stack.push(I64(a.to_uint64().reinterpret_as_int64()))
+      // Reinterpret i32 as u32, then zero-extend to i64
+      let u32_val = a.reinterpret_as_uint()
+      self.stack.push(I64(u32_val.to_int64()))
     }
     // i32.trunc_f32_s: f32 -> i32 (有符号截断)
     I32TruncF32S => {
       let a = self.stack.pop_f32()
+      if a.is_nan() {
+        raise @runtime.InvalidConversion
+      }
+      let d = a.to_double()
+      if d >= 2147483648.0 || d < -2147483648.0 {
+        raise @runtime.IntegerOverflow
+      }
       self.stack.push(I32(a.to_int()))
     }
     // i32.trunc_f32_u: f32 -> i32 (无符号截断)
     I32TruncF32U => {
       let a = self.stack.pop_f32()
-      self.stack.push(I32(a.to_double().to_uint().reinterpret_as_int()))
+      if a.is_nan() {
+        raise @runtime.InvalidConversion
+      }
+      let d = a.to_double()
+      if d >= 4294967296.0 || d < 0.0 {
+        raise @runtime.IntegerOverflow
+      }
+      self.stack.push(I32(d.to_uint().reinterpret_as_int()))
     }
     // i32.trunc_f64_s: f64 -> i32 (有符号截断)
     I32TruncF64S => {
       let a = self.stack.pop_f64()
+      if a.is_nan() {
+        raise @runtime.InvalidConversion
+      }
+      if a >= 2147483648.0 || a < -2147483648.0 {
+        raise @runtime.IntegerOverflow
+      }
       self.stack.push(I32(a.to_int()))
     }
     // i32.trunc_f64_u: f64 -> i32 (无符号截断)
     I32TruncF64U => {
       let a = self.stack.pop_f64()
+      if a.is_nan() {
+        raise @runtime.InvalidConversion
+      }
+      if a >= 4294967296.0 || a < 0.0 {
+        raise @runtime.IntegerOverflow
+      }
       self.stack.push(I32(a.to_uint().reinterpret_as_int()))
     }
     // i64.trunc_f32_s: f32 -> i64 (有符号截断)
     I64TruncF32S => {
       let a = self.stack.pop_f32()
-      self.stack.push(I64(a.to_double().to_int64()))
+      if a.is_nan() {
+        raise @runtime.InvalidConversion
+      }
+      let d = a.to_double()
+      if d >= 9223372036854775808.0 || d < -9223372036854775808.0 {
+        raise @runtime.IntegerOverflow
+      }
+      self.stack.push(I64(d.to_int64()))
     }
     // i64.trunc_f32_u: f32 -> i64 (无符号截断)
     I64TruncF32U => {
       let a = self.stack.pop_f32()
-      self.stack.push(I64(a.to_double().to_uint64().reinterpret_as_int64()))
+      if a.is_nan() {
+        raise @runtime.InvalidConversion
+      }
+      let d = a.to_double()
+      if d >= 18446744073709551616.0 || d < 0.0 {
+        raise @runtime.IntegerOverflow
+      }
+      self.stack.push(I64(d.to_uint64().reinterpret_as_int64()))
     }
     // i64.trunc_f64_s: f64 -> i64 (有符号截断)
     I64TruncF64S => {
       let a = self.stack.pop_f64()
+      if a.is_nan() {
+        raise @runtime.InvalidConversion
+      }
+      if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
+        raise @runtime.IntegerOverflow
+      }
       self.stack.push(I64(a.to_int64()))
     }
     // i64.trunc_f64_u: f64 -> i64 (无符号截断)
     I64TruncF64U => {
       let a = self.stack.pop_f64()
+      if a.is_nan() {
+        raise @runtime.InvalidConversion
+      }
+      if a >= 18446744073709551616.0 || a < 0.0 {
+        raise @runtime.IntegerOverflow
+      }
       self.stack.push(I64(a.to_uint64().reinterpret_as_int64()))
     }
     // f32.convert_i32_s: i32 -> f32 (有符号转换)
