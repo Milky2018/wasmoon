@@ -528,3 +528,27 @@ test "f32 decimal literal rounding - case 557" {
     _ => panic()
   }
 }
+
+// ============================================================
+// Regression test: f32.const 3 should parse correctly
+// ============================================================
+
+///|
+test "f32 simple integer constant - regression" {
+  // br.wast line 22-23: (func (export "type-f32-value") (result f32)
+  //   (block (result f32) (f32.neg (br 0 (f32.const 3)))))
+  // Expected: f32.const 3 should be 3.0, not 2.0
+  let wat =
+    #|(module
+    #|  (func (export "f") (result f32) (f32.const 3))
+    #|)
+  let mod_ = parse(wat)
+  match mod_.codes[0].body[0] {
+    F32Const(f) => {
+      // f32 3.0 should be 0x40400000 = 1077936128
+      inspect(f, content="3")
+      inspect(f.reinterpret_as_int(), content="1077936128")
+    }
+    _ => panic()
+  }
+}
