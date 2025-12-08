@@ -1192,6 +1192,69 @@ test "LEB128 i64 decoding" {
 }
 
 ///|
+test "LEB128 u32 - too long (6 bytes)" {
+  // 6 bytes encoding value 3: \x83\x80\x80\x80\x80\x00
+  let parser = Parser::new(b"\x83\x80\x80\x80\x80\x00")
+  inspect(try? parser.read_leb128_u32(), content="Err(LEB128 encoded integer is too large)")
+}
+
+///|
+test "LEB128 u32 - 5th byte with unused bits set" {
+  // Value 3 with 5th byte having bit 4 set: \x83\x80\x80\x80\x10
+  let parser = Parser::new(b"\x83\x80\x80\x80\x10")
+  inspect(try? parser.read_leb128_u32(), content="Err(LEB128 encoded integer is too large)")
+}
+
+///|
+test "LEB128 u32 - valid 5 byte encoding" {
+  // Maximum u32 (0xFFFFFFFF): \xFF\xFF\xFF\xFF\x0F
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x0F")
+  inspect(parser.read_leb128_u32(), content="-1") // -1 as signed = 0xFFFFFFFF
+}
+
+///|
+test "LEB128 i32 - unused bits not sign-extended (positive)" {
+  // i32.const 0 with 5th byte = 0x70 (bits 4-6 should be 0 for positive)
+  let parser = Parser::new(b"\x80\x80\x80\x80\x70")
+  inspect(try? parser.read_leb128_i32(), content="Err(LEB128 encoded integer is too large)")
+}
+
+///|
+test "LEB128 i32 - unused bits not sign-extended (negative)" {
+  // i32.const -1 with 5th byte = 0x0F (bits 4-6 should be 1 for negative)
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x0F")
+  inspect(try? parser.read_leb128_i32(), content="Err(LEB128 encoded integer is too large)")
+}
+
+///|
+test "LEB128 i32 - valid positive 5 byte" {
+  // Maximum positive i32 (0x7FFFFFFF): bits 4-6 = 0 in 5th byte
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x07")
+  inspect(parser.read_leb128_i32(), content="2147483647")
+}
+
+///|
+test "LEB128 i32 - valid negative 5 byte" {
+  // -1 with proper sign extension: bits 4-6 = 1 in 5th byte
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x7F")
+  inspect(parser.read_leb128_i32(), content="-1")
+}
+
+///|
+test "LEB128 i64 - unused bits not sign-extended" {
+  // i64.const 0 with 10th byte = 0x7E (bits 1-6 should be 0 for positive)
+  let parser = Parser::new(b"\x80\x80\x80\x80\x80\x80\x80\x80\x80\x7E")
+  inspect(try? parser.read_leb128_i64(), content="Err(LEB128 encoded integer is too large)")
+}
+
+///|
+test "LEB128 i64 - valid maximum positive" {
+  // Maximum positive i64: 0x7FFFFFFFFFFFFFFF
+  let parser = Parser::new(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00")
+  inspect(parser.read_leb128_i64(), content="9223372036854775807")
+}
+
+///|
 test "value type parsing" {
   let parser = Parser::new(b"\x7F\x7E\x7D\x7C")
   inspect(parser.read_value_type(), content="I32")
