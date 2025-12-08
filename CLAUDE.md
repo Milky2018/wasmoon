@@ -288,7 +288,7 @@ Add libraries in `moon.pkg.json`:
 ### Finding API Documentation
 
 **Core library**: Check `~/.moon/lib/core/**/*.mbti` files
-- Example: `~/.moon/lib/core/hashmap/hashmap.mbti`
+- Example: `~/.moon/lib/core/hashmap/pkg.generated.mbti`
 - `.mbti` files contain type signatures and public APIs
 
 **Third-party libraries**: Check `.mooncakes/**/*.mbti` files
