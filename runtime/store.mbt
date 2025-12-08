@@ -2,6 +2,7 @@
 /// The store contains all global runtime state
 pub struct Store {
   funcs : Array[FuncInst]
+  func_types : Array[@types.FuncType] // Type of each function
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
@@ -16,6 +17,7 @@ pub struct Store {
 pub fn Store::new() -> Store {
   {
     funcs: [],
+    func_types: [],
     tables: [],
     mems: [],
     globals: [],
@@ -25,22 +27,29 @@ pub fn Store::new() -> Store {
 }
 
 ///|
-/// Allocate a WASM function
-pub fn Store::alloc_func(self : Store, func : @types.FunctionCode) -> Int {
+/// Allocate a WASM function with its type
+pub fn Store::alloc_func(
+  self : Store,
+  func : @types.FunctionCode,
+  func_type? : @types.FuncType = { params: [], results: [] },
+) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(FuncInst::WasmFunc(func))
+  self.func_types.push(func_type)
   self.func_owners.push(-1) // Owner not yet known
   idx
 }
 
 ///|
-/// Allocate a host function
+/// Allocate a host function with its type
 pub fn Store::alloc_host_func(
   self : Store,
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
+  func_type? : @types.FuncType = { params: [], results: [] },
 ) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(FuncInst::HostFunc(func))
+  self.func_types.push(func_type)
   self.func_owners.push(-1) // Host functions don't have an owner
   idx
 }
@@ -75,6 +84,18 @@ pub fn Store::get_func_inst(
     raise UndefinedElement
   }
   self.funcs[idx]
+}
+
+///|
+/// Get function type by store address
+pub fn Store::get_func_type(
+  self : Store,
+  idx : Int,
+) -> @types.FuncType raise RuntimeError {
+  if idx < 0 || idx >= self.func_types.length() {
+    raise UndefinedElement
+  }
+  self.func_types[idx]
 }
 
 ///|

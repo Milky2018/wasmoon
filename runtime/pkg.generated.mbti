@@ -169,20 +169,22 @@ pub impl Show for Stack
 
 pub struct Store {
   funcs : Array[FuncInst]
+  func_types : Array[@types.FuncType]
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
   func_owners : Array[Int]
   instances : Array[ModuleInstance]
 }
-pub fn Store::alloc_func(Self, @types.FunctionCode) -> Int
+pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType) -> Int
 pub fn Store::alloc_global(Self, GlobalInstance) -> Int
-pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Int
+pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Int
 pub fn Store::alloc_mem(Self, Memory) -> Int
 pub fn Store::alloc_table(Self, Table) -> Int
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 pub fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
 pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
+pub fn Store::get_func_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory

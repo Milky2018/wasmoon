@@ -389,10 +389,12 @@ pub fn instantiate_module(
 ) -> (@runtime.Store, @runtime.ModuleInstance) {
   let store = @runtime.Store::new()
 
-  // Allocate functions
+  // Allocate functions with their types
   let func_addrs : Array[Int] = []
-  for code in mod.codes {
-    let addr = store.alloc_func(code)
+  for i, code in mod.codes {
+    let type_idx = mod.funcs[i]
+    let func_type = mod.types[type_idx]
+    let addr = store.alloc_func(code, func_type~)
     func_addrs.push(addr)
   }
 
@@ -597,11 +599,13 @@ pub fn instantiate_module_with_imports(
     }
   }
 
-  // Allocate module functions
+  // Allocate module functions with their types
   for i, code in mod.codes {
-    let addr = store.alloc_func(code)
+    let type_idx = mod.funcs[i]
+    let func_type = mod.types[type_idx]
+    let addr = store.alloc_func(code, func_type~)
     func_addrs.push(addr)
-    func_type_indices.push(mod.funcs[i])
+    func_type_indices.push(type_idx)
   }
 
   // Allocate memories (after imported memories)

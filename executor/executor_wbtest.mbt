@@ -1395,9 +1395,15 @@ test "table import: call_indirect with imported table" {
     body: [LocalGet(0), LocalGet(1), I32Sub],
   }
 
-  // Allocate the functions in store
-  let add_addr = store.alloc_func(add_func)
-  let sub_addr = store.alloc_func(sub_func)
+  // The type for add/sub functions
+  let binary_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+
+  // Allocate the functions in store with their type
+  let add_addr = store.alloc_func(add_func, func_type=binary_type)
+  let sub_addr = store.alloc_func(sub_func, func_type=binary_type)
 
   // Set function references in table
   shared_table.set(0, @types.Value::FuncRef(add_addr)) catch {
@@ -1418,10 +1424,6 @@ test "table import: call_indirect with imported table" {
       CallIndirect(0, 0),
     ],
   } // type 0, table 0
-  let binary_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
   let apply_type : @types.FuncType = {
     params: [
       @types.ValueType::I32,

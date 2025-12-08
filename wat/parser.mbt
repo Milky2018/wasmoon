@@ -839,9 +839,15 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             mod_.imports.push(imp)
           }
           Keyword("table") => {
-            let (table, export_name, inline_elem) = self.parse_table_def(mod_)
+            let (table, export_name, inline_elem, tbl_name) = self.parse_table_def(
+              mod_,
+            )
             let table_idx = mod_.tables.length()
             mod_.tables.push(table)
+            // Register table name with correct index
+            if tbl_name is Some(name) {
+              self.table_names.set(name, table_idx)
+            }
             if export_name is Some(name) {
               mod_.exports.push({
                 name,
@@ -1529,11 +1535,26 @@ fn Parser::parse_plain_instruction(
     "call" => @types.Instruction::Call(self.parse_func_idx())
     "call_indirect" => {
       // call_indirect can have various forms:
+      // (call_indirect $table (type $t) ...)
       // (call_indirect (type $t) ...)
       // (call_indirect (param ...) (result ...) ...)
       // (call_indirect ...)  - empty type
-      let table_idx = 0
+      let mut table_idx = 0
       let mut type_idx = -1
+
+      // Check for optional table index/name before the type
+      match self.current {
+        Id(name) =>
+          match self.table_names.get(name) {
+            Some(idx) => {
+              table_idx = idx
+              self.advance()
+            }
+            None => () // Not a table name, might be something else
+          }
+        Number(_) => table_idx = self.parse_u32()
+        _ => ()
+      }
 
       // Parse optional type/param/result annotations
       while self.current == LParen {
@@ -2427,14 +2448,17 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
 fn Parser::parse_table_def(
   self : Parser,
   mod_ : @types.Module,
-) -> (@types.TableType, String?, @types.Element?) raise WatError {
+) -> (@types.TableType, String?, @types.Element?, String?) raise WatError {
+  // Returns (table_type, export_name, inline_elem, table_name)
   self.advance() // skip "table"
   let mut export_name : String? = None
+  let mut table_name : String? = None
 
   // Optional name
   match self.current {
     Id(name) => {
-      self.table_names.set(name, 0)
+      table_name = Some(name)
+      // Don't set table_names here; caller will set with correct index
       self.advance()
     }
     _ => ()
@@ -2509,7 +2533,12 @@ fn Parser::parse_table_def(
         }
         mod_.imports.push(imp)
         // Return a placeholder table type (the import is what matters)
-        return ({ elem_type, limits: { min, max } }, export_name, None)
+        return (
+          { elem_type, limits: { min, max } },
+          export_name,
+          None,
+          table_name,
+        )
       }
       _ => {
         // Not an inline import, restore state
@@ -2582,7 +2611,7 @@ fn Parser::parse_table_def(
               max: Some(func_indices.length()),
             },
           }
-          (table_type, export_name, Some(elem))
+          (table_type, export_name, Some(elem), table_name)
         }
         _ => raise UnexpectedToken("expected elem in inline table", self.loc())
       }
@@ -2596,7 +2625,7 @@ fn Parser::parse_table_def(
       }
       let elem_type = self.parse_value_type()
       self.expect_rparen()
-      ({ elem_type, limits: { min, max } }, export_name, None)
+      ({ elem_type, limits: { min, max } }, export_name, None, table_name)
     }
   }
 }
@@ -2924,9 +2953,12 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
         _ => 0
       }
       self.expect_rparen()
-      // Now expect (offset ...)
+      // Now expect offset expression - either (offset ...) or directly (i32.const ...)
       self.expect_lparen()
-      self.expect_keyword("offset")
+      // Check if explicit "offset" keyword is present
+      if self.current is Keyword("offset") {
+        self.advance()
+      }
     }
     Keyword("offset") => self.advance()
     _ => ()

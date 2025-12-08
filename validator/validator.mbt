@@ -307,6 +307,18 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     }
   }
 
+  // Validate elem segments reference valid functions
+  for elem in mod.elems {
+    for init in elem.init {
+      // Each init is an array of instructions (usually just RefFunc)
+      for instr in init {
+        if instr is RefFunc(func_idx) && func_idx >= ctx.funcs.length() {
+          raise InvalidFunctionIndex(func_idx)
+        }
+      }
+    }
+  }
+
   // Validate all function bodies
   let num_imports = count_func_imports(mod.imports)
   for i, code in mod.codes {
@@ -350,6 +362,19 @@ pub fn validate_module_with_context(
       raise WithContext(
         ValidationErrorContext::from_error(InvalidMemoryIndex(data.memory_idx)),
       )
+    }
+  }
+
+  // Validate elem segments reference valid functions
+  for elem in mod.elems {
+    for init in elem.init {
+      for instr in init {
+        if instr is RefFunc(func_idx) && func_idx >= ctx.funcs.length() {
+          raise WithContext(
+            ValidationErrorContext::from_error(InvalidFunctionIndex(func_idx)),
+          )
+        }
+      }
     }
   }
 
@@ -1145,6 +1170,13 @@ fn validate_instr(
     CallIndirect(type_idx, table_idx) => {
       if table_idx >= ctx.tables.length() {
         raise InvalidTableIndex(table_idx)
+      }
+      // call_indirect requires a funcref table
+      let table_type = ctx.tables[table_idx]
+      if table_type.elem_type != @types.ValueType::FuncRef {
+        raise TypeMismatch(
+          "call_indirect requires funcref table, got \{table_type.elem_type}",
+        )
       }
       if type_idx >= ctx.types.length() {
         raise InvalidTypeIndex(type_idx)
