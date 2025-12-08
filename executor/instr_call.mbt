@@ -47,8 +47,14 @@ fn ExecContext::exec_call_indirect(
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 
-  // Get the expected type and the function
+  // Get the expected type
   let expected_type = self.instance.types[type_idx]
+
+  // Get the actual function type and verify it matches
+  let actual_type = self.store.get_func_type(store_addr)
+  if expected_type != actual_type {
+    raise @runtime.IndirectCallTypeMismatch
+  }
 
   // Pop arguments from stack in reverse order
   let num_params = expected_type.params.length()
