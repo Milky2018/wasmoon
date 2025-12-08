@@ -67,6 +67,7 @@ pub(all) enum Instruction {
   TableGrow(Int) // table index
   TableFill(Int) // table index
   TableCopy(Int, Int) // dest table index, src table index
+  TableInit(Int, Int) // table index, elem index
 
   // Memory instructions
   I32Load(Int, Int) // align, offset

@@ -89,6 +89,14 @@ fn ExecContext::exec_instr(
       let src_table = self.store.get_table(src_table_addr)
       dest_table.copy_from(dest, src_table, src, n)
     }
+    TableInit(_, _) => {
+      // table.init copies elements from elem segment to table
+      // Pop operands: n (count), s (src offset in elem), d (dest offset in table)
+      self.stack.pop_i32() |> ignore // n
+      self.stack.pop_i32() |> ignore // s
+      self.stack.pop_i32() |> ignore // d
+      // TODO: implement table.init - requires elem segment support in runtime
+    }
 
     // Drop
     Drop => self.stack.pop() |> ignore

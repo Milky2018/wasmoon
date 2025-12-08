@@ -1115,6 +1115,11 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
     }
+    TableInit(_, _) => {
+      stack.pop(@types.ValueType::I32) // n
+      stack.pop(@types.ValueType::I32) // s
+      stack.pop(@types.ValueType::I32) // d
+    }
     ElemDrop(_) => ()
 
     // Reference instructions

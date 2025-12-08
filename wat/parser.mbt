@@ -643,6 +643,17 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
+fn count_table_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    if imp.desc is @types.ImportDesc::Table(_) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
 /// Parse a WAT module from string
 pub fn parse(input : String) -> @types.Module raise WatError {
   let parser = Parser::new(input)
@@ -1668,6 +1679,49 @@ fn Parser::parse_plain_instruction(
       let src = self.parse_table_idx()
       @types.Instruction::TableCopy(dest, src)
     }
+    "table.init" => {
+      // table.init can have forms: (table.init $elem) or (table.init $table $elem)
+      let first = match self.current {
+        Number(s) => {
+          self.advance()
+          parse_int(s)
+        }
+        Id(name) =>
+          // Could be table name or elem name - try table first
+          match self.table_names.get(name) {
+            Some(idx) => {
+              self.advance()
+              idx
+            }
+            None => {
+              // Not a table name, treat as elem index
+              self.advance()
+              0 // Assume it's elem 0 for named elems (we don't track elem names)
+            }
+          }
+        _ => 0
+      }
+      match self.current {
+        Number(_) | Id(_) => {
+          // Two arguments: first was table index, second is elem index
+          let elem_idx = match self.current {
+            Number(s) => {
+              self.advance()
+              parse_int(s)
+            }
+            Id(_) => {
+              self.advance()
+              0 // Named elem, default to 0
+            }
+            _ => 0
+          }
+          @types.Instruction::TableInit(first, elem_idx)
+        }
+        _ =>
+          // One argument: first was elem index, table defaults to 0
+          @types.Instruction::TableInit(0, first)
+      }
+    }
 
     // Memory
     "i32.load" =>
@@ -2586,15 +2640,15 @@ fn Parser::parse_table_def(
         match self.current {
           Keyword("elem") => {
             self.advance()
-            // Parse function indices
-            let func_indices : Array[Int] = []
+            // Parse element init expressions (can be indices or expressions)
+            let init : Array[Array[@types.Instruction]] = []
             while self.current != RParen {
               match self.current {
                 Id(name) =>
                   // Named function reference like $f
                   match self.func_names.get(name) {
                     Some(idx) => {
-                      func_indices.push(idx)
+                      init.push([@types.Instruction::RefFunc(idx)])
                       self.advance()
                     }
                     None =>
@@ -2604,13 +2658,39 @@ fn Parser::parse_table_def(
                   }
                 Number(_) => {
                   let idx = self.parse_u32()
-                  func_indices.push(idx)
+                  init.push([@types.Instruction::RefFunc(idx)])
                 }
-                _ =>
-                  raise UnexpectedToken(
-                    "expected function index in elem",
-                    self.loc(),
-                  )
+                LParen => {
+                  // Expression like (ref.func $f) or (ref.null func)
+                  self.advance()
+                  match self.current {
+                    Keyword("ref.func") => {
+                      self.advance()
+                      let idx = self.parse_func_idx()
+                      self.expect_rparen()
+                      init.push([@types.Instruction::RefFunc(idx)])
+                    }
+                    Keyword("ref.null") => {
+                      self.advance()
+                      let ref_type = self.parse_ref_type()
+                      self.expect_rparen()
+                      init.push([@types.Instruction::RefNull(ref_type)])
+                    }
+                    Keyword("item") => {
+                      self.advance()
+                      let expr = self.parse_instructions()
+                      self.expect_rparen()
+                      init.push(expr)
+                    }
+                    _ => {
+                      // General expression
+                      let expr = self.parse_instructions()
+                      self.expect_rparen()
+                      init.push(expr)
+                    }
+                  }
+                }
+                _ => break
               }
             }
             self.expect_rparen() // close elem
@@ -2621,16 +2701,11 @@ fn Parser::parse_table_def(
                 @types.Instruction::I32Const(0),
               ]),
               type_: elem_type,
-              init: func_indices.map(fn(idx) {
-                [@types.Instruction::RefFunc(idx)]
-              }),
+              init,
             }
             let table_type : @types.TableType = {
               elem_type,
-              limits: {
-                min: func_indices.length(),
-                max: Some(func_indices.length()),
-              },
+              limits: { min: init.length(), max: Some(init.length()) },
             }
             return (table_type, export_name, Some(elem), table_name)
           }
@@ -2660,13 +2735,49 @@ fn Parser::parse_table_def(
       }
     }
     _ => {
-      // Standard syntax: (table MIN [MAX] elemtype)
+      // Standard syntax: (table MIN [MAX] elemtype [init_expr])
       let min = self.parse_u32()
       let max = match self.current {
         Number(_) => Some(self.parse_u32())
         _ => None
       }
       let elem_type = self.parse_value_type()
+      // Check for optional default init expression (ref.func $f) or (ref.null func)
+      if self.current == LParen {
+        // Skip the init expression - it's for table default value
+        // This is a WebAssembly 2.0 feature, we'll just parse and ignore for now
+        self.advance()
+        match self.current {
+          Keyword("ref.func") | Keyword("ref.null") => {
+            self.advance()
+            // Skip the argument
+            while self.current != RParen {
+              self.advance()
+            }
+            self.expect_rparen()
+          }
+          _ => {
+            // General expression, skip until closing paren
+            let mut depth = 1
+            while depth > 0 && self.current != Eof {
+              match self.current {
+                LParen => {
+                  depth += 1
+                  self.advance()
+                }
+                RParen => {
+                  depth -= 1
+                  if depth > 0 {
+                    self.advance()
+                  }
+                }
+                _ => self.advance()
+              }
+            }
+            self.expect_rparen()
+          }
+        }
+      }
       self.expect_rparen()
       ({ elem_type, limits: { min, max } }, export_name, None, table_name)
     }
@@ -2794,6 +2905,12 @@ fn Parser::parse_import_def(
     }
     Keyword("table") => {
       self.advance()
+      // Optional table name
+      if self.current is Id(tname) {
+        // Register table name - table index is count of table imports so far
+        self.table_names.set(tname, count_table_imports(mod_.imports))
+        self.advance()
+      }
       let min = self.parse_u32()
       let max = match self.current {
         Number(_) => Some(self.parse_u32())
@@ -2936,98 +3053,208 @@ fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
 
 ///|
 /// Parse an element segment definition
-/// Syntax: (elem (i32.const <offset>) $func1 $func2 ...)
-/// or:     (elem (table $t) (offset (i32.const <n>)) func $func1 $func2 ...)
-/// or:     (elem declare func $func1 ...)  - declarative element segment
+/// Supports various syntaxes:
+/// - Passive: (elem funcref ...) or (elem func $f $g)
+/// - Active: (elem (table $t) (offset ...) ...) or (elem (i32.const 0) $f $g)
+/// - Declarative: (elem declare func $f $g)
 fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
   self.advance() // skip "elem"
 
   // Check for optional elem id
-  match self.current {
-    Id(_) => self.advance()
-    _ => ()
-  }
-
-  // Check for declarative element segment: (elem declare func $f)
-  // This declares functions without placing them in a table
-  if self.current == Keyword("declare") {
-    self.advance() // skip "declare"
-    // Optionally parse "func" keyword
-    if self.current is Keyword("func") {
-      self.advance()
-    }
-    // Parse function indices
-    let func_indices : Array[Int] = []
-    while self.current != RParen && self.current != Eof {
-      match self.current {
-        Number(_) | Id(_) => func_indices.push(self.parse_func_idx())
-        _ => break
-      }
-    }
-    self.expect_rparen() // close elem
-    // Declarative element has no table placement
-    return {
-      mode: @types.ElemMode::Declarative,
-      type_: @types.ValueType::FuncRef,
-      init: func_indices.map(fn(idx) { [@types.Instruction::RefFunc(idx)] }),
-    }
-  }
-
-  // Default table index is 0
-  let mut table_idx = 0
-
-  // Parse table reference or offset expression
-  self.expect_lparen()
-
-  // Check if this is (table <idx>) or an offset expression
-  match self.current {
-    Keyword("table") => {
-      self.advance()
-      table_idx = match self.current {
-        Number(_) => self.parse_u32()
-        Id(name) =>
-          match self.table_names.get(name) {
-            Some(idx) => {
-              self.advance()
-              idx
-            }
-            None => raise UndefinedIdentifier("table $\{name}", self.loc())
-          }
-        _ => 0
-      }
-      self.expect_rparen()
-      // Now expect offset expression - either (offset ...) or directly (i32.const ...)
-      self.expect_lparen()
-      // Check if explicit "offset" keyword is present
-      if self.current is Keyword("offset") {
-        self.advance()
-      }
-    }
-    Keyword("offset") => self.advance()
-    _ => ()
-  }
-
-  // Parse the offset expression (e.g., i32.const 0)
-  let offset = self.parse_instructions()
-  self.expect_rparen()
-
-  // Optionally parse "func" keyword for newer elem syntax
-  if self.current is Keyword("func") {
+  if self.current is Id(_) {
     self.advance()
   }
 
-  // Parse function indices
-  let func_indices : Array[Int] = []
-  while self.current != RParen && self.current != Eof {
-    match self.current {
-      Number(_) | Id(_) => func_indices.push(self.parse_func_idx())
-      _ => break
+  // Check for declarative element segment: (elem declare ...)
+  if self.current == Keyword("declare") {
+    self.advance() // skip "declare"
+    return self.parse_elem_items_and_finish(@types.ElemMode::Declarative)
+  }
+
+  // Check what comes next to determine if this is passive or active
+  // Passive: starts with reftype (funcref, externref, func, (ref ...))
+  // Active: starts with ( for table/offset/i32.const
+  match self.current {
+    Keyword("funcref")
+    | Keyword("externref")
+    | Keyword("func")
+    | Keyword("extern") =>
+      // Passive element segment
+      self.parse_elem_items_and_finish(@types.ElemMode::Passive)
+    LParen => {
+      // Could be active segment with (table ...), (offset ...), (i32.const ...), or (ref ...)
+      let saved = self.lexer.pos
+      let saved_line = self.lexer.line
+      let saved_column = self.lexer.column
+      let saved_token_start_line = self.lexer.token_start_line
+      let saved_token_start_column = self.lexer.token_start_column
+      self.advance()
+      match self.current {
+        Keyword("ref") => {
+          // Passive segment with (ref null func) type
+          self.lexer.pos = saved
+          self.lexer.line = saved_line
+          self.lexer.column = saved_column
+          self.lexer.token_start_line = saved_token_start_line
+          self.lexer.token_start_column = saved_token_start_column
+          self.current = LParen
+          self.parse_elem_items_and_finish(@types.ElemMode::Passive)
+        }
+        Keyword("table") => {
+          // Active with explicit table
+          self.advance()
+          let table_idx = match self.current {
+            Number(_) => self.parse_u32()
+            Id(name) =>
+              match self.table_names.get(name) {
+                Some(idx) => {
+                  self.advance()
+                  idx
+                }
+                None => raise UndefinedIdentifier("table $\{name}", self.loc())
+              }
+            _ => 0
+          }
+          self.expect_rparen()
+          // Now expect offset expression
+          self.expect_lparen()
+          let offset = if self.current is Keyword("offset") {
+            self.advance()
+            let o = self.parse_instructions()
+            self.expect_rparen()
+            o
+          } else {
+            // Direct offset expression like (i32.const 0)
+            let o = self.parse_instructions()
+            self.expect_rparen()
+            o
+          }
+          self.parse_elem_items_and_finish(
+            @types.ElemMode::Active(table_idx, offset),
+          )
+        }
+        Keyword("offset") => {
+          // Active with explicit offset, implicit table 0
+          self.advance()
+          let offset = self.parse_instructions()
+          self.expect_rparen()
+          self.parse_elem_items_and_finish(@types.ElemMode::Active(0, offset))
+        }
+        _ => {
+          // Active with direct offset expression like (i32.const 0), implicit table 0
+          let offset = self.parse_instructions()
+          self.expect_rparen()
+          self.parse_elem_items_and_finish(@types.ElemMode::Active(0, offset))
+        }
+      }
+    }
+    // Empty passive segment
+    RParen => {
+      self.expect_rparen()
+      {
+        mode: @types.ElemMode::Passive,
+        type_: @types.ValueType::FuncRef,
+        init: [],
+      }
+    }
+    _ => raise UnexpectedToken("expected elem segment content", self.loc())
+  }
+}
+
+///|
+/// Parse element items (type and init expressions) and finish the element segment
+fn Parser::parse_elem_items_and_finish(
+  self : Parser,
+  mode : @types.ElemMode,
+) -> @types.Element raise WatError {
+  // Parse element type: funcref, externref, func, (ref ...)
+  let (elem_type, use_func_indices) = self.parse_elem_type()
+
+  // Parse init expressions
+  let init : Array[Array[@types.Instruction]] = []
+  if use_func_indices {
+    // Parse function indices directly: $f $g or 0 1 2
+    while self.current != RParen && self.current != Eof {
+      match self.current {
+        Number(_) | Id(_) => {
+          let idx = self.parse_func_idx()
+          init.push([@types.Instruction::RefFunc(idx)])
+        }
+        _ => break
+      }
+    }
+  } else {
+    // Parse init expressions: (ref.func $f), (ref.null func), (item ...), or general expressions
+    while self.current == LParen {
+      self.advance()
+      match self.current {
+        Keyword("item") => {
+          // (item <expr>)
+          self.advance()
+          let expr = self.parse_instructions()
+          self.expect_rparen()
+          init.push(expr)
+        }
+        Keyword("ref.func") => {
+          // (ref.func $f)
+          self.advance()
+          let idx = self.parse_func_idx()
+          self.expect_rparen()
+          init.push([@types.Instruction::RefFunc(idx)])
+        }
+        Keyword("ref.null") => {
+          // (ref.null func)
+          self.advance()
+          let ref_type = self.parse_ref_type()
+          self.expect_rparen()
+          init.push([@types.Instruction::RefNull(ref_type)])
+        }
+        _ => {
+          // General expression like (global.get 0)
+          let expr = self.parse_instructions()
+          self.expect_rparen()
+          init.push(expr)
+        }
+      }
     }
   }
   self.expect_rparen() // close elem
-  {
-    mode: @types.ElemMode::Active(table_idx, offset),
-    type_: @types.ValueType::FuncRef,
-    init: func_indices.map(fn(idx) { [@types.Instruction::RefFunc(idx)] }),
+  { mode, type_: elem_type, init }
+}
+
+///|
+/// Parse element type and return (type, use_func_indices)
+/// use_func_indices is true when using "func" abbreviation (indices instead of expressions)
+fn Parser::parse_elem_type(
+  self : Parser,
+) -> (@types.ValueType, Bool) raise WatError {
+  match self.current {
+    Keyword("funcref") => {
+      self.advance()
+      (@types.ValueType::FuncRef, false)
+    }
+    Keyword("externref") => {
+      self.advance()
+      (@types.ValueType::ExternRef, false)
+    }
+    Keyword("func") => {
+      self.advance()
+      (@types.ValueType::FuncRef, true) // use indices
+    }
+    Keyword("extern") => {
+      self.advance()
+      (@types.ValueType::ExternRef, true) // use indices
+    }
+    LParen => {
+      // (ref null func) or similar
+      let vt = self.parse_value_type()
+      (vt, false)
+    }
+    Id(_) | Number(_) =>
+      // Legacy syntax: direct function indices without type keyword
+      (@types.ValueType::FuncRef, true)
+    _ =>
+      // Default to funcref with expressions (empty elem)
+      (@types.ValueType::FuncRef, false)
   }
 }

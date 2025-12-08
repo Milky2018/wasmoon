@@ -524,6 +524,12 @@ fn write_instruction_simple(
       buf.write_string(" ")
       buf.write_string(src.to_string())
     }
+    TableInit(table_idx, elem_idx) => {
+      buf.write_string("table.init ")
+      buf.write_string(table_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(elem_idx.to_string())
+    }
 
     // Memory load instructions
     I32Load(align, offset) => write_mem_instr(buf, "i32.load", align, offset)
