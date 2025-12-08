@@ -21,11 +21,7 @@ pub fn Table::get(self : Table, idx : Int) -> @types.Value raise RuntimeError {
   if idx < 0 || idx >= self.size {
     raise OutOfBoundsTableAccess
   }
-  let elem = self.elements[idx]
-  match elem {
-    Null => raise UninitializedElement
-    _ => elem
-  }
+  self.elements[idx]
 }
 
 ///|
@@ -43,18 +39,6 @@ pub fn Table::set(
 ///|
 pub fn Table::size(self : Table) -> Int {
   self.size
-}
-
-///|
-/// Get element without checking for uninitialized (for testing)
-pub fn Table::get_element(
-  self : Table,
-  idx : Int,
-) -> @types.Value raise RuntimeError {
-  if idx < 0 || idx >= self.size {
-    raise OutOfBoundsTableAccess
-  }
-  self.elements[idx]
 }
 
 ///|

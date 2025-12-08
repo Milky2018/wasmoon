@@ -89,13 +89,61 @@ fn ExecContext::exec_instr(
       let src_table = self.store.get_table(src_table_addr)
       dest_table.copy_from(dest, src_table, src, n)
     }
-    TableInit(_, _) => {
+    TableInit(table_idx, elem_idx) => {
       // table.init copies elements from elem segment to table
       // Pop operands: n (count), s (src offset in elem), d (dest offset in table)
-      self.stack.pop_i32() |> ignore // n
-      self.stack.pop_i32() |> ignore // s
-      self.stack.pop_i32() |> ignore // d
-      // TODO: implement table.init - requires elem segment support in runtime
+      let n = self.stack.pop_i32()
+      let s = self.stack.pop_i32()
+      let d = self.stack.pop_i32()
+
+      // Get elem segment
+      let elem_segment = self.instance.elem_segments[elem_idx]
+
+      // Check if segment has been dropped or is declarative
+      // Declarative elem segments behave as if they have been dropped
+      let is_dropped = self.instance.dropped_elems[elem_idx]
+      let is_declarative = elem_segment.mode is @types.ElemMode::Declarative
+      if is_dropped || is_declarative {
+        // Dropped/declarative segments behave as if they have zero length
+        if n != 0 {
+          raise @runtime.RuntimeError::OutOfBoundsTableAccess
+        }
+        return
+      }
+
+      // Check bounds
+      let elem_len = elem_segment.init.length()
+      let table_addr = self.instance.table_addrs[table_idx]
+      let table = self.store.get_table(table_addr)
+      let table_size = table.size()
+      if s < 0 || n < 0 || s + n > elem_len || d < 0 || d + n > table_size {
+        raise @runtime.RuntimeError::OutOfBoundsTableAccess
+      }
+
+      // Copy elements from elem segment to table
+      for i in 0..<n {
+        let init_expr = elem_segment.init[s + i]
+        // Evaluate the init expression to get the value
+        let value = match init_expr {
+          [RefFunc(func_idx)] => {
+            // Convert module function index to store address
+            let store_addr = self.instance.func_addrs[func_idx]
+            @types.Value::FuncRef(store_addr)
+          }
+          [RefNull(ref_type)] =>
+            match ref_type {
+              FuncRef | ExternRef => @types.Value::Null
+              _ => @types.Value::Null
+            }
+          [I32Const(idx)] => {
+            // Legacy format: function index as i32
+            let store_addr = self.instance.func_addrs[idx]
+            @types.Value::FuncRef(store_addr)
+          }
+          _ => @types.Value::Null
+        }
+        table.set(d + i, value)
+      }
     }
 
     // Drop
@@ -430,7 +478,7 @@ pub fn instantiate_module(
   let global_addrs : Array[Int] = []
   for global in mod.globals {
     // Evaluate init expression (for now, assume simple constant expressions)
-    let init_value = eval_const_expr(global.init)
+    let init_value = eval_const_expr(global.init, func_addrs~)
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
@@ -465,7 +513,10 @@ pub fn instantiate_module(
 
 ///|
 /// Evaluate a constant initialization expression
-fn eval_const_expr(instrs : Array[@types.Instruction]) -> @types.Value {
+fn eval_const_expr(
+  instrs : Array[@types.Instruction],
+  func_addrs? : Array[Int] = [],
+) -> @types.Value {
   // WebAssembly constant expressions can only contain:
   // - i32.const, i64.const, f32.const, f64.const
   // - ref.null, ref.func
@@ -475,7 +526,119 @@ fn eval_const_expr(instrs : Array[@types.Instruction]) -> @types.Value {
     [I64Const(n)] => I64(n)
     [F32Const(f)] => F32(f)
     [F64Const(d)] => F64(d)
+    [RefNull(_)] => Null
+    [RefFunc(idx)] => {
+      // Convert module function index to store address
+      let store_addr = if idx < func_addrs.length() {
+        func_addrs[idx]
+      } else {
+        idx // fallback, module func idx
+      }
+      FuncRef(store_addr)
+    }
     _ => Null // fallback for unsupported expressions
+  }
+}
+
+///|
+/// Evaluate an extended constant expression for elem/data segment offsets
+/// Supports i32.add, i32.sub, i32.mul in addition to basic constants
+/// Returns the i32 offset value
+fn eval_extended_const_expr(
+  instrs : Array[@types.Instruction],
+  globals : Array[@runtime.GlobalInstance],
+) -> Int {
+  // Use a simple stack-based evaluator
+  let stack : Array[Int] = []
+  for instr in instrs {
+    match instr {
+      I32Const(n) => stack.push(n)
+      GlobalGet(idx) =>
+        if idx < globals.length() {
+          match globals[idx].get() {
+            I32(n) => stack.push(n)
+            _ => ()
+          }
+        }
+      I32Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() + b.unwrap())
+        }
+      I32Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() - b.unwrap())
+        }
+      I32Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() * b.unwrap())
+        }
+      _ => ()
+    }
+  }
+  if stack.length() > 0 {
+    stack[stack.length() - 1]
+  } else {
+    0
+  }
+}
+
+///|
+/// Helper to get global instances from a store given global addresses
+fn get_global_instances(
+  store : @runtime.Store,
+  global_addrs : Array[Int],
+) -> Array[@runtime.GlobalInstance] {
+  let globals : Array[@runtime.GlobalInstance] = []
+  for addr in global_addrs {
+    globals.push(store.get_global(addr)) catch {
+      _ => ()
+    }
+  }
+  globals
+}
+
+///|
+/// Evaluate an elem segment init expression to get a Value
+/// Returns None for unsupported expressions that should be skipped
+fn eval_elem_init_expr(
+  init_expr : Array[@types.Instruction],
+  func_addrs : Array[Int],
+  globals : Array[@runtime.GlobalInstance],
+) -> @types.Value? {
+  match init_expr {
+    [RefFunc(idx)] => {
+      // Convert module function index to store address
+      let store_addr = if idx < func_addrs.length() {
+        func_addrs[idx]
+      } else {
+        idx // fallback, should not happen for valid modules
+      }
+      Some(@types.Value::FuncRef(store_addr))
+    }
+    [I32Const(idx)] => {
+      // Legacy format: function index as i32
+      let store_addr = if idx < func_addrs.length() {
+        func_addrs[idx]
+      } else {
+        idx // fallback
+      }
+      Some(@types.Value::FuncRef(store_addr))
+    }
+    [RefNull(_)] => Some(@types.Value::Null)
+    [GlobalGet(idx)] =>
+      // Get funcref from global
+      if idx < globals.length() {
+        Some(globals[idx].get())
+      } else {
+        None
+      }
+    _ => None
   }
 }
 
@@ -503,36 +666,32 @@ pub fn instantiate_module_with_init(
   }
 
   // Initialize element segments (populate tables with function references)
-  for elem in mod.elems {
+  for elem_idx, elem in mod.elems {
     // Only process active element segments
     if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
       if instance.table_addrs.length() > table_idx {
         let table = store.get_table(instance.table_addrs[table_idx])
 
-        // Evaluate offset expression
-        let offset = match offset_expr {
-          [I32Const(n)] => n
-          _ => 0
+        // Evaluate offset expression using extended const expr evaluator
+        let globals = get_global_instances(store, instance.global_addrs)
+        let offset = eval_extended_const_expr(offset_expr, globals)
+
+        // Check bounds before initializing
+        // offset + num_elements must not exceed table size
+        if offset < 0 || offset + elem.init.length() > table.size() {
+          raise @runtime.OutOfBoundsTableAccess
         }
 
-        // Set table entries - convert module function index to store address
+        // Set table entries - evaluate init expression to get value
         for i, init_expr in elem.init {
-          // Extract function index from init expression
-          let func_idx = match init_expr {
-            [RefFunc(idx)] => idx
-            [I32Const(idx)] => idx
-            _ => continue
-          }
-          let store_addr = if func_idx < instance.func_addrs.length() {
-            instance.func_addrs[func_idx]
-          } else {
-            func_idx // fallback, should not happen for valid modules
-          }
-          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-            _ => ()
+          match eval_elem_init_expr(init_expr, instance.func_addrs, globals) {
+            Some(value) => table.set(offset + i, value)
+            None => continue
           }
         }
       }
+      // Active elem segments are implicitly dropped after initialization
+      instance.dropped_elems[elem_idx] = true
     }
   }
 
@@ -636,7 +795,7 @@ pub fn instantiate_module_with_imports(
 
   // Allocate globals (after imported globals)
   for global in mod.globals {
-    let init_value = eval_const_expr(global.init)
+    let init_value = eval_const_expr(global.init, func_addrs~)
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
@@ -667,34 +826,31 @@ pub fn instantiate_module_with_imports(
   }
 
   // Initialize active element segments (populate tables with function references)
-  for elem in mod.elems {
+  for elem_idx, elem in mod.elems {
     // Only process active element segments
     if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
       if table_addrs.length() > table_idx {
         let table = store.get_table(table_addrs[table_idx])
-        // Evaluate offset expression
-        let offset = match offset_expr {
-          [I32Const(n)] => n
-          _ => 0
+        // Evaluate offset expression using extended const expr evaluator
+        let globals = get_global_instances(store, global_addrs)
+        let offset = eval_extended_const_expr(offset_expr, globals)
+
+        // Check bounds before initializing
+        // offset + num_elements must not exceed table size
+        if offset < 0 || offset + elem.init.length() > table.size() {
+          raise @runtime.OutOfBoundsTableAccess
         }
-        // Set table entries - convert module function index to store address
+
+        // Set table entries - evaluate init expression to get value
         for i, init_expr in elem.init {
-          // Extract function index from init expression
-          let func_idx = match init_expr {
-            [RefFunc(idx)] => idx
-            [I32Const(idx)] => idx
-            _ => continue
-          }
-          let store_addr = if func_idx < func_addrs.length() {
-            func_addrs[func_idx]
-          } else {
-            func_idx // fallback, should not happen for valid modules
-          }
-          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-            _ => ()
+          match eval_elem_init_expr(init_expr, func_addrs, globals) {
+            Some(value) => table.set(offset + i, value)
+            None => continue
           }
         }
       }
+      // Active elem segments are implicitly dropped after initialization
+      dropped_elems[elem_idx] = true
     }
   }
   {
@@ -844,33 +1000,31 @@ pub fn instantiate_with_linker(
   }
 
   // Initialize element segments (populate tables with function references)
-  for elem in mod.elems {
+  for elem_idx, elem in mod.elems {
     // Only process active element segments
     if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
       if instance.table_addrs.length() > table_idx {
         let table = store.get_table(instance.table_addrs[table_idx])
-        let offset = match offset_expr {
-          [I32Const(n)] => n
-          _ => 0
+        // Evaluate offset expression using extended const expr evaluator
+        let globals = get_global_instances(store, instance.global_addrs)
+        let offset = eval_extended_const_expr(offset_expr, globals)
+
+        // Check bounds before initializing
+        // offset + num_elements must not exceed table size
+        if offset < 0 || offset + elem.init.length() > table.size() {
+          raise @runtime.OutOfBoundsTableAccess
         }
-        // Convert module function index to store address
+
+        // Set table entries - evaluate init expression to get value
         for i, init_expr in elem.init {
-          // Extract function index from init expression
-          let func_idx = match init_expr {
-            [RefFunc(idx)] => idx
-            [I32Const(idx)] => idx
-            _ => continue
-          }
-          let store_addr = if func_idx < instance.func_addrs.length() {
-            instance.func_addrs[func_idx]
-          } else {
-            func_idx // fallback, should not happen for valid modules
-          }
-          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-            _ => ()
+          match eval_elem_init_expr(init_expr, instance.func_addrs, globals) {
+            Some(value) => table.set(offset + i, value)
+            None => continue
           }
         }
       }
+      // Active elem segments are implicitly dropped after initialization
+      instance.dropped_elems[elem_idx] = true
     }
   }
 

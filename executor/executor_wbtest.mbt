@@ -1700,11 +1700,11 @@ test "table operations: table.fill" {
   }
 
   // Verify: table[0] should be Null, table[1..3] should be FuncRef(42), table[4] should be Null
-  inspect(table.get_element(0), content="Null")
-  inspect(table.get_element(1), content="FuncRef(42)")
-  inspect(table.get_element(2), content="FuncRef(42)")
-  inspect(table.get_element(3), content="FuncRef(42)")
-  inspect(table.get_element(4), content="Null")
+  inspect(table.get(0), content="Null")
+  inspect(table.get(1), content="FuncRef(42)")
+  inspect(table.get(2), content="FuncRef(42)")
+  inspect(table.get(3), content="FuncRef(42)")
+  inspect(table.get(4), content="Null")
 }
 
 ///|
@@ -1728,12 +1728,12 @@ test "table operations: table.copy same table" {
   table.copy_from(3, table, 0, 3) catch {
     _ => fail("table.copy failed")
   }
-  inspect(table.get_element(0), content="FuncRef(10)")
-  inspect(table.get_element(1), content="FuncRef(20)")
-  inspect(table.get_element(2), content="FuncRef(30)")
-  inspect(table.get_element(3), content="FuncRef(10)")
-  inspect(table.get_element(4), content="FuncRef(20)")
-  inspect(table.get_element(5), content="FuncRef(30)")
+  inspect(table.get(0), content="FuncRef(10)")
+  inspect(table.get(1), content="FuncRef(20)")
+  inspect(table.get(2), content="FuncRef(30)")
+  inspect(table.get(3), content="FuncRef(10)")
+  inspect(table.get(4), content="FuncRef(20)")
+  inspect(table.get(5), content="FuncRef(30)")
 }
 
 ///|
@@ -1756,10 +1756,10 @@ test "table operations: table.copy between tables" {
   table2.copy_from(1, table1, 0, 2) catch {
     _ => fail("table.copy failed")
   }
-  inspect(table2.get_element(0), content="Null")
-  inspect(table2.get_element(1), content="FuncRef(100)")
-  inspect(table2.get_element(2), content="FuncRef(200)")
-  inspect(table2.get_element(3), content="Null")
+  inspect(table2.get(0), content="Null")
+  inspect(table2.get(1), content="FuncRef(100)")
+  inspect(table2.get(2), content="FuncRef(200)")
+  inspect(table2.get(3), content="Null")
 }
 
 ///|
@@ -1784,12 +1784,12 @@ test "table operations: table.copy overlapping backward" {
   table.copy_from(2, table, 0, 3) catch {
     _ => fail("table.copy failed")
   }
-  inspect(table.get_element(0), content="FuncRef(1)")
-  inspect(table.get_element(1), content="FuncRef(2)")
-  inspect(table.get_element(2), content="FuncRef(1)")
-  inspect(table.get_element(3), content="FuncRef(2)")
-  inspect(table.get_element(4), content="FuncRef(3)")
-  inspect(table.get_element(5), content="Null")
+  inspect(table.get(0), content="FuncRef(1)")
+  inspect(table.get(1), content="FuncRef(2)")
+  inspect(table.get(2), content="FuncRef(1)")
+  inspect(table.get(3), content="FuncRef(2)")
+  inspect(table.get(4), content="FuncRef(3)")
+  inspect(table.get(5), content="Null")
 }
 
 ///|
@@ -2294,8 +2294,9 @@ test "bulk memory: elem.drop" {
     _ => fail("instantiate_module_with_init failed")
   }
 
-  // Before drop: elem segment should not be dropped
-  inspect(instance.dropped_elems[0], content="false")
+  // Before explicit drop: active elem segment is already implicitly dropped after initialization
+  // (per WebAssembly spec, active elem segments are dropped after module instantiation)
+  inspect(instance.dropped_elems[0], content="true")
 
   // Drop the elem segment
   call_exported_func(store, instance, "drop", []) |> ignore

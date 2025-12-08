@@ -13,6 +13,7 @@ pub(all) suberror ValidationError {
   InvalidTableIndex(Int)
   InvalidMemoryIndex(Int)
   InvalidLabelIndex(Int)
+  InvalidElemIndex(Int)
   UnreachableCode
   MultipleMemories // More than one memory is not allowed in MVP
   MultipleTables // More than one table is not allowed in MVP
@@ -53,6 +54,7 @@ pub fn ValidationErrorContext::from_error(
     InvalidTableIndex(idx) => "invalid table index: \{idx}"
     InvalidMemoryIndex(idx) => "invalid memory index: \{idx}"
     InvalidLabelIndex(idx) => "invalid label index: \{idx}"
+    InvalidElemIndex(idx) => "invalid element index: \{idx}"
     UnreachableCode => "unreachable code"
     MultipleMemories => "multiple memories not allowed in MVP"
     MultipleTables => "multiple tables not allowed in MVP"
@@ -147,6 +149,7 @@ priv struct ValidationContext {
   tables : Array[@types.TableType]
   mems : Array[@types.MemoryType]
   globals : Array[@types.GlobalType]
+  elems : Array[@types.ValueType] // element segment types
   locals : Array[@types.ValueType] // current function's locals
   labels : Array[LabelInfo] // label stack for control flow
   returns : Array[@types.ValueType] // current function's return types
@@ -198,12 +201,18 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   for global in mod.globals {
     globals.push(global.type_)
   }
+  // Collect elem segment types
+  let elems : Array[@types.ValueType] = []
+  for elem in mod.elems {
+    elems.push(elem.type_)
+  }
   {
     types: mod.types,
     funcs,
     tables,
     mems,
     globals,
+    elems,
     locals: [],
     labels: [],
     returns: [],
@@ -291,6 +300,7 @@ fn validate_const_expr(
   globals : Array[@types.GlobalType],
   expr : Array[@types.Instruction],
   expected_type : @types.ValueType,
+  funcs? : Array[Int] = [],
 ) -> Unit raise ValidationError {
   // Constant expressions must be exactly one instruction that produces a value
   // Valid constant instructions: i32.const, i64.const, f32.const, f64.const,
@@ -308,7 +318,13 @@ fn validate_const_expr(
       F32Const(_) => result_type = Some(@types.ValueType::F32)
       F64Const(_) => result_type = Some(@types.ValueType::F64)
       RefNull(t) => result_type = Some(t)
-      RefFunc(_) => result_type = Some(@types.ValueType::FuncRef)
+      RefFunc(func_idx) => {
+        // Check function exists if funcs array is provided
+        if funcs.length() > 0 && func_idx >= funcs.length() {
+          raise InvalidFunctionIndex(func_idx)
+        }
+        result_type = Some(@types.ValueType::FuncRef)
+      }
       GlobalGet(idx) => {
         // Check global exists
         if idx >= globals.length() {
@@ -374,15 +390,27 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     validate_const_expr(ctx.globals, data.offset, @types.ValueType::I32)
   }
 
-  // Validate elem segments reference valid functions
+  // Validate elem segments
   for elem in mod.elems {
-    for init in elem.init {
-      // Each init is an array of instructions (usually just RefFunc)
-      for instr in init {
-        if instr is RefFunc(func_idx) && func_idx >= ctx.funcs.length() {
-          raise InvalidFunctionIndex(func_idx)
-        }
+    // Validate offset expression for active elem segments
+    if elem.mode is Active(table_idx, offset_expr) {
+      // Check table index is valid
+      if table_idx >= ctx.tables.length() {
+        raise InvalidTableIndex(table_idx)
       }
+      // Check element type matches table element type
+      let table_elem_type = ctx.tables[table_idx].elem_type
+      if elem.type_ != table_elem_type {
+        raise TypeMismatch(
+          "element segment type \{elem.type_} does not match table element type \{table_elem_type}",
+        )
+      }
+      // Validate offset expression is a constant expression producing i32
+      validate_const_expr(ctx.globals, offset_expr, @types.ValueType::I32)
+    }
+    // Validate each init expression is a constant expression producing the element type
+    for init in elem.init {
+      validate_const_expr(ctx.globals, init, elem.type_, funcs=ctx.funcs)
     }
   }
 
@@ -436,15 +464,36 @@ pub fn validate_module_with_context(
     }
   }
 
-  // Validate elem segments reference valid functions
+  // Validate elem segments
   for elem in mod.elems {
+    // Validate offset expression for active elem segments
+    if elem.mode is Active(table_idx, offset_expr) {
+      // Check table index is valid
+      if table_idx >= ctx.tables.length() {
+        raise WithContext(
+          ValidationErrorContext::from_error(InvalidTableIndex(table_idx)),
+        )
+      }
+      // Check element type matches table element type
+      let table_elem_type = ctx.tables[table_idx].elem_type
+      if elem.type_ != table_elem_type {
+        raise WithContext(
+          ValidationErrorContext::from_error(
+            TypeMismatch(
+              "element segment type \{elem.type_} does not match table element type \{table_elem_type}",
+            ),
+          ),
+        )
+      }
+      // Validate offset expression is a constant expression producing i32
+      validate_const_expr(ctx.globals, offset_expr, @types.ValueType::I32) catch {
+        e => raise WithContext(ValidationErrorContext::from_error(e))
+      }
+    }
+    // Validate each init expression is a constant expression producing the element type
     for init in elem.init {
-      for instr in init {
-        if instr is RefFunc(func_idx) && func_idx >= ctx.funcs.length() {
-          raise WithContext(
-            ValidationErrorContext::from_error(InvalidFunctionIndex(func_idx)),
-          )
-        }
+      validate_const_expr(ctx.globals, init, elem.type_, funcs=ctx.funcs) catch {
+        e => raise WithContext(ValidationErrorContext::from_error(e))
       }
     }
   }
@@ -490,6 +539,7 @@ fn validate_function_with_offset(
     tables: ctx.tables,
     mems: ctx.mems,
     globals: ctx.globals,
+    elems: ctx.elems,
     locals,
     labels: [],
     returns: func_type.results,
@@ -604,6 +654,7 @@ fn validate_function(
     tables: ctx.tables,
     mems: ctx.mems,
     globals: ctx.globals,
+    elems: ctx.elems,
     locals,
     labels: [],
     returns: func_type.results,
@@ -1186,7 +1237,22 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
     }
-    TableInit(_, _) => {
+    TableInit(table_idx, elem_idx) => {
+      // Validate table and elem indices
+      if table_idx >= ctx.tables.length() {
+        raise InvalidTableIndex(table_idx)
+      }
+      if elem_idx >= ctx.elems.length() {
+        raise InvalidElemIndex(elem_idx)
+      }
+      // Check elem segment type matches table element type
+      let table_elem_type = ctx.tables[table_idx].elem_type
+      let elem_type = ctx.elems[elem_idx]
+      if elem_type != table_elem_type {
+        raise TypeMismatch(
+          "element segment type \{elem_type} does not match table element type \{table_elem_type}",
+        )
+      }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d

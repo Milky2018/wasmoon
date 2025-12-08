@@ -44,8 +44,8 @@ test "Table set and get with funcref" {
   table.set(5, @types.Value::FuncRef(100))
   inspect(try? table.get(0), content="Ok(FuncRef(42))")
   inspect(try? table.get(5), content="Ok(FuncRef(100))")
-  // Uninitialized element raises error
-  inspect(try? table.get(1), content="Err(UninitializedElement)")
+  // Uninitialized element returns Null (call_indirect would trap on this)
+  inspect(try? table.get(1), content="Ok(Null)")
 }
 
 ///|
