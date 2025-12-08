@@ -494,24 +494,33 @@ pub fn instantiate_module_with_init(
 
   // Initialize element segments (populate tables with function references)
   for elem in mod.elems {
-    if instance.table_addrs.length() > elem.table_idx {
-      let table = store.get_table(instance.table_addrs[elem.table_idx])
+    // Only process active element segments
+    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+      if instance.table_addrs.length() > table_idx {
+        let table = store.get_table(instance.table_addrs[table_idx])
 
-      // Evaluate offset expression
-      let offset = match elem.offset {
-        [I32Const(n)] => n
-        _ => 0
-      }
-
-      // Set table entries - convert module function index to store address
-      for i, func_idx in elem.init {
-        let store_addr = if func_idx < instance.func_addrs.length() {
-          instance.func_addrs[func_idx]
-        } else {
-          func_idx // fallback, should not happen for valid modules
+        // Evaluate offset expression
+        let offset = match offset_expr {
+          [I32Const(n)] => n
+          _ => 0
         }
-        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-          _ => ()
+
+        // Set table entries - convert module function index to store address
+        for i, init_expr in elem.init {
+          // Extract function index from init expression
+          let func_idx = match init_expr {
+            [RefFunc(idx)] => idx
+            [I32Const(idx)] => idx
+            _ => continue
+          }
+          let store_addr = if func_idx < instance.func_addrs.length() {
+            instance.func_addrs[func_idx]
+          } else {
+            func_idx // fallback, should not happen for valid modules
+          }
+          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
+            _ => ()
+          }
         }
       }
     }
@@ -647,23 +656,31 @@ pub fn instantiate_module_with_imports(
 
   // Initialize active element segments (populate tables with function references)
   for elem in mod.elems {
-    // Active element segments have a non-empty offset expression
-    if elem.offset.length() > 0 && table_addrs.length() > elem.table_idx {
-      let table = store.get_table(table_addrs[elem.table_idx])
-      // Evaluate offset expression
-      let offset = match elem.offset {
-        [I32Const(n)] => n
-        _ => 0
-      }
-      // Set table entries - convert module function index to store address
-      for i, func_idx in elem.init {
-        let store_addr = if func_idx < func_addrs.length() {
-          func_addrs[func_idx]
-        } else {
-          func_idx // fallback, should not happen for valid modules
+    // Only process active element segments
+    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+      if table_addrs.length() > table_idx {
+        let table = store.get_table(table_addrs[table_idx])
+        // Evaluate offset expression
+        let offset = match offset_expr {
+          [I32Const(n)] => n
+          _ => 0
         }
-        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-          _ => ()
+        // Set table entries - convert module function index to store address
+        for i, init_expr in elem.init {
+          // Extract function index from init expression
+          let func_idx = match init_expr {
+            [RefFunc(idx)] => idx
+            [I32Const(idx)] => idx
+            _ => continue
+          }
+          let store_addr = if func_idx < func_addrs.length() {
+            func_addrs[func_idx]
+          } else {
+            func_idx // fallback, should not happen for valid modules
+          }
+          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
+            _ => ()
+          }
         }
       }
     }
@@ -816,21 +833,30 @@ pub fn instantiate_with_linker(
 
   // Initialize element segments (populate tables with function references)
   for elem in mod.elems {
-    if instance.table_addrs.length() > elem.table_idx {
-      let table = store.get_table(instance.table_addrs[elem.table_idx])
-      let offset = match elem.offset {
-        [I32Const(n)] => n
-        _ => 0
-      }
-      // Convert module function index to store address
-      for i, func_idx in elem.init {
-        let store_addr = if func_idx < instance.func_addrs.length() {
-          instance.func_addrs[func_idx]
-        } else {
-          func_idx // fallback, should not happen for valid modules
+    // Only process active element segments
+    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+      if instance.table_addrs.length() > table_idx {
+        let table = store.get_table(instance.table_addrs[table_idx])
+        let offset = match offset_expr {
+          [I32Const(n)] => n
+          _ => 0
         }
-        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-          _ => ()
+        // Convert module function index to store address
+        for i, init_expr in elem.init {
+          // Extract function index from init expression
+          let func_idx = match init_expr {
+            [RefFunc(idx)] => idx
+            [I32Const(idx)] => idx
+            _ => continue
+          }
+          let store_addr = if func_idx < instance.func_addrs.length() {
+            instance.func_addrs[func_idx]
+          } else {
+            func_idx // fallback, should not happen for valid modules
+          }
+          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
+            _ => ()
+          }
         }
       }
     }

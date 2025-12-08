@@ -323,7 +323,7 @@ test "parse inline table elem with named function" {
   inspect(mod_.elems.length(), content="1")
   // The element should contain the function index for $func (which is 0)
   inspect(mod_.elems[0].init.length(), content="1")
-  inspect(mod_.elems[0].init[0], content="0")
+  inspect(mod_.elems[0].init[0], content="[RefFunc(0)]")
 }
 
 ///|
@@ -341,7 +341,7 @@ test "parse inline table elem with named function - multiple funcs" {
   inspect(mod_.elems.length(), content="1")
   // $func is the 4th function (index 3)
   inspect(mod_.elems[0].init.length(), content="1")
-  inspect(mod_.elems[0].init[0], content="3")
+  inspect(mod_.elems[0].init[0], content="[RefFunc(3)]")
 }
 
 ///|
@@ -416,7 +416,7 @@ test "parse inline table elem - func index with dummy" {
     #|)
   let mod_ = parse(wat)
   // $func is the 2nd function (index 1)
-  inspect(mod_.elems[0].init[0], content="1")
+  inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
   // $check should be type index 2
   let test_func = mod_.codes[mod_.codes.length() - 1]
   inspect(

@@ -358,11 +358,22 @@ pub(all) struct Global {
 } derive(Eq, Show)
 
 ///|
+/// Element segment mode
+pub(all) enum ElemMode {
+  /// Active segment: copied to table at instantiation
+  Active(Int, Array[Instruction]) // table_idx, offset_expr
+  /// Passive segment: can be copied via table.init
+  Passive
+  /// Declarative segment: only for validation
+  Declarative
+} derive(Eq, Show)
+
+///|
 /// Element segment
 pub(all) struct Element {
-  table_idx : Int
-  offset : Array[Instruction]
-  init : Array[Int] // function indices
+  mode : ElemMode
+  type_ : ValueType // element type (funcref or externref)
+  init : Array[Array[Instruction]] // init expressions (each evaluates to a ref)
 } derive(Eq, Show)
 
 ///|

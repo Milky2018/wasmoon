@@ -175,7 +175,7 @@ test "parse simple module" {
     #|)
   let script = parse(input) catch { e => fail("Parse error: \{e}") }
   inspect(script.commands.length(), content="1")
-  guard script.commands[0] is Module(_, _) else {
+  guard script.commands[0].0 is Module(_, _) else {
     fail("Expected Module command")
   }
 }
@@ -192,7 +192,7 @@ test "parse assert_return" {
     #|(assert_return (invoke "add" (i32.const 1) (i32.const 2)) (i32.const 3))
   let script = parse(input) catch { e => fail("Parse error: \{e}") }
   inspect(script.commands.length(), content="2")
-  if script.commands[1] is AssertReturn(Invoke(_, "add", args), expected) {
+  if script.commands[1].0 is AssertReturn(Invoke(_, "add", args), expected) {
     inspect(args.length(), content="2")
     inspect(expected.length(), content="1")
   } else {
@@ -212,7 +212,7 @@ test "parse assert_trap" {
     #|(assert_trap (invoke "div" (i32.const 1) (i32.const 0)) "integer divide by zero")
   let script = parse(input) catch { e => fail("Parse error: \{e}") }
   inspect(script.commands.length(), content="2")
-  if script.commands[1] is AssertTrap(Invoke(_, "div", _), msg) {
+  if script.commands[1].0 is AssertTrap(Invoke(_, "div", _), msg) {
     inspect(msg, content="integer divide by zero")
   } else {
     fail("Expected AssertTrap command")
@@ -226,7 +226,7 @@ test "parse register command" {
     #|(register "M1")
   let script = parse(input) catch { e => fail("Parse error: \{e}") }
   inspect(script.commands.length(), content="2")
-  guard script.commands[1] is Register("M1", None) else {
+  guard script.commands[1].0 is Register("M1", None) else {
     fail("Expected Register command")
   }
 }
@@ -239,7 +239,7 @@ test "parse i32 const values" {
     #|)
     #|(assert_return (invoke "f") (i32.const 42))
   let script = parse(input) catch { e => fail("Parse error: \{e}") }
-  if script.commands[1] is AssertReturn(_, expected) {
+  if script.commands[1].0 is AssertReturn(_, expected) {
     if expected[0] is I32(n) {
       inspect(n, content="42")
     } else {
@@ -258,7 +258,7 @@ test "parse hex numbers" {
     #|)
     #|(assert_return (invoke "f") (i32.const 0xff))
   let script = parse(input) catch { e => fail("Parse error: \{e}") }
-  if script.commands[1] is AssertReturn(_, expected) {
+  if script.commands[1].0 is AssertReturn(_, expected) {
     if expected[0] is I32(n) {
       inspect(n, content="255")
     } else {
@@ -351,13 +351,13 @@ test "collect_module_text reconstruction" {
     #|)
     #|(assert_return (invoke "test") (i32.const 1))
   let script = parse(wast_text)
-  match script.commands[0] {
+  match script.commands[0].0 {
     Module(mod_, _) => {
       inspect(mod_.types.length(), content="4")
       inspect(mod_.funcs.length(), content="3")
       inspect(mod_.elems.length(), content="1")
       // Check elem init is correct (should be 1, func index of $func)
-      inspect(mod_.elems[0].init[0], content="1")
+      inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
       // Check call_indirect type index (should be 2, index of $check)
       let test_func = mod_.codes[mod_.codes.length() - 1]
       inspect(
