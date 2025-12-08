@@ -421,11 +421,213 @@ fn parse_float32(s : String) -> Float raise WatError {
     s.has_prefix("0X") ||
     s.has_prefix("-0X") ||
     s.has_prefix("+0X") {
-    return parse_hex_float64(s) |> Float::from_double
+    return parse_hex_float32_precise(s)
   }
   (@strconv.parse_double(s) |> Float::from_double) catch {
     _ => raise InvalidNumber(s, default_loc())
   }
+}
+
+///|
+/// Parse hexadecimal floating-point literal to Float with precise rounding.
+/// Uses integer bit manipulation to ensure correct IEEE 754 rounding.
+fn parse_hex_float32_precise(s : String) -> Float raise WatError {
+  let mut neg = false
+  let mut idx = 0
+
+  // Handle sign
+  if s.code_unit_at(0).unsafe_to_char() == '-' {
+    neg = true
+    idx = 1
+  } else if s.code_unit_at(0).unsafe_to_char() == '+' {
+    idx = 1
+  }
+
+  // Skip 0x
+  idx += 2
+
+  // Parse significand as a 64-bit integer, tracking the binary exponent
+  let mut significand : UInt64 = 0UL
+  let mut frac_bits = 0
+  let mut seen_dot = false
+  let mut seen_digit = false
+  let mut extra_bits = false
+  let mut sig_bits = 0
+
+  while idx < s.length() {
+    let c = s.code_unit_at(idx).unsafe_to_char()
+    if c == '.' {
+      seen_dot = true
+      idx += 1
+      continue
+    }
+    if c == 'p' || c == 'P' {
+      break
+    }
+    if c == '_' {
+      idx += 1
+      continue
+    }
+    match hex_digit_value(c) {
+      Some(v) => {
+        seen_digit = true
+        let v_u64 = v.to_int64().reinterpret_as_uint64()
+        if sig_bits < 64 {
+          significand = significand * 16UL + v_u64
+          sig_bits += 4
+          // Only count fractional bits for digits that fit in significand
+          if seen_dot {
+            frac_bits += 4
+          }
+        } else {
+          if v != 0 {
+            extra_bits = true
+          }
+        }
+        idx += 1
+      }
+      None => raise InvalidNumber(s, default_loc())
+    }
+  }
+
+  if !seen_digit {
+    significand = 0UL
+  }
+
+  // Parse exponent
+  let mut exp = 0
+  let mut exp_neg = false
+  if idx < s.length() && (s.code_unit_at(idx).unsafe_to_char() == 'p' || s.code_unit_at(idx).unsafe_to_char() == 'P') {
+    idx += 1
+    if idx < s.length() && s.code_unit_at(idx).unsafe_to_char() == '-' {
+      exp_neg = true
+      idx += 1
+    } else if idx < s.length() && s.code_unit_at(idx).unsafe_to_char() == '+' {
+      idx += 1
+    }
+    while idx < s.length() {
+      let c = s.code_unit_at(idx).unsafe_to_char()
+      if c >= '0' && c <= '9' {
+        exp = exp * 10 + (c.to_int() - '0'.to_int())
+        idx += 1
+      } else {
+        break
+      }
+    }
+  }
+
+  // Handle zero
+  if significand == 0UL {
+    return if neg {
+      Float::reinterpret_from_uint(0x80000000U) // -0.0
+    } else {
+      (0.0 : Float)
+    }
+  }
+
+  // Calculate the binary exponent
+  let total_exp = if exp_neg { -exp - frac_bits } else { exp - frac_bits }
+
+  // Normalize: shift significand so leading 1 is at bit 63
+  let mut norm_sig = significand
+  let mut bit_count = 0
+  let mut temp = significand
+  while temp != 0UL {
+    bit_count += 1
+    temp = temp >> 1
+  }
+
+  let shift_amount = 64 - bit_count
+  if shift_amount > 0 {
+    norm_sig = norm_sig << shift_amount
+  }
+
+  // norm_exp is the actual binary exponent when norm_sig is in [1, 2) form
+  let norm_exp = total_exp + bit_count - 1
+
+  // IEEE 754 float: value = 2^(ieee_exp - 127) * (1 + mantissa/2^23)
+  let ieee_exp = norm_exp + 127
+
+  // Check for overflow (infinity)
+  if ieee_exp >= 255 {
+    return if neg {
+      Float::reinterpret_from_uint(0xff800000U) // -infinity
+    } else {
+      Float::reinterpret_from_uint(0x7f800000U) // +infinity
+    }
+  }
+
+  // Check for underflow (subnormal or zero)
+  if ieee_exp <= 0 {
+    let shift = 1 - ieee_exp
+    if shift >= 64 {
+      return if neg {
+        Float::reinterpret_from_uint(0x80000000U) // -0.0
+      } else {
+        (0.0 : Float)
+      }
+    }
+
+    let shifted_sig = norm_sig >> shift
+    // For float subnormal: mantissa is bits 62-40 of shifted_sig (23 bits)
+    // Round bit is bit 39, sticky bits are bits 38-0 plus extra_bits
+    let mantissa = ((shifted_sig >> 40) & 0x7FFFFFUL).reinterpret_as_int64().to_int()
+    let round_bit = (shifted_sig >> 39) & 1UL
+    let sticky_bits = (shifted_sig & 0x7FFFFFFFFFUL) != 0UL || extra_bits || (shift > 0 && (norm_sig & ((1UL << shift) - 1UL)) != 0UL)
+
+    let mantissa_rounded = if round_bit != 0UL && (sticky_bits || (mantissa & 1) != 0) {
+      mantissa + 1
+    } else {
+      mantissa
+    }
+
+    // Check if rounding promoted to normal
+    if mantissa_rounded >= 0x800000 {
+      let final_mantissa = (mantissa_rounded & 0x7FFFFF).reinterpret_as_uint()
+      let bits = if neg { 0x80800000U | final_mantissa } else { 0x00800000U | final_mantissa }
+      return Float::reinterpret_from_uint(bits)
+    }
+
+    let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+    let bits = sign_bit | mantissa_rounded.reinterpret_as_uint()
+    return Float::reinterpret_from_uint(bits)
+  }
+
+  // Normal number
+  // Extract 23-bit mantissa from norm_sig (bits 62-40, since bit 63 is the implicit 1)
+  // Round bit is bit 39, sticky bits are bits 38-0 plus extra_bits
+  let mantissa_raw = ((norm_sig >> 40) & 0x7FFFFFUL).reinterpret_as_int64().to_int()
+  let round_bit = (norm_sig >> 39) & 1UL
+  let sticky_bits = (norm_sig & 0x7FFFFFFFFFUL) != 0UL || extra_bits
+
+  // Round to nearest, ties to even
+  let mantissa_rounded = if round_bit != 0UL && (sticky_bits || (mantissa_raw & 1) != 0) {
+    mantissa_raw + 1
+  } else {
+    mantissa_raw
+  }
+
+  // Check if rounding overflowed the mantissa
+  let (final_exp, final_mantissa) = if mantissa_rounded >= 0x800000 {
+    (ieee_exp + 1, 0)
+  } else {
+    (ieee_exp, mantissa_rounded & 0x7FFFFF)
+  }
+
+  // Check for overflow after rounding
+  if final_exp >= 255 {
+    return if neg {
+      Float::reinterpret_from_uint(0xff800000U) // -infinity
+    } else {
+      Float::reinterpret_from_uint(0x7f800000U) // +infinity
+    }
+  }
+
+  // Construct IEEE 754 bit pattern
+  let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+  let exp_bits = ((final_exp & 0xFF) << 23).reinterpret_as_uint()
+  let bits = sign_bit | exp_bits | final_mantissa.reinterpret_as_uint()
+  Float::reinterpret_from_uint(bits)
 }
 
 ///|
