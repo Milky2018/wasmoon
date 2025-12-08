@@ -252,10 +252,42 @@ fn run_wast_command(
         ctx.named_modules.set(n, instance)
       }
     }
-    ModuleQuote(_parts) => {
-      // Quoted modules are for malformed tests, skip for now
-      result.skipped = result.skipped + 1
-      result.failures.push("line \{line}: skipped (quoted module)")
+    ModuleQuote(parts) => {
+      // Concatenate quoted strings and parse as WAT module
+      let wat_text = StringBuilder::new()
+      wat_text.write_string("(module ")
+      for part in parts {
+        wat_text.write_string(part)
+      }
+      wat_text.write_string(")")
+      let mod_ = @wat.parse(wat_text.to_string()) catch {
+        e => {
+          // If parsing fails, skip this module
+          result.skipped = result.skipped + 1
+          result.failures.push(
+            "line \{line}: skipped (quoted module parse failed: \{e})",
+          )
+          return
+        }
+      }
+      // Build imports from registered modules
+      let imports = ctx.build_imports()
+      // Instantiate the module with imports using shared store
+      let instance = @executor.instantiate_module_with_imports(
+        ctx.store,
+        mod_,
+        imports,
+      ) catch {
+        e => {
+          // If instantiation fails, skip this module
+          result.skipped = result.skipped + 1
+          result.failures.push(
+            "line \{line}: skipped (quoted module instantiation failed: \{e})",
+          )
+          return
+        }
+      }
+      ctx.current_module = Some(instance)
     }
     ModuleBinaryFailed(err) => {
       // Binary module failed to parse (unsupported features), skip

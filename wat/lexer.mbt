@@ -95,7 +95,7 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
           self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
           while !self.is_eof() {
             match self.peek_char() {
-              Some('\n') => {
+              Some('\n') | Some('\r') => {
                 self.advance_pos()
                 break
               }
