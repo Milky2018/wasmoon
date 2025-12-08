@@ -737,9 +737,12 @@ test "validator: data segment with i64 offset should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [I64Const(0L)], init: b"" }],
   }
-  inspect(try? validate_module(mod), content=(
-    #|Err(TypeMismatch("constant expression: expected I32, got I64"))
-  ))
+  inspect(
+    try? validate_module(mod),
+    content=(
+      #|Err(TypeMismatch("constant expression: expected I32, got I64"))
+    ),
+  )
 }
 
 ///|
@@ -756,11 +759,16 @@ test "validator: data segment with ref.null offset should fail" {
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [RefNull(@types.ValueType::FuncRef)], init: b"" }],
+    datas: [
+      { memory_idx: 0, offset: [RefNull(@types.ValueType::FuncRef)], init: b"" },
+    ],
   }
-  inspect(try? validate_module(mod), content=(
-    #|Err(TypeMismatch("constant expression: expected I32, got FuncRef"))
-  ))
+  inspect(
+    try? validate_module(mod),
+    content=(
+      #|Err(TypeMismatch("constant expression: expected I32, got FuncRef"))
+    ),
+  )
 }
 
 ///|
@@ -779,9 +787,12 @@ test "validator: data segment with empty offset should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [], init: b"" }],
   }
-  inspect(try? validate_module(mod), content=(
-    #|Err(TypeMismatch("empty constant expression"))
-  ))
+  inspect(
+    try? validate_module(mod),
+    content=(
+      #|Err(TypeMismatch("empty constant expression"))
+    ),
+  )
 }
 
 ///|
@@ -850,7 +861,12 @@ test "validator: data segment with mutable global offset should fail" {
     funcs: [],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
-    globals: [{ type_: { value_type: @types.ValueType::I32, mutable: true }, init: [I32Const(0)] }],
+    globals: [
+      {
+        type_: { value_type: @types.ValueType::I32, mutable: true },
+        init: [I32Const(0)],
+      },
+    ],
     exports: [],
     start: None,
     elems: [],
@@ -888,7 +904,12 @@ test "validator: data segment with immutable global offset should pass" {
     funcs: [],
     tables: [],
     memories: [{ limits: { min: 1, max: None } }],
-    globals: [{ type_: { value_type: @types.ValueType::I32, mutable: false }, init: [I32Const(0)] }],
+    globals: [
+      {
+        type_: { value_type: @types.ValueType::I32, mutable: false },
+        init: [I32Const(0)],
+      },
+    ],
     exports: [],
     start: None,
     elems: [],

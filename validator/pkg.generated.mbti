@@ -29,6 +29,8 @@ pub(all) suberror ValidationError {
   MultipleTables
   InvalidLimits(String)
   InvalidAlignment(String)
+  ConstantExpressionRequired
+  MutableGlobalInConstExpr
   WithContext(ValidationErrorContext)
 }
 pub impl Show for ValidationError
