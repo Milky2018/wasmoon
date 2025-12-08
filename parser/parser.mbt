@@ -536,27 +536,28 @@ fn Parser::read_elem_segment(
   }
 
   // Read element type
-  let elem_type : @types.ValueType = if is_passive_or_declarative ||
-    uses_expressions {
-    // Has explicit elem kind or reftype
-    if uses_expressions {
-      // When using expressions, must be a reference type (funcref or externref)
-      let type_byte = self.read_byte()
-      match type_byte {
-        0x70 => @types.ValueType::FuncRef
-        0x6F => @types.ValueType::ExternRef
-        _ => raise MalformedReferenceType(type_byte)
-      }
-    } else {
-      // elemkind: 0x00 = funcref
-      let kind = self.read_byte()
-      if kind != 0x00 {
-        raise ParseError("unsupported element kind: \{kind}")
-      }
-      @types.ValueType::FuncRef
+  // flags encoding for elem type:
+  // - flags 0: no elemkind (implicit funcref)
+  // - flags 1, 2, 3: has elemkind byte (0x00 = funcref)
+  // - flags 4, 5, 6, 7: has reftype byte (0x70=funcref, 0x6F=externref)
+  let has_elemkind = flags == 1 || flags == 2 || flags == 3
+  let elem_type : @types.ValueType = if uses_expressions {
+    // flags 4-7: has reftype
+    let type_byte = self.read_byte()
+    match type_byte {
+      0x70 => @types.ValueType::FuncRef
+      0x6F => @types.ValueType::ExternRef
+      _ => raise MalformedReferenceType(type_byte)
     }
+  } else if has_elemkind {
+    // flags 1, 2, 3: has elemkind
+    let kind = self.read_byte()
+    if kind != 0x00 {
+      raise ParseError("unsupported element kind: \{kind}")
+    }
+    @types.ValueType::FuncRef
   } else {
-    // Legacy format: always funcref
+    // flags 0: no elemkind, implicit funcref
     @types.ValueType::FuncRef
   }
 
@@ -1195,14 +1196,20 @@ test "LEB128 i64 decoding" {
 test "LEB128 u32 - too long (6 bytes)" {
   // 6 bytes encoding value 3: \x83\x80\x80\x80\x80\x00
   let parser = Parser::new(b"\x83\x80\x80\x80\x80\x00")
-  inspect(try? parser.read_leb128_u32(), content="Err(LEB128 encoded integer is too large)")
+  inspect(
+    try? parser.read_leb128_u32(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
 }
 
 ///|
 test "LEB128 u32 - 5th byte with unused bits set" {
   // Value 3 with 5th byte having bit 4 set: \x83\x80\x80\x80\x10
   let parser = Parser::new(b"\x83\x80\x80\x80\x10")
-  inspect(try? parser.read_leb128_u32(), content="Err(LEB128 encoded integer is too large)")
+  inspect(
+    try? parser.read_leb128_u32(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
 }
 
 ///|
@@ -1216,14 +1223,20 @@ test "LEB128 u32 - valid 5 byte encoding" {
 test "LEB128 i32 - unused bits not sign-extended (positive)" {
   // i32.const 0 with 5th byte = 0x70 (bits 4-6 should be 0 for positive)
   let parser = Parser::new(b"\x80\x80\x80\x80\x70")
-  inspect(try? parser.read_leb128_i32(), content="Err(LEB128 encoded integer is too large)")
+  inspect(
+    try? parser.read_leb128_i32(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
 }
 
 ///|
 test "LEB128 i32 - unused bits not sign-extended (negative)" {
   // i32.const -1 with 5th byte = 0x0F (bits 4-6 should be 1 for negative)
   let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x0F")
-  inspect(try? parser.read_leb128_i32(), content="Err(LEB128 encoded integer is too large)")
+  inspect(
+    try? parser.read_leb128_i32(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
 }
 
 ///|
@@ -1244,7 +1257,10 @@ test "LEB128 i32 - valid negative 5 byte" {
 test "LEB128 i64 - unused bits not sign-extended" {
   // i64.const 0 with 10th byte = 0x7E (bits 1-6 should be 0 for positive)
   let parser = Parser::new(b"\x80\x80\x80\x80\x80\x80\x80\x80\x80\x7E")
-  inspect(try? parser.read_leb128_i64(), content="Err(LEB128 encoded integer is too large)")
+  inspect(
+    try? parser.read_leb128_i64(),
+    content="Err(LEB128 encoded integer is too large)",
+  )
 }
 
 ///|

@@ -66,11 +66,110 @@ priv struct WastContext {
 
 ///|
 fn WastContext::new() -> WastContext {
+  let store = @runtime.Store::new()
+
+  // Create spectest module with standard test functions/values
+  let spectest_instance = create_spectest_module(store)
+  let registered_modules : Map[String, @runtime.ModuleInstance] = Map::new()
+  registered_modules.set("spectest", spectest_instance)
   WastContext::{
-    store: @runtime.Store::new(),
+    store,
     current_module: None,
     named_modules: Map::new(),
-    registered_modules: Map::new(),
+    registered_modules,
+  }
+}
+
+///|
+/// Create the spectest module with standard test functions
+fn create_spectest_module(store : @runtime.Store) -> @runtime.ModuleInstance {
+  // Allocate host functions
+  // print_i32: (i32) -> ()
+  let print_i32_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_i64: (i64) -> ()
+  let print_i64_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_f32: (f32) -> ()
+  let print_f32_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_f64: (f64) -> ()
+  let print_f64_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_i32_f32: (i32, f32) -> ()
+  let print_i32_f32_addr = store.alloc_host_func(fn(_args) { [] })
+  // print_f64_f64: (f64, f64) -> ()
+  let print_f64_f64_addr = store.alloc_host_func(fn(_args) { [] })
+  // print: () -> ()
+  let print_addr = store.alloc_host_func(fn(_args) { [] })
+
+  // Allocate memory: (memory 1 2) - min 1 page, max 2 pages
+  let memory = @runtime.Memory::new(1, Some(2))
+  let memory_addr = store.alloc_mem(memory)
+
+  // Allocate table: (table 10 20 funcref)
+  let table = @runtime.Table::new(@types.ValueType::FuncRef, 10, Some(20))
+  let table_addr = store.alloc_table(table)
+
+  // Allocate globals
+  // global_i32: (global i32 (i32.const 666))
+  let global_i32_addr = store.alloc_global(
+    @runtime.GlobalInstance::new(
+      @types.GlobalType::{ value_type: @types.ValueType::I32, mutable: false },
+      @types.Value::I32(666),
+    ),
+  )
+  // global_i64: (global i64 (i64.const 666))
+  let global_i64_addr = store.alloc_global(
+    @runtime.GlobalInstance::new(
+      @types.GlobalType::{ value_type: @types.ValueType::I64, mutable: false },
+      @types.Value::I64(666L),
+    ),
+  )
+  // global_f32: (global f32 (f32.const 666))
+  let global_f32_addr = store.alloc_global(
+    @runtime.GlobalInstance::new(
+      @types.GlobalType::{ value_type: @types.ValueType::F32, mutable: false },
+      @types.Value::F32(666.6),
+    ),
+  )
+  // global_f64: (global f64 (f64.const 666))
+  let global_f64_addr = store.alloc_global(
+    @runtime.GlobalInstance::new(
+      @types.GlobalType::{ value_type: @types.ValueType::F64, mutable: false },
+      @types.Value::F64(666.6),
+    ),
+  )
+
+  // Create exports
+  let exports : Array[@types.Export] = [
+    { name: "print_i32", desc: @types.ExportDesc::Func(0) },
+    { name: "print_i64", desc: @types.ExportDesc::Func(1) },
+    { name: "print_f32", desc: @types.ExportDesc::Func(2) },
+    { name: "print_f64", desc: @types.ExportDesc::Func(3) },
+    { name: "print_i32_f32", desc: @types.ExportDesc::Func(4) },
+    { name: "print_f64_f64", desc: @types.ExportDesc::Func(5) },
+    { name: "print", desc: @types.ExportDesc::Func(6) },
+    { name: "memory", desc: @types.ExportDesc::Memory(0) },
+    { name: "table", desc: @types.ExportDesc::Table(0) },
+    { name: "global_i32", desc: @types.ExportDesc::Global(0) },
+    { name: "global_i64", desc: @types.ExportDesc::Global(1) },
+    { name: "global_f32", desc: @types.ExportDesc::Global(2) },
+    { name: "global_f64", desc: @types.ExportDesc::Global(3) },
+  ]
+  @runtime.ModuleInstance::{
+    types: [],
+    func_addrs: [
+      print_i32_addr, print_i64_addr, print_f32_addr, print_f64_addr, print_i32_f32_addr,
+      print_f64_f64_addr, print_addr,
+    ],
+    func_type_indices: [],
+    table_addrs: [table_addr],
+    mem_addrs: [memory_addr],
+    global_addrs: [
+      global_i32_addr, global_i64_addr, global_f32_addr, global_f64_addr,
+    ],
+    exports,
+    elem_segments: [],
+    data_segments: [],
+    dropped_elems: [],
+    dropped_datas: [],
   }
 }
 
@@ -139,9 +238,12 @@ fn run_wast_command(
         mod_,
         imports,
       ) catch {
-        _ => {
+        e => {
           // If instantiation fails, skip this module
           result.skipped = result.skipped + 1
+          result.failures.push(
+            "line \{line}: skipped (instantiation failed: \{e})",
+          )
           return
         }
       }
