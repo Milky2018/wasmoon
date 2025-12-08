@@ -126,6 +126,7 @@ pub(all) enum Instruction {
   TableGrow(Int)
   TableFill(Int)
   TableCopy(Int, Int)
+  TableInit(Int, Int)
   I32Load(Int, Int)
   I64Load(Int, Int)
   F32Load(Int, Int)
