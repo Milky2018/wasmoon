@@ -23,8 +23,7 @@ suberror ParserError {
   FunctionCodeMismatch // function and code section counts differ
   DataCountMismatch // data count and data section have inconsistent lengths
   UnexpectedContent // unexpected content after last section
-  DuplicateSection(Int) // non-custom section appears multiple times
-  SectionOutOfOrder // sections not in proper order
+  DuplicateSection(Int) // non-custom section appears multiple times or out of order
   MalformedReferenceType(Int) // element segment has non-reference type
   ParseError(String) // Generic error with message
 }
@@ -109,7 +108,6 @@ pub impl Show for ParserError with output(self, logger) {
     DataCountMismatch => "data count and data section have inconsistent lengths"
     UnexpectedContent => "unexpected content after last section"
     DuplicateSection(_) => "unexpected content after last section"
-    SectionOutOfOrder => "unexpected content after last section"
     MalformedReferenceType(_) => "malformed reference type"
     ParseError(msg) => msg
   }
