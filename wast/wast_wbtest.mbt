@@ -429,3 +429,33 @@ test "collect_module_text reconstruction" {
     _ => fail("expected module")
   }
 }
+
+///|
+test "regression: Unicode function names in WAST" {
+  // Test that WAST parser preserves Unicode code points > 0xFF correctly
+  // Previously, escape_string_to would truncate Unicode code points,
+  // e.g., U+FEFF (65279) would become 0xFF (255)
+  let wast_input = "(module (func (export \"﻿\") (result i32) (i32.const 15)))\n(assert_return (invoke \"﻿\") (i32.const 15))"
+  let script = parse(wast_input) catch { e => fail("Parse error: \{e}") }
+
+  // First command should be Module
+  let (cmd1, _) = script.commands[0]
+  if cmd1 is Module(mod, _) {
+    let export_name = mod.exports[0].name
+    inspect(export_name.length(), content="1")
+    // BOM character U+FEFF = 65279
+    inspect(export_name.code_unit_at(0).to_int(), content="65279")
+  } else {
+    fail("Expected Module command")
+  }
+
+  // Second command should be AssertReturn - the function name must match
+  let (cmd2, _) = script.commands[1]
+  if cmd2 is AssertReturn(Invoke(_, func_name, _), _) {
+    inspect(func_name.length(), content="1")
+    // Function name in invoke must also be U+FEFF = 65279, not 0xFF (255)
+    inspect(func_name.code_unit_at(0).to_int(), content="65279")
+  } else {
+    fail("Expected AssertReturn command")
+  }
+}

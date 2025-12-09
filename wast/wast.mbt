@@ -395,11 +395,14 @@ fn escape_string_to(s : String, buf : StringBuilder) -> Unit {
     } else if c >= 0x20 && c < 0x7f {
       // Printable ASCII
       buf.write_char(c.unsafe_to_char())
-    } else {
-      // Non-printable: use hex escape
+    } else if c < 0x100 {
+      // Non-printable byte (0x00-0x1F, 0x7F-0xFF): use hex escape
       buf.write_string("\\")
       buf.write_char(hex_char((c / 16) & 0x0f))
       buf.write_char(hex_char(c & 0x0f))
+    } else {
+      // Unicode code point > 0xFF: write directly (WAT parser handles UTF-8)
+      buf.write_char(c.unsafe_to_char())
     }
   }
 }
