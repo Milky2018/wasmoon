@@ -53,6 +53,7 @@ pub(all) enum Instruction {
   Return
   Call(Int) // function index
   CallIndirect(Int, Int) // type index, table index
+  CallRef(Int) // type index (WasmGC)
 
   // Parametric instructions
   Drop
@@ -110,6 +111,8 @@ pub(all) enum Instruction {
   RefNull(ValueType) // ref.null: push null reference of given type
   RefIsNull // ref.is_null: test if reference is null
   RefFunc(Int) // ref.func: push reference to function by index
+  RefAsNonNull // ref.as_non_null: convert nullable ref to non-null ref
+  BrOnNull(Int) // br_on_null: branch if reference is null
 
   // Numeric instructions - Constants
   I32Const(Int)

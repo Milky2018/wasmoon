@@ -202,6 +202,18 @@ fn ExecContext::exec_instr(
       let func_addr = self.instance.func_addrs[func_idx]
       self.stack.push(FuncRef(func_addr))
     }
+    RefAsNonNull => {
+      // ref.as_non_null: traps if reference is null
+      let value = self.stack.pop()
+      match value {
+        Null => raise @runtime.RuntimeError::Unreachable
+        _ => self.stack.push(value)
+      }
+    }
+    BrOnNull(_) =>
+      // br_on_null is a control instruction, handled in exec_control
+      // But since it requires special branch handling, trap for now
+      raise @runtime.RuntimeError::Unreachable
 
     // i32 numeric operations
     I32Add
@@ -403,6 +415,10 @@ fn ExecContext::exec_instr(
     Call(func_idx) => self.exec_call(func_idx)
     CallIndirect(type_idx, table_idx) =>
       self.exec_call_indirect(type_idx, table_idx)
+    CallRef(_) =>
+      // call_ref is a WasmGC instruction that requires GC runtime support
+      // Currently not implemented - will trap if reached
+      raise @runtime.RuntimeError::Unreachable
   }
 }
 
