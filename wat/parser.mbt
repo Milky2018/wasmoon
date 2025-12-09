@@ -576,6 +576,40 @@ impl Shl for BigUInt with shl(self, n) {
 }
 
 ///|
+/// Right shift by n bits
+impl Shr for BigUInt with shr(self, n) {
+  if n == 0 {
+    return { limbs: self.limbs.copy() }
+  }
+  let limb_shift = n / 64
+  let bit_shift = n % 64
+  if limb_shift >= self.limbs.length() {
+    return { limbs: [0UL] }
+  }
+  let result : Array[UInt64] = []
+  if bit_shift == 0 {
+    for i in limb_shift..<self.limbs.length() {
+      result.push(self.limbs[i])
+    }
+  } else {
+    for i in limb_shift..<self.limbs.length() {
+      let lo = self.limbs[i] >> bit_shift
+      let hi = if i + 1 < self.limbs.length() {
+        self.limbs[i + 1] << (64 - bit_shift)
+      } else {
+        0UL
+      }
+      result.push(lo | hi)
+    }
+  }
+  // Remove leading zeros
+  while result.length() > 1 && result[result.length() - 1] == 0UL {
+    result.pop() |> ignore
+  }
+  { limbs: result }
+}
+
+///|
 /// Get the highest set bit position (0-indexed from LSB), -1 if zero
 fn BigUInt::bit_length(self : BigUInt) -> Int {
   let mut idx = self.limbs.length() - 1
@@ -777,8 +811,9 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
     // We need to compute mantissa / 5^|decimal_exp| with enough precision
     // Strategy: multiply mantissa by 2^extra_bits, then divide by 5^|decimal_exp|
     // We need at least 24 + 2 (guard, round) + some extra bits for precision
-    // Use 128 extra bits to be safe
-    let extra_bits = 128
+    // For subnormal numbers, we need up to 149 extra bits (f32 subnormal range)
+    // Use 256 extra bits to be safe for all cases
+    let extra_bits = 256
     let abs_exp = -decimal_exp
 
     // Compute 5^abs_exp
@@ -837,45 +872,97 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
 
   // Check for underflow (subnormal or zero)
   if ieee_exp <= 0 {
-    // Subnormal: shift right more, ieee_exp becomes 0
-    let shift_more = 1 - ieee_exp
-    if shift_more >= bit_len {
-      // Underflow to zero
+    // Subnormal: the value is sig * 2^binary_exp
+    // For subnormal f32, we need to represent as mantissa * 2^(-149)
+    // where mantissa is at most 23 bits (no implicit leading 1)
+    //
+    // The effective exponent for subnormal is fixed at -149 (unbiased: -126 - 23)
+    // We need to shift sig right so that its value becomes mantissa * 2^(-149)
+    //
+    // Currently: value = sig * 2^binary_exp
+    // Target:    value = mantissa * 2^(-149)
+    // So: mantissa = sig * 2^(binary_exp + 149)
+    //
+    // If binary_exp + 149 < 0, we need to shift sig right by -(binary_exp + 149)
+    // If binary_exp + 149 >= 0, we need to shift sig left
+
+    let target_exp = -149
+    let shift_amount = binary_exp - target_exp // = binary_exp + 149
+    let (shifted_sig, extra_round, extra_sticky) = if shift_amount >= 0 {
+      // Shift left - no precision loss
+      (sig << shift_amount, false, false)
+    } else {
+      // Shift right - may lose precision
+      // Round bit is at position (right_shift - 1) in original sig
+      // Sticky bits are below that
+      let right_shift = -shift_amount
+      let round = if right_shift > 0 {
+        sig.extract_bits(right_shift - 1, 1) != 0UL
+      } else {
+        false
+      }
+      let sticky = if right_shift > 1 {
+        sig.has_bits_below(right_shift - 1)
+      } else {
+        false
+      }
+      (sig >> right_shift, round, sticky)
+    }
+    let shifted_bit_len = shifted_sig.bit_length()
+    if shifted_bit_len == 0 {
+      // Underflow to zero, but check if we should round up to 1
+      if extra_round && (extra_sticky || true) {
+        // Round up from 0 to 1
+        let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+        let result_bits = sign_bit | 1U
+        return Float::reinterpret_from_uint(result_bits)
+      }
       if neg {
         return Float::reinterpret_from_uint(0x80000000U)
       }
       return (0.0 : Float)
     }
-    // For subnormal, we extract fewer bits
-    let mantissa_bits = bit_len - shift_more
-    if mantissa_bits <= 0 {
-      if neg {
-        return Float::reinterpret_from_uint(0x80000000U)
+
+    // For subnormal, mantissa is at most 23 bits
+    // If shifted_sig has more than 23 bits, we need to truncate and round
+    if shifted_bit_len <= 23 {
+      // All bits fit in mantissa
+      // Round bit and sticky come from the earlier shift
+      let raw_mantissa = shifted_sig.extract_bits(0, shifted_bit_len)
+      let mut final_mantissa = raw_mantissa.reinterpret_as_int64().to_int()
+      if extra_round && (extra_sticky || (final_mantissa & 1) != 0) {
+        final_mantissa += 1
       }
-      return (0.0 : Float)
+      // Check if rounding promoted to normal
+      if final_mantissa >= 0x800000 {
+        let result_bits = if neg { 0x80800000U } else { 0x00800000U }
+        return Float::reinterpret_from_uint(result_bits)
+      }
+      let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+      let result_bits = sign_bit | final_mantissa.reinterpret_as_uint()
+      return Float::reinterpret_from_uint(result_bits)
     }
-    // Extract mantissa (no implicit 1 for subnormals)
-    let raw_mantissa = sig.extract_bits(
-      bit_len - mantissa_bits - 1,
-      mantissa_bits,
-    )
-    let round_pos = bit_len - mantissa_bits - 1
-    let round_bit = if round_pos >= 0 {
-      sig.extract_bits(round_pos, 1)
-    } else {
-      0UL
-    }
-    let sticky = if round_pos > 0 {
-      sig.has_bits_below(round_pos)
-    } else {
-      false
-    }
+
+    // shifted_bit_len > 23: need to extract top 23 bits and round
+    let mantissa_start = shifted_bit_len - 23
+    let raw_mantissa = shifted_sig.extract_bits(mantissa_start, 23)
+
+    // Round bit is at position mantissa_start - 1 in shifted_sig
+    let round_pos = mantissa_start - 1
+    let round_bit = shifted_sig.extract_bits(round_pos, 1) != 0UL
+
+    // Sticky bits are all bits below round_pos in shifted_sig, plus extra from earlier shift
+    let sticky = extra_round ||
+      extra_sticky ||
+      (round_pos > 0 && shifted_sig.has_bits_below(round_pos))
+
     // Round to nearest, ties to even
     let mut final_mantissa = raw_mantissa.reinterpret_as_int64().to_int()
-    if round_bit != 0UL && (sticky || (final_mantissa & 1) != 0) {
+    if round_bit && (sticky || (final_mantissa & 1) != 0) {
       final_mantissa += 1
     }
-    // Check if rounding promoted to normal
+
+    // Check if rounding promoted to normal (mantissa >= 2^23)
     if final_mantissa >= 0x800000 {
       // Became normal with exp = 1
       let result_bits = if neg { 0x80800000U } else { 0x00800000U }
@@ -1018,6 +1105,7 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
   // Parse significand as a 64-bit integer, tracking the binary exponent
   let mut significand : UInt64 = 0UL
   let mut frac_bits = 0
+  let mut int_bits_overflow = 0 // Extra integer bits that didn't fit
   let mut seen_dot = false
   let mut seen_digit = false
   let mut extra_bits = false
@@ -1047,8 +1135,15 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
           if seen_dot {
             frac_bits += 4
           }
-        } else if v != 0 {
-          extra_bits = true
+        } else {
+          // Beyond 64 bits
+          if !seen_dot {
+            // Integer part overflow - these bits add to the exponent
+            int_bits_overflow += 4
+          }
+          if v != 0 {
+            extra_bits = true
+          }
         }
         idx += 1
       }
@@ -1095,7 +1190,12 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
   }
 
   // Calculate the binary exponent
-  let total_exp = if exp_neg { -exp - frac_bits } else { exp - frac_bits }
+  // int_bits_overflow accounts for integer bits that didn't fit in significand
+  let total_exp = if exp_neg {
+    -exp - frac_bits + int_bits_overflow
+  } else {
+    exp - frac_bits + int_bits_overflow
+  }
 
   // Normalize: shift significand so leading 1 is at bit 63
   let mut norm_sig = significand
@@ -1349,8 +1449,11 @@ fn parse_hex_float64(s : String) -> Double raise WatError {
   }
 
   // Handle zero
+  // NOTE: Using bit manipulation to work around MoonBit compiler bug
+  // where `if neg { -0.0 } else { 0.0 }` incorrectly returns -0.0 even when neg=false
   if significand == 0UL {
-    return if neg { -0.0 } else { 0.0 }
+    let sign_bit : Int64 = if neg { 0x8000000000000000L } else { 0L }
+    return sign_bit.reinterpret_as_double()
   }
 
   // Calculate the binary exponent
@@ -1393,7 +1496,9 @@ fn parse_hex_float64(s : String) -> Double raise WatError {
   if ieee_exp <= 0 {
     let shift = 1 - ieee_exp
     if shift >= 64 {
-      return if neg { -0.0 } else { 0.0 }
+      // NOTE: Work around MoonBit compiler bug with conditional float literals
+      let sign_bit : Int64 = if neg { 0x8000000000000000L } else { 0L }
+      return sign_bit.reinterpret_as_double()
     }
     let shifted_sig = norm_sig >> shift
     // For double subnormal: mantissa is bits 62-11 of shifted_sig (52 bits)
