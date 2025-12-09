@@ -397,16 +397,10 @@ pub fn propagate_copies(func : Function) -> OptResult {
     let copies : @hashmap.HashMap[Int, Value] = @hashmap.new()
     // First pass: collect copy instructions in this block
     for inst in block.instructions {
-      match inst.opcode {
-        Copy =>
-          match inst.result {
-            Some(dest) =>
-              if inst.operands.length() > 0 {
-                copies.set(dest.id, inst.operands[0])
-              }
-            None => ()
-          }
-        _ => ()
+      if inst.opcode is Copy &&
+        inst.result is Some(dest) &&
+        inst.operands.length() > 0 {
+        copies.set(dest.id, inst.operands[0])
       }
     }
     // Second pass: replace uses of copied values in this block
@@ -750,18 +744,12 @@ pub fn simplify_branches(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.new()
   for block in func.blocks {
     for inst in block.instructions {
-      match inst.opcode {
-        Iconst(v) =>
-          match inst.result {
-            Some(r) =>
-              if r.ty is I32 {
-                constants.set(r.id, ConstValue::I32(v.to_int()))
-              } else {
-                constants.set(r.id, ConstValue::I64(v))
-              }
-            None => ()
-          }
-        _ => ()
+      if inst.opcode is Iconst(v) && inst.result is Some(r) {
+        if r.ty is I32 {
+          constants.set(r.id, ConstValue::I32(v.to_int()))
+        } else {
+          constants.set(r.id, ConstValue::I64(v))
+        }
       }
     }
   }
@@ -911,27 +899,19 @@ pub fn merge_blocks(func : Function) -> OptResult {
       continue // Don't merge into entry block
     }
     let preds = pred_count.get(block.id).unwrap_or(0)
-    if preds == 1 {
-      match single_pred.get(block.id) {
-        Some(pred_id) => {
-          let succs = succ_count.get(pred_id).unwrap_or(0)
-          if succs == 1 {
-            // Check that the jump has no arguments (simple case)
-            for pred_block in func.blocks {
-              if pred_block.id == pred_id {
-                match pred_block.terminator {
-                  Some(Jump(_, args)) =>
-                    if args.length() == 0 {
-                      to_merge.push((pred_id, block.id))
-                    }
-                  _ => ()
-                }
-                break
-              }
+    if preds == 1 && single_pred.get(block.id) is Some(pred_id) {
+      let succs = succ_count.get(pred_id).unwrap_or(0)
+      if succs == 1 {
+        // Check that the jump has no arguments (simple case)
+        for pred_block in func.blocks {
+          if pred_block.id == pred_id {
+            if pred_block.terminator is Some(Jump(_, args)) &&
+              args.length() == 0 {
+              to_merge.push((pred_id, block.id))
             }
+            break
           }
         }
-        None => ()
       }
     }
   }
@@ -950,21 +930,18 @@ pub fn merge_blocks(func : Function) -> OptResult {
         succ_idx = i
       }
     }
-    match (pred_block, succ_block) {
-      (Some(pred), Some(succ)) => {
-        // Append successor's instructions to predecessor
-        for inst in succ.instructions {
-          pred.instructions.push(inst)
-        }
-        // Take successor's terminator
-        pred.terminator = succ.terminator
-        // Remove successor block
-        if succ_idx >= 0 {
-          func.blocks.remove(succ_idx) |> ignore
-          result.mark_changed()
-        }
+    if (pred_block, succ_block) is (Some(pred), Some(succ)) {
+      // Append successor's instructions to predecessor
+      for inst in succ.instructions {
+        pred.instructions.push(inst)
       }
-      _ => ()
+      // Take successor's terminator
+      pred.terminator = succ.terminator
+      // Remove successor block
+      if succ_idx >= 0 {
+        func.blocks.remove(succ_idx) |> ignore
+        result.mark_changed()
+      }
     }
   }
   result
@@ -980,14 +957,11 @@ pub fn thread_jumps(func : Function) -> OptResult {
   // Find blocks that are just jumps (no instructions, just a jump terminator)
   let jump_targets : @hashmap.HashMap[Int, Int] = @hashmap.new() // block -> final target
   for block in func.blocks {
-    if block.instructions.length() == 0 && block.params.length() == 0 {
-      match block.terminator {
-        Some(Jump(target, args)) =>
-          if args.length() == 0 {
-            jump_targets.set(block.id, target)
-          }
-        _ => ()
-      }
+    if block.instructions.length() == 0 &&
+      block.params.length() == 0 &&
+      block.terminator is Some(Jump(target, args)) &&
+      args.length() == 0 {
+      jump_targets.set(block.id, target)
     }
   }
   // Follow jump chains to find final target
@@ -1337,16 +1311,12 @@ pub fn reduce_strength(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.new()
   for block in func.blocks {
     for inst in block.instructions {
-      match inst.opcode {
-        Iconst(v) =>
-          if inst.result is Some(r) {
-            if r.ty is I32 {
-              constants.set(r.id, ConstValue::I32(v.to_int()))
-            } else {
-              constants.set(r.id, ConstValue::I64(v))
-            }
-          }
-        _ => ()
+      if inst.opcode is Iconst(v) && inst.result is Some(r) {
+        if r.ty is I32 {
+          constants.set(r.id, ConstValue::I32(v.to_int()))
+        } else {
+          constants.set(r.id, ConstValue::I64(v))
+        }
       }
     }
   }

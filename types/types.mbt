@@ -313,6 +313,13 @@ pub(all) struct TableType {
 } derive(Eq, Show)
 
 ///|
+/// Table definition with optional init expression
+pub(all) struct Table {
+  type_ : TableType
+  init : Array[Instruction]? // Optional init expression for all elements
+} derive(Eq, Show)
+
+///|
 /// Global type
 pub(all) struct GlobalType {
   value_type : ValueType
@@ -399,7 +406,7 @@ pub(all) struct Module {
   types : Array[FuncType]
   imports : Array[Import]
   funcs : Array[Int] // type indices for functions
-  tables : Array[TableType]
+  tables : Array[Table]
   memories : Array[MemoryType]
   globals : Array[Global]
   exports : Array[Export]

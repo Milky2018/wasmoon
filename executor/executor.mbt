@@ -483,12 +483,23 @@ pub fn instantiate_module(
   }
 
   // Allocate tables
+  // Note: table init expressions can reference imported globals, so we need to
+  // create imported global instances first if we have any table init expressions.
+  // For simplicity, we'll evaluate table init expressions with an empty globals array
+  // since the validator already ensures only imported globals can be referenced.
   let table_addrs : Array[Int] = []
-  for table_type in mod.tables {
+  for table_def in mod.tables {
+    // Evaluate table init expression if present
+    let init_value : @types.Value = if table_def.init is Some(init_expr) {
+      eval_const_expr(init_expr, func_addrs~, globals=[])
+    } else {
+      @types.Value::Null
+    }
     let table = @runtime.Table::new(
-      table_type.elem_type,
-      table_type.limits.min,
-      table_type.limits.max,
+      table_def.type_.elem_type,
+      table_def.type_.limits.min,
+      table_def.type_.limits.max,
+      init_value~,
     )
     let addr = store.alloc_table(table)
     table_addrs.push(addr)
@@ -953,19 +964,8 @@ pub fn instantiate_module_with_imports(
     mem_addrs.push(addr)
   }
 
-  // Allocate tables (after imported tables)
-  for table_type in mod.tables {
-    let table = @runtime.Table::new(
-      table_type.elem_type,
-      table_type.limits.min,
-      table_type.limits.max,
-    )
-    let addr = store.alloc_table(table)
-    table_addrs.push(addr)
-  }
-
-  // Allocate globals (after imported globals)
   // First, collect instances for already-allocated globals (imports)
+  // This is needed for table init expressions that reference imported globals
   let global_instances : Array[@runtime.GlobalInstance] = []
   for addr in global_addrs {
     global_instances.push(
@@ -978,6 +978,27 @@ pub fn instantiate_module_with_imports(
       },
     )
   }
+
+  // Allocate tables (after imported tables and globals)
+  // Table init expressions can reference imported globals
+  for table_def in mod.tables {
+    // Evaluate table init expression if present
+    let init_value : @types.Value = match table_def.init {
+      Some(init_expr) =>
+        eval_const_expr(init_expr, func_addrs~, globals=global_instances)
+      None => @types.Value::Null
+    }
+    let table = @runtime.Table::new(
+      table_def.type_.elem_type,
+      table_def.type_.limits.min,
+      table_def.type_.limits.max,
+      init_value~,
+    )
+    let addr = store.alloc_table(table)
+    table_addrs.push(addr)
+  }
+
+  // Allocate globals (after imported globals)
   for global in mod.globals {
     let init_value = eval_const_expr(
       global.init,

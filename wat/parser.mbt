@@ -156,9 +156,8 @@ fn Parser::expect_keyword(self : Parser, kw : String) -> Unit raise WatError {
 ///|
 /// Skip an optional identifier (e.g., label after 'end' or 'else' in flat form)
 fn Parser::skip_optional_id(self : Parser) -> Unit raise WatError {
-  match self.current {
-    Id(_) => self.advance()
-    _ => ()
+  if self.current is Id(_) {
+    self.advance()
   }
 }
 
@@ -1749,13 +1748,11 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("import") => {
             self.advance()
             // Skip module name and import name
-            match self.current {
-              String_(_) => self.advance()
-              _ => ()
+            if self.current is String_(_) {
+              self.advance()
             }
-            match self.current {
-              String_(_) => self.advance()
-              _ => ()
+            if self.current is String_(_) {
+              self.advance()
             }
             // Check import kind
             if self.current == LParen {
@@ -2069,12 +2066,9 @@ fn Parser::parse_type_def(
 ) -> @types.FuncType raise WatError {
   self.advance() // skip "type"
   // Optional type name
-  match self.current {
-    Id(name) => {
-      self.advance()
-      self.type_names.set(name, type_idx)
-    }
-    _ => ()
+  if self.current is Id(name) {
+    self.advance()
+    self.type_names.set(name, type_idx)
   }
   self.expect_lparen()
   self.expect_keyword("func")
@@ -2135,12 +2129,9 @@ fn Parser::parse_func_def(
   let mut func_name : String? = None
 
   // Optional function name
-  match self.current {
-    Id(name) => {
-      func_name = Some(name)
-      self.advance()
-    }
-    _ => ()
+  if self.current is Id(name) {
+    func_name = Some(name)
+    self.advance()
   }
 
   // Clear local names for this function
@@ -2215,12 +2206,9 @@ fn Parser::parse_func_def(
             Keyword("param") => {
               self.advance()
               // Optional name
-              match self.current {
-                Id(name) => {
-                  self.local_names.set(name, inline_params.length())
-                  self.advance()
-                }
-                _ => ()
+              if self.current is Id(name) {
+                self.local_names.set(name, inline_params.length())
+                self.advance()
               }
               while self.current != RParen {
                 inline_params.push(self.parse_value_type())
@@ -2441,13 +2429,10 @@ fn Parser::parse_func_def(
       Keyword("local") => {
         self.advance()
         // Optional name
-        match self.current {
-          Id(name) => {
-            let local_idx = param_count + locals.length()
-            self.local_names.set(name, local_idx)
-            self.advance()
-          }
-          _ => ()
+        if self.current is Id(name) {
+          let local_idx = param_count + locals.length()
+          self.local_names.set(name, local_idx)
+          self.advance()
         }
         while self.current != RParen {
           locals.push(self.parse_value_type())
@@ -3411,12 +3396,9 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   let export_names : Array[String] = []
 
   // Optional name
-  match self.current {
-    Id(name) => {
-      self.memory_names.set(name, 0)
-      self.advance()
-    }
-    _ => ()
+  if self.current is Id(name) {
+    self.memory_names.set(name, 0)
+    self.advance()
   }
 
   // Check for inline import: (memory (import "mod" "name") MIN [MAX])
@@ -3789,20 +3771,17 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
 fn Parser::parse_table_def(
   self : Parser,
   mod_ : @types.Module,
-) -> (@types.TableType, String?, @types.Element?, String?) raise WatError {
-  // Returns (table_type, export_name, inline_elem, table_name)
+) -> (@types.Table, String?, @types.Element?, String?) raise WatError {
+  // Returns (table, export_name, inline_elem, table_name)
   self.advance() // skip "table"
   let mut export_name : String? = None
   let mut table_name : String? = None
 
   // Optional name
-  match self.current {
-    Id(name) => {
-      table_name = Some(name)
-      // Don't set table_names here; caller will set with correct index
-      self.advance()
-    }
-    _ => ()
+  if self.current is Id(name) {
+    table_name = Some(name)
+    // Don't set table_names here; caller will set with correct index
+    self.advance()
   }
 
   // Check for inline export
@@ -3873,9 +3852,9 @@ fn Parser::parse_table_def(
           desc: @types.ImportDesc::Table({ elem_type, limits: { min, max } }),
         }
         mod_.imports.push(imp)
-        // Return a placeholder table type (the import is what matters)
+        // Return a placeholder table (the import is what matters)
         return (
-          { elem_type, limits: { min, max } },
+          { type_: { elem_type, limits: { min, max } }, init: None },
           export_name,
           None,
           table_name,
@@ -3978,11 +3957,14 @@ fn Parser::parse_table_def(
               type_: elem_type,
               init,
             }
-            let table_type : @types.TableType = {
-              elem_type,
-              limits: { min: init.length(), max: Some(init.length()) },
+            let table : @types.Table = {
+              type_: {
+                elem_type,
+                limits: { min: init.length(), max: Some(init.length()) },
+              },
+              init: None,
             }
-            return (table_type, export_name, Some(elem), table_name)
+            return (table, export_name, Some(elem), table_name)
           }
           _ => {
             // Not an inline elem, restore state and fall through to standard syntax
@@ -4002,7 +3984,7 @@ fn Parser::parse_table_def(
         self.expect_rparen()
         // This is a table with implicit size 0, no elements
         return (
-          { elem_type, limits: { min: 0, max: None } },
+          { type_: { elem_type, limits: { min: 0, max: None } }, init: None },
           export_name,
           None,
           table_name,
@@ -4017,19 +3999,23 @@ fn Parser::parse_table_def(
         _ => None
       }
       let elem_type = self.parse_value_type()
-      // Check for optional default init expression (ref.func $f) or (ref.null func)
-      if self.current == LParen {
+      // Check for optional default init expression (ref.func $f) or (ref.null func) or (global.get $g)
+      let table_init : Array[@types.Instruction]? = if self.current == LParen {
         // Parse the init expression - validate global.get references
         // Table init expressions can only reference imported globals, not module-defined globals
         self.advance()
         match self.current {
-          Keyword("ref.func") | Keyword("ref.null") => {
+          Keyword("ref.func") => {
             self.advance()
-            // Skip the argument
-            while self.current != RParen {
-              self.advance()
-            }
+            let idx = self.parse_func_idx()
             self.expect_rparen()
+            Some([@types.Instruction::RefFunc(idx)])
+          }
+          Keyword("ref.null") => {
+            self.advance()
+            let ref_type = self.parse_ref_type()
+            self.expect_rparen()
+            Some([@types.Instruction::RefNull(ref_type)])
           }
           Keyword("global.get") => {
             self.advance()
@@ -4044,31 +4030,26 @@ fn Parser::parse_table_def(
               )
             }
             self.expect_rparen()
+            Some([@types.Instruction::GlobalGet(global_idx)])
           }
           _ => {
-            // General expression, skip until closing paren
-            let mut depth = 1
-            while depth > 0 && self.current != Eof {
-              match self.current {
-                LParen => {
-                  depth += 1
-                  self.advance()
-                }
-                RParen => {
-                  depth -= 1
-                  if depth > 0 {
-                    self.advance()
-                  }
-                }
-                _ => self.advance()
-              }
-            }
+            // General expression - parse it as instructions
+            // Let the validator catch type mismatches
+            let expr = self.parse_instructions()
             self.expect_rparen()
+            Some(expr)
           }
         }
+      } else {
+        None
       }
       self.expect_rparen()
-      ({ elem_type, limits: { min, max } }, export_name, None, table_name)
+      (
+        { type_: { elem_type, limits: { min, max } }, init: table_init },
+        export_name,
+        None,
+        table_name,
+      )
     }
   }
 }

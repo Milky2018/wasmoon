@@ -1147,7 +1147,13 @@ test "function call: call_indirect" {
     imports: [],
     funcs: [0, 0, 1], // add and sub have type 0, apply has type 1
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 2, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 2, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],
@@ -1656,7 +1662,13 @@ test "table operations: table.size" {
     imports: [],
     funcs: [0],
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 4, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 4, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],
@@ -1931,7 +1943,13 @@ test "module initialization: element segment" {
     imports: [],
     funcs: [0, 0, 1], // func0, func1 have type 0; call_func has type 1
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 2, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 2, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],
@@ -2274,7 +2292,13 @@ test "bulk memory: elem.drop" {
     imports: [],
     funcs: [0, 1], // drop has type 0, dummy has type 1
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 2, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 2, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],
@@ -2452,7 +2476,13 @@ test "reference types: ref.is_null with non-null value" {
     imports: [],
     funcs: [0, 0],
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 1, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],
@@ -2503,7 +2533,13 @@ test "reference types: ref.func used with table.set" {
     imports: [],
     funcs: [0, 0],
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 1, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],
@@ -3068,7 +3104,13 @@ test "call_indirect with imports path" {
     imports: [],
     funcs: [0, 0], // Both functions have type 0
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 1, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],
@@ -3124,7 +3166,13 @@ test "call_indirect with multiple funcs and explicit type" {
     imports: [],
     funcs: [0, 1, 2, 1], // dummy=0, test1=1, func=2, test=1
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 1, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],
@@ -3183,7 +3231,13 @@ test "call_indirect type index bug reproduction" {
     imports: [],
     funcs: [0, 1, 3], // dummy=type0, $func=type1, test=type3
     tables: [
-      { elem_type: @types.ValueType::FuncRef, limits: { min: 1, max: None } },
+      {
+        type_: {
+          elem_type: @types.ValueType::FuncRef,
+          limits: { min: 1, max: None },
+        },
+        init: None,
+      },
     ],
     memories: [],
     globals: [],

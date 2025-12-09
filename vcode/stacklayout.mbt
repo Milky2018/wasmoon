@@ -340,29 +340,24 @@ pub fn AArch64StackFrame::gen_prologue(
   insts.push(sub_sp)
 
   // Save FP and LR if using frame pointer
-  if self.use_fp {
-    match (self.fp_slot, self.lr_slot) {
-      (Some(fp_off), Some(lr_off)) => {
-        // Store FP
-        let store_fp = VCodeInst::new(Store(I64, fp_off))
-        store_fp.add_use(Physical({ index: 29, class: Int })) // FP
-        store_fp.add_use(Physical({ index: 31, class: Int })) // SP (conceptual)
-        insts.push(store_fp)
+  if self.use_fp && (self.fp_slot, self.lr_slot) is (Some(fp_off), Some(lr_off)) {
+    // Store FP
+    let store_fp = VCodeInst::new(Store(I64, fp_off))
+    store_fp.add_use(Physical({ index: 29, class: Int })) // FP
+    store_fp.add_use(Physical({ index: 31, class: Int })) // SP (conceptual)
+    insts.push(store_fp)
 
-        // Store LR
-        let store_lr = VCodeInst::new(Store(I64, lr_off))
-        store_lr.add_use(Physical({ index: 30, class: Int })) // LR
-        store_lr.add_use(Physical({ index: 31, class: Int })) // SP
-        insts.push(store_lr)
+    // Store LR
+    let store_lr = VCodeInst::new(Store(I64, lr_off))
+    store_lr.add_use(Physical({ index: 30, class: Int })) // LR
+    store_lr.add_use(Physical({ index: 31, class: Int })) // SP
+    insts.push(store_lr)
 
-        // Set up frame pointer: MOV x29, sp
-        let setup_fp = VCodeInst::new(Move)
-        setup_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
-        setup_fp.add_use(Physical({ index: 31, class: Int }))
-        insts.push(setup_fp)
-      }
-      _ => ()
-    }
+    // Set up frame pointer: MOV x29, sp
+    let setup_fp = VCodeInst::new(Move)
+    setup_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
+    setup_fp.add_use(Physical({ index: 31, class: Int }))
+    insts.push(setup_fp)
   }
   insts
 }
@@ -379,23 +374,18 @@ pub fn AArch64StackFrame::gen_epilogue(
   }
 
   // Restore FP and LR if using frame pointer
-  if self.use_fp {
-    match (self.fp_slot, self.lr_slot) {
-      (Some(fp_off), Some(lr_off)) => {
-        // Restore FP
-        let load_fp = VCodeInst::new(Load(I64, fp_off))
-        load_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
-        load_fp.add_use(Physical({ index: 31, class: Int })) // SP
-        insts.push(load_fp)
+  if self.use_fp && (self.fp_slot, self.lr_slot) is (Some(fp_off), Some(lr_off)) {
+    // Restore FP
+    let load_fp = VCodeInst::new(Load(I64, fp_off))
+    load_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
+    load_fp.add_use(Physical({ index: 31, class: Int })) // SP
+    insts.push(load_fp)
 
-        // Restore LR
-        let load_lr = VCodeInst::new(Load(I64, lr_off))
-        load_lr.add_def({ reg: Physical({ index: 30, class: Int }) })
-        load_lr.add_use(Physical({ index: 31, class: Int })) // SP
-        insts.push(load_lr)
-      }
-      _ => ()
-    }
+    // Restore LR
+    let load_lr = VCodeInst::new(Load(I64, lr_off))
+    load_lr.add_def({ reg: Physical({ index: 30, class: Int }) })
+    load_lr.add_use(Physical({ index: 31, class: Int })) // SP
+    insts.push(load_lr)
   }
 
   // Restore stack pointer: ADD sp, sp, #frame_size

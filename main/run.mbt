@@ -177,36 +177,35 @@ fn run_wasm(
   // Initialize element segments (populate tables with function references)
   for elem in mod_.elems {
     // Only process active element segments
-    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
-      if instance.table_addrs.length() > table_idx {
-        let table = store.get_table(instance.table_addrs[table_idx]) catch {
+    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) &&
+      instance.table_addrs.length() > table_idx {
+      let table = store.get_table(instance.table_addrs[table_idx]) catch {
+        e => {
+          println("Error getting table: \{e}")
+          return
+        }
+      }
+      let offset = match offset_expr {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      for i, init_expr in elem.init {
+        // Extract function index from init expression
+        let func_idx = match init_expr {
+          [RefFunc(idx)] => idx
+          [I32Const(idx)] => idx
+          _ => continue
+        }
+        // Convert module function index to store address
+        let store_addr = if func_idx < instance.func_addrs.length() {
+          instance.func_addrs[func_idx]
+        } else {
+          func_idx // fallback, should not happen for valid modules
+        }
+        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
           e => {
-            println("Error getting table: \{e}")
+            println("Error setting table element: \{e}")
             return
-          }
-        }
-        let offset = match offset_expr {
-          [I32Const(n)] => n
-          _ => 0
-        }
-        for i, init_expr in elem.init {
-          // Extract function index from init expression
-          let func_idx = match init_expr {
-            [RefFunc(idx)] => idx
-            [I32Const(idx)] => idx
-            _ => continue
-          }
-          // Convert module function index to store address
-          let store_addr = if func_idx < instance.func_addrs.length() {
-            instance.func_addrs[func_idx]
-          } else {
-            func_idx // fallback, should not happen for valid modules
-          }
-          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-            e => {
-              println("Error setting table element: \{e}")
-              return
-            }
           }
         }
       }
@@ -422,26 +421,24 @@ fn find_exported_func_type(
   func_name : String,
 ) -> @types.FuncType? {
   for exp in mod_.exports {
-    if exp.name == func_name {
-      if exp.desc is Func(idx) {
-        // Get the type index for this function
-        // Account for imported functions
-        let num_imports = count_func_imports(mod_.imports)
-        let type_idx = if idx < num_imports {
-          // It's an imported function
-          get_import_func_type_idx(mod_.imports, idx)
+    if exp.name == func_name && exp.desc is Func(idx) {
+      // Get the type index for this function
+      // Account for imported functions
+      let num_imports = count_func_imports(mod_.imports)
+      let type_idx = if idx < num_imports {
+        // It's an imported function
+        get_import_func_type_idx(mod_.imports, idx)
+      } else {
+        // It's a defined function
+        let func_idx = idx - num_imports
+        if func_idx < mod_.funcs.length() {
+          Some(mod_.funcs[func_idx])
         } else {
-          // It's a defined function
-          let func_idx = idx - num_imports
-          if func_idx < mod_.funcs.length() {
-            Some(mod_.funcs[func_idx])
-          } else {
-            None
-          }
+          None
         }
-        if type_idx is Some(tidx) && tidx < mod_.types.length() {
-          return Some(mod_.types[tidx])
-        }
+      }
+      if type_idx is Some(tidx) && tidx < mod_.types.length() {
+        return Some(mod_.types[tidx])
       }
     }
   }
@@ -478,14 +475,11 @@ fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
 fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
   let mut func_count = 0
   for imp in imports {
-    match imp.desc {
-      Func(type_idx) => {
-        if func_count == idx {
-          return Some(type_idx)
-        }
-        func_count = func_count + 1
+    if imp.desc is Func(type_idx) {
+      if func_count == idx {
+        return Some(type_idx)
       }
-      _ => ()
+      func_count = func_count + 1
     }
   }
   None
@@ -730,10 +724,9 @@ fn check_jit_import_support(
 ) -> Bool {
   let unsupported : Array[String] = []
   for imp in mod_.imports {
-    if imp.desc is Func(_) {
-      if !@jit.has_import_trampoline(imp.mod_name, imp.name) {
-        unsupported.push("\{imp.mod_name}.\{imp.name}")
-      }
+    if imp.desc is Func(_) &&
+      !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+      unsupported.push("\{imp.mod_name}.\{imp.name}")
     }
   }
   if unsupported.length() > 0 {

@@ -167,9 +167,8 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   // Collect function types (imports + defined functions)
   let funcs : Array[Int] = []
   for imp in mod.imports {
-    match imp.desc {
-      Func(type_idx) => funcs.push(type_idx)
-      _ => ()
+    if imp.desc is Func(type_idx) {
+      funcs.push(type_idx)
     }
   }
   for type_idx in mod.funcs {
@@ -178,20 +177,18 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   // Collect tables
   let tables : Array[@types.TableType] = []
   for imp in mod.imports {
-    match imp.desc {
-      Table(table_type) => tables.push(table_type)
-      _ => ()
+    if imp.desc is Table(table_type) {
+      tables.push(table_type)
     }
   }
   for table in mod.tables {
-    tables.push(table)
+    tables.push(table.type_)
   }
   // Collect memories
   let mems : Array[@types.MemoryType] = []
   for imp in mod.imports {
-    match imp.desc {
-      Memory(mem_type) => mems.push(mem_type)
-      _ => ()
+    if imp.desc is Memory(mem_type) {
+      mems.push(mem_type)
     }
   }
   for mem in mod.memories {
@@ -200,9 +197,8 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   // Collect globals
   let globals : Array[@types.GlobalType] = []
   for imp in mod.imports {
-    match imp.desc {
-      Global(global_type) => globals.push(global_type)
-      _ => ()
+    if imp.desc is Global(global_type) {
+      globals.push(global_type)
     }
   }
   for global in mod.globals {
@@ -452,6 +448,11 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     validate_memory_limits(mem.limits)
   }
 
+  // Validate table types and limits
+  for table in mod.tables {
+    validate_table_type(table, ctx, ctx.funcs)
+  }
+
   // Validate global initialization expressions
   // For each global, its init expression can only reference previously defined globals
   // (imported globals are already in ctx.globals from imports)
@@ -576,6 +577,13 @@ pub fn validate_module_with_context(
   // Validate memory limits
   for mem in ctx.mems {
     validate_memory_limits(mem.limits) catch {
+      e => raise WithContext(ValidationErrorContext::from_error(e))
+    }
+  }
+
+  // Validate table types and limits
+  for table in mod.tables {
+    validate_table_type(table, ctx, ctx.funcs) catch {
       e => raise WithContext(ValidationErrorContext::from_error(e))
     }
   }
@@ -756,12 +764,59 @@ fn validate_memory_limits(limits : @types.Limits) -> Unit raise ValidationError 
 }
 
 ///|
+/// Validate table limits according to WASM spec
+fn validate_table_limits(limits : @types.Limits) -> Unit raise ValidationError {
+  // Check max if specified
+  if limits.max is Some(max_val) {
+    // min must not be greater than max (unsigned comparison)
+    if limits.min.reinterpret_as_uint() > max_val.reinterpret_as_uint() {
+      raise InvalidLimits("size minimum must not be greater than maximum")
+    }
+  }
+}
+
+///|
+/// Check if a reference type is non-nullable
+fn is_non_nullable_ref_type(ty : @types.ValueType) -> Bool {
+  match ty {
+    RefFunc | RefExtern | RefFuncTyped(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Validate table type with init expression
+fn validate_table_type(
+  table : @types.Table,
+  ctx : ValidationContext,
+  func_addrs : Array[Int],
+) -> Unit raise ValidationError {
+  // Validate table limits
+  validate_table_limits(table.type_.limits)
+  // Validate table init expression if present
+  if table.init is Some(init_expr) {
+    // Validate the init expression produces the correct type
+    validate_const_expr(
+      ctx.globals,
+      init_expr,
+      table.type_.elem_type,
+      funcs=func_addrs,
+    )
+  } else if is_non_nullable_ref_type(table.type_.elem_type) {
+    // If no init expression and element type is non-nullable, this is always an error
+    // per WebAssembly spec, regardless of table size
+    raise TypeMismatch(
+      "table with non-nullable element type requires an initializer",
+    )
+  }
+}
+
+///|
 fn count_func_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    match imp.desc {
-      Func(_) => count = count + 1
-      _ => ()
+    if imp.desc is Func(_) {
+      count = count + 1
     }
   }
   count
@@ -771,9 +826,8 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 fn count_global_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    match imp.desc {
-      Global(_) => count = count + 1
-      _ => ()
+    if imp.desc is Global(_) {
+      count = count + 1
     }
   }
   count

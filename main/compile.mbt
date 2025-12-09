@@ -126,17 +126,14 @@ fn run_compile(
   }
 
   // Write IR file if requested
-  match (emit_ir, ir_output) {
-    (Some(ir_path), Some(buf)) => {
-      @fs.write_string_to_file(ir_path, buf.to_string()) catch {
-        e => {
-          println("Error writing IR file: \{e}")
-          return
-        }
+  if (emit_ir, ir_output) is (Some(ir_path), Some(buf)) {
+    @fs.write_string_to_file(ir_path, buf.to_string()) catch {
+      e => {
+        println("Error writing IR file: \{e}")
+        return
       }
-      println("Wrote IR to \{ir_path}")
     }
-    _ => ()
+    println("Wrote IR to \{ir_path}")
   }
 
   // Serialize the precompiled module

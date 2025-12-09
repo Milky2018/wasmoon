@@ -1242,9 +1242,8 @@ fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
   for block in func.blocks {
     for inst in block.insts {
       // Check if this instruction is a function call
-      match inst.opcode {
-        CallIndirect(_, _) => has_calls = true
-        _ => ()
+      if inst.opcode is CallIndirect(_, _) {
+        has_calls = true
       }
       for def in inst.defs {
         match def.reg {

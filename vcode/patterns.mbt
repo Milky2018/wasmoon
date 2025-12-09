@@ -313,10 +313,8 @@ fn find_defining_inst(ctx : LoweringContext, value : @ir.Value) -> @ir.Inst? {
   // Search through all blocks and instructions to find the definition
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
-      if inst.result is Some(result) {
-        if result.id == value.id {
-          return Some(inst)
-        }
+      if inst.result is Some(result) && result.id == value.id {
+        return Some(inst)
       }
     }
   }

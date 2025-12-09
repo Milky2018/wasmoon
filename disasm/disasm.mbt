@@ -56,9 +56,9 @@ pub fn disassemble(mod_ : @types.Module) -> String {
     buf.write_string("  (table (;")
     buf.write_string(i.to_string())
     buf.write_string(";) ")
-    write_limits(buf, table.limits)
+    write_limits(buf, table.type_.limits)
     buf.write_string(" ")
-    write_value_type(buf, table.elem_type)
+    write_value_type(buf, table.type_.elem_type)
     buf.write_string(")\n")
   }
 
@@ -149,9 +149,8 @@ pub fn disassemble(mod_ : @types.Module) -> String {
 fn count_func_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    match imp.desc {
-      Func(_) => count = count + 1
-      _ => ()
+    if imp.desc is Func(_) {
+      count = count + 1
     }
   }
   count

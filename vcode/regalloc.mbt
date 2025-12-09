@@ -287,11 +287,31 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     }
 
     // Record uses in terminator
-    match block.terminator {
-      Some(term) =>
-        match term {
-          Branch(cond, _, _) =>
-            match cond {
+    if block.terminator is Some(term) {
+      match term {
+        Branch(cond, _, _) =>
+          match cond {
+            Virtual(vreg) => {
+              let info = match result.use_def.get(vreg.id) {
+                Some(existing) => existing
+                None => {
+                  let new_info = UseDefInfo::new(vreg)
+                  result.use_def.set(vreg.id, new_info)
+                  new_info
+                }
+              }
+              let inst_idx = block.insts.length()
+              info.use_points.push({
+                block: block_idx,
+                inst: inst_idx,
+                pos: Before,
+              })
+            }
+            Physical(_) => ()
+          }
+        Return(values) =>
+          for value in values {
+            match value {
               Virtual(vreg) => {
                 let info = match result.use_def.get(vreg.id) {
                   Some(existing) => existing
@@ -310,31 +330,9 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
               }
               Physical(_) => ()
             }
-          Return(values) =>
-            for value in values {
-              match value {
-                Virtual(vreg) => {
-                  let info = match result.use_def.get(vreg.id) {
-                    Some(existing) => existing
-                    None => {
-                      let new_info = UseDefInfo::new(vreg)
-                      result.use_def.set(vreg.id, new_info)
-                      new_info
-                    }
-                  }
-                  let inst_idx = block.insts.length()
-                  info.use_points.push({
-                    block: block_idx,
-                    inst: inst_idx,
-                    pos: Before,
-                  })
-                }
-                Physical(_) => ()
-              }
-            }
-          _ => ()
-        }
-      None => ()
+          }
+        _ => ()
+      }
     }
   }
 }
@@ -380,30 +378,28 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     }
 
     // Terminator uses
-    match block.terminator {
-      Some(term) =>
-        match term {
-          Branch(cond, _, _) =>
-            match cond {
+    if block.terminator is Some(term) {
+      match term {
+        Branch(cond, _, _) =>
+          match cond {
+            Virtual(vreg) =>
+              if !def_set.contains(vreg.id) {
+                use_set.add(vreg.id)
+              }
+            Physical(_) => ()
+          }
+        Return(values) =>
+          for value in values {
+            match value {
               Virtual(vreg) =>
                 if !def_set.contains(vreg.id) {
                   use_set.add(vreg.id)
                 }
               Physical(_) => ()
             }
-          Return(values) =>
-            for value in values {
-              match value {
-                Virtual(vreg) =>
-                  if !def_set.contains(vreg.id) {
-                    use_set.add(vreg.id)
-                  }
-                Physical(_) => ()
-              }
-            }
-          _ => ()
-        }
-      None => ()
+          }
+        _ => ()
+      }
     }
     block_use.push(use_set)
     block_def.push(def_set)
@@ -456,11 +452,10 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       }
       // Then add live-out minus defs
       for vreg_id in result.live_out[block_idx] {
-        if !block_def[block_idx].contains(vreg_id) {
-          if !result.live_in[block_idx].contains(vreg_id) {
-            result.live_in[block_idx].add(vreg_id)
-            changed = true
-          }
+        if !block_def[block_idx].contains(vreg_id) &&
+          !result.live_in[block_idx].contains(vreg_id) {
+          result.live_in[block_idx].add(vreg_id)
+          changed = true
         }
       }
     }

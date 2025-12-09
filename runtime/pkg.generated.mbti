@@ -203,7 +203,7 @@ pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError
 pub fn Table::get_elem_type(Self) -> @types.ValueType
 pub fn Table::get_limits(Self) -> (Int, Int?)
 pub fn Table::grow(Self, Int, @types.Value) -> Int
-pub fn Table::new(@types.ValueType, Int, Int?) -> Self
+pub fn Table::new(@types.ValueType, Int, Int?, init_value? : @types.Value) -> Self
 pub fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
 pub fn Table::size(Self) -> Int
 pub impl Show for Table
