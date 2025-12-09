@@ -476,12 +476,18 @@ pub fn instantiate_module(
 
   // Allocate globals with initialization
   let global_addrs : Array[Int] = []
+  let global_instances : Array[@runtime.GlobalInstance] = []
   for global in mod.globals {
-    // Evaluate init expression (for now, assume simple constant expressions)
-    let init_value = eval_const_expr(global.init, func_addrs~)
+    // Evaluate init expression with access to already-initialized globals
+    let init_value = eval_const_expr(
+      global.init,
+      func_addrs~,
+      globals=global_instances,
+    )
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
+    global_instances.push(global_inst)
   }
 
   // func_addrs: indices into store.funcs
@@ -513,30 +519,96 @@ pub fn instantiate_module(
 
 ///|
 /// Evaluate a constant initialization expression
+/// Supports extended constant expressions with arithmetic operations
 fn eval_const_expr(
   instrs : Array[@types.Instruction],
   func_addrs? : Array[Int] = [],
+  globals? : Array[@runtime.GlobalInstance] = [],
 ) -> @types.Value {
-  // WebAssembly constant expressions can only contain:
-  // - i32.const, i64.const, f32.const, f64.const
-  // - ref.null, ref.func
-  // - global.get (for imported globals only)
-  match instrs {
-    [I32Const(n)] => I32(n)
-    [I64Const(n)] => I64(n)
-    [F32Const(f)] => F32(f)
-    [F64Const(d)] => F64(d)
-    [RefNull(_)] => Null
-    [RefFunc(idx)] => {
-      // Convert module function index to store address
-      let store_addr = if idx < func_addrs.length() {
-        func_addrs[idx]
-      } else {
-        idx // fallback, module func idx
+  // Use stack-based evaluation for extended constant expressions
+  let stack : Array[@types.Value] = []
+  for instr in instrs {
+    match instr {
+      I32Const(n) => stack.push(I32(n))
+      I64Const(n) => stack.push(I64(n))
+      F32Const(f) => stack.push(F32(f))
+      F64Const(d) => stack.push(F64(d))
+      RefNull(_) => stack.push(Null)
+      RefFunc(idx) => {
+        let store_addr = if idx < func_addrs.length() {
+          func_addrs[idx]
+        } else {
+          idx
+        }
+        stack.push(FuncRef(store_addr))
       }
-      FuncRef(store_addr)
+      GlobalGet(idx) =>
+        if idx < globals.length() {
+          stack.push(globals[idx].get())
+        }
+      // i32 arithmetic operations
+      I32Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          match (a, b) {
+            (I32(av), I32(bv)) => stack.push(I32(av + bv))
+            _ => ()
+          }
+        }
+      I32Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          match (a, b) {
+            (I32(av), I32(bv)) => stack.push(I32(av - bv))
+            _ => ()
+          }
+        }
+      I32Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          match (a, b) {
+            (I32(av), I32(bv)) => stack.push(I32(av * bv))
+            _ => ()
+          }
+        }
+      // i64 arithmetic operations
+      I64Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          match (a, b) {
+            (I64(av), I64(bv)) => stack.push(I64(av + bv))
+            _ => ()
+          }
+        }
+      I64Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          match (a, b) {
+            (I64(av), I64(bv)) => stack.push(I64(av - bv))
+            _ => ()
+          }
+        }
+      I64Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          match (a, b) {
+            (I64(av), I64(bv)) => stack.push(I64(av * bv))
+            _ => ()
+          }
+        }
+      _ => ()
     }
-    _ => Null // fallback for unsupported expressions
+  }
+  if stack.length() > 0 {
+    stack[stack.length() - 1]
+  } else {
+    Null
   }
 }
 
@@ -794,11 +866,29 @@ pub fn instantiate_module_with_imports(
   }
 
   // Allocate globals (after imported globals)
+  // First, collect instances for already-allocated globals (imports)
+  let global_instances : Array[@runtime.GlobalInstance] = []
+  for addr in global_addrs {
+    global_instances.push(
+      store.get_global(addr) catch {
+        _ =>
+          @runtime.GlobalInstance::new(
+            { value_type: I32, mutable: false },
+            I32(0),
+          )
+      },
+    )
+  }
   for global in mod.globals {
-    let init_value = eval_const_expr(global.init, func_addrs~)
+    let init_value = eval_const_expr(
+      global.init,
+      func_addrs~,
+      globals=global_instances,
+    )
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
+    global_instances.push(global_inst)
   }
   // Initialize dropped arrays with false values
   let dropped_elems : Array[Bool] = []
