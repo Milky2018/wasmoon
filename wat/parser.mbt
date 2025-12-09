@@ -158,7 +158,7 @@ fn Parser::parse_u32(self : Parser) -> Int raise WatError {
   match self.current {
     Number(s) => {
       self.advance()
-      parse_int(s)
+      parse_u32(s)
     }
     _ =>
       raise UnexpectedToken("expected number, got \{self.current}", self.loc())

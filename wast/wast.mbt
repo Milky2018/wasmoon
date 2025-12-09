@@ -100,6 +100,7 @@ priv enum Token {
 /// WAST command types
 pub enum WastCommand {
   Module(@types.Module, String?) // module and optional name
+  ModuleDefinition(@types.Module, String?) // module definition only (not instantiated)
   ModuleQuote(Array[String]) // quoted module (for malformed tests)
   ModuleBinaryFailed(String) // binary module that failed to parse (skip in tests)
   AssertReturn(WastAction, Array[WastValue])
@@ -654,8 +655,19 @@ fn Parser::parse_module_command(self : Parser) -> WastCommand raise WastError {
   self.advance() // skip "module"
   // Check for optional module name
   let name = self.parse_optional_id()
-  // Check for binary or quote module
+  // Check for binary, quote, or definition module
   match self.current {
+    Keyword("definition") => {
+      // module definition - defines but doesn't instantiate
+      self.advance()
+      let module_start_line = self.current_line()
+      let wat_text = self.collect_module_text()
+      self.expect_rparen()
+      let mod_ = @wat.parse(wat_text) catch {
+        e => raise WatError(e, module_start_line)
+      }
+      ModuleDefinition(mod_, name)
+    }
     Keyword("binary") => {
       self.advance()
       let bytes = self.parse_binary_module()
