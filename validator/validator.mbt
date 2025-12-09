@@ -231,7 +231,7 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
 /// Check if a value type is a non-nullable reference type
 fn is_non_nullable_ref(ty : @types.ValueType) -> Bool {
   match ty {
-    RefFunc | RefExtern => true
+    RefFunc | RefExtern | RefFuncTyped(_) => true
     _ => false
   }
 }
