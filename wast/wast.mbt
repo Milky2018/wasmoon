@@ -41,43 +41,46 @@ pub impl Show for WastError with output(self, logger) {
 
 ///|
 /// Adjust WAT error line numbers by adding an offset
-fn adjust_wat_error_line(err : @wat.WatError, line_offset : Int) -> @wat.WatError {
+fn adjust_wat_error_line(
+  err : @wat.WatError,
+  line_offset : Int,
+) -> @wat.WatError {
   match err {
     @wat.WatError::UnexpectedToken(msg, loc) =>
-      @wat.WatError::UnexpectedToken(
-        msg,
-        { line: loc.line + line_offset - 1, column: loc.column },
-      )
+      @wat.WatError::UnexpectedToken(msg, {
+        line: loc.line + line_offset - 1,
+        column: loc.column,
+      })
     @wat.WatError::UnexpectedEof(loc) =>
       @wat.WatError::UnexpectedEof({
         line: loc.line + line_offset - 1,
         column: loc.column,
       })
     @wat.WatError::InvalidNumber(s, loc) =>
-      @wat.WatError::InvalidNumber(
-        s,
-        { line: loc.line + line_offset - 1, column: loc.column },
-      )
+      @wat.WatError::InvalidNumber(s, {
+        line: loc.line + line_offset - 1,
+        column: loc.column,
+      })
     @wat.WatError::InvalidInstruction(s, loc) =>
-      @wat.WatError::InvalidInstruction(
-        s,
-        { line: loc.line + line_offset - 1, column: loc.column },
-      )
+      @wat.WatError::InvalidInstruction(s, {
+        line: loc.line + line_offset - 1,
+        column: loc.column,
+      })
     @wat.WatError::UndefinedIdentifier(s, loc) =>
-      @wat.WatError::UndefinedIdentifier(
-        s,
-        { line: loc.line + line_offset - 1, column: loc.column },
-      )
+      @wat.WatError::UndefinedIdentifier(s, {
+        line: loc.line + line_offset - 1,
+        column: loc.column,
+      })
     @wat.WatError::DuplicateIdentifier(s, loc) =>
-      @wat.WatError::DuplicateIdentifier(
-        s,
-        { line: loc.line + line_offset - 1, column: loc.column },
-      )
+      @wat.WatError::DuplicateIdentifier(s, {
+        line: loc.line + line_offset - 1,
+        column: loc.column,
+      })
     @wat.WatError::ParseError(msg, loc) =>
-      @wat.WatError::ParseError(
-        msg,
-        { line: loc.line + line_offset - 1, column: loc.column },
-      )
+      @wat.WatError::ParseError(msg, {
+        line: loc.line + line_offset - 1,
+        column: loc.column,
+      })
   }
 }
 
