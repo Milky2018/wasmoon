@@ -144,8 +144,8 @@ test "emit: comparison" {
 test "emit: full function" {
   // Create a simple add function: add(a, b) -> a + b
   let func = VCodeFunction::new("test_add")
-  let _ = func.add_param(Int)
-  let _ = func.add_param(Int)
+  func.add_param(Int) |> ignore
+  func.add_param(Int) |> ignore
   func.add_result(Int)
   let block = func.new_block()
 

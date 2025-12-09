@@ -25,9 +25,9 @@ test "compilation queue: basic operations" {
 ///|
 test "compilation queue: priority ordering" {
   let queue = CompilationQueue::new(0)
-  let _ = queue.enqueue(CompilationRequest::with_priority(0, Baseline, 10))
-  let _ = queue.enqueue(CompilationRequest::with_priority(1, Baseline, 50))
-  let _ = queue.enqueue(CompilationRequest::with_priority(2, Baseline, 30))
+  queue.enqueue(CompilationRequest::with_priority(0, Baseline, 10)) |> ignore
+  queue.enqueue(CompilationRequest::with_priority(1, Baseline, 50)) |> ignore
+  queue.enqueue(CompilationRequest::with_priority(2, Baseline, 30)) |> ignore
 
   // Should dequeue in priority order: 1, 2, 0
   match queue.dequeue() {
@@ -48,7 +48,7 @@ test "compilation queue: priority ordering" {
 ///|
 test "compilation queue: no duplicates" {
   let queue = CompilationQueue::new(0)
-  let _ = queue.enqueue(CompilationRequest::new(0, Baseline))
+  queue.enqueue(CompilationRequest::new(0, Baseline)) |> ignore
   let added = queue.enqueue(CompilationRequest::new(0, Optimized))
   inspect(added, content="false")
   inspect(queue.length(), content="1")
@@ -57,8 +57,8 @@ test "compilation queue: no duplicates" {
 ///|
 test "compilation queue: size limit" {
   let queue = CompilationQueue::new(2)
-  let _ = queue.enqueue(CompilationRequest::new(0, Baseline))
-  let _ = queue.enqueue(CompilationRequest::new(1, Baseline))
+  queue.enqueue(CompilationRequest::new(0, Baseline)) |> ignore
+  queue.enqueue(CompilationRequest::new(1, Baseline)) |> ignore
   let added = queue.enqueue(CompilationRequest::new(2, Baseline))
   inspect(added, content="false")
   inspect(queue.length(), content="2")
@@ -67,7 +67,7 @@ test "compilation queue: size limit" {
 ///|
 test "compilation queue: contains" {
   let queue = CompilationQueue::new(0)
-  let _ = queue.enqueue(CompilationRequest::new(5, Baseline))
+  queue.enqueue(CompilationRequest::new(5, Baseline)) |> ignore
   inspect(queue.contains(5), content="true")
   inspect(queue.contains(6), content="false")
 }
@@ -75,8 +75,8 @@ test "compilation queue: contains" {
 ///|
 test "compilation queue: clear" {
   let queue = CompilationQueue::new(0)
-  let _ = queue.enqueue(CompilationRequest::new(0, Baseline))
-  let _ = queue.enqueue(CompilationRequest::new(1, Baseline))
+  queue.enqueue(CompilationRequest::new(0, Baseline)) |> ignore
+  queue.enqueue(CompilationRequest::new(1, Baseline)) |> ignore
   queue.clear()
   inspect(queue.is_empty(), content="true")
 }
@@ -118,8 +118,7 @@ test "compilation strategy: compile hot functions" {
 
   // Call up to threshold - 1
   for _ in 0..<9 {
-    let _ = strategy.decide(0)
-
+    strategy.decide(0) |> ignore
   }
 
   // 10th call should trigger compilation
@@ -168,8 +167,7 @@ test "compilation strategy: stats" {
 
   // Make some calls
   for _ in 0..<10 {
-    let _ = strategy.decide(0)
-
+    strategy.decide(0) |> ignore
   }
   let (total, interp, compiled_calls, compilations, queue, hot) = strategy.stats()
   inspect(total, content="10")

@@ -243,14 +243,14 @@ test "all comparison kinds" {
   builder.add_result(Int)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let _ = builder.cmp(Eq, p0, p1)
-  let _ = builder.cmp(Ne, p0, p1)
-  let _ = builder.cmp(Slt, p0, p1)
-  let _ = builder.cmp(Sle, p0, p1)
-  let _ = builder.cmp(Sge, p0, p1)
-  let _ = builder.cmp(Ult, p0, p1)
-  let _ = builder.cmp(Ule, p0, p1)
-  let _ = builder.cmp(Ugt, p0, p1)
+  builder.cmp(Eq, p0, p1) |> ignore
+  builder.cmp(Ne, p0, p1) |> ignore
+  builder.cmp(Slt, p0, p1) |> ignore
+  builder.cmp(Sle, p0, p1) |> ignore
+  builder.cmp(Sge, p0, p1) |> ignore
+  builder.cmp(Ult, p0, p1) |> ignore
+  builder.cmp(Ule, p0, p1) |> ignore
+  builder.cmp(Ugt, p0, p1) |> ignore
   let result = builder.cmp(Uge, p0, p1)
   builder.return_([result])
   inspect(builder.get_function().blocks[0].insts.length(), content="9")
@@ -264,11 +264,11 @@ test "float comparison kinds" {
   builder.add_result(Int)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let _ = builder.fcmp(FCmpKind::Eq, p0, p1)
-  let _ = builder.fcmp(FCmpKind::Ne, p0, p1)
-  let _ = builder.fcmp(FCmpKind::Lt, p0, p1)
-  let _ = builder.fcmp(FCmpKind::Le, p0, p1)
-  let _ = builder.fcmp(FCmpKind::Gt, p0, p1)
+  builder.fcmp(FCmpKind::Eq, p0, p1) |> ignore
+  builder.fcmp(FCmpKind::Ne, p0, p1) |> ignore
+  builder.fcmp(FCmpKind::Lt, p0, p1) |> ignore
+  builder.fcmp(FCmpKind::Le, p0, p1) |> ignore
+  builder.fcmp(FCmpKind::Gt, p0, p1) |> ignore
   let result = builder.fcmp(FCmpKind::Ge, p0, p1)
   builder.return_([result])
   inspect(builder.get_function().blocks[0].insts.length(), content="6")
@@ -327,10 +327,10 @@ test "memory types" {
   builder.add_result(Int)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let _ = builder.load(I8, addr, 0)
-  let _ = builder.load(I16, addr, 1)
-  let _ = builder.load(I64, addr, 2)
-  let _ = builder.load(F32, addr, 3)
+  builder.load(I8, addr, 0) |> ignore
+  builder.load(I16, addr, 1) |> ignore
+  builder.load(I64, addr, 2) |> ignore
+  builder.load(F32, addr, 3) |> ignore
   let result = builder.load(F64, addr, 4)
   builder.return_([result])
   // Just check it doesn't crash

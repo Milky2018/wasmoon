@@ -51,8 +51,7 @@ test "jit engine: mark compiled" {
 
   // Call a few times first
   for _ in 0..<5 {
-    let _ = engine.on_call(0)
-
+    engine.on_call(0) |> ignore
   }
 
   // Mark as compiled
@@ -127,16 +126,13 @@ test "jit engine: multiple functions" {
 
   // Call different functions
   for _ in 0..<5 {
-    let _ = engine.on_call(0)
-
+    engine.on_call(0) |> ignore
   }
   for _ in 0..<3 {
-    let _ = engine.on_call(1)
-
+    engine.on_call(1) |> ignore
   }
   for _ in 0..<7 {
-    let _ = engine.on_call(2)
-
+    engine.on_call(2) |> ignore
   }
   let (total, _, interp, _, _) = engine.stats()
   inspect(total, content="15")
@@ -146,7 +142,7 @@ test "jit engine: multiple functions" {
 ///|
 test "jit engine: show" {
   let engine = JITEngine::default()
-  let _ = engine.on_call(0)
+  engine.on_call(0) |> ignore
   let s = engine.to_string()
   inspect(s.length() > 0, content="true")
 }

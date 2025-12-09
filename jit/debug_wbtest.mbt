@@ -107,8 +107,8 @@ test "breakpoint manager: remove" {
 ///|
 test "breakpoint manager: at location" {
   let mgr = BreakpointManager::new()
-  let _ = mgr.add(0, 10)
-  let _ = mgr.add(0, 20)
+  mgr.add(0, 10) |> ignore
+  mgr.add(0, 20) |> ignore
   match mgr.at_location(0, 10) {
     Some(bp) => inspect(bp.offset, content="10")
     None => panic()
@@ -132,9 +132,9 @@ test "breakpoint manager: should break" {
 ///|
 test "breakpoint manager: clear" {
   let mgr = BreakpointManager::new()
-  let _ = mgr.add(0, 10)
-  let _ = mgr.add(0, 20)
-  let _ = mgr.add(1, 0)
+  mgr.add(0, 10) |> ignore
+  mgr.add(0, 20) |> ignore
+  mgr.add(1, 0) |> ignore
   inspect(mgr.count(), content="3")
   mgr.clear()
   inspect(mgr.count(), content="0")
@@ -194,7 +194,7 @@ test "debug context: enable disable" {
 test "debug context: should pause on breakpoint" {
   let ctx = DebugContext::new()
   ctx.enable()
-  let _ = ctx.breakpoints.add(0, 10)
+  ctx.breakpoints.add(0, 10) |> ignore
   inspect(ctx.should_pause(0, 10), content="true")
   inspect(ctx.should_pause(0, 20), content="false")
 }
@@ -236,7 +236,7 @@ test "debug context: location string" {
 ///|
 test "debug context: show" {
   let ctx = DebugContext::new()
-  let _ = ctx.breakpoints.add(0, 10)
+  ctx.breakpoints.add(0, 10) |> ignore
   ctx.source_map.add_mapping(0, 10, SourceLocation::new(0, 10))
   let s = ctx.to_string()
   inspect(s.contains("breakpoints=1"), content="true")

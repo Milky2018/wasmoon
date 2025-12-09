@@ -1525,7 +1525,7 @@ fn validate_instr(
     // Reference instructions
     RefNull(ref_type) => stack.push(ref_type)
     RefIsNull => {
-      let _ = stack.pop_any() // any ref type
+      stack.pop_any() |> ignore // any ref type
       stack.push(@types.ValueType::I32)
     }
     RefFunc(func_idx) => {
@@ -1537,7 +1537,7 @@ fn validate_instr(
     RefAsNonNull => {
       // ref.as_non_null: pops nullable ref, pushes non-null ref
       // In polymorphic context (after unreachable), any type is valid
-      let _ = stack.pop_any()
+      stack.pop_any() |> ignore
       // Push a non-null reference - using FuncRef as placeholder
       // The actual type depends on the input type
       stack.push(@types.ValueType::RefFunc)
@@ -1548,7 +1548,7 @@ fn validate_instr(
         raise InvalidLabelIndex(label_idx)
       }
       // Pop the reference - in unreachable context this may be polymorphic
-      let _ = stack.pop_any()
+      stack.pop_any() |> ignore
       // If not null, the non-null reference remains on stack
       stack.push(@types.ValueType::RefFunc)
     }
@@ -1556,10 +1556,7 @@ fn validate_instr(
     // Control flow
     Nop => ()
     Unreachable => stack.set_polymorphic()
-    Drop => {
-      let _ = stack.pop_any()
-
-    }
+    Drop => stack.pop_any() |> ignore
     Select => {
       stack.pop(@types.ValueType::I32) // condition
       let t2 = stack.pop_any()

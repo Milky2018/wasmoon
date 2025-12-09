@@ -863,23 +863,13 @@ fn try_instantiate_source_traps(
     Binary(bytes) =>
       (try? {
         let mod_ = @parser.parse_module(bytes)
-        let _ = @executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-
+        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+        |> ignore
       })
       is Err(_)
     Inline(mod_) =>
-      (try? {
-        let _ = @executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-
-      })
+      (try? (@executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+      |> ignore))
       is Err(_)
     Quote(_) => false // Quoted source - can't test
     FailedToParse(_) => false // Module failed to parse, doesn't count as trap

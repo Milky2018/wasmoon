@@ -71,9 +71,9 @@ test "code cache: statistics" {
   emit_nop(mc)
   emit_nop(mc)
   cache.insert(0, CompiledFunction::new("func0", mc, 0))
-  let _ = cache.get(0) // Hit
-  let _ = cache.get(1) // Miss
-  let _ = cache.get(0) // Hit
+  cache.get(0) |> ignore // Hit
+  cache.get(1) |> ignore // Miss
+  cache.get(0) |> ignore // Hit
   let (size, count, hits, misses) = cache.stats()
   inspect(count, content="1")
   inspect(size, content="8") // 2 NOPs = 8 bytes
@@ -109,7 +109,7 @@ test "executable region: write" {
 test "executable region: finalize" {
   let region = ExecutableRegion::new(0, 1024)
   let bytes : Array[Int] = [0x1F, 0x20, 0x03, 0xD5]
-  let _ = region.write(bytes)
+  region.write(bytes) |> ignore
   region.finalize()
 
   // Cannot write after finalize
@@ -171,7 +171,7 @@ test "jit runtime: invalidate" {
   let mc = MachineCode::new()
   emit_nop(mc)
   let func = CompiledFunction::new("test", mc, 0)
-  let _ = runtime.register(0, func)
+  runtime.register(0, func) |> ignore
   runtime.invalidate(0)
   inspect(runtime.lookup(0) is None, content="true")
 }
@@ -181,8 +181,8 @@ test "jit runtime: statistics" {
   let runtime = JITRuntime::new(0, 4096)
   let mc = MachineCode::new()
   emit_nop(mc)
-  let _ = runtime.register(0, CompiledFunction::new("func0", mc, 0))
-  let _ = runtime.register(1, CompiledFunction::new("func1", mc, 0))
+  runtime.register(0, CompiledFunction::new("func0", mc, 0)) |> ignore
+  runtime.register(1, CompiledFunction::new("func1", mc, 0)) |> ignore
   let (comps, recomps, count, _, _, _, _) = runtime.stats()
   inspect(comps, content="2")
   inspect(recomps, content="0")
@@ -194,9 +194,9 @@ test "jit runtime: recompilation" {
   let runtime = JITRuntime::new(0, 4096)
   let mc = MachineCode::new()
   emit_nop(mc)
-  let _ = runtime.register(0, CompiledFunction::new("func0", mc, 0))
+  runtime.register(0, CompiledFunction::new("func0", mc, 0)) |> ignore
   // Re-register same function (recompilation)
-  let _ = runtime.register(0, CompiledFunction::new("func0_v2", mc, 0))
+  runtime.register(0, CompiledFunction::new("func0_v2", mc, 0)) |> ignore
   let (comps, recomps, _, _, _, _, _) = runtime.stats()
   inspect(comps, content="1")
   inspect(recomps, content="1")
