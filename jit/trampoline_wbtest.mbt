@@ -40,8 +40,8 @@ test "has_import_trampoline: unsupported functions" {
 ///|
 test "has_import_trampoline: spectest module" {
   let supported = [
-    "print", "print_i32", "print_i64", "print_f32", "print_f64",
-    "print_i32_f32", "print_f64_f64",
+    "print", "print_i32", "print_i64", "print_f32", "print_f64", "print_i32_f32",
+    "print_f64_f64",
   ]
   for name in supported {
     assert_true(has_import_trampoline("spectest", name))
