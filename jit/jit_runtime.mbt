@@ -235,7 +235,7 @@ pub fn JITModule::call_with_context(
   self : JITModule,
   func : JITFunction,
   args : Array[Int64],
-) -> Int64? {
+) -> Int64? raise JITTrap {
   match self.context {
     Some(ctx) => {
       // Activate context for WASI calls

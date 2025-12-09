@@ -268,9 +268,8 @@ pub fn aapcs64_callee_saved() -> Array[PReg] {
 pub fn aapcs64_caller_saved() -> Array[PReg] {
   [
     // Use callee-saved registers that survive across function calls
-    // X20 and X21 are reserved for func_table_ptr and memory_base
+    // X20, X21, X22 are reserved for func_table_ptr, memory_base, memory_size
     { index: 19, class: Int },
-    { index: 22, class: Int },
     { index: 23, class: Int },
     { index: 24, class: Int },
     { index: 25, class: Int },

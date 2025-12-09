@@ -409,7 +409,7 @@ test "AAPCS64 calling convention registers" {
   let callee_saved = aapcs64_callee_saved()
   inspect(callee_saved.length(), content="12") // x19-x28, fp, lr
   let caller_saved = aapcs64_caller_saved()
-  inspect(caller_saved.length(), content="10") // x0-x18
+  inspect(caller_saved.length(), content="9") // callee-saved minus reserved
   let arg_fprs = aapcs64_arg_fprs()
   inspect(arg_fprs.length(), content="8") // d0-d7
   let ret_fprs = aapcs64_ret_fprs()

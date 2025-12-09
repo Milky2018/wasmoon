@@ -305,6 +305,10 @@ pub enum VCodeOpcode {
   FloatToInt
   // Special
   Nop
+  // Memory bounds check (for WASM linear memory safety)
+  // BoundsCheck(offset, access_size): checks wasm_addr + offset + access_size <= memory_size
+  // Uses: [wasm_addr], traps if out of bounds
+  BoundsCheck(Int, Int)
   // AArch64-specific: shifted operand instructions
   // These combine an arithmetic/logical op with a shift in one instruction
   AddShifted(ShiftType, Int) // ADD Xd, Xn, Xm, shift #amount
@@ -361,6 +365,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     IntToFloat => "i2f"
     FloatToInt => "f2i"
     Nop => "nop"
+    BoundsCheck(offset, size) => "bounds_check +\{offset}, \{size}"
     // AArch64-specific
     AddShifted(shift, amount) => "add.\{shift} #\{amount}"
     SubShifted(shift, amount) => "sub.\{shift} #\{amount}"

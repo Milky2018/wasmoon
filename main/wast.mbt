@@ -646,7 +646,9 @@ fn invoke_action(
                 }
                 i64_args.push(v)
               }
-              let result = jm.call_with_context(f, i64_args)
+              let result = jm.call_with_context(f, i64_args) catch {
+                @jit.JITTrap(msg) => raise RuntimeError(msg)
+              }
               match result {
                 Some(v) =>
                   // Convert result back to Value based on function return type

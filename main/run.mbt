@@ -553,7 +553,14 @@ fn run_with_jit(
               if debug_config.verbose {
                 println("[DEBUG] JIT: Calling function '\{func_name}'")
               }
-              let result = jm.call_with_context(f, i64_args)
+              let result = jm.call_with_context(f, i64_args) catch {
+                @jit.JITTrap(msg) => {
+                  println("JIT Trap: \{msg}")
+                  @jit.free_memory(mem_ptr)
+                  jm.free()
+                  return None
+                }
+              }
               // Cleanup
               @jit.free_memory(mem_ptr)
               jm.free()

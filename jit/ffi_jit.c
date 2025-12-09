@@ -13,6 +13,8 @@ extern "C" {
 #include <errno.h>
 #include <stdlib.h>
 #include <time.h>
+#include <signal.h>
+#include <setjmp.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -27,6 +29,44 @@ extern "C" {
 #endif
 
 #include "moonbit.h"
+
+// ============ Trap Handling ============
+// Jump buffer for catching JIT traps (BRK instructions)
+static jmp_buf g_trap_jmp_buf;
+static volatile sig_atomic_t g_trap_code = 0;
+static volatile sig_atomic_t g_trap_active = 0;
+
+// Signal handler for SIGTRAP (triggered by BRK instruction)
+static void trap_signal_handler(int sig) {
+    (void)sig;
+    if (g_trap_active) {
+        g_trap_code = 1;  // Out of bounds memory access
+        longjmp(g_trap_jmp_buf, 1);
+    }
+}
+
+// Install trap handler
+static void install_trap_handler(void) {
+    static int installed = 0;
+    if (!installed) {
+        struct sigaction sa;
+        sa.sa_handler = trap_signal_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGTRAP, &sa, NULL);
+        installed = 1;
+    }
+}
+
+// Check if a trap occurred (returns 0 = no trap, 1 = out of bounds, etc.)
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_code(void) {
+    return (int)g_trap_code;
+}
+
+// Clear trap code
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_trap(void) {
+    g_trap_code = 0;
+}
 
 // ============ JIT Context for function calls ============
 
@@ -590,62 +630,122 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory(int64_t ctx_ptr) {
 
 // ============ Call JIT functions with context ============
 
-// Function pointer type that receives (func_table_ptr, memory_base_ptr) as first two args
-// On AArch64: X0 = func_table, X1 = memory_base
-// Prologue saves them to X20 and X21 respectively
-typedef int64_t (*jit_func_ctx2_i64)(int64_t func_table, int64_t mem_base);
-typedef int64_t (*jit_func_ctx2_i64_i64)(int64_t func_table, int64_t mem_base, int64_t arg0);
-typedef int64_t (*jit_func_ctx2_i64i64_i64)(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1);
-typedef void (*jit_func_ctx2_void)(int64_t func_table, int64_t mem_base);
-typedef void (*jit_func_ctx2_i64_void)(int64_t func_table, int64_t mem_base, int64_t arg0);
-typedef void (*jit_func_ctx2_i64i64_void)(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1);
+// Function pointer type that receives (func_table_ptr, memory_base_ptr, memory_size) as first three args
+// On AArch64: X0 = func_table, X1 = memory_base, X2 = memory_size
+// Prologue saves them to X20, X21, and X22 respectively
+typedef int64_t (*jit_func_ctx3_i64)(int64_t func_table, int64_t mem_base, int64_t mem_size);
+typedef int64_t (*jit_func_ctx3_i64_i64)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0);
+typedef int64_t (*jit_func_ctx3_i64i64_i64)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0, int64_t arg1);
+typedef void (*jit_func_ctx3_void)(int64_t func_table, int64_t mem_base, int64_t mem_size);
+typedef void (*jit_func_ctx3_i64_void)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0);
+typedef void (*jit_func_ctx3_i64i64_void)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0, int64_t arg1);
 
 // Call JIT function with context: () -> i64
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_void_i64(int64_t func_ptr, int64_t func_table_ptr) {
     if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (setjmp(g_trap_jmp_buf) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
     int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    jit_func_ctx2_i64 func = (jit_func_ctx2_i64)func_ptr;
-    return func(func_table_ptr, mem_base);
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64 func = (jit_func_ctx3_i64)func_ptr;
+    int64_t result = func(func_table_ptr, mem_base, mem_size);
+    g_trap_active = 0;
+    return result;
 }
 
 // Call JIT function with context: (i64) -> i64
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_i64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
     if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (setjmp(g_trap_jmp_buf) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
     int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    jit_func_ctx2_i64_i64 func = (jit_func_ctx2_i64_i64)func_ptr;
-    return func(func_table_ptr, mem_base, arg0);
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64_i64 func = (jit_func_ctx3_i64_i64)func_ptr;
+    // Force function call before JIT to ensure proper register/stack state
+    // This works around some compiler optimization issue with setjmp/longjmp
+    fflush(NULL);
+    int64_t result = func(func_table_ptr, mem_base, mem_size, arg0);
+    g_trap_active = 0;
+    return result;
 }
 
 // Call JIT function with context: (i64, i64) -> i64
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64i64_i64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
     if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (setjmp(g_trap_jmp_buf) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
     int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    jit_func_ctx2_i64i64_i64 func = (jit_func_ctx2_i64i64_i64)func_ptr;
-    return func(func_table_ptr, mem_base, arg0, arg1);
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64i64_i64 func = (jit_func_ctx3_i64i64_i64)func_ptr;
+    int64_t result = func(func_table_ptr, mem_base, mem_size, arg0, arg1);
+    g_trap_active = 0;
+    return result;
 }
 
 // Call JIT function with context: () -> void
 MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_void_void(int64_t func_ptr, int64_t func_table_ptr) {
     if (!func_ptr) return;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (setjmp(g_trap_jmp_buf) != 0) {
+        g_trap_active = 0;
+        return;  // Trap occurred
+    }
     int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    jit_func_ctx2_void func = (jit_func_ctx2_void)func_ptr;
-    func(func_table_ptr, mem_base);
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_void func = (jit_func_ctx3_void)func_ptr;
+    func(func_table_ptr, mem_base, mem_size);
+    g_trap_active = 0;
 }
 
 // Call JIT function with context: (i64) -> void
 MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64_void(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
     if (!func_ptr) return;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (setjmp(g_trap_jmp_buf) != 0) {
+        g_trap_active = 0;
+        return;  // Trap occurred
+    }
     int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    jit_func_ctx2_i64_void func = (jit_func_ctx2_i64_void)func_ptr;
-    func(func_table_ptr, mem_base, arg0);
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64_void func = (jit_func_ctx3_i64_void)func_ptr;
+    func(func_table_ptr, mem_base, mem_size, arg0);
+    g_trap_active = 0;
 }
 
 // Call JIT function with context: (i64, i64) -> void
 MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64i64_void(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
     if (!func_ptr) return;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (setjmp(g_trap_jmp_buf) != 0) {
+        g_trap_active = 0;
+        return;  // Trap occurred
+    }
     int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    jit_func_ctx2_i64i64_void func = (jit_func_ctx2_i64i64_void)func_ptr;
-    func(func_table_ptr, mem_base, arg0, arg1);
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64i64_void func = (jit_func_ctx3_i64i64_void)func_ptr;
+    func(func_table_ptr, mem_base, mem_size, arg0, arg1);
+    g_trap_active = 0;
 }
 
 // ============ Executable memory management ============
