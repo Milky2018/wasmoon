@@ -1345,16 +1345,15 @@ fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
 /// Emit prologue to save callee-saved registers
 /// Returns the stack frame size used
 fn emit_prologue(mc : MachineCode, clobbered : Array[Int]) -> Int {
-  // Save func_table_ptr, memory_base, and memory_size to callee-saved registers
-  emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
-  emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
-  emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
-  // If no callee-saved registers are clobbered, no need to save anything
-  if clobbered.length() == 0 {
-    return 0
+  // We always clobber X20, X21, X22 for func_table, memory_base, memory_size
+  // These are callee-saved registers, so we must save them first!
+  // Build list: X20, X21, X22 + any other clobbered callee-saved registers
+  let all_to_save : Array[Int] = [20, 21, 22]
+  for reg in clobbered {
+    all_to_save.push(reg)
   }
   // Round up to even number for STP (store pairs)
-  let num_regs = clobbered.length()
+  let num_regs = all_to_save.length()
   let num_pairs = (num_regs + 1) / 2
   let frame_size = num_pairs * 16 // 16 bytes per pair
   // Allocate stack frame first using SUB
@@ -1363,13 +1362,17 @@ fn emit_prologue(mc : MachineCode, clobbered : Array[Int]) -> Int {
   let mut i = 0
   let mut pair_idx = 0
   while i < num_regs {
-    let reg1 = clobbered[i]
-    let reg2 = if i + 1 < num_regs { clobbered[i + 1] } else { 31 } // XZR as padding
+    let reg1 = all_to_save[i]
+    let reg2 = if i + 1 < num_regs { all_to_save[i + 1] } else { 31 } // XZR as padding
     let offset = pair_idx * 16
     emit_stp_offset(mc, reg1, reg2, 31, offset)
     i = i + 2
     pair_idx = pair_idx + 1
   }
+  // Now move parameters to reserved registers (after saving their original values)
+  emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
+  emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
+  emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
   frame_size
 }
 
@@ -1444,17 +1447,19 @@ fn emit_epilogue(
   clobbered : Array[Int],
   frame_size : Int,
 ) -> Unit {
-  if clobbered.length() == 0 {
-    return
+  // Build the same list as prologue: X20, X21, X22 + clobbered
+  let all_to_restore : Array[Int] = [20, 21, 22]
+  for reg in clobbered {
+    all_to_restore.push(reg)
   }
-  let num_regs = clobbered.length()
+  let num_regs = all_to_restore.length()
   let num_pairs = (num_regs + 1) / 2
   // Restore registers using LDP
   let mut i = 0
   let mut pair_idx = 0
   while i < num_regs {
-    let reg1 = clobbered[i]
-    let reg2 = if i + 1 < num_regs { clobbered[i + 1] } else { 31 }
+    let reg1 = all_to_restore[i]
+    let reg2 = if i + 1 < num_regs { all_to_restore[i + 1] } else { 31 }
     let offset = pair_idx * 16
     if pair_idx == num_pairs - 1 {
       // Last LDP with post-indexed to deallocate stack

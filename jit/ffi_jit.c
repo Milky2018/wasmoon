@@ -32,7 +32,8 @@ extern "C" {
 
 // ============ Trap Handling ============
 // Jump buffer for catching JIT traps (BRK instructions)
-static jmp_buf g_trap_jmp_buf;
+// Using sigjmp_buf/sigsetjmp/siglongjmp for proper signal handler support
+static sigjmp_buf g_trap_jmp_buf;
 static volatile sig_atomic_t g_trap_code = 0;
 static volatile sig_atomic_t g_trap_active = 0;
 
@@ -41,7 +42,7 @@ static void trap_signal_handler(int sig) {
     (void)sig;
     if (g_trap_active) {
         g_trap_code = 1;  // Out of bounds memory access
-        longjmp(g_trap_jmp_buf, 1);
+        siglongjmp(g_trap_jmp_buf, 1);
     }
 }
 
@@ -646,7 +647,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_void_i64(int64_t func_ptr, int64
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
-    if (setjmp(g_trap_jmp_buf) != 0) {
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         return 0;  // Trap occurred
     }
@@ -659,16 +660,12 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_void_i64(int64_t func_ptr, int64
 }
 
 // Call JIT function with context: (i64) -> i64
-// Disable optimization to avoid setjmp/longjmp related issues
-#if defined(__clang__) || defined(__GNUC__)
-__attribute__((optnone))
-#endif
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_i64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
     if (!func_ptr) return 0;
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
-    if (setjmp(g_trap_jmp_buf) != 0) {
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         return 0;  // Trap occurred
     }
@@ -686,7 +683,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64i64_i64(int64_t func_ptr, int
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
-    if (setjmp(g_trap_jmp_buf) != 0) {
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         return 0;  // Trap occurred
     }
@@ -704,7 +701,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_void_void(int64_t func_ptr, int64_t
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
-    if (setjmp(g_trap_jmp_buf) != 0) {
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         return;  // Trap occurred
     }
@@ -721,7 +718,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64_void(int64_t func_ptr, int64_t 
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
-    if (setjmp(g_trap_jmp_buf) != 0) {
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         return;  // Trap occurred
     }
@@ -738,7 +735,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64i64_void(int64_t func_ptr, int64
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
-    if (setjmp(g_trap_jmp_buf) != 0) {
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         return;  // Trap occurred
     }

@@ -214,3 +214,55 @@ jit_func();  // BRK instruction → SIGTRAP signal → signal handler calls long
 **Current fix:** Using `__attribute__((optnone))` to disable optimization for affected functions.
 
 **Next investigation:** Try `sigsetjmp/siglongjmp` which are designed for signal handler contexts.
+
+### Final Root Cause: JIT Prologue Not Saving Callee-Saved Registers
+
+**Breakthrough:** Using lldb to debug the crash revealed the exact issue:
+
+```
+* frame #0: wasmoon_jit_call_ctx_i64_i64 + 168
+->  str    wzr, [x22, #0x4a0]    ; Crash! address=0x104a0
+```
+
+X22 = 0x10000 = 65536 = **memory_size** (1 WASM page)!
+
+**Disassembly analysis:**
+```asm
+<+36>:  adrp   x22, 89               ; Compiler uses X22 for global variable page address
+<+100>: str    w1, [x22, #0x4a0]     ; g_trap_active = 1
+<+112>: bl     sigsetjmp             ; sigsetjmp saves X22 (page address)
+...
+<+164>: blr    x20                   ; Call JIT function
+<+168>: str    wzr, [x22, #0x4a0]    ; g_trap_active = 0 (expects X22 = page address)
+```
+
+**The bug:** JIT prologue was:
+```moonbit
+emit_mov_reg(mc, 20, 0) // MOV X20, X0 - overwrites without saving!
+emit_mov_reg(mc, 21, 1) // MOV X21, X1 - overwrites without saving!
+emit_mov_reg(mc, 22, 2) // MOV X22, X2 - overwrites without saving!
+```
+
+X20, X21, X22 are **callee-saved registers**. JIT function MUST save them before use and restore before return. But our code was overwriting them directly!
+
+When JIT triggers BRK → SIGTRAP → siglongjmp:
+1. siglongjmp restores X22 to sigsetjmp's saved value (page address)
+2. But JIT had already clobbered X22 with memory_size
+3. C code tries to use X22 as page address → crash
+
+**The fix:** Modified `emit_prologue` and `emit_epilogue` to always save/restore X20, X21, X22:
+
+```moonbit
+fn emit_prologue(mc : MachineCode, clobbered : Array[Int]) -> Int {
+  // Always save X20, X21, X22 first (they are callee-saved!)
+  let all_to_save : Array[Int] = [20, 21, 22]
+  for reg in clobbered { all_to_save.push(reg) }
+  // ... save to stack ...
+  // Then set up reserved registers
+  emit_mov_reg(mc, 20, 0) // MOV X20, X0
+  emit_mov_reg(mc, 21, 1) // MOV X21, X1
+  emit_mov_reg(mc, 22, 2) // MOV X22, X2
+}
+```
+
+**Result:** All 256 address.wast tests pass without any workarounds (`fflush`, `optnone`, etc.)
