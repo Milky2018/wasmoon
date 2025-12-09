@@ -192,7 +192,6 @@ test "lower memory operations" {
       #|    ret v4
       #|}
       #|
-
     ),
   )
 }
