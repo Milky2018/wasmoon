@@ -1490,13 +1490,19 @@ fn validate_instr(
       for param in params {
         block_stack.push(param)
       }
+      // Save local_init state - locals initialized inside block don't count outside
+      let saved_init = ctx.local_init.copy()
       // Push label for block (br jumps to end, uses results)
       let label : LabelInfo = { kind: BlockLabel, block_type: bt }
       ctx.labels.push(label)
       // Validate body
       validate_expr(ctx, block_stack, body)
       // Pop label
-      let _ = ctx.labels.pop()
+      ctx.labels.pop() |> ignore
+      // Restore local_init state
+      for i in 0..<saved_init.length() {
+        ctx.local_init[i] = saved_init[i]
+      }
       // Check stack height: should have exactly results.length() values
       block_stack.check_height(results.length(), "block exit")
       // Verify result types
@@ -1520,13 +1526,19 @@ fn validate_instr(
       for param in params {
         block_stack.push(param)
       }
+      // Save local_init state - locals initialized inside loop don't count outside
+      let saved_init = ctx.local_init.copy()
       // Push label for loop (br jumps to start, uses params)
       let label : LabelInfo = { kind: LoopLabel, block_type: bt }
       ctx.labels.push(label)
       // Validate body
       validate_expr(ctx, block_stack, body)
       // Pop label
-      let _ = ctx.labels.pop()
+      ctx.labels.pop() |> ignore
+      // Restore local_init state
+      for i in 0..<saved_init.length() {
+        ctx.local_init[i] = saved_init[i]
+      }
       // Check stack height: should have exactly results.length() values
       block_stack.check_height(results.length(), "loop exit")
       // Verify result types
@@ -1546,6 +1558,8 @@ fn validate_instr(
       for i = params.length() - 1; i >= 0; i = i - 1 {
         stack.pop(params[i])
       }
+      // Save local_init state - locals initialized inside if don't count outside
+      let saved_init = ctx.local_init.copy()
       // Push label for if (br jumps to end, uses results)
       let label : LabelInfo = { kind: BlockLabel, block_type: bt }
       ctx.labels.push(label)
@@ -1560,6 +1574,10 @@ fn validate_instr(
       for i = results.length() - 1; i >= 0; i = i - 1 {
         then_stack.pop(results[i])
       }
+      // Restore local_init state before else branch
+      for i in 0..<saved_init.length() {
+        ctx.local_init[i] = saved_init[i]
+      }
       // Validate else branch
       let else_stack = OperandStack::new()
       for param in params {
@@ -1572,7 +1590,11 @@ fn validate_instr(
         else_stack.pop(results[i])
       }
       // Pop label
-      let _ = ctx.labels.pop()
+      ctx.labels.pop() |> ignore
+      // Restore local_init state - locals initialized in if don't count outside
+      for i in 0..<saved_init.length() {
+        ctx.local_init[i] = saved_init[i]
+      }
       // Push results onto outer stack
       for result in results {
         stack.push(result)
