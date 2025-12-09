@@ -792,7 +792,7 @@ fn mem_type_size(ty : MemType) -> Int {
 /// Emit bounds check instruction
 /// Checks that wasm_addr + offset + access_size <= memory_size
 fn emit_bounds_check(
-  ctx : LoweringContext,
+  _ctx : LoweringContext,
   block : VCodeBlock,
   wasm_addr : VReg,
   offset : Int,

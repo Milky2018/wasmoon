@@ -119,6 +119,8 @@ pub fn emit_mneg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_mov_reg(MachineCode, Int, Int) -> Unit
 
+pub fn emit_mov_reg32(MachineCode, Int, Int) -> Unit
+
 pub fn emit_movk(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_movz(MachineCode, Int, Int, Int) -> Unit
@@ -748,6 +750,7 @@ pub enum VCodeOpcode {
   IntToFloat
   FloatToInt
   Nop
+  BoundsCheck(Int, Int)
   AddShifted(ShiftType, Int)
   SubShifted(ShiftType, Int)
   AndShifted(ShiftType, Int)

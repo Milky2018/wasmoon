@@ -1692,7 +1692,10 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       emit_mov_reg32(mc, 16, wasm_addr)
       // Compute end_addr = X16 + offset + access_size
       // Handle offset as unsigned 32-bit, then add access_size
-      let offset_u64 = offset.reinterpret_as_uint().to_uint64().reinterpret_as_int64()
+      let offset_u64 = offset
+        .reinterpret_as_uint()
+        .to_uint64()
+        .reinterpret_as_int64()
       let end_offset = offset_u64 + access_size.to_int64()
       if end_offset > 0L {
         // Compute end_addr = X16 + (offset + access_size)

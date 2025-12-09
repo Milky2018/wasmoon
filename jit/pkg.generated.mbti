@@ -10,6 +10,8 @@ import(
 // Values
 pub fn alloc_memory(Int64) -> Int64
 
+pub fn check_trap() -> Unit raise JITTrap
+
 pub fn free_memory(Int64) -> Unit
 
 pub fn get_args_get_ptr() -> Int64
@@ -57,6 +59,7 @@ pub fn has_import_trampoline(String, String) -> Bool
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 // Errors
+pub suberror JITTrap String
 
 // Types and methods
 pub(all) struct Breakpoint {
@@ -225,12 +228,12 @@ pub(all) struct JITContext {
   func_table_ptr : Int64
 }
 pub fn JITContext::activate(Self) -> Unit
-pub fn JITContext::call_i64_i64(Self, Int64, Int64) -> Int64
-pub fn JITContext::call_i64_void(Self, Int64, Int64) -> Unit
-pub fn JITContext::call_i64i64_i64(Self, Int64, Int64, Int64) -> Int64
-pub fn JITContext::call_i64i64_void(Self, Int64, Int64, Int64) -> Unit
-pub fn JITContext::call_void_i64(Self, Int64) -> Int64
-pub fn JITContext::call_void_void(Self, Int64) -> Unit
+pub fn JITContext::call_i64_i64(Self, Int64, Int64) -> Int64 raise JITTrap
+pub fn JITContext::call_i64_void(Self, Int64, Int64) -> Unit raise JITTrap
+pub fn JITContext::call_i64i64_i64(Self, Int64, Int64, Int64) -> Int64 raise JITTrap
+pub fn JITContext::call_i64i64_void(Self, Int64, Int64, Int64) -> Unit raise JITTrap
+pub fn JITContext::call_void_i64(Self, Int64) -> Int64 raise JITTrap
+pub fn JITContext::call_void_void(Self, Int64) -> Unit raise JITTrap
 pub fn JITContext::free(Self) -> Unit
 pub fn JITContext::new(Int) -> Self?
 pub fn JITContext::set_func(Self, Int, Int64) -> Unit
@@ -275,7 +278,7 @@ pub(all) struct JITModule {
   mut context : JITContext?
   mut num_imports : Int
 }
-pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Int64?
+pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Int64? raise JITTrap
 pub fn JITModule::free(Self) -> Unit
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?

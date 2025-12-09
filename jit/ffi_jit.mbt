@@ -426,7 +426,12 @@ pub fn JITContext::call_i64i64_i64(
   arg0 : Int64,
   arg1 : Int64,
 ) -> Int64 raise JITTrap {
-  let result = c_jit_call_ctx_i64i64_i64(func_ptr, self.func_table_ptr, arg0, arg1)
+  let result = c_jit_call_ctx_i64i64_i64(
+    func_ptr,
+    self.func_table_ptr,
+    arg0,
+    arg1,
+  )
   check_trap()
   result
 }
