@@ -211,6 +211,8 @@ fn write_value_type(buf : StringBuilder, vt : @types.ValueType) -> Unit {
     ExternRef => buf.write_string("externref")
     RefFunc => buf.write_string("(ref func)")
     RefExtern => buf.write_string("(ref extern)")
+    RefFuncTyped(idx) => buf.write_string("(ref \{idx})")
+    RefNullFuncTyped(idx) => buf.write_string("(ref null \{idx})")
   }
 }
 

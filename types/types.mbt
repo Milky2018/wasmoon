@@ -17,6 +17,9 @@ pub(all) enum ValueType {
   ExternRef // nullable external reference (ref null extern)
   RefFunc // non-null function reference (ref func)
   RefExtern // non-null external reference (ref extern)
+  // Typed function references
+  RefFuncTyped(Int) // non-null typed function reference (ref $t)
+  RefNullFuncTyped(Int) // nullable typed function reference (ref null $t)
 } derive(Eq, Show)
 
 ///|

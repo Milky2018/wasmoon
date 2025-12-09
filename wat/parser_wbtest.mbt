@@ -476,7 +476,7 @@ test "regression: explicit type definitions parsed before functions" {
 
 ///|
 test "regression: ref type local parsing" {
-  // (ref $t) should be parsed as RefFunc (non-nullable function reference)
+  // (ref $t) should be parsed as RefFuncTyped (non-nullable typed function reference)
   let wat =
     #|(module
     #|  (type $t (func))
@@ -485,5 +485,5 @@ test "regression: ref type local parsing" {
   let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
   let code = mod.codes[0]
   inspect(code.locals.length(), content="1")
-  inspect(code.locals[0], content="RefFunc")
+  inspect(code.locals[0], content="RefFuncTyped(0)")
 }

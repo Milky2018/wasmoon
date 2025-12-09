@@ -1,6 +1,40 @@
 // Wasmoon Executor - Main instruction dispatch and module execution
 
 ///|
+/// Check if subtype is a subtype of supertype for value types.
+/// This implements WebAssembly reference type subtyping:
+/// - RefFunc <: FuncRef (ref func <: ref null func)
+/// - RefExtern <: ExternRef (ref extern <: ref null extern)
+/// - RefFuncTyped(i) <: RefNullFuncTyped(i) (ref $t <: ref null $t)
+/// - RefFuncTyped(i) <: RefFunc <: FuncRef (concrete <: abstract <: nullable abstract)
+/// - RefNullFuncTyped(i) <: FuncRef (ref null $t <: ref null func)
+/// - All types are subtypes of themselves
+fn is_value_type_subtype(
+  subtype : @types.ValueType,
+  supertype : @types.ValueType,
+) -> Bool {
+  if subtype == supertype {
+    return true
+  }
+  match (subtype, supertype) {
+    // RefFunc (ref func) is subtype of FuncRef (ref null func)
+    (RefFunc, FuncRef) => true
+    // RefExtern (ref extern) is subtype of ExternRef (ref null extern)
+    (RefExtern, ExternRef) => true
+    // RefFuncTyped(i) is subtype of RefNullFuncTyped(i) for same i
+    (RefFuncTyped(i), RefNullFuncTyped(j)) => i == j
+    // RefFuncTyped is subtype of RefFunc (concrete <: abstract)
+    (RefFuncTyped(_), RefFunc) => true
+    // RefFuncTyped is subtype of FuncRef (concrete <: nullable abstract)
+    (RefFuncTyped(_), FuncRef) => true
+    // RefNullFuncTyped is subtype of FuncRef (nullable concrete <: nullable abstract)
+    (RefNullFuncTyped(_), FuncRef) => true
+    // Everything else: not a subtype
+    _ => false
+  }
+}
+
+///|
 /// Execute a single instruction
 fn ExecContext::exec_instr(
   self : ExecContext,
@@ -856,13 +890,29 @@ pub fn instantiate_module_with_imports(
             // Check global type compatibility
             let actual_global = store.get_global(addr)
             let actual_type = actual_global.get_type()
-            // Value types must match
-            if actual_type.value_type != expected_global_type.value_type {
-              raise @runtime.LinkError
-            }
-            // Mutability must match
-            if actual_type.mutable != expected_global_type.mutable {
-              raise @runtime.LinkError
+            // For mutable globals: types must match exactly (invariant)
+            // For immutable globals: expected type must be supertype of actual type
+            if actual_type.mutable {
+              // Mutable globals: exact match required
+              if actual_type.value_type != expected_global_type.value_type {
+                raise @runtime.LinkError
+              }
+              if actual_type.mutable != expected_global_type.mutable {
+                raise @runtime.LinkError
+              }
+            } else {
+              // Immutable globals: expected must be supertype of actual
+              // (i.e., actual is subtype of expected)
+              if !is_value_type_subtype(
+                  actual_type.value_type,
+                  expected_global_type.value_type,
+                ) {
+                raise @runtime.LinkError
+              }
+              // Import must also be immutable for immutable export
+              if expected_global_type.mutable {
+                raise @runtime.LinkError
+              }
             }
             global_addrs.push(addr)
           }
