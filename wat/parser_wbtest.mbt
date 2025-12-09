@@ -236,6 +236,13 @@ test "parse_u32: decimal overflow raises error" {
 }
 
 ///|
+test "parse_u32: hex overflow 0x1_0000_0000 raises error" {
+  // 0x1_0000_0000 = 4294967296, exceeds u32 max
+  let result = try? parse_u32("0x1_0000_0000")
+  inspect(result is Err(_), content="true")
+}
+
+///|
 test "parse WAT: multiple inline exports on func" {
   // Test: (module (func (export "a") (export "b") (export "c")))
   let wat = "(module (func (export \"a\") (export \"b\") (export \"c\")))"

@@ -339,6 +339,26 @@ fn run_wast_command(
         "line \{line}: skipped (binary parse failed: \{err})",
       )
     }
+    ModuleDefinition(mod_, name) => {
+      // Module definition - only validates, does not instantiate
+      // Used for testing large memory declarations that can't actually be allocated
+      @validator.validate_module(mod_) catch {
+        e => {
+          result.failed = result.failed + 1
+          result.failures.push(
+            "line \{line}: module definition validation failed: \{e}",
+          )
+          return
+        }
+      }
+      // Update the named module map if name is provided, but don't set as current
+      // since this module is not instantiated
+      if name is Some(_) {
+        // Skip - can't add to named_modules without instance
+        ()
+      }
+      result.passed = result.passed + 1
+    }
     AssertReturn(action, expected) =>
       match run_assert_return(ctx, action, expected) {
         None => result.passed = result.passed + 1
