@@ -13,8 +13,8 @@ test "call counter: basic operations" {
   inspect(counter.total(), content="1")
 
   // Multiple increments
-  let _ = counter.increment(0)
-  let _ = counter.increment(0)
+  counter.increment(0) |> ignore
+  counter.increment(0) |> ignore
   inspect(counter.get_count(0), content="3")
   inspect(counter.total(), content="3")
 }
@@ -22,10 +22,10 @@ test "call counter: basic operations" {
 ///|
 test "call counter: multiple functions" {
   let counter = CallCounter::new()
-  let _ = counter.increment(0)
-  let _ = counter.increment(1)
-  let _ = counter.increment(0)
-  let _ = counter.increment(2)
+  counter.increment(0) |> ignore
+  counter.increment(1) |> ignore
+  counter.increment(0) |> ignore
+  counter.increment(2) |> ignore
   inspect(counter.get_count(0), content="2")
   inspect(counter.get_count(1), content="1")
   inspect(counter.get_count(2), content="1")
@@ -36,8 +36,8 @@ test "call counter: multiple functions" {
 ///|
 test "call counter: reset and clear" {
   let counter = CallCounter::new()
-  let _ = counter.increment(0)
-  let _ = counter.increment(1)
+  counter.increment(0) |> ignore
+  counter.increment(1) |> ignore
   counter.reset(0)
   inspect(counter.get_count(0), content="0")
   inspect(counter.get_count(1), content="1")
@@ -96,8 +96,7 @@ test "profiler: pending compilation" {
 
   // Trigger compilation for function 0
   for _ in 0..<10 {
-    let _ = profiler.record_call(0)
-
+    profiler.record_call(0) |> ignore
   }
   let pending = profiler.get_pending()
   inspect(pending.length(), content="1")
@@ -114,12 +113,10 @@ test "profiler: stats" {
   let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
   let profiler = Profiler::new(threshold)
   for _ in 0..<15 {
-    let _ = profiler.record_call(0)
-
+    profiler.record_call(0) |> ignore
   }
   for _ in 0..<5 {
-    let _ = profiler.record_call(1)
-
+    profiler.record_call(1) |> ignore
   }
   profiler.mark_compiled(0)
   let (total, unique, hot, compiled) = profiler.stats()

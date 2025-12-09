@@ -73,6 +73,10 @@ pub fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_fmov_d_to_x(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fmov_s_to_w(MachineCode, Int, Int) -> Unit
+
 pub fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fsub_d(MachineCode, Int, Int, Int) -> Unit
@@ -84,6 +88,8 @@ pub fn emit_ldp_post(MachineCode, Int, Int, Int, Int) -> Unit
 pub fn emit_ldr_d_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_ldr_imm(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_ldr_s_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_ldr_w_imm(MachineCode, Int, Int, Int) -> Unit
 
@@ -113,6 +119,8 @@ pub fn emit_mneg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_mov_reg(MachineCode, Int, Int) -> Unit
 
+pub fn emit_mov_reg32(MachineCode, Int, Int) -> Unit
+
 pub fn emit_movk(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_movz(MachineCode, Int, Int, Int) -> Unit
@@ -136,6 +144,8 @@ pub fn emit_stp_pre(MachineCode, Int, Int, Int, Int) -> Unit
 pub fn emit_str_d_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_str_imm(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_str_s_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_str_w_imm(MachineCode, Int, Int, Int) -> Unit
 
@@ -707,6 +717,7 @@ pub impl Show for VCodeInst
 
 pub enum VCodeOpcode {
   Add
+  AddImm(Int)
   Sub
   Mul
   SDiv
@@ -739,6 +750,7 @@ pub enum VCodeOpcode {
   IntToFloat
   FloatToInt
   Nop
+  BoundsCheck(Int, Int)
   AddShifted(ShiftType, Int)
   SubShifted(ShiftType, Int)
   AndShifted(ShiftType, Int)

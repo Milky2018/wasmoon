@@ -104,6 +104,14 @@ fn has_side_effects(inst : Inst) -> Bool {
   match inst.opcode {
     // All Store variants have side effects (modify memory)
     Store(_, _) | Store8(_) | Store16(_) | Store32(_) => true
+    // All Load variants have side effects (can trap on out-of-bounds access)
+    Load(_, _)
+    | Load8S(_, _)
+    | Load8U(_, _)
+    | Load16S(_, _)
+    | Load16U(_, _)
+    | Load32S(_)
+    | Load32U(_) => true
     // Calls may have side effects
     Call(_) | CallIndirect(_) => true
     // Other instructions are pure

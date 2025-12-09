@@ -778,6 +778,32 @@ fn lower_fcmp(
 }
 
 ///|
+/// Get access size for a MemType
+fn mem_type_size(ty : MemType) -> Int {
+  match ty {
+    I8 => 1
+    I16 => 2
+    I32 | F32 => 4
+    I64 | F64 => 8
+  }
+}
+
+///|
+/// Emit bounds check instruction
+/// Checks that wasm_addr + offset + access_size <= memory_size
+fn emit_bounds_check(
+  _ctx : LoweringContext,
+  block : VCodeBlock,
+  wasm_addr : VReg,
+  offset : Int,
+  access_size : Int,
+) -> Unit {
+  let bounds_check = VCodeInst::new(BoundsCheck(offset, access_size))
+  bounds_check.add_use(Virtual(wasm_addr))
+  block.add_inst(bounds_check)
+}
+
+///|
 /// Lower load instruction
 /// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
 fn lower_load(
@@ -791,6 +817,11 @@ fn lower_load(
     Some(result) => {
       let dst = ctx.get_vreg(result)
       let wasm_addr = ctx.get_vreg(inst.operands[0])
+      // Determine access size for bounds check
+      let mem_ty = ir_type_to_mem_type(ty)
+      let access_size = mem_type_size(mem_ty)
+      // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
+      emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
       // Compute effective address: memory_base (X21) + wasm_addr
       let effective_addr = ctx.vcode_func.new_vreg(Int)
       let add_inst = VCodeInst::new(Add)
@@ -799,11 +830,33 @@ fn lower_load(
       add_inst.add_use(Virtual(wasm_addr))
       block.add_inst(add_inst)
       // Now load from effective_addr + offset
-      let mem_ty = ir_type_to_mem_type(ty)
-      let vcode_inst = VCodeInst::new(Load(mem_ty, offset))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(effective_addr))
-      block.add_inst(vcode_inst)
+      // Check alignment requirement based on memory type
+      let alignment = match mem_ty {
+        I8 => 1
+        I16 => 2
+        I32 | F32 => 4
+        I64 | F64 => 8
+      }
+      // If offset is not aligned or too large, add it to the address first
+      if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
+        // Add offset to effective_addr using immediate add
+        let addr_with_offset = ctx.vcode_func.new_vreg(Int)
+        let offset_add = VCodeInst::new(AddImm(offset))
+        offset_add.add_def({ reg: Virtual(addr_with_offset) })
+        offset_add.add_use(Virtual(effective_addr))
+        block.add_inst(offset_add)
+        // Now load with offset=0
+        let vcode_inst = VCodeInst::new(Load(mem_ty, 0))
+        vcode_inst.add_def({ reg: Virtual(dst) })
+        vcode_inst.add_use(Virtual(addr_with_offset))
+        block.add_inst(vcode_inst)
+      } else {
+        // Offset can be encoded directly in the load instruction
+        let vcode_inst = VCodeInst::new(Load(mem_ty, offset))
+        vcode_inst.add_def({ reg: Virtual(dst) })
+        vcode_inst.add_use(Virtual(effective_addr))
+        block.add_inst(vcode_inst)
+      }
     }
     None => ()
   }
@@ -822,6 +875,11 @@ fn lower_store(
   // Store has no result, just uses: addr, value
   let wasm_addr = ctx.get_vreg(inst.operands[0])
   let value = ctx.get_vreg(inst.operands[1])
+  // Determine access size for bounds check
+  let mem_ty = ir_type_to_mem_type(ty)
+  let access_size = mem_type_size(mem_ty)
+  // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
+  emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
   // Compute effective address: memory_base (X21) + wasm_addr
   let effective_addr = ctx.vcode_func.new_vreg(Int)
   let add_inst = VCodeInst::new(Add)
@@ -830,11 +888,33 @@ fn lower_store(
   add_inst.add_use(Virtual(wasm_addr))
   block.add_inst(add_inst)
   // Now store to effective_addr + offset
-  let mem_ty = ir_type_to_mem_type(ty)
-  let vcode_inst = VCodeInst::new(Store(mem_ty, offset))
-  vcode_inst.add_use(Virtual(effective_addr))
-  vcode_inst.add_use(Virtual(value))
-  block.add_inst(vcode_inst)
+  // Check alignment requirement based on memory type
+  let alignment = match mem_ty {
+    I8 => 1
+    I16 => 2
+    I32 | F32 => 4
+    I64 | F64 => 8
+  }
+  // If offset is not aligned or too large, add it to the address first
+  if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
+    // Add offset to effective_addr using immediate add
+    let addr_with_offset = ctx.vcode_func.new_vreg(Int)
+    let offset_add = VCodeInst::new(AddImm(offset))
+    offset_add.add_def({ reg: Virtual(addr_with_offset) })
+    offset_add.add_use(Virtual(effective_addr))
+    block.add_inst(offset_add)
+    // Now store with offset=0
+    let vcode_inst = VCodeInst::new(Store(mem_ty, 0))
+    vcode_inst.add_use(Virtual(addr_with_offset))
+    vcode_inst.add_use(Virtual(value))
+    block.add_inst(vcode_inst)
+  } else {
+    // Offset can be encoded directly in the store instruction
+    let vcode_inst = VCodeInst::new(Store(mem_ty, offset))
+    vcode_inst.add_use(Virtual(effective_addr))
+    vcode_inst.add_use(Virtual(value))
+    block.add_inst(vcode_inst)
+  }
 }
 
 ///|
@@ -851,6 +931,16 @@ fn lower_load_narrow(
     Some(result) => {
       let dst = ctx.get_vreg(result)
       let wasm_addr = ctx.get_vreg(inst.operands[0])
+      // Determine access size based on opcode type
+      let sample_opcode = opcode_fn(0)
+      let access_size = match sample_opcode {
+        Load8S(_) | Load8U(_) => 1
+        Load16S(_) | Load16U(_) => 2
+        Load32S(_) | Load32U(_) => 4
+        _ => 1
+      }
+      // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
+      emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
       // Compute effective address: memory_base (X21) + wasm_addr
       let effective_addr = ctx.vcode_func.new_vreg(Int)
       let add_inst = VCodeInst::new(Add)
@@ -858,11 +948,31 @@ fn lower_load_narrow(
       add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
       add_inst.add_use(Virtual(wasm_addr))
       block.add_inst(add_inst)
-      // Now load from effective_addr + offset
-      let vcode_inst = VCodeInst::new(opcode_fn(offset))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(effective_addr))
-      block.add_inst(vcode_inst)
+      // Check alignment requirement based on opcode type
+      // Load8: any offset ok (1-byte aligned)
+      // Load16: offset must be 2-aligned for immediate encoding
+      // Load32: offset must be 4-aligned for immediate encoding
+      let alignment = access_size
+      // If offset is not aligned or too large, add it to the address first
+      if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
+        // Add offset to effective_addr using immediate add
+        let addr_with_offset = ctx.vcode_func.new_vreg(Int)
+        let offset_add = VCodeInst::new(AddImm(offset))
+        offset_add.add_def({ reg: Virtual(addr_with_offset) })
+        offset_add.add_use(Virtual(effective_addr))
+        block.add_inst(offset_add)
+        // Now load with offset=0
+        let vcode_inst = VCodeInst::new(opcode_fn(0))
+        vcode_inst.add_def({ reg: Virtual(dst) })
+        vcode_inst.add_use(Virtual(addr_with_offset))
+        block.add_inst(vcode_inst)
+      } else {
+        // Offset can be encoded directly in the load instruction
+        let vcode_inst = VCodeInst::new(opcode_fn(offset))
+        vcode_inst.add_def({ reg: Virtual(dst) })
+        vcode_inst.add_use(Virtual(effective_addr))
+        block.add_inst(vcode_inst)
+      }
     }
     None => ()
   }
@@ -881,6 +991,10 @@ fn lower_store_narrow(
   // Store has no result, just uses: addr, value
   let wasm_addr = ctx.get_vreg(inst.operands[0])
   let value = ctx.get_vreg(inst.operands[1])
+  // Determine access size for bounds check
+  let access_size = mem_type_size(mem_ty)
+  // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
+  emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
   // Compute effective address: memory_base (X21) + wasm_addr
   let effective_addr = ctx.vcode_func.new_vreg(Int)
   let add_inst = VCodeInst::new(Add)
@@ -888,11 +1002,28 @@ fn lower_store_narrow(
   add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
   add_inst.add_use(Virtual(wasm_addr))
   block.add_inst(add_inst)
-  // Now store to effective_addr + offset
-  let vcode_inst = VCodeInst::new(Store(mem_ty, offset))
-  vcode_inst.add_use(Virtual(effective_addr))
-  vcode_inst.add_use(Virtual(value))
-  block.add_inst(vcode_inst)
+  // Check alignment requirement based on memory type
+  let alignment = access_size
+  // If offset is not aligned or too large, add it to the address first
+  if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
+    // Add offset to effective_addr using immediate add
+    let addr_with_offset = ctx.vcode_func.new_vreg(Int)
+    let offset_add = VCodeInst::new(AddImm(offset))
+    offset_add.add_def({ reg: Virtual(addr_with_offset) })
+    offset_add.add_use(Virtual(effective_addr))
+    block.add_inst(offset_add)
+    // Now store with offset=0
+    let vcode_inst = VCodeInst::new(Store(mem_ty, 0))
+    vcode_inst.add_use(Virtual(addr_with_offset))
+    vcode_inst.add_use(Virtual(value))
+    block.add_inst(vcode_inst)
+  } else {
+    // Offset can be encoded directly in the store instruction
+    let vcode_inst = VCodeInst::new(Store(mem_ty, offset))
+    vcode_inst.add_use(Virtual(effective_addr))
+    vcode_inst.add_use(Virtual(value))
+    block.add_inst(vcode_inst)
+  }
 }
 
 ///|

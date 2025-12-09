@@ -2,6 +2,30 @@
 /// JIT runtime FFI for executable memory management and code execution
 /// These functions call C functions defined in ffi_jit.c
 
+// ============ Trap Handling ============
+
+///|
+/// Error for JIT trap
+pub suberror JITTrap String
+
+///|
+/// Get trap code (0 = no trap, 1 = out of bounds memory access)
+extern "c" fn c_jit_get_trap_code() -> Int = "wasmoon_jit_get_trap_code"
+
+///|
+/// Clear trap code
+extern "c" fn c_jit_clear_trap() -> Unit = "wasmoon_jit_clear_trap"
+
+///|
+/// Check if trap occurred and raise error if so
+pub fn check_trap() -> Unit raise JITTrap {
+  let code = c_jit_get_trap_code()
+  if code != 0 {
+    c_jit_clear_trap()
+    raise JITTrap("out of bounds memory access")
+  }
+}
+
 // ============ JIT Context Management ============
 
 ///|
@@ -363,14 +387,76 @@ pub fn JITContext::activate(self : JITContext) -> Unit {
 
 ///|
 /// Call a JIT function with this context: () -> i64
-pub fn JITContext::call_void_i64(self : JITContext, func_ptr : Int64) -> Int64 {
-  c_jit_call_ctx_void_i64(func_ptr, self.func_table_ptr)
+pub fn JITContext::call_void_i64(
+  self : JITContext,
+  func_ptr : Int64,
+) -> Int64 raise JITTrap {
+  let result = c_jit_call_ctx_void_i64(func_ptr, self.func_table_ptr)
+  check_trap()
+  result
 }
 
 ///|
 /// Call a JIT function with this context: () -> void
-pub fn JITContext::call_void_void(self : JITContext, func_ptr : Int64) -> Unit {
+pub fn JITContext::call_void_void(
+  self : JITContext,
+  func_ptr : Int64,
+) -> Unit raise JITTrap {
   c_jit_call_ctx_void_void(func_ptr, self.func_table_ptr)
+  check_trap()
+}
+
+///|
+/// Call a JIT function with this context: (i64) -> i64
+pub fn JITContext::call_i64_i64(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+) -> Int64 raise JITTrap {
+  let result = c_jit_call_ctx_i64_i64(func_ptr, self.func_table_ptr, arg0)
+  check_trap()
+  result
+}
+
+///|
+/// Call a JIT function with this context: (i64, i64) -> i64
+pub fn JITContext::call_i64i64_i64(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Int64 raise JITTrap {
+  let result = c_jit_call_ctx_i64i64_i64(
+    func_ptr,
+    self.func_table_ptr,
+    arg0,
+    arg1,
+  )
+  check_trap()
+  result
+}
+
+///|
+/// Call a JIT function with this context: (i64) -> void
+pub fn JITContext::call_i64_void(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+) -> Unit raise JITTrap {
+  c_jit_call_ctx_i64_void(func_ptr, self.func_table_ptr, arg0)
+  check_trap()
+}
+
+///|
+/// Call a JIT function with this context: (i64, i64) -> void
+pub fn JITContext::call_i64i64_void(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Unit raise JITTrap {
+  c_jit_call_ctx_i64i64_void(func_ptr, self.func_table_ptr, arg0, arg1)
+  check_trap()
 }
 
 ///|

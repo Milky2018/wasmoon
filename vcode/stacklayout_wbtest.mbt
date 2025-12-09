@@ -84,8 +84,8 @@ test "aarch64 frame: with spills" {
   // Add some spill slots
   let vreg1 : VReg = { id: 0, class: Int }
   let vreg2 : VReg = { id: 1, class: Float }
-  let _ = frame.alloc_spill(vreg1)
-  let _ = frame.alloc_spill(vreg2)
+  frame.alloc_spill(vreg1) |> ignore
+  frame.alloc_spill(vreg2) |> ignore
   frame.finalize()
   // FP + LR + 2 spills = 32 bytes
   inspect(frame.size(), content="32")
@@ -96,7 +96,7 @@ test "aarch64 frame: prologue generation" {
   let frame = AArch64StackFrame::new()
   frame.setup()
   let vreg : VReg = { id: 0, class: Int }
-  let _ = frame.alloc_spill(vreg)
+  frame.alloc_spill(vreg) |> ignore
   frame.finalize()
   let prologue = frame.gen_prologue()
   // Should have: SUB sp, Store FP, Store LR, MOV fp,sp
@@ -108,7 +108,7 @@ test "aarch64 frame: epilogue generation" {
   let frame = AArch64StackFrame::new()
   frame.setup()
   let vreg : VReg = { id: 0, class: Int }
-  let _ = frame.alloc_spill(vreg)
+  frame.alloc_spill(vreg) |> ignore
   frame.finalize()
   let epilogue = frame.gen_epilogue()
   // Should have: Load FP, Load LR, ADD sp
@@ -132,7 +132,7 @@ test "aarch64 frame: empty frame" {
 test "stack frame: print" {
   let frame = StackFrame::new(16)
   let vreg : VReg = { id: 0, class: Int }
-  let _ = frame.alloc_spill_slot(vreg, 8, 8)
+  frame.alloc_spill_slot(vreg, 8, 8) |> ignore
   frame.finalize()
   let output = frame.print()
   // Should contain frame info
@@ -149,7 +149,7 @@ test "align_up: basic cases" {
 
   // 1 byte aligned to 8 should use 8 bytes of space
   let vreg : VReg = { id: 0, class: Int }
-  let _ = frame.alloc_spill_slot(vreg, 1, 8)
+  frame.alloc_spill_slot(vreg, 1, 8) |> ignore
 
   // Next 8-byte allocation should be at offset -16
   let vreg2 : VReg = { id: 1, class: Int }

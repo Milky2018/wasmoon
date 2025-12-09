@@ -582,11 +582,11 @@ pub fn LinearScanAllocator::allocate(
   }
 
   // Pre-assign function parameters to ABI registers
-  // JIT ABI: X0 = func_table, X1 = memory_base, args in X2-X7
-  // So WASM parameters start at X2
+  // JIT ABI: X0 = func_table, X1 = memory_base, X2 = memory_size, args in X3-X7
+  // So WASM parameters start at X3
   for i, param in func.params {
     let preg = match param.class {
-      Int => { index: i + 2, class: Int } // X2, X3, X4, ...
+      Int => { index: i + 3, class: Int } // X3, X4, X5, ...
       Float => { index: i, class: Float } // D0, D1, D2, ... (float params)
     }
     result.assignments.set(param.id, preg)

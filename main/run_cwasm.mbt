@@ -77,7 +77,14 @@ fn run_cwasm(
             args.push(n)
           }
           // Call the function using context (for proper inter-function calls)
-          let result = jm.call_with_context(f, args)
+          let result = jm.call_with_context(f, args) catch {
+            @jit.JITTrap(msg) => {
+              println("JIT Trap: \{msg}")
+              @jit.free_memory(mem_ptr)
+              jm.free()
+              return
+            }
+          }
           match result {
             Some(r) => println(r.to_string())
             None => ()

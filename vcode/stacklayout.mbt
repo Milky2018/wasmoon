@@ -430,10 +430,7 @@ pub fn build_stack_layout_aarch64(
     // Find the vreg info
     let vreg = find_vreg_by_id(func, vreg_id)
     match vreg {
-      Some(v) => {
-        let _ = frame.alloc_spill(v)
-
-      }
+      Some(v) => frame.alloc_spill(v) |> ignore
       None => ()
     }
   }

@@ -566,6 +566,19 @@ pub fn emit_mov_reg(mc : MachineCode, rd : Int, rm : Int) -> Unit {
 }
 
 ///|
+/// Encode 32-bit MOV (register): MOV Wd, Wm (ORR Wd, WZR, Wm)
+/// This zero-extends the result to 64-bit in Xd
+pub fn emit_mov_reg32(mc : MachineCode, rd : Int, rm : Int) -> Unit {
+  // ORR Wd, WZR, Wm - 32-bit OR with zero register
+  // Same as emit_orr_reg but with sf=0 (byte 3 = 0x2A instead of 0xAA)
+  let b0 = (rd & 31) | ((31 & 7) << 5) // rd, WZR low bits
+  let b1 = (31 >> 3) & 3 // WZR high bits, imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
+  let b3 = 0x2A // 32-bit ORR opcode
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode MOVZ: MOVZ Xd, #imm16, LSL #shift
 /// Opcode: 0xD2800000
 pub fn emit_movz(mc : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
@@ -1124,6 +1137,65 @@ pub fn emit_fmov_d(mc : MachineCode, rd : Int, rm : Int) -> Unit {
 }
 
 ///|
+/// Encode FMOV (double to general): FMOV Xd, Dn
+/// Opcode: 0x9E660000
+/// Moves 64-bit FP register to 64-bit GPR
+pub fn emit_fmov_d_to_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = (rn >> 2) & 7
+  let b2 = 102 // 0x66
+  let b3 = 158 // 0x9E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMOV (single to general): FMOV Wd, Sn
+/// Opcode: 0x1E260000
+/// Moves 32-bit FP register to 32-bit GPR
+pub fn emit_fmov_s_to_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = (rn >> 2) & 7
+  let b2 = 38 // 0x26
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode LDR (single, unsigned offset): LDR St, [Xn, #imm]
+/// Opcode: 0xBD400000
+pub fn emit_ldr_s_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let scaled = (imm12 / 4) & 0xFFF
+  // Encoding: Rt in bits [4:0], Rn in bits [9:5], imm12 in bits [21:10]
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 64 // 0x40 for LDR
+  let b3 = 189 // 0xBD
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode STR (single, unsigned offset): STR St, [Xn, #imm]
+/// Opcode: 0xBD000000
+pub fn emit_str_s_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let scaled = (imm12 / 4) & 0xFFF
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = (scaled >> 6) & 63
+  let b3 = 189 // 0xBD
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode LDR (double, unsigned offset): LDR Dt, [Xn, #imm]
 /// Opcode: 0xFD400000
 pub fn emit_ldr_d_imm(
@@ -1133,9 +1205,9 @@ pub fn emit_ldr_d_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 8) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = ((scaled >> 5) & 127) | 64 // 0x40
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 64 // 0x40 for LDR
   let b3 = 253 // 0xFD
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -1150,9 +1222,9 @@ pub fn emit_str_d_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 8) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = (scaled >> 5) & 127
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = (scaled >> 6) & 63
   let b3 = 253 // 0xFD
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -1228,9 +1300,9 @@ pub fn CondCode::to_int(self : CondCode) -> Int {
 ///|
 /// Check if a register index is a callee-saved register that we use for allocation
 fn is_callee_saved_alloc(reg : Int) -> Bool {
-  // X19, X22-X28 are callee-saved registers we allocate
-  // X20, X21 are reserved for func_table and memory_base
-  reg == 19 || (reg >= 22 && reg <= 28)
+  // X19, X23-X28 are callee-saved registers we allocate
+  // X20, X21, X22 are reserved for func_table, memory_base, memory_size
+  reg == 19 || (reg >= 23 && reg <= 28)
 }
 
 ///|
@@ -1273,15 +1345,15 @@ fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
 /// Emit prologue to save callee-saved registers
 /// Returns the stack frame size used
 fn emit_prologue(mc : MachineCode, clobbered : Array[Int]) -> Int {
-  // Save func_table_ptr and memory_base to callee-saved registers
-  emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
-  emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
-  // If no callee-saved registers are clobbered, no need to save anything
-  if clobbered.length() == 0 {
-    return 0
+  // We always clobber X20, X21, X22 for func_table, memory_base, memory_size
+  // These are callee-saved registers, so we must save them first!
+  // Build list: X20, X21, X22 + any other clobbered callee-saved registers
+  let all_to_save : Array[Int] = [20, 21, 22]
+  for reg in clobbered {
+    all_to_save.push(reg)
   }
   // Round up to even number for STP (store pairs)
-  let num_regs = clobbered.length()
+  let num_regs = all_to_save.length()
   let num_pairs = (num_regs + 1) / 2
   let frame_size = num_pairs * 16 // 16 bytes per pair
   // Allocate stack frame first using SUB
@@ -1290,13 +1362,17 @@ fn emit_prologue(mc : MachineCode, clobbered : Array[Int]) -> Int {
   let mut i = 0
   let mut pair_idx = 0
   while i < num_regs {
-    let reg1 = clobbered[i]
-    let reg2 = if i + 1 < num_regs { clobbered[i + 1] } else { 31 } // XZR as padding
+    let reg1 = all_to_save[i]
+    let reg2 = if i + 1 < num_regs { all_to_save[i + 1] } else { 31 } // XZR as padding
     let offset = pair_idx * 16
     emit_stp_offset(mc, reg1, reg2, 31, offset)
     i = i + 2
     pair_idx = pair_idx + 1
   }
+  // Now move parameters to reserved registers (after saving their original values)
+  emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
+  emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
+  emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
   frame_size
 }
 
@@ -1371,17 +1447,19 @@ fn emit_epilogue(
   clobbered : Array[Int],
   frame_size : Int,
 ) -> Unit {
-  if clobbered.length() == 0 {
-    return
+  // Build the same list as prologue: X20, X21, X22 + clobbered
+  let all_to_restore : Array[Int] = [20, 21, 22]
+  for reg in clobbered {
+    all_to_restore.push(reg)
   }
-  let num_regs = clobbered.length()
+  let num_regs = all_to_restore.length()
   let num_pairs = (num_regs + 1) / 2
   // Restore registers using LDP
   let mut i = 0
   let mut pair_idx = 0
   while i < num_regs {
-    let reg1 = clobbered[i]
-    let reg2 = if i + 1 < num_regs { clobbered[i + 1] } else { 31 }
+    let reg1 = all_to_restore[i]
+    let reg2 = if i + 1 < num_regs { all_to_restore[i + 1] } else { 31 }
     let offset = pair_idx * 16
     if pair_idx == num_pairs - 1 {
       // Last LDP with post-indexed to deallocate stack
@@ -1435,6 +1513,11 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       emit_add_reg(mc, rd, rn, rm)
+    }
+    AddImm(imm) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_add_imm(mc, rd, rn, imm)
     }
     Sub => {
       let rd = wreg_num(inst.defs[0])
@@ -1596,6 +1679,56 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
     }
     Extend(_) | Truncate | IntToFloat | FloatToInt => emit_nop(mc)
     Nop => emit_nop(mc)
+    BoundsCheck(offset, access_size) => {
+      // Memory bounds check: trap if wasm_addr + offset + access_size > memory_size
+      // Uses: [wasm_addr]
+      // X22 = memory_size (stored in prologue)
+      // We use X16 as a temporary register for calculation (platform scratch, not allocatable)
+      //
+      // IMPORTANT: WASM addresses are 32-bit unsigned. We must zero-extend to 64-bit
+      // to avoid overflow issues when the 32-bit value is negative (like 0xFFFFFFFF).
+      let wasm_addr = reg_num(inst.uses[0])
+      // First zero-extend the 32-bit wasm_addr to X16 (clear upper 32 bits)
+      emit_mov_reg32(mc, 16, wasm_addr)
+      // Compute end_addr = X16 + offset + access_size
+      // Handle offset as unsigned 32-bit, then add access_size
+      let offset_u64 = offset
+        .reinterpret_as_uint()
+        .to_uint64()
+        .reinterpret_as_int64()
+      let end_offset = offset_u64 + access_size.to_int64()
+      if end_offset > 0L {
+        // Compute end_addr = X16 + (offset + access_size)
+        if end_offset <= 4095L {
+          // Use ADD immediate for small offsets: X16 = X16 + end_offset
+          emit_add_imm(mc, 16, 16, end_offset.to_int())
+        } else {
+          // For large offsets, load the offset into X17 first, then ADD register
+          emit_load_imm64(mc, 17, end_offset)
+          // ADD X16, X16, X17
+          emit_add_reg(mc, 16, 16, 17)
+        }
+      }
+      // CMP X16, X22 (compare end_addr with memory_size)
+      emit_cmp_reg(mc, 16, 22)
+      // B.HI trap (branch if unsigned higher, meaning out of bounds)
+      // We need to emit: B.HI +8 (skip the BRK if in bounds)
+      // B.LS is condition code 9 (LS = lower or same, unsigned <=)
+      // So we use B.LS to skip the trap
+      // B.cond encoding: imm19 in bits [23:5], cond in bits [3:0]
+      // We want to jump +2 instructions (8 bytes) to skip the BRK
+      let skip_imm19 = 2 // Skip 2 instructions = 8 bytes
+      let b_ls_cond = 9 // LS condition
+      let b0 = b_ls_cond | ((skip_imm19 & 7) << 5)
+      let b1 = (skip_imm19 >> 3) & 0xFF
+      let b2 = (skip_imm19 >> 11) & 0xFF
+      let b3 = 0x54 // B.cond opcode
+      mc.emit_inst(b0, b1, b2, b3)
+      // BRK #1 - trap with code 1 for out of bounds memory access
+      // BRK encoding: 0xD4200000 + (imm16 << 5)
+      // BRK #1 = 0xD4200020
+      mc.emit_inst(0x20, 0x00, 0x20, 0xD4)
+    }
     // AArch64-specific: shifted operand instructions
     AddShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
@@ -1653,16 +1786,16 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
     }
     CallIndirect(num_args, has_result) => {
       // Call through a function pointer in a register
-      // Our JIT ABI: X0 = func_table_ptr, X1 = memory_base, args in X2-X7, return in X0
+      // Our JIT ABI: X0 = func_table_ptr, X1 = memory_base, X2 = memory_size, args in X3-X7, return in X0
       // Uses: [func_ptr, arg0, arg1, ...]
       let func_ptr = reg_num(inst.uses[0])
       // First, save function pointer to a safe temp register (X9)
       // This is necessary because the arg moving below may overwrite the func_ptr register
       emit_mov_reg(mc, 9, func_ptr) // MOV X9, func_ptr
-      // Move arguments to ABI registers (starting at X2, since X0/X1 are reserved)
+      // Move arguments to ABI registers (starting at X3, since X0/X1/X2 are reserved)
       // We need to handle parallel moves carefully to avoid overwriting source values.
       // Strategy: first copy all args to temp registers (X10-X17), then to final destinations
-      // This avoids the problem of e.g. MOV X2, X3; MOV X3, X4 where X3 gets clobbered.
+      // This avoids the problem of e.g. MOV X3, X4; MOV X4, X5 where X4 gets clobbered.
       if num_args > 0 {
         // Step 1: Copy all args to temp registers X10, X11, ...
         for i in 0..<num_args {
@@ -1670,16 +1803,17 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
           let temp = 10 + i // X10, X11, X12, ...
           emit_mov_reg(mc, temp, src)
         }
-        // Step 2: Copy from temp registers to final ABI registers X2, X3, ...
+        // Step 2: Copy from temp registers to final ABI registers X3, X4, ...
         for i in 0..<num_args {
           let temp = 10 + i
-          let dst = i + 2 // X2, X3, X4, ...
+          let dst = i + 3 // X3, X4, X5, ... (shifted by 1 for memory_size)
           emit_mov_reg(mc, dst, temp)
         }
       }
-      // Set up context: X0 = func_table (X20), X1 = memory_base (X21)
+      // Set up context: X0 = func_table (X20), X1 = memory_base (X21), X2 = memory_size (X22)
       emit_mov_reg(mc, 0, 20) // MOV X0, X20
       emit_mov_reg(mc, 1, 21) // MOV X1, X21
+      emit_mov_reg(mc, 2, 22) // MOV X2, X22
       // Call the function (from saved X9)
       emit_blr(mc, 9)
       // Move result to destination if needed
@@ -1706,7 +1840,8 @@ fn emit_load(
     I16 => emit_ldrh_imm(mc, rt, rn, offset)
     I32 => emit_ldr_w_imm(mc, rt, rn, offset)
     I64 => emit_ldr_imm(mc, rt, rn, offset)
-    F32 | F64 => emit_ldr_d_imm(mc, rt, rn, offset)
+    F32 => emit_ldr_s_imm(mc, rt, rn, offset)
+    F64 => emit_ldr_d_imm(mc, rt, rn, offset)
   }
 }
 
@@ -1723,7 +1858,8 @@ fn emit_store(
     I16 => emit_strh_imm(mc, rt, rn, offset)
     I32 => emit_str_w_imm(mc, rt, rn, offset)
     I64 => emit_str_imm(mc, rt, rn, offset)
-    F32 | F64 => emit_str_d_imm(mc, rt, rn, offset)
+    F32 => emit_str_s_imm(mc, rt, rn, offset)
+    F64 => emit_str_d_imm(mc, rt, rn, offset)
   }
 }
 
@@ -1771,12 +1907,24 @@ fn emit_terminator_with_epilogue(
       emit_b(mc, else_b)
     }
     Return(values) => {
-      // Move return values to their ABI registers (X0, X1, etc.)
+      // Move return values to their ABI registers
+      // Integer results go in X0, X1, etc.
+      // Float results need FMOV to move from D/S registers to X0
       for i, value in values {
         let src = reg_num(value)
-        if src != i {
-          // Only emit mov if source != destination
-          emit_mov_reg(mc, i, src)
+        let reg_class = match value {
+          Physical(preg) => preg.class
+          Virtual(_) => Int // Should not happen at emit time
+        }
+        match reg_class {
+          Float =>
+            // Float value in D register, need to move to X register for return
+            emit_fmov_d_to_x(mc, i, src)
+          Int =>
+            if src != i {
+              // Only emit mov if source != destination
+              emit_mov_reg(mc, i, src)
+            }
         }
       }
       // Emit epilogue to restore callee-saved registers before return

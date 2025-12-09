@@ -300,13 +300,10 @@ pub fn BreakpointManager::remove(self : BreakpointManager, id : Int) -> Bool {
     Some(bp) => {
       // Remove from location index
       match self.by_location.get(bp.func_idx) {
-        Some(func_map) => {
-          let _ = func_map.remove(bp.offset)
-
-        }
+        Some(func_map) => func_map.remove(bp.offset) |> ignore
         None => ()
       }
-      let _ = self.breakpoints.remove(id)
+      self.breakpoints.remove(id) |> ignore
       true
     }
     None => false
