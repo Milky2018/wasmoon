@@ -1819,7 +1819,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
     }
   }
 
-  // Restore lexer state for second pass
+  // Restore lexer state for type definition pass
   self.lexer.pos = saved_pos
   self.lexer.line = saved_line
   self.lexer.column = saved_column
@@ -1827,7 +1827,8 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   self.lexer.token_start_column = saved_token_start_column
   self.current = saved_current
 
-  // Second pass: actual parsing
+  // Intermediate pass: parse ONLY explicit type definitions first
+  // This ensures all explicit types are available before functions create implicit types
   while self.current != RParen && self.current != Eof {
     match self.current {
       LParen => {
@@ -1839,6 +1840,30 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.type_names.set("\{type_idx}", type_idx)
             mod_.types.push(ft)
           }
+          _ => self.skip_to_matching_rparen()
+        }
+      }
+      _ => self.advance()
+    }
+  }
+
+  // Restore lexer state for main parsing pass
+  self.lexer.pos = saved_pos
+  self.lexer.line = saved_line
+  self.lexer.column = saved_column
+  self.lexer.token_start_line = saved_token_start_line
+  self.lexer.token_start_column = saved_token_start_column
+  self.current = saved_current
+
+  // Main pass: parse everything except types (already parsed)
+  while self.current != RParen && self.current != Eof {
+    match self.current {
+      LParen => {
+        self.advance()
+        match self.current {
+          Keyword("type") =>
+            // Already parsed in intermediate pass, skip
+            self.skip_to_matching_rparen()
           Keyword("func") =>
             match self.parse_func_def(mod_) {
               FuncDef(type_idx, code, export_names) => {
@@ -2356,6 +2381,14 @@ fn Parser::parse_func_def(
     }
   }
 
+  // Calculate actual param count - if type_idx was used, get params from type
+  // Otherwise use inline_params
+  let param_count = if type_idx >= 0 && type_idx < mod_.types.length() {
+    mod_.types[type_idx].params.length()
+  } else {
+    inline_params.length()
+  }
+
   // Parse locals
   let locals : Array[@types.ValueType] = []
   while self.current == LParen {
@@ -2367,7 +2400,7 @@ fn Parser::parse_func_def(
         // Optional name
         match self.current {
           Id(name) => {
-            let local_idx = inline_params.length() + locals.length()
+            let local_idx = param_count + locals.length()
             self.local_names.set(name, local_idx)
             self.advance()
           }

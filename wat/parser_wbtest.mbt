@@ -422,3 +422,68 @@ test "debug: max subnormal with more precision" {
   }
   inspect(r2.reinterpret_as_int(), content="8388606")
 }
+
+// ============================================================
+// Regression tests for func.wast and func_ptrs.wast bugs
+// ============================================================
+
+///|
+test "regression: local index with explicit type reference" {
+  // When a function uses (type $sig) instead of inline params,
+  // local $var should be indexed correctly (param_count + local_index)
+  // Previously: used inline_params.length() which was 0 when type was used
+  let wat =
+    #|(module
+    #|  (type $sig (func (param i32) (result i32)))
+    #|  (func (type $sig) (local $var i32)
+    #|    local.get $var  ;; should get local at index 1 (param 0, local 1)
+    #|  )
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  // Function should have type index 0
+  inspect(mod.funcs[0], content="0")
+  // Body should have LocalGet(1) - the local $var
+  let code = mod.codes[0]
+  inspect(code.locals.length(), content="1")
+  inspect(code.body[0], content="LocalGet(1)")
+}
+
+///|
+test "regression: explicit type definitions parsed before functions" {
+  // Type $t is defined AFTER functions $f, $g, $h that use matching signatures.
+  // Previously: parser created implicit types during function parsing,
+  // so the type indices didn't match correctly.
+  // Now: explicit type definitions are parsed first.
+  let wat =
+    #|(module
+    #|  (func $f (result f64) (f64.const 0))  ;; adds implicit type ()
+    #|  (func $g (param i32))                 ;; reuses explicit type $t
+    #|  (func $h (result f64) (f64.const 1))  ;; reuses implicit type from $f
+    #|  (type $t (func (param i32)))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  // Should have 2 types: (param i32) and (result f64)
+  inspect(mod.types.length(), content="2")
+  // $t should be type 0: (func (param i32))
+  inspect(mod.types[0].params.length(), content="1")
+  inspect(mod.types[0].results.length(), content="0")
+  // Implicit type should be type 1: (func (result f64))
+  inspect(mod.types[1].params.length(), content="0")
+  inspect(mod.types[1].results.length(), content="1")
+  // $g should use type 0 (same as explicit $t)
+  inspect(mod.funcs[1], content="0")
+}
+
+///|
+test "regression: ref type local parsing" {
+  // (ref $t) should be parsed as RefFunc (non-nullable function reference)
+  let wat =
+    #|(module
+    #|  (type $t (func))
+    #|  (func $test (local $x (ref $t)))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  let code = mod.codes[0]
+  inspect(code.locals.length(), content="1")
+  inspect(code.locals[0], content="RefFunc")
+}

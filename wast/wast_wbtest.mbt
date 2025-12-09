@@ -409,16 +409,21 @@ test "collect_module_text reconstruction" {
   let script = parse(wast_text)
   match script.commands[0].0 {
     Module(mod_, _) => {
-      inspect(mod_.types.length(), content="4")
+      // With explicit types first: 3 types instead of 4
+      // Type 0: $check (i32, i32) -> i32 (explicit)
+      // Type 1: () -> () ($dummy's implicit type)
+      // Type 2: () -> i32 (test's implicit type)
+      // $func reuses type 0 since it matches $check
+      inspect(mod_.types.length(), content="3")
       inspect(mod_.funcs.length(), content="3")
       inspect(mod_.elems.length(), content="1")
       // Check elem init is correct (should be 1, func index of $func)
       inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
-      // Check call_indirect type index (should be 2, index of $check)
+      // Check call_indirect type index (should be 0, index of $check - explicit type first)
       let test_func = mod_.codes[mod_.codes.length() - 1]
       inspect(
         test_func.body,
-        content="[I32Const(1), I32Const(2), I32Const(0), CallIndirect(2, 0)]",
+        content="[I32Const(1), I32Const(2), I32Const(0), CallIndirect(0, 0)]",
       )
     }
     _ => fail("expected module")
