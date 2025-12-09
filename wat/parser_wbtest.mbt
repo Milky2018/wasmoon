@@ -494,3 +494,30 @@ test "regression: ref type local parsing" {
   inspect(code.locals.length(), content="1")
   inspect(code.locals[0], content="RefFuncTyped(0)")
 }
+
+///|
+test "regression: select with nested ref type in result annotation" {
+  // select (result (ref null func)) should properly parse the nested parentheses
+  // in the result type annotation. Previously, the parser would stop at the first
+  // closing paren inside (ref null func), leaving the operands unparsed.
+  let wat =
+    #|(module
+    #|  (type $t (func))
+    #|  (func $tf) (elem declare func $tf)
+    #|  (func (export "join-funcnull") (param i32) (result (ref null func))
+    #|    (select (result (ref null func))
+    #|      (ref.func $tf)
+    #|      (ref.null func)
+    #|      (local.get 0)
+    #|    )
+    #|  )
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  // Should have parsed successfully with 2 functions
+  inspect(mod.funcs.length(), content="2")
+  // The exported function should have the select instruction
+  let code = mod.codes[1]
+  // Body should contain: RefFunc, RefNull, LocalGet, Select
+  inspect(code.body.length(), content="4")
+  inspect(code.body[3], content="Select")
+}

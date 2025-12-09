@@ -237,6 +237,20 @@ fn is_non_nullable_ref(ty : @types.ValueType) -> Bool {
 }
 
 ///|
+/// Check if a value type is any reference type (nullable or non-nullable)
+fn is_ref_type(ty : @types.ValueType) -> Bool {
+  match ty {
+    FuncRef
+    | ExternRef
+    | RefFunc
+    | RefExtern
+    | RefFuncTyped(_)
+    | RefNullFuncTyped(_) => true
+    _ => false
+  }
+}
+
+///|
 /// Operand stack for type validation
 /// Uses Option to represent polymorphic stack (after unreachable)
 priv struct OperandStack {
@@ -1428,6 +1442,13 @@ fn validate_instr(
       if t1 != t2 {
         raise TypeMismatch(
           "select operands must have same type: \{t1} vs \{t2}",
+        )
+      }
+      // Untyped select (without explicit result type) only works with numeric types.
+      // For reference types, the typed form `select t*` must be used.
+      if is_ref_type(t1) {
+        raise TypeMismatch(
+          "type mismatch: select with reference type requires explicit type annotation",
         )
       }
       stack.push(t1)
