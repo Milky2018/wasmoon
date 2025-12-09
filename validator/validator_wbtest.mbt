@@ -1215,8 +1215,8 @@ test "regression: uninitialized non-nullable local should fail" {
         body: [LocalGet(0), Drop],
       },
     ],
-    datas: [], // reading uninitialized local
-  }
+    datas: [],
+  } // reading uninitialized local
   inspect(try? validate_module(mod), content="Err(UninitializedLocal(0))")
 }
 
@@ -1270,8 +1270,8 @@ test "regression: nullable ref local reading without initialization should pass"
         body: [LocalGet(0), Drop],
       },
     ],
-    datas: [], // reading uninitialized nullable local is OK
-  }
+    datas: [],
+  } // reading uninitialized nullable local is OK
   inspect(try? validate_module(mod), content="Ok(())")
 }
 
