@@ -374,6 +374,48 @@ pub fn JITContext::call_void_void(self : JITContext, func_ptr : Int64) -> Unit {
 }
 
 ///|
+/// Call a JIT function with this context: (i64) -> i64
+pub fn JITContext::call_i64_i64(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+) -> Int64 {
+  c_jit_call_ctx_i64_i64(func_ptr, self.func_table_ptr, arg0)
+}
+
+///|
+/// Call a JIT function with this context: (i64, i64) -> i64
+pub fn JITContext::call_i64i64_i64(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Int64 {
+  c_jit_call_ctx_i64i64_i64(func_ptr, self.func_table_ptr, arg0, arg1)
+}
+
+///|
+/// Call a JIT function with this context: (i64) -> void
+pub fn JITContext::call_i64_void(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+) -> Unit {
+  c_jit_call_ctx_i64_void(func_ptr, self.func_table_ptr, arg0)
+}
+
+///|
+/// Call a JIT function with this context: (i64, i64) -> void
+pub fn JITContext::call_i64i64_void(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Unit {
+  c_jit_call_ctx_i64i64_void(func_ptr, self.func_table_ptr, arg0, arg1)
+}
+
+///|
 /// Free the context
 pub fn JITContext::free(self : JITContext) -> Unit {
   c_jit_free_context(self.ctx_ptr)

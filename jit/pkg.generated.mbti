@@ -225,6 +225,10 @@ pub(all) struct JITContext {
   func_table_ptr : Int64
 }
 pub fn JITContext::activate(Self) -> Unit
+pub fn JITContext::call_i64_i64(Self, Int64, Int64) -> Int64
+pub fn JITContext::call_i64_void(Self, Int64, Int64) -> Unit
+pub fn JITContext::call_i64i64_i64(Self, Int64, Int64, Int64) -> Int64
+pub fn JITContext::call_i64i64_void(Self, Int64, Int64, Int64) -> Unit
 pub fn JITContext::call_void_i64(Self, Int64) -> Int64
 pub fn JITContext::call_void_void(Self, Int64) -> Unit
 pub fn JITContext::free(Self) -> Unit

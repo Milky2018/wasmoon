@@ -264,6 +264,7 @@ pub impl Show for ShiftType with output(self, logger) {
 pub enum VCodeOpcode {
   // Integer arithmetic
   Add
+  AddImm(Int) // ADD Xd, Xn, #imm (immediate add)
   Sub
   Mul
   SDiv
@@ -327,6 +328,7 @@ pub enum VCodeOpcode {
 fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
   match self {
     Add => "add"
+    AddImm(imm) => "add #\{imm}"
     Sub => "sub"
     Mul => "mul"
     SDiv => "sdiv"

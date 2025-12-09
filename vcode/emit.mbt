@@ -1436,6 +1436,11 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       let rm = reg_num(inst.uses[1])
       emit_add_reg(mc, rd, rn, rm)
     }
+    AddImm(imm) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_add_imm(mc, rd, rn, imm)
+    }
     Sub => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
