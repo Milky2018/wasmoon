@@ -256,11 +256,12 @@ fn is_ref_type(ty : @types.ValueType) -> Bool {
 priv struct OperandStack {
   stack : Array[@types.ValueType]
   mut polymorphic : Bool // true after unreachable instruction
+  mut underflow_limit : Int // stack height at which polymorphism was enabled
 }
 
 ///|
 fn OperandStack::new() -> OperandStack {
-  { stack: [], polymorphic: false }
+  { stack: [], polymorphic: false, underflow_limit: 0 }
 }
 
 ///|
@@ -308,18 +309,32 @@ fn OperandStack::pop_any(
 ///|
 fn OperandStack::set_polymorphic(self : OperandStack) -> Unit {
   self.polymorphic = true
+  self.underflow_limit = self.stack.length()
 }
 
 ///|
 /// Check that stack has exactly the expected height
+/// In polymorphic mode, we can synthesize values from below the underflow_limit,
+/// but actual values pushed after unreachable still count.
 fn OperandStack::check_height(
   self : OperandStack,
   expected : Int,
   context : String,
 ) -> Unit raise ValidationError {
-  if !self.polymorphic && self.stack.length() != expected {
+  let actual = self.stack.length()
+  if self.polymorphic {
+    // Values above underflow_limit are real values that were pushed after unreachable
+    let real_values = actual - self.underflow_limit
+    // We can synthesize up to (expected - real_values) values from the polymorphic stack,
+    // but if we have more real values than expected, that's an error
+    if real_values > expected {
+      raise StackHeightMismatch(
+        "\{context}: expected stack height \{expected}, got at least \{real_values} values after unreachable code",
+      )
+    }
+  } else if actual != expected {
     raise StackHeightMismatch(
-      "\{context}: expected stack height \{expected}, got \{self.stack.length()}",
+      "\{context}: expected stack height \{expected}, got \{actual}",
     )
   }
 }
