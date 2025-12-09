@@ -35,6 +35,7 @@ pub(all) suberror ValidationError {
   DuplicateExportName(String)
   UnknownExport(String)
   UninitializedLocal(Int)
+  InvalidStartFunction(String)
   WithContext(ValidationErrorContext)
 }
 pub impl Show for ValidationError
