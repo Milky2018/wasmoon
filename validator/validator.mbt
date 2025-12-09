@@ -1556,6 +1556,10 @@ fn validate_instr(
       }
       validate_expr(ctx, then_stack, then_body)
       then_stack.check_height(results.length(), "if-then exit")
+      // Verify then result types
+      for i = results.length() - 1; i >= 0; i = i - 1 {
+        then_stack.pop(results[i])
+      }
       // Validate else branch
       let else_stack = OperandStack::new()
       for param in params {
@@ -1563,6 +1567,10 @@ fn validate_instr(
       }
       validate_expr(ctx, else_stack, else_body)
       else_stack.check_height(results.length(), "if-else exit")
+      // Verify else result types
+      for i = results.length() - 1; i >= 0; i = i - 1 {
+        else_stack.pop(results[i])
+      }
       // Pop label
       let _ = ctx.labels.pop()
       // Push results onto outer stack
