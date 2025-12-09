@@ -49,7 +49,15 @@ pub fn Table::size(self : Table) -> Int {
 ///|
 pub fn Table::grow(self : Table, delta : Int, init : @types.Value) -> Int {
   let old_size = self.size
-  let new_size = old_size + delta
+  // Use unsigned arithmetic to check for overflow (i32 range)
+  let old_size_u = old_size.reinterpret_as_uint()
+  let delta_u = delta.reinterpret_as_uint()
+  let new_size_u = old_size_u + delta_u
+  // If overflow occurred, the result will be less than old_size
+  if new_size_u < old_size_u {
+    return -1
+  }
+  let new_size = new_size_u.reinterpret_as_int()
 
   // Check max limit
   if self.max is Some(max) && new_size > max {
