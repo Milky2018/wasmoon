@@ -1663,6 +1663,17 @@ fn count_table_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
+fn count_global_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    if imp.desc is @types.ImportDesc::Global(_) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
 /// Parse a WAT module from string
 pub fn parse(input : String) -> @types.Module raise WatError {
   let parser = Parser::new(input)
@@ -3914,8 +3925,8 @@ fn Parser::parse_table_def(
       let elem_type = self.parse_value_type()
       // Check for optional default init expression (ref.func $f) or (ref.null func)
       if self.current == LParen {
-        // Skip the init expression - it's for table default value
-        // This is a WebAssembly 2.0 feature, we'll just parse and ignore for now
+        // Parse the init expression - validate global.get references
+        // Table init expressions can only reference imported globals, not module-defined globals
         self.advance()
         match self.current {
           Keyword("ref.func") | Keyword("ref.null") => {
@@ -3923,6 +3934,20 @@ fn Parser::parse_table_def(
             // Skip the argument
             while self.current != RParen {
               self.advance()
+            }
+            self.expect_rparen()
+          }
+          Keyword("global.get") => {
+            self.advance()
+            // Parse and validate the global index
+            let global_idx = self.parse_global_idx()
+            // Check if this global is imported (only imported globals can be used in table init)
+            let num_imported_globals = count_global_imports(mod_.imports)
+            if global_idx >= num_imported_globals {
+              raise UndefinedIdentifier(
+                "unknown global (table init can only reference imported globals)",
+                self.loc(),
+              )
             }
             self.expect_rparen()
           }

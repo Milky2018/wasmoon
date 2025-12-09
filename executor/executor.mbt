@@ -722,15 +722,14 @@ pub fn instantiate_module_with_init(
   let (store, instance) = instantiate_module(mod)
 
   // Initialize data segments (copy data to memory)
+  // Get global instances for evaluating offset expressions
+  let globals_for_data = get_global_instances(store, instance.global_addrs)
   for data in mod.datas {
     if instance.mem_addrs.length() > data.memory_idx {
       let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
 
-      // Evaluate offset expression
-      let offset = match data.offset {
-        [I32Const(n)] => n
-        _ => 0
-      }
+      // Evaluate offset expression using extended const expr evaluator
+      let offset = eval_extended_const_expr(data.offset, globals_for_data)
 
       // Copy data to memory
       mem.init_data(offset, data.init)
@@ -901,15 +900,13 @@ pub fn instantiate_module_with_imports(
   }
 
   // Initialize active data segments (copy data to memory)
+  let globals_for_data_init = get_global_instances(store, global_addrs)
   for data in mod.datas {
     // Active data segments have a non-empty offset expression
     if data.offset.length() > 0 && mem_addrs.length() > data.memory_idx {
       let mem = store.get_mem(mem_addrs[data.memory_idx])
-      // Evaluate offset expression
-      let offset = match data.offset {
-        [I32Const(n)] => n
-        _ => 0
-      }
+      // Evaluate offset expression using extended const expr evaluator
+      let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
       // Copy data to memory
       mem.init_data(offset, data.init)
     }
@@ -1078,13 +1075,17 @@ pub fn instantiate_with_linker(
   store.register_instance(instance) |> ignore
 
   // Initialize data segments (copy data to memory)
+  let globals_for_linker_data = get_global_instances(
+    store,
+    instance.global_addrs,
+  )
   for data in mod.datas {
     if instance.mem_addrs.length() > data.memory_idx {
       let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
-      let offset = match data.offset {
-        [I32Const(n)] => n
-        _ => 0
-      }
+      let offset = eval_extended_const_expr(
+        data.offset,
+        globals_for_linker_data,
+      )
       mem.init_data(offset, data.init)
     }
   }
