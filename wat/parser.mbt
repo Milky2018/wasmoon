@@ -2787,11 +2787,18 @@ fn Parser::parse_plain_instruction(
         self.advance()
         match self.current {
           Keyword("result") => {
-            // Skip result type annotation
-            while self.current != RParen {
+            // Skip result type annotation, tracking nested parentheses
+            let mut depth = 1 // We're inside (result ...)
+            while depth > 0 {
               self.advance()
+              match self.current {
+                LParen => depth += 1
+                RParen => depth -= 1
+                Eof => break
+                _ => ()
+              }
             }
-            self.expect_rparen()
+            self.advance() // Move past the closing RParen
           }
           _ => {
             // Not a type annotation, restore state
