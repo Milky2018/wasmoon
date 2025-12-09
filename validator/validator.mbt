@@ -24,6 +24,7 @@ pub(all) suberror ValidationError {
   DuplicateExportName(String) // Same export name used more than once
   UnknownExport(String) // Export references unknown entity
   UninitializedLocal(Int) // Non-nullable ref local read before initialization
+  InvalidStartFunction(String) // Start function has invalid signature
   // Error with location context
   WithContext(ValidationErrorContext)
 } derive(Show)
@@ -68,6 +69,7 @@ pub fn ValidationErrorContext::from_error(
     DuplicateExportName(name) => "duplicate export name: \{name}"
     UnknownExport(m) => m
     UninitializedLocal(_) => "uninitialized local"
+    InvalidStartFunction(m) => m
     WithContext(ctx) => ctx.error_msg
   }
   { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
@@ -534,6 +536,21 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     }
   }
 
+  // Validate start function if present
+  if mod.start is Some(start_idx) {
+    // Check that the function index is valid
+    if start_idx >= ctx.funcs.length() {
+      raise InvalidFunctionIndex(start_idx)
+    }
+    // Get the function type
+    let type_idx = ctx.funcs[start_idx]
+    let func_type = ctx.types[type_idx]
+    // Start function must have type [] -> [] (no params, no results)
+    if func_type.params.length() != 0 || func_type.results.length() != 0 {
+      raise InvalidStartFunction("start function")
+    }
+  }
+
   // Validate all function bodies
   let num_imports = count_func_imports(mod.imports)
   for i, code in mod.codes {
@@ -632,6 +649,27 @@ pub fn validate_module_with_context(
       validate_const_expr(ctx.globals, init, elem.type_, funcs=ctx.funcs) catch {
         e => raise WithContext(ValidationErrorContext::from_error(e))
       }
+    }
+  }
+
+  // Validate start function if present
+  if mod.start is Some(start_idx) {
+    // Check that the function index is valid
+    if start_idx >= ctx.funcs.length() {
+      raise WithContext(
+        ValidationErrorContext::from_error(InvalidFunctionIndex(start_idx)),
+      )
+    }
+    // Get the function type
+    let type_idx = ctx.funcs[start_idx]
+    let func_type = ctx.types[type_idx]
+    // Start function must have type [] -> [] (no params, no results)
+    if func_type.params.length() != 0 || func_type.results.length() != 0 {
+      raise WithContext(
+        ValidationErrorContext::from_error(
+          InvalidStartFunction("start function"),
+        ),
+      )
     }
   }
 
