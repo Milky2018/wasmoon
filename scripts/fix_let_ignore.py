@@ -36,6 +36,43 @@ def find_mbt_files(paths: list[str]) -> list[Path]:
     return result
 
 
+def insert_ignore_before_comment(expr: str) -> str:
+    """
+    Insert `|> ignore` before any trailing comment.
+
+    Examples:
+        "foo()"              -> "foo() |> ignore"
+        "foo() // comment"   -> "foo() |> ignore // comment"
+        "foo() /// doc"      -> "foo() |> ignore /// doc"
+    """
+    # Find // comment (but not inside a string)
+    # Simple approach: find the first // that's not inside quotes
+    in_string = False
+    string_char = None
+    i = 0
+    while i < len(expr):
+        c = expr[i]
+        if in_string:
+            if c == '\\' and i + 1 < len(expr):
+                i += 2  # Skip escaped char
+                continue
+            if c == string_char:
+                in_string = False
+        else:
+            if c in '"\'':
+                in_string = True
+                string_char = c
+            elif c == '/' and i + 1 < len(expr) and expr[i + 1] == '/':
+                # Found comment start
+                code_part = expr[:i].rstrip()
+                comment_part = expr[i:]
+                return f"{code_part} |> ignore {comment_part}"
+        i += 1
+
+    # No comment found
+    return f"{expr} |> ignore"
+
+
 def fix_let_ignore(content: str) -> tuple[str, int]:
     """
     Replace `let _ = expr` with `expr |> ignore`.
@@ -88,7 +125,9 @@ def fix_let_ignore(content: str) -> tuple[str, int]:
                 # Simple case: single line
                 expr = expr_start.rstrip()
                 if expr:
-                    result_lines.append(f"{indent}{expr} |> ignore")
+                    # Handle trailing comments: extract comment and put |> ignore before it
+                    expr_with_ignore = insert_ignore_before_comment(expr)
+                    result_lines.append(f"{indent}{expr_with_ignore}")
                     count += 1
                 else:
                     # Empty expression, keep original
@@ -100,9 +139,10 @@ def fix_let_ignore(content: str) -> tuple[str, int]:
                 # Middle lines (keep as-is)
                 for mid_line in expr_lines[1:-1]:
                     result_lines.append(mid_line)
-                # Last line: append |> ignore
+                # Last line: append |> ignore (handle trailing comment)
                 last_line = expr_lines[-1].rstrip()
-                result_lines.append(f"{last_line} |> ignore")
+                last_line_with_ignore = insert_ignore_before_comment(last_line)
+                result_lines.append(last_line_with_ignore)
                 count += 1
         else:
             result_lines.append(line)
