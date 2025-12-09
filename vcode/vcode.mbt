@@ -326,6 +326,11 @@ pub enum VCodeOpcode {
   // Defs: [result] (if has_result)
   // Parameters: num_args, has_result
   CallIndirect(Int, Bool)
+  // Stack operations for spilling
+  // StackLoad(offset): Load from [SP + offset] into the def register
+  // StackStore(offset): Store the use register to [SP + offset]
+  StackLoad(Int)
+  StackStore(Int)
 }
 
 ///|
@@ -379,6 +384,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       let ret_ty = if has_result { "i64" } else { "void" }
       "call_indirect(\{num_args}) -> \{ret_ty}"
     }
+    StackLoad(offset) => "stack_load [sp+\{offset}]"
+    StackStore(offset) => "stack_store [sp+\{offset}]"
   }
 }
 

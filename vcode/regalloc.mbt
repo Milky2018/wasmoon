@@ -744,8 +744,12 @@ fn LinearScanAllocator::spill_interval(
 
 // ============ Apply Allocation ============
 
+// Scratch registers for spill/reload (not allocatable)
+// X16 is used for integer spills, we can use X17 if needed
+
 ///|
 /// Apply register allocation results to a VCode function
+/// Handles spilled registers by inserting StackLoad/StackStore instructions
 pub fn apply_allocation(
   func : VCodeFunction,
   alloc : RegAllocResult,
@@ -782,20 +786,102 @@ pub fn apply_allocation(
 
     // Process instructions
     for inst in block.insts {
+      // First, insert reload instructions for any spilled uses
+      // Track which scratch registers are used for each spilled vreg
+      let spill_regs : Map[Int, PReg] = {}
+      let mut scratch_idx = 0
+      for use_reg in inst.uses {
+        match use_reg {
+          Virtual(vreg) =>
+            if alloc.assignments.get(vreg.id) is None {
+              // This vreg is spilled, need to reload
+              match alloc.spill_slots.get(vreg.id) {
+                Some(slot) => {
+                  // Use scratch register X16 or X17 for reloading
+                  let scratch_preg : PReg = {
+                    index: 16 + scratch_idx,
+                    class: vreg.class,
+                  }
+                  scratch_idx = (scratch_idx + 1) % 2 // Alternate between X16 and X17
+                  spill_regs.set(vreg.id, scratch_preg)
+                  // Insert StackLoad instruction
+                  let reload_inst = VCodeInst::new(StackLoad(slot * 8))
+                  reload_inst.add_def({ reg: Physical(scratch_preg) })
+                  new_block.add_inst(reload_inst)
+                }
+                None => ()
+              }
+            }
+          Physical(_) => ()
+        }
+      }
+
+      // Check if any definitions are spilled
+      let mut spilled_def : (VReg, Int)? = None
+      for def in inst.defs {
+        match def.reg {
+          Virtual(vreg) =>
+            if alloc.assignments.get(vreg.id) is None {
+              match alloc.spill_slots.get(vreg.id) {
+                Some(slot) => spilled_def = Some((vreg, slot))
+                None => ()
+              }
+            }
+          Physical(_) => ()
+        }
+      }
+
+      // Create new instruction with rewritten registers
       let new_inst = VCodeInst::new(inst.opcode)
 
       // Rewrite definitions
       for def in inst.defs {
-        let new_reg = rewrite_reg(def.reg, alloc)
-        new_inst.add_def({ reg: new_reg })
+        match def.reg {
+          Virtual(vreg) =>
+            match alloc.assignments.get(vreg.id) {
+              Some(preg) => new_inst.add_def({ reg: Physical(preg) })
+              None => {
+                // Spilled: use scratch register X16 as temporary destination
+                let scratch_preg : PReg = { index: 16, class: vreg.class }
+                new_inst.add_def({ reg: Physical(scratch_preg) })
+              }
+            }
+          Physical(_) => new_inst.add_def(def)
+        }
       }
 
       // Rewrite uses
       for use_reg in inst.uses {
-        let new_reg = rewrite_reg(use_reg, alloc)
-        new_inst.add_use(new_reg)
+        match use_reg {
+          Virtual(vreg) =>
+            match alloc.assignments.get(vreg.id) {
+              Some(preg) => new_inst.add_use(Physical(preg))
+              None =>
+                // Spilled: use the scratch register we reloaded into
+                match spill_regs.get(vreg.id) {
+                  Some(scratch_preg) => new_inst.add_use(Physical(scratch_preg))
+                  None => {
+                    // Fallback: use X16 if somehow not in spill_regs
+                    let scratch_preg : PReg = { index: 16, class: vreg.class }
+                    new_inst.add_use(Physical(scratch_preg))
+                  }
+                }
+            }
+          Physical(_) => new_inst.add_use(use_reg)
+        }
       }
       new_block.add_inst(new_inst)
+
+      // Insert spill instruction after the defining instruction if needed
+      match spilled_def {
+        Some((vreg, slot)) => {
+          let spill_inst = VCodeInst::new(StackStore(slot * 8))
+          let scratch_preg : PReg = { index: 16, class: vreg.class }
+          spill_inst.add_use(Physical(scratch_preg))
+          new_block.add_inst(spill_inst)
+        }
+        None => ()
+      }
     }
 
     // Rewrite terminator
@@ -804,13 +890,14 @@ pub fn apply_allocation(
         let new_term = match term {
           Jump(target) => Jump(target)
           Branch(cond, then_b, else_b) => {
-            let new_cond = rewrite_reg(cond, alloc)
+            // Handle spilled condition register
+            let new_cond = rewrite_reg_with_spill(cond, alloc, new_block)
             Branch(new_cond, then_b, else_b)
           }
           Return(values) => {
             let new_values : Array[Reg] = []
             for v in values {
-              new_values.push(rewrite_reg(v, alloc))
+              new_values.push(rewrite_reg_with_spill(v, alloc, new_block))
             }
             Return(new_values)
           }
@@ -825,6 +912,35 @@ pub fn apply_allocation(
 }
 
 ///|
+/// Rewrite a register, inserting reload if spilled
+fn rewrite_reg_with_spill(
+  reg : Reg,
+  alloc : RegAllocResult,
+  block : VCodeBlock,
+) -> Reg {
+  match reg {
+    Virtual(vreg) =>
+      match alloc.assignments.get(vreg.id) {
+        Some(preg) => Physical(preg)
+        None =>
+          // Spilled: insert reload and use scratch register
+          match alloc.spill_slots.get(vreg.id) {
+            Some(slot) => {
+              let scratch_preg : PReg = { index: 16, class: vreg.class }
+              let reload_inst = VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: Physical(scratch_preg) })
+              block.add_inst(reload_inst)
+              Physical(scratch_preg)
+            }
+            None => reg // Should not happen
+          }
+      }
+    Physical(_) => reg
+  }
+}
+
+///|
+#warnings("-unused_value")
 fn rewrite_reg(reg : Reg, alloc : RegAllocResult) -> Reg {
   match reg {
     Virtual(vreg) =>

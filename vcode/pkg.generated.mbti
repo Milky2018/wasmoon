@@ -760,6 +760,8 @@ pub enum VCodeOpcode {
   Msub
   Mneg
   CallIndirect(Int, Bool)
+  StackLoad(Int)
+  StackStore(Int)
 }
 pub impl Show for VCodeOpcode
 

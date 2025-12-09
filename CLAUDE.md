@@ -449,3 +449,12 @@ let c = s.get_char(i)  // 返回 Char?
 ### 构建和运行
 - `moon build` 后需要执行 `./install.sh` 才能使用 `./wasmoon` 二进制文件
 - 批量运行 WAST 测试：`python3 scripts/run_all_wast.py`
+
+### 调试
+- 遇到未知错误（如 Exit Code 134 等异常退出码）时，使用 lldb 调试：
+  ```bash
+  lldb -- ./wasmoon test path/to/test.wast
+  (lldb) run
+  # 崩溃后查看堆栈
+  (lldb) bt
+  ```

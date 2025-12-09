@@ -1824,6 +1824,18 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
         }
       }
     }
+    StackLoad(offset) => {
+      // Load from [SP + offset] into the def register
+      // Uses SP (X31) as base, loads 64-bit value
+      let rd = wreg_num(inst.defs[0])
+      emit_ldr_imm(mc, rd, 31, offset) // LDR Xd, [SP, #offset]
+    }
+    StackStore(offset) => {
+      // Store the use register to [SP + offset]
+      // Uses SP (X31) as base, stores 64-bit value
+      let rt = reg_num(inst.uses[0])
+      emit_str_imm(mc, rt, 31, offset) // STR Xt, [SP, #offset]
+    }
   }
 }
 
