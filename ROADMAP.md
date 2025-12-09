@@ -747,3 +747,34 @@ Phase 9/11 优化 (P2)
 | 导入导出/链接 | 0 | 1 | 1 | 0% |
 | 其他 | 9 | 6 | 5 | 45% |
 | **总计** | **45** | **15** | **12** | **96.7%** |
+
+---
+
+## 已知问题与技术债务
+
+### MoonBit 编译器 Bug
+
+#### 条件表达式中的浮点零字面量 Bug
+
+**问题描述**: 在 MoonBit 中，`if neg { -0.0 } else { 0.0 }` 表达式在 `neg = false` 时错误地返回 `-0.0`（负零），而不是预期的 `0.0`（正零）。
+
+**影响范围**: `wat/parser.mbt` 中的 `parse_hex_float64` 和相关浮点解析函数。
+
+**当前解决方案**: 使用 bit 操作绕过此 bug：
+```moonbit
+// 错误的写法（受 bug 影响）:
+// return if neg { -0.0 } else { 0.0 }
+
+// 正确的绕过方式:
+let sign_bit : Int64 = if neg { 0x8000000000000000L } else { 0L }
+return sign_bit.reinterpret_as_double()
+```
+
+**相关代码位置**:
+- `wat/parser.mbt:1351-1357` - `parse_hex_float64` 零值处理
+- `wat/parser.mbt:1399-1401` - `parse_hex_float64` underflow 零值处理
+
+**跟踪测试**: `wat/parser_wbtest.mbt` 中的 `test "moonbit-bug: conditional 0.0 vs -0.0 returns wrong value"` 用于跟踪此 bug 是否被修复。
+
+**待办**: 当 MoonBit 修复此 bug 后，可以将 bit 操作改回更简洁的条件表达式写法。
+
