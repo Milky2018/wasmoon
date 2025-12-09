@@ -659,6 +659,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_void_i64(int64_t func_ptr, int64
 }
 
 // Call JIT function with context: (i64) -> i64
+// Disable optimization to avoid setjmp/longjmp related issues
+#if defined(__clang__) || defined(__GNUC__)
+__attribute__((optnone))
+#endif
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_i64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
     if (!func_ptr) return 0;
     install_trap_handler();
@@ -671,9 +675,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_i64(int64_t func_ptr, int64_
     int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
     int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
     jit_func_ctx3_i64_i64 func = (jit_func_ctx3_i64_i64)func_ptr;
-    // Force function call before JIT to ensure proper register/stack state
-    // This works around some compiler optimization issue with setjmp/longjmp
-    fflush(NULL);
     int64_t result = func(func_table_ptr, mem_base, mem_size, arg0);
     g_trap_active = 0;
     return result;

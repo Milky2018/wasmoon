@@ -127,6 +127,90 @@ After all fixes:
 
 1. Investigate the setjmp/longjmp issue more thoroughly - the `fflush(NULL)` workaround works but isn't ideal.
 
-2. Consider using `volatile` for variables modified between setjmp and longjmp.
+2. ~~Consider using `volatile` for variables modified between setjmp and longjmp.~~ **Investigated:** Using `volatile` local variables plus `__asm__ volatile("" ::: "memory")` memory barrier did NOT fix the crash. The `fflush(NULL)` call does something more than just acting as a memory/optimization barrier.
 
 3. Run the full test suite to verify no regressions in other tests.
+
+## Additional Investigation (Follow-up)
+
+### MoonBit FFI Reference Counting - Not Related
+
+Investigated whether MoonBit's FFI reference counting mechanism could be causing the setjmp/longjmp issue. Conclusion: **NOT related**.
+
+- The crashing functions (`wasmoon_jit_call_ctx_*`) only receive `Int64` primitive types, not reference-counted MoonBit objects
+- The FFI declarations that do receive `Bytes`/`FixedArray[Byte]` already have correct `#borrow` attributes
+
+### Volatile + Memory Barrier - Insufficient
+
+Attempted to replace `fflush(NULL)` with proper C semantics:
+
+```c
+// Variables modified after setjmp must be volatile per C standard
+volatile int64_t mem_base = 0;
+volatile int64_t mem_size = 0;
+volatile jit_func_ctx3_i64_i64 func = NULL;
+
+if (setjmp(g_trap_jmp_buf) != 0) { ... }
+
+mem_base = ...;
+mem_size = ...;
+func = ...;
+
+// Memory barrier to prevent compiler from reordering
+__asm__ volatile("" ::: "memory");
+
+int64_t result = func(...);
+```
+
+**Result:** Still crashed with SIGSEGV. The `fflush(NULL)` call does something beyond what volatile + memory barrier provides - possibly:
+- Making a system call that forces specific register/stack state
+- Affecting function prologue/epilogue generation
+- Interacting with signal handling in a specific way on AArch64
+
+### `__attribute__((optnone))` - Works!
+
+Attempted to disable compiler optimization entirely for the function:
+
+```c
+#if defined(__clang__) || defined(__GNUC__)
+__attribute__((optnone))
+#endif
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_i64(...) {
+    // ... setjmp/longjmp code ...
+}
+```
+
+**Result:** Tests pass! This confirms the issue is caused by compiler optimization.
+
+### Root Cause Analysis (Updated)
+
+The key difference from normal setjmp/longjmp usage is that **longjmp is called from a signal handler**:
+
+```c
+static void trap_signal_handler(int sig) {
+    if (g_trap_active) {
+        longjmp(g_trap_jmp_buf, 1);  // Called from signal handler!
+    }
+}
+```
+
+Normal pattern:
+```c
+if (setjmp(buf) != 0) { /* error */ }
+some_function();  // may call longjmp(buf, 1) directly
+```
+
+Our pattern:
+```c
+if (setjmp(buf) != 0) { /* error */ }
+jit_func();  // BRK instruction → SIGTRAP signal → signal handler calls longjmp
+```
+
+**Why this matters:**
+1. Signals can interrupt at **any instruction** (including mid-optimization sequence)
+2. Signal handler has its own stack frame, may clobber registers
+3. longjmp restores setjmp state, but optimized code may have assumptions about register/stack state that are violated
+
+**Current fix:** Using `__attribute__((optnone))` to disable optimization for affected functions.
+
+**Next investigation:** Try `sigsetjmp/siglongjmp` which are designed for signal handler contexts.
