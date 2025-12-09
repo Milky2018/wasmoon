@@ -324,7 +324,7 @@ pub(all) struct Module {
   types : Array[FuncType]
   imports : Array[Import]
   funcs : Array[Int]
-  tables : Array[TableType]
+  tables : Array[Table]
   memories : Array[MemoryType]
   globals : Array[Global]
   exports : Array[Export]
@@ -335,6 +335,13 @@ pub(all) struct Module {
 }
 pub fn Module::new() -> Self
 pub impl Show for Module
+
+pub(all) struct Table {
+  type_ : TableType
+  init : Array[Instruction]?
+}
+pub impl Eq for Table
+pub impl Show for Table
 
 pub(all) struct TableType {
   elem_type : ValueType

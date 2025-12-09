@@ -511,7 +511,7 @@ fn Parser::read_limits(self : Parser) -> @types.Limits raise ParserError {
 // ============================================================
 
 ///|
-fn Parser::read_table_type(self : Parser) -> @types.TableType raise ParserError {
+fn Parser::read_table(self : Parser) -> @types.Table raise ParserError {
   // Check for extended table type encoding (typed function references)
   let first_byte = self.peek_byte()
   if first_byte == 0x40 {
@@ -523,16 +523,23 @@ fn Parser::read_table_type(self : Parser) -> @types.TableType raise ParserError 
     }
     let elem_type = self.read_value_type()
     let limits = self.read_limits()
-    // Read and discard the initialization expression
-    // (We don't support table initializers yet, but need to parse past them)
-    self.read_expr() |> ignore
-    { elem_type, limits }
+    // Read the initialization expression
+    let init = self.read_expr()
+    { type_: { elem_type, limits }, init: Some(init) }
   } else {
     // Standard encoding: reftype limits
     let elem_type = self.read_value_type()
     let limits = self.read_limits()
-    { elem_type, limits }
+    { type_: { elem_type, limits }, init: None }
   }
+}
+
+///|
+fn Parser::read_table_type(self : Parser) -> @types.TableType raise ParserError {
+  // For imports, we just need the table type (no init expression)
+  let elem_type = self.read_value_type()
+  let limits = self.read_limits()
+  { elem_type, limits }
 }
 
 ///|
@@ -1120,7 +1127,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         // Table section
         let count = parser.read_u32()
         for _ in 0..<count {
-          mod.tables.push(parser.read_table_type())
+          mod.tables.push(parser.read_table())
         }
       }
       5 => {
@@ -1241,10 +1248,8 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
   }
 
   // Verify data count and data section counts match (if data count section present)
-  if data_count is Some(count) {
-    if count != mod.datas.length() {
-      raise DataCountMismatch
-    }
+  if data_count is Some(count) && count != mod.datas.length() {
+    raise DataCountMismatch
   }
 
   // Check for unexpected content after last section

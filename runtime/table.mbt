@@ -8,10 +8,15 @@ struct Table {
 } derive(Show)
 
 ///|
-pub fn Table::new(elem_type : @types.ValueType, min : Int, max : Int?) -> Table {
+pub fn Table::new(
+  elem_type : @types.ValueType,
+  min : Int,
+  max : Int?,
+  init_value? : @types.Value = @types.Value::Null,
+) -> Table {
   let elements : Array[@types.Value] = []
   for _ in 0..<min {
-    elements.push(Null)
+    elements.push(init_value)
   }
   { elem_type, elements, size: min, max }
 }
