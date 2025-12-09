@@ -1124,6 +1124,65 @@ pub fn emit_fmov_d(mc : MachineCode, rd : Int, rm : Int) -> Unit {
 }
 
 ///|
+/// Encode FMOV (double to general): FMOV Xd, Dn
+/// Opcode: 0x9E660000
+/// Moves 64-bit FP register to 64-bit GPR
+pub fn emit_fmov_d_to_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = (rn >> 2) & 7
+  let b2 = 102 // 0x66
+  let b3 = 158 // 0x9E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMOV (single to general): FMOV Wd, Sn
+/// Opcode: 0x1E260000
+/// Moves 32-bit FP register to 32-bit GPR
+pub fn emit_fmov_s_to_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = (rn >> 2) & 7
+  let b2 = 38 // 0x26
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode LDR (single, unsigned offset): LDR St, [Xn, #imm]
+/// Opcode: 0xBD400000
+pub fn emit_ldr_s_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let scaled = (imm12 / 4) & 0xFFF
+  // Encoding: Rt in bits [4:0], Rn in bits [9:5], imm12 in bits [21:10]
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 64 // 0x40 for LDR
+  let b3 = 189 // 0xBD
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode STR (single, unsigned offset): STR St, [Xn, #imm]
+/// Opcode: 0xBD000000
+pub fn emit_str_s_imm(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  let scaled = (imm12 / 4) & 0xFFF
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = (scaled >> 6) & 63
+  let b3 = 189 // 0xBD
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode LDR (double, unsigned offset): LDR Dt, [Xn, #imm]
 /// Opcode: 0xFD400000
 pub fn emit_ldr_d_imm(
@@ -1133,9 +1192,9 @@ pub fn emit_ldr_d_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 8) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = ((scaled >> 5) & 127) | 64 // 0x40
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = ((scaled >> 6) & 63) | 64 // 0x40 for LDR
   let b3 = 253 // 0xFD
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -1150,9 +1209,9 @@ pub fn emit_str_d_imm(
   imm12 : Int,
 ) -> Unit {
   let scaled = (imm12 / 8) & 0xFFF
-  let b0 = (rt & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((scaled & 31) << 3)
-  let b2 = (scaled >> 5) & 127
+  let b0 = (rt & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
+  let b2 = (scaled >> 6) & 63
   let b3 = 253 // 0xFD
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -1711,7 +1770,8 @@ fn emit_load(
     I16 => emit_ldrh_imm(mc, rt, rn, offset)
     I32 => emit_ldr_w_imm(mc, rt, rn, offset)
     I64 => emit_ldr_imm(mc, rt, rn, offset)
-    F32 | F64 => emit_ldr_d_imm(mc, rt, rn, offset)
+    F32 => emit_ldr_s_imm(mc, rt, rn, offset)
+    F64 => emit_ldr_d_imm(mc, rt, rn, offset)
   }
 }
 
@@ -1728,7 +1788,8 @@ fn emit_store(
     I16 => emit_strh_imm(mc, rt, rn, offset)
     I32 => emit_str_w_imm(mc, rt, rn, offset)
     I64 => emit_str_imm(mc, rt, rn, offset)
-    F32 | F64 => emit_str_d_imm(mc, rt, rn, offset)
+    F32 => emit_str_s_imm(mc, rt, rn, offset)
+    F64 => emit_str_d_imm(mc, rt, rn, offset)
   }
 }
 
@@ -1776,12 +1837,24 @@ fn emit_terminator_with_epilogue(
       emit_b(mc, else_b)
     }
     Return(values) => {
-      // Move return values to their ABI registers (X0, X1, etc.)
+      // Move return values to their ABI registers
+      // Integer results go in X0, X1, etc.
+      // Float results need FMOV to move from D/S registers to X0
       for i, value in values {
         let src = reg_num(value)
-        if src != i {
-          // Only emit mov if source != destination
-          emit_mov_reg(mc, i, src)
+        let reg_class = match value {
+          Physical(preg) => preg.class
+          Virtual(_) => Int // Should not happen at emit time
+        }
+        match reg_class {
+          Float =>
+            // Float value in D register, need to move to X register for return
+            emit_fmov_d_to_x(mc, i, src)
+          Int =>
+            if src != i {
+              // Only emit mov if source != destination
+              emit_mov_reg(mc, i, src)
+            }
         }
       }
       // Emit epilogue to restore callee-saved registers before return
