@@ -1,7 +1,9 @@
 ///|
 /// Run a WAST test script
-fn run_wast(wast_path : String) -> Unit {
+fn run_wast(wast_path : String, use_jit : Bool) -> Unit {
   println("Running WAST script: \{wast_path}")
+  let jit_status = if use_jit { "enabled" } else { "disabled" }
+  println("JIT: \{jit_status}")
   println("=".repeat(50))
 
   // Read WAST file
@@ -22,7 +24,7 @@ fn run_wast(wast_path : String) -> Unit {
 
   // Run WAST commands
   let base_dir = find_base_dir(wast_path)
-  let result = run_wast_commands(script, base_dir)
+  let result = run_wast_commands(script, base_dir, use_jit)
 
   // Print results
   println("")
@@ -62,10 +64,14 @@ priv struct WastContext {
   named_modules : Map[String, @runtime.ModuleInstance]
   // Registered modules for imports (module_name -> exports)
   registered_modules : Map[String, @runtime.ModuleInstance]
+  // JIT support: module -> (JITModule, memory_ptr, original Module)
+  jit_modules : Map[String, (@jit.JITModule, Int64, @types.Module)]
+  mut current_jit : (@jit.JITModule, Int64, @types.Module)?
+  use_jit : Bool
 }
 
 ///|
-fn WastContext::new() -> WastContext {
+fn WastContext::new(use_jit : Bool) -> WastContext {
   let store = @runtime.Store::new()
 
   // Create spectest module with standard test functions/values
@@ -77,6 +83,9 @@ fn WastContext::new() -> WastContext {
     current_module: None,
     named_modules: Map::new(),
     registered_modules,
+    jit_modules: Map::new(),
+    current_jit: None,
+    use_jit,
   }
 }
 
@@ -248,13 +257,65 @@ fn WastContext::build_imports(self : WastContext) -> @runtime.Imports {
 }
 
 ///|
+/// Try to compile a module to JIT and return (JITModule, memory_ptr) if successful
+fn try_compile_jit(
+  mod_ : @types.Module,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+) -> (@jit.JITModule, Int64)? {
+  // Check if all imports are supported by JIT
+  for imp in mod_.imports {
+    if imp.desc is Func(_) &&
+      !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+      return None // Unsupported import
+    }
+  }
+  // Compile module to JIT
+  let debug_config = DebugConfig::new()
+  let precompiled = compile_module_to_jit(mod_, debug_config)
+  match precompiled {
+    None => None
+    Some(pc) => {
+      // Build func_types array
+      let func_types : Array[(Int, Bool)] = []
+      for entry in pc.functions {
+        func_types.push((entry.num_params, entry.num_results > 0))
+      }
+      // Load JIT module
+      let jit_module = @jit.JITModule::load(pc, func_types)
+      match jit_module {
+        None => None
+        Some(jm) => {
+          // Allocate linear memory
+          let mem_size = get_memory_size(instance, store)
+          let mem_ptr = @jit.alloc_memory(mem_size)
+          if mem_ptr == 0L {
+            jm.free()
+            return None
+          }
+          // Initialize data segments
+          init_data_segments(mod_, mem_ptr)
+          // Set memory in JIT context
+          match jm.context {
+            Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
+            None => ()
+          }
+          Some((jm, mem_ptr))
+        }
+      }
+    }
+  }
+}
+
+///|
 /// Run WAST script commands
 fn run_wast_commands(
   script : @wast.WastScript,
   base_dir : String,
+  use_jit : Bool,
 ) -> WastResult {
   let result = WastResult::new()
-  let ctx = WastContext::new()
+  let ctx = WastContext::new(use_jit)
   for item in script.commands {
     let (cmd, line) = item
     run_wast_command(ctx, cmd, line, result, base_dir)
@@ -294,6 +355,20 @@ fn run_wast_command(
       if name is Some(n) {
         ctx.named_modules.set(n, instance)
       }
+      // Try to compile JIT version (only if JIT is enabled)
+      if ctx.use_jit {
+        match try_compile_jit(mod_, instance, ctx.store) {
+          Some((jm, mem_ptr)) => {
+            ctx.current_jit = Some((jm, mem_ptr, mod_))
+            if name is Some(n) {
+              ctx.jit_modules.set(n, (jm, mem_ptr, mod_))
+            }
+          }
+          None => ctx.current_jit = None
+        }
+      } else {
+        ctx.current_jit = None
+      }
     }
     ModuleQuote(parts) => {
       // Concatenate quoted strings and parse as WAT module
@@ -331,6 +406,15 @@ fn run_wast_command(
         }
       }
       ctx.current_module = Some(instance)
+      // Try to compile JIT version (only if JIT is enabled)
+      if ctx.use_jit {
+        match try_compile_jit(mod_, instance, ctx.store) {
+          Some((jm, mem_ptr)) => ctx.current_jit = Some((jm, mem_ptr, mod_))
+          None => ctx.current_jit = None
+        }
+      } else {
+        ctx.current_jit = None
+      }
     }
     ModuleBinaryFailed(err) => {
       // Binary module failed to parse (unsupported features), skip
@@ -521,6 +605,7 @@ fn invoke_action(
 ) -> Array[@types.Value] raise CliError {
   match action {
     Invoke(module_name, func_name, args) => {
+      // Get instance for validation
       let instance = match module_name {
         Some(name) =>
           match ctx.named_modules.get(name) {
@@ -533,9 +618,73 @@ fn invoke_action(
             None => raise NoCurrentModule
           }
       }
-      let runtime_args = args.map(wast_value_to_runtime)
-      @executor.call_exported_func(ctx.store, instance, func_name, runtime_args) catch {
-        e => raise RuntimeError(e.to_string())
+      // Try JIT execution first
+      let jit_info : (@jit.JITModule, Int64, @types.Module)? = match
+        module_name {
+        Some(name) => ctx.jit_modules.get(name)
+        None => ctx.current_jit
+      }
+      match jit_info {
+        Some((jm, _mem_ptr, mod_)) => {
+          // Activate JIT context
+          match jm.context {
+            Some(jit_ctx) => jit_ctx.activate()
+            None => ()
+          }
+          // Find and call JIT function
+          match jm.get_func_by_name(func_name) {
+            Some(f) => {
+              // Convert args to Int64
+              let i64_args : Array[Int64] = []
+              for arg in args {
+                let v = match arg {
+                  I32(n) => n.to_int64()
+                  I64(n) => n
+                  F32(n) => n.reinterpret_as_int().to_int64()
+                  F64(n) => n.reinterpret_as_int64()
+                  _ => 0L
+                }
+                i64_args.push(v)
+              }
+              let result = jm.call_with_context(f, i64_args)
+              match result {
+                Some(v) =>
+                  // Convert result back to Value based on function return type
+                  if f.has_result {
+                    // Determine result type from function signature
+                    [convert_jit_result(v, func_name, mod_)]
+                  } else {
+                    []
+                  }
+                None => []
+              }
+            }
+            None => {
+              // Function not found in JIT, fall back to interpreter
+              let runtime_args = args.map(wast_value_to_runtime)
+              @executor.call_exported_func(
+                ctx.store,
+                instance,
+                func_name,
+                runtime_args,
+              ) catch {
+                e => raise RuntimeError(e.to_string())
+              }
+            }
+          }
+        }
+        None => {
+          // No JIT available, use interpreter
+          let runtime_args = args.map(wast_value_to_runtime)
+          @executor.call_exported_func(
+            ctx.store,
+            instance,
+            func_name,
+            runtime_args,
+          ) catch {
+            e => raise RuntimeError(e.to_string())
+          }
+        }
       }
     }
     Get(module_name, global_name) => {
@@ -561,6 +710,43 @@ fn invoke_action(
       [value]
     }
   }
+}
+
+///|
+/// Convert JIT result (Int64) to Value based on function's return type
+fn convert_jit_result(
+  v : Int64,
+  func_name : String,
+  mod_ : @types.Module,
+) -> @types.Value {
+  // Find the function's return type from exports
+  for exp in mod_.exports {
+    if exp.name == func_name && exp.desc is Func(func_idx) {
+      // Get function type
+      let num_imports = count_func_imports(mod_.imports)
+      if func_idx >= num_imports {
+        let local_idx = func_idx - num_imports
+        if local_idx < mod_.funcs.length() {
+          let type_idx = mod_.funcs[local_idx]
+          if type_idx < mod_.types.length() {
+            let func_type = mod_.types[type_idx]
+            if func_type.results.length() > 0 {
+              return match func_type.results[0] {
+                I32 => @types.Value::I32(v.to_int())
+                I64 => @types.Value::I64(v)
+                F32 =>
+                  @types.Value::F32(Float::reinterpret_from_int(v.to_int()))
+                F64 => @types.Value::F64(v.reinterpret_as_double())
+                _ => @types.Value::I32(v.to_int())
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  // Default to I32
+  @types.Value::I32(v.to_int())
 }
 
 ///|

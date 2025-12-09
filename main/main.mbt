@@ -76,7 +76,12 @@ fn main {
       ),
       "test": @clap.SubCommand::new(
         help="Run WebAssembly test script (.wast format)",
-        args={ "file": @clap.Arg::positional(help="Path to WAST file") },
+        args={
+          "file": @clap.Arg::positional(help="Path to WAST file"),
+          "no-jit": @clap.Arg::flag(
+            help="Disable JIT compilation (use interpreter)",
+          ),
+        },
       ),
       "disasm": @clap.SubCommand::new(
         help="Disassemble WASM file to text format",
@@ -85,10 +90,6 @@ fn main {
       "wat": @clap.SubCommand::new(help="Parse WAT file and display as text", args={
         "file": @clap.Arg::positional(help="Path to WAT file"),
       }),
-      "wast": @clap.SubCommand::new(
-        help="Run WebAssembly test script (.wast format)",
-        args={ "file": @clap.Arg::positional(help="Path to WAST file") },
-      ),
       "explore": @clap.SubCommand::new(
         help="Explore WASM compilation process (WASM -> IR -> VCode)",
         args={
@@ -266,7 +267,11 @@ fn main {
             "test" => {
               let positional = sub.positional_args
               if positional.length() > 0 {
-                run_testsuite(positional[0])
+                let use_jit = match sub.flags.get("no-jit") {
+                  Some(true) => false
+                  _ => true
+                }
+                run_testsuite(positional[0], use_jit)
               } else {
                 println("Error: missing file argument")
               }
@@ -283,14 +288,6 @@ fn main {
               let positional = sub.positional_args
               if positional.length() > 0 {
                 run_wat(positional[0])
-              } else {
-                println("Error: missing file argument")
-              }
-            }
-            "wast" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                run_wast(positional[0])
               } else {
                 println("Error: missing file argument")
               }

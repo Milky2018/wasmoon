@@ -12,9 +12,43 @@ pub fn alloc_memory(Int64) -> Int64
 
 pub fn free_memory(Int64) -> Unit
 
+pub fn get_args_get_ptr() -> Int64
+
+pub fn get_args_sizes_get_ptr() -> Int64
+
+pub fn get_clock_time_get_ptr() -> Int64
+
+pub fn get_environ_get_ptr() -> Int64
+
+pub fn get_environ_sizes_get_ptr() -> Int64
+
+pub fn get_fd_close_ptr() -> Int64
+
+pub fn get_fd_fdstat_get_ptr() -> Int64
+
+pub fn get_fd_prestat_get_ptr() -> Int64
+
+pub fn get_fd_read_ptr() -> Int64
+
 pub fn get_fd_write_ptr() -> Int64
 
 pub fn get_proc_exit_ptr() -> Int64
+
+pub fn get_random_get_ptr() -> Int64
+
+pub fn get_spectest_print_f32_ptr() -> Int64
+
+pub fn get_spectest_print_f64_f64_ptr() -> Int64
+
+pub fn get_spectest_print_f64_ptr() -> Int64
+
+pub fn get_spectest_print_i32_f32_ptr() -> Int64
+
+pub fn get_spectest_print_i32_ptr() -> Int64
+
+pub fn get_spectest_print_i64_ptr() -> Int64
+
+pub fn get_spectest_print_ptr() -> Int64
 
 pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 

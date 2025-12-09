@@ -12,11 +12,13 @@ extern "C" {
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifdef _WIN32
 #include <windows.h>
 #else
 #include <sys/mman.h>
+#include <sys/time.h>
 #include <unistd.h>
 #ifdef __APPLE__
 #include <libkern/OSCacheControl.h>
@@ -34,6 +36,11 @@ typedef struct {
     int func_count;         // Number of entries in func_table
     uint8_t *memory_base;   // WebAssembly linear memory base
     size_t memory_size;     // Memory size in bytes
+    // WASI args/env storage
+    char **args;            // Command line arguments
+    int argc;               // Number of arguments
+    char **envp;            // Environment variables (NAME=VALUE format)
+    int envc;               // Number of environment variables
 } jit_context_t;
 
 // Global JIT context (set before calling JIT functions)
@@ -62,6 +69,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
     ctx->func_count = func_count;
     ctx->memory_base = NULL;
     ctx->memory_size = 0;
+    ctx->args = NULL;
+    ctx->argc = 0;
+    ctx->envp = NULL;
+    ctx->envc = 0;
 
     return (int64_t)ctx;
 }
@@ -157,6 +168,251 @@ static int64_t wasi_proc_exit_impl(int64_t func_table, int64_t mem_base, int64_t
     return 0; // Never reached
 }
 
+// fd_read trampoline: (func_table, mem_base, fd, iovs, iovs_len, nread_ptr) -> errno
+// Only supports stdin (fd=0)
+static int64_t wasi_fd_read_impl(int64_t func_table, int64_t mem_base, int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nread_ptr) {
+    (void)func_table;
+    (void)mem_base;
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+    int32_t total_read = 0;
+
+    // Only handle stdin (0)
+    if (fd != 0) {
+        return 8; // ERRNO_BADF
+    }
+
+    for (int64_t i = 0; i < iovs_len; i++) {
+        int32_t iov_offset = (int32_t)(iovs + i * 8);
+        int32_t buf_ptr = *(int32_t *)(mem + iov_offset);
+        int32_t buf_len = *(int32_t *)(mem + iov_offset + 4);
+
+        if (buf_len > 0) {
+            size_t bytes_read = fread(mem + buf_ptr, 1, buf_len, stdin);
+            total_read += (int32_t)bytes_read;
+            if (bytes_read < (size_t)buf_len) {
+                break; // EOF or error
+            }
+        }
+    }
+
+    // Write the number of bytes read
+    if (nread_ptr > 0) {
+        *(int32_t *)(mem + nread_ptr) = total_read;
+    }
+
+    return 0; // Success
+}
+
+// args_sizes_get trampoline: (func_table, mem_base, argc_ptr, argv_buf_size_ptr) -> errno
+static int64_t wasi_args_sizes_get_impl(int64_t func_table, int64_t mem_base, int64_t argc_ptr, int64_t argv_buf_size_ptr) {
+    (void)func_table;
+    (void)mem_base;
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+    int argc = g_jit_context->argc;
+    char **args = g_jit_context->args;
+
+    // Calculate total buffer size
+    size_t buf_size = 0;
+    for (int i = 0; i < argc; i++) {
+        buf_size += strlen(args[i]) + 1; // +1 for null terminator
+    }
+
+    *(int32_t *)(mem + argc_ptr) = argc;
+    *(int32_t *)(mem + argv_buf_size_ptr) = (int32_t)buf_size;
+
+    return 0; // Success
+}
+
+// args_get trampoline: (func_table, mem_base, argv_ptr, argv_buf_ptr) -> errno
+static int64_t wasi_args_get_impl(int64_t func_table, int64_t mem_base, int64_t argv_ptr, int64_t argv_buf_ptr) {
+    (void)func_table;
+    (void)mem_base;
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+    int argc = g_jit_context->argc;
+    char **args = g_jit_context->args;
+
+    int32_t buf_offset = (int32_t)argv_buf_ptr;
+    for (int i = 0; i < argc; i++) {
+        // Store pointer to string in argv array
+        *(int32_t *)(mem + argv_ptr + i * 4) = buf_offset;
+        // Copy string to buffer
+        size_t len = strlen(args[i]) + 1;
+        memcpy(mem + buf_offset, args[i], len);
+        buf_offset += (int32_t)len;
+    }
+
+    return 0; // Success
+}
+
+// environ_sizes_get trampoline: (func_table, mem_base, environc_ptr, environ_buf_size_ptr) -> errno
+static int64_t wasi_environ_sizes_get_impl(int64_t func_table, int64_t mem_base, int64_t environc_ptr, int64_t environ_buf_size_ptr) {
+    (void)func_table;
+    (void)mem_base;
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+    int envc = g_jit_context->envc;
+    char **envp = g_jit_context->envp;
+
+    // Calculate total buffer size
+    size_t buf_size = 0;
+    for (int i = 0; i < envc; i++) {
+        buf_size += strlen(envp[i]) + 1; // +1 for null terminator
+    }
+
+    *(int32_t *)(mem + environc_ptr) = envc;
+    *(int32_t *)(mem + environ_buf_size_ptr) = (int32_t)buf_size;
+
+    return 0; // Success
+}
+
+// environ_get trampoline: (func_table, mem_base, environ_ptr, environ_buf_ptr) -> errno
+static int64_t wasi_environ_get_impl(int64_t func_table, int64_t mem_base, int64_t environ_ptr, int64_t environ_buf_ptr) {
+    (void)func_table;
+    (void)mem_base;
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+    int envc = g_jit_context->envc;
+    char **envp = g_jit_context->envp;
+
+    int32_t buf_offset = (int32_t)environ_buf_ptr;
+    for (int i = 0; i < envc; i++) {
+        // Store pointer to string in environ array
+        *(int32_t *)(mem + environ_ptr + i * 4) = buf_offset;
+        // Copy string to buffer
+        size_t len = strlen(envp[i]) + 1;
+        memcpy(mem + buf_offset, envp[i], len);
+        buf_offset += (int32_t)len;
+    }
+
+    return 0; // Success
+}
+
+// clock_time_get trampoline: (func_table, mem_base, clock_id, precision, time_ptr) -> errno
+static int64_t wasi_clock_time_get_impl(int64_t func_table, int64_t mem_base, int64_t clock_id, int64_t precision, int64_t time_ptr) {
+    (void)func_table;
+    (void)mem_base;
+    (void)precision;
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+    int64_t time_ns = 0;
+
+    // clock_id: 0 = realtime, 1 = monotonic
+    if (clock_id == 0 || clock_id == 1) {
+#ifdef _WIN32
+        FILETIME ft;
+        GetSystemTimeAsFileTime(&ft);
+        uint64_t time_100ns = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+        // Convert from 100ns intervals since 1601 to ns since 1970
+        time_ns = (int64_t)((time_100ns - 116444736000000000ULL) * 100);
+#else
+        struct timespec ts;
+        clock_gettime(clock_id == 0 ? CLOCK_REALTIME : CLOCK_MONOTONIC, &ts);
+        time_ns = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+    } else {
+        return 28; // ERRNO_INVAL
+    }
+
+    *(int64_t *)(mem + time_ptr) = time_ns;
+    return 0; // Success
+}
+
+// random_get trampoline: (func_table, mem_base, buf_ptr, buf_len) -> errno
+static int64_t wasi_random_get_impl(int64_t func_table, int64_t mem_base, int64_t buf_ptr, int64_t buf_len) {
+    (void)func_table;
+    (void)mem_base;
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+
+    // Simple PRNG - not cryptographically secure
+    for (int64_t i = 0; i < buf_len; i++) {
+        mem[buf_ptr + i] = (uint8_t)(rand() & 0xFF);
+    }
+
+    return 0; // Success
+}
+
+// fd_close trampoline: (func_table, mem_base, fd) -> errno
+// Stub - just returns success for stdio fds
+static int64_t wasi_fd_close_impl(int64_t func_table, int64_t mem_base, int64_t fd) {
+    (void)func_table;
+    (void)mem_base;
+
+    // For stdio fds (0, 1, 2), just return success
+    if (fd >= 0 && fd <= 2) {
+        return 0; // Success
+    }
+    return 8; // ERRNO_BADF
+}
+
+// fd_fdstat_get trampoline: (func_table, mem_base, fd, fdstat_ptr) -> errno
+static int64_t wasi_fd_fdstat_get_impl(int64_t func_table, int64_t mem_base, int64_t fd, int64_t fdstat_ptr) {
+    (void)func_table;
+    (void)mem_base;
+
+    if (!g_jit_context || !g_jit_context->memory_base) {
+        return 8; // ERRNO_BADF
+    }
+
+    uint8_t *mem = g_jit_context->memory_base;
+
+    // For stdio fds (0, 1, 2), return basic fdstat
+    if (fd >= 0 && fd <= 2) {
+        // fdstat structure:
+        // u8 fs_filetype
+        // u16 fs_flags
+        // u64 fs_rights_base
+        // u64 fs_rights_inheriting
+        mem[fdstat_ptr] = 2; // FILETYPE_CHARACTER_DEVICE
+        *(uint16_t *)(mem + fdstat_ptr + 2) = 0; // fs_flags
+        *(uint64_t *)(mem + fdstat_ptr + 8) = 0xFFFFFFFFFFFFFFFFULL; // all rights
+        *(uint64_t *)(mem + fdstat_ptr + 16) = 0xFFFFFFFFFFFFFFFFULL; // all rights
+        return 0; // Success
+    }
+    return 8; // ERRNO_BADF
+}
+
+// fd_prestat_get trampoline: (func_table, mem_base, fd, prestat_ptr) -> errno
+// Returns BADF for now (no preopened directories in JIT mode)
+static int64_t wasi_fd_prestat_get_impl(int64_t func_table, int64_t mem_base, int64_t fd, int64_t prestat_ptr) {
+    (void)func_table;
+    (void)mem_base;
+    (void)fd;
+    (void)prestat_ptr;
+    return 8; // ERRNO_BADF - no preopened directories
+}
+
 // Get fd_write trampoline pointer
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) {
     return (int64_t)wasi_fd_write_impl;
@@ -165,6 +421,138 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) {
 // Get proc_exit trampoline pointer
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) {
     return (int64_t)wasi_proc_exit_impl;
+}
+
+// Get fd_read trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_ptr(void) {
+    return (int64_t)wasi_fd_read_impl;
+}
+
+// Get args_sizes_get trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_ptr(void) {
+    return (int64_t)wasi_args_sizes_get_impl;
+}
+
+// Get args_get trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_ptr(void) {
+    return (int64_t)wasi_args_get_impl;
+}
+
+// Get environ_sizes_get trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_ptr(void) {
+    return (int64_t)wasi_environ_sizes_get_impl;
+}
+
+// Get environ_get trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_ptr(void) {
+    return (int64_t)wasi_environ_get_impl;
+}
+
+// Get clock_time_get trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_ptr(void) {
+    return (int64_t)wasi_clock_time_get_impl;
+}
+
+// Get random_get trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_ptr(void) {
+    return (int64_t)wasi_random_get_impl;
+}
+
+// Get fd_close trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_ptr(void) {
+    return (int64_t)wasi_fd_close_impl;
+}
+
+// Get fd_fdstat_get trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_ptr(void) {
+    return (int64_t)wasi_fd_fdstat_get_impl;
+}
+
+// Get fd_prestat_get trampoline pointer
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_ptr(void) {
+    return (int64_t)wasi_fd_prestat_get_impl;
+}
+
+// ============ Spectest Trampolines ============
+// These are no-op functions used by the WebAssembly test suite
+
+// print: () -> ()
+static void spectest_print_impl(int64_t func_table, int64_t mem_base) {
+    (void)func_table;
+    (void)mem_base;
+}
+
+// print_i32: (i32) -> ()
+static void spectest_print_i32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+    (void)func_table;
+    (void)mem_base;
+    (void)arg0;
+}
+
+// print_i64: (i64) -> ()
+static void spectest_print_i64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+    (void)func_table;
+    (void)mem_base;
+    (void)arg0;
+}
+
+// print_f32: (f32) -> ()
+static void spectest_print_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+    (void)func_table;
+    (void)mem_base;
+    (void)arg0;
+}
+
+// print_f64: (f64) -> ()
+static void spectest_print_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+    (void)func_table;
+    (void)mem_base;
+    (void)arg0;
+}
+
+// print_i32_f32: (i32, f32) -> ()
+static void spectest_print_i32_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
+    (void)func_table;
+    (void)mem_base;
+    (void)arg0;
+    (void)arg1;
+}
+
+// print_f64_f64: (f64, f64) -> ()
+static void spectest_print_f64_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
+    (void)func_table;
+    (void)mem_base;
+    (void)arg0;
+    (void)arg1;
+}
+
+// Get spectest trampoline pointers
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_ptr(void) {
+    return (int64_t)spectest_print_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i32_ptr(void) {
+    return (int64_t)spectest_print_i32_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i64_ptr(void) {
+    return (int64_t)spectest_print_i64_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f32_ptr(void) {
+    return (int64_t)spectest_print_f32_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_ptr(void) {
+    return (int64_t)spectest_print_f64_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i32_f32_ptr(void) {
+    return (int64_t)spectest_print_i32_f32_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_f64_ptr(void) {
+    return (int64_t)spectest_print_f64_f64_impl;
 }
 
 // ============ Linear Memory Allocation ============

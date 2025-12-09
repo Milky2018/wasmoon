@@ -21,7 +21,7 @@ fn run_wat(wat_path : String) -> Unit {
 
 ///|
 /// Run testsuite with a WAST file
-fn run_testsuite(wast_path : String) -> Unit {
+fn run_testsuite(wast_path : String, use_jit : Bool) -> Unit {
   // Delegate to run_wast - testsuite now uses WAST format
-  run_wast(wast_path)
+  run_wast(wast_path, use_jit)
 }

@@ -164,8 +164,29 @@ fn get_import_trampoline(module_name : String, field_name : String) -> Int64 {
   if module_name == "wasi_snapshot_preview1" {
     match field_name {
       "fd_write" => get_fd_write_ptr()
+      "fd_read" => get_fd_read_ptr()
+      "fd_close" => get_fd_close_ptr()
+      "fd_fdstat_get" => get_fd_fdstat_get_ptr()
+      "fd_prestat_get" => get_fd_prestat_get_ptr()
       "proc_exit" => get_proc_exit_ptr()
+      "args_sizes_get" => get_args_sizes_get_ptr()
+      "args_get" => get_args_get_ptr()
+      "environ_sizes_get" => get_environ_sizes_get_ptr()
+      "environ_get" => get_environ_get_ptr()
+      "clock_time_get" => get_clock_time_get_ptr()
+      "random_get" => get_random_get_ptr()
       _ => 0L // Unknown WASI function
+    }
+  } else if module_name == "spectest" {
+    match field_name {
+      "print" => get_spectest_print_ptr()
+      "print_i32" => get_spectest_print_i32_ptr()
+      "print_i64" => get_spectest_print_i64_ptr()
+      "print_f32" => get_spectest_print_f32_ptr()
+      "print_f64" => get_spectest_print_f64_ptr()
+      "print_i32_f32" => get_spectest_print_i32_f32_ptr()
+      "print_f64_f64" => get_spectest_print_f64_f64_ptr()
+      _ => 0L // Unknown spectest function
     }
   } else {
     0L // Unknown module
