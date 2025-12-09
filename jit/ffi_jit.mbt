@@ -69,6 +69,76 @@ extern "c" fn c_jit_get_fd_write_ptr() -> Int64 = "wasmoon_jit_get_fd_write_ptr"
 /// Get proc_exit trampoline pointer
 extern "c" fn c_jit_get_proc_exit_ptr() -> Int64 = "wasmoon_jit_get_proc_exit_ptr"
 
+///|
+/// Get fd_read trampoline pointer
+extern "c" fn c_jit_get_fd_read_ptr() -> Int64 = "wasmoon_jit_get_fd_read_ptr"
+
+///|
+/// Get args_sizes_get trampoline pointer
+extern "c" fn c_jit_get_args_sizes_get_ptr() -> Int64 = "wasmoon_jit_get_args_sizes_get_ptr"
+
+///|
+/// Get args_get trampoline pointer
+extern "c" fn c_jit_get_args_get_ptr() -> Int64 = "wasmoon_jit_get_args_get_ptr"
+
+///|
+/// Get environ_sizes_get trampoline pointer
+extern "c" fn c_jit_get_environ_sizes_get_ptr() -> Int64 = "wasmoon_jit_get_environ_sizes_get_ptr"
+
+///|
+/// Get environ_get trampoline pointer
+extern "c" fn c_jit_get_environ_get_ptr() -> Int64 = "wasmoon_jit_get_environ_get_ptr"
+
+///|
+/// Get clock_time_get trampoline pointer
+extern "c" fn c_jit_get_clock_time_get_ptr() -> Int64 = "wasmoon_jit_get_clock_time_get_ptr"
+
+///|
+/// Get random_get trampoline pointer
+extern "c" fn c_jit_get_random_get_ptr() -> Int64 = "wasmoon_jit_get_random_get_ptr"
+
+///|
+/// Get fd_close trampoline pointer
+extern "c" fn c_jit_get_fd_close_ptr() -> Int64 = "wasmoon_jit_get_fd_close_ptr"
+
+///|
+/// Get fd_fdstat_get trampoline pointer
+extern "c" fn c_jit_get_fd_fdstat_get_ptr() -> Int64 = "wasmoon_jit_get_fd_fdstat_get_ptr"
+
+///|
+/// Get fd_prestat_get trampoline pointer
+extern "c" fn c_jit_get_fd_prestat_get_ptr() -> Int64 = "wasmoon_jit_get_fd_prestat_get_ptr"
+
+// ============ Spectest Trampolines ============
+
+///|
+/// Get spectest print trampoline pointer
+extern "c" fn c_jit_get_spectest_print_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_ptr"
+
+///|
+/// Get spectest print_i32 trampoline pointer
+extern "c" fn c_jit_get_spectest_print_i32_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_i32_ptr"
+
+///|
+/// Get spectest print_i64 trampoline pointer
+extern "c" fn c_jit_get_spectest_print_i64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_i64_ptr"
+
+///|
+/// Get spectest print_f32 trampoline pointer
+extern "c" fn c_jit_get_spectest_print_f32_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f32_ptr"
+
+///|
+/// Get spectest print_f64 trampoline pointer
+extern "c" fn c_jit_get_spectest_print_f64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f64_ptr"
+
+///|
+/// Get spectest print_i32_f32 trampoline pointer
+extern "c" fn c_jit_get_spectest_print_i32_f32_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_i32_f32_ptr"
+
+///|
+/// Get spectest print_f64_f64 trampoline pointer
+extern "c" fn c_jit_get_spectest_print_f64_f64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f64_f64_ptr"
+
 // ============ Context-aware JIT function calls ============
 
 ///|
@@ -319,6 +389,108 @@ pub fn get_fd_write_ptr() -> Int64 {
 /// Get proc_exit trampoline pointer
 pub fn get_proc_exit_ptr() -> Int64 {
   c_jit_get_proc_exit_ptr()
+}
+
+///|
+/// Get fd_read trampoline pointer
+pub fn get_fd_read_ptr() -> Int64 {
+  c_jit_get_fd_read_ptr()
+}
+
+///|
+/// Get args_sizes_get trampoline pointer
+pub fn get_args_sizes_get_ptr() -> Int64 {
+  c_jit_get_args_sizes_get_ptr()
+}
+
+///|
+/// Get args_get trampoline pointer
+pub fn get_args_get_ptr() -> Int64 {
+  c_jit_get_args_get_ptr()
+}
+
+///|
+/// Get environ_sizes_get trampoline pointer
+pub fn get_environ_sizes_get_ptr() -> Int64 {
+  c_jit_get_environ_sizes_get_ptr()
+}
+
+///|
+/// Get environ_get trampoline pointer
+pub fn get_environ_get_ptr() -> Int64 {
+  c_jit_get_environ_get_ptr()
+}
+
+///|
+/// Get clock_time_get trampoline pointer
+pub fn get_clock_time_get_ptr() -> Int64 {
+  c_jit_get_clock_time_get_ptr()
+}
+
+///|
+/// Get random_get trampoline pointer
+pub fn get_random_get_ptr() -> Int64 {
+  c_jit_get_random_get_ptr()
+}
+
+///|
+/// Get fd_close trampoline pointer
+pub fn get_fd_close_ptr() -> Int64 {
+  c_jit_get_fd_close_ptr()
+}
+
+///|
+/// Get fd_fdstat_get trampoline pointer
+pub fn get_fd_fdstat_get_ptr() -> Int64 {
+  c_jit_get_fd_fdstat_get_ptr()
+}
+
+///|
+/// Get fd_prestat_get trampoline pointer
+pub fn get_fd_prestat_get_ptr() -> Int64 {
+  c_jit_get_fd_prestat_get_ptr()
+}
+
+///|
+/// Get spectest print trampoline pointer
+pub fn get_spectest_print_ptr() -> Int64 {
+  c_jit_get_spectest_print_ptr()
+}
+
+///|
+/// Get spectest print_i32 trampoline pointer
+pub fn get_spectest_print_i32_ptr() -> Int64 {
+  c_jit_get_spectest_print_i32_ptr()
+}
+
+///|
+/// Get spectest print_i64 trampoline pointer
+pub fn get_spectest_print_i64_ptr() -> Int64 {
+  c_jit_get_spectest_print_i64_ptr()
+}
+
+///|
+/// Get spectest print_f32 trampoline pointer
+pub fn get_spectest_print_f32_ptr() -> Int64 {
+  c_jit_get_spectest_print_f32_ptr()
+}
+
+///|
+/// Get spectest print_f64 trampoline pointer
+pub fn get_spectest_print_f64_ptr() -> Int64 {
+  c_jit_get_spectest_print_f64_ptr()
+}
+
+///|
+/// Get spectest print_i32_f32 trampoline pointer
+pub fn get_spectest_print_i32_f32_ptr() -> Int64 {
+  c_jit_get_spectest_print_i32_f32_ptr()
+}
+
+///|
+/// Get spectest print_f64_f64 trampoline pointer
+pub fn get_spectest_print_f64_f64_ptr() -> Int64 {
+  c_jit_get_spectest_print_f64_f64_ptr()
 }
 
 // ============ Executable Code Block ============

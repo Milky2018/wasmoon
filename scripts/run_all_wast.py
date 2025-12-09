@@ -1,20 +1,28 @@
 #!/usr/bin/env python3
-"""Run all .wast tests and report results."""
+"""Run all .wast tests and report results for both JIT and interpreter modes."""
 
 import subprocess
 from pathlib import Path
 
 
-def run_test(wast_file: Path) -> tuple[int | None, int | None, str | None]:
+def run_test(wast_file: Path, use_jit: bool) -> tuple[int | None, int | None, str | None]:
     """Run a single wast test and return (passed, failed, error)."""
+    cmd = ["./wasmoon", "test", str(wast_file)]
+    if not use_jit:
+        cmd.append("--no-jit")
+
     try:
         result = subprocess.run(
-            ["./wasmoon", "wast", str(wast_file)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=60,
         )
         output = result.stdout + result.stderr
+
+        # Check for crash (non-zero exit code without proper output)
+        if result.returncode != 0 and "Passed:" not in output:
+            return None, None, f"Crash (exit {result.returncode})"
 
         if "Error" in output and "Passed:" not in output:
             # Parse error
@@ -38,11 +46,12 @@ def run_test(wast_file: Path) -> tuple[int | None, int | None, str | None]:
         return None, None, str(e)
 
 
-def main() -> None:
-    test_dir = Path("testsuite/data")
-    wast_files = sorted(test_dir.glob("*.wast"))
-
-    print(f"Running {len(wast_files)} .wast tests...\n")
+def run_tests_for_mode(wast_files: list[Path], use_jit: bool) -> dict:
+    """Run all tests for a specific mode and return results."""
+    mode_name = "JIT" if use_jit else "Interpreter"
+    print(f"\n{'='*60}")
+    print(f"Running {len(wast_files)} tests with {mode_name} mode...")
+    print("="*60 + "\n")
 
     total_passed = 0
     total_failed = 0
@@ -52,10 +61,10 @@ def main() -> None:
 
     for wast_file in wast_files:
         name = wast_file.name
-        passed, failed, error = run_test(wast_file)
+        passed, failed, error = run_test(wast_file, use_jit)
 
         if error or passed is None or failed is None:
-            status = f"ERROR: {error[:60] if error else 'Unknown error'}"
+            status = f"ERROR: {error[:50] if error else 'Unknown error'}"
             has_errors.append(name)
         elif failed == 0:
             status = f"[PASS] ({passed} tests)"
@@ -69,29 +78,74 @@ def main() -> None:
 
         print(f"{name:40} {status}")
 
+    return {
+        "mode": mode_name,
+        "total_passed": total_passed,
+        "total_failed": total_failed,
+        "fully_passed": fully_passed,
+        "has_failures": has_failures,
+        "has_errors": has_errors,
+        "total_files": len(wast_files),
+    }
+
+
+def print_summary(results: dict) -> None:
+    """Print summary for a mode."""
+    mode = results["mode"]
+    print(f"\n{mode} Mode Summary:")
+    print("-" * 40)
+    print(f"  Files fully passed:  {len(results['fully_passed'])}/{results['total_files']}")
+    print(f"  Files with failures: {len(results['has_failures'])}")
+    print(f"  Files with errors:   {len(results['has_errors'])}")
+    print(f"  Total tests passed:  {results['total_passed']}")
+    print(f"  Total tests failed:  {results['total_failed']}")
+
+    if results['has_errors']:
+        print(f"\n  [ERROR] ({len(results['has_errors'])}):")
+        for name in results['has_errors'][:10]:
+            print(f"    - {name}")
+        if len(results['has_errors']) > 10:
+            print(f"    ... and {len(results['has_errors']) - 10} more")
+
+
+def main() -> None:
+    test_dir = Path("testsuite/data")
+    wast_files = sorted(test_dir.glob("*.wast"))
+
+    print(f"Found {len(wast_files)} .wast test files")
+
+    # Run tests with interpreter (--no-jit)
+    interp_results = run_tests_for_mode(wast_files, use_jit=False)
+
+    # Run tests with JIT
+    jit_results = run_tests_for_mode(wast_files, use_jit=True)
+
+    # Print combined summary
     print("\n" + "=" * 60)
-    print("SUMMARY")
+    print("COMBINED SUMMARY")
     print("=" * 60)
-    print(f"Files fully passed:  {len(fully_passed)}/{len(wast_files)}")
-    print(f"Files with failures: {len(has_failures)}")
-    print(f"Files with errors:   {len(has_errors)}")
-    print(f"\nTotal tests passed:  {total_passed}")
-    print(f"Total tests failed:  {total_failed}")
 
-    if fully_passed:
-        print(f"\n[PASS] Fully passed ({len(fully_passed)}):")
-        for name in fully_passed:
-            print(f"  - {name}")
+    print_summary(interp_results)
+    print_summary(jit_results)
 
-    if has_failures:
-        print(f"\n[FAIL] Has failures ({len(has_failures)}):")
-        for name, _, f in sorted(has_failures, key=lambda x: -x[2]):
-            print(f"  - {name}: {f} failures")
+    # Compare results
+    print("\n" + "-" * 40)
+    print("Comparison:")
+    interp_ok = len(interp_results['fully_passed'])
+    jit_ok = len(jit_results['fully_passed'])
+    print(f"  Interpreter: {interp_ok}/{interp_results['total_files']} files passed")
+    print(f"  JIT:         {jit_ok}/{jit_results['total_files']} files passed")
 
-    if has_errors:
-        print(f"\n[ERROR] Errors ({len(has_errors)}):")
-        for name in has_errors:
-            print(f"  - {name}")
+    # Show files that work with interpreter but fail with JIT
+    interp_set = set(interp_results['fully_passed'])
+    jit_set = set(jit_results['fully_passed'])
+    jit_regressions = interp_set - jit_set
+    if jit_regressions:
+        print(f"\n  JIT regressions (pass with interpreter, fail with JIT): {len(jit_regressions)}")
+        for name in sorted(jit_regressions)[:10]:
+            print(f"    - {name}")
+        if len(jit_regressions) > 10:
+            print(f"    ... and {len(jit_regressions) - 10} more")
 
 
 if __name__ == "__main__":
