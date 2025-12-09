@@ -106,3 +106,15 @@ pub fn Table::copy_from(
     }
   }
 }
+
+///|
+/// Get element type for type checking
+pub fn Table::get_elem_type(self : Table) -> @types.ValueType {
+  self.elem_type
+}
+
+///|
+/// Get table limits (min, max) for type checking
+pub fn Table::get_limits(self : Table) -> (Int, Int?) {
+  (self.size, self.max)
+}

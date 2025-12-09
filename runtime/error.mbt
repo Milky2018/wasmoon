@@ -14,6 +14,7 @@ pub(all) suberror RuntimeError {
   Unreachable
   CallStackExhausted
   UnknownImport // Import not found during instantiation
+  LinkError // Import type mismatch during linking
 } derive(Show)
 
 ///|
@@ -95,6 +96,7 @@ pub fn RuntimeErrorContext::format(self : RuntimeErrorContext) -> String {
     Unreachable => "unreachable: execution reached unreachable instruction"
     CallStackExhausted => "call stack exhausted: too many nested function calls"
     UnknownImport => "unknown import: required import not provided"
+    LinkError => "incompatible import type"
   }
   result.write_string("runtime error: ")
   result.write_string(error_msg)

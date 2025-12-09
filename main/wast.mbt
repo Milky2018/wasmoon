@@ -83,21 +83,64 @@ fn WastContext::new() -> WastContext {
 ///|
 /// Create the spectest module with standard test functions
 fn create_spectest_module(store : @runtime.Store) -> @runtime.ModuleInstance {
-  // Allocate host functions
+  // Allocate host functions with correct types
   // print_i32: (i32) -> ()
-  let print_i32_addr = store.alloc_host_func(fn(_args) { [] })
+  let print_i32_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [],
+  }
+  let print_i32_addr = store.alloc_host_func(
+    fn(_args) { [] },
+    func_type=print_i32_type,
+  )
   // print_i64: (i64) -> ()
-  let print_i64_addr = store.alloc_host_func(fn(_args) { [] })
+  let print_i64_type : @types.FuncType = {
+    params: [@types.ValueType::I64],
+    results: [],
+  }
+  let print_i64_addr = store.alloc_host_func(
+    fn(_args) { [] },
+    func_type=print_i64_type,
+  )
   // print_f32: (f32) -> ()
-  let print_f32_addr = store.alloc_host_func(fn(_args) { [] })
+  let print_f32_type : @types.FuncType = {
+    params: [@types.ValueType::F32],
+    results: [],
+  }
+  let print_f32_addr = store.alloc_host_func(
+    fn(_args) { [] },
+    func_type=print_f32_type,
+  )
   // print_f64: (f64) -> ()
-  let print_f64_addr = store.alloc_host_func(fn(_args) { [] })
+  let print_f64_type : @types.FuncType = {
+    params: [@types.ValueType::F64],
+    results: [],
+  }
+  let print_f64_addr = store.alloc_host_func(
+    fn(_args) { [] },
+    func_type=print_f64_type,
+  )
   // print_i32_f32: (i32, f32) -> ()
-  let print_i32_f32_addr = store.alloc_host_func(fn(_args) { [] })
+  let print_i32_f32_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::F32],
+    results: [],
+  }
+  let print_i32_f32_addr = store.alloc_host_func(
+    fn(_args) { [] },
+    func_type=print_i32_f32_type,
+  )
   // print_f64_f64: (f64, f64) -> ()
-  let print_f64_f64_addr = store.alloc_host_func(fn(_args) { [] })
+  let print_f64_f64_type : @types.FuncType = {
+    params: [@types.ValueType::F64, @types.ValueType::F64],
+    results: [],
+  }
+  let print_f64_f64_addr = store.alloc_host_func(
+    fn(_args) { [] },
+    func_type=print_f64_f64_type,
+  )
   // print: () -> ()
-  let print_addr = store.alloc_host_func(fn(_args) { [] })
+  let print_type : @types.FuncType = { params: [], results: [] }
+  let print_addr = store.alloc_host_func(fn(_args) { [] }, func_type=print_type)
 
   // Allocate memory: (memory 1 2) - min 1 page, max 2 pages
   let memory = @runtime.Memory::new(1, Some(2))
@@ -328,6 +371,19 @@ fn run_wast_command(
           "line \{line}: assert_exhaustion: expected exhaustion",
         )
       }
+    AssertModuleTrap(source, msg) => {
+      // Try to instantiate - should trap during instantiation (e.g., start function)
+      // Unlike assert_unlinkable, this tests for runtime traps, not linking errors
+      let trapped = try_instantiate_source_traps(ctx, source)
+      if trapped {
+        result.passed = result.passed + 1
+      } else {
+        result.failed = result.failed + 1
+        result.failures.push(
+          "line \{line}: assert_trap (module): expected trap during instantiation (expected: \{msg})",
+        )
+      }
+    }
     AssertInvalid(source, msg) => {
       let valid = validate_module_source(source)
       if valid {
@@ -584,5 +640,40 @@ fn try_instantiate_source(
       is Ok(_)
     Quote(_) => false
     FailedToParse(_) => false // Module failed to parse, can't instantiate
+  }
+}
+
+///|
+/// Try to instantiate a module source and check if it traps.
+/// Returns true if instantiation traps (for assert_trap with module).
+fn try_instantiate_source_traps(
+  ctx : WastContext,
+  source : @wast.WastModuleSource,
+) -> Bool {
+  let imports = ctx.build_imports()
+  match source {
+    Binary(bytes) =>
+      (try? {
+        let mod_ = @parser.parse_module(bytes)
+        let _ = @executor.instantiate_module_with_imports(
+          ctx.store,
+          mod_,
+          imports,
+        )
+
+      })
+      is Err(_)
+    Inline(mod_) =>
+      (try? {
+        let _ = @executor.instantiate_module_with_imports(
+          ctx.store,
+          mod_,
+          imports,
+        )
+
+      })
+      is Err(_)
+    Quote(_) => false // Quoted source - can't test
+    FailedToParse(_) => false // Module failed to parse, doesn't count as trap
   }
 }

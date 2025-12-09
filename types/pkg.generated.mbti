@@ -362,6 +362,8 @@ pub(all) enum ValueType {
   ExternRef
   RefFunc
   RefExtern
+  RefFuncTyped(Int)
+  RefNullFuncTyped(Int)
 }
 pub impl Eq for ValueType
 pub impl Show for ValueType

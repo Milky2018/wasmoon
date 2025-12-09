@@ -1596,14 +1596,29 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
             @types.ValueType::RefExtern
           }
         }
-        Id(_) => {
-          // Typed function reference like (ref $t) - treat as FuncRef for now
+        Id(name) => {
+          // Typed function reference like (ref $t)
+          let type_idx = match self.type_names.get(name) {
+            Some(idx) => idx
+            None => 0 // Default to 0 if not found (forward reference)
+          }
           self.advance()
           self.expect_rparen()
           if is_nullable {
-            @types.ValueType::FuncRef
+            @types.ValueType::RefNullFuncTyped(type_idx)
           } else {
-            @types.ValueType::RefFunc
+            @types.ValueType::RefFuncTyped(type_idx)
+          }
+        }
+        Number(s) => {
+          // Typed function reference with numeric index like (ref 0)
+          let type_idx = parse_int(s)
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            @types.ValueType::RefNullFuncTyped(type_idx)
+          } else {
+            @types.ValueType::RefFuncTyped(type_idx)
           }
         }
         _ => {
@@ -1950,7 +1965,15 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("global") =>
             match self.parse_global_def() {
               GlobalDef(global, export_names) => {
-                let global_idx = mod_.globals.length()
+                // Count existing global imports for correct global index
+                let mut num_global_imports = 0
+                for existing in mod_.imports {
+                  if existing.desc is @types.ImportDesc::Global(_) {
+                    num_global_imports += 1
+                  }
+                }
+                // Global index = number of imports + number of defined globals
+                let global_idx = num_global_imports + mod_.globals.length()
                 mod_.globals.push(global)
                 for name in export_names {
                   mod_.exports.push({

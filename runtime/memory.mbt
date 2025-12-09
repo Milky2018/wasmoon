@@ -485,3 +485,9 @@ pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
   }
   Bytes::from_array(arr)
 }
+
+///|
+/// Get memory limits (min, max) for type checking
+pub fn Memory::get_limits(self : Memory) -> (Int, Int?) {
+  (self.size, self.max)
+}

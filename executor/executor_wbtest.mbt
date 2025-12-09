@@ -1202,7 +1202,11 @@ test "host function: simple call" {
       _ => raise @runtime.TypeMismatch
     }
   }
-  let host_addr = store.alloc_host_func(host_fn)
+  let unary_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let host_addr = store.alloc_host_func(host_fn, func_type=unary_type)
 
   // Create a module that imports and calls the host function
   // func 0: imported host function (double)
@@ -1210,10 +1214,6 @@ test "host function: simple call" {
   let main_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), Call(0)], // call imported function at index 0
-  }
-  let unary_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
     types: [unary_type],
