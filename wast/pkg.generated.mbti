@@ -16,7 +16,7 @@ pub(all) suberror WastError {
   InvalidNumber(String)
   InvalidInstruction(String)
   ParseError(String)
-  WatError(@wat.WatError)
+  WatError(@wat.WatError, Int)
 }
 pub impl Show for WastError
 

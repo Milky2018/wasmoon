@@ -23,6 +23,8 @@ priv enum MemoryDefResult {
   MemoryDef(@types.MemoryType, Array[String])
   /// Inline import: the import definition
   MemoryImport(@types.Import, Array[String]) // import, optional export names
+  /// Memory with inline data: (memory_type, export_names, data_bytes)
+  MemoryWithData(@types.MemoryType, Array[String], Bytes)
 }
 
 ///|
@@ -1787,6 +1789,22 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   })
                 }
               }
+              MemoryWithData(mem, export_names, data_bytes) => {
+                let mem_idx = mod_.memories.length()
+                mod_.memories.push(mem)
+                for name in export_names {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Memory(mem_idx),
+                  })
+                }
+                // Add inline data segment at offset 0
+                mod_.datas.push({
+                  memory_idx: mem_idx,
+                  offset: [@types.Instruction::I32Const(0)],
+                  init: data_bytes,
+                })
+              }
             }
           Keyword("global") =>
             match self.parse_global_def() {
@@ -3303,6 +3321,33 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
             }
           }
         }
+      }
+      Keyword("data") => {
+        // Inline data syntax: (memory (data "..."))
+        // The memory size is automatically calculated from the data size
+        self.advance() // skip "data"
+        let init_bytes : Array[Byte] = []
+        while self.current is String_(_) {
+          if self.current is String_(s) {
+            for i in 0..<s.length() {
+              init_bytes.push(s.code_unit_at(i).to_byte())
+            }
+            self.advance()
+          }
+        }
+        self.expect_rparen() // close data
+        self.expect_rparen() // close memory
+        // Calculate minimum pages needed (64KB per page)
+        let page_size = 65536
+        let data_len = init_bytes.length()
+        let min_pages = (data_len + page_size - 1) / page_size
+        // Ensure at least 1 page if there's any data
+        let min = if data_len > 0 && min_pages == 0 { 1 } else { min_pages }
+        return MemoryDefResult::MemoryWithData(
+          { limits: { min, max: Some(min) } },
+          export_names,
+          Bytes::from_array(init_bytes),
+        )
       }
       _ => {
         self.lexer.pos = saved
