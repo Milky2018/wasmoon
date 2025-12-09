@@ -245,3 +245,53 @@ test "parse WAT: multiple inline exports on func" {
   inspect(mod.exports[1].name, content="b")
   inspect(mod.exports[2].name, content="c")
 }
+
+///|
+test "parse WAT: forward reference global export" {
+  // Export references a global defined later
+  let wat = "(module (export \"a\" (global $g)) (global $g i32 (i32.const 0)))"
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="a")
+  inspect(mod.exports[0].desc is @types.ExportDesc::Global(_), content="true")
+}
+
+///|
+test "parse WAT: forward reference global inline export" {
+  // Inline export with global name before definition
+  let wat = "(module (global $a (export \"a\") i32 (i32.const 0)))"
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="a")
+  inspect(mod.globals.length(), content="1")
+}
+
+///|
+test "parse WAT: forward reference func" {
+  // Export references a function defined later
+  let wat = "(module (export \"f\" (func $f)) (func $f))"
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="f")
+  inspect(mod.exports[0].desc is @types.ExportDesc::Func(_), content="true")
+}
+
+///|
+test "parse WAT: forward reference memory" {
+  // Export references a memory defined later
+  let wat = "(module (export \"m\" (memory $m)) (memory $m 1))"
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="m")
+  inspect(mod.exports[0].desc is @types.ExportDesc::Memory(_), content="true")
+}
+
+///|
+test "parse WAT: forward reference table" {
+  // Export references a table defined later
+  let wat = "(module (export \"t\" (table $t)) (table $t 1 funcref))"
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="t")
+  inspect(mod.exports[0].desc is @types.ExportDesc::Table(_), content="true")
+}

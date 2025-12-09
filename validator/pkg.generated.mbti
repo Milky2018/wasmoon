@@ -32,6 +32,8 @@ pub(all) suberror ValidationError {
   InvalidAlignment(String)
   ConstantExpressionRequired
   MutableGlobalInConstExpr
+  DuplicateExportName(String)
+  UnknownExport(String)
   WithContext(ValidationErrorContext)
 }
 pub impl Show for ValidationError

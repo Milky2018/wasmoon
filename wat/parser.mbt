@@ -1573,7 +1573,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   }
   let mod_ = @types.Module::new()
 
-  // First pass: collect function and type names (to support forward references)
+  // First pass: collect all names (to support forward references)
   // Save lexer state
   let saved_pos = self.lexer.pos
   let saved_line = self.lexer.line
@@ -1582,9 +1582,12 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   let saved_token_start_column = self.lexer.token_start_column
   let saved_current = self.current
 
-  // Scan for function and type definitions to collect names
+  // Scan for definitions to collect names
   let mut func_idx = 0
   let mut type_idx = 0
+  let mut global_idx = 0
+  let mut memory_idx = 0
+  let mut table_idx = 0
   while self.current != RParen && self.current != Eof {
     match self.current {
       LParen => {
@@ -1612,22 +1615,51 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
               String_(_) => self.advance()
               _ => ()
             }
-            // Check if it's a function import
+            // Check import kind
             if self.current == LParen {
               self.advance()
-              if self.current == Keyword("func") {
-                self.advance()
-                // Check for function name
-                if self.current is Id(name) {
-                  self.func_names.set(name, func_idx)
+              match self.current {
+                Keyword("func") => {
                   self.advance()
+                  // Check for function name
+                  if self.current is Id(name) {
+                    self.func_names.set(name, func_idx)
+                    self.advance()
+                  }
+                  func_idx = func_idx + 1
+                  self.skip_to_matching_rparen()
                 }
-                func_idx = func_idx + 1
-                // Skip rest of func definition (depth starts at 1 for this inner paren)
-                self.skip_to_matching_rparen()
-              } else {
-                // Not a func import, skip this inner expression
-                self.skip_to_matching_rparen()
+                Keyword("global") => {
+                  self.advance()
+                  // Check for global name
+                  if self.current is Id(name) {
+                    self.global_names.set(name, global_idx)
+                    self.advance()
+                  }
+                  global_idx = global_idx + 1
+                  self.skip_to_matching_rparen()
+                }
+                Keyword("memory") => {
+                  self.advance()
+                  // Check for memory name
+                  if self.current is Id(name) {
+                    self.memory_names.set(name, memory_idx)
+                    self.advance()
+                  }
+                  memory_idx = memory_idx + 1
+                  self.skip_to_matching_rparen()
+                }
+                Keyword("table") => {
+                  self.advance()
+                  // Check for table name
+                  if self.current is Id(name) {
+                    self.table_names.set(name, table_idx)
+                    self.advance()
+                  }
+                  table_idx = table_idx + 1
+                  self.skip_to_matching_rparen()
+                }
+                _ => self.skip_to_matching_rparen()
               }
             }
             // Skip to end of import (the outer rparen)
@@ -1641,6 +1673,36 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             }
             func_idx = func_idx + 1
             // Skip to end of func
+            self.skip_to_matching_rparen()
+          }
+          Keyword("global") => {
+            self.advance()
+            // Check for global name
+            if self.current is Id(name) {
+              self.global_names.set(name, global_idx)
+            }
+            global_idx = global_idx + 1
+            // Skip to end of global
+            self.skip_to_matching_rparen()
+          }
+          Keyword("memory") => {
+            self.advance()
+            // Check for memory name
+            if self.current is Id(name) {
+              self.memory_names.set(name, memory_idx)
+            }
+            memory_idx = memory_idx + 1
+            // Skip to end of memory
+            self.skip_to_matching_rparen()
+          }
+          Keyword("table") => {
+            self.advance()
+            // Check for table name
+            if self.current is Id(name) {
+              self.table_names.set(name, table_idx)
+            }
+            table_idx = table_idx + 1
+            // Skip to end of table
             self.skip_to_matching_rparen()
           }
           _ => self.skip_to_matching_rparen()
@@ -3267,15 +3329,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
 fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   self.advance() // skip "global"
   let export_names : Array[String] = []
-  let mut global_name : String? = None
 
-  // Optional name
-  match self.current {
-    Id(name) => {
-      global_name = Some(name)
-      self.advance()
-    }
-    _ => ()
+  // Optional name - skip it (already registered in first pass)
+  if self.current is Id(_) {
+    self.advance()
   }
 
   // Check for inline import: (global $x (import "mod" "name") i32)
@@ -3358,10 +3415,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         }
         self.expect_rparen() // close global
 
-        // Register global name
-        if global_name is Some(name) {
-          self.global_names.set(name, self.global_names.length())
-        }
+        // Note: global name is already registered in first pass, no need to set again
         let imp : @types.Import = {
           mod_name,
           name: import_name,
@@ -3381,10 +3435,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
     }
   }
 
-  // Register global name for regular global
-  if global_name is Some(name) {
-    self.global_names.set(name, self.global_names.length())
-  }
+  // Note: global name is already registered in first pass, no need to set again
 
   // Check for inline exports (can have multiple)
   while self.current == LParen {
@@ -3744,6 +3795,14 @@ fn Parser::parse_export_def(
       self.advance()
       let idx = match self.current {
         Number(_) => self.parse_u32()
+        Id(name) =>
+          match self.memory_names.get(name) {
+            Some(idx) => {
+              self.advance()
+              idx
+            }
+            None => raise UndefinedIdentifier("memory $\{name}", self.loc())
+          }
         _ => 0
       }
       @types.ExportDesc::Memory(idx)
@@ -3752,6 +3811,14 @@ fn Parser::parse_export_def(
       self.advance()
       let idx = match self.current {
         Number(_) => self.parse_u32()
+        Id(name) =>
+          match self.table_names.get(name) {
+            Some(idx) => {
+              self.advance()
+              idx
+            }
+            None => raise UndefinedIdentifier("table $\{name}", self.loc())
+          }
         _ => 0
       }
       @types.ExportDesc::Table(idx)

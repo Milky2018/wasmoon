@@ -21,6 +21,8 @@ pub(all) suberror ValidationError {
   InvalidAlignment(String) // Alignment must not be larger than natural
   ConstantExpressionRequired // Non-constant instruction in init expression
   MutableGlobalInConstExpr // Mutable global referenced in constant expression
+  DuplicateExportName(String) // Same export name used more than once
+  UnknownExport(String) // Export references unknown entity
   // Error with location context
   WithContext(ValidationErrorContext)
 } derive(Show)
@@ -62,6 +64,8 @@ pub fn ValidationErrorContext::from_error(
     InvalidAlignment(m) => "alignment must not be larger than natural: \{m}"
     ConstantExpressionRequired => "constant expression required"
     MutableGlobalInConstExpr => "constant expression required"
+    DuplicateExportName(name) => "duplicate export name: \{name}"
+    UnknownExport(m) => m
     WithContext(ctx) => ctx.error_msg
   }
   { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
@@ -411,6 +415,35 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     // Validate each init expression is a constant expression producing the element type
     for init in elem.init {
       validate_const_expr(ctx.globals, init, elem.type_, funcs=ctx.funcs)
+    }
+  }
+
+  // Validate exports
+  let export_names : Map[String, Unit] = {}
+  for exp in mod.exports {
+    // Check for duplicate export names
+    if export_names.contains(exp.name) {
+      raise DuplicateExportName(exp.name)
+    }
+    export_names.set(exp.name, ())
+    // Check that export references a valid entity
+    match exp.desc {
+      Func(idx) =>
+        if idx >= ctx.funcs.length() {
+          raise UnknownExport("unknown function \{idx}")
+        }
+      Global(idx) =>
+        if idx >= ctx.globals.length() {
+          raise UnknownExport("unknown global \{idx}")
+        }
+      Table(idx) =>
+        if idx >= ctx.tables.length() {
+          raise UnknownExport("unknown table \{idx}")
+        }
+      Memory(idx) =>
+        if idx >= ctx.mems.length() {
+          raise UnknownExport("unknown memory \{idx}")
+        }
     }
   }
 
