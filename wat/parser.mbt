@@ -2729,6 +2729,11 @@ fn Parser::parse_plain_instruction(
     }
     "return" => @types.Instruction::Return
     "call" => @types.Instruction::Call(self.parse_func_idx())
+    "call_ref" => {
+      // call_ref $type - calls a function reference with the given type
+      let type_idx = self.parse_type_idx()
+      @types.Instruction::CallRef(type_idx)
+    }
     "call_indirect" => {
       // call_indirect can have various forms:
       // (call_indirect $table (type $t) ...)
@@ -2840,6 +2845,8 @@ fn Parser::parse_plain_instruction(
     }
     "ref.is_null" => @types.Instruction::RefIsNull
     "ref.func" => @types.Instruction::RefFunc(self.parse_func_idx())
+    "ref.as_non_null" => @types.Instruction::RefAsNonNull
+    "br_on_null" => @types.Instruction::BrOnNull(self.parse_label_idx())
 
     // Variable
     "local.get" => @types.Instruction::LocalGet(self.parse_local_idx())

@@ -474,6 +474,10 @@ fn write_instruction_simple(
         buf.write_string(")")
       }
     }
+    CallRef(type_idx) => {
+      buf.write_string("call_ref ")
+      buf.write_string(type_idx.to_string())
+    }
 
     // Parametric instructions
     Drop => buf.write_string("drop")
@@ -603,6 +607,11 @@ fn write_instruction_simple(
     RefIsNull => buf.write_string("ref.is_null")
     RefFunc(idx) => {
       buf.write_string("ref.func ")
+      buf.write_string(idx.to_string())
+    }
+    RefAsNonNull => buf.write_string("ref.as_non_null")
+    BrOnNull(idx) => {
+      buf.write_string("br_on_null ")
       buf.write_string(idx.to_string())
     }
 

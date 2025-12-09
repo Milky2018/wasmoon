@@ -1427,6 +1427,24 @@ fn validate_instr(
       }
       stack.push(@types.ValueType::FuncRef)
     }
+    RefAsNonNull => {
+      // ref.as_non_null: pops nullable ref, pushes non-null ref
+      // In polymorphic context (after unreachable), any type is valid
+      let _ = stack.pop_any()
+      // Push a non-null reference - using FuncRef as placeholder
+      // The actual type depends on the input type
+      stack.push(@types.ValueType::RefFunc)
+    }
+    BrOnNull(label_idx) => {
+      // br_on_null: pops a ref, branches if null, otherwise continues with non-null ref
+      if label_idx >= ctx.labels.length() {
+        raise InvalidLabelIndex(label_idx)
+      }
+      // Pop the reference - in unreachable context this may be polymorphic
+      let _ = stack.pop_any()
+      // If not null, the non-null reference remains on stack
+      stack.push(@types.ValueType::RefFunc)
+    }
 
     // Control flow
     Nop => ()
@@ -1493,6 +1511,25 @@ fn validate_instr(
         let i = num_ci_params - 1 - offset
         stack.pop(func_type.params[i])
       }
+      for result in func_type.results {
+        stack.push(result)
+      }
+    }
+    CallRef(type_idx) => {
+      if type_idx >= ctx.types.length() {
+        raise InvalidTypeIndex(type_idx)
+      }
+      let func_type = ctx.types[type_idx]
+      // Pop the function reference (ref null $t)
+      // In unreachable context, this may be a polymorphic type
+      stack.pop(@types.ValueType::RefNullFuncTyped(type_idx))
+      // Pop parameters in reverse order
+      let num_params = func_type.params.length()
+      for offset in 0..<num_params {
+        let i = num_params - 1 - offset
+        stack.pop(func_type.params[i])
+      }
+      // Push results
       for result in func_type.results {
         stack.push(result)
       }

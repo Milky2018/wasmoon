@@ -113,6 +113,7 @@ pub(all) enum Instruction {
   Return
   Call(Int)
   CallIndirect(Int, Int)
+  CallRef(Int)
   Drop
   Select
   LocalGet(Int)
@@ -160,6 +161,8 @@ pub(all) enum Instruction {
   RefNull(ValueType)
   RefIsNull
   RefFunc(Int)
+  RefAsNonNull
+  BrOnNull(Int)
   I32Const(Int)
   I64Const(Int64)
   F32Const(Float)
