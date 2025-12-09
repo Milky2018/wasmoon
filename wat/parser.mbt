@@ -1,28 +1,28 @@
 ///|
 /// Result of parsing a func definition - can be a regular function or an inline import
 priv enum FuncDefResult {
-  /// Regular function definition: (type_idx, code, export_name)
-  FuncDef(Int, @types.FunctionCode, String?)
+  /// Regular function definition: (type_idx, code, export_names)
+  FuncDef(Int, @types.FunctionCode, Array[String])
   /// Inline import: the import definition
-  InlineImport(@types.Import, String?) // import, optional export name
+  InlineImport(@types.Import, Array[String]) // import, optional export names
 }
 
 ///|
 /// Result of parsing a global definition - can be a regular global or an inline import
 priv enum GlobalDefResult {
-  /// Regular global definition: (global, export_name)
-  GlobalDef(@types.Global, String?)
+  /// Regular global definition: (global, export_names)
+  GlobalDef(@types.Global, Array[String])
   /// Inline import: the import definition
-  GlobalImport(@types.Import, String?) // import, optional export name
+  GlobalImport(@types.Import, Array[String]) // import, optional export names
 }
 
 ///|
 /// Result of parsing a memory definition - can be a regular memory or an inline import
 priv enum MemoryDefResult {
-  /// Regular memory definition: (memory_type, export_name)
-  MemoryDef(@types.MemoryType, String?)
+  /// Regular memory definition: (memory_type, export_names)
+  MemoryDef(@types.MemoryType, Array[String])
   /// Inline import: the import definition
-  MemoryImport(@types.Import, String?) // import, optional export name
+  MemoryImport(@types.Import, Array[String]) // import, optional export names
 }
 
 ///|
@@ -1573,7 +1573,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   }
   let mod_ = @types.Module::new()
 
-  // First pass: collect function and type names (to support forward references)
+  // First pass: collect all names (to support forward references)
   // Save lexer state
   let saved_pos = self.lexer.pos
   let saved_line = self.lexer.line
@@ -1582,9 +1582,12 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   let saved_token_start_column = self.lexer.token_start_column
   let saved_current = self.current
 
-  // Scan for function and type definitions to collect names
+  // Scan for definitions to collect names
   let mut func_idx = 0
   let mut type_idx = 0
+  let mut global_idx = 0
+  let mut memory_idx = 0
+  let mut table_idx = 0
   while self.current != RParen && self.current != Eof {
     match self.current {
       LParen => {
@@ -1612,22 +1615,51 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
               String_(_) => self.advance()
               _ => ()
             }
-            // Check if it's a function import
+            // Check import kind
             if self.current == LParen {
               self.advance()
-              if self.current == Keyword("func") {
-                self.advance()
-                // Check for function name
-                if self.current is Id(name) {
-                  self.func_names.set(name, func_idx)
+              match self.current {
+                Keyword("func") => {
                   self.advance()
+                  // Check for function name
+                  if self.current is Id(name) {
+                    self.func_names.set(name, func_idx)
+                    self.advance()
+                  }
+                  func_idx = func_idx + 1
+                  self.skip_to_matching_rparen()
                 }
-                func_idx = func_idx + 1
-                // Skip rest of func definition (depth starts at 1 for this inner paren)
-                self.skip_to_matching_rparen()
-              } else {
-                // Not a func import, skip this inner expression
-                self.skip_to_matching_rparen()
+                Keyword("global") => {
+                  self.advance()
+                  // Check for global name
+                  if self.current is Id(name) {
+                    self.global_names.set(name, global_idx)
+                    self.advance()
+                  }
+                  global_idx = global_idx + 1
+                  self.skip_to_matching_rparen()
+                }
+                Keyword("memory") => {
+                  self.advance()
+                  // Check for memory name
+                  if self.current is Id(name) {
+                    self.memory_names.set(name, memory_idx)
+                    self.advance()
+                  }
+                  memory_idx = memory_idx + 1
+                  self.skip_to_matching_rparen()
+                }
+                Keyword("table") => {
+                  self.advance()
+                  // Check for table name
+                  if self.current is Id(name) {
+                    self.table_names.set(name, table_idx)
+                    self.advance()
+                  }
+                  table_idx = table_idx + 1
+                  self.skip_to_matching_rparen()
+                }
+                _ => self.skip_to_matching_rparen()
               }
             }
             // Skip to end of import (the outer rparen)
@@ -1641,6 +1673,36 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             }
             func_idx = func_idx + 1
             // Skip to end of func
+            self.skip_to_matching_rparen()
+          }
+          Keyword("global") => {
+            self.advance()
+            // Check for global name
+            if self.current is Id(name) {
+              self.global_names.set(name, global_idx)
+            }
+            global_idx = global_idx + 1
+            // Skip to end of global
+            self.skip_to_matching_rparen()
+          }
+          Keyword("memory") => {
+            self.advance()
+            // Check for memory name
+            if self.current is Id(name) {
+              self.memory_names.set(name, memory_idx)
+            }
+            memory_idx = memory_idx + 1
+            // Skip to end of memory
+            self.skip_to_matching_rparen()
+          }
+          Keyword("table") => {
+            self.advance()
+            // Check for table name
+            if self.current is Id(name) {
+              self.table_names.set(name, table_idx)
+            }
+            table_idx = table_idx + 1
+            // Skip to end of table
             self.skip_to_matching_rparen()
           }
           _ => self.skip_to_matching_rparen()
@@ -1672,24 +1734,24 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           }
           Keyword("func") =>
             match self.parse_func_def(mod_) {
-              FuncDef(type_idx, code, export_name) => {
+              FuncDef(type_idx, code, export_names) => {
                 // func_idx must account for imported functions
                 let func_idx = count_func_imports(mod_.imports) +
                   mod_.funcs.length()
                 mod_.funcs.push(type_idx)
                 mod_.codes.push(code)
-                if export_name is Some(name) {
+                for name in export_names {
                   mod_.exports.push({
                     name,
                     desc: @types.ExportDesc::Func(func_idx),
                   })
                 }
               }
-              InlineImport(imp, export_name) => {
+              InlineImport(imp, export_names) => {
                 // Add the import and optionally export it
                 let func_idx = count_func_imports(mod_.imports)
                 mod_.imports.push(imp)
-                if export_name is Some(name) {
+                for name in export_names {
                   mod_.exports.push({
                     name,
                     desc: @types.ExportDesc::Func(func_idx),
@@ -1699,17 +1761,17 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             }
           Keyword("memory") =>
             match self.parse_memory_def() {
-              MemoryDef(mem, export_name) => {
+              MemoryDef(mem, export_names) => {
                 let mem_idx = mod_.memories.length()
                 mod_.memories.push(mem)
-                if export_name is Some(name) {
+                for name in export_names {
                   mod_.exports.push({
                     name,
                     desc: @types.ExportDesc::Memory(mem_idx),
                   })
                 }
               }
-              MemoryImport(imp, export_name) => {
+              MemoryImport(imp, export_names) => {
                 // Count existing memory imports
                 let mut memory_import_count = 0
                 for existing in mod_.imports {
@@ -1718,7 +1780,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   }
                 }
                 mod_.imports.push(imp)
-                if export_name is Some(name) {
+                for name in export_names {
                   mod_.exports.push({
                     name,
                     desc: @types.ExportDesc::Memory(memory_import_count),
@@ -1728,17 +1790,17 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             }
           Keyword("global") =>
             match self.parse_global_def() {
-              GlobalDef(global, export_name) => {
+              GlobalDef(global, export_names) => {
                 let global_idx = mod_.globals.length()
                 mod_.globals.push(global)
-                if export_name is Some(name) {
+                for name in export_names {
                   mod_.exports.push({
                     name,
                     desc: @types.ExportDesc::Global(global_idx),
                   })
                 }
               }
-              GlobalImport(imp, export_name) => {
+              GlobalImport(imp, export_names) => {
                 // Count existing global imports
                 let mut global_import_count = 0
                 for existing in mod_.imports {
@@ -1747,7 +1809,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   }
                 }
                 mod_.imports.push(imp)
-                if export_name is Some(name) {
+                for name in export_names {
                   mod_.exports.push({
                     name,
                     desc: @types.ExportDesc::Global(global_import_count),
@@ -1878,7 +1940,7 @@ fn Parser::parse_func_def(
   mod_ : @types.Module,
 ) -> FuncDefResult raise WatError {
   self.advance() // skip "func"
-  let mut export_name : String? = None
+  let export_names : Array[String] = []
   let mut func_name : String? = None
 
   // Optional function name
@@ -1922,8 +1984,8 @@ fn Parser::parse_func_def(
         }
         self.expect_rparen() // close import
 
-        // Check for inline export after import
-        if self.current == LParen {
+        // Check for inline exports after import (can have multiple)
+        while self.current == LParen {
           let saved2 = self.lexer.pos
           self.advance()
           match self.current {
@@ -1931,7 +1993,7 @@ fn Parser::parse_func_def(
               self.advance()
               match self.current {
                 String_(s) => {
-                  export_name = Some(s)
+                  export_names.push(s)
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -1941,6 +2003,7 @@ fn Parser::parse_func_def(
             _ => {
               self.lexer.pos = saved2
               self.current = LParen
+              break
             }
           }
         }
@@ -2040,7 +2103,7 @@ fn Parser::parse_func_def(
           name: import_name,
           desc: @types.ImportDesc::Func(type_idx),
         }
-        return FuncDefResult::InlineImport(imp, export_name)
+        return FuncDefResult::InlineImport(imp, export_names)
       }
       _ => {
         // Not an inline import, restore state
@@ -2061,8 +2124,8 @@ fn Parser::parse_func_def(
     self.func_names.set(name, func_idx)
   }
 
-  // Check for inline export
-  if self.current == LParen {
+  // Check for inline exports (can have multiple)
+  while self.current == LParen {
     let saved = self.lexer.pos
     self.advance()
     match self.current {
@@ -2070,7 +2133,7 @@ fn Parser::parse_func_def(
         self.advance()
         match self.current {
           String_(s) => {
-            export_name = Some(s)
+            export_names.push(s)
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -2080,6 +2143,7 @@ fn Parser::parse_func_def(
       _ => {
         self.lexer.pos = saved
         self.current = LParen
+        break
       }
     }
   }
@@ -2202,7 +2266,7 @@ fn Parser::parse_func_def(
   // Parse body instructions
   let body = self.parse_instructions()
   self.expect_rparen() // close func
-  FuncDefResult::FuncDef(type_idx, { locals, body }, export_name)
+  FuncDefResult::FuncDef(type_idx, { locals, body }, export_names)
 }
 
 ///|
@@ -3123,7 +3187,7 @@ fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
 ///|
 fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   self.advance() // skip "memory"
-  let mut export_name : String? = None
+  let export_names : Array[String] = []
 
   // Optional name
   match self.current {
@@ -3162,8 +3226,8 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         }
         self.expect_rparen() // close import
 
-        // Check for inline export after import
-        if self.current == LParen {
+        // Check for inline exports after import (can have multiple)
+        while self.current == LParen {
           let saved2 = self.lexer.pos
           self.advance()
           match self.current {
@@ -3171,7 +3235,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               self.advance()
               match self.current {
                 String_(s) => {
-                  export_name = Some(s)
+                  export_names.push(s)
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -3181,6 +3245,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
             _ => {
               self.lexer.pos = saved2
               self.current = LParen
+              break
             }
           }
         }
@@ -3197,18 +3262,47 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
           name: import_name,
           desc: @types.ImportDesc::Memory({ limits: { min, max } }),
         }
-        return MemoryDefResult::MemoryImport(imp, export_name)
+        return MemoryDefResult::MemoryImport(imp, export_names)
       }
       Keyword("export") => {
-        self.advance()
-        match self.current {
-          String_(s) => {
-            export_name = Some(s)
-            self.advance()
-          }
-          _ => raise UnexpectedToken("expected export name", self.loc())
-        }
+        export_names.push(
+          match self.current {
+            _ => {
+              self.advance()
+              match self.current {
+                String_(s) => {
+                  self.advance()
+                  s
+                }
+                _ => raise UnexpectedToken("expected export name", self.loc())
+              }
+            }
+          },
+        )
         self.expect_rparen()
+        // Check for more exports
+        while self.current == LParen {
+          let saved2 = self.lexer.pos
+          self.advance()
+          match self.current {
+            Keyword("export") => {
+              self.advance()
+              match self.current {
+                String_(s) => {
+                  export_names.push(s)
+                  self.advance()
+                }
+                _ => raise UnexpectedToken("expected export name", self.loc())
+              }
+              self.expect_rparen()
+            }
+            _ => {
+              self.lexer.pos = saved2
+              self.current = LParen
+              break
+            }
+          }
+        }
       }
       _ => {
         self.lexer.pos = saved
@@ -3228,22 +3322,17 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
     _ => None
   }
   self.expect_rparen()
-  MemoryDefResult::MemoryDef({ limits: { min, max } }, export_name)
+  MemoryDefResult::MemoryDef({ limits: { min, max } }, export_names)
 }
 
 ///|
 fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   self.advance() // skip "global"
-  let mut export_name : String? = None
-  let mut global_name : String? = None
+  let export_names : Array[String] = []
 
-  // Optional name
-  match self.current {
-    Id(name) => {
-      global_name = Some(name)
-      self.advance()
-    }
-    _ => ()
+  // Optional name - skip it (already registered in first pass)
+  if self.current is Id(_) {
+    self.advance()
   }
 
   // Check for inline import: (global $x (import "mod" "name") i32)
@@ -3274,8 +3363,8 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         }
         self.expect_rparen() // close import
 
-        // Check for inline export after import
-        if self.current == LParen {
+        // Check for inline exports after import (can have multiple)
+        while self.current == LParen {
           let saved2 = self.lexer.pos
           self.advance()
           match self.current {
@@ -3283,7 +3372,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
               self.advance()
               match self.current {
                 String_(s) => {
-                  export_name = Some(s)
+                  export_names.push(s)
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -3293,6 +3382,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             _ => {
               self.lexer.pos = saved2
               self.current = LParen
+              break
             }
           }
         }
@@ -3325,16 +3415,13 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         }
         self.expect_rparen() // close global
 
-        // Register global name
-        if global_name is Some(name) {
-          self.global_names.set(name, self.global_names.length())
-        }
+        // Note: global name is already registered in first pass, no need to set again
         let imp : @types.Import = {
           mod_name,
           name: import_name,
           desc: @types.ImportDesc::Global({ value_type, mutable }),
         }
-        return GlobalDefResult::GlobalImport(imp, export_name)
+        return GlobalDefResult::GlobalImport(imp, export_names)
       }
       _ => {
         // Not an inline import, restore state
@@ -3348,13 +3435,10 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
     }
   }
 
-  // Register global name for regular global
-  if global_name is Some(name) {
-    self.global_names.set(name, self.global_names.length())
-  }
+  // Note: global name is already registered in first pass, no need to set again
 
-  // Check for inline export
-  if self.current == LParen {
+  // Check for inline exports (can have multiple)
+  while self.current == LParen {
     let saved = self.lexer.pos
     self.advance()
     match self.current {
@@ -3362,7 +3446,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         self.advance()
         match self.current {
           String_(s) => {
-            export_name = Some(s)
+            export_names.push(s)
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -3372,6 +3456,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
       _ => {
         self.lexer.pos = saved
         self.current = LParen
+        break
       }
     }
   }
@@ -3408,7 +3493,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   self.expect_rparen()
   GlobalDefResult::GlobalDef(
     { type_: { value_type, mutable }, init },
-    export_name,
+    export_names,
   )
 }
 
@@ -3710,6 +3795,14 @@ fn Parser::parse_export_def(
       self.advance()
       let idx = match self.current {
         Number(_) => self.parse_u32()
+        Id(name) =>
+          match self.memory_names.get(name) {
+            Some(idx) => {
+              self.advance()
+              idx
+            }
+            None => raise UndefinedIdentifier("memory $\{name}", self.loc())
+          }
         _ => 0
       }
       @types.ExportDesc::Memory(idx)
@@ -3718,6 +3811,14 @@ fn Parser::parse_export_def(
       self.advance()
       let idx = match self.current {
         Number(_) => self.parse_u32()
+        Id(name) =>
+          match self.table_names.get(name) {
+            Some(idx) => {
+              self.advance()
+              idx
+            }
+            None => raise UndefinedIdentifier("table $\{name}", self.loc())
+          }
         _ => 0
       }
       @types.ExportDesc::Table(idx)
