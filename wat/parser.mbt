@@ -3470,9 +3470,13 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
           },
         )
         self.expect_rparen()
-        // Check for more exports
+        // Check for more exports or import
         while self.current == LParen {
           let saved2 = self.lexer.pos
+          let saved2_line = self.lexer.line
+          let saved2_column = self.lexer.column
+          let saved2_token_start_line = self.lexer.token_start_line
+          let saved2_token_start_column = self.lexer.token_start_column
           self.advance()
           match self.current {
             Keyword("export") => {
@@ -3486,8 +3490,44 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               }
               self.expect_rparen()
             }
+            Keyword("import") => {
+              // Handle (memory (export ...) (import "mod" "name") limits) syntax
+              self.advance()
+              let mod_name = match self.current {
+                String_(s) => {
+                  self.advance()
+                  s
+                }
+                _ => raise UnexpectedToken("expected module name", self.loc())
+              }
+              let import_name = match self.current {
+                String_(s) => {
+                  self.advance()
+                  s
+                }
+                _ => raise UnexpectedToken("expected import name", self.loc())
+              }
+              self.expect_rparen() // close import
+              // Parse limits
+              let min = self.parse_u32()
+              let max = match self.current {
+                Number(_) => Some(self.parse_u32())
+                _ => None
+              }
+              self.expect_rparen() // close memory
+              let imp : @types.Import = {
+                mod_name,
+                name: import_name,
+                desc: @types.ImportDesc::Memory({ limits: { min, max } }),
+              }
+              return MemoryDefResult::MemoryImport(imp, export_names)
+            }
             _ => {
               self.lexer.pos = saved2
+              self.lexer.line = saved2_line
+              self.lexer.column = saved2_column
+              self.lexer.token_start_line = saved2_token_start_line
+              self.lexer.token_start_column = saved2_token_start_column
               self.current = LParen
               break
             }
