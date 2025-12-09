@@ -18,8 +18,68 @@ pub(all) suberror WastError {
   InvalidNumber(String)
   InvalidInstruction(String)
   ParseError(String)
-  WatError(@wat.WatError)
-} derive(Show)
+  /// WAT error with line offset adjustment (for inline modules in WAST)
+  /// The Int is the line number in the original WAST file where the module starts
+  WatError(@wat.WatError, Int)
+}
+
+///|
+pub impl Show for WastError with output(self, logger) {
+  match self {
+    WatError(e, line_offset) => {
+      // Adjust the line number in the error message
+      let adjusted = adjust_wat_error_line(e, line_offset)
+      logger.write_string(adjusted.to_string())
+    }
+    UnexpectedToken(s) => logger.write_string("UnexpectedToken(\{s})")
+    UnexpectedEof => logger.write_string("UnexpectedEof")
+    InvalidNumber(s) => logger.write_string("InvalidNumber(\{s})")
+    InvalidInstruction(s) => logger.write_string("InvalidInstruction(\{s})")
+    ParseError(s) => logger.write_string("ParseError(\{s})")
+  }
+}
+
+///|
+/// Adjust WAT error line numbers by adding an offset
+fn adjust_wat_error_line(err : @wat.WatError, line_offset : Int) -> @wat.WatError {
+  match err {
+    @wat.WatError::UnexpectedToken(msg, loc) =>
+      @wat.WatError::UnexpectedToken(
+        msg,
+        { line: loc.line + line_offset - 1, column: loc.column },
+      )
+    @wat.WatError::UnexpectedEof(loc) =>
+      @wat.WatError::UnexpectedEof({
+        line: loc.line + line_offset - 1,
+        column: loc.column,
+      })
+    @wat.WatError::InvalidNumber(s, loc) =>
+      @wat.WatError::InvalidNumber(
+        s,
+        { line: loc.line + line_offset - 1, column: loc.column },
+      )
+    @wat.WatError::InvalidInstruction(s, loc) =>
+      @wat.WatError::InvalidInstruction(
+        s,
+        { line: loc.line + line_offset - 1, column: loc.column },
+      )
+    @wat.WatError::UndefinedIdentifier(s, loc) =>
+      @wat.WatError::UndefinedIdentifier(
+        s,
+        { line: loc.line + line_offset - 1, column: loc.column },
+      )
+    @wat.WatError::DuplicateIdentifier(s, loc) =>
+      @wat.WatError::DuplicateIdentifier(
+        s,
+        { line: loc.line + line_offset - 1, column: loc.column },
+      )
+    @wat.WatError::ParseError(msg, loc) =>
+      @wat.WatError::ParseError(
+        msg,
+        { line: loc.line + line_offset - 1, column: loc.column },
+      )
+  }
+}
 
 ///|
 /// Token types for WAST lexer (same as WAT)
@@ -619,9 +679,13 @@ fn Parser::parse_module_command(self : Parser) -> WastCommand raise WastError {
     }
     _ => {
       // Inline WAT module - collect the rest and parse with WAT parser
+      // Record the line number where the module starts for error reporting
+      let module_start_line = self.current_line()
       let wat_text = self.collect_module_text()
       self.expect_rparen()
-      let mod_ = @wat.parse(wat_text) catch { e => raise WatError(e) }
+      let mod_ = @wat.parse(wat_text) catch {
+        e => raise WatError(e, module_start_line)
+      }
       Module(mod_, name)
     }
   }
