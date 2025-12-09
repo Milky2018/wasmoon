@@ -38,9 +38,22 @@ test "has_import_trampoline: unsupported functions" {
 }
 
 ///|
+test "has_import_trampoline: spectest module" {
+  let supported = [
+    "print", "print_i32", "print_i64", "print_f32", "print_f64",
+    "print_i32_f32", "print_f64_f64",
+  ]
+  for name in supported {
+    assert_true(has_import_trampoline("spectest", name))
+  }
+  // Unsupported spectest functions
+  assert_false(has_import_trampoline("spectest", "unknown_func"))
+}
+
+///|
 test "has_import_trampoline: unknown module" {
-  assert_false(has_import_trampoline("spectest", "print_i32"))
   assert_false(has_import_trampoline("env", "memory"))
+  assert_false(has_import_trampoline("unknown_module", "some_func"))
 }
 
 ///|
