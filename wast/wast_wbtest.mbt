@@ -436,7 +436,6 @@ test "regression: Unicode function names in WAST" {
   // Previously, escape_string_to would truncate Unicode code points,
   // e.g., U+FEFF (65279) would become 0xFF (255)
   let wast_input = "(module (func (export \"﻿\") (result i32) (i32.const 15)))\n(assert_return (invoke \"﻿\") (i32.const 15))"
-
   let script = parse(wast_input) catch { e => fail("Parse error: \{e}") }
 
   // First command should be Module
