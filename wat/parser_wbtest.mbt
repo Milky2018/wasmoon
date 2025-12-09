@@ -521,3 +521,46 @@ test "regression: select with nested ref type in result annotation" {
   inspect(code.body.length(), content="4")
   inspect(code.body[3], content="Select")
 }
+
+///|
+test "regression: flat form with optional labels after else and end" {
+  // WAT flat form allows optional label IDs after 'if', 'else', and 'end'
+  // These labels are for documentation purposes and should be skipped.
+  // Previously: parser failed with "expected 'end', got Id("body")"
+  let wat =
+    #|(module
+    #|  (func (export "fac-stack-raw") (param $n i64) (result i64)
+    #|    (local $i i64)
+    #|    (local $res i64)
+    #|    local.get $n
+    #|    local.set $i
+    #|    i64.const 1
+    #|    local.set $res
+    #|    block $done
+    #|      loop $loop
+    #|        local.get $i
+    #|        i64.const 0
+    #|        i64.eq
+    #|        if $body
+    #|          br $done
+    #|        else $body
+    #|          local.get $i
+    #|          local.get $res
+    #|          i64.mul
+    #|          local.set $res
+    #|          local.get $i
+    #|          i64.const 1
+    #|          i64.sub
+    #|          local.set $i
+    #|        end $body
+    #|        br $loop
+    #|      end $loop
+    #|    end $done
+    #|    local.get $res
+    #|  )
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.funcs.length(), content="1")
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="fac-stack-raw")
+}
