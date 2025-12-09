@@ -154,6 +154,15 @@ fn Parser::expect_keyword(self : Parser, kw : String) -> Unit raise WatError {
 }
 
 ///|
+/// Skip an optional identifier (e.g., label after 'end' or 'else' in flat form)
+fn Parser::skip_optional_id(self : Parser) -> Unit raise WatError {
+  match self.current {
+    Id(_) => self.advance()
+    _ => ()
+  }
+}
+
+///|
 fn Parser::parse_u32(self : Parser) -> Int raise WatError {
   match self.current {
     Number(s) => {
@@ -2652,6 +2661,8 @@ fn Parser::parse_plain_instruction(
       let body = self.parse_instructions()
       self.pop_label()
       self.expect_keyword("end")
+      // Skip optional label after 'end' (e.g., "end $label")
+      self.skip_optional_id()
       @types.Instruction::Block(bt, body)
     }
     "loop" => {
@@ -2668,6 +2679,8 @@ fn Parser::parse_plain_instruction(
       let body = self.parse_instructions()
       self.pop_label()
       self.expect_keyword("end")
+      // Skip optional label after 'end' (e.g., "end $label")
+      self.skip_optional_id()
       @types.Instruction::Loop(bt, body)
     }
     "if" => {
@@ -2686,12 +2699,16 @@ fn Parser::parse_plain_instruction(
       let else_body : Array[@types.Instruction] = if self.current ==
         Keyword("else") {
         self.advance()
+        // Skip optional label after 'else' (e.g., "else $label")
+        self.skip_optional_id()
         self.parse_instructions()
       } else {
         []
       }
       self.pop_label()
       self.expect_keyword("end")
+      // Skip optional label after 'end' (e.g., "end $label")
+      self.skip_optional_id()
       @types.Instruction::If(bt, then_body, else_body)
     }
     "br" => @types.Instruction::Br(self.parse_label_idx())
