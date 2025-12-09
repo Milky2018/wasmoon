@@ -666,7 +666,9 @@ pub fn validate_module_with_context(
     // Start function must have type [] -> [] (no params, no results)
     if func_type.params.length() != 0 || func_type.results.length() != 0 {
       raise WithContext(
-        ValidationErrorContext::from_error(InvalidStartFunction("start function")),
+        ValidationErrorContext::from_error(
+          InvalidStartFunction("start function"),
+        ),
       )
     }
   }
