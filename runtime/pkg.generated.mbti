@@ -24,6 +24,7 @@ pub(all) suberror RuntimeError {
   Unreachable
   CallStackExhausted
   UnknownImport
+  LinkError
 }
 pub impl Show for RuntimeError
 
@@ -55,6 +56,7 @@ pub impl Show for FuncInst
 
 type GlobalInstance
 pub fn GlobalInstance::get(Self) -> @types.Value
+pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
 pub fn GlobalInstance::new(@types.GlobalType, @types.Value) -> Self
 pub fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
 pub impl Show for GlobalInstance
@@ -87,6 +89,7 @@ pub fn Linker::with_store(Store) -> Self
 type Memory
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
 pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
+pub fn Memory::get_limits(Self) -> (Int, Int?)
 pub fn Memory::grow(Self, Int) -> Int
 pub fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
 pub fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
@@ -197,6 +200,8 @@ type Table
 pub fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
 pub fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
 pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError
+pub fn Table::get_elem_type(Self) -> @types.ValueType
+pub fn Table::get_limits(Self) -> (Int, Int?)
 pub fn Table::grow(Self, Int, @types.Value) -> Int
 pub fn Table::new(@types.ValueType, Int, Int?) -> Self
 pub fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError

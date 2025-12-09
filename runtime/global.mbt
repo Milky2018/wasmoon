@@ -28,3 +28,9 @@ pub fn GlobalInstance::set(
   }
   self.value = value
 }
+
+///|
+/// Get global type for type checking
+pub fn GlobalInstance::get_type(self : GlobalInstance) -> @types.GlobalType {
+  self.type_
+}

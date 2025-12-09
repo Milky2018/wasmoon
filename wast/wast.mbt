@@ -104,6 +104,7 @@ pub enum WastCommand {
   ModuleBinaryFailed(String) // binary module that failed to parse (skip in tests)
   AssertReturn(WastAction, Array[WastValue])
   AssertTrap(WastAction, String)
+  AssertModuleTrap(WastModuleSource, String) // module that traps during instantiation
   AssertExhaustion(WastAction, String)
   AssertInvalid(WastModuleSource, String)
   AssertMalformed(WastModuleSource, String)
@@ -791,7 +792,7 @@ fn Parser::parse_assert_trap(self : Parser) -> WastCommand raise WastError {
       self.expect_rparen()
       let msg = self.parse_string()
       self.expect_rparen()
-      AssertUnlinkable(source, msg) // trap during instantiation
+      AssertModuleTrap(source, msg) // trap during instantiation (start function)
     }
     _ => {
       let action = self.parse_action()

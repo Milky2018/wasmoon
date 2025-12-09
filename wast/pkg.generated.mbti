@@ -33,6 +33,7 @@ pub enum WastCommand {
   ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])
   AssertTrap(WastAction, String)
+  AssertModuleTrap(WastModuleSource, String)
   AssertExhaustion(WastAction, String)
   AssertInvalid(WastModuleSource, String)
   AssertMalformed(WastModuleSource, String)

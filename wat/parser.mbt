@@ -1950,7 +1950,15 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("global") =>
             match self.parse_global_def() {
               GlobalDef(global, export_names) => {
-                let global_idx = mod_.globals.length()
+                // Count existing global imports for correct global index
+                let mut num_global_imports = 0
+                for existing in mod_.imports {
+                  if existing.desc is @types.ImportDesc::Global(_) {
+                    num_global_imports += 1
+                  }
+                }
+                // Global index = number of imports + number of defined globals
+                let global_idx = num_global_imports + mod_.globals.length()
                 mod_.globals.push(global)
                 for name in export_names {
                   mod_.exports.push({

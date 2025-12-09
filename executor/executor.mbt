@@ -385,45 +385,15 @@ pub fn ExecContext::call_func(
 ) -> Array[@types.Value] raise {
   // Get the store address from instance
   let store_addr = self.instance.func_addrs[func_idx]
-  let func = self.store.get_func(store_addr)
+  let func_inst = self.store.get_func_inst(store_addr)
 
   // Get the function type to determine return arity
   let type_idx = self.instance.func_type_indices[func_idx]
   let func_type = self.instance.types[type_idx]
   let return_arity = func_type.results.length()
 
-  // Create locals array: params + local variables
-  let locals : Array[@types.Value] = []
-
-  // Add parameters
-  for arg in args {
-    locals.push(arg)
-  }
-
-  // Add local variables (initialized to 0/null)
-  for local_type in func.locals {
-    locals.push(
-      match local_type {
-        I32 => I32(0)
-        I64 => I64(0L)
-        F32 => F32(0.0)
-        F64 => F64(0.0)
-        FuncRef => Null
-        ExternRef => Null
-        _ => Null
-      },
-    )
-  }
-
-  // Create and push frame
-  let frame = @runtime.Frame::new(func_idx, locals, return_arity)
-  self.push_frame(frame)
-
-  // Execute function body
-  self.exec_expr(func.body)
-
-  // Pop frame
-  self.pop_frame()
+  // Use the same context-switching logic as exec_call
+  self.call_func_inst_with_context(store_addr, func_inst, args, return_arity)
 
   // Collect return values from stack (in reverse order, then reverse back)
   let results : Array[@types.Value] = []
@@ -814,24 +784,88 @@ pub fn instantiate_module_with_imports(
       Func(type_idx) =>
         match imports.resolve(imp.mod_name, imp.name) {
           Some(Func(addr)) => {
+            // Check that imported function type matches expected type
+            let expected_type = mod.types[type_idx]
+            let actual_type = store.get_func_type(addr)
+            if expected_type != actual_type {
+              raise @runtime.LinkError
+            }
             func_addrs.push(addr)
             func_type_indices.push(type_idx)
           }
           _ => raise @runtime.UnknownImport
         }
-      Memory(_) =>
+      Memory(expected_mem_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
-          Some(Memory(addr)) => mem_addrs.push(addr)
+          Some(Memory(addr)) => {
+            // Check memory type compatibility
+            let actual_mem = store.get_mem(addr)
+            let actual_limits = actual_mem.get_limits()
+            // Import memory limits must be compatible:
+            // - actual min >= expected min
+            // - if expected has max, actual must have max <= expected max
+            if actual_limits.0 < expected_mem_type.limits.min {
+              raise @runtime.LinkError
+            }
+            if expected_mem_type.limits.max is Some(expected_max) {
+              match actual_limits.1 {
+                Some(actual_max) =>
+                  if actual_max > expected_max {
+                    raise @runtime.LinkError
+                  }
+                None => raise @runtime.LinkError
+              }
+            } // actual has no max but expected does
+            mem_addrs.push(addr)
+          }
           _ => raise @runtime.UnknownImport
         }
-      Table(_) =>
+      Table(expected_table_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
-          Some(Table(addr)) => table_addrs.push(addr)
+          Some(Table(addr)) => {
+            // Check table type compatibility
+            let actual_table = store.get_table(addr)
+            let actual_elem_type = actual_table.get_elem_type()
+            let actual_limits = actual_table.get_limits()
+            // Element types must match
+            if actual_elem_type != expected_table_type.elem_type {
+              raise @runtime.LinkError
+            }
+            // Limits must be compatible:
+            // - actual min >= expected min
+            // - if expected has max, actual must have max <= expected max
+            if actual_limits.0 < expected_table_type.limits.min {
+              raise @runtime.LinkError
+            }
+            if expected_table_type.limits.max is Some(expected_max) {
+              match actual_limits.1 {
+                Some(actual_max) =>
+                  if actual_max > expected_max {
+                    raise @runtime.LinkError
+                  }
+                None => raise @runtime.LinkError
+              }
+            }
+            table_addrs.push(addr)
+          }
           _ => raise @runtime.UnknownImport
         }
-      Global(_) =>
+      Global(expected_global_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
-          Some(Global(addr)) => global_addrs.push(addr)
+          Some(Global(addr)) => {
+            // Check global type compatibility
+            let actual_global = store.get_global(addr)
+            let actual_type = actual_global.get_type()
+            // Value types must match
+            if actual_type.value_type != expected_global_type.value_type {
+              raise @runtime.LinkError
+            }
+            // Mutability must match
+            if actual_type.mutable != expected_global_type.mutable {
+              raise @runtime.LinkError
+            }
+            global_addrs.push(addr)
+          }
           _ => raise @runtime.UnknownImport
         }
     }
@@ -940,7 +974,7 @@ pub fn instantiate_module_with_imports(
       dropped_elems[elem_idx] = true
     }
   }
-  {
+  let instance : @runtime.ModuleInstance = {
     types: mod.types,
     func_addrs,
     func_type_indices,
@@ -953,6 +987,36 @@ pub fn instantiate_module_with_imports(
     dropped_elems,
     dropped_datas,
   }
+
+  // Register instance with store for cross-module call resolution
+  store.register_instance(instance) |> ignore
+
+  // Execute start function if present
+  if mod.start is Some(start_func_idx) {
+    let ctx = ExecContext::new(store, instance)
+    (ctx.call_func(start_func_idx, []) catch {
+      BranchWith(_, _) | Return => raise @runtime.Unreachable
+      @runtime.StackUnderflow => raise @runtime.StackUnderflow
+      @runtime.StackOverflow => raise @runtime.StackOverflow
+      @runtime.TypeMismatch => raise @runtime.TypeMismatch
+      @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
+      @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+      @runtime.UndefinedElement => raise @runtime.UndefinedElement
+      @runtime.UninitializedElement => raise @runtime.UninitializedElement
+      @runtime.IndirectCallTypeMismatch =>
+        raise @runtime.IndirectCallTypeMismatch
+      @runtime.DivisionByZero => raise @runtime.DivisionByZero
+      @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
+      @runtime.InvalidConversion => raise @runtime.InvalidConversion
+      @runtime.Unreachable => raise @runtime.Unreachable
+      @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
+      @runtime.UnknownImport => raise @runtime.UnknownImport
+      @runtime.LinkError => raise @runtime.LinkError
+      _ => raise @runtime.Unreachable
+    })
+    |> ignore
+  }
+  instance
 }
 
 ///|
