@@ -27,6 +27,7 @@ suberror ParserError {
   UnexpectedContent // unexpected content after last section
   DuplicateSection(Int) // non-custom section appears multiple times or out of order
   MalformedReferenceType(Int) // element segment has non-reference type
+  MalformedMutability(Int) // mutability must be 0 or 1
   ParseError(String) // Generic error with message
 }
 
@@ -113,6 +114,7 @@ pub impl Show for ParserError with output(self, logger) {
     UnexpectedContent => "unexpected content after last section"
     DuplicateSection(_) => "unexpected content after last section"
     MalformedReferenceType(_) => "malformed reference type"
+    MalformedMutability(_) => "malformed mutability"
     ParseError(msg) => msg
   }
   logger.write_string(msg)
@@ -547,6 +549,10 @@ fn Parser::read_global_type(
 ) -> @types.GlobalType raise ParserError {
   let value_type = self.read_value_type()
   let mutability = self.read_byte()
+  // Mutability must be 0 (const) or 1 (var)
+  if mutability != 0x00 && mutability != 0x01 {
+    raise MalformedMutability(mutability)
+  }
   { value_type, mutable: mutability == 0x01 }
 }
 
