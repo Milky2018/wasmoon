@@ -295,3 +295,130 @@ test "parse WAT: forward reference table" {
   inspect(mod.exports[0].name, content="t")
   inspect(mod.exports[0].desc is @types.ExportDesc::Table(_), content="true")
 }
+
+// ============================================================
+// Regression tests for float_literals.wast failures
+// ============================================================
+
+///|
+test "debug: MoonBit 0.0 bit pattern" {
+  // Verify MoonBit's 0.0 and -0.0 bit patterns
+  let pos_zero : Double = 0.0
+  let neg_zero : Double = -0.0
+  inspect(pos_zero.reinterpret_as_int64(), content="0")
+  inspect(neg_zero.reinterpret_as_int64(), content="-9223372036854775808")
+}
+
+///|
+// NOTE: This test documents a MoonBit compiler bug where
+// `if neg { -0.0 } else { 0.0 }` returns -0.0 even when neg=false.
+// Keep this test to track when the bug is fixed.
+test "moonbit-bug: conditional 0.0 vs -0.0 returns wrong value" {
+  let neg = false
+  let result = if neg { -0.0 } else { 0.0 }
+  let bits = result.reinterpret_as_int64()
+  // BUG: Should be 0, but MoonBit returns -9223372036854775808 (negative zero)
+  inspect(bits, content="-9223372036854775808")
+}
+
+///|
+test "regression: f64.zero - hex float 0x0.0p0 should be positive zero" {
+  // f64.zero: 0x0.0p0 should return bit pattern 0x0000000000000000 (positive zero)
+  // NOT 0x8000000000000000 (negative zero)
+  let result = parse_float64("0x0.0p0") catch { e => fail("Parse error: \{e}") }
+  let bits = result.reinterpret_as_int64()
+  inspect(bits, content="0") // Should be 0, not -9223372036854775808
+}
+
+///|
+test "regression: f64.positive_zero - hex float +0x0.0p0 with explicit plus" {
+  // +0x0.0p0 should also be positive zero
+  let result = parse_float64("+0x0.0p0") catch {
+    e => fail("Parse error: \{e}")
+  }
+  let bits = result.reinterpret_as_int64()
+  inspect(bits, content="0") // Should be 0, not -9223372036854775808
+}
+
+///|
+test "regression: f32.large_int - 80-bit hex integer" {
+  // 0x1_0000_0000_0000_0000_0000 is 2^80
+  // As f32, this should be 0x67800000 (1736441856)
+  let result = parse_float32("0x1_0000_0000_0000_0000_0000") catch {
+    e => fail("Parse error: \{e}")
+  }
+  let bits = result.reinterpret_as_int()
+  inspect(bits, content="1736441856") // 0x67800000
+}
+
+///|
+test "regression: f32_dec.min_positive - smallest positive f32" {
+  // 1.4013e-45 is the smallest positive subnormal f32
+  // Should have bit pattern 0x00000001 (1)
+  // f32 subnormal: value = mantissa * 2^(-149) where mantissa is in [0, 2^23-1]
+  // For bit pattern 1: value = 1 * 2^(-149) ≈ 1.4012984643e-45
+  let result = parse_float32("1.4013e-45") catch {
+    e => fail("Parse error: \{e}")
+  }
+  let bits = result.reinterpret_as_int()
+  inspect(bits, content="1") // Should be 1, not 0
+}
+
+///|
+test "debug: f32 subnormal boundary values" {
+  // 2^(-149) ≈ 1.4012984643e-45 is the smallest positive f32
+  // 1.4e-45 is slightly less than 2^(-149), but close enough to round to 1
+  let r1 = parse_float32("1.4e-45") catch { e => fail("Parse error: \{e}") }
+  inspect(r1.reinterpret_as_int(), content="1")
+
+  // 1.5e-45 should definitely round to 1
+  let r2 = parse_float32("1.5e-45") catch { e => fail("Parse error: \{e}") }
+  inspect(r2.reinterpret_as_int(), content="1")
+}
+
+///|
+test "debug: strconv parse_double for subnormal" {
+  // What does MoonBit's strconv return for 1.4013e-45?
+  let d = @strconv.parse_double("1.4013e-45") catch { _ => fail("parse error") }
+  // Convert double to float (may lose precision)
+  let f = Float::from_double(d)
+  inspect(f.reinterpret_as_int(), content="1")
+}
+
+///|
+test "debug: strconv for max subnormal" {
+  let d = @strconv.parse_double("1.1754942e-38") catch {
+    _ => fail("parse error")
+  }
+  let f = Float::from_double(d)
+  inspect(f.reinterpret_as_int(), content="8388607")
+}
+
+///|
+test "regression: f32_dec.max_subnormal - largest subnormal f32" {
+  // 1.1754942e-38 is close to the largest subnormal f32
+  // max_subnormal = 8388607 * 2^(-149) ≈ 1.1754942106924411e-38
+  // 8388606 * 2^(-149) ≈ 1.1754940705955805e-38
+  // midpoint ≈ 1.1754941406440108e-38
+  // 1.1754942e-38 > midpoint, so should round up to 8388607
+  let result = parse_float32("1.1754942e-38") catch {
+    e => fail("Parse error: \{e}")
+  }
+  let bits = result.reinterpret_as_int()
+  inspect(bits, content="8388607") // 0x007fffff
+}
+
+///|
+test "debug: max subnormal with more precision" {
+  // Use exact value that should definitely be 8388607
+  let r1 = parse_float32("1.17549421e-38") catch {
+    e => fail("Parse error: \{e}")
+  }
+  inspect(r1.reinterpret_as_int(), content="8388607")
+
+  // Use exact value for 8388606
+  let r2 = parse_float32("1.17549407e-38") catch {
+    e => fail("Parse error: \{e}")
+  }
+  inspect(r2.reinterpret_as_int(), content="8388606")
+}
