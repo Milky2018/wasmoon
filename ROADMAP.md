@@ -408,15 +408,38 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 ### 13.1 WASM 2.0+ 特性
 - [ ] 尾调用 (tail-call)
 - [ ] 异常处理 (exception-handling)
-- [ ] 垃圾回收 (GC)
 - [ ] 组件模型 (Component Model)
 
-### 13.2 SIMD 支持
+### 13.2 垃圾回收 (WasmGC) 📋 未来计划
+
+> [WebAssembly GC Proposal](https://github.com/WebAssembly/gc) - 为 WASM 添加原生 GC 支持
+
+#### 13.2.1 类型系统扩展
+- [ ] 结构体类型 (struct types): `(type $point (struct (field $x i32) (field $y i32)))`
+- [ ] 数组类型 (array types): `(type $vec (array i32))`
+- [ ] 类型层次 (type hierarchy): anyref, eqref, structref, arrayref
+- [ ] 可空与非空引用: `(ref null $t)` vs `(ref $t)`
+- [ ] 函数引用类型: `(ref func)`, `(ref $functype)`
+
+#### 13.2.2 指令集扩展
+- [ ] 结构体操作: `struct.new`, `struct.get`, `struct.set`
+- [ ] 数组操作: `array.new`, `array.get`, `array.set`, `array.len`
+- [ ] 引用操作: `ref.cast`, `ref.test`, `ref.eq`
+- [ ] 函数引用: `ref.func`, `call_ref`, `return_call_ref`
+- [ ] 类型转换: `br_on_cast`, `br_on_cast_fail`
+
+#### 13.2.3 运行时支持
+- [ ] GC 堆管理
+- [ ] 对象布局
+- [ ] 类型检查运行时
+- [ ] 与解释器/JIT 集成
+
+### 13.3 SIMD 支持
 - [ ] v128 类型
 - [ ] SIMD 指令集
 - [ ] 向量化优化
 
-### 13.3 线程支持
+### 13.4 线程支持
 - [ ] 共享内存
 - [ ] 原子操作
 - [ ] 等待/通知
@@ -434,8 +457,10 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 | Phase 9 | 寄存器分配 | ✅ 核心完成 (合并优化待实现) |
 | Phase 10 | 代码生成 | ✅ 核心完成 (扩展指令待实现) |
 | Phase 11 | JIT 集成 | ✅ 核心完成 (OSR、完整调试命令待实现) |
-| Phase 12 | WASI 支持 | 📋 未来计划 |
-| Phase 13 | WASM 扩展 | 📋 未来计划 |
+| Phase 12 | WASI 支持 | ✅ Preview 1 完成 |
+| Phase 13 | WASM 扩展 | 📋 未来计划 (WasmGC 规划中) |
+| Phase 14 | 测试套件兼容性 | ✅ 99.8% 通过率 |
+| Phase 15 | 100% 测试通过 | 🔨 进行中 |
 
 ---
 
@@ -458,8 +483,8 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-**当前状态**: Phase 8-11 核心功能已完成，JIT 执行器支持 .cwasm 预编译文件的直接执行。WAST 测试套件通过率达到 **96.7%** (16764/17339)。
-**下一步**: 修复剩余 575 个测试失败 (主要是 Unicode 名称、导入类型验证、浮点解析精度)，以及 12 个解析错误
+**当前状态**: Phase 8-11 核心功能已完成，JIT 执行器支持 .cwasm 预编译文件的直接执行。WAST 测试套件通过率达到 **99.8%** (18711/18749)。
+**下一步**: 修复剩余 38 个测试失败 (主要是验证器 type mismatch、表操作边界)，以及 2 个解析错误 (stack.wast, unreached-valid.wast)
 
 ---
 
@@ -551,7 +576,7 @@ Phase 9/11 优化 (P2)
 
 ---
 
-## Phase 14: WAST 官方测试套件兼容性 🔨 进行中
+## Phase 14: WAST 官方测试套件兼容性 ✅ 基本完成
 
 > 基于 WebAssembly 官方测试套件 (72 个 .wast 文件) 的兼容性分析
 
@@ -559,145 +584,52 @@ Phase 9/11 优化 (P2)
 
 | 状态 | 数量 | 说明 |
 |------|------|------|
-| ✅ 完全通过 | 45 | 0 failures |
-| ⚠️ 部分通过 | 15 | 有少量 failures |
-| ❌ 解析错误 | 12 | 需要修复 WAT 解析器 |
+| ✅ 完全通过 | 66 | 0 failures |
+| ⚠️ 部分通过 | 4 | 有少量 failures |
+| ❌ 解析错误 | 2 | 需要支持 WASM 2.0+ 特性 |
 
-**测试通过率**: 16764 passed / 17339 total = **96.7%**
+**测试通过率**: 18711 passed / 18749 total = **99.8%**
 
-**完全通过的测试 (45个)**:
-- 数值运算: `f32.wast`, `f64.wast`, `f32_cmp.wast`, `f64_cmp.wast`, `f32_bitwise.wast`, `f64_bitwise.wast`, `i32.wast`, `i64.wast`, `int_exprs.wast`, `int_literals.wast`, `fac.wast`, `float_literals.wast`, `float_misc.wast`, `conversions.wast`
-- 内存操作: `address.wast`, `align.wast`, `load.wast`, `store.wast`, `endianness.wast`, `memory_redundancy.wast`, `memory_size.wast`, `memory_trap.wast`
-- 控制流: `block.wast`, `loop.wast`, `br.wast`, `br_if.wast`, `br_table.wast`, `nop.wast`, `return.wast`, `labels.wast`, `forward.wast`, `switch.wast`, `unreachable.wast`, `traps.wast`, `unwind.wast`
-- 变量与函数: `local_get.wast`, `local_set.wast`, `call.wast`, `call_indirect.wast`
-- 表与元素: `table_size.wast`
-- 其他: `token.wast`, `type.wast`, `left-to-right.wast`, `binary.wast`, `binary-leb128.wast`
+**完全通过的测试 (66个)**:
+- 数值运算: `f32.wast`, `f64.wast`, `f32_cmp.wast`, `f64_cmp.wast`, `f32_bitwise.wast`, `f64_bitwise.wast`, `i32.wast`, `i64.wast`, `int_exprs.wast`, `int_literals.wast`, `fac.wast`, `float_literals.wast`, `float_misc.wast`, `conversions.wast`, `const.wast`, `float_exprs.wast`, `float_memory.wast`
+- 内存操作: `address.wast`, `align.wast`, `load.wast`, `store.wast`, `endianness.wast`, `memory_redundancy.wast`, `memory_size.wast`, `memory_trap.wast`, `memory.wast`, `memory_grow.wast`, `data.wast`
+- 控制流: `block.wast`, `loop.wast`, `br.wast`, `br_if.wast`, `br_table.wast`, `nop.wast`, `return.wast`, `labels.wast`, `forward.wast`, `switch.wast`, `unreachable.wast`, `traps.wast`, `unwind.wast`, `if.wast`
+- 变量与函数: `local_get.wast`, `local_set.wast`, `local_tee.wast`, `local_init.wast`, `call.wast`, `call_indirect.wast`, `func.wast`, `func_ptrs.wast`, `global.wast`
+- 表与元素: `table_size.wast`, `table_get.wast`, `table_set.wast`, `elem.wast`, `exports.wast`
+- 导入链接: `linking.wast`, `names.wast`
+- 其他: `token.wast`, `type.wast`, `left-to-right.wast`, `binary.wast`, `binary-leb128.wast`, `comments.wast`, `custom.wast`, `select.wast`
 
-**有失败的测试 (15个)**:
+**有失败的测试 (4个)**:
 | 测试文件 | 通过 | 失败 | 主要问题 |
 |----------|------|------|----------|
-| `names.wast` | 113 | 369 | Unicode 名称处理 |
-| `linking.wast` | 74 | 59 | 导入类型验证 |
-| `elem.wast` | 21 | 51 | 元素段验证/运行时 |
-| `const.wast` | 344 | 32 | 浮点解析精度 |
 | `unreached-invalid.wast` | 103 | 18 | 验证器 type mismatch |
-| `data.wast` | 20 | 14 | 数据段边界 |
-| `func_ptrs.wast` | 26 | 6 | 函数指针 |
-| `func.wast` | 166 | 5 | 函数验证 |
-| `if.wast` | 236 | 4 | 验证器 type mismatch |
-| `table_grow.wast` | 44 | 4 | 表增长 |
-| `table_set.wast` | 21 | 4 | 表设置 |
-| `comments.wast` | 0 | 3 | 注释解析 |
-| `custom.wast` | 5 | 3 | 自定义段 |
-| `table_get.wast` | 12 | 2 | 表获取 |
-| `local_tee.wast` | 96 | 1 | 局部变量 |
+| `table.wast` | 12 | 16 | 表操作验证 |
+| `start.wast` | 8 | 3 | start 函数验证 |
+| `table_grow.wast` | 47 | 1 | 表增长边界 |
 
-**解析错误的测试 (12个)**:
-- `exports.wast` - 导出语法
-- `float_exprs.wast` - 浮点表达式语法
-- `float_memory.wast` - 浮点内存语法
-- `global.wast` - 全局变量语法
-- `local.wast` - 局部变量语法
-- `memory.wast` - 内存语法
-- `memory_grow.wast` - 内存增长语法
-- `select.wast` - select 指令语法
-- `stack.wast` - 栈语法
-- `start.wast` - start 函数语法
-- `table.wast` - 表语法
-- `unreached-valid.wast` - 指令语法
+**解析错误的测试 (2个)**:
+- `stack.wast` - assert_exhaustion 命令解析
+- `unreached-valid.wast` - call_ref 指令 (需要 WasmGC 支持)
 
-### 14.2 WAT/WAST 解析器缺失功能
+### 14.2 剩余问题
 
-#### 14.2.1 数值解析问题 (P0 - 高优先级)
-- [ ] **无符号 32 位整数字面量**: `4294967295` (影响 address, const, int_literals)
-- [ ] **无符号 64 位整数字面量**: `FFFF_FFFF_FFFF_FFFF` (影响 align)
-- [ ] **NaN 字面量语法**: `nan`, `nan:0x...` (影响 float_literals, local_tee)
-
-#### 14.2.2 WAT 语法缺失 (P0 - 高优先级)
-- [ ] **elem 段 funcref 语法**: `(elem (table ...) funcref ...)` (影响 elem)
-- [ ] **内联 export 语法**: `(export "name" (func ...))` 在 func 内部 (影响 exports)
-- [ ] **global 初始化表达式扩展**: 复杂的 global 初始化 (影响 global)
-- [ ] **memory/table 内联定义**: `(memory ...)` / `(table ...)` 简写形式 (影响 memory, table)
-- [ ] **前向类型引用**: `(type $forward ...)` 在定义前使用 (影响 func)
-- [ ] **select 指令 ref type**: `(select (result ...))` 带结果类型 (影响 select)
-- [ ] **local 简写语法**: 数字索引形式 (影响 local)
-- [ ] **br_table 扩展语法**: 带标签数组的完整语法 (影响 br_table)
-
-#### 14.2.3 指令解析问题 (P1 - 中优先级)
-- [ ] **call_indirect 新语法**: `(call_indirect (type ...) ...)` vs 旧 offset 语法 (影响 call_indirect, table_get, table_set)
-- [ ] **start 段语法**: 不同形式的 start 定义 (影响 start)
-- [ ] **memory.grow 语法**: 带参数的形式 (影响 memory_grow)
-- [ ] **float 表达式语法**: `(f32.const (f32.neg ...))` 嵌套形式 (影响 float_exprs, float_memory)
-- [ ] **stack 测试 id 语法**: `$body` 等特殊标识符 (影响 stack)
-
-#### 14.2.4 WASM 2.0+ 指令 (P2 - 低优先级)
-- [ ] **ref.as_non_null**: typed reference 指令 (影响 unreached-invalid)
+#### 14.2.1 WASM 2.0+ 指令 (需要 WasmGC 支持)
 - [ ] **call_ref**: 函数引用调用 (影响 unreached-valid)
+- [ ] **ref.as_non_null**: typed reference 指令 (影响 unreached-invalid)
 
-### 14.3 二进制解析器问题
+#### 14.2.2 验证器问题
+- [ ] **unreachable 代码中的类型检查**: 部分 assert_invalid 测试失败
 
-- [ ] **Section size 验证**: 声明大小与实际内容不匹配 (影响 binary-leb128)
-- [ ] **意外输入结束处理**: 截断的二进制模块 (影响 binary)
+#### 14.2.3 表操作边界
+- [ ] **table 初始化验证**: 表边界和元素类型检查
 
-### 14.4 运行时功能缺失
-
-#### 14.4.1 浮点位运算 (P1) ✅ 已修复
-- [x] **f32.copysign / f64.copysign** - 已实现 (f32_bitwise, f64_bitwise 全部通过)
-- [x] **-nan 解析** - 已修复负 NaN 的符号位保留
-
-#### 14.4.2 名称处理 (P2)
-- [ ] **Unicode 名称支持** (影响 names - 370 failures)
-
-#### 14.4.3 链接验证 (P1)
-- [ ] **导入类型兼容性验证** (影响 linking - 84 failures)
-- [ ] **assert_unlinkable 语义**
-
-#### 14.4.4 类型转换 (P1) ✅ 部分修复
-- [x] **i64.extend_i32_u** - 已修复无符号扩展
-- [x] **trunc 指令溢出检测** - 已添加 NaN 和溢出检查
-- [ ] **trunc 边界值精度** (影响 conversions - 26 failures)
-
-#### 14.4.5 其他运行时问题
-- [ ] **data 段初始化边界检查** (影响 data - 14 failures)
-- [ ] **custom section 处理** (影响 custom - 7 failures)
-- [ ] **func_ptrs 表操作** (影响 func_ptrs - 9 failures)
-- [ ] **table_size 边界** (影响 table_size - 16 failures)
-
-### 14.5 实施优先级
-
-```
-已完成 ✅
-├─► f32.copysign / f64.copysign 实现
-├─► -nan 解析修复
-├─► i64.extend_i32_u 修复
-├─► trunc 指令溢出/NaN 检测
-└─► call_indirect 表元素初始化修复
-
-剩余高优先级 (P0)
-├─► 导入类型兼容性验证 (linking - 63 failures)
-├─► const 浮点解析精度 (const - 32 failures)
-└─► conversions 边界值 (conversions - 26 failures)
-
-中优先级 (P1)
-├─► 验证器 type mismatch 检测 (if, unreached-invalid)
-├─► data 段边界检查 (data - 14 failures)
-├─► float_literals 解析 (float_literals - 12 failures)
-└─► func_ptrs 表操作 (func_ptrs - 9 failures)
-
-低优先级 (P2)
-├─► Unicode 名称支持 (names - 370 failures)
-├─► custom section 完整支持 (custom - 7 failures)
-└─► comments 解析 (comments - 3 failures)
-```
-
-### 14.6 测试通过率目标
+### 14.3 测试通过率目标
 
 | 阶段 | 目标 | 当前 |
 |------|------|------|
-| ✅ 解析通过 | 解析通过率 > 90% | 83% (60/72) |
-| ✅ 基础执行 | 执行通过率 > 80% | **96.7%** (16764/17339) |
-| 🔨 当前目标 | 执行通过率 > 98% | 96.7% |
-| 最终目标 | 执行通过率 100% | - |
+| ✅ 解析通过 | 解析通过率 > 90% | 97% (70/72) |
+| ✅ 基础执行 | 执行通过率 > 80% | **99.8%** (18711/18749) |
+| 🔨 当前目标 | 执行通过率 100% | 99.8% |
 
 ---
 
@@ -712,41 +644,35 @@ Phase 9/11 优化 (P2)
 
 ### 15.2 当前状态 (2025-12 更新)
 
-**总体进度**: 16764 passed / 17339 total = **96.7%** 通过率
+**总体进度**: 18711 passed / 18749 total = **99.8%** 通过率
 
-**完全通过的测试 (45个)**: 见 Phase 14.1
-
-**有失败的测试 (15个)**: 见 Phase 14.1
-
-**解析错误的测试 (12个)**: 见 Phase 14.1
+**完全通过**: 66 个文件
+**部分失败**: 4 个文件 (38 failures)
+**解析错误**: 2 个文件 (需要 WasmGC 支持)
 
 ### 15.3 剩余任务
 
-#### 高影响 (解决后可大幅提升通过率)
-- [ ] **Unicode 名称支持** - 修复后可消除 ~369 failures
-- [ ] **WAT 解析器扩展** - 修复后可运行 12 个目前有解析错误的测试
-- [ ] **导入类型兼容性验证** - 修复后可消除 ~59 failures
-- [ ] **elem 验证和运行时** - 修复后可消除 ~51 failures
+#### 需要 WasmGC 支持 (远期目标)
+- [ ] **unreached-valid.wast** - call_ref 指令
+- [ ] **stack.wast** - assert_exhaustion 命令
 
-#### 中等影响
-- [ ] **浮点解析精度** - ~32 failures
-- [ ] **验证器 type mismatch 检测** - ~22 failures
-- [ ] **数据段边界检查** - ~14 failures
-
-#### 低影响
-- [ ] **其他** - ~28 failures
+#### 验证器改进
+- [ ] **unreached-invalid.wast** - 18 failures (unreachable 代码类型检查)
+- [ ] **table.wast** - 16 failures (表验证)
+- [ ] **start.wast** - 3 failures (start 函数验证)
+- [ ] **table_grow.wast** - 1 failure (表增长边界)
 
 ### 15.4 进度跟踪
 
 | 类别 | 完全通过 | 部分失败 | 解析错误 | 通过率 |
 |------|----------|----------|----------|--------|
-| 数值运算 | 14 | 1 | 2 | 88% |
-| 内存操作 | 8 | 1 | 2 | 73% |
-| 控制流 | 13 | 2 | 1 | 81% |
-| 表/元素 | 1 | 4 | 1 | 17% |
-| 导入导出/链接 | 0 | 1 | 1 | 0% |
-| 其他 | 9 | 6 | 5 | 45% |
-| **总计** | **45** | **15** | **12** | **96.7%** |
+| 数值运算 | 17 | 0 | 0 | 100% |
+| 内存操作 | 9 | 0 | 0 | 100% |
+| 控制流 | 14 | 0 | 0 | 100% |
+| 表/元素 | 4 | 3 | 0 | 57% |
+| 导入导出/链接 | 3 | 0 | 0 | 100% |
+| 其他 | 19 | 1 | 2 | 86% |
+| **总计** | **66** | **4** | **2** | **99.8%** |
 
 ---
 
