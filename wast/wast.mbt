@@ -979,7 +979,9 @@ fn Parser::parse_const_value(self : Parser) -> WastValue raise WastError {
           self.advance()
           RefNull(ty)
         }
-        _ => raise UnexpectedToken("expected ref type")
+        // Allow (ref.null) without type - in WAST assertions, the type can be inferred
+        // Use empty string to indicate unspecified type
+        _ => RefNull("")
       }
     }
     Keyword("ref.extern") => {

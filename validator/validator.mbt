@@ -313,46 +313,65 @@ fn OperandStack::check_height(
 ///|
 /// Validate a constant expression (used in data/elem offsets and global init)
 /// Returns the result type of the expression
+/// Supports extended-const proposal: allows i32/i64 arithmetic (add, sub, mul)
 fn validate_const_expr(
   globals : Array[@types.GlobalType],
   expr : Array[@types.Instruction],
   expected_type : @types.ValueType,
   funcs? : Array[Int] = [],
 ) -> Unit raise ValidationError {
-  // Constant expressions must be exactly one instruction that produces a value
-  // Valid constant instructions: i32.const, i64.const, f32.const, f64.const,
-  // ref.null, ref.func, global.get (of immutable import)
   if expr.is_empty() {
     raise TypeMismatch("empty constant expression")
   }
 
-  // Check each instruction is a valid constant instruction
-  let mut result_type : @types.ValueType? = None
+  // Use stack-based type checking for extended constant expressions
+  let type_stack : Array[@types.ValueType] = []
   for instr in expr {
     match instr {
-      I32Const(_) => result_type = Some(@types.ValueType::I32)
-      I64Const(_) => result_type = Some(@types.ValueType::I64)
-      F32Const(_) => result_type = Some(@types.ValueType::F32)
-      F64Const(_) => result_type = Some(@types.ValueType::F64)
-      RefNull(t) => result_type = Some(t)
+      I32Const(_) => type_stack.push(@types.ValueType::I32)
+      I64Const(_) => type_stack.push(@types.ValueType::I64)
+      F32Const(_) => type_stack.push(@types.ValueType::F32)
+      F64Const(_) => type_stack.push(@types.ValueType::F64)
+      RefNull(t) => type_stack.push(t)
       RefFunc(func_idx) => {
-        // Check function index is valid
         if func_idx >= funcs.length() {
           raise InvalidFunctionIndex(func_idx)
         }
-        result_type = Some(@types.ValueType::FuncRef)
+        type_stack.push(@types.ValueType::FuncRef)
       }
       GlobalGet(idx) => {
-        // Check global exists
         if idx >= globals.length() {
           raise InvalidGlobalIndex(idx)
         }
         let global = globals[idx]
-        // Global must be immutable for constant expression
         if global.mutable {
           raise MutableGlobalInConstExpr
         }
-        result_type = Some(global.value_type)
+        type_stack.push(global.value_type)
+      }
+      // Extended-const: i32 arithmetic
+      I32Add | I32Sub | I32Mul => {
+        if type_stack.length() < 2 {
+          raise StackUnderflow("i32 arithmetic in constant expression")
+        }
+        let b = type_stack.pop().unwrap()
+        let a = type_stack.pop().unwrap()
+        if a != @types.ValueType::I32 || b != @types.ValueType::I32 {
+          raise TypeMismatch("i32 arithmetic requires i32 operands")
+        }
+        type_stack.push(@types.ValueType::I32)
+      }
+      // Extended-const: i64 arithmetic
+      I64Add | I64Sub | I64Mul => {
+        if type_stack.length() < 2 {
+          raise StackUnderflow("i64 arithmetic in constant expression")
+        }
+        let b = type_stack.pop().unwrap()
+        let a = type_stack.pop().unwrap()
+        if a != @types.ValueType::I64 || b != @types.ValueType::I64 {
+          raise TypeMismatch("i64 arithmetic requires i64 operands")
+        }
+        type_stack.push(@types.ValueType::I64)
       }
       _ =>
         // Any other instruction is not allowed in constant expressions
@@ -361,20 +380,18 @@ fn validate_const_expr(
   }
 
   // Constant expression must produce exactly one value
-  // Multiple instructions would produce multiple values on the stack
-  if expr.length() > 1 {
-    raise TypeMismatch("constant expression must be single instruction")
+  if type_stack.length() != 1 {
+    raise TypeMismatch(
+      "constant expression must produce exactly one value, got \{type_stack.length()}",
+    )
   }
 
   // Check the result type matches expected
-  match result_type {
-    Some(t) =>
-      if t != expected_type {
-        raise TypeMismatch(
-          "constant expression: expected \{expected_type}, got \{t}",
-        )
-      }
-    None => raise TypeMismatch("constant expression produces no value")
+  let result_type = type_stack[0]
+  if result_type != expected_type {
+    raise TypeMismatch(
+      "constant expression: expected \{expected_type}, got \{result_type}",
+    )
   }
 }
 
@@ -404,6 +421,25 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   // Validate memory limits
   for mem in ctx.mems {
     validate_memory_limits(mem.limits)
+  }
+
+  // Validate global initialization expressions
+  // For each global, its init expression can only reference previously defined globals
+  // (imported globals are already in ctx.globals from imports)
+  let num_imported_globals = count_global_imports(mod.imports)
+  for i, global in mod.globals {
+    // Available globals for this init: imports + module globals before index i
+    let available_globals : Array[@types.GlobalType] = []
+    // Add all imported globals
+    for j in 0..<num_imported_globals {
+      available_globals.push(ctx.globals[j])
+    }
+    // Add module globals defined before this one
+    for j in 0..<i {
+      available_globals.push(mod.globals[j].type_)
+    }
+    // Validate init expression
+    validate_const_expr(available_globals, global.init, global.type_.value_type)
   }
 
   // Validate data segments reference valid memory and have valid offset expressions
@@ -703,6 +739,18 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
+fn count_global_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    match imp.desc {
+      Global(_) => count = count + 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
 /// Validate a function body
 fn validate_function(
   ctx : ValidationContext,
@@ -823,6 +871,10 @@ fn validate_instr(
     GlobalSet(idx) => {
       if idx >= ctx.globals.length() {
         raise InvalidGlobalIndex(idx)
+      }
+      // Global must be mutable to set
+      if !ctx.globals[idx].mutable {
+        raise TypeMismatch("cannot set immutable global")
       }
       stack.pop(ctx.globals[idx].value_type)
     }
