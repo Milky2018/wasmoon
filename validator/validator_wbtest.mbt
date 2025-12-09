@@ -1170,3 +1170,126 @@ test "validator: elem with unknown function should fail" {
   // Should fail with "unknown function" error
   inspect((try? validate_module(mod)) is Err(_), content="true")
 }
+
+// ============================================================
+// Regression tests for func.wast and func_ptrs.wast bugs
+// ============================================================
+
+///|
+test "regression: invalid type index should fail" {
+  // func.wast line 435: (func (type 2)) - unknown type
+  // When a function references a type that doesn't exist, validation should fail
+  let mod : @types.Module = {
+    types: [{ params: [], results: [] }], // only type 0 exists
+    imports: [],
+    funcs: [2], // references type 2, which doesn't exist
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [{ locals: [], body: [] }],
+    datas: [],
+  }
+  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(2))")
+}
+
+///|
+test "regression: uninitialized non-nullable local should fail" {
+  // func.wast line 659: (func (local $x (ref $t)) (drop (local.get $x)))
+  // Non-nullable reference locals must be initialized before use
+  let mod : @types.Module = {
+    types: [{ params: [], results: [] }],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [
+      {
+        locals: [@types.ValueType::RefFunc], // non-nullable ref local
+        body: [LocalGet(0), Drop],
+      },
+    ],
+    datas: [],
+  } // reading uninitialized local
+  inspect(try? validate_module(mod), content="Err(UninitializedLocal(0))")
+}
+
+///|
+test "regression: initialized non-nullable local should pass" {
+  // After setting a non-nullable local, reading it should be valid
+  // Use FuncRef (nullable) as local type since RefFunc(idx) instruction pushes FuncRef
+  let mod : @types.Module = {
+    types: [{ params: [], results: [] }],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [
+      {
+        locals: [@types.ValueType::FuncRef], // nullable ref local
+        body: [
+          RefFunc(0), // push a FuncRef value
+          LocalSet(0), // set the local
+          LocalGet(0), // reading is valid (nullable is always initialized)
+          Drop,
+        ],
+      },
+    ],
+    datas: [],
+  }
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "regression: nullable ref local reading without initialization should pass" {
+  // Nullable reference types (FuncRef) have a default value (null),
+  // so reading without explicit initialization is valid
+  let mod : @types.Module = {
+    types: [{ params: [], results: [] }],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [
+      {
+        locals: [@types.ValueType::FuncRef], // nullable ref local
+        body: [LocalGet(0), Drop],
+      },
+    ],
+    datas: [],
+  } // reading uninitialized nullable local is OK
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "regression: param with non-nullable ref type should be initialized" {
+  // Function parameters are always initialized by the caller
+  let mod : @types.Module = {
+    types: [{ params: [@types.ValueType::RefFunc], results: [] }],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [{ locals: [], body: [LocalGet(0), Drop] }],
+    datas: [], // param 0 is always initialized
+  }
+  inspect(try? validate_module(mod), content="Ok(())")
+}

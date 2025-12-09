@@ -23,6 +23,7 @@ pub(all) suberror ValidationError {
   MutableGlobalInConstExpr // Mutable global referenced in constant expression
   DuplicateExportName(String) // Same export name used more than once
   UnknownExport(String) // Export references unknown entity
+  UninitializedLocal(Int) // Non-nullable ref local read before initialization
   // Error with location context
   WithContext(ValidationErrorContext)
 } derive(Show)
@@ -66,6 +67,7 @@ pub fn ValidationErrorContext::from_error(
     MutableGlobalInConstExpr => "constant expression required"
     DuplicateExportName(name) => "duplicate export name: \{name}"
     UnknownExport(m) => m
+    UninitializedLocal(_) => "uninitialized local"
     WithContext(ctx) => ctx.error_msg
   }
   { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
@@ -157,6 +159,7 @@ priv struct ValidationContext {
   locals : Array[@types.ValueType] // current function's locals
   labels : Array[LabelInfo] // label stack for control flow
   returns : Array[@types.ValueType] // current function's return types
+  local_init : Array[Bool] // tracks which locals have been initialized (for non-nullable refs)
 }
 
 ///|
@@ -220,6 +223,16 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
     locals: [],
     labels: [],
     returns: [],
+    local_init: [],
+  }
+}
+
+///|
+/// Check if a value type is a non-nullable reference type
+fn is_non_nullable_ref(ty : @types.ValueType) -> Bool {
+  match ty {
+    RefFunc | RefExtern => true
+    _ => false
   }
 }
 
@@ -370,6 +383,14 @@ fn validate_const_expr(
 pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   let ctx = ValidationContext::new(mod)
 
+  // Validate that all function type indices are valid
+  for i, type_idx in ctx.funcs {
+    if type_idx >= ctx.types.length() {
+      raise InvalidTypeIndex(type_idx)
+    }
+    ignore(i)
+  }
+
   // Check for multiple memories (not allowed in MVP)
   if ctx.mems.length() > 1 {
     raise MultipleMemories
@@ -467,6 +488,16 @@ pub fn validate_module_with_context(
 ) -> Unit raise ValidationError {
   let ctx = ValidationContext::new(mod)
 
+  // Validate that all function type indices are valid
+  for i, type_idx in ctx.funcs {
+    if type_idx >= ctx.types.length() {
+      raise WithContext(
+        ValidationErrorContext::from_error(InvalidTypeIndex(type_idx)),
+      )
+    }
+    ignore(i)
+  }
+
   // Check for multiple memories (not allowed in MVP)
   if ctx.mems.length() > 1 {
     raise WithContext(ValidationErrorContext::from_error(MultipleMemories))
@@ -558,11 +589,17 @@ fn validate_function_with_offset(
 ) -> Unit raise ValidationError {
   // Set up locals: params + declared locals
   let locals : Array[@types.ValueType] = []
+  let local_init : Array[Bool] = []
+  // Parameters are always initialized (provided by caller)
   for param in func_type.params {
     locals.push(param)
+    local_init.push(true)
   }
+  // Declared locals: initialized only if they have a default value (not non-nullable ref)
   for local_type in code.locals {
     locals.push(local_type)
+    // Non-nullable reference types don't have a default value, so they start uninitialized
+    local_init.push(!is_non_nullable_ref(local_type))
   }
 
   // Create validation context for this function
@@ -576,6 +613,7 @@ fn validate_function_with_offset(
     locals,
     labels: [],
     returns: func_type.results,
+    local_init,
   }
   let stack = OperandStack::new()
 
@@ -673,11 +711,17 @@ fn validate_function(
 ) -> Unit raise ValidationError {
   // Set up locals: params + declared locals
   let locals : Array[@types.ValueType] = []
+  let local_init : Array[Bool] = []
+  // Parameters are always initialized (provided by caller)
   for param in func_type.params {
     locals.push(param)
+    local_init.push(true)
   }
+  // Declared locals: initialized only if they have a default value (not non-nullable ref)
   for local_type in code.locals {
     locals.push(local_type)
+    // Non-nullable reference types don't have a default value, so they start uninitialized
+    local_init.push(!is_non_nullable_ref(local_type))
   }
 
   // Create validation context for this function
@@ -691,6 +735,7 @@ fn validate_function(
     locals,
     labels: [],
     returns: func_type.results,
+    local_init,
   }
   let stack = OperandStack::new()
 
@@ -740,6 +785,10 @@ fn validate_instr(
       if idx >= ctx.locals.length() {
         raise InvalidLocalIndex(idx)
       }
+      // Check if non-nullable ref local is initialized
+      if idx < ctx.local_init.length() && !ctx.local_init[idx] {
+        raise UninitializedLocal(idx)
+      }
       stack.push(ctx.locals[idx])
     }
     LocalSet(idx) => {
@@ -747,6 +796,10 @@ fn validate_instr(
         raise InvalidLocalIndex(idx)
       }
       stack.pop(ctx.locals[idx])
+      // Mark local as initialized
+      if idx < ctx.local_init.length() {
+        ctx.local_init[idx] = true
+      }
     }
     LocalTee(idx) => {
       if idx >= ctx.locals.length() {
@@ -754,6 +807,10 @@ fn validate_instr(
       }
       stack.pop(ctx.locals[idx])
       stack.push(ctx.locals[idx])
+      // Mark local as initialized
+      if idx < ctx.local_init.length() {
+        ctx.local_init[idx] = true
+      }
     }
 
     // Global operations
