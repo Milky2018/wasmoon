@@ -904,3 +904,67 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     Virtual(_) => inspect(false, content="true")
   }
 }
+
+// ============ Minimal Test: Dead Float Constants ============
+// This test reproduces the pattern from WASM local initialization.
+// The issue: dead value and live value get allocated to the same register.
+
+///|
+test "minimal: dead float constant should not affect live values" {
+  let builder = @ir.IRBuilder::new("dead_fconst_test")
+  builder.add_result(@ir.Type::F32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Use DIFFERENT values to make bug obvious:
+  // If f0 and f1 share register, return value will be WRONG
+  let v1 = builder.fconst_f32(1.0) // DEAD - should not affect result
+  let v2 = builder.fconst_f32(2.0) // LIVE - returned, must be 2.0
+  let v3 = builder.fconst_f32(10.0) // LIVE - stored to memory
+
+  let addr = builder.iconst_i32(0)
+  builder.store(@ir.Type::F32, addr, v3, 0)
+  builder.return_([v2])
+  ignore(v1)
+
+  // Lower to VCode
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode dead_fconst_test() -> float {
+      #|block0:
+      #|    f0 = ldf 1
+      #|    f1 = ldf 2
+      #|    f2 = ldf 10
+      #|    v3 = ldi 0
+      #|    bounds_check +0, 4 v3
+      #|    v4 = add x21, v3
+      #|    store.f32 +0 v4, f2
+      #|    ret f1
+      #|}
+      #|
+    ),
+  )
+
+  // Register allocation - CRITICAL:
+  // f1 (2.0) MUST have its own register, NOT shared with f0 (1.0)
+  let allocated_func = allocate_registers_aarch64(vcode_func)
+  inspect(
+    allocated_func.print(),
+    content=(
+      #|vcode dead_fconst_test() -> float {
+      #|block0:
+      #|    d0 = ldf 1
+      #|    d1 = ldf 2
+      #|    d2 = ldf 10
+      #|    x8 = ldi 0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d2
+      #|    ret d1
+      #|}
+      #|
+    ),
+  )
+}
