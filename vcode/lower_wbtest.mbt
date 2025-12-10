@@ -297,6 +297,111 @@ test "lower float comparison" {
 }
 
 ///|
+test "lower f64 operations" {
+  let builder = @ir.IRBuilder::new("f64_add")
+  let a = builder.add_param(@ir.Type::F64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::F64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let sum = builder.fadd(a, b)
+  let prod = builder.fmul(sum, a)
+  builder.return_([prod])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode f64_add(f0:double, f1:double) -> double {
+      #|block0:
+      #|    f2 = fadd f0, f1
+      #|    f3 = fmul f2, f0
+      #|    ret f3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower f64 comparison" {
+  let builder = @ir.IRBuilder::new("f64_cmp_test")
+  let a = builder.add_param(@ir.Type::F64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let cmp_result = builder.fcmp(@ir.FloatCC::Gt, a, b)
+  builder.return_([cmp_result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  let expected =
+    #|vcode f64_cmp_test(f0:double, f1:double) -> int {
+    #|block0:
+    #|    v2 = fcmp.gt f0, f1
+    #|    ret v2
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower f64 division and subtraction" {
+  let builder = @ir.IRBuilder::new("f64_ops")
+  let a = builder.add_param(@ir.Type::F64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::F64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let div = builder.fdiv(a, b)
+  let result = builder.fsub(div, b)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode f64_ops(f0:double, f1:double) -> double {
+      #|block0:
+      #|    f2 = fdiv f0, f1
+      #|    f3 = fsub f2, f1
+      #|    ret f3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower mixed int and f64" {
+  // fn mixed(a: i64, b: f64) -> f64
+  // Converts int to float and adds
+  let builder = @ir.IRBuilder::new("mixed_int_f64")
+  let a = builder.add_param(@ir.Type::I64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::F64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  // Just return b doubled (can't convert int to float in current IR)
+  let result = builder.fadd(b, b)
+  builder.return_([result])
+  ignore(a)
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode mixed_int_f64(v0:int, f1:double) -> double {
+      #|block0:
+      #|    f2 = fadd f1, f1
+      #|    ret f2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower unconditional jump" {
   let builder = @ir.IRBuilder::new("jump_test")
   builder.add_result(@ir.Type::I32)

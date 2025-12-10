@@ -433,6 +433,7 @@ pub(all) struct MachineCode {
   mut pos : Int
   labels : Map[Int, Int]
   fixups : Array[Fixup]
+  disasm : Array[(Int, String)]
 }
 pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
 pub fn MachineCode::align(Self, Int) -> Unit
@@ -440,6 +441,7 @@ pub fn MachineCode::align_block(Self) -> Unit
 pub fn MachineCode::align_function(Self) -> Unit
 pub fn MachineCode::current_pos(Self) -> Int
 pub fn MachineCode::define_label(Self, Int) -> Unit
+pub fn MachineCode::dump_disasm(Self) -> String
 pub fn MachineCode::emit_byte(Self, Int) -> Unit
 pub fn MachineCode::emit_inst(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::get_bytes(Self) -> Array[Int]

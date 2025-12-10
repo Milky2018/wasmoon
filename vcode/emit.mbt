@@ -17,6 +17,8 @@ pub(all) struct MachineCode {
   labels : Map[Int, Int] // block_id -> offset
   // Pending fixups for forward branches
   fixups : Array[Fixup]
+  // Disassembly annotations (offset -> instruction text)
+  disasm : Array[(Int, String)]
 }
 
 ///|
@@ -39,7 +41,7 @@ pub enum FixupKind {
 
 ///|
 pub fn MachineCode::new() -> MachineCode {
-  { bytes: [], pos: 0, labels: {}, fixups: [] }
+  { bytes: [], pos: 0, labels: {}, fixups: [], disasm: [] }
 }
 
 ///|
@@ -68,6 +70,75 @@ pub fn MachineCode::emit_inst(
 /// Current position in the buffer
 pub fn MachineCode::current_pos(self : MachineCode) -> Int {
   self.pos
+}
+
+///|
+/// Add a disassembly annotation at the current position
+fn MachineCode::annotate(self : MachineCode, text : String) -> Unit {
+  self.disasm.push((self.pos, text))
+}
+
+///|
+/// Dump disassembly with hex bytes
+pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
+  let mut result = ""
+  // Build a map of offset -> label for block labels
+  let label_map : Map[Int, Int] = {}
+  for entry in self.labels {
+    label_map.set(entry.1, entry.0)
+  }
+  // Sort disasm by offset
+  let sorted = self.disasm.copy()
+  sorted.sort_by(fn(a, b) { a.0.compare(b.0) })
+  for entry in sorted {
+    let (offset, text) = entry
+    // Check if there's a label at this offset
+    if label_map.get(offset) is Some(block_id) {
+      result = result + "block\{block_id}:\n"
+    }
+    // Get the 4 bytes at this offset
+    let b0 = if offset < self.bytes.length() { self.bytes[offset] } else { 0 }
+    let b1 = if offset + 1 < self.bytes.length() {
+      self.bytes[offset + 1]
+    } else {
+      0
+    }
+    let b2 = if offset + 2 < self.bytes.length() {
+      self.bytes[offset + 2]
+    } else {
+      0
+    }
+    let b3 = if offset + 3 < self.bytes.length() {
+      self.bytes[offset + 3]
+    } else {
+      0
+    }
+    let hex = hex2(b0) + hex2(b1) + hex2(b2) + hex2(b3)
+    result = result + "  \{to_hex4(offset)}: \{hex}  \{text}\n"
+  }
+  result
+}
+
+///|
+fn hex2(n : Int) -> String {
+  let hi = (n >> 4) & 0xF
+  let lo = n & 0xF
+  let hi_c = if hi < 10 {
+    Int::unsafe_to_char(hi + 48).to_string()
+  } else {
+    Int::unsafe_to_char(hi - 10 + 97).to_string()
+  }
+  let lo_c = if lo < 10 {
+    Int::unsafe_to_char(lo + 48).to_string()
+  } else {
+    Int::unsafe_to_char(lo - 10 + 97).to_string()
+  }
+  hi_c + lo_c
+}
+
+///|
+fn to_hex4(n : Int) -> String {
+  hex2((n >> 8) & 0xFF) + hex2(n & 0xFF)
 }
 
 ///|
@@ -1129,6 +1200,7 @@ pub fn emit_fdiv_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode FMOV (double, register): FMOV Dd, Dm
 /// Opcode: 0x1E604000
 pub fn emit_fmov_d(mc : MachineCode, rd : Int, rm : Int) -> Unit {
+  mc.annotate("fmov d\{rd}, d\{rm}")
   let b0 = (rd & 31) | ((rm & 3) << 5)
   let b1 = ((rm >> 2) & 7) | 64 // 0x40
   let b2 = 96 // 0x60

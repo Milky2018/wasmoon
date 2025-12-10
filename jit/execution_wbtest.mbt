@@ -148,7 +148,7 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   let code_bytes = mc.get_bytes()
   let exec_code = ExecCode::new(code_bytes)
   guard exec_code is Some(exec) else { return }
-  defer exec.free()
+  defer exec..free()
 
   // ============ Execute and Verify ============
   // Expected: test(0) = 10.0, test(1) = 10.0, test(2) = 10.0, test(3) = 0.0

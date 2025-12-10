@@ -1238,3 +1238,187 @@ test "regalloc: br_table pattern with 4 targets" {
   }
   inspect(pregs, content="[Some(x8), Some(x8), Some(x8), Some(x8)]")
 }
+
+///|
+test "regalloc: f64 registers" {
+  // Test register allocation for Float64 (double) values
+  //
+  // f0 = ldf 1.5   ; double
+  // f1 = ldf 2.5   ; double
+  // f2 = fadd f0, f1  ; double
+  // ret f2
+
+  let func = VCodeFunction::new("f64_test")
+  func.add_result(Float64)
+  let block = func.new_block()
+  let f0 = func.new_vreg(Float64)
+  let f1 = func.new_vreg(Float64)
+  let f2 = func.new_vreg(Float64)
+
+  // f0 = ldf 1.5 (double bits)
+  let inst0 = VCodeInst::new(
+    LoadConstF64((1.5 : Double).reinterpret_as_int64()),
+  )
+  inst0.add_def({ reg: Virtual(f0) })
+  block.add_inst(inst0)
+
+  // f1 = ldf 2.5 (double bits)
+  let inst1 = VCodeInst::new(
+    LoadConstF64((2.5 : Double).reinterpret_as_int64()),
+  )
+  inst1.add_def({ reg: Virtual(f1) })
+  block.add_inst(inst1)
+
+  // f2 = fadd f0, f1
+  let inst2 = VCodeInst::new(FAdd)
+  inst2.add_use(Virtual(f0))
+  inst2.add_use(Virtual(f1))
+  inst2.add_def({ reg: Virtual(f2) })
+  block.add_inst(inst2)
+  block.set_terminator(Return([Virtual(f2)]))
+
+  // Show VCode before allocation
+  inspect(
+    func.print(),
+    content=(
+      #|vcode f64_test() -> double {
+      #|block0:
+      #|    f0 = ldf 1.5
+      #|    f1 = ldf 2.5
+      #|    f2 = fadd f0, f1
+      #|    ret f2
+      #|}
+      #|
+    ),
+  )
+
+  // Allocate registers
+  let allocated = allocate_registers_aarch64(func)
+
+  // Float64 values should use d registers
+  inspect(
+    allocated.print(),
+    content=(
+      #|vcode f64_test() -> double {
+      #|block0:
+      #|    d0 = ldf 1.5
+      #|    d1 = ldf 2.5
+      #|    d2 = fadd d0, d1
+      #|    ret d2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "regalloc: mixed int, f32, f64 registers" {
+  // Test register allocation with all three types mixed
+  // Chain all values so nothing is dead:
+  //
+  // v0 = ldi 10       ; int
+  // f1 = ldf 3.14     ; float32
+  // f2 = ldf 2.718    ; float64 (double)
+  // v3 = add v0, v0   ; int (uses v0)
+  // f4 = fadd f1, f2  ; uses f1 and f2
+  // f5 = fadd f4, f4  ; uses f4
+  // store v3          ; uses v3 (keeps int chain alive)
+  // ret f5
+
+  let func = VCodeFunction::new("mixed_types")
+  func.add_result(Float64)
+  let block = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let f1 = func.new_vreg(Float32)
+  let f2 = func.new_vreg(Float64)
+  let v3 = func.new_vreg(Int)
+  let f4 = func.new_vreg(Float64)
+  let f5 = func.new_vreg(Float64)
+
+  // v0 = ldi 10
+  let inst0 = VCodeInst::new(LoadConst(10L))
+  inst0.add_def({ reg: Virtual(v0) })
+  block.add_inst(inst0)
+
+  // f1 = ldf 3.14 (float32)
+  let inst1 = VCodeInst::new(LoadConstF32((3.14 : Float).reinterpret_as_int()))
+  inst1.add_def({ reg: Virtual(f1) })
+  block.add_inst(inst1)
+
+  // f2 = ldf 2.718 (float64)
+  let inst2 = VCodeInst::new(
+    LoadConstF64((2.718 : Double).reinterpret_as_int64()),
+  )
+  inst2.add_def({ reg: Virtual(f2) })
+  block.add_inst(inst2)
+
+  // v3 = add v0, v0
+  let inst3 = VCodeInst::new(Add)
+  inst3.add_use(Virtual(v0))
+  inst3.add_use(Virtual(v0))
+  inst3.add_def({ reg: Virtual(v3) })
+  block.add_inst(inst3)
+
+  // f4 = fadd f1, f2 (mix float32 and float64)
+  let inst4 = VCodeInst::new(FAdd)
+  inst4.add_use(Virtual(f1))
+  inst4.add_use(Virtual(f2))
+  inst4.add_def({ reg: Virtual(f4) })
+  block.add_inst(inst4)
+
+  // f5 = fadd f4, f4
+  let inst5 = VCodeInst::new(FAdd)
+  inst5.add_use(Virtual(f4))
+  inst5.add_use(Virtual(f4))
+  inst5.add_def({ reg: Virtual(f5) })
+  block.add_inst(inst5)
+
+  // store.i32 +0, v3 (keeps v3 alive)
+  let inst6 = VCodeInst::new(Store(I32, 0))
+  inst6.add_use(Virtual(v3)) // addr
+  inst6.add_use(Virtual(v3)) // value
+  block.add_inst(inst6)
+  block.set_terminator(Return([Virtual(f5)]))
+
+  // Show VCode before allocation
+  inspect(
+    func.print(),
+    content=(
+      #|vcode mixed_types() -> double {
+      #|block0:
+      #|    v0 = ldi 10
+      #|    f1 = ldf 3.140000104904175
+      #|    f2 = ldf 2.718
+      #|    v3 = add v0, v0
+      #|    f4 = fadd f1, f2
+      #|    f5 = fadd f4, f4
+      #|    store.i32 +0 v3, v3
+      #|    ret f5
+      #|}
+      #|
+    ),
+  )
+
+  // Allocate registers
+  let allocated = allocate_registers_aarch64(func)
+
+  // Int values should use x registers, all floats should use d registers
+  // Float32 and Float64 share the same physical register file (d0-d31)
+  inspect(
+    allocated.print(),
+    content=(
+      #|vcode mixed_types() -> double {
+      #|block0:
+      #|    x8 = ldi 10
+      #|    d0 = ldf 3.140000104904175
+      #|    d1 = ldf 2.718
+      #|    x19 = add x8, x8
+      #|    d2 = fadd d0, d1
+      #|    d3 = fadd d2, d2
+      #|    store.i32 +0 x19, x19
+      #|    ret d3
+      #|}
+      #|
+    ),
+  )
+}

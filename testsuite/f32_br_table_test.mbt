@@ -167,6 +167,9 @@ test "A critical bug as in data/f32_br_2locals" {
     ),
   )
   let mc = @vcode.emit_function(allocated_func)
+  // Debug: dump disassembly
+  println("=== Disassembly ===")
+  println(mc.dump_disasm())
   let ctx = @jit.JITContext::new(1)
   guard ctx is Some(jit_ctx) else { return }
   defer jit_ctx.free()
