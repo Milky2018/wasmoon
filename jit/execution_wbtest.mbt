@@ -152,29 +152,22 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
 
   // ============ Execute and Verify ============
   // Expected: test(0) = 10.0, test(1) = 10.0, test(2) = 10.0, test(3) = 0.0
-  let expected_10_bits = (10.0 : Float).reinterpret_as_int().to_int64()
-  let expected_0_bits = (0.0 : Float).reinterpret_as_int().to_int64()
 
   // test(0) should return 10.0
-  let result0 = jit_ctx.call_i64_i64(exec.ptr, 0L) catch { _ => return }
-  // F32 result is in the low 32 bits
-  let result0_f32_bits = result0 & 0xFFFFFFFFL
-  inspect(result0_f32_bits == expected_10_bits, content="true")
+  let result0 = jit_ctx.call_i64_f32(exec.ptr, 0L) catch { _ => return }
+  inspect(result0 == 10.0, content="true")
 
   // test(1) should return 10.0
-  let result1 = jit_ctx.call_i64_i64(exec.ptr, 1L) catch { _ => return }
-  let result1_f32_bits = result1 & 0xFFFFFFFFL
-  inspect(result1_f32_bits == expected_10_bits, content="true")
+  let result1 = jit_ctx.call_i64_f32(exec.ptr, 1L) catch { _ => return }
+  inspect(result1 == 10.0, content="true")
 
   // test(2) should return 10.0
-  let result2 = jit_ctx.call_i64_i64(exec.ptr, 2L) catch { _ => return }
-  let result2_f32_bits = result2 & 0xFFFFFFFFL
-  inspect(result2_f32_bits == expected_10_bits, content="true")
+  let result2 = jit_ctx.call_i64_f32(exec.ptr, 2L) catch { _ => return }
+  inspect(result2 == 10.0, content="true")
 
   // test(3) should return 0.0 (default case, local2 never set)
-  let result3 = jit_ctx.call_i64_i64(exec.ptr, 3L) catch { _ => return }
-  let result3_f32_bits = result3 & 0xFFFFFFFFL
-  inspect(result3_f32_bits == expected_0_bits, content="true")
+  let result3 = jit_ctx.call_i64_f32(exec.ptr, 3L) catch { _ => return }
+  inspect(result3 == 0.0, content="true")
 }
 
 // ============ End-to-End WAST Source Test ============
@@ -511,8 +504,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
 
   // ============ Phase 6: Execute assert_return commands ============
   // Process each assert_return from the WAST script
-  // Collect results: (input, expected_bits, actual_bits)
-  let results : Array[(Int64, Int64, Int64)] = []
+  // Collect results: (input, expected, actual)
+  let results : Array[(Int64, Float, Float)] = []
   for i in 1..<script.commands.length() {
     let (cmd, _) = script.commands[i]
     match cmd {
@@ -530,19 +523,16 @@ test "end-to-end: f32_br_2locals.wast from source" {
             }
 
             // Get expected result
-            let expected_bits = match expected[0] {
-              @wast.WastValue::F32(f) => f.reinterpret_as_int().to_int64()
+            let expected_f32 = match expected[0] {
+              @wast.WastValue::F32(f) => f
               _ => continue
             }
 
             // Call the JIT-compiled function
-            let result = jit_ctx.call_i64_i64(exec.ptr, arg) catch {
+            let result_f32 = jit_ctx.call_i64_f32(exec.ptr, arg) catch {
               _ => continue
             }
-
-            // F32 result is in the low 32 bits
-            let result_bits = result & 0xFFFFFFFFL
-            results.push((arg, expected_bits, result_bits))
+            results.push((arg, expected_f32, result_f32))
           }
           _ => ()
         }
@@ -552,9 +542,5 @@ test "end-to-end: f32_br_2locals.wast from source" {
 
   // Show all test results: (input, expected, actual)
   // Expected: all 4 tests pass with correct values
-  // 10.0f32 bits = 1092616192, 0.0f32 bits = 0
-  inspect(
-    results,
-    content="[(0, 1092616192, 1092616192), (1, 1092616192, 1092616192), (2, 1092616192, 1092616192), (3, 0, 0)]",
-  )
+  inspect(results, content="[(0, 10, 10), (1, 10, 10), (2, 10, 10), (3, 0, 0)]")
 }

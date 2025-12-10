@@ -228,10 +228,16 @@ pub(all) struct JITContext {
   func_table_ptr : Int64
 }
 pub fn JITContext::activate(Self) -> Unit
+pub fn JITContext::call_i64_f32(Self, Int64, Int64) -> Float raise JITTrap
+pub fn JITContext::call_i64_f64(Self, Int64, Int64) -> Double raise JITTrap
 pub fn JITContext::call_i64_i64(Self, Int64, Int64) -> Int64 raise JITTrap
 pub fn JITContext::call_i64_void(Self, Int64, Int64) -> Unit raise JITTrap
+pub fn JITContext::call_i64i64_f32(Self, Int64, Int64, Int64) -> Float raise JITTrap
+pub fn JITContext::call_i64i64_f64(Self, Int64, Int64, Int64) -> Double raise JITTrap
 pub fn JITContext::call_i64i64_i64(Self, Int64, Int64, Int64) -> Int64 raise JITTrap
 pub fn JITContext::call_i64i64_void(Self, Int64, Int64, Int64) -> Unit raise JITTrap
+pub fn JITContext::call_void_f32(Self, Int64) -> Float raise JITTrap
+pub fn JITContext::call_void_f64(Self, Int64) -> Double raise JITTrap
 pub fn JITContext::call_void_i64(Self, Int64) -> Int64 raise JITTrap
 pub fn JITContext::call_void_void(Self, Int64) -> Unit raise JITTrap
 pub fn JITContext::free(Self) -> Unit

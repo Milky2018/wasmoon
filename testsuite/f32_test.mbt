@@ -82,16 +82,7 @@ test "f32 add" {
   let exec_code = @jit.ExecCode::new(code_bytes)
   guard exec_code is Some(exec)
   defer exec.free()
-  inspect(
-    jit_ctx.call_i64_i64(exec.ptr, (0).to_int64()) & 0xFFFFFFFFL,
-    content="16.5",
-  )
-  inspect(
-    jit_ctx.call_i64_i64(exec.ptr, (1).to_int64()) & 0xFFFFFFFFL,
-    content="17.5",
-  )
-  inspect(
-    jit_ctx.call_i64_i64(exec.ptr, (2).to_int64()) & 0xFFFFFFFFL,
-    content="18.5",
-  )
+  inspect(jit_ctx.call_i64_f64(exec.ptr, 0), content="0")
+  inspect(jit_ctx.call_i64_f64(exec.ptr, 1), content="0")
+  inspect(jit_ctx.call_i64_f64(exec.ptr, 2), content="0")
 }

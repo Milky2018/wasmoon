@@ -217,6 +217,57 @@ extern "c" fn c_jit_call_ctx_i64i64_void(
   arg1 : Int64,
 ) -> Unit = "wasmoon_jit_call_ctx_i64i64_void"
 
+// ============ Float Return Value Calls ============
+// AAPCS64: float/double returns are in D0, not X0
+
+///|
+/// Call JIT function with context: () -> f32
+extern "c" fn c_jit_call_ctx_void_f32(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+) -> Float = "wasmoon_jit_call_ctx_void_f32"
+
+///|
+/// Call JIT function with context: (i64) -> f32
+extern "c" fn c_jit_call_ctx_i64_f32(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  arg0 : Int64,
+) -> Float = "wasmoon_jit_call_ctx_i64_f32"
+
+///|
+/// Call JIT function with context: (i64, i64) -> f32
+extern "c" fn c_jit_call_ctx_i64i64_f32(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Float = "wasmoon_jit_call_ctx_i64i64_f32"
+
+///|
+/// Call JIT function with context: () -> f64
+extern "c" fn c_jit_call_ctx_void_f64(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+) -> Double = "wasmoon_jit_call_ctx_void_f64"
+
+///|
+/// Call JIT function with context: (i64) -> f64
+extern "c" fn c_jit_call_ctx_i64_f64(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  arg0 : Int64,
+) -> Double = "wasmoon_jit_call_ctx_i64_f64"
+
+///|
+/// Call JIT function with context: (i64, i64) -> f64
+extern "c" fn c_jit_call_ctx_i64i64_f64(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Double = "wasmoon_jit_call_ctx_i64i64_f64"
+
 // ============ Legacy JIT function calls (without context) ============
 
 ///|
@@ -457,6 +508,88 @@ pub fn JITContext::call_i64i64_void(
 ) -> Unit raise JITTrap {
   c_jit_call_ctx_i64i64_void(func_ptr, self.func_table_ptr, arg0, arg1)
   check_trap()
+}
+
+///|
+/// Call a JIT function with this context: () -> f32
+pub fn JITContext::call_void_f32(
+  self : JITContext,
+  func_ptr : Int64,
+) -> Float raise JITTrap {
+  let result = c_jit_call_ctx_void_f32(func_ptr, self.func_table_ptr)
+  check_trap()
+  result
+}
+
+///|
+/// Call a JIT function with this context: (i64) -> f32
+pub fn JITContext::call_i64_f32(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+) -> Float raise JITTrap {
+  let result = c_jit_call_ctx_i64_f32(func_ptr, self.func_table_ptr, arg0)
+  check_trap()
+  result
+}
+
+///|
+/// Call a JIT function with this context: (i64, i64) -> f32
+pub fn JITContext::call_i64i64_f32(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Float raise JITTrap {
+  let result = c_jit_call_ctx_i64i64_f32(
+    func_ptr,
+    self.func_table_ptr,
+    arg0,
+    arg1,
+  )
+  check_trap()
+  result
+}
+
+///|
+/// Call a JIT function with this context: () -> f64
+pub fn JITContext::call_void_f64(
+  self : JITContext,
+  func_ptr : Int64,
+) -> Double raise JITTrap {
+  let result = c_jit_call_ctx_void_f64(func_ptr, self.func_table_ptr)
+  check_trap()
+  result
+}
+
+///|
+/// Call a JIT function with this context: (i64) -> f64
+pub fn JITContext::call_i64_f64(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+) -> Double raise JITTrap {
+  let result = c_jit_call_ctx_i64_f64(func_ptr, self.func_table_ptr, arg0)
+  check_trap()
+  result
+}
+
+///|
+/// Call a JIT function with this context: (i64, i64) -> f64
+pub fn JITContext::call_i64i64_f64(
+  self : JITContext,
+  func_ptr : Int64,
+  arg0 : Int64,
+  arg1 : Int64,
+) -> Double raise JITTrap {
+  let result = c_jit_call_ctx_i64i64_f64(
+    func_ptr,
+    self.func_table_ptr,
+    arg0,
+    arg1,
+  )
+  check_trap()
+  result
 }
 
 ///|
