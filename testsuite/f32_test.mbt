@@ -84,7 +84,96 @@ test "f32 add" {
   defer exec.free()
   // Pass Float values (f32) since the WASM function takes f32 parameter
   // JITArg for Float reinterprets the f32 bit pattern and passes it correctly
+  inspect(jit_ctx.call_f64_1(exec.ptr, (0.0 : Float)), content="15.5")
+  inspect(jit_ctx.call_f64_1(exec.ptr, (1.0 : Float)), content="16.5")
+  inspect(jit_ctx.call_f64_1(exec.ptr, (2.0 : Float)), content="17.5")
+}
+
+///|
+test "f64 add" {
+  let source =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "test") (param f64) (result f64)
+    #|    (local.get 0)
+    #|    (f64.const 15.5)
+    #|    (f64.add)
+    #|  )
+    #|)
+  let ir = @wat.parse(source)
+  let func_code = ir.codes[0]
+  let func_type_idx = ir.funcs[0]
+  let func_type = ir.types[func_type_idx]
+
+  // Get locals from the function code
+  let locals : Array[@types.ValueType] = []
+  for loc in func_code.locals {
+    locals.push(loc)
+  }
+
+  // Create translator and translate WASM to IR
+  let translator = @ir.Translator::new(
+    "test",
+    func_type,
+    locals,
+    ir.types,
+    ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
+    0, // num_imports
+    [], // import_func_type_indices
+  )
+  let ir_func = translator.translate(func_code.body)
+  inspect(
+    ir_func.print(),
+    content=(
+      #|function test(v0:f64) -> f64 {
+      #|block0:
+      #|    v1:f64 = fconst 15.5
+      #|    v2:f64 = fadd v0, v1
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+  let vcode = @vcode.lower_function(ir_func)
+  inspect(
+    vcode,
+    content=(
+      #|vcode test(f0:double) -> double {
+      #|block0:
+      #|    f1 = ldf 15.5
+      #|    f2 = fadd f0, f1
+      #|    ret f2
+      #|}
+      #|
+    ),
+  )
+  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  inspect(
+    allocated_func.print(),
+    content=(
+      #|vcode test(f0:double) -> double {
+      #|block0:
+      #|    d1 = ldf 15.5
+      #|    d2 = fadd d0, d1
+      #|    ret d2
+      #|}
+      #|
+    ),
+  )
+  let mc = @vcode.emit_function(allocated_func)
+  let ctx = @jit.JITContext::new(1)
+  guard ctx is Some(jit_ctx) else { return }
+  defer jit_ctx.free()
+  let mem_size = 4096L
+  let mem_ptr = @jit.alloc_memory(mem_size)
+  guard mem_ptr != 0L else { return }
+  defer @jit.free_memory(mem_ptr)
+  jit_ctx.set_memory(mem_ptr, mem_size)
+  let code_bytes = mc.get_bytes()
+  let exec_code = @jit.ExecCode::new(code_bytes)
+  guard exec_code is Some(exec)
+  defer exec.free()
   inspect(jit_ctx.call_f64_1(exec.ptr, (0.0 : Double)), content="15.5")
   inspect(jit_ctx.call_f64_1(exec.ptr, (1.0 : Double)), content="16.5")
-  inspect(jit_ctx.call_f64_1(exec.ptr, (2.0 : Float)), content="17.5")
+  inspect(jit_ctx.call_f64_1(exec.ptr, (2.0 : Double)), content="17.5")
 }

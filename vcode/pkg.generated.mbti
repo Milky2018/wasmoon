@@ -567,7 +567,8 @@ pub(all) struct RegAllocResult {
 
 pub(all) enum RegClass {
   Int
-  Float
+  Float32
+  Float64
 }
 pub impl Show for RegClass
 

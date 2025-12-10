@@ -689,7 +689,7 @@ pub fn LinearScanAllocator::allocate(
   for i, param in func.params {
     let preg = match param.class {
       Int => { index: i + 3, class: Int } // X3, X4, X5, ...
-      Float => { index: i, class: Float } // D0, D1, D2, ... (float params)
+      Float32 | Float64 => { index: i, class: param.class } // D0, D1, D2, ... (float params)
     }
     result.assignments.set(param.id, preg)
     // Mark the register as initially occupied
@@ -725,7 +725,7 @@ pub fn LinearScanAllocator::allocate(
     // Get available registers for this class
     let avail_regs = match interval.vreg.class {
       Int => self.int_regs
-      Float => self.float_regs
+      Float32 | Float64 => self.float_regs
     }
 
     // Try to allocate a register
@@ -780,11 +780,14 @@ fn LinearScanAllocator::expire_old_intervals(
 }
 
 ///|
-/// Check if two register classes are equal
+/// Check if two register classes are compatible (can use same physical registers)
 fn reg_class_eq(a : RegClass, b : RegClass) -> Bool {
   match (a, b) {
     (Int, Int) => true
-    (Float, Float) => true
+    (Float32, Float32)
+    | (Float32, Float64)
+    | (Float64, Float32)
+    | (Float64, Float64) => true
     _ => false
   }
 }
@@ -851,7 +854,7 @@ fn LinearScanAllocator::spill_interval(
     // Get a register for this reload (use first available)
     let avail_regs = match interval.vreg.class {
       Int => self.int_regs
-      Float => self.float_regs
+      Float32 | Float64 => self.float_regs
     }
     if avail_regs.length() > 0 {
       result.reloads.push({

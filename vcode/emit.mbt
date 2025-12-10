@@ -1424,19 +1424,24 @@ fn emit_prologue(
   // Float params need special handling:
   //   - For f32: lower 32 bits of X register contain f32 bit pattern
   //     We need to extract to S register, then FCVT to D register
-  //   - Since we treat all floats as f64 internally, f32 values must be converted
+  //   - For f64: full 64 bits of X register contain f64 bit pattern
+  //     We need to FMOV from X register to D register
   // Regalloc assigns: Int param i → X(3+i), Float param i → D(i)
   for param_idx, param in params {
     let x_src = 3 + param_idx // X3, X4, X5, ... (source in FFI convention)
     match param.class {
-      Float => {
-        // Float param: extract f32 from lower 32 bits and convert to f64
+      Float32 => {
+        // Float32 param: extract f32 from lower 32 bits and convert to f64
         // 1. FMOV S16, W(x_src) - move lower 32 bits to S register
         // 2. FCVT D(param_idx), S16 - convert f32 to f64
         // This handles f32 values passed via JITArg (reinterpreted bits in lower 32)
         emit_fmov_w_to_s(mc, 16, x_src) // FMOV S16, W(3+i)
         emit_fcvt_d_s(mc, param_idx, 16) // FCVT D(i), S16
       }
+      Float64 =>
+        // Float64 param: move full 64 bits from X register to D register
+        // FMOV D(param_idx), X(x_src)
+        emit_fmov_x_to_d(mc, param_idx, x_src)
       Int =>
         // Int param: already in X(3+i) where regalloc expects it
         // No move needed
@@ -1730,7 +1735,7 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
         Virtual(_) => Int // Should not happen at emit time
       }
       match reg_class {
-        Float => emit_fmov_d(mc, rd, rm)
+        Float32 | Float64 => emit_fmov_d(mc, rd, rm)
         Int => emit_mov_reg(mc, rd, rm)
       }
     }
@@ -2034,7 +2039,7 @@ fn emit_terminator_with_epilogue(
           Virtual(_) => Int // Should not happen at emit time
         }
         match reg_class {
-          Float =>
+          Float32 | Float64 =>
             // Float return: ensure value is in D0 (AAPCS64 requirement)
             if src != i {
               emit_fmov_d(mc, i, src) // fmov d0, dn

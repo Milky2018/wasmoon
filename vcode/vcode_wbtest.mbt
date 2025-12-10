@@ -82,9 +82,9 @@ test "conditional branch" {
 ///|
 test "float operations" {
   let builder = VCodeBuilder::new("float_add")
-  let p0 = builder.add_param(Float)
-  let p1 = builder.add_param(Float)
-  builder.add_result(Float)
+  let p0 = builder.add_param(Float64)
+  let p1 = builder.add_param(Float64)
+  builder.add_result(Float64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(p0, p1)
@@ -212,9 +212,9 @@ test "division operations" {
 ///|
 test "float division and subtraction" {
   let builder = VCodeBuilder::new("float_ops")
-  let p0 = builder.add_param(Float)
-  let p1 = builder.add_param(Float)
-  builder.add_result(Float)
+  let p0 = builder.add_param(Float64)
+  let p1 = builder.add_param(Float64)
+  builder.add_result(Float64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let div_result = builder.fdiv(p0, p1)
@@ -259,8 +259,8 @@ test "all comparison kinds" {
 ///|
 test "float comparison kinds" {
   let builder = VCodeBuilder::new("fcmp_all")
-  let p0 = builder.add_param(Float)
-  let p1 = builder.add_param(Float)
+  let p0 = builder.add_param(Float64)
+  let p1 = builder.add_param(Float64)
   builder.add_result(Int)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
@@ -381,10 +381,10 @@ test "AArch64 get_preg" {
     None => panic()
   }
   // Valid FPR
-  match target.get_preg(Float, 31) {
+  match target.get_preg(Float64, 31) {
     Some(preg) => {
       inspect(preg.index, content="31")
-      inspect(preg.class.to_string(), content="float")
+      inspect(preg.class.to_string(), content="double")
     }
     None => panic()
   }
@@ -394,7 +394,7 @@ test "AArch64 get_preg" {
     None => ()
   }
   // Out of range FPR
-  match target.get_preg(Float, 32) {
+  match target.get_preg(Float64, 32) {
     Some(_) => panic()
     None => ()
   }

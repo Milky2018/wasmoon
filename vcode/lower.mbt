@@ -67,7 +67,8 @@ fn ir_type_to_reg_class(ty : @ir.Type) -> RegClass {
   match ty {
     @ir.Type::I32 | @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef =>
       Int
-    @ir.Type::F32 | @ir.Type::F64 => Float
+    @ir.Type::F32 => Float32
+    @ir.Type::F64 => Float64
   }
 }
 

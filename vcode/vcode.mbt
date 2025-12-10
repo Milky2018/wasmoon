@@ -18,7 +18,7 @@ pub(all) struct VReg {
 fn VReg::to_string(self : VReg) -> String {
   match self.class {
     Int => "v\{self.id}"
-    Float => "f\{self.id}"
+    Float32 | Float64 => "f\{self.id}"
   }
 }
 
@@ -31,14 +31,16 @@ pub impl Show for VReg with output(self, logger) {
 /// Register class - categorizes registers by their purpose
 pub(all) enum RegClass {
   Int // Integer/general-purpose registers
-  Float // Floating-point registers
+  Float32 // 32-bit floating-point registers
+  Float64 // 64-bit floating-point registers
 }
 
 ///|
 fn RegClass::to_string(self : RegClass) -> String {
   match self {
     Int => "int"
-    Float => "float"
+    Float32 => "float"
+    Float64 => "double"
   }
 }
 
@@ -58,7 +60,7 @@ pub(all) struct PReg {
 fn PReg::to_string(self : PReg) -> String {
   match self.class {
     Int => "x\{self.index}"
-    Float => "d\{self.index}"
+    Float32 | Float64 => "d\{self.index}"
   }
 }
 

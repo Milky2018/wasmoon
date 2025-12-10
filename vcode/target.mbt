@@ -87,9 +87,9 @@ pub impl TargetISA for AArch64 with get_preg(
       } else {
         None
       }
-    Float =>
+    Float32 | Float64 =>
       if index >= 0 && index < 32 {
-        Some({ index, class: Float })
+        Some({ index, class })
       } else {
         None
       }
@@ -175,42 +175,42 @@ pub fn AArch64Regs::lr(_self : AArch64Regs) -> PReg {
 
 ///|
 pub fn AArch64Regs::d0(_self : AArch64Regs) -> PReg {
-  { index: 0, class: Float }
+  { index: 0, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d1(_self : AArch64Regs) -> PReg {
-  { index: 1, class: Float }
+  { index: 1, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d2(_self : AArch64Regs) -> PReg {
-  { index: 2, class: Float }
+  { index: 2, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d3(_self : AArch64Regs) -> PReg {
-  { index: 3, class: Float }
+  { index: 3, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d4(_self : AArch64Regs) -> PReg {
-  { index: 4, class: Float }
+  { index: 4, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d5(_self : AArch64Regs) -> PReg {
-  { index: 5, class: Float }
+  { index: 5, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d6(_self : AArch64Regs) -> PReg {
-  { index: 6, class: Float }
+  { index: 6, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d7(_self : AArch64Regs) -> PReg {
-  { index: 7, class: Float }
+  { index: 7, class: Float64 }
 }
 
 // ============ Register Usage in AAPCS64 ============
@@ -281,14 +281,14 @@ pub fn allocatable_callee_saved_regs() -> Array[PReg] {
 /// AAPCS64 floating-point argument registers
 pub fn aapcs64_arg_fprs() -> Array[PReg] {
   [
-    { index: 0, class: Float },
-    { index: 1, class: Float },
-    { index: 2, class: Float },
-    { index: 3, class: Float },
-    { index: 4, class: Float },
-    { index: 5, class: Float },
-    { index: 6, class: Float },
-    { index: 7, class: Float },
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+    { index: 4, class: Float64 },
+    { index: 5, class: Float64 },
+    { index: 6, class: Float64 },
+    { index: 7, class: Float64 },
   ]
 }
 
@@ -296,9 +296,9 @@ pub fn aapcs64_arg_fprs() -> Array[PReg] {
 /// AAPCS64 floating-point return registers
 pub fn aapcs64_ret_fprs() -> Array[PReg] {
   [
-    { index: 0, class: Float },
-    { index: 1, class: Float },
-    { index: 2, class: Float },
-    { index: 3, class: Float },
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
   ]
 }

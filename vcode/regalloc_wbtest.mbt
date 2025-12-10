@@ -131,14 +131,14 @@ test "regalloc: with spilling" {
 test "regalloc: float registers" {
   // Test that float vregs use float registers
   let func = VCodeFunction::new("test_float")
-  let a = func.add_param(Float)
-  let b = func.add_param(Float)
-  func.add_result(Float)
+  let a = func.add_param(Float64)
+  let b = func.add_param(Float64)
+  func.add_result(Float64)
   let block = func.new_block()
 
   // f2 = fadd f0, f1
   let fadd_inst = VCodeInst::new(FAdd)
-  let result_vreg = func.new_vreg(Float)
+  let result_vreg = func.new_vreg(Float64)
   fadd_inst.add_def({ reg: Virtual(result_vreg) })
   fadd_inst.add_use(Virtual(a))
   fadd_inst.add_use(Virtual(b))
@@ -150,9 +150,9 @@ test "regalloc: float registers" {
   // Allocate registers
   let int_regs : Array[PReg] = []
   let float_regs = [
-    { index: 0, class: Float },
-    { index: 1, class: Float },
-    { index: 2, class: Float },
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
   ]
   let liveness = compute_liveness(func)
   let allocator = LinearScanAllocator::new(int_regs, float_regs)
@@ -455,11 +455,11 @@ test "regalloc: SSA deconstruction scenario" {
   //   jump block1
 
   let v0 = func.new_vreg(Int)
-  let f1 = func.new_vreg(Float)
+  let f1 = func.new_vreg(Float64)
   let v2 = func.new_vreg(Int)
   let v3 = func.new_vreg(Int)
   let v4 = func.new_vreg(Int)
-  let f5 = func.new_vreg(Float)
+  let f5 = func.new_vreg(Float64)
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
@@ -530,7 +530,7 @@ test "regalloc: SSA deconstruction scenario" {
     Some(preg) => {
       let class_name = match preg.class {
         Int => "Int"
-        Float => "Float"
+        Float32 | Float64 => "Float"
       }
       inspect(class_name, content="Float")
     }
@@ -923,12 +923,12 @@ test "regalloc: float and int mixed allocation" {
   // ret f3
 
   let func = VCodeFunction::new("mixed")
-  func.add_result(Float)
+  func.add_result(Float64)
   let block = func.new_block()
   let v0 = func.new_vreg(Int)
-  let f1 = func.new_vreg(Float)
+  let f1 = func.new_vreg(Float64)
   let v2 = func.new_vreg(Int)
-  let f3 = func.new_vreg(Float)
+  let f3 = func.new_vreg(Float64)
 
   // v0 = ldi 10
   let inst0 = VCodeInst::new(LoadConst(10L))
@@ -976,7 +976,7 @@ test "regalloc: float and int mixed allocation" {
   // Allocate with separate int and float registers
   // Need 2 int regs (v0 live until v2 defined) and 2 float regs (f1 live until f3 defined)
   let int_regs = [{ index: 8, class: Int }, { index: 19, class: Int }]
-  let float_regs = [{ index: 0, class: Float }, { index: 1, class: Float }]
+  let float_regs = [{ index: 0, class: Float64 }, { index: 1, class: Float64 }]
   let liveness = compute_liveness(func)
   let allocator = LinearScanAllocator::new(int_regs, float_regs)
   let alloc_result = allocator.allocate(func, liveness)
@@ -1087,13 +1087,13 @@ test "regalloc: br_table pattern with 4 targets" {
   // Multiple mutually exclusive blocks all defining same vregs to pass to common target
   let func = VCodeFunction::new("test_br_table_pattern")
   let v0 = func.new_vreg(Int) // selector
-  let f1 = func.new_vreg(Float) // constant 1
-  let f2 = func.new_vreg(Float) // constant 2
+  let f1 = func.new_vreg(Float64) // constant 1
+  let f2 = func.new_vreg(Float64) // constant 2
 
   // Common target block parameters
   let v_target = func.new_vreg(Int)
-  let f_target1 = func.new_vreg(Float)
-  let f_target2 = func.new_vreg(Float)
+  let f_target1 = func.new_vreg(Float64)
+  let f_target2 = func.new_vreg(Float64)
   let block0 = func.new_block()
   let block_target = func.new_block()
   let block_case0 = func.new_block()

@@ -83,7 +83,7 @@ test "aarch64 frame: with spills" {
 
   // Add some spill slots
   let vreg1 : VReg = { id: 0, class: Int }
-  let vreg2 : VReg = { id: 1, class: Float }
+  let vreg2 : VReg = { id: 1, class: Float64 }
   frame.alloc_spill(vreg1) |> ignore
   frame.alloc_spill(vreg2) |> ignore
   frame.finalize()
