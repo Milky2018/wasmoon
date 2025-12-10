@@ -228,18 +228,18 @@ pub(all) struct JITContext {
   func_table_ptr : Int64
 }
 pub fn JITContext::activate(Self) -> Unit
-pub fn JITContext::call_i64_f32(Self, Int64, Int64) -> Float raise JITTrap
-pub fn JITContext::call_i64_f64(Self, Int64, Int64) -> Double raise JITTrap
-pub fn JITContext::call_i64_i64(Self, Int64, Int64) -> Int64 raise JITTrap
-pub fn JITContext::call_i64_void(Self, Int64, Int64) -> Unit raise JITTrap
-pub fn JITContext::call_i64i64_f32(Self, Int64, Int64, Int64) -> Float raise JITTrap
-pub fn JITContext::call_i64i64_f64(Self, Int64, Int64, Int64) -> Double raise JITTrap
-pub fn JITContext::call_i64i64_i64(Self, Int64, Int64, Int64) -> Int64 raise JITTrap
-pub fn JITContext::call_i64i64_void(Self, Int64, Int64, Int64) -> Unit raise JITTrap
-pub fn JITContext::call_void_f32(Self, Int64) -> Float raise JITTrap
-pub fn JITContext::call_void_f64(Self, Int64) -> Double raise JITTrap
-pub fn JITContext::call_void_i64(Self, Int64) -> Int64 raise JITTrap
-pub fn JITContext::call_void_void(Self, Int64) -> Unit raise JITTrap
+pub fn JITContext::call_f32_0(Self, Int64) -> Float raise JITTrap
+pub fn[T : JITArg] JITContext::call_f32_1(Self, Int64, T) -> Float raise JITTrap
+pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_f32_2(Self, Int64, T1, T2) -> Float raise JITTrap
+pub fn JITContext::call_f64_0(Self, Int64) -> Double raise JITTrap
+pub fn[T : JITArg] JITContext::call_f64_1(Self, Int64, T) -> Double raise JITTrap
+pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_f64_2(Self, Int64, T1, T2) -> Double raise JITTrap
+pub fn JITContext::call_i64_0(Self, Int64) -> Int64 raise JITTrap
+pub fn[T : JITArg] JITContext::call_i64_1(Self, Int64, T) -> Int64 raise JITTrap
+pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_i64_2(Self, Int64, T1, T2) -> Int64 raise JITTrap
+pub fn JITContext::call_void_0(Self, Int64) -> Unit raise JITTrap
+pub fn[T : JITArg] JITContext::call_void_1(Self, Int64, T) -> Unit raise JITTrap
+pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_void_2(Self, Int64, T1, T2) -> Unit raise JITTrap
 pub fn JITContext::free(Self) -> Unit
 pub fn JITContext::new(Int) -> Self?
 pub fn JITContext::set_func(Self, Int, Int64) -> Unit
@@ -374,4 +374,11 @@ pub fn TieredConfig::eager() -> Self
 // Type aliases
 
 // Traits
+pub(open) trait JITArg {
+  to_jit_arg(Self) -> Int64
+}
+pub impl JITArg for Int
+pub impl JITArg for Int64
+pub impl JITArg for Float
+pub impl JITArg for Double
 

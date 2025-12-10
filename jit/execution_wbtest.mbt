@@ -154,19 +154,19 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   // Expected: test(0) = 10.0, test(1) = 10.0, test(2) = 10.0, test(3) = 0.0
 
   // test(0) should return 10.0
-  let result0 = jit_ctx.call_i64_f32(exec.ptr, 0L) catch { _ => return }
+  let result0 = jit_ctx.call_f32_1(exec.ptr, 0L) catch { _ => return }
   inspect(result0 == 10.0, content="true")
 
   // test(1) should return 10.0
-  let result1 = jit_ctx.call_i64_f32(exec.ptr, 1L) catch { _ => return }
+  let result1 = jit_ctx.call_f32_1(exec.ptr, 1L) catch { _ => return }
   inspect(result1 == 10.0, content="true")
 
   // test(2) should return 10.0
-  let result2 = jit_ctx.call_i64_f32(exec.ptr, 2L) catch { _ => return }
+  let result2 = jit_ctx.call_f32_1(exec.ptr, 2L) catch { _ => return }
   inspect(result2 == 10.0, content="true")
 
   // test(3) should return 0.0 (default case, local2 never set)
-  let result3 = jit_ctx.call_i64_f32(exec.ptr, 3L) catch { _ => return }
+  let result3 = jit_ctx.call_f32_1(exec.ptr, 3L) catch { _ => return }
   inspect(result3 == 0.0, content="true")
 }
 
@@ -529,7 +529,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
             }
 
             // Call the JIT-compiled function
-            let result_f32 = jit_ctx.call_i64_f32(exec.ptr, arg) catch {
+            let result_f32 = jit_ctx.call_f32_1(exec.ptr, arg) catch {
               _ => continue
             }
             results.push((arg, expected_f32, result_f32))
