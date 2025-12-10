@@ -1189,6 +1189,20 @@ pub fn emit_fmov_w_to_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 }
 
 ///|
+/// Encode FCVT (single to double): FCVT Dd, Sn
+/// Opcode: 0x1E22C000
+/// Converts single-precision float to double-precision
+pub fn emit_fcvt_d_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  // Rd in bits [4:0], Rn in bits [9:5]
+  // Encoding: 0 0 0 1 1 1 1 0 0 0 1 0 0 0 1 0 1 1 0 0 0 0 0 0 Rn Rd
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 34 // 0x22
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode LDR (single, unsigned offset): LDR St, [Xn, #imm]
 /// Opcode: 0xBD400000
 pub fn emit_ldr_s_imm(
@@ -1370,9 +1384,13 @@ fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
 }
 
 ///|
-/// Emit prologue to save callee-saved registers
+/// Emit prologue to save callee-saved registers and set up parameters
 /// Returns the stack frame size used
-fn emit_prologue(mc : MachineCode, clobbered : Array[Int]) -> Int {
+fn emit_prologue(
+  mc : MachineCode,
+  clobbered : Array[Int],
+  params : Array[VReg],
+) -> Int {
   // We always clobber X20, X21, X22 for func_table, memory_base, memory_size
   // These are callee-saved registers, so we must save them first!
   // Build list: X20, X21, X22 + any other clobbered callee-saved registers
@@ -1401,6 +1419,30 @@ fn emit_prologue(mc : MachineCode, clobbered : Array[Int]) -> Int {
   emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
   emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
   emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
+  // Move user arguments from X registers to their allocated registers
+  // FFI passes all args as Int64 in X3, X4, X5, ...
+  // Float params need special handling:
+  //   - For f32: lower 32 bits of X register contain f32 bit pattern
+  //     We need to extract to S register, then FCVT to D register
+  //   - Since we treat all floats as f64 internally, f32 values must be converted
+  // Regalloc assigns: Int param i → X(3+i), Float param i → D(i)
+  for param_idx, param in params {
+    let x_src = 3 + param_idx // X3, X4, X5, ... (source in FFI convention)
+    match param.class {
+      Float => {
+        // Float param: extract f32 from lower 32 bits and convert to f64
+        // 1. FMOV S16, W(x_src) - move lower 32 bits to S register
+        // 2. FCVT D(param_idx), S16 - convert f32 to f64
+        // This handles f32 values passed via JITArg (reinterpreted bits in lower 32)
+        emit_fmov_w_to_s(mc, 16, x_src) // FMOV S16, W(3+i)
+        emit_fcvt_d_s(mc, param_idx, 16) // FCVT D(i), S16
+      }
+      Int =>
+        // Int param: already in X(3+i) where regalloc expects it
+        // No move needed
+        ()
+    }
+  }
   frame_size
 }
 
@@ -1515,8 +1557,8 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
   let mc = MachineCode::new()
   // Collect callee-saved registers that this function clobbers
   let clobbered = collect_used_callee_saved(func)
-  // Emit prologue: save callee-saved registers and set up X20/X21
-  let frame_size = emit_prologue(mc, clobbered)
+  // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
+  let frame_size = emit_prologue(mc, clobbered, func.params)
   // Emit function body
   for block in func.blocks {
     mc.define_label(block.id)
@@ -1697,9 +1739,12 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       emit_load_imm64(mc, rd, v)
     }
     LoadConstF32(bits) => {
-      // Load 32-bit float constant:
+      // Load 32-bit float constant and convert to double:
       // 1. Load the 32-bit representation into a scratch W register (X16/W16)
-      // 2. FMOV from W16 to the destination S register
+      // 2. FMOV from W16 to scratch S register (S16)
+      // 3. FCVT to convert f32 to f64 in destination D register
+      // This ensures the f32 value is properly represented as f64 for our
+      // double-precision arithmetic operations
       let rd = wreg_num(inst.defs[0])
       // Use X16 as scratch register, load the 32-bit value as unsigned
       emit_movz(mc, 16, bits & 0xFFFF, 0)
@@ -1707,8 +1752,10 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       if high != 0 {
         emit_movk(mc, 16, high, 16)
       }
-      // FMOV Sd, Wn
-      emit_fmov_w_to_s(mc, rd, 16)
+      // FMOV S16, W16 (move 32-bit value to S register)
+      emit_fmov_w_to_s(mc, 16, 16)
+      // FCVT Dd, S16 (convert single to double)
+      emit_fcvt_d_s(mc, rd, 16)
     }
     LoadConstF64(bits) => {
       // Load 64-bit float constant:
@@ -1979,9 +2026,7 @@ fn emit_terminator_with_epilogue(
     }
     Return(values) => {
       // Move return values to their ABI registers
-      // JIT calling convention: ALL returns (int and float) go to X registers as int64
-      // Integer results go in X0, X1, etc.
-      // Float results: fmov from D register to X register (transfer bit pattern)
+      // AAPCS64: Integer returns in X0, float/double returns in D0
       for i, value in values {
         let src = reg_num(value)
         let reg_class = match value {
@@ -1990,8 +2035,10 @@ fn emit_terminator_with_epilogue(
         }
         match reg_class {
           Float =>
-            // Float value in D register, transfer bit pattern to X register for return
-            emit_fmov_d_to_x(mc, i, src)
+            // Float return: ensure value is in D0 (AAPCS64 requirement)
+            if src != i {
+              emit_fmov_d(mc, i, src) // fmov d0, dn
+            }
           Int =>
             if src != i {
               // Only emit mov if source != destination

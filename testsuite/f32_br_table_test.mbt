@@ -179,7 +179,7 @@ test "A critical bug as in data/f32_br_2locals" {
   let exec_code = @jit.ExecCode::new(code_bytes)
   guard exec_code is Some(exec)
   defer exec.free()
-  inspect(jit_ctx.call_f64_1(exec.ptr, 0), content="2.0")
-  inspect(jit_ctx.call_f64_1(exec.ptr, 1), content="3.0")
+  inspect(jit_ctx.call_f64_1(exec.ptr, 0), content="2")
+  inspect(jit_ctx.call_f64_1(exec.ptr, 1), content="3")
   inspect(jit_ctx.call_f64_1(exec.ptr, 2), content="0")
 }

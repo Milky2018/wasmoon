@@ -77,6 +77,8 @@ pub fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_fcvt_d_s(MachineCode, Int, Int) -> Unit
+
 pub fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
