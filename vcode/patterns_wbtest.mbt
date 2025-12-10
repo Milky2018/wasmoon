@@ -315,7 +315,6 @@ test "pattern: fmul x, 1.0 -> mov x" {
       #|    ret f2
       #|}
       #|
-
     ),
   )
 }

@@ -103,7 +103,6 @@ test "float operations" {
       #|    ret f4
       #|}
       #|
-
     ),
   )
 }

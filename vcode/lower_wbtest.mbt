@@ -358,7 +358,6 @@ test "lower float constant" {
       #|    ret f0
       #|}
       #|
-
     ),
   )
 }
@@ -752,7 +751,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   // This shows how br_table is lowered to comparison chain
   inspect(
     vcode_func.print(),
-    content=
+    content=(
       #|vcode test(v0:int) -> float {
       #|block0:
       #|    f2 = ldf 10
@@ -800,7 +799,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    branch v10, block3, block4
       #|}
       #|
-    ,
+    ),
   )
 
   // ============ Phase 2: Register Allocation ============
@@ -813,7 +812,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   // 3. Float values should be in float registers (d0, d1, d2, ...)
   inspect(
     allocated_func.print(),
-    content=
+    content=(
       #|vcode test(v0:int) -> float {
       #|block0:
       #|    d0 = ldf 10
@@ -861,7 +860,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    branch x23, block3, block4
       #|}
       #|
-    ,
+    ),
   )
 
   // ============ Phase 3: Verify Key Properties ============

@@ -591,7 +591,6 @@ test "emit: complete VCode instruction emission" {
   mov.add_def({ reg: Physical({ index: 0, class: Int }) })
   mov.add_use(Physical({ index: 2, class: Int }))
   block.add_inst(mov)
-
   block.set_terminator(Return([Physical({ index: 0, class: Int })]))
 
   // Show VCode

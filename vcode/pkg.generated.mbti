@@ -33,6 +33,10 @@ pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
 pub fn debug_liveness(LivenessResult) -> String
 
+pub fn dump_regalloc(String, LivenessResult, RegAllocResult) -> Unit
+
+pub fn dump_vcode(VCodeFunction, String) -> Unit
+
 pub fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit

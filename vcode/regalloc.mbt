@@ -770,7 +770,6 @@ fn LinearScanAllocator::expire_old_intervals(
       let cmp = interval.end.compare_with_order(current.start, block_order)
       cmp >= 0
     }
-
     if overlaps {
       new_active.push(interval)
     }
@@ -1093,73 +1092,11 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   // Compute liveness
   let liveness = compute_liveness(func)
 
-  // Debug: print liveness intervals for debugging f32_br_2locals issue
-  if func.name == "test" {
-    println("=== Live Intervals ===")
-    // Convert to array and sort by vreg id for consistent output
-    let intervals_arr : Array[(Int, LiveInterval)] = []
-    for entry in liveness.intervals {
-      intervals_arr.push(entry)
-    }
-    intervals_arr.sort_by(fn(a, b) { a.0 - b.0 })
-
-    for entry in intervals_arr {
-      let (vreg_id, interval) = entry
-      let class_name = match interval.vreg.class {
-        Int => "int"
-        Float => "float"
-      }
-      println("v\{vreg_id} (\{class_name}): \{interval.start} - \{interval.end}")
-    }
-    println("======================")
-  }
-
   // Allocate
   let allocator = LinearScanAllocator::new(int_regs, float_regs)
   let alloc_result = allocator.allocate(func, liveness)
 
-  // Debug: print register assignments for debugging f32_br_2locals issue
-  if func.name == "test" {
-    println("=== Register Assignments ===")
-    // Need to get vreg class from liveness intervals
-    let assignments_arr : Array[(Int, PReg)] = []
-    for entry in alloc_result.assignments {
-      assignments_arr.push(entry)
-    }
-    assignments_arr.sort_by(fn(a, b) { a.0 - b.0 })
-
-    for entry in assignments_arr {
-      let (vreg_id, preg) = entry
-      // Get vreg class from liveness interval
-      let class_name = match liveness.intervals.get(vreg_id) {
-        Some(interval) =>
-          match interval.vreg.class {
-            Int => "int"
-            Float => "float"
-          }
-        None => "unknown"
-      }
-      println("v\{vreg_id} (\{class_name}) -> \{preg}")
-    }
-    if alloc_result.spill_slots.length() > 0 {
-      println("\n=== Spilled Registers ===")
-      for entry in alloc_result.spill_slots {
-        let (vreg_id, slot) = entry
-        println("v\{vreg_id} -> spill slot \{slot}")
-      }
-    }
-    println("============================")
-  }
-
   // Apply allocation
   let allocated_func = apply_allocation(func, alloc_result)
-
-  // Debug: print allocated VCode for debugging f32_br_2locals issue
-  if func.name == "test" {
-    println("=== Allocated VCode for function: test ===")
-    println(allocated_func.print())
-    println("===========================================")
-  }
-
   allocated_func
 }
