@@ -277,7 +277,6 @@ test "progpoint: comparison" {
   let p2 : ProgPoint = { block: 0, inst: 0, pos: After }
   let p3 : ProgPoint = { block: 0, inst: 1, pos: Before }
   let p4 : ProgPoint = { block: 1, inst: 0, pos: Before }
-
   let order : Map[Int, Int] = {}
   order.set(0, 0)
   order.set(1, 1)
@@ -312,7 +311,6 @@ test "liveness: block parameters should have use points" {
 
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
-
   let block0 = func.new_block()
   let block1 = func.new_block()
 
@@ -320,12 +318,10 @@ test "liveness: block parameters should have use points" {
   let inst0 = VCodeInst::new(LoadConst(10L))
   inst0.add_def({ reg: Virtual(v0) })
   block0.add_inst(inst0)
-
   let inst1 = VCodeInst::new(Move)
   inst1.add_use(Virtual(v0))
   inst1.add_def({ reg: Virtual(v1) })
   block0.add_inst(inst1)
-
   block0.set_terminator(Jump(block1.id))
 
   // block1(v1): ret v1
@@ -370,7 +366,6 @@ test "liveness: mutually exclusive paths with same vreg" {
 
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
-
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
@@ -465,7 +460,6 @@ test "regalloc: SSA deconstruction scenario" {
   let v3 = func.new_vreg(Int)
   let v4 = func.new_vreg(Int)
   let f5 = func.new_vreg(Float)
-
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
@@ -475,21 +469,17 @@ test "regalloc: SSA deconstruction scenario" {
   let inst0 = VCodeInst::new(LoadConst(0L))
   inst0.add_def({ reg: Virtual(v0) })
   block0.add_inst(inst0)
-
   let inst1 = VCodeInst::new(LoadConstF32(0x41200000)) // 10.0
   inst1.add_def({ reg: Virtual(f1) })
   block0.add_inst(inst1)
-
   let inst2 = VCodeInst::new(LoadConst(1L))
   inst2.add_def({ reg: Virtual(v2) })
   block0.add_inst(inst2)
-
   let inst3 = VCodeInst::new(Cmp(Eq))
   inst3.add_use(Virtual(v0))
   inst3.add_use(Virtual(v2))
   inst3.add_def({ reg: Virtual(v3) })
   block0.add_inst(inst3)
-
   block0.set_terminator(Branch(Virtual(v3), block2.id, block3.id))
 
   // block1 with params
@@ -502,12 +492,10 @@ test "regalloc: SSA deconstruction scenario" {
   inst4.add_use(Virtual(v0))
   inst4.add_def({ reg: Virtual(v4) })
   block2.add_inst(inst4)
-
   let inst5 = VCodeInst::new(Move)
   inst5.add_use(Virtual(f1))
   inst5.add_def({ reg: Virtual(f5) })
   block2.add_inst(inst5)
-
   block2.set_terminator(Jump(block1.id))
 
   // block3: same moves
@@ -515,20 +503,14 @@ test "regalloc: SSA deconstruction scenario" {
   inst6.add_use(Virtual(v0))
   inst6.add_def({ reg: Virtual(v4) })
   block3.add_inst(inst6)
-
   let inst7 = VCodeInst::new(Move)
   inst7.add_use(Virtual(f1))
   inst7.add_def({ reg: Virtual(f5) })
   block3.add_inst(inst7)
-
   block3.set_terminator(Jump(block1.id))
 
   // Compute liveness
   let liveness = compute_liveness(func)
-
-  // v4 and f5 are defined in both block2 and block3
-  let v4_info = liveness.use_def.get(v4.id).unwrap()
-  let f5_info = liveness.use_def.get(f5.id).unwrap()
 
   // f5 should be in block1's live-in set (v4 is not used, so it's not live-in)
   inspect(liveness.live_in[1].contains(f5.id), content="true")
@@ -568,7 +550,7 @@ test "regalloc: SSA deconstruction scenario" {
 
   // Both should be Move instructions defining the same physical register
   match (block2_last.defs.get(0), block3_last.defs.get(0)) {
-    (Some(def2), Some(def3)) => {
+    (Some(def2), Some(def3)) =>
       match (def2.reg, def3.reg) {
         (Physical(preg2), Physical(preg3)) => {
           // They should be THE SAME register!
@@ -578,9 +560,525 @@ test "regalloc: SSA deconstruction scenario" {
         }
         _ => inspect(false, content="true")
       }
-    }
     _ => inspect(false, content="true")
   }
+}
+
+///|
+test "liveness: complete output for linear function" {
+  // Test that shows complete liveness analysis output
+  // A simple linear function: add(a, b) -> (a + b) * 2
+  let func = VCodeFunction::new("linear")
+  let a = func.add_param(Int)
+  let b = func.add_param(Int)
+  func.add_result(Int)
+  let block = func.new_block()
+
+  // v2 = add v0, v1
+  let add_inst = VCodeInst::new(Add)
+  let sum = func.new_vreg(Int)
+  add_inst.add_def({ reg: Virtual(sum) })
+  add_inst.add_use(Virtual(a))
+  add_inst.add_use(Virtual(b))
+  block.add_inst(add_inst)
+
+  // v3 = ldi 2
+  let const_inst = VCodeInst::new(LoadConst(2L))
+  let two = func.new_vreg(Int)
+  const_inst.add_def({ reg: Virtual(two) })
+  block.add_inst(const_inst)
+
+  // v4 = mul v2, v3
+  let mul_inst = VCodeInst::new(Mul)
+  let result = func.new_vreg(Int)
+  mul_inst.add_def({ reg: Virtual(result) })
+  mul_inst.add_use(Virtual(sum))
+  mul_inst.add_use(Virtual(two))
+  block.add_inst(mul_inst)
+
+  // ret v4
+  block.set_terminator(Return([Virtual(result)]))
+
+  // Compute liveness
+  let liveness = compute_liveness(func)
+
+  // Show complete debug output
+  let debug_output = debug_liveness(liveness)
+  inspect(
+    debug_output,
+    content=(
+      #|=== Liveness Debug ===
+      #|Use-Def Chains:
+      #|  v0: def=Some((0:-1a)), uses=[(0:0b)]
+      #|  v1: def=Some((0:-1a)), uses=[(0:0b)]
+      #|  v2: def=Some((0:0a)), uses=[(0:2b)]
+      #|  v3: def=Some((0:1a)), uses=[(0:2b)]
+      #|  v4: def=Some((0:2a)), uses=[(0:3b)]
+      #|
+      #|Live-in/out:
+      #|  block0: in=[0, 1], out=[]
+      #|
+      #|Intervals:
+      #|  v0: (0:-1a) - (0:0b)
+      #|  v1: (0:-1a) - (0:0b)
+      #|  v2: (0:0a) - (0:2b)
+      #|  v3: (0:1a) - (0:2b)
+      #|  v4: (0:2a) - (0:3b)
+      #|
+    ),
+  )
+}
+
+///|
+test "liveness: complete output for diamond CFG" {
+  // Diamond control flow: if-else that merges
+  // block0:
+  //   v0 = param (condition)
+  //   v1 = ldi 10
+  //   v2 = ldi 20
+  //   branch v0, block1, block2
+  // block1:
+  //   v3 = add v1, v1
+  //   jump block3
+  // block2:
+  //   v3 = add v2, v2
+  //   jump block3
+  // block3:
+  //   ret v3
+
+  let func = VCodeFunction::new("diamond")
+  let cond = func.add_param(Int)
+  func.add_result(Int)
+  let v1 = func.new_vreg(Int)
+  let v2 = func.new_vreg(Int)
+  let v3 = func.new_vreg(Int)
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+  let block2 = func.new_block()
+  let block3 = func.new_block()
+
+  // block0
+  let inst1 = VCodeInst::new(LoadConst(10L))
+  inst1.add_def({ reg: Virtual(v1) })
+  block0.add_inst(inst1)
+  let inst2 = VCodeInst::new(LoadConst(20L))
+  inst2.add_def({ reg: Virtual(v2) })
+  block0.add_inst(inst2)
+  block0.set_terminator(Branch(Virtual(cond), block1.id, block2.id))
+
+  // block1: v3 = add v1, v1
+  let add1 = VCodeInst::new(Add)
+  add1.add_use(Virtual(v1))
+  add1.add_use(Virtual(v1))
+  add1.add_def({ reg: Virtual(v3) })
+  block1.add_inst(add1)
+  block1.set_terminator(Jump(block3.id))
+
+  // block2: v3 = add v2, v2
+  let add2 = VCodeInst::new(Add)
+  add2.add_use(Virtual(v2))
+  add2.add_use(Virtual(v2))
+  add2.add_def({ reg: Virtual(v3) })
+  block2.add_inst(add2)
+  block2.set_terminator(Jump(block3.id))
+
+  // block3: ret v3
+  block3.set_terminator(Return([Virtual(v3)]))
+  let liveness = compute_liveness(func)
+  let debug_output = debug_liveness(liveness)
+  inspect(
+    debug_output,
+    content=(
+      #|=== Liveness Debug ===
+      #|Use-Def Chains:
+      #|  v0: def=Some((0:-1a)), uses=[(0:2b)]
+      #|  v1: def=Some((0:0a)), uses=[(1:0b), (1:0b)]
+      #|  v2: def=Some((0:1a)), uses=[(2:0b), (2:0b)]
+      #|  v3: def=Some((2:0a)), uses=[(3:0b)]
+      #|
+      #|Live-in/out:
+      #|  block0: in=[0], out=[1, 2]
+      #|  block1: in=[1], out=[3]
+      #|  block2: in=[2], out=[3]
+      #|  block3: in=[3], out=[]
+      #|
+      #|Intervals:
+      #|  v0: (0:-1a) - (0:2b)
+      #|  v1: (0:0a) - (1:0b)
+      #|  v2: (0:1a) - (2:0b)
+      #|  v3: (2:0a) - (3:0b)
+      #|
+    ),
+  )
+}
+
+///|
+test "regalloc: complete allocation output for simple function" {
+  // Show full allocation result for a simple function
+  let func = VCodeFunction::new("alloc_demo")
+  let a = func.add_param(Int)
+  let b = func.add_param(Int)
+  func.add_result(Int)
+  let block = func.new_block()
+
+  // v2 = add v0, v1
+  let add_inst = VCodeInst::new(Add)
+  let result = func.new_vreg(Int)
+  add_inst.add_def({ reg: Virtual(result) })
+  add_inst.add_use(Virtual(a))
+  add_inst.add_use(Virtual(b))
+  block.add_inst(add_inst)
+
+  // ret v2
+  block.set_terminator(Return([Virtual(result)]))
+
+  // Show VCode before allocation
+  inspect(
+    func.print(),
+    content=(
+      #|vcode alloc_demo(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = add v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+
+  // Allocate with limited registers
+  let int_regs = [
+    { index: 8, class: Int },
+    { index: 19, class: Int },
+    { index: 23, class: Int },
+  ]
+  let float_regs : Array[PReg] = []
+  let liveness = compute_liveness(func)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let alloc_result = allocator.allocate(func, liveness)
+
+  // Show assignments
+  let mut assignments_str = ""
+  let assignments_arr : Array[(Int, PReg)] = []
+  for entry in alloc_result.assignments {
+    assignments_arr.push(entry)
+  }
+  assignments_arr.sort_by(fn(a, b) { a.0 - b.0 })
+  for entry in assignments_arr {
+    let (vreg_id, preg) = entry
+    assignments_str = assignments_str + "v\{vreg_id} -> \{preg}\n"
+  }
+  inspect(
+    assignments_str,
+    content=(
+      #|v0 -> x3
+      #|v1 -> x4
+      #|v2 -> x8
+      #|
+    ),
+  )
+
+  // Apply and show final code
+  let allocated = apply_allocation(func, alloc_result)
+  inspect(
+    allocated.print(),
+    content=(
+      #|vcode alloc_demo(v0:int, v1:int) -> int {
+      #|block0:
+      #|    x8 = add x3, x4
+      #|    ret x8
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "regalloc: same instruction use-def conflict" {
+  // Test the critical fix: a use and def in the same instruction
+  // must not share the same physical register
+  //
+  // v0 = ldi 10
+  // v1 = add v0, v0  ; v0 used, v1 defined - must be different registers!
+
+  let func = VCodeFunction::new("same_inst_conflict")
+  func.add_result(Int)
+  let block = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+
+  // v0 = ldi 10
+  let load_inst = VCodeInst::new(LoadConst(10L))
+  load_inst.add_def({ reg: Virtual(v0) })
+  block.add_inst(load_inst)
+
+  // v1 = add v0, v0
+  let add_inst = VCodeInst::new(Add)
+  add_inst.add_use(Virtual(v0))
+  add_inst.add_use(Virtual(v0))
+  add_inst.add_def({ reg: Virtual(v1) })
+  block.add_inst(add_inst)
+
+  // ret v1
+  block.set_terminator(Return([Virtual(v1)]))
+
+  // Show liveness - v0 ends at (0:1b) and v1 starts at (0:1a)
+  let liveness = compute_liveness(func)
+  let debug_output = debug_liveness(liveness)
+  inspect(
+    debug_output,
+    content=(
+      #|=== Liveness Debug ===
+      #|Use-Def Chains:
+      #|  v0: def=Some((0:0a)), uses=[(0:1b), (0:1b)]
+      #|  v1: def=Some((0:1a)), uses=[(0:2b)]
+      #|
+      #|Live-in/out:
+      #|  block0: in=[], out=[]
+      #|
+      #|Intervals:
+      #|  v0: (0:0a) - (0:1b)
+      #|  v1: (0:1a) - (0:2b)
+      #|
+    ),
+  )
+
+  // Allocate with only ONE register - this forces the conflict check
+  let int_regs = [{ index: 8, class: Int }]
+  let float_regs : Array[PReg] = []
+  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let alloc_result = allocator.allocate(func, liveness)
+
+  // With only 1 register and same-instruction conflict detection,
+  // one vreg MUST be spilled
+  inspect(alloc_result.num_spill_slots > 0, content="true")
+}
+
+///|
+test "regalloc: interval extension across blocks" {
+  // Test that intervals extend correctly when a value is live across blocks
+  //
+  // block0:
+  //   v0 = ldi 10
+  //   jump block1
+  // block1:
+  //   v1 = add v0, v0  ; v0 must be live here
+  //   ret v1
+
+  let func = VCodeFunction::new("cross_block")
+  func.add_result(Int)
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+
+  // block0
+  let load_inst = VCodeInst::new(LoadConst(10L))
+  load_inst.add_def({ reg: Virtual(v0) })
+  block0.add_inst(load_inst)
+  block0.set_terminator(Jump(block1.id))
+
+  // block1
+  let add_inst = VCodeInst::new(Add)
+  add_inst.add_use(Virtual(v0))
+  add_inst.add_use(Virtual(v0))
+  add_inst.add_def({ reg: Virtual(v1) })
+  block1.add_inst(add_inst)
+  block1.set_terminator(Return([Virtual(v1)]))
+  let liveness = compute_liveness(func)
+
+  // v0 should be live-out of block0 and live-in to block1
+  inspect(liveness.live_out[0].contains(v0.id), content="true")
+  inspect(liveness.live_in[1].contains(v0.id), content="true")
+
+  // Show the full debug output
+  let debug_output = debug_liveness(liveness)
+  inspect(
+    debug_output,
+    content=(
+      #|=== Liveness Debug ===
+      #|Use-Def Chains:
+      #|  v0: def=Some((0:0a)), uses=[(1:0b), (1:0b)]
+      #|  v1: def=Some((1:0a)), uses=[(1:1b)]
+      #|
+      #|Live-in/out:
+      #|  block0: in=[], out=[0]
+      #|  block1: in=[0], out=[]
+      #|
+      #|Intervals:
+      #|  v0: (0:0a) - (1:0b)
+      #|  v1: (1:0a) - (1:1b)
+      #|
+    ),
+  )
+}
+
+///|
+test "regalloc: float and int mixed allocation" {
+  // Test that float and int registers are allocated independently
+  //
+  // v0 = ldi 10       ; int
+  // f1 = ldf 3.14     ; float
+  // v2 = add v0, v0   ; int
+  // f3 = fadd f1, f1  ; float
+  // ret f3
+
+  let func = VCodeFunction::new("mixed")
+  func.add_result(Float)
+  let block = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let f1 = func.new_vreg(Float)
+  let v2 = func.new_vreg(Int)
+  let f3 = func.new_vreg(Float)
+
+  // v0 = ldi 10
+  let inst0 = VCodeInst::new(LoadConst(10L))
+  inst0.add_def({ reg: Virtual(v0) })
+  block.add_inst(inst0)
+
+  // f1 = ldf 3.14
+  let inst1 = VCodeInst::new(LoadConstF64(3.14.reinterpret_as_int64()))
+  inst1.add_def({ reg: Virtual(f1) })
+  block.add_inst(inst1)
+
+  // v2 = add v0, v0
+  let inst2 = VCodeInst::new(Add)
+  inst2.add_use(Virtual(v0))
+  inst2.add_use(Virtual(v0))
+  inst2.add_def({ reg: Virtual(v2) })
+  block.add_inst(inst2)
+
+  // f3 = fadd f1, f1
+  let inst3 = VCodeInst::new(FAdd)
+  inst3.add_use(Virtual(f1))
+  inst3.add_use(Virtual(f1))
+  inst3.add_def({ reg: Virtual(f3) })
+  block.add_inst(inst3)
+
+  // ret f3
+  block.set_terminator(Return([Virtual(f3)]))
+
+  // Show VCode before allocation
+  inspect(
+    func.print(),
+    content=(
+      #|vcode mixed() -> float {
+      #|block0:
+      #|    v0 = ldi 10
+      #|    f1 = ldf 3.14
+      #|    v2 = add v0, v0
+      #|    f3 = fadd f1, f1
+      #|    ret f3
+      #|}
+      #|
+    ),
+  )
+
+  // Allocate with separate int and float registers
+  // Need 2 int regs (v0 live until v2 defined) and 2 float regs (f1 live until f3 defined)
+  let int_regs = [{ index: 8, class: Int }, { index: 19, class: Int }]
+  let float_regs = [{ index: 0, class: Float }, { index: 1, class: Float }]
+  let liveness = compute_liveness(func)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let alloc_result = allocator.allocate(func, liveness)
+
+  // No spills should be needed
+  inspect(alloc_result.num_spill_slots, content="0")
+
+  // Apply and show final code
+  let allocated = apply_allocation(func, alloc_result)
+
+  // Int regs should use x8/x19, float regs should use d0/d1
+  // Due to same-instruction conflict fix:
+  // - v0 and v2 CANNOT share x8 because in "v2 = add v0, v0", v0 is used and v2 is defined
+  // - f1 and f3 CANNOT share d0 because in "f3 = fadd f1, f1", f1 is used and f3 is defined
+  inspect(
+    allocated.print(),
+    content=(
+      #|vcode mixed() -> float {
+      #|block0:
+      #|    x8 = ldi 10
+      #|    d0 = ldf 3.14
+      #|    x19 = add x8, x8
+      #|    d1 = fadd d0, d0
+      #|    ret d1
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "regalloc: spill and reload complete flow" {
+  // Test complete spill/reload flow with inspection of generated code
+  //
+  // v0 = ldi 1
+  // v1 = ldi 2
+  // v2 = ldi 3
+  // v3 = add v0, v1  ; all three must be live here
+  // v4 = add v3, v2
+  // ret v4
+
+  let func = VCodeFunction::new("spill_flow")
+  func.add_result(Int)
+  let block = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+  let v2 = func.new_vreg(Int)
+  let v3 = func.new_vreg(Int)
+  let v4 = func.new_vreg(Int)
+  let inst0 = VCodeInst::new(LoadConst(1L))
+  inst0.add_def({ reg: Virtual(v0) })
+  block.add_inst(inst0)
+  let inst1 = VCodeInst::new(LoadConst(2L))
+  inst1.add_def({ reg: Virtual(v1) })
+  block.add_inst(inst1)
+  let inst2 = VCodeInst::new(LoadConst(3L))
+  inst2.add_def({ reg: Virtual(v2) })
+  block.add_inst(inst2)
+  let inst3 = VCodeInst::new(Add)
+  inst3.add_use(Virtual(v0))
+  inst3.add_use(Virtual(v1))
+  inst3.add_def({ reg: Virtual(v3) })
+  block.add_inst(inst3)
+  let inst4 = VCodeInst::new(Add)
+  inst4.add_use(Virtual(v3))
+  inst4.add_use(Virtual(v2))
+  inst4.add_def({ reg: Virtual(v4) })
+  block.add_inst(inst4)
+  block.set_terminator(Return([Virtual(v4)]))
+
+  // Show original VCode
+  inspect(
+    func.print(),
+    content=(
+      #|vcode spill_flow() -> int {
+      #|block0:
+      #|    v0 = ldi 1
+      #|    v1 = ldi 2
+      #|    v2 = ldi 3
+      #|    v3 = add v0, v1
+      #|    v4 = add v3, v2
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
+
+  // Only 2 registers - must spill at least one
+  let int_regs = [{ index: 8, class: Int }, { index: 19, class: Int }]
+  let float_regs : Array[PReg] = []
+  let liveness = compute_liveness(func)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let alloc_result = allocator.allocate(func, liveness)
+
+  // Should have spills
+  inspect(alloc_result.num_spill_slots > 0, content="true")
+
+  // Show allocated code with spill/reload instructions
+  let allocated = apply_allocation(func, alloc_result)
+  // The exact output depends on spill decisions, but should have stack_load/stack_store
+  let output = allocated.print()
+  inspect(output.contains("stack_"), content="true")
 }
 
 ///|
@@ -588,7 +1086,6 @@ test "regalloc: br_table pattern with 4 targets" {
   // Simulate the exact pattern from f32_br_2locals.wast
   // Multiple mutually exclusive blocks all defining same vregs to pass to common target
   let func = VCodeFunction::new("test_br_table_pattern")
-
   let v0 = func.new_vreg(Int) // selector
   let f1 = func.new_vreg(Float) // constant 1
   let f2 = func.new_vreg(Float) // constant 2
@@ -597,7 +1094,6 @@ test "regalloc: br_table pattern with 4 targets" {
   let v_target = func.new_vreg(Int)
   let f_target1 = func.new_vreg(Float)
   let f_target2 = func.new_vreg(Float)
-
   let block0 = func.new_block()
   let block_target = func.new_block()
   let block_case0 = func.new_block()
@@ -609,15 +1105,12 @@ test "regalloc: br_table pattern with 4 targets" {
   let inst0 = VCodeInst::new(LoadConst(0L))
   inst0.add_def({ reg: Virtual(v0) })
   block0.add_inst(inst0)
-
   let inst1 = VCodeInst::new(LoadConstF32(0x41200000)) // 10.0
   inst1.add_def({ reg: Virtual(f1) })
   block0.add_inst(inst1)
-
   let inst2 = VCodeInst::new(LoadConstF32(0x41A00000)) // 20.0
   inst2.add_def({ reg: Virtual(f2) })
   block0.add_inst(inst2)
-
   block0.set_terminator(Branch(Virtual(v0), block_case0.id, block_case1.id))
 
   // block_target with params
@@ -633,17 +1126,14 @@ test "regalloc: br_table pattern with 4 targets" {
     mov0.add_use(Virtual(v0))
     mov0.add_def({ reg: Virtual(v_target) })
     block_case0.add_inst(mov0)
-
     let mov1 = VCodeInst::new(Move)
     mov1.add_use(Virtual(f1))
     mov1.add_def({ reg: Virtual(f_target1) })
     block_case0.add_inst(mov1)
-
     let mov2 = VCodeInst::new(Move)
     mov2.add_use(Virtual(f2))
     mov2.add_def({ reg: Virtual(f_target2) })
     block_case0.add_inst(mov2)
-
     block_case0.set_terminator(Jump(block_target.id))
   }
 
@@ -653,17 +1143,14 @@ test "regalloc: br_table pattern with 4 targets" {
     mov0.add_use(Virtual(v0))
     mov0.add_def({ reg: Virtual(v_target) })
     block_case1.add_inst(mov0)
-
     let mov1 = VCodeInst::new(Move)
     mov1.add_use(Virtual(f1))
     mov1.add_def({ reg: Virtual(f_target1) })
     block_case1.add_inst(mov1)
-
     let mov2 = VCodeInst::new(Move)
     mov2.add_use(Virtual(f2))
     mov2.add_def({ reg: Virtual(f_target2) })
     block_case1.add_inst(mov2)
-
     block_case1.set_terminator(Jump(block_target.id))
   }
 
@@ -673,17 +1160,14 @@ test "regalloc: br_table pattern with 4 targets" {
     mov0.add_use(Virtual(v0))
     mov0.add_def({ reg: Virtual(v_target) })
     block_case2.add_inst(mov0)
-
     let mov1 = VCodeInst::new(Move)
     mov1.add_use(Virtual(f1))
     mov1.add_def({ reg: Virtual(f_target1) })
     block_case2.add_inst(mov1)
-
     let mov2 = VCodeInst::new(Move)
     mov2.add_use(Virtual(f2))
     mov2.add_def({ reg: Virtual(f_target2) })
     block_case2.add_inst(mov2)
-
     block_case2.set_terminator(Jump(block_target.id))
   }
 
@@ -693,17 +1177,14 @@ test "regalloc: br_table pattern with 4 targets" {
     mov0.add_use(Virtual(v0))
     mov0.add_def({ reg: Virtual(v_target) })
     block_case3.add_inst(mov0)
-
     let mov1 = VCodeInst::new(Move)
     mov1.add_use(Virtual(f1))
     mov1.add_def({ reg: Virtual(f_target1) })
     block_case3.add_inst(mov1)
-
     let mov2 = VCodeInst::new(Move)
     mov2.add_use(Virtual(f2))
     mov2.add_def({ reg: Virtual(f_target2) })
     block_case3.add_inst(mov2)
-
     block_case3.set_terminator(Jump(block_target.id))
   }
 
@@ -755,4 +1236,5 @@ test "regalloc: br_table pattern with 4 targets" {
       _ => inspect(false, content="true")
     }
   }
+  inspect(pregs, content="[Some(x8), Some(x8), Some(x8), Some(x8)]")
 }
