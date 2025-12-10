@@ -124,14 +124,14 @@ fn hex2(n : Int) -> String {
   let hi = (n >> 4) & 0xF
   let lo = n & 0xF
   let hi_c = if hi < 10 {
-    Int::unsafe_to_char(hi + 48).to_string()
+    (hi + 48).unsafe_to_char().to_string()
   } else {
-    Int::unsafe_to_char(hi - 10 + 97).to_string()
+    (hi - 10 + 97).unsafe_to_char().to_string()
   }
   let lo_c = if lo < 10 {
-    Int::unsafe_to_char(lo + 48).to_string()
+    (lo + 48).unsafe_to_char().to_string()
   } else {
-    Int::unsafe_to_char(lo - 10 + 97).to_string()
+    (lo - 10 + 97).unsafe_to_char().to_string()
   }
   hi_c + lo_c
 }
@@ -1201,8 +1201,9 @@ pub fn emit_fdiv_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Opcode: 0x1E604000
 pub fn emit_fmov_d(mc : MachineCode, rd : Int, rm : Int) -> Unit {
   mc.annotate("fmov d\{rd}, d\{rm}")
-  let b0 = (rd & 31) | ((rm & 3) << 5)
-  let b1 = ((rm >> 2) & 7) | 64 // 0x40
+  // Encoding: Rd in bits [4:0], Rn in bits [9:5]
+  let b0 = (rd & 31) | ((rm & 7) << 5)
+  let b1 = ((rm >> 3) & 3) | 64 // 0x40
   let b2 = 96 // 0x60
   let b3 = 30 // 0x1E
   mc.emit_inst(b0, b1, b2, b3)
