@@ -408,8 +408,10 @@ test "AAPCS64 calling convention registers" {
   inspect(ret_gprs.length(), content="2") // x0-x1
   let callee_saved = aapcs64_callee_saved()
   inspect(callee_saved.length(), content="12") // x19-x28, fp, lr
-  let caller_saved = aapcs64_caller_saved()
-  inspect(caller_saved.length(), content="9") // callee-saved minus reserved
+  let scratch_regs = allocatable_scratch_regs()
+  inspect(scratch_regs.length(), content="1") // x8 only
+  let callee_saved_regs = allocatable_callee_saved_regs()
+  inspect(callee_saved_regs.length(), content="7") // x19, x23-x28
   let arg_fprs = aapcs64_arg_fprs()
   inspect(arg_fprs.length(), content="8") // d0-d7
   let ret_fprs = aapcs64_ret_fprs()

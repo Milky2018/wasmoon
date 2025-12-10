@@ -256,19 +256,17 @@ pub fn aapcs64_callee_saved() -> Array[PReg] {
 }
 
 ///|
-/// AAPCS64 caller-saved registers (scratch registers)
-/// Note: X0 and X1 are excluded because our JIT ABI uses them for
-/// func_table_ptr and memory_base, which get clobbered on function calls.
-/// Note: X9-X17 are excluded because they're used as scratch registers
-/// in CallIndirect for function pointer and argument shuffling.
-/// Note: X2-X7 are excluded because they're used for passing arguments
-/// in CallIndirect, so values in these registers get clobbered.
-/// We use callee-saved registers X19-X28 for values that need to survive
-/// across function calls (like loop counters).
-pub fn aapcs64_caller_saved() -> Array[PReg] {
+/// Scratch registers available for allocation (caller-saved, no save/restore needed)
+/// Only X8 is available - X9-X17 are used by CallIndirect
+pub fn allocatable_scratch_regs() -> Array[PReg] {
+  [{ index: 8, class: Int }]
+}
+
+///|
+/// Callee-saved registers available for allocation (must be saved/restored)
+/// X20-X22 are reserved for func_table, memory_base, memory_size
+pub fn allocatable_callee_saved_regs() -> Array[PReg] {
   [
-    // Use callee-saved registers that survive across function calls
-    // X20, X21, X22 are reserved for func_table_ptr, memory_base, memory_size
     { index: 19, class: Int },
     { index: 23, class: Int },
     { index: 24, class: Int },
@@ -276,9 +274,6 @@ pub fn aapcs64_caller_saved() -> Array[PReg] {
     { index: 26, class: Int },
     { index: 27, class: Int },
     { index: 28, class: Int },
-    // Also include X8 which is not used for arguments
-    { index: 8, class: Int },
-    { index: 18, class: Int }, // Platform register
   ]
 }
 

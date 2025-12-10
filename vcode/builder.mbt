@@ -293,8 +293,10 @@ pub fn VCodeBuilder::iconst(self : VCodeBuilder, value : Int64) -> VReg {
 
 ///|
 pub fn VCodeBuilder::fconst(self : VCodeBuilder, value : Double) -> VReg {
+  // This builder method defaults to F64
   let result = self.new_vreg(Float)
-  let inst = VCodeInst::new(LoadConstF(value))
+  let bits = value.reinterpret_as_int64()
+  let inst = VCodeInst::new(LoadConstF64(bits))
   inst.add_def({ reg: Virtual(result) })
   self.emit(inst)
   result

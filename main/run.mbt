@@ -620,10 +620,25 @@ fn compile_module_to_jit(
     let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (O2 level)
     @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
+    // DEBUG: Print IR
+    if debug_config.verbose {
+      println("[DEBUG] IR for \{func_name}:")
+      println(ir_func.print())
+    }
     // Stage 3: Lower to VCode
     let vcode_func = @vcode.lower_function(ir_func)
+    // DEBUG: Print VCode before regalloc
+    if debug_config.verbose {
+      println("[DEBUG] VCode before regalloc for \{func_name}:")
+      println(vcode_func.print())
+    }
     // Stage 4: Register allocation
     let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+    // DEBUG: Print VCode after regalloc
+    if debug_config.verbose {
+      println("[DEBUG] VCode after regalloc for \{func_name}:")
+      println(allocated.print())
+    }
     // Stage 5: Emit machine code
     let mc = @vcode.emit_function(allocated)
     // Stage 6: Add to precompiled module

@@ -1069,28 +1069,72 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
 
 ///|
 /// Translate a br_table instruction
+/// Uses critical edge splitting to pass block arguments properly
 fn Translator::translate_br_table(
   self : Translator,
   labels : Array[Int],
   default_ : Int,
 ) -> Unit {
   let index = self.pop()
-  // For simplicity, just use the default target
-  // A full implementation would create a proper switch
-  let idx = self.block_stack.length() - 1 - default_
-  if idx >= 0 && idx < self.block_stack.length() {
-    let frame = self.block_stack[idx]
-    // Build target blocks array
-    let targets : Array[Block] = []
-    for depth in labels {
-      let target_idx = self.block_stack.length() - 1 - depth
-      if target_idx >= 0 && target_idx < self.block_stack.length() {
-        targets.push(self.block_stack[target_idx].block)
-      } else {
-        targets.push(frame.block) // Fallback to default
+  // Get the default target frame
+  let default_idx = self.block_stack.length() - 1 - default_
+  if default_idx >= 0 && default_idx < self.block_stack.length() {
+    let default_frame = self.block_stack[default_idx]
+
+    // Collect arguments that would be passed on branch (same for all targets)
+    // All targets must have the same result type as the default
+    let args : Array[Value] = []
+    let num_results = default_frame.result_types.length()
+    // Only collect results if we have enough values on the stack
+    if self.value_stack.length() >= num_results {
+      for i in 0..<num_results {
+        args.push(self.value_stack[self.value_stack.length() - num_results + i])
       }
     }
-    self.builder.br_table(index, targets, frame.block)
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
+
+    // Save the original block
+    let original_block = self.builder.current_block()
+
+    // Phase 1: Create all intermediate blocks (without filling them)
+    let intermediate_blocks : Array[Block] = []
+    let target_frames : Array[BlockFrame] = []
+    for depth in labels {
+      let target_idx = self.block_stack.length() - 1 - depth
+      let target_frame = if target_idx >= 0 &&
+        target_idx < self.block_stack.length() {
+        self.block_stack[target_idx]
+      } else {
+        default_frame
+      }
+      target_frames.push(target_frame)
+      intermediate_blocks.push(self.builder.create_block())
+    }
+    // Create intermediate block for default
+    let default_intermediate = self.builder.create_block()
+
+    // Phase 2: Emit br_table in original block
+    match original_block {
+      Some(_) =>
+        self.builder.br_table(index, intermediate_blocks, default_intermediate)
+      None => ()
+    }
+
+    // Phase 3: Fill in intermediate blocks with jumps to real targets
+    for i, intermediate in intermediate_blocks {
+      self.builder.switch_to_block(intermediate)
+      self.builder.jump(target_frames[i].block, args)
+    }
+
+    // Fill in default intermediate
+    self.builder.switch_to_block(default_intermediate)
+    self.builder.jump(default_frame.block, args)
+
+    // br_table is a terminator, code after it is unreachable
+    // Don't switch back to original - leave current_block as the last intermediate
   }
 }
 

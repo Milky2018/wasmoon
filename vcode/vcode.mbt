@@ -294,7 +294,8 @@ pub enum VCodeOpcode {
   // Moves
   Move
   LoadConst(Int64) // Load immediate
-  LoadConstF(Double) // Load float immediate
+  LoadConstF32(Int) // Load f32 immediate (stored as bits)
+  LoadConstF64(Int64) // Load f64 immediate (stored as bits)
   // Comparisons (result is 0 or 1)
   Cmp(CmpKind)
   FCmp(FCmpKind)
@@ -362,7 +363,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Load32U(offset) => "load32u +\{offset}"
     Move => "mov"
     LoadConst(v) => "ldi \{v}"
-    LoadConstF(v) => "ldf \{v}"
+    LoadConstF32(v) => "ldf32 0x\{v.to_string()}"
+    LoadConstF64(v) => "ldf64 0x\{v.to_string()}"
     Cmp(kind) => "cmp.\{kind}"
     FCmp(kind) => "fcmp.\{kind}"
     Extend(kind) => "extend.\{kind}"

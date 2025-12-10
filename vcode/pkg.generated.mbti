@@ -13,11 +13,13 @@ pub fn aapcs64_arg_gprs() -> Array[PReg]
 
 pub fn aapcs64_callee_saved() -> Array[PReg]
 
-pub fn aapcs64_caller_saved() -> Array[PReg]
-
 pub fn aapcs64_ret_fprs() -> Array[PReg]
 
 pub fn aapcs64_ret_gprs() -> Array[PReg]
+
+pub fn allocatable_callee_saved_regs() -> Array[PReg]
+
+pub fn allocatable_scratch_regs() -> Array[PReg]
 
 pub fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
 
@@ -76,6 +78,10 @@ pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
 pub fn emit_fmov_d_to_x(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fmov_s_to_w(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fmov_w_to_s(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fmov_x_to_d(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
 
@@ -382,6 +388,7 @@ pub(all) struct LinearScanAllocator {
   float_regs : Array[PReg]
   mut active : Array[LiveInterval]
   mut next_spill_slot : Int
+  block_order : Map[Int, Int]
 }
 pub fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
 pub fn LinearScanAllocator::new(Array[PReg], Array[PReg]) -> Self
@@ -402,6 +409,7 @@ pub(all) struct LivenessResult {
   use_def : Map[Int, UseDefInfo]
   live_in : Array[@set.Set[Int]]
   live_out : Array[@set.Set[Int]]
+  block_order : Map[Int, Int]
 }
 
 pub(all) struct LoweringContext {
@@ -742,7 +750,8 @@ pub enum VCodeOpcode {
   Load32U(Int)
   Move
   LoadConst(Int64)
-  LoadConstF(Double)
+  LoadConstF32(Int)
+  LoadConstF64(Int64)
   Cmp(CmpKind)
   FCmp(FCmpKind)
   Extend(ExtendKind)

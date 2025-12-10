@@ -25,9 +25,17 @@ pub enum ProgPos {
 }
 
 ///|
-fn ProgPoint::compare(self : ProgPoint, other : ProgPoint) -> Int {
+/// Compare two program points using a block order map
+/// This is used by the register allocator to correctly order points in non-linear CFGs
+fn ProgPoint::compare_with_order(
+  self : ProgPoint,
+  other : ProgPoint,
+  block_order : Map[Int, Int],
+) -> Int {
   if self.block != other.block {
-    return self.block - other.block
+    let self_order = block_order.get(self.block).unwrap_or(self.block)
+    let other_order = block_order.get(other.block).unwrap_or(other.block)
+    return self_order - other_order
   }
   if self.inst != other.inst {
     return self.inst - other.inst
@@ -84,8 +92,13 @@ fn LiveInterval::new(vreg : VReg, start : ProgPoint) -> LiveInterval {
 }
 
 ///|
-fn LiveInterval::extend(self : LiveInterval, point : ProgPoint) -> Unit {
-  if point.compare(self.end) > 0 {
+/// Extend interval using block execution order for comparison
+fn LiveInterval::extend_with_order(
+  self : LiveInterval,
+  point : ProgPoint,
+  block_order : Map[Int, Int],
+) -> Unit {
+  if point.compare_with_order(self.end, block_order) > 0 {
     self.end = point
   }
   self.uses.push(point)
@@ -180,6 +193,8 @@ pub(all) struct LivenessResult {
   live_in : Array[Set[Int]]
   // Block live-out sets (vregs live at block exit)
   live_out : Array[Set[Int]]
+  // Block order: maps block ID -> linear position (for correct interval comparison)
+  block_order : Map[Int, Int]
 }
 
 ///|
@@ -190,13 +205,82 @@ fn LivenessResult::new(num_blocks : Int) -> LivenessResult {
     live_in.push(Set::new())
     live_out.push(Set::new())
   }
-  { intervals: {}, use_def: {}, live_in, live_out }
+  { intervals: {}, use_def: {}, live_in, live_out, block_order: {} }
+}
+
+///|
+/// Compute reverse postorder of blocks (for linearizing the CFG)
+fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
+  let visited : Set[Int] = Set::new()
+  let postorder : Array[Int] = []
+
+  // DFS to compute postorder
+  fn dfs(
+    func : VCodeFunction,
+    block_id : Int,
+    visited : Set[Int],
+    postorder : Array[Int],
+  ) {
+    if visited.contains(block_id) {
+      return
+    }
+    visited.add(block_id)
+
+    // Visit successors first
+    // Since block ID equals array index, we can use direct indexing
+    if block_id >= 0 && block_id < func.blocks.length() {
+      let block = func.blocks[block_id]
+      match block.terminator {
+        Some(term) =>
+          match term {
+            Jump(target) => dfs(func, target, visited, postorder)
+            Branch(_, then_b, else_b) => {
+              dfs(func, then_b, visited, postorder)
+              dfs(func, else_b, visited, postorder)
+            }
+            Return(_) | Trap(_) => ()
+          }
+        None => ()
+      }
+    }
+
+    // Add to postorder after visiting all successors
+    postorder.push(block_id)
+  }
+
+  // Start DFS from block 0 (entry)
+  if func.blocks.length() > 0 {
+    dfs(func, func.blocks[0].id, visited, postorder)
+  }
+
+  // Also visit any unreachable blocks (shouldn't happen in valid code)
+  for block in func.blocks {
+    if !visited.contains(block.id) {
+      dfs(func, block.id, visited, postorder)
+    }
+  }
+
+  // Reverse postorder: reverse the postorder array
+  // Map block ID -> position in reverse postorder
+  let order : Map[Int, Int] = {}
+  let n = postorder.length()
+  for i, block_id in postorder {
+    order.set(block_id, n - 1 - i)
+  }
+  order
 }
 
 ///|
 /// Compute liveness information for a VCode function
 pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
   let result = LivenessResult::new(func.blocks.length())
+
+  // Compute block order for correct interval comparison
+  let block_order = compute_reverse_postorder(func)
+  for entry in block_order {
+    let (block_id, order) = entry
+    result.block_order.set(block_id, order)
+  }
 
   // Phase 1: Collect definitions and uses
   collect_defs_uses(func, result)
@@ -221,17 +305,14 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
   // Process each block
   for block_idx, block in func.blocks {
-    // Block parameters are definitions at block entry
+    // Block parameters are NOT definitions - they receive values from
+    // predecessor block moves (SSA deconstruction). We only register them
+    // in use_def map but don't set def_point here.
     for param in block.params {
-      let info = match result.use_def.get(param.id) {
-        Some(existing) => existing
-        None => {
-          let new_info = UseDefInfo::new(param)
-          result.use_def.set(param.id, new_info)
-          new_info
-        }
+      if result.use_def.get(param.id) is None {
+        let new_info = UseDefInfo::new(param)
+        result.use_def.set(param.id, new_info)
       }
-      info.def_point = Some({ block: block_idx, inst: -1, pos: After })
     }
 
     // Process instructions
@@ -270,15 +351,22 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
                 new_info
               }
             }
-            // Only set def_point if not already set (keep earliest definition)
-            // This is important for block parameters that may be redefined
-            // in parallel copy moves
-            if info.def_point is None {
-              info.def_point = Some({
-                block: block_idx,
-                inst: inst_idx,
-                pos: After,
-              })
+            // For SSA deconstruction, the same vreg may be defined in multiple
+            // blocks on different paths. Keep the earliest definition in
+            // execution order (using block_order for comparison).
+            let new_def : ProgPoint = {
+              block: block_idx,
+              inst: inst_idx,
+              pos: After,
+            }
+            match info.def_point {
+              None => info.def_point = Some(new_def)
+              Some(existing_def) =>
+                // Keep the earlier definition (lower order = earlier in execution)
+                if new_def.compare_with_order(existing_def, result.block_order) <
+                  0 {
+                  info.def_point = Some(new_def)
+                }
             }
           }
           Physical(_) => ()
@@ -465,6 +553,9 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
 ///|
 /// Phase 3: Build live intervals from use-def info
 fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
+  // Get block order for correct interval comparison
+  let block_order = result.block_order
+
   // For each vreg, create an interval spanning from def to last use
   for entry in result.use_def {
     let (vreg_id, info) = entry
@@ -480,9 +571,9 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
     }
     let interval = LiveInterval::new(info.vreg, start)
 
-    // Extend to cover all uses
+    // Extend to cover all uses (using block order for correct comparison)
     for use_point in info.use_points {
-      interval.extend(use_point)
+      interval.extend_with_order(use_point, block_order)
     }
 
     // Extend to cover live-in blocks - the interval needs to span from
@@ -492,7 +583,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
         // The vreg is live at the start of this block
         // Extend from block entry
         let entry_point = { block: block_idx, inst: -1, pos: Before }
-        interval.extend(entry_point)
+        interval.extend_with_order(entry_point, block_order)
         // Also extend to end of block if live-out (already handled below)
       }
     }
@@ -507,7 +598,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
           inst: block.insts.length(),
           pos: After,
         }
-        interval.extend(end_point)
+        interval.extend_with_order(end_point, block_order)
       }
     }
     result.intervals.set(vreg_id, interval)
@@ -556,6 +647,8 @@ pub(all) struct LinearScanAllocator {
   // Current state
   mut active : Array[LiveInterval] // Intervals currently occupying registers
   mut next_spill_slot : Int
+  // Block order for correct interval comparison in non-linear CFGs
+  block_order : Map[Int, Int]
 }
 
 ///|
@@ -563,7 +656,7 @@ pub fn LinearScanAllocator::new(
   int_regs : Array[PReg],
   float_regs : Array[PReg],
 ) -> LinearScanAllocator {
-  { int_regs, float_regs, active: [], next_spill_slot: 0 }
+  { int_regs, float_regs, active: [], next_spill_slot: 0, block_order: {} }
 }
 
 ///|
@@ -573,6 +666,11 @@ pub fn LinearScanAllocator::allocate(
   func : VCodeFunction,
   liveness : LivenessResult,
 ) -> RegAllocResult {
+  // Copy block order from liveness result
+  for entry in liveness.block_order {
+    let (block_id, order) = entry
+    self.block_order.set(block_id, order)
+  }
   let result : RegAllocResult = {
     assignments: {},
     spill_slots: {},
@@ -600,7 +698,7 @@ pub fn LinearScanAllocator::allocate(
     }
   }
 
-  // Sort intervals by start point
+  // Sort intervals by start point using block order
   let intervals : Array[LiveInterval] = []
   for entry in liveness.intervals {
     let (_, interval) = entry
@@ -610,7 +708,10 @@ pub fn LinearScanAllocator::allocate(
     }
     intervals.push(interval)
   }
-  intervals.sort_by(fn(a, b) { a.start.compare(b.start) })
+  let block_order = self.block_order
+  intervals.sort_by(fn(a, b) {
+    a.start.compare_with_order(b.start, block_order)
+  })
 
   // Process intervals in order of start point
   for interval in intervals {
@@ -646,11 +747,13 @@ fn LinearScanAllocator::expire_old_intervals(
   self : LinearScanAllocator,
   current : LiveInterval,
 ) -> Unit {
-  // Sort active by end point and remove those that end before current starts
-  self.active.sort_by(fn(a, b) { a.end.compare(b.end) })
+  // Sort active by end point using block order, and remove those that end before current starts
+  let block_order = self.block_order
+  self.active.sort_by(fn(a, b) { a.end.compare_with_order(b.end, block_order) })
   let new_active : Array[LiveInterval] = []
   for interval in self.active {
-    if interval.end.compare(current.start) >= 0 {
+    let cmp = interval.end.compare_with_order(current.start, block_order)
+    if cmp >= 0 {
       new_active.push(interval)
     }
   }
@@ -957,9 +1060,16 @@ fn rewrite_reg(reg : Reg, alloc : RegAllocResult) -> Reg {
 ///|
 /// Allocate registers for a function using default AArch64 register set
 pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
-  // Get AArch64 allocatable registers
-  // Use caller-saved registers for general allocation
-  let int_regs = aapcs64_caller_saved()
+  // Build allocatable register pool:
+  // 1. Scratch regs (caller-saved, no save needed) - use first
+  // 2. Callee-saved regs (must save/restore) - use when scratch exhausted
+  let int_regs : Array[PReg] = []
+  for r in allocatable_scratch_regs() {
+    int_regs.push(r)
+  }
+  for r in allocatable_callee_saved_regs() {
+    int_regs.push(r)
+  }
   let float_regs = aapcs64_arg_fprs()
 
   // Compute liveness

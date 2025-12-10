@@ -1141,8 +1141,9 @@ pub fn emit_fmov_d(mc : MachineCode, rd : Int, rm : Int) -> Unit {
 /// Opcode: 0x9E660000
 /// Moves 64-bit FP register to 64-bit GPR
 pub fn emit_fmov_d_to_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = (rn >> 2) & 7
+  // Rd in bits [4:0], Rn in bits [9:5]
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
   let b2 = 102 // 0x66
   let b3 = 158 // 0x9E
   mc.emit_inst(b0, b1, b2, b3)
@@ -1153,9 +1154,36 @@ pub fn emit_fmov_d_to_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 /// Opcode: 0x1E260000
 /// Moves 32-bit FP register to 32-bit GPR
 pub fn emit_fmov_s_to_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = (rn >> 2) & 7
+  // Rd in bits [4:0], Rn in bits [9:5]
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
   let b2 = 38 // 0x26
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMOV (general to double): FMOV Dd, Xn
+/// Opcode: 0x9E670000
+/// Moves 64-bit GPR to 64-bit FP register
+pub fn emit_fmov_x_to_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  // Rd in bits [4:0], Rn in bits [9:5]
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  let b2 = 103 // 0x67
+  let b3 = 158 // 0x9E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMOV (general to single): FMOV Sd, Wn
+/// Opcode: 0x1E270000
+/// Moves 32-bit GPR to 32-bit FP register
+pub fn emit_fmov_w_to_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  // Rd in bits [4:0], Rn in bits [9:5]
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  let b2 = 39 // 0x27
   let b3 = 30 // 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -1654,13 +1682,44 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
     Move => {
       let rd = wreg_num(inst.defs[0])
       let rm = reg_num(inst.uses[0])
-      emit_mov_reg(mc, rd, rm)
+      // Check register class to use appropriate move instruction
+      let reg_class = match inst.defs[0].reg {
+        Physical(preg) => preg.class
+        Virtual(_) => Int // Should not happen at emit time
+      }
+      match reg_class {
+        Float => emit_fmov_d(mc, rd, rm)
+        Int => emit_mov_reg(mc, rd, rm)
+      }
     }
     LoadConst(v) => {
       let rd = wreg_num(inst.defs[0])
       emit_load_imm64(mc, rd, v)
     }
-    LoadConstF(_) => emit_nop(mc)
+    LoadConstF32(bits) => {
+      // Load 32-bit float constant:
+      // 1. Load the 32-bit representation into a scratch W register (X16/W16)
+      // 2. FMOV from W16 to the destination S register
+      let rd = wreg_num(inst.defs[0])
+      // Use X16 as scratch register, load the 32-bit value as unsigned
+      emit_movz(mc, 16, bits & 0xFFFF, 0)
+      let high = (bits >> 16) & 0xFFFF
+      if high != 0 {
+        emit_movk(mc, 16, high, 16)
+      }
+      // FMOV Sd, Wn
+      emit_fmov_w_to_s(mc, rd, 16)
+    }
+    LoadConstF64(bits) => {
+      // Load 64-bit float constant:
+      // 1. Load the 64-bit representation into a scratch X register (X16)
+      // 2. FMOV from X16 to the destination D register
+      let rd = wreg_num(inst.defs[0])
+      // Use X16 as scratch register
+      emit_load_imm64(mc, 16, bits)
+      // FMOV Dd, Xn
+      emit_fmov_x_to_d(mc, rd, 16)
+    }
     Cmp(kind) => {
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
