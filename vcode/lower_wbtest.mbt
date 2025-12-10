@@ -644,3 +644,264 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
     #|
   inspect(output, content=expected)
 }
+
+// ============ br_table Pattern Test (f32_br_2locals reproduction) ============
+// This test reproduces the pattern from testsuite/data/f32_br_2locals.wast
+//
+// The WASM function:
+//   (func (export "test") (param i32) (result f32)
+//     (local f32 f32)   ; local1, local2
+//     (local.set 1 (f32.const 10.0))
+//     (block $3
+//       (block $2
+//         (block $1
+//           (block $0
+//             (br_table $0 $1 $2 $3 (local.get 0))
+//           )
+//           ;; case 0: store local1, load to local2, br $3
+//           (f32.store (i32.const 0) (local.get 1))
+//           (local.set 2 (f32.load (i32.const 0)))
+//           (br $3)
+//         )
+//         ;; case 1: same as case 0
+//       )
+//       ;; case 2: same as case 0
+//     )
+//     ;; case 3/default: local2 is never set, returns default 0.0
+//     (local.get 2)
+//   )
+//
+// The key challenges for register allocation:
+// 1. br_table is lowered to a comparison chain
+// 2. Multiple paths define the same vreg (block parameter for local2)
+// 3. All paths merge at the exit block via block parameters
+// 4. Float register allocation must handle this correctly
+
+///|
+test "lower br_table with f32 locals (f32_br_2locals pattern)" {
+  // Build IR that mimics the f32_br_2locals.wast function:
+  //   fn test(selector: i32) -> f32
+  //
+  // Structure:
+  //   entry:
+  //     local1 = f32.const 10.0
+  //     local2_init = f32.const 0.0
+  //     addr = i32.const 0
+  //     br_table selector, [case0, case1, case2], exit
+  //
+  //   case0, case1, case2:
+  //     store.f32 addr, local1
+  //     local2_i = load.f32 addr
+  //     jump exit(local2_i)
+  //
+  //   exit(local2_phi: f32):
+  //     return local2_phi
+
+  let builder = @ir.IRBuilder::new("test")
+  let selector = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::F32)
+
+  // Create all blocks first
+  let entry = builder.create_block()
+  let case0 = builder.create_block()
+  let case1 = builder.create_block()
+  let case2 = builder.create_block()
+  let exit = builder.create_block()
+
+  // Add block parameter for exit (the merged local2 value)
+  let local2_phi = builder.add_block_param(exit, @ir.Type::F32)
+
+  // Entry block
+  builder.switch_to_block(entry)
+  let local1 = builder.fconst_f32(10.0)
+  let local2_init = builder.fconst_f32(0.0)
+  let addr = builder.iconst_i32(0)
+  // br_table with 3 cases + default
+  // targets = [case0, case1, case2], default = exit
+  builder.br_table(selector, [case0, case1, case2], exit)
+
+  // case0: store local1, load to local2, jump exit with local2
+  builder.switch_to_block(case0)
+  builder.store(@ir.Type::F32, addr, local1, 0)
+  let local2_0 = builder.load(@ir.Type::F32, addr, 0)
+  builder.jump(exit, [local2_0])
+
+  // case1: same pattern
+  builder.switch_to_block(case1)
+  builder.store(@ir.Type::F32, addr, local1, 0)
+  let local2_1 = builder.load(@ir.Type::F32, addr, 0)
+  builder.jump(exit, [local2_1])
+
+  // case2: same pattern
+  builder.switch_to_block(case2)
+  builder.store(@ir.Type::F32, addr, local1, 0)
+  let local2_2 = builder.load(@ir.Type::F32, addr, 0)
+  builder.jump(exit, [local2_2])
+
+  // exit: return local2_phi
+  builder.switch_to_block(exit)
+  builder.return_([local2_phi])
+
+  // Ignore warnings about unused values (they're used in block param passing)
+  ignore(local2_init)
+
+  // ============ Phase 1: Lower to VCode ============
+  let vcode_func = lower_function(builder.get_function())
+
+  // Inspect the lowered VCode structure
+  // This shows how br_table is lowered to comparison chain
+  inspect(
+    vcode_func.print(),
+    content=
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    f2 = ldf 10
+      #|    f3 = ldf 0
+      #|    v4 = ldi 0
+      #|    v6 = ldi 0
+      #|    v5 = cmp.eq v0, v6
+      #|    branch v5, block1, block5
+      #|block1:
+      #|    bounds_check +0, 4 v4
+      #|    v11 = add x21, v4
+      #|    store.f32 +0 v11, f2
+      #|    bounds_check +0, 4 v4
+      #|    v13 = add x21, v4
+      #|    f12 = load.f32 +0 v13
+      #|    f1 = mov f12
+      #|    jump block4
+      #|block2:
+      #|    bounds_check +0, 4 v4
+      #|    v14 = add x21, v4
+      #|    store.f32 +0 v14, f2
+      #|    bounds_check +0, 4 v4
+      #|    v16 = add x21, v4
+      #|    f15 = load.f32 +0 v16
+      #|    f1 = mov f15
+      #|    jump block4
+      #|block3:
+      #|    bounds_check +0, 4 v4
+      #|    v17 = add x21, v4
+      #|    store.f32 +0 v17, f2
+      #|    bounds_check +0, 4 v4
+      #|    v19 = add x21, v4
+      #|    f18 = load.f32 +0 v19
+      #|    f1 = mov f18
+      #|    jump block4
+      #|block4(f1:float):
+      #|    ret f1
+      #|block5:
+      #|    v7 = ldi 1
+      #|    v8 = cmp.eq v0, v7
+      #|    branch v8, block2, block6
+      #|block6:
+      #|    v9 = ldi 2
+      #|    v10 = cmp.eq v0, v9
+      #|    branch v10, block3, block4
+      #|}
+      #|
+    ,
+  )
+
+  // ============ Phase 2: Register Allocation ============
+  let allocated_func = allocate_registers_aarch64(vcode_func)
+
+  // Inspect the allocated VCode
+  // Key observations:
+  // 1. All case blocks (1, 2, 3) should write the block parameter to the SAME register (d2)
+  // 2. The exit block (4) should return that same register (d2)
+  // 3. Float values should be in float registers (d0, d1, d2, ...)
+  inspect(
+    allocated_func.print(),
+    content=
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    d0 = ldf 10
+      #|    d1 = ldf 0
+      #|    x8 = ldi 0
+      #|    x19 = ldi 0
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block1, block5
+      #|block1:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d0 = load.f32 +0 x19
+      #|    d2 = mov d0
+      #|    jump block4
+      #|block2:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d1 = load.f32 +0 x19
+      #|    d2 = mov d1
+      #|    jump block4
+      #|block3:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d1 = load.f32 +0 x19
+      #|    d2 = mov d1
+      #|    jump block4
+      #|block4(f1:float):
+      #|    ret d2
+      #|block5:
+      #|    x19 = ldi 1
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block2, block6
+      #|block6:
+      #|    x19 = ldi 2
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block3, block4
+      #|}
+      #|
+    ,
+  )
+
+  // ============ Phase 3: Verify Key Properties ============
+
+  // Count the number of blocks (entry + 3 cases + exit + 2 comparison chain blocks = 7)
+  inspect(allocated_func.blocks.length(), content="7")
+
+  // Verify the function returns a float
+  inspect(allocated_func.results.length(), content="1")
+
+  // ============ Phase 4: Verify SSA Deconstruction ============
+  // The critical property: all paths that define the block parameter (f1)
+  // should write to the SAME physical register (d2)
+  //
+  // block1: d2 = mov d0
+  // block2: d2 = mov d1
+  // block3: d2 = mov d1
+  // block4: ret d2
+  //
+  // This ensures the value correctly flows through all paths
+
+  // Check block1's last instruction defines d2
+  let block1_last = allocated_func.blocks[1].insts.last().unwrap()
+  inspect(block1_last.opcode, content="mov")
+  match block1_last.defs[0].reg {
+    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Virtual(_) => inspect(false, content="true")
+  }
+
+  // Check block2's last instruction defines d2
+  let block2_last = allocated_func.blocks[2].insts.last().unwrap()
+  match block2_last.defs[0].reg {
+    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Virtual(_) => inspect(false, content="true")
+  }
+
+  // Check block3's last instruction defines d2
+  let block3_last = allocated_func.blocks[3].insts.last().unwrap()
+  match block3_last.defs[0].reg {
+    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Virtual(_) => inspect(false, content="true")
+  }
+}
