@@ -305,15 +305,19 @@ test "pattern: fmul x, 1.0 -> mov x" {
   builder.return_([result])
   let vcode_func = lower_function_optimized(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode fmul_one_test(f0:float) -> float {
-    #|block0:
-    #|    f1 = ldf 1
-    #|    f2 = mov f0
-    #|    ret f2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode fmul_one_test(f0:float) -> float {
+      #|block0:
+      #|    f1 = ldf 1
+      #|    f2 = mov f0
+      #|    ret f2
+      #|}
+      #|
+
+    ),
+  )
 }
 
 ///|

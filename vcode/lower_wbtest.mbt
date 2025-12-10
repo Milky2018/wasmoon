@@ -349,14 +349,18 @@ test "lower float constant" {
   builder.return_([c])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode fconst_test() -> float {
-    #|block0:
-    #|    f0 = ldf 3.14
-    #|    ret f0
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode fconst_test() -> float {
+      #|block0:
+      #|    f0 = ldf 3.14
+      #|    ret f0
+      #|}
+      #|
+
+    ),
+  )
 }
 
 // ============ AArch64-Specific Instruction Selection Tests ============

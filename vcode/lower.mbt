@@ -182,6 +182,14 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   for i, ir_block in ir_func.blocks {
     lower_block_body(ctx, ir_block, ctx.vcode_func.blocks[i])
   }
+
+  // Debug: print VCode for debugging f32_br_2locals issue
+  if ctx.vcode_func.name == "test" {
+    println("=== VCode for function: test ===")
+    println(ctx.vcode_func.print())
+    println("================================")
+  }
+
   ctx.vcode_func
 }
 

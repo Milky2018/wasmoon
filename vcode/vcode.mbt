@@ -363,8 +363,16 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Load32U(offset) => "load32u +\{offset}"
     Move => "mov"
     LoadConst(v) => "ldi \{v}"
-    LoadConstF32(v) => "ldf32 0x\{v.to_string()}"
-    LoadConstF64(v) => "ldf64 0x\{v.to_string()}"
+    LoadConstF32(v) => {
+      // Convert i32 bits to f32 value for display
+      let f = Float::reinterpret_from_uint(v.reinterpret_as_uint())
+      "ldf \{f}"
+    }
+    LoadConstF64(v) => {
+      // Convert i64 bits to f64 value for display
+      let f = v.reinterpret_as_double()
+      "ldf \{f}"
+    }
     Cmp(kind) => "cmp.\{kind}"
     FCmp(kind) => "fcmp.\{kind}"
     Extend(kind) => "extend.\{kind}"

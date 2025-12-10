@@ -1979,8 +1979,9 @@ fn emit_terminator_with_epilogue(
     }
     Return(values) => {
       // Move return values to their ABI registers
+      // JIT calling convention: ALL returns (int and float) go to X registers as int64
       // Integer results go in X0, X1, etc.
-      // Float results need FMOV to move from D/S registers to X0
+      // Float results: fmov from D register to X register (transfer bit pattern)
       for i, value in values {
         let src = reg_num(value)
         let reg_class = match value {
@@ -1989,7 +1990,7 @@ fn emit_terminator_with_epilogue(
         }
         match reg_class {
           Float =>
-            // Float value in D register, need to move to X register for return
+            // Float value in D register, transfer bit pattern to X register for return
             emit_fmov_d_to_x(mc, i, src)
           Int =>
             if src != i {

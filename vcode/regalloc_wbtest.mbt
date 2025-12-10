@@ -124,7 +124,7 @@ test "regalloc: with spilling" {
   let result_alloc = allocator.allocate(func, liveness)
 
   // Some vregs should be spilled since we have 7 vregs but only 2 registers
-  inspect(result_alloc.num_spill_slots > 0, content="false")
+  inspect(result_alloc.num_spill_slots > 0, content="true")
 }
 
 ///|
@@ -278,16 +278,481 @@ test "progpoint: comparison" {
   let p3 : ProgPoint = { block: 0, inst: 1, pos: Before }
   let p4 : ProgPoint = { block: 1, inst: 0, pos: Before }
 
+  let order : Map[Int, Int] = {}
+  order.set(0, 0)
+  order.set(1, 1)
+
   // p1 < p2 (Before < After)
-  inspect(p1.compare(p2) < 0, content="true")
+  inspect(p1.compare_with_order(p2, order) < 0, content="true")
 
   // p2 < p3 (same block, earlier inst < later inst)
-  inspect(p2.compare(p3) < 0, content="true")
+  inspect(p2.compare_with_order(p3, order) < 0, content="true")
 
   // p3 < p4 (earlier block < later block)
-  inspect(p3.compare(p4) < 0, content="true")
+  inspect(p3.compare_with_order(p4, order) < 0, content="true")
 
   // Equal comparison
   let p5 : ProgPoint = { block: 0, inst: 0, pos: Before }
-  inspect(p1.compare(p5), content="0")
+  inspect(p1.compare_with_order(p5, order), content="0")
+}
+
+///|
+test "liveness: block parameters should have use points" {
+  // This test verifies that block parameters get use points at block entry
+  // Reproduces the bug found in f32_br_2locals.wast
+  let func = VCodeFunction::new("test_block_param_use")
+
+  // Create:
+  // block0:
+  //   v0 = ldi 10
+  //   v1 = mov v0
+  //   jump block1
+  // block1(v1):  ; v1 is passed as block parameter
+  //   ret v1
+
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+
+  // block0: v0 = ldi 10; v1 = mov v0; jump block1
+  let inst0 = VCodeInst::new(LoadConst(10L))
+  inst0.add_def({ reg: Virtual(v0) })
+  block0.add_inst(inst0)
+
+  let inst1 = VCodeInst::new(Move)
+  inst1.add_use(Virtual(v0))
+  inst1.add_def({ reg: Virtual(v1) })
+  block0.add_inst(inst1)
+
+  block0.set_terminator(Jump(block1.id))
+
+  // block1(v1): ret v1
+  block1.params.push(v1)
+  block1.set_terminator(Return([Virtual(v1)]))
+
+  // Compute liveness
+  let liveness = compute_liveness(func)
+
+  // v1 should have use points in both blocks
+  let v1_info = liveness.use_def.get(v1.id).unwrap()
+
+  // Should have at least 2 use points: one at block0's move, one at block1 entry
+  inspect(v1_info.use_points.length() >= 2, content="true")
+
+  // v1 should be in block1's live-in set
+  inspect(liveness.live_in[1].contains(v1.id), content="true")
+
+  // v1's interval should extend into block1
+  let v1_interval = liveness.intervals.get(v1.id).unwrap()
+  inspect(v1_interval.end.block >= 1, content="true")
+}
+
+///|
+test "liveness: mutually exclusive paths with same vreg" {
+  // CRITICAL TEST: Same vreg defined on multiple mutually exclusive paths
+  // This is the core issue in f32_br_2locals.wast
+  let func = VCodeFunction::new("test_mutually_exclusive")
+
+  // Create a diamond CFG:
+  // block0:
+  //   v0 = ldi 1
+  //   branch v0, block1, block2
+  // block1:
+  //   v1 = ldi 10
+  //   jump block3
+  // block2:
+  //   v1 = ldi 20  ; SAME vreg v1 defined here!
+  //   jump block3
+  // block3:
+  //   ret v1
+
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+  let block2 = func.new_block()
+  let block3 = func.new_block()
+
+  // block0
+  let inst0 = VCodeInst::new(LoadConst(1L))
+  inst0.add_def({ reg: Virtual(v0) })
+  block0.add_inst(inst0)
+  block0.set_terminator(Branch(Virtual(v0), block1.id, block2.id))
+
+  // block1
+  let inst1 = VCodeInst::new(LoadConst(10L))
+  inst1.add_def({ reg: Virtual(v1) })
+  block1.add_inst(inst1)
+  block1.set_terminator(Jump(block3.id))
+
+  // block2
+  let inst2 = VCodeInst::new(LoadConst(20L))
+  inst2.add_def({ reg: Virtual(v1) })
+  block2.add_inst(inst2)
+  block2.set_terminator(Jump(block3.id))
+
+  // block3
+  block3.set_terminator(Return([Virtual(v1)]))
+
+  // Compute liveness
+  let liveness = compute_liveness(func)
+
+  // Get v1's use-def info
+  let v1_info = liveness.use_def.get(v1.id).unwrap()
+
+  // CRITICAL: v1 has TWO definitions: (1:0a) and (2:0a)
+  // Current code only keeps ONE def_point
+  match v1_info.def_point {
+    Some(_) => ()
+    None => ()
+  }
+
+  // v1 should be in block3's live-in set
+  inspect(liveness.live_in[3].contains(v1.id), content="true")
+
+  // v1's interval
+  let v1_interval = liveness.intervals.get(v1.id).unwrap()
+
+  // The interval should end at block3
+  inspect(v1_interval.end.block == 3, content="true")
+
+  // PROBLEM: The interval start is only at ONE of the two definitions!
+  // This means one path will have an uninitialized register!
+  //
+  // If def_point is block1, then block2 path will use uninitialized v1
+  // If def_point is block2, then block1 path will use uninitialized v1
+  //
+  // This test DEMONSTRATES the bug but doesn't fix it.
+  // The fix would require either:
+  // 1. Splitting v1 into two vregs (v1_then, v1_else)
+  // 2. Creating separate intervals for each definition
+  // 3. Ensuring both paths define v1 in the same physical register
+}
+
+///|
+test "regalloc: SSA deconstruction scenario" {
+  // Test SSA deconstruction with block parameters
+  // Simulates the br_table lowering pattern
+  let func = VCodeFunction::new("test_ssa_decon")
+
+  // Create:
+  // block0:
+  //   v0 = ldi 0
+  //   f1 = ldf32 0x41200000  ; 10.0
+  //   v2 = ldi 1
+  //   v3 = cmp.eq v0, v2
+  //   branch v3, block2, block3
+  //
+  // block1(v4, f5):  ; common target with block params
+  //   ret f5
+  //
+  // block2:
+  //   v4 = mov v0
+  //   f5 = mov f1
+  //   jump block1
+  //
+  // block3:
+  //   v4 = mov v0
+  //   f5 = mov f1
+  //   jump block1
+
+  let v0 = func.new_vreg(Int)
+  let f1 = func.new_vreg(Float)
+  let v2 = func.new_vreg(Int)
+  let v3 = func.new_vreg(Int)
+  let v4 = func.new_vreg(Int)
+  let f5 = func.new_vreg(Float)
+
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+  let block2 = func.new_block()
+  let block3 = func.new_block()
+
+  // block0
+  let inst0 = VCodeInst::new(LoadConst(0L))
+  inst0.add_def({ reg: Virtual(v0) })
+  block0.add_inst(inst0)
+
+  let inst1 = VCodeInst::new(LoadConstF32(0x41200000)) // 10.0
+  inst1.add_def({ reg: Virtual(f1) })
+  block0.add_inst(inst1)
+
+  let inst2 = VCodeInst::new(LoadConst(1L))
+  inst2.add_def({ reg: Virtual(v2) })
+  block0.add_inst(inst2)
+
+  let inst3 = VCodeInst::new(Cmp(Eq))
+  inst3.add_use(Virtual(v0))
+  inst3.add_use(Virtual(v2))
+  inst3.add_def({ reg: Virtual(v3) })
+  block0.add_inst(inst3)
+
+  block0.set_terminator(Branch(Virtual(v3), block2.id, block3.id))
+
+  // block1 with params
+  block1.params.push(v4)
+  block1.params.push(f5)
+  block1.set_terminator(Return([Virtual(f5)]))
+
+  // block2: moves to pass values to block1 params
+  let inst4 = VCodeInst::new(Move)
+  inst4.add_use(Virtual(v0))
+  inst4.add_def({ reg: Virtual(v4) })
+  block2.add_inst(inst4)
+
+  let inst5 = VCodeInst::new(Move)
+  inst5.add_use(Virtual(f1))
+  inst5.add_def({ reg: Virtual(f5) })
+  block2.add_inst(inst5)
+
+  block2.set_terminator(Jump(block1.id))
+
+  // block3: same moves
+  let inst6 = VCodeInst::new(Move)
+  inst6.add_use(Virtual(v0))
+  inst6.add_def({ reg: Virtual(v4) })
+  block3.add_inst(inst6)
+
+  let inst7 = VCodeInst::new(Move)
+  inst7.add_use(Virtual(f1))
+  inst7.add_def({ reg: Virtual(f5) })
+  block3.add_inst(inst7)
+
+  block3.set_terminator(Jump(block1.id))
+
+  // Compute liveness
+  let liveness = compute_liveness(func)
+
+  // v4 and f5 are defined in both block2 and block3
+  let v4_info = liveness.use_def.get(v4.id).unwrap()
+  let f5_info = liveness.use_def.get(f5.id).unwrap()
+
+  // f5 should be in block1's live-in set (v4 is not used, so it's not live-in)
+  inspect(liveness.live_in[1].contains(f5.id), content="true")
+
+  // Allocate registers
+  let allocator = LinearScanAllocator::new(
+    allocatable_scratch_regs(),
+    aapcs64_arg_fprs(),
+  )
+  let alloc_result = allocator.allocate(func, liveness)
+
+  // f5 should get assignment (v4 is dead code, so it might not get assigned)
+  inspect(alloc_result.assignments.get(f5.id) is Some(_), content="true")
+
+  // Verify f5 got the right register class
+  match alloc_result.assignments.get(f5.id) {
+    Some(preg) => {
+      let class_name = match preg.class {
+        Int => "Int"
+        Float => "Float"
+      }
+      inspect(class_name, content="Float")
+    }
+    None => ()
+  }
+
+  // The CRITICAL question: when both block2 and block3 define f5,
+  // do they both write to the SAME physical register?
+  // If not, block1 will see garbage in one of the paths!
+  //
+  // Apply allocation to see the final code
+  let allocated_func = apply_allocation(func, alloc_result)
+
+  // Check that block2 and block3 both define f5 to the same preg
+  let block2_last = allocated_func.blocks[2].insts.last().unwrap()
+  let block3_last = allocated_func.blocks[3].insts.last().unwrap()
+
+  // Both should be Move instructions defining the same physical register
+  match (block2_last.defs.get(0), block3_last.defs.get(0)) {
+    (Some(def2), Some(def3)) => {
+      match (def2.reg, def3.reg) {
+        (Physical(preg2), Physical(preg3)) => {
+          // They should be THE SAME register!
+          let same_reg = preg2.index == preg3.index &&
+            reg_class_eq(preg2.class, preg3.class)
+          inspect(same_reg, content="true")
+        }
+        _ => inspect(false, content="true")
+      }
+    }
+    _ => inspect(false, content="true")
+  }
+}
+
+///|
+test "regalloc: br_table pattern with 4 targets" {
+  // Simulate the exact pattern from f32_br_2locals.wast
+  // Multiple mutually exclusive blocks all defining same vregs to pass to common target
+  let func = VCodeFunction::new("test_br_table_pattern")
+
+  let v0 = func.new_vreg(Int) // selector
+  let f1 = func.new_vreg(Float) // constant 1
+  let f2 = func.new_vreg(Float) // constant 2
+
+  // Common target block parameters
+  let v_target = func.new_vreg(Int)
+  let f_target1 = func.new_vreg(Float)
+  let f_target2 = func.new_vreg(Float)
+
+  let block0 = func.new_block()
+  let block_target = func.new_block()
+  let block_case0 = func.new_block()
+  let block_case1 = func.new_block()
+  let block_case2 = func.new_block()
+  let block_case3 = func.new_block()
+
+  // block0: load constants
+  let inst0 = VCodeInst::new(LoadConst(0L))
+  inst0.add_def({ reg: Virtual(v0) })
+  block0.add_inst(inst0)
+
+  let inst1 = VCodeInst::new(LoadConstF32(0x41200000)) // 10.0
+  inst1.add_def({ reg: Virtual(f1) })
+  block0.add_inst(inst1)
+
+  let inst2 = VCodeInst::new(LoadConstF32(0x41A00000)) // 20.0
+  inst2.add_def({ reg: Virtual(f2) })
+  block0.add_inst(inst2)
+
+  block0.set_terminator(Branch(Virtual(v0), block_case0.id, block_case1.id))
+
+  // block_target with params
+  block_target.params.push(v_target)
+  block_target.params.push(f_target1)
+  block_target.params.push(f_target2)
+  block_target.set_terminator(Return([Virtual(f_target1)]))
+
+  // Each case block moves values to target params
+  // case0
+  {
+    let mov0 = VCodeInst::new(Move)
+    mov0.add_use(Virtual(v0))
+    mov0.add_def({ reg: Virtual(v_target) })
+    block_case0.add_inst(mov0)
+
+    let mov1 = VCodeInst::new(Move)
+    mov1.add_use(Virtual(f1))
+    mov1.add_def({ reg: Virtual(f_target1) })
+    block_case0.add_inst(mov1)
+
+    let mov2 = VCodeInst::new(Move)
+    mov2.add_use(Virtual(f2))
+    mov2.add_def({ reg: Virtual(f_target2) })
+    block_case0.add_inst(mov2)
+
+    block_case0.set_terminator(Jump(block_target.id))
+  }
+
+  // case1
+  {
+    let mov0 = VCodeInst::new(Move)
+    mov0.add_use(Virtual(v0))
+    mov0.add_def({ reg: Virtual(v_target) })
+    block_case1.add_inst(mov0)
+
+    let mov1 = VCodeInst::new(Move)
+    mov1.add_use(Virtual(f1))
+    mov1.add_def({ reg: Virtual(f_target1) })
+    block_case1.add_inst(mov1)
+
+    let mov2 = VCodeInst::new(Move)
+    mov2.add_use(Virtual(f2))
+    mov2.add_def({ reg: Virtual(f_target2) })
+    block_case1.add_inst(mov2)
+
+    block_case1.set_terminator(Jump(block_target.id))
+  }
+
+  // case2
+  {
+    let mov0 = VCodeInst::new(Move)
+    mov0.add_use(Virtual(v0))
+    mov0.add_def({ reg: Virtual(v_target) })
+    block_case2.add_inst(mov0)
+
+    let mov1 = VCodeInst::new(Move)
+    mov1.add_use(Virtual(f1))
+    mov1.add_def({ reg: Virtual(f_target1) })
+    block_case2.add_inst(mov1)
+
+    let mov2 = VCodeInst::new(Move)
+    mov2.add_use(Virtual(f2))
+    mov2.add_def({ reg: Virtual(f_target2) })
+    block_case2.add_inst(mov2)
+
+    block_case2.set_terminator(Jump(block_target.id))
+  }
+
+  // case3
+  {
+    let mov0 = VCodeInst::new(Move)
+    mov0.add_use(Virtual(v0))
+    mov0.add_def({ reg: Virtual(v_target) })
+    block_case3.add_inst(mov0)
+
+    let mov1 = VCodeInst::new(Move)
+    mov1.add_use(Virtual(f1))
+    mov1.add_def({ reg: Virtual(f_target1) })
+    block_case3.add_inst(mov1)
+
+    let mov2 = VCodeInst::new(Move)
+    mov2.add_use(Virtual(f2))
+    mov2.add_def({ reg: Virtual(f_target2) })
+    block_case3.add_inst(mov2)
+
+    block_case3.set_terminator(Jump(block_target.id))
+  }
+
+  // Compute liveness and allocate
+  let liveness = compute_liveness(func)
+
+  // CRITICAL CHECK: f_target1 is defined in 4 different blocks
+  // They MUST all get assigned to the SAME physical register!
+  let allocator = LinearScanAllocator::new(
+    allocatable_scratch_regs(),
+    aapcs64_arg_fprs(),
+  )
+  let alloc_result = allocator.allocate(func, liveness)
+
+  // Apply allocation
+  let allocated_func = apply_allocation(func, alloc_result)
+
+  // Verify all 4 case blocks define f_target1 to the same physical register
+  let pregs : Array[PReg?] = []
+  for i in 2..<6 {
+    // blocks 2-5 are case0-case3
+    let block = allocated_func.blocks[i]
+    if block.insts.length() >= 2 {
+      let mov1 = block.insts[1] // second mov (f_target1)
+      match mov1.defs.get(0) {
+        Some(def) =>
+          match def.reg {
+            Physical(preg) => pregs.push(Some(preg))
+            _ => pregs.push(None)
+          }
+        None => pregs.push(None)
+      }
+    }
+  }
+
+  // All should be Some and all should be equal
+  // They should all be the same!
+  if pregs.length() == 4 {
+    match (pregs[0], pregs[1], pregs[2], pregs[3]) {
+      (Some(p0), Some(p1), Some(p2), Some(p3)) => {
+        let all_same = p0.index == p1.index &&
+          p1.index == p2.index &&
+          p2.index == p3.index &&
+          reg_class_eq(p0.class, p1.class) &&
+          reg_class_eq(p1.class, p2.class) &&
+          reg_class_eq(p2.class, p3.class)
+        inspect(all_same, content="true")
+      }
+      _ => inspect(false, content="true")
+    }
+  }
 }

@@ -305,14 +305,19 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
   // Process each block
   for block_idx, block in func.blocks {
-    // Block parameters are NOT definitions - they receive values from
-    // predecessor block moves (SSA deconstruction). We only register them
-    // in use_def map but don't set def_point here.
+    // Block parameters receive values from predecessor block moves (SSA deconstruction).
+    // Add a use point at block entry to keep them live through the block.
     for param in block.params {
-      if result.use_def.get(param.id) is None {
-        let new_info = UseDefInfo::new(param)
-        result.use_def.set(param.id, new_info)
+      let info = match result.use_def.get(param.id) {
+        Some(existing) => existing
+        None => {
+          let new_info = UseDefInfo::new(param)
+          result.use_def.set(param.id, new_info)
+          new_info
+        }
       }
+      // Add use point at block entry (before first instruction)
+      info.use_points.push({ block: block_idx, inst: 0, pos: Before })
     }
 
     // Process instructions
@@ -439,10 +444,9 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     let use_set : Set[Int] = Set::new()
     let def_set : Set[Int] = Set::new()
 
-    // Block params are defs
-    for param in block.params {
-      def_set.add(param.id)
-    }
+    // Block parameters are NOT defs in SSA deconstruction
+    // They represent values passed from predecessors, so they're live-in
+    // (Do not add block params to def_set)
 
     // Process instructions
     for inst in block.insts {
@@ -752,8 +756,22 @@ fn LinearScanAllocator::expire_old_intervals(
   self.active.sort_by(fn(a, b) { a.end.compare_with_order(b.end, block_order) })
   let new_active : Array[LiveInterval] = []
   for interval in self.active {
-    let cmp = interval.end.compare_with_order(current.start, block_order)
-    if cmp >= 0 {
+    // Check if interval ends before current starts
+    // CRITICAL FIX: If both points are in the same instruction (same block & inst),
+    // they must be considered overlapping even if one is Before and other is After.
+    // This prevents allocating the same register to a use and def in the same instruction.
+    // Example: v25 = add x21, v22 cannot become x23 = add x21, x23!
+    let overlaps = if interval.end.block == current.start.block &&
+      interval.end.inst == current.start.inst {
+      // Same instruction: they overlap regardless of Before/After position
+      true
+    } else {
+      // Different instructions: use normal comparison
+      let cmp = interval.end.compare_with_order(current.start, block_order)
+      cmp >= 0
+    }
+
+    if overlaps {
       new_active.push(interval)
     }
   }
@@ -1075,10 +1093,73 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   // Compute liveness
   let liveness = compute_liveness(func)
 
+  // Debug: print liveness intervals for debugging f32_br_2locals issue
+  if func.name == "test" {
+    println("=== Live Intervals ===")
+    // Convert to array and sort by vreg id for consistent output
+    let intervals_arr : Array[(Int, LiveInterval)] = []
+    for entry in liveness.intervals {
+      intervals_arr.push(entry)
+    }
+    intervals_arr.sort_by(fn(a, b) { a.0 - b.0 })
+
+    for entry in intervals_arr {
+      let (vreg_id, interval) = entry
+      let class_name = match interval.vreg.class {
+        Int => "int"
+        Float => "float"
+      }
+      println("v\{vreg_id} (\{class_name}): \{interval.start} - \{interval.end}")
+    }
+    println("======================")
+  }
+
   // Allocate
   let allocator = LinearScanAllocator::new(int_regs, float_regs)
   let alloc_result = allocator.allocate(func, liveness)
 
+  // Debug: print register assignments for debugging f32_br_2locals issue
+  if func.name == "test" {
+    println("=== Register Assignments ===")
+    // Need to get vreg class from liveness intervals
+    let assignments_arr : Array[(Int, PReg)] = []
+    for entry in alloc_result.assignments {
+      assignments_arr.push(entry)
+    }
+    assignments_arr.sort_by(fn(a, b) { a.0 - b.0 })
+
+    for entry in assignments_arr {
+      let (vreg_id, preg) = entry
+      // Get vreg class from liveness interval
+      let class_name = match liveness.intervals.get(vreg_id) {
+        Some(interval) =>
+          match interval.vreg.class {
+            Int => "int"
+            Float => "float"
+          }
+        None => "unknown"
+      }
+      println("v\{vreg_id} (\{class_name}) -> \{preg}")
+    }
+    if alloc_result.spill_slots.length() > 0 {
+      println("\n=== Spilled Registers ===")
+      for entry in alloc_result.spill_slots {
+        let (vreg_id, slot) = entry
+        println("v\{vreg_id} -> spill slot \{slot}")
+      }
+    }
+    println("============================")
+  }
+
   // Apply allocation
-  apply_allocation(func, alloc_result)
+  let allocated_func = apply_allocation(func, alloc_result)
+
+  // Debug: print allocated VCode for debugging f32_br_2locals issue
+  if func.name == "test" {
+    println("=== Allocated VCode for function: test ===")
+    println(allocated_func.print())
+    println("===========================================")
+  }
+
+  allocated_func
 }
