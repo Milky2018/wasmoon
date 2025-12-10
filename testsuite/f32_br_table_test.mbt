@@ -1,0 +1,194 @@
+///|
+test "A critical bug as in data/f32_br_2locals" {
+  let source =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "test") (param i32) (result f32)
+    #|    (local f32 f32)
+    #|    (block $2
+    #|      (block $1
+    #|        (block $0
+    #|          (br_table $0 $1 $2 (local.get 0))
+    #|        )
+    #|        ;; case 0
+    #|        (local.set 1 (f32.const 2.0))
+    #|        (br $2)
+    #|      )
+    #|      ;; case 1
+    #|      (local.set 1 (f32.const 3.0))
+    #|      (br $2)
+    #|    )
+    #|    ;; case 2 / default
+    #|    (local.get 1)
+    #|  )
+    #|)
+  let ir = @wat.parse(source)
+  let func_code = ir.codes[0]
+  let func_type_idx = ir.funcs[0]
+  let func_type = ir.types[func_type_idx]
+
+  // Get locals from the function code
+  let locals : Array[@types.ValueType] = []
+  for loc in func_code.locals {
+    locals.push(loc)
+  }
+
+  // Create translator and translate WASM to IR
+  let translator = @ir.Translator::new(
+    "test",
+    func_type,
+    locals,
+    ir.types,
+    ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
+    0, // num_imports
+    [], // import_func_type_indices
+  )
+  let ir_func = translator.translate(func_code.body)
+  inspect(
+    ir_func.print(),
+    content=(
+      #|function test(v0:i32) -> f32 {
+      #|block0:
+      #|    v1:f32 = fconst 0
+      #|    v2:f32 = fconst 0
+      #|    br_table v0, [block4, block5], block6
+      #|block1(v3:i32, v4:f32, v5:f32):
+      #|    return v4
+      #|block2(v6:i32, v7:f32, v8:f32):
+      #|    v13:f32 = fconst 3
+      #|    jump block1(v6, v13, v8)
+      #|block3(v9:i32, v10:f32, v11:f32):
+      #|    v12:f32 = fconst 2
+      #|    jump block1(v9, v12, v11)
+      #|block4:
+      #|    jump block3(v0, v1, v2)
+      #|block5:
+      #|    jump block2(v0, v1, v2)
+      #|block6:
+      #|    jump block1(v0, v1, v2)
+      #|}
+      #|
+    ),
+  )
+  let vcode = @vcode.lower_function(ir_func)
+  inspect(
+    vcode,
+    content=(
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    f10 = ldf 0
+      #|    f11 = ldf 0
+      #|    v13 = ldi 0
+      #|    v12 = cmp.eq v0, v13
+      #|    branch v12, block4, block7
+      #|block1(v1:int, f2:float, f3:float):
+      #|    ret f2
+      #|block2(v4:int, f5:float, f6:float):
+      #|    f16 = ldf 3
+      #|    v1 = mov v4
+      #|    f2 = mov f16
+      #|    f3 = mov f6
+      #|    jump block1
+      #|block3(v7:int, f8:float, f9:float):
+      #|    f17 = ldf 2
+      #|    v1 = mov v7
+      #|    f2 = mov f17
+      #|    f3 = mov f9
+      #|    jump block1
+      #|block4:
+      #|    v7 = mov v0
+      #|    f8 = mov f10
+      #|    f9 = mov f11
+      #|    jump block3
+      #|block5:
+      #|    v4 = mov v0
+      #|    f5 = mov f10
+      #|    f6 = mov f11
+      #|    jump block2
+      #|block6:
+      #|    v1 = mov v0
+      #|    f2 = mov f10
+      #|    f3 = mov f11
+      #|    jump block1
+      #|block7:
+      #|    v14 = ldi 1
+      #|    v15 = cmp.eq v0, v14
+      #|    branch v15, block5, block6
+      #|}
+      #|
+    ),
+  )
+  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  inspect(
+    allocated_func.print(),
+    content=(
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    d0 = ldf 0
+      #|    d1 = ldf 0
+      #|    x8 = ldi 0
+      #|    x19 = cmp.eq x3, x8
+      #|    branch x19, block4, block7
+      #|block1(v1:int, f2:float, f3:float):
+      #|    ret d2
+      #|block2(v4:int, f5:float, f6:float):
+      #|    d6 = ldf 3
+      #|    x8 = mov x19
+      #|    d2 = mov d6
+      #|    d3 = mov d5
+      #|    jump block1
+      #|block3(v7:int, f8:float, f9:float):
+      #|    d0 = ldf 2
+      #|    x8 = mov x19
+      #|    d2 = mov d0
+      #|    d3 = mov d5
+      #|    jump block1
+      #|block4:
+      #|    x19 = mov x3
+      #|    d4 = mov d0
+      #|    d5 = mov d1
+      #|    jump block3
+      #|block5:
+      #|    x19 = mov x3
+      #|    d4 = mov d0
+      #|    d5 = mov d1
+      #|    jump block2
+      #|block6:
+      #|    x8 = mov x3
+      #|    d2 = mov d0
+      #|    d3 = mov d1
+      #|    jump block1
+      #|block7:
+      #|    x8 = ldi 1
+      #|    x19 = cmp.eq x3, x8
+      #|    branch x19, block5, block6
+      #|}
+      #|
+    ),
+  )
+  let mc = @vcode.emit_function(allocated_func)
+  let ctx = @jit.JITContext::new(1)
+  guard ctx is Some(jit_ctx) else { return }
+  defer jit_ctx.free()
+  let mem_size = 4096L
+  let mem_ptr = @jit.alloc_memory(mem_size)
+  guard mem_ptr != 0L else { return }
+  defer @jit.free_memory(mem_ptr)
+  jit_ctx.set_memory(mem_ptr, mem_size)
+  let code_bytes = mc.get_bytes()
+  let exec_code = @jit.ExecCode::new(code_bytes)
+  guard exec_code is Some(exec)
+  defer exec.free()
+  inspect(
+    jit_ctx.call_i64_i64(exec.ptr, (0).to_int64()) & 0xFFFFFFFFL,
+    content="1073741824",
+  )
+  inspect(
+    jit_ctx.call_i64_i64(exec.ptr, (1).to_int64()) & 0xFFFFFFFFL,
+    content="0",
+  )
+  inspect(
+    jit_ctx.call_i64_i64(exec.ptr, (2).to_int64()) & 0xFFFFFFFFL,
+    content="0",
+  )
+}
