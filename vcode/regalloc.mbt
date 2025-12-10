@@ -757,16 +757,18 @@ fn LinearScanAllocator::expire_old_intervals(
   let new_active : Array[LiveInterval] = []
   for interval in self.active {
     // Check if interval ends before current starts
-    // CRITICAL FIX: If both points are in the same instruction (same block & inst),
-    // they must be considered overlapping even if one is Before and other is After.
-    // This prevents allocating the same register to a use and def in the same instruction.
-    // Example: v25 = add x21, v22 cannot become x23 = add x21, x23!
-    let overlaps = if interval.end.block == current.start.block &&
-      interval.end.inst == current.start.inst {
-      // Same instruction: they overlap regardless of Before/After position
-      true
+    // CRITICAL FIX: In the same basic block, be conservative about register reuse.
+    // We require at least 2 instructions gap before expiring an interval.
+    // This prevents two issues:
+    // 1. Same instruction use-def: v25 = add x21, v22 cannot become x23 = add x21, x23
+    // 2. Adjacent definitions: dead values should not immediately share registers
+    //    with the next definition (e.g., d0 = ldf 1; d0 = ldf 2 is wrong)
+    let overlaps = if interval.end.block == current.start.block {
+      // Same block: require at least 2 instruction gap
+      // interval.end.inst >= current.start.inst - 1 means they're adjacent or same
+      interval.end.inst >= current.start.inst - 1
     } else {
-      // Different instructions: use normal comparison
+      // Different blocks: use normal comparison
       let cmp = interval.end.compare_with_order(current.start, block_order)
       cmp >= 0
     }
@@ -1072,11 +1074,136 @@ fn rewrite_reg(reg : Reg, alloc : RegAllocResult) -> Reg {
   }
 }
 
+// ============ Dead Code Elimination ============
+
+///|
+/// Check if an opcode has side effects (cannot be eliminated even if dead)
+fn has_side_effects(opcode : VCodeOpcode) -> Bool {
+  match opcode {
+    // Memory stores have side effects
+    Store(_, _) | StackStore(_) => true
+    // Bounds check can trap
+    BoundsCheck(_, _) => true
+    // Function calls have side effects
+    CallIndirect(_, _) => true
+    // Everything else is pure computation
+    _ => false
+  }
+}
+
+///|
+/// Eliminate dead code from a VCode function
+/// Removes instructions that define vregs which are never used
+pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
+  // Step 1: Collect all used vregs
+  let used_vregs : Set[Int] = Set::new()
+
+  // Add function parameters (they're implicitly used)
+  for param in func.params {
+    used_vregs.add(param.id)
+  }
+
+  // Scan all instructions and terminators for uses
+  for block in func.blocks {
+    // Block parameters are used (they receive values from jumps)
+    for param in block.params {
+      used_vregs.add(param.id)
+    }
+
+    // Instruction uses
+    for inst in block.insts {
+      for use_reg in inst.uses {
+        match use_reg {
+          Virtual(vreg) => used_vregs.add(vreg.id)
+          Physical(_) => ()
+        }
+      }
+    }
+
+    // Terminator uses
+    match block.terminator {
+      Some(term) =>
+        match term {
+          Branch(cond, _, _) =>
+            match cond {
+              Virtual(vreg) => used_vregs.add(vreg.id)
+              Physical(_) => ()
+            }
+          Return(values) =>
+            for v in values {
+              match v {
+                Virtual(vreg) => used_vregs.add(vreg.id)
+                Physical(_) => ()
+              }
+            }
+          Jump(_) | Trap(_) => ()
+        }
+      None => ()
+    }
+  }
+
+  // Step 2: Build new function without dead instructions
+  let new_func = VCodeFunction::new(func.name)
+  new_func.next_vreg_id = func.next_vreg_id
+
+  // Copy params and results
+  for param in func.params {
+    new_func.params.push(param)
+  }
+  for result in func.results {
+    new_func.results.push(result)
+  }
+
+  // Copy blocks, filtering out dead instructions
+  for block in func.blocks {
+    let new_block = new_func.new_block()
+
+    // Copy block params
+    for param in block.params {
+      new_block.params.push(param)
+    }
+
+    // Filter instructions: keep if has side effects OR defines a used vreg
+    for inst in block.insts {
+      let should_keep = if has_side_effects(inst.opcode) {
+        true
+      } else {
+        // Keep if any defined vreg is used
+        let mut any_def_used = false
+        for def in inst.defs {
+          match def.reg {
+            Virtual(vreg) =>
+              if used_vregs.contains(vreg.id) {
+                any_def_used = true
+              }
+            Physical(_) => any_def_used = true // Always keep physical reg defs
+          }
+        }
+        // Also keep instructions with no defs (shouldn't happen for pure ops, but be safe)
+        any_def_used || inst.defs.is_empty()
+      }
+      if should_keep {
+        new_block.add_inst(inst)
+      }
+    }
+
+    // Copy terminator
+    match block.terminator {
+      Some(term) => new_block.set_terminator(term)
+      None => ()
+    }
+  }
+  new_func
+}
+
 // ============ Convenience API ============
 
 ///|
 /// Allocate registers for a function using default AArch64 register set
 pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
+  // Step 0: Eliminate dead code first
+  let func = eliminate_dead_code(func)
+
   // Build allocatable register pool:
   // 1. Scratch regs (caller-saved, no save needed) - use first
   // 2. Callee-saved regs (must save/restore) - use when scratch exhausted

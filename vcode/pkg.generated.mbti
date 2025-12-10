@@ -37,6 +37,8 @@ pub fn dump_regalloc(String, LivenessResult, RegAllocResult) -> Unit
 
 pub fn dump_vcode(VCodeFunction, String) -> Unit
 
+pub fn eliminate_dead_code(VCodeFunction) -> VCodeFunction
+
 pub fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit

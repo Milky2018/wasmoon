@@ -816,7 +816,6 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|vcode test(v0:int) -> float {
       #|block0:
       #|    d0 = ldf 10
-      #|    d1 = ldf 0
       #|    x8 = ldi 0
       #|    x19 = ldi 0
       #|    x23 = cmp.eq x3, x19
@@ -921,7 +920,6 @@ test "minimal: dead float constant should not affect live values" {
   let v1 = builder.fconst_f32(1.0) // DEAD - should not affect result
   let v2 = builder.fconst_f32(2.0) // LIVE - returned, must be 2.0
   let v3 = builder.fconst_f32(10.0) // LIVE - stored to memory
-
   let addr = builder.iconst_i32(0)
   builder.store(@ir.Type::F32, addr, v3, 0)
   builder.return_([v2])
@@ -947,22 +945,94 @@ test "minimal: dead float constant should not affect live values" {
     ),
   )
 
-  // Register allocation - CRITICAL:
-  // f1 (2.0) MUST have its own register, NOT shared with f0 (1.0)
+  // Register allocation with DCE:
+  // Dead code (f0 = ldf 1) is eliminated before register allocation
+  // Only live values get registers: f1 -> d0, f2 -> d1
   let allocated_func = allocate_registers_aarch64(vcode_func)
   inspect(
     allocated_func.print(),
     content=(
       #|vcode dead_fconst_test() -> float {
       #|block0:
-      #|    d0 = ldf 1
-      #|    d1 = ldf 2
-      #|    d2 = ldf 10
+      #|    d0 = ldf 2
+      #|    d1 = ldf 10
       #|    x8 = ldi 0
       #|    bounds_check +0, 4 x8
       #|    x19 = add x21, x8
-      #|    store.f32 +0 x19, d2
-      #|    ret d1
+      #|    store.f32 +0 x19, d1
+      #|    ret d0
+      #|}
+      #|
+    ),
+  )
+}
+
+// ============ br_table with Block Arguments Test ============
+// Simple test: br_table with 1 target + default, uses local variable
+
+///|
+test "br_table with block arguments from WAT" {
+  // test(0) = 100 (case 0), test(1) = 0 (default)
+  let wat_source =
+    #|(module
+    #|  (func (export "test") (param i32) (result i32)
+    #|    (local i32)
+    #|    (block $done
+    #|      (block $case0
+    #|        (br_table $case0 $done (local.get 0))
+    #|      )
+    #|      (local.set 1 (i32.const 100))
+    #|    )
+    #|    (local.get 1)
+    #|  )
+    #|)
+  let wasm_module = @wat.parse(wat_source) catch {
+    e => {
+      inspect(e)
+      return
+    }
+  }
+  let func_code = wasm_module.codes[0]
+  let func_type = wasm_module.types[wasm_module.funcs[0]]
+  let locals : Array[@types.ValueType] = []
+  for loc in func_code.locals {
+    locals.push(loc)
+  }
+  let translator = @ir.Translator::new(
+    "test",
+    func_type,
+    locals,
+    wasm_module.types,
+    wasm_module.funcs.mapi(fn(i, _) { wasm_module.funcs[i] }),
+    0,
+    [],
+  )
+  let ir_func = translator.translate(func_code.body)
+  let vcode_func = lower_function(ir_func)
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode test(v0:int) -> int {
+      #|block0:
+      #|    v5 = ldi 0
+      #|    v7 = ldi 0
+      #|    v6 = cmp.eq v0, v7
+      #|    branch v6, block3, block4
+      #|block1(v1:int, v2:int):
+      #|    ret v2
+      #|block2(v3:int, v4:int):
+      #|    v8 = ldi 100
+      #|    v1 = mov v3
+      #|    v2 = mov v8
+      #|    jump block1
+      #|block3:
+      #|    v3 = mov v0
+      #|    v4 = mov v5
+      #|    jump block2
+      #|block4:
+      #|    v1 = mov v0
+      #|    v2 = mov v5
+      #|    jump block1
       #|}
       #|
     ),

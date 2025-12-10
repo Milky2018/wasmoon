@@ -74,55 +74,57 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   let mc = @vcode.emit_function(allocated_func)
 
   // Debug: print allocated VCode for the working test
-  inspect(allocated_func.print(), content=(
-    #|vcode test(v0:int) -> float {
-    #|block0:
-    #|    d0 = ldf 10
-    #|    d1 = ldf 0
-    #|    x8 = ldi 0
-    #|    x19 = ldi 0
-    #|    x23 = cmp.eq x3, x19
-    #|    branch x23, block1, block5
-    #|block1:
-    #|    bounds_check +0, 4 x8
-    #|    x19 = add x21, x8
-    #|    store.f32 +0 x19, d0
-    #|    bounds_check +0, 4 x8
-    #|    x19 = add x21, x8
-    #|    d0 = load.f32 +0 x19
-    #|    d2 = mov d0
-    #|    jump block4
-    #|block2:
-    #|    bounds_check +0, 4 x8
-    #|    x19 = add x21, x8
-    #|    store.f32 +0 x19, d0
-    #|    bounds_check +0, 4 x8
-    #|    x19 = add x21, x8
-    #|    d1 = load.f32 +0 x19
-    #|    d2 = mov d1
-    #|    jump block4
-    #|block3:
-    #|    bounds_check +0, 4 x8
-    #|    x19 = add x21, x8
-    #|    store.f32 +0 x19, d0
-    #|    bounds_check +0, 4 x8
-    #|    x19 = add x21, x8
-    #|    d1 = load.f32 +0 x19
-    #|    d2 = mov d1
-    #|    jump block4
-    #|block4(f1:float):
-    #|    ret d2
-    #|block5:
-    #|    x19 = ldi 1
-    #|    x23 = cmp.eq x3, x19
-    #|    branch x23, block2, block6
-    #|block6:
-    #|    x19 = ldi 2
-    #|    x23 = cmp.eq x3, x19
-    #|    branch x23, block3, block4
-    #|}
-    #|
-  ))
+  inspect(
+    allocated_func.print(),
+    content=(
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    d0 = ldf 10
+      #|    x8 = ldi 0
+      #|    x19 = ldi 0
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block1, block5
+      #|block1:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d0 = load.f32 +0 x19
+      #|    d2 = mov d0
+      #|    jump block4
+      #|block2:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d1 = load.f32 +0 x19
+      #|    d2 = mov d1
+      #|    jump block4
+      #|block3:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d1 = load.f32 +0 x19
+      #|    d2 = mov d1
+      #|    jump block4
+      #|block4(f1:float):
+      #|    ret d2
+      #|block5:
+      #|    x19 = ldi 1
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block2, block6
+      #|block6:
+      #|    x19 = ldi 2
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block3, block4
+      #|}
+      #|
+    ),
+  )
 
   // ============ Set up JIT Execution Context ============
   // Create JIT context with function table (1 function)
@@ -275,216 +277,222 @@ test "end-to-end: f32_br_2locals.wast from source" {
   inspect(ir_func.blocks.length(), content="9")
 
   // Debug: print the IR to understand structure
-  inspect(ir_func.print(), content=(
-    #|function test(v0:i32) -> f32 {
-    #|block0:
-    #|    v1:f32 = fconst 0
-    #|    v2:f32 = fconst 0
-    #|    v3:f32 = fconst 10
-    #|    br_table v0, [block5, block6, block7], block8
-    #|block1(v4:i32, v5:f32, v6:f32):
-    #|    return v6
-    #|block2(v7:i32, v8:f32, v9:f32):
-    #|    v22:i32 = iconst 0
-    #|    store.f32 v22, v8 +0
-    #|    v23:i32 = iconst 0
-    #|    v24:f32 = load.f32 v23 +0
-    #|    jump block1(v7, v8, v24)
-    #|block3(v10:i32, v11:f32, v12:f32):
-    #|    v19:i32 = iconst 0
-    #|    store.f32 v19, v11 +0
-    #|    v20:i32 = iconst 0
-    #|    v21:f32 = load.f32 v20 +0
-    #|    jump block1(v10, v11, v21)
-    #|block4(v13:i32, v14:f32, v15:f32):
-    #|    v16:i32 = iconst 0
-    #|    store.f32 v16, v14 +0
-    #|    v17:i32 = iconst 0
-    #|    v18:f32 = load.f32 v17 +0
-    #|    jump block1(v13, v14, v18)
-    #|block5:
-    #|    jump block4(v0, v3, v2)
-    #|block6:
-    #|    jump block3(v0, v3, v2)
-    #|block7:
-    #|    jump block2(v0, v3, v2)
-    #|block8:
-    #|    jump block1(v0, v3, v2)
-    #|}
-    #|
-  ))
+  inspect(
+    ir_func.print(),
+    content=(
+      #|function test(v0:i32) -> f32 {
+      #|block0:
+      #|    v1:f32 = fconst 0
+      #|    v2:f32 = fconst 0
+      #|    v3:f32 = fconst 10
+      #|    br_table v0, [block5, block6, block7], block8
+      #|block1(v4:i32, v5:f32, v6:f32):
+      #|    return v6
+      #|block2(v7:i32, v8:f32, v9:f32):
+      #|    v22:i32 = iconst 0
+      #|    store.f32 v22, v8 +0
+      #|    v23:i32 = iconst 0
+      #|    v24:f32 = load.f32 v23 +0
+      #|    jump block1(v7, v8, v24)
+      #|block3(v10:i32, v11:f32, v12:f32):
+      #|    v19:i32 = iconst 0
+      #|    store.f32 v19, v11 +0
+      #|    v20:i32 = iconst 0
+      #|    v21:f32 = load.f32 v20 +0
+      #|    jump block1(v10, v11, v21)
+      #|block4(v13:i32, v14:f32, v15:f32):
+      #|    v16:i32 = iconst 0
+      #|    store.f32 v16, v14 +0
+      #|    v17:i32 = iconst 0
+      #|    v18:f32 = load.f32 v17 +0
+      #|    jump block1(v13, v14, v18)
+      #|block5:
+      #|    jump block4(v0, v3, v2)
+      #|block6:
+      #|    jump block3(v0, v3, v2)
+      #|block7:
+      #|    jump block2(v0, v3, v2)
+      #|block8:
+      #|    jump block1(v0, v3, v2)
+      #|}
+      #|
+    ),
+  )
 
   // ============ Phase 4: Lower IR → VCode → Machine Code ============
   let vcode_func = @vcode.lower_function(ir_func)
 
   // Debug: print VCode to understand structure
-  inspect(vcode_func.print(), content=(
-    #|vcode test(v0:int) -> float {
-    #|block0:
-    #|    f13 = ldf 0
-    #|    f14 = ldf 0
-    #|    f15 = ldf 10
-    #|    v17 = ldi 0
-    #|    v16 = cmp.eq v0, v17
-    #|    branch v16, block5, block9
-    #|block1(v1:int, f2:float, f3:float):
-    #|    ret f3
-    #|block2(v4:int, f5:float, f6:float):
-    #|    v22 = ldi 0
-    #|    bounds_check +0, 4 v22
-    #|    v23 = add x21, v22
-    #|    store.f32 +0 v23, f5
-    #|    v24 = ldi 0
-    #|    bounds_check +0, 4 v24
-    #|    v26 = add x21, v24
-    #|    f25 = load.f32 +0 v26
-    #|    v1 = mov v4
-    #|    f2 = mov f5
-    #|    f3 = mov f25
-    #|    jump block1
-    #|block3(v7:int, f8:float, f9:float):
-    #|    v27 = ldi 0
-    #|    bounds_check +0, 4 v27
-    #|    v28 = add x21, v27
-    #|    store.f32 +0 v28, f8
-    #|    v29 = ldi 0
-    #|    bounds_check +0, 4 v29
-    #|    v31 = add x21, v29
-    #|    f30 = load.f32 +0 v31
-    #|    v1 = mov v7
-    #|    f2 = mov f8
-    #|    f3 = mov f30
-    #|    jump block1
-    #|block4(v10:int, f11:float, f12:float):
-    #|    v32 = ldi 0
-    #|    bounds_check +0, 4 v32
-    #|    v33 = add x21, v32
-    #|    store.f32 +0 v33, f11
-    #|    v34 = ldi 0
-    #|    bounds_check +0, 4 v34
-    #|    v36 = add x21, v34
-    #|    f35 = load.f32 +0 v36
-    #|    v1 = mov v10
-    #|    f2 = mov f11
-    #|    f3 = mov f35
-    #|    jump block1
-    #|block5:
-    #|    v10 = mov v0
-    #|    f11 = mov f15
-    #|    f12 = mov f14
-    #|    jump block4
-    #|block6:
-    #|    v7 = mov v0
-    #|    f8 = mov f15
-    #|    f9 = mov f14
-    #|    jump block3
-    #|block7:
-    #|    v4 = mov v0
-    #|    f5 = mov f15
-    #|    f6 = mov f14
-    #|    jump block2
-    #|block8:
-    #|    v1 = mov v0
-    #|    f2 = mov f15
-    #|    f3 = mov f14
-    #|    jump block1
-    #|block9:
-    #|    v18 = ldi 1
-    #|    v19 = cmp.eq v0, v18
-    #|    branch v19, block6, block10
-    #|block10:
-    #|    v20 = ldi 2
-    #|    v21 = cmp.eq v0, v20
-    #|    branch v21, block7, block8
-    #|}
-    #|
-  ))
-
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    f13 = ldf 0
+      #|    f14 = ldf 0
+      #|    f15 = ldf 10
+      #|    v17 = ldi 0
+      #|    v16 = cmp.eq v0, v17
+      #|    branch v16, block5, block9
+      #|block1(v1:int, f2:float, f3:float):
+      #|    ret f3
+      #|block2(v4:int, f5:float, f6:float):
+      #|    v22 = ldi 0
+      #|    bounds_check +0, 4 v22
+      #|    v23 = add x21, v22
+      #|    store.f32 +0 v23, f5
+      #|    v24 = ldi 0
+      #|    bounds_check +0, 4 v24
+      #|    v26 = add x21, v24
+      #|    f25 = load.f32 +0 v26
+      #|    v1 = mov v4
+      #|    f2 = mov f5
+      #|    f3 = mov f25
+      #|    jump block1
+      #|block3(v7:int, f8:float, f9:float):
+      #|    v27 = ldi 0
+      #|    bounds_check +0, 4 v27
+      #|    v28 = add x21, v27
+      #|    store.f32 +0 v28, f8
+      #|    v29 = ldi 0
+      #|    bounds_check +0, 4 v29
+      #|    v31 = add x21, v29
+      #|    f30 = load.f32 +0 v31
+      #|    v1 = mov v7
+      #|    f2 = mov f8
+      #|    f3 = mov f30
+      #|    jump block1
+      #|block4(v10:int, f11:float, f12:float):
+      #|    v32 = ldi 0
+      #|    bounds_check +0, 4 v32
+      #|    v33 = add x21, v32
+      #|    store.f32 +0 v33, f11
+      #|    v34 = ldi 0
+      #|    bounds_check +0, 4 v34
+      #|    v36 = add x21, v34
+      #|    f35 = load.f32 +0 v36
+      #|    v1 = mov v10
+      #|    f2 = mov f11
+      #|    f3 = mov f35
+      #|    jump block1
+      #|block5:
+      #|    v10 = mov v0
+      #|    f11 = mov f15
+      #|    f12 = mov f14
+      #|    jump block4
+      #|block6:
+      #|    v7 = mov v0
+      #|    f8 = mov f15
+      #|    f9 = mov f14
+      #|    jump block3
+      #|block7:
+      #|    v4 = mov v0
+      #|    f5 = mov f15
+      #|    f6 = mov f14
+      #|    jump block2
+      #|block8:
+      #|    v1 = mov v0
+      #|    f2 = mov f15
+      #|    f3 = mov f14
+      #|    jump block1
+      #|block9:
+      #|    v18 = ldi 1
+      #|    v19 = cmp.eq v0, v18
+      #|    branch v19, block6, block10
+      #|block10:
+      #|    v20 = ldi 2
+      #|    v21 = cmp.eq v0, v20
+      #|    branch v21, block7, block8
+      #|}
+      #|
+    ),
+  )
   let allocated_func = @vcode.allocate_registers_aarch64(vcode_func)
 
   // Debug: print allocated VCode
-  inspect(allocated_func.print(), content=(
-    #|vcode test(v0:int) -> float {
-    #|block0:
-    #|    d0 = ldf 0
-    #|    d0 = ldf 0
-    #|    d1 = ldf 10
-    #|    x8 = ldi 0
-    #|    x19 = cmp.eq x3, x8
-    #|    branch x19, block5, block9
-    #|block1(v1:int, f2:float, f3:float):
-    #|    ret d3
-    #|block2(v4:int, f5:float, f6:float):
-    #|    x23 = ldi 0
-    #|    bounds_check +0, 4 x23
-    #|    x24 = add x21, x23
-    #|    store.f32 +0 x24, d4
-    #|    x23 = ldi 0
-    #|    bounds_check +0, 4 x23
-    #|    x24 = add x21, x23
-    #|    d5 = load.f32 +0 x24
-    #|    x8 = mov x19
-    #|    d2 = mov d4
-    #|    d3 = mov d5
-    #|    jump block1
-    #|block3(v7:int, f8:float, f9:float):
-    #|    x23 = ldi 0
-    #|    bounds_check +0, 4 x23
-    #|    x24 = add x21, x23
-    #|    store.f32 +0 x24, d4
-    #|    x23 = ldi 0
-    #|    bounds_check +0, 4 x23
-    #|    x24 = add x21, x23
-    #|    d5 = load.f32 +0 x24
-    #|    x8 = mov x19
-    #|    d2 = mov d4
-    #|    d3 = mov d5
-    #|    jump block1
-    #|block4(v10:int, f11:float, f12:float):
-    #|    x23 = ldi 0
-    #|    bounds_check +0, 4 x23
-    #|    x24 = add x21, x23
-    #|    store.f32 +0 x24, d4
-    #|    x23 = ldi 0
-    #|    bounds_check +0, 4 x23
-    #|    x24 = add x21, x23
-    #|    d0 = load.f32 +0 x24
-    #|    x8 = mov x19
-    #|    d2 = mov d4
-    #|    d3 = mov d0
-    #|    jump block1
-    #|block5:
-    #|    x19 = mov x3
-    #|    d4 = mov d1
-    #|    d1 = mov d0
-    #|    jump block4
-    #|block6:
-    #|    x19 = mov x3
-    #|    d4 = mov d1
-    #|    d5 = mov d0
-    #|    jump block3
-    #|block7:
-    #|    x19 = mov x3
-    #|    d4 = mov d1
-    #|    d5 = mov d0
-    #|    jump block2
-    #|block8:
-    #|    x8 = mov x3
-    #|    d2 = mov d1
-    #|    d3 = mov d0
-    #|    jump block1
-    #|block9:
-    #|    x8 = ldi 1
-    #|    x19 = cmp.eq x3, x8
-    #|    branch x19, block6, block10
-    #|block10:
-    #|    x8 = ldi 2
-    #|    x19 = cmp.eq x3, x8
-    #|    branch x19, block7, block8
-    #|}
-    #|
-  ))
-
+  inspect(
+    allocated_func.print(),
+    content=(
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    d0 = ldf 0
+      #|    d1 = ldf 10
+      #|    x8 = ldi 0
+      #|    x19 = cmp.eq x3, x8
+      #|    branch x19, block5, block9
+      #|block1(v1:int, f2:float, f3:float):
+      #|    ret d3
+      #|block2(v4:int, f5:float, f6:float):
+      #|    x23 = ldi 0
+      #|    bounds_check +0, 4 x23
+      #|    x24 = add x21, x23
+      #|    store.f32 +0 x24, d4
+      #|    x23 = ldi 0
+      #|    bounds_check +0, 4 x23
+      #|    x24 = add x21, x23
+      #|    d5 = load.f32 +0 x24
+      #|    x8 = mov x19
+      #|    d2 = mov d4
+      #|    d3 = mov d5
+      #|    jump block1
+      #|block3(v7:int, f8:float, f9:float):
+      #|    x23 = ldi 0
+      #|    bounds_check +0, 4 x23
+      #|    x24 = add x21, x23
+      #|    store.f32 +0 x24, d4
+      #|    x23 = ldi 0
+      #|    bounds_check +0, 4 x23
+      #|    x24 = add x21, x23
+      #|    d5 = load.f32 +0 x24
+      #|    x8 = mov x19
+      #|    d2 = mov d4
+      #|    d3 = mov d5
+      #|    jump block1
+      #|block4(v10:int, f11:float, f12:float):
+      #|    x23 = ldi 0
+      #|    bounds_check +0, 4 x23
+      #|    x24 = add x21, x23
+      #|    store.f32 +0 x24, d4
+      #|    x23 = ldi 0
+      #|    bounds_check +0, 4 x23
+      #|    x24 = add x21, x23
+      #|    d0 = load.f32 +0 x24
+      #|    x8 = mov x19
+      #|    d2 = mov d4
+      #|    d3 = mov d0
+      #|    jump block1
+      #|block5:
+      #|    x19 = mov x3
+      #|    d4 = mov d1
+      #|    d5 = mov d0
+      #|    jump block4
+      #|block6:
+      #|    x19 = mov x3
+      #|    d4 = mov d1
+      #|    d5 = mov d0
+      #|    jump block3
+      #|block7:
+      #|    x19 = mov x3
+      #|    d4 = mov d1
+      #|    d5 = mov d0
+      #|    jump block2
+      #|block8:
+      #|    x8 = mov x3
+      #|    d2 = mov d1
+      #|    d3 = mov d0
+      #|    jump block1
+      #|block9:
+      #|    x8 = ldi 1
+      #|    x19 = cmp.eq x3, x8
+      #|    branch x19, block6, block10
+      #|block10:
+      #|    x8 = ldi 2
+      #|    x19 = cmp.eq x3, x8
+      #|    branch x19, block7, block8
+      #|}
+      #|
+    ),
+  )
   let mc = @vcode.emit_function(allocated_func)
 
   // ============ Phase 5: Set up JIT execution ============
