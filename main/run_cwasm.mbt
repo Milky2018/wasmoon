@@ -25,13 +25,19 @@ fn run_cwasm(
       return
     }
   }
-  // Build func_types array from the precompiled module using stored signature info
-  let func_types : Array[(Int, Bool)] = []
+  // Build func_signatures array from the precompiled module
+  // For .cwasm files, we don't have full type info, so use empty result_types
+  let func_signatures : Array[(Int, Array[@types.ValueType])] = []
   for entry in precompiled.functions {
-    func_types.push((entry.num_params, entry.num_results > 0))
+    // Create empty result_types array - the actual types aren't stored in cwasm
+    let result_types : Array[@types.ValueType] = []
+    for _ in 0..<entry.num_results {
+      result_types.push(@types.ValueType::I64) // Default to I64
+    }
+    func_signatures.push((entry.num_params, result_types))
   }
-  // Load the JIT module (empty result_types array for backwards compatibility)
-  let jit_module = @jit.JITModule::load(precompiled, func_types, [])
+  // Load the JIT module
+  let jit_module = @jit.JITModule::load(precompiled, func_signatures)
   match jit_module {
     Some(jm) => {
       // Allocate linear memory (1 page = 64KB for now)
@@ -77,7 +83,7 @@ fn run_cwasm(
             args.push(n)
           }
           // Call the function using context (for proper inter-function calls)
-          let result = jm.call_with_context(f, args) catch {
+          let results = jm.call_with_context(f, args) catch {
             @jit.JITTrap(msg) => {
               println("JIT Trap: \{msg}")
               @jit.free_memory(mem_ptr)
@@ -85,9 +91,9 @@ fn run_cwasm(
               return
             }
           }
-          match result {
-            Some(r) => println(r.to_string())
-            None => ()
+          if results.length() > 0 {
+            let strs = results.map(fn(r) { r.to_string() })
+            println(strs.join(" "))
           }
         }
         None => println("Error: function '\{func_name}' not found")

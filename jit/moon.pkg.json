@@ -1,12 +1,12 @@
 {
   "import": [
     "Milky2018/wasmoon/vcode",
-    "Milky2018/wasmoon/cwasm"
+    "Milky2018/wasmoon/cwasm",
+    "Milky2018/wasmoon/types"
   ],
   "wbtest-import": [
     "Milky2018/wasmoon/ir",
-    "Milky2018/wasmoon/wast",
-    "Milky2018/wasmoon/types"
+    "Milky2018/wasmoon/wast"
   ],
   "targets": {
     "ffi_jit.mbt": [

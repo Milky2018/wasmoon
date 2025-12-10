@@ -1345,6 +1345,25 @@ pub fn emit_str_d_imm(
 }
 
 ///|
+/// Store 64-bit integer to memory with offset
+/// STR Xt, [Xn, #offset]
+fn emit_str_offset(mc : MachineCode, rt : Int, rn : Int, offset : Int) -> Unit {
+  emit_str_imm(mc, rt, rn, offset)
+}
+
+///|
+/// Store double to memory with offset
+/// STR Dt, [Xn, #offset]
+fn emit_str_d_offset(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit {
+  emit_str_d_imm(mc, rt, rn, offset)
+}
+
+///|
 /// Encode FCMP (double): FCMP Dn, Dm
 /// Opcode: 0x1E602000
 pub fn emit_fcmp_d(mc : MachineCode, rn : Int, rm : Int) -> Unit {
@@ -1459,15 +1478,27 @@ fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
 ///|
 /// Emit prologue to save callee-saved registers and set up parameters
 /// Returns the stack frame size used
+/// When needs_extra_ptr is true:
+///   - X0 contains the extra results buffer pointer (saved to X23)
+///   - X1 = func_table_ptr, X2 = memory_base, X3 = memory_size
+///   - User params start from X4
+/// When needs_extra_ptr is false:
+///   - X0 = func_table_ptr, X1 = memory_base, X2 = memory_size
+///   - User params start from X3
 fn emit_prologue(
   mc : MachineCode,
   clobbered : Array[Int],
   params : Array[VReg],
+  needs_extra_ptr : Bool,
 ) -> Int {
   // We always clobber X20, X21, X22 for func_table, memory_base, memory_size
+  // When needs_extra_ptr, we also clobber X23 for the extra results pointer
   // These are callee-saved registers, so we must save them first!
-  // Build list: X20, X21, X22 + any other clobbered callee-saved registers
-  let all_to_save : Array[Int] = [20, 21, 22]
+  let all_to_save : Array[Int] = if needs_extra_ptr {
+    [20, 21, 22, 23]
+  } else {
+    [20, 21, 22]
+  }
   for reg in clobbered {
     all_to_save.push(reg)
   }
@@ -1489,26 +1520,35 @@ fn emit_prologue(
     pair_idx = pair_idx + 1
   }
   // Now move parameters to reserved registers (after saving their original values)
-  emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
-  emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
-  emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
+  if needs_extra_ptr {
+    // X0 = extra_results_ptr, X1 = func_table, X2 = memory_base, X3 = memory_size
+    emit_mov_reg(mc, 23, 0) // MOV X23, X0 (extra_results_ptr)
+    emit_mov_reg(mc, 20, 1) // MOV X20, X1 (func_table_ptr)
+    emit_mov_reg(mc, 21, 2) // MOV X21, X2 (memory_base)
+    emit_mov_reg(mc, 22, 3) // MOV X22, X3 (memory_size)
+  } else {
+    // X0 = func_table, X1 = memory_base, X2 = memory_size
+    emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
+    emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
+    emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
+  }
   // Move user arguments from X registers to their allocated registers
-  // FFI passes all args as Int64 in X3, X4, X5, ...
+  // FFI passes all args as Int64 in X registers
   // Float params need special handling:
   //   - For f32: lower 32 bits of X register contain f32 bit pattern
   //     We need to extract to S register, then FCVT to D register
   //   - For f64: full 64 bits of X register contain f64 bit pattern
   //     We need to FMOV from X register to D register
-  // Regalloc assigns: Int param i → X(3+i), Float param i → D(i)
+  // Regalloc assigns: Int param i → X(base+i), Float param i → D(i)
+  let param_base = if needs_extra_ptr { 4 } else { 3 } // User params start at X4 or X3
   for param_idx, param in params {
-    let x_src = 3 + param_idx // X3, X4, X5, ... (source in FFI convention)
+    let x_src = param_base + param_idx
     match param.class {
       Float32 => {
         // Float32 param: extract f32 from lower 32 bits and convert to f64
         // 1. FMOV S16, W(x_src) - move lower 32 bits to S register
         // 2. FCVT D(param_idx), S16 - convert f32 to f64
-        // This handles f32 values passed via JITArg (reinterpreted bits in lower 32)
-        emit_fmov_w_to_s(mc, 16, x_src) // FMOV S16, W(3+i)
+        emit_fmov_w_to_s(mc, 16, x_src) // FMOV S16, W(base+i)
         emit_fcvt_d_s(mc, param_idx, 16) // FCVT D(i), S16
       }
       Float64 =>
@@ -1516,7 +1556,7 @@ fn emit_prologue(
         // FMOV D(param_idx), X(x_src)
         emit_fmov_x_to_d(mc, param_idx, x_src)
       Int =>
-        // Int param: already in X(3+i) where regalloc expects it
+        // Int param: already in X(base+i) where regalloc expects it
         // No move needed
         ()
     }
@@ -1594,9 +1634,14 @@ fn emit_epilogue(
   mc : MachineCode,
   clobbered : Array[Int],
   frame_size : Int,
+  needs_extra_ptr : Bool,
 ) -> Unit {
-  // Build the same list as prologue: X20, X21, X22 + clobbered
-  let all_to_restore : Array[Int] = [20, 21, 22]
+  // Build the same list as prologue: X20, X21, X22, (X23 if needed) + clobbered
+  let all_to_restore : Array[Int] = if needs_extra_ptr {
+    [20, 21, 22, 23]
+  } else {
+    [20, 21, 22]
+  }
   for reg in clobbered {
     all_to_restore.push(reg)
   }
@@ -1633,10 +1678,12 @@ fn emit_epilogue(
 /// Emit machine code for a VCode function
 pub fn emit_function(func : VCodeFunction) -> MachineCode {
   let mc = MachineCode::new()
+  // Check if we need extra results pointer
+  let needs_extra_ptr = func.needs_extra_results_ptr()
   // Collect callee-saved registers that this function clobbers
   let clobbered = collect_used_callee_saved(func)
   // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
-  let frame_size = emit_prologue(mc, clobbered, func.params)
+  let frame_size = emit_prologue(mc, clobbered, func.params, needs_extra_ptr)
   // Emit function body
   for block in func.blocks {
     mc.define_label(block.id)
@@ -1645,7 +1692,14 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
     }
     match block.terminator {
       Some(term) =>
-        emit_terminator_with_epilogue(mc, term, clobbered, frame_size)
+        emit_terminator_with_epilogue(
+          mc,
+          term,
+          clobbered,
+          frame_size,
+          func.result_types,
+          needs_extra_ptr,
+        )
       None => ()
     }
   }
@@ -2089,11 +2143,17 @@ fn fcmp_kind_to_cond(kind : FCmpKind) -> Int {
 
 ///|
 /// Emit terminator with epilogue for Return
+/// Handles multi-value returns:
+/// - First 2 integer returns → X0, X1
+/// - First 2 float returns → D0, D1
+/// - Extra returns → written to buffer pointed by X23
 fn emit_terminator_with_epilogue(
   mc : MachineCode,
   term : VCodeTerminator,
   clobbered : Array[Int],
   frame_size : Int,
+  result_types : Array[@ir.Type],
+  needs_extra_ptr : Bool,
 ) -> Unit {
   match term {
     Jump(target) => emit_b(mc, target)
@@ -2103,29 +2163,50 @@ fn emit_terminator_with_epilogue(
       emit_b(mc, else_b)
     }
     Return(values) => {
-      // Move return values to their ABI registers
-      // AAPCS64: Integer returns in X0, float/double returns in D0
+      // For multi-value returns, we need to carefully place each value
+      // Track how many int/float values we've placed in registers
+      let mut int_reg_idx = 0 // Next X register to use (0 or 1)
+      let mut float_reg_idx = 0 // Next D register to use (0 or 1)
+      let mut extra_offset = 0 // Offset in extra results buffer
       for i, value in values {
         let src = reg_num(value)
-        let reg_class = match value {
-          Physical(preg) => preg.class
-          Virtual(_) => Int // Should not happen at emit time
+        let ty = if i < result_types.length() {
+          result_types[i]
+        } else {
+          @ir.Type::I64 // Fallback
         }
-        match reg_class {
-          Float32 | Float64 =>
-            // Float return: ensure value is in D0 (AAPCS64 requirement)
-            if src != i {
-              emit_fmov_d(mc, i, src) // fmov d0, dn
+        match ty {
+          F32 | F64 =>
+            if float_reg_idx < 2 {
+              // Place in D0 or D1
+              if src != float_reg_idx {
+                emit_fmov_d(mc, float_reg_idx, src)
+              }
+              float_reg_idx = float_reg_idx + 1
+            } else {
+              // Spill to extra results buffer
+              // STR D(src), [X23, #extra_offset]
+              emit_str_d_offset(mc, src, 23, extra_offset)
+              extra_offset = extra_offset + 8
             }
-          Int =>
-            if src != i {
-              // Only emit mov if source != destination
-              emit_mov_reg(mc, i, src)
+          _ =>
+            // I32, I64, or other integer types
+            if int_reg_idx < 2 {
+              // Place in X0 or X1
+              if src != int_reg_idx {
+                emit_mov_reg(mc, int_reg_idx, src)
+              }
+              int_reg_idx = int_reg_idx + 1
+            } else {
+              // Spill to extra results buffer
+              // STR X(src), [X23, #extra_offset]
+              emit_str_offset(mc, src, 23, extra_offset)
+              extra_offset = extra_offset + 8
             }
         }
       }
       // Emit epilogue to restore callee-saved registers before return
-      emit_epilogue(mc, clobbered, frame_size)
+      emit_epilogue(mc, clobbered, frame_size, needs_extra_ptr)
       emit_ret(mc, 30)
     }
     Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000

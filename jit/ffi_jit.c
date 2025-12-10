@@ -767,6 +767,182 @@ MOONBIT_FFI_EXPORT double wasmoon_jit_call_ctx_i64i64_f64(int64_t func_ptr, int6
     return result;
 }
 
+// ============ Multi-value return support ============
+// For functions with >2 integer or >2 float returns, we use a hidden pointer mechanism:
+// - Caller allocates a buffer for extra return values
+// - Buffer pointer is passed as first argument (X0)
+// - JIT function convention: (extra_ptr, func_table, mem_base, mem_size, args...)
+// - Returns: X0/X1 for first 2 ints, D0/D1 for first 2 floats, rest via buffer
+
+// Structure to hold multi-value return results read from registers
+typedef struct {
+    int64_t x0;
+    int64_t x1;
+    double d0;
+    double d1;
+} multi_return_regs_t;
+
+// Function type for multi-return calls with hidden pointer
+// (extra_ptr, func_table_ptr, mem_base, mem_size, args...) -> void
+// Results are placed in X0, X1, D0, D1 and the buffer pointed by extra_ptr
+typedef void (*jit_func_multi_0)(int64_t, int64_t, int64_t, int64_t);
+typedef void (*jit_func_multi_1)(int64_t, int64_t, int64_t, int64_t, int64_t);
+typedef void (*jit_func_multi_2)(int64_t, int64_t, int64_t, int64_t, int64_t, int64_t);
+
+// Call a JIT function that returns multiple values
+// result_buffer: pre-allocated buffer for extra results (beyond X0/X1/D0/D1)
+// result_types: array of type codes (0=I32, 1=I64, 2=F32, 3=F64)
+// num_results: number of return values
+// Returns: 0 on success, trap code on error
+MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
+    int64_t func_ptr,
+    int64_t func_table_ptr,
+    int64_t* args,
+    int num_args,
+    int64_t* results,
+    int* result_types,
+    int num_results
+) {
+    if (!func_ptr) return -1;
+
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
+        g_trap_active = 0;
+        return (int)g_trap_code;
+    }
+
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+
+    // Count how many results go to registers vs buffer
+    int int_count = 0, float_count = 0;
+    for (int i = 0; i < num_results; i++) {
+        if (result_types[i] == 2 || result_types[i] == 3) { // F32 or F64
+            float_count++;
+        } else { // I32, I64
+            int_count++;
+        }
+    }
+
+    // Determine if we need a hidden pointer
+    int needs_extra_ptr = (int_count > 2 || float_count > 2);
+
+    // Allocate buffer for extra results if needed
+    int64_t extra_buffer[16]; // Support up to 16 extra results
+    memset(extra_buffer, 0, sizeof(extra_buffer));
+
+    // Call the JIT function
+    // For AArch64, we need inline assembly to capture X0, X1, D0, D1
+    int64_t x0_result = 0, x1_result = 0;
+    double d0_result = 0.0, d1_result = 0.0;
+
+    if (needs_extra_ptr) {
+        // Call with hidden pointer as first argument
+        // (extra_ptr, func_table, mem_base, mem_size, args...)
+#if defined(__aarch64__) || defined(_M_ARM64)
+        // Use inline assembly to call and capture results
+        int64_t extra_ptr = (int64_t)extra_buffer;
+        register int64_t r0 __asm__("x0") = extra_ptr;
+        register int64_t r1 __asm__("x1") = func_table_ptr;
+        register int64_t r2 __asm__("x2") = mem_base;
+        register int64_t r3 __asm__("x3") = mem_size;
+        register int64_t r4 __asm__("x4") = num_args > 0 ? args[0] : 0;
+        register int64_t r5 __asm__("x5") = num_args > 1 ? args[1] : 0;
+        register int64_t r6 __asm__("x6") = num_args > 2 ? args[2] : 0;
+        register int64_t r7 __asm__("x7") = num_args > 3 ? args[3] : 0;
+        register double d0 __asm__("d0");
+        register double d1 __asm__("d1");
+
+        __asm__ volatile(
+            "blr %[func]"
+            : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
+            : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7)
+            : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+              "x16", "x17", "x30",
+              "d2", "d3", "d4", "d5", "d6", "d7",
+              "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
+              "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
+              "memory", "cc"
+        );
+
+        x0_result = r0;
+        x1_result = r1;
+        d0_result = d0;
+        d1_result = d1;
+#else
+        // Fallback for non-ARM64 platforms
+        ((jit_func_multi_0)func_ptr)((int64_t)extra_buffer, func_table_ptr, mem_base, mem_size);
+#endif
+    } else {
+        // Normal call without hidden pointer
+#if defined(__aarch64__) || defined(_M_ARM64)
+        register int64_t r0 __asm__("x0") = func_table_ptr;
+        register int64_t r1 __asm__("x1") = mem_base;
+        register int64_t r2 __asm__("x2") = mem_size;
+        register int64_t r3 __asm__("x3") = num_args > 0 ? args[0] : 0;
+        register int64_t r4 __asm__("x4") = num_args > 1 ? args[1] : 0;
+        register int64_t r5 __asm__("x5") = num_args > 2 ? args[2] : 0;
+        register int64_t r6 __asm__("x6") = num_args > 3 ? args[3] : 0;
+        register double d0 __asm__("d0");
+        register double d1 __asm__("d1");
+
+        __asm__ volatile(
+            "blr %[func]"
+            : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
+            : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6)
+            : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+              "x16", "x17", "x30",
+              "d2", "d3", "d4", "d5", "d6", "d7",
+              "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
+              "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
+              "memory", "cc"
+        );
+
+        x0_result = r0;
+        x1_result = r1;
+        d0_result = d0;
+        d1_result = d1;
+#else
+        // Fallback
+        x0_result = ((jit_func_ctx3_i64)func_ptr)(func_table_ptr, mem_base, mem_size);
+#endif
+    }
+
+    g_trap_active = 0;
+
+    // Now distribute results from registers and buffer to the output array
+    int int_idx = 0, float_idx = 0, extra_idx = 0;
+    for (int i = 0; i < num_results; i++) {
+        int ty = result_types[i];
+        if (ty == 2 || ty == 3) { // F32 or F64
+            if (float_idx < 2) {
+                // From D0 or D1
+                double d = (float_idx == 0) ? d0_result : d1_result;
+                // Store as bits in int64
+                memcpy(&results[i], &d, sizeof(double));
+                float_idx++;
+            } else {
+                // From extra buffer
+                results[i] = extra_buffer[extra_idx++];
+            }
+        } else { // I32, I64
+            if (int_idx < 2) {
+                // From X0 or X1
+                results[i] = (int_idx == 0) ? x0_result : x1_result;
+                int_idx++;
+            } else {
+                // From extra buffer
+                results[i] = extra_buffer[extra_idx++];
+            }
+        }
+    }
+
+    return 0; // Success
+}
+
 // ============ Executable memory management ============
 
 // Executable memory block

@@ -713,11 +713,14 @@ pub(all) struct VCodeFunction {
   name : String
   params : Array[VReg]
   results : Array[RegClass]
+  result_types : Array[@ir.Type]
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
 }
 pub fn VCodeFunction::add_param(Self, RegClass) -> VReg
 pub fn VCodeFunction::add_result(Self, RegClass) -> Unit
+pub fn VCodeFunction::add_result_type(Self, @ir.Type) -> Unit
+pub fn VCodeFunction::needs_extra_results_ptr(Self) -> Bool
 pub fn VCodeFunction::new(String) -> Self
 pub fn VCodeFunction::new_block(Self) -> VCodeBlock
 pub fn VCodeFunction::new_vreg(Self, RegClass) -> VReg

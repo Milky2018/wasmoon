@@ -164,6 +164,7 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   for ty in ir_func.results {
     let class = ir_type_to_reg_class(ty)
     ctx.vcode_func.add_result(class)
+    ctx.vcode_func.add_result_type(ty) // Also store full type info
   }
 
   // Phase 3.5: Pre-register all block parameters

@@ -900,6 +900,11 @@ pub fn apply_allocation(
     new_func.results.push(r)
   }
 
+  // Copy result types for multi-value return support
+  for ty in func.result_types {
+    new_func.result_types.push(ty)
+  }
+
   // Process each block
   for block in func.blocks {
     let new_block = new_func.new_block()
@@ -1155,6 +1160,10 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
   }
   for result in func.results {
     new_func.results.push(result)
+  }
+  // Copy result types for multi-value return support
+  for ty in func.result_types {
+    new_func.result_types.push(ty)
   }
 
   // Copy blocks, filtering out dead instructions

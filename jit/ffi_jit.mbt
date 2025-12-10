@@ -1013,3 +1013,68 @@ pub fn ExecCode::call_i64i64i64i64_void(
 pub fn ExecCode::debug_print(self : ExecCode) -> Unit {
   c_jit_debug_print_code(self.ptr, self.size)
 }
+
+// ============ Multi-value Return Support ============
+
+///|
+/// C FFI for multi-value return calls
+/// result_types uses: 0=I32, 1=I64, 2=F32, 3=F64
+#borrow(args, results, result_types)
+extern "c" fn c_jit_call_multi_return(
+  func_ptr : Int64,
+  func_table_ptr : Int64,
+  args : FixedArray[Int64],
+  num_args : Int,
+  results : FixedArray[Int64],
+  result_types : FixedArray[Int],
+  num_results : Int,
+) -> Int = "wasmoon_jit_call_multi_return"
+
+///|
+/// Call a JIT function with multiple return values
+/// Returns 0 on success, trap code on error
+pub fn JITContext::call_multi_return(
+  self : JITContext,
+  func_ptr : Int64,
+  args : Array[Int64],
+  results : Array[Int64],
+  result_types : Array[@types.ValueType],
+) -> Unit raise JITTrap {
+  let num_args = args.length()
+  let num_results = result_types.length()
+  // Convert args to FixedArray
+  let args_fixed = FixedArray::make(num_args.max(1), 0L)
+  for i in 0..<num_args {
+    args_fixed[i] = args[i]
+  }
+  // Convert result_types to int codes
+  let types_fixed = FixedArray::make(num_results, 0)
+  for i in 0..<num_results {
+    types_fixed[i] = match result_types[i] {
+      I32 => 0
+      I64 => 1
+      F32 => 2
+      F64 => 3
+      _ => 0
+    }
+  }
+  // Prepare results array
+  let results_fixed = FixedArray::make(num_results.max(1), 0L)
+  // Call FFI
+  let trap_code = c_jit_call_multi_return(
+    func_ptr,
+    self.func_table_ptr,
+    args_fixed,
+    num_args,
+    results_fixed,
+    types_fixed,
+    num_results,
+  )
+  if trap_code != 0 {
+    raise JITTrap("out of bounds memory access")
+  }
+  // Copy results back
+  for i in 0..<num_results {
+    results[i] = results_fixed[i]
+  }
+}

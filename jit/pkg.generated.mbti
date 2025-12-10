@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/jit"
 
 import(
   "Milky2018/wasmoon/cwasm"
+  "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/vcode"
   "moonbitlang/core/hashset"
 )
@@ -237,6 +238,7 @@ pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_f64_2(Self, Int64, T1, T2) -> 
 pub fn JITContext::call_i64_0(Self, Int64) -> Int64 raise JITTrap
 pub fn[T : JITArg] JITContext::call_i64_1(Self, Int64, T) -> Int64 raise JITTrap
 pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_i64_2(Self, Int64, T1, T2) -> Int64 raise JITTrap
+pub fn JITContext::call_multi_return(Self, Int64, Array[Int64], Array[Int64], Array[@types.ValueType]) -> Unit raise JITTrap
 pub fn JITContext::call_void_0(Self, Int64) -> Unit raise JITTrap
 pub fn[T : JITArg] JITContext::call_void_1(Self, Int64, T) -> Unit raise JITTrap
 pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_void_2(Self, Int64, T1, T2) -> Unit raise JITTrap
@@ -271,13 +273,12 @@ pub(all) struct JITFunction {
   exec_code : ExecCode
   frame_size : Int
   num_params : Int
-  has_result : Bool
-  result_type : JITReturnType
+  result_types : Array[@types.ValueType]
 }
 pub fn JITFunction::call(Self, Array[Int64]) -> Int64?
 pub fn JITFunction::debug_print(Self) -> Unit
 pub fn JITFunction::free(Self) -> Unit
-pub fn JITFunction::new(String, Int, ExecCode, Int, Int, Bool, JITReturnType) -> Self
+pub fn JITFunction::new(String, Int, ExecCode, Int, Int, Array[@types.ValueType]) -> Self
 
 pub(all) struct JITModule {
   functions : Map[Int, JITFunction]
@@ -285,20 +286,12 @@ pub(all) struct JITModule {
   mut context : JITContext?
   mut num_imports : Int
 }
-pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Int64? raise JITTrap
+pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn JITModule::free(Self) -> Unit
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
-pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Int, Bool)], Array[JITReturnType]) -> Self?
+pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Int, Array[@types.ValueType])]) -> Self?
 pub fn JITModule::new() -> Self
-
-pub(all) enum JITReturnType {
-  None
-  Int
-  Float
-}
-pub impl Eq for JITReturnType
-pub impl Show for JITReturnType
 
 pub(all) struct Profiler {
   counter : CallCounter

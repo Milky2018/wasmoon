@@ -580,13 +580,21 @@ pub(all) struct VCodeFunction {
   name : String
   params : Array[VReg] // Function parameters
   results : Array[RegClass] // Result types (for return value allocation)
+  result_types : Array[@ir.Type] // Full return type info for multi-value returns
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
 }
 
 ///|
 pub fn VCodeFunction::new(name : String) -> VCodeFunction {
-  { name, params: [], results: [], blocks: [], next_vreg_id: 0 }
+  {
+    name,
+    params: [],
+    results: [],
+    result_types: [],
+    blocks: [],
+    next_vreg_id: 0,
+  }
 }
 
 ///|
@@ -609,6 +617,31 @@ pub fn VCodeFunction::add_result(
   class : RegClass,
 ) -> Unit {
   self.results.push(class)
+}
+
+///|
+/// Add a result type with full type information for multi-value returns
+pub fn VCodeFunction::add_result_type(
+  self : VCodeFunction,
+  ty : @ir.Type,
+) -> Unit {
+  self.result_types.push(ty)
+}
+
+///|
+/// Check if this function needs a hidden pointer for extra return values
+/// Returns true if there are more than 2 integer or 2 float returns
+pub fn VCodeFunction::needs_extra_results_ptr(self : VCodeFunction) -> Bool {
+  let mut int_count = 0
+  let mut float_count = 0
+  for ty in self.result_types {
+    match ty {
+      I32 | I64 => int_count = int_count + 1
+      F32 | F64 => float_count = float_count + 1
+      _ => ()
+    }
+  }
+  int_count > 2 || float_count > 2
 }
 
 ///|
