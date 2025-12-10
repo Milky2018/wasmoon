@@ -746,6 +746,144 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64i64_void(int64_t func_ptr, int64
     g_trap_active = 0;
 }
 
+// ============ Float Return Value Calls ============
+// AAPCS64: float/double returns are in D0, not X0
+// These functions properly read from D0 and return bit pattern as int64
+
+// Function pointer types for float returns
+typedef float (*jit_func_ctx3_f32)(int64_t func_table, int64_t mem_base, int64_t mem_size);
+typedef float (*jit_func_ctx3_i64_f32)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0);
+typedef float (*jit_func_ctx3_i64i64_f32)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0, int64_t arg1);
+typedef double (*jit_func_ctx3_f64)(int64_t func_table, int64_t mem_base, int64_t mem_size);
+typedef double (*jit_func_ctx3_i64_f64)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0);
+typedef double (*jit_func_ctx3_i64i64_f64)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0, int64_t arg1);
+
+// Call JIT function with context: () -> f32 (returns bit pattern as i64)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_void_f32(int64_t func_ptr, int64_t func_table_ptr) {
+    if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_f32 func = (jit_func_ctx3_f32)func_ptr;
+    float result = func(func_table_ptr, mem_base, mem_size);
+    g_trap_active = 0;
+    // Return f32 bit pattern as i64
+    uint32_t bits;
+    memcpy(&bits, &result, sizeof(bits));
+    return (int64_t)bits;
+}
+
+// Call JIT function with context: (i64) -> f32 (returns bit pattern as i64)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_f32(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
+    if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64_f32 func = (jit_func_ctx3_i64_f32)func_ptr;
+    float result = func(func_table_ptr, mem_base, mem_size, arg0);
+    g_trap_active = 0;
+    // Return f32 bit pattern as i64
+    uint32_t bits;
+    memcpy(&bits, &result, sizeof(bits));
+    return (int64_t)bits;
+}
+
+// Call JIT function with context: (i64, i64) -> f32 (returns bit pattern as i64)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64i64_f32(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
+    if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64i64_f32 func = (jit_func_ctx3_i64i64_f32)func_ptr;
+    float result = func(func_table_ptr, mem_base, mem_size, arg0, arg1);
+    g_trap_active = 0;
+    // Return f32 bit pattern as i64
+    uint32_t bits;
+    memcpy(&bits, &result, sizeof(bits));
+    return (int64_t)bits;
+}
+
+// Call JIT function with context: () -> f64 (returns bit pattern as i64)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_void_f64(int64_t func_ptr, int64_t func_table_ptr) {
+    if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_f64 func = (jit_func_ctx3_f64)func_ptr;
+    double result = func(func_table_ptr, mem_base, mem_size);
+    g_trap_active = 0;
+    // Return f64 bit pattern as i64
+    int64_t bits;
+    memcpy(&bits, &result, sizeof(bits));
+    return bits;
+}
+
+// Call JIT function with context: (i64) -> f64 (returns bit pattern as i64)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_f64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
+    if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64_f64 func = (jit_func_ctx3_i64_f64)func_ptr;
+    double result = func(func_table_ptr, mem_base, mem_size, arg0);
+    g_trap_active = 0;
+    // Return f64 bit pattern as i64
+    int64_t bits;
+    memcpy(&bits, &result, sizeof(bits));
+    return bits;
+}
+
+// Call JIT function with context: (i64, i64) -> f64 (returns bit pattern as i64)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64i64_f64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
+    if (!func_ptr) return 0;
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
+        g_trap_active = 0;
+        return 0;  // Trap occurred
+    }
+    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
+    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
+    jit_func_ctx3_i64i64_f64 func = (jit_func_ctx3_i64i64_f64)func_ptr;
+    double result = func(func_table_ptr, mem_base, mem_size, arg0, arg1);
+    g_trap_active = 0;
+    // Return f64 bit pattern as i64
+    int64_t bits;
+    memcpy(&bits, &result, sizeof(bits));
+    return bits;
+}
+
 // ============ Executable memory management ============
 
 // Executable memory block

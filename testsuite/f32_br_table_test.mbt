@@ -181,11 +181,11 @@ test "A critical bug as in data/f32_br_2locals" {
   defer exec.free()
   inspect(
     jit_ctx.call_i64_i64(exec.ptr, (0).to_int64()) & 0xFFFFFFFFL,
-    content="1073741824",
+    content="2.0",
   )
   inspect(
     jit_ctx.call_i64_i64(exec.ptr, (1).to_int64()) & 0xFFFFFFFFL,
-    content="0",
+    content="3.0",
   )
   inspect(
     jit_ctx.call_i64_i64(exec.ptr, (2).to_int64()) & 0xFFFFFFFFL,

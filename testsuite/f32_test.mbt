@@ -84,14 +84,14 @@ test "f32 add" {
   defer exec.free()
   inspect(
     jit_ctx.call_i64_i64(exec.ptr, (0).to_int64()) & 0xFFFFFFFFL,
-    content="1098383360",
+    content="16.5",
   )
   inspect(
     jit_ctx.call_i64_i64(exec.ptr, (1).to_int64()) & 0xFFFFFFFFL,
-    content="1098383360",
+    content="17.5",
   )
   inspect(
     jit_ctx.call_i64_i64(exec.ptr, (2).to_int64()) & 0xFFFFFFFFL,
-    content="1098383360",
+    content="18.5",
   )
 }
