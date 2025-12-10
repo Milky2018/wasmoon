@@ -82,9 +82,9 @@ test "conditional branch" {
 ///|
 test "float operations" {
   let builder = VCodeBuilder::new("float_add")
-  let p0 = builder.add_param(Float64)
-  let p1 = builder.add_param(Float64)
-  builder.add_result(Float64)
+  let p0 = builder.add_param(Float32)
+  let p1 = builder.add_param(Float32)
+  builder.add_result(Float32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(p0, p1)
@@ -212,9 +212,9 @@ test "division operations" {
 ///|
 test "float division and subtraction" {
   let builder = VCodeBuilder::new("float_ops")
-  let p0 = builder.add_param(Float64)
-  let p1 = builder.add_param(Float64)
-  builder.add_result(Float64)
+  let p0 = builder.add_param(Float32)
+  let p1 = builder.add_param(Float32)
+  builder.add_result(Float32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let div_result = builder.fdiv(p0, p1)

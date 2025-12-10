@@ -296,11 +296,11 @@ test "optimized vs non-optimized comparison" {
 ///|
 test "pattern: fmul x, 1.0 -> mov x" {
   let builder = @ir.IRBuilder::new("fmul_one_test")
-  let a = builder.add_param(@ir.Type::F64)
-  builder.add_result(@ir.Type::F64)
+  let a = builder.add_param(@ir.Type::F32)
+  builder.add_result(@ir.Type::F32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let one = builder.fconst_f64(1.0)
+  let one = builder.fconst_f32(1.0)
   let result = builder.fmul(a, one)
   builder.return_([result])
   let vcode_func = lower_function_optimized(builder.get_function())

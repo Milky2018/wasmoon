@@ -78,9 +78,9 @@ test "lower constants" {
 ///|
 test "lower float operations" {
   let builder = @ir.IRBuilder::new("float_add")
-  let a = builder.add_param(@ir.Type::F64)
-  let b = builder.add_param(@ir.Type::F64)
-  builder.add_result(@ir.Type::F64)
+  let a = builder.add_param(@ir.Type::F32)
+  let b = builder.add_param(@ir.Type::F32)
+  builder.add_result(@ir.Type::F32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(a, b)
@@ -277,8 +277,8 @@ test "lower division operations" {
 ///|
 test "lower float comparison" {
   let builder = @ir.IRBuilder::new("fcmp_test")
-  let a = builder.add_param(@ir.Type::F64)
-  let b = builder.add_param(@ir.Type::F64)
+  let a = builder.add_param(@ir.Type::F32)
+  let b = builder.add_param(@ir.Type::F32)
   builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
@@ -340,7 +340,7 @@ test "lower trap" {
 }
 
 ///|
-test "lower float constant" {
+test "lower double constant" {
   let builder = @ir.IRBuilder::new("fconst_test")
   builder.add_result(@ir.Type::F64)
   let entry = builder.create_block()
@@ -352,7 +352,7 @@ test "lower float constant" {
   inspect(
     output,
     content=(
-      #|vcode fconst_test() -> float {
+      #|vcode fconst_test() -> double {
       #|block0:
       #|    f0 = ldf 3.14
       #|    ret f0

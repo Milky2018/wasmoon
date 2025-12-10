@@ -923,12 +923,12 @@ test "regalloc: float and int mixed allocation" {
   // ret f3
 
   let func = VCodeFunction::new("mixed")
-  func.add_result(Float64)
+  func.add_result(Float32)
   let block = func.new_block()
   let v0 = func.new_vreg(Int)
-  let f1 = func.new_vreg(Float64)
+  let f1 = func.new_vreg(Float32)
   let v2 = func.new_vreg(Int)
-  let f3 = func.new_vreg(Float64)
+  let f3 = func.new_vreg(Float32)
 
   // v0 = ldi 10
   let inst0 = VCodeInst::new(LoadConst(10L))
@@ -936,7 +936,7 @@ test "regalloc: float and int mixed allocation" {
   block.add_inst(inst0)
 
   // f1 = ldf 3.14
-  let inst1 = VCodeInst::new(LoadConstF64(3.14.reinterpret_as_int64()))
+  let inst1 = VCodeInst::new(LoadConstF32((3.14 : Float).reinterpret_as_int()))
   inst1.add_def({ reg: Virtual(f1) })
   block.add_inst(inst1)
 
@@ -964,7 +964,7 @@ test "regalloc: float and int mixed allocation" {
       #|vcode mixed() -> float {
       #|block0:
       #|    v0 = ldi 10
-      #|    f1 = ldf 3.14
+      #|    f1 = ldf 3.140000104904175
       #|    v2 = add v0, v0
       #|    f3 = fadd f1, f1
       #|    ret f3
@@ -997,7 +997,7 @@ test "regalloc: float and int mixed allocation" {
       #|vcode mixed() -> float {
       #|block0:
       #|    x8 = ldi 10
-      #|    d0 = ldf 3.14
+      #|    d0 = ldf 3.140000104904175
       #|    x19 = add x8, x8
       #|    d1 = fadd d0, d0
       #|    ret d1
