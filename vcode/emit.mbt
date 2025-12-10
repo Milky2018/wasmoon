@@ -280,6 +280,7 @@ fn wreg_num(wreg : Writable) -> Int {
 /// Encode ADD (shifted register): ADD Xd, Xn, Xm
 /// Opcode: 0x8B000000 = 10001011 00000000 00000000 00000000
 pub fn emit_add_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("add x\{rd}, x\{rn}, x\{rm}")
   // AArch64 ADD (shifted register) encoding:
   // | 31 | 30-29 | 28 | 27-24 | 23-22 | 21 | 20-16 | 15-10 | 9-5 | 4-0 |
   // | sf |  op   | S  | 01011 | shift | 0  |  Rm   | imm6  | Rn  | Rd  |
@@ -312,6 +313,12 @@ pub fn emit_add_shifted(
     Lsr => 1
     Asr => 2
   }
+  let shift_name = match shift {
+    Lsl => "lsl"
+    Lsr => "lsr"
+    Asr => "asr"
+  }
+  mc.annotate("add x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
   // Encoding: sf=1 | op=0 | S=0 | 01011 | shift[1:0] | 0 | Rm | imm6 | Rn | Rd
   let b0 = (rd & 31) | ((rn & 3) << 5)
@@ -336,6 +343,12 @@ pub fn emit_sub_shifted(
     Lsr => 1
     Asr => 2
   }
+  let shift_name = match shift {
+    Lsl => "lsl"
+    Lsr => "lsr"
+    Asr => "asr"
+  }
+  mc.annotate("sub x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
@@ -359,6 +372,12 @@ pub fn emit_and_shifted(
     Lsr => 1
     Asr => 2
   }
+  let shift_name = match shift {
+    Lsl => "lsl"
+    Lsr => "lsr"
+    Asr => "asr"
+  }
+  mc.annotate("and x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
@@ -382,6 +401,12 @@ pub fn emit_orr_shifted(
     Lsr => 1
     Asr => 2
   }
+  let shift_name = match shift {
+    Lsl => "lsl"
+    Lsr => "lsr"
+    Asr => "asr"
+  }
+  mc.annotate("orr x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
@@ -405,6 +430,12 @@ pub fn emit_eor_shifted(
     Lsr => 1
     Asr => 2
   }
+  let shift_name = match shift {
+    Lsl => "lsl"
+    Lsr => "lsr"
+    Asr => "asr"
+  }
+  mc.annotate("eor x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
@@ -423,6 +454,7 @@ pub fn emit_madd(
   rm : Int,
   ra : Int,
 ) -> Unit {
+  mc.annotate("madd x\{rd}, x\{rn}, x\{rm}, x\{ra}")
   // Encoding: sf=1 | 00 | 11011 | 000 | Rm | o0=0 | Ra | Rn | Rd
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | ((ra & 31) << 3)
@@ -441,6 +473,7 @@ pub fn emit_msub(
   rm : Int,
   ra : Int,
 ) -> Unit {
+  mc.annotate("msub x\{rd}, x\{rn}, x\{rm}, x\{ra}")
   // Encoding: sf=1 | 00 | 11011 | 000 | Rm | o0=1 | Ra | Rn | Rd
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | ((ra & 31) << 3) | 128 // o0=1 (bit 7)
@@ -453,6 +486,7 @@ pub fn emit_msub(
 /// Encode MNEG: MNEG Xd, Xn, Xm (Xd = -(Xn * Xm)) = MSUB Xd, Xn, Xm, XZR
 /// Opcode: 0x9B00FC00
 pub fn emit_mneg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("mneg x\{rd}, x\{rn}, x\{rm}")
   emit_msub(mc, rd, rn, rm, 31) // XZR = register 31
 }
 
@@ -460,6 +494,9 @@ pub fn emit_mneg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode ADD (immediate): ADD Xd, Xn, #imm12
 /// Opcode: 0x91000000
 pub fn emit_add_imm(mc : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
+  let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+  let rd_name = if rd == 31 { "sp" } else { "x\{rd}" }
+  mc.annotate("add \{rd_name}, \{rn_name}, #\{imm12}")
   // sf=1 | op=0 | S=0 | 100010 | sh=0 | imm12[11:0] | Rn[4:0] | Rd[4:0]
   // Build as 32-bit instruction
   let imm = imm12 & 0xFFF
@@ -483,6 +520,7 @@ pub fn emit_add_imm(mc : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
 /// Encode SUB (shifted register): SUB Xd, Xn, Xm
 /// Opcode: 0xCB000000
 pub fn emit_sub_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("sub x\{rd}, x\{rn}, x\{rm}")
   // Same encoding as ADD but with opcode 0xCB
   let b0 = (rd & 31) | ((rn & 7) << 5)
   let b1 = (rn >> 3) & 3 // imm6 = 0
@@ -495,6 +533,9 @@ pub fn emit_sub_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode SUB (immediate): SUB Xd, Xn, #imm12
 /// Opcode: 0xD1000000
 pub fn emit_sub_imm(mc : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
+  let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+  let rd_name = if rd == 31 { "sp" } else { "x\{rd}" }
+  mc.annotate("sub \{rd_name}, \{rn_name}, #\{imm12}")
   // sf=1 | op=1 | S=0 | 100010 | sh=0 | imm12[11:0] | Rn[4:0] | Rd[4:0]
   // Build as 32-bit instruction
   let imm = imm12 & 0xFFF
@@ -518,6 +559,7 @@ pub fn emit_sub_imm(mc : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
 /// Encode MUL: MUL Xd, Xn, Xm (MADD Xd, Xn, Xm, XZR)
 /// Opcode: 0x9B007C00
 pub fn emit_mul(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("mul x\{rd}, x\{rn}, x\{rm}")
   // sf=1 | 00 | 11011 | 000 | Rm | 0 | Ra=11111 | Rn | Rd
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 248 // Ra=11111, bit pattern 0xF8
@@ -532,6 +574,7 @@ pub fn emit_mul(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode SDIV: SDIV Xd, Xn, Xm
 /// Opcode: 0x9AC00C00
 pub fn emit_sdiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("sdiv x\{rd}, x\{rn}, x\{rm}")
   // Encoding: sf=1 | 0 | 0 | 11010110 | Rm | 00001 | 1 | Rn | Rd
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 24 // 00001 | 1 pattern = 0x18
@@ -546,6 +589,7 @@ pub fn emit_sdiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode UDIV: UDIV Xd, Xn, Xm
 /// Opcode: 0x9AC00800
 pub fn emit_udiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("udiv x\{rd}, x\{rn}, x\{rm}")
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 16 // 00001 | 0 pattern = 0x10
   let c0 = 192 // 0xC0
@@ -559,6 +603,7 @@ pub fn emit_udiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode AND (shifted register): AND Xd, Xn, Xm
 /// Opcode: 0x8A000000
 pub fn emit_and_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("and x\{rd}, x\{rn}, x\{rm}")
   // Same encoding format as ADD/SUB but with opcode 0x8A
   let b0 = (rd & 31) | ((rn & 7) << 5)
   let b1 = (rn >> 3) & 3 // imm6 = 0
@@ -571,6 +616,7 @@ pub fn emit_and_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode ORR (shifted register): ORR Xd, Xn, Xm
 /// Opcode: 0xAA000000
 pub fn emit_orr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("orr x\{rd}, x\{rn}, x\{rm}")
   // Same encoding format as ADD/SUB but with opcode 0xAA
   let b0 = (rd & 31) | ((rn & 7) << 5)
   let b1 = (rn >> 3) & 3 // imm6 = 0
@@ -583,6 +629,7 @@ pub fn emit_orr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode EOR (shifted register): EOR Xd, Xn, Xm
 /// Opcode: 0xCA000000
 pub fn emit_eor_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("eor x\{rd}, x\{rn}, x\{rm}")
   // Same encoding format as ADD/SUB but with opcode 0xCA
   let b0 = (rd & 31) | ((rn & 7) << 5)
   let b1 = (rn >> 3) & 3 // imm6 = 0
@@ -595,6 +642,7 @@ pub fn emit_eor_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode LSL (register): LSLV Xd, Xn, Xm
 /// Opcode: 0x9AC02000
 pub fn emit_lsl_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("lsl x\{rd}, x\{rn}, x\{rm}")
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 64 // 0010 | 00 = 0x40
   let c0 = 192 // 0xC0
@@ -608,6 +656,7 @@ pub fn emit_lsl_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode ASR (register): ASRV Xd, Xn, Xm
 /// Opcode: 0x9AC02800
 pub fn emit_asr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("asr x\{rd}, x\{rn}, x\{rm}")
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 80 // 0010 | 10 = 0x50
   let c0 = 192 // 0xC0
@@ -621,6 +670,7 @@ pub fn emit_asr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode LSR (register): LSRV Xd, Xn, Xm
 /// Opcode: 0x9AC02400
 pub fn emit_lsr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("lsr x\{rd}, x\{rn}, x\{rm}")
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 72 // 0010 | 01 = 0x48
   let c0 = 192 // 0xC0
@@ -633,13 +683,20 @@ pub fn emit_lsr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 ///|
 /// Encode MOV (register): MOV Xd, Xm (ORR Xd, XZR, Xm)
 pub fn emit_mov_reg(mc : MachineCode, rd : Int, rm : Int) -> Unit {
-  emit_orr_reg(mc, rd, 31, rm)
+  mc.annotate("mov x\{rd}, x\{rm}")
+  // Inline ORR encoding to avoid double annotation
+  let b0 = (rd & 31) | ((31 & 7) << 5)
+  let b1 = (31 >> 3) & 3 // imm6 = 0
+  let b2 = rm & 31 // shift = 0, bit 21 = 0
+  let b3 = 170 // 0xAA
+  mc.emit_inst(b0, b1, b2, b3)
 }
 
 ///|
 /// Encode 32-bit MOV (register): MOV Wd, Wm (ORR Wd, WZR, Wm)
 /// This zero-extends the result to 64-bit in Xd
 pub fn emit_mov_reg32(mc : MachineCode, rd : Int, rm : Int) -> Unit {
+  mc.annotate("mov w\{rd}, w\{rm}")
   // ORR Wd, WZR, Wm - 32-bit OR with zero register
   // Same as emit_orr_reg but with sf=0 (byte 3 = 0x2A instead of 0xAA)
   let b0 = (rd & 31) | ((31 & 7) << 5) // rd, WZR low bits
@@ -653,6 +710,7 @@ pub fn emit_mov_reg32(mc : MachineCode, rd : Int, rm : Int) -> Unit {
 /// Encode MOVZ: MOVZ Xd, #imm16, LSL #shift
 /// Opcode: 0xD2800000
 pub fn emit_movz(mc : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
+  mc.annotate("movz x\{rd}, #\{imm16}, lsl #\{shift}")
   let hw = shift / 16
   let imm = imm16 & 0xFFFF
   let b0 = (rd & 31) | ((imm & 7) << 5)
@@ -667,6 +725,7 @@ pub fn emit_movz(mc : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
 /// Encode MOVK: MOVK Xd, #imm16, LSL #shift
 /// Opcode: 0xF2800000
 pub fn emit_movk(mc : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
+  mc.annotate("movk x\{rd}, #\{imm16}, lsl #\{shift}")
   let hw = shift / 16
   let imm = imm16 & 0xFFFF
   let b0 = (rd & 31) | ((imm & 7) << 5)
@@ -721,6 +780,7 @@ pub fn emit_load_imm64(mc : MachineCode, rd : Int, imm : Int64) -> Unit {
 /// Encode LDR (64-bit, unsigned offset): LDR Xt, [Xn, #imm]
 /// Opcode: 0xF9400000
 pub fn emit_ldr_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+  mc.annotate("ldr x\{rt}, [x\{rn}, #\{imm12}]")
   // AArch64 LDR (immediate, unsigned offset) encoding:
   // [31:30] = size = 11 (64-bit)
   // [29:27] = 111 (fixed)
@@ -752,6 +812,7 @@ pub fn emit_ldr_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
 /// Encode STR (64-bit, unsigned offset): STR Xt, [Xn, #imm]
 /// Opcode: 0xF9000000
 pub fn emit_str_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+  mc.annotate("str x\{rt}, [x\{rn}, #\{imm12}]")
   // AArch64 STR (immediate, unsigned offset) encoding:
   // Same as LDR but opc = 00 instead of 01
   let scaled = (imm12 / 8) & 0xFFF
@@ -775,6 +836,7 @@ pub fn emit_str_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
 /// Encode LDRB (unsigned offset): LDRB Wt, [Xn, #imm]
 /// Opcode: 0x39400000
 pub fn emit_ldrb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+  mc.annotate("ldrb w\{rt}, [x\{rn}, #\{imm12}]")
   let imm = imm12 & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
@@ -787,6 +849,7 @@ pub fn emit_ldrb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit 
 /// Encode LDRH (unsigned offset): LDRH Wt, [Xn, #imm]
 /// Opcode: 0x79400000
 pub fn emit_ldrh_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+  mc.annotate("ldrh w\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 2) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -804,6 +867,7 @@ pub fn emit_ldr_w_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("ldr w\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 4) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -816,6 +880,7 @@ pub fn emit_ldr_w_imm(
 /// Encode STRB (unsigned offset): STRB Wt, [Xn, #imm]
 /// Opcode: 0x39000000
 pub fn emit_strb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+  mc.annotate("strb w\{rt}, [x\{rn}, #\{imm12}]")
   let imm = imm12 & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
@@ -828,6 +893,7 @@ pub fn emit_strb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit 
 /// Encode STRH (unsigned offset): STRH Wt, [Xn, #imm]
 /// Opcode: 0x79000000
 pub fn emit_strh_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+  mc.annotate("strh w\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 2) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -845,6 +911,7 @@ pub fn emit_str_w_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("str w\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 4) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -867,6 +934,8 @@ pub fn emit_stp_pre(
   rn : Int,
   imm : Int,
 ) -> Unit {
+  let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+  mc.annotate("stp x\{rt1}, x\{rt2}, [\{rn_name}, #\{imm}]!")
   // STP (pre-indexed) encoding for 64-bit:
   // Instruction format: 1 0 1 0 1 0 0 1 1 | imm7 | Rt2 | Rn | Rt1
   // [31:30] = 10 (opc for 64-bit)
@@ -909,6 +978,8 @@ pub fn emit_ldp_post(
   rn : Int,
   imm : Int,
 ) -> Unit {
+  let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+  mc.annotate("ldp x\{rt1}, x\{rt2}, [\{rn_name}], #\{imm}")
   // LDP (post-indexed) encoding for 64-bit:
   // [31:30] = 10 (opc for 64-bit)
   // [29:27] = 101
@@ -948,6 +1019,7 @@ pub fn emit_ldrsb_x_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("ldrsb x\{rt}, [x\{rn}, #\{imm12}]")
   let imm = imm12 & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
@@ -965,6 +1037,7 @@ pub fn emit_ldrsb_w_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("ldrsb w\{rt}, [x\{rn}, #\{imm12}]")
   let imm = imm12 & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
@@ -982,6 +1055,7 @@ pub fn emit_ldrsh_x_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("ldrsh x\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 2) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -999,6 +1073,7 @@ pub fn emit_ldrsh_w_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("ldrsh w\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 2) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -1016,6 +1091,7 @@ pub fn emit_ldrsw_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("ldrsw x\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 4) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -1030,6 +1106,7 @@ pub fn emit_ldrsw_imm(
 /// Encode B (unconditional branch): B label
 /// Opcode: 0x14000000
 pub fn emit_b(mc : MachineCode, target_block : Int) -> Unit {
+  mc.annotate("b block\{target_block}")
   mc.emit_inst(0, 0, 0, 20) // 0x14
   mc.add_fixup(target_block, Branch26)
 }
@@ -1038,6 +1115,18 @@ pub fn emit_b(mc : MachineCode, target_block : Int) -> Unit {
 /// Encode B.cond (conditional branch): B.cond label
 /// Opcode: 0x54000000
 pub fn emit_b_cond(mc : MachineCode, cond : Int, target_block : Int) -> Unit {
+  let cond_name = match cond {
+    0 => "eq"
+    1 => "ne"
+    2 => "hs"
+    3 => "lo"
+    10 => "ge"
+    11 => "lt"
+    12 => "gt"
+    13 => "le"
+    _ => "?\{cond}"
+  }
+  mc.annotate("b.\{cond_name} block\{target_block}")
   mc.emit_inst(cond & 15, 0, 0, 84) // 0x54
   mc.add_fixup(target_block, Branch19)
 }
@@ -1046,6 +1135,7 @@ pub fn emit_b_cond(mc : MachineCode, cond : Int, target_block : Int) -> Unit {
 /// Encode CBZ: CBZ Xt, label
 /// Opcode: 0xB4000000
 pub fn emit_cbz(mc : MachineCode, rt : Int, target_block : Int) -> Unit {
+  mc.annotate("cbz x\{rt}, block\{target_block}")
   mc.emit_inst(rt & 31, 0, 0, 180) // 0xB4
   mc.add_fixup(target_block, Branch19)
 }
@@ -1054,6 +1144,7 @@ pub fn emit_cbz(mc : MachineCode, rt : Int, target_block : Int) -> Unit {
 /// Encode CBNZ: CBNZ Xt, label
 /// Opcode: 0xB5000000
 pub fn emit_cbnz(mc : MachineCode, rt : Int, target_block : Int) -> Unit {
+  mc.annotate("cbnz x\{rt}, block\{target_block}")
   mc.emit_inst(rt & 31, 0, 0, 181) // 0xB5
   mc.add_fixup(target_block, Branch19)
 }
@@ -1062,6 +1153,7 @@ pub fn emit_cbnz(mc : MachineCode, rt : Int, target_block : Int) -> Unit {
 /// Encode RET: RET Xn
 /// Opcode: 0xD65F0000 (with Rn in bits [9:5])
 pub fn emit_ret(mc : MachineCode, rn : Int) -> Unit {
+  mc.annotate("ret")
   // Rn goes in bits [9:5] of the instruction
   // In little-endian bytes:
   // byte0 bits [7:5] = Rn[2:0]
@@ -1075,6 +1167,7 @@ pub fn emit_ret(mc : MachineCode, rn : Int) -> Unit {
 /// Encode BL (branch with link): BL label
 /// Opcode: 0x94000000
 pub fn emit_bl(mc : MachineCode, target_block : Int) -> Unit {
+  mc.annotate("bl block\{target_block}")
   mc.emit_inst(0, 0, 0, 148) // 0x94
   mc.add_fixup(target_block, Branch26)
 }
@@ -1084,6 +1177,7 @@ pub fn emit_bl(mc : MachineCode, target_block : Int) -> Unit {
 /// Opcode: 0xD63F0000
 /// The register goes in bits [9:5]
 pub fn emit_blr(mc : MachineCode, rn : Int) -> Unit {
+  mc.annotate("blr x\{rn}")
   // BLR Xn encoding: 0xD63F0000 with Rn in bits [9:5]
   // In little-endian bytes:
   // byte0 bits [7:5] = Rn[2:0], bits [4:0] = 0
@@ -1099,6 +1193,7 @@ pub fn emit_blr(mc : MachineCode, rn : Int) -> Unit {
 /// Encode CMP (register): CMP Xn, Xm (SUBS XZR, Xn, Xm)
 /// Opcode: 0xEB00001F
 pub fn emit_cmp_reg(mc : MachineCode, rn : Int, rm : Int) -> Unit {
+  mc.annotate("cmp x\{rn}, x\{rm}")
   // SUBS with Rd=31 (XZR)
   // Same encoding as SUB (shifted register) but with S=1 (opcode 0xEB instead of 0xCB)
   let b0 = 31 | ((rn & 7) << 5) // Rd=31 (XZR)
@@ -1112,6 +1207,7 @@ pub fn emit_cmp_reg(mc : MachineCode, rn : Int, rm : Int) -> Unit {
 /// Encode CMP (immediate): CMP Xn, #imm12 (SUBS XZR, Xn, #imm12)
 /// Opcode: 0xF100001F
 pub fn emit_cmp_imm(mc : MachineCode, rn : Int, imm12 : Int) -> Unit {
+  mc.annotate("cmp x\{rn}, #\{imm12}")
   let imm = imm12 & 0xFFF
   let x1f = 31 // 0x1F
   let b0 = x1f | ((rn & 3) << 5)
@@ -1125,6 +1221,18 @@ pub fn emit_cmp_imm(mc : MachineCode, rn : Int, imm12 : Int) -> Unit {
 /// Encode CSET: CSET Xd, cond (CSINC Xd, XZR, XZR, invert(cond))
 /// Opcode: 0x9A9F0400
 pub fn emit_cset(mc : MachineCode, rd : Int, cond : Int) -> Unit {
+  let cond_name = match cond {
+    0 => "eq"
+    1 => "ne"
+    2 => "hs"
+    3 => "lo"
+    10 => "ge"
+    11 => "lt"
+    12 => "gt"
+    13 => "le"
+    _ => "?\{cond}"
+  }
+  mc.annotate("cset x\{rd}, \{cond_name}")
   let inv_cond = cond ^ 1
   // CSINC Xd, XZR, XZR, inv_cond
   // Encoding: sf=1 | 00 | 11010100 | Rm=11111 | cond | 0 | 1 | Rn=11111 | Rd
@@ -1144,6 +1252,7 @@ pub fn emit_cset(mc : MachineCode, rd : Int, cond : Int) -> Unit {
 /// Encode FADD (double): FADD Dd, Dn, Dm
 /// Opcode: 0x1E602800
 pub fn emit_fadd_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fadd d\{rd}, d\{rn}, d\{rm}")
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 40 // 0x28
   let x60 = 96 // 0x60
@@ -1158,6 +1267,7 @@ pub fn emit_fadd_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode FSUB (double): FSUB Dd, Dn, Dm
 /// Opcode: 0x1E603800
 pub fn emit_fsub_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fsub d\{rd}, d\{rn}, d\{rm}")
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 56 // 0x38
   let x60 = 96 // 0x60
@@ -1172,6 +1282,7 @@ pub fn emit_fsub_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode FMUL (double): FMUL Dd, Dn, Dm
 /// Opcode: 0x1E600800
 pub fn emit_fmul_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fmul d\{rd}, d\{rn}, d\{rm}")
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 8 // 0x08
   let x60 = 96 // 0x60
@@ -1186,6 +1297,7 @@ pub fn emit_fmul_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Encode FDIV (double): FDIV Dd, Dn, Dm
 /// Opcode: 0x1E601800
 pub fn emit_fdiv_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fdiv d\{rd}, d\{rn}, d\{rm}")
   let b0 = (rd & 31) | ((rn & 3) << 5)
   let b1 = ((rn >> 2) & 7) | 24 // 0x18
   let x60 = 96 // 0x60
@@ -1214,6 +1326,7 @@ pub fn emit_fmov_d(mc : MachineCode, rd : Int, rm : Int) -> Unit {
 /// Opcode: 0x9E660000
 /// Moves 64-bit FP register to 64-bit GPR
 pub fn emit_fmov_d_to_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fmov x\{rd}, d\{rn}")
   // Rd in bits [4:0], Rn in bits [9:5]
   let b0 = (rd & 31) | ((rn & 7) << 5)
   let b1 = (rn >> 3) & 3
@@ -1227,6 +1340,7 @@ pub fn emit_fmov_d_to_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 /// Opcode: 0x1E260000
 /// Moves 32-bit FP register to 32-bit GPR
 pub fn emit_fmov_s_to_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fmov w\{rd}, s\{rn}")
   // Rd in bits [4:0], Rn in bits [9:5]
   let b0 = (rd & 31) | ((rn & 7) << 5)
   let b1 = (rn >> 3) & 3
@@ -1240,6 +1354,7 @@ pub fn emit_fmov_s_to_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 /// Opcode: 0x9E670000
 /// Moves 64-bit GPR to 64-bit FP register
 pub fn emit_fmov_x_to_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fmov d\{rd}, x\{rn}")
   // Rd in bits [4:0], Rn in bits [9:5]
   let b0 = (rd & 31) | ((rn & 7) << 5)
   let b1 = (rn >> 3) & 3
@@ -1253,6 +1368,7 @@ pub fn emit_fmov_x_to_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 /// Opcode: 0x1E270000
 /// Moves 32-bit GPR to 32-bit FP register
 pub fn emit_fmov_w_to_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fmov s\{rd}, w\{rn}")
   // Rd in bits [4:0], Rn in bits [9:5]
   let b0 = (rd & 31) | ((rn & 7) << 5)
   let b1 = (rn >> 3) & 3
@@ -1266,6 +1382,7 @@ pub fn emit_fmov_w_to_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 /// Opcode: 0x1E22C000
 /// Converts single-precision float to double-precision
 pub fn emit_fcvt_d_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fcvt d\{rd}, s\{rn}")
   // Rd in bits [4:0], Rn in bits [9:5]
   // Encoding: 0 0 0 1 1 1 1 0 0 0 1 0 0 0 1 0 1 1 0 0 0 0 0 0 Rn Rd
   let b0 = (rd & 31) | ((rn & 7) << 5)
@@ -1284,6 +1401,7 @@ pub fn emit_ldr_s_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("ldr s\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 4) & 0xFFF
   // Encoding: Rt in bits [4:0], Rn in bits [9:5], imm12 in bits [21:10]
   let b0 = (rt & 31) | ((rn & 7) << 5)
@@ -1302,6 +1420,7 @@ pub fn emit_str_s_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("str s\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 4) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -1319,6 +1438,7 @@ pub fn emit_ldr_d_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("ldr d\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 8) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -1336,6 +1456,7 @@ pub fn emit_str_d_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
+  mc.annotate("str d\{rt}, [x\{rn}, #\{imm12}]")
   let scaled = (imm12 / 8) & 0xFFF
   let b0 = (rt & 31) | ((rn & 7) << 5)
   let b1 = ((rn >> 3) & 3) | ((scaled & 63) << 2)
@@ -1367,6 +1488,7 @@ fn emit_str_d_offset(
 /// Encode FCMP (double): FCMP Dn, Dm
 /// Opcode: 0x1E602000
 pub fn emit_fcmp_d(mc : MachineCode, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fcmp d\{rn}, d\{rm}")
   let b0 = (rn & 3) << 5
   let b1 = ((rn >> 2) & 7) | 32 // 0x20
   let x60 = 96 // 0x60
@@ -1383,6 +1505,7 @@ pub fn emit_fcmp_d(mc : MachineCode, rn : Int, rm : Int) -> Unit {
 /// Encode NOP
 /// Opcode: 0xD503201F
 pub fn emit_nop(mc : MachineCode) -> Unit {
+  mc.annotate("nop")
   mc.emit_inst(31, 32, 3, 213) // 0x1F, 0x20, 0x03, 0xD5
 }
 
@@ -1573,6 +1696,8 @@ fn emit_stp_offset(
   rn : Int,
   offset : Int,
 ) -> Unit {
+  let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+  mc.annotate("stp x\{rt1}, x\{rt2}, [\{rn_name}, #\{offset}]")
   // STP (signed offset) encoding for 64-bit:
   // [31:30] = 10 (opc for 64-bit)
   // [29:27] = 101
@@ -1610,6 +1735,8 @@ fn emit_ldp_offset(
   rn : Int,
   offset : Int,
 ) -> Unit {
+  let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+  mc.annotate("ldp x\{rt1}, x\{rt2}, [\{rn_name}, #\{offset}]")
   let imm7 = (offset / 8) & 0x7F
   let inst = (0b10 << 30) |
     (0b101 << 27) |
