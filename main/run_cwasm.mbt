@@ -30,8 +30,8 @@ fn run_cwasm(
   for entry in precompiled.functions {
     func_types.push((entry.num_params, entry.num_results > 0))
   }
-  // Load the JIT module
-  let jit_module = @jit.JITModule::load(precompiled, func_types)
+  // Load the JIT module (empty result_types array for backwards compatibility)
+  let jit_module = @jit.JITModule::load(precompiled, func_types, [])
   match jit_module {
     Some(jm) => {
       // Allocate linear memory (1 page = 64KB for now)

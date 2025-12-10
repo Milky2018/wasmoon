@@ -3,6 +3,14 @@
 /// Loads and executes precompiled .cwasm files
 
 ///|
+/// Return type for JIT functions
+pub(all) enum JITReturnType {
+  None // No return value
+  Int // Integer return (i32, i64) - uses X0
+  Float // Float return (f32, f64) - uses D0, internally always f64
+} derive(Eq, Show)
+
+///|
 /// JIT-compiled function ready for execution
 pub(all) struct JITFunction {
   name : String
@@ -10,7 +18,8 @@ pub(all) struct JITFunction {
   exec_code : ExecCode
   frame_size : Int
   num_params : Int
-  has_result : Bool
+  has_result : Bool // Keep for backwards compatibility
+  result_type : JITReturnType // Actual return type info
 }
 
 ///|
@@ -21,8 +30,9 @@ pub fn JITFunction::new(
   frame_size : Int,
   num_params : Int,
   has_result : Bool,
+  result_type : JITReturnType,
 ) -> JITFunction {
-  { name, func_idx, exec_code, frame_size, num_params, has_result }
+  { name, func_idx, exec_code, frame_size, num_params, has_result, result_type }
 }
 
 ///|
@@ -94,9 +104,12 @@ pub fn JITModule::new() -> JITModule {
 
 ///|
 /// Load a precompiled module
+/// func_types: Array of (num_params, has_result) for each func_idx (for backwards compat)
+/// result_types: Array of JITReturnType for each func_idx (for float support), can be empty
 pub fn JITModule::load(
   precompiled : @cwasm.PrecompiledModule,
-  func_types : Array[(Int, Bool)], // (num_params, has_result) for each func_idx
+  func_types : Array[(Int, Bool)],
+  result_types : Array[JITReturnType],
 ) -> JITModule? {
   let jit_module = JITModule::new()
   let num_imports = precompiled.imports.length()
@@ -126,6 +139,14 @@ pub fn JITModule::load(
               .iter()
               .nth(entry.func_idx)
               .unwrap_or((0, false))
+            // Get result type if provided
+            let result_type = if entry.func_idx < result_types.length() {
+              result_types[entry.func_idx]
+            } else if has_result {
+              JITReturnType::Int // Default to Int for backwards compatibility
+            } else {
+              JITReturnType::None
+            }
             let jit_func = JITFunction::new(
               entry.name,
               entry.func_idx,
@@ -133,6 +154,7 @@ pub fn JITModule::load(
               entry.frame_size,
               num_params,
               has_result,
+              result_type,
             )
             jit_module.functions.set(entry.func_idx, jit_func)
             jit_module.by_name.set(entry.name, entry.func_idx)
@@ -231,6 +253,9 @@ pub fn JITModule::free(self : JITModule) -> Unit {
 
 ///|
 /// Call a function using the JIT context (for functions that need to call other functions)
+/// Returns Int64 for both int and float results:
+/// - For Int return type: the value is directly in Int64
+/// - For Float return type: the value is the bits of a f64 (Double) reinterpreted as Int64
 pub fn JITModule::call_with_context(
   self : JITModule,
   func : JITFunction,
@@ -240,23 +265,38 @@ pub fn JITModule::call_with_context(
     Some(ctx) => {
       // Activate context for WASI calls
       ctx.activate()
-      // Call using context-aware method based on argument count
-      if func.has_result {
-        let result = match args.length() {
-          0 => ctx.call_void_i64(func.exec_code.ptr)
-          1 => ctx.call_i64_i64(func.exec_code.ptr, args[0])
-          2 => ctx.call_i64i64_i64(func.exec_code.ptr, args[0], args[1])
-          _ => return None // Too many arguments
+      // Call using appropriate method based on return type
+      match func.result_type {
+        // Float returns - use f64 call (result is bits of double in Int64)
+        JITReturnType::Float => {
+          let result : Double = match args.length() {
+            0 => ctx.call_void_f64(func.exec_code.ptr)
+            1 => ctx.call_i64_f64(func.exec_code.ptr, args[0])
+            2 => ctx.call_i64i64_f64(func.exec_code.ptr, args[0], args[1])
+            _ => return None // Too many arguments
+          }
+          Some(result.reinterpret_as_int64())
         }
-        Some(result)
-      } else {
-        match args.length() {
-          0 => ctx.call_void_void(func.exec_code.ptr)
-          1 => ctx.call_i64_void(func.exec_code.ptr, args[0])
-          2 => ctx.call_i64i64_void(func.exec_code.ptr, args[0], args[1])
-          _ => return None // Too many arguments
+        // Integer returns - use i64 call
+        JITReturnType::Int => {
+          let result = match args.length() {
+            0 => ctx.call_void_i64(func.exec_code.ptr)
+            1 => ctx.call_i64_i64(func.exec_code.ptr, args[0])
+            2 => ctx.call_i64i64_i64(func.exec_code.ptr, args[0], args[1])
+            _ => return None // Too many arguments
+          }
+          Some(result)
         }
-        None
+        // No return - use void call
+        JITReturnType::None => {
+          match args.length() {
+            0 => ctx.call_void_void(func.exec_code.ptr)
+            1 => ctx.call_i64_void(func.exec_code.ptr, args[0])
+            2 => ctx.call_i64i64_void(func.exec_code.ptr, args[0], args[1])
+            _ => return None // Too many arguments
+          }
+          None
+        }
       }
     }
     None =>

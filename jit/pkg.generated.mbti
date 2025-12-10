@@ -272,11 +272,12 @@ pub(all) struct JITFunction {
   frame_size : Int
   num_params : Int
   has_result : Bool
+  result_type : JITReturnType
 }
 pub fn JITFunction::call(Self, Array[Int64]) -> Int64?
 pub fn JITFunction::debug_print(Self) -> Unit
 pub fn JITFunction::free(Self) -> Unit
-pub fn JITFunction::new(String, Int, ExecCode, Int, Int, Bool) -> Self
+pub fn JITFunction::new(String, Int, ExecCode, Int, Int, Bool, JITReturnType) -> Self
 
 pub(all) struct JITModule {
   functions : Map[Int, JITFunction]
@@ -288,8 +289,16 @@ pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Int64? r
 pub fn JITModule::free(Self) -> Unit
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
-pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Int, Bool)]) -> Self?
+pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Int, Bool)], Array[JITReturnType]) -> Self?
 pub fn JITModule::new() -> Self
+
+pub(all) enum JITReturnType {
+  None
+  Int
+  Float
+}
+pub impl Eq for JITReturnType
+pub impl Show for JITReturnType
 
 pub(all) struct Profiler {
   counter : CallCounter

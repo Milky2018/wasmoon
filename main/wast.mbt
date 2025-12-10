@@ -281,8 +281,10 @@ fn try_compile_jit(
       for entry in pc.functions {
         func_types.push((entry.num_params, entry.num_results > 0))
       }
+      // Build result_types array from module types
+      let result_types = build_result_types(mod_)
       // Load JIT module
-      let jit_module = @jit.JITModule::load(pc, func_types)
+      let jit_module = @jit.JITModule::load(pc, func_types, result_types)
       match jit_module {
         None => None
         Some(jm) => {
@@ -305,6 +307,33 @@ fn try_compile_jit(
       }
     }
   }
+}
+
+///|
+/// Build result_types array for JIT module loading
+/// Maps func_idx to JITReturnType based on function's return type in the module
+fn build_result_types(mod_ : @types.Module) -> Array[@jit.JITReturnType] {
+  let num_imports = count_func_imports(mod_.imports)
+  let total_funcs = num_imports + mod_.funcs.length()
+  let result_types : Array[@jit.JITReturnType] = []
+  // Pre-fill with None for all functions
+  for _ in 0..<total_funcs {
+    result_types.push(@jit.JITReturnType::None)
+  }
+  // Fill in result types for local functions
+  for i, type_idx in mod_.funcs {
+    let func_idx = num_imports + i
+    if type_idx < mod_.types.length() {
+      let func_type = mod_.types[type_idx]
+      if func_type.results.length() > 0 {
+        result_types[func_idx] = match func_type.results[0] {
+          F32 | F64 => @jit.JITReturnType::Float
+          _ => @jit.JITReturnType::Int
+        }
+      }
+    }
+  }
+  result_types
 }
 
 ///|
@@ -716,6 +745,8 @@ fn invoke_action(
 
 ///|
 /// Convert JIT result (Int64) to Value based on function's return type
+/// Note: For float types, the Int64 contains the bits of a f64 (Double),
+/// because JIT internally promotes f32 to f64.
 fn convert_jit_result(
   v : Int64,
   func_name : String,
@@ -736,8 +767,12 @@ fn convert_jit_result(
               return match func_type.results[0] {
                 I32 => @types.Value::I32(v.to_int())
                 I64 => @types.Value::I64(v)
-                F32 =>
-                  @types.Value::F32(Float::reinterpret_from_int(v.to_int()))
+                F32 => {
+                  // v contains bits of a f64 (JIT promotes f32 to f64 internally)
+                  // Convert f64 to f32 value
+                  let f64_val = v.reinterpret_as_double()
+                  @types.Value::F32(Float::from_double(f64_val))
+                }
                 F64 => @types.Value::F64(v.reinterpret_as_double())
                 _ => @types.Value::I32(v.to_int())
               }

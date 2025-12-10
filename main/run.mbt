@@ -511,8 +511,10 @@ fn run_with_jit(
       for entry in pc.functions {
         func_types.push((entry.num_params, entry.num_results > 0))
       }
+      // Build result_types array for float return support
+      let result_types = build_jit_result_types(mod_)
       // Load JIT module
-      let jit_module = @jit.JITModule::load(pc, func_types)
+      let jit_module = @jit.JITModule::load(pc, func_types, result_types)
       match jit_module {
         None => {
           println("Error: Failed to load JIT module")
@@ -681,6 +683,33 @@ fn init_data_segments(mod_ : @types.Module, mem_ptr : Int64) -> Unit {
     }
     @jit.memory_init(mem_ptr, offset, data.init) |> ignore
   }
+}
+
+///|
+/// Build result_types array for JIT module loading
+/// Maps func_idx to JITReturnType based on function's return type in the module
+fn build_jit_result_types(mod_ : @types.Module) -> Array[@jit.JITReturnType] {
+  let num_imports = count_func_imports(mod_.imports)
+  let total_funcs = num_imports + mod_.funcs.length()
+  let result_types : Array[@jit.JITReturnType] = []
+  // Pre-fill with None for all functions
+  for _ in 0..<total_funcs {
+    result_types.push(@jit.JITReturnType::None)
+  }
+  // Fill in result types for local functions
+  for i, type_idx in mod_.funcs {
+    let func_idx = num_imports + i
+    if type_idx < mod_.types.length() {
+      let func_type = mod_.types[type_idx]
+      if func_type.results.length() > 0 {
+        result_types[func_idx] = match func_type.results[0] {
+          F32 | F64 => @jit.JITReturnType::Float
+          _ => @jit.JITReturnType::Int
+        }
+      }
+    }
+  }
+  result_types
 }
 
 ///|
