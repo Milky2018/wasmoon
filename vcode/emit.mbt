@@ -1393,6 +1393,21 @@ pub fn emit_fcvt_d_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 }
 
 ///|
+/// Encode FCVT (double to single): FCVT Sd, Dn
+/// Opcode: 0x1E624000
+/// Converts double-precision float to single-precision
+pub fn emit_fcvt_s_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fcvt s\{rd}, d\{rn}")
+  // Rd in bits [4:0], Rn in bits [9:5]
+  // Encoding: 0x1E624000 = 0001 1110 0110 0010 0100 0000 0000 0000
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 64 // 0x40
+  let b2 = 98 // 0x62
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode LDR (single, unsigned offset): LDR St, [Xn, #imm]
 /// Opcode: 0xBD400000
 pub fn emit_ldr_s_imm(
@@ -1935,13 +1950,29 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_load(mc, ty, rt, rn, offset)
+      match ty {
+        F32 => {
+          // F32 load: load into scratch S16, then FCVT to destination D register
+          // This promotes f32 to f64 for consistent double-precision handling
+          emit_ldr_s_imm(mc, 16, rn, offset)
+          emit_fcvt_d_s(mc, rt, 16)
+        }
+        _ => emit_load(mc, ty, rt, rn, offset)
+      }
     }
     Store(ty, offset) => {
       // uses[0] = address (Rn), uses[1] = value (Rt)
       let rn = reg_num(inst.uses[0]) // base address
       let rt = reg_num(inst.uses[1]) // value to store
-      emit_store(mc, ty, rt, rn, offset)
+      match ty {
+        F32 => {
+          // F32 store: convert D register (f64) to S16 (f32), then store
+          // This demotes f64 back to f32 for memory storage
+          emit_fcvt_s_d(mc, 16, rt)
+          emit_str_s_imm(mc, 16, rn, offset)
+        }
+        _ => emit_store(mc, ty, rt, rn, offset)
+      }
     }
     // Narrow load operations (8/16/32-bit with sign/zero extension)
     Load8S(offset) => {
