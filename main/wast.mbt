@@ -295,11 +295,49 @@ fn try_compile_jit(
           init_data_segments(mod_, mem_ptr)
           // Set memory in JIT context
           jm.set_memory(mem_ptr, mem_size)
+          // Initialize indirect table for call_indirect
+          init_elem_segments(mod_, jm)
           Some((jm, mem_ptr))
         }
       }
     }
   }
+}
+
+///|
+/// Initialize element segments for call_indirect support
+fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
+  // Calculate total table size from all tables
+  let mut table_size = 0
+  for table in mod_.tables {
+    let min_size = table.type_.limits.min
+    table_size = table_size + min_size
+  }
+  if table_size == 0 {
+    return // No tables, nothing to do
+  }
+  // Collect elem initializers: (table_idx, func_idx)
+  let elem_init : Array[(Int, Int)] = []
+  for elem in mod_.elems {
+    // Only process active element segments
+    if elem.mode is @types.ElemMode::Active(_table_idx, offset_expr) {
+      let offset = match offset_expr {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      for i, init_expr in elem.init {
+        // Extract function index from init expression
+        let func_idx = match init_expr {
+          [RefFunc(idx)] => idx
+          [I32Const(idx)] => idx
+          _ => continue
+        }
+        elem_init.push((offset + i, func_idx))
+      }
+    }
+  }
+  // Initialize the indirect table
+  jm.init_indirect_table(table_size, elem_init)
 }
 
 ///|

@@ -148,6 +148,11 @@ pub enum Opcode {
   Rotl // Rotate left
   Rotr // Rotate right
 
+  // Bit counting operations
+  Clz // Count leading zeros
+  Ctz // Count trailing zeros
+  Popcnt // Population count (number of 1 bits)
+
   // Comparisons (return i32 0 or 1)
   Icmp(IntCC) // Integer compare
 

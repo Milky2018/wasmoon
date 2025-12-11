@@ -323,6 +323,14 @@ pub enum VCodeOpcode {
   FPromote // f32 -> f64
   FDemote // f64 -> f32
   Bitcast // Reinterpret bits between int/float of same size
+  // Conditional select
+  // Select: Xd = cond ? Xn : Xm
+  // Uses: [cond, true_val, false_val], Defs: [result]
+  Select
+  // Bit counting operations
+  Clz // Count leading zeros
+  Ctz // Count trailing zeros
+  Popcnt // Population count (number of 1 bits)
   // Special
   Nop
   // Memory bounds check (for WASM linear memory safety)
@@ -415,6 +423,10 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FPromote => "fpromote"
     FDemote => "fdemote"
     Bitcast => "bitcast"
+    Select => "select"
+    Clz => "clz"
+    Ctz => "ctz"
+    Popcnt => "popcnt"
     Nop => "nop"
     BoundsCheck(offset, size) => "bounds_check +\{offset}, \{size}"
     // AArch64-specific

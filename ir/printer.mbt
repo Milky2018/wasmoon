@@ -79,6 +79,11 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
     Rotl => "rotl \{ops}"
     Rotr => "rotr \{ops}"
 
+    // Bit counting
+    Clz => "clz \{ops}"
+    Ctz => "ctz \{ops}"
+    Popcnt => "popcnt \{ops}"
+
     // Comparisons
     Icmp(cc) => "icmp.\{format_intcc(cc)} \{ops}"
 

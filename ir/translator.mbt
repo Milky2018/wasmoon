@@ -285,6 +285,11 @@ fn Translator::translate_instruction(
     I32Rotl => self.translate_binary_i32(fn(b, a, v) { b.rotl(a, v) })
     I32Rotr => self.translate_binary_i32(fn(b, a, v) { b.rotr(a, v) })
 
+    // i32 bit counting
+    I32Clz => self.translate_unary_i32(fn(b, a) { b.clz(a) })
+    I32Ctz => self.translate_unary_i32(fn(b, a) { b.ctz(a) })
+    I32Popcnt => self.translate_unary_i32(fn(b, a) { b.popcnt(a) })
+
     // i32 comparisons
     I32Eqz => {
       let a = self.pop()
@@ -319,6 +324,11 @@ fn Translator::translate_instruction(
     I64ShrU => self.translate_binary_i64(fn(b, a, v) { b.ushr(a, v) })
     I64Rotl => self.translate_binary_i64(fn(b, a, v) { b.rotl(a, v) })
     I64Rotr => self.translate_binary_i64(fn(b, a, v) { b.rotr(a, v) })
+
+    // i64 bit counting
+    I64Clz => self.translate_unary_i64(fn(b, a) { b.clz(a) })
+    I64Ctz => self.translate_unary_i64(fn(b, a) { b.ctz(a) })
+    I64Popcnt => self.translate_unary_i64(fn(b, a) { b.popcnt(a) })
 
     // i64 comparisons
     I64Eqz => {
@@ -682,6 +692,28 @@ fn Translator::translate_unary_f32(
 ///|
 /// Helper for unary f64 operations
 fn Translator::translate_unary_f64(
+  self : Translator,
+  op : (IRBuilder, Value) -> Value,
+) -> Unit {
+  let a = self.pop()
+  let result = op(self.builder, a)
+  self.push(result)
+}
+
+///|
+/// Helper for unary i32 operations
+fn Translator::translate_unary_i32(
+  self : Translator,
+  op : (IRBuilder, Value) -> Value,
+) -> Unit {
+  let a = self.pop()
+  let result = op(self.builder, a)
+  self.push(result)
+}
+
+///|
+/// Helper for unary i64 operations
+fn Translator::translate_unary_i64(
   self : Translator,
   op : (IRBuilder, Value) -> Value,
 ) -> Unit {
@@ -1204,6 +1236,7 @@ fn Translator::translate_br_table(
 
     // br_table is a terminator, code after it is unreachable
     // Don't switch back to original - leave current_block as the last intermediate
+    self.is_unreachable = true
   }
 }
 

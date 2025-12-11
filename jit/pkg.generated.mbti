@@ -241,6 +241,7 @@ pub fn JITModule::free(Self) -> Unit
 pub fn JITModule::from_single_function(Array[Int], String, Int, Array[@types.ValueType], Int64) -> Self?
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
+pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int)]) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Int, Array[@types.ValueType])]) -> Self?
 pub fn JITModule::new() -> Self
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit

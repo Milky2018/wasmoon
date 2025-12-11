@@ -117,6 +117,14 @@ fn validate_instruction(
         )
       }
 
+    // Bit counting operations (unary)
+    Clz | Ctz | Popcnt =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "Bit counting op expects 1 operand, got \{inst.operands.length()}",
+        )
+      }
+
     // Integer comparisons
     Icmp(_) => {
       if inst.operands.length() != 2 {

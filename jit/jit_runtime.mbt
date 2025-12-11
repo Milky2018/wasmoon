@@ -267,3 +267,24 @@ pub fn JITModule::set_memory(
     None => ()
   }
 }
+
+///|
+/// Initialize indirect table for call_indirect.
+/// table_size: number of table elements
+/// elem_init: array of (table_idx, func_idx) pairs
+pub fn JITModule::init_indirect_table(
+  self : JITModule,
+  table_size : Int,
+  elem_init : Array[(Int, Int)],
+) -> Unit {
+  match self.context {
+    Some(ctx) =>
+      if ctx.alloc_indirect_table(table_size) {
+        for entry in elem_init {
+          let (table_idx, func_idx) = entry
+          ctx.set_indirect(table_idx, func_idx)
+        }
+      }
+    None => ()
+  }
+}
