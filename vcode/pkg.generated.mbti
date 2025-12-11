@@ -718,6 +718,7 @@ pub(all) struct VCodeFunction {
   result_types : Array[@ir.Type]
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
+  mut num_spill_slots : Int
 }
 pub fn VCodeFunction::add_param(Self, RegClass) -> VReg
 pub fn VCodeFunction::add_result(Self, RegClass) -> Unit

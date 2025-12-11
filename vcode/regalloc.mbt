@@ -881,6 +881,7 @@ pub fn apply_allocation(
 ) -> VCodeFunction {
   let new_func = VCodeFunction::new(func.name)
   new_func.next_vreg_id = func.next_vreg_id
+  new_func.num_spill_slots = alloc.num_spill_slots
 
   // Convert function parameters
   for param in func.params {

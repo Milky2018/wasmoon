@@ -1632,6 +1632,7 @@ fn emit_prologue(
   clobbered : Array[Int],
   params : Array[VReg],
   needs_extra_results : Bool,
+  num_spill_slots : Int,
 ) -> Int {
   // We always clobber X20, X21, X22 for func_table, memory_base, memory_size
   // When needs_extra_results, we also clobber X23 for the extra results buffer pointer
@@ -1647,7 +1648,10 @@ fn emit_prologue(
   // Round up to even number for STP (store pairs)
   let num_regs = all_to_save.length()
   let num_pairs = (num_regs + 1) / 2
-  let frame_size = num_pairs * 16 // 16 bytes per pair
+  let clobbered_size = num_pairs * 16 // 16 bytes per pair
+  // Calculate spill slots size (8 bytes each, aligned to 16)
+  let spill_size = (num_spill_slots * 8 + 15) / 16 * 16
+  let frame_size = clobbered_size + spill_size
   // Allocate stack frame first using SUB
   emit_sub_imm(mc, 31, 31, frame_size)
   // Save registers using STP with signed offset
@@ -1824,18 +1828,26 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
   let needs_extra_results = func.needs_extra_results_ptr()
   // Collect callee-saved registers that this function clobbers
   let clobbered = collect_used_callee_saved(func, needs_extra_results)
+  // Calculate clobbered_size for spill offset calculation
+  let num_base_regs = if needs_extra_results { 4 } else { 3 } // X20-X22 or X20-X23
+  let num_regs = num_base_regs + clobbered.length()
+  let num_pairs = (num_regs + 1) / 2
+  let clobbered_size = num_pairs * 16
   // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
   let frame_size = emit_prologue(
     mc,
     clobbered,
     func.params,
     needs_extra_results,
+    func.num_spill_slots,
   )
   // Emit function body
+  // Spill slots start after the saved registers area
+  let spill_base_offset = clobbered_size
   for block in func.blocks {
     mc.define_label(block.id)
     for inst in block.insts {
-      emit_instruction(mc, inst)
+      emit_instruction(mc, inst, spill_base_offset)
     }
     match block.terminator {
       Some(term) =>
@@ -1855,7 +1867,11 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
 }
 
 ///|
-fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
+fn emit_instruction(
+  mc : MachineCode,
+  inst : VCodeInst,
+  spill_base_offset : Int,
+) -> Unit {
   match inst.opcode {
     Add => {
       let rd = wreg_num(inst.defs[0])
@@ -2226,16 +2242,18 @@ fn emit_instruction(mc : MachineCode, inst : VCodeInst) -> Unit {
       }
     }
     StackLoad(offset) => {
-      // Load from [SP + offset] into the def register
+      // Load from [SP + spill_base_offset + offset] into the def register
       // Uses SP (X31) as base, loads 64-bit value
+      // spill_base_offset accounts for saved registers area
       let rd = wreg_num(inst.defs[0])
-      emit_ldr_imm(mc, rd, 31, offset) // LDR Xd, [SP, #offset]
+      emit_ldr_imm(mc, rd, 31, spill_base_offset + offset) // LDR Xd, [SP, #offset]
     }
     StackStore(offset) => {
-      // Store the use register to [SP + offset]
+      // Store the use register to [SP + spill_base_offset + offset]
       // Uses SP (X31) as base, stores 64-bit value
+      // spill_base_offset accounts for saved registers area
       let rt = reg_num(inst.uses[0])
-      emit_str_imm(mc, rt, 31, offset) // STR Xt, [SP, #offset]
+      emit_str_imm(mc, rt, 31, spill_base_offset + offset) // STR Xt, [SP, #offset]
     }
   }
 }

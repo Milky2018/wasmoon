@@ -583,6 +583,7 @@ pub(all) struct VCodeFunction {
   result_types : Array[@ir.Type] // Full return type info for multi-value returns
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
+  mut num_spill_slots : Int // Number of spill slots used by register allocator
 }
 
 ///|
@@ -594,6 +595,7 @@ pub fn VCodeFunction::new(name : String) -> VCodeFunction {
     result_types: [],
     blocks: [],
     next_vreg_id: 0,
+    num_spill_slots: 0,
   }
 }
 
