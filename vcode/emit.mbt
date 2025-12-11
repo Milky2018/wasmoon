@@ -3186,12 +3186,36 @@ fn cmp_kind_to_cond(kind : CmpKind) -> Int {
 }
 
 ///|
+/// Map floating-point comparison kind to AArch64 condition code.
+///
+/// For floating-point comparisons, we need "ordered" semantics where
+/// any comparison involving NaN returns false (0).
+///
+/// After FCMP, the NZCV flags are set as:
+/// - Ordered less than:    N=1, Z=0, C=0, V=0
+/// - Ordered equal:        N=0, Z=1, C=1, V=0
+/// - Ordered greater than: N=0, Z=0, C=1, V=0
+/// - Unordered (NaN):      N=0, Z=0, C=1, V=1
+///
+/// Condition codes for ordered floating-point comparisons:
+/// - Lt: MI (N=1) - true only when N is set (ordered less than)
+/// - Le: LS (C=0|Z=1) - true when C is clear OR Z is set
+/// - Gt: GT (Z=0 & N=V) - works correctly for floats
+/// - Ge: GE (N=V) - works correctly for floats
+/// - Eq: EQ (Z=1) - works correctly
+/// - Ne: NE (Z=0) - but need VC for ordered ne, using NE gives unordered ne
+///
+/// Note: For NaN, NZCV=0011, so:
+/// - MI: N=0, false ✓
+/// - LS: C=1, Z=0, so C=0|Z=1 = false ✓
+/// - GT: Z=0 & N=V = 0 & (0=1) = false ✓
+/// - GE: N=V = 0=1 = false ✓
 fn fcmp_kind_to_cond(kind : FCmpKind) -> Int {
   match kind {
     FCmpKind::Eq => EQ.to_int()
     FCmpKind::Ne => NE.to_int()
-    FCmpKind::Lt => LT.to_int()
-    FCmpKind::Le => LE.to_int()
+    FCmpKind::Lt => MI.to_int() // Use MI for ordered less-than
+    FCmpKind::Le => LS.to_int() // Use LS for ordered less-or-equal
     FCmpKind::Gt => GT.to_int()
     FCmpKind::Ge => GE.to_int()
   }
