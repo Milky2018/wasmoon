@@ -528,10 +528,7 @@ fn run_with_jit(
           // Initialize data segments
           init_data_segments(mod_, mem_ptr)
           // Set memory in JIT context
-          match jm.context {
-            Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
-            None => ()
-          }
+          jm.set_memory(mem_ptr, mem_size)
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {

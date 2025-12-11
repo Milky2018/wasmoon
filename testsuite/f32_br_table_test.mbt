@@ -167,21 +167,33 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
     ),
   )
   let mc = @vcode.emit_function(allocated_func)
-  let ctx = @jit.JITContext::new(1)
-  guard ctx is Some(jit_ctx) else { return }
-  defer jit_ctx.free()
-  let mem_size = 4096L
-  let mem_ptr = @jit.alloc_memory(mem_size)
-  guard mem_ptr != 0L else { return }
-  defer @jit.free_memory(mem_ptr)
-  jit_ctx.set_memory(mem_ptr, mem_size)
   let code_bytes = mc.get_bytes()
-  let exec_code = @jit.ExecCode::new(code_bytes)
-  guard exec_code is Some(exec)
-  defer exec.free()
-  inspect(jit_ctx.call_f64_1(exec.ptr, 0), content="2")
-  inspect(jit_ctx.call_f64_1(exec.ptr, 1), content="3")
-  inspect(jit_ctx.call_f64_1(exec.ptr, 2), content="0")
+  let jit_module = @jit.JITModule::from_single_function(
+    code_bytes,
+    "test",
+    1, // num_params
+    [@types.ValueType::F32], // result_types
+    4096L, // mem_size
+  )
+  guard jit_module is Some(jm) else { return }
+  defer jm.free()
+  let func = jm.get_func_by_name("test")
+  guard func is Some(f) else { return }
+  let result0 = jm.call_with_context(f, [0L])
+  inspect(
+    @types.Value::F32(Float::from_double(result0[0].reinterpret_as_double())),
+    content="F32(2)",
+  )
+  let result1 = jm.call_with_context(f, [1L])
+  inspect(
+    @types.Value::F32(Float::from_double(result1[0].reinterpret_as_double())),
+    content="F32(3)",
+  )
+  let result2 = jm.call_with_context(f, [2L])
+  inspect(
+    @types.Value::F32(Float::from_double(result2[0].reinterpret_as_double())),
+    content="F32(0)",
+  )
 }
 
 ///|
@@ -242,20 +254,36 @@ test "A critical bug as in data/f32_br_2locals" {
   let vcode = @vcode.lower_function(ir_func)
   let allocated_func = @vcode.allocate_registers_aarch64(vcode)
   let mc = @vcode.emit_function(allocated_func)
-  let ctx = @jit.JITContext::new(1)
-  guard ctx is Some(jit_ctx) else { return }
-  defer jit_ctx.free()
-  let mem_size = 4096L
-  let mem_ptr = @jit.alloc_memory(mem_size)
-  guard mem_ptr != 0L else { return }
-  defer @jit.free_memory(mem_ptr)
-  jit_ctx.set_memory(mem_ptr, mem_size)
   let code_bytes = mc.get_bytes()
-  let exec_code = @jit.ExecCode::new(code_bytes)
-  guard exec_code is Some(exec)
-  defer exec.free()
-  inspect(jit_ctx.call_f64_1(exec.ptr, 0), content="10")
-  inspect(jit_ctx.call_f64_1(exec.ptr, 1), content="10")
-  inspect(jit_ctx.call_f64_1(exec.ptr, 2), content="10")
-  inspect(jit_ctx.call_f64_1(exec.ptr, 3), content="0")
+  let jit_module = @jit.JITModule::from_single_function(
+    code_bytes,
+    "test",
+    1, // num_params
+    [@types.ValueType::F32], // result_types
+    4096L, // mem_size
+  )
+  guard jit_module is Some(jm) else { return }
+  defer jm.free()
+  let func = jm.get_func_by_name("test")
+  guard func is Some(f) else { return }
+  let result0 = jm.call_with_context(f, [0L])
+  inspect(
+    @types.Value::F32(Float::from_double(result0[0].reinterpret_as_double())),
+    content="F32(10)",
+  )
+  let result1 = jm.call_with_context(f, [1L])
+  inspect(
+    @types.Value::F32(Float::from_double(result1[0].reinterpret_as_double())),
+    content="F32(10)",
+  )
+  let result2 = jm.call_with_context(f, [2L])
+  inspect(
+    @types.Value::F32(Float::from_double(result2[0].reinterpret_as_double())),
+    content="F32(10)",
+  )
+  let result3 = jm.call_with_context(f, [3L])
+  inspect(
+    @types.Value::F32(Float::from_double(result3[0].reinterpret_as_double())),
+    content="F32(0)",
+  )
 }

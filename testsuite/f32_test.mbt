@@ -70,23 +70,41 @@ test "f32 add" {
     ),
   )
   let mc = @vcode.emit_function(allocated_func)
-  let ctx = @jit.JITContext::new(1)
-  guard ctx is Some(jit_ctx) else { return }
-  defer jit_ctx.free()
-  let mem_size = 4096L
-  let mem_ptr = @jit.alloc_memory(mem_size)
-  guard mem_ptr != 0L else { return }
-  defer @jit.free_memory(mem_ptr)
-  jit_ctx.set_memory(mem_ptr, mem_size)
   let code_bytes = mc.get_bytes()
-  let exec_code = @jit.ExecCode::new(code_bytes)
-  guard exec_code is Some(exec)
-  defer exec.free()
+  let jit_module = @jit.JITModule::from_single_function(
+    code_bytes,
+    "test",
+    1, // num_params
+    [@types.ValueType::F32], // result_types
+    4096L, // mem_size
+  )
+  guard jit_module is Some(jm) else { return }
+  defer jm.free()
+  let func = jm.get_func_by_name("test")
+  guard func is Some(f) else { return }
   // Pass Float values (f32) since the WASM function takes f32 parameter
   // JITArg for Float reinterprets the f32 bit pattern and passes it correctly
-  inspect(jit_ctx.call_f64_1(exec.ptr, (0.0 : Float)), content="15.5")
-  inspect(jit_ctx.call_f64_1(exec.ptr, (1.0 : Float)), content="16.5")
-  inspect(jit_ctx.call_f64_1(exec.ptr, (2.0 : Float)), content="17.5")
+  let result0 = jm.call_with_context(f, [
+    (0.0 : Float).reinterpret_as_int().to_int64(),
+  ])
+  inspect(
+    @types.Value::F32(Float::from_double(result0[0].reinterpret_as_double())),
+    content="F32(15.5)",
+  )
+  let result1 = jm.call_with_context(f, [
+    (1.0 : Float).reinterpret_as_int().to_int64(),
+  ])
+  inspect(
+    @types.Value::F32(Float::from_double(result1[0].reinterpret_as_double())),
+    content="F32(16.5)",
+  )
+  let result2 = jm.call_with_context(f, [
+    (2.0 : Float).reinterpret_as_int().to_int64(),
+  ])
+  inspect(
+    @types.Value::F32(Float::from_double(result2[0].reinterpret_as_double())),
+    content="F32(17.5)",
+  )
 }
 
 ///|
@@ -161,19 +179,31 @@ test "f64 add" {
     ),
   )
   let mc = @vcode.emit_function(allocated_func)
-  let ctx = @jit.JITContext::new(1)
-  guard ctx is Some(jit_ctx) else { return }
-  defer jit_ctx.free()
-  let mem_size = 4096L
-  let mem_ptr = @jit.alloc_memory(mem_size)
-  guard mem_ptr != 0L else { return }
-  defer @jit.free_memory(mem_ptr)
-  jit_ctx.set_memory(mem_ptr, mem_size)
   let code_bytes = mc.get_bytes()
-  let exec_code = @jit.ExecCode::new(code_bytes)
-  guard exec_code is Some(exec)
-  defer exec.free()
-  inspect(jit_ctx.call_f64_1(exec.ptr, (0.0 : Double)), content="15.5")
-  inspect(jit_ctx.call_f64_1(exec.ptr, (1.0 : Double)), content="16.5")
-  inspect(jit_ctx.call_f64_1(exec.ptr, (2.0 : Double)), content="17.5")
+  let jit_module = @jit.JITModule::from_single_function(
+    code_bytes,
+    "test",
+    1, // num_params
+    [@types.ValueType::F64], // result_types
+    4096L, // mem_size
+  )
+  guard jit_module is Some(jm) else { return }
+  defer jm.free()
+  let func = jm.get_func_by_name("test")
+  guard func is Some(f) else { return }
+  let result0 = jm.call_with_context(f, [0.0.reinterpret_as_int64()])
+  inspect(
+    @types.Value::F64(result0[0].reinterpret_as_double()),
+    content="F64(15.5)",
+  )
+  let result1 = jm.call_with_context(f, [1.0.reinterpret_as_int64()])
+  inspect(
+    @types.Value::F64(result1[0].reinterpret_as_double()),
+    content="F64(16.5)",
+  )
+  let result2 = jm.call_with_context(f, [2.0.reinterpret_as_int64()])
+  inspect(
+    @types.Value::F64(result2[0].reinterpret_as_double()),
+    content="F64(17.5)",
+  )
 }

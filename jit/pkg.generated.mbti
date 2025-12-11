@@ -61,6 +61,7 @@ pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 // Errors
 pub suberror JITTrap String
+pub impl Show for JITTrap
 
 // Types and methods
 pub(all) struct Breakpoint {
@@ -224,29 +225,6 @@ pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
 pub fn HotThreshold::default() -> Self
 
-pub(all) struct JITContext {
-  ctx_ptr : Int64
-  func_table_ptr : Int64
-}
-pub fn JITContext::activate(Self) -> Unit
-pub fn JITContext::call_f32_0(Self, Int64) -> Float raise JITTrap
-pub fn[T : JITArg] JITContext::call_f32_1(Self, Int64, T) -> Float raise JITTrap
-pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_f32_2(Self, Int64, T1, T2) -> Float raise JITTrap
-pub fn JITContext::call_f64_0(Self, Int64) -> Double raise JITTrap
-pub fn[T : JITArg] JITContext::call_f64_1(Self, Int64, T) -> Double raise JITTrap
-pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_f64_2(Self, Int64, T1, T2) -> Double raise JITTrap
-pub fn JITContext::call_i64_0(Self, Int64) -> Int64 raise JITTrap
-pub fn[T : JITArg] JITContext::call_i64_1(Self, Int64, T) -> Int64 raise JITTrap
-pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_i64_2(Self, Int64, T1, T2) -> Int64 raise JITTrap
-pub fn JITContext::call_multi_return(Self, Int64, Array[Int64], Array[Int64], Array[@types.ValueType]) -> Unit raise JITTrap
-pub fn JITContext::call_void_0(Self, Int64) -> Unit raise JITTrap
-pub fn[T : JITArg] JITContext::call_void_1(Self, Int64, T) -> Unit raise JITTrap
-pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_void_2(Self, Int64, T1, T2) -> Unit raise JITTrap
-pub fn JITContext::free(Self) -> Unit
-pub fn JITContext::new(Int) -> Self?
-pub fn JITContext::set_func(Self, Int, Int64) -> Unit
-pub fn JITContext::set_memory(Self, Int64, Int64) -> Unit
-
 pub(all) struct JITEngine {
   strategy : CompilationStrategy
   runtime : @vcode.JITRuntime
@@ -280,18 +258,20 @@ pub fn JITFunction::debug_print(Self) -> Unit
 pub fn JITFunction::free(Self) -> Unit
 pub fn JITFunction::new(String, Int, ExecCode, Int, Int, Array[@types.ValueType]) -> Self
 
-pub(all) struct JITModule {
+pub struct JITModule {
   functions : Map[Int, JITFunction]
   by_name : Map[String, Int]
-  mut context : JITContext?
   mut num_imports : Int
+  // private fields
 }
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn JITModule::free(Self) -> Unit
+pub fn JITModule::from_single_function(Array[Int], String, Int, Array[@types.ValueType], Int64) -> Self?
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Int, Array[@types.ValueType])]) -> Self?
 pub fn JITModule::new() -> Self
+pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
 
 pub(all) struct Profiler {
   counter : CallCounter

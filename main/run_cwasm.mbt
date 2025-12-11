@@ -56,10 +56,7 @@ fn run_cwasm(
         init_simple_loop_data(mem_ptr)
       }
       // Set memory in JIT context
-      match jm.context {
-        Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
-        None => ()
-      }
+      jm.set_memory(mem_ptr, mem_size)
       // Determine which function to call
       let func_name = match invoke {
         Some(name) => name

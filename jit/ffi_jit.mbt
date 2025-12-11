@@ -397,14 +397,14 @@ pub impl JITArg for Double with to_jit_arg(self) {
 
 ///|
 /// JIT execution context
-pub(all) struct JITContext {
+priv struct JITContext {
   ctx_ptr : Int64
   func_table_ptr : Int64
 }
 
 ///|
 /// Create a new JIT context
-pub fn JITContext::new(total_funcs : Int) -> JITContext? {
+fn JITContext::new(total_funcs : Int) -> JITContext? {
   let ctx_ptr = c_jit_alloc_context(total_funcs)
   if ctx_ptr == 0L {
     return None
@@ -415,17 +415,13 @@ pub fn JITContext::new(total_funcs : Int) -> JITContext? {
 
 ///|
 /// Set a function pointer in the context
-pub fn JITContext::set_func(
-  self : JITContext,
-  idx : Int,
-  func_ptr : Int64,
-) -> Unit {
+fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
   c_jit_ctx_set_func(self.ctx_ptr, idx, func_ptr)
 }
 
 ///|
 /// Set memory in the context
-pub fn JITContext::set_memory(
+fn JITContext::set_memory(
   self : JITContext,
   mem_ptr : Int64,
   mem_size : Int64,
@@ -461,7 +457,7 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
 
 ///|
 /// Activate this context for WASI calls
-pub fn JITContext::activate(self : JITContext) -> Unit {
+fn JITContext::activate(self : JITContext) -> Unit {
   c_jit_set_context(self.ctx_ptr)
 }
 
@@ -537,44 +533,6 @@ fn JITContext::call_i64i64_void(
 }
 
 ///|
-fn JITContext::call_void_f32(
-  self : JITContext,
-  func_ptr : Int64,
-) -> Float raise JITTrap {
-  let result = c_jit_call_ctx_void_f32(func_ptr, self.func_table_ptr)
-  check_trap()
-  result
-}
-
-///|
-fn JITContext::call_i64_f32(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : Int64,
-) -> Float raise JITTrap {
-  let result = c_jit_call_ctx_i64_f32(func_ptr, self.func_table_ptr, arg0)
-  check_trap()
-  result
-}
-
-///|
-fn JITContext::call_i64i64_f32(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : Int64,
-  arg1 : Int64,
-) -> Float raise JITTrap {
-  let result = c_jit_call_ctx_i64i64_f32(
-    func_ptr,
-    self.func_table_ptr,
-    arg0,
-    arg1,
-  )
-  check_trap()
-  result
-}
-
-///|
 fn JITContext::call_void_f64(
   self : JITContext,
   func_ptr : Int64,
@@ -612,132 +570,9 @@ fn JITContext::call_i64i64_f64(
   result
 }
 
-// ============ Generic Call Functions ============
-// These use the JITArg trait to accept any convertible argument type
-
-///|
-/// Call with 0 args, return i64
-pub fn JITContext::call_i64_0(
-  self : JITContext,
-  func_ptr : Int64,
-) -> Int64 raise JITTrap {
-  self.call_void_i64(func_ptr)
-}
-
-///|
-/// Call with 1 arg, return i64
-pub fn[T : JITArg] JITContext::call_i64_1(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : T,
-) -> Int64 raise JITTrap {
-  self.call_i64_i64(func_ptr, arg0.to_jit_arg())
-}
-
-///|
-/// Call with 2 args, return i64
-pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_i64_2(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : T1,
-  arg1 : T2,
-) -> Int64 raise JITTrap {
-  self.call_i64i64_i64(func_ptr, arg0.to_jit_arg(), arg1.to_jit_arg())
-}
-
-///|
-/// Call with 0 args, return f32
-pub fn JITContext::call_f32_0(
-  self : JITContext,
-  func_ptr : Int64,
-) -> Float raise JITTrap {
-  self.call_void_f32(func_ptr)
-}
-
-///|
-/// Call with 1 arg, return f32
-pub fn[T : JITArg] JITContext::call_f32_1(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : T,
-) -> Float raise JITTrap {
-  self.call_i64_f32(func_ptr, arg0.to_jit_arg())
-}
-
-///|
-/// Call with 2 args, return f32
-pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_f32_2(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : T1,
-  arg1 : T2,
-) -> Float raise JITTrap {
-  self.call_i64i64_f32(func_ptr, arg0.to_jit_arg(), arg1.to_jit_arg())
-}
-
-///|
-/// Call with 0 args, return f64
-pub fn JITContext::call_f64_0(
-  self : JITContext,
-  func_ptr : Int64,
-) -> Double raise JITTrap {
-  self.call_void_f64(func_ptr)
-}
-
-///|
-/// Call with 1 arg, return f64
-pub fn[T : JITArg] JITContext::call_f64_1(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : T,
-) -> Double raise JITTrap {
-  self.call_i64_f64(func_ptr, arg0.to_jit_arg())
-}
-
-///|
-/// Call with 2 args, return f64
-pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_f64_2(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : T1,
-  arg1 : T2,
-) -> Double raise JITTrap {
-  self.call_i64i64_f64(func_ptr, arg0.to_jit_arg(), arg1.to_jit_arg())
-}
-
-///|
-/// Call with 0 args, no return
-pub fn JITContext::call_void_0(
-  self : JITContext,
-  func_ptr : Int64,
-) -> Unit raise JITTrap {
-  self.call_void_void(func_ptr)
-}
-
-///|
-/// Call with 1 arg, no return
-pub fn[T : JITArg] JITContext::call_void_1(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : T,
-) -> Unit raise JITTrap {
-  self.call_i64_void(func_ptr, arg0.to_jit_arg())
-}
-
-///|
-/// Call with 2 args, no return
-pub fn[T1 : JITArg, T2 : JITArg] JITContext::call_void_2(
-  self : JITContext,
-  func_ptr : Int64,
-  arg0 : T1,
-  arg1 : T2,
-) -> Unit raise JITTrap {
-  self.call_i64i64_void(func_ptr, arg0.to_jit_arg(), arg1.to_jit_arg())
-}
-
 ///|
 /// Free the context
-pub fn JITContext::free(self : JITContext) -> Unit {
+fn JITContext::free(self : JITContext) -> Unit {
   c_jit_free_context(self.ctx_ptr)
 }
 
@@ -1033,7 +868,7 @@ extern "c" fn c_jit_call_multi_return(
 ///|
 /// Call a JIT function with multiple return values
 /// Returns 0 on success, trap code on error
-pub fn JITContext::call_multi_return(
+fn JITContext::call_multi_return(
   self : JITContext,
   func_ptr : Int64,
   args : Array[Int64],

@@ -294,10 +294,7 @@ fn try_compile_jit(
           // Initialize data segments
           init_data_segments(mod_, mem_ptr)
           // Set memory in JIT context
-          match jm.context {
-            Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
-            None => ()
-          }
+          jm.set_memory(mem_ptr, mem_size)
           Some((jm, mem_ptr))
         }
       }
@@ -659,12 +656,7 @@ fn invoke_action(
         None => ctx.current_jit
       }
       match jit_info {
-        Some((jm, _mem_ptr, _mod)) => {
-          // Activate JIT context
-          match jm.context {
-            Some(jit_ctx) => jit_ctx.activate()
-            None => ()
-          }
+        Some((jm, _mem_ptr, _mod)) =>
           // Find and call JIT function
           match jm.get_func_by_name(func_name) {
             Some(f) => {
@@ -705,7 +697,6 @@ fn invoke_action(
               }
             }
           }
-        }
         None => {
           // No JIT available, use interpreter
           let runtime_args = args.map(wast_value_to_runtime)

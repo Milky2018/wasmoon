@@ -83,10 +83,10 @@ pub fn JITFunction::debug_print(self : JITFunction) -> Unit {
 
 ///|
 /// Loaded precompiled module with executable functions
-pub(all) struct JITModule {
+pub struct JITModule {
   functions : Map[Int, JITFunction]
   by_name : Map[String, Int]
-  mut context : JITContext?
+  priv mut context : JITContext?
   mut num_imports : Int
 }
 
@@ -162,6 +162,56 @@ pub fn JITModule::load(
     }
   }
   Some(jit_module)
+}
+
+///|
+/// Create a JITModule from a single compiled function (for testing)
+/// This is a convenience method for unit tests that compile a single function
+pub fn JITModule::from_single_function(
+  code_bytes : Array[Int],
+  func_name : String,
+  num_params : Int,
+  result_types : Array[@types.ValueType],
+  mem_size : Int64,
+) -> JITModule? {
+  // Create context with 1 function slot
+  let context = JITContext::new(1)
+  match context {
+    None => return None
+    Some(ctx) => {
+      // Allocate memory
+      let mem_ptr = alloc_memory(mem_size)
+      if mem_ptr == 0L {
+        ctx.free()
+        return None
+      }
+      ctx.set_memory(mem_ptr, mem_size)
+      // Create executable code
+      let exec_code = ExecCode::new(code_bytes)
+      match exec_code {
+        None => {
+          free_memory(mem_ptr)
+          ctx.free()
+          return None
+        }
+        Some(ec) => {
+          // Set function in table
+          ctx.set_func(0, ec.ptr)
+          // Create JIT function
+          let jit_func = JITFunction::new(
+            func_name, 0, ec, 0, // frame_size not tracked here
+             num_params, result_types,
+          )
+          // Create module
+          let jit_module = JITModule::new()
+          jit_module.functions.set(0, jit_func)
+          jit_module.by_name.set(func_name, 0)
+          jit_module.context = Some(ctx)
+          Some(jit_module)
+        }
+      }
+    }
+  }
 }
 
 ///|
@@ -299,5 +349,18 @@ pub fn JITModule::call_with_context(
         Some(v) => [v]
         None => []
       }
+  }
+}
+
+///|
+/// Set memory for the JIT context
+pub fn JITModule::set_memory(
+  self : JITModule,
+  mem_ptr : Int64,
+  mem_size : Int64,
+) -> Unit {
+  match self.context {
+    Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
+    None => ()
   }
 }
