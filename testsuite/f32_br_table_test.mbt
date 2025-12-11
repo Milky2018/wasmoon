@@ -1,5 +1,5 @@
 ///|
-test "A critical bug as in data/f32_br_2locals" {
+test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   let source =
     #|(module
     #|  (memory 1)
@@ -182,4 +182,80 @@ test "A critical bug as in data/f32_br_2locals" {
   inspect(jit_ctx.call_f64_1(exec.ptr, 0), content="2")
   inspect(jit_ctx.call_f64_1(exec.ptr, 1), content="3")
   inspect(jit_ctx.call_f64_1(exec.ptr, 2), content="0")
+}
+
+///|
+test "A critical bug as in data/f32_br_2locals" {
+  let source =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "test") (param i32) (result f32)
+    #|    (local f32 f32)
+    #|    (local.set 1 (f32.const 10.0))
+    #|    (block $3
+    #|      (block $2
+    #|        (block $1
+    #|          (block $0
+    #|            (br_table $0 $1 $2 $3 (local.get 0))
+    #|          )
+    #|          ;; case 0
+    #|          (f32.store (i32.const 0) (local.get 1))
+    #|          (local.set 2 (f32.load (i32.const 0)))
+    #|          (br $3)
+    #|        )
+    #|        ;; case 1
+    #|        (f32.store (i32.const 0) (local.get 1))
+    #|        (local.set 2 (f32.load (i32.const 0)))
+    #|        (br $3)
+    #|      )
+    #|      ;; case 2
+    #|      (f32.store (i32.const 0) (local.get 1))
+    #|      (local.set 2 (f32.load (i32.const 0)))
+    #|      (br $3)
+    #|    )
+    #|    ;; case 3 / default
+    #|    (local.get 2)
+    #|  )
+    #|)
+  let ir = @wat.parse(source)
+  let func_code = ir.codes[0]
+  let func_type_idx = ir.funcs[0]
+  let func_type = ir.types[func_type_idx]
+
+  // Get locals from the function code
+  let locals : Array[@types.ValueType] = []
+  for loc in func_code.locals {
+    locals.push(loc)
+  }
+
+  // Create translator and translate WASM to IR
+  let translator = @ir.Translator::new(
+    "test",
+    func_type,
+    locals,
+    ir.types,
+    ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
+    0, // num_imports
+    [], // import_func_type_indices
+  )
+  let ir_func = translator.translate(func_code.body)
+  let vcode = @vcode.lower_function(ir_func)
+  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let mc = @vcode.emit_function(allocated_func)
+  let ctx = @jit.JITContext::new(1)
+  guard ctx is Some(jit_ctx) else { return }
+  defer jit_ctx.free()
+  let mem_size = 4096L
+  let mem_ptr = @jit.alloc_memory(mem_size)
+  guard mem_ptr != 0L else { return }
+  defer @jit.free_memory(mem_ptr)
+  jit_ctx.set_memory(mem_ptr, mem_size)
+  let code_bytes = mc.get_bytes()
+  let exec_code = @jit.ExecCode::new(code_bytes)
+  guard exec_code is Some(exec)
+  defer exec.free()
+  inspect(jit_ctx.call_f64_1(exec.ptr, 0), content="10")
+  inspect(jit_ctx.call_f64_1(exec.ptr, 1), content="10")
+  inspect(jit_ctx.call_f64_1(exec.ptr, 2), content="10")
+  inspect(jit_ctx.call_f64_1(exec.ptr, 3), content="0")
 }

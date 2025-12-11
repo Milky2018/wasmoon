@@ -6,7 +6,7 @@
 
 ///|
 /// Error for JIT trap
-pub suberror JITTrap String
+pub suberror JITTrap String derive(Show)
 
 ///|
 /// Get trap code (0 = no trap, 1 = out of bounds memory access)
