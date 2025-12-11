@@ -112,6 +112,8 @@ pub fn IRBuilder::brz(Self, Value, Block, Block) -> Unit
 pub fn IRBuilder::bxor(Self, Value, Value) -> Value
 pub fn IRBuilder::call(Self, Int, Type?, Array[Value]) -> Value?
 pub fn IRBuilder::call_indirect(Self, Int, Type?, Value, Array[Value]) -> Value?
+pub fn IRBuilder::call_indirect_multi(Self, Int, Array[Type], Value, Array[Value]) -> Array[Value]
+pub fn IRBuilder::call_multi(Self, Int, Array[Type], Array[Value]) -> Array[Value]
 pub fn IRBuilder::copy(Self, Value) -> Value
 pub fn IRBuilder::create_block(Self) -> Block
 pub fn IRBuilder::current_block(Self) -> Block?
@@ -189,9 +191,12 @@ pub fn IRBuilder::ushr(Self, Value, Value) -> Value
 
 pub(all) struct Inst {
   result : Value?
+  extra_results : Array[Value]
   mut opcode : Opcode
   operands : Array[Value]
 }
+pub fn Inst::all_results(Self) -> Array[Value]
+pub fn Inst::new_multi(Array[Value], Opcode, Array[Value]) -> Self
 pub impl Show for Inst
 
 pub(all) enum IntCC {

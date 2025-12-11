@@ -280,9 +280,10 @@ pub fn AArch64StackFrame::alloc_spill(
   vreg : VReg,
 ) -> Int {
   // Size based on register class
+  // Note: Float32 values are promoted to f64 internally, so they also use 8 bytes
   let size = match vreg.class {
     Int => 8 // 64-bit
-    Float => 8 // 64-bit (double)
+    Float32 | Float64 => 8 // 64-bit (all floats stored as f64)
   }
   self.frame.alloc_spill_slot(vreg, size, size)
 }

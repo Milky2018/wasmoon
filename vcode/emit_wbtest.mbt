@@ -317,3 +317,320 @@ test "machine code: align with invalid alignment" {
   mc.align(0)
   inspect(mc.size(), content="4")
 }
+
+///|
+test "emit: complete function with control flow" {
+  // Test a function with conditional branch:
+  // func max(a, b) -> int:
+  //   if a > b:
+  //     return a
+  //   else:
+  //     return b
+
+  let func = VCodeFunction::new("max")
+  func.add_result(Int)
+
+  // Create blocks
+  let block0 = func.new_block() // entry: compare and branch
+  let block1 = func.new_block() // then: return a
+  let block2 = func.new_block() // else: return b
+
+  // block0: compare X3 (a) > X4 (b) and branch
+  // CMP X3, X4; CSET X8, GT; CBNZ X8, block1; B block2
+  let cmp_inst = VCodeInst::new(Cmp(Sgt))
+  cmp_inst.add_def({ reg: Physical({ index: 8, class: Int }) })
+  cmp_inst.add_use(Physical({ index: 3, class: Int }))
+  cmp_inst.add_use(Physical({ index: 4, class: Int }))
+  block0.add_inst(cmp_inst)
+  block0.set_terminator(Branch(Physical({ index: 8, class: Int }), 1, 2))
+
+  // block1: MOV X0, X3; RET
+  let mov1 = VCodeInst::new(Move)
+  mov1.add_def({ reg: Physical({ index: 0, class: Int }) })
+  mov1.add_use(Physical({ index: 3, class: Int }))
+  block1.add_inst(mov1)
+  block1.set_terminator(Return([Physical({ index: 0, class: Int })]))
+
+  // block2: MOV X0, X4; RET
+  let mov2 = VCodeInst::new(Move)
+  mov2.add_def({ reg: Physical({ index: 0, class: Int }) })
+  mov2.add_use(Physical({ index: 4, class: Int }))
+  block2.add_inst(mov2)
+  block2.set_terminator(Return([Physical({ index: 0, class: Int })]))
+
+  // Show VCode
+  inspect(
+    func.print(),
+    content=(
+      #|vcode max() -> int {
+      #|block0:
+      #|    x8 = cmp.sgt x3, x4
+      #|    branch x8, block1, block2
+      #|block1:
+      #|    x0 = mov x3
+      #|    ret x0
+      #|block2:
+      #|    x0 = mov x4
+      #|    ret x0
+      #|}
+      #|
+    ),
+  )
+
+  // Emit machine code
+  let mc = emit_function(func)
+
+  // Should have:
+  // - prologue (STP, MOV X21, MOV X22, SUB SP)
+  // - block0: CMP + CSET + CBNZ + B
+  // - block1: MOV + epilogue + RET
+  // - block2: MOV + epilogue + RET
+  // Total size should be reasonable
+  inspect(mc.size() > 0, content="true")
+
+  // Show hex dump for debugging
+  let hex = mc.hex_dump()
+  inspect(hex.length() > 0, content="true")
+}
+
+///|
+test "emit: arithmetic operations encoding verification" {
+  // Test that arithmetic instructions are encoded correctly
+  // by checking specific byte patterns
+
+  let mc = MachineCode::new()
+
+  // ADD X0, X1, X2 -> 0x8B020020
+  emit_add_reg(mc, 0, 1, 2)
+  inspect(mc.get_bytes()[0], content="32") // 0x20
+  inspect(mc.get_bytes()[1], content="0") // 0x00
+  inspect(mc.get_bytes()[2], content="2") // 0x02
+  inspect(mc.get_bytes()[3], content="139") // 0x8B
+
+  // SUB X3, X4, X5 -> 0xCB050083
+  emit_sub_reg(mc, 3, 4, 5)
+  inspect(mc.get_bytes()[4], content="131") // 0x83
+  inspect(mc.get_bytes()[5], content="0") // 0x00
+  inspect(mc.get_bytes()[6], content="5") // 0x05
+  inspect(mc.get_bytes()[7], content="203") // 0xCB
+
+  // Total: 2 instructions = 8 bytes
+  inspect(mc.size(), content="8")
+}
+
+///|
+test "emit: memory operations with offset" {
+  // Test load/store with various offsets
+
+  let mc = MachineCode::new()
+
+  // LDR X0, [X1, #0]
+  emit_ldr_imm(mc, 0, 1, 0)
+  inspect(mc.size(), content="4")
+
+  // LDR X0, [X1, #8] - offset must be aligned to 8 bytes for X register
+  emit_ldr_imm(mc, 0, 1, 8)
+  inspect(mc.size(), content="8")
+
+  // STR X2, [X3, #16]
+  emit_str_imm(mc, 2, 3, 16)
+  inspect(mc.size(), content="12")
+
+  // LDR W0, [X1, #4] - 32-bit load with 4-byte aligned offset
+  emit_ldr_w_imm(mc, 0, 1, 4)
+  inspect(mc.size(), content="16")
+
+  // STR W2, [X3, #8] - 32-bit store
+  emit_str_w_imm(mc, 2, 3, 8)
+  inspect(mc.size(), content="20")
+}
+
+///|
+test "emit: float operations encoding" {
+  // Test floating-point instruction encoding
+
+  let mc = MachineCode::new()
+
+  // FADD D0, D1, D2 - double-precision add
+  emit_fadd_d(mc, 0, 1, 2)
+  let bytes = mc.get_bytes()
+  inspect(bytes[3], content="30") // 0x1E - FP opcode
+
+  // FMUL D3, D4, D5
+  emit_fmul_d(mc, 3, 4, 5)
+  inspect(mc.size(), content="8")
+
+  // FMOV D0, D1 - FP register move
+  emit_fmov_d(mc, 0, 1)
+  inspect(mc.size(), content="12")
+
+  // LDR D0, [X1, #0] - FP load
+  emit_ldr_d_imm(mc, 0, 1, 0)
+  inspect(mc.size(), content="16")
+
+  // STR D2, [X3, #8] - FP store
+  emit_str_d_imm(mc, 2, 3, 8)
+  inspect(mc.size(), content="20")
+}
+
+///|
+test "emit: branch fixup forward reference" {
+  // Test that forward branch references are correctly resolved
+
+  let mc = MachineCode::new()
+
+  // block0: B block2 (forward reference)
+  mc.define_label(0)
+  emit_b(mc, 2) // Jump forward to block2
+
+  // block1: NOP
+  mc.define_label(1)
+  emit_nop(mc)
+
+  // block2: RET
+  mc.define_label(2)
+  emit_ret(mc, 30)
+
+  // Resolve fixups
+  mc.resolve_fixups()
+
+  // Check sizes
+  inspect(mc.size(), content="12") // 3 instructions
+
+  // The branch at offset 0 should jump over 2 instructions (to offset 8)
+  // PC-relative offset = (8 - 0) / 4 = 2
+  let bytes = mc.get_bytes()
+  // B instruction: imm26 = 2, opcode = 0x14
+  // Byte 0 should have low bits of offset
+  inspect(bytes[0], content="2") // imm26 low byte = 2
+}
+
+///|
+test "emit: shifted register operations" {
+  // Test AArch64-specific shifted operand instructions
+
+  let mc = MachineCode::new()
+
+  // ADD X0, X1, X2, LSL #3
+  emit_add_shifted(mc, 0, 1, 2, Lsl, 3)
+  inspect(mc.size(), content="4")
+
+  // SUB X3, X4, X5, LSR #2
+  emit_sub_shifted(mc, 3, 4, 5, Lsr, 2)
+  inspect(mc.size(), content="8")
+
+  // AND X6, X7, X8, ASR #1
+  emit_and_shifted(mc, 6, 7, 8, Asr, 1)
+  inspect(mc.size(), content="12")
+
+  // ORR X9, X10, X11, LSL #4
+  emit_orr_shifted(mc, 9, 10, 11, Lsl, 4)
+  inspect(mc.size(), content="16")
+
+  // EOR X12, X13, X14, LSL #0 (no shift)
+  emit_eor_shifted(mc, 12, 13, 14, Lsl, 0)
+  inspect(mc.size(), content="20")
+}
+
+///|
+test "emit: multiply-accumulate instructions" {
+  // Test MADD, MSUB, MNEG instructions
+
+  let mc = MachineCode::new()
+
+  // MADD X0, X1, X2, X3 -> X0 = X3 + X1 * X2
+  emit_madd(mc, 0, 1, 2, 3)
+  let bytes = mc.get_bytes()
+  inspect(bytes[3], content="155") // 0x9B - MADD opcode
+  inspect(mc.size(), content="4")
+
+  // MSUB X4, X5, X6, X7 -> X4 = X7 - X5 * X6
+  emit_msub(mc, 4, 5, 6, 7)
+  inspect(mc.size(), content="8")
+
+  // MNEG X8, X9, X10 -> X8 = -(X9 * X10) = MSUB X8, X9, X10, XZR
+  emit_mneg(mc, 8, 9, 10)
+  inspect(mc.size(), content="12")
+
+  // MUL X11, X12, X13 -> X11 = X12 * X13 = MADD X11, X12, X13, XZR
+  emit_mul(mc, 11, 12, 13)
+  inspect(mc.size(), content="16")
+}
+
+///|
+test "emit: complete VCode instruction emission" {
+  // Test emit_instruction for various VCodeOpcode values
+
+  // Create a simple function to test instruction emission
+  let func = VCodeFunction::new("test_insts")
+  func.add_result(Int)
+  let block = func.new_block()
+
+  // Add various instructions using physical registers
+  // LoadConst
+  let ldi = VCodeInst::new(LoadConst(42L))
+  ldi.add_def({ reg: Physical({ index: 0, class: Int }) })
+  block.add_inst(ldi)
+
+  // Add
+  let add = VCodeInst::new(Add)
+  add.add_def({ reg: Physical({ index: 1, class: Int }) })
+  add.add_use(Physical({ index: 0, class: Int }))
+  add.add_use(Physical({ index: 0, class: Int }))
+  block.add_inst(add)
+
+  // Mul
+  let mul = VCodeInst::new(Mul)
+  mul.add_def({ reg: Physical({ index: 2, class: Int }) })
+  mul.add_use(Physical({ index: 1, class: Int }))
+  mul.add_use(Physical({ index: 0, class: Int }))
+  block.add_inst(mul)
+
+  // Move
+  let mov = VCodeInst::new(Move)
+  mov.add_def({ reg: Physical({ index: 0, class: Int }) })
+  mov.add_use(Physical({ index: 2, class: Int }))
+  block.add_inst(mov)
+  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
+
+  // Show VCode
+  inspect(
+    func.print(),
+    content=(
+      #|vcode test_insts() -> int {
+      #|block0:
+      #|    x0 = ldi 42
+      #|    x1 = add x0, x0
+      #|    x2 = mul x1, x0
+      #|    x0 = mov x2
+      #|    ret x0
+      #|}
+      #|
+    ),
+  )
+
+  // Emit and verify
+  let mc = emit_function(func)
+  inspect(mc.size() > 0, content="true")
+}
+
+///|
+test "emit_mul encoding verification" {
+  // MUL Xd, Xn, Xm = MADD Xd, Xn, Xm, XZR
+  // Encoding: sf=1 | 00 | 11011 | 000 | Rm[4:0] | 0 | Ra=11111 | Rn[4:0] | Rd[4:0]
+  //
+  // MUL X8, X23, X24:
+  //   Rd=8 (01000), Rn=23 (10111), Rm=24 (11000), Ra=31 (11111)
+  //   Bits 31-0: 1_00_11011_000_11000_0_11111_10111_01000
+  //   = 0x9b187ee8
+  //   Little endian bytes: e8 7e 18 9b
+
+  let mc = MachineCode::new()
+  emit_mul(mc, 8, 23, 24) // MUL X8, X23, X24
+  let bytes = mc.get_bytes()
+  inspect(bytes.length(), content="4")
+  inspect(bytes[0], content="232")
+  inspect(bytes[1], content="126")
+  inspect(bytes[2], content="24")
+  inspect(bytes[3], content="155")
+}

@@ -5,6 +5,10 @@
     "Milky2018/wasmoon/runtime",
     "Milky2018/wasmoon/executor",
     "Milky2018/wasmoon/validator",
-    "Milky2018/wasmoon/wat"
+    "Milky2018/wasmoon/wat",
+    "Milky2018/wasmoon/ir",
+    "Milky2018/wasmoon/vcode",
+    "Milky2018/wasmoon/jit",
+    "Milky2018/wasmoon/cwasm"
   ]
 }

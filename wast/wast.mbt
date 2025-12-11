@@ -439,7 +439,7 @@ fn Lexer::read_number(self : Lexer) -> String {
       buf.write_string("nan")
       self.pos += 3
       // Check for nan:payload format
-      if !self.is_eof() && self.peek_char() == Some(':') {
+      if !self.is_eof() && self.peek_char() is Some(':') {
         buf.write_char(':')
         self.pos += 1
         // Read payload (hex number)

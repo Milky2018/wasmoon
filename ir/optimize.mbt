@@ -1303,7 +1303,19 @@ fn clone_instruction(inst : Inst, func : Function) -> Inst {
   for op in inst.operands {
     new_operands.push(op)
   }
-  { opcode: inst.opcode, operands: new_operands, result: new_result }
+  // Clone extra_results too
+  let new_extra_results : Array[Value] = []
+  for v in inst.extra_results {
+    let new_id = func.next_value_id
+    func.next_value_id = new_id + 1
+    new_extra_results.push({ id: new_id, ty: v.ty })
+  }
+  {
+    opcode: inst.opcode,
+    operands: new_operands,
+    result: new_result,
+    extra_results: new_extra_results,
+  }
 }
 
 // ============ Strength Reduction ============

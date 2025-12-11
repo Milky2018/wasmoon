@@ -607,7 +607,7 @@ pub fn IRBuilder::copy(self : IRBuilder, a : Value) -> Value {
 // ============ Function Calls ============
 
 ///|
-/// Direct function call
+/// Direct function call (single return value)
 pub fn IRBuilder::call(
   self : IRBuilder,
   func_idx : Int,
@@ -624,7 +624,33 @@ pub fn IRBuilder::call(
 }
 
 ///|
-/// Indirect function call
+/// Direct function call with multiple return values
+pub fn IRBuilder::call_multi(
+  self : IRBuilder,
+  func_idx : Int,
+  result_types : Array[Type],
+  args : Array[Value],
+) -> Array[Value] {
+  if result_types.length() == 0 {
+    self.emit_void_inst(Opcode::Call(func_idx), args)
+    return []
+  }
+  // Create result values for each return type
+  let results : Array[Value] = []
+  for ty in result_types {
+    results.push(self.func.new_value(ty))
+  }
+  // Create instruction with multiple results
+  let inst = Inst::new_multi(results, Opcode::Call(func_idx), args)
+  match self.current_block {
+    Some(block) => block.add_inst(inst)
+    None => ()
+  }
+  results
+}
+
+///|
+/// Indirect function call (single return value)
 pub fn IRBuilder::call_indirect(
   self : IRBuilder,
   type_idx : Int,
@@ -644,6 +670,37 @@ pub fn IRBuilder::call_indirect(
       None
     }
   }
+}
+
+///|
+/// Indirect function call with multiple return values
+pub fn IRBuilder::call_indirect_multi(
+  self : IRBuilder,
+  type_idx : Int,
+  result_types : Array[Type],
+  callee : Value,
+  args : Array[Value],
+) -> Array[Value] {
+  let all_args : Array[Value] = [callee]
+  for arg in args {
+    all_args.push(arg)
+  }
+  if result_types.length() == 0 {
+    self.emit_void_inst(Opcode::CallIndirect(type_idx), all_args)
+    return []
+  }
+  // Create result values for each return type
+  let results : Array[Value] = []
+  for ty in result_types {
+    results.push(self.func.new_value(ty))
+  }
+  // Create instruction with multiple results
+  let inst = Inst::new_multi(results, Opcode::CallIndirect(type_idx), all_args)
+  match self.current_block {
+    Some(block) => block.add_inst(inst)
+    None => ()
+  }
+  results
 }
 
 // ============ Terminators ============

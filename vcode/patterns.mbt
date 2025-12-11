@@ -568,7 +568,21 @@ pub fn lower_inst_with_patterns(
     ConstantFloat(val) =>
       if inst.result is Some(result) {
         let dst = ctx.get_vreg(result)
-        let vcode_inst = VCodeInst::new(LoadConstF(val))
+        // Determine if this is an F32 or F64 constant based on the result type
+        let opcode = match result.ty {
+          @ir.Type::F32 => {
+            // Convert Double to Float, then get its 32-bit representation
+            let float_val = Float::from_double(val)
+            let bits = float_val.reinterpret_as_int()
+            LoadConstF32(bits)
+          }
+          _ => {
+            // F64: get 64-bit representation
+            let bits = val.reinterpret_as_int64()
+            LoadConstF64(bits)
+          }
+        }
+        let vcode_inst = VCodeInst::new(opcode)
         vcode_inst.add_def({ reg: Virtual(dst) })
         block.add_inst(vcode_inst)
         true

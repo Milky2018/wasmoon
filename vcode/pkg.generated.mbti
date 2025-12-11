@@ -13,11 +13,13 @@ pub fn aapcs64_arg_gprs() -> Array[PReg]
 
 pub fn aapcs64_callee_saved() -> Array[PReg]
 
-pub fn aapcs64_caller_saved() -> Array[PReg]
-
 pub fn aapcs64_ret_fprs() -> Array[PReg]
 
 pub fn aapcs64_ret_gprs() -> Array[PReg]
+
+pub fn allocatable_callee_saved_regs() -> Array[PReg]
+
+pub fn allocatable_scratch_regs() -> Array[PReg]
 
 pub fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
 
@@ -27,9 +29,19 @@ pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
 
 pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
 
+pub fn call_clobbered_fprs() -> Array[PReg]
+
+pub fn call_clobbered_gprs() -> Array[PReg]
+
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
 pub fn debug_liveness(LivenessResult) -> String
+
+pub fn dump_regalloc(String, LivenessResult, RegAllocResult) -> Unit
+
+pub fn dump_vcode(VCodeFunction, String) -> Unit
+
+pub fn eliminate_dead_code(VCodeFunction) -> VCodeFunction
 
 pub fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
 
@@ -69,6 +81,10 @@ pub fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_fcvt_d_s(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fcvt_s_d(MachineCode, Int, Int) -> Unit
+
 pub fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
@@ -76,6 +92,10 @@ pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
 pub fn emit_fmov_d_to_x(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fmov_s_to_w(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fmov_w_to_s(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fmov_x_to_d(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
 
@@ -380,11 +400,13 @@ pub impl Show for JITRuntime
 pub(all) struct LinearScanAllocator {
   int_regs : Array[PReg]
   float_regs : Array[PReg]
+  callee_saved_int_regs : Array[PReg]
   mut active : Array[LiveInterval]
   mut next_spill_slot : Int
+  block_order : Map[Int, Int]
 }
 pub fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
-pub fn LinearScanAllocator::new(Array[PReg], Array[PReg]) -> Self
+pub fn LinearScanAllocator::new(Array[PReg], Array[PReg], Array[PReg]) -> Self
 
 pub(all) struct LiveInterval {
   vreg : VReg
@@ -394,6 +416,7 @@ pub(all) struct LiveInterval {
   hint : PReg?
   mut assigned : PReg?
   mut spill_slot : Int?
+  mut crosses_call : Bool
 }
 pub impl Show for LiveInterval
 
@@ -402,6 +425,8 @@ pub(all) struct LivenessResult {
   use_def : Map[Int, UseDefInfo]
   live_in : Array[@set.Set[Int]]
   live_out : Array[@set.Set[Int]]
+  block_order : Map[Int, Int]
+  call_points : Array[ProgPoint]
 }
 
 pub(all) struct LoweringContext {
@@ -417,6 +442,7 @@ pub(all) struct MachineCode {
   mut pos : Int
   labels : Map[Int, Int]
   fixups : Array[Fixup]
+  disasm : Array[(Int, String)]
 }
 pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
 pub fn MachineCode::align(Self, Int) -> Unit
@@ -424,6 +450,7 @@ pub fn MachineCode::align_block(Self) -> Unit
 pub fn MachineCode::align_function(Self) -> Unit
 pub fn MachineCode::current_pos(Self) -> Int
 pub fn MachineCode::define_label(Self, Int) -> Unit
+pub fn MachineCode::dump_disasm(Self) -> String
 pub fn MachineCode::emit_byte(Self, Int) -> Unit
 pub fn MachineCode::emit_inst(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::get_bytes(Self) -> Array[Int]
@@ -551,7 +578,8 @@ pub(all) struct RegAllocResult {
 
 pub(all) enum RegClass {
   Int
-  Float
+  Float32
+  Float64
 }
 pub impl Show for RegClass
 
@@ -694,11 +722,17 @@ pub(all) struct VCodeFunction {
   name : String
   params : Array[VReg]
   results : Array[RegClass]
+  result_types : Array[@ir.Type]
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
+  mut num_spill_slots : Int
+  param_pregs : Array[PReg?]
 }
 pub fn VCodeFunction::add_param(Self, RegClass) -> VReg
 pub fn VCodeFunction::add_result(Self, RegClass) -> Unit
+pub fn VCodeFunction::add_result_type(Self, @ir.Type) -> Unit
+pub fn VCodeFunction::calls_multi_value_function(Self) -> Bool
+pub fn VCodeFunction::needs_extra_results_ptr(Self) -> Bool
 pub fn VCodeFunction::new(String) -> Self
 pub fn VCodeFunction::new_block(Self) -> VCodeBlock
 pub fn VCodeFunction::new_vreg(Self, RegClass) -> VReg
@@ -742,7 +776,8 @@ pub enum VCodeOpcode {
   Load32U(Int)
   Move
   LoadConst(Int64)
-  LoadConstF(Double)
+  LoadConstF32(Int)
+  LoadConstF64(Int64)
   Cmp(CmpKind)
   FCmp(FCmpKind)
   Extend(ExtendKind)
@@ -759,7 +794,7 @@ pub enum VCodeOpcode {
   Madd
   Msub
   Mneg
-  CallIndirect(Int, Bool)
+  CallIndirect(Int, Int)
   StackLoad(Int)
   StackStore(Int)
 }

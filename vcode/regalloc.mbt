@@ -25,9 +25,17 @@ pub enum ProgPos {
 }
 
 ///|
-fn ProgPoint::compare(self : ProgPoint, other : ProgPoint) -> Int {
+/// Compare two program points using a block order map
+/// This is used by the register allocator to correctly order points in non-linear CFGs
+fn ProgPoint::compare_with_order(
+  self : ProgPoint,
+  other : ProgPoint,
+  block_order : Map[Int, Int],
+) -> Int {
   if self.block != other.block {
-    return self.block - other.block
+    let self_order = block_order.get(self.block).unwrap_or(self.block)
+    let other_order = block_order.get(other.block).unwrap_or(other.block)
+    return self_order - other_order
   }
   if self.inst != other.inst {
     return self.inst - other.inst
@@ -68,6 +76,8 @@ pub(all) struct LiveInterval {
   mut assigned : PReg?
   // Spill slot if spilled (filled by allocator)
   mut spill_slot : Int?
+  // Whether this interval crosses a function call (cannot use caller-saved registers)
+  mut crosses_call : Bool
 }
 
 ///|
@@ -80,12 +90,18 @@ fn LiveInterval::new(vreg : VReg, start : ProgPoint) -> LiveInterval {
     hint: None,
     assigned: None,
     spill_slot: None,
+    crosses_call: false,
   }
 }
 
 ///|
-fn LiveInterval::extend(self : LiveInterval, point : ProgPoint) -> Unit {
-  if point.compare(self.end) > 0 {
+/// Extend interval using block execution order for comparison
+fn LiveInterval::extend_with_order(
+  self : LiveInterval,
+  point : ProgPoint,
+  block_order : Map[Int, Int],
+) -> Unit {
+  if point.compare_with_order(self.end, block_order) > 0 {
     self.end = point
   }
   self.uses.push(point)
@@ -180,6 +196,10 @@ pub(all) struct LivenessResult {
   live_in : Array[Set[Int]]
   // Block live-out sets (vregs live at block exit)
   live_out : Array[Set[Int]]
+  // Block order: maps block ID -> linear position (for correct interval comparison)
+  block_order : Map[Int, Int]
+  // Call points (block_idx, inst_idx) - instructions that clobber caller-saved registers
+  call_points : Array[ProgPoint]
 }
 
 ///|
@@ -190,13 +210,89 @@ fn LivenessResult::new(num_blocks : Int) -> LivenessResult {
     live_in.push(Set::new())
     live_out.push(Set::new())
   }
-  { intervals: {}, use_def: {}, live_in, live_out }
+  {
+    intervals: {},
+    use_def: {},
+    live_in,
+    live_out,
+    block_order: {},
+    call_points: [],
+  }
+}
+
+///|
+/// Compute reverse postorder of blocks (for linearizing the CFG)
+fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
+  let visited : Set[Int] = Set::new()
+  let postorder : Array[Int] = []
+
+  // DFS to compute postorder
+  fn dfs(
+    func : VCodeFunction,
+    block_id : Int,
+    visited : Set[Int],
+    postorder : Array[Int],
+  ) {
+    if visited.contains(block_id) {
+      return
+    }
+    visited.add(block_id)
+
+    // Visit successors first
+    // Since block ID equals array index, we can use direct indexing
+    if block_id >= 0 && block_id < func.blocks.length() {
+      let block = func.blocks[block_id]
+      match block.terminator {
+        Some(term) =>
+          match term {
+            Jump(target) => dfs(func, target, visited, postorder)
+            Branch(_, then_b, else_b) => {
+              dfs(func, then_b, visited, postorder)
+              dfs(func, else_b, visited, postorder)
+            }
+            Return(_) | Trap(_) => ()
+          }
+        None => ()
+      }
+    }
+
+    // Add to postorder after visiting all successors
+    postorder.push(block_id)
+  }
+
+  // Start DFS from block 0 (entry)
+  if func.blocks.length() > 0 {
+    dfs(func, func.blocks[0].id, visited, postorder)
+  }
+
+  // Also visit any unreachable blocks (shouldn't happen in valid code)
+  for block in func.blocks {
+    if !visited.contains(block.id) {
+      dfs(func, block.id, visited, postorder)
+    }
+  }
+
+  // Reverse postorder: reverse the postorder array
+  // Map block ID -> position in reverse postorder
+  let order : Map[Int, Int] = {}
+  let n = postorder.length()
+  for i, block_id in postorder {
+    order.set(block_id, n - 1 - i)
+  }
+  order
 }
 
 ///|
 /// Compute liveness information for a VCode function
 pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
   let result = LivenessResult::new(func.blocks.length())
+
+  // Compute block order for correct interval comparison
+  let block_order = compute_reverse_postorder(func)
+  for entry in block_order {
+    let (block_id, order) = entry
+    result.block_order.set(block_id, order)
+  }
 
   // Phase 1: Collect definitions and uses
   collect_defs_uses(func, result)
@@ -221,7 +317,8 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
   // Process each block
   for block_idx, block in func.blocks {
-    // Block parameters are definitions at block entry
+    // Block parameters receive values from predecessor block moves (SSA deconstruction).
+    // Add a use point at block entry to keep them live through the block.
     for param in block.params {
       let info = match result.use_def.get(param.id) {
         Some(existing) => existing
@@ -231,11 +328,17 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
           new_info
         }
       }
-      info.def_point = Some({ block: block_idx, inst: -1, pos: After })
+      // Add use point at block entry (before first instruction)
+      info.use_points.push({ block: block_idx, inst: 0, pos: Before })
     }
 
     // Process instructions
     for inst_idx, inst in block.insts {
+      // Record call points for caller-saved register handling
+      if inst.opcode is CallIndirect(_, _) {
+        result.call_points.push({ block: block_idx, inst: inst_idx, pos: After })
+      }
+
       // Record uses (before the instruction)
       for use_reg in inst.uses {
         match use_reg {
@@ -270,15 +373,22 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
                 new_info
               }
             }
-            // Only set def_point if not already set (keep earliest definition)
-            // This is important for block parameters that may be redefined
-            // in parallel copy moves
-            if info.def_point is None {
-              info.def_point = Some({
-                block: block_idx,
-                inst: inst_idx,
-                pos: After,
-              })
+            // For SSA deconstruction, the same vreg may be defined in multiple
+            // blocks on different paths. Keep the earliest definition in
+            // execution order (using block_order for comparison).
+            let new_def : ProgPoint = {
+              block: block_idx,
+              inst: inst_idx,
+              pos: After,
+            }
+            match info.def_point {
+              None => info.def_point = Some(new_def)
+              Some(existing_def) =>
+                // Keep the earlier definition (lower order = earlier in execution)
+                if new_def.compare_with_order(existing_def, result.block_order) <
+                  0 {
+                  info.def_point = Some(new_def)
+                }
             }
           }
           Physical(_) => ()
@@ -351,10 +461,9 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     let use_set : Set[Int] = Set::new()
     let def_set : Set[Int] = Set::new()
 
-    // Block params are defs
-    for param in block.params {
-      def_set.add(param.id)
-    }
+    // Block parameters are NOT defs in SSA deconstruction
+    // They represent values passed from predecessors, so they're live-in
+    // (Do not add block params to def_set)
 
     // Process instructions
     for inst in block.insts {
@@ -465,6 +574,9 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
 ///|
 /// Phase 3: Build live intervals from use-def info
 fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
+  // Get block order for correct interval comparison
+  let block_order = result.block_order
+
   // For each vreg, create an interval spanning from def to last use
   for entry in result.use_def {
     let (vreg_id, info) = entry
@@ -480,9 +592,9 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
     }
     let interval = LiveInterval::new(info.vreg, start)
 
-    // Extend to cover all uses
+    // Extend to cover all uses (using block order for correct comparison)
     for use_point in info.use_points {
-      interval.extend(use_point)
+      interval.extend_with_order(use_point, block_order)
     }
 
     // Extend to cover live-in blocks - the interval needs to span from
@@ -492,7 +604,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
         // The vreg is live at the start of this block
         // Extend from block entry
         let entry_point = { block: block_idx, inst: -1, pos: Before }
-        interval.extend(entry_point)
+        interval.extend_with_order(entry_point, block_order)
         // Also extend to end of block if live-out (already handled below)
       }
     }
@@ -507,7 +619,21 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
           inst: block.insts.length(),
           pos: After,
         }
-        interval.extend(end_point)
+        interval.extend_with_order(end_point, block_order)
+      }
+    }
+
+    // Check if this interval crosses any call point
+    // If so, it cannot be assigned to a caller-saved register
+    for call_point in result.call_points {
+      // An interval crosses a call if:
+      // - The call is after the interval's start AND before the interval's end
+      let start_cmp = interval.start.compare_with_order(call_point, block_order)
+      let end_cmp = interval.end.compare_with_order(call_point, block_order)
+      // start <= call_point < end (interval is live across the call)
+      if start_cmp <= 0 && end_cmp > 0 {
+        interval.crosses_call = true
+        break
       }
     }
     result.intervals.set(vreg_id, interval)
@@ -553,17 +679,29 @@ pub(all) struct LinearScanAllocator {
   // Available physical registers by class
   int_regs : Array[PReg]
   float_regs : Array[PReg]
+  // Callee-saved registers for cross-call allocation (may exclude X23)
+  callee_saved_int_regs : Array[PReg]
   // Current state
   mut active : Array[LiveInterval] // Intervals currently occupying registers
   mut next_spill_slot : Int
+  // Block order for correct interval comparison in non-linear CFGs
+  block_order : Map[Int, Int]
 }
 
 ///|
 pub fn LinearScanAllocator::new(
   int_regs : Array[PReg],
   float_regs : Array[PReg],
+  callee_saved_int_regs : Array[PReg],
 ) -> LinearScanAllocator {
-  { int_regs, float_regs, active: [], next_spill_slot: 0 }
+  {
+    int_regs,
+    float_regs,
+    callee_saved_int_regs,
+    active: [],
+    next_spill_slot: 0,
+    block_order: {},
+  }
 }
 
 ///|
@@ -573,6 +711,11 @@ pub fn LinearScanAllocator::allocate(
   func : VCodeFunction,
   liveness : LivenessResult,
 ) -> RegAllocResult {
+  // Copy block order from liveness result
+  for entry in liveness.block_order {
+    let (block_id, order) = entry
+    self.block_order.set(block_id, order)
+  }
   let result : RegAllocResult = {
     assignments: {},
     spill_slots: {},
@@ -584,23 +727,30 @@ pub fn LinearScanAllocator::allocate(
   // Pre-assign function parameters to ABI registers
   // JIT ABI: X0 = func_table, X1 = memory_base, X2 = memory_size, args in X3-X7
   // So WASM parameters start at X3
+  // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
+  // it will be handled by the normal allocation process (which will use callee-saved)
   for i, param in func.params {
-    let preg = match param.class {
-      Int => { index: i + 3, class: Int } // X3, X4, X5, ...
-      Float => { index: i, class: Float } // D0, D1, D2, ... (float params)
-    }
-    result.assignments.set(param.id, preg)
-    // Mark the register as initially occupied
     match liveness.intervals.get(param.id) {
-      Some(interval) => {
-        interval.assigned = Some(preg)
-        self.active.push(interval)
-      }
+      Some(interval) =>
+        if interval.crosses_call {
+          // Parameter crosses a call, don't pre-assign to caller-saved register
+          // The allocation loop below will handle it and assign to callee-saved
+          continue
+        } else {
+          // Safe to pre-assign to ABI register
+          let preg = match param.class {
+            Int => { index: i + 3, class: Int } // X3, X4, X5, ...
+            Float32 | Float64 => { index: i, class: param.class } // D0, D1, D2, ...
+          }
+          result.assignments.set(param.id, preg)
+          interval.assigned = Some(preg)
+          self.active.push(interval)
+        }
       None => ()
     }
   }
 
-  // Sort intervals by start point
+  // Sort intervals by start point using block order
   let intervals : Array[LiveInterval] = []
   for entry in liveness.intervals {
     let (_, interval) = entry
@@ -610,7 +760,10 @@ pub fn LinearScanAllocator::allocate(
     }
     intervals.push(interval)
   }
-  intervals.sort_by(fn(a, b) { a.start.compare(b.start) })
+  let block_order = self.block_order
+  intervals.sort_by(fn(a, b) {
+    a.start.compare_with_order(b.start, block_order)
+  })
 
   // Process intervals in order of start point
   for interval in intervals {
@@ -618,9 +771,20 @@ pub fn LinearScanAllocator::allocate(
     self.expire_old_intervals(interval)
 
     // Get available registers for this class
-    let avail_regs = match interval.vreg.class {
-      Int => self.int_regs
-      Float => self.float_regs
+    // If interval crosses a call, only use callee-saved registers
+    let avail_regs = if interval.crosses_call {
+      match interval.vreg.class {
+        Int => self.callee_saved_int_regs
+        Float32 | Float64 =>
+          // For floats, we don't have callee-saved FPRs in AAPCS64
+          // This will likely spill, but that's correct behavior
+          []
+      }
+    } else {
+      match interval.vreg.class {
+        Int => self.int_regs
+        Float32 | Float64 => self.float_regs
+      }
     }
 
     // Try to allocate a register
@@ -646,11 +810,28 @@ fn LinearScanAllocator::expire_old_intervals(
   self : LinearScanAllocator,
   current : LiveInterval,
 ) -> Unit {
-  // Sort active by end point and remove those that end before current starts
-  self.active.sort_by(fn(a, b) { a.end.compare(b.end) })
+  // Sort active by end point using block order, and remove those that end before current starts
+  let block_order = self.block_order
+  self.active.sort_by(fn(a, b) { a.end.compare_with_order(b.end, block_order) })
   let new_active : Array[LiveInterval] = []
   for interval in self.active {
-    if interval.end.compare(current.start) >= 0 {
+    // Check if interval ends before current starts
+    // CRITICAL FIX: In the same basic block, be conservative about register reuse.
+    // We require at least 2 instructions gap before expiring an interval.
+    // This prevents two issues:
+    // 1. Same instruction use-def: v25 = add x21, v22 cannot become x23 = add x21, x23
+    // 2. Adjacent definitions: dead values should not immediately share registers
+    //    with the next definition (e.g., d0 = ldf 1; d0 = ldf 2 is wrong)
+    let overlaps = if interval.end.block == current.start.block {
+      // Same block: require at least 2 instruction gap
+      // interval.end.inst >= current.start.inst - 1 means they're adjacent or same
+      interval.end.inst >= current.start.inst - 1
+    } else {
+      // Different blocks: use normal comparison
+      let cmp = interval.end.compare_with_order(current.start, block_order)
+      cmp >= 0
+    }
+    if overlaps {
       new_active.push(interval)
     }
   }
@@ -658,11 +839,14 @@ fn LinearScanAllocator::expire_old_intervals(
 }
 
 ///|
-/// Check if two register classes are equal
+/// Check if two register classes are compatible (can use same physical registers)
 fn reg_class_eq(a : RegClass, b : RegClass) -> Bool {
   match (a, b) {
     (Int, Int) => true
-    (Float, Float) => true
+    (Float32, Float32)
+    | (Float32, Float64)
+    | (Float64, Float32)
+    | (Float64, Float64) => true
     _ => false
   }
 }
@@ -729,7 +913,7 @@ fn LinearScanAllocator::spill_interval(
     // Get a register for this reload (use first available)
     let avail_regs = match interval.vreg.class {
       Int => self.int_regs
-      Float => self.float_regs
+      Float32 | Float64 => self.float_regs
     }
     if avail_regs.length() > 0 {
       result.reloads.push({
@@ -756,23 +940,44 @@ pub fn apply_allocation(
 ) -> VCodeFunction {
   let new_func = VCodeFunction::new(func.name)
   new_func.next_vreg_id = func.next_vreg_id
+  new_func.num_spill_slots = alloc.num_spill_slots
 
   // Convert function parameters
-  for param in func.params {
+  for i, param in func.params {
     match alloc.assignments.get(param.id) {
-      Some(_) => {
+      Some(preg) => {
         // Parameter is assigned to physical register
         // We still track it as vreg but note the assignment
         let new_vreg = { id: param.id, class: param.class }
         new_func.params.push(new_vreg)
+        // Store the physical register assignment for emit_prologue
+        // If it's not the default ABI register (X(3+i) for int, D(i) for float),
+        // we need to emit a move instruction in prologue
+        let default_preg : PReg = match param.class {
+          Int => { index: i + 3, class: Int }
+          Float32 | Float64 => { index: i, class: param.class }
+        }
+        if preg.index != default_preg.index {
+          new_func.param_pregs.push(Some(preg))
+        } else {
+          new_func.param_pregs.push(None) // No move needed
+        }
       }
-      None => new_func.params.push(param)
+      None => {
+        new_func.params.push(param)
+        new_func.param_pregs.push(None)
+      }
     }
   }
 
   // Copy results
   for r in func.results {
     new_func.results.push(r)
+  }
+
+  // Copy result types for multi-value return support
+  for ty in func.result_types {
+    new_func.result_types.push(ty)
   }
 
   // Process each block
@@ -816,14 +1021,14 @@ pub fn apply_allocation(
         }
       }
 
-      // Check if any definitions are spilled
-      let mut spilled_def : (VReg, Int)? = None
+      // Check if any definitions are spilled - collect ALL spilled defs
+      let spilled_defs : Array[(VReg, Int)] = []
       for def in inst.defs {
         match def.reg {
           Virtual(vreg) =>
             if alloc.assignments.get(vreg.id) is None {
               match alloc.spill_slots.get(vreg.id) {
-                Some(slot) => spilled_def = Some((vreg, slot))
+                Some(slot) => spilled_defs.push((vreg, slot))
                 None => ()
               }
             }
@@ -834,15 +1039,23 @@ pub fn apply_allocation(
       // Create new instruction with rewritten registers
       let new_inst = VCodeInst::new(inst.opcode)
 
-      // Rewrite definitions
+      // Rewrite definitions - use different scratch registers for each spilled def
+      let mut spill_scratch_idx = 0
+      let spill_scratch_map : Map[Int, PReg] = {} // vreg.id -> scratch preg
       for def in inst.defs {
         match def.reg {
           Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
               Some(preg) => new_inst.add_def({ reg: Physical(preg) })
               None => {
-                // Spilled: use scratch register X16 as temporary destination
-                let scratch_preg : PReg = { index: 16, class: vreg.class }
+                // Spilled: use scratch register X16 or X17 as temporary destination
+                // Alternate between X16 and X17 for multiple spilled defs
+                let scratch_preg : PReg = {
+                  index: 16 + spill_scratch_idx,
+                  class: vreg.class,
+                }
+                spill_scratch_idx = (spill_scratch_idx + 1) % 2
+                spill_scratch_map.set(vreg.id, scratch_preg)
                 new_inst.add_def({ reg: Physical(scratch_preg) })
               }
             }
@@ -872,15 +1085,13 @@ pub fn apply_allocation(
       }
       new_block.add_inst(new_inst)
 
-      // Insert spill instruction after the defining instruction if needed
-      match spilled_def {
-        Some((vreg, slot)) => {
-          let spill_inst = VCodeInst::new(StackStore(slot * 8))
-          let scratch_preg : PReg = { index: 16, class: vreg.class }
-          spill_inst.add_use(Physical(scratch_preg))
-          new_block.add_inst(spill_inst)
-        }
-        None => ()
+      // Insert spill instructions after the defining instruction for ALL spilled defs
+      for entry in spilled_defs {
+        let (vreg, slot) = entry
+        let spill_inst = VCodeInst::new(StackStore(slot * 8))
+        let scratch_preg = spill_scratch_map.get(vreg.id).unwrap()
+        spill_inst.add_use(Physical(scratch_preg))
+        new_block.add_inst(spill_inst)
       }
     }
 
@@ -952,23 +1163,176 @@ fn rewrite_reg(reg : Reg, alloc : RegAllocResult) -> Reg {
   }
 }
 
+// ============ Dead Code Elimination ============
+
+///|
+/// Check if an opcode has side effects (cannot be eliminated even if dead)
+fn has_side_effects(opcode : VCodeOpcode) -> Bool {
+  match opcode {
+    // Memory stores have side effects
+    Store(_, _) | StackStore(_) => true
+    // Bounds check can trap
+    BoundsCheck(_, _) => true
+    // Function calls have side effects
+    CallIndirect(_, _) => true
+    // Everything else is pure computation
+    _ => false
+  }
+}
+
+///|
+/// Eliminate dead code from a VCode function
+/// Removes instructions that define vregs which are never used
+pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
+  // Step 1: Collect all used vregs
+  let used_vregs : Set[Int] = Set::new()
+
+  // Add function parameters (they're implicitly used)
+  for param in func.params {
+    used_vregs.add(param.id)
+  }
+
+  // Scan all instructions and terminators for uses
+  for block in func.blocks {
+    // Block parameters are used (they receive values from jumps)
+    for param in block.params {
+      used_vregs.add(param.id)
+    }
+
+    // Instruction uses
+    for inst in block.insts {
+      for use_reg in inst.uses {
+        match use_reg {
+          Virtual(vreg) => used_vregs.add(vreg.id)
+          Physical(_) => ()
+        }
+      }
+    }
+
+    // Terminator uses
+    match block.terminator {
+      Some(term) =>
+        match term {
+          Branch(cond, _, _) =>
+            match cond {
+              Virtual(vreg) => used_vregs.add(vreg.id)
+              Physical(_) => ()
+            }
+          Return(values) =>
+            for v in values {
+              match v {
+                Virtual(vreg) => used_vregs.add(vreg.id)
+                Physical(_) => ()
+              }
+            }
+          Jump(_) | Trap(_) => ()
+        }
+      None => ()
+    }
+  }
+
+  // Step 2: Build new function without dead instructions
+  let new_func = VCodeFunction::new(func.name)
+  new_func.next_vreg_id = func.next_vreg_id
+
+  // Copy params and results
+  for param in func.params {
+    new_func.params.push(param)
+  }
+  for result in func.results {
+    new_func.results.push(result)
+  }
+  // Copy result types for multi-value return support
+  for ty in func.result_types {
+    new_func.result_types.push(ty)
+  }
+
+  // Copy blocks, filtering out dead instructions
+  for block in func.blocks {
+    let new_block = new_func.new_block()
+
+    // Copy block params
+    for param in block.params {
+      new_block.params.push(param)
+    }
+
+    // Filter instructions: keep if has side effects OR defines a used vreg
+    for inst in block.insts {
+      let should_keep = if has_side_effects(inst.opcode) {
+        true
+      } else {
+        // Keep if any defined vreg is used
+        let mut any_def_used = false
+        for def in inst.defs {
+          match def.reg {
+            Virtual(vreg) =>
+              if used_vregs.contains(vreg.id) {
+                any_def_used = true
+              }
+            Physical(_) => any_def_used = true // Always keep physical reg defs
+          }
+        }
+        // Also keep instructions with no defs (shouldn't happen for pure ops, but be safe)
+        any_def_used || inst.defs.is_empty()
+      }
+      if should_keep {
+        new_block.add_inst(inst)
+      }
+    }
+
+    // Copy terminator
+    match block.terminator {
+      Some(term) => new_block.set_terminator(term)
+      None => ()
+    }
+  }
+  new_func
+}
+
 // ============ Convenience API ============
 
 ///|
 /// Allocate registers for a function using default AArch64 register set
 pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
-  // Get AArch64 allocatable registers
-  // Use caller-saved registers for general allocation
-  let int_regs = aapcs64_caller_saved()
+  // Step 0: Eliminate dead code first
+  let func = eliminate_dead_code(func)
+
+  // Check if function needs extra results buffer (uses X23)
+  // This is true if:
+  // 1. Function returns more than 2 values (needs_extra_results_ptr)
+  // 2. Function calls other functions that return more than 2 values (calls_multi_value_function)
+  let calls_multi = func.calls_multi_value_function()
+  let needs_extra = func.needs_extra_results_ptr()
+  let needs_x23_reserved = needs_extra || calls_multi
+
+  // Build allocatable register pool:
+  // 1. Scratch regs (caller-saved, no save needed) - use first
+  // 2. Callee-saved regs (must save/restore) - use when scratch exhausted
+  let int_regs : Array[PReg] = []
+  let callee_saved_int_regs : Array[PReg] = []
+  for r in allocatable_scratch_regs() {
+    int_regs.push(r)
+  }
+  for r in allocatable_callee_saved_regs() {
+    // X23 (index 23) is reserved for extra_results_buffer when needed
+    if needs_x23_reserved && r.index == 23 {
+      continue
+    }
+    int_regs.push(r)
+    callee_saved_int_regs.push(r)
+  }
   let float_regs = aapcs64_arg_fprs()
 
   // Compute liveness
   let liveness = compute_liveness(func)
 
   // Allocate
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(
+    int_regs, float_regs, callee_saved_int_regs,
+  )
   let alloc_result = allocator.allocate(func, liveness)
 
   // Apply allocation
-  apply_allocation(func, alloc_result)
+  let allocated_func = apply_allocation(func, alloc_result)
+  allocated_func
 }

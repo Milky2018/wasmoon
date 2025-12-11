@@ -8,6 +8,8 @@ import(
 )
 
 // Values
+pub fn compare_jit_interp(String, String, Array[@types.Value]) -> CompareResult
+
 pub fn parse_json_test_file(String) -> ParsedTestFile raise TestRunnerError
 
 pub fn parse_test_value(TestValue) -> @types.Value
@@ -32,6 +34,10 @@ pub suberror TestRunnerError {
 pub impl Show for TestRunnerError
 
 // Types and methods
+type CompareResult
+pub fn CompareResult::matched(Self) -> Bool
+pub fn CompareResult::to_string(Self) -> String
+
 pub(all) struct JsonValue {
   type_ : String
   value : String?

@@ -67,7 +67,8 @@ fn ir_type_to_reg_class(ty : @ir.Type) -> RegClass {
   match ty {
     @ir.Type::I32 | @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef =>
       Int
-    @ir.Type::F32 | @ir.Type::F64 => Float
+    @ir.Type::F32 => Float32
+    @ir.Type::F64 => Float64
   }
 }
 
@@ -163,6 +164,7 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   for ty in ir_func.results {
     let class = ir_type_to_reg_class(ty)
     ctx.vcode_func.add_result(class)
+    ctx.vcode_func.add_result_type(ty) // Also store full type info
   }
 
   // Phase 3.5: Pre-register all block parameters
@@ -321,7 +323,21 @@ fn lower_fconst(
   match inst.result {
     Some(result) => {
       let vreg = ctx.get_vreg(result)
-      let vcode_inst = VCodeInst::new(LoadConstF(val))
+      // Determine if this is an F32 or F64 constant based on the result type
+      let opcode = match result.ty {
+        @ir.Type::F32 => {
+          // Convert Double to Float, then get its 32-bit representation
+          let float_val = Float::from_double(val)
+          let bits = float_val.reinterpret_as_int()
+          LoadConstF32(bits)
+        }
+        _ => {
+          // F64: get 64-bit representation
+          let bits = val.reinterpret_as_int64()
+          LoadConstF64(bits)
+        }
+      }
+      let vcode_inst = VCodeInst::new(opcode)
       vcode_inst.add_def({ reg: Virtual(vreg) })
       block.add_inst(vcode_inst)
     }
@@ -1238,12 +1254,86 @@ fn lower_terminator(
     }
     @ir.Terminator::Trap(msg) => block.set_terminator(Trap(msg))
     @ir.Terminator::BrTable(index, targets, default) => {
-      // For now, lower br_table to a simple branch
-      // TODO: Implement proper switch lowering with jump tables
-      let _index_vreg = ctx.get_vreg(index)
+      // Lower br_table using a comparison chain
+      // For each target at position i, compare index with i and branch if equal
+      let index_vreg = ctx.get_vreg(index)
       let default_id = ctx.get_block_id(default)
-      block.set_terminator(Jump(default_id))
-      ignore(targets)
+      if targets.is_empty() {
+        // No targets, just jump to default
+        block.set_terminator(Jump(default_id))
+      } else {
+        // Create comparison chain blocks
+        // We need N-1 blocks where N = number of targets
+        // Original block handles index 0
+        // Chain block i-1 handles index i (for i = 1..N-1)
+        // The last comparison branches to default if not equal
+        let chain_blocks : Array[VCodeBlock] = []
+        for _ in 0..<(targets.length() - 1) {
+          chain_blocks.push(ctx.vcode_func.new_block())
+        }
+
+        // First comparison goes in the original block
+        // Compare index with 0
+        let cmp_result_0 = ctx.vcode_func.new_vreg(Int)
+        let zero_vreg = ctx.vcode_func.new_vreg(Int)
+
+        // Load constant 0
+        let load_zero = VCodeInst::new(LoadConst(0L))
+        load_zero.add_def({ reg: Virtual(zero_vreg) })
+        block.add_inst(load_zero)
+
+        // Compare index with 0: cmp_result = (index == 0)
+        let cmp_inst_0 = VCodeInst::new(Cmp(Eq))
+        cmp_inst_0.add_def({ reg: Virtual(cmp_result_0) })
+        cmp_inst_0.add_use(Virtual(index_vreg))
+        cmp_inst_0.add_use(Virtual(zero_vreg))
+        block.add_inst(cmp_inst_0)
+
+        // Branch: if equal go to targets[0], else go to chain_blocks[0] (next comparison)
+        let target_0_id = ctx.get_block_id(targets[0])
+        if targets.length() == 1 {
+          // Only one target, else goes to default
+          block.set_terminator(
+            Branch(Virtual(cmp_result_0), target_0_id, default_id),
+          )
+        } else {
+          block.set_terminator(
+            Branch(Virtual(cmp_result_0), target_0_id, chain_blocks[0].id),
+          )
+        }
+
+        // Fill in the chain blocks for indices 1 to N-1
+        for i in 1..<targets.length() {
+          let chain_block = chain_blocks[i - 1]
+          let target_id = ctx.get_block_id(targets[i])
+
+          // Load constant i
+          let const_vreg = ctx.vcode_func.new_vreg(Int)
+          let load_const = VCodeInst::new(LoadConst(i.to_int64()))
+          load_const.add_def({ reg: Virtual(const_vreg) })
+          chain_block.add_inst(load_const)
+
+          // Compare index with i
+          let cmp_result = ctx.vcode_func.new_vreg(Int)
+          let cmp_inst = VCodeInst::new(Cmp(Eq))
+          cmp_inst.add_def({ reg: Virtual(cmp_result) })
+          cmp_inst.add_use(Virtual(index_vreg))
+          cmp_inst.add_use(Virtual(const_vreg))
+          chain_block.add_inst(cmp_inst)
+
+          // Branch: if equal go to targets[i], else go to next chain block or default
+          if i == targets.length() - 1 {
+            // Last comparison, else goes to default
+            chain_block.set_terminator(
+              Branch(Virtual(cmp_result), target_id, default_id),
+            )
+          } else {
+            chain_block.set_terminator(
+              Branch(Virtual(cmp_result), target_id, chain_blocks[i].id),
+            )
+          }
+        }
+      }
     }
   }
 }
@@ -1265,7 +1355,10 @@ fn lower_call(
     arg_vregs.push(ctx.get_vreg(operand))
   }
   let num_args = arg_vregs.length()
-  let has_result = inst.result is Some(_)
+
+  // Get all results (primary result + extra_results)
+  let all_results = inst.all_results()
+  let num_results = all_results.length()
 
   // Create a temporary vreg for the function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -1281,15 +1374,15 @@ fn lower_call(
   block.add_inst(load_inst)
 
   // Step 2: Emit CallIndirect instruction
-  let call_inst = VCodeInst::new(CallIndirect(num_args, has_result))
-  // Result (if any)
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      call_inst.add_def({ reg: Virtual(dst) })
-    }
-    None => ()
+  let call_inst = VCodeInst::new(CallIndirect(num_args, num_results))
+  // Define all results
+  for result in all_results {
+    let dst = ctx.get_vreg(result)
+    call_inst.add_def({ reg: Virtual(dst) })
   }
+  // Add clobbers for all caller-saved registers
+  // This tells the register allocator that these registers are destroyed by the call
+  add_call_clobbers(call_inst)
   // Uses: function pointer first, then arguments
   call_inst.add_use(Virtual(func_ptr_vreg))
   for arg_vreg in arg_vregs {
@@ -1321,7 +1414,10 @@ fn lower_call_indirect(
     arg_vregs.push(ctx.get_vreg(inst.operands[i]))
   }
   let num_args = arg_vregs.length()
-  let has_result = inst.result is Some(_)
+
+  // Get all results (primary result + extra_results)
+  let all_results = inst.all_results()
+  let num_results = all_results.length()
 
   // Create temporaries for calculation
   let offset_vreg = ctx.vcode_func.new_vreg(Int)
@@ -1353,19 +1449,35 @@ fn lower_call_indirect(
   block.add_inst(load_inst)
 
   // Step 4: Emit CallIndirect instruction
-  let call_inst = VCodeInst::new(CallIndirect(num_args, has_result))
-  // Result (if any)
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      call_inst.add_def({ reg: Virtual(dst) })
-    }
-    None => ()
+  let call_inst = VCodeInst::new(CallIndirect(num_args, num_results))
+  // Define all results
+  for result in all_results {
+    let dst = ctx.get_vreg(result)
+    call_inst.add_def({ reg: Virtual(dst) })
   }
+  // Add clobbers for all caller-saved registers
+  // This tells the register allocator that these registers are destroyed by the call
+  add_call_clobbers(call_inst)
   // Uses: function pointer first, then arguments
   call_inst.add_use(Virtual(func_ptr_vreg))
   for arg_vreg in arg_vregs {
     call_inst.add_use(Virtual(arg_vreg))
   }
   block.add_inst(call_inst)
+}
+
+///|
+/// Add clobber definitions for all caller-saved registers to a call instruction.
+/// This tells the register allocator that these registers are destroyed by the call,
+/// so any values that need to survive across the call must be spilled or allocated
+/// to callee-saved registers.
+fn add_call_clobbers(call_inst : VCodeInst) -> Unit {
+  // Add clobbers for all caller-saved GPRs (X0-X17)
+  for preg in call_clobbered_gprs() {
+    call_inst.add_def({ reg: Physical(preg) })
+  }
+  // Add clobbers for all caller-saved FPRs (D0-D7)
+  for preg in call_clobbered_fprs() {
+    call_inst.add_def({ reg: Physical(preg) })
+  }
 }

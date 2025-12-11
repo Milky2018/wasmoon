@@ -87,9 +87,9 @@ pub impl TargetISA for AArch64 with get_preg(
       } else {
         None
       }
-    Float =>
+    Float32 | Float64 =>
       if index >= 0 && index < 32 {
-        Some({ index, class: Float })
+        Some({ index, class })
       } else {
         None
       }
@@ -175,42 +175,42 @@ pub fn AArch64Regs::lr(_self : AArch64Regs) -> PReg {
 
 ///|
 pub fn AArch64Regs::d0(_self : AArch64Regs) -> PReg {
-  { index: 0, class: Float }
+  { index: 0, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d1(_self : AArch64Regs) -> PReg {
-  { index: 1, class: Float }
+  { index: 1, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d2(_self : AArch64Regs) -> PReg {
-  { index: 2, class: Float }
+  { index: 2, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d3(_self : AArch64Regs) -> PReg {
-  { index: 3, class: Float }
+  { index: 3, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d4(_self : AArch64Regs) -> PReg {
-  { index: 4, class: Float }
+  { index: 4, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d5(_self : AArch64Regs) -> PReg {
-  { index: 5, class: Float }
+  { index: 5, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d6(_self : AArch64Regs) -> PReg {
-  { index: 6, class: Float }
+  { index: 6, class: Float64 }
 }
 
 ///|
 pub fn AArch64Regs::d7(_self : AArch64Regs) -> PReg {
-  { index: 7, class: Float }
+  { index: 7, class: Float64 }
 }
 
 // ============ Register Usage in AAPCS64 ============
@@ -256,19 +256,17 @@ pub fn aapcs64_callee_saved() -> Array[PReg] {
 }
 
 ///|
-/// AAPCS64 caller-saved registers (scratch registers)
-/// Note: X0 and X1 are excluded because our JIT ABI uses them for
-/// func_table_ptr and memory_base, which get clobbered on function calls.
-/// Note: X9-X17 are excluded because they're used as scratch registers
-/// in CallIndirect for function pointer and argument shuffling.
-/// Note: X2-X7 are excluded because they're used for passing arguments
-/// in CallIndirect, so values in these registers get clobbered.
-/// We use callee-saved registers X19-X28 for values that need to survive
-/// across function calls (like loop counters).
-pub fn aapcs64_caller_saved() -> Array[PReg] {
+/// Scratch registers available for allocation (caller-saved, no save/restore needed)
+/// Only X8 is available - X9-X17 are used by CallIndirect
+pub fn allocatable_scratch_regs() -> Array[PReg] {
+  [{ index: 8, class: Int }]
+}
+
+///|
+/// Callee-saved registers available for allocation (must be saved/restored)
+/// X20-X22 are reserved for func_table, memory_base, memory_size
+pub fn allocatable_callee_saved_regs() -> Array[PReg] {
   [
-    // Use callee-saved registers that survive across function calls
-    // X20, X21, X22 are reserved for func_table_ptr, memory_base, memory_size
     { index: 19, class: Int },
     { index: 23, class: Int },
     { index: 24, class: Int },
@@ -276,9 +274,6 @@ pub fn aapcs64_caller_saved() -> Array[PReg] {
     { index: 26, class: Int },
     { index: 27, class: Int },
     { index: 28, class: Int },
-    // Also include X8 which is not used for arguments
-    { index: 8, class: Int },
-    { index: 18, class: Int }, // Platform register
   ]
 }
 
@@ -286,14 +281,14 @@ pub fn aapcs64_caller_saved() -> Array[PReg] {
 /// AAPCS64 floating-point argument registers
 pub fn aapcs64_arg_fprs() -> Array[PReg] {
   [
-    { index: 0, class: Float },
-    { index: 1, class: Float },
-    { index: 2, class: Float },
-    { index: 3, class: Float },
-    { index: 4, class: Float },
-    { index: 5, class: Float },
-    { index: 6, class: Float },
-    { index: 7, class: Float },
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+    { index: 4, class: Float64 },
+    { index: 5, class: Float64 },
+    { index: 6, class: Float64 },
+    { index: 7, class: Float64 },
   ]
 }
 
@@ -301,9 +296,52 @@ pub fn aapcs64_arg_fprs() -> Array[PReg] {
 /// AAPCS64 floating-point return registers
 pub fn aapcs64_ret_fprs() -> Array[PReg] {
   [
-    { index: 0, class: Float },
-    { index: 1, class: Float },
-    { index: 2, class: Float },
-    { index: 3, class: Float },
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+  ]
+}
+
+///|
+/// Registers clobbered by function calls (caller-saved)
+/// These are registers that the caller must assume are destroyed after a call.
+/// For our JIT ABI: X0-X7 (args/return), X8 (scratch), X9-X17 (used by call)
+/// Also D0-D7 for floating-point
+pub fn call_clobbered_gprs() -> Array[PReg] {
+  [
+    { index: 0, class: Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
+    { index: 8, class: Int },
+    { index: 9, class: Int },
+    { index: 10, class: Int },
+    { index: 11, class: Int },
+    { index: 12, class: Int },
+    { index: 13, class: Int },
+    { index: 14, class: Int },
+    { index: 15, class: Int },
+    { index: 16, class: Int },
+    { index: 17, class: Int },
+  ]
+}
+
+///|
+/// Floating-point registers clobbered by function calls
+pub fn call_clobbered_fprs() -> Array[PReg] {
+  [
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+    { index: 4, class: Float64 },
+    { index: 5, class: Float64 },
+    { index: 6, class: Float64 },
+    { index: 7, class: Float64 },
   ]
 }

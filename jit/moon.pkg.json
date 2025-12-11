@@ -1,11 +1,25 @@
 {
   "import": [
     "Milky2018/wasmoon/vcode",
-    "Milky2018/wasmoon/cwasm"
+    "Milky2018/wasmoon/cwasm",
+    "Milky2018/wasmoon/types"
+  ],
+  "wbtest-import": [
+    "Milky2018/wasmoon/ir",
+    "Milky2018/wasmoon/wast"
   ],
   "targets": {
-    "ffi_jit.mbt": ["native"],
-    "jit_runtime.mbt": ["native"]
+    "ffi_jit.mbt": [
+      "native"
+    ],
+    "jit_runtime.mbt": [
+      "native"
+    ],
+    "execution_wbtest.mbt": [
+      "native"
+    ]
   },
-  "native-stub": ["ffi_jit.c"]
+  "native-stub": [
+    "ffi_jit.c"
+  ]
 }

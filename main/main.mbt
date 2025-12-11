@@ -5,6 +5,11 @@ fn main {
     "verbose", "print-ir", "print-vcode", "print-regalloc", "trace-exec",
   ])
 
+  // Define choices for explore stages
+  let stage_choices = @hashset.HashSet::from_array([
+    "wasm", "ir", "opt-ir", "vcode", "regalloc", "mc",
+  ])
+
   // Define choices for config action
   let config_action_choices = @hashset.HashSet::from_array([
     "show", "path", "init",
@@ -102,10 +107,13 @@ fn main {
             nargs=@clap.Nargs::AtMost(1),
             help="Optimization level (0-3, default: 2)",
           ),
-          "html": @clap.Arg::named(
-            nargs=@clap.Nargs::AtMost(1),
-            help="Output HTML report to specified path",
+          "stage": @clap.Arg::named(
+            short='s',
+            nargs=@clap.Nargs::Any,
+            choices=stage_choices,
+            help="Stages to show: wasm, ir, opt-ir, vcode, regalloc, mc (default all)",
           ),
+          "html": @clap.Arg::flag(help="Output HTML report"),
         },
       ),
       "objdump": @clap.SubCommand::new(help="Inspect precompiled .cwasm file", args={
@@ -317,16 +325,18 @@ fn main {
                     }
                   None => 2
                 }
-                let html_output : String? = match sub.args.get("html") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      Some(arr[0])
-                    } else {
-                      None
-                    }
-                  None => None
+                let stages : Array[String] = match sub.args.get("stage") {
+                  Some(arr) => arr
+                  None => []
                 }
-                run_explore(positional[0], func_idx, opt_level, html_output)
+                let html_output = sub.flags.get("html") is Some(true)
+                run_explore(
+                  positional[0],
+                  func_idx,
+                  opt_level,
+                  stages,
+                  html_output,
+                )
               } else {
                 println("Error: missing file argument")
               }

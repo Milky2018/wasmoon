@@ -4,99 +4,48 @@
 
 ///|
 /// JIT-compiled function ready for execution
-pub(all) struct JITFunction {
+pub struct JITFunction {
   name : String
-  func_idx : Int
-  exec_code : ExecCode
-  frame_size : Int
+  priv exec_code : ExecCode
   num_params : Int
-  has_result : Bool
+  result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
 }
 
 ///|
-pub fn JITFunction::new(
+fn JITFunction::new(
   name : String,
-  func_idx : Int,
   exec_code : ExecCode,
-  frame_size : Int,
   num_params : Int,
-  has_result : Bool,
+  result_types : Array[@types.ValueType],
 ) -> JITFunction {
-  { name, func_idx, exec_code, frame_size, num_params, has_result }
-}
-
-///|
-/// Call the function with i64 arguments
-pub fn JITFunction::call(self : JITFunction, args : Array[Int64]) -> Int64? {
-  // Validate argument count
-  if args.length() != self.num_params {
-    return None
-  }
-  // Call based on number of arguments and return type
-  if self.has_result {
-    let result = match self.num_params {
-      0 => self.exec_code.call_void_i64()
-      1 => self.exec_code.call_i64_i64(args[0])
-      2 => self.exec_code.call_i64i64_i64(args[0], args[1])
-      3 => self.exec_code.call_i64i64i64_i64(args[0], args[1], args[2])
-      4 =>
-        self.exec_code.call_i64i64i64i64_i64(args[0], args[1], args[2], args[3])
-      _ => return None // Too many arguments
-    }
-    Some(result)
-  } else {
-    match self.num_params {
-      0 => self.exec_code.call_void_void()
-      1 => self.exec_code.call_i64_void(args[0])
-      2 => self.exec_code.call_i64i64_void(args[0], args[1])
-      3 => self.exec_code.call_i64i64i64_void(args[0], args[1], args[2])
-      4 =>
-        self.exec_code.call_i64i64i64i64_void(
-          args[0],
-          args[1],
-          args[2],
-          args[3],
-        )
-      _ => return None
-    }
-    None
-  }
+  { name, exec_code, num_params, result_types }
 }
 
 ///|
 /// Free the JIT function's executable memory
-pub fn JITFunction::free(self : JITFunction) -> Unit {
+fn JITFunction::free(self : JITFunction) -> Unit {
   self.exec_code.free()
 }
 
 ///|
-/// Debug print the machine code
-pub fn JITFunction::debug_print(self : JITFunction) -> Unit {
-  println("JIT Function: \{self.name} (idx=\{self.func_idx})")
-  println("  Params: \{self.num_params}, Returns: \{self.has_result}")
-  println("  Frame size: \{self.frame_size}")
-  self.exec_code.debug_print()
-}
-
-///|
 /// Loaded precompiled module with executable functions
-pub(all) struct JITModule {
-  functions : Map[Int, JITFunction]
-  by_name : Map[String, Int]
-  mut context : JITContext?
-  mut num_imports : Int
+pub struct JITModule {
+  priv functions : Map[Int, JITFunction]
+  priv by_name : Map[String, Int]
+  priv mut context : JITContext?
 }
 
 ///|
 pub fn JITModule::new() -> JITModule {
-  { functions: Map::new(), by_name: Map::new(), context: None, num_imports: 0 }
+  { functions: Map::new(), by_name: Map::new(), context: None }
 }
 
 ///|
 /// Load a precompiled module
+/// func_signatures: Array of (num_params, result_types) for each func_idx
 pub fn JITModule::load(
   precompiled : @cwasm.PrecompiledModule,
-  func_types : Array[(Int, Bool)], // (num_params, has_result) for each func_idx
+  func_signatures : Array[(Int, Array[@types.ValueType])],
 ) -> JITModule? {
   let jit_module = JITModule::new()
   let num_imports = precompiled.imports.length()
@@ -122,17 +71,17 @@ pub fn JITModule::load(
         match exec_code {
           Some(ec) => {
             // Get function signature
-            let (num_params, has_result) = func_types
-              .iter()
-              .nth(entry.func_idx)
-              .unwrap_or((0, false))
+            let (num_params, result_types) = if entry.func_idx <
+              func_signatures.length() {
+              func_signatures[entry.func_idx]
+            } else {
+              (0, [])
+            }
             let jit_func = JITFunction::new(
               entry.name,
-              entry.func_idx,
               ec,
-              entry.frame_size,
               num_params,
-              has_result,
+              result_types,
             )
             jit_module.functions.set(entry.func_idx, jit_func)
             jit_module.by_name.set(entry.name, entry.func_idx)
@@ -152,10 +101,58 @@ pub fn JITModule::load(
 
       // Store context in module
       jit_module.context = Some(ctx)
-      jit_module.num_imports = num_imports
     }
   }
   Some(jit_module)
+}
+
+///|
+/// Create a JITModule from a single compiled function (for testing)
+/// This is a convenience method for unit tests that compile a single function
+pub fn JITModule::from_single_function(
+  code_bytes : Array[Int],
+  func_name : String,
+  num_params : Int,
+  result_types : Array[@types.ValueType],
+  mem_size : Int64,
+) -> JITModule? {
+  // Create context with 1 function slot
+  let context = JITContext::new(1)
+  match context {
+    None => return None
+    Some(ctx) => {
+      // Allocate memory
+      let mem_ptr = alloc_memory(mem_size)
+      if mem_ptr == 0L {
+        ctx.free()
+        return None
+      }
+      ctx.set_memory(mem_ptr, mem_size)
+      // Create executable code
+      let exec_code = ExecCode::new(code_bytes)
+      match exec_code {
+        None => {
+          free_memory(mem_ptr)
+          ctx.free()
+          return None
+        }
+        Some(ec) => {
+          // Set function in table
+          ctx.set_func(0, ec.ptr)
+          // Create JIT function
+          let jit_func = JITFunction::new(
+            func_name, ec, num_params, result_types,
+          )
+          // Create module
+          let jit_module = JITModule::new()
+          jit_module.functions.set(0, jit_func)
+          jit_module.by_name.set(func_name, 0)
+          jit_module.context = Some(ctx)
+          Some(jit_module)
+        }
+      }
+    }
+  }
 }
 
 ///|
@@ -231,36 +228,42 @@ pub fn JITModule::free(self : JITModule) -> Unit {
 
 ///|
 /// Call a function using the JIT context (for functions that need to call other functions)
+/// Returns Array[Int64] where each element corresponds to a return value:
+/// - For I32/I64: the value is directly in Int64
+/// - For F32/F64: the value is the bits of a f64 (Double) reinterpreted as Int64
+///   (JIT internally promotes f32 to f64)
 pub fn JITModule::call_with_context(
   self : JITModule,
   func : JITFunction,
   args : Array[Int64],
-) -> Int64? raise JITTrap {
+) -> Array[Int64] raise JITTrap {
   match self.context {
     Some(ctx) => {
       // Activate context for WASI calls
       ctx.activate()
-      // Call using context-aware method based on argument count
-      if func.has_result {
-        let result = match args.length() {
-          0 => ctx.call_void_i64(func.exec_code.ptr)
-          1 => ctx.call_i64_i64(func.exec_code.ptr, args[0])
-          2 => ctx.call_i64i64_i64(func.exec_code.ptr, args[0], args[1])
-          _ => return None // Too many arguments
-        }
-        Some(result)
-      } else {
-        match args.length() {
-          0 => ctx.call_void_void(func.exec_code.ptr)
-          1 => ctx.call_i64_void(func.exec_code.ptr, args[0])
-          2 => ctx.call_i64i64_void(func.exec_code.ptr, args[0], args[1])
-          _ => return None // Too many arguments
-        }
-        None
-      }
+      let num_results = func.result_types.length()
+      let results : Array[Int64] = Array::make(num_results, 0L)
+      ctx.call_multi_return(
+        func.exec_code.ptr,
+        args,
+        results,
+        func.result_types,
+      )
+      results
     }
-    None =>
-      // Fallback to direct call (no context)
-      func.call(args)
+    None => [] // No context, cannot call
+  }
+}
+
+///|
+/// Set memory for the JIT context
+pub fn JITModule::set_memory(
+  self : JITModule,
+  mem_ptr : Int64,
+  mem_size : Int64,
+) -> Unit {
+  match self.context {
+    Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
+    None => ()
   }
 }

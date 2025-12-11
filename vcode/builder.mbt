@@ -193,7 +193,7 @@ pub fn VCodeBuilder::lshr(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
 
 ///|
 pub fn VCodeBuilder::fadd(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
-  let result = self.new_vreg(Float)
+  let result = self.new_vreg(Float64)
   let inst = VCodeInst::new(FAdd)
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
@@ -204,7 +204,7 @@ pub fn VCodeBuilder::fadd(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
 
 ///|
 pub fn VCodeBuilder::fsub(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
-  let result = self.new_vreg(Float)
+  let result = self.new_vreg(Float64)
   let inst = VCodeInst::new(FSub)
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
@@ -215,7 +215,7 @@ pub fn VCodeBuilder::fsub(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
 
 ///|
 pub fn VCodeBuilder::fmul(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
-  let result = self.new_vreg(Float)
+  let result = self.new_vreg(Float64)
   let inst = VCodeInst::new(FMul)
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
@@ -226,7 +226,7 @@ pub fn VCodeBuilder::fmul(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
 
 ///|
 pub fn VCodeBuilder::fdiv(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
-  let result = self.new_vreg(Float)
+  let result = self.new_vreg(Float64)
   let inst = VCodeInst::new(FDiv)
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
@@ -245,7 +245,8 @@ pub fn VCodeBuilder::load(
   offset : Int,
 ) -> VReg {
   let class = match ty {
-    F32 | F64 => Float
+    F32 => Float32
+    F64 => Float64
     _ => Int
   }
   let result = self.new_vreg(class)
@@ -293,8 +294,10 @@ pub fn VCodeBuilder::iconst(self : VCodeBuilder, value : Int64) -> VReg {
 
 ///|
 pub fn VCodeBuilder::fconst(self : VCodeBuilder, value : Double) -> VReg {
-  let result = self.new_vreg(Float)
-  let inst = VCodeInst::new(LoadConstF(value))
+  // This builder method defaults to F64
+  let result = self.new_vreg(Float64)
+  let bits = value.reinterpret_as_int64()
+  let inst = VCodeInst::new(LoadConstF64(bits))
   inst.add_def({ reg: Virtual(result) })
   self.emit(inst)
   result

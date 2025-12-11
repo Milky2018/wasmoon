@@ -242,12 +242,13 @@ fn run_wasm(
       }
       if can_use_jit {
         // JIT execution path
-        let jit_result = run_with_jit(
+        let jit_results = run_with_jit(
           mod_, instance, store, func_name, args, debug_config,
         )
-        match jit_result {
-          Some(r) => println(r.to_string())
-          None => ()
+        if jit_results.length() > 0 {
+          // Print all results separated by spaces
+          let strs = jit_results.map(format_value)
+          println(strs.join(" "))
         }
       } else {
         // Interpreter execution path
@@ -494,7 +495,7 @@ fn run_with_jit(
   func_name : String,
   args : Array[@types.Value],
   debug_config : DebugConfig,
-) -> Int64? {
+) -> Array[@types.Value] {
   if debug_config.verbose {
     println("[DEBUG] JIT: Compiling module...")
   }
@@ -503,20 +504,17 @@ fn run_with_jit(
   match precompiled {
     None => {
       println("Error: JIT compilation failed")
-      return None
+      return []
     }
     Some(pc) => {
-      // Build func_types array for JITModule::load
-      let func_types : Array[(Int, Bool)] = []
-      for entry in pc.functions {
-        func_types.push((entry.num_params, entry.num_results > 0))
-      }
+      // Build func_signatures array for JITModule::load
+      let func_signatures = build_jit_func_signatures(mod_)
       // Load JIT module
-      let jit_module = @jit.JITModule::load(pc, func_types)
+      let jit_module = @jit.JITModule::load(pc, func_signatures)
       match jit_module {
         None => {
           println("Error: Failed to load JIT module")
-          return None
+          return []
         }
         Some(jm) => {
           // Allocate linear memory
@@ -525,15 +523,12 @@ fn run_with_jit(
           if mem_ptr == 0L {
             println("Error: Failed to allocate linear memory")
             jm.free()
-            return None
+            return []
           }
           // Initialize data segments
           init_data_segments(mod_, mem_ptr)
           // Set memory in JIT context
-          match jm.context {
-            Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
-            None => ()
-          }
+          jm.set_memory(mem_ptr, mem_size)
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {
@@ -553,24 +548,42 @@ fn run_with_jit(
               if debug_config.verbose {
                 println("[DEBUG] JIT: Calling function '\{func_name}'")
               }
-              let result = jm.call_with_context(f, i64_args) catch {
+              let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   println("JIT Trap: \{msg}")
                   @jit.free_memory(mem_ptr)
                   jm.free()
-                  return None
+                  return []
+                }
+              }
+              // Convert Int64 results to Value based on result types
+              let values : Array[@types.Value] = []
+              for i, r in results {
+                if i < f.result_types.length() {
+                  let v = match f.result_types[i] {
+                    I32 => @types.Value::I32(r.to_int())
+                    I64 => @types.Value::I64(r)
+                    F32 => {
+                      // r contains bits of f64, convert to f32
+                      let f64_val = r.reinterpret_as_double()
+                      @types.Value::F32(Float::from_double(f64_val))
+                    }
+                    F64 => @types.Value::F64(r.reinterpret_as_double())
+                    _ => @types.Value::I32(r.to_int())
+                  }
+                  values.push(v)
                 }
               }
               // Cleanup
               @jit.free_memory(mem_ptr)
               jm.free()
-              result
+              values
             }
             None => {
               println("Error: Function '\{func_name}' not found in JIT module")
               @jit.free_memory(mem_ptr)
               jm.free()
-              None
+              []
             }
           }
         }
@@ -620,10 +633,25 @@ fn compile_module_to_jit(
     let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (O2 level)
     @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
+    // DEBUG: Print IR
+    if debug_config.verbose {
+      println("[DEBUG] IR for \{func_name}:")
+      println(ir_func.print())
+    }
     // Stage 3: Lower to VCode
     let vcode_func = @vcode.lower_function(ir_func)
+    // DEBUG: Print VCode before regalloc
+    if debug_config.verbose {
+      println("[DEBUG] VCode before regalloc for \{func_name}:")
+      println(vcode_func.print())
+    }
     // Stage 4: Register allocation
     let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+    // DEBUG: Print VCode after regalloc
+    if debug_config.verbose {
+      println("[DEBUG] VCode after regalloc for \{func_name}:")
+      println(allocated.print())
+    }
     // Stage 5: Emit machine code
     let mc = @vcode.emit_function(allocated)
     // Stage 6: Add to precompiled module
@@ -666,6 +694,42 @@ fn init_data_segments(mod_ : @types.Module, mem_ptr : Int64) -> Unit {
     }
     @jit.memory_init(mem_ptr, offset, data.init) |> ignore
   }
+}
+
+///|
+/// Build func_signatures array for JIT module loading
+/// Returns Array[(num_params, result_types)] for each function
+fn build_jit_func_signatures(
+  mod_ : @types.Module,
+) -> Array[(Int, Array[@types.ValueType])] {
+  let num_imports = count_func_imports(mod_.imports)
+  let total_funcs = num_imports + mod_.funcs.length()
+  let signatures : Array[(Int, Array[@types.ValueType])] = []
+  // Pre-fill with empty signatures for all functions
+  for _ in 0..<total_funcs {
+    signatures.push((0, []))
+  }
+  // Fill in signatures for import functions
+  for i, imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      if type_idx < mod_.types.length() {
+        let func_type = mod_.types[type_idx]
+        signatures[i] = (func_type.params.length(), func_type.results.copy())
+      }
+    }
+  }
+  // Fill in signatures for local functions
+  for i, type_idx in mod_.funcs {
+    let func_idx = num_imports + i
+    if type_idx < mod_.types.length() {
+      let func_type = mod_.types[type_idx]
+      signatures[func_idx] = (
+        func_type.params.length(),
+        func_type.results.copy(),
+      )
+    }
+  }
+  signatures
 }
 
 ///|

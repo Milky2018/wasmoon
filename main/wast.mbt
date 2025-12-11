@@ -277,12 +277,10 @@ fn try_compile_jit(
     None => None
     Some(pc) => {
       // Build func_types array
-      let func_types : Array[(Int, Bool)] = []
-      for entry in pc.functions {
-        func_types.push((entry.num_params, entry.num_results > 0))
-      }
+      // Build func_signatures array for JIT module
+      let func_signatures = build_func_signatures(mod_)
       // Load JIT module
-      let jit_module = @jit.JITModule::load(pc, func_types)
+      let jit_module = @jit.JITModule::load(pc, func_signatures)
       match jit_module {
         None => None
         Some(jm) => {
@@ -296,15 +294,48 @@ fn try_compile_jit(
           // Initialize data segments
           init_data_segments(mod_, mem_ptr)
           // Set memory in JIT context
-          match jm.context {
-            Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
-            None => ()
-          }
+          jm.set_memory(mem_ptr, mem_size)
           Some((jm, mem_ptr))
         }
       }
     }
   }
+}
+
+///|
+/// Build func_signatures array for JIT module loading
+/// Returns Array[(num_params, result_types)] for each function
+fn build_func_signatures(
+  mod_ : @types.Module,
+) -> Array[(Int, Array[@types.ValueType])] {
+  let num_imports = count_func_imports(mod_.imports)
+  let total_funcs = num_imports + mod_.funcs.length()
+  let signatures : Array[(Int, Array[@types.ValueType])] = []
+  // Pre-fill with empty signatures for all functions
+  for _ in 0..<total_funcs {
+    signatures.push((0, []))
+  }
+  // Fill in signatures for import functions
+  for i, imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      if type_idx < mod_.types.length() {
+        let func_type = mod_.types[type_idx]
+        signatures[i] = (func_type.params.length(), func_type.results.copy())
+      }
+    }
+  }
+  // Fill in signatures for local functions
+  for i, type_idx in mod_.funcs {
+    let func_idx = num_imports + i
+    if type_idx < mod_.types.length() {
+      let func_type = mod_.types[type_idx]
+      signatures[func_idx] = (
+        func_type.params.length(),
+        func_type.results.copy(),
+      )
+    }
+  }
+  signatures
 }
 
 ///|
@@ -625,12 +656,7 @@ fn invoke_action(
         None => ctx.current_jit
       }
       match jit_info {
-        Some((jm, _mem_ptr, mod_)) => {
-          // Activate JIT context
-          match jm.context {
-            Some(jit_ctx) => jit_ctx.activate()
-            None => ()
-          }
+        Some((jm, _mem_ptr, _mod)) =>
           // Find and call JIT function
           match jm.get_func_by_name(func_name) {
             Some(f) => {
@@ -646,20 +672,17 @@ fn invoke_action(
                 }
                 i64_args.push(v)
               }
-              let result = jm.call_with_context(f, i64_args) catch {
+              let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => raise RuntimeError(msg)
               }
-              match result {
-                Some(v) =>
-                  // Convert result back to Value based on function return type
-                  if f.has_result {
-                    // Determine result type from function signature
-                    [convert_jit_result(v, func_name, mod_)]
-                  } else {
-                    []
-                  }
-                None => []
+              // Convert results back to Values based on function return types
+              let values : Array[@types.Value] = []
+              for i, r in results {
+                if i < f.result_types.length() {
+                  values.push(convert_jit_result(r, f.result_types[i]))
+                }
               }
+              values
             }
             None => {
               // Function not found in JIT, fall back to interpreter
@@ -674,7 +697,6 @@ fn invoke_action(
               }
             }
           }
-        }
         None => {
           // No JIT available, use interpreter
           let runtime_args = args.map(wast_value_to_runtime)
@@ -715,40 +737,22 @@ fn invoke_action(
 }
 
 ///|
-/// Convert JIT result (Int64) to Value based on function's return type
-fn convert_jit_result(
-  v : Int64,
-  func_name : String,
-  mod_ : @types.Module,
-) -> @types.Value {
-  // Find the function's return type from exports
-  for exp in mod_.exports {
-    if exp.name == func_name && exp.desc is Func(func_idx) {
-      // Get function type
-      let num_imports = count_func_imports(mod_.imports)
-      if func_idx >= num_imports {
-        let local_idx = func_idx - num_imports
-        if local_idx < mod_.funcs.length() {
-          let type_idx = mod_.funcs[local_idx]
-          if type_idx < mod_.types.length() {
-            let func_type = mod_.types[type_idx]
-            if func_type.results.length() > 0 {
-              return match func_type.results[0] {
-                I32 => @types.Value::I32(v.to_int())
-                I64 => @types.Value::I64(v)
-                F32 =>
-                  @types.Value::F32(Float::reinterpret_from_int(v.to_int()))
-                F64 => @types.Value::F64(v.reinterpret_as_double())
-                _ => @types.Value::I32(v.to_int())
-              }
-            }
-          }
-        }
-      }
+/// Convert JIT result (Int64) to Value based on the given return type
+/// Note: For float types, the Int64 contains the bits of a f64 (Double),
+/// because JIT internally promotes f32 to f64.
+fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
+  match ty {
+    I32 => @types.Value::I32(v.to_int())
+    I64 => @types.Value::I64(v)
+    F32 => {
+      // v contains bits of a f64 (JIT promotes f32 to f64 internally)
+      // Convert f64 to f32 value
+      let f64_val = v.reinterpret_as_double()
+      @types.Value::F32(Float::from_double(f64_val))
     }
+    F64 => @types.Value::F64(v.reinterpret_as_double())
+    _ => @types.Value::I32(v.to_int())
   }
-  // Default to I32
-  @types.Value::I32(v.to_int())
 }
 
 ///|

@@ -31,11 +31,91 @@ extern "C" {
 #include "moonbit.h"
 
 // ============ Trap Handling ============
-// Jump buffer for catching JIT traps (BRK instructions)
+// Jump buffer for catching JIT traps (BRK instructions and stack overflow)
 // Using sigjmp_buf/sigsetjmp/siglongjmp for proper signal handler support
 static sigjmp_buf g_trap_jmp_buf;
 static volatile sig_atomic_t g_trap_code = 0;
 static volatile sig_atomic_t g_trap_active = 0;
+
+// Trap codes:
+// 0 = no trap
+// 1 = out of bounds memory access
+// 2 = call stack exhausted
+
+// Alternate signal stack for handling stack overflow
+#define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
+static char g_sigstack[SIGSTACK_SIZE];
+static int g_sigstack_installed = 0;
+
+// Stack bounds for overflow detection
+static void *g_stack_base = NULL;   // Stack base (high address on most platforms)
+static size_t g_stack_size = 0;     // Stack size
+
+// Initialize stack bounds
+static void init_stack_bounds(void) {
+    if (g_stack_base != NULL) return;  // Already initialized
+
+#if defined(__APPLE__)
+    // macOS: use pthread_get_stackaddr_np and pthread_get_stacksize_np
+    pthread_t self = pthread_self();
+    g_stack_base = pthread_get_stackaddr_np(self);
+    g_stack_size = pthread_get_stacksize_np(self);
+#elif defined(__linux__)
+    // Linux: use pthread_attr_getstack
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_getattr_np(pthread_self(), &attr);
+    void *stack_addr;
+    size_t stack_size;
+    pthread_attr_getstack(&attr, &stack_addr, &stack_size);
+    // On Linux, stack_addr is the low address
+    g_stack_base = (char*)stack_addr + stack_size;
+    g_stack_size = stack_size;
+    pthread_attr_destroy(&attr);
+#else
+    // Fallback: estimate from current stack pointer
+    volatile int dummy;
+    g_stack_base = (void*)&dummy;
+    g_stack_size = 8 * 1024 * 1024;  // Assume 8MB stack
+#endif
+}
+
+// Check if address is near stack boundary (likely stack overflow)
+static int is_stack_overflow(void *fault_addr) {
+    if (g_stack_base == NULL || g_stack_size == 0) {
+        return 0;  // Can't determine
+    }
+
+    // Stack grows down: check if fault address is below stack base
+    // and within a reasonable range (stack region + guard pages)
+    uintptr_t base = (uintptr_t)g_stack_base;
+    uintptr_t addr = (uintptr_t)fault_addr;
+    uintptr_t stack_low = base - g_stack_size;
+
+    // Consider addresses within stack region or slightly below (guard page)
+    // Guard page is typically 4KB-64KB below stack limit
+    size_t guard_zone = 64 * 1024;  // 64KB guard zone
+    if (stack_low > guard_zone) {
+        stack_low -= guard_zone;
+    } else {
+        stack_low = 0;
+    }
+
+    return (addr >= stack_low && addr < base);
+}
+
+// Install alternate signal stack for stack overflow handling
+static void install_alt_stack(void) {
+    if (g_sigstack_installed) return;
+
+    stack_t ss;
+    ss.ss_sp = g_sigstack;
+    ss.ss_size = SIGSTACK_SIZE;
+    ss.ss_flags = 0;
+    if (sigaltstack(&ss, NULL) == 0) {
+        g_sigstack_installed = 1;
+    }
+}
 
 // Signal handler for SIGTRAP (triggered by BRK instruction)
 static void trap_signal_handler(int sig) {
@@ -46,15 +126,56 @@ static void trap_signal_handler(int sig) {
     }
 }
 
+// Signal handler for SIGSEGV (triggered by stack overflow or invalid memory access)
+static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
+    (void)sig;
+    (void)ucontext;
+
+    if (g_trap_active) {
+        void *fault_addr = info->si_addr;
+
+        if (is_stack_overflow(fault_addr)) {
+            // Stack overflow detected
+            g_trap_code = 2;  // call stack exhausted
+            siglongjmp(g_trap_jmp_buf, 1);
+        } else {
+            // Could be WASM memory access violation
+            // For now, treat as out of bounds
+            g_trap_code = 1;
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+    }
+
+    // Not in JIT context, re-raise signal for default handling
+    signal(SIGSEGV, SIG_DFL);
+    raise(SIGSEGV);
+}
+
 // Install trap handler
 static void install_trap_handler(void) {
     static int installed = 0;
     if (!installed) {
-        struct sigaction sa;
-        sa.sa_handler = trap_signal_handler;
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = 0;
-        sigaction(SIGTRAP, &sa, NULL);
+        init_stack_bounds();
+        install_alt_stack();  // Must install alternate stack first
+
+        // Install SIGTRAP handler (for BRK instructions)
+        struct sigaction sa_trap;
+        sa_trap.sa_handler = trap_signal_handler;
+        sigemptyset(&sa_trap.sa_mask);
+        sa_trap.sa_flags = 0;
+        sigaction(SIGTRAP, &sa_trap, NULL);
+
+        // Install SIGSEGV handler (for stack overflow)
+        // Use SA_SIGINFO to get fault address, SA_ONSTACK to use alternate stack
+        struct sigaction sa_segv;
+        sa_segv.sa_sigaction = segv_signal_handler;
+        sigemptyset(&sa_segv.sa_mask);
+        sa_segv.sa_flags = SA_SIGINFO | SA_ONSTACK;  // Run on alternate stack!
+        sigaction(SIGSEGV, &sa_segv, NULL);
+
+        // Also handle SIGBUS (on some platforms, stack overflow triggers SIGBUS)
+        sigaction(SIGBUS, &sa_segv, NULL);
+
         installed = 1;
     }
 }
@@ -629,121 +750,122 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory(int64_t ctx_ptr) {
     return 0;
 }
 
-// ============ Call JIT functions with context ============
+// ============ Multi-value return support ============
+// All JIT calls go through wasmoon_jit_call_multi_return
+// - JIT ABI: X0 = func_table, X1 = mem_base, X2 = mem_size, X3-X6 = args
+// - When >2 int or >2 float returns: X7 = extra_results_buffer pointer
+// - Returns: X0/X1 for first 2 ints, D0/D1 for first 2 floats
+// - Extra returns: callee writes to buffer pointed by X7 (saved to X23)
 
-// Function pointer type that receives (func_table_ptr, memory_base_ptr, memory_size) as first three args
-// On AArch64: X0 = func_table, X1 = memory_base, X2 = memory_size
-// Prologue saves them to X20, X21, and X22 respectively
-typedef int64_t (*jit_func_ctx3_i64)(int64_t func_table, int64_t mem_base, int64_t mem_size);
-typedef int64_t (*jit_func_ctx3_i64_i64)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0);
-typedef int64_t (*jit_func_ctx3_i64i64_i64)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0, int64_t arg1);
-typedef void (*jit_func_ctx3_void)(int64_t func_table, int64_t mem_base, int64_t mem_size);
-typedef void (*jit_func_ctx3_i64_void)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0);
-typedef void (*jit_func_ctx3_i64i64_void)(int64_t func_table, int64_t mem_base, int64_t mem_size, int64_t arg0, int64_t arg1);
+// Call a JIT function that returns multiple values
+// result_types: array of type codes (0=I32, 1=I64, 2=F32, 3=F64)
+// num_results: number of return values
+// Returns: 0 on success, trap code on error
+MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
+    int64_t func_ptr,
+    int64_t func_table_ptr,
+    int64_t* args,
+    int num_args,
+    int64_t* results,
+    int* result_types,
+    int num_results
+) {
+    if (!func_ptr) return -1;
 
-// Call JIT function with context: () -> i64
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_void_i64(int64_t func_ptr, int64_t func_table_ptr) {
-    if (!func_ptr) return 0;
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
-    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
-        g_trap_active = 0;
-        return 0;  // Trap occurred
-    }
-    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
-    jit_func_ctx3_i64 func = (jit_func_ctx3_i64)func_ptr;
-    int64_t result = func(func_table_ptr, mem_base, mem_size);
-    g_trap_active = 0;
-    return result;
-}
 
-// Call JIT function with context: (i64) -> i64
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64_i64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
-    if (!func_ptr) return 0;
-    install_trap_handler();
-    g_trap_code = 0;
-    g_trap_active = 1;
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
-        return 0;  // Trap occurred
+        return (int)g_trap_code;
     }
-    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
-    jit_func_ctx3_i64_i64 func = (jit_func_ctx3_i64_i64)func_ptr;
-    int64_t result = func(func_table_ptr, mem_base, mem_size, arg0);
-    g_trap_active = 0;
-    return result;
-}
 
-// Call JIT function with context: (i64, i64) -> i64
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_ctx_i64i64_i64(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
-    if (!func_ptr) return 0;
-    install_trap_handler();
-    g_trap_code = 0;
-    g_trap_active = 1;
-    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
-        g_trap_active = 0;
-        return 0;  // Trap occurred
-    }
     int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
     int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
-    jit_func_ctx3_i64i64_i64 func = (jit_func_ctx3_i64i64_i64)func_ptr;
-    int64_t result = func(func_table_ptr, mem_base, mem_size, arg0, arg1);
-    g_trap_active = 0;
-    return result;
-}
 
-// Call JIT function with context: () -> void
-MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_void_void(int64_t func_ptr, int64_t func_table_ptr) {
-    if (!func_ptr) return;
-    install_trap_handler();
-    g_trap_code = 0;
-    g_trap_active = 1;
-    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
-        g_trap_active = 0;
-        return;  // Trap occurred
+    // Count how many extra results need buffer
+    int int_count = 0, float_count = 0;
+    for (int i = 0; i < num_results; i++) {
+        if (result_types[i] == 2 || result_types[i] == 3) { // F32 or F64
+            float_count++;
+        } else { // I32, I64
+            int_count++;
+        }
     }
-    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
-    jit_func_ctx3_void func = (jit_func_ctx3_void)func_ptr;
-    func(func_table_ptr, mem_base, mem_size);
-    g_trap_active = 0;
-}
+    int needs_extra_buffer = (int_count > 2 || float_count > 2);
 
-// Call JIT function with context: (i64) -> void
-MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64_void(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0) {
-    if (!func_ptr) return;
-    install_trap_handler();
-    g_trap_code = 0;
-    g_trap_active = 1;
-    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
-        g_trap_active = 0;
-        return;  // Trap occurred
-    }
-    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
-    jit_func_ctx3_i64_void func = (jit_func_ctx3_i64_void)func_ptr;
-    func(func_table_ptr, mem_base, mem_size, arg0);
-    g_trap_active = 0;
-}
+    // Buffer for extra results
+    int64_t extra_buffer[16];
+    memset(extra_buffer, 0, sizeof(extra_buffer));
 
-// Call JIT function with context: (i64, i64) -> void
-MOONBIT_FFI_EXPORT void wasmoon_jit_call_ctx_i64i64_void(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
-    if (!func_ptr) return;
-    install_trap_handler();
-    g_trap_code = 0;
-    g_trap_active = 1;
-    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
-        g_trap_active = 0;
-        return;  // Trap occurred
-    }
-    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
-    jit_func_ctx3_i64i64_void func = (jit_func_ctx3_i64i64_void)func_ptr;
-    func(func_table_ptr, mem_base, mem_size, arg0, arg1);
+    // Call the JIT function
+    int64_t x0_result = 0, x1_result = 0;
+    double d0_result = 0.0, d1_result = 0.0;
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+    register int64_t r0 __asm__("x0") = func_table_ptr;
+    register int64_t r1 __asm__("x1") = mem_base;
+    register int64_t r2 __asm__("x2") = mem_size;
+    register int64_t r3 __asm__("x3") = num_args > 0 ? args[0] : 0;
+    register int64_t r4 __asm__("x4") = num_args > 1 ? args[1] : 0;
+    register int64_t r5 __asm__("x5") = num_args > 2 ? args[2] : 0;
+    register int64_t r6 __asm__("x6") = num_args > 3 ? args[3] : 0;
+    register int64_t r7 __asm__("x7") = needs_extra_buffer ? (int64_t)extra_buffer : 0;
+    register double d0 __asm__("d0");
+    register double d1 __asm__("d1");
+
+    __asm__ volatile(
+        "blr %[func]"
+        : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
+        : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7)
+        : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+          "x16", "x17", "x30",
+          "d2", "d3", "d4", "d5", "d6", "d7",
+          "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
+          "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
+          "memory", "cc"
+    );
+
+    x0_result = r0;
+    x1_result = r1;
+    d0_result = d0;
+    d1_result = d1;
+#else
+    // Fallback for non-ARM64 platforms
+    typedef int64_t (*jit_func_t)(int64_t, int64_t, int64_t);
+    x0_result = ((jit_func_t)func_ptr)(func_table_ptr, mem_base, mem_size);
+#endif
+
     g_trap_active = 0;
+
+    // Distribute results from registers and extra_buffer to the output array
+    int int_idx = 0, float_idx = 0, extra_idx = 0;
+    for (int i = 0; i < num_results; i++) {
+        int ty = result_types[i];
+        if (ty == 2 || ty == 3) { // F32 or F64
+            if (float_idx < 2) {
+                // From D0 or D1
+                double d = (float_idx == 0) ? d0_result : d1_result;
+                memcpy(&results[i], &d, sizeof(double));
+                float_idx++;
+            } else {
+                // From extra buffer
+                results[i] = extra_buffer[extra_idx++];
+            }
+        } else { // I32, I64
+            if (int_idx < 2) {
+                // From X0 or X1
+                results[i] = (int_idx == 0) ? x0_result : x1_result;
+                int_idx++;
+            } else {
+                // From extra buffer
+                results[i] = extra_buffer[extra_idx++];
+            }
+        }
+    }
+
+    return 0; // Success
 }
 
 // ============ Executable memory management ============
@@ -869,161 +991,6 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_free_exec(int64_t ptr_i64) {
     }
 
     return -1;  // Not found
-}
-
-// Function pointer types for different signatures
-typedef int64_t (*jit_func_void_i64)(void);
-typedef int64_t (*jit_func_i64_i64)(int64_t);
-typedef int64_t (*jit_func_i64i64_i64)(int64_t, int64_t);
-typedef int64_t (*jit_func_i64i64i64_i64)(int64_t, int64_t, int64_t);
-typedef int64_t (*jit_func_i64i64i64i64_i64)(int64_t, int64_t, int64_t, int64_t);
-typedef void (*jit_func_void_void)(void);
-typedef void (*jit_func_i64_void)(int64_t);
-typedef void (*jit_func_i64i64_void)(int64_t, int64_t);
-typedef void (*jit_func_i64i64i64_void)(int64_t, int64_t, int64_t);
-typedef void (*jit_func_i64i64i64i64_void)(int64_t, int64_t, int64_t, int64_t);
-
-// Call a JIT-compiled function with no arguments, returning i64
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_void_i64(int64_t func_ptr) {
-    if (!func_ptr) return 0;
-    jit_func_void_i64 func = (jit_func_void_i64)func_ptr;
-    return func();
-}
-
-// Call a JIT-compiled function with 1 i64 argument, returning i64
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_i64_i64(int64_t func_ptr, int64_t arg0) {
-    if (!func_ptr) return 0;
-    jit_func_i64_i64 func = (jit_func_i64_i64)func_ptr;
-    return func(arg0);
-}
-
-// Call a JIT-compiled function with 2 i64 arguments, returning i64
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_i64i64_i64(int64_t func_ptr, int64_t arg0, int64_t arg1) {
-    if (!func_ptr) return 0;
-    jit_func_i64i64_i64 func = (jit_func_i64i64_i64)func_ptr;
-    return func(arg0, arg1);
-}
-
-// Call a JIT-compiled function with 3 i64 arguments, returning i64
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_i64i64i64_i64(int64_t func_ptr, int64_t arg0, int64_t arg1, int64_t arg2) {
-    if (!func_ptr) return 0;
-    jit_func_i64i64i64_i64 func = (jit_func_i64i64i64_i64)func_ptr;
-    return func(arg0, arg1, arg2);
-}
-
-// Call a JIT-compiled function with 4 i64 arguments, returning i64
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_call_i64i64i64i64_i64(int64_t func_ptr, int64_t arg0, int64_t arg1, int64_t arg2, int64_t arg3) {
-    if (!func_ptr) return 0;
-    jit_func_i64i64i64i64_i64 func = (jit_func_i64i64i64i64_i64)func_ptr;
-    return func(arg0, arg1, arg2, arg3);
-}
-
-// Call a JIT-compiled function with no arguments, no return
-MOONBIT_FFI_EXPORT void wasmoon_jit_call_void_void(int64_t func_ptr) {
-    if (!func_ptr) return;
-    jit_func_void_void func = (jit_func_void_void)func_ptr;
-    func();
-}
-
-// Call a JIT-compiled function with 1 i64 argument, no return
-MOONBIT_FFI_EXPORT void wasmoon_jit_call_i64_void(int64_t func_ptr, int64_t arg0) {
-    if (!func_ptr) return;
-    jit_func_i64_void func = (jit_func_i64_void)func_ptr;
-    func(arg0);
-}
-
-// Call a JIT-compiled function with 2 i64 arguments, no return
-MOONBIT_FFI_EXPORT void wasmoon_jit_call_i64i64_void(int64_t func_ptr, int64_t arg0, int64_t arg1) {
-    if (!func_ptr) return;
-    jit_func_i64i64_void func = (jit_func_i64i64_void)func_ptr;
-    func(arg0, arg1);
-}
-
-// Call a JIT-compiled function with 3 i64 arguments, no return
-MOONBIT_FFI_EXPORT void wasmoon_jit_call_i64i64i64_void(int64_t func_ptr, int64_t arg0, int64_t arg1, int64_t arg2) {
-    if (!func_ptr) return;
-    jit_func_i64i64i64_void func = (jit_func_i64i64i64_void)func_ptr;
-    func(arg0, arg1, arg2);
-}
-
-// Call a JIT-compiled function with 4 i64 arguments, no return
-MOONBIT_FFI_EXPORT void wasmoon_jit_call_i64i64i64i64_void(int64_t func_ptr, int64_t arg0, int64_t arg1, int64_t arg2, int64_t arg3) {
-    if (!func_ptr) return;
-    jit_func_i64i64i64i64_void func = (jit_func_i64i64i64i64_void)func_ptr;
-    func(arg0, arg1, arg2, arg3);
-}
-
-// Generic call with array of arguments (up to 8 args)
-// Returns result in out_result (if not NULL)
-// sig: bit 0 = has_result, bits 1-4 = num_args
-MOONBIT_FFI_EXPORT int wasmoon_jit_call_generic(void *func_ptr, int sig,
-                                                  int64_t *args, int64_t *out_result) {
-    if (!func_ptr) return -1;
-
-    int has_result = sig & 1;
-    int num_args = (sig >> 1) & 0xF;
-
-    int64_t result = 0;
-
-    // Use the appropriate call based on num_args
-    switch (num_args) {
-        case 0:
-            if (has_result) {
-                result = ((jit_func_void_i64)func_ptr)();
-            } else {
-                ((jit_func_void_void)func_ptr)();
-            }
-            break;
-        case 1:
-            if (has_result) {
-                result = ((jit_func_i64_i64)func_ptr)(args[0]);
-            } else {
-                ((jit_func_i64_void)func_ptr)(args[0]);
-            }
-            break;
-        case 2:
-            if (has_result) {
-                result = ((jit_func_i64i64_i64)func_ptr)(args[0], args[1]);
-            } else {
-                ((jit_func_i64i64_void)func_ptr)(args[0], args[1]);
-            }
-            break;
-        case 3:
-            if (has_result) {
-                result = ((jit_func_i64i64i64_i64)func_ptr)(args[0], args[1], args[2]);
-            } else {
-                ((jit_func_i64i64i64_void)func_ptr)(args[0], args[1], args[2]);
-            }
-            break;
-        case 4:
-            if (has_result) {
-                result = ((jit_func_i64i64i64i64_i64)func_ptr)(args[0], args[1], args[2], args[3]);
-            } else {
-                ((jit_func_i64i64i64i64_void)func_ptr)(args[0], args[1], args[2], args[3]);
-            }
-            break;
-        default:
-            return -2;  // Too many arguments
-    }
-
-    if (out_result && has_result) {
-        *out_result = result;
-    }
-
-    return 0;
-}
-
-// Debug: print machine code bytes
-MOONBIT_FFI_EXPORT void wasmoon_jit_debug_print_code(int64_t ptr_i64, int size) {
-    void *ptr = (void *)ptr_i64;
-    if (!ptr || size <= 0) return;
-    unsigned char *bytes = (unsigned char *)ptr;
-    printf("JIT code at %p (%d bytes):\n", ptr, size);
-    for (int i = 0; i < size; i++) {
-        printf("%02x ", bytes[i]);
-        if ((i + 1) % 16 == 0) printf("\n");
-    }
-    if (size % 16 != 0) printf("\n");
 }
 
 #ifdef __cplusplus

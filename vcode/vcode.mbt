@@ -18,7 +18,7 @@ pub(all) struct VReg {
 fn VReg::to_string(self : VReg) -> String {
   match self.class {
     Int => "v\{self.id}"
-    Float => "f\{self.id}"
+    Float32 | Float64 => "f\{self.id}"
   }
 }
 
@@ -31,14 +31,16 @@ pub impl Show for VReg with output(self, logger) {
 /// Register class - categorizes registers by their purpose
 pub(all) enum RegClass {
   Int // Integer/general-purpose registers
-  Float // Floating-point registers
+  Float32 // 32-bit floating-point registers
+  Float64 // 64-bit floating-point registers
 }
 
 ///|
 fn RegClass::to_string(self : RegClass) -> String {
   match self {
     Int => "int"
-    Float => "float"
+    Float32 => "float"
+    Float64 => "double"
   }
 }
 
@@ -58,7 +60,7 @@ pub(all) struct PReg {
 fn PReg::to_string(self : PReg) -> String {
   match self.class {
     Int => "x\{self.index}"
-    Float => "d\{self.index}"
+    Float32 | Float64 => "d\{self.index}"
   }
 }
 
@@ -294,7 +296,8 @@ pub enum VCodeOpcode {
   // Moves
   Move
   LoadConst(Int64) // Load immediate
-  LoadConstF(Double) // Load float immediate
+  LoadConstF32(Int) // Load f32 immediate (stored as bits)
+  LoadConstF64(Int64) // Load f64 immediate (stored as bits)
   // Comparisons (result is 0 or 1)
   Cmp(CmpKind)
   FCmp(FCmpKind)
@@ -323,9 +326,9 @@ pub enum VCodeOpcode {
   // Function calls
   // CallIndirect: call through a function pointer in a register
   // Uses: [func_ptr, arg0, arg1, ...]
-  // Defs: [result] (if has_result)
-  // Parameters: num_args, has_result
-  CallIndirect(Int, Bool)
+  // Defs: [result0, result1, ...] (multiple results supported)
+  // Parameters: num_args, num_results
+  CallIndirect(Int, Int)
   // Stack operations for spilling
   // StackLoad(offset): Load from [SP + offset] into the def register
   // StackStore(offset): Store the use register to [SP + offset]
@@ -362,7 +365,16 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Load32U(offset) => "load32u +\{offset}"
     Move => "mov"
     LoadConst(v) => "ldi \{v}"
-    LoadConstF(v) => "ldf \{v}"
+    LoadConstF32(v) => {
+      // Convert i32 bits to f32 value for display
+      let f = Float::reinterpret_from_uint(v.reinterpret_as_uint())
+      "ldf \{f}"
+    }
+    LoadConstF64(v) => {
+      // Convert i64 bits to f64 value for display
+      let f = v.reinterpret_as_double()
+      "ldf \{f}"
+    }
     Cmp(kind) => "cmp.\{kind}"
     FCmp(kind) => "fcmp.\{kind}"
     Extend(kind) => "extend.\{kind}"
@@ -380,10 +392,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Madd => "madd"
     Msub => "msub"
     Mneg => "mneg"
-    CallIndirect(num_args, has_result) => {
-      let ret_ty = if has_result { "i64" } else { "void" }
-      "call_indirect(\{num_args}) -> \{ret_ty}"
-    }
+    CallIndirect(num_args, num_results) =>
+      "call_indirect(\{num_args}) -> \{num_results} results"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
   }
@@ -568,13 +578,27 @@ pub(all) struct VCodeFunction {
   name : String
   params : Array[VReg] // Function parameters
   results : Array[RegClass] // Result types (for return value allocation)
+  result_types : Array[@ir.Type] // Full return type info for multi-value returns
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
+  mut num_spill_slots : Int // Number of spill slots used by register allocator
+  // Map from param index to allocated physical register (for params that cross calls)
+  // This is filled by apply_allocation and used by emit_prologue
+  param_pregs : Array[PReg?]
 }
 
 ///|
 pub fn VCodeFunction::new(name : String) -> VCodeFunction {
-  { name, params: [], results: [], blocks: [], next_vreg_id: 0 }
+  {
+    name,
+    params: [],
+    results: [],
+    result_types: [],
+    blocks: [],
+    next_vreg_id: 0,
+    num_spill_slots: 0,
+    param_pregs: [],
+  }
 }
 
 ///|
@@ -597,6 +621,47 @@ pub fn VCodeFunction::add_result(
   class : RegClass,
 ) -> Unit {
   self.results.push(class)
+}
+
+///|
+/// Add a result type with full type information for multi-value returns
+pub fn VCodeFunction::add_result_type(
+  self : VCodeFunction,
+  ty : @ir.Type,
+) -> Unit {
+  self.result_types.push(ty)
+}
+
+///|
+/// Check if this function needs a hidden pointer for extra return values
+/// Returns true if there are more than 2 integer or 2 float returns
+pub fn VCodeFunction::needs_extra_results_ptr(self : VCodeFunction) -> Bool {
+  let mut int_count = 0
+  let mut float_count = 0
+  for ty in self.result_types {
+    match ty {
+      I32 | I64 => int_count = int_count + 1
+      F32 | F64 => float_count = float_count + 1
+      _ => ()
+    }
+  }
+  int_count > 2 || float_count > 2
+}
+
+///|
+/// Check if this function calls any function that returns more than 2 values
+/// In that case, we need to allocate a local buffer for receiving extra results
+pub fn VCodeFunction::calls_multi_value_function(self : VCodeFunction) -> Bool {
+  for block in self.blocks {
+    for inst in block.insts {
+      if inst.opcode is CallIndirect(_, num_results) {
+        if num_results > 2 {
+          return true
+        }
+      }
+    }
+  }
+  false
 }
 
 ///|

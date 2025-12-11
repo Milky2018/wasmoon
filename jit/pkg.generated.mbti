@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/jit"
 
 import(
   "Milky2018/wasmoon/cwasm"
+  "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/vcode"
   "moonbitlang/core/hashset"
 )
@@ -60,6 +61,7 @@ pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 // Errors
 pub suberror JITTrap String
+pub impl Show for JITTrap
 
 // Types and methods
 pub(all) struct Breakpoint {
@@ -180,25 +182,6 @@ pub fn DebugContext::set_step_mode(Self, StepMode) -> Unit
 pub fn DebugContext::should_pause(Self, Int, Int) -> Bool
 pub impl Show for DebugContext
 
-pub(all) struct ExecCode {
-  ptr : Int64
-  size : Int
-}
-pub fn ExecCode::call_i64_i64(Self, Int64) -> Int64
-pub fn ExecCode::call_i64_void(Self, Int64) -> Unit
-pub fn ExecCode::call_i64i64_i64(Self, Int64, Int64) -> Int64
-pub fn ExecCode::call_i64i64_void(Self, Int64, Int64) -> Unit
-pub fn ExecCode::call_i64i64i64_i64(Self, Int64, Int64, Int64) -> Int64
-pub fn ExecCode::call_i64i64i64_void(Self, Int64, Int64, Int64) -> Unit
-pub fn ExecCode::call_i64i64i64i64_i64(Self, Int64, Int64, Int64, Int64) -> Int64
-pub fn ExecCode::call_i64i64i64i64_void(Self, Int64, Int64, Int64, Int64) -> Unit
-pub fn ExecCode::call_void_i64(Self) -> Int64
-pub fn ExecCode::call_void_void(Self) -> Unit
-pub fn ExecCode::debug_print(Self) -> Unit
-pub fn ExecCode::free(Self) -> Unit
-pub fn ExecCode::from_bytes(Bytes) -> Self?
-pub fn ExecCode::new(Array[Int]) -> Self?
-
 pub(all) struct FunctionEntry {
   func_idx : Int
   mut status : CompilationStatus
@@ -223,22 +206,6 @@ pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
 pub fn HotThreshold::default() -> Self
 
-pub(all) struct JITContext {
-  ctx_ptr : Int64
-  func_table_ptr : Int64
-}
-pub fn JITContext::activate(Self) -> Unit
-pub fn JITContext::call_i64_i64(Self, Int64, Int64) -> Int64 raise JITTrap
-pub fn JITContext::call_i64_void(Self, Int64, Int64) -> Unit raise JITTrap
-pub fn JITContext::call_i64i64_i64(Self, Int64, Int64, Int64) -> Int64 raise JITTrap
-pub fn JITContext::call_i64i64_void(Self, Int64, Int64, Int64) -> Unit raise JITTrap
-pub fn JITContext::call_void_i64(Self, Int64) -> Int64 raise JITTrap
-pub fn JITContext::call_void_void(Self, Int64) -> Unit raise JITTrap
-pub fn JITContext::free(Self) -> Unit
-pub fn JITContext::new(Int) -> Self?
-pub fn JITContext::set_func(Self, Int, Int64) -> Unit
-pub fn JITContext::set_memory(Self, Int64, Int64) -> Unit
-
 pub(all) struct JITEngine {
   strategy : CompilationStrategy
   runtime : @vcode.JITRuntime
@@ -259,31 +226,24 @@ pub fn JITEngine::on_call(Self, Int) -> Bool
 pub fn JITEngine::stats(Self) -> (Int, Int, Int, Int, Int)
 pub impl Show for JITEngine
 
-pub(all) struct JITFunction {
+pub struct JITFunction {
   name : String
-  func_idx : Int
-  exec_code : ExecCode
-  frame_size : Int
   num_params : Int
-  has_result : Bool
+  result_types : Array[@types.ValueType]
+  // private fields
 }
-pub fn JITFunction::call(Self, Array[Int64]) -> Int64?
-pub fn JITFunction::debug_print(Self) -> Unit
-pub fn JITFunction::free(Self) -> Unit
-pub fn JITFunction::new(String, Int, ExecCode, Int, Int, Bool) -> Self
 
-pub(all) struct JITModule {
-  functions : Map[Int, JITFunction]
-  by_name : Map[String, Int]
-  mut context : JITContext?
-  mut num_imports : Int
+pub struct JITModule {
+  // private fields
 }
-pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Int64? raise JITTrap
+pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn JITModule::free(Self) -> Unit
+pub fn JITModule::from_single_function(Array[Int], String, Int, Array[@types.ValueType], Int64) -> Self?
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
-pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Int, Bool)]) -> Self?
+pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Int, Array[@types.ValueType])]) -> Self?
 pub fn JITModule::new() -> Self
+pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
 
 pub(all) struct Profiler {
   counter : CallCounter
@@ -368,4 +328,11 @@ pub fn TieredConfig::eager() -> Self
 // Type aliases
 
 // Traits
+pub(open) trait JITArg {
+  to_jit_arg(Self) -> Int64
+}
+pub impl JITArg for Int
+pub impl JITArg for Int64
+pub impl JITArg for Float
+pub impl JITArg for Double
 

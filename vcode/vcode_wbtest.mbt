@@ -82,9 +82,9 @@ test "conditional branch" {
 ///|
 test "float operations" {
   let builder = VCodeBuilder::new("float_add")
-  let p0 = builder.add_param(Float)
-  let p1 = builder.add_param(Float)
-  builder.add_result(Float)
+  let p0 = builder.add_param(Float32)
+  let p1 = builder.add_param(Float32)
+  builder.add_result(Float32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(p0, p1)
@@ -212,9 +212,9 @@ test "division operations" {
 ///|
 test "float division and subtraction" {
   let builder = VCodeBuilder::new("float_ops")
-  let p0 = builder.add_param(Float)
-  let p1 = builder.add_param(Float)
-  builder.add_result(Float)
+  let p0 = builder.add_param(Float32)
+  let p1 = builder.add_param(Float32)
+  builder.add_result(Float32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let div_result = builder.fdiv(p0, p1)
@@ -229,6 +229,90 @@ test "float division and subtraction" {
       #|    f2 = fdiv f0, f1
       #|    f3 = fsub f2, f1
       #|    ret f3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "f64 operations" {
+  let builder = VCodeBuilder::new("f64_add")
+  let p0 = builder.add_param(Float64)
+  let p1 = builder.add_param(Float64)
+  builder.add_result(Float64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let sum = builder.fadd(p0, p1)
+  let c2 = builder.fconst(2.0)
+  let result = builder.fmul(sum, c2)
+  builder.return_([result])
+  let output = builder.print()
+  inspect(
+    output,
+    content=(
+      #|vcode f64_add(f0:double, f1:double) -> double {
+      #|block0:
+      #|    f2 = fadd f0, f1
+      #|    f3 = ldf 2
+      #|    f4 = fmul f2, f3
+      #|    ret f4
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "f64 division and subtraction" {
+  let builder = VCodeBuilder::new("f64_ops")
+  let p0 = builder.add_param(Float64)
+  let p1 = builder.add_param(Float64)
+  builder.add_result(Float64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let div_result = builder.fdiv(p0, p1)
+  let sub_result = builder.fsub(div_result, p1)
+  builder.return_([sub_result])
+  let output = builder.print()
+  inspect(
+    output,
+    content=(
+      #|vcode f64_ops(f0:double, f1:double) -> double {
+      #|block0:
+      #|    f2 = fdiv f0, f1
+      #|    f3 = fsub f2, f1
+      #|    ret f3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "mixed int and float parameters" {
+  // fn mixed(a: int, b: float32, c: int, d: float64) -> float64
+  let builder = VCodeBuilder::new("mixed_params")
+  let a = builder.add_param(Int)
+  let b = builder.add_param(Float32)
+  let c = builder.add_param(Int)
+  let d = builder.add_param(Float64)
+  builder.add_result(Float64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  // Just add the two floats together (both promoted to double internally)
+  let result = builder.fadd(b, d)
+  builder.return_([result])
+  ignore(a)
+  ignore(c)
+  let output = builder.print()
+  inspect(
+    output,
+    content=(
+      #|vcode mixed_params(v0:int, f1:float, v2:int, f3:double) -> double {
+      #|block0:
+      #|    f4 = fadd f1, f3
+      #|    ret f4
       #|}
       #|
     ),
@@ -259,8 +343,8 @@ test "all comparison kinds" {
 ///|
 test "float comparison kinds" {
   let builder = VCodeBuilder::new("fcmp_all")
-  let p0 = builder.add_param(Float)
-  let p1 = builder.add_param(Float)
+  let p0 = builder.add_param(Float64)
+  let p1 = builder.add_param(Float64)
   builder.add_result(Int)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
@@ -381,10 +465,10 @@ test "AArch64 get_preg" {
     None => panic()
   }
   // Valid FPR
-  match target.get_preg(Float, 31) {
+  match target.get_preg(Float64, 31) {
     Some(preg) => {
       inspect(preg.index, content="31")
-      inspect(preg.class.to_string(), content="float")
+      inspect(preg.class.to_string(), content="double")
     }
     None => panic()
   }
@@ -394,7 +478,7 @@ test "AArch64 get_preg" {
     None => ()
   }
   // Out of range FPR
-  match target.get_preg(Float, 32) {
+  match target.get_preg(Float64, 32) {
     Some(_) => panic()
     None => ()
   }
@@ -408,8 +492,10 @@ test "AAPCS64 calling convention registers" {
   inspect(ret_gprs.length(), content="2") // x0-x1
   let callee_saved = aapcs64_callee_saved()
   inspect(callee_saved.length(), content="12") // x19-x28, fp, lr
-  let caller_saved = aapcs64_caller_saved()
-  inspect(caller_saved.length(), content="9") // callee-saved minus reserved
+  let scratch_regs = allocatable_scratch_regs()
+  inspect(scratch_regs.length(), content="1") // x8 only
+  let callee_saved_regs = allocatable_callee_saved_regs()
+  inspect(callee_saved_regs.length(), content="7") // x19, x23-x28
   let arg_fprs = aapcs64_arg_fprs()
   inspect(arg_fprs.length(), content="8") // d0-d7
   let ret_fprs = aapcs64_ret_fprs()

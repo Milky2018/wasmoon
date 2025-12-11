@@ -78,9 +78,9 @@ test "lower constants" {
 ///|
 test "lower float operations" {
   let builder = @ir.IRBuilder::new("float_add")
-  let a = builder.add_param(@ir.Type::F64)
-  let b = builder.add_param(@ir.Type::F64)
-  builder.add_result(@ir.Type::F64)
+  let a = builder.add_param(@ir.Type::F32)
+  let b = builder.add_param(@ir.Type::F32)
+  builder.add_result(@ir.Type::F32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(a, b)
@@ -277,8 +277,8 @@ test "lower division operations" {
 ///|
 test "lower float comparison" {
   let builder = @ir.IRBuilder::new("fcmp_test")
-  let a = builder.add_param(@ir.Type::F64)
-  let b = builder.add_param(@ir.Type::F64)
+  let a = builder.add_param(@ir.Type::F32)
+  let b = builder.add_param(@ir.Type::F32)
   builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
@@ -294,6 +294,111 @@ test "lower float comparison" {
     #|}
     #|
   inspect(output, content=expected)
+}
+
+///|
+test "lower f64 operations" {
+  let builder = @ir.IRBuilder::new("f64_add")
+  let a = builder.add_param(@ir.Type::F64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::F64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let sum = builder.fadd(a, b)
+  let prod = builder.fmul(sum, a)
+  builder.return_([prod])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode f64_add(f0:double, f1:double) -> double {
+      #|block0:
+      #|    f2 = fadd f0, f1
+      #|    f3 = fmul f2, f0
+      #|    ret f3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower f64 comparison" {
+  let builder = @ir.IRBuilder::new("f64_cmp_test")
+  let a = builder.add_param(@ir.Type::F64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let cmp_result = builder.fcmp(@ir.FloatCC::Gt, a, b)
+  builder.return_([cmp_result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  let expected =
+    #|vcode f64_cmp_test(f0:double, f1:double) -> int {
+    #|block0:
+    #|    v2 = fcmp.gt f0, f1
+    #|    ret v2
+    #|}
+    #|
+  inspect(output, content=expected)
+}
+
+///|
+test "lower f64 division and subtraction" {
+  let builder = @ir.IRBuilder::new("f64_ops")
+  let a = builder.add_param(@ir.Type::F64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::F64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let div = builder.fdiv(a, b)
+  let result = builder.fsub(div, b)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode f64_ops(f0:double, f1:double) -> double {
+      #|block0:
+      #|    f2 = fdiv f0, f1
+      #|    f3 = fsub f2, f1
+      #|    ret f3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower mixed int and f64" {
+  // fn mixed(a: i64, b: f64) -> f64
+  // Converts int to float and adds
+  let builder = @ir.IRBuilder::new("mixed_int_f64")
+  let a = builder.add_param(@ir.Type::I64)
+  let b = builder.add_param(@ir.Type::F64)
+  builder.add_result(@ir.Type::F64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  // Just return b doubled (can't convert int to float in current IR)
+  let result = builder.fadd(b, b)
+  builder.return_([result])
+  ignore(a)
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode mixed_int_f64(v0:int, f1:double) -> double {
+      #|block0:
+      #|    f2 = fadd f1, f1
+      #|    ret f2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -340,7 +445,7 @@ test "lower trap" {
 }
 
 ///|
-test "lower float constant" {
+test "lower double constant" {
   let builder = @ir.IRBuilder::new("fconst_test")
   builder.add_result(@ir.Type::F64)
   let entry = builder.create_block()
@@ -349,14 +454,17 @@ test "lower float constant" {
   builder.return_([c])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode fconst_test() -> float {
-    #|block0:
-    #|    f0 = ldf 3.14
-    #|    ret f0
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode fconst_test() -> double {
+      #|block0:
+      #|    f0 = ldf 3.14
+      #|    ret f0
+      #|}
+      #|
+    ),
+  )
 }
 
 // ============ AArch64-Specific Instruction Selection Tests ============
@@ -639,4 +747,399 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
     #|}
     #|
   inspect(output, content=expected)
+}
+
+// ============ br_table Pattern Test (f32_br_2locals reproduction) ============
+// This test reproduces the pattern from testsuite/data/f32_br_2locals.wast
+//
+// The WASM function:
+//   (func (export "test") (param i32) (result f32)
+//     (local f32 f32)   ; local1, local2
+//     (local.set 1 (f32.const 10.0))
+//     (block $3
+//       (block $2
+//         (block $1
+//           (block $0
+//             (br_table $0 $1 $2 $3 (local.get 0))
+//           )
+//           ;; case 0: store local1, load to local2, br $3
+//           (f32.store (i32.const 0) (local.get 1))
+//           (local.set 2 (f32.load (i32.const 0)))
+//           (br $3)
+//         )
+//         ;; case 1: same as case 0
+//       )
+//       ;; case 2: same as case 0
+//     )
+//     ;; case 3/default: local2 is never set, returns default 0.0
+//     (local.get 2)
+//   )
+//
+// The key challenges for register allocation:
+// 1. br_table is lowered to a comparison chain
+// 2. Multiple paths define the same vreg (block parameter for local2)
+// 3. All paths merge at the exit block via block parameters
+// 4. Float register allocation must handle this correctly
+
+///|
+test "lower br_table with f32 locals (f32_br_2locals pattern)" {
+  // Build IR that mimics the f32_br_2locals.wast function:
+  //   fn test(selector: i32) -> f32
+  //
+  // Structure:
+  //   entry:
+  //     local1 = f32.const 10.0
+  //     local2_init = f32.const 0.0
+  //     addr = i32.const 0
+  //     br_table selector, [case0, case1, case2], exit
+  //
+  //   case0, case1, case2:
+  //     store.f32 addr, local1
+  //     local2_i = load.f32 addr
+  //     jump exit(local2_i)
+  //
+  //   exit(local2_phi: f32):
+  //     return local2_phi
+
+  let builder = @ir.IRBuilder::new("test")
+  let selector = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::F32)
+
+  // Create all blocks first
+  let entry = builder.create_block()
+  let case0 = builder.create_block()
+  let case1 = builder.create_block()
+  let case2 = builder.create_block()
+  let exit = builder.create_block()
+
+  // Add block parameter for exit (the merged local2 value)
+  let local2_phi = builder.add_block_param(exit, @ir.Type::F32)
+
+  // Entry block
+  builder.switch_to_block(entry)
+  let local1 = builder.fconst_f32(10.0)
+  let local2_init = builder.fconst_f32(0.0)
+  let addr = builder.iconst_i32(0)
+  // br_table with 3 cases + default
+  // targets = [case0, case1, case2], default = exit
+  builder.br_table(selector, [case0, case1, case2], exit)
+
+  // case0: store local1, load to local2, jump exit with local2
+  builder.switch_to_block(case0)
+  builder.store(@ir.Type::F32, addr, local1, 0)
+  let local2_0 = builder.load(@ir.Type::F32, addr, 0)
+  builder.jump(exit, [local2_0])
+
+  // case1: same pattern
+  builder.switch_to_block(case1)
+  builder.store(@ir.Type::F32, addr, local1, 0)
+  let local2_1 = builder.load(@ir.Type::F32, addr, 0)
+  builder.jump(exit, [local2_1])
+
+  // case2: same pattern
+  builder.switch_to_block(case2)
+  builder.store(@ir.Type::F32, addr, local1, 0)
+  let local2_2 = builder.load(@ir.Type::F32, addr, 0)
+  builder.jump(exit, [local2_2])
+
+  // exit: return local2_phi
+  builder.switch_to_block(exit)
+  builder.return_([local2_phi])
+
+  // Ignore warnings about unused values (they're used in block param passing)
+  ignore(local2_init)
+
+  // ============ Phase 1: Lower to VCode ============
+  let vcode_func = lower_function(builder.get_function())
+
+  // Inspect the lowered VCode structure
+  // This shows how br_table is lowered to comparison chain
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    f2 = ldf 10
+      #|    f3 = ldf 0
+      #|    v4 = ldi 0
+      #|    v6 = ldi 0
+      #|    v5 = cmp.eq v0, v6
+      #|    branch v5, block1, block5
+      #|block1:
+      #|    bounds_check +0, 4 v4
+      #|    v11 = add x21, v4
+      #|    store.f32 +0 v11, f2
+      #|    bounds_check +0, 4 v4
+      #|    v13 = add x21, v4
+      #|    f12 = load.f32 +0 v13
+      #|    f1 = mov f12
+      #|    jump block4
+      #|block2:
+      #|    bounds_check +0, 4 v4
+      #|    v14 = add x21, v4
+      #|    store.f32 +0 v14, f2
+      #|    bounds_check +0, 4 v4
+      #|    v16 = add x21, v4
+      #|    f15 = load.f32 +0 v16
+      #|    f1 = mov f15
+      #|    jump block4
+      #|block3:
+      #|    bounds_check +0, 4 v4
+      #|    v17 = add x21, v4
+      #|    store.f32 +0 v17, f2
+      #|    bounds_check +0, 4 v4
+      #|    v19 = add x21, v4
+      #|    f18 = load.f32 +0 v19
+      #|    f1 = mov f18
+      #|    jump block4
+      #|block4(f1:float):
+      #|    ret f1
+      #|block5:
+      #|    v7 = ldi 1
+      #|    v8 = cmp.eq v0, v7
+      #|    branch v8, block2, block6
+      #|block6:
+      #|    v9 = ldi 2
+      #|    v10 = cmp.eq v0, v9
+      #|    branch v10, block3, block4
+      #|}
+      #|
+    ),
+  )
+
+  // ============ Phase 2: Register Allocation ============
+  let allocated_func = allocate_registers_aarch64(vcode_func)
+
+  // Inspect the allocated VCode
+  // Key observations:
+  // 1. All case blocks (1, 2, 3) should write the block parameter to the SAME register (d2)
+  // 2. The exit block (4) should return that same register (d2)
+  // 3. Float values should be in float registers (d0, d1, d2, ...)
+  inspect(
+    allocated_func.print(),
+    content=(
+      #|vcode test(v0:int) -> float {
+      #|block0:
+      #|    d0 = ldf 10
+      #|    x8 = ldi 0
+      #|    x19 = ldi 0
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block1, block5
+      #|block1:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d0 = load.f32 +0 x19
+      #|    d2 = mov d0
+      #|    jump block4
+      #|block2:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d1 = load.f32 +0 x19
+      #|    d2 = mov d1
+      #|    jump block4
+      #|block3:
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    d1 = load.f32 +0 x19
+      #|    d2 = mov d1
+      #|    jump block4
+      #|block4(f1:float):
+      #|    ret d2
+      #|block5:
+      #|    x19 = ldi 1
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block2, block6
+      #|block6:
+      #|    x19 = ldi 2
+      #|    x23 = cmp.eq x3, x19
+      #|    branch x23, block3, block4
+      #|}
+      #|
+    ),
+  )
+
+  // ============ Phase 3: Verify Key Properties ============
+
+  // Count the number of blocks (entry + 3 cases + exit + 2 comparison chain blocks = 7)
+  inspect(allocated_func.blocks.length(), content="7")
+
+  // Verify the function returns a float
+  inspect(allocated_func.results.length(), content="1")
+
+  // ============ Phase 4: Verify SSA Deconstruction ============
+  // The critical property: all paths that define the block parameter (f1)
+  // should write to the SAME physical register (d2)
+  //
+  // block1: d2 = mov d0
+  // block2: d2 = mov d1
+  // block3: d2 = mov d1
+  // block4: ret d2
+  //
+  // This ensures the value correctly flows through all paths
+
+  // Check block1's last instruction defines d2
+  let block1_last = allocated_func.blocks[1].insts.last().unwrap()
+  inspect(block1_last.opcode, content="mov")
+  match block1_last.defs[0].reg {
+    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Virtual(_) => inspect(false, content="true")
+  }
+
+  // Check block2's last instruction defines d2
+  let block2_last = allocated_func.blocks[2].insts.last().unwrap()
+  match block2_last.defs[0].reg {
+    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Virtual(_) => inspect(false, content="true")
+  }
+
+  // Check block3's last instruction defines d2
+  let block3_last = allocated_func.blocks[3].insts.last().unwrap()
+  match block3_last.defs[0].reg {
+    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Virtual(_) => inspect(false, content="true")
+  }
+}
+
+// ============ Minimal Test: Dead Float Constants ============
+// This test reproduces the pattern from WASM local initialization.
+// The issue: dead value and live value get allocated to the same register.
+
+///|
+test "minimal: dead float constant should not affect live values" {
+  let builder = @ir.IRBuilder::new("dead_fconst_test")
+  builder.add_result(@ir.Type::F32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Use DIFFERENT values to make bug obvious:
+  // If f0 and f1 share register, return value will be WRONG
+  let v1 = builder.fconst_f32(1.0) // DEAD - should not affect result
+  let v2 = builder.fconst_f32(2.0) // LIVE - returned, must be 2.0
+  let v3 = builder.fconst_f32(10.0) // LIVE - stored to memory
+  let addr = builder.iconst_i32(0)
+  builder.store(@ir.Type::F32, addr, v3, 0)
+  builder.return_([v2])
+  ignore(v1)
+
+  // Lower to VCode
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode dead_fconst_test() -> float {
+      #|block0:
+      #|    f0 = ldf 1
+      #|    f1 = ldf 2
+      #|    f2 = ldf 10
+      #|    v3 = ldi 0
+      #|    bounds_check +0, 4 v3
+      #|    v4 = add x21, v3
+      #|    store.f32 +0 v4, f2
+      #|    ret f1
+      #|}
+      #|
+    ),
+  )
+
+  // Register allocation with DCE:
+  // Dead code (f0 = ldf 1) is eliminated before register allocation
+  // Only live values get registers: f1 -> d0, f2 -> d1
+  let allocated_func = allocate_registers_aarch64(vcode_func)
+  inspect(
+    allocated_func.print(),
+    content=(
+      #|vcode dead_fconst_test() -> float {
+      #|block0:
+      #|    d0 = ldf 2
+      #|    d1 = ldf 10
+      #|    x8 = ldi 0
+      #|    bounds_check +0, 4 x8
+      #|    x19 = add x21, x8
+      #|    store.f32 +0 x19, d1
+      #|    ret d0
+      #|}
+      #|
+    ),
+  )
+}
+
+// ============ br_table with Block Arguments Test ============
+// Simple test: br_table with 1 target + default, uses local variable
+
+///|
+test "br_table with block arguments from WAT" {
+  // test(0) = 100 (case 0), test(1) = 0 (default)
+  let wat_source =
+    #|(module
+    #|  (func (export "test") (param i32) (result i32)
+    #|    (local i32)
+    #|    (block $done
+    #|      (block $case0
+    #|        (br_table $case0 $done (local.get 0))
+    #|      )
+    #|      (local.set 1 (i32.const 100))
+    #|    )
+    #|    (local.get 1)
+    #|  )
+    #|)
+  let wasm_module = @wat.parse(wat_source) catch {
+    e => {
+      inspect(e)
+      return
+    }
+  }
+  let func_code = wasm_module.codes[0]
+  let func_type = wasm_module.types[wasm_module.funcs[0]]
+  let locals : Array[@types.ValueType] = []
+  for loc in func_code.locals {
+    locals.push(loc)
+  }
+  let translator = @ir.Translator::new(
+    "test",
+    func_type,
+    locals,
+    wasm_module.types,
+    wasm_module.funcs.mapi(fn(i, _) { wasm_module.funcs[i] }),
+    0,
+    [],
+  )
+  let ir_func = translator.translate(func_code.body)
+  let vcode_func = lower_function(ir_func)
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode test(v0:int) -> int {
+      #|block0:
+      #|    v5 = ldi 0
+      #|    v7 = ldi 0
+      #|    v6 = cmp.eq v0, v7
+      #|    branch v6, block3, block4
+      #|block1(v1:int, v2:int):
+      #|    ret v2
+      #|block2(v3:int, v4:int):
+      #|    v8 = ldi 100
+      #|    v1 = mov v3
+      #|    v2 = mov v8
+      #|    jump block1
+      #|block3:
+      #|    v3 = mov v0
+      #|    v4 = mov v5
+      #|    jump block2
+      #|block4:
+      #|    v1 = mov v0
+      #|    v2 = mov v5
+      #|    jump block1
+      #|}
+      #|
+    ),
+  )
 }
