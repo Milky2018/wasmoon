@@ -613,3 +613,27 @@ test "emit: complete VCode instruction emission" {
   let mc = emit_function(func)
   inspect(mc.size() > 0, content="true")
 }
+
+///|
+test "emit_mul encoding verification" {
+  // MUL Xd, Xn, Xm = MADD Xd, Xn, Xm, XZR
+  // Encoding: sf=1 | 00 | 11011 | 000 | Rm[4:0] | 0 | Ra=11111 | Rn[4:0] | Rd[4:0]
+  //
+  // MUL X8, X23, X24:
+  //   Rd=8 (01000), Rn=23 (10111), Rm=24 (11000), Ra=31 (11111)
+  //   Bits 31-0: 1_00_11011_000_11000_0_11111_10111_01000
+  //   = 0x9b187ee8
+  //   Little endian bytes: e8 7e 18 9b
+
+  let mc = MachineCode::new()
+  emit_mul(mc, 8, 23, 24) // MUL X8, X23, X24
+  let bytes = mc.get_bytes()
+  inspect(bytes.length(), content="4")
+
+  // Expected bytes in little endian: e8 7e 18 9b
+  // Actual (BUGGY): 68 fd fc 9b
+  inspect(bytes[0], content="232") // BUG: got 0x68, expected 0xe8 (232)
+  inspect(bytes[1], content="126") // BUG: got 0xfd, expected 0x7e (126)
+  inspect(bytes[2], content="192") // BUG: got 0xfc, expected 0x18 (24)
+  inspect(bytes[3], content="155") // OK: 0x9b
+}
