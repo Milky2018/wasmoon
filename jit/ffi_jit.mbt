@@ -268,7 +268,7 @@ extern "c" fn c_jit_call_ctx_i64i64_f64(
   arg1 : Int64,
 ) -> Double = "wasmoon_jit_call_ctx_i64i64_f64"
 
-// ============ Legacy JIT function calls (without context) ============
+// ============ Executable Memory Management ============
 
 ///|
 /// Allocate executable memory
@@ -289,76 +289,6 @@ extern "c" fn c_jit_copy_code(
 /// Free executable memory
 /// Returns 0 on success, -1 on failure
 extern "c" fn c_jit_free_exec(ptr : Int64) -> Int = "wasmoon_jit_free_exec"
-
-///|
-/// Call JIT function: () -> i64
-extern "c" fn c_jit_call_void_i64(func_ptr : Int64) -> Int64 = "wasmoon_jit_call_void_i64"
-
-///|
-/// Call JIT function: (i64) -> i64
-extern "c" fn c_jit_call_i64_i64(func_ptr : Int64, arg0 : Int64) -> Int64 = "wasmoon_jit_call_i64_i64"
-
-///|
-/// Call JIT function: (i64, i64) -> i64
-extern "c" fn c_jit_call_i64i64_i64(
-  func_ptr : Int64,
-  arg0 : Int64,
-  arg1 : Int64,
-) -> Int64 = "wasmoon_jit_call_i64i64_i64"
-
-///|
-/// Call JIT function: (i64, i64, i64) -> i64
-extern "c" fn c_jit_call_i64i64i64_i64(
-  func_ptr : Int64,
-  arg0 : Int64,
-  arg1 : Int64,
-  arg2 : Int64,
-) -> Int64 = "wasmoon_jit_call_i64i64i64_i64"
-
-///|
-/// Call JIT function: (i64, i64, i64, i64) -> i64
-extern "c" fn c_jit_call_i64i64i64i64_i64(
-  func_ptr : Int64,
-  arg0 : Int64,
-  arg1 : Int64,
-  arg2 : Int64,
-  arg3 : Int64,
-) -> Int64 = "wasmoon_jit_call_i64i64i64i64_i64"
-
-///|
-/// Call JIT function: () -> void
-extern "c" fn c_jit_call_void_void(func_ptr : Int64) -> Unit = "wasmoon_jit_call_void_void"
-
-///|
-/// Call JIT function: (i64) -> void
-extern "c" fn c_jit_call_i64_void(func_ptr : Int64, arg0 : Int64) -> Unit = "wasmoon_jit_call_i64_void"
-
-///|
-/// Call JIT function: (i64, i64) -> void
-extern "c" fn c_jit_call_i64i64_void(
-  func_ptr : Int64,
-  arg0 : Int64,
-  arg1 : Int64,
-) -> Unit = "wasmoon_jit_call_i64i64_void"
-
-///|
-/// Call JIT function: (i64, i64, i64) -> void
-extern "c" fn c_jit_call_i64i64i64_void(
-  func_ptr : Int64,
-  arg0 : Int64,
-  arg1 : Int64,
-  arg2 : Int64,
-) -> Unit = "wasmoon_jit_call_i64i64i64_void"
-
-///|
-/// Call JIT function: (i64, i64, i64, i64) -> void
-extern "c" fn c_jit_call_i64i64i64i64_void(
-  func_ptr : Int64,
-  arg0 : Int64,
-  arg1 : Int64,
-  arg2 : Int64,
-  arg3 : Int64,
-) -> Unit = "wasmoon_jit_call_i64i64i64i64_void"
 
 ///|
 /// Debug: print machine code bytes
@@ -751,96 +681,6 @@ pub fn ExecCode::from_bytes(code : Bytes) -> ExecCode? {
 /// Free the executable memory
 pub fn ExecCode::free(self : ExecCode) -> Unit {
   c_jit_free_exec(self.ptr) |> ignore
-}
-
-///|
-/// Call with no args, return i64
-pub fn ExecCode::call_void_i64(self : ExecCode) -> Int64 {
-  c_jit_call_void_i64(self.ptr)
-}
-
-///|
-/// Call with 1 arg, return i64
-pub fn ExecCode::call_i64_i64(self : ExecCode, arg0 : Int64) -> Int64 {
-  c_jit_call_i64_i64(self.ptr, arg0)
-}
-
-///|
-/// Call with 2 args, return i64
-pub fn ExecCode::call_i64i64_i64(
-  self : ExecCode,
-  arg0 : Int64,
-  arg1 : Int64,
-) -> Int64 {
-  c_jit_call_i64i64_i64(self.ptr, arg0, arg1)
-}
-
-///|
-/// Call with 3 args, return i64
-pub fn ExecCode::call_i64i64i64_i64(
-  self : ExecCode,
-  arg0 : Int64,
-  arg1 : Int64,
-  arg2 : Int64,
-) -> Int64 {
-  c_jit_call_i64i64i64_i64(self.ptr, arg0, arg1, arg2)
-}
-
-///|
-/// Call with 4 args, return i64
-pub fn ExecCode::call_i64i64i64i64_i64(
-  self : ExecCode,
-  arg0 : Int64,
-  arg1 : Int64,
-  arg2 : Int64,
-  arg3 : Int64,
-) -> Int64 {
-  c_jit_call_i64i64i64i64_i64(self.ptr, arg0, arg1, arg2, arg3)
-}
-
-///|
-/// Call with no args, no return
-pub fn ExecCode::call_void_void(self : ExecCode) -> Unit {
-  c_jit_call_void_void(self.ptr)
-}
-
-///|
-/// Call with 1 arg, no return
-pub fn ExecCode::call_i64_void(self : ExecCode, arg0 : Int64) -> Unit {
-  c_jit_call_i64_void(self.ptr, arg0)
-}
-
-///|
-/// Call with 2 args, no return
-pub fn ExecCode::call_i64i64_void(
-  self : ExecCode,
-  arg0 : Int64,
-  arg1 : Int64,
-) -> Unit {
-  c_jit_call_i64i64_void(self.ptr, arg0, arg1)
-}
-
-///|
-/// Call with 3 args, no return
-pub fn ExecCode::call_i64i64i64_void(
-  self : ExecCode,
-  arg0 : Int64,
-  arg1 : Int64,
-  arg2 : Int64,
-) -> Unit {
-  c_jit_call_i64i64i64_void(self.ptr, arg0, arg1, arg2)
-}
-
-///|
-/// Call with 4 args, no return
-pub fn ExecCode::call_i64i64i64i64_void(
-  self : ExecCode,
-  arg0 : Int64,
-  arg1 : Int64,
-  arg2 : Int64,
-  arg3 : Int64,
-) -> Unit {
-  c_jit_call_i64i64i64i64_void(self.ptr, arg0, arg1, arg2, arg3)
 }
 
 ///|
