@@ -50,7 +50,7 @@ test "f32 add" {
       #|vcode test(f0:float) -> float {
       #|block0:
       #|    f1 = ldf 15.5
-      #|    f2 = fadd f0, f1
+      #|    f2 = fadd.s f0, f1
       #|    ret f2
       #|}
       #|
@@ -63,7 +63,7 @@ test "f32 add" {
       #|vcode test(f0:float) -> float {
       #|block0:
       #|    d1 = ldf 15.5
-      #|    d2 = fadd d0, d1
+      #|    d2 = fadd.s d0, d1
       #|    ret d2
       #|}
       #|
@@ -159,7 +159,7 @@ test "f64 add" {
       #|vcode test(f0:double) -> double {
       #|block0:
       #|    f1 = ldf 15.5
-      #|    f2 = fadd f0, f1
+      #|    f2 = fadd.d f0, f1
       #|    ret f2
       #|}
       #|
@@ -172,7 +172,7 @@ test "f64 add" {
       #|vcode test(f0:double) -> double {
       #|block0:
       #|    d1 = ldf 15.5
-      #|    d2 = fadd d0, d1
+      #|    d2 = fadd.d d0, d1
       #|    ret d2
       #|}
       #|
@@ -260,7 +260,7 @@ test "f32 sub" {
       #|vcode test(f0:float) -> float {
       #|block0:
       #|    f1 = ldf 3.5
-      #|    f2 = fsub f0, f1
+      #|    f2 = fsub.s f0, f1
       #|    ret f2
       #|}
       #|
@@ -273,7 +273,7 @@ test "f32 sub" {
       #|vcode test(f0:float) -> float {
       #|block0:
       #|    d1 = ldf 3.5
-      #|    d2 = fsub d0, d1
+      #|    d2 = fsub.s d0, d1
       #|    ret d2
       #|}
       #|
@@ -370,7 +370,7 @@ test "f32 mul" {
       #|vcode test(f0:float) -> float {
       #|block0:
       #|    f1 = ldf 2.5
-      #|    f2 = fmul f0, f1
+      #|    f2 = fmul.s f0, f1
       #|    ret f2
       #|}
       #|
@@ -383,7 +383,7 @@ test "f32 mul" {
       #|vcode test(f0:float) -> float {
       #|block0:
       #|    d1 = ldf 2.5
-      #|    d2 = fmul d0, d1
+      #|    d2 = fmul.s d0, d1
       #|    ret d2
       #|}
       #|
@@ -406,12 +406,15 @@ test "f32 mul" {
       #|  0024: 1004a8f2  movk x16, #16416, lsl #16
       #|  0028: 1002271e  fmov s16, w16
       #|  002c: 01c2221e  fcvt d1, s16
-      #|  0030: 0208611e  fmul d2, d0, d1
-      #|  0034: 4040601e  fmov d0, d2
-      #|  0038: f45740a9  ldp x20, x21, [sp, #0]
-      #|  003c: f60b40f9  ldr x22, [x31, #16]
-      #|  0040: ff830091  add sp, sp, #32
-      #|  0044: c0035fd6  ret
+      #|  0030: 1040621e  fcvt s16, d0
+      #|  0034: 3140621e  fcvt s17, d1
+      #|  0038: 100a311e  fmul s16, s16, s17
+      #|  003c: 02c2221e  fcvt d2, s16
+      #|  0040: 4040601e  fmov d0, d2
+      #|  0044: f45740a9  ldp x20, x21, [sp, #0]
+      #|  0048: f60b40f9  ldr x22, [x31, #16]
+      #|  004c: ff830091  add sp, sp, #32
+      #|  0050: c0035fd6  ret
       #|
     ),
   )

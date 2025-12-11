@@ -83,7 +83,11 @@ pub fn emit_eor_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
 pub fn emit_fabs_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_fabs_s(MachineCode, Int, Int) -> Unit
+
 pub fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_fadd_s(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
 
@@ -97,13 +101,21 @@ pub fn emit_fcvtzu(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
 
 pub fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
 
+pub fn emit_fdiv_s(MachineCode, Int, Int, Int) -> Unit
+
 pub fn emit_fmax_d(MachineCode, Int, Int, Int) -> Unit
 
+pub fn emit_fmax_s(MachineCode, Int, Int, Int) -> Unit
+
 pub fn emit_fmin_d(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_fmin_s(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fmov_d_to_x(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fmov_s(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fmov_s_to_w(MachineCode, Int, Int) -> Unit
 
@@ -113,19 +125,35 @@ pub fn emit_fmov_x_to_d(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
 
+pub fn emit_fmul_s(MachineCode, Int, Int, Int) -> Unit
+
 pub fn emit_fneg_d(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fneg_s(MachineCode, Int, Int) -> Unit
 
 pub fn emit_frintm_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_frintm_s(MachineCode, Int, Int) -> Unit
+
 pub fn emit_frintn_d(MachineCode, Int, Int) -> Unit
+
+pub fn emit_frintn_s(MachineCode, Int, Int) -> Unit
 
 pub fn emit_frintp_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_frintp_s(MachineCode, Int, Int) -> Unit
+
 pub fn emit_frintz_d(MachineCode, Int, Int) -> Unit
+
+pub fn emit_frintz_s(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fsqrt_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_fsqrt_s(MachineCode, Int, Int) -> Unit
+
 pub fn emit_fsub_d(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_fsub_s(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_function(VCodeFunction) -> MachineCode
 
@@ -827,19 +855,19 @@ pub enum VCodeOpcode {
   Rotr
   Rotl
   Not
-  FAdd
-  FSub
-  FMul
-  FDiv
-  FMin
-  FMax
-  FSqrt
-  FAbs
-  FNeg
-  FCeil
-  FFloor
-  FTrunc
-  FNearest
+  FAdd(Bool)
+  FSub(Bool)
+  FMul(Bool)
+  FDiv(Bool)
+  FMin(Bool)
+  FMax(Bool)
+  FSqrt(Bool)
+  FAbs(Bool)
+  FNeg(Bool)
+  FCeil(Bool)
+  FFloor(Bool)
+  FTrunc(Bool)
+  FNearest(Bool)
   Load(MemType, Int)
   Store(MemType, Int)
   Load8S(Int)

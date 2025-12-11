@@ -3,10 +3,7 @@
 
 ///|
 /// Test f32.no_fma - should not use fused multiply-add
-/// Line 26-30 failures: precision issues with f32 mul+add
-/// KNOWN ISSUE: JIT performs f32 operations in f64 precision (D registers),
-/// which gives different results than true f32 precision operations.
-/// This is an architectural limitation that requires implementing S register ops.
+/// Line 26-30: precision test for f32 mul+add
 test "f32_no_fma" {
   let source =
     #|(module
@@ -18,14 +15,22 @@ test "f32_no_fma" {
     F32(0x1.cf8548p-23),
     F32(0x1.992adap+107),
   ])
-  // TODO: Fix when S register f32 operations are implemented
-  inspect(result.matched(), content="false")
+  // Debug: print jit and interp results
+  inspect(
+    result.to_string(),
+    content=(
+      #|JIT: F32(2.669349603329165e+32)
+      #|Interpreter: F32(2.669349603329165e+32)
+      #|Result: MATCH
+    ),
+  )
+  // S register f32 operations now implemented
+  inspect(result.matched(), content="true")
 }
 
 ///|
-/// Test no_reassociate_mul - result is 0 instead of expected value
-/// Line 360-364: f32.no_reassociate_mul returns 0
-/// KNOWN ISSUE: Same as f32_no_fma - f32 operations performed in f64 precision.
+/// Test no_reassociate_mul - f32 multiplication chain
+/// Line 360-364: f32.no_reassociate_mul
 test "f32_no_reassociate_mul" {
   let source =
     #|(module
@@ -39,8 +44,8 @@ test "f32_no_reassociate_mul" {
     F32(-0x1.5f9bcp+102),
     F32(0x1.f04508p-56),
   ])
-  // TODO: Fix when S register f32 operations are implemented
-  inspect(result.matched(), content="false")
+  // S register f32 operations now implemented
+  inspect(result.matched(), content="true")
 }
 
 ///|

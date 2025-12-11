@@ -194,7 +194,7 @@ pub fn VCodeBuilder::lshr(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
 ///|
 pub fn VCodeBuilder::fadd(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
   let result = self.new_vreg(Float64)
-  let inst = VCodeInst::new(FAdd)
+  let inst = VCodeInst::new(FAdd(false)) // f64 operation
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -205,7 +205,7 @@ pub fn VCodeBuilder::fadd(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
 ///|
 pub fn VCodeBuilder::fsub(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
   let result = self.new_vreg(Float64)
-  let inst = VCodeInst::new(FSub)
+  let inst = VCodeInst::new(FSub(false)) // f64 operation
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -216,7 +216,7 @@ pub fn VCodeBuilder::fsub(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
 ///|
 pub fn VCodeBuilder::fmul(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
   let result = self.new_vreg(Float64)
-  let inst = VCodeInst::new(FMul)
+  let inst = VCodeInst::new(FMul(false)) // f64 operation
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -227,7 +227,7 @@ pub fn VCodeBuilder::fmul(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
 ///|
 pub fn VCodeBuilder::fdiv(self : VCodeBuilder, a : VReg, b : VReg) -> VReg {
   let result = self.new_vreg(Float64)
-  let inst = VCodeInst::new(FDiv)
+  let inst = VCodeInst::new(FDiv(false)) // f64 operation
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))

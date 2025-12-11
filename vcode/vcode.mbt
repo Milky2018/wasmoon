@@ -283,20 +283,20 @@ pub enum VCodeOpcode {
   Rotr // Rotate right
   Rotl // Rotate left (emulated as rotr with (64-n))
   Not // Bitwise NOT
-  // Floating-point operations
-  FAdd
-  FSub
-  FMul
-  FDiv
-  FMin
-  FMax
-  FSqrt
-  FAbs
-  FNeg
-  FCeil
-  FFloor
-  FTrunc
-  FNearest
+  // Floating-point operations (Bool = true for f32, false for f64)
+  FAdd(Bool)
+  FSub(Bool)
+  FMul(Bool)
+  FDiv(Bool)
+  FMin(Bool)
+  FMax(Bool)
+  FSqrt(Bool)
+  FAbs(Bool)
+  FNeg(Bool)
+  FCeil(Bool)
+  FFloor(Bool)
+  FTrunc(Bool)
+  FNearest(Bool)
   // Memory operations
   Load(MemType, Int) // type, offset
   Store(MemType, Int) // type, offset
@@ -381,19 +381,19 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Rotr => "rotr"
     Rotl => "rotl"
     Not => "not"
-    FAdd => "fadd"
-    FSub => "fsub"
-    FMul => "fmul"
-    FDiv => "fdiv"
-    FMin => "fmin"
-    FMax => "fmax"
-    FSqrt => "fsqrt"
-    FAbs => "fabs"
-    FNeg => "fneg"
-    FCeil => "fceil"
-    FFloor => "ffloor"
-    FTrunc => "ftrunc"
-    FNearest => "fnearest"
+    FAdd(is_f32) => if is_f32 { "fadd.s" } else { "fadd.d" }
+    FSub(is_f32) => if is_f32 { "fsub.s" } else { "fsub.d" }
+    FMul(is_f32) => if is_f32 { "fmul.s" } else { "fmul.d" }
+    FDiv(is_f32) => if is_f32 { "fdiv.s" } else { "fdiv.d" }
+    FMin(is_f32) => if is_f32 { "fmin.s" } else { "fmin.d" }
+    FMax(is_f32) => if is_f32 { "fmax.s" } else { "fmax.d" }
+    FSqrt(is_f32) => if is_f32 { "fsqrt.s" } else { "fsqrt.d" }
+    FAbs(is_f32) => if is_f32 { "fabs.s" } else { "fabs.d" }
+    FNeg(is_f32) => if is_f32 { "fneg.s" } else { "fneg.d" }
+    FCeil(is_f32) => if is_f32 { "fceil.s" } else { "fceil.d" }
+    FFloor(is_f32) => if is_f32 { "ffloor.s" } else { "ffloor.d" }
+    FTrunc(is_f32) => if is_f32 { "ftrunc.s" } else { "ftrunc.d" }
+    FNearest(is_f32) => if is_f32 { "fnearest.s" } else { "fnearest.d" }
     Load(ty, offset) => "load.\{ty} +\{offset}"
     Store(ty, offset) => "store.\{ty} +\{offset}"
     Load8S(offset) => "load8s +\{offset}"

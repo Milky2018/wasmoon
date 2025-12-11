@@ -97,9 +97,9 @@ test "float operations" {
     content=(
       #|vcode float_add(f0:float, f1:float) -> float {
       #|block0:
-      #|    f2 = fadd f0, f1
+      #|    f2 = fadd.d f0, f1
       #|    f3 = ldf 2
-      #|    f4 = fmul f2, f3
+      #|    f4 = fmul.d f2, f3
       #|    ret f4
       #|}
       #|
@@ -226,8 +226,8 @@ test "float division and subtraction" {
     content=(
       #|vcode float_ops(f0:float, f1:float) -> float {
       #|block0:
-      #|    f2 = fdiv f0, f1
-      #|    f3 = fsub f2, f1
+      #|    f2 = fdiv.d f0, f1
+      #|    f3 = fsub.d f2, f1
       #|    ret f3
       #|}
       #|
@@ -253,9 +253,9 @@ test "f64 operations" {
     content=(
       #|vcode f64_add(f0:double, f1:double) -> double {
       #|block0:
-      #|    f2 = fadd f0, f1
+      #|    f2 = fadd.d f0, f1
       #|    f3 = ldf 2
-      #|    f4 = fmul f2, f3
+      #|    f4 = fmul.d f2, f3
       #|    ret f4
       #|}
       #|
@@ -280,8 +280,8 @@ test "f64 division and subtraction" {
     content=(
       #|vcode f64_ops(f0:double, f1:double) -> double {
       #|block0:
-      #|    f2 = fdiv f0, f1
-      #|    f3 = fsub f2, f1
+      #|    f2 = fdiv.d f0, f1
+      #|    f3 = fsub.d f2, f1
       #|    ret f3
       #|}
       #|
@@ -311,7 +311,7 @@ test "mixed int and float parameters" {
     content=(
       #|vcode mixed_params(v0:int, f1:float, v2:int, f3:double) -> double {
       #|block0:
-      #|    f4 = fadd f1, f3
+      #|    f4 = fadd.d f1, f3
       #|    ret f4
       #|}
       #|

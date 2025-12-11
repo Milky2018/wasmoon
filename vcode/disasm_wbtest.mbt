@@ -407,9 +407,9 @@ test "all emit functions disasm" {
       #|  00bc: f35300a9  stp x19, x20, [sp, #0]
       #|  00c0: f55b41a9  ldp x21, x22, [sp, #16]
       #|  00c4: 2028621e  fadd d0, d1, d2
-      #|  00c8: 0339651e  fsub d3, d4, d5
-      #|  00cc: 6609681e  fmul d6, d7, d8
-      #|  00d0: 491a6b1e  fdiv d9, d10, d11
+      #|  00c8: 8338651e  fsub d3, d4, d5
+      #|  00cc: e608681e  fmul d6, d7, d8
+      #|  00d0: 49196b1e  fdiv d9, d10, d11
       #|  00d4: 2040601e  fmov d0, d1
       #|  00d8: 6200679e  fmov d2, x3
       #|  00dc: a400669e  fmov x4, d5
