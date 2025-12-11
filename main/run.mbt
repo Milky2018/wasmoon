@@ -247,7 +247,7 @@ fn run_wasm(
         )
         if jit_results.length() > 0 {
           // Print all results separated by spaces
-          let strs = jit_results.map(fn(r) { r.to_string() })
+          let strs = jit_results.map(format_value)
           println(strs.join(" "))
         }
       } else {
@@ -495,7 +495,7 @@ fn run_with_jit(
   func_name : String,
   args : Array[@types.Value],
   debug_config : DebugConfig,
-) -> Array[Int64] {
+) -> Array[@types.Value] {
   if debug_config.verbose {
     println("[DEBUG] JIT: Compiling module...")
   }
@@ -559,10 +559,28 @@ fn run_with_jit(
                   return []
                 }
               }
+              // Convert Int64 results to Value based on result types
+              let values : Array[@types.Value] = []
+              for i, r in results {
+                if i < f.result_types.length() {
+                  let v = match f.result_types[i] {
+                    I32 => @types.Value::I32(r.to_int())
+                    I64 => @types.Value::I64(r)
+                    F32 => {
+                      // r contains bits of f64, convert to f32
+                      let f64_val = r.reinterpret_as_double()
+                      @types.Value::F32(Float::from_double(f64_val))
+                    }
+                    F64 => @types.Value::F64(r.reinterpret_as_double())
+                    _ => @types.Value::I32(r.to_int())
+                  }
+                  values.push(v)
+                }
+              }
               // Cleanup
               @jit.free_memory(mem_ptr)
               jm.free()
-              results
+              values
             }
             None => {
               println("Error: Function '\{func_name}' not found in JIT module")
