@@ -29,6 +29,10 @@ pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
 
 pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
 
+pub fn call_clobbered_fprs() -> Array[PReg]
+
+pub fn call_clobbered_gprs() -> Array[PReg]
+
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
 pub fn debug_liveness(LivenessResult) -> String
@@ -411,6 +415,7 @@ pub(all) struct LiveInterval {
   hint : PReg?
   mut assigned : PReg?
   mut spill_slot : Int?
+  mut crosses_call : Bool
 }
 pub impl Show for LiveInterval
 
@@ -420,6 +425,7 @@ pub(all) struct LivenessResult {
   live_in : Array[@set.Set[Int]]
   live_out : Array[@set.Set[Int]]
   block_order : Map[Int, Int]
+  call_points : Array[ProgPoint]
 }
 
 pub(all) struct LoweringContext {
@@ -719,6 +725,7 @@ pub(all) struct VCodeFunction {
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
   mut num_spill_slots : Int
+  param_pregs : Array[PReg?]
 }
 pub fn VCodeFunction::add_param(Self, RegClass) -> VReg
 pub fn VCodeFunction::add_result(Self, RegClass) -> Unit
