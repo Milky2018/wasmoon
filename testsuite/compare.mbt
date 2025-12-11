@@ -140,60 +140,91 @@ fn run_jit(
   args : Array[@types.Value],
   result_types : Array[@types.ValueType],
 ) -> Result[Array[@types.Value], String] {
+  ignore(func_idx)
   try {
-    let func_code = mod_.codes[func_idx]
-    let func_type_idx = mod_.funcs[func_idx]
-    let func_type = mod_.types[func_type_idx]
+    // Compile ALL functions in the module (not just the target function)
+    // This is necessary because the target function may call other functions
+    let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+    let num_imports = count_func_imports(mod_.imports)
 
-    // Get locals
-    let locals : Array[@types.ValueType] = []
-    for loc in func_code.locals {
-      locals.push(loc)
+    // Build import function type indices
+    let import_func_type_indices : Array[Int] = []
+    for imp in mod_.imports {
+      if imp.desc is Func(type_idx) {
+        import_func_type_indices.push(type_idx)
+        let func_type = mod_.types[type_idx]
+        precompiled.add_import(
+          imp.mod_name,
+          imp.name,
+          func_type.params.length(),
+          func_type.results.length(),
+        )
+      }
     }
 
-    // Translate to IR
-    let translator = @ir.Translator::new(
-      func_name,
-      func_type,
-      locals,
-      mod_.types,
-      mod_.funcs.mapi(fn(i, _) { mod_.funcs[i] }),
-      0, // num_imports
-      [], // import_func_type_indices
-    )
-    let ir_func = translator.translate(func_code.body)
+    // Compile each function in the module
+    for i, code in mod_.codes {
+      let f_idx = num_imports + i
+      let type_idx = mod_.funcs[i]
+      let func_type = mod_.types[type_idx]
+      let f_name = get_func_name(mod_, f_idx)
 
-    // Lower to VCode
-    let vcode = @vcode.lower_function(ir_func)
+      // Translate to IR
+      let translator = @ir.Translator::new(
+        f_name,
+        func_type,
+        code.locals,
+        mod_.types,
+        mod_.funcs,
+        num_imports,
+        import_func_type_indices,
+      )
+      let ir_func = translator.translate(code.body)
 
-    // Register allocation
-    let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+      // Lower to VCode
+      let vcode = @vcode.lower_function(ir_func)
 
-    // Emit machine code
-    let mc = @vcode.emit_function(allocated_func)
-    let code_bytes = mc.get_bytes()
+      // Register allocation
+      let allocated_func = @vcode.allocate_registers_aarch64(vcode)
 
-    // Create JIT module
-    let jit_module = @jit.JITModule::from_single_function(
-      code_bytes,
-      func_name,
-      args.length(),
-      result_types,
-      65536L, // 64KB memory
-    )
-    guard jit_module is Some(jm) else {
+      // Emit machine code
+      let mc = @vcode.emit_function(allocated_func)
+
+      // Add to precompiled module
+      let compiled = @vcode.CompiledFunction::new(f_name, mc, 0)
+      precompiled.add_function(
+        f_idx,
+        f_name,
+        compiled,
+        func_type.params.length(),
+        func_type.results.length(),
+      )
+    }
+
+    // Build func_signatures for JIT module
+    let func_signatures = build_func_signatures(mod_, num_imports)
+
+    // Load JIT module with all functions
+    guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
       return Err("Failed to create JIT module")
     }
+    defer jm.free()
 
-    // Call and cleanup
-    let func = jm.get_func_by_name(func_name)
-    guard func is Some(f) else {
-      jm.free()
+    // Allocate memory
+    let mem_size = 65536L // 64KB
+    let mem_ptr = @jit.alloc_memory(mem_size)
+    if mem_ptr == 0L {
+      return Err("Failed to allocate memory")
+    }
+    defer @jit.free_memory(mem_ptr)
+    jm.set_memory(mem_ptr, mem_size)
+
+    // Call the target function
+    guard jm.get_func_by_name(func_name) is Some(f) else {
       return Err("Failed to get JIT function")
     }
     let jit_args = args.map(value_to_jit_arg)
     let raw_results = jm.call_with_context(f, jit_args)
-    jm.free()
 
     // Convert to Values
     let values = jit_results_to_values(raw_results, result_types)
@@ -201,6 +232,72 @@ fn run_jit(
   } catch {
     e => Err("JIT error: \{e}")
   }
+}
+
+///|
+/// Count function imports in imports array
+fn count_func_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    if imp.desc is Func(_) {
+      count += 1
+    }
+  }
+  count
+}
+
+///|
+/// Get function name from exports or generate default name
+fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
+  for exp in mod_.exports {
+    if exp.desc is Func(idx) && idx == func_idx {
+      return exp.name
+    }
+  }
+  "func_\{func_idx}"
+}
+
+///|
+/// Build func_signatures array for JIT module loading
+fn build_func_signatures(
+  mod_ : @types.Module,
+  num_imports : Int,
+) -> Array[(Int, Array[@types.ValueType])] {
+  let total_funcs = num_imports + mod_.funcs.length()
+  let signatures : Array[(Int, Array[@types.ValueType])] = []
+
+  // Pre-fill with empty signatures
+  for _ in 0..<total_funcs {
+    signatures.push((0, []))
+  }
+
+  // Fill in signatures for import functions
+  let mut func_count = 0
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      if type_idx < mod_.types.length() {
+        let func_type = mod_.types[type_idx]
+        signatures[func_count] = (
+          func_type.params.length(),
+          func_type.results.copy(),
+        )
+      }
+      func_count += 1
+    }
+  }
+
+  // Fill in signatures for local functions
+  for i, type_idx in mod_.funcs {
+    let func_idx = num_imports + i
+    if type_idx < mod_.types.length() {
+      let func_type = mod_.types[type_idx]
+      signatures[func_idx] = (
+        func_type.params.length(),
+        func_type.results.copy(),
+      )
+    }
+  }
+  signatures
 }
 
 ///|
