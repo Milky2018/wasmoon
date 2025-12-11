@@ -3,4 +3,3 @@ target/
 .mooncakes/
 .moonagent/
 wasmoon
-*.cwasm
