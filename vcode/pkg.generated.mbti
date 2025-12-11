@@ -67,9 +67,13 @@ pub fn emit_cbnz(MachineCode, Int, Int) -> Unit
 
 pub fn emit_cbz(MachineCode, Int, Int) -> Unit
 
+pub fn emit_clz(MachineCode, Int, Int) -> Unit
+
 pub fn emit_cmp_imm(MachineCode, Int, Int) -> Unit
 
 pub fn emit_cmp_reg(MachineCode, Int, Int) -> Unit
+
+pub fn emit_csel(MachineCode, Int, Int, Int, Int) -> Unit
 
 pub fn emit_cset(MachineCode, Int, Int) -> Unit
 
@@ -174,6 +178,8 @@ pub fn emit_nop(MachineCode) -> Unit
 pub fn emit_orr_reg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_orr_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+
+pub fn emit_rbit(MachineCode, Int, Int) -> Unit
 
 pub fn emit_ret(MachineCode, Int) -> Unit
 
@@ -823,6 +829,10 @@ pub enum VCodeOpcode {
   FPromote
   FDemote
   Bitcast
+  Select
+  Clz
+  Ctz
+  Popcnt
   Nop
   BoundsCheck(Int, Int)
   AddShifted(ShiftType, Int)

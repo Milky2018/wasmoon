@@ -85,6 +85,25 @@ extern "c" fn c_jit_memory_init(
 extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
 
 ///|
+/// Allocate indirect table for call_indirect
+extern "c" fn c_jit_ctx_alloc_indirect_table(
+  ctx_ptr : Int64,
+  count : Int,
+) -> Int = "wasmoon_jit_ctx_alloc_indirect_table"
+
+///|
+/// Set an entry in indirect table (table_idx -> func_table[func_idx])
+extern "c" fn c_jit_ctx_set_indirect(
+  ctx_ptr : Int64,
+  table_idx : Int,
+  func_idx : Int,
+) -> Unit = "wasmoon_jit_ctx_set_indirect"
+
+///|
+/// Get indirect table base address (for call_indirect)
+extern "c" fn c_jit_ctx_get_indirect_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_indirect_table"
+
+///|
 /// Set the global JIT context (for WASI trampolines)
 extern "c" fn c_jit_set_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context"
 
@@ -225,7 +244,10 @@ pub impl JITArg for Double with to_jit_arg(self) {
 /// JIT execution context
 priv struct JITContext {
   ctx_ptr : Int64
-  func_table_ptr : Int64
+  // indirect_table_ptr is used for both direct calls (via func_idx) and
+  // call_indirect (via table_idx). It defaults to func_table and is updated
+  // when alloc_indirect_table is called.
+  mut indirect_table_ptr : Int64
 }
 
 ///|
@@ -235,14 +257,36 @@ fn JITContext::new(total_funcs : Int) -> JITContext? {
   if ctx_ptr == 0L {
     return None
   }
+  // Default to func_table_ptr; will be updated if indirect table is allocated
   let func_table_ptr = c_jit_ctx_get_func_table(ctx_ptr)
-  Some(JITContext::{ ctx_ptr, func_table_ptr })
+  Some(JITContext::{ ctx_ptr, indirect_table_ptr: func_table_ptr })
 }
 
 ///|
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
   c_jit_ctx_set_func(self.ctx_ptr, idx, func_ptr)
+}
+
+///|
+/// Allocate indirect table for call_indirect
+fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
+  if c_jit_ctx_alloc_indirect_table(self.ctx_ptr, count) != 0 {
+    self.indirect_table_ptr = c_jit_ctx_get_indirect_table(self.ctx_ptr)
+    true
+  } else {
+    false
+  }
+}
+
+///|
+/// Set an entry in indirect table (maps table_idx to func_idx)
+fn JITContext::set_indirect(
+  self : JITContext,
+  table_idx : Int,
+  func_idx : Int,
+) -> Unit {
+  c_jit_ctx_set_indirect(self.ctx_ptr, table_idx, func_idx)
 }
 
 ///|
@@ -494,7 +538,7 @@ fn JITContext::call_multi_return(
   // Call FFI
   let trap_code = c_jit_call_multi_return(
     func_ptr,
-    self.func_table_ptr,
+    self.indirect_table_ptr, // Use indirect_table for call_indirect support
     args_fixed,
     num_args,
     results_fixed,

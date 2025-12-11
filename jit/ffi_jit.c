@@ -194,8 +194,10 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_trap(void) {
 
 // JIT execution context - holds function table and memory pointer
 typedef struct {
-    void **func_table;      // Array of function pointers
+    void **func_table;      // Array of function pointers (indexed by func_idx)
     int func_count;         // Number of entries in func_table
+    void **indirect_table;  // Array for call_indirect (indexed by table element index)
+    int indirect_count;     // Number of entries in indirect_table
     uint8_t *memory_base;   // WebAssembly linear memory base
     size_t memory_size;     // Memory size in bytes
     // WASI args/env storage
@@ -229,6 +231,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
         return 0;
     }
     ctx->func_count = func_count;
+    ctx->indirect_table = NULL;
+    ctx->indirect_count = 0;
     ctx->memory_base = NULL;
     ctx->memory_size = 0;
     ctx->args = NULL;
@@ -265,12 +269,69 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
     return 0;
 }
 
+// Allocate indirect table for call_indirect
+// The indirect table is at least as large as func_count to support both
+// direct calls (via func_idx) and indirect calls (via table_idx)
+MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || count <= 0) return 0;
+
+    // Free existing indirect table if any
+    if (ctx->indirect_table) {
+        free(ctx->indirect_table);
+    }
+
+    // Allocate at least func_count entries so direct calls work too
+    int alloc_count = count > ctx->func_count ? count : ctx->func_count;
+    ctx->indirect_table = (void **)calloc(alloc_count, sizeof(void *));
+    if (!ctx->indirect_table) {
+        ctx->indirect_count = 0;
+        return 0;
+    }
+    ctx->indirect_count = alloc_count;
+
+    // Pre-fill with func_table entries so direct calls work
+    for (int i = 0; i < ctx->func_count; i++) {
+        ctx->indirect_table[i] = ctx->func_table[i];
+    }
+
+    return 1;
+}
+
+// Set an entry in indirect table
+// table_idx: the WASM table index (0, 1, 2, ...)
+// func_idx: the function index to look up in func_table
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (ctx && ctx->indirect_table &&
+        table_idx >= 0 && table_idx < ctx->indirect_count &&
+        func_idx >= 0 && func_idx < ctx->func_count) {
+        ctx->indirect_table[table_idx] = ctx->func_table[func_idx];
+    }
+}
+
+// Get indirect table base address (this is what X20 should point to for call_indirect)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (ctx && ctx->indirect_table) {
+        return (int64_t)ctx->indirect_table;
+    }
+    // Fall back to func_table if no indirect table (backward compatibility)
+    if (ctx) {
+        return (int64_t)ctx->func_table;
+    }
+    return 0;
+}
+
 // Free a JIT context
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         if (ctx->func_table) {
             free(ctx->func_table);
+        }
+        if (ctx->indirect_table) {
+            free(ctx->indirect_table);
         }
         free(ctx);
     }

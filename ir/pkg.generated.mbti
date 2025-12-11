@@ -114,8 +114,10 @@ pub fn IRBuilder::call(Self, Int, Type?, Array[Value]) -> Value?
 pub fn IRBuilder::call_indirect(Self, Int, Type?, Value, Array[Value]) -> Value?
 pub fn IRBuilder::call_indirect_multi(Self, Int, Array[Type], Value, Array[Value]) -> Array[Value]
 pub fn IRBuilder::call_multi(Self, Int, Array[Type], Array[Value]) -> Array[Value]
+pub fn IRBuilder::clz(Self, Value) -> Value
 pub fn IRBuilder::copy(Self, Value) -> Value
 pub fn IRBuilder::create_block(Self) -> Block
+pub fn IRBuilder::ctz(Self, Value) -> Value
 pub fn IRBuilder::current_block(Self) -> Block?
 pub fn IRBuilder::fabs(Self, Value) -> Value
 pub fn IRBuilder::fadd(Self, Value, Value) -> Value
@@ -167,6 +169,7 @@ pub fn IRBuilder::load32_u(Self, Value, Int) -> Value
 pub fn IRBuilder::load8_s(Self, Type, Value, Int) -> Value
 pub fn IRBuilder::load8_u(Self, Type, Value, Int) -> Value
 pub fn IRBuilder::new(String) -> Self
+pub fn IRBuilder::popcnt(Self, Value) -> Value
 pub fn IRBuilder::print(Self) -> String
 pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
 pub fn IRBuilder::rotl(Self, Value, Value) -> Value
@@ -239,6 +242,9 @@ pub enum Opcode {
   Ushr
   Rotl
   Rotr
+  Clz
+  Ctz
+  Popcnt
   Icmp(IntCC)
   Fadd
   Fsub

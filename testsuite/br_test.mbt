@@ -81,3 +81,34 @@ test "br_nested_block_value" {
   let result = compare_jit_interp(source, "nested-block-value", [])
   inspect(result.matched(), content="true")
 }
+
+///|
+/// Test break-bare: br followed by unreachable code
+test "break_bare" {
+  let source =
+    #|(module
+    #|  (func (export "break-bare") (result i32)
+    #|    (block (br 0) (unreachable))
+    #|    (block (br_if 0 (i32.const 1)) (unreachable))
+    #|    (block (br_table 0 (i32.const 0)) (unreachable))
+    #|    (block (br_table 0 0 0 (i32.const 1)) (unreachable))
+    #|    (i32.const 19)
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "break-bare", [])
+  inspect(result.matched(), content="true")
+}
+
+///|
+/// Test as-call-value: call internal function with block result
+test "as_call_value" {
+  let source =
+    #|(module
+    #|  (func $f (param i32) (result i32) (local.get 0))
+    #|  (func (export "as-call-value") (result i32)
+    #|    (call $f (block (result i32) (i32.const 1)))
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "as-call-value", [])
+  inspect(result.matched(), content="true")
+}

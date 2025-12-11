@@ -233,6 +233,24 @@ pub fn IRBuilder::rotr(self : IRBuilder, a : Value, b : Value) -> Value {
   self.emit_inst(a.ty, Opcode::Rotr, [a, b])
 }
 
+///|
+/// Count leading zeros
+pub fn IRBuilder::clz(self : IRBuilder, a : Value) -> Value {
+  self.emit_inst(a.ty, Opcode::Clz, [a])
+}
+
+///|
+/// Count trailing zeros
+pub fn IRBuilder::ctz(self : IRBuilder, a : Value) -> Value {
+  self.emit_inst(a.ty, Opcode::Ctz, [a])
+}
+
+///|
+/// Population count (count number of 1 bits)
+pub fn IRBuilder::popcnt(self : IRBuilder, a : Value) -> Value {
+  self.emit_inst(a.ty, Opcode::Popcnt, [a])
+}
+
 // ============ Integer Comparisons ============
 
 ///|

@@ -260,6 +260,11 @@ fn lower_inst(
     @ir.Opcode::Ftrunc => lower_unary_float(ctx, inst, block, FTrunc)
     @ir.Opcode::Fnearest => lower_unary_float(ctx, inst, block, FNearest)
 
+    // Bit counting operations
+    @ir.Opcode::Clz => lower_unary_int(ctx, inst, block, Clz)
+    @ir.Opcode::Ctz => lower_unary_int(ctx, inst, block, Ctz)
+    @ir.Opcode::Popcnt => lower_unary_int(ctx, inst, block, Popcnt)
+
     // Floating point comparisons
     @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
 
@@ -1269,14 +1274,13 @@ fn lower_copy(
 }
 
 ///|
-/// Lower select instruction (cond ? a : b)
+/// Lower select instruction (cond ? true_val : false_val)
+/// Uses AArch64 CSEL instruction: if cond != 0, select true_val, else false_val
 fn lower_select(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : VCodeBlock,
 ) -> Unit {
-  // For now, lower select to a conditional move sequence
-  // In the future, this could be pattern-matched to cmov on x86 or csel on AArch64
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
@@ -1284,22 +1288,13 @@ fn lower_select(
       let true_val = ctx.get_vreg(inst.operands[1])
       let false_val = ctx.get_vreg(inst.operands[2])
 
-      // For now, emit a simple sequence:
-      // mov dst, false_val
-      // cmp cond, 0
-      // cmov.ne dst, true_val (conceptually)
-      // We'll simplify to just a move for now - proper select lowering
-      // requires target-specific patterns
-
-      // Move false value first
-      let mov_inst = VCodeInst::new(Move)
-      mov_inst.add_def({ reg: Virtual(dst) })
-      mov_inst.add_use(Virtual(false_val))
-      block.add_inst(mov_inst)
-
-      // TODO: Add conditional move when we have target-specific patterns
-      ignore(cond)
-      ignore(true_val)
+      // Emit Select instruction: dst = cond != 0 ? true_val : false_val
+      let vcode_inst = VCodeInst::new(Select)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(cond))
+      vcode_inst.add_use(Virtual(true_val))
+      vcode_inst.add_use(Virtual(false_val))
+      block.add_inst(vcode_inst)
     }
     None => ()
   }
@@ -1505,18 +1500,18 @@ fn lower_call_indirect(
   inst : @ir.Inst,
   block : VCodeBlock,
 ) -> Unit {
-  // For call_indirect, the last operand is the table index
+  // For call_indirect, the first operand is the table index (callee)
   // which we need to convert to a function pointer
   if inst.operands.length() == 0 {
     return
   }
 
-  // Last operand is the table index
-  let table_idx_vreg = ctx.get_vreg(inst.operands[inst.operands.length() - 1])
+  // First operand is the table index (callee)
+  let table_idx_vreg = ctx.get_vreg(inst.operands[0])
 
-  // Arguments are all operands except the last one
+  // Arguments are all operands except the first one
   let arg_vregs : Array[VReg] = []
-  for i in 0..<(inst.operands.length() - 1) {
+  for i in 1..<inst.operands.length() {
     arg_vregs.push(ctx.get_vreg(inst.operands[i]))
   }
   let num_args = arg_vregs.length()
