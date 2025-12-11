@@ -24,13 +24,5 @@ test "fac_iter" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "fac-iter", [I64(5)])
-  inspect(result.matched(), content="false")
-  inspect(
-    result.to_string(),
-    content=(
-      #|JIT: I64(0)
-      #|Interpreter: I64(120)
-      #|Result: MISMATCH
-    ),
-  )
+  inspect(result.matched(), content="true")
 }

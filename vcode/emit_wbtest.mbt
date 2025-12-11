@@ -629,11 +629,8 @@ test "emit_mul encoding verification" {
   emit_mul(mc, 8, 23, 24) // MUL X8, X23, X24
   let bytes = mc.get_bytes()
   inspect(bytes.length(), content="4")
-
-  // Expected bytes in little endian: e8 7e 18 9b
-  // Actual (BUGGY): 68 fd fc 9b
-  inspect(bytes[0], content="232") // BUG: got 0x68, expected 0xe8 (232)
-  inspect(bytes[1], content="126") // BUG: got 0xfd, expected 0x7e (126)
-  inspect(bytes[2], content="192") // BUG: got 0xfc, expected 0x18 (24)
-  inspect(bytes[3], content="155") // OK: 0x9b
+  inspect(bytes[0], content="232")
+  inspect(bytes[1], content="126")
+  inspect(bytes[2], content="24")
+  inspect(bytes[3], content="155")
 }

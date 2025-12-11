@@ -360,7 +360,7 @@ test "all emit functions disasm" {
       #|  0004: 83900191  add x3, x4, #100
       #|  0008: c50007cb  sub x5, x6, x7
       #|  000c: 282103d1  sub x8, x9, #200
-      #|  0010: 6a7d609b  mul x10, x11, x12
+      #|  0010: 6a7d0c9b  mul x10, x11, x12
       #|  0014: 4d1bcf9a  sdiv x13, x14, x15
       #|  0018: 3014c29b  udiv x16, x17, x18
       #|  001c: 9302158a  and x19, x20, x21

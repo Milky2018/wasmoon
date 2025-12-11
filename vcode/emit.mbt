@@ -565,8 +565,8 @@ pub fn emit_mul(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   let b0 = (rd & 0x1f) | ((rn & 0x7) << 5)
   // b1: Rn[4:3] | Ra[4:0]<<2 | o0<<7 = Rn[4:3] | 11111<<2 | 0 = Rn[4:3] | 0x7C
   let b1 = ((rn >> 3) & 0x3) | 0x7C
-  // b2: Rm[4:0] | 000
-  let b2 = (rm & 0x1f) << 3
+  // b2: 000 | Rm[4:0] (bits 7-5 are 000 for MUL opcode, bits 4-0 are Rm)
+  let b2 = rm & 0x1f
   // b3: 1_00_11011 = 0x9B
   let b3 = 0x9B
   mc.emit_inst(b0, b1, b2, b3)

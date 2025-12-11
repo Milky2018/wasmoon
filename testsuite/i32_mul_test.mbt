@@ -81,7 +81,7 @@ test "i32 mul" {
       #|  0014: f60302aa  mov x22, x2
       #|block0:
       #|  0018: 680080d2  movz x8, #3, lsl #0
-      #|  001c: 737c409b  mul x19, x3, x8
+      #|  001c: 737c089b  mul x19, x3, x8
       #|  0020: e00313aa  mov x0, x19
       #|  0024: f45740a9  ldp x20, x21, [sp, #0]
       #|  0028: f64f41a9  ldp x22, x19, [sp, #16]
@@ -104,10 +104,10 @@ test "i32 mul" {
   guard func is Some(f) else { return }
   // 4 * 3 = 12
   let result0 = jm.call_with_context(f, [4L])
-  inspect(result0[0], content="0")
+  inspect(result0[0], content="12")
   // 7 * 3 = 21
   let result1 = jm.call_with_context(f, [7L])
-  inspect(result1[0], content="0")
+  inspect(result1[0], content="21")
   // 0 * 3 = 0
   let result2 = jm.call_with_context(f, [0L])
   inspect(result2[0], content="0")
