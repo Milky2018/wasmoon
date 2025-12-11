@@ -4,56 +4,40 @@
 
 ///|
 /// JIT-compiled function ready for execution
-pub(all) struct JITFunction {
+pub struct JITFunction {
   name : String
-  func_idx : Int
-  exec_code : ExecCode
-  frame_size : Int
+  priv exec_code : ExecCode
   num_params : Int
   result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
 }
 
 ///|
-pub fn JITFunction::new(
+fn JITFunction::new(
   name : String,
-  func_idx : Int,
   exec_code : ExecCode,
-  frame_size : Int,
   num_params : Int,
   result_types : Array[@types.ValueType],
 ) -> JITFunction {
-  { name, func_idx, exec_code, frame_size, num_params, result_types }
+  { name, exec_code, num_params, result_types }
 }
 
 ///|
 /// Free the JIT function's executable memory
-pub fn JITFunction::free(self : JITFunction) -> Unit {
+fn JITFunction::free(self : JITFunction) -> Unit {
   self.exec_code.free()
-}
-
-///|
-/// Debug print the machine code
-pub fn JITFunction::debug_print(self : JITFunction) -> Unit {
-  println("JIT Function: \{self.name} (idx=\{self.func_idx})")
-  println(
-    "  Params: \{self.num_params}, Returns: \{self.result_types.length()}",
-  )
-  println("  Frame size: \{self.frame_size}")
-  self.exec_code.debug_print()
 }
 
 ///|
 /// Loaded precompiled module with executable functions
 pub struct JITModule {
-  functions : Map[Int, JITFunction]
-  by_name : Map[String, Int]
+  priv functions : Map[Int, JITFunction]
+  priv by_name : Map[String, Int]
   priv mut context : JITContext?
-  mut num_imports : Int
 }
 
 ///|
 pub fn JITModule::new() -> JITModule {
-  { functions: Map::new(), by_name: Map::new(), context: None, num_imports: 0 }
+  { functions: Map::new(), by_name: Map::new(), context: None }
 }
 
 ///|
@@ -95,9 +79,7 @@ pub fn JITModule::load(
             }
             let jit_func = JITFunction::new(
               entry.name,
-              entry.func_idx,
               ec,
-              entry.frame_size,
               num_params,
               result_types,
             )
@@ -119,7 +101,6 @@ pub fn JITModule::load(
 
       // Store context in module
       jit_module.context = Some(ctx)
-      jit_module.num_imports = num_imports
     }
   }
   Some(jit_module)
@@ -160,8 +141,7 @@ pub fn JITModule::from_single_function(
           ctx.set_func(0, ec.ptr)
           // Create JIT function
           let jit_func = JITFunction::new(
-            func_name, 0, ec, 0, // frame_size not tracked here
-             num_params, result_types,
+            func_name, ec, num_params, result_types,
           )
           // Create module
           let jit_module = JITModule::new()

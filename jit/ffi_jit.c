@@ -735,14 +735,6 @@ MOONBIT_FFI_EXPORT float wasmoon_jit_call_ctx_i64_f32(int64_t func_ptr, int64_t 
     return result;
 }
 
-MOONBIT_FFI_EXPORT float wasmoon_jit_call_ctx_i64i64_f32(int64_t func_ptr, int64_t func_table_ptr, int64_t arg0, int64_t arg1) {
-    if (!func_ptr) return 0.0f;
-    JIT_CALL_PROLOGUE();
-    float result = ((jit_func_ctx3_i64i64_f32)func_ptr)(func_table_ptr, mem_base, mem_size, arg0, arg1);
-    JIT_CALL_EPILOGUE();
-    return result;
-}
-
 MOONBIT_FFI_EXPORT double wasmoon_jit_call_ctx_void_f64(int64_t func_ptr, int64_t func_table_ptr) {
     if (!func_ptr) return 0.0;
     JIT_CALL_PROLOGUE();
@@ -1208,19 +1200,6 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_generic(void *func_ptr, int sig,
     }
 
     return 0;
-}
-
-// Debug: print machine code bytes
-MOONBIT_FFI_EXPORT void wasmoon_jit_debug_print_code(int64_t ptr_i64, int size) {
-    void *ptr = (void *)ptr_i64;
-    if (!ptr || size <= 0) return;
-    unsigned char *bytes = (unsigned char *)ptr;
-    printf("JIT code at %p (%d bytes):\n", ptr, size);
-    for (int i = 0; i < size; i++) {
-        printf("%02x ", bytes[i]);
-        if ((i + 1) % 16 == 0) printf("\n");
-    }
-    if (size % 16 != 0) printf("\n");
 }
 
 #ifdef __cplusplus

@@ -182,25 +182,6 @@ pub fn DebugContext::set_step_mode(Self, StepMode) -> Unit
 pub fn DebugContext::should_pause(Self, Int, Int) -> Bool
 pub impl Show for DebugContext
 
-pub(all) struct ExecCode {
-  ptr : Int64
-  size : Int
-}
-pub fn ExecCode::call_i64_i64(Self, Int64) -> Int64
-pub fn ExecCode::call_i64_void(Self, Int64) -> Unit
-pub fn ExecCode::call_i64i64_i64(Self, Int64, Int64) -> Int64
-pub fn ExecCode::call_i64i64_void(Self, Int64, Int64) -> Unit
-pub fn ExecCode::call_i64i64i64_i64(Self, Int64, Int64, Int64) -> Int64
-pub fn ExecCode::call_i64i64i64_void(Self, Int64, Int64, Int64) -> Unit
-pub fn ExecCode::call_i64i64i64i64_i64(Self, Int64, Int64, Int64, Int64) -> Int64
-pub fn ExecCode::call_i64i64i64i64_void(Self, Int64, Int64, Int64, Int64) -> Unit
-pub fn ExecCode::call_void_i64(Self) -> Int64
-pub fn ExecCode::call_void_void(Self) -> Unit
-pub fn ExecCode::debug_print(Self) -> Unit
-pub fn ExecCode::free(Self) -> Unit
-pub fn ExecCode::from_bytes(Bytes) -> Self?
-pub fn ExecCode::new(Array[Int]) -> Self?
-
 pub(all) struct FunctionEntry {
   func_idx : Int
   mut status : CompilationStatus
@@ -245,23 +226,14 @@ pub fn JITEngine::on_call(Self, Int) -> Bool
 pub fn JITEngine::stats(Self) -> (Int, Int, Int, Int, Int)
 pub impl Show for JITEngine
 
-pub(all) struct JITFunction {
+pub struct JITFunction {
   name : String
-  func_idx : Int
-  exec_code : ExecCode
-  frame_size : Int
   num_params : Int
   result_types : Array[@types.ValueType]
+  // private fields
 }
-pub fn JITFunction::call(Self, Array[Int64]) -> Int64?
-pub fn JITFunction::debug_print(Self) -> Unit
-pub fn JITFunction::free(Self) -> Unit
-pub fn JITFunction::new(String, Int, ExecCode, Int, Int, Array[@types.ValueType]) -> Self
 
 pub struct JITModule {
-  functions : Map[Int, JITFunction]
-  by_name : Map[String, Int]
-  mut num_imports : Int
   // private fields
 }
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap

@@ -236,15 +236,6 @@ extern "c" fn c_jit_call_ctx_i64_f32(
 ) -> Float = "wasmoon_jit_call_ctx_i64_f32"
 
 ///|
-/// Call JIT function with context: (i64, i64) -> f32
-extern "c" fn c_jit_call_ctx_i64i64_f32(
-  func_ptr : Int64,
-  func_table_ptr : Int64,
-  arg0 : Int64,
-  arg1 : Int64,
-) -> Float = "wasmoon_jit_call_ctx_i64i64_f32"
-
-///|
 /// Call JIT function with context: () -> f64
 extern "c" fn c_jit_call_ctx_void_f64(
   func_ptr : Int64,
@@ -289,10 +280,6 @@ extern "c" fn c_jit_copy_code(
 /// Free executable memory
 /// Returns 0 on success, -1 on failure
 extern "c" fn c_jit_free_exec(ptr : Int64) -> Int = "wasmoon_jit_free_exec"
-
-///|
-/// Debug: print machine code bytes
-extern "c" fn c_jit_debug_print_code(ptr : Int64, size : Int) -> Unit = "wasmoon_jit_debug_print_code"
 
 // ============ JIT Argument Trait ============
 
@@ -624,14 +611,13 @@ pub fn get_spectest_print_f64_f64_ptr() -> Int64 {
 
 ///|
 /// Executable code block
-pub(all) struct ExecCode {
+priv struct ExecCode {
   ptr : Int64
-  size : Int
 }
 
 ///|
 /// Allocate and copy code to executable memory
-pub fn ExecCode::new(code : Array[Int]) -> ExecCode? {
+fn ExecCode::new(code : Array[Int]) -> ExecCode? {
   let size = code.length()
   if size == 0 {
     return None
@@ -650,43 +636,13 @@ pub fn ExecCode::new(code : Array[Int]) -> ExecCode? {
     c_jit_free_exec(ptr) |> ignore
     return None
   }
-  Some(ExecCode::{ ptr, size })
-}
-
-///|
-/// Create from Bytes
-pub fn ExecCode::from_bytes(code : Bytes) -> ExecCode? {
-  let size = code.length()
-  if size == 0 {
-    return None
-  }
-  let ptr = c_jit_alloc_exec(size)
-  if ptr == 0L {
-    return None
-  }
-  // Copy code bytes
-  let bytes = FixedArray::make(size, b'\x00')
-  for i in 0..<size {
-    bytes[i] = code[i]
-  }
-  let result = c_jit_copy_code(ptr, bytes, size)
-  if result != 0 {
-    c_jit_free_exec(ptr) |> ignore
-    return None
-  }
-  Some(ExecCode::{ ptr, size })
+  Some(ExecCode::{ ptr, })
 }
 
 ///|
 /// Free the executable memory
-pub fn ExecCode::free(self : ExecCode) -> Unit {
+fn ExecCode::free(self : ExecCode) -> Unit {
   c_jit_free_exec(self.ptr) |> ignore
-}
-
-///|
-/// Debug: print the machine code
-pub fn ExecCode::debug_print(self : ExecCode) -> Unit {
-  c_jit_debug_print_code(self.ptr, self.size)
 }
 
 // ============ Multi-value Return Support ============
