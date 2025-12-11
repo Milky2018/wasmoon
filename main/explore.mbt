@@ -1,4 +1,16 @@
 ///|
+/// Compiled function data for HTML report
+struct CompiledFunc {
+  name : String
+  type_str : String
+  ir : String
+  ir_opt : String
+  vcode : String
+  regalloc : String
+  mc : String
+}
+
+///|
 /// Explore WASM compilation process
 fn run_explore(
   wasm_path : String,
@@ -40,18 +52,6 @@ fn run_explore(
     println("")
   }
 
-  // Determine which function to explore
-  let func_idx = match func_index {
-    Some(idx) => idx
-    None => 0 // Default to first function
-  }
-  if func_idx >= mod_.codes.length() {
-    println(
-      "Error: function index \{func_idx} out of range (0..\{mod_.codes.length()})",
-    )
-    return
-  }
-
   // Get function info
   let num_imports = count_func_imports(mod_.imports)
 
@@ -62,81 +62,129 @@ fn run_explore(
       import_func_type_indices.push(type_idx)
     }
   }
-  let type_idx = mod_.funcs[func_idx]
-  let func_type = mod_.types[type_idx]
-  let code = mod_.codes[func_idx]
-  if !html_output {
-    println("== Function \{func_idx} ==")
-    println("Type: \{format_func_type(func_type)}")
-    println("Locals: \{code.locals.length()}")
-    println("")
 
-    // Stage 1: WASM instructions
-    if show_wasm {
-      println("== Stage 1: WASM Instructions ==")
-      println("  Instructions: \{code.body.length()}")
-      for i, instr in code.body {
-        println("    \{i}: \{instr}")
+  // Determine which functions to explore
+  let func_indices : Array[Int] = match func_index {
+    Some(idx) => {
+      if idx >= mod_.codes.length() {
+        println(
+          "Error: function index \{idx} out of range (0..\{mod_.codes.length()})",
+        )
+        return
       }
+      [idx]
+    }
+    None => Array::makei(mod_.codes.length(), fn(i) { i })
+  }
+
+  // Compile each function
+  let compiled_funcs : Array[CompiledFunc] = []
+  for func_idx in func_indices {
+    let type_idx = mod_.funcs[func_idx]
+    let func_type = mod_.types[type_idx]
+    let code = mod_.codes[func_idx]
+    // Find function name from exports (func_idx needs to account for imports)
+    let actual_func_idx = num_imports + func_idx
+    let func_name : String = {
+      let mut name = ""
+      for exp in mod_.exports {
+        if exp.desc is @types.ExportDesc::Func(idx) && idx == actual_func_idx {
+          name = exp.name
+          break
+        }
+      }
+      if name == "" {
+        "func_\{func_idx}"
+      } else {
+        name
+      }
+    }
+    if !html_output {
       println("")
+      println("╔" + "═".repeat(58) + "╗")
+      println("║  \{func_name} \{format_func_type(func_type)}")
+      println("╚" + "═".repeat(58) + "╝")
+
+      // Stage 1: WASM instructions
+      if show_wasm {
+        println("")
+        println("── WASM Instructions ──")
+        for i, instr in code.body {
+          println("  \{i}: \{instr}")
+        }
+      }
+    }
+
+    // Stage 2: IR (SSA form)
+    let translator = @ir.Translator::new(
+      "func_\{func_idx}",
+      func_type,
+      code.locals,
+      mod_.types,
+      mod_.funcs,
+      num_imports,
+      import_func_type_indices,
+    )
+    let ir_func = translator.translate(code.body)
+    let ir_text = ir_func.print()
+    if !html_output && show_ir {
+      println("")
+      println("── IR (SSA Form) ──")
+      println(ir_text)
+    }
+
+    // Stage 3: Optimized IR
+    let level = @ir.OptLevel::from_int(opt_level)
+    @ir.optimize_with_level(ir_func, level) |> ignore
+    let ir_optimized = ir_func.print()
+    if !html_output && show_opt_ir {
+      println("")
+      println("── Optimized IR ──")
+      println(ir_optimized)
+    }
+
+    // Stage 4: VCode (Low-level IR)
+    let vcode_func = @vcode.lower_function(ir_func)
+    let vcode_text = vcode_func.to_string()
+    if !html_output && show_vcode {
+      println("")
+      println("── VCode ──")
+      println(vcode_text)
+    }
+
+    // Stage 5: Register Allocation
+    let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+    let allocated_text = allocated.to_string()
+    if !html_output && show_regalloc {
+      println("")
+      println("── Register Allocation ──")
+      println(allocated_text)
+    }
+
+    // Stage 6: Machine Code
+    let mc = @vcode.emit_function(allocated)
+    let mc_text = mc.dump_disasm()
+    if !html_output && show_mc {
+      println("")
+      println("── Machine Code ──")
+      println(mc_text)
+    }
+
+    // Collect for HTML
+    if html_output {
+      compiled_funcs.push({
+        name: func_name,
+        type_str: format_func_type(func_type),
+        ir: ir_text,
+        ir_opt: ir_optimized,
+        vcode: vcode_text,
+        regalloc: allocated_text,
+        mc: mc_text,
+      })
     }
   }
-
-  // Stage 2: IR (SSA form)
-  let translator = @ir.Translator::new(
-    "func_\{func_idx}",
-    func_type,
-    code.locals,
-    mod_.types,
-    mod_.funcs,
-    num_imports,
-    import_func_type_indices,
-  )
-  let ir_func = translator.translate(code.body)
-  let ir_text = ir_func.print()
-  if !html_output && show_ir {
-    println("== Stage 2: IR (SSA Form) ==")
-    println(ir_text)
-    println("")
-  }
-
-  // Stage 3: Optimized IR
-  let level = @ir.OptLevel::from_int(opt_level)
-  @ir.optimize_with_level(ir_func, level) |> ignore
-  let ir_optimized = ir_func.print()
-  if !html_output && show_opt_ir {
-    println("== Stage 3: Optimized IR (O\{opt_level}) ==")
-    println(ir_optimized)
-    println("")
-  }
-
-  // Stage 4: VCode (Low-level IR)
-  let vcode_func = @vcode.lower_function(ir_func)
-  let vcode_text = vcode_func.to_string()
-  if !html_output && show_vcode {
-    println("== Stage 4: VCode (Low-level IR) ==")
-    println(vcode_text)
-    println("")
-  }
-
-  // Stage 5: Register Allocation
-  let allocated = @vcode.allocate_registers_aarch64(vcode_func)
-  let allocated_text = allocated.to_string()
-  if !html_output && show_regalloc {
-    println("== Stage 5: After Register Allocation ==")
-    println(allocated_text)
-    println("")
-  }
-
-  // Stage 6: Machine Code
-  let mc = @vcode.emit_function(allocated)
-  if !html_output && show_mc {
-    println("== Stage 6: Machine Code ==")
-    println(mc.dump_disasm())
-  }
   if !html_output {
-    println("=".repeat(60))
-    println("Exploration complete!")
+    println("")
   }
 
   // Generate HTML report if requested
@@ -149,10 +197,7 @@ fn run_explore(
     } else {
       wasm_path + ".html"
     }
-    let html = generate_html_report(
-      wasm_path, func_idx, func_type, code, ir_func, ir_optimized, vcode_text, allocated_text,
-      opt_level,
-    )
+    let html = generate_html_report(compiled_funcs)
     @fs.write_string_to_file(path, html) catch {
       e => {
         println("Error writing HTML report: \{e}")

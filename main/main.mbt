@@ -111,7 +111,7 @@ fn main {
             short='s',
             nargs=@clap.Nargs::Any,
             choices=stage_choices,
-            help="Stages to show: wasm, ir, opt-ir, vcode, regalloc, mc (default: all)",
+            help="Stages to show: wasm, ir, opt-ir, vcode, regalloc, mc (default all)",
           ),
           "html": @clap.Arg::flag(help="Output HTML report"),
         },
