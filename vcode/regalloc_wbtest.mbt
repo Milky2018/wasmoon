@@ -67,7 +67,7 @@ test "regalloc: simple allocation" {
   ]
   let float_regs : Array[PReg] = []
   let liveness = compute_liveness(func)
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs, int_regs)
   let result = allocator.allocate(func, liveness)
 
   // Check that all vregs got assigned
@@ -120,7 +120,7 @@ test "regalloc: with spilling" {
   let int_regs = [{ index: 0, class: Int }, { index: 1, class: Int }]
   let float_regs : Array[PReg] = []
   let liveness = compute_liveness(func)
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs, int_regs)
   let result_alloc = allocator.allocate(func, liveness)
 
   // Some vregs should be spilled since we have 7 vregs but only 2 registers
@@ -155,7 +155,7 @@ test "regalloc: float registers" {
     { index: 2, class: Float64 },
   ]
   let liveness = compute_liveness(func)
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs, int_regs)
   let result = allocator.allocate(func, liveness)
 
   // All float vregs should be assigned
@@ -519,6 +519,7 @@ test "regalloc: SSA deconstruction scenario" {
   let allocator = LinearScanAllocator::new(
     allocatable_scratch_regs(),
     aapcs64_arg_fprs(),
+    allocatable_callee_saved_regs(),
   )
   let alloc_result = allocator.allocate(func, liveness)
 
@@ -753,7 +754,7 @@ test "regalloc: complete allocation output for simple function" {
   ]
   let float_regs : Array[PReg] = []
   let liveness = compute_liveness(func)
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs, int_regs)
   let alloc_result = allocator.allocate(func, liveness)
 
   // Show assignments
@@ -845,7 +846,7 @@ test "regalloc: same instruction use-def conflict" {
   // Allocate with only ONE register - this forces the conflict check
   let int_regs = [{ index: 8, class: Int }]
   let float_regs : Array[PReg] = []
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs, int_regs)
   let alloc_result = allocator.allocate(func, liveness)
 
   // With only 1 register and same-instruction conflict detection,
@@ -978,7 +979,7 @@ test "regalloc: float and int mixed allocation" {
   let int_regs = [{ index: 8, class: Int }, { index: 19, class: Int }]
   let float_regs = [{ index: 0, class: Float64 }, { index: 1, class: Float64 }]
   let liveness = compute_liveness(func)
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs, int_regs)
   let alloc_result = allocator.allocate(func, liveness)
 
   // No spills should be needed
@@ -1068,7 +1069,7 @@ test "regalloc: spill and reload complete flow" {
   let int_regs = [{ index: 8, class: Int }, { index: 19, class: Int }]
   let float_regs : Array[PReg] = []
   let liveness = compute_liveness(func)
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(int_regs, float_regs, int_regs)
   let alloc_result = allocator.allocate(func, liveness)
 
   // Should have spills
@@ -1196,6 +1197,7 @@ test "regalloc: br_table pattern with 4 targets" {
   let allocator = LinearScanAllocator::new(
     allocatable_scratch_regs(),
     aapcs64_arg_fprs(),
+    allocatable_callee_saved_regs(),
   )
   let alloc_result = allocator.allocate(func, liveness)
 

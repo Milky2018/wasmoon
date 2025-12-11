@@ -28,10 +28,6 @@ test "fac_iter" {
 }
 
 ///|
-// BUG: fac-rec returns wrong result (0 instead of 120 for n=5)
-// Root cause: Register allocator doesn't spill caller-saved registers across calls
-// After call_indirect, x3 still contains the call argument (n-1), not the original n
-// So `mul x3, x8` computes (n-1)*fac(n-1) instead of n*fac(n-1)
 test "fac_rec" {
   let source =
     #|(module
@@ -46,5 +42,31 @@ test "fac_rec" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "fac-rec", [I64(5)])
+  inspect(result.matched(), content="true")
+}
+
+///|
+test "fac_ssa" {
+  let source =
+    #|(module
+    #|  ;; Iterative factorial without locals.
+    #|  (func $pick0 (param i64) (result i64 i64)
+    #|    (local.get 0) (local.get 0)
+    #|  )
+    #|  (func $pick1 (param i64 i64) (result i64 i64 i64)
+    #|    (local.get 0) (local.get 1) (local.get 0)
+    #|  )
+    #|  (func (export "fac-ssa") (param i64) (result i64)
+    #|    (i64.const 1) (local.get 0)
+    #|    (loop $l (param i64 i64) (result i64)
+    #|      (call $pick1) (call $pick1) (i64.mul)
+    #|      (call $pick1) (i64.const 1) (i64.sub)
+    #|      (call $pick0) (i64.const 0) (i64.gt_u)
+    #|      (br_if $l)
+    #|      (drop) (return)
+    #|    )
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "fac-ssa", [I64(5)])
   inspect(result.matched(), content="true")
 }

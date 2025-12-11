@@ -77,14 +77,48 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 ///|
 /// Instruction - an SSA instruction that produces a value
 pub(all) struct Inst {
-  result : Value? // The value produced (None for void instructions)
+  result : Value? // The primary value produced (None for void instructions)
+  extra_results : Array[Value] // Additional results for multi-value returns (e.g., call returning multiple values)
   mut opcode : Opcode // The operation
   operands : Array[Value] // Input values
 } derive(Show)
 
 ///|
 fn Inst::new(result : Value?, opcode : Opcode, operands : Array[Value]) -> Inst {
-  { result, opcode, operands }
+  { result, extra_results: [], opcode, operands }
+}
+
+///|
+/// Create an instruction with multiple results (for multi-value call)
+pub fn Inst::new_multi(
+  results : Array[Value],
+  opcode : Opcode,
+  operands : Array[Value],
+) -> Inst {
+  let (result, extra_results) = if results.length() == 0 {
+    (None, [])
+  } else {
+    let extra : Array[Value] = []
+    for i in 1..<results.length() {
+      extra.push(results[i])
+    }
+    (Some(results[0]), extra)
+  }
+  { result, extra_results, opcode, operands }
+}
+
+///|
+/// Get all results of this instruction
+pub fn Inst::all_results(self : Inst) -> Array[Value] {
+  let results : Array[Value] = []
+  match self.result {
+    Some(v) => results.push(v)
+    None => ()
+  }
+  for v in self.extra_results {
+    results.push(v)
+  }
+  results
 }
 
 ///|

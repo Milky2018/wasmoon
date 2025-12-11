@@ -144,7 +144,18 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
 fn format_inst(inst : Inst) -> String {
   let opcode_str = format_opcode(inst.opcode, inst.operands)
   match inst.result {
-    Some(r) => "\{format_value(r)}:\{format_type(r.ty)} = \{opcode_str}"
+    Some(r) =>
+      // Check for extra results (multi-value returns)
+      if inst.extra_results.length() > 0 {
+        let all_results = [format_value(r) + ":" + format_type(r.ty)]
+        for extra in inst.extra_results {
+          all_results.push(format_value(extra) + ":" + format_type(extra.ty))
+        }
+        let results_str = all_results.join(", ")
+        "(\{results_str}) = \{opcode_str}"
+      } else {
+        "\{format_value(r)}:\{format_type(r.ty)} = \{opcode_str}"
+      }
     None => opcode_str
   }
 }

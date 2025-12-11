@@ -1355,7 +1355,10 @@ fn lower_call(
     arg_vregs.push(ctx.get_vreg(operand))
   }
   let num_args = arg_vregs.length()
-  let has_result = inst.result is Some(_)
+
+  // Get all results (primary result + extra_results)
+  let all_results = inst.all_results()
+  let num_results = all_results.length()
 
   // Create a temporary vreg for the function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -1371,14 +1374,11 @@ fn lower_call(
   block.add_inst(load_inst)
 
   // Step 2: Emit CallIndirect instruction
-  let call_inst = VCodeInst::new(CallIndirect(num_args, has_result))
-  // Result (if any)
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      call_inst.add_def({ reg: Virtual(dst) })
-    }
-    None => ()
+  let call_inst = VCodeInst::new(CallIndirect(num_args, num_results))
+  // Define all results
+  for result in all_results {
+    let dst = ctx.get_vreg(result)
+    call_inst.add_def({ reg: Virtual(dst) })
   }
   // Add clobbers for all caller-saved registers
   // This tells the register allocator that these registers are destroyed by the call
@@ -1414,7 +1414,10 @@ fn lower_call_indirect(
     arg_vregs.push(ctx.get_vreg(inst.operands[i]))
   }
   let num_args = arg_vregs.length()
-  let has_result = inst.result is Some(_)
+
+  // Get all results (primary result + extra_results)
+  let all_results = inst.all_results()
+  let num_results = all_results.length()
 
   // Create temporaries for calculation
   let offset_vreg = ctx.vcode_func.new_vreg(Int)
@@ -1446,14 +1449,11 @@ fn lower_call_indirect(
   block.add_inst(load_inst)
 
   // Step 4: Emit CallIndirect instruction
-  let call_inst = VCodeInst::new(CallIndirect(num_args, has_result))
-  // Result (if any)
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      call_inst.add_def({ reg: Virtual(dst) })
-    }
-    None => ()
+  let call_inst = VCodeInst::new(CallIndirect(num_args, num_results))
+  // Define all results
+  for result in all_results {
+    let dst = ctx.get_vreg(result)
+    call_inst.add_def({ reg: Virtual(dst) })
   }
   // Add clobbers for all caller-saved registers
   // This tells the register allocator that these registers are destroyed by the call

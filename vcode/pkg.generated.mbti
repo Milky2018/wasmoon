@@ -400,12 +400,13 @@ pub impl Show for JITRuntime
 pub(all) struct LinearScanAllocator {
   int_regs : Array[PReg]
   float_regs : Array[PReg]
+  callee_saved_int_regs : Array[PReg]
   mut active : Array[LiveInterval]
   mut next_spill_slot : Int
   block_order : Map[Int, Int]
 }
 pub fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
-pub fn LinearScanAllocator::new(Array[PReg], Array[PReg]) -> Self
+pub fn LinearScanAllocator::new(Array[PReg], Array[PReg], Array[PReg]) -> Self
 
 pub(all) struct LiveInterval {
   vreg : VReg
@@ -730,6 +731,7 @@ pub(all) struct VCodeFunction {
 pub fn VCodeFunction::add_param(Self, RegClass) -> VReg
 pub fn VCodeFunction::add_result(Self, RegClass) -> Unit
 pub fn VCodeFunction::add_result_type(Self, @ir.Type) -> Unit
+pub fn VCodeFunction::calls_multi_value_function(Self) -> Bool
 pub fn VCodeFunction::needs_extra_results_ptr(Self) -> Bool
 pub fn VCodeFunction::new(String) -> Self
 pub fn VCodeFunction::new_block(Self) -> VCodeBlock
@@ -792,7 +794,7 @@ pub enum VCodeOpcode {
   Madd
   Msub
   Mneg
-  CallIndirect(Int, Bool)
+  CallIndirect(Int, Int)
   StackLoad(Int)
   StackStore(Int)
 }

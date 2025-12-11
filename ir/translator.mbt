@@ -1044,12 +1044,8 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
       args.push(loc)
     }
 
-    // If we actually take the branch, need to add block params to fallthrough
-    for ty in frame.result_types {
-      self.builder.add_block_param(fallthrough, ty) |> ignore
-    }
-
     // Branch: taken goes to intermediate block, not-taken falls through
+    // Note: fallthrough block doesn't need parameters - values stay in same vregs
     self.builder.brnz(cond, taken, fallthrough)
 
     // Critical edge split: taken block jumps to target with args
@@ -1057,13 +1053,8 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
     self.builder.jump(frame.block, args)
 
     // Continue with fallthrough
+    // Values on stack remain unchanged (no need to update them)
     self.builder.switch_to_block(fallthrough)
-    // Push the fallthrough values back
-    for i, _ty in frame.result_types {
-      self.value_stack[self.value_stack.length() -
-      frame.result_types.length() +
-      i] = fallthrough.params[i].0
-    }
   }
 }
 
@@ -1165,17 +1156,13 @@ fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
       args.push(self.pop())
     }
     args.rev_in_place()
-    // Get result type
-    let result_ty : Type? = if func_type.results.length() > 0 {
-      Some(Type::from_wasm(func_type.results[0]))
-    } else {
-      None
-    }
-    // Emit call
-    let result = self.builder.call(func_idx, result_ty, args)
-    match result {
-      Some(v) => self.push(v)
-      None => ()
+    // Get result types
+    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+    // Emit call with multi-value support
+    let results = self.builder.call_multi(func_idx, result_types, args)
+    // Push all results onto the stack
+    for v in results {
+      self.push(v)
     }
   }
 }
@@ -1196,17 +1183,15 @@ fn Translator::translate_call_indirect(
       args.push(self.pop())
     }
     args.rev_in_place()
-    // Get result type
-    let result_ty : Type? = if func_type.results.length() > 0 {
-      Some(Type::from_wasm(func_type.results[0]))
-    } else {
-      None
-    }
-    // Emit call_indirect
-    let result = self.builder.call_indirect(type_idx, result_ty, callee, args)
-    match result {
-      Some(v) => self.push(v)
-      None => ()
+    // Get result types
+    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+    // Emit call_indirect with multi-value support
+    let results = self.builder.call_indirect_multi(
+      type_idx, result_types, callee, args,
+    )
+    // Push all results onto the stack
+    for v in results {
+      self.push(v)
     }
   }
 }

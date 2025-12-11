@@ -1651,12 +1651,16 @@ fn emit_prologue(
   params : Array[VReg],
   param_pregs : Array[PReg?],
   needs_extra_results : Bool,
+  calls_multi_value : Bool,
   num_spill_slots : Int,
 ) -> Int {
   // We always clobber X20, X21, X22 for func_table, memory_base, memory_size
-  // When needs_extra_results, we also clobber X23 for the extra results buffer pointer
+  // When needs_extra_results OR calls_multi_value, we also clobber X23
+  // - needs_extra_results: X23 stores the incoming buffer pointer from X7
+  // - calls_multi_value: X23 points to a local buffer on the stack
   // These are callee-saved registers, so we must save them first!
-  let all_to_save : Array[Int] = if needs_extra_results {
+  let uses_x23 = needs_extra_results || calls_multi_value
+  let all_to_save : Array[Int] = if uses_x23 {
     [20, 21, 22, 23]
   } else {
     [20, 21, 22]
@@ -1670,7 +1674,14 @@ fn emit_prologue(
   let clobbered_size = num_pairs * 16 // 16 bytes per pair
   // Calculate spill slots size (8 bytes each, aligned to 16)
   let spill_size = (num_spill_slots * 8 + 15) / 16 * 16
-  let frame_size = clobbered_size + spill_size
+  // If we call multi-value functions, allocate 64 bytes for receiving extra results
+  // This buffer will be pointed to by X23
+  let call_results_buffer_size = if calls_multi_value && !needs_extra_results {
+    64
+  } else {
+    0
+  }
+  let frame_size = clobbered_size + spill_size + call_results_buffer_size
   // Allocate stack frame first using SUB
   emit_sub_imm(mc, 31, 31, frame_size)
   // Save registers using STP with signed offset
@@ -1689,9 +1700,15 @@ fn emit_prologue(
   emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
   emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
   emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
-  // When needs_extra_results, X7 contains the extra results buffer pointer
+  // Set up X23 for extra results buffer
   if needs_extra_results {
+    // When we return multi-value, X7 contains the caller-provided buffer pointer
     emit_mov_reg(mc, 23, 7) // MOV X23, X7 (extra_results_buffer)
+  } else if calls_multi_value {
+    // When we call multi-value functions, allocate local buffer on stack
+    // Buffer is at the end of the frame: SP + clobbered_size + spill_size
+    let buffer_offset = clobbered_size + spill_size
+    emit_add_imm(mc, 23, 31, buffer_offset) // ADD X23, SP, #buffer_offset
   }
   // Move user arguments from X registers to their allocated registers
   // FFI passes all args as Int64 in X registers
@@ -1823,9 +1840,11 @@ fn emit_epilogue(
   clobbered : Array[Int],
   frame_size : Int,
   needs_extra_results : Bool,
+  calls_multi_value : Bool,
 ) -> Unit {
-  // Build the same list as prologue: X20, X21, X22, (X23 if needs_extra_results) + clobbered
-  let all_to_restore : Array[Int] = if needs_extra_results {
+  // Build the same list as prologue: X20, X21, X22, (X23 if uses_x23) + clobbered
+  let uses_x23 = needs_extra_results || calls_multi_value
+  let all_to_restore : Array[Int] = if uses_x23 {
     [20, 21, 22, 23]
   } else {
     [20, 21, 22]
@@ -1840,12 +1859,17 @@ fn emit_epilogue(
   let mut pair_idx = 0
   while i < num_regs {
     let reg1 = all_to_restore[i]
-    let reg2 = if i + 1 < num_regs { all_to_restore[i + 1] } else { 31 }
+    let has_reg2 = i + 1 < num_regs
+    let reg2 = if has_reg2 { all_to_restore[i + 1] } else { 31 }
     let offset = pair_idx * 16
     if pair_idx == num_pairs - 1 {
-      // Last LDP with post-indexed to deallocate stack
-      // But we still need to load from the correct offset first
-      if pair_idx == 0 {
+      // Last load
+      if !has_reg2 {
+        // Odd number of registers: use single LDR for the last one
+        // We can't use LDP with X31 as destination - that would corrupt SP!
+        emit_ldr_imm(mc, reg1, 31, offset)
+        emit_add_imm(mc, 31, 31, frame_size)
+      } else if pair_idx == 0 {
         // Only one pair, use post-indexed directly
         emit_ldp_post(mc, reg1, reg2, 31, frame_size)
       } else {
@@ -1868,10 +1892,15 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
   let mc = MachineCode::new()
   // Check if we need extra results buffer (>2 int or >2 float returns)
   let needs_extra_results = func.needs_extra_results_ptr()
+  // Check if we call functions that return more than 2 values
+  // In that case, we need to allocate a local buffer and use X23 to point to it
+  let calls_multi_value = func.calls_multi_value_function()
+  // We need X23 if either we return multi-value OR we call multi-value functions
+  let uses_x23 = needs_extra_results || calls_multi_value
   // Collect callee-saved registers that this function clobbers
-  let clobbered = collect_used_callee_saved(func, needs_extra_results)
+  let clobbered = collect_used_callee_saved(func, uses_x23)
   // Calculate clobbered_size for spill offset calculation
-  let num_base_regs = if needs_extra_results { 4 } else { 3 } // X20-X22 or X20-X23
+  let num_base_regs = if uses_x23 { 4 } else { 3 } // X20-X22 or X20-X23
   let num_regs = num_base_regs + clobbered.length()
   let num_pairs = (num_regs + 1) / 2
   let clobbered_size = num_pairs * 16
@@ -1882,6 +1911,7 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
     func.params,
     func.param_pregs,
     needs_extra_results,
+    calls_multi_value,
     func.num_spill_slots,
   )
   // Emit function body
@@ -1901,6 +1931,7 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
           frame_size,
           func.result_types,
           needs_extra_results,
+          calls_multi_value,
         )
       None => ()
     }
@@ -2244,9 +2275,10 @@ fn emit_instruction(
       let rm = reg_num(inst.uses[1])
       emit_mneg(mc, rd, rn, rm)
     }
-    CallIndirect(num_args, has_result) => {
+    CallIndirect(num_args, num_results) => {
       // Call through a function pointer in a register
-      // Our JIT ABI: X0 = func_table_ptr, X1 = memory_base, X2 = memory_size, args in X3-X7, return in X0
+      // Our JIT ABI: X0 = func_table_ptr, X1 = memory_base, X2 = memory_size, args in X3-X7
+      // Return values: X0, X1 for first two int results, extra results via buffer pointed by X7/X23
       // Uses: [func_ptr, arg0, arg1, ...]
       let func_ptr = reg_num(inst.uses[0])
       // First, save function pointer to a safe temp register (X9)
@@ -2270,17 +2302,39 @@ fn emit_instruction(
           emit_mov_reg(mc, dst, temp)
         }
       }
+      // If callee returns more than 2 values, it needs a buffer pointer in X7
+      // We pass our X23 (extra_results_buffer pointer) as X7
+      if num_results > 2 {
+        emit_mov_reg(mc, 7, 23) // MOV X7, X23
+      }
       // Set up context: X0 = func_table (X20), X1 = memory_base (X21), X2 = memory_size (X22)
       emit_mov_reg(mc, 0, 20) // MOV X0, X20
       emit_mov_reg(mc, 1, 21) // MOV X1, X21
       emit_mov_reg(mc, 2, 22) // MOV X2, X22
       // Call the function (from saved X9)
       emit_blr(mc, 9)
-      // Move result to destination if needed
-      if has_result && inst.defs.length() > 0 {
-        let rd = wreg_num(inst.defs[0])
-        if rd != 0 {
-          emit_mov_reg(mc, rd, 0) // Move X0 to result
+      // Move results to destination registers
+      // First two results come from X0, X1
+      // Additional results are read from buffer pointed by X23
+      for i in 0..<num_results {
+        if i >= inst.defs.length() {
+          break
+        }
+        let rd = wreg_num(inst.defs[i])
+        if i == 0 {
+          // First result is in X0
+          if rd != 0 {
+            emit_mov_reg(mc, rd, 0)
+          }
+        } else if i == 1 {
+          // Second result is in X1
+          if rd != 1 {
+            emit_mov_reg(mc, rd, 1)
+          }
+        } else {
+          // Additional results: load from [X23 + (i-2)*8]
+          let offset = (i - 2) * 8
+          emit_ldr_imm(mc, rd, 23, offset)
         }
       }
     }
@@ -2378,6 +2432,7 @@ fn emit_terminator_with_epilogue(
   frame_size : Int,
   result_types : Array[@ir.Type],
   needs_extra_results : Bool,
+  calls_multi_value : Bool,
 ) -> Unit {
   match term {
     Jump(target) => emit_b(mc, target)
@@ -2428,7 +2483,9 @@ fn emit_terminator_with_epilogue(
         }
       }
       // Emit epilogue to restore callee-saved registers before return
-      emit_epilogue(mc, clobbered, frame_size, needs_extra_results)
+      emit_epilogue(
+        mc, clobbered, frame_size, needs_extra_results, calls_multi_value,
+      )
       emit_ret(mc, 30)
     }
     Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000

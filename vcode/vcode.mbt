@@ -326,9 +326,9 @@ pub enum VCodeOpcode {
   // Function calls
   // CallIndirect: call through a function pointer in a register
   // Uses: [func_ptr, arg0, arg1, ...]
-  // Defs: [result] (if has_result)
-  // Parameters: num_args, has_result
-  CallIndirect(Int, Bool)
+  // Defs: [result0, result1, ...] (multiple results supported)
+  // Parameters: num_args, num_results
+  CallIndirect(Int, Int)
   // Stack operations for spilling
   // StackLoad(offset): Load from [SP + offset] into the def register
   // StackStore(offset): Store the use register to [SP + offset]
@@ -392,10 +392,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Madd => "madd"
     Msub => "msub"
     Mneg => "mneg"
-    CallIndirect(num_args, has_result) => {
-      let ret_ty = if has_result { "i64" } else { "void" }
-      "call_indirect(\{num_args}) -> \{ret_ty}"
-    }
+    CallIndirect(num_args, num_results) =>
+      "call_indirect(\{num_args}) -> \{num_results} results"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
   }
@@ -648,6 +646,22 @@ pub fn VCodeFunction::needs_extra_results_ptr(self : VCodeFunction) -> Bool {
     }
   }
   int_count > 2 || float_count > 2
+}
+
+///|
+/// Check if this function calls any function that returns more than 2 values
+/// In that case, we need to allocate a local buffer for receiving extra results
+pub fn VCodeFunction::calls_multi_value_function(self : VCodeFunction) -> Bool {
+  for block in self.blocks {
+    for inst in block.insts {
+      if inst.opcode is CallIndirect(_, num_results) {
+        if num_results > 2 {
+          return true
+        }
+      }
+    }
+  }
+  false
 }
 
 ///|

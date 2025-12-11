@@ -679,6 +679,8 @@ pub(all) struct LinearScanAllocator {
   // Available physical registers by class
   int_regs : Array[PReg]
   float_regs : Array[PReg]
+  // Callee-saved registers for cross-call allocation (may exclude X23)
+  callee_saved_int_regs : Array[PReg]
   // Current state
   mut active : Array[LiveInterval] // Intervals currently occupying registers
   mut next_spill_slot : Int
@@ -690,8 +692,16 @@ pub(all) struct LinearScanAllocator {
 pub fn LinearScanAllocator::new(
   int_regs : Array[PReg],
   float_regs : Array[PReg],
+  callee_saved_int_regs : Array[PReg],
 ) -> LinearScanAllocator {
-  { int_regs, float_regs, active: [], next_spill_slot: 0, block_order: {} }
+  {
+    int_regs,
+    float_regs,
+    callee_saved_int_regs,
+    active: [],
+    next_spill_slot: 0,
+    block_order: {},
+  }
 }
 
 ///|
@@ -764,7 +774,7 @@ pub fn LinearScanAllocator::allocate(
     // If interval crosses a call, only use callee-saved registers
     let avail_regs = if interval.crosses_call {
       match interval.vreg.class {
-        Int => allocatable_callee_saved_regs()
+        Int => self.callee_saved_int_regs
         Float32 | Float64 =>
           // For floats, we don't have callee-saved FPRs in AAPCS64
           // This will likely spill, but that's correct behavior
@@ -1011,14 +1021,14 @@ pub fn apply_allocation(
         }
       }
 
-      // Check if any definitions are spilled
-      let mut spilled_def : (VReg, Int)? = None
+      // Check if any definitions are spilled - collect ALL spilled defs
+      let spilled_defs : Array[(VReg, Int)] = []
       for def in inst.defs {
         match def.reg {
           Virtual(vreg) =>
             if alloc.assignments.get(vreg.id) is None {
               match alloc.spill_slots.get(vreg.id) {
-                Some(slot) => spilled_def = Some((vreg, slot))
+                Some(slot) => spilled_defs.push((vreg, slot))
                 None => ()
               }
             }
@@ -1029,15 +1039,23 @@ pub fn apply_allocation(
       // Create new instruction with rewritten registers
       let new_inst = VCodeInst::new(inst.opcode)
 
-      // Rewrite definitions
+      // Rewrite definitions - use different scratch registers for each spilled def
+      let mut spill_scratch_idx = 0
+      let spill_scratch_map : Map[Int, PReg] = {} // vreg.id -> scratch preg
       for def in inst.defs {
         match def.reg {
           Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
               Some(preg) => new_inst.add_def({ reg: Physical(preg) })
               None => {
-                // Spilled: use scratch register X16 as temporary destination
-                let scratch_preg : PReg = { index: 16, class: vreg.class }
+                // Spilled: use scratch register X16 or X17 as temporary destination
+                // Alternate between X16 and X17 for multiple spilled defs
+                let scratch_preg : PReg = {
+                  index: 16 + spill_scratch_idx,
+                  class: vreg.class,
+                }
+                spill_scratch_idx = (spill_scratch_idx + 1) % 2
+                spill_scratch_map.set(vreg.id, scratch_preg)
                 new_inst.add_def({ reg: Physical(scratch_preg) })
               }
             }
@@ -1067,15 +1085,13 @@ pub fn apply_allocation(
       }
       new_block.add_inst(new_inst)
 
-      // Insert spill instruction after the defining instruction if needed
-      match spilled_def {
-        Some((vreg, slot)) => {
-          let spill_inst = VCodeInst::new(StackStore(slot * 8))
-          let scratch_preg : PReg = { index: 16, class: vreg.class }
-          spill_inst.add_use(Physical(scratch_preg))
-          new_block.add_inst(spill_inst)
-        }
-        None => ()
+      // Insert spill instructions after the defining instruction for ALL spilled defs
+      for entry in spilled_defs {
+        let (vreg, slot) = entry
+        let spill_inst = VCodeInst::new(StackStore(slot * 8))
+        let scratch_preg = spill_scratch_map.get(vreg.id).unwrap()
+        spill_inst.add_use(Physical(scratch_preg))
+        new_block.add_inst(spill_inst)
       }
     }
 
@@ -1282,21 +1298,28 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   let func = eliminate_dead_code(func)
 
   // Check if function needs extra results buffer (uses X23)
-  let needs_extra_results = func.needs_extra_results_ptr()
+  // This is true if:
+  // 1. Function returns more than 2 values (needs_extra_results_ptr)
+  // 2. Function calls other functions that return more than 2 values (calls_multi_value_function)
+  let calls_multi = func.calls_multi_value_function()
+  let needs_extra = func.needs_extra_results_ptr()
+  let needs_x23_reserved = needs_extra || calls_multi
 
   // Build allocatable register pool:
   // 1. Scratch regs (caller-saved, no save needed) - use first
   // 2. Callee-saved regs (must save/restore) - use when scratch exhausted
   let int_regs : Array[PReg] = []
+  let callee_saved_int_regs : Array[PReg] = []
   for r in allocatable_scratch_regs() {
     int_regs.push(r)
   }
   for r in allocatable_callee_saved_regs() {
     // X23 (index 23) is reserved for extra_results_buffer when needed
-    if needs_extra_results && r.index == 23 {
+    if needs_x23_reserved && r.index == 23 {
       continue
     }
     int_regs.push(r)
+    callee_saved_int_regs.push(r)
   }
   let float_regs = aapcs64_arg_fprs()
 
@@ -1304,7 +1327,9 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   let liveness = compute_liveness(func)
 
   // Allocate
-  let allocator = LinearScanAllocator::new(int_regs, float_regs)
+  let allocator = LinearScanAllocator::new(
+    int_regs, float_regs, callee_saved_int_regs,
+  )
   let alloc_result = allocator.allocate(func, liveness)
 
   // Apply allocation
