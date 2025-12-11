@@ -1,0 +1,36 @@
+///|
+test "fac_iter" {
+  let source =
+    #|(module
+    #|  ;; Iterative factorial
+    #|  (func (export "fac-iter") (param i64) (result i64)
+    #|    (local i64 i64)
+    #|    (local.set 1 (local.get 0))
+    #|    (local.set 2 (i64.const 1))
+    #|    (block
+    #|      (loop
+    #|        (if
+    #|          (i64.eq (local.get 1) (i64.const 0))
+    #|          (then (br 2))
+    #|          (else
+    #|            (local.set 2 (i64.mul (local.get 1) (local.get 2)))
+    #|            (local.set 1 (i64.sub (local.get 1) (i64.const 1)))
+    #|          )
+    #|        )
+    #|        (br 0)
+    #|      )
+    #|    )
+    #|    (local.get 2)
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "fac-iter", [I64(5)])
+  inspect(result.matched(), content="false")
+  inspect(
+    result.to_string(),
+    content=(
+      #|JIT: I64(0)
+      #|Interpreter: I64(120)
+      #|Result: MISMATCH
+    ),
+  )
+}
