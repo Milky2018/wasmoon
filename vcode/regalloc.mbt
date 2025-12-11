@@ -1216,6 +1216,9 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   // Step 0: Eliminate dead code first
   let func = eliminate_dead_code(func)
 
+  // Check if function needs extra results buffer (uses X23)
+  let needs_extra_results = func.needs_extra_results_ptr()
+
   // Build allocatable register pool:
   // 1. Scratch regs (caller-saved, no save needed) - use first
   // 2. Callee-saved regs (must save/restore) - use when scratch exhausted
@@ -1224,6 +1227,10 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
     int_regs.push(r)
   }
   for r in allocatable_callee_saved_regs() {
+    // X23 (index 23) is reserved for extra_results_buffer when needed
+    if needs_extra_results && r.index == 23 {
+      continue
+    }
     int_regs.push(r)
   }
   let float_regs = aapcs64_arg_fprs()

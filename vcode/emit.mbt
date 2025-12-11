@@ -1580,7 +1580,11 @@ fn is_callee_saved_alloc(reg : Int) -> Bool {
 ///|
 /// Collect all callee-saved registers that are defined in the function
 /// Also includes LR (X30) if the function makes any calls
-fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
+/// When needs_extra_results is true, X23 is excluded because it's reserved for extra_buffer
+fn collect_used_callee_saved(
+  func : VCodeFunction,
+  needs_extra_results : Bool,
+) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
   let mut has_calls = false
   for block in func.blocks {
@@ -1593,6 +1597,10 @@ fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
         match def.reg {
           Physical(preg) =>
             if is_callee_saved_alloc(preg.index) {
+              // X23 is reserved for extra_buffer when needs_extra_results
+              if needs_extra_results && preg.index == 23 {
+                continue
+              }
               used.add(preg.index)
             }
           Virtual(_) => ()
@@ -1616,23 +1624,19 @@ fn collect_used_callee_saved(func : VCodeFunction) -> Array[Int] {
 ///|
 /// Emit prologue to save callee-saved registers and set up parameters
 /// Returns the stack frame size used
-/// When needs_extra_ptr is true:
-///   - X0 contains the extra results buffer pointer (saved to X23)
-///   - X1 = func_table_ptr, X2 = memory_base, X3 = memory_size
-///   - User params start from X4
-/// When needs_extra_ptr is false:
-///   - X0 = func_table_ptr, X1 = memory_base, X2 = memory_size
-///   - User params start from X3
+/// JIT ABI: X0 = func_table_ptr, X1 = memory_base, X2 = memory_size
+/// User params start from X3 (up to X6)
+/// When function has >2 int or >2 float returns: X7 = extra_results_buffer pointer
 fn emit_prologue(
   mc : MachineCode,
   clobbered : Array[Int],
   params : Array[VReg],
-  needs_extra_ptr : Bool,
+  needs_extra_results : Bool,
 ) -> Int {
   // We always clobber X20, X21, X22 for func_table, memory_base, memory_size
-  // When needs_extra_ptr, we also clobber X23 for the extra results pointer
+  // When needs_extra_results, we also clobber X23 for the extra results buffer pointer
   // These are callee-saved registers, so we must save them first!
-  let all_to_save : Array[Int] = if needs_extra_ptr {
+  let all_to_save : Array[Int] = if needs_extra_results {
     [20, 21, 22, 23]
   } else {
     [20, 21, 22]
@@ -1658,17 +1662,13 @@ fn emit_prologue(
     pair_idx = pair_idx + 1
   }
   // Now move parameters to reserved registers (after saving their original values)
-  if needs_extra_ptr {
-    // X0 = extra_results_ptr, X1 = func_table, X2 = memory_base, X3 = memory_size
-    emit_mov_reg(mc, 23, 0) // MOV X23, X0 (extra_results_ptr)
-    emit_mov_reg(mc, 20, 1) // MOV X20, X1 (func_table_ptr)
-    emit_mov_reg(mc, 21, 2) // MOV X21, X2 (memory_base)
-    emit_mov_reg(mc, 22, 3) // MOV X22, X3 (memory_size)
-  } else {
-    // X0 = func_table, X1 = memory_base, X2 = memory_size
-    emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
-    emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
-    emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
+  // X0 = func_table, X1 = memory_base, X2 = memory_size
+  emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
+  emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
+  emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
+  // When needs_extra_results, X7 contains the extra results buffer pointer
+  if needs_extra_results {
+    emit_mov_reg(mc, 23, 7) // MOV X23, X7 (extra_results_buffer)
   }
   // Move user arguments from X registers to their allocated registers
   // FFI passes all args as Int64 in X registers
@@ -1677,8 +1677,8 @@ fn emit_prologue(
   //     We need to extract to S register, then FCVT to D register
   //   - For f64: full 64 bits of X register contain f64 bit pattern
   //     We need to FMOV from X register to D register
-  // Regalloc assigns: Int param i → X(base+i), Float param i → D(i)
-  let param_base = if needs_extra_ptr { 4 } else { 3 } // User params start at X4 or X3
+  // Regalloc assigns: Int param i → X(3+i), Float param i → D(i)
+  let param_base = 3 // User params start at X3
   for param_idx, param in params {
     let x_src = param_base + param_idx
     match param.class {
@@ -1694,7 +1694,7 @@ fn emit_prologue(
         // FMOV D(param_idx), X(x_src)
         emit_fmov_x_to_d(mc, param_idx, x_src)
       Int =>
-        // Int param: already in X(base+i) where regalloc expects it
+        // Int param: already at X(3+i) where regalloc expects it
         // No move needed
         ()
     }
@@ -1776,10 +1776,10 @@ fn emit_epilogue(
   mc : MachineCode,
   clobbered : Array[Int],
   frame_size : Int,
-  needs_extra_ptr : Bool,
+  needs_extra_results : Bool,
 ) -> Unit {
-  // Build the same list as prologue: X20, X21, X22, (X23 if needed) + clobbered
-  let all_to_restore : Array[Int] = if needs_extra_ptr {
+  // Build the same list as prologue: X20, X21, X22, (X23 if needs_extra_results) + clobbered
+  let all_to_restore : Array[Int] = if needs_extra_results {
     [20, 21, 22, 23]
   } else {
     [20, 21, 22]
@@ -1820,12 +1820,17 @@ fn emit_epilogue(
 /// Emit machine code for a VCode function
 pub fn emit_function(func : VCodeFunction) -> MachineCode {
   let mc = MachineCode::new()
-  // Check if we need extra results pointer
-  let needs_extra_ptr = func.needs_extra_results_ptr()
+  // Check if we need extra results buffer (>2 int or >2 float returns)
+  let needs_extra_results = func.needs_extra_results_ptr()
   // Collect callee-saved registers that this function clobbers
-  let clobbered = collect_used_callee_saved(func)
+  let clobbered = collect_used_callee_saved(func, needs_extra_results)
   // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
-  let frame_size = emit_prologue(mc, clobbered, func.params, needs_extra_ptr)
+  let frame_size = emit_prologue(
+    mc,
+    clobbered,
+    func.params,
+    needs_extra_results,
+  )
   // Emit function body
   for block in func.blocks {
     mc.define_label(block.id)
@@ -1840,7 +1845,7 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
           clobbered,
           frame_size,
           func.result_types,
-          needs_extra_ptr,
+          needs_extra_results,
         )
       None => ()
     }
@@ -2304,14 +2309,14 @@ fn fcmp_kind_to_cond(kind : FCmpKind) -> Int {
 /// Handles multi-value returns:
 /// - First 2 integer returns → X0, X1
 /// - First 2 float returns → D0, D1
-/// - Extra returns → written to buffer pointed by X23
+/// - Extra returns → written to buffer pointed by X23 (which was passed in X7)
 fn emit_terminator_with_epilogue(
   mc : MachineCode,
   term : VCodeTerminator,
   clobbered : Array[Int],
   frame_size : Int,
   result_types : Array[@ir.Type],
-  needs_extra_ptr : Bool,
+  needs_extra_results : Bool,
 ) -> Unit {
   match term {
     Jump(target) => emit_b(mc, target)
@@ -2325,7 +2330,7 @@ fn emit_terminator_with_epilogue(
       // Track how many int/float values we've placed in registers
       let mut int_reg_idx = 0 // Next X register to use (0 or 1)
       let mut float_reg_idx = 0 // Next D register to use (0 or 1)
-      let mut extra_offset = 0 // Offset in extra results buffer
+      let mut extra_offset = 0 // Offset in extra results buffer (X23)
       for i, value in values {
         let src = reg_num(value)
         let ty = if i < result_types.length() {
@@ -2342,8 +2347,7 @@ fn emit_terminator_with_epilogue(
               }
               float_reg_idx = float_reg_idx + 1
             } else {
-              // Spill to extra results buffer
-              // STR D(src), [X23, #extra_offset]
+              // Spill to extra buffer: STR D(src), [X23, #extra_offset]
               emit_str_d_offset(mc, src, 23, extra_offset)
               extra_offset = extra_offset + 8
             }
@@ -2356,15 +2360,14 @@ fn emit_terminator_with_epilogue(
               }
               int_reg_idx = int_reg_idx + 1
             } else {
-              // Spill to extra results buffer
-              // STR X(src), [X23, #extra_offset]
+              // Spill to extra buffer: STR X(src), [X23, #extra_offset]
               emit_str_offset(mc, src, 23, extra_offset)
               extra_offset = extra_offset + 8
             }
         }
       }
       // Emit epilogue to restore callee-saved registers before return
-      emit_epilogue(mc, clobbered, frame_size, needs_extra_ptr)
+      emit_epilogue(mc, clobbered, frame_size, needs_extra_results)
       emit_ret(mc, 30)
     }
     Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000

@@ -242,39 +242,6 @@ pub fn JITModule::call_with_context(
       // Activate context for WASI calls
       ctx.activate()
       let num_results = func.result_types.length()
-      // No return values
-      if num_results == 0 {
-        match args.length() {
-          0 => ctx.call_void_void(func.exec_code.ptr)
-          1 => ctx.call_i64_void(func.exec_code.ptr, args[0])
-          2 => ctx.call_i64i64_void(func.exec_code.ptr, args[0], args[1])
-          _ => ()
-        }
-        return []
-      }
-      // Single return value
-      if num_results == 1 {
-        let is_float = func.result_types[0] is (F32 | F64)
-        if is_float {
-          let result : Double = match args.length() {
-            0 => ctx.call_void_f64(func.exec_code.ptr)
-            1 => ctx.call_i64_f64(func.exec_code.ptr, args[0])
-            2 => ctx.call_i64i64_f64(func.exec_code.ptr, args[0], args[1])
-            _ => 0.0
-          }
-          return [result.reinterpret_as_int64()]
-        } else {
-          let result = match args.length() {
-            0 => ctx.call_void_i64(func.exec_code.ptr)
-            1 => ctx.call_i64_i64(func.exec_code.ptr, args[0])
-            2 => ctx.call_i64i64_i64(func.exec_code.ptr, args[0], args[1])
-            _ => 0L
-          }
-          return [result]
-        }
-      }
-      // Multi-value returns (2+ results)
-      // For now, call with multi-return FFI
       let results : Array[Int64] = Array::make(num_results, 0L)
       ctx.call_multi_return(
         func.exec_code.ptr,
