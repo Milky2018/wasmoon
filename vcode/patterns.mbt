@@ -744,10 +744,10 @@ fn lower_inst_default(
     @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
     @ir.Opcode::Uextend => lower_extend(ctx, inst, block, signed=false)
     @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
-    @ir.Opcode::FcvtToSint | @ir.Opcode::FcvtToUint =>
-      lower_float_to_int(ctx, inst, block)
-    @ir.Opcode::SintToFcvt | @ir.Opcode::UintToFcvt =>
-      lower_int_to_float(ctx, inst, block)
+    @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
+    @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
+    @ir.Opcode::SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
+    @ir.Opcode::UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
 
     // Misc
     @ir.Opcode::Copy => lower_copy(ctx, inst, block)

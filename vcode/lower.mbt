@@ -296,10 +296,10 @@ fn lower_inst(
     @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
     @ir.Opcode::Uextend => lower_extend(ctx, inst, block, signed=false)
     @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
-    @ir.Opcode::FcvtToSint | @ir.Opcode::FcvtToUint =>
-      lower_float_to_int(ctx, inst, block)
-    @ir.Opcode::SintToFcvt | @ir.Opcode::UintToFcvt =>
-      lower_int_to_float(ctx, inst, block)
+    @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
+    @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
+    @ir.Opcode::SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
+    @ir.Opcode::UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
     @ir.Opcode::Fpromote => lower_unary_float(ctx, inst, block, FPromote)
     @ir.Opcode::Fdemote => lower_unary_float(ctx, inst, block, FDemote)
     @ir.Opcode::Bitcast => lower_bitcast(ctx, inst, block)
@@ -1219,12 +1219,27 @@ fn lower_float_to_int(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : VCodeBlock,
+  signed~ : Bool,
 ) -> Unit {
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
       let src = ctx.get_vreg(inst.operands[0])
-      let vcode_inst = VCodeInst::new(FloatToInt)
+      // Determine conversion kind based on source/dest types and signedness
+      let src_ty = inst.operands[0].ty
+      let dst_ty = result.ty
+      let kind : FloatToIntKind = match (src_ty, dst_ty, signed) {
+        (@ir.Type::F32, @ir.Type::I32, true) => F32ToI32S
+        (@ir.Type::F32, @ir.Type::I32, false) => F32ToI32U
+        (@ir.Type::F32, @ir.Type::I64, true) => F32ToI64S
+        (@ir.Type::F32, @ir.Type::I64, false) => F32ToI64U
+        (@ir.Type::F64, @ir.Type::I32, true) => F64ToI32S
+        (@ir.Type::F64, @ir.Type::I32, false) => F64ToI32U
+        (@ir.Type::F64, @ir.Type::I64, true) => F64ToI64S
+        (@ir.Type::F64, @ir.Type::I64, false) => F64ToI64U
+        _ => F64ToI64S // Default fallback
+      }
+      let vcode_inst = VCodeInst::new(FloatToInt(kind))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(src))
       block.add_inst(vcode_inst)
@@ -1239,12 +1254,27 @@ fn lower_int_to_float(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : VCodeBlock,
+  signed~ : Bool,
 ) -> Unit {
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
       let src = ctx.get_vreg(inst.operands[0])
-      let vcode_inst = VCodeInst::new(IntToFloat)
+      // Determine conversion kind based on source/dest types and signedness
+      let src_ty = inst.operands[0].ty
+      let dst_ty = result.ty
+      let kind : IntToFloatKind = match (src_ty, dst_ty, signed) {
+        (@ir.Type::I32, @ir.Type::F32, true) => I32SToF32
+        (@ir.Type::I32, @ir.Type::F32, false) => I32UToF32
+        (@ir.Type::I64, @ir.Type::F32, true) => I64SToF32
+        (@ir.Type::I64, @ir.Type::F32, false) => I64UToF32
+        (@ir.Type::I32, @ir.Type::F64, true) => I32SToF64
+        (@ir.Type::I32, @ir.Type::F64, false) => I32UToF64
+        (@ir.Type::I64, @ir.Type::F64, true) => I64SToF64
+        (@ir.Type::I64, @ir.Type::F64, false) => I64UToF64
+        _ => I64SToF64 // Default fallback
+      }
+      let vcode_inst = VCodeInst::new(IntToFloat(kind))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(src))
       block.add_inst(vcode_inst)

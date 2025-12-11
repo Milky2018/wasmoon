@@ -745,6 +745,107 @@ pub fn emit_rbit(mc : MachineCode, rd : Int, rn : Int) -> Unit {
   mc.emit_inst(b0, b1, b2, b3)
 }
 
+// ============ Float-Int Conversions ============
+
+///|
+/// Encode FCVTZS: convert float to signed int (round toward zero)
+/// sf: 0 = 32-bit int (W), 1 = 64-bit int (X)
+/// ftype: 0 = single (S), 1 = double (D)
+/// FCVTZS Wd, Sn: 0x1E380000 | (Rn << 5) | Rd
+/// FCVTZS Wd, Dn: 0x1E780000 | (Rn << 5) | Rd
+/// FCVTZS Xd, Sn: 0x9E380000 | (Rn << 5) | Rd
+/// FCVTZS Xd, Dn: 0x9E780000 | (Rn << 5) | Rd
+pub fn emit_fcvtzs(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  int64~ : Bool,
+  double~ : Bool,
+) -> Unit {
+  let int_name = if int64 { "x" } else { "w" }
+  let float_name = if double { "d" } else { "s" }
+  mc.annotate("fcvtzs \{int_name}\{rd}, \{float_name}\{rn}")
+  // Base: 0x1E380000 for Wd, Sn
+  // sf (bit 31) = int64 ? 1 : 0
+  // ftype (bit 22) = double ? 1 : 0
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  let b2 = if double { 0x78 } else { 0x38 }
+  let b3 = if int64 { 0x9E } else { 0x1E }
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FCVTZU: convert float to unsigned int (round toward zero)
+/// FCVTZU Wd, Sn: 0x1E390000 | (Rn << 5) | Rd
+/// FCVTZU Wd, Dn: 0x1E790000 | (Rn << 5) | Rd
+/// FCVTZU Xd, Sn: 0x9E390000 | (Rn << 5) | Rd
+/// FCVTZU Xd, Dn: 0x9E790000 | (Rn << 5) | Rd
+pub fn emit_fcvtzu(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  int64~ : Bool,
+  double~ : Bool,
+) -> Unit {
+  let int_name = if int64 { "x" } else { "w" }
+  let float_name = if double { "d" } else { "s" }
+  mc.annotate("fcvtzu \{int_name}\{rd}, \{float_name}\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  // Unsigned uses 0x39/0x79 instead of 0x38/0x78 (bit 16 set)
+  let b2 = if double { 0x79 } else { 0x39 }
+  let b3 = if int64 { 0x9E } else { 0x1E }
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode SCVTF: convert signed int to float
+/// SCVTF Sd, Wn: 0x1E220000 | (Rn << 5) | Rd
+/// SCVTF Dd, Wn: 0x1E620000 | (Rn << 5) | Rd
+/// SCVTF Sd, Xn: 0x9E220000 | (Rn << 5) | Rd
+/// SCVTF Dd, Xn: 0x9E620000 | (Rn << 5) | Rd
+pub fn emit_scvtf(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  int64~ : Bool,
+  double~ : Bool,
+) -> Unit {
+  let int_name = if int64 { "x" } else { "w" }
+  let float_name = if double { "d" } else { "s" }
+  mc.annotate("scvtf \{float_name}\{rd}, \{int_name}\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  let b2 = if double { 0x62 } else { 0x22 }
+  let b3 = if int64 { 0x9E } else { 0x1E }
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode UCVTF: convert unsigned int to float
+/// UCVTF Sd, Wn: 0x1E230000 | (Rn << 5) | Rd
+/// UCVTF Dd, Wn: 0x1E630000 | (Rn << 5) | Rd
+/// UCVTF Sd, Xn: 0x9E230000 | (Rn << 5) | Rd
+/// UCVTF Dd, Xn: 0x9E630000 | (Rn << 5) | Rd
+pub fn emit_ucvtf(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  int64~ : Bool,
+  double~ : Bool,
+) -> Unit {
+  let int_name = if int64 { "x" } else { "w" }
+  let float_name = if double { "d" } else { "s" }
+  mc.annotate("ucvtf \{float_name}\{rd}, \{int_name}\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  // Unsigned uses 0x23/0x63 instead of 0x22/0x62 (bit 16 set)
+  let b2 = if double { 0x63 } else { 0x23 }
+  let b3 = if int64 { 0x9E } else { 0x1E }
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
 ///|
 /// Encode MOV (register): MOV Xd, Xm (ORR Xd, XZR, Xm)
 pub fn emit_mov_reg(mc : MachineCode, rd : Int, rm : Int) -> Unit {
@@ -2543,7 +2644,64 @@ fn emit_instruction(
       emit_mov_reg(mc, rd, rn)
       emit_nop(mc)
     }
-    Extend(_) | Truncate | IntToFloat | FloatToInt => emit_nop(mc)
+    Extend(_) | Truncate => emit_nop(mc)
+    FloatToInt(kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // NOTE: In our JIT, all floats are stored in D registers (f64 format)
+      // For f32 sources, we need to first demote from D to S before conversion
+      match kind {
+        F32ToI32S => {
+          // D register contains f64-promoted f32, demote to S16 first
+          emit_fcvt_s_d(mc, 16, rn) // FCVT S16, Dn
+          emit_fcvtzs(mc, rd, 16, int64=false, double=false) // FCVTZS Wd, S16
+        }
+        F32ToI32U => {
+          emit_fcvt_s_d(mc, 16, rn)
+          emit_fcvtzu(mc, rd, 16, int64=false, double=false)
+        }
+        F32ToI64S => {
+          emit_fcvt_s_d(mc, 16, rn)
+          emit_fcvtzs(mc, rd, 16, int64=true, double=false)
+        }
+        F32ToI64U => {
+          emit_fcvt_s_d(mc, 16, rn)
+          emit_fcvtzu(mc, rd, 16, int64=true, double=false)
+        }
+        F64ToI32S => emit_fcvtzs(mc, rd, rn, int64=false, double=true)
+        F64ToI32U => emit_fcvtzu(mc, rd, rn, int64=false, double=true)
+        F64ToI64S => emit_fcvtzs(mc, rd, rn, int64=true, double=true)
+        F64ToI64U => emit_fcvtzu(mc, rd, rn, int64=true, double=true)
+      }
+    }
+    IntToFloat(kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // NOTE: In our JIT, all floats are stored in D registers (f64 format)
+      // For f32 targets, we convert to S first then promote to D
+      match kind {
+        I32SToF32 => {
+          emit_scvtf(mc, 16, rn, int64=false, double=false) // SCVTF S16, Wn
+          emit_fcvt_d_s(mc, rd, 16) // FCVT Dd, S16
+        }
+        I32UToF32 => {
+          emit_ucvtf(mc, 16, rn, int64=false, double=false)
+          emit_fcvt_d_s(mc, rd, 16)
+        }
+        I64SToF32 => {
+          emit_scvtf(mc, 16, rn, int64=true, double=false)
+          emit_fcvt_d_s(mc, rd, 16)
+        }
+        I64UToF32 => {
+          emit_ucvtf(mc, 16, rn, int64=true, double=false)
+          emit_fcvt_d_s(mc, rd, 16)
+        }
+        I32SToF64 => emit_scvtf(mc, rd, rn, int64=false, double=true)
+        I32UToF64 => emit_ucvtf(mc, rd, rn, int64=false, double=true)
+        I64SToF64 => emit_scvtf(mc, rd, rn, int64=true, double=true)
+        I64UToF64 => emit_ucvtf(mc, rd, rn, int64=true, double=true)
+      }
+    }
     Nop => emit_nop(mc)
     BoundsCheck(offset, access_size) => {
       // Memory bounds check: trap if wasm_addr + offset + access_size > memory_size

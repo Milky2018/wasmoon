@@ -91,6 +91,10 @@ pub fn emit_fcvt_d_s(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fcvt_s_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_fcvtzs(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
+
+pub fn emit_fcvtzu(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
+
 pub fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fmax_d(MachineCode, Int, Int, Int) -> Unit
@@ -185,6 +189,8 @@ pub fn emit_ret(MachineCode, Int) -> Unit
 
 pub fn emit_ror_reg(MachineCode, Int, Int, Int) -> Unit
 
+pub fn emit_scvtf(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
+
 pub fn emit_sdiv(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_stp_pre(MachineCode, Int, Int, Int, Int) -> Unit
@@ -206,6 +212,8 @@ pub fn emit_sub_imm(MachineCode, Int, Int, Int) -> Unit
 pub fn emit_sub_reg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_sub_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
+
+pub fn emit_ucvtf(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
 
 pub fn emit_udiv(MachineCode, Int, Int, Int) -> Unit
 
@@ -410,6 +418,30 @@ pub enum FixupKind {
   Branch26
   Branch19
 }
+
+pub(all) enum FloatToIntKind {
+  F32ToI32S
+  F32ToI32U
+  F32ToI64S
+  F32ToI64U
+  F64ToI32S
+  F64ToI32U
+  F64ToI64S
+  F64ToI64U
+}
+pub impl Show for FloatToIntKind
+
+pub(all) enum IntToFloatKind {
+  I32SToF32
+  I32UToF32
+  I64SToF32
+  I64UToF32
+  I32SToF64
+  I32UToF64
+  I64SToF64
+  I64UToF64
+}
+pub impl Show for IntToFloatKind
 
 pub(all) struct JITRuntime {
   cache : CodeCache
@@ -824,8 +856,8 @@ pub enum VCodeOpcode {
   FCmp(FCmpKind)
   Extend(ExtendKind)
   Truncate
-  IntToFloat
-  FloatToInt
+  IntToFloat(IntToFloatKind)
+  FloatToInt(FloatToIntKind)
   FPromote
   FDemote
   Bitcast
