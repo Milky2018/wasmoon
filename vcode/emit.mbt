@@ -683,6 +683,35 @@ pub fn emit_lsr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 }
 
 ///|
+/// Encode ROR (register): ROR Xd, Xn, Xm (rotate right)
+/// This is an alias for RORV: Xd = Xn >>> Xm (rotate right by amount in Xm)
+/// Opcode: 0x9AC02C00
+pub fn emit_ror_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("ror x\{rd}, x\{rn}, x\{rm}")
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | 44 // 0x2C
+  let c0 = 192 // 0xC0
+  let b2 = (c0 | (rm & 15)) & 255
+  let x9a = 154 // 0x9A
+  let b3 = x9a | ((rm >> 4) & 1)
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode MVN (register): MVN Xd, Xm (bitwise NOT)
+/// This is an alias for ORN Xd, XZR, Xm
+/// Opcode: 0xAA2003E0
+pub fn emit_mvn(mc : MachineCode, rd : Int, rm : Int) -> Unit {
+  mc.annotate("mvn x\{rd}, x\{rm}")
+  // ORN Xd, XZR, Xm - bitwise OR NOT with zero register = NOT
+  let b0 = (rd & 31) | ((31 & 7) << 5) // rd, XZR low bits
+  let b1 = (31 >> 3) & 3 // XZR high bits
+  let b2 = (rm & 31) | 32 // rm with N bit set (bit 21 = 1 for ORN)
+  let b3 = 170 // 0xAA
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode MOV (register): MOV Xd, Xm (ORR Xd, XZR, Xm)
 pub fn emit_mov_reg(mc : MachineCode, rd : Int, rm : Int) -> Unit {
   mc.annotate("mov x\{rd}, x\{rm}")
@@ -1307,6 +1336,120 @@ pub fn emit_fdiv_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   let b2 = (x60 | (rm & 15)) & x6f
   let x1e = 30 // 0x1E
   let b3 = x1e | ((rm >> 4) & 1)
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMAX (double): FMAX Dd, Dn, Dm
+/// Opcode: 0x1E604800
+pub fn emit_fmax_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fmax d\{rd}, d\{rn}, d\{rm}")
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | 72 // 0x48
+  let x60 = 96 // 0x60
+  let x6f = 111 // 0x6F
+  let b2 = (x60 | (rm & 15)) & x6f
+  let x1e = 30 // 0x1E
+  let b3 = x1e | ((rm >> 4) & 1)
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMIN (double): FMIN Dd, Dn, Dm
+/// Opcode: 0x1E605800
+pub fn emit_fmin_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fmin d\{rd}, d\{rn}, d\{rm}")
+  let b0 = (rd & 31) | ((rn & 3) << 5)
+  let b1 = ((rn >> 2) & 7) | 88 // 0x58
+  let x60 = 96 // 0x60
+  let x6f = 111 // 0x6F
+  let b2 = (x60 | (rm & 15)) & x6f
+  let x1e = 30 // 0x1E
+  let b3 = x1e | ((rm >> 4) & 1)
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FSQRT (double): FSQRT Dd, Dn
+/// Opcode: 0x1E61C000
+pub fn emit_fsqrt_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fsqrt d\{rd}, d\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 97 // 0x61
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FABS (double): FABS Dd, Dn
+/// Opcode: 0x1E60C000
+pub fn emit_fabs_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fabs d\{rd}, d\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 96 // 0x60
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FNEG (double): FNEG Dd, Dn
+/// Opcode: 0x1E614000
+pub fn emit_fneg_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fneg d\{rd}, d\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 64 // 0x40
+  let b2 = 97 // 0x61
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FRINTP (double, ceiling): FRINTP Dd, Dn
+/// Opcode: 0x1E64C000
+pub fn emit_frintp_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("frintp d\{rd}, d\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 100 // 0x64
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FRINTM (double, floor): FRINTM Dd, Dn
+/// Opcode: 0x1E654000
+pub fn emit_frintm_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("frintm d\{rd}, d\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 64 // 0x40
+  let b2 = 101 // 0x65
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FRINTZ (double, truncate towards zero): FRINTZ Dd, Dn
+/// Opcode: 0x1E65C000
+pub fn emit_frintz_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("frintz d\{rd}, d\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 101 // 0x65
+  let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FRINTN (double, nearest with ties to even): FRINTN Dd, Dn
+/// Opcode: 0x1E644000
+pub fn emit_frintn_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("frintn d\{rd}, d\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 64 // 0x40
+  let b2 = 100 // 0x64
+  let b3 = 30 // 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -2018,6 +2161,58 @@ fn emit_instruction(
       let rm = reg_num(inst.uses[1])
       emit_lsr_reg(mc, rd, rn, rm)
     }
+    Rotr => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_ror_reg(mc, rd, rn, rm)
+    }
+    Rotl => {
+      // Rotate left by n is rotate right by (64 - n)
+      // rotl(x, n) = rotr(x, 64 - n)
+      // We need to compute 64 - rm, then rotate right
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      // Use scratch register x16 to compute (64 - rm)
+      emit_movz(mc, 16, 64, 0) // x16 = 64
+      emit_sub_reg(mc, 16, 16, rm) // x16 = 64 - rm
+      emit_ror_reg(mc, rd, rn, 16) // rd = rotr(rn, x16)
+    }
+    Not => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_mvn(mc, rd, rn)
+    }
+    SRem => {
+      // Signed remainder: rem = a - (a / b) * b
+      // Using MSUB: rd = ra - rn * rm
+      // 1. Compute quotient: x16 = a / b (SDIV)
+      // 2. Compute remainder: rd = a - x16 * b (MSUB)
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0]) // dividend (a)
+      let rm = reg_num(inst.uses[1]) // divisor (b)
+      emit_sdiv(mc, 16, rn, rm) // x16 = a / b
+      emit_msub(mc, rd, 16, rm, rn) // rd = a - x16 * b
+    }
+    URem => {
+      // Unsigned remainder: rem = a - (a / b) * b
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0]) // dividend (a)
+      let rm = reg_num(inst.uses[1]) // divisor (b)
+      emit_udiv(mc, 16, rn, rm) // x16 = a / b (unsigned)
+      emit_msub(mc, rd, 16, rm, rn) // rd = a - x16 * b
+    }
+    Bitcast => {
+      // Reinterpret bits between int and float
+      // Use FMOV to transfer bits without conversion
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Determine direction based on register types
+      // For now, use FMOV between X and D registers
+      // This handles both i64 <-> f64 and i32 <-> f32
+      emit_fmov_x_to_d(mc, rd, rn)
+    }
     FAdd => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -2041,6 +2236,68 @@ fn emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       emit_fdiv_d(mc, rd, rn, rm)
+    }
+    FMin => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_fmin_d(mc, rd, rn, rm)
+    }
+    FMax => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      emit_fmax_d(mc, rd, rn, rm)
+    }
+    // Floating-point unary operations
+    FSqrt => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_fsqrt_d(mc, rd, rn)
+    }
+    FAbs => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_fabs_d(mc, rd, rn)
+    }
+    FNeg => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_fneg_d(mc, rd, rn)
+    }
+    FCeil => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_frintp_d(mc, rd, rn)
+    }
+    FFloor => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_frintm_d(mc, rd, rn)
+    }
+    FTrunc => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_frintz_d(mc, rd, rn)
+    }
+    FNearest => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_frintn_d(mc, rd, rn)
+    }
+    // Floating-point conversions
+    FPromote => {
+      // f32 -> f64: already stored as f64 internally, this is a no-op
+      // Just move the value
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_fmov_d(mc, rd, rn)
+    }
+    FDemote => {
+      // f64 -> f32: also a no-op in our representation since we use f64 internally
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_fmov_d(mc, rd, rn)
     }
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
