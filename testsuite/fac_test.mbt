@@ -70,3 +70,68 @@ test "fac_ssa" {
   let result = compare_jit_interp(source, "fac-ssa", [I64(5)])
   inspect(result.matched(), content="true")
 }
+
+///|
+test "fac_rec_named" {
+  let source =
+    #|(func $fac-rec-named (export "fac-rec-named") (param $n i64) (result i64)
+    #|  (if (result i64) (i64.eq (local.get $n) (i64.const 0))
+    #|    (then (i64.const 1))
+    #|    (else
+    #|      (i64.mul
+    #|        (local.get $n)
+    #|        (call $fac-rec-named (i64.sub (local.get $n) (i64.const 1)))
+    #|      )
+    #|    )
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "fac-rec-named", [I64(5)])
+  inspect(result.matched(), content="true")
+}
+
+///|
+test "fac_iter_named" {
+  let source =
+    #|(func (export "fac-iter-named") (param $n i64) (result i64)
+    #|  (local $i i64)
+    #|  (local $res i64)
+    #|  (local.set $i (local.get $n))
+    #|  (local.set $res (i64.const 1))
+    #|  (block $done
+    #|    (loop $loop
+    #|      (if
+    #|        (i64.eq (local.get $i) (i64.const 0))
+    #|        (then (br $done))
+    #|        (else
+    #|          (local.set $res (i64.mul (local.get $i) (local.get $res)))
+    #|          (local.set $i (i64.sub (local.get $i) (i64.const 1)))
+    #|        )
+    #|      )
+    #|      (br $loop)
+    #|    )
+    #|  )
+    #|  (local.get $res)
+    #|)
+  let result = compare_jit_interp(source, "fac-iter-named", [I64(5)])
+  inspect(result.matched(), content="true")
+}
+
+///|
+test "fac_opt" {
+  let source =
+    #|(func (export "fac-opt") (param i64) (result i64)
+    #|  (local i64)
+    #|  (local.set 1 (i64.const 1))
+    #|  (block
+    #|    (br_if 0 (i64.lt_s (local.get 0) (i64.const 2)))
+    #|    (loop
+    #|      (local.set 1 (i64.mul (local.get 1) (local.get 0)))
+    #|      (local.set 0 (i64.add (local.get 0) (i64.const -1)))
+    #|      (br_if 0 (i64.gt_s (local.get 0) (i64.const 1)))
+    #|    )
+    #|  )
+    #|  (local.get 1)
+    #|)
+  let result = compare_jit_interp(source, "fac-opt", [I64(5)])
+  inspect(result.matched(), content="true")
+}

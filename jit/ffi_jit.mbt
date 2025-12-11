@@ -22,7 +22,12 @@ pub fn check_trap() -> Unit raise JITTrap {
   let code = c_jit_get_trap_code()
   if code != 0 {
     c_jit_clear_trap()
-    raise JITTrap("out of bounds memory access")
+    let msg = match code {
+      1 => "out of bounds memory access"
+      2 => "call stack exhausted"
+      _ => "unknown trap"
+    }
+    raise JITTrap(msg)
   }
 }
 
@@ -497,7 +502,12 @@ fn JITContext::call_multi_return(
     num_results,
   )
   if trap_code != 0 {
-    raise JITTrap("out of bounds memory access")
+    let msg = match trap_code {
+      1 => "out of bounds memory access"
+      2 => "call stack exhausted"
+      _ => "unknown trap"
+    }
+    raise JITTrap(msg)
   }
   // Copy results back
   for i in 0..<num_results {
