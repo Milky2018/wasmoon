@@ -103,12 +103,21 @@ test "i32 mul" {
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   // 4 * 3 = 12
-  let result0 = jm.call_with_context(f, [4L])
-  inspect(result0[0], content="12")
+  let @jit.Single((result0 : Int)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(4),
+  )
+  inspect(result0, content="12")
   // 7 * 3 = 21
-  let result1 = jm.call_with_context(f, [7L])
-  inspect(result1[0], content="21")
+  let @jit.Single((result1 : Int)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(7),
+  )
+  inspect(result1, content="21")
   // 0 * 3 = 0
-  let result2 = jm.call_with_context(f, [0L])
-  inspect(result2[0], content="0")
+  let @jit.Single((result2 : Int)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(0),
+  )
+  inspect(result2, content="0")
 }

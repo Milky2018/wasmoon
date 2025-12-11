@@ -84,13 +84,11 @@ test "f32 add" {
   guard func is Some(f) else { return }
   // Pass Float values (f32) since the WASM function takes f32 parameter
   // JITArg for Float reinterprets the f32 bit pattern and passes it correctly
-  let result0 = jm.call_with_context(f, [
-    (0.0 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result0[0].reinterpret_as_double())),
-    content="F32(15.5)",
+  let @jit.Single((result0 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((0.0 : Float)),
   )
+  inspect(result0, content="15.5")
   let result1 = jm.call_with_context(f, [
     (1.0 : Float).reinterpret_as_int().to_int64(),
   ])

@@ -25,7 +25,7 @@ test "f32_no_fma" {
     ),
   )
   // S register f32 operations now implemented
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -45,7 +45,7 @@ test "f32_no_reassociate_mul" {
     F32(0x1.f04508p-56),
   ])
   // S register f32 operations now implemented
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -58,7 +58,7 @@ test "i32_no_fold_f32_s" {
     #|    (i32.trunc_f32_s (f32.convert_i32_s (local.get $x))))
     #|)
   let result = compare_jit_interp(source, "i32.no_fold_f32_s", [I32(16777216)])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -71,7 +71,7 @@ test "i32_no_fold_f32_u" {
     #|    (i32.trunc_f32_u (f32.convert_i32_s (local.get $x))))
     #|)
   let result = compare_jit_interp(source, "i32.no_fold_f32_u", [I32(16777216)])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -86,7 +86,7 @@ test "i64_no_fold_f64_s" {
   let result = compare_jit_interp(source, "i64.no_fold_f64_s", [
     I64(9007199254740992L),
   ])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -101,7 +101,7 @@ test "f32_i32_no_fold_trunc_s_convert_s" {
   let result = compare_jit_interp(source, "f32.i32.no_fold_trunc_s_convert_s", [
     F32(1.5),
   ])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -116,7 +116,7 @@ test "f64_i32_no_fold_trunc_s_convert_s" {
   let result = compare_jit_interp(source, "f64.i32.no_fold_trunc_s_convert_s", [
     F64(1.5),
   ])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -131,5 +131,5 @@ test "no_fold_demote_promote" {
   let result = compare_jit_interp(source, "no_fold_demote_promote", [
     F64(-1.7176275796615013e-40),
   ])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }

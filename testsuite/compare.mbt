@@ -11,6 +11,15 @@ struct CompareResult {
 }
 
 ///|
+pub impl Show for CompareResult with output(self, logger) {
+  if self.match_ {
+    logger.write_string("matched")
+  } else {
+    logger.write_string(self.to_string())
+  }
+}
+
+///|
 /// Convert JIT Int64 results to @types.Value using result_types
 fn jit_results_to_values(
   results : Array[Int64],

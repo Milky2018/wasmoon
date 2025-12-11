@@ -14,7 +14,7 @@ test "f32 identity function" {
       #|Result: MATCH
     ),
   )
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -33,7 +33,7 @@ test "f32 add simple" {
       #|Result: MATCH
     ),
   )
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -52,5 +52,5 @@ test "f32 mul simple" {
       #|Result: MATCH
     ),
   )
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }

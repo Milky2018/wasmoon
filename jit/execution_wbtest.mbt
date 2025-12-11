@@ -147,23 +147,19 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   // For proper WAST behavior, see the "end-to-end" test below which parses actual WAST
 
   // test(0) should return 10.0 (store 10 to mem[0], load back)
-  let result0 = jm.call_with_context(f, [0L])
-  let result0_f32 = Float::from_double(result0[0].reinterpret_as_double())
+  let Single((result0_f32 : Float)) = jm.call_with_context_poly(f, Single(0))
   inspect(result0_f32, content="10")
 
   // test(1) should return 10.0
-  let result1 = jm.call_with_context(f, [1L])
-  let result1_f32 = Float::from_double(result1[0].reinterpret_as_double())
+  let Single((result1_f32 : Float)) = jm.call_with_context_poly(f, Single(1))
   inspect(result1_f32, content="10")
 
   // test(2) should return 10.0
-  let result2 = jm.call_with_context(f, [2L])
-  let result2_f32 = Float::from_double(result2[0].reinterpret_as_double())
+  let Single((result2_f32 : Float)) = jm.call_with_context_poly(f, Single(2))
   inspect(result2_f32, content="10")
 
   // test(3) - default case: jumps directly to exit, d2 retains value from d0 (which is 10.0)
-  let result3 = jm.call_with_context(f, [3L])
-  let result3_f32 = Float::from_double(result3[0].reinterpret_as_double())
+  let Single((result3_f32 : Float)) = jm.call_with_context_poly(f, Single(3))
   inspect(result3_f32, content="10")
 }
 
@@ -639,9 +635,9 @@ test "end-to-end: f32_br_2locals.wast from source" {
             }
 
             // Call the JIT-compiled function
-            let result = jm.call_with_context(f, [arg.to_int64()])
-            let result_f32 = Float::from_double(
-              result[0].reinterpret_as_double(),
+            let Single((result_f32 : Float)) = jm.call_with_context_poly(
+              f,
+              Single(arg),
             )
             results.push((arg.to_int64(), expected_f32, result_f32))
           }
