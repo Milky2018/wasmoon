@@ -37,6 +37,7 @@ pub impl Show for TestRunnerError
 type CompareResult
 pub fn CompareResult::matched(Self) -> Bool
 pub fn CompareResult::to_string(Self) -> String
+pub impl Show for CompareResult
 
 pub(all) struct JsonValue {
   type_ : String

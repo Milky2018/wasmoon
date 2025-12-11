@@ -45,10 +45,13 @@ test "multi return: 3 integers" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [10L])
-  inspect(result[0], content="10")
-  inspect(result[1], content="11")
-  inspect(result[2], content="12")
+  let (r0, r1, r2) : (Int, Int, Int) = jm.call_with_context_poly(
+    f,
+    @jit.Single(10),
+  )
+  inspect(r0, content="10")
+  inspect(r1, content="11")
+  inspect(r2, content="12")
 }
 
 ///|
@@ -106,11 +109,14 @@ test "multi return: 4 integers" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [100L])
-  inspect(result[0], content="100")
-  inspect(result[1], content="110")
-  inspect(result[2], content="120")
-  inspect(result[3], content="130")
+  let (r0, r1, r2, r3) : (Int, Int, Int, Int) = jm.call_with_context_poly(
+    f,
+    @jit.Single(100),
+  )
+  inspect(r0, content="100")
+  inspect(r1, content="110")
+  inspect(r2, content="120")
+  inspect(r3, content="130")
 }
 
 ///|
@@ -156,10 +162,10 @@ test "multi return: 3 floats" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [])
-  inspect(result[0].reinterpret_as_double(), content="1.5")
-  inspect(result[1].reinterpret_as_double(), content="2.5")
-  inspect(result[2].reinterpret_as_double(), content="3.5")
+  let (r0, r1, r2) : (Double, Double, Double) = jm.call_with_context_poly(f, ())
+  inspect(r0, content="1.5")
+  inspect(r1, content="2.5")
+  inspect(r2, content="3.5")
 }
 
 ///|
@@ -215,11 +221,14 @@ test "multi return: mixed int and float" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [5L])
-  inspect(result[0], content="5")
-  inspect(result[1], content="15")
-  inspect(result[2], content="25")
-  inspect(result[3].reinterpret_as_double(), content="3.14")
+  let (r0, r1, r2, r3) : (Int, Int, Int, Double) = jm.call_with_context_poly(
+    f,
+    @jit.Single(5),
+  )
+  inspect(r0, content="5")
+  inspect(r1, content="15")
+  inspect(r2, content="25")
+  inspect(r3, content="3.14")
 }
 
 ///|
@@ -264,7 +273,7 @@ test "multi return: 2 integers (no extra buffer)" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [])
-  inspect(result[0], content="42")
-  inspect(result[1], content="99")
+  let (r0, r1) : (Int, Int) = jm.call_with_context_poly(f, ())
+  inspect(r0, content="42")
+  inspect(r1, content="99")
 }

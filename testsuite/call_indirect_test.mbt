@@ -24,7 +24,7 @@ test "call_indirect_with_many_functions" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "test", [])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -41,7 +41,7 @@ test "call_indirect_simple" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "test", [])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -62,7 +62,7 @@ test "call_indirect_block_mid" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "test", [])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
 
 ///|
@@ -83,5 +83,5 @@ test "call_indirect_block_last" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "test", [])
-  inspect(result.matched(), content="true")
+  inspect(result, content="matched")
 }
