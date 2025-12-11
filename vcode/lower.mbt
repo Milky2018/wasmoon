@@ -1380,6 +1380,9 @@ fn lower_call(
     }
     None => ()
   }
+  // Add clobbers for all caller-saved registers
+  // This tells the register allocator that these registers are destroyed by the call
+  add_call_clobbers(call_inst)
   // Uses: function pointer first, then arguments
   call_inst.add_use(Virtual(func_ptr_vreg))
   for arg_vreg in arg_vregs {
@@ -1452,10 +1455,29 @@ fn lower_call_indirect(
     }
     None => ()
   }
+  // Add clobbers for all caller-saved registers
+  // This tells the register allocator that these registers are destroyed by the call
+  add_call_clobbers(call_inst)
   // Uses: function pointer first, then arguments
   call_inst.add_use(Virtual(func_ptr_vreg))
   for arg_vreg in arg_vregs {
     call_inst.add_use(Virtual(arg_vreg))
   }
   block.add_inst(call_inst)
+}
+
+///|
+/// Add clobber definitions for all caller-saved registers to a call instruction.
+/// This tells the register allocator that these registers are destroyed by the call,
+/// so any values that need to survive across the call must be spilled or allocated
+/// to callee-saved registers.
+fn add_call_clobbers(call_inst : VCodeInst) -> Unit {
+  // Add clobbers for all caller-saved GPRs (X0-X17)
+  for preg in call_clobbered_gprs() {
+    call_inst.add_def({ reg: Physical(preg) })
+  }
+  // Add clobbers for all caller-saved FPRs (D0-D7)
+  for preg in call_clobbered_fprs() {
+    call_inst.add_def({ reg: Physical(preg) })
+  }
 }

@@ -76,6 +76,8 @@ pub(all) struct LiveInterval {
   mut assigned : PReg?
   // Spill slot if spilled (filled by allocator)
   mut spill_slot : Int?
+  // Whether this interval crosses a function call (cannot use caller-saved registers)
+  mut crosses_call : Bool
 }
 
 ///|
@@ -88,6 +90,7 @@ fn LiveInterval::new(vreg : VReg, start : ProgPoint) -> LiveInterval {
     hint: None,
     assigned: None,
     spill_slot: None,
+    crosses_call: false,
   }
 }
 
@@ -195,6 +198,8 @@ pub(all) struct LivenessResult {
   live_out : Array[Set[Int]]
   // Block order: maps block ID -> linear position (for correct interval comparison)
   block_order : Map[Int, Int]
+  // Call points (block_idx, inst_idx) - instructions that clobber caller-saved registers
+  call_points : Array[ProgPoint]
 }
 
 ///|
@@ -205,7 +210,14 @@ fn LivenessResult::new(num_blocks : Int) -> LivenessResult {
     live_in.push(Set::new())
     live_out.push(Set::new())
   }
-  { intervals: {}, use_def: {}, live_in, live_out, block_order: {} }
+  {
+    intervals: {},
+    use_def: {},
+    live_in,
+    live_out,
+    block_order: {},
+    call_points: [],
+  }
 }
 
 ///|
@@ -322,6 +334,11 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
     // Process instructions
     for inst_idx, inst in block.insts {
+      // Record call points for caller-saved register handling
+      if inst.opcode is CallIndirect(_, _) {
+        result.call_points.push({ block: block_idx, inst: inst_idx, pos: After })
+      }
+
       // Record uses (before the instruction)
       for use_reg in inst.uses {
         match use_reg {
@@ -605,6 +622,20 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
         interval.extend_with_order(end_point, block_order)
       }
     }
+
+    // Check if this interval crosses any call point
+    // If so, it cannot be assigned to a caller-saved register
+    for call_point in result.call_points {
+      // An interval crosses a call if:
+      // - The call is after the interval's start AND before the interval's end
+      let start_cmp = interval.start.compare_with_order(call_point, block_order)
+      let end_cmp = interval.end.compare_with_order(call_point, block_order)
+      // start <= call_point < end (interval is live across the call)
+      if start_cmp <= 0 && end_cmp > 0 {
+        interval.crosses_call = true
+        break
+      }
+    }
     result.intervals.set(vreg_id, interval)
   }
 }
@@ -686,18 +717,25 @@ pub fn LinearScanAllocator::allocate(
   // Pre-assign function parameters to ABI registers
   // JIT ABI: X0 = func_table, X1 = memory_base, X2 = memory_size, args in X3-X7
   // So WASM parameters start at X3
+  // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
+  // it will be handled by the normal allocation process (which will use callee-saved)
   for i, param in func.params {
-    let preg = match param.class {
-      Int => { index: i + 3, class: Int } // X3, X4, X5, ...
-      Float32 | Float64 => { index: i, class: param.class } // D0, D1, D2, ... (float params)
-    }
-    result.assignments.set(param.id, preg)
-    // Mark the register as initially occupied
     match liveness.intervals.get(param.id) {
-      Some(interval) => {
-        interval.assigned = Some(preg)
-        self.active.push(interval)
-      }
+      Some(interval) =>
+        if interval.crosses_call {
+          // Parameter crosses a call, don't pre-assign to caller-saved register
+          // The allocation loop below will handle it and assign to callee-saved
+          continue
+        } else {
+          // Safe to pre-assign to ABI register
+          let preg = match param.class {
+            Int => { index: i + 3, class: Int } // X3, X4, X5, ...
+            Float32 | Float64 => { index: i, class: param.class } // D0, D1, D2, ...
+          }
+          result.assignments.set(param.id, preg)
+          interval.assigned = Some(preg)
+          self.active.push(interval)
+        }
       None => ()
     }
   }
@@ -723,9 +761,20 @@ pub fn LinearScanAllocator::allocate(
     self.expire_old_intervals(interval)
 
     // Get available registers for this class
-    let avail_regs = match interval.vreg.class {
-      Int => self.int_regs
-      Float32 | Float64 => self.float_regs
+    // If interval crosses a call, only use callee-saved registers
+    let avail_regs = if interval.crosses_call {
+      match interval.vreg.class {
+        Int => allocatable_callee_saved_regs()
+        Float32 | Float64 =>
+          // For floats, we don't have callee-saved FPRs in AAPCS64
+          // This will likely spill, but that's correct behavior
+          []
+      }
+    } else {
+      match interval.vreg.class {
+        Int => self.int_regs
+        Float32 | Float64 => self.float_regs
+      }
     }
 
     // Try to allocate a register
@@ -884,15 +933,30 @@ pub fn apply_allocation(
   new_func.num_spill_slots = alloc.num_spill_slots
 
   // Convert function parameters
-  for param in func.params {
+  for i, param in func.params {
     match alloc.assignments.get(param.id) {
-      Some(_) => {
+      Some(preg) => {
         // Parameter is assigned to physical register
         // We still track it as vreg but note the assignment
         let new_vreg = { id: param.id, class: param.class }
         new_func.params.push(new_vreg)
+        // Store the physical register assignment for emit_prologue
+        // If it's not the default ABI register (X(3+i) for int, D(i) for float),
+        // we need to emit a move instruction in prologue
+        let default_preg : PReg = match param.class {
+          Int => { index: i + 3, class: Int }
+          Float32 | Float64 => { index: i, class: param.class }
+        }
+        if preg.index != default_preg.index {
+          new_func.param_pregs.push(Some(preg))
+        } else {
+          new_func.param_pregs.push(None) // No move needed
+        }
       }
-      None => new_func.params.push(param)
+      None => {
+        new_func.params.push(param)
+        new_func.param_pregs.push(None)
+      }
     }
   }
 

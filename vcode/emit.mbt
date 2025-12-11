@@ -1589,6 +1589,22 @@ fn collect_used_callee_saved(
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
   let mut has_calls = false
+
+  // Check param_pregs: parameters that cross calls are moved to callee-saved registers
+  // These are defined in the prologue via `mov xN, x(3+i)`
+  for preg in func.param_pregs {
+    match preg {
+      Some(p) =>
+        if is_callee_saved_alloc(p.index) {
+          // X23 is reserved for extra_buffer when needs_extra_results
+          if needs_extra_results && p.index == 23 {
+            continue
+          }
+          used.add(p.index)
+        }
+      None => ()
+    }
+  }
   for block in func.blocks {
     for inst in block.insts {
       // Check if this instruction is a function call
@@ -1633,6 +1649,7 @@ fn emit_prologue(
   mc : MachineCode,
   clobbered : Array[Int],
   params : Array[VReg],
+  param_pregs : Array[PReg?],
   needs_extra_results : Bool,
   num_spill_slots : Int,
 ) -> Int {
@@ -1684,25 +1701,48 @@ fn emit_prologue(
   //   - For f64: full 64 bits of X register contain f64 bit pattern
   //     We need to FMOV from X register to D register
   // Regalloc assigns: Int param i → X(3+i), Float param i → D(i)
+  // BUT: if param crosses a call, it may be assigned to a callee-saved register
   let param_base = 3 // User params start at X3
   for param_idx, param in params {
     let x_src = param_base + param_idx
+    // Check if this param needs to be moved to a different register
+    let dest_preg = if param_idx < param_pregs.length() {
+      param_pregs[param_idx]
+    } else {
+      None
+    }
     match param.class {
       Float32 => {
         // Float32 param: extract f32 from lower 32 bits and convert to f64
         // 1. FMOV S16, W(x_src) - move lower 32 bits to S register
-        // 2. FCVT D(param_idx), S16 - convert f32 to f64
+        // 2. FCVT D(dest), S16 - convert f32 to f64
+        let d_dest = match dest_preg {
+          Some(preg) => preg.index
+          None => param_idx
+        }
         emit_fmov_w_to_s(mc, 16, x_src) // FMOV S16, W(base+i)
-        emit_fcvt_d_s(mc, param_idx, 16) // FCVT D(i), S16
+        emit_fcvt_d_s(mc, d_dest, 16) // FCVT D(dest), S16
       }
-      Float64 =>
+      Float64 => {
         // Float64 param: move full 64 bits from X register to D register
-        // FMOV D(param_idx), X(x_src)
-        emit_fmov_x_to_d(mc, param_idx, x_src)
+        // FMOV D(dest), X(x_src)
+        let d_dest = match dest_preg {
+          Some(preg) => preg.index
+          None => param_idx
+        }
+        emit_fmov_x_to_d(mc, d_dest, x_src)
+      }
       Int =>
-        // Int param: already at X(3+i) where regalloc expects it
-        // No move needed
-        ()
+        // Int param: may need to move from X(3+i) to allocated register
+        match dest_preg {
+          Some(preg) =>
+            // Param crosses a call, move to callee-saved register
+            emit_mov_reg(mc, preg.index, x_src)
+          None =>
+            // Int param: already at X(3+i) where regalloc expects it
+            // No move needed
+            ()
+        }
     }
   }
   frame_size
@@ -1840,6 +1880,7 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
     mc,
     clobbered,
     func.params,
+    func.param_pregs,
     needs_extra_results,
     func.num_spill_slots,
   )

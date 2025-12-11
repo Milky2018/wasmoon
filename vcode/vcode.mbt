@@ -584,6 +584,9 @@ pub(all) struct VCodeFunction {
   blocks : Array[VCodeBlock]
   mut next_vreg_id : Int
   mut num_spill_slots : Int // Number of spill slots used by register allocator
+  // Map from param index to allocated physical register (for params that cross calls)
+  // This is filled by apply_allocation and used by emit_prologue
+  param_pregs : Array[PReg?]
 }
 
 ///|
@@ -596,6 +599,7 @@ pub fn VCodeFunction::new(name : String) -> VCodeFunction {
     blocks: [],
     next_vreg_id: 0,
     num_spill_slots: 0,
+    param_pregs: [],
   }
 }
 

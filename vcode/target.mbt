@@ -302,3 +302,46 @@ pub fn aapcs64_ret_fprs() -> Array[PReg] {
     { index: 3, class: Float64 },
   ]
 }
+
+///|
+/// Registers clobbered by function calls (caller-saved)
+/// These are registers that the caller must assume are destroyed after a call.
+/// For our JIT ABI: X0-X7 (args/return), X8 (scratch), X9-X17 (used by call)
+/// Also D0-D7 for floating-point
+pub fn call_clobbered_gprs() -> Array[PReg] {
+  [
+    { index: 0, class: Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
+    { index: 8, class: Int },
+    { index: 9, class: Int },
+    { index: 10, class: Int },
+    { index: 11, class: Int },
+    { index: 12, class: Int },
+    { index: 13, class: Int },
+    { index: 14, class: Int },
+    { index: 15, class: Int },
+    { index: 16, class: Int },
+    { index: 17, class: Int },
+  ]
+}
+
+///|
+/// Floating-point registers clobbered by function calls
+pub fn call_clobbered_fprs() -> Array[PReg] {
+  [
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+    { index: 4, class: Float64 },
+    { index: 5, class: Float64 },
+    { index: 6, class: Float64 },
+    { index: 7, class: Float64 },
+  ]
+}
