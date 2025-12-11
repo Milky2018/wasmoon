@@ -93,8 +93,8 @@ test "lower float operations" {
     content=(
       #|vcode float_add(f0:float, f1:float) -> float {
       #|block0:
-      #|    f2 = fadd f0, f1
-      #|    f3 = fmul f2, f0
+      #|    f2 = fadd.s f0, f1
+      #|    f3 = fmul.s f2, f0
       #|    ret f3
       #|}
       #|
@@ -314,8 +314,8 @@ test "lower f64 operations" {
     content=(
       #|vcode f64_add(f0:double, f1:double) -> double {
       #|block0:
-      #|    f2 = fadd f0, f1
-      #|    f3 = fmul f2, f0
+      #|    f2 = fadd.d f0, f1
+      #|    f3 = fmul.d f2, f0
       #|    ret f3
       #|}
       #|
@@ -363,8 +363,8 @@ test "lower f64 division and subtraction" {
     content=(
       #|vcode f64_ops(f0:double, f1:double) -> double {
       #|block0:
-      #|    f2 = fdiv f0, f1
-      #|    f3 = fsub f2, f1
+      #|    f2 = fdiv.d f0, f1
+      #|    f3 = fsub.d f2, f1
       #|    ret f3
       #|}
       #|
@@ -393,7 +393,7 @@ test "lower mixed int and f64" {
     content=(
       #|vcode mixed_int_f64(v0:int, f1:double) -> double {
       #|block0:
-      #|    f2 = fadd f1, f1
+      #|    f2 = fadd.d f1, f1
       #|    ret f2
       #|}
       #|

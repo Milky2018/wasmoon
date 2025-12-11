@@ -283,20 +283,20 @@ pub enum VCodeOpcode {
   Rotr // Rotate right
   Rotl // Rotate left (emulated as rotr with (64-n))
   Not // Bitwise NOT
-  // Floating-point operations
-  FAdd
-  FSub
-  FMul
-  FDiv
-  FMin
-  FMax
-  FSqrt
-  FAbs
-  FNeg
-  FCeil
-  FFloor
-  FTrunc
-  FNearest
+  // Floating-point operations (Bool = true for f32, false for f64)
+  FAdd(Bool)
+  FSub(Bool)
+  FMul(Bool)
+  FDiv(Bool)
+  FMin(Bool)
+  FMax(Bool)
+  FSqrt(Bool)
+  FAbs(Bool)
+  FNeg(Bool)
+  FCeil(Bool)
+  FFloor(Bool)
+  FTrunc(Bool)
+  FNearest(Bool)
   // Memory operations
   Load(MemType, Int) // type, offset
   Store(MemType, Int) // type, offset
@@ -318,8 +318,8 @@ pub enum VCodeOpcode {
   // Conversions
   Extend(ExtendKind)
   Truncate
-  IntToFloat
-  FloatToInt
+  IntToFloat(IntToFloatKind)
+  FloatToInt(FloatToIntKind)
   FPromote // f32 -> f64
   FDemote // f64 -> f32
   Bitcast // Reinterpret bits between int/float of same size
@@ -381,19 +381,19 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Rotr => "rotr"
     Rotl => "rotl"
     Not => "not"
-    FAdd => "fadd"
-    FSub => "fsub"
-    FMul => "fmul"
-    FDiv => "fdiv"
-    FMin => "fmin"
-    FMax => "fmax"
-    FSqrt => "fsqrt"
-    FAbs => "fabs"
-    FNeg => "fneg"
-    FCeil => "fceil"
-    FFloor => "ffloor"
-    FTrunc => "ftrunc"
-    FNearest => "fnearest"
+    FAdd(is_f32) => if is_f32 { "fadd.s" } else { "fadd.d" }
+    FSub(is_f32) => if is_f32 { "fsub.s" } else { "fsub.d" }
+    FMul(is_f32) => if is_f32 { "fmul.s" } else { "fmul.d" }
+    FDiv(is_f32) => if is_f32 { "fdiv.s" } else { "fdiv.d" }
+    FMin(is_f32) => if is_f32 { "fmin.s" } else { "fmin.d" }
+    FMax(is_f32) => if is_f32 { "fmax.s" } else { "fmax.d" }
+    FSqrt(is_f32) => if is_f32 { "fsqrt.s" } else { "fsqrt.d" }
+    FAbs(is_f32) => if is_f32 { "fabs.s" } else { "fabs.d" }
+    FNeg(is_f32) => if is_f32 { "fneg.s" } else { "fneg.d" }
+    FCeil(is_f32) => if is_f32 { "fceil.s" } else { "fceil.d" }
+    FFloor(is_f32) => if is_f32 { "ffloor.s" } else { "ffloor.d" }
+    FTrunc(is_f32) => if is_f32 { "ftrunc.s" } else { "ftrunc.d" }
+    FNearest(is_f32) => if is_f32 { "fnearest.s" } else { "fnearest.d" }
     Load(ty, offset) => "load.\{ty} +\{offset}"
     Store(ty, offset) => "store.\{ty} +\{offset}"
     Load8S(offset) => "load8s +\{offset}"
@@ -418,8 +418,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FCmp(kind) => "fcmp.\{kind}"
     Extend(kind) => "extend.\{kind}"
     Truncate => "trunc"
-    IntToFloat => "i2f"
-    FloatToInt => "f2i"
+    IntToFloat(kind) => "i2f.\{kind}"
+    FloatToInt(kind) => "f2i.\{kind}"
     FPromote => "fpromote"
     FDemote => "fdemote"
     Bitcast => "bitcast"
@@ -576,6 +576,72 @@ fn ExtendKind::to_string(self : ExtendKind) -> String {
 
 ///|
 pub impl Show for ExtendKind with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// Float to Int conversion kind
+/// Encodes: source float type, destination int type, signedness
+pub(all) enum FloatToIntKind {
+  F32ToI32S // f32 -> i32 signed (FCVTZS Wd, Sn)
+  F32ToI32U // f32 -> i32 unsigned (FCVTZU Wd, Sn)
+  F32ToI64S // f32 -> i64 signed (FCVTZS Xd, Sn)
+  F32ToI64U // f32 -> i64 unsigned (FCVTZU Xd, Sn)
+  F64ToI32S // f64 -> i32 signed (FCVTZS Wd, Dn)
+  F64ToI32U // f64 -> i32 unsigned (FCVTZU Wd, Dn)
+  F64ToI64S // f64 -> i64 signed (FCVTZS Xd, Dn)
+  F64ToI64U // f64 -> i64 unsigned (FCVTZU Xd, Dn)
+}
+
+///|
+fn FloatToIntKind::to_string(self : FloatToIntKind) -> String {
+  match self {
+    F32ToI32S => "f32_i32_s"
+    F32ToI32U => "f32_i32_u"
+    F32ToI64S => "f32_i64_s"
+    F32ToI64U => "f32_i64_u"
+    F64ToI32S => "f64_i32_s"
+    F64ToI32U => "f64_i32_u"
+    F64ToI64S => "f64_i64_s"
+    F64ToI64U => "f64_i64_u"
+  }
+}
+
+///|
+pub impl Show for FloatToIntKind with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// Int to Float conversion kind
+/// Encodes: source int type, destination float type, signedness
+pub(all) enum IntToFloatKind {
+  I32SToF32 // i32 signed -> f32 (SCVTF Sd, Wn)
+  I32UToF32 // i32 unsigned -> f32 (UCVTF Sd, Wn)
+  I64SToF32 // i64 signed -> f32 (SCVTF Sd, Xn)
+  I64UToF32 // i64 unsigned -> f32 (UCVTF Sd, Xn)
+  I32SToF64 // i32 signed -> f64 (SCVTF Dd, Wn)
+  I32UToF64 // i32 unsigned -> f64 (UCVTF Dd, Wn)
+  I64SToF64 // i64 signed -> f64 (SCVTF Dd, Xn)
+  I64UToF64 // i64 unsigned -> f64 (UCVTF Dd, Xn)
+}
+
+///|
+fn IntToFloatKind::to_string(self : IntToFloatKind) -> String {
+  match self {
+    I32SToF32 => "i32_s_f32"
+    I32UToF32 => "i32_u_f32"
+    I64SToF32 => "i64_s_f32"
+    I64UToF32 => "i64_u_f32"
+    I32SToF64 => "i32_s_f64"
+    I32UToF64 => "i32_u_f64"
+    I64SToF64 => "i64_s_f64"
+    I64UToF64 => "i64_u_f64"
+  }
+}
+
+///|
+pub impl Show for IntToFloatKind with output(self, logger) {
   logger.write_string(self.to_string())
 }
 

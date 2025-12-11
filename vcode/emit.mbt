@@ -745,6 +745,107 @@ pub fn emit_rbit(mc : MachineCode, rd : Int, rn : Int) -> Unit {
   mc.emit_inst(b0, b1, b2, b3)
 }
 
+// ============ Float-Int Conversions ============
+
+///|
+/// Encode FCVTZS: convert float to signed int (round toward zero)
+/// sf: 0 = 32-bit int (W), 1 = 64-bit int (X)
+/// ftype: 0 = single (S), 1 = double (D)
+/// FCVTZS Wd, Sn: 0x1E380000 | (Rn << 5) | Rd
+/// FCVTZS Wd, Dn: 0x1E780000 | (Rn << 5) | Rd
+/// FCVTZS Xd, Sn: 0x9E380000 | (Rn << 5) | Rd
+/// FCVTZS Xd, Dn: 0x9E780000 | (Rn << 5) | Rd
+pub fn emit_fcvtzs(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  int64~ : Bool,
+  double~ : Bool,
+) -> Unit {
+  let int_name = if int64 { "x" } else { "w" }
+  let float_name = if double { "d" } else { "s" }
+  mc.annotate("fcvtzs \{int_name}\{rd}, \{float_name}\{rn}")
+  // Base: 0x1E380000 for Wd, Sn
+  // sf (bit 31) = int64 ? 1 : 0
+  // ftype (bit 22) = double ? 1 : 0
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  let b2 = if double { 0x78 } else { 0x38 }
+  let b3 = if int64 { 0x9E } else { 0x1E }
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FCVTZU: convert float to unsigned int (round toward zero)
+/// FCVTZU Wd, Sn: 0x1E390000 | (Rn << 5) | Rd
+/// FCVTZU Wd, Dn: 0x1E790000 | (Rn << 5) | Rd
+/// FCVTZU Xd, Sn: 0x9E390000 | (Rn << 5) | Rd
+/// FCVTZU Xd, Dn: 0x9E790000 | (Rn << 5) | Rd
+pub fn emit_fcvtzu(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  int64~ : Bool,
+  double~ : Bool,
+) -> Unit {
+  let int_name = if int64 { "x" } else { "w" }
+  let float_name = if double { "d" } else { "s" }
+  mc.annotate("fcvtzu \{int_name}\{rd}, \{float_name}\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  // Unsigned uses 0x39/0x79 instead of 0x38/0x78 (bit 16 set)
+  let b2 = if double { 0x79 } else { 0x39 }
+  let b3 = if int64 { 0x9E } else { 0x1E }
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode SCVTF: convert signed int to float
+/// SCVTF Sd, Wn: 0x1E220000 | (Rn << 5) | Rd
+/// SCVTF Dd, Wn: 0x1E620000 | (Rn << 5) | Rd
+/// SCVTF Sd, Xn: 0x9E220000 | (Rn << 5) | Rd
+/// SCVTF Dd, Xn: 0x9E620000 | (Rn << 5) | Rd
+pub fn emit_scvtf(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  int64~ : Bool,
+  double~ : Bool,
+) -> Unit {
+  let int_name = if int64 { "x" } else { "w" }
+  let float_name = if double { "d" } else { "s" }
+  mc.annotate("scvtf \{float_name}\{rd}, \{int_name}\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  let b2 = if double { 0x62 } else { 0x22 }
+  let b3 = if int64 { 0x9E } else { 0x1E }
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode UCVTF: convert unsigned int to float
+/// UCVTF Sd, Wn: 0x1E230000 | (Rn << 5) | Rd
+/// UCVTF Dd, Wn: 0x1E630000 | (Rn << 5) | Rd
+/// UCVTF Sd, Xn: 0x9E230000 | (Rn << 5) | Rd
+/// UCVTF Dd, Xn: 0x9E630000 | (Rn << 5) | Rd
+pub fn emit_ucvtf(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  int64~ : Bool,
+  double~ : Bool,
+) -> Unit {
+  let int_name = if int64 { "x" } else { "w" }
+  let float_name = if double { "d" } else { "s" }
+  mc.annotate("ucvtf \{float_name}\{rd}, \{int_name}\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = (rn >> 3) & 3
+  // Unsigned uses 0x23/0x63 instead of 0x22/0x62 (bit 16 set)
+  let b2 = if double { 0x63 } else { 0x23 }
+  let b3 = if int64 { 0x9E } else { 0x1E }
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
 ///|
 /// Encode MOV (register): MOV Xd, Xm (ORR Xd, XZR, Xm)
 pub fn emit_mov_reg(mc : MachineCode, rd : Int, rm : Int) -> Unit {
@@ -1357,90 +1458,156 @@ pub fn emit_csel(
 ///|
 /// Encode FADD (double): FADD Dd, Dn, Dm
 /// Opcode: 0x1E602800
+/// Format: 0x1E602800 | (rm << 16) | (rn << 5) | rd
 pub fn emit_fadd_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("fadd d\{rd}, d\{rn}, d\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 40 // 0x28
-  let x60 = 96 // 0x60
-  let x6f = 111 // 0x6F
-  let b2 = (x60 | (rm & 15)) & x6f
-  let x1e = 30 // 0x1E
-  let b3 = x1e | ((rm >> 4) & 1)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x28
+  let b2 = 0x60 | (rm & 31)
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FADD (single): FADD Sd, Sn, Sm
+/// Opcode: 0x1E202800
+/// Format: 0x1E202800 | (rm << 16) | (rn << 5) | rd
+pub fn emit_fadd_s(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fadd s\{rd}, s\{rn}, s\{rm}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x28
+  let b2 = 0x20 | (rm & 31)
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
 ///|
 /// Encode FSUB (double): FSUB Dd, Dn, Dm
 /// Opcode: 0x1E603800
+/// Format: 0x1E603800 | (rm << 16) | (rn << 5) | rd
 pub fn emit_fsub_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("fsub d\{rd}, d\{rn}, d\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 56 // 0x38
-  let x60 = 96 // 0x60
-  let x6f = 111 // 0x6F
-  let b2 = (x60 | (rm & 15)) & x6f
-  let x1e = 30 // 0x1E
-  let b3 = x1e | ((rm >> 4) & 1)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x38
+  let b2 = 0x60 | (rm & 31)
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FSUB (single): FSUB Sd, Sn, Sm
+/// Opcode: 0x1E203800
+/// Format: 0x1E203800 | (rm << 16) | (rn << 5) | rd
+pub fn emit_fsub_s(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fsub s\{rd}, s\{rn}, s\{rm}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x38
+  let b2 = 0x20 | (rm & 31)
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
 ///|
 /// Encode FMUL (double): FMUL Dd, Dn, Dm
 /// Opcode: 0x1E600800
+/// Format: 0x1E600800 | (rm << 16) | (rn << 5) | rd
 pub fn emit_fmul_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("fmul d\{rd}, d\{rn}, d\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 8 // 0x08
-  let x60 = 96 // 0x60
-  let x6f = 111 // 0x6F
-  let b2 = (x60 | (rm & 15)) & x6f
-  let x1e = 30 // 0x1E
-  let b3 = x1e | ((rm >> 4) & 1)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x08
+  let b2 = 0x60 | (rm & 31)
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMUL (single): FMUL Sd, Sn, Sm
+/// Opcode: 0x1E200800
+/// Format: 0x1E200800 | (rm << 16) | (rn << 5) | rd
+pub fn emit_fmul_s(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fmul s\{rd}, s\{rn}, s\{rm}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x08
+  let b2 = 0x20 | (rm & 31)
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
 ///|
 /// Encode FDIV (double): FDIV Dd, Dn, Dm
 /// Opcode: 0x1E601800
+/// Format: 0x1E601800 | (rm << 16) | (rn << 5) | rd
 pub fn emit_fdiv_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("fdiv d\{rd}, d\{rn}, d\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 24 // 0x18
-  let x60 = 96 // 0x60
-  let x6f = 111 // 0x6F
-  let b2 = (x60 | (rm & 15)) & x6f
-  let x1e = 30 // 0x1E
-  let b3 = x1e | ((rm >> 4) & 1)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x18
+  let b2 = 0x60 | (rm & 31)
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FDIV (single): FDIV Sd, Sn, Sm
+/// Opcode: 0x1E201800
+/// Format: 0x1E201800 | (rm << 16) | (rn << 5) | rd
+pub fn emit_fdiv_s(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fdiv s\{rd}, s\{rn}, s\{rm}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x18
+  let b2 = 0x20 | (rm & 31)
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
 ///|
 /// Encode FMAX (double): FMAX Dd, Dn, Dm
 /// Opcode: 0x1E604800
+/// Format: 0x1E604800 | (rm << 16) | (rn << 5) | rd
 pub fn emit_fmax_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("fmax d\{rd}, d\{rn}, d\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 72 // 0x48
-  let x60 = 96 // 0x60
-  let x6f = 111 // 0x6F
-  let b2 = (x60 | (rm & 15)) & x6f
-  let x1e = 30 // 0x1E
-  let b3 = x1e | ((rm >> 4) & 1)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x48
+  let b2 = 0x60 | (rm & 31)
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMAX (single): FMAX Sd, Sn, Sm
+/// Opcode: 0x1E204800
+/// Format: 0x1E204800 | (rm << 16) | (rn << 5) | rd
+pub fn emit_fmax_s(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fmax s\{rd}, s\{rn}, s\{rm}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x48
+  let b2 = 0x20 | (rm & 31)
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
 ///|
 /// Encode FMIN (double): FMIN Dd, Dn, Dm
 /// Opcode: 0x1E605800
+/// Format: 0x1E605800 | (rm << 16) | (rn << 5) | rd
 pub fn emit_fmin_d(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("fmin d\{rd}, d\{rn}, d\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 88 // 0x58
-  let x60 = 96 // 0x60
-  let x6f = 111 // 0x6F
-  let b2 = (x60 | (rm & 15)) & x6f
-  let x1e = 30 // 0x1E
-  let b3 = x1e | ((rm >> 4) & 1)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x58
+  let b2 = 0x60 | (rm & 31)
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMIN (single): FMIN Sd, Sn, Sm
+/// Opcode: 0x1E205800
+/// Format: 0x1E205800 | (rm << 16) | (rn << 5) | rd
+pub fn emit_fmin_s(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fmin s\{rd}, s\{rn}, s\{rm}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x58
+  let b2 = 0x20 | (rm & 31)
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -1457,6 +1624,18 @@ pub fn emit_fsqrt_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 }
 
 ///|
+/// Encode FSQRT (single): FSQRT Sd, Sn
+/// Opcode: 0x1E21C000
+pub fn emit_fsqrt_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fsqrt s\{rd}, s\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 0x21
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode FABS (double): FABS Dd, Dn
 /// Opcode: 0x1E60C000
 pub fn emit_fabs_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
@@ -1465,6 +1644,18 @@ pub fn emit_fabs_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
   let b1 = ((rn >> 3) & 3) | 192 // 0xC0
   let b2 = 96 // 0x60
   let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FABS (single): FABS Sd, Sn
+/// Opcode: 0x1E20C000
+pub fn emit_fabs_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fabs s\{rd}, s\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 0x20
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -1481,6 +1672,18 @@ pub fn emit_fneg_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 }
 
 ///|
+/// Encode FNEG (single): FNEG Sd, Sn
+/// Opcode: 0x1E214000
+pub fn emit_fneg_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("fneg s\{rd}, s\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 64 // 0x40
+  let b2 = 0x21
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode FRINTP (double, ceiling): FRINTP Dd, Dn
 /// Opcode: 0x1E64C000
 pub fn emit_frintp_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
@@ -1489,6 +1692,18 @@ pub fn emit_frintp_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
   let b1 = ((rn >> 3) & 3) | 192 // 0xC0
   let b2 = 100 // 0x64
   let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FRINTP (single, ceiling): FRINTP Sd, Sn
+/// Opcode: 0x1E24C000
+pub fn emit_frintp_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("frintp s\{rd}, s\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 0x24
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -1505,6 +1720,18 @@ pub fn emit_frintm_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 }
 
 ///|
+/// Encode FRINTM (single, floor): FRINTM Sd, Sn
+/// Opcode: 0x1E254000
+pub fn emit_frintm_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("frintm s\{rd}, s\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 64 // 0x40
+  let b2 = 0x25
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode FRINTZ (double, truncate towards zero): FRINTZ Dd, Dn
 /// Opcode: 0x1E65C000
 pub fn emit_frintz_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
@@ -1513,6 +1740,18 @@ pub fn emit_frintz_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
   let b1 = ((rn >> 3) & 3) | 192 // 0xC0
   let b2 = 101 // 0x65
   let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FRINTZ (single, truncate towards zero): FRINTZ Sd, Sn
+/// Opcode: 0x1E25C000
+pub fn emit_frintz_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("frintz s\{rd}, s\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 192 // 0xC0
+  let b2 = 0x25
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -1529,6 +1768,18 @@ pub fn emit_frintn_d(mc : MachineCode, rd : Int, rn : Int) -> Unit {
 }
 
 ///|
+/// Encode FRINTN (single, nearest with ties to even): FRINTN Sd, Sn
+/// Opcode: 0x1E244000
+pub fn emit_frintn_s(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("frintn s\{rd}, s\{rn}")
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 64 // 0x40
+  let b2 = 0x24
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode FMOV (double, register): FMOV Dd, Dm
 /// Opcode: 0x1E604000
 pub fn emit_fmov_d(mc : MachineCode, rd : Int, rm : Int) -> Unit {
@@ -1538,6 +1789,18 @@ pub fn emit_fmov_d(mc : MachineCode, rd : Int, rm : Int) -> Unit {
   let b1 = ((rm >> 3) & 3) | 64 // 0x40
   let b2 = 96 // 0x60
   let b3 = 30 // 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FMOV (single, register): FMOV Sd, Sm
+/// Opcode: 0x1E204000
+pub fn emit_fmov_s(mc : MachineCode, rd : Int, rm : Int) -> Unit {
+  mc.annotate("fmov s\{rd}, s\{rm}")
+  let b0 = (rd & 31) | ((rm & 7) << 5)
+  let b1 = ((rm >> 3) & 3) | 64 // 0x40
+  let b2 = 0x20
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -1722,15 +1985,13 @@ fn emit_str_d_offset(
 ///|
 /// Encode FCMP (double): FCMP Dn, Dm
 /// Opcode: 0x1E602000
+/// Format: 0x1E602000 | (rm << 16) | (rn << 5)
 pub fn emit_fcmp_d(mc : MachineCode, rn : Int, rm : Int) -> Unit {
   mc.annotate("fcmp d\{rn}, d\{rm}")
-  let b0 = (rn & 3) << 5
-  let b1 = ((rn >> 2) & 7) | 32 // 0x20
-  let x60 = 96 // 0x60
-  let x6f = 111 // 0x6F
-  let b2 = (x60 | (rm & 15)) & x6f
-  let x1e = 30 // 0x1E
-  let b3 = x1e | ((rm >> 4) & 1)
+  let b0 = (rn & 7) << 5
+  let b1 = ((rn >> 3) & 3) | 0x20
+  let b2 = 0x60 | (rm & 31)
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -2288,77 +2549,162 @@ fn emit_instruction(
       // This handles both i64 <-> f64 and i32 <-> f32
       emit_fmov_x_to_d(mc, rd, rn)
     }
-    FAdd => {
+    FAdd(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      emit_fadd_d(mc, rd, rn, rm)
+      if is_f32 {
+        // For f32: demote operands from D to S, operate in S, promote result to D
+        emit_fcvt_s_d(mc, 16, rn) // S16 = demote(Dn)
+        emit_fcvt_s_d(mc, 17, rm) // S17 = demote(Dm)
+        emit_fadd_s(mc, 16, 16, 17) // S16 = S16 + S17
+        emit_fcvt_d_s(mc, rd, 16) // Dd = promote(S16)
+      } else {
+        emit_fadd_d(mc, rd, rn, rm)
+      }
     }
-    FSub => {
+    FSub(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      emit_fsub_d(mc, rd, rn, rm)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_fcvt_s_d(mc, 17, rm)
+        emit_fsub_s(mc, 16, 16, 17)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_fsub_d(mc, rd, rn, rm)
+      }
     }
-    FMul => {
+    FMul(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      emit_fmul_d(mc, rd, rn, rm)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_fcvt_s_d(mc, 17, rm)
+        emit_fmul_s(mc, 16, 16, 17)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_fmul_d(mc, rd, rn, rm)
+      }
     }
-    FDiv => {
+    FDiv(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      emit_fdiv_d(mc, rd, rn, rm)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_fcvt_s_d(mc, 17, rm)
+        emit_fdiv_s(mc, 16, 16, 17)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_fdiv_d(mc, rd, rn, rm)
+      }
     }
-    FMin => {
+    FMin(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      emit_fmin_d(mc, rd, rn, rm)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_fcvt_s_d(mc, 17, rm)
+        emit_fmin_s(mc, 16, 16, 17)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_fmin_d(mc, rd, rn, rm)
+      }
     }
-    FMax => {
+    FMax(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      emit_fmax_d(mc, rd, rn, rm)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_fcvt_s_d(mc, 17, rm)
+        emit_fmax_s(mc, 16, 16, 17)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_fmax_d(mc, rd, rn, rm)
+      }
     }
     // Floating-point unary operations
-    FSqrt => {
+    FSqrt(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_fsqrt_d(mc, rd, rn)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_fsqrt_s(mc, 16, 16)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_fsqrt_d(mc, rd, rn)
+      }
     }
-    FAbs => {
+    FAbs(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_fabs_d(mc, rd, rn)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_fabs_s(mc, 16, 16)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_fabs_d(mc, rd, rn)
+      }
     }
-    FNeg => {
+    FNeg(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_fneg_d(mc, rd, rn)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_fneg_s(mc, 16, 16)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_fneg_d(mc, rd, rn)
+      }
     }
-    FCeil => {
+    FCeil(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_frintp_d(mc, rd, rn)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_frintp_s(mc, 16, 16)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_frintp_d(mc, rd, rn)
+      }
     }
-    FFloor => {
+    FFloor(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_frintm_d(mc, rd, rn)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_frintm_s(mc, 16, 16)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_frintm_d(mc, rd, rn)
+      }
     }
-    FTrunc => {
+    FTrunc(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_frintz_d(mc, rd, rn)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_frintz_s(mc, 16, 16)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_frintz_d(mc, rd, rn)
+      }
     }
-    FNearest => {
+    FNearest(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_frintn_d(mc, rd, rn)
+      if is_f32 {
+        emit_fcvt_s_d(mc, 16, rn)
+        emit_frintn_s(mc, 16, 16)
+        emit_fcvt_d_s(mc, rd, 16)
+      } else {
+        emit_frintn_d(mc, rd, rn)
+      }
     }
     // Floating-point conversions
     FPromote => {
@@ -2543,7 +2889,64 @@ fn emit_instruction(
       emit_mov_reg(mc, rd, rn)
       emit_nop(mc)
     }
-    Extend(_) | Truncate | IntToFloat | FloatToInt => emit_nop(mc)
+    Extend(_) | Truncate => emit_nop(mc)
+    FloatToInt(kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // NOTE: In our JIT, all floats are stored in D registers (f64 format)
+      // For f32 sources, we need to first demote from D to S before conversion
+      match kind {
+        F32ToI32S => {
+          // D register contains f64-promoted f32, demote to S16 first
+          emit_fcvt_s_d(mc, 16, rn) // FCVT S16, Dn
+          emit_fcvtzs(mc, rd, 16, int64=false, double=false) // FCVTZS Wd, S16
+        }
+        F32ToI32U => {
+          emit_fcvt_s_d(mc, 16, rn)
+          emit_fcvtzu(mc, rd, 16, int64=false, double=false)
+        }
+        F32ToI64S => {
+          emit_fcvt_s_d(mc, 16, rn)
+          emit_fcvtzs(mc, rd, 16, int64=true, double=false)
+        }
+        F32ToI64U => {
+          emit_fcvt_s_d(mc, 16, rn)
+          emit_fcvtzu(mc, rd, 16, int64=true, double=false)
+        }
+        F64ToI32S => emit_fcvtzs(mc, rd, rn, int64=false, double=true)
+        F64ToI32U => emit_fcvtzu(mc, rd, rn, int64=false, double=true)
+        F64ToI64S => emit_fcvtzs(mc, rd, rn, int64=true, double=true)
+        F64ToI64U => emit_fcvtzu(mc, rd, rn, int64=true, double=true)
+      }
+    }
+    IntToFloat(kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // NOTE: In our JIT, all floats are stored in D registers (f64 format)
+      // For f32 targets, we convert to S first then promote to D
+      match kind {
+        I32SToF32 => {
+          emit_scvtf(mc, 16, rn, int64=false, double=false) // SCVTF S16, Wn
+          emit_fcvt_d_s(mc, rd, 16) // FCVT Dd, S16
+        }
+        I32UToF32 => {
+          emit_ucvtf(mc, 16, rn, int64=false, double=false)
+          emit_fcvt_d_s(mc, rd, 16)
+        }
+        I64SToF32 => {
+          emit_scvtf(mc, 16, rn, int64=true, double=false)
+          emit_fcvt_d_s(mc, rd, 16)
+        }
+        I64UToF32 => {
+          emit_ucvtf(mc, 16, rn, int64=true, double=false)
+          emit_fcvt_d_s(mc, rd, 16)
+        }
+        I32SToF64 => emit_scvtf(mc, rd, rn, int64=false, double=true)
+        I32UToF64 => emit_ucvtf(mc, rd, rn, int64=false, double=true)
+        I64SToF64 => emit_scvtf(mc, rd, rn, int64=true, double=true)
+        I64UToF64 => emit_ucvtf(mc, rd, rn, int64=true, double=true)
+      }
+    }
     Nop => emit_nop(mc)
     BoundsCheck(offset, access_size) => {
       // Memory bounds check: trap if wasm_addr + offset + access_size > memory_size

@@ -137,7 +137,7 @@ test "regalloc: float registers" {
   let block = func.new_block()
 
   // f2 = fadd f0, f1
-  let fadd_inst = VCodeInst::new(FAdd)
+  let fadd_inst = VCodeInst::new(FAdd(false))
   let result_vreg = func.new_vreg(Float64)
   fadd_inst.add_def({ reg: Virtual(result_vreg) })
   fadd_inst.add_use(Virtual(a))
@@ -949,7 +949,7 @@ test "regalloc: float and int mixed allocation" {
   block.add_inst(inst2)
 
   // f3 = fadd f1, f1
-  let inst3 = VCodeInst::new(FAdd)
+  let inst3 = VCodeInst::new(FAdd(false))
   inst3.add_use(Virtual(f1))
   inst3.add_use(Virtual(f1))
   inst3.add_def({ reg: Virtual(f3) })
@@ -967,7 +967,7 @@ test "regalloc: float and int mixed allocation" {
       #|    v0 = ldi 10
       #|    f1 = ldf 3.140000104904175
       #|    v2 = add v0, v0
-      #|    f3 = fadd f1, f1
+      #|    f3 = fadd.d f1, f1
       #|    ret f3
       #|}
       #|
@@ -1000,7 +1000,7 @@ test "regalloc: float and int mixed allocation" {
       #|    x8 = ldi 10
       #|    d0 = ldf 3.140000104904175
       #|    x19 = add x8, x8
-      #|    d1 = fadd d0, d0
+      #|    d1 = fadd.d d0, d0
       #|    ret d1
       #|}
       #|
@@ -1272,7 +1272,7 @@ test "regalloc: f64 registers" {
   block.add_inst(inst1)
 
   // f2 = fadd f0, f1
-  let inst2 = VCodeInst::new(FAdd)
+  let inst2 = VCodeInst::new(FAdd(false))
   inst2.add_use(Virtual(f0))
   inst2.add_use(Virtual(f1))
   inst2.add_def({ reg: Virtual(f2) })
@@ -1287,7 +1287,7 @@ test "regalloc: f64 registers" {
       #|block0:
       #|    f0 = ldf 1.5
       #|    f1 = ldf 2.5
-      #|    f2 = fadd f0, f1
+      #|    f2 = fadd.d f0, f1
       #|    ret f2
       #|}
       #|
@@ -1305,7 +1305,7 @@ test "regalloc: f64 registers" {
       #|block0:
       #|    d0 = ldf 1.5
       #|    d1 = ldf 2.5
-      #|    d2 = fadd d0, d1
+      #|    d2 = fadd.d d0, d1
       #|    ret d2
       #|}
       #|
@@ -1362,14 +1362,14 @@ test "regalloc: mixed int, f32, f64 registers" {
   block.add_inst(inst3)
 
   // f4 = fadd f1, f2 (mix float32 and float64)
-  let inst4 = VCodeInst::new(FAdd)
+  let inst4 = VCodeInst::new(FAdd(false))
   inst4.add_use(Virtual(f1))
   inst4.add_use(Virtual(f2))
   inst4.add_def({ reg: Virtual(f4) })
   block.add_inst(inst4)
 
   // f5 = fadd f4, f4
-  let inst5 = VCodeInst::new(FAdd)
+  let inst5 = VCodeInst::new(FAdd(false))
   inst5.add_use(Virtual(f4))
   inst5.add_use(Virtual(f4))
   inst5.add_def({ reg: Virtual(f5) })
@@ -1392,8 +1392,8 @@ test "regalloc: mixed int, f32, f64 registers" {
       #|    f1 = ldf 3.140000104904175
       #|    f2 = ldf 2.718
       #|    v3 = add v0, v0
-      #|    f4 = fadd f1, f2
-      #|    f5 = fadd f4, f4
+      #|    f4 = fadd.d f1, f2
+      #|    f5 = fadd.d f4, f4
       #|    store.i32 +0 v3, v3
       #|    ret f5
       #|}
@@ -1415,8 +1415,8 @@ test "regalloc: mixed int, f32, f64 registers" {
       #|    d0 = ldf 3.140000104904175
       #|    d1 = ldf 2.718
       #|    x19 = add x8, x8
-      #|    d2 = fadd d0, d1
-      #|    d3 = fadd d2, d2
+      #|    d2 = fadd.d d0, d1
+      #|    d3 = fadd.d d2, d2
       #|    store.i32 +0 x19, x19
       #|    ret d3
       #|}

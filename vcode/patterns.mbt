@@ -728,10 +728,10 @@ fn lower_inst_default(
     @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)
 
     // Floating point arithmetic
-    @ir.Opcode::Fadd => lower_binary_float(ctx, inst, block, FAdd)
-    @ir.Opcode::Fsub => lower_binary_float(ctx, inst, block, FSub)
-    @ir.Opcode::Fmul => lower_binary_float(ctx, inst, block, FMul)
-    @ir.Opcode::Fdiv => lower_binary_float(ctx, inst, block, FDiv)
+    @ir.Opcode::Fadd => lower_binary_float(ctx, inst, block)
+    @ir.Opcode::Fsub => lower_binary_float(ctx, inst, block)
+    @ir.Opcode::Fmul => lower_binary_float(ctx, inst, block)
+    @ir.Opcode::Fdiv => lower_binary_float(ctx, inst, block)
 
     // Floating point comparisons
     @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
@@ -744,10 +744,10 @@ fn lower_inst_default(
     @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
     @ir.Opcode::Uextend => lower_extend(ctx, inst, block, signed=false)
     @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
-    @ir.Opcode::FcvtToSint | @ir.Opcode::FcvtToUint =>
-      lower_float_to_int(ctx, inst, block)
-    @ir.Opcode::SintToFcvt | @ir.Opcode::UintToFcvt =>
-      lower_int_to_float(ctx, inst, block)
+    @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
+    @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
+    @ir.Opcode::SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
+    @ir.Opcode::UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
 
     // Misc
     @ir.Opcode::Copy => lower_copy(ctx, inst, block)
