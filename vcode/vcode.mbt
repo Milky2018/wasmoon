@@ -271,6 +271,8 @@ pub enum VCodeOpcode {
   Mul
   SDiv
   UDiv
+  SRem // Signed remainder (implemented as: rem = a - (a/b)*b)
+  URem // Unsigned remainder
   // Bitwise operations
   And
   Or
@@ -278,11 +280,23 @@ pub enum VCodeOpcode {
   Shl
   AShr // Arithmetic shift right
   LShr // Logical shift right
+  Rotr // Rotate right
+  Rotl // Rotate left (emulated as rotr with (64-n))
+  Not // Bitwise NOT
   // Floating-point operations
   FAdd
   FSub
   FMul
   FDiv
+  FMin
+  FMax
+  FSqrt
+  FAbs
+  FNeg
+  FCeil
+  FFloor
+  FTrunc
+  FNearest
   // Memory operations
   Load(MemType, Int) // type, offset
   Store(MemType, Int) // type, offset
@@ -306,6 +320,9 @@ pub enum VCodeOpcode {
   Truncate
   IntToFloat
   FloatToInt
+  FPromote // f32 -> f64
+  FDemote // f64 -> f32
+  Bitcast // Reinterpret bits between int/float of same size
   // Special
   Nop
   // Memory bounds check (for WASM linear memory safety)
@@ -345,16 +362,30 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Mul => "mul"
     SDiv => "sdiv"
     UDiv => "udiv"
+    SRem => "srem"
+    URem => "urem"
     And => "and"
     Or => "or"
     Xor => "xor"
     Shl => "shl"
     AShr => "ashr"
     LShr => "lshr"
+    Rotr => "rotr"
+    Rotl => "rotl"
+    Not => "not"
     FAdd => "fadd"
     FSub => "fsub"
     FMul => "fmul"
     FDiv => "fdiv"
+    FMin => "fmin"
+    FMax => "fmax"
+    FSqrt => "fsqrt"
+    FAbs => "fabs"
+    FNeg => "fneg"
+    FCeil => "fceil"
+    FFloor => "ffloor"
+    FTrunc => "ftrunc"
+    FNearest => "fnearest"
     Load(ty, offset) => "load.\{ty} +\{offset}"
     Store(ty, offset) => "store.\{ty} +\{offset}"
     Load8S(offset) => "load8s +\{offset}"
@@ -381,6 +412,9 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Truncate => "trunc"
     IntToFloat => "i2f"
     FloatToInt => "f2i"
+    FPromote => "fpromote"
+    FDemote => "fdemote"
+    Bitcast => "bitcast"
     Nop => "nop"
     BoundsCheck(offset, size) => "bounds_check +\{offset}, \{size}"
     // AArch64-specific

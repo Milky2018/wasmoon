@@ -77,6 +77,8 @@ pub fn emit_eor_reg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_eor_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
+pub fn emit_fabs_d(MachineCode, Int, Int) -> Unit
+
 pub fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
@@ -86,6 +88,10 @@ pub fn emit_fcvt_d_s(MachineCode, Int, Int) -> Unit
 pub fn emit_fcvt_s_d(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_fmax_d(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_fmin_d(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
 
@@ -98,6 +104,18 @@ pub fn emit_fmov_w_to_s(MachineCode, Int, Int) -> Unit
 pub fn emit_fmov_x_to_d(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_fneg_d(MachineCode, Int, Int) -> Unit
+
+pub fn emit_frintm_d(MachineCode, Int, Int) -> Unit
+
+pub fn emit_frintn_d(MachineCode, Int, Int) -> Unit
+
+pub fn emit_frintp_d(MachineCode, Int, Int) -> Unit
+
+pub fn emit_frintz_d(MachineCode, Int, Int) -> Unit
+
+pub fn emit_fsqrt_d(MachineCode, Int, Int) -> Unit
 
 pub fn emit_fsub_d(MachineCode, Int, Int, Int) -> Unit
 
@@ -149,6 +167,8 @@ pub fn emit_msub(MachineCode, Int, Int, Int, Int) -> Unit
 
 pub fn emit_mul(MachineCode, Int, Int, Int) -> Unit
 
+pub fn emit_mvn(MachineCode, Int, Int) -> Unit
+
 pub fn emit_nop(MachineCode) -> Unit
 
 pub fn emit_orr_reg(MachineCode, Int, Int, Int) -> Unit
@@ -156,6 +176,8 @@ pub fn emit_orr_reg(MachineCode, Int, Int, Int) -> Unit
 pub fn emit_orr_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
 pub fn emit_ret(MachineCode, Int) -> Unit
+
+pub fn emit_ror_reg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_sdiv(MachineCode, Int, Int, Int) -> Unit
 
@@ -756,16 +778,30 @@ pub enum VCodeOpcode {
   Mul
   SDiv
   UDiv
+  SRem
+  URem
   And
   Or
   Xor
   Shl
   AShr
   LShr
+  Rotr
+  Rotl
+  Not
   FAdd
   FSub
   FMul
   FDiv
+  FMin
+  FMax
+  FSqrt
+  FAbs
+  FNeg
+  FCeil
+  FFloor
+  FTrunc
+  FNearest
   Load(MemType, Int)
   Store(MemType, Int)
   Load8S(Int)
@@ -784,6 +820,9 @@ pub enum VCodeOpcode {
   Truncate
   IntToFloat
   FloatToInt
+  FPromote
+  FDemote
+  Bitcast
   Nop
   BoundsCheck(Int, Int)
   AddShifted(ShiftType, Int)

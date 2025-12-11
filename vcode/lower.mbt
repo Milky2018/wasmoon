@@ -226,6 +226,8 @@ fn lower_inst(
     @ir.Opcode::Imul => lower_binary_int(ctx, inst, block, Mul)
     @ir.Opcode::Sdiv => lower_binary_int(ctx, inst, block, SDiv)
     @ir.Opcode::Udiv => lower_binary_int(ctx, inst, block, UDiv)
+    @ir.Opcode::Srem => lower_rem(ctx, inst, block, true)
+    @ir.Opcode::Urem => lower_rem(ctx, inst, block, false)
 
     // Bitwise operations - with pattern matching for shifted operands
     @ir.Opcode::Band => lower_band(ctx, inst, block)
@@ -234,6 +236,9 @@ fn lower_inst(
     @ir.Opcode::Ishl => lower_binary_int(ctx, inst, block, Shl)
     @ir.Opcode::Sshr => lower_binary_int(ctx, inst, block, AShr)
     @ir.Opcode::Ushr => lower_binary_int(ctx, inst, block, LShr)
+    @ir.Opcode::Rotl => lower_binary_int(ctx, inst, block, Rotl)
+    @ir.Opcode::Rotr => lower_binary_int(ctx, inst, block, Rotr)
+    @ir.Opcode::Bnot => lower_unary_int(ctx, inst, block, Not)
 
     // Integer comparisons
     @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)
@@ -243,6 +248,17 @@ fn lower_inst(
     @ir.Opcode::Fsub => lower_binary_float(ctx, inst, block, FSub)
     @ir.Opcode::Fmul => lower_binary_float(ctx, inst, block, FMul)
     @ir.Opcode::Fdiv => lower_binary_float(ctx, inst, block, FDiv)
+    @ir.Opcode::Fmin => lower_binary_float(ctx, inst, block, FMin)
+    @ir.Opcode::Fmax => lower_binary_float(ctx, inst, block, FMax)
+
+    // Floating point unary operations
+    @ir.Opcode::Fsqrt => lower_unary_float(ctx, inst, block, FSqrt)
+    @ir.Opcode::Fabs => lower_unary_float(ctx, inst, block, FAbs)
+    @ir.Opcode::Fneg => lower_unary_float(ctx, inst, block, FNeg)
+    @ir.Opcode::Fceil => lower_unary_float(ctx, inst, block, FCeil)
+    @ir.Opcode::Ffloor => lower_unary_float(ctx, inst, block, FFloor)
+    @ir.Opcode::Ftrunc => lower_unary_float(ctx, inst, block, FTrunc)
+    @ir.Opcode::Fnearest => lower_unary_float(ctx, inst, block, FNearest)
 
     // Floating point comparisons
     @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
@@ -279,6 +295,9 @@ fn lower_inst(
       lower_float_to_int(ctx, inst, block)
     @ir.Opcode::SintToFcvt | @ir.Opcode::UintToFcvt =>
       lower_int_to_float(ctx, inst, block)
+    @ir.Opcode::Fpromote => lower_unary_float(ctx, inst, block, FPromote)
+    @ir.Opcode::Fdemote => lower_unary_float(ctx, inst, block, FDemote)
+    @ir.Opcode::Bitcast => lower_bitcast(ctx, inst, block)
 
     // Misc
     @ir.Opcode::Copy => lower_copy(ctx, inst, block)
@@ -287,9 +306,6 @@ fn lower_inst(
     // Function calls
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
     @ir.Opcode::CallIndirect(_type_idx) => lower_call_indirect(ctx, inst, block)
-
-    // Unimplemented opcodes - emit nop for now
-    _ => ()
   }
 }
 
@@ -709,6 +725,96 @@ fn lower_binary_float(
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(lhs))
       vcode_inst.add_use(Virtual(rhs))
+      block.add_inst(vcode_inst)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Lower floating-point unary operation (sqrt, abs, neg, ceil, floor, trunc, nearest, promote, demote)
+fn lower_unary_float(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+  opcode : VCodeOpcode,
+) -> Unit {
+  match inst.result {
+    Some(result) => {
+      let dst = ctx.get_vreg(result)
+      let src = ctx.get_vreg(inst.operands[0])
+      let vcode_inst = VCodeInst::new(opcode)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(src))
+      block.add_inst(vcode_inst)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Lower integer unary operation (not)
+fn lower_unary_int(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+  opcode : VCodeOpcode,
+) -> Unit {
+  match inst.result {
+    Some(result) => {
+      let dst = ctx.get_vreg(result)
+      let src = ctx.get_vreg(inst.operands[0])
+      let vcode_inst = VCodeInst::new(opcode)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(src))
+      block.add_inst(vcode_inst)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Lower integer remainder: rem = a - (a / b) * b
+/// AArch64 doesn't have a direct remainder instruction, so we use MSUB:
+/// MSUB rd, rn, rm, ra computes: ra - rn * rm
+/// For remainder: a - (a / b) * b = MSUB result, quotient, b, a
+fn lower_rem(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+  signed : Bool,
+) -> Unit {
+  match inst.result {
+    Some(result) => {
+      let dst = ctx.get_vreg(result)
+      let lhs = ctx.get_vreg(inst.operands[0])
+      let rhs = ctx.get_vreg(inst.operands[1])
+      // Use SRem/URem VCode opcode which will be lowered to SDIV+MSUB or UDIV+MSUB
+      let opcode = if signed { SRem } else { URem }
+      let vcode_inst = VCodeInst::new(opcode)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(lhs))
+      vcode_inst.add_use(Virtual(rhs))
+      block.add_inst(vcode_inst)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Lower bitcast (reinterpret bits between int and float)
+fn lower_bitcast(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  match inst.result {
+    Some(result) => {
+      let dst = ctx.get_vreg(result)
+      let src = ctx.get_vreg(inst.operands[0])
+      let vcode_inst = VCodeInst::new(Bitcast)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(src))
       block.add_inst(vcode_inst)
     }
     None => ()

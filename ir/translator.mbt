@@ -19,6 +19,9 @@ pub(all) struct Translator {
   num_imports : Int
   // Type indices for imported functions
   import_func_type_indices : Array[Int]
+  // Unreachable code flag - set after br/return/unreachable
+  // When true, skip translating instructions until block end
+  mut is_unreachable : Bool
 }
 
 ///|
@@ -84,6 +87,7 @@ pub fn Translator::new(
     func_type_indices,
     num_imports,
     import_func_type_indices,
+    is_unreachable: false,
   }
 }
 
@@ -208,6 +212,19 @@ fn Translator::translate_instruction(
   self : Translator,
   instr : @types.Instruction,
 ) -> Unit {
+  // If we're in unreachable code, only process control flow instructions
+  // that may create new reachable regions
+  if self.is_unreachable {
+    match instr {
+      Block(block_type, body) => self.translate_block(block_type, body)
+      Loop(block_type, body) => self.translate_loop(block_type, body)
+      If(block_type, then_body, else_body) =>
+        self.translate_if(block_type, then_body, else_body)
+      // All other instructions are dead code, skip them
+      _ => return
+    }
+    return
+  }
   match instr {
     // Constants
     I32Const(n) => {
@@ -702,6 +719,8 @@ fn Translator::translate_block(
   block_type : @types.BlockType,
   body : Array[@types.Instruction],
 ) -> Unit {
+  // Save the unreachable state from outer context
+  let outer_is_unreachable = self.is_unreachable
   let result_types = get_block_result_types(block_type, self.func_types)
   let continuation = self.builder.create_block()
 
@@ -726,6 +745,10 @@ fn Translator::translate_block(
   }
   self.block_stack.push(frame)
 
+  // Reset unreachable for block body (block entry is reachable if outer is)
+  // If outer is unreachable, the whole block is dead code
+  self.is_unreachable = outer_is_unreachable
+
   // Translate body
   for instr in body {
     self.translate_instruction(instr)
@@ -734,30 +757,42 @@ fn Translator::translate_block(
   // Pop frame
   self.block_stack.pop() |> ignore
 
-  // Fall through to continuation
-  match self.builder.current_block() {
-    Some(block) =>
-      match block.terminator {
-        None => {
-          // Collect results from stack
-          let args : Array[Value] = []
-          for _ in 0..<result_types.length() {
-            args.push(self.pop())
+  // Fall through to continuation (only if not unreachable)
+  if !self.is_unreachable {
+    match self.builder.current_block() {
+      Some(block) =>
+        match block.terminator {
+          None => {
+            // Collect results from stack
+            let args : Array[Value] = []
+            for _ in 0..<result_types.length() {
+              args.push(self.pop())
+            }
+            args.rev_in_place()
+            // Then, all locals
+            for loc in self.locals {
+              args.push(loc)
+            }
+            self.builder.jump(continuation, args)
           }
-          args.rev_in_place()
-          // Then, all locals
-          for loc in self.locals {
-            args.push(loc)
-          }
-          self.builder.jump(continuation, args)
+          Some(_) => ()
         }
-        Some(_) => ()
-      }
-    None => ()
+      None => ()
+    }
+  }
+
+  // When unreachable, we need to restore stack to block entry height
+  // because unreachable code may have pushed values that shouldn't persist
+  while self.value_stack.length() > frame.stack_height {
+    self.pop() |> ignore
   }
 
   // Switch to continuation
   self.builder.switch_to_block(continuation)
+
+  // Continuation is reachable (either from fall-through or from br)
+  // unless the outer context was unreachable
+  self.is_unreachable = outer_is_unreachable
 
   // Push block results onto stack
   for i, _ty in result_types {
@@ -780,6 +815,8 @@ fn Translator::translate_loop(
   block_type : @types.BlockType,
   body : Array[@types.Instruction],
 ) -> Unit {
+  // Save the unreachable state from outer context
+  let outer_is_unreachable = self.is_unreachable
   let result_types = get_block_result_types(block_type, self.func_types)
   let param_types = get_block_param_types(block_type, self.func_types)
   let loop_header = self.builder.create_block()
@@ -802,17 +839,20 @@ fn Translator::translate_loop(
   }
 
   // Jump to loop header with current stack values AND current local values
-  let header_args : Array[Value] = []
-  // First, explicit block params from stack
-  for _ in 0..<param_types.length() {
-    header_args.push(self.pop())
+  // (only if not unreachable)
+  if !outer_is_unreachable {
+    let header_args : Array[Value] = []
+    // First, explicit block params from stack
+    for _ in 0..<param_types.length() {
+      header_args.push(self.pop())
+    }
+    header_args.rev_in_place()
+    // Then, all locals
+    for loc in self.locals {
+      header_args.push(loc)
+    }
+    self.builder.jump(loop_header, header_args)
   }
-  header_args.rev_in_place()
-  // Then, all locals
-  for loc in self.locals {
-    header_args.push(loc)
-  }
-  self.builder.jump(loop_header, header_args)
 
   // Switch to loop header
   self.builder.switch_to_block(loop_header)
@@ -838,6 +878,9 @@ fn Translator::translate_loop(
   }
   self.block_stack.push(frame)
 
+  // Reset unreachable for loop body
+  self.is_unreachable = outer_is_unreachable
+
   // Translate body
   for instr in body {
     self.translate_instruction(instr)
@@ -846,25 +889,36 @@ fn Translator::translate_loop(
   // Pop frame
   self.block_stack.pop() |> ignore
 
-  // Fall through to continuation
-  match self.builder.current_block() {
-    Some(block) =>
-      match block.terminator {
-        None => {
-          let args : Array[Value] = []
-          for _ in 0..<result_types.length() {
-            args.push(self.pop())
+  // Fall through to continuation (only if not unreachable)
+  if !self.is_unreachable {
+    match self.builder.current_block() {
+      Some(block) =>
+        match block.terminator {
+          None => {
+            let args : Array[Value] = []
+            for _ in 0..<result_types.length() {
+              args.push(self.pop())
+            }
+            args.rev_in_place()
+            self.builder.jump(continuation, args)
           }
-          args.rev_in_place()
-          self.builder.jump(continuation, args)
+          Some(_) => ()
         }
-        Some(_) => ()
-      }
-    None => ()
+      None => ()
+    }
+  }
+
+  // Restore stack to entry height (for unreachable code cleanup)
+  while self.value_stack.length() > frame.stack_height {
+    self.pop() |> ignore
   }
 
   // Switch to continuation
   self.builder.switch_to_block(continuation)
+
+  // Continuation is reachable unless outer was unreachable
+  self.is_unreachable = outer_is_unreachable
+
   // Push results onto stack
   for i, _ty in result_types {
     self.push(continuation.params[i].0)
@@ -882,8 +936,15 @@ fn Translator::translate_if(
   then_body : Array[@types.Instruction],
   else_body : Array[@types.Instruction],
 ) -> Unit {
+  // Save the unreachable state from outer context
+  let outer_is_unreachable = self.is_unreachable
   let result_types = get_block_result_types(block_type, self.func_types)
-  let cond = self.pop()
+  let cond = if outer_is_unreachable {
+    // Create a dummy value when unreachable
+    self.builder.iconst_i32(0)
+  } else {
+    self.pop()
+  }
   let then_block = self.builder.create_block()
   let else_block = self.builder.create_block()
   let continuation = self.builder.create_block()
@@ -899,8 +960,10 @@ fn Translator::translate_if(
     self.builder.add_block_param(continuation, loc.ty) |> ignore
   }
 
-  // Branch
-  self.builder.brnz(cond, then_block, else_block)
+  // Branch (only if not unreachable)
+  if !outer_is_unreachable {
+    self.builder.brnz(cond, then_block, else_block)
+  }
 
   // Push frame for then branch (else block as the "else" continuation)
   let frame : BlockFrame = {
@@ -917,29 +980,33 @@ fn Translator::translate_if(
 
   // Translate then body
   self.builder.switch_to_block(then_block)
+  self.is_unreachable = outer_is_unreachable // Reset for then body
   for instr in then_body {
     self.translate_instruction(instr)
   }
+  let then_is_unreachable = self.is_unreachable
 
-  // Jump to continuation from then block with locals
-  match self.builder.current_block() {
-    Some(block) =>
-      match block.terminator {
-        None => {
-          let args : Array[Value] = []
-          for _ in 0..<result_types.length() {
-            args.push(self.pop())
+  // Jump to continuation from then block with locals (only if not unreachable)
+  if !self.is_unreachable {
+    match self.builder.current_block() {
+      Some(block) =>
+        match block.terminator {
+          None => {
+            let args : Array[Value] = []
+            for _ in 0..<result_types.length() {
+              args.push(self.pop())
+            }
+            args.rev_in_place()
+            // Pass locals
+            for loc in self.locals {
+              args.push(loc)
+            }
+            self.builder.jump(continuation, args)
           }
-          args.rev_in_place()
-          // Pass locals
-          for loc in self.locals {
-            args.push(loc)
-          }
-          self.builder.jump(continuation, args)
+          Some(_) => ()
         }
-        Some(_) => ()
-      }
-    None => ()
+      None => ()
+    }
   }
 
   // Restore stack to original height for else branch
@@ -954,29 +1021,33 @@ fn Translator::translate_if(
 
   // Translate else body
   self.builder.switch_to_block(else_block)
+  self.is_unreachable = outer_is_unreachable // Reset for else body
   for instr in else_body {
     self.translate_instruction(instr)
   }
+  let else_is_unreachable = self.is_unreachable
 
-  // Jump to continuation from else block with locals
-  match self.builder.current_block() {
-    Some(block) =>
-      match block.terminator {
-        None => {
-          let args : Array[Value] = []
-          for _ in 0..<result_types.length() {
-            args.push(self.pop())
+  // Jump to continuation from else block with locals (only if not unreachable)
+  if !self.is_unreachable {
+    match self.builder.current_block() {
+      Some(block) =>
+        match block.terminator {
+          None => {
+            let args : Array[Value] = []
+            for _ in 0..<result_types.length() {
+              args.push(self.pop())
+            }
+            args.rev_in_place()
+            // Pass locals
+            for loc in self.locals {
+              args.push(loc)
+            }
+            self.builder.jump(continuation, args)
           }
-          args.rev_in_place()
-          // Pass locals
-          for loc in self.locals {
-            args.push(loc)
-          }
-          self.builder.jump(continuation, args)
+          Some(_) => ()
         }
-        Some(_) => ()
-      }
-    None => ()
+      None => ()
+    }
   }
 
   // Pop frame
@@ -984,6 +1055,11 @@ fn Translator::translate_if(
 
   // Switch to continuation
   self.builder.switch_to_block(continuation)
+
+  // Continuation is reachable if either branch is reachable
+  // (unless outer was unreachable)
+  self.is_unreachable = outer_is_unreachable ||
+    (then_is_unreachable && else_is_unreachable)
 
   // Push results onto stack
   for i, _ty in result_types {
@@ -1015,6 +1091,8 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
     }
     self.builder.jump(frame.block, args)
   }
+  // After br, code is unreachable
+  self.is_unreachable = true
 }
 
 ///|
