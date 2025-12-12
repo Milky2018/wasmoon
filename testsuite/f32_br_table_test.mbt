@@ -179,21 +179,21 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result0 = jm.call_with_context(f, [0L])
-  inspect(
-    @types.Value::F32(Float::from_double(result0[0].reinterpret_as_double())),
-    content="F32(2)",
+  let @jit.Single((result0 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(0L),
   )
-  let result1 = jm.call_with_context(f, [1L])
-  inspect(
-    @types.Value::F32(Float::from_double(result1[0].reinterpret_as_double())),
-    content="F32(3)",
+  inspect(@types.Value::F32(result0), content="F32(2)")
+  let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(1L),
   )
-  let result2 = jm.call_with_context(f, [2L])
-  inspect(
-    @types.Value::F32(Float::from_double(result2[0].reinterpret_as_double())),
-    content="F32(0)",
+  inspect(@types.Value::F32(result1), content="F32(3)")
+  let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(2L),
   )
+  inspect(@types.Value::F32(result2), content="F32(0)")
 }
 
 ///|
@@ -266,24 +266,24 @@ test "A critical bug as in data/f32_br_2locals" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result0 = jm.call_with_context(f, [0L])
-  inspect(
-    @types.Value::F32(Float::from_double(result0[0].reinterpret_as_double())),
-    content="F32(10)",
+  let @jit.Single((result0 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(0L),
   )
-  let result1 = jm.call_with_context(f, [1L])
-  inspect(
-    @types.Value::F32(Float::from_double(result1[0].reinterpret_as_double())),
-    content="F32(10)",
+  inspect(@types.Value::F32(result0), content="F32(10)")
+  let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(1L),
   )
-  let result2 = jm.call_with_context(f, [2L])
-  inspect(
-    @types.Value::F32(Float::from_double(result2[0].reinterpret_as_double())),
-    content="F32(10)",
+  inspect(@types.Value::F32(result1), content="F32(10)")
+  let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(2L),
   )
-  let result3 = jm.call_with_context(f, [3L])
-  inspect(
-    @types.Value::F32(Float::from_double(result3[0].reinterpret_as_double())),
-    content="F32(0)",
+  inspect(@types.Value::F32(result2), content="F32(10)")
+  let @jit.Single((result3 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(3L),
   )
+  inspect(@types.Value::F32(result3), content="F32(0)")
 }

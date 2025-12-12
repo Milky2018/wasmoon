@@ -29,10 +29,10 @@ fn jit_results_to_values(
   for i, ty in result_types {
     let raw = results[i]
     let value : @types.Value = match ty {
-      I32 => I32(raw.to_int())
-      I64 => I64(raw)
-      F32 => F32(Float::from_double(raw.reinterpret_as_double()))
-      F64 => F64(raw.reinterpret_as_double())
+      I32 => I32(@jit.FromInt64::from_int64_bits(raw))
+      I64 => I64(@jit.FromInt64::from_int64_bits(raw))
+      F32 => F32(@jit.FromInt64::from_int64_bits(raw))
+      F64 => F64(@jit.FromInt64::from_int64_bits(raw))
       _ => I32(0) // fallback for V128, FuncRef, etc.
     }
     values.push(value)

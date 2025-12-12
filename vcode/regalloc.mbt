@@ -791,9 +791,15 @@ pub fn LinearScanAllocator::allocate(
     let assigned = self.try_allocate_reg(interval, avail_regs)
     match assigned {
       Some(preg) => {
-        interval.assigned = Some(preg)
+        // Preserve the original vreg's class when storing the assignment
+        // This is important for Bitcast to distinguish f32 vs f64 operations
+        let assigned_preg : PReg = {
+          index: preg.index,
+          class: interval.vreg.class,
+        }
+        interval.assigned = Some(assigned_preg)
         self.active.push(interval)
-        result.assignments.set(interval.vreg.id, preg)
+        result.assignments.set(interval.vreg.id, assigned_preg)
       }
       None =>
         // Need to spill

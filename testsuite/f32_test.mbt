@@ -89,20 +89,16 @@ test "f32 add" {
     @jit.Single((0.0 : Float)),
   )
   inspect(result0, content="15.5")
-  let result1 = jm.call_with_context(f, [
-    (1.0 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result1[0].reinterpret_as_double())),
-    content="F32(16.5)",
+  let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((1.0 : Float)),
   )
-  let result2 = jm.call_with_context(f, [
-    (2.0 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result2[0].reinterpret_as_double())),
-    content="F32(17.5)",
+  inspect(@types.Value::F32(result1), content="F32(16.5)")
+  let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((2.0 : Float)),
   )
+  inspect(@types.Value::F32(result2), content="F32(17.5)")
 }
 
 ///|
@@ -189,21 +185,21 @@ test "f64 add" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result0 = jm.call_with_context(f, [0.0.reinterpret_as_int64()])
-  inspect(
-    @types.Value::F64(result0[0].reinterpret_as_double()),
-    content="F64(15.5)",
+  let @jit.Single((result0 : Double)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(0.0),
   )
-  let result1 = jm.call_with_context(f, [1.0.reinterpret_as_int64()])
-  inspect(
-    @types.Value::F64(result1[0].reinterpret_as_double()),
-    content="F64(16.5)",
+  inspect(@types.Value::F64(result0), content="F64(15.5)")
+  let @jit.Single((result1 : Double)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(1.0),
   )
-  let result2 = jm.call_with_context(f, [2.0.reinterpret_as_int64()])
-  inspect(
-    @types.Value::F64(result2[0].reinterpret_as_double()),
-    content="F64(17.5)",
+  inspect(@types.Value::F64(result1), content="F64(16.5)")
+  let @jit.Single((result2 : Double)) = jm.call_with_context_poly(
+    f,
+    @jit.Single(2.0),
   )
+  inspect(@types.Value::F64(result2), content="F64(17.5)")
 }
 
 ///|
@@ -291,29 +287,23 @@ test "f32 sub" {
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   // 10.0 - 3.5 = 6.5
-  let result0 = jm.call_with_context(f, [
-    (10.0 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result0[0].reinterpret_as_double())),
-    content="F32(6.5)",
+  let @jit.Single((result0 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((10.0 : Float)),
   )
+  inspect(@types.Value::F32(result0), content="F32(6.5)")
   // 5.5 - 3.5 = 2.0
-  let result1 = jm.call_with_context(f, [
-    (5.5 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result1[0].reinterpret_as_double())),
-    content="F32(2)",
+  let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((5.5 : Float)),
   )
+  inspect(@types.Value::F32(result1), content="F32(2)")
   // 3.5 - 3.5 = 0.0
-  let result2 = jm.call_with_context(f, [
-    (3.5 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result2[0].reinterpret_as_double())),
-    content="F32(0)",
+  let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((3.5 : Float)),
   )
+  inspect(@types.Value::F32(result2), content="F32(0)")
 }
 
 ///|
@@ -397,22 +387,17 @@ test "f32 mul" {
       #|  000c: f40300aa  mov x20, x0
       #|  0010: f50301aa  mov x21, x1
       #|  0014: f60302aa  mov x22, x2
-      #|  0018: 7000271e  fmov s16, w3
-      #|  001c: 00c2221e  fcvt d0, s16
+      #|  0018: 6000271e  fmov s0, w3
       #|block0:
-      #|  0020: 100080d2  movz x16, #0, lsl #0
-      #|  0024: 1004a8f2  movk x16, #16416, lsl #16
-      #|  0028: 1002271e  fmov s16, w16
-      #|  002c: 01c2221e  fcvt d1, s16
-      #|  0030: 1040621e  fcvt s16, d0
-      #|  0034: 3140621e  fcvt s17, d1
-      #|  0038: 100a311e  fmul s16, s16, s17
-      #|  003c: 02c2221e  fcvt d2, s16
-      #|  0040: 4040601e  fmov d0, d2
-      #|  0044: f45740a9  ldp x20, x21, [sp, #0]
-      #|  0048: f60b40f9  ldr x22, [x31, #16]
-      #|  004c: ff830091  add sp, sp, #32
-      #|  0050: c0035fd6  ret
+      #|  001c: 100080d2  movz x16, #0, lsl #0
+      #|  0020: 1004a8f2  movk x16, #16416, lsl #16
+      #|  0024: 0102271e  fmov s1, w16
+      #|  0028: 0208211e  fmul s2, s0, s1
+      #|  002c: 4040201e  fmov s0, s2
+      #|  0030: f45740a9  ldp x20, x21, [sp, #0]
+      #|  0034: f60b40f9  ldr x22, [x31, #16]
+      #|  0038: ff830091  add sp, sp, #32
+      #|  003c: c0035fd6  ret
       #|
     ),
   )
@@ -429,27 +414,21 @@ test "f32 mul" {
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   // 4.0 * 2.5 = 10.0
-  let result0 = jm.call_with_context(f, [
-    (4.0 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result0[0].reinterpret_as_double())),
-    content="F32(10)",
+  let @jit.Single((result0 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((4.0 : Float)),
   )
+  inspect(@types.Value::F32(result0), content="F32(10)")
   // 3.0 * 2.5 = 7.5
-  let result1 = jm.call_with_context(f, [
-    (3.0 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result1[0].reinterpret_as_double())),
-    content="F32(7.5)",
+  let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((3.0 : Float)),
   )
+  inspect(@types.Value::F32(result1), content="F32(7.5)")
   // 0.0 * 2.5 = 0.0
-  let result2 = jm.call_with_context(f, [
-    (0.0 : Float).reinterpret_as_int().to_int64(),
-  ])
-  inspect(
-    @types.Value::F32(Float::from_double(result2[0].reinterpret_as_double())),
-    content="F32(0)",
+  let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
+    f,
+    @jit.Single((0.0 : Float)),
   )
+  inspect(@types.Value::F32(result2), content="F32(0)")
 }

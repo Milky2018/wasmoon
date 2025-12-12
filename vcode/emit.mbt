@@ -2087,6 +2087,19 @@ pub fn emit_fcmp_d(mc : MachineCode, rn : Int, rm : Int) -> Unit {
   mc.emit_inst(b0, b1, b2, b3)
 }
 
+///|
+/// Encode FCMP (single): FCMP Sn, Sm
+/// Opcode: 0x1E202000
+/// Format: 0x1E202000 | (rm << 16) | (rn << 5)
+pub fn emit_fcmp_s(mc : MachineCode, rn : Int, rm : Int) -> Unit {
+  mc.annotate("fcmp s\{rn}, s\{rm}")
+  let b0 = (rn & 7) << 5
+  let b1 = ((rn >> 3) & 3) | 0x20
+  let b2 = 0x20 | (rm & 31) // 0x20 for single, 0x60 for double
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
 // ============ NOP ============
 
 ///|
@@ -2285,9 +2298,9 @@ fn emit_prologue(
   // FFI passes all args as Int64 in X registers
   // Float params need special handling:
   //   - For f32: lower 32 bits of X register contain f32 bit pattern
-  //     We need to extract to S register, then FCVT to D register
+  //     We use FMOV W->S to move bits directly (no conversion)
   //   - For f64: full 64 bits of X register contain f64 bit pattern
-  //     We need to FMOV from X register to D register
+  //     We use FMOV X->D to move bits directly
   // Regalloc assigns: Int param i → X(3+i), Float param i → D(i)
   // BUT: if param crosses a call, it may be assigned to a callee-saved register
   let param_base = 3 // User params start at X3
@@ -2301,15 +2314,13 @@ fn emit_prologue(
     }
     match param.class {
       Float32 => {
-        // Float32 param: extract f32 from lower 32 bits and convert to f64
-        // 1. FMOV S16, W(x_src) - move lower 32 bits to S register
-        // 2. FCVT D(dest), S16 - convert f32 to f64
-        let d_dest = match dest_preg {
+        // Float32 param: extract f32 from lower 32 bits
+        // FMOV S(dest), W(x_src) - bit-exact transfer, no conversion
+        let s_dest = match dest_preg {
           Some(preg) => preg.index
           None => param_idx
         }
-        emit_fmov_w_to_s(mc, 16, x_src) // FMOV S16, W(base+i)
-        emit_fcvt_d_s(mc, d_dest, 16) // FCVT D(dest), S16
+        emit_fmov_w_to_s(mc, s_dest, x_src) // FMOV Sd, Wn (raw bits)
       }
       Float64 => {
         // Float64 param: move full 64 bits from X register to D register
@@ -2633,24 +2644,49 @@ fn emit_instruction(
     }
     Bitcast => {
       // Reinterpret bits between int and float
-      // Use FMOV to transfer bits without conversion
+      // IMPORTANT: For f32 bitcast, we must preserve exact bits (including NaN payloads)
+      // We store f32 as raw 32-bit pattern in lower bits of D register, NOT as promoted f64
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      // Determine direction based on register types
-      // For now, use FMOV between X and D registers
-      // This handles both i64 <-> f64 and i32 <-> f32
-      emit_fmov_x_to_d(mc, rd, rn)
+      // Determine direction and size based on register classes
+      let dest_class = match inst.defs[0].reg {
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
+      }
+      let src_class = match inst.uses[0] {
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
+      }
+      match (src_class, dest_class) {
+        (Int, Float64) =>
+          // i64 -> f64: FMOV Dd, Xn (bit-exact transfer)
+          emit_fmov_x_to_d(mc, rd, rn)
+        (Float64, Int) =>
+          // f64 -> i64: FMOV Xd, Dn (bit-exact transfer)
+          emit_fmov_d_to_x(mc, rd, rn)
+        (Int, Float32) =>
+          // i32 -> f32: Store raw f32 bits in D register
+          // Use FMOV S, W which moves bits to lower 32 bits of D register
+          // The upper 32 bits are zeroed, which is fine for our purposes
+          // This preserves exact bit patterns including signaling NaNs
+          emit_fmov_w_to_s(mc, rd, rn) // FMOV Sd, Wn (bit-exact, no conversion)
+        (Float32, Int) =>
+          // f32 -> i32: Extract raw f32 bits from D register
+          // Use FMOV W, S which extracts lower 32 bits
+          // This preserves exact bit patterns including signaling NaNs
+          emit_fmov_s_to_w(mc, rd, rn) // FMOV Wd, Sn (bit-exact, no conversion)
+        _ =>
+          // Fallback for other cases (shouldn't happen with valid WASM)
+          emit_fmov_x_to_d(mc, rd, rn)
+      }
     }
     FAdd(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_f32 {
-        // For f32: demote operands from D to S, operate in S, promote result to D
-        emit_fcvt_s_d(mc, 16, rn) // S16 = demote(Dn)
-        emit_fcvt_s_d(mc, 17, rm) // S17 = demote(Dm)
-        emit_fadd_s(mc, 16, 16, 17) // S16 = S16 + S17
-        emit_fcvt_d_s(mc, rd, 16) // Dd = promote(S16)
+        // For f32: operate directly on S registers (raw f32 bits)
+        emit_fadd_s(mc, rd, rn, rm)
       } else {
         emit_fadd_d(mc, rd, rn, rm)
       }
@@ -2660,10 +2696,7 @@ fn emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_fcvt_s_d(mc, 17, rm)
-        emit_fsub_s(mc, 16, 16, 17)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_fsub_s(mc, rd, rn, rm)
       } else {
         emit_fsub_d(mc, rd, rn, rm)
       }
@@ -2673,10 +2706,7 @@ fn emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_fcvt_s_d(mc, 17, rm)
-        emit_fmul_s(mc, 16, 16, 17)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_fmul_s(mc, rd, rn, rm)
       } else {
         emit_fmul_d(mc, rd, rn, rm)
       }
@@ -2686,10 +2716,7 @@ fn emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_fcvt_s_d(mc, 17, rm)
-        emit_fdiv_s(mc, 16, 16, 17)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_fdiv_s(mc, rd, rn, rm)
       } else {
         emit_fdiv_d(mc, rd, rn, rm)
       }
@@ -2699,10 +2726,7 @@ fn emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_fcvt_s_d(mc, 17, rm)
-        emit_fmin_s(mc, 16, 16, 17)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_fmin_s(mc, rd, rn, rm)
       } else {
         emit_fmin_d(mc, rd, rn, rm)
       }
@@ -2712,10 +2736,7 @@ fn emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_fcvt_s_d(mc, 17, rm)
-        emit_fmax_s(mc, 16, 16, 17)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_fmax_s(mc, rd, rn, rm)
       } else {
         emit_fmax_d(mc, rd, rn, rm)
       }
@@ -2725,9 +2746,7 @@ fn emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_fsqrt_s(mc, 16, 16)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_fsqrt_s(mc, rd, rn)
       } else {
         emit_fsqrt_d(mc, rd, rn)
       }
@@ -2736,9 +2755,7 @@ fn emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_fabs_s(mc, 16, 16)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_fabs_s(mc, rd, rn)
       } else {
         emit_fabs_d(mc, rd, rn)
       }
@@ -2747,9 +2764,10 @@ fn emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_fneg_s(mc, 16, 16)
-        emit_fcvt_d_s(mc, rd, 16)
+        // For f32: Use FNEG S directly to preserve exact bit patterns
+        // Our f32 values are stored as raw bits in S registers (lower 32 bits of D)
+        // FNEG S only flips the sign bit without changing NaN payloads
+        emit_fneg_s(mc, rd, rn)
       } else {
         emit_fneg_d(mc, rd, rn)
       }
@@ -2758,9 +2776,7 @@ fn emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_frintp_s(mc, 16, 16)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_frintp_s(mc, rd, rn)
       } else {
         emit_frintp_d(mc, rd, rn)
       }
@@ -2769,9 +2785,7 @@ fn emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_frintm_s(mc, 16, 16)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_frintm_s(mc, rd, rn)
       } else {
         emit_frintm_d(mc, rd, rn)
       }
@@ -2780,9 +2794,7 @@ fn emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_frintz_s(mc, 16, 16)
-        emit_fcvt_d_s(mc, rd, 16)
+        emit_frintz_s(mc, rd, rn)
       } else {
         emit_frintz_d(mc, rd, rn)
       }
@@ -2791,53 +2803,39 @@ fn emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_f32 {
-        emit_fcvt_s_d(mc, 16, rn)
-        emit_frintn_s(mc, 16, 16)
-        emit_fcvt_d_s(mc, rd, 16)
+        // For f32: operate directly on S registers (raw f32 bits)
+        emit_frintn_s(mc, rd, rn)
       } else {
         emit_frintn_d(mc, rd, rn)
       }
     }
     // Floating-point conversions
     FPromote => {
-      // f32 -> f64: already stored as f64 internally, this is a no-op
-      // Just move the value
+      // f32 -> f64: Convert from S register (raw f32 bits) to D register (f64)
+      // This is a real conversion using FCVT
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_fmov_d(mc, rd, rn)
+      emit_fcvt_d_s(mc, rd, rn)
     }
     FDemote => {
-      // f64 -> f32: also a no-op in our representation since we use f64 internally
+      // f64 -> f32: Convert from D register (f64) to S register (raw f32 bits)
+      // This is a real conversion using FCVT
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      emit_fmov_d(mc, rd, rn)
+      emit_fcvt_s_d(mc, rd, rn)
     }
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      match ty {
-        F32 => {
-          // F32 load: load into scratch S16, then FCVT to destination D register
-          // This promotes f32 to f64 for consistent double-precision handling
-          emit_ldr_s_imm(mc, 16, rn, offset)
-          emit_fcvt_d_s(mc, rt, 16)
-        }
-        _ => emit_load(mc, ty, rt, rn, offset)
-      }
+      // F32 loads directly into S register (raw f32 bits preserved)
+      emit_load(mc, ty, rt, rn, offset)
     }
     Store(ty, offset) => {
       // uses[0] = address (Rn), uses[1] = value (Rt)
       let rn = reg_num(inst.uses[0]) // base address
       let rt = reg_num(inst.uses[1]) // value to store
-      match ty {
-        F32 => {
-          // F32 store: convert D register (f64) to S16 (f32), then store
-          // This demotes f64 back to f32 for memory storage
-          emit_fcvt_s_d(mc, 16, rt)
-          emit_str_s_imm(mc, 16, rn, offset)
-        }
-        _ => emit_store(mc, ty, rt, rn, offset)
-      }
+      // F32 stores directly from S register (raw f32 bits preserved)
+      emit_store(mc, ty, rt, rn, offset)
     }
     // Narrow load operations (8/16/32-bit with sign/zero extension)
     Load8S(offset) => {
@@ -2885,7 +2883,8 @@ fn emit_instruction(
         Virtual(_) => Int // Should not happen at emit time
       }
       match reg_class {
-        Float32 | Float64 => emit_fmov_d(mc, rd, rm)
+        Float32 => emit_fmov_s(mc, rd, rm)
+        Float64 => emit_fmov_d(mc, rd, rm)
         Int => emit_mov_reg(mc, rd, rm)
       }
     }
@@ -2894,12 +2893,9 @@ fn emit_instruction(
       emit_load_imm64(mc, rd, v)
     }
     LoadConstF32(bits) => {
-      // Load 32-bit float constant and convert to double:
-      // 1. Load the 32-bit representation into a scratch W register (X16/W16)
-      // 2. FMOV from W16 to scratch S register (S16)
-      // 3. FCVT to convert f32 to f64 in destination D register
-      // This ensures the f32 value is properly represented as f64 for our
-      // double-precision arithmetic operations
+      // Load 32-bit float constant as raw bits into S register
+      // 1. Load the 32-bit representation into a scratch W register (W16)
+      // 2. FMOV from W16 to destination S register (bit-exact, no conversion)
       let rd = wreg_num(inst.defs[0])
       // Use X16 as scratch register, load the 32-bit value as unsigned
       emit_movz(mc, 16, bits & 0xFFFF, 0)
@@ -2907,10 +2903,8 @@ fn emit_instruction(
       if high != 0 {
         emit_movk(mc, 16, high, 16)
       }
-      // FMOV S16, W16 (move 32-bit value to S register)
-      emit_fmov_w_to_s(mc, 16, 16)
-      // FCVT Dd, S16 (convert single to double)
-      emit_fcvt_d_s(mc, rd, 16)
+      // FMOV Sd, W16 (move 32-bit value to S register - bit-exact)
+      emit_fmov_w_to_s(mc, rd, 16)
     }
     LoadConstF64(bits) => {
       // Load 64-bit float constant:
@@ -2933,7 +2927,15 @@ fn emit_instruction(
     FCmp(kind) => {
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      emit_fcmp_d(mc, rn, rm)
+      // Check register class to use appropriate compare instruction
+      let reg_class = match inst.uses[0] {
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
+      }
+      match reg_class {
+        Float32 => emit_fcmp_s(mc, rn, rm)
+        _ => emit_fcmp_d(mc, rn, rm)
+      }
       let rd = wreg_num(inst.defs[0])
       let cond = fcmp_kind_to_cond(kind)
       emit_cset(mc, rd, cond)
@@ -2953,9 +2955,11 @@ fn emit_instruction(
         Virtual(_) => Int // Should not happen at emit time
       }
       match reg_class {
-        Float32 | Float64 =>
-          // Use FCSEL for floating-point registers
-          // Note: We use double-precision FCSEL since all floats are stored in D registers
+        Float32 =>
+          // Use FCSEL S for single-precision
+          emit_fcsel_s(mc, rd, true_val, false_val, NE.to_int())
+        Float64 =>
+          // Use FCSEL D for double-precision
           emit_fcsel_d(mc, rd, true_val, false_val, NE.to_int())
         Int =>
           // Use CSEL for integer registers
@@ -2997,26 +3001,15 @@ fn emit_instruction(
     FloatToInt(kind) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      // NOTE: In our JIT, all floats are stored in D registers (f64 format)
-      // For f32 sources, we need to first demote from D to S before conversion
+      // f32 values are stored as raw bits in S registers
+      // f64 values are stored in D registers
       match kind {
-        F32ToI32S => {
-          // D register contains f64-promoted f32, demote to S16 first
-          emit_fcvt_s_d(mc, 16, rn) // FCVT S16, Dn
-          emit_fcvtzs(mc, rd, 16, int64=false, double=false) // FCVTZS Wd, S16
-        }
-        F32ToI32U => {
-          emit_fcvt_s_d(mc, 16, rn)
-          emit_fcvtzu(mc, rd, 16, int64=false, double=false)
-        }
-        F32ToI64S => {
-          emit_fcvt_s_d(mc, 16, rn)
-          emit_fcvtzs(mc, rd, 16, int64=true, double=false)
-        }
-        F32ToI64U => {
-          emit_fcvt_s_d(mc, 16, rn)
-          emit_fcvtzu(mc, rd, 16, int64=true, double=false)
-        }
+        F32ToI32S =>
+          // S register contains f32, convert directly
+          emit_fcvtzs(mc, rd, rn, int64=false, double=false) // FCVTZS Wd, Sn
+        F32ToI32U => emit_fcvtzu(mc, rd, rn, int64=false, double=false)
+        F32ToI64S => emit_fcvtzs(mc, rd, rn, int64=true, double=false)
+        F32ToI64U => emit_fcvtzu(mc, rd, rn, int64=true, double=false)
         F64ToI32S => emit_fcvtzs(mc, rd, rn, int64=false, double=true)
         F64ToI32U => emit_fcvtzu(mc, rd, rn, int64=false, double=true)
         F64ToI64S => emit_fcvtzs(mc, rd, rn, int64=true, double=true)
@@ -3026,25 +3019,15 @@ fn emit_instruction(
     IntToFloat(kind) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      // NOTE: In our JIT, all floats are stored in D registers (f64 format)
-      // For f32 targets, we convert to S first then promote to D
+      // f32 results go directly to S registers
+      // f64 results go directly to D registers
       match kind {
-        I32SToF32 => {
-          emit_scvtf(mc, 16, rn, int64=false, double=false) // SCVTF S16, Wn
-          emit_fcvt_d_s(mc, rd, 16) // FCVT Dd, S16
-        }
-        I32UToF32 => {
-          emit_ucvtf(mc, 16, rn, int64=false, double=false)
-          emit_fcvt_d_s(mc, rd, 16)
-        }
-        I64SToF32 => {
-          emit_scvtf(mc, 16, rn, int64=true, double=false)
-          emit_fcvt_d_s(mc, rd, 16)
-        }
-        I64UToF32 => {
-          emit_ucvtf(mc, 16, rn, int64=true, double=false)
-          emit_fcvt_d_s(mc, rd, 16)
-        }
+        I32SToF32 =>
+          // Convert to S register directly
+          emit_scvtf(mc, rd, rn, int64=false, double=false) // SCVTF Sd, Wn
+        I32UToF32 => emit_ucvtf(mc, rd, rn, int64=false, double=false)
+        I64SToF32 => emit_scvtf(mc, rd, rn, int64=true, double=false)
+        I64UToF32 => emit_ucvtf(mc, rd, rn, int64=true, double=false)
         I32SToF64 => emit_scvtf(mc, rd, rn, int64=false, double=true)
         I32UToF64 => emit_ucvtf(mc, rd, rn, int64=false, double=true)
         I64SToF64 => emit_scvtf(mc, rd, rn, int64=true, double=true)
@@ -3222,17 +3205,35 @@ fn emit_instruction(
     }
     StackLoad(offset) => {
       // Load from [SP + spill_base_offset + offset] into the def register
-      // Uses SP (X31) as base, loads 64-bit value
+      // Uses SP (X31) as base
       // spill_base_offset accounts for saved registers area
       let rd = wreg_num(inst.defs[0])
-      emit_ldr_imm(mc, rd, 31, spill_base_offset + offset) // LDR Xd, [SP, #offset]
+      // Check if this is a float or int register
+      let def_class = match inst.defs[0].reg {
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
+      }
+      match def_class {
+        Int => emit_ldr_imm(mc, rd, 31, spill_base_offset + offset) // LDR Xd, [SP, #offset]
+        Float32 => emit_ldr_s_imm(mc, rd, 31, spill_base_offset + offset) // LDR Sd, [SP, #offset]
+        Float64 => emit_ldr_d_imm(mc, rd, 31, spill_base_offset + offset) // LDR Dd, [SP, #offset]
+      }
     }
     StackStore(offset) => {
       // Store the use register to [SP + spill_base_offset + offset]
-      // Uses SP (X31) as base, stores 64-bit value
+      // Uses SP (X31) as base
       // spill_base_offset accounts for saved registers area
       let rt = reg_num(inst.uses[0])
-      emit_str_imm(mc, rt, 31, spill_base_offset + offset) // STR Xt, [SP, #offset]
+      // Check if this is a float or int register
+      let use_class = match inst.uses[0] {
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
+      }
+      match use_class {
+        Int => emit_str_imm(mc, rt, 31, spill_base_offset + offset) // STR Xt, [SP, #offset]
+        Float32 => emit_str_s_imm(mc, rt, 31, spill_base_offset + offset) // STR St, [SP, #offset]
+        Float64 => emit_str_d_imm(mc, rt, 31, spill_base_offset + offset) // STR Dt, [SP, #offset]
+      }
     }
   }
 }
@@ -3351,7 +3352,7 @@ fn emit_terminator_with_epilogue(
       // For multi-value returns, we need to carefully place each value
       // Track how many int/float values we've placed in registers
       let mut int_reg_idx = 0 // Next X register to use (0 or 1)
-      let mut float_reg_idx = 0 // Next D register to use (0 or 1)
+      let mut float_reg_idx = 0 // Next D/S register to use (0 or 1)
       let mut extra_offset = 0 // Offset in extra results buffer (X23)
       for i, value in values {
         let src = reg_num(value)
@@ -3361,7 +3362,20 @@ fn emit_terminator_with_epilogue(
           @ir.Type::I64 // Fallback
         }
         match ty {
-          F32 | F64 =>
+          F32 =>
+            if float_reg_idx < 2 {
+              // Place in S0 or S1 (raw f32 bits)
+              if src != float_reg_idx {
+                emit_fmov_s(mc, float_reg_idx, src)
+              }
+              float_reg_idx = float_reg_idx + 1
+            } else {
+              // Spill to extra buffer: STR S(src), [X23, #extra_offset]
+              // TODO: add emit_str_s_offset
+              emit_str_d_offset(mc, src, 23, extra_offset)
+              extra_offset = extra_offset + 8
+            }
+          F64 =>
             if float_reg_idx < 2 {
               // Place in D0 or D1
               if src != float_reg_idx {

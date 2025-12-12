@@ -91,6 +91,8 @@ pub fn emit_fadd_s(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
 
+pub fn emit_fcmp_s(MachineCode, Int, Int) -> Unit
+
 pub fn emit_fcsel_d(MachineCode, Int, Int, Int, Int) -> Unit
 
 pub fn emit_fcsel_s(MachineCode, Int, Int, Int, Int) -> Unit

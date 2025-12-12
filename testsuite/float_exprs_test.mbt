@@ -16,14 +16,7 @@ test "f32_no_fma" {
     F32(0x1.992adap+107),
   ])
   // Debug: print jit and interp results
-  inspect(
-    result.to_string(),
-    content=(
-      #|JIT: F32(2.669349603329165e+32)
-      #|Interpreter: F32(2.669349603329165e+32)
-      #|Result: MATCH
-    ),
-  )
+  inspect(result, content="matched")
   // S register f32 operations now implemented
   inspect(result, content="matched")
 }

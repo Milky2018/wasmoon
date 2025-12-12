@@ -115,7 +115,9 @@ pub impl FromInt64 for Double with from_int64_bits(v) {
 
 ///|
 pub impl FromInt64 for Float with from_int64_bits(v) {
-  Float::from_double(v.reinterpret_as_double())
+  // f32 values are returned in S0 register (lower 32 bits of the 64-bit return)
+  // Extract lower 32 bits and reinterpret as f32 bit pattern
+  Float::reinterpret_from_int(v.to_int())
 }
 
 ///|
