@@ -33,6 +33,8 @@ pub fn call_clobbered_fprs() -> Array[PReg]
 
 pub fn call_clobbered_gprs() -> Array[PReg]
 
+pub fn callee_saved_fprs() -> Array[PReg]
+
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
 pub fn debug_liveness(LivenessResult) -> String
@@ -495,12 +497,13 @@ pub(all) struct LinearScanAllocator {
   int_regs : Array[PReg]
   float_regs : Array[PReg]
   callee_saved_int_regs : Array[PReg]
+  callee_saved_float_regs : Array[PReg]
   mut active : Array[LiveInterval]
   mut next_spill_slot : Int
   block_order : Map[Int, Int]
 }
 pub fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
-pub fn LinearScanAllocator::new(Array[PReg], Array[PReg], Array[PReg]) -> Self
+pub fn LinearScanAllocator::new(Array[PReg], Array[PReg], Array[PReg], callee_saved_float_regs? : Array[PReg]) -> Self
 
 pub(all) struct LiveInterval {
   vreg : VReg

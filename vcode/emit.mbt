@@ -2156,7 +2156,7 @@ pub fn CondCode::to_int(self : CondCode) -> Int {
 // ============ VCode to Machine Code ============
 
 ///|
-/// Check if a register index is a callee-saved register that we use for allocation
+/// Check if a register index is a callee-saved GPR that we use for allocation
 fn is_callee_saved_alloc(reg : Int) -> Bool {
   // X19, X23-X28 are callee-saved registers we allocate
   // X20, X21, X22 are reserved for func_table, memory_base, memory_size
@@ -2164,7 +2164,13 @@ fn is_callee_saved_alloc(reg : Int) -> Bool {
 }
 
 ///|
-/// Collect all callee-saved registers that are defined in the function
+/// Check if a FPR index is callee-saved (D8-D15 in AAPCS64)
+fn is_callee_saved_fpr(reg : Int) -> Bool {
+  reg >= 8 && reg <= 15
+}
+
+///|
+/// Collect all callee-saved GPRs that are defined in the function
 /// Also includes LR (X30) if the function makes any calls
 /// When needs_extra_results is true, X23 is excluded because it's reserved for extra_buffer
 fn collect_used_callee_saved(
@@ -2198,7 +2204,7 @@ fn collect_used_callee_saved(
       for def in inst.defs {
         match def.reg {
           Physical(preg) =>
-            if is_callee_saved_alloc(preg.index) {
+            if preg.class is Int && is_callee_saved_alloc(preg.index) {
               // X23 is reserved for extra_buffer when needs_extra_results
               if needs_extra_results && preg.index == 23 {
                 continue
@@ -2224,6 +2230,33 @@ fn collect_used_callee_saved(
 }
 
 ///|
+/// Collect all callee-saved FPRs (D8-D15) that are defined in the function
+fn collect_used_callee_saved_fprs(func : VCodeFunction) -> Array[Int] {
+  let used : @hashset.HashSet[Int] = @hashset.new()
+  for block in func.blocks {
+    for inst in block.insts {
+      for def in inst.defs {
+        match def.reg {
+          Physical(preg) =>
+            if (preg.class is Float32 || preg.class is Float64) &&
+              is_callee_saved_fpr(preg.index) {
+              used.add(preg.index)
+            }
+          Virtual(_) => ()
+        }
+      }
+    }
+  }
+  // Sort the registers for consistent ordering
+  let result : Array[Int] = []
+  for reg in used {
+    result.push(reg)
+  }
+  result.sort()
+  result
+}
+
+///|
 /// Emit prologue to save callee-saved registers and set up parameters
 /// Returns the stack frame size used
 /// JIT ABI: X0 = func_table_ptr, X1 = memory_base, X2 = memory_size
@@ -2232,6 +2265,7 @@ fn collect_used_callee_saved(
 fn emit_prologue(
   mc : MachineCode,
   clobbered : Array[Int],
+  clobbered_fprs : Array[Int],
   params : Array[VReg],
   param_pregs : Array[PReg?],
   needs_extra_results : Bool,
@@ -2255,7 +2289,11 @@ fn emit_prologue(
   // Round up to even number for STP (store pairs)
   let num_regs = all_to_save.length()
   let num_pairs = (num_regs + 1) / 2
-  let clobbered_size = num_pairs * 16 // 16 bytes per pair
+  let clobbered_gpr_size = num_pairs * 16 // 16 bytes per pair
+  // Calculate FPR save size (D8-D15, 16 bytes per pair)
+  let num_fprs = clobbered_fprs.length()
+  let num_fpr_pairs = (num_fprs + 1) / 2
+  let clobbered_fpr_size = num_fpr_pairs * 16
   // Calculate spill slots size (8 bytes each, aligned to 16)
   let spill_size = (num_spill_slots * 8 + 15) / 16 * 16
   // If we call multi-value functions, allocate 64 bytes for receiving extra results
@@ -2265,10 +2303,13 @@ fn emit_prologue(
   } else {
     0
   }
-  let frame_size = clobbered_size + spill_size + call_results_buffer_size
+  let frame_size = clobbered_gpr_size +
+    clobbered_fpr_size +
+    spill_size +
+    call_results_buffer_size
   // Allocate stack frame first using SUB
   emit_sub_imm(mc, 31, 31, frame_size)
-  // Save registers using STP with signed offset
+  // Save GPRs using STP with signed offset
   let mut i = 0
   let mut pair_idx = 0
   while i < num_regs {
@@ -2278,6 +2319,25 @@ fn emit_prologue(
     emit_stp_offset(mc, reg1, reg2, 31, offset)
     i = i + 2
     pair_idx = pair_idx + 1
+  }
+  // Save FPRs (D8-D15) after GPRs
+  // Handle pairs first, then single register if odd count
+  let mut fi = 0
+  let mut fpr_pair_idx = 0
+  while fi + 1 < num_fprs {
+    // Save pairs
+    let reg1 = clobbered_fprs[fi]
+    let reg2 = clobbered_fprs[fi + 1]
+    let offset = clobbered_gpr_size + fpr_pair_idx * 16
+    emit_stp_d_offset(mc, reg1, reg2, 31, offset)
+    fi = fi + 2
+    fpr_pair_idx = fpr_pair_idx + 1
+  }
+  // Handle last register if odd count
+  if fi < num_fprs {
+    let reg = clobbered_fprs[fi]
+    let offset = clobbered_gpr_size + fpr_pair_idx * 16
+    emit_str_d_imm(mc, reg, 31, offset)
   }
   // Now move parameters to reserved registers (after saving their original values)
   // X0 = func_table, X1 = memory_base, X2 = memory_size
@@ -2290,8 +2350,8 @@ fn emit_prologue(
     emit_mov_reg(mc, 23, 7) // MOV X23, X7 (extra_results_buffer)
   } else if calls_multi_value {
     // When we call multi-value functions, allocate local buffer on stack
-    // Buffer is at the end of the frame: SP + clobbered_size + spill_size
-    let buffer_offset = clobbered_size + spill_size
+    // Buffer is at the end of the frame: SP + GPR save + FPR save + spill_size
+    let buffer_offset = clobbered_gpr_size + clobbered_fpr_size + spill_size
     emit_add_imm(mc, 23, 31, buffer_offset) // ADD X23, SP, #buffer_offset
   }
   // Move user arguments from X registers to their allocated registers
@@ -2303,45 +2363,85 @@ fn emit_prologue(
   //     We use FMOV X->D to move bits directly
   // Regalloc assigns: Int param i → X(3+i), Float param i → D(i)
   // BUT: if param crosses a call, it may be assigned to a callee-saved register
+  //
+  // JIT ABI for parameter passing:
+  // - X0-X2: reserved (func_table, memory_base, memory_size)
+  // - Args 0-7 in X3-X10 (up to 8 register args)
+  // - Args 8+ on stack at [SP + frame_size + (i-8)*8]
   let param_base = 3 // User params start at X3
+  let max_reg_params = 8 // X3-X10 (8 registers for user params)
   for param_idx, param in params {
-    let x_src = param_base + param_idx
     // Check if this param needs to be moved to a different register
     let dest_preg = if param_idx < param_pregs.length() {
       param_pregs[param_idx]
     } else {
       None
     }
-    match param.class {
-      Float32 => {
-        // Float32 param: extract f32 from lower 32 bits
-        // FMOV S(dest), W(x_src) - bit-exact transfer, no conversion
-        let s_dest = match dest_preg {
-          Some(preg) => preg.index
-          None => param_idx
+    if param_idx < max_reg_params {
+      // Register param: in X(3+param_idx)
+      let x_src = param_base + param_idx
+      match param.class {
+        Float32 => {
+          // Float32 param: extract f32 from lower 32 bits
+          // FMOV S(dest), W(x_src) - bit-exact transfer, no conversion
+          let s_dest = match dest_preg {
+            Some(preg) => preg.index
+            None => param_idx
+          }
+          emit_fmov_w_to_s(mc, s_dest, x_src) // FMOV Sd, Wn (raw bits)
         }
-        emit_fmov_w_to_s(mc, s_dest, x_src) // FMOV Sd, Wn (raw bits)
+        Float64 => {
+          // Float64 param: move full 64 bits from X register to D register
+          // FMOV D(dest), X(x_src)
+          let d_dest = match dest_preg {
+            Some(preg) => preg.index
+            None => param_idx
+          }
+          emit_fmov_x_to_d(mc, d_dest, x_src)
+        }
+        Int =>
+          // Int param: may need to move from X(3+i) to allocated register
+          match dest_preg {
+            Some(preg) =>
+              // Param crosses a call, move to callee-saved register
+              emit_mov_reg(mc, preg.index, x_src)
+            None =>
+              // Int param: already at X(3+i) where regalloc expects it
+              // No move needed
+              ()
+          }
       }
-      Float64 => {
-        // Float64 param: move full 64 bits from X register to D register
-        // FMOV D(dest), X(x_src)
-        let d_dest = match dest_preg {
-          Some(preg) => preg.index
-          None => param_idx
+    } else {
+      // Stack param: at [SP + frame_size + (param_idx - max_reg_params) * 8]
+      // Load from caller's stack frame (above our frame)
+      let stack_offset = frame_size + (param_idx - max_reg_params) * 8
+      match param.class {
+        Float32 => {
+          let s_dest = match dest_preg {
+            Some(preg) => preg.index
+            None => param_idx
+          }
+          // Load as 32-bit integer, then move to S register
+          emit_ldr_w_imm(mc, 16, 31, stack_offset) // LDR W16, [SP, #offset]
+          emit_fmov_w_to_s(mc, s_dest, 16) // FMOV Sd, W16
         }
-        emit_fmov_x_to_d(mc, d_dest, x_src)
+        Float64 => {
+          let d_dest = match dest_preg {
+            Some(preg) => preg.index
+            None => param_idx
+          }
+          // Load as 64-bit integer, then move to D register
+          emit_ldr_imm(mc, 16, 31, stack_offset) // LDR X16, [SP, #offset]
+          emit_fmov_x_to_d(mc, d_dest, 16) // FMOV Dd, X16
+        }
+        Int => {
+          let dest = match dest_preg {
+            Some(preg) => preg.index
+            None => param_base + param_idx // X(3+param_idx) for consistency
+          }
+          emit_ldr_imm(mc, dest, 31, stack_offset) // LDR Xdest, [SP, #offset]
+        }
       }
-      Int =>
-        // Int param: may need to move from X(3+i) to allocated register
-        match dest_preg {
-          Some(preg) =>
-            // Param crosses a call, move to callee-saved register
-            emit_mov_reg(mc, preg.index, x_src)
-          None =>
-            // Int param: already at X(3+i) where regalloc expects it
-            // No move needed
-            ()
-        }
     }
   }
   frame_size
@@ -2416,10 +2516,82 @@ fn emit_ldp_offset(
 }
 
 ///|
+/// Emit STP for FPR pairs (64-bit D registers) with signed offset
+fn emit_stp_d_offset(
+  mc : MachineCode,
+  rt1 : Int,
+  rt2 : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit {
+  let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+  mc.annotate("stp d\{rt1}, d\{rt2}, [\{rn_name}, #\{offset}]")
+  // STP (FPR, signed offset) encoding for 64-bit:
+  // [31:30] = 01 (opc for 64-bit FP)
+  // [29:27] = 101
+  // [26] = 1 (V = 1 for SIMD/FP)
+  // [25:23] = 010 (signed offset)
+  // [22] = 0 (store)
+  // [21:15] = imm7
+  // [14:10] = Rt2
+  // [9:5] = Rn
+  // [4:0] = Rt1
+  let imm7 = (offset / 8) & 0x7F
+  let inst = (0b01 << 30) |
+    (0b101 << 27) |
+    (1 << 26) |
+    (0b010 << 23) |
+    (0 << 22) |
+    (imm7 << 15) |
+    ((rt2 & 31) << 10) |
+    ((rn & 31) << 5) |
+    (rt1 & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
+}
+
+///|
+/// Emit LDP for FPR pairs (64-bit D registers) with signed offset
+fn emit_ldp_d_offset(
+  mc : MachineCode,
+  rt1 : Int,
+  rt2 : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit {
+  let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+  mc.annotate("ldp d\{rt1}, d\{rt2}, [\{rn_name}, #\{offset}]")
+  // LDP (FPR, signed offset) encoding for 64-bit:
+  // Same as STP but with [22] = 1 (load)
+  let imm7 = (offset / 8) & 0x7F
+  let inst = (0b01 << 30) |
+    (0b101 << 27) |
+    (1 << 26) |
+    (0b010 << 23) |
+    (1 << 22) |
+    (imm7 << 15) |
+    ((rt2 & 31) << 10) |
+    ((rn & 31) << 5) |
+    (rt1 & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
+}
+
+///|
 /// Emit epilogue to restore callee-saved registers
 fn emit_epilogue(
   mc : MachineCode,
   clobbered : Array[Int],
+  clobbered_fprs : Array[Int],
+  clobbered_gpr_size : Int,
   frame_size : Int,
   needs_extra_results : Bool,
   calls_multi_value : Bool,
@@ -2436,7 +2608,27 @@ fn emit_epilogue(
   }
   let num_regs = all_to_restore.length()
   let num_pairs = (num_regs + 1) / 2
-  // Restore registers using LDP
+  // Restore FPRs first (before GPRs, since FPRs are saved after GPRs)
+  // Handle pairs first, then single register if odd count
+  let num_fprs = clobbered_fprs.length()
+  let mut fi = 0
+  let mut fpr_pair_idx = 0
+  while fi + 1 < num_fprs {
+    // Restore pairs
+    let reg1 = clobbered_fprs[fi]
+    let reg2 = clobbered_fprs[fi + 1]
+    let offset = clobbered_gpr_size + fpr_pair_idx * 16
+    emit_ldp_d_offset(mc, reg1, reg2, 31, offset)
+    fi = fi + 2
+    fpr_pair_idx = fpr_pair_idx + 1
+  }
+  // Handle last register if odd count
+  if fi < num_fprs {
+    let reg = clobbered_fprs[fi]
+    let offset = clobbered_gpr_size + fpr_pair_idx * 16
+    emit_ldr_d_imm(mc, reg, 31, offset)
+  }
+  // Restore GPRs using LDP
   let mut i = 0
   let mut pair_idx = 0
   while i < num_regs {
@@ -2479,17 +2671,23 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
   let calls_multi_value = func.calls_multi_value_function()
   // We need X23 if either we return multi-value OR we call multi-value functions
   let uses_x23 = needs_extra_results || calls_multi_value
-  // Collect callee-saved registers that this function clobbers
+  // Collect callee-saved GPRs that this function clobbers
   let clobbered = collect_used_callee_saved(func, uses_x23)
-  // Calculate clobbered_size for spill offset calculation
+  // Collect callee-saved FPRs (D8-D15) that this function clobbers
+  let clobbered_fprs = collect_used_callee_saved_fprs(func)
+  // Calculate clobbered_gpr_size for spill offset calculation
   let num_base_regs = if uses_x23 { 4 } else { 3 } // X20-X22 or X20-X23
   let num_regs = num_base_regs + clobbered.length()
   let num_pairs = (num_regs + 1) / 2
-  let clobbered_size = num_pairs * 16
+  let clobbered_gpr_size = num_pairs * 16
+  // Calculate FPR save size
+  let num_fpr_pairs = (clobbered_fprs.length() + 1) / 2
+  let clobbered_fpr_size = num_fpr_pairs * 16
   // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
   let frame_size = emit_prologue(
     mc,
     clobbered,
+    clobbered_fprs,
     func.params,
     func.param_pregs,
     needs_extra_results,
@@ -2497,8 +2695,8 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
     func.num_spill_slots,
   )
   // Emit function body
-  // Spill slots start after the saved registers area
-  let spill_base_offset = clobbered_size
+  // Spill slots start after the saved registers area (GPRs + FPRs)
+  let spill_base_offset = clobbered_gpr_size + clobbered_fpr_size
   for block in func.blocks {
     mc.define_label(block.id)
     for inst in block.insts {
@@ -2510,6 +2708,8 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
           mc,
           term,
           clobbered,
+          clobbered_fprs,
+          clobbered_gpr_size,
           frame_size,
           func.result_types,
           needs_extra_results,
@@ -3142,42 +3342,92 @@ fn emit_instruction(
     }
     CallIndirect(num_args, num_results) => {
       // Call through a function pointer in a register
-      // Our JIT ABI: X0 = func_table_ptr, X1 = memory_base, X2 = memory_size, args in X3-X7
+      // Our JIT ABI: X0 = func_table_ptr, X1 = memory_base, X2 = memory_size
+      // - Args 0-7 go in X3-X10 (up to 8 register args)
+      // - Args 8+ go on the stack
       // Return values: X0, X1 for first two int results, extra results via buffer pointed by X7/X23
       // Uses: [func_ptr, arg0, arg1, ...]
       let func_ptr = reg_num(inst.uses[0])
-      // First, save function pointer to a safe temp register (X9)
-      // This is necessary because the arg moving below may overwrite the func_ptr register
-      emit_mov_reg(mc, 9, func_ptr) // MOV X9, func_ptr
-      // Move arguments to ABI registers (starting at X3, since X0/X1/X2 are reserved)
-      // All arguments are passed in integer registers X3-X7, even float arguments.
-      // Float arguments need to be moved from S/D to X registers first.
+      // Save function pointer to X18 (platform register, safe for JIT temp use)
+      emit_mov_reg(mc, 18, func_ptr) // MOV X18, func_ptr
+      // Calculate how many args go on stack (args beyond the first 8)
+      let max_reg_args = 8 // X3-X10
+      let stack_args = if num_args > max_reg_args {
+        num_args - max_reg_args
+      } else {
+        0
+      }
+      // Allocate stack space for overflow args (16-byte aligned)
+      let stack_space = (stack_args * 8 + 15) / 16 * 16
+      if stack_space > 0 {
+        emit_sub_imm(mc, 31, 31, stack_space) // SUB SP, SP, #stack_space
+      }
+      // Move arguments: use two-phase for register args to avoid clobbering
+      // All arguments are passed as Int64 (floats converted via FMOV)
       if num_args > 0 {
-        // Step 1: Copy all args to temp registers X10, X11, ...
-        // For float args, we need to use FMOV to move from D/S to X
-        for i in 0..<num_args {
+        let reg_args_count = @cmp.minimum(num_args, max_reg_args)
+        // Phase 1: Copy args 5-7 directly to X8-X10 (if present)
+        // These are safe to copy first since X8-X10 are not used as temps
+        for i in 5..<reg_args_count {
           let src = reg_num(inst.uses[i + 1])
-          let temp = 10 + i // X10, X11, X12, ...
-          // Determine the register class of the argument
+          let dst = i + 3 // X8, X9, X10 for args 5, 6, 7
           let arg_class = match inst.uses[i + 1] {
             Physical(preg) => preg.class
             Virtual(vreg) => vreg.class
           }
           match arg_class {
-            Int => emit_mov_reg(mc, temp, src) // MOV Xtemp, Xsrc
-            Float32 => emit_fmov_s_to_w(mc, temp, src) // FMOV Wtemp, Ssrc
-            Float64 => emit_fmov_d_to_x(mc, temp, src) // FMOV Xtemp, Dsrc
+            Int => emit_mov_reg(mc, dst, src)
+            Float32 => emit_fmov_s_to_w(mc, dst, src)
+            Float64 => emit_fmov_d_to_x(mc, dst, src)
           }
         }
-        // Step 2: Copy from temp registers to final ABI registers X3, X4, ...
-        for i in 0..<num_args {
-          let temp = 10 + i
-          let dst = i + 3 // X3, X4, X5, ... (shifted by 1 for memory_size)
+        // Phase 2: Copy args 0-4 to temp registers X11-X15
+        let first_reg_args = @cmp.minimum(reg_args_count, 5)
+        for i in 0..<first_reg_args {
+          let src = reg_num(inst.uses[i + 1])
+          let temp = 11 + i // X11, X12, X13, X14, X15
+          let arg_class = match inst.uses[i + 1] {
+            Physical(preg) => preg.class
+            Virtual(vreg) => vreg.class
+          }
+          match arg_class {
+            Int => emit_mov_reg(mc, temp, src)
+            Float32 => emit_fmov_s_to_w(mc, temp, src)
+            Float64 => emit_fmov_d_to_x(mc, temp, src)
+          }
+        }
+        // Phase 3: Copy from temps X11-X15 to final destinations X3-X7
+        for i in 0..<first_reg_args {
+          let temp = 11 + i
+          let dst = i + 3 // X3, X4, X5, X6, X7
           emit_mov_reg(mc, dst, temp)
+        }
+        // Store stack args (args 8+) directly to stack
+        for i in max_reg_args..<num_args {
+          let src = reg_num(inst.uses[i + 1])
+          let stack_offset = (i - max_reg_args) * 8
+          let arg_class = match inst.uses[i + 1] {
+            Physical(preg) => preg.class
+            Virtual(vreg) => vreg.class
+          }
+          match arg_class {
+            Int => emit_str_imm(mc, src, 31, stack_offset) // STR Xsrc, [SP, #offset]
+            Float32 => {
+              // Move f32 to X16, then store
+              emit_fmov_s_to_w(mc, 16, src)
+              emit_str_imm(mc, 16, 31, stack_offset)
+            }
+            Float64 => {
+              // Move f64 to X16, then store
+              emit_fmov_d_to_x(mc, 16, src)
+              emit_str_imm(mc, 16, 31, stack_offset)
+            }
+          }
         }
       }
       // If callee returns more than 2 values, it needs a buffer pointer in X7
-      // We pass our X23 (extra_results_buffer pointer) as X7
+      // Note: This overwrites arg4 if it was set, so multi-return functions
+      // can only have up to 4 user args when using the buffer
       if num_results > 2 {
         emit_mov_reg(mc, 7, 23) // MOV X7, X23
       }
@@ -3185,8 +3435,8 @@ fn emit_instruction(
       emit_mov_reg(mc, 0, 20) // MOV X0, X20
       emit_mov_reg(mc, 1, 21) // MOV X1, X21
       emit_mov_reg(mc, 2, 22) // MOV X2, X22
-      // Call the function (from saved X9)
-      emit_blr(mc, 9)
+      // Call the function (from saved X18)
+      emit_blr(mc, 18)
       // Move results to destination registers
       // JIT ABI: integer returns in X0, X1; float returns in D0/S0, D1/S1
       // Two-phase is only needed when there's potential conflict:
@@ -3330,6 +3580,10 @@ fn emit_instruction(
           }
         }
       }
+      // Restore stack pointer if we allocated space for stack args
+      if stack_space > 0 {
+        emit_add_imm(mc, 31, 31, stack_space) // ADD SP, SP, #stack_space
+      }
     }
     StackLoad(offset) => {
       // Load from [SP + spill_base_offset + offset] into the def register
@@ -3466,6 +3720,8 @@ fn emit_terminator_with_epilogue(
   mc : MachineCode,
   term : VCodeTerminator,
   clobbered : Array[Int],
+  clobbered_fprs : Array[Int],
+  clobbered_gpr_size : Int,
   frame_size : Int,
   result_types : Array[@ir.Type],
   needs_extra_results : Bool,
@@ -3572,7 +3828,8 @@ fn emit_terminator_with_epilogue(
       }
       // Emit epilogue to restore callee-saved registers before return
       emit_epilogue(
-        mc, clobbered, frame_size, needs_extra_results, calls_multi_value,
+        mc, clobbered, clobbered_fprs, clobbered_gpr_size, frame_size, needs_extra_results,
+        calls_multi_value,
       )
       emit_ret(mc, 30)
     }

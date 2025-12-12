@@ -681,6 +681,8 @@ pub(all) struct LinearScanAllocator {
   float_regs : Array[PReg]
   // Callee-saved registers for cross-call allocation (may exclude X23)
   callee_saved_int_regs : Array[PReg]
+  // Callee-saved float registers for cross-call allocation (D8-D15)
+  callee_saved_float_regs : Array[PReg]
   // Current state
   mut active : Array[LiveInterval] // Intervals currently occupying registers
   mut next_spill_slot : Int
@@ -693,11 +695,13 @@ pub fn LinearScanAllocator::new(
   int_regs : Array[PReg],
   float_regs : Array[PReg],
   callee_saved_int_regs : Array[PReg],
+  callee_saved_float_regs? : Array[PReg] = [],
 ) -> LinearScanAllocator {
   {
     int_regs,
     float_regs,
     callee_saved_int_regs,
+    callee_saved_float_regs,
     active: [],
     next_spill_slot: 0,
     block_order: {},
@@ -776,9 +780,8 @@ pub fn LinearScanAllocator::allocate(
       match interval.vreg.class {
         Int => self.callee_saved_int_regs
         Float32 | Float64 =>
-          // For floats, we don't have callee-saved FPRs in AAPCS64
-          // This will likely spill, but that's correct behavior
-          []
+          // Use callee-saved FPRs (D8-D15) for floats that must survive across calls
+          self.callee_saved_float_regs
       }
     } else {
       match interval.vreg.class {
@@ -1368,13 +1371,17 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
     callee_saved_int_regs.push(r)
   }
   let float_regs = aapcs64_arg_fprs()
+  let callee_saved_float_regs = callee_saved_fprs()
 
   // Compute liveness
   let liveness = compute_liveness(func)
 
   // Allocate
   let allocator = LinearScanAllocator::new(
-    int_regs, float_regs, callee_saved_int_regs,
+    int_regs,
+    float_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs~,
   )
   let alloc_result = allocator.allocate(func, liveness)
 
