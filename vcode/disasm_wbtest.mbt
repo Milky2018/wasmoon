@@ -361,23 +361,23 @@ test "all emit functions disasm" {
       #|  0008: c50007cb  sub x5, x6, x7
       #|  000c: 282103d1  sub x8, x9, #200
       #|  0010: 6a7d0c9b  mul x10, x11, x12
-      #|  0014: 4d1bcf9a  sdiv x13, x14, x15
-      #|  0018: 3014c29b  udiv x16, x17, x18
+      #|  0014: cd0dcf9a  sdiv x13, x14, x15
+      #|  0018: 300ad29a  udiv x16, x17, x18
       #|  001c: 9302158a  and x19, x20, x21
       #|  0020: f60218aa  orr x22, x23, x24
       #|  0024: 59031bca  eor x25, x26, x27
-      #|  0028: 2040c29a  lsl x0, x1, x2
-      #|  002c: 0349c59a  lsr x3, x4, x5
-      #|  0030: 6651c89a  asr x6, x7, x8
-      #|  0034: 2018018b  add x0, x1, x2, lsl #3
-      #|  0038: 036142cb  sub x3, x4, x5, lsr #4
-      #|  003c: 6629848a  and x6, x7, x8, asr #5
-      #|  0040: 497205aa  orr x9, x10, x11, lsl #6
-      #|  0044: 2c3b47ca  eor x12, x13, x14, lsr #7
-      #|  0048: 2018029b  madd x0, x1, x2, x3
-      #|  004c: 24b9069b  msub x4, x5, x6, x7
-      #|  0050: 28fa0a9b  mneg x8, x9, x10
-      #|  0050: 28fa0a9b  msub x8, x9, x10, x31
+      #|  0028: 2020c29a  lsl x0, x1, x2
+      #|  002c: 8324c59a  lsr x3, x4, x5
+      #|  0030: e628c89a  asr x6, x7, x8
+      #|  0034: 200c028b  add x0, x1, x2, lsl #3
+      #|  0038: 831045cb  sub x3, x4, x5, lsr #4
+      #|  003c: e614888a  and x6, x7, x8, asr #5
+      #|  0040: 49190baa  orr x9, x10, x11, lsl #6
+      #|  0044: ac1d4eca  eor x12, x13, x14, lsr #7
+      #|  0048: 200c029b  madd x0, x1, x2, x3
+      #|  004c: a49c069b  msub x4, x5, x6, x7
+      #|  0050: 28fd0a9b  mneg x8, x9, x10
+      #|  0050: 28fd0a9b  msub x8, x9, x10, x31
       #|  0054: e00301aa  mov x0, x1
       #|  0058: e203032a  mov w2, w3
       #|  005c: 844682d2  movz x4, #4660, lsl #0

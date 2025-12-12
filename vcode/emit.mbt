@@ -321,9 +321,13 @@ pub fn emit_add_shifted(
   mc.annotate("add x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
   // Encoding: sf=1 | op=0 | S=0 | 01011 | shift[1:0] | 0 | Rm | imm6 | Rn | Rd
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
-  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  // byte 0: Rd[4:0] | Rn[2:0] << 5
+  // byte 1: Rn[4:3] | imm6[5:0] << 2
+  // byte 2: Rm[4:0] | shift[1:0] << 6
+  // byte 3: 0x8B
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+  let b2 = (rm & 31) | ((shift_bits & 3) << 6)
   let b3 = 139 // 0x8B
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -350,9 +354,9 @@ pub fn emit_sub_shifted(
   }
   mc.annotate("sub x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
-  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+  let b2 = (rm & 31) | ((shift_bits & 3) << 6)
   let b3 = 203 // 0xCB
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -379,9 +383,9 @@ pub fn emit_and_shifted(
   }
   mc.annotate("and x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
-  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+  let b2 = (rm & 31) | ((shift_bits & 3) << 6)
   let b3 = 138 // 0x8A
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -408,9 +412,9 @@ pub fn emit_orr_shifted(
   }
   mc.annotate("orr x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
-  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+  let b2 = (rm & 31) | ((shift_bits & 3) << 6)
   let b3 = 170 // 0xAA
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -437,9 +441,9 @@ pub fn emit_eor_shifted(
   }
   mc.annotate("eor x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}")
   let imm6 = amount & 63
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm6 & 7) << 3) | ((rm & 1) << 6)
-  let b2 = ((rm >> 1) & 15) | ((shift_bits & 3) << 6)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+  let b2 = (rm & 31) | ((shift_bits & 3) << 6)
   let b3 = 202 // 0xCA
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -456,8 +460,12 @@ pub fn emit_madd(
 ) -> Unit {
   mc.annotate("madd x\{rd}, x\{rn}, x\{rm}, x\{ra}")
   // Encoding: sf=1 | 00 | 11011 | 000 | Rm | o0=0 | Ra | Rn | Rd
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((ra & 31) << 3)
+  // byte 0: Rd[4:0] | Rn[2:0] << 5
+  // byte 1: Rn[4:3] | Ra[4:0] << 2 | o0 << 7
+  // byte 2: Rm[4:0]
+  // byte 3: 0x9B
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((ra & 31) << 2)
   let b2 = rm & 31
   let b3 = 155 // 0x9B
   mc.emit_inst(b0, b1, b2, b3)
@@ -475,8 +483,12 @@ pub fn emit_msub(
 ) -> Unit {
   mc.annotate("msub x\{rd}, x\{rn}, x\{rm}, x\{ra}")
   // Encoding: sf=1 | 00 | 11011 | 000 | Rm | o0=1 | Ra | Rn | Rd
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((ra & 31) << 3) | 128 // o0=1 (bit 7)
+  // byte 0: Rd[4:0] | Rn[2:0] << 5
+  // byte 1: Rn[4:3] | Ra[4:0] << 2 | o0 << 7
+  // byte 2: Rm[4:0]
+  // byte 3: 0x9B
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((ra & 31) << 2) | 128 // o0=1 (bit 7)
   let b2 = rm & 31
   let b3 = 155 // 0x9B
   mc.emit_inst(b0, b1, b2, b3)
@@ -577,13 +589,15 @@ pub fn emit_mul(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Opcode: 0x9AC00C00
 pub fn emit_sdiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("sdiv x\{rd}, x\{rn}, x\{rm}")
-  // Encoding: sf=1 | 0 | 0 | 11010110 | Rm | 00001 | 1 | Rn | Rd
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 24 // 00001 | 1 pattern = 0x18
-  let c0 = 192 // 0xC0
-  let b2 = (c0 | (rm & 15)) & 255
-  let x9a = 154 // 0x9A
-  let b3 = x9a | ((rm >> 4) & 1)
+  // Encoding: sf=1 | 0 | 0 | 11010110 | Rm | 000011 | Rn | Rd
+  // byte 0: Rd[4:0] | Rn[2:0] << 5
+  // byte 1: Rn[4:3] | opcode[5:0] << 2 (opcode=000011 for SDIV)
+  // byte 2: 0xC0 | Rm[4:0]
+  // byte 3: 0x9A
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (3 << 2) // opcode 000011 = 3
+  let b2 = 0xC0 | (rm & 31)
+  let b3 = 0x9A
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -592,12 +606,15 @@ pub fn emit_sdiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Opcode: 0x9AC00800
 pub fn emit_udiv(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("udiv x\{rd}, x\{rn}, x\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 16 // 00001 | 0 pattern = 0x10
-  let c0 = 192 // 0xC0
-  let b2 = (c0 | (rm & 15)) & 255
-  let x9a = 154 // 0x9A
-  let b3 = x9a | ((rm >> 4) & 1)
+  // Encoding: sf=1 | 0 | 0 | 11010110 | Rm | 000010 | Rn | Rd
+  // byte 0: Rd[4:0] | Rn[2:0] << 5
+  // byte 1: Rn[4:3] | opcode[5:0] << 2 (opcode=000010 for UDIV)
+  // byte 2: 0xC0 | Rm[4:0]
+  // byte 3: 0x9A
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (2 << 2) // opcode 000010 = 2
+  let b2 = 0xC0 | (rm & 31)
+  let b3 = 0x9A
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -645,12 +662,11 @@ pub fn emit_eor_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Opcode: 0x9AC02000
 pub fn emit_lsl_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("lsl x\{rd}, x\{rn}, x\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 64 // 0010 | 00 = 0x40
-  let c0 = 192 // 0xC0
-  let b2 = (c0 | (rm & 15)) & 255
-  let x9a = 154 // 0x9A
-  let b3 = x9a | ((rm >> 4) & 1)
+  // Encoding: sf=1 | 0 | 0 | 11010110 | Rm | 001000 | Rn | Rd
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (8 << 2) // opcode 001000 = 8
+  let b2 = 0xC0 | (rm & 31)
+  let b3 = 0x9A
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -659,12 +675,11 @@ pub fn emit_lsl_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Opcode: 0x9AC02800
 pub fn emit_asr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("asr x\{rd}, x\{rn}, x\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 80 // 0010 | 10 = 0x50
-  let c0 = 192 // 0xC0
-  let b2 = (c0 | (rm & 15)) & 255
-  let x9a = 154 // 0x9A
-  let b3 = x9a | ((rm >> 4) & 1)
+  // Encoding: sf=1 | 0 | 0 | 11010110 | Rm | 001010 | Rn | Rd
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (10 << 2) // opcode 001010 = 10
+  let b2 = 0xC0 | (rm & 31)
+  let b3 = 0x9A
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -673,12 +688,11 @@ pub fn emit_asr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Opcode: 0x9AC02400
 pub fn emit_lsr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("lsr x\{rd}, x\{rn}, x\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 72 // 0010 | 01 = 0x48
-  let c0 = 192 // 0xC0
-  let b2 = (c0 | (rm & 15)) & 255
-  let x9a = 154 // 0x9A
-  let b3 = x9a | ((rm >> 4) & 1)
+  // Encoding: sf=1 | 0 | 0 | 11010110 | Rm | 001001 | Rn | Rd
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (9 << 2) // opcode 001001 = 9
+  let b2 = 0xC0 | (rm & 31)
+  let b3 = 0x9A
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -688,12 +702,11 @@ pub fn emit_lsr_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
 /// Opcode: 0x9AC02C00
 pub fn emit_ror_reg(mc : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
   mc.annotate("ror x\{rd}, x\{rn}, x\{rm}")
-  let b0 = (rd & 31) | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | 44 // 0x2C
-  let c0 = 192 // 0xC0
-  let b2 = (c0 | (rm & 15)) & 255
-  let x9a = 154 // 0x9A
-  let b3 = x9a | ((rm >> 4) & 1)
+  // Encoding: sf=1 | 0 | 0 | 11010110 | Rm | 001011 | Rn | Rd
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (11 << 2) // opcode 001011 = 11
+  let b2 = 0xC0 | (rm & 31)
+  let b3 = 0x9A
   mc.emit_inst(b0, b1, b2, b3)
 }
 
