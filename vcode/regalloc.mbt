@@ -729,7 +729,7 @@ pub fn LinearScanAllocator::allocate(
   }
 
   // Pre-assign function parameters to ABI registers
-  // JIT ABI: X0 = func_table, X1 = memory_base, X2 = memory_size, args in X3-X7
+  // JIT ABI: X0 = func_table, X1 = memory_base, X2 = memory_size, args in X3-X10
   // So WASM parameters start at X3
   // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
   // it will be handled by the normal allocation process (which will use callee-saved)

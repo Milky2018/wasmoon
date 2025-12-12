@@ -988,6 +988,47 @@ pub fn emit_ldr_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
 }
 
 ///|
+/// Encode LDUR (64-bit, unscaled signed offset): LDUR Xt, [Xn, #simm9]
+/// Used for negative offsets (-256 to 255)
+/// Opcode base: 0xF8400000
+pub fn emit_ldr_imm_signed(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  simm9 : Int,
+) -> Unit {
+  mc.annotate("ldur x\{rt}, [x\{rn}, #\{simm9}]")
+  // AArch64 LDUR (unscaled offset) encoding:
+  // [31:30] = size = 11 (64-bit)
+  // [29:27] = 111 (fixed)
+  // [26] = V = 0 (general purpose register)
+  // [25:24] = 00 (unscaled)
+  // [23:22] = opc = 01 (LDUR)
+  // [21] = 0
+  // [20:12] = imm9 (signed 9-bit, -256 to 255)
+  // [11:10] = 00
+  // [9:5] = Rn (base register)
+  // [4:0] = Rt (destination register)
+  let imm9 = simm9 & 0x1FF // 9-bit mask, preserves sign bits
+  let inst = (0b11 << 30) |
+    (0b111 << 27) |
+    (0 << 26) |
+    (0b00 << 24) |
+    (0b01 << 22) |
+    (0 << 21) |
+    (imm9 << 12) |
+    (0b00 << 10) |
+    ((rn & 31) << 5) |
+    (rt & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
+}
+
+///|
 /// Encode STR (64-bit, unsigned offset): STR Xt, [Xn, #imm]
 /// Opcode: 0xF9000000
 pub fn emit_str_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
@@ -2272,16 +2313,16 @@ fn emit_prologue(
   calls_multi_value : Bool,
   num_spill_slots : Int,
 ) -> Int {
-  // We always clobber X20, X21, X22 for func_table, memory_base, memory_size
+  // We always clobber X20, X21, X22, X24 for func_table, memory_base, memory_size, indirect_table
   // When needs_extra_results OR calls_multi_value, we also clobber X23
   // - needs_extra_results: X23 stores the incoming buffer pointer from X7
   // - calls_multi_value: X23 points to a local buffer on the stack
   // These are callee-saved registers, so we must save them first!
   let uses_x23 = needs_extra_results || calls_multi_value
   let all_to_save : Array[Int] = if uses_x23 {
-    [20, 21, 22, 23]
+    [20, 21, 22, 23, 24]
   } else {
-    [20, 21, 22]
+    [20, 21, 22, 24]
   }
   for reg in clobbered {
     all_to_save.push(reg)
@@ -2344,6 +2385,11 @@ fn emit_prologue(
   emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
   emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
   emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
+  // Load indirect_table_ptr from func_table[-1] into X24
+  // Memory layout: [indirect_table_ptr | func_ptr_0 | func_ptr_1 | ...]
+  //                ^                    ^
+  //                X20 - 8              X20
+  emit_ldr_imm_signed(mc, 24, 20, -8) // LDR X24, [X20, #-8]
   // Set up X23 for extra results buffer
   if needs_extra_results {
     // When we return multi-value, X7 contains the caller-provided buffer pointer
@@ -2596,12 +2642,12 @@ fn emit_epilogue(
   needs_extra_results : Bool,
   calls_multi_value : Bool,
 ) -> Unit {
-  // Build the same list as prologue: X20, X21, X22, (X23 if uses_x23) + clobbered
+  // Build the same list as prologue: X20, X21, X22, X24, (X23 if uses_x23) + clobbered
   let uses_x23 = needs_extra_results || calls_multi_value
   let all_to_restore : Array[Int] = if uses_x23 {
-    [20, 21, 22, 23]
+    [20, 21, 22, 23, 24]
   } else {
-    [20, 21, 22]
+    [20, 21, 22, 24]
   }
   for reg in clobbered {
     all_to_restore.push(reg)
@@ -2676,7 +2722,8 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
   let clobbered_fprs = collect_used_callee_saved_fprs(func)
   // Calculate clobbered_gpr_size for spill offset calculation
-  let num_base_regs = if uses_x23 { 4 } else { 3 } // X20-X22 or X20-X23
+  // Always save X20-X22, X24; optionally X23
+  let num_base_regs = if uses_x23 { 5 } else { 4 } // X20-X22,X24 or X20-X23,X24
   let num_regs = num_base_regs + clobbered.length()
   let num_pairs = (num_regs + 1) / 2
   let clobbered_gpr_size = num_pairs * 16

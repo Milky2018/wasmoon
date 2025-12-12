@@ -458,3 +458,10 @@ let c = s.get_char(i)  // 返回 Char?
   # 崩溃后查看堆栈
   (lldb) bt
   ```
+
+### 测试
+- `moon test -p <package> -f <file> -i <idx>` 可以测试某个包的某个文件的某一个测试，例如 `moon test -p testsuite -f f32_test.mbt` 可以测试 `testsuite/f32_test.mbt` 文件中的所有测试
+
+### `./wasmoon` 命令运行指南
+- `./wasmoon explore <wat_file> --stage vcode mc` 可以查看编译产物，可以选择多个 stage，详情可参考 `./wasmoon explore --help`
+- `./wasmoon test <wast_file>`

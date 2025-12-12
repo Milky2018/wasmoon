@@ -73,20 +73,23 @@ test "i32 mul" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ff8300d1  sub sp, sp, #32
+      #|  0000: ffc300d1  sub sp, sp, #48
       #|  0004: f45700a9  stp x20, x21, [sp, #0]
-      #|  0008: f64f01a9  stp x22, x19, [sp, #16]
-      #|  000c: f40300aa  mov x20, x0
-      #|  0010: f50301aa  mov x21, x1
-      #|  0014: f60302aa  mov x22, x2
+      #|  0008: f66301a9  stp x22, x24, [sp, #16]
+      #|  000c: f37f02a9  stp x19, x31, [sp, #32]
+      #|  0010: f40300aa  mov x20, x0
+      #|  0014: f50301aa  mov x21, x1
+      #|  0018: f60302aa  mov x22, x2
+      #|  001c: 98825ff8  ldur x24, [x20, #-8]
       #|block0:
-      #|  0018: 680080d2  movz x8, #3, lsl #0
-      #|  001c: 737c089b  mul x19, x3, x8
-      #|  0020: e00313aa  mov x0, x19
-      #|  0024: f45740a9  ldp x20, x21, [sp, #0]
-      #|  0028: f64f41a9  ldp x22, x19, [sp, #16]
-      #|  002c: ff830091  add sp, sp, #32
-      #|  0030: c0035fd6  ret
+      #|  0020: 680080d2  movz x8, #3, lsl #0
+      #|  0024: 737c089b  mul x19, x3, x8
+      #|  0028: e00313aa  mov x0, x19
+      #|  002c: f45740a9  ldp x20, x21, [sp, #0]
+      #|  0030: f66341a9  ldp x22, x24, [sp, #16]
+      #|  0034: f31340f9  ldr x19, [x31, #32]
+      #|  0038: ffc30091  add sp, sp, #48
+      #|  003c: c0035fd6  ret
       #|
     ),
   )
