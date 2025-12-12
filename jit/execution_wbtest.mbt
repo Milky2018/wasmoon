@@ -402,12 +402,12 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block2(v4:int, f5:float, f6:float):
       #|    x23 = ldi 0
       #|    bounds_check +0, 4 x23
-      #|    x24 = add x21, x23
-      #|    store.f32 +0 x24, d4
+      #|    x25 = add x21, x23
+      #|    store.f32 +0 x25, d4
       #|    x23 = ldi 0
       #|    bounds_check +0, 4 x23
-      #|    x24 = add x21, x23
-      #|    d5 = load.f32 +0 x24
+      #|    x25 = add x21, x23
+      #|    d5 = load.f32 +0 x25
       #|    x8 = mov x19
       #|    d2 = mov d4
       #|    d3 = mov d5
@@ -415,12 +415,12 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block3(v7:int, f8:float, f9:float):
       #|    x23 = ldi 0
       #|    bounds_check +0, 4 x23
-      #|    x24 = add x21, x23
-      #|    store.f32 +0 x24, d4
+      #|    x25 = add x21, x23
+      #|    store.f32 +0 x25, d4
       #|    x23 = ldi 0
       #|    bounds_check +0, 4 x23
-      #|    x24 = add x21, x23
-      #|    d5 = load.f32 +0 x24
+      #|    x25 = add x21, x23
+      #|    d5 = load.f32 +0 x25
       #|    x8 = mov x19
       #|    d2 = mov d4
       #|    d3 = mov d5
@@ -428,12 +428,12 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block4(v10:int, f11:float, f12:float):
       #|    x23 = ldi 0
       #|    bounds_check +0, 4 x23
-      #|    x24 = add x21, x23
-      #|    store.f32 +0 x24, d4
+      #|    x25 = add x21, x23
+      #|    store.f32 +0 x25, d4
       #|    x23 = ldi 0
       #|    bounds_check +0, 4 x23
-      #|    x24 = add x21, x23
-      #|    d0 = load.f32 +0 x24
+      #|    x25 = add x21, x23
+      #|    d0 = load.f32 +0 x25
       #|    x8 = mov x19
       #|    d2 = mov d4
       #|    d3 = mov d0
@@ -474,114 +474,117 @@ test "end-to-end: f32_br_2locals.wast from source" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ffc300d1  sub sp, sp, #48
+      #|  0000: ff0301d1  sub sp, sp, #64
       #|  0004: f45700a9  stp x20, x21, [sp, #0]
-      #|  0008: f64f01a9  stp x22, x19, [sp, #16]
-      #|  000c: f76302a9  stp x23, x24, [sp, #32]
-      #|  0010: f40300aa  mov x20, x0
-      #|  0014: f50301aa  mov x21, x1
-      #|  0018: f60302aa  mov x22, x2
+      #|  0008: f66301a9  stp x22, x24, [sp, #16]
+      #|  000c: f35f02a9  stp x19, x23, [sp, #32]
+      #|  0010: f97f03a9  stp x25, x31, [sp, #48]
+      #|  0014: f40300aa  mov x20, x0
+      #|  0018: f50301aa  mov x21, x1
+      #|  001c: f60302aa  mov x22, x2
+      #|  0020: 98825ff8  ldur x24, [x20, #-8]
       #|block0:
-      #|  001c: 100080d2  movz x16, #0, lsl #0
-      #|  0020: 0002271e  fmov s0, w16
       #|  0024: 100080d2  movz x16, #0, lsl #0
-      #|  0028: 1024a8f2  movk x16, #16672, lsl #16
-      #|  002c: 0102271e  fmov s1, w16
-      #|  0030: 080080d2  movz x8, #0, lsl #0
-      #|  0034: 7f0008eb  cmp x3, x8
-      #|  0038: f3179f9a  cset x19, eq
-      #|  003c: 930800b5  cbnz x19, block5
-      #|  0040: 53000014  b block9
+      #|  0028: 0002271e  fmov s0, w16
+      #|  002c: 100080d2  movz x16, #0, lsl #0
+      #|  0030: 1024a8f2  movk x16, #16672, lsl #16
+      #|  0034: 0102271e  fmov s1, w16
+      #|  0038: 080080d2  movz x8, #0, lsl #0
+      #|  003c: 7f0008eb  cmp x3, x8
+      #|  0040: f3179f9a  cset x19, eq
+      #|  0044: b30800b5  cbnz x19, block5
+      #|  0048: 54000014  b block9
       #|block1:
-      #|  0044: 6040201e  fmov s0, s3
-      #|  0048: f45740a9  ldp x20, x21, [sp, #0]
-      #|  004c: f64f41a9  ldp x22, x19, [sp, #16]
-      #|  0050: f76342a9  ldp x23, x24, [sp, #32]
-      #|  0054: ffc30091  add sp, sp, #48
-      #|  0058: c0035fd6  ret
+      #|  004c: 6040201e  fmov s0, s3
+      #|  0050: f45740a9  ldp x20, x21, [sp, #0]
+      #|  0054: f66341a9  ldp x22, x24, [sp, #16]
+      #|  0058: f35f42a9  ldp x19, x23, [sp, #32]
+      #|  005c: f91b40f9  ldr x25, [x31, #48]
+      #|  0060: ff030191  add sp, sp, #64
+      #|  0064: c0035fd6  ret
       #|block2:
-      #|  005c: 170080d2  movz x23, #0, lsl #0
-      #|  0060: f003172a  mov w16, w23
-      #|  0064: 10120091  add x16, x16, #4
-      #|  0068: 1f0216eb  cmp x16, x22
-      #|  0074: b802178b  add x24, x21, x23
-      #|  0078: 040300bd  str s4, [x24, #0]
-      #|  007c: 170080d2  movz x23, #0, lsl #0
-      #|  0080: f003172a  mov w16, w23
-      #|  0084: 10120091  add x16, x16, #4
-      #|  0088: 1f0216eb  cmp x16, x22
-      #|  0094: b802178b  add x24, x21, x23
-      #|  0098: 050340bd  ldr s5, [x24, #0]
-      #|  009c: e80313aa  mov x8, x19
-      #|  00a0: 8240201e  fmov s2, s4
-      #|  00a4: a340201e  fmov s3, s5
-      #|  00a8: e7ffff17  b block1
+      #|  0068: 170080d2  movz x23, #0, lsl #0
+      #|  006c: f003172a  mov w16, w23
+      #|  0070: 10120091  add x16, x16, #4
+      #|  0074: 1f0216eb  cmp x16, x22
+      #|  0080: b902178b  add x25, x21, x23
+      #|  0084: 240300bd  str s4, [x25, #0]
+      #|  0088: 170080d2  movz x23, #0, lsl #0
+      #|  008c: f003172a  mov w16, w23
+      #|  0090: 10120091  add x16, x16, #4
+      #|  0094: 1f0216eb  cmp x16, x22
+      #|  00a0: b902178b  add x25, x21, x23
+      #|  00a4: 250340bd  ldr s5, [x25, #0]
+      #|  00a8: e80313aa  mov x8, x19
+      #|  00ac: 8240201e  fmov s2, s4
+      #|  00b0: a340201e  fmov s3, s5
+      #|  00b4: e6ffff17  b block1
       #|block3:
-      #|  00ac: 170080d2  movz x23, #0, lsl #0
-      #|  00b0: f003172a  mov w16, w23
-      #|  00b4: 10120091  add x16, x16, #4
-      #|  00b8: 1f0216eb  cmp x16, x22
-      #|  00c4: b802178b  add x24, x21, x23
-      #|  00c8: 040300bd  str s4, [x24, #0]
-      #|  00cc: 170080d2  movz x23, #0, lsl #0
-      #|  00d0: f003172a  mov w16, w23
-      #|  00d4: 10120091  add x16, x16, #4
-      #|  00d8: 1f0216eb  cmp x16, x22
-      #|  00e4: b802178b  add x24, x21, x23
-      #|  00e8: 050340bd  ldr s5, [x24, #0]
-      #|  00ec: e80313aa  mov x8, x19
-      #|  00f0: 8240201e  fmov s2, s4
-      #|  00f4: a340201e  fmov s3, s5
-      #|  00f8: d3ffff17  b block1
+      #|  00b8: 170080d2  movz x23, #0, lsl #0
+      #|  00bc: f003172a  mov w16, w23
+      #|  00c0: 10120091  add x16, x16, #4
+      #|  00c4: 1f0216eb  cmp x16, x22
+      #|  00d0: b902178b  add x25, x21, x23
+      #|  00d4: 240300bd  str s4, [x25, #0]
+      #|  00d8: 170080d2  movz x23, #0, lsl #0
+      #|  00dc: f003172a  mov w16, w23
+      #|  00e0: 10120091  add x16, x16, #4
+      #|  00e4: 1f0216eb  cmp x16, x22
+      #|  00f0: b902178b  add x25, x21, x23
+      #|  00f4: 250340bd  ldr s5, [x25, #0]
+      #|  00f8: e80313aa  mov x8, x19
+      #|  00fc: 8240201e  fmov s2, s4
+      #|  0100: a340201e  fmov s3, s5
+      #|  0104: d2ffff17  b block1
       #|block4:
-      #|  00fc: 170080d2  movz x23, #0, lsl #0
-      #|  0100: f003172a  mov w16, w23
-      #|  0104: 10120091  add x16, x16, #4
-      #|  0108: 1f0216eb  cmp x16, x22
-      #|  0114: b802178b  add x24, x21, x23
-      #|  0118: 040300bd  str s4, [x24, #0]
-      #|  011c: 170080d2  movz x23, #0, lsl #0
-      #|  0120: f003172a  mov w16, w23
-      #|  0124: 10120091  add x16, x16, #4
-      #|  0128: 1f0216eb  cmp x16, x22
-      #|  0134: b802178b  add x24, x21, x23
-      #|  0138: 000340bd  ldr s0, [x24, #0]
-      #|  013c: e80313aa  mov x8, x19
-      #|  0140: 8240201e  fmov s2, s4
-      #|  0144: 0340201e  fmov s3, s0
-      #|  0148: bfffff17  b block1
+      #|  0108: 170080d2  movz x23, #0, lsl #0
+      #|  010c: f003172a  mov w16, w23
+      #|  0110: 10120091  add x16, x16, #4
+      #|  0114: 1f0216eb  cmp x16, x22
+      #|  0120: b902178b  add x25, x21, x23
+      #|  0124: 240300bd  str s4, [x25, #0]
+      #|  0128: 170080d2  movz x23, #0, lsl #0
+      #|  012c: f003172a  mov w16, w23
+      #|  0130: 10120091  add x16, x16, #4
+      #|  0134: 1f0216eb  cmp x16, x22
+      #|  0140: b902178b  add x25, x21, x23
+      #|  0144: 200340bd  ldr s0, [x25, #0]
+      #|  0148: e80313aa  mov x8, x19
+      #|  014c: 8240201e  fmov s2, s4
+      #|  0150: 0340201e  fmov s3, s0
+      #|  0154: beffff17  b block1
       #|block5:
-      #|  014c: f30303aa  mov x19, x3
-      #|  0150: 2440201e  fmov s4, s1
-      #|  0154: 0540201e  fmov s5, s0
-      #|  0158: e9ffff17  b block4
+      #|  0158: f30303aa  mov x19, x3
+      #|  015c: 2440201e  fmov s4, s1
+      #|  0160: 0540201e  fmov s5, s0
+      #|  0164: e9ffff17  b block4
       #|block6:
-      #|  015c: f30303aa  mov x19, x3
-      #|  0160: 2440201e  fmov s4, s1
-      #|  0164: 0540201e  fmov s5, s0
-      #|  0168: d1ffff17  b block3
+      #|  0168: f30303aa  mov x19, x3
+      #|  016c: 2440201e  fmov s4, s1
+      #|  0170: 0540201e  fmov s5, s0
+      #|  0174: d1ffff17  b block3
       #|block7:
-      #|  016c: f30303aa  mov x19, x3
-      #|  0170: 2440201e  fmov s4, s1
-      #|  0174: 0540201e  fmov s5, s0
-      #|  0178: b9ffff17  b block2
+      #|  0178: f30303aa  mov x19, x3
+      #|  017c: 2440201e  fmov s4, s1
+      #|  0180: 0540201e  fmov s5, s0
+      #|  0184: b9ffff17  b block2
       #|block8:
-      #|  017c: e80303aa  mov x8, x3
-      #|  0180: 2240201e  fmov s2, s1
-      #|  0184: 0340201e  fmov s3, s0
-      #|  0188: afffff17  b block1
+      #|  0188: e80303aa  mov x8, x3
+      #|  018c: 2240201e  fmov s2, s1
+      #|  0190: 0340201e  fmov s3, s0
+      #|  0194: aeffff17  b block1
       #|block9:
-      #|  018c: 280080d2  movz x8, #1, lsl #0
-      #|  0190: 7f0008eb  cmp x3, x8
-      #|  0194: f3179f9a  cset x19, eq
-      #|  0198: 33feffb5  cbnz x19, block6
-      #|  019c: 01000014  b block10
+      #|  0198: 280080d2  movz x8, #1, lsl #0
+      #|  019c: 7f0008eb  cmp x3, x8
+      #|  01a0: f3179f9a  cset x19, eq
+      #|  01a4: 33feffb5  cbnz x19, block6
+      #|  01a8: 01000014  b block10
       #|block10:
-      #|  01a0: 480080d2  movz x8, #2, lsl #0
-      #|  01a4: 7f0008eb  cmp x3, x8
-      #|  01a8: f3179f9a  cset x19, eq
-      #|  01ac: 13feffb5  cbnz x19, block7
-      #|  01b0: f3ffff17  b block8
+      #|  01ac: 480080d2  movz x8, #2, lsl #0
+      #|  01b0: 7f0008eb  cmp x3, x8
+      #|  01b4: f3179f9a  cset x19, eq
+      #|  01b8: 13feffb5  cbnz x19, block7
+      #|  01bc: f3ffff17  b block8
       #|
     ),
   )

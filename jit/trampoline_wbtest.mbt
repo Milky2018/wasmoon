@@ -63,7 +63,6 @@ test "JITContext: allocation and free" {
   match ctx {
     Some(c) => {
       assert_true(c.ctx_ptr != 0L)
-      assert_true(c.indirect_table_ptr != 0L)
       c.free()
     }
     None => ()

@@ -221,15 +221,25 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context(void) {
 }
 
 // Allocate a JIT context
+// Memory layout for func_table:
+//   [indirect_table_ptr | func_ptr_0 | func_ptr_1 | ...]
+//   ^                    ^
+//   raw_alloc            func_table (returned pointer, offset +8)
+// This allows LDR X24, [X20, #-8] to load indirect_table_ptr in prologue
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
     jit_context_t *ctx = (jit_context_t *)malloc(sizeof(jit_context_t));
     if (!ctx) return 0;
 
-    ctx->func_table = (void **)calloc(func_count, sizeof(void *));
-    if (!ctx->func_table) {
+    // Allocate func_count + 1 entries: first slot for indirect_table_ptr
+    void **raw_alloc = (void **)calloc(func_count + 1, sizeof(void *));
+    if (!raw_alloc) {
         free(ctx);
         return 0;
     }
+    // func_table points to second element, so func_table[-1] = indirect_table_ptr
+    ctx->func_table = raw_alloc + 1;
+    // Initialize indirect_table_ptr slot to NULL (will be set when indirect table is allocated)
+    raw_alloc[0] = NULL;
     ctx->func_count = func_count;
     ctx->indirect_table = NULL;
     ctx->indirect_count = 0;
@@ -270,8 +280,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
 }
 
 // Allocate indirect table for call_indirect
-// The indirect table is at least as large as func_count to support both
-// direct calls (via func_idx) and indirect calls (via table_idx)
+// This table is separate from func_table and used only for call_indirect
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;
@@ -281,19 +290,17 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int
         free(ctx->indirect_table);
     }
 
-    // Allocate at least func_count entries so direct calls work too
-    int alloc_count = count > ctx->func_count ? count : ctx->func_count;
-    ctx->indirect_table = (void **)calloc(alloc_count, sizeof(void *));
+    // Allocate exactly 'count' entries for the WASM table
+    ctx->indirect_table = (void **)calloc(count, sizeof(void *));
     if (!ctx->indirect_table) {
         ctx->indirect_count = 0;
         return 0;
     }
-    ctx->indirect_count = alloc_count;
+    ctx->indirect_count = count;
 
-    // Pre-fill with func_table entries so direct calls work
-    for (int i = 0; i < ctx->func_count; i++) {
-        ctx->indirect_table[i] = ctx->func_table[i];
-    }
+    // Store indirect_table pointer in func_table[-1] for prologue to load
+    // This is accessed via LDR X24, [X20, #-8]
+    ctx->func_table[-1] = ctx->indirect_table;
 
     return 1;
 }
@@ -328,7 +335,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         if (ctx->func_table) {
-            free(ctx->func_table);
+            // func_table points to raw_alloc + 1, so subtract 1 to get original allocation
+            free(ctx->func_table - 1);
         }
         if (ctx->indirect_table) {
             free(ctx->indirect_table);
@@ -813,7 +821,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory(int64_t ctx_ptr) {
 
 // ============ Multi-value return support ============
 // All JIT calls go through wasmoon_jit_call_multi_return
-// - JIT ABI: X0 = func_table, X1 = mem_base, X2 = mem_size, X3-X6 = args
+// - JIT ABI: X0 = func_table, X1 = mem_base, X2 = mem_size, X3 = indirect_table, X4-X10 = args
 // - When >2 int or >2 float returns: X7 = extra_results_buffer pointer
 // - Returns: X0/X1 for first 2 ints, D0/D1 for first 2 floats
 // - Extra returns: callee writes to buffer pointed by X7 (saved to X23)
@@ -822,6 +830,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory(int64_t ctx_ptr) {
 // result_types: array of type codes (0=I32, 1=I64, 2=F32, 3=F64)
 // num_results: number of return values
 // Returns: 0 on success, trap code on error
+// Note: indirect_table_ptr is stored at func_table[-1] and loaded by prologue into X24
 MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
     int64_t func_ptr,
     int64_t func_table_ptr,
@@ -866,6 +875,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
 
 #if defined(__aarch64__) || defined(_M_ARM64)
     // JIT ABI: X0=func_table, X1=mem_base, X2=mem_size, X3-X10=args (up to 8)
+    // indirect_table_ptr is stored at func_table[-1] and loaded into X24 by prologue
     // When needs_extra_buffer: X7=extra_results_buffer (conflicts with arg 4)
     // For now, we support up to 8 args when needs_extra_buffer is false,
     // and up to 4 args when needs_extra_buffer is true

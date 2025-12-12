@@ -171,6 +171,8 @@ pub fn emit_ldr_d_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_ldr_imm(MachineCode, Int, Int, Int) -> Unit
 
+pub fn emit_ldr_imm_signed(MachineCode, Int, Int, Int) -> Unit
+
 pub fn emit_ldr_s_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_ldr_w_imm(MachineCode, Int, Int, Int) -> Unit

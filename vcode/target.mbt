@@ -265,11 +265,11 @@ pub fn allocatable_scratch_regs() -> Array[PReg] {
 ///|
 /// Callee-saved registers available for allocation (must be saved/restored)
 /// X20-X22 are reserved for func_table, memory_base, memory_size
+/// X24 is reserved for indirect_table_ptr
 pub fn allocatable_callee_saved_regs() -> Array[PReg] {
   [
     { index: 19, class: Int },
     { index: 23, class: Int },
-    { index: 24, class: Int },
     { index: 25, class: Int },
     { index: 26, class: Int },
     { index: 27, class: Int },

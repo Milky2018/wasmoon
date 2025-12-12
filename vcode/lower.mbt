@@ -1628,11 +1628,12 @@ fn lower_call_indirect(
   mul_inst.add_use(Virtual(const_8_vreg))
   block.add_inst(mul_inst)
 
-  // Step 2: Calculate address = X20 + offset
+  // Step 2: Calculate address = X24 + offset
+  // X24 holds the indirect_table_ptr (separate from func_table in X20)
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
   let add_inst = VCodeInst::new(Add)
   add_inst.add_def({ reg: Virtual(addr_vreg) })
-  add_inst.add_use(Physical({ index: 20, class: Int }))
+  add_inst.add_use(Physical({ index: 24, class: Int }))
   add_inst.add_use(Virtual(offset_vreg))
   block.add_inst(add_inst)
 
