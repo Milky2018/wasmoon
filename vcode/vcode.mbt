@@ -698,6 +698,9 @@ pub enum VCodeTerminator {
   Branch(Reg, Int, Int) // Conditional: condition, then-block, else-block
   Return(Array[Reg]) // Return with values
   Trap(String) // Trap with message
+  // BrTable: index register, target block IDs, default block ID
+  // Uses jump table for O(1) dispatch instead of comparison chain
+  BrTable(Reg, Array[Int], Int)
 }
 
 ///|
@@ -720,6 +723,17 @@ fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
       result
     }
     Trap(msg) => "trap \"\{msg}\""
+    BrTable(index, targets, default) => {
+      let mut result = "br_table \{index}, ["
+      for i, t in targets {
+        if i > 0 {
+          result = result + ", "
+        }
+        result = result + "block\{t}"
+      }
+      result = result + "], default block\{default}"
+      result
+    }
   }
 }
 

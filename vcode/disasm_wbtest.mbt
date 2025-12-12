@@ -288,6 +288,17 @@ test "all emit functions disasm" {
   emit_ldrsh_w_imm(mc, 16, 17, 10)
   emit_ldrsw_imm(mc, 18, 19, 16)
 
+  // Sign/Zero Extension Instructions
+  emit_sxtb_x(mc, 0, 1) // Sign extend byte to 64-bit
+  emit_sxth_x(mc, 2, 3) // Sign extend halfword to 64-bit
+  emit_sxtw(mc, 4, 5) // Sign extend word to 64-bit
+  emit_sxtb_w(mc, 6, 7) // Sign extend byte to 32-bit
+  emit_sxth_w(mc, 8, 9) // Sign extend halfword to 32-bit
+  emit_uxtb_x(mc, 10, 11) // Zero extend byte to 64-bit
+  emit_uxth_x(mc, 12, 13) // Zero extend halfword to 64-bit
+  emit_uxtb_w(mc, 14, 15) // Zero extend byte to 32-bit
+  emit_uxth_w(mc, 16, 17) // Zero extend halfword to 32-bit
+
   // Integer stores
   emit_str_imm(mc, 0, 1, 0)
   emit_str_imm(mc, 2, 3, 64)
@@ -348,7 +359,11 @@ test "all emit functions disasm" {
   // Call and return
   emit_bl(mc, 0)
   emit_blr(mc, 16)
+  emit_br(mc, 17) // Branch register (indirect jump)
   emit_ret(mc, 30)
+
+  // ADR (PC-relative address)
+  emit_adr(mc, 18, 8) // ADR x18, .+8
 
   // NOP
   emit_nop(mc)
@@ -397,48 +412,59 @@ test "all emit functions disasm" {
       #|  0094: ee118079  ldrsh x14, [x15, #8]
       #|  0098: 3016c079  ldrsh w16, [x17, #10]
       #|  009c: 721280b9  ldrsw x18, [x19, #16]
-      #|  00a0: 200000f9  str x0, [x1, #0]
-      #|  00a4: 622000f9  str x2, [x3, #64]
-      #|  00a8: a4280039  strb w4, [x5, #10]
-      #|  00ac: e6280079  strh w6, [x7, #20]
-      #|  00b0: 282900b9  str w8, [x9, #40]
-      #|  00b4: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  00b8: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  00bc: f35300a9  stp x19, x20, [sp, #0]
-      #|  00c0: f55b41a9  ldp x21, x22, [sp, #16]
-      #|  00c4: 2028621e  fadd d0, d1, d2
-      #|  00c8: 8338651e  fsub d3, d4, d5
-      #|  00cc: e608681e  fmul d6, d7, d8
-      #|  00d0: 49196b1e  fdiv d9, d10, d11
-      #|  00d4: 2040601e  fmov d0, d1
-      #|  00d8: 6200679e  fmov d2, x3
-      #|  00dc: a400669e  fmov x4, d5
-      #|  00e0: e600271e  fmov s6, w7
-      #|  00e4: 2801261e  fmov w8, s9
-      #|  00e8: 6ac1221e  fcvt d10, s11
-      #|  00ec: 200040bd  ldr s0, [x1, #0]
-      #|  00f0: 620440fd  ldr d2, [x3, #8]
-      #|  00f4: a41000bd  str s4, [x5, #16]
-      #|  00f8: e60c00fd  str d6, [x7, #24]
-      #|  00fc: 1f0001eb  cmp x0, x1
-      #|  0100: 5fa800f1  cmp x2, #42
-      #|  0104: 6020641e  fcmp d3, d4
-      #|  0108: e5179f9a  cset x5, eq
-      #|  010c: e6079f9a  cset x6, ne
-      #|  0110: e7a79f9a  cset x7, lt
-      #|  0114: e8b79f9a  cset x8, ge
+      #|  00a0: 201c4093  sxtb x0, w1
+      #|  00a4: 623c4093  sxth x2, w3
+      #|  00a8: a47c4093  sxtw x4, w5
+      #|  00ac: e61c0013  sxtb w6, w7
+      #|  00b0: 283d0013  sxth w8, w9
+      #|  00b4: 6a1d0053  uxtb x10, w11
+      #|  00b8: ac3d0053  uxth x12, w13
+      #|  00bc: ee1d0053  uxtb w14, w15
+      #|  00c0: 303e0053  uxth w16, w17
+      #|  00c4: 200000f9  str x0, [x1, #0]
+      #|  00c8: 622000f9  str x2, [x3, #64]
+      #|  00cc: a4280039  strb w4, [x5, #10]
+      #|  00d0: e6280079  strh w6, [x7, #20]
+      #|  00d4: 282900b9  str w8, [x9, #40]
+      #|  00d8: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  00dc: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  00e0: f35300a9  stp x19, x20, [sp, #0]
+      #|  00e4: f55b41a9  ldp x21, x22, [sp, #16]
+      #|  00e8: 2028621e  fadd d0, d1, d2
+      #|  00ec: 8338651e  fsub d3, d4, d5
+      #|  00f0: e608681e  fmul d6, d7, d8
+      #|  00f4: 49196b1e  fdiv d9, d10, d11
+      #|  00f8: 2040601e  fmov d0, d1
+      #|  00fc: 6200679e  fmov d2, x3
+      #|  0100: a400669e  fmov x4, d5
+      #|  0104: e600271e  fmov s6, w7
+      #|  0108: 2801261e  fmov w8, s9
+      #|  010c: 6ac1221e  fcvt d10, s11
+      #|  0110: 200040bd  ldr s0, [x1, #0]
+      #|  0114: 620440fd  ldr d2, [x3, #8]
+      #|  0118: a41000bd  str s4, [x5, #16]
+      #|  011c: e60c00fd  str d6, [x7, #24]
+      #|  0120: 1f0001eb  cmp x0, x1
+      #|  0124: 5fa800f1  cmp x2, #42
+      #|  0128: 6020641e  fcmp d3, d4
+      #|  012c: e5179f9a  cset x5, eq
+      #|  0130: e6079f9a  cset x6, ne
+      #|  0134: e7a79f9a  cset x7, lt
+      #|  0138: e8b79f9a  cset x8, ge
       #|block0:
-      #|  0118: 06000014  b block1
-      #|  011c: a0000054  b.eq block2
-      #|  0120: 81000054  b.ne block3
-      #|  0124: 6b000054  b.lt block4
-      #|  0128: 400000b4  cbz x0, block5
-      #|  012c: 210000b5  cbnz x1, block6
+      #|  013c: 06000014  b block1
+      #|  0140: a0000054  b.eq block2
+      #|  0144: 81000054  b.ne block3
+      #|  0148: 6b000054  b.lt block4
+      #|  014c: 400000b4  cbz x0, block5
+      #|  0150: 210000b5  cbnz x1, block6
       #|block6:
-      #|  0130: faffff97  bl block0
-      #|  0134: 00023fd6  blr x16
-      #|  0138: c0035fd6  ret
-      #|  013c: 1f2003d5  nop
+      #|  0154: faffff97  bl block0
+      #|  0158: 00023fd6  blr x16
+      #|  015c: 20021fd6  br x17
+      #|  0160: c0035fd6  ret
+      #|  0164: 52000010  adr x18, .+8
+      #|  0168: 1f2003d5  nop
       #|
     ),
   )
