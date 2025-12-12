@@ -2457,38 +2457,9 @@ fn emit_prologue(
               ()
           }
       }
-    } else {
-      // Stack param: at [SP + frame_size + (param_idx - max_reg_params) * 8]
-      // Load from caller's stack frame (above our frame)
-      let stack_offset = frame_size + (param_idx - max_reg_params) * 8
-      match param.class {
-        Float32 => {
-          let s_dest = match dest_preg {
-            Some(preg) => preg.index
-            None => param_idx
-          }
-          // Load as 32-bit integer, then move to S register
-          emit_ldr_w_imm(mc, 16, 31, stack_offset) // LDR W16, [SP, #offset]
-          emit_fmov_w_to_s(mc, s_dest, 16) // FMOV Sd, W16
-        }
-        Float64 => {
-          let d_dest = match dest_preg {
-            Some(preg) => preg.index
-            None => param_idx
-          }
-          // Load as 64-bit integer, then move to D register
-          emit_ldr_imm(mc, 16, 31, stack_offset) // LDR X16, [SP, #offset]
-          emit_fmov_x_to_d(mc, d_dest, 16) // FMOV Dd, X16
-        }
-        Int => {
-          let dest = match dest_preg {
-            Some(preg) => preg.index
-            None => param_base + param_idx // X(3+param_idx) for consistency
-          }
-          emit_ldr_imm(mc, dest, 31, stack_offset) // LDR Xdest, [SP, #offset]
-        }
-      }
     }
+    // Stack params (param_idx >= 8) are now handled by LoadStackParam instruction
+    // during function body execution, not in prologue
   }
   frame_size
 }
@@ -2747,7 +2718,7 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
   for block in func.blocks {
     mc.define_label(block.id)
     for inst in block.insts {
-      emit_instruction(mc, inst, spill_base_offset)
+      emit_instruction(mc, inst, spill_base_offset, frame_size)
     }
     match block.terminator {
       Some(term) =>
@@ -2774,6 +2745,7 @@ fn emit_instruction(
   mc : MachineCode,
   inst : VCodeInst,
   spill_base_offset : Int,
+  frame_size : Int,
 ) -> Unit {
   match inst.opcode {
     Add => {
@@ -3664,6 +3636,26 @@ fn emit_instruction(
         // Always use 64-bit store for floats to avoid S/D register aliasing issues
         Float32 | Float64 =>
           emit_str_d_imm(mc, rt, 31, spill_base_offset + offset) // STR Dt, [SP, #offset]
+      }
+    }
+    LoadStackParam(param_idx, class) => {
+      // Load stack parameter from [SP + frame_size + (param_idx - 8) * 8]
+      // Stack parameters are located above the current frame
+      let max_reg_params = 8
+      let stack_offset = frame_size + (param_idx - max_reg_params) * 8
+      let rd = wreg_num(inst.defs[0])
+      match class {
+        Int => emit_ldr_imm(mc, rd, 31, stack_offset) // LDR Xd, [SP, #offset]
+        Float32 => {
+          // Load 32-bit value to scratch, then move to S register
+          emit_ldr_w_imm(mc, 16, 31, stack_offset) // LDR W16, [SP, #offset]
+          emit_fmov_w_to_s(mc, rd, 16) // FMOV Sd, W16
+        }
+        Float64 => {
+          // Load 64-bit value to scratch, then move to D register
+          emit_ldr_imm(mc, 16, 31, stack_offset) // LDR X16, [SP, #offset]
+          emit_fmov_x_to_d(mc, rd, 16) // FMOV Dd, X16
+        }
       }
     }
   }

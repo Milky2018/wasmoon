@@ -733,7 +733,13 @@ pub fn LinearScanAllocator::allocate(
   // So WASM parameters start at X3
   // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
   // it will be handled by the normal allocation process (which will use callee-saved)
+  // NOTE: Only the first 8 params (0-7) are in registers. Params 8+ are on stack.
+  let max_reg_params = 8
   for i, param in func.params {
+    // Skip stack parameters - they're not in registers
+    if i >= max_reg_params {
+      continue
+    }
     match liveness.intervals.get(param.id) {
       Some(interval) =>
         if interval.crosses_call {
@@ -743,8 +749,8 @@ pub fn LinearScanAllocator::allocate(
         } else {
           // Safe to pre-assign to ABI register
           let preg = match param.class {
-            Int => { index: i + 3, class: Int } // X3, X4, X5, ...
-            Float32 | Float64 => { index: i, class: param.class } // D0, D1, D2, ...
+            Int => { index: i + 3, class: Int } // X3, X4, X5, ... X10
+            Float32 | Float64 => { index: i, class: param.class } // D0, D1, D2, ... D7
           }
           result.assignments.set(param.id, preg)
           interval.assigned = Some(preg)
@@ -952,6 +958,7 @@ pub fn apply_allocation(
   new_func.num_spill_slots = alloc.num_spill_slots
 
   // Convert function parameters
+  let max_reg_params = 8 // Params 0-7 are passed in registers, 8+ on stack
   for i, param in func.params {
     match alloc.assignments.get(param.id) {
       Some(preg) => {
@@ -960,16 +967,23 @@ pub fn apply_allocation(
         let new_vreg = { id: param.id, class: param.class }
         new_func.params.push(new_vreg)
         // Store the physical register assignment for emit_prologue
-        // If it's not the default ABI register (X(3+i) for int, D(i) for float),
-        // we need to emit a move instruction in prologue
-        let default_preg : PReg = match param.class {
-          Int => { index: i + 3, class: Int }
-          Float32 | Float64 => { index: i, class: param.class }
-        }
-        if preg.index != default_preg.index {
+        // For register params (0-7): only need move if not in default ABI register
+        // For stack params (8+): ALWAYS need to store the assigned register
+        //   because emit_prologue must load them from the stack
+        if i >= max_reg_params {
+          // Stack param - always store the assigned register
           new_func.param_pregs.push(Some(preg))
         } else {
-          new_func.param_pregs.push(None) // No move needed
+          // Register param - check if it needs a move from default location
+          let default_preg : PReg = match param.class {
+            Int => { index: i + 3, class: Int } // X3-X10
+            Float32 | Float64 => { index: i, class: param.class } // D0-D7
+          }
+          if preg.index != default_preg.index {
+            new_func.param_pregs.push(Some(preg))
+          } else {
+            new_func.param_pregs.push(None) // No move needed
+          }
         }
       }
       None => {
@@ -1014,14 +1028,15 @@ pub fn apply_allocation(
               // This vreg is spilled, need to reload
               match alloc.spill_slots.get(vreg.id) {
                 Some(slot) => {
-                  // Use scratch register D16-D19 for float, X16-X19 for int
+                  // Use scratch register D16-D17 for float, X16-X17 for int
+                  // NOTE: Only use X16-X17 (IP0, IP1) - NOT X18 (platform) or X19 (callee-saved)
                   // Always use Float64 for float scratch to avoid S/D aliasing issues
                   let scratch_class = match vreg.class {
                     Float32 | Float64 => Float64
                     _ => vreg.class
                   }
                   let scratch_preg : PReg = {
-                    index: 16 + block_scratch_idx % 4,
+                    index: 16 + block_scratch_idx % 2,
                     class: scratch_class,
                   }
                   block_scratch_idx = block_scratch_idx + 1
@@ -1370,7 +1385,15 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
     int_regs.push(r)
     callee_saved_int_regs.push(r)
   }
-  let float_regs = aapcs64_arg_fprs()
+  // Float regs pool: D0-D7 (caller-saved) + D8-D15 (callee-saved)
+  // This mirrors the int_regs structure which includes both scratch and callee-saved
+  let float_regs : Array[PReg] = []
+  for r in aapcs64_arg_fprs() {
+    float_regs.push(r)
+  }
+  for r in callee_saved_fprs() {
+    float_regs.push(r)
+  }
   let callee_saved_float_regs = callee_saved_fprs()
 
   // Compute liveness

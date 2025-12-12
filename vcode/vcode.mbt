@@ -359,6 +359,10 @@ pub enum VCodeOpcode {
   // StackStore(offset): Store the use register to [SP + offset]
   StackLoad(Int)
   StackStore(Int)
+  // Stack parameter load (for params >= 8 that are passed on the stack)
+  // LoadStackParam(param_idx, class): Load from [SP + frame_size + (param_idx - 8) * 8]
+  // The actual offset is computed at emit time when frame_size is known
+  LoadStackParam(Int, RegClass)
 }
 
 ///|
@@ -442,6 +446,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       "call_indirect(\{num_args}) -> \{num_results} results"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
+    LoadStackParam(param_idx, class) =>
+      "load_stack_param \{param_idx} (\{class})"
   }
 }
 
