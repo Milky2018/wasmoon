@@ -93,12 +93,12 @@ test "f32 add" {
     f,
     @jit.Single((1.0 : Float)),
   )
-  inspect(@types.Value::F32(result1), content="F32(16.5)")
+  inspect(result1, content="16.5")
   let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single((2.0 : Float)),
   )
-  inspect(@types.Value::F32(result2), content="F32(17.5)")
+  inspect(result2, content="17.5")
 }
 
 ///|
@@ -189,17 +189,17 @@ test "f64 add" {
     f,
     @jit.Single(0.0),
   )
-  inspect(@types.Value::F64(result0), content="F64(15.5)")
+  inspect(result0, content="15.5")
   let @jit.Single((result1 : Double)) = jm.call_with_context_poly(
     f,
     @jit.Single(1.0),
   )
-  inspect(@types.Value::F64(result1), content="F64(16.5)")
+  inspect(result1, content="16.5")
   let @jit.Single((result2 : Double)) = jm.call_with_context_poly(
     f,
     @jit.Single(2.0),
   )
-  inspect(@types.Value::F64(result2), content="F64(17.5)")
+  inspect(result2, content="17.5")
 }
 
 ///|
@@ -291,19 +291,19 @@ test "f32 sub" {
     f,
     @jit.Single((10.0 : Float)),
   )
-  inspect(@types.Value::F32(result0), content="F32(6.5)")
+  inspect(result0, content="6.5")
   // 5.5 - 3.5 = 2.0
   let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single((5.5 : Float)),
   )
-  inspect(@types.Value::F32(result1), content="F32(2)")
+  inspect(result1, content="2")
   // 3.5 - 3.5 = 0.0
   let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single((3.5 : Float)),
   )
-  inspect(@types.Value::F32(result2), content="F32(0)")
+  inspect(result2, content="0")
 }
 
 ///|
@@ -418,17 +418,17 @@ test "f32 mul" {
     f,
     @jit.Single((4.0 : Float)),
   )
-  inspect(@types.Value::F32(result0), content="F32(10)")
+  inspect(result0, content="10")
   // 3.0 * 2.5 = 7.5
   let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single((3.0 : Float)),
   )
-  inspect(@types.Value::F32(result1), content="F32(7.5)")
+  inspect(result1, content="7.5")
   // 0.0 * 2.5 = 0.0
   let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single((0.0 : Float)),
   )
-  inspect(@types.Value::F32(result2), content="F32(0)")
+  inspect(result2, content="0")
 }

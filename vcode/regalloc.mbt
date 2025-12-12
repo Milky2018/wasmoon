@@ -995,12 +995,15 @@ pub fn apply_allocation(
       new_block.params.push(param)
     }
 
+    // Block-level scratch register counter to avoid aliasing across instructions
+    // Use 4 scratch registers (D16-D19 for float, X16-X19 for int) and cycle through them
+    let mut block_scratch_idx = 0
+
     // Process instructions
     for inst in block.insts {
       // First, insert reload instructions for any spilled uses
       // Track which scratch registers are used for each spilled vreg
       let spill_regs : Map[Int, PReg] = {}
-      let mut scratch_idx = 0
       for use_reg in inst.uses {
         match use_reg {
           Virtual(vreg) =>
@@ -1008,12 +1011,17 @@ pub fn apply_allocation(
               // This vreg is spilled, need to reload
               match alloc.spill_slots.get(vreg.id) {
                 Some(slot) => {
-                  // Use scratch register X16 or X17 for reloading
-                  let scratch_preg : PReg = {
-                    index: 16 + scratch_idx,
-                    class: vreg.class,
+                  // Use scratch register D16-D19 for float, X16-X19 for int
+                  // Always use Float64 for float scratch to avoid S/D aliasing issues
+                  let scratch_class = match vreg.class {
+                    Float32 | Float64 => Float64
+                    _ => vreg.class
                   }
-                  scratch_idx = (scratch_idx + 1) % 2 // Alternate between X16 and X17
+                  let scratch_preg : PReg = {
+                    index: 16 + block_scratch_idx % 4,
+                    class: scratch_class,
+                  }
+                  block_scratch_idx = block_scratch_idx + 1
                   spill_regs.set(vreg.id, scratch_preg)
                   // Insert StackLoad instruction
                   let reload_inst = VCodeInst::new(StackLoad(slot * 8))
@@ -1046,7 +1054,6 @@ pub fn apply_allocation(
       let new_inst = VCodeInst::new(inst.opcode)
 
       // Rewrite definitions - use different scratch registers for each spilled def
-      let mut spill_scratch_idx = 0
       let spill_scratch_map : Map[Int, PReg] = {} // vreg.id -> scratch preg
       for def in inst.defs {
         match def.reg {
@@ -1054,13 +1061,17 @@ pub fn apply_allocation(
             match alloc.assignments.get(vreg.id) {
               Some(preg) => new_inst.add_def({ reg: Physical(preg) })
               None => {
-                // Spilled: use scratch register X16 or X17 as temporary destination
-                // Alternate between X16 and X17 for multiple spilled defs
-                let scratch_preg : PReg = {
-                  index: 16 + spill_scratch_idx,
-                  class: vreg.class,
+                // Spilled: use scratch register from block-level pool
+                // Always use Float64 for float scratch to avoid S/D aliasing issues
+                let scratch_class = match vreg.class {
+                  Float32 | Float64 => Float64
+                  _ => vreg.class
                 }
-                spill_scratch_idx = (spill_scratch_idx + 1) % 2
+                let scratch_preg : PReg = {
+                  index: 16 + block_scratch_idx % 4,
+                  class: scratch_class,
+                }
+                block_scratch_idx = block_scratch_idx + 1
                 spill_scratch_map.set(vreg.id, scratch_preg)
                 new_inst.add_def({ reg: Physical(scratch_preg) })
               }
@@ -1112,9 +1123,38 @@ pub fn apply_allocation(
             Branch(new_cond, then_b, else_b)
           }
           Return(values) => {
+            // Handle Return specially to use block-level scratch counter
+            // This ensures each spilled value uses a different scratch register
             let new_values : Array[Reg] = []
             for v in values {
-              new_values.push(rewrite_reg_with_spill(v, alloc, new_block))
+              match v {
+                Virtual(vreg) =>
+                  match alloc.assignments.get(vreg.id) {
+                    Some(preg) => new_values.push(Physical(preg))
+                    None =>
+                      // Spilled: insert reload and use scratch register from block pool
+                      match alloc.spill_slots.get(vreg.id) {
+                        Some(slot) => {
+                          // Always use Float64 for float scratch to avoid S/D aliasing
+                          let scratch_class = match vreg.class {
+                            Float32 | Float64 => Float64
+                            _ => vreg.class
+                          }
+                          let scratch_preg : PReg = {
+                            index: 16 + block_scratch_idx % 4,
+                            class: scratch_class,
+                          }
+                          block_scratch_idx = block_scratch_idx + 1
+                          let reload_inst = VCodeInst::new(StackLoad(slot * 8))
+                          reload_inst.add_def({ reg: Physical(scratch_preg) })
+                          new_block.add_inst(reload_inst)
+                          new_values.push(Physical(scratch_preg))
+                        }
+                        None => new_values.push(v) // Should not happen
+                      }
+                  }
+                Physical(_) => new_values.push(v)
+              }
             }
             Return(new_values)
           }

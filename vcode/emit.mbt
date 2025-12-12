@@ -3150,15 +3150,24 @@ fn emit_instruction(
       // This is necessary because the arg moving below may overwrite the func_ptr register
       emit_mov_reg(mc, 9, func_ptr) // MOV X9, func_ptr
       // Move arguments to ABI registers (starting at X3, since X0/X1/X2 are reserved)
-      // We need to handle parallel moves carefully to avoid overwriting source values.
-      // Strategy: first copy all args to temp registers (X10-X17), then to final destinations
-      // This avoids the problem of e.g. MOV X3, X4; MOV X4, X5 where X4 gets clobbered.
+      // All arguments are passed in integer registers X3-X7, even float arguments.
+      // Float arguments need to be moved from S/D to X registers first.
       if num_args > 0 {
         // Step 1: Copy all args to temp registers X10, X11, ...
+        // For float args, we need to use FMOV to move from D/S to X
         for i in 0..<num_args {
           let src = reg_num(inst.uses[i + 1])
           let temp = 10 + i // X10, X11, X12, ...
-          emit_mov_reg(mc, temp, src)
+          // Determine the register class of the argument
+          let arg_class = match inst.uses[i + 1] {
+            Physical(preg) => preg.class
+            Virtual(vreg) => vreg.class
+          }
+          match arg_class {
+            Int => emit_mov_reg(mc, temp, src) // MOV Xtemp, Xsrc
+            Float32 => emit_fmov_s_to_w(mc, temp, src) // FMOV Wtemp, Ssrc
+            Float64 => emit_fmov_d_to_x(mc, temp, src) // FMOV Xtemp, Dsrc
+          }
         }
         // Step 2: Copy from temp registers to final ABI registers X3, X4, ...
         for i in 0..<num_args {
@@ -3179,27 +3188,146 @@ fn emit_instruction(
       // Call the function (from saved X9)
       emit_blr(mc, 9)
       // Move results to destination registers
-      // First two results come from X0, X1
-      // Additional results are read from buffer pointed by X23
+      // JIT ABI: integer returns in X0, X1; float returns in D0/S0, D1/S1
+      // Two-phase is only needed when there's potential conflict:
+      // - For ints: if dest is X0/X1 and we have multiple int results
+      // - For floats: if mixing f32 and f64 types
+
+      // Collect result info
+      let int_results : Array[(Int, Int)] = [] // (dest_reg, abi_idx)
+      let float_results : Array[(RegClass, Int, Int)] = [] // (class, dest_reg, abi_idx)
+      let mut int_abi_idx = 0
+      let mut float_abi_idx = 0
       for i in 0..<num_results {
         if i >= inst.defs.length() {
           break
         }
         let rd = wreg_num(inst.defs[i])
-        if i == 0 {
-          // First result is in X0
-          if rd != 0 {
-            emit_mov_reg(mc, rd, 0)
+        let def_class = match inst.defs[i].reg {
+          Physical(preg) => preg.class
+          Virtual(vreg) => vreg.class
+        }
+        match def_class {
+          Int => {
+            int_results.push((rd, int_abi_idx))
+            int_abi_idx = int_abi_idx + 1
           }
-        } else if i == 1 {
-          // Second result is in X1
-          if rd != 1 {
-            emit_mov_reg(mc, rd, 1)
+          Float32 | Float64 => {
+            float_results.push((def_class, rd, float_abi_idx))
+            float_abi_idx = float_abi_idx + 1
           }
-        } else {
-          // Additional results: load from [X23 + (i-2)*8]
-          let offset = (i - 2) * 8
-          emit_ldr_imm(mc, rd, 23, offset)
+        }
+      }
+
+      // Handle integer results
+      // Need two-phase if: multiple results AND any dest is X0 or X1 (would conflict)
+      let int_need_two_phase = int_results.length() >= 2 &&
+        {
+          let mut has_conflict = false
+          for entry in int_results {
+            let (rd, _) = entry
+            if rd == 0 || rd == 1 {
+              has_conflict = true
+              break
+            }
+          }
+          has_conflict
+        }
+      if int_need_two_phase {
+        // Two-phase: save to temps first
+        let temp_int_base = 10
+        for entry in int_results {
+          let (_, abi_idx) = entry
+          if abi_idx < 2 {
+            emit_mov_reg(mc, temp_int_base + abi_idx, abi_idx)
+          }
+        }
+        for entry in int_results {
+          let (rd, abi_idx) = entry
+          if abi_idx < 2 {
+            let temp = temp_int_base + abi_idx
+            if rd != temp {
+              emit_mov_reg(mc, rd, temp)
+            }
+          } else {
+            let offset = (abi_idx - 2) * 8
+            emit_ldr_imm(mc, rd, 23, offset)
+          }
+        }
+      } else {
+        // Direct move: no conflict
+        for entry in int_results {
+          let (rd, abi_idx) = entry
+          if abi_idx < 2 {
+            if rd != abi_idx {
+              emit_mov_reg(mc, rd, abi_idx)
+            }
+          } else {
+            let offset = (abi_idx - 2) * 8
+            emit_ldr_imm(mc, rd, 23, offset)
+          }
+        }
+      }
+
+      // Handle float results
+      // Need two-phase only when mixing f32 and f64 (D/S register aliasing)
+      let mut has_f32 = false
+      let mut has_f64 = false
+      for entry in float_results {
+        let (class, _, _) = entry
+        match class {
+          Float32 => has_f32 = true
+          _ => has_f64 = true
+        }
+      }
+      let float_need_two_phase = has_f32 &&
+        has_f64 &&
+        float_results.length() >= 2
+      if float_need_two_phase {
+        // Two-phase: save to temps first
+        let temp_float_base = 24
+        for entry in float_results {
+          let (_, _, abi_idx) = entry
+          if abi_idx < 2 {
+            emit_fmov_d(mc, temp_float_base + abi_idx, abi_idx)
+          }
+        }
+        for entry in float_results {
+          let (class, rd, abi_idx) = entry
+          if abi_idx < 2 {
+            let temp = temp_float_base + abi_idx
+            if rd != temp {
+              match class {
+                Float32 => emit_fmov_s(mc, rd, temp)
+                _ => emit_fmov_d(mc, rd, temp)
+              }
+            }
+          } else {
+            let offset = (abi_idx - 2) * 8
+            match class {
+              Float32 => emit_ldr_s_imm(mc, rd, 23, offset)
+              _ => emit_ldr_d_imm(mc, rd, 23, offset)
+            }
+          }
+        }
+      } else {
+        // Direct move: no conflict
+        for entry in float_results {
+          let (class, rd, abi_idx) = entry
+          if abi_idx < 2 {
+            if rd != abi_idx {
+              match class {
+                Float32 => emit_fmov_s(mc, rd, abi_idx)
+                _ => emit_fmov_d(mc, rd, abi_idx)
+              }
+            }
+          } else {
+            let offset = (abi_idx - 2) * 8
+            match class {
+              Float32 => emit_ldr_s_imm(mc, rd, 23, offset)
+              _ => emit_ldr_d_imm(mc, rd, 23, offset)
+            }
+          }
         }
       }
     }
@@ -3215,8 +3343,9 @@ fn emit_instruction(
       }
       match def_class {
         Int => emit_ldr_imm(mc, rd, 31, spill_base_offset + offset) // LDR Xd, [SP, #offset]
-        Float32 => emit_ldr_s_imm(mc, rd, 31, spill_base_offset + offset) // LDR Sd, [SP, #offset]
-        Float64 => emit_ldr_d_imm(mc, rd, 31, spill_base_offset + offset) // LDR Dd, [SP, #offset]
+        // Always use 64-bit load for floats to avoid S/D register aliasing issues
+        Float32 | Float64 =>
+          emit_ldr_d_imm(mc, rd, 31, spill_base_offset + offset) // LDR Dd, [SP, #offset]
       }
     }
     StackStore(offset) => {
@@ -3231,8 +3360,9 @@ fn emit_instruction(
       }
       match use_class {
         Int => emit_str_imm(mc, rt, 31, spill_base_offset + offset) // STR Xt, [SP, #offset]
-        Float32 => emit_str_s_imm(mc, rt, 31, spill_base_offset + offset) // STR St, [SP, #offset]
-        Float64 => emit_str_d_imm(mc, rt, 31, spill_base_offset + offset) // STR Dt, [SP, #offset]
+        // Always use 64-bit store for floats to avoid S/D register aliasing issues
+        Float32 | Float64 =>
+          emit_str_d_imm(mc, rt, 31, spill_base_offset + offset) // STR Dt, [SP, #offset]
       }
     }
   }
@@ -3350,56 +3480,94 @@ fn emit_terminator_with_epilogue(
     }
     Return(values) => {
       // For multi-value returns, we need to carefully place each value
-      // Track how many int/float values we've placed in registers
-      let mut int_reg_idx = 0 // Next X register to use (0 or 1)
-      let mut float_reg_idx = 0 // Next D/S register to use (0 or 1)
-      let mut extra_offset = 0 // Offset in extra results buffer (X23)
+      // Two-phase approach is ONLY needed when there's potential for D/S clobbering:
+      // - D_n and S_n share the same V_n register
+      // - So mixing f32 and f64 returns can cause issues if source overlaps dest
+
+      // First pass: collect sources for each return type
+      let int_sources : Array[(Int, Int)] = [] // (src_reg, value_index)
+      let float_sources : Array[(@ir.Type, Int, Int)] = [] // (type, src_reg, value_index)
       for i, value in values {
         let src = reg_num(value)
         let ty = if i < result_types.length() {
           result_types[i]
         } else {
-          @ir.Type::I64 // Fallback
+          @ir.Type::I64
         }
         match ty {
-          F32 =>
-            if float_reg_idx < 2 {
-              // Place in S0 or S1 (raw f32 bits)
-              if src != float_reg_idx {
-                emit_fmov_s(mc, float_reg_idx, src)
-              }
-              float_reg_idx = float_reg_idx + 1
-            } else {
-              // Spill to extra buffer: STR S(src), [X23, #extra_offset]
-              // TODO: add emit_str_s_offset
-              emit_str_d_offset(mc, src, 23, extra_offset)
-              extra_offset = extra_offset + 8
+          F32 | F64 => float_sources.push((ty, src, i))
+          _ => int_sources.push((src, i))
+        }
+      }
+
+      // Handle integer returns directly (X registers are independent)
+      let mut extra_offset = 0
+      for idx, entry in int_sources {
+        let (src, _) = entry
+        if idx < 2 {
+          if src != idx {
+            emit_mov_reg(mc, idx, src)
+          }
+        } else {
+          emit_str_offset(mc, src, 23, extra_offset)
+          extra_offset = extra_offset + 8
+        }
+      }
+
+      // Check if we need two-phase for floats (only when mixing f32 and f64)
+      let mut has_f32 = false
+      let mut has_f64 = false
+      for entry in float_sources {
+        let (ty, _, _) = entry
+        match ty {
+          F32 => has_f32 = true
+          _ => has_f64 = true
+        }
+      }
+      let need_two_phase = has_f32 && has_f64 && float_sources.length() >= 2
+      if need_two_phase {
+        // Two-phase: copy to temps first, then to final registers
+        let temp_float_base = 28
+        for idx, entry in float_sources {
+          let (ty, src, _) = entry
+          let temp = temp_float_base + idx
+          if src != temp {
+            match ty {
+              F32 => emit_fmov_s(mc, temp, src)
+              _ => emit_fmov_d(mc, temp, src)
             }
-          F64 =>
-            if float_reg_idx < 2 {
-              // Place in D0 or D1
-              if src != float_reg_idx {
-                emit_fmov_d(mc, float_reg_idx, src)
+          }
+        }
+        for idx, entry in float_sources {
+          let (ty, _, _) = entry
+          let temp = temp_float_base + idx
+          if idx < 2 {
+            if temp != idx {
+              match ty {
+                F32 => emit_fmov_s(mc, idx, temp)
+                _ => emit_fmov_d(mc, idx, temp)
               }
-              float_reg_idx = float_reg_idx + 1
-            } else {
-              // Spill to extra buffer: STR D(src), [X23, #extra_offset]
-              emit_str_d_offset(mc, src, 23, extra_offset)
-              extra_offset = extra_offset + 8
             }
-          _ =>
-            // I32, I64, or other integer types
-            if int_reg_idx < 2 {
-              // Place in X0 or X1
-              if src != int_reg_idx {
-                emit_mov_reg(mc, int_reg_idx, src)
+          } else {
+            emit_str_d_offset(mc, temp, 23, extra_offset)
+            extra_offset = extra_offset + 8
+          }
+        }
+      } else {
+        // Direct move: no conflict possible
+        for idx, entry in float_sources {
+          let (ty, src, _) = entry
+          if idx < 2 {
+            if src != idx {
+              match ty {
+                F32 => emit_fmov_s(mc, idx, src)
+                _ => emit_fmov_d(mc, idx, src)
               }
-              int_reg_idx = int_reg_idx + 1
-            } else {
-              // Spill to extra buffer: STR X(src), [X23, #extra_offset]
-              emit_str_offset(mc, src, 23, extra_offset)
-              extra_offset = extra_offset + 8
             }
+          } else {
+            emit_str_d_offset(mc, src, 23, extra_offset)
+            extra_offset = extra_offset + 8
+          }
         }
       }
       // Emit epilogue to restore callee-saved registers before return

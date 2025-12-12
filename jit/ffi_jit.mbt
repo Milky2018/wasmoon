@@ -246,7 +246,7 @@ priv struct JITContext {
   ctx_ptr : Int64
   // indirect_table_ptr is used for both direct calls (via func_idx) and
   // call_indirect (via table_idx). It defaults to func_table and is updated
-  // when alloc_indirect_table is called.
+  // when alloc_indirect_table is called (which copies func_table entries).
   mut indirect_table_ptr : Int64
 }
 
@@ -538,7 +538,7 @@ fn JITContext::call_multi_return(
   // Call FFI
   let trap_code = c_jit_call_multi_return(
     func_ptr,
-    self.indirect_table_ptr, // Use indirect_table for call_indirect support
+    self.indirect_table_ptr, // Use indirect_table (contains func_table entries too)
     args_fixed,
     num_args,
     results_fixed,
