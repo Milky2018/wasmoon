@@ -272,3 +272,106 @@ test "i64 16 params - sum all" {
   ])
   inspect(result, content="matched")
 }
+
+///|
+test "i64 64 params - sum all" {
+  let source =
+    #|(module
+    #|  (func (export "sum64")
+    #|        (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64) (param i64)
+    #|        (result i64)
+    #|    (local $sum i64)
+    #|    (local.set $sum (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (local.get 0) (local.get 1)) (local.get 2)) (local.get 3)) (local.get 4)) (local.get 5)) (local.get 6)) (local.get 7)))
+    #|    (local.set $sum (i64.add (local.get $sum) (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (local.get 8) (local.get 9)) (local.get 10)) (local.get 11)) (local.get 12)) (local.get 13)) (local.get 14)) (local.get 15))))
+    #|    (local.set $sum (i64.add (local.get $sum) (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (local.get 16) (local.get 17)) (local.get 18)) (local.get 19)) (local.get 20)) (local.get 21)) (local.get 22)) (local.get 23))))
+    #|    (local.set $sum (i64.add (local.get $sum) (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (local.get 24) (local.get 25)) (local.get 26)) (local.get 27)) (local.get 28)) (local.get 29)) (local.get 30)) (local.get 31))))
+    #|    (local.set $sum (i64.add (local.get $sum) (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (local.get 32) (local.get 33)) (local.get 34)) (local.get 35)) (local.get 36)) (local.get 37)) (local.get 38)) (local.get 39))))
+    #|    (local.set $sum (i64.add (local.get $sum) (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (local.get 40) (local.get 41)) (local.get 42)) (local.get 43)) (local.get 44)) (local.get 45)) (local.get 46)) (local.get 47))))
+    #|    (local.set $sum (i64.add (local.get $sum) (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (local.get 48) (local.get 49)) (local.get 50)) (local.get 51)) (local.get 52)) (local.get 53)) (local.get 54)) (local.get 55))))
+    #|    (local.set $sum (i64.add (local.get $sum) (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (local.get 56) (local.get 57)) (local.get 58)) (local.get 59)) (local.get 60)) (local.get 61)) (local.get 62)) (local.get 63))))
+    #|    (local.get $sum))
+    #|)
+  // 1+2+3+...+64 = 64*65/2 = 2080
+  let result = compare_jit_interp(source, "sum64", [
+    I64(1L),
+    I64(2L),
+    I64(3L),
+    I64(4L),
+    I64(5L),
+    I64(6L),
+    I64(7L),
+    I64(8L),
+    I64(9L),
+    I64(10L),
+    I64(11L),
+    I64(12L),
+    I64(13L),
+    I64(14L),
+    I64(15L),
+    I64(16L),
+    I64(17L),
+    I64(18L),
+    I64(19L),
+    I64(20L),
+    I64(21L),
+    I64(22L),
+    I64(23L),
+    I64(24L),
+    I64(25L),
+    I64(26L),
+    I64(27L),
+    I64(28L),
+    I64(29L),
+    I64(30L),
+    I64(31L),
+    I64(32L),
+    I64(33L),
+    I64(34L),
+    I64(35L),
+    I64(36L),
+    I64(37L),
+    I64(38L),
+    I64(39L),
+    I64(40L),
+    I64(41L),
+    I64(42L),
+    I64(43L),
+    I64(44L),
+    I64(45L),
+    I64(46L),
+    I64(47L),
+    I64(48L),
+    I64(49L),
+    I64(50L),
+    I64(51L),
+    I64(52L),
+    I64(53L),
+    I64(54L),
+    I64(55L),
+    I64(56L),
+    I64(57L),
+    I64(58L),
+    I64(59L),
+    I64(60L),
+    I64(61L),
+    I64(62L),
+    I64(63L),
+    I64(64L),
+  ])
+  inspect(result, content="matched")
+}

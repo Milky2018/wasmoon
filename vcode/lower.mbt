@@ -16,6 +16,8 @@ pub(all) struct LoweringContext {
   value_map : Map[Int, VReg]
   // Map from IR Block id to VCode block id
   block_map : Map[Int, Int]
+  // Map from IR Value id to stack param index (for params >= 8)
+  stack_param_map : Map[Int, (Int, RegClass)]
 }
 
 ///|
@@ -25,6 +27,7 @@ pub fn LoweringContext::new(ir_func : @ir.Function) -> LoweringContext {
     vcode_func: VCodeFunction::new(ir_func.name),
     value_map: {},
     block_map: {},
+    stack_param_map: {},
   }
 }
 
@@ -39,6 +42,30 @@ fn LoweringContext::get_vreg(self : LoweringContext, value : @ir.Value) -> VReg 
       self.value_map.set(value.id, vreg)
       vreg
     }
+  }
+}
+
+///|
+/// Get VReg for an IR Value, generating LoadStackParam if it's a stack parameter
+/// This should be used when lowering instructions that use values
+fn LoweringContext::get_vreg_for_use(
+  self : LoweringContext,
+  value : @ir.Value,
+  block : VCodeBlock,
+) -> VReg {
+  // First check if it's a stack parameter
+  match self.stack_param_map.get(value.id) {
+    Some((param_idx, class)) => {
+      // Generate LoadStackParam instruction
+      let result = self.vcode_func.new_vreg(class)
+      let inst = VCodeInst::new(LoadStackParam(param_idx, class))
+      inst.add_def({ reg: Virtual(result) })
+      block.add_inst(inst)
+      result
+    }
+    None =>
+      // Not a stack param, use normal get_vreg
+      self.get_vreg(value)
   }
 }
 
@@ -153,11 +180,20 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   }
 
   // Phase 2: Lower function parameters
-  for param in ir_func.params {
+  // Only the first 8 parameters are passed in registers (X3-X10)
+  // Parameters 8+ are passed on the stack and loaded on demand
+  let max_reg_params = 8
+  for i, param in ir_func.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
-    let vreg = ctx.vcode_func.add_param(class)
-    ctx.value_map.set(value.id, vreg)
+    if i < max_reg_params {
+      // Register parameter: allocate VReg
+      let vreg = ctx.vcode_func.add_param(class)
+      ctx.value_map.set(value.id, vreg)
+    } else {
+      // Stack parameter: record in stack_param_map for on-demand loading
+      ctx.stack_param_map.set(value.id, (i, class))
+    }
   }
 
   // Phase 3: Lower result types
@@ -377,8 +413,8 @@ fn lower_binary_int(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg(inst.operands[0])
-      let rhs = ctx.get_vreg(inst.operands[1])
+      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
       let vcode_inst = VCodeInst::new(opcode)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(lhs))
@@ -411,9 +447,9 @@ fn lower_iadd(
   // Pattern: add(x, mul(y, z)) -> MADD
   match match_mul_value(ctx, rhs_val) {
     Some((mul_lhs, mul_rhs)) => {
-      let acc = ctx.get_vreg(lhs_val)
-      let src1 = ctx.get_vreg(mul_lhs)
-      let src2 = ctx.get_vreg(mul_rhs)
+      let acc = ctx.get_vreg_for_use(lhs_val, block)
+      let src1 = ctx.get_vreg_for_use(mul_lhs, block)
+      let src2 = ctx.get_vreg_for_use(mul_rhs, block)
       let vcode_inst = VCodeInst::new(Madd)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(acc)) // accumulator
@@ -428,9 +464,9 @@ fn lower_iadd(
   // Pattern: add(mul(x, y), z) -> MADD (commutative)
   match match_mul_value(ctx, lhs_val) {
     Some((mul_lhs, mul_rhs)) => {
-      let acc = ctx.get_vreg(rhs_val)
-      let src1 = ctx.get_vreg(mul_lhs)
-      let src2 = ctx.get_vreg(mul_rhs)
+      let acc = ctx.get_vreg_for_use(rhs_val, block)
+      let src1 = ctx.get_vreg_for_use(mul_lhs, block)
+      let src2 = ctx.get_vreg_for_use(mul_rhs, block)
       let vcode_inst = VCodeInst::new(Madd)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(acc))
@@ -445,8 +481,8 @@ fn lower_iadd(
   // Pattern: add(x, shl(y, n)) -> AddShifted
   match match_shl_const_value(ctx, rhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(lhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(lhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(AddShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -460,8 +496,8 @@ fn lower_iadd(
   // Pattern: add(shl(x, n), y) -> AddShifted (commutative)
   match match_shl_const_value(ctx, lhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(rhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(rhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(AddShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -473,8 +509,8 @@ fn lower_iadd(
   }
 
   // Default: regular add
-  let lhs = ctx.get_vreg(lhs_val)
-  let rhs = ctx.get_vreg(rhs_val)
+  let lhs = ctx.get_vreg_for_use(lhs_val, block)
+  let rhs = ctx.get_vreg_for_use(rhs_val, block)
   let vcode_inst = VCodeInst::new(Add)
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
@@ -502,8 +538,8 @@ fn lower_isub(
   if is_const_zero_value(ctx, lhs_val) {
     match match_mul_value(ctx, rhs_val) {
       Some((mul_lhs, mul_rhs)) => {
-        let src1 = ctx.get_vreg(mul_lhs)
-        let src2 = ctx.get_vreg(mul_rhs)
+        let src1 = ctx.get_vreg_for_use(mul_lhs, block)
+        let src2 = ctx.get_vreg_for_use(mul_rhs, block)
         let vcode_inst = VCodeInst::new(Mneg)
         vcode_inst.add_def({ reg: Virtual(dst) })
         vcode_inst.add_use(Virtual(src1))
@@ -518,9 +554,9 @@ fn lower_isub(
   // Pattern: sub(x, mul(y, z)) -> MSUB
   match match_mul_value(ctx, rhs_val) {
     Some((mul_lhs, mul_rhs)) => {
-      let acc = ctx.get_vreg(lhs_val)
-      let src1 = ctx.get_vreg(mul_lhs)
-      let src2 = ctx.get_vreg(mul_rhs)
+      let acc = ctx.get_vreg_for_use(lhs_val, block)
+      let src1 = ctx.get_vreg_for_use(mul_lhs, block)
+      let src2 = ctx.get_vreg_for_use(mul_rhs, block)
       let vcode_inst = VCodeInst::new(Msub)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(acc))
@@ -535,8 +571,8 @@ fn lower_isub(
   // Pattern: sub(x, shl(y, n)) -> SubShifted
   match match_shl_const_value(ctx, rhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(lhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(lhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(SubShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -548,8 +584,8 @@ fn lower_isub(
   }
 
   // Default: regular sub
-  let lhs = ctx.get_vreg(lhs_val)
-  let rhs = ctx.get_vreg(rhs_val)
+  let lhs = ctx.get_vreg_for_use(lhs_val, block)
+  let rhs = ctx.get_vreg_for_use(rhs_val, block)
   let vcode_inst = VCodeInst::new(Sub)
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
@@ -572,8 +608,8 @@ fn lower_band(
   // Pattern: and(x, shl(y, n)) -> AndShifted
   match match_shl_const_value(ctx, rhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(lhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(lhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(AndShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -587,8 +623,8 @@ fn lower_band(
   // Pattern: and(shl(x, n), y) -> AndShifted (commutative)
   match match_shl_const_value(ctx, lhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(rhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(rhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(AndShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -600,8 +636,8 @@ fn lower_band(
   }
 
   // Default: regular and
-  let lhs = ctx.get_vreg(lhs_val)
-  let rhs = ctx.get_vreg(rhs_val)
+  let lhs = ctx.get_vreg_for_use(lhs_val, block)
+  let rhs = ctx.get_vreg_for_use(rhs_val, block)
   let vcode_inst = VCodeInst::new(And)
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
@@ -624,8 +660,8 @@ fn lower_bor(
   // Pattern: or(x, shl(y, n)) -> OrShifted
   match match_shl_const_value(ctx, rhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(lhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(lhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(OrShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -639,8 +675,8 @@ fn lower_bor(
   // Pattern: or(shl(x, n), y) -> OrShifted (commutative)
   match match_shl_const_value(ctx, lhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(rhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(rhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(OrShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -652,8 +688,8 @@ fn lower_bor(
   }
 
   // Default: regular or
-  let lhs = ctx.get_vreg(lhs_val)
-  let rhs = ctx.get_vreg(rhs_val)
+  let lhs = ctx.get_vreg_for_use(lhs_val, block)
+  let rhs = ctx.get_vreg_for_use(rhs_val, block)
   let vcode_inst = VCodeInst::new(Or)
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
@@ -676,8 +712,8 @@ fn lower_bxor(
   // Pattern: xor(x, shl(y, n)) -> XorShifted
   match match_shl_const_value(ctx, rhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(lhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(lhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(XorShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -691,8 +727,8 @@ fn lower_bxor(
   // Pattern: xor(shl(x, n), y) -> XorShifted (commutative)
   match match_shl_const_value(ctx, lhs_val) {
     Some((shifted, amount)) => {
-      let rn = ctx.get_vreg(rhs_val)
-      let rm = ctx.get_vreg(shifted)
+      let rn = ctx.get_vreg_for_use(rhs_val, block)
+      let rm = ctx.get_vreg_for_use(shifted, block)
       let vcode_inst = VCodeInst::new(XorShifted(Lsl, amount))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(rn))
@@ -704,8 +740,8 @@ fn lower_bxor(
   }
 
   // Default: regular xor
-  let lhs = ctx.get_vreg(lhs_val)
-  let rhs = ctx.get_vreg(rhs_val)
+  let lhs = ctx.get_vreg_for_use(lhs_val, block)
+  let rhs = ctx.get_vreg_for_use(rhs_val, block)
   let vcode_inst = VCodeInst::new(Xor)
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
@@ -723,8 +759,8 @@ fn lower_binary_float(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg(inst.operands[0])
-      let rhs = ctx.get_vreg(inst.operands[1])
+      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
       // Determine if this is f32 based on result type
       let is_f32 = result.ty is @ir.Type::F32
       // Select VCode opcode based on IR opcode
@@ -757,7 +793,7 @@ fn lower_unary_float(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       // Determine if this is f32 based on result type
       let is_f32 = result.ty is @ir.Type::F32
       // Select VCode opcode based on IR opcode
@@ -790,7 +826,7 @@ fn lower_promote(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       let vcode_inst = VCodeInst::new(FPromote)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(src))
@@ -810,7 +846,7 @@ fn lower_demote(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       let vcode_inst = VCodeInst::new(FDemote)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(src))
@@ -831,7 +867,7 @@ fn lower_unary_int(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       let vcode_inst = VCodeInst::new(opcode)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(src))
@@ -855,8 +891,8 @@ fn lower_rem(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg(inst.operands[0])
-      let rhs = ctx.get_vreg(inst.operands[1])
+      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
       // Use SRem/URem VCode opcode which will be lowered to SDIV+MSUB or UDIV+MSUB
       let opcode = if signed { SRem } else { URem }
       let vcode_inst = VCodeInst::new(opcode)
@@ -879,7 +915,7 @@ fn lower_bitcast(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       let vcode_inst = VCodeInst::new(Bitcast)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(src))
@@ -917,8 +953,8 @@ fn lower_icmp(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg(inst.operands[0])
-      let rhs = ctx.get_vreg(inst.operands[1])
+      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
       let kind = ir_intcc_to_cmp_kind(cc)
       let vcode_inst = VCodeInst::new(Cmp(kind))
       vcode_inst.add_def({ reg: Virtual(dst) })
@@ -954,8 +990,8 @@ fn lower_fcmp(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg(inst.operands[0])
-      let rhs = ctx.get_vreg(inst.operands[1])
+      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
       let kind = ir_floatcc_to_fcmp_kind(cc)
       let vcode_inst = VCodeInst::new(FCmp(kind))
       vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1006,7 +1042,7 @@ fn lower_load(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let wasm_addr = ctx.get_vreg(inst.operands[0])
+      let wasm_addr = ctx.get_vreg_for_use(inst.operands[0], block)
       // Determine access size for bounds check
       let mem_ty = ir_type_to_mem_type(ty)
       let access_size = mem_type_size(mem_ty)
@@ -1063,8 +1099,8 @@ fn lower_store(
   offset : Int,
 ) -> Unit {
   // Store has no result, just uses: addr, value
-  let wasm_addr = ctx.get_vreg(inst.operands[0])
-  let value = ctx.get_vreg(inst.operands[1])
+  let wasm_addr = ctx.get_vreg_for_use(inst.operands[0], block)
+  let value = ctx.get_vreg_for_use(inst.operands[1], block)
   // Determine access size for bounds check
   let mem_ty = ir_type_to_mem_type(ty)
   let access_size = mem_type_size(mem_ty)
@@ -1120,7 +1156,7 @@ fn lower_load_narrow(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let wasm_addr = ctx.get_vreg(inst.operands[0])
+      let wasm_addr = ctx.get_vreg_for_use(inst.operands[0], block)
       // Determine access size based on opcode type
       let sample_opcode = opcode_fn(0)
       let access_size = match sample_opcode {
@@ -1179,8 +1215,8 @@ fn lower_store_narrow(
   mem_ty : MemType,
 ) -> Unit {
   // Store has no result, just uses: addr, value
-  let wasm_addr = ctx.get_vreg(inst.operands[0])
-  let value = ctx.get_vreg(inst.operands[1])
+  let wasm_addr = ctx.get_vreg_for_use(inst.operands[0], block)
+  let value = ctx.get_vreg_for_use(inst.operands[1], block)
   // Determine access size for bounds check
   let access_size = mem_type_size(mem_ty)
   // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
@@ -1227,7 +1263,7 @@ fn lower_extend(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       // Determine the extend kind based on source and destination types
       let src_ty = inst.operands[0].ty
       let dst_ty = result.ty
@@ -1266,7 +1302,7 @@ fn lower_truncate(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       let vcode_inst = VCodeInst::new(Truncate)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(src))
@@ -1287,7 +1323,7 @@ fn lower_float_to_int(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       // Determine conversion kind based on source/dest types and signedness
       let src_ty = inst.operands[0].ty
       let dst_ty = result.ty
@@ -1322,7 +1358,7 @@ fn lower_int_to_float(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       // Determine conversion kind based on source/dest types and signedness
       let src_ty = inst.operands[0].ty
       let dst_ty = result.ty
@@ -1356,7 +1392,7 @@ fn lower_copy(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg(inst.operands[0])
+      let src = ctx.get_vreg_for_use(inst.operands[0], block)
       let vcode_inst = VCodeInst::new(Move)
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(src))
@@ -1377,9 +1413,9 @@ fn lower_select(
   match inst.result {
     Some(result) => {
       let dst = ctx.get_vreg(result)
-      let cond = ctx.get_vreg(inst.operands[0])
-      let true_val = ctx.get_vreg(inst.operands[1])
-      let false_val = ctx.get_vreg(inst.operands[2])
+      let cond = ctx.get_vreg_for_use(inst.operands[0], block)
+      let true_val = ctx.get_vreg_for_use(inst.operands[1], block)
+      let false_val = ctx.get_vreg_for_use(inst.operands[2], block)
 
       // Emit Select instruction: dst = cond != 0 ? true_val : false_val
       let vcode_inst = VCodeInst::new(Select)
@@ -1410,7 +1446,7 @@ fn lower_terminator(
           for i, param_info in tb.params {
             if i < args.length() {
               // Get the source value's vreg
-              let src = ctx.get_vreg(args[i])
+              let src = ctx.get_vreg_for_use(args[i], block)
               // Get the destination param's vreg
               let (param_value, _param_ty) = param_info
               let dst = ctx.get_vreg(param_value)
@@ -1427,14 +1463,14 @@ fn lower_terminator(
       block.set_terminator(Jump(target_id))
     }
     @ir.Terminator::Brz(cond, then_block, else_block) => {
-      let cond_vreg = ctx.get_vreg(cond)
+      let cond_vreg = ctx.get_vreg_for_use(cond, block)
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)
       // brz means branch if zero, so swap then/else for Branch semantics
       block.set_terminator(Branch(Virtual(cond_vreg), else_id, then_id))
     }
     @ir.Terminator::Brnz(cond, then_block, else_block) => {
-      let cond_vreg = ctx.get_vreg(cond)
+      let cond_vreg = ctx.get_vreg_for_use(cond, block)
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)
       block.set_terminator(Branch(Virtual(cond_vreg), then_id, else_id))
@@ -1442,7 +1478,7 @@ fn lower_terminator(
     @ir.Terminator::Return(values) => {
       let regs : Array[Reg] = []
       for v in values {
-        regs.push(Virtual(ctx.get_vreg(v)))
+        regs.push(Virtual(ctx.get_vreg_for_use(v, block)))
       }
       block.set_terminator(Return(regs))
     }
@@ -1450,7 +1486,7 @@ fn lower_terminator(
     @ir.Terminator::BrTable(index, targets, default) => {
       // Lower br_table using a comparison chain
       // For each target at position i, compare index with i and branch if equal
-      let index_vreg = ctx.get_vreg(index)
+      let index_vreg = ctx.get_vreg_for_use(index, block)
       let default_id = ctx.get_block_id(default)
       if targets.is_empty() {
         // No targets, just jump to default
@@ -1546,7 +1582,7 @@ fn lower_call(
   // Collect argument vregs
   let arg_vregs : Array[VReg] = []
   for operand in inst.operands {
-    arg_vregs.push(ctx.get_vreg(operand))
+    arg_vregs.push(ctx.get_vreg_for_use(operand, block))
   }
   let num_args = arg_vregs.length()
 
@@ -1600,12 +1636,12 @@ fn lower_call_indirect(
   }
 
   // First operand is the table index (callee)
-  let table_idx_vreg = ctx.get_vreg(inst.operands[0])
+  let table_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Arguments are all operands except the first one
   let arg_vregs : Array[VReg] = []
   for i in 1..<inst.operands.length() {
-    arg_vregs.push(ctx.get_vreg(inst.operands[i]))
+    arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
   let num_args = arg_vregs.length()
 

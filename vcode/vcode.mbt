@@ -69,6 +69,37 @@ pub impl Show for PReg with output(self, logger) {
   logger.write_string(self.to_string())
 }
 
+// ============ Spilled Register Encoding ============
+// For CallIndirect with many spilled args, we encode the spill slot in the register index.
+// Register indices >= SPILL_SLOT_BASE represent spilled values at slot (index - SPILL_SLOT_BASE).
+
+///|
+/// Base index for encoding spilled operands in PReg.index
+/// PReg with index >= 256 represents a spilled value at slot (index - 256)
+pub let spill_slot_base : Int = 256
+
+///|
+/// Check if a physical register represents a spilled value
+pub fn PReg::is_spilled(self : PReg) -> Bool {
+  self.index >= spill_slot_base
+}
+
+///|
+/// Get the spill slot for a spilled register (returns -1 if not spilled)
+pub fn PReg::get_spill_slot(self : PReg) -> Int {
+  if self.index >= spill_slot_base {
+    self.index - spill_slot_base
+  } else {
+    -1
+  }
+}
+
+///|
+/// Create a PReg that represents a spilled value at the given slot
+pub fn PReg::spilled(slot : Int, class : RegClass) -> PReg {
+  { index: spill_slot_base + slot, class }
+}
+
 ///|
 /// A register reference - either virtual or physical
 pub enum Reg {
@@ -359,6 +390,10 @@ pub enum VCodeOpcode {
   // StackStore(offset): Store the use register to [SP + offset]
   StackLoad(Int)
   StackStore(Int)
+  // Stack parameter load (for params >= 8 that are passed on the stack)
+  // LoadStackParam(param_idx, class): Load from [SP + frame_size + (param_idx - 8) * 8]
+  // The actual offset is computed at emit time when frame_size is known
+  LoadStackParam(Int, RegClass)
 }
 
 ///|
@@ -442,6 +477,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       "call_indirect(\{num_args}) -> \{num_results} results"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
+    LoadStackParam(param_idx, class) =>
+      "load_stack_param \{param_idx} (\{class})"
   }
 }
 

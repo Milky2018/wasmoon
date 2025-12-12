@@ -885,7 +885,25 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
     // Stack must be 16-byte aligned
     int stack_space = ((stack_args * 8) + 15) & ~15;
 
-    // Set up register arguments
+    // For stack args, allocate space and store them BEFORE setting up register args
+    // (C code in the loop may clobber register variables)
+    if (stack_space > 0) {
+        // Allocate stack space and get pointer to it
+        int64_t *stack_args_ptr;
+        __asm__ volatile(
+            "sub sp, sp, %[size]\n\t"
+            "mov %[ptr], sp"
+            : [ptr] "=r"(stack_args_ptr)
+            : [size] "r"((int64_t)stack_space)
+        );
+
+        // Store all stack args directly from args array
+        for (int i = 0; i < stack_args; i++) {
+            stack_args_ptr[i] = args[8 + i];
+        }
+    }
+
+    // Set up register arguments AFTER the C loop to avoid clobbering
     register int64_t r0 __asm__("x0") = func_table_ptr;
     register int64_t r1 __asm__("x1") = mem_base;
     register int64_t r2 __asm__("x2") = mem_size;
@@ -902,22 +920,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
     register uint64_t d0 __asm__("d0");
     register uint64_t d1 __asm__("d1");
 
-    // For stack args, allocate space and store them directly
     if (stack_space > 0) {
-        // Allocate stack space and get pointer to it
-        int64_t *stack_args_ptr;
-        __asm__ volatile(
-            "sub sp, sp, %[size]\n\t"
-            "mov %[ptr], sp"
-            : [ptr] "=r"(stack_args_ptr)
-            : [size] "r"((int64_t)stack_space)
-        );
-
-        // Store all stack args directly from args array
-        for (int i = 0; i < stack_args; i++) {
-            stack_args_ptr[i] = args[8 + i];
-        }
-
         __asm__ volatile(
             "blr %[func]\n\t"
             "add sp, sp, %[size]"

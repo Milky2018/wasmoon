@@ -19,17 +19,19 @@ Wasmoon 使用**自定义的 JIT ABI**，而非标准的 AAPCS64。这是为了�
 | X0 | 入参: func_table_ptr / 返回值 1 | 调用者保存 |
 | X1 | 入参: memory_base / 返回值 2 | 调用者保存 |
 | X2 | 入参: memory_size | 调用者保存 |
-| X3-X6 | WASM 函数参数 0-3 | 调用者保存 |
-| X7 | WASM 参数 4 / extra_results_buffer | 调用者保存 |
-| X8 | 临时寄存器 (可分配) | 调用者保存 |
-| X9-X17 | CallIndirect 使用的临时寄存器 | 调用者保存 |
-| X18 | 平台保留 | - |
+| X3-X7 | WASM 函数参数 0-4 | 调用者保存 |
+| X7 | WASM 参数 4 / extra_results_buffer (多返回值时) | 调用者保存 |
+| X8-X10 | WASM 函数参数 5-7 | 调用者保存 |
+| X11-X15 | CallIndirect 参数 marshalling 临时寄存器 | 调用者保存 |
+| X16-X17 | 平台 scratch / spill 临时寄存器 | 调用者保存 |
+| X18 | CallIndirect func_ptr 临时保存 | 调用者保存 |
 | X19 | 可分配 (callee-saved) | 被调用者保存 |
 | **X20** | **func_table_ptr (JIT 内部)** | 被调用者保存 |
 | **X21** | **memory_base (JIT 内部)** | 被调用者保存 |
 | **X22** | **memory_size (JIT 内部)** | 被调用者保存 |
 | **X23** | **extra_results_buffer 指针** | 被调用者保存 |
-| X24-X28 | 可分配 (callee-saved) | 被调用者保存 |
+| **X24** | **indirect_table_ptr (JIT 内部)** | 被调用者保存 |
+| X25-X28 | 可分配 (callee-saved) | 被调用者保存 |
 | X29 (FP) | 帧指针 | 被调用者保存 |
 | X30 (LR) | 链接寄存器 | 被调用者保存 |
 | X31 (SP) | 栈指针 | - |
@@ -60,8 +62,24 @@ X3 = arg[0]            (第 1 个 WASM 参数)
 X4 = arg[1]            (第 2 个 WASM 参数)
 X5 = arg[2]            (第 3 个 WASM 参数)
 X6 = arg[3]            (第 4 个 WASM 参数)
-X7 = arg[4] 或 extra_results_buffer
+X7 = arg[4] 或 extra_results_buffer (多返回值时)
+X8 = arg[5]            (第 6 个 WASM 参数)
+X9 = arg[6]            (第 7 个 WASM 参数)
+X10 = arg[7]           (第 8 个 WASM 参数)
 ```
+
+### 栈参数 (8+ 参数)
+
+当函数有超过 8 个参数时，参数 8 及之后的参数通过栈传递：
+
+```
+[SP + frame_size + 0]  = arg[8]   (第 9 个参数)
+[SP + frame_size + 8]  = arg[9]   (第 10 个参数)
+[SP + frame_size + 16] = arg[10]  (第 11 个参数)
+...
+```
+
+栈参数在调用者的栈帧中，位于被调用者栈帧之上。被调用者通过 `LoadStackParam` 指令在函数体中加载这些参数。
 
 #### 浮点参数编码
 
@@ -160,13 +178,67 @@ BLR X16
 ```
 ; 从 indirect_table 加载函数指针
 ; table_idx 在运行时计算
-LDR X16, [X20, table_idx, LSL #3]
+LDR X16, [X24, table_idx, LSL #3]
 
 ; 检查是否为 null
 CBZ X16, trap_label
 
 ; 调用 (参数设置同上)
 BLR X16
+```
+
+### CallIndirect 参数 Marshalling (三阶段)
+
+当 JIT 代码调用另一个函数时，需要将参数从当前寄存器分配移动到 ABI 规定的位置。
+这是一个复杂的过程，因为寄存器分配器可能将参数值放在任意寄存器中。
+
+**问题**：参数 0-4 可能被分配到 X8-X10（参数 5-7 的目标位置），如果先写 X8-X10 会覆盖这些值。
+
+**解决方案**：使用三阶段 marshalling，确保不会覆盖尚未保存的值：
+
+```
+; === Phase 1: 保存 args 0-4 到临时寄存器 X11-X15 ===
+; 必须先执行！否则如果 arg0 在 X8，Phase 2 会覆盖它
+MOV X11, <arg0_reg>    ; 保存 arg0
+MOV X12, <arg1_reg>    ; 保存 arg1
+MOV X13, <arg2_reg>    ; 保存 arg2
+MOV X14, <arg3_reg>    ; 保存 arg3
+MOV X15, <arg4_reg>    ; 保存 arg4
+
+; === Phase 2: 写入 args 5-7 到 X8-X10 ===
+; 现在安全了，因为 args 0-4 已保存到 X11-X15
+MOV X8, <arg5_reg>     ; arg5 → X8
+MOV X9, <arg6_reg>     ; arg6 → X9
+MOV X10, <arg7_reg>    ; arg7 → X10
+
+; === Phase 3: 从临时寄存器复制到最终位置 X3-X7 ===
+MOV X3, X11            ; arg0 → X3
+MOV X4, X12            ; arg1 → X4
+MOV X5, X13            ; arg2 → X5
+MOV X6, X14            ; arg3 → X6
+MOV X7, X15            ; arg4 → X7
+
+; === 栈参数 (args 8+) ===
+; 直接存储到栈上
+STR <arg8_reg>, [SP, #0]
+STR <arg9_reg>, [SP, #8]
+...
+
+; === 设置上下文和调用 ===
+MOV X0, X20    ; func_table_ptr
+MOV X1, X21    ; memory_base
+MOV X2, X22    ; memory_size
+BLR X18        ; 调用 (func_ptr 之前已保存到 X18)
+```
+
+**Spilled 参数处理**：
+
+当参数被溢出到栈上时，使用特殊编码 (`PReg.index >= 256`) 标记。
+emit 代码检测到这种情况后，直接从 spill slot 加载到目标位置：
+
+```
+; 如果 arg5 被 spill 到 slot 3:
+LDR X8, [SP, #spill_base_offset + 24]   ; 直接加载到 X8
 ```
 
 ## 内存访问
@@ -195,9 +267,14 @@ LDR W9, [X16, #8]     ; load with offset
 高地址
 +------------------------+
 |   调用者的栈帧          |
++------------------------+
+|   栈参数 (args 8+)     |  ← 如果有超过 8 个参数
 +------------------------+ ← 入口时的 SP
-|   Callee-saved 寄存器   |
-|   (X20-X23, X19, etc.) |
+|   Callee-saved GPRs    |
+|   (X20-X24, X19, etc.) |
++------------------------+
+|   Callee-saved FPRs    |
+|   (D8-D15, 如果使用)    |
 +------------------------+
 |   Spill slots          |
 |   (寄存器溢出空间)       |
@@ -214,15 +291,21 @@ LDR W9, [X16, #8]     ; load with offset
 ; 分配栈帧
 SUB SP, SP, #frame_size
 
-; 保存 callee-saved 寄存器
+; 保存 callee-saved 寄存器 (GPRs)
 STP X20, X21, [SP, #0]
 STP X22, X23, [SP, #16]
-STP X19, X30, [SP, #32]   ; X30 = LR
+STP X24, X19, [SP, #32]
+STP X30, XZR, [SP, #48]   ; X30 = LR (如果函数有调用)
+
+; 保存 callee-saved FPRs (如果使用)
+STP D8, D9, [SP, #64]
+...
 
 ; 设置上下文寄存器
 MOV X20, X0    ; func_table_ptr
 MOV X21, X1    ; memory_base
 MOV X22, X2    ; memory_size
+LDR X24, [X20, #-8]  ; indirect_table_ptr (存储在 func_table[-1])
 MOV X23, X7    ; extra_results_buffer (如需要)
 
 ; 移动参数到目标寄存器
@@ -233,10 +316,15 @@ MOV X19, X4    ; 需要跨调用保持的整数参数
 ### Epilogue 生成的代码
 
 ```asm
-; 恢复 callee-saved 寄存器
+; 恢复 callee-saved FPRs (如果保存了)
+LDP D8, D9, [SP, #64]
+...
+
+; 恢复 callee-saved GPRs
 LDP X20, X21, [SP, #0]
 LDP X22, X23, [SP, #16]
-LDP X19, X30, [SP, #32]
+LDP X24, X19, [SP, #32]
+LDP X30, XZR, [SP, #48]
 
 ; 释放栈帧
 ADD SP, SP, #frame_size
@@ -249,14 +337,17 @@ RET
 
 | 特性 | AAPCS64 | Wasmoon JIT ABI |
 |------|---------|-----------------|
-| 参数寄存器 (整数) | X0-X7 | X0-X2 固定，X3-X7 用户参数 |
+| 参数寄存器 (整数) | X0-X7 | X0-X2 固定上下文，X3-X10 用户参数 (最多 8 个) |
 | 参数寄存器 (浮点) | D0-D7 | 通过 X 寄存器传位模式 |
+| 栈参数 | [SP] 及以上 | [SP + frame_size + (i-8)*8] |
 | 返回值 (整数) | X0 (X0+X1) | X0, X1 |
 | 返回值 (浮点) | D0-D3 | D0, D1 (S0, S1 for f32) |
-| X8 用途 | 间接返回值地址 | 临时寄存器 |
-| X18 | 平台保留 | 平台保留 |
-| X19-X28 | Callee-saved | X20-X22 固定用途，其余可分配 |
-| 多返回值 | 不支持 | 通过 buffer 支持 |
+| X8-X10 用途 | X8: 间接返回值地址 | 用户参数 5-7 |
+| X11-X15 | 临时寄存器 | CallIndirect marshalling 临时寄存器 |
+| X16-X17 | 平台 scratch | 平台 scratch / spill 临时寄存器 |
+| X18 | 平台保留 | CallIndirect func_ptr 临时保存 |
+| X19-X28 | Callee-saved | X20-X22,X24 固定用途，X23 可选 (extra_results)，其余可分配 |
+| 多返回值 | 不支持 | 通过 X23 指向的 buffer 支持 |
 
 ## Trap 处理
 
