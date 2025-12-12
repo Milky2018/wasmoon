@@ -1375,10 +1375,15 @@ pub fn emit_cmp_reg(mc : MachineCode, rn : Int, rm : Int) -> Unit {
 pub fn emit_cmp_imm(mc : MachineCode, rn : Int, imm12 : Int) -> Unit {
   mc.annotate("cmp x\{rn}, #\{imm12}")
   let imm = imm12 & 0xFFF
-  let x1f = 31 // 0x1F
-  let b0 = x1f | ((rn & 3) << 5)
-  let b1 = ((rn >> 2) & 7) | ((imm & 31) << 3)
-  let b2 = (imm >> 5) & 127
+  // CMP (immediate) = SUBS XZR, Rn, #imm12
+  // Encoding: sf=1 | op=1 | S=1 | 100010 | sh=0 | imm12[11:0] | Rn[4:0] | Rd=11111
+  // Byte 0: Rd[4:0] | Rn[2:0] << 5
+  // Byte 1: Rn[4:3] | imm12[5:0] << 2
+  // Byte 2: imm12[11:6] | sh << 6
+  // Byte 3: 0xF1
+  let b0 = 31 | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
+  let b2 = (imm >> 6) & 63
   let b3 = 241 // 0xF1
   mc.emit_inst(b0, b1, b2, b3)
 }
@@ -1450,6 +1455,80 @@ pub fn emit_csel(
   let b1 = ((rn >> 3) & 3) | ((cond & 15) << 4)
   let b2 = (rm & 31) | 128 // 0x80 = bit 7 set for opcode
   let b3 = 154 // 0x9A
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FCSEL (double): FCSEL Dd, Dn, Dm, cond
+/// If condition is true, Dd = Dn, else Dd = Dm
+/// Opcode: 0x1E600C00
+pub fn emit_fcsel_d(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  cond : Int,
+) -> Unit {
+  let cond_name = match cond {
+    0 => "eq"
+    1 => "ne"
+    2 => "hs"
+    3 => "lo"
+    10 => "ge"
+    11 => "lt"
+    12 => "gt"
+    13 => "le"
+    _ => "?\{cond}"
+  }
+  mc.annotate("fcsel d\{rd}, d\{rn}, d\{rm}, \{cond_name}")
+  // FCSEL encoding: M=0 | 0 | S=0 | 11110 | ftype=01 | 1 | Rm | cond | 11 | Rn | Rd
+  // [31]: M = 0
+  // [30]: 0
+  // [29]: S = 0
+  // [28:24]: 11110
+  // [23:22]: ftype = 01 (double)
+  // [21]: 1
+  // [20:16]: Rm
+  // [15:12]: cond
+  // [11:10]: 11
+  // [9:5]: Rn
+  // [4:0]: Rd
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x0C | ((cond & 15) << 4) // 0x0C = bits 11:10 = 11
+  let b2 = 0x60 | (rm & 31) // 0x60 = ftype=01, bit 21=1
+  let b3 = 0x1E
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode FCSEL (single): FCSEL Sd, Sn, Sm, cond
+/// If condition is true, Sd = Sn, else Sd = Sm
+/// Opcode: 0x1E200C00
+pub fn emit_fcsel_s(
+  mc : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  cond : Int,
+) -> Unit {
+  let cond_name = match cond {
+    0 => "eq"
+    1 => "ne"
+    2 => "hs"
+    3 => "lo"
+    10 => "ge"
+    11 => "lt"
+    12 => "gt"
+    13 => "le"
+    _ => "?\{cond}"
+  }
+  mc.annotate("fcsel s\{rd}, s\{rn}, s\{rm}, \{cond_name}")
+  // FCSEL encoding: M=0 | 0 | S=0 | 11110 | ftype=00 | 1 | Rm | cond | 11 | Rn | Rd
+  // ftype = 00 (single)
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | 0x0C | ((cond & 15) << 4)
+  let b2 = 0x20 | (rm & 31) // 0x20 = ftype=00, bit 21=1
+  let b3 = 0x1E
   mc.emit_inst(b0, b1, b2, b3)
 }
 
@@ -2855,8 +2934,20 @@ fn emit_instruction(
       let false_val = reg_num(inst.uses[2])
       // Compare cond with 0: CMP cond, #0
       emit_cmp_imm(mc, cond_reg, 0)
-      // CSEL rd, true_val, false_val, NE (select true_val if cond != 0)
-      emit_csel(mc, rd, true_val, false_val, NE.to_int())
+      // Check register class to use appropriate select instruction
+      let reg_class = match inst.defs[0].reg {
+        Physical(preg) => preg.class
+        Virtual(_) => Int // Should not happen at emit time
+      }
+      match reg_class {
+        Float32 | Float64 =>
+          // Use FCSEL for floating-point registers
+          // Note: We use double-precision FCSEL since all floats are stored in D registers
+          emit_fcsel_d(mc, rd, true_val, false_val, NE.to_int())
+        Int =>
+          // Use CSEL for integer registers
+          emit_csel(mc, rd, true_val, false_val, NE.to_int())
+      }
     }
     Clz => {
       // Count leading zeros
@@ -3186,12 +3277,36 @@ fn cmp_kind_to_cond(kind : CmpKind) -> Int {
 }
 
 ///|
+/// Map floating-point comparison kind to AArch64 condition code.
+///
+/// For floating-point comparisons, we need "ordered" semantics where
+/// any comparison involving NaN returns false (0).
+///
+/// After FCMP, the NZCV flags are set as:
+/// - Ordered less than:    N=1, Z=0, C=0, V=0
+/// - Ordered equal:        N=0, Z=1, C=1, V=0
+/// - Ordered greater than: N=0, Z=0, C=1, V=0
+/// - Unordered (NaN):      N=0, Z=0, C=1, V=1
+///
+/// Condition codes for ordered floating-point comparisons:
+/// - Lt: MI (N=1) - true only when N is set (ordered less than)
+/// - Le: LS (C=0|Z=1) - true when C is clear OR Z is set
+/// - Gt: GT (Z=0 & N=V) - works correctly for floats
+/// - Ge: GE (N=V) - works correctly for floats
+/// - Eq: EQ (Z=1) - works correctly
+/// - Ne: NE (Z=0) - but need VC for ordered ne, using NE gives unordered ne
+///
+/// Note: For NaN, NZCV=0011, so:
+/// - MI: N=0, false ✓
+/// - LS: C=1, Z=0, so C=0|Z=1 = false ✓
+/// - GT: Z=0 & N=V = 0 & (0=1) = false ✓
+/// - GE: N=V = 0=1 = false ✓
 fn fcmp_kind_to_cond(kind : FCmpKind) -> Int {
   match kind {
     FCmpKind::Eq => EQ.to_int()
     FCmpKind::Ne => NE.to_int()
-    FCmpKind::Lt => LT.to_int()
-    FCmpKind::Le => LE.to_int()
+    FCmpKind::Lt => MI.to_int() // Use MI for ordered less-than
+    FCmpKind::Le => LS.to_int() // Use LS for ordered less-or-equal
     FCmpKind::Gt => GT.to_int()
     FCmpKind::Ge => GE.to_int()
   }

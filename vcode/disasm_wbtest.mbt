@@ -421,7 +421,7 @@ test "all emit functions disasm" {
       #|  00f4: a41000bd  str s4, [x5, #16]
       #|  00f8: e60c00fd  str d6, [x7, #24]
       #|  00fc: 1f0001eb  cmp x0, x1
-      #|  0100: 5f5001f1  cmp x2, #42
+      #|  0100: 5fa800f1  cmp x2, #42
       #|  0104: 6020641e  fcmp d3, d4
       #|  0108: e5179f9a  cset x5, eq
       #|  010c: e6079f9a  cset x6, ne
