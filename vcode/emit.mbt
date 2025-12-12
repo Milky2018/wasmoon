@@ -1508,6 +1508,39 @@ pub fn emit_ret(mc : MachineCode, rn : Int) -> Unit {
 }
 
 ///|
+/// Encode BR (branch register): BR Xn
+/// Opcode: 0xD61F0000 (with Rn in bits [9:5])
+pub fn emit_br(mc : MachineCode, rn : Int) -> Unit {
+  mc.annotate("br x\{rn}")
+  // Rn goes in bits [9:5] of the instruction
+  // In little-endian bytes:
+  // byte0 bits [7:5] = Rn[2:0]
+  // byte1 bits [2:0] = Rn[4:3]
+  let b0 = (rn & 7) << 5 // Rn[2:0] in bits [7:5]
+  let b1 = (rn >> 3) & 3 // Rn[4:3] in bits [1:0]
+  mc.emit_inst(b0, b1, 31, 214) // 0x1F, 0xD6
+}
+
+///|
+/// Encode ADR: ADR Xd, #offset (PC-relative address with known offset)
+/// Opcode: 0x10000000
+pub fn emit_adr(mc : MachineCode, rd : Int, offset : Int) -> Unit {
+  mc.annotate("adr x\{rd}, .+\{offset}")
+  // ADR encoding:
+  // | 31 | 30-29 | 28-24 | 23-5   | 4-0 |
+  // | op | immlo | 10000 | immhi  | Rd  |
+  // op=0 for ADR, immlo in bits [30:29], immhi in bits [23:5]
+  // The immediate is a signed 21-bit value split between immlo (2 bits) and immhi (19 bits)
+  let immlo = offset & 3
+  let immhi = (offset >> 2) & 0x7FFFF
+  let b0 = (rd & 31) | ((immhi & 7) << 5)
+  let b1 = (immhi >> 3) & 0xFF
+  let b2 = (immhi >> 11) & 0xFF
+  let b3 = 16 | (immlo << 5) // 0x10 for ADR, immlo in bits [30:29]
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 /// Encode BL (branch with link): BL label
 /// Opcode: 0x94000000
 pub fn emit_bl(mc : MachineCode, target_block : Int) -> Unit {
@@ -4155,6 +4188,34 @@ fn emit_terminator_with_epilogue(
       emit_ret(mc, 30)
     }
     Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000
+    BrTable(index, targets, default) => {
+      // Jump table implementation for br_table
+      // 1. Check bounds: if index >= num_targets, branch to default
+      // 2. Compute jump table entry address: base + index * 4
+      // 3. Branch indirectly to that entry
+      // 4. Jump table: sequence of B instructions
+      let index_reg = reg_num(index)
+      let num_targets = targets.length()
+      // Use x16 and x17 as scratch registers (IP0 and IP1)
+      // First, bounds check: CMP index, #num_targets
+      emit_cmp_imm(mc, index_reg, num_targets)
+      // B.HS default (condition code 2 = HS/CS = unsigned >=)
+      emit_b_cond(mc, 2, default)
+      // Layout after this point:
+      //   ADR  at offset X    -> x16 = X + 12 (pointing to jump table)
+      //   ADD  at offset X+4
+      //   BR   at offset X+8
+      //   B target[0] at offset X+12  <- jump table starts here
+      emit_adr(mc, 16, 12)
+      // ADD x16, x16, index, LSL #2 (each entry is 4 bytes)
+      emit_add_shifted(mc, 16, 16, index_reg, Lsl, 2)
+      // BR x16
+      emit_br(mc, 16)
+      // Emit jump table: sequence of B instructions
+      for target in targets {
+        emit_b(mc, target)
+      }
+    }
   }
 }
 

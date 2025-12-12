@@ -326,6 +326,8 @@ pub(all) struct Translator {
   num_imports : Int
   import_func_type_indices : Array[Int]
   mut is_unreachable : Bool
+  mut return_continuation : Block?
+  func_result_types : Array[Type]
 }
 pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function

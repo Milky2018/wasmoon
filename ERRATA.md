@@ -595,3 +595,6 @@ _请在此处继续添加新的意见和建议_
 - [x] 把 cwasm 后缀纳入 gitignore，并清除已经被 git 跟踪的 cwasm 文件 → 已将 `*.cwasm` 添加到 .gitignore，并用 `git rm --cached` 移除了 5 个已跟踪的 cwasm 文件
 - [x] CLI 的诸多命令描述有误，比如现在的 test 命令和 wast 命令实际上是一回事，而且都和 json 无关。`debug` 等参数应该有 choices 参数。在 `.mooncakes/TheWaWaR/clap/src/clap.mbti` 中查看 named 函数的声明。 → 已修复：更新 test 命令描述为 "Run WebAssembly test script (.wast format)"，为 debug 和 config action 参数添加 choices
 - [ ] `pub fn` 过多了
+- [ ] Sign/Zero Extension Instructions、br、adr 也需要添加到 "all emit functions disasm" 中
+- [ ] disasm 命令可以删了
+- [ ] call_indirect 在 vcode 的 dump 中会打印很长一个东西

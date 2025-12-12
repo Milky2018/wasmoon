@@ -22,6 +22,10 @@ pub(all) struct Translator {
   // Unreachable code flag - set after br/return/unreachable
   // When true, skip translating instructions until block end
   mut is_unreachable : Bool
+  // Return continuation block - lazily created when br/br_table jumps to function level
+  mut return_continuation : Block?
+  // Function result types - needed for lazy return continuation creation
+  func_result_types : Array[Type]
 }
 
 ///|
@@ -64,8 +68,10 @@ pub fn Translator::new(
     local_values.push(p)
   }
   // Add result types
+  let func_result_types : Array[Type] = []
   for result in func_type.results {
     builder.add_result(Type::from_wasm(result))
+    func_result_types.push(Type::from_wasm(result))
   }
   // Initialize locals with zero values - we'll handle them specially
   for local_ty in locals {
@@ -88,6 +94,8 @@ pub fn Translator::new(
     num_imports,
     import_func_type_indices,
     is_unreachable: false,
+    return_continuation: None,
+    func_result_types,
   }
 }
 
@@ -179,31 +187,88 @@ pub fn Translator::translate(
       self.locals[i] = zero_val
     }
   }
+
   // Translate instructions
+  // Note: block_stack does NOT include a function-level frame
+  // translate_br/translate_br_table handle function-level jumps specially
   for instr in instrs {
     self.translate_instruction(instr)
   }
-  // If no terminator, add implicit return
-  match self.builder.current_block() {
-    Some(block) =>
-      match block.terminator {
-        None => {
-          let results = self.builder.get_function().results
-          let return_vals : Array[Value] = []
-          for _ in 0..<results.length() {
-            if self.value_stack.length() > 0 {
-              return_vals.push(self.pop())
+
+  // Handle function end
+  if !self.is_unreachable {
+    match self.builder.current_block() {
+      Some(block) =>
+        match block.terminator {
+          None =>
+            // Normal fall-through: check if return_continuation was created
+            match self.return_continuation {
+              Some(ret_cont) => {
+                // Someone jumped to function level, need to go through continuation
+                let args : Array[Value] = []
+                for _ in 0..<self.func_result_types.length() {
+                  if self.value_stack.length() > 0 {
+                    args.push(self.pop())
+                  }
+                }
+                args.rev_in_place()
+                for loc in self.locals {
+                  args.push(loc)
+                }
+                self.builder.jump(ret_cont, args)
+              }
+              None => {
+                // No one jumped to function level, just return directly
+                let return_vals : Array[Value] = []
+                for _ in 0..<self.func_result_types.length() {
+                  if self.value_stack.length() > 0 {
+                    return_vals.push(self.pop())
+                  }
+                }
+                return_vals.rev_in_place()
+                self.builder.return_(return_vals)
+              }
             }
-          }
-          // Reverse since we popped in wrong order
-          return_vals.rev_in_place()
-          self.builder.return_(return_vals)
+          Some(_) => ()
         }
-        Some(_) => ()
+      None => ()
+    }
+  }
+
+  // If return_continuation was created, emit it
+  match self.return_continuation {
+    Some(ret_cont) => {
+      self.builder.switch_to_block(ret_cont)
+      let return_vals : Array[Value] = []
+      for i in 0..<self.func_result_types.length() {
+        return_vals.push(ret_cont.params[i].0)
       }
+      self.builder.return_(return_vals)
+    }
     None => ()
   }
   self.builder.get_function()
+}
+
+///|
+/// Get or create the return continuation block for function-level jumps
+fn Translator::get_or_create_return_continuation(self : Translator) -> Block {
+  match self.return_continuation {
+    Some(block) => block
+    None => {
+      let ret_cont = self.builder.create_block()
+      // Add block parameters for function results
+      for ty in self.func_result_types {
+        self.builder.add_block_param(ret_cont, ty) |> ignore
+      }
+      // Add block parameters for ALL locals (SSA phi nodes)
+      for loc in self.locals {
+        self.builder.add_block_param(ret_cont, loc.ty) |> ignore
+      }
+      self.return_continuation = Some(ret_cont)
+      ret_cont
+    }
+  }
 }
 
 ///|
@@ -1121,6 +1186,7 @@ fn Translator::translate_if(
 fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
   let idx = self.block_stack.length() - 1 - depth
   if idx >= 0 && idx < self.block_stack.length() {
+    // Jump to a block within the function
     let frame = self.block_stack[idx]
     let args : Array[Value] = []
     // Pop explicit block params
@@ -1133,6 +1199,20 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
       args.push(loc)
     }
     self.builder.jump(frame.block, args)
+  } else if idx == -1 {
+    // Jump to function level (early return)
+    let ret_cont = self.get_or_create_return_continuation()
+    let args : Array[Value] = []
+    // Pop function result values
+    for _ in 0..<self.func_result_types.length() {
+      args.push(self.pop())
+    }
+    args.rev_in_place()
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
+    self.builder.jump(ret_cont, args)
   }
   // After br, code is unreachable
   self.is_unreachable = true
@@ -1144,11 +1224,13 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
 fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
   let cond = self.pop()
   let idx = self.block_stack.length() - 1 - depth
+
+  // For br_if, we need a fallthrough block and a taken block (critical edge split)
+  let fallthrough = self.builder.create_block()
+  let taken = self.builder.create_block()
   if idx >= 0 && idx < self.block_stack.length() {
+    // Jump to a block within the function
     let frame = self.block_stack[idx]
-    // For br_if, we need a fallthrough block and a taken block (critical edge split)
-    let fallthrough = self.builder.create_block()
-    let taken = self.builder.create_block()
 
     // Collect values that would be passed on branch
     let args : Array[Value] = []
@@ -1166,7 +1248,6 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
     }
 
     // Branch: taken goes to intermediate block, not-taken falls through
-    // Note: fallthrough block doesn't need parameters - values stay in same vregs
     self.builder.brnz(cond, taken, fallthrough)
 
     // Critical edge split: taken block jumps to target with args
@@ -1174,7 +1255,34 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
     self.builder.jump(frame.block, args)
 
     // Continue with fallthrough
-    // Values on stack remain unchanged (no need to update them)
+    self.builder.switch_to_block(fallthrough)
+  } else if idx == -1 {
+    // Jump to function level (early return)
+    let ret_cont = self.get_or_create_return_continuation()
+
+    // Collect values that would be passed on branch
+    let args : Array[Value] = []
+    for i in 0..<self.func_result_types.length() {
+      args.push(
+        self.value_stack[self.value_stack.length() -
+        self.func_result_types.length() +
+        i],
+      )
+    }
+
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
+
+    // Branch: taken goes to intermediate block, not-taken falls through
+    self.builder.brnz(cond, taken, fallthrough)
+
+    // Critical edge split: taken block jumps to return continuation
+    self.builder.switch_to_block(taken)
+    self.builder.jump(ret_cont, args)
+
+    // Continue with fallthrough
     self.builder.switch_to_block(fallthrough)
   }
 }
@@ -1188,67 +1296,73 @@ fn Translator::translate_br_table(
   default_ : Int,
 ) -> Unit {
   let index = self.pop()
-  // Get the default target frame
-  let default_idx = self.block_stack.length() - 1 - default_
-  if default_idx >= 0 && default_idx < self.block_stack.length() {
-    let default_frame = self.block_stack[default_idx]
 
-    // Collect arguments that would be passed on branch (same for all targets)
-    // All targets must have the same result type as the default
-    let args : Array[Value] = []
-    let num_results = default_frame.result_types.length()
-    // Only collect results if we have enough values on the stack
-    if self.value_stack.length() >= num_results {
-      for i in 0..<num_results {
-        args.push(self.value_stack[self.value_stack.length() - num_results + i])
-      }
+  // Helper to get target block and result types for a given depth
+  // Returns (target_block, result_types, is_function_level)
+  fn get_target(self : Translator, depth : Int) -> (Block, Array[Type], Bool) {
+    let idx = self.block_stack.length() - 1 - depth
+    if idx >= 0 && idx < self.block_stack.length() {
+      let frame = self.block_stack[idx]
+      (frame.block, frame.result_types, false)
+    } else {
+      // Function level
+      let ret_cont = self.get_or_create_return_continuation()
+      (ret_cont, self.func_result_types, true)
     }
-    // Always pass current local values
-    for loc in self.locals {
-      args.push(loc)
-    }
-
-    // Save the original block
-    let original_block = self.builder.current_block()
-
-    // Phase 1: Create all intermediate blocks (without filling them)
-    let intermediate_blocks : Array[Block] = []
-    let target_frames : Array[BlockFrame] = []
-    for depth in labels {
-      let target_idx = self.block_stack.length() - 1 - depth
-      let target_frame = if target_idx >= 0 &&
-        target_idx < self.block_stack.length() {
-        self.block_stack[target_idx]
-      } else {
-        default_frame
-      }
-      target_frames.push(target_frame)
-      intermediate_blocks.push(self.builder.create_block())
-    }
-    // Create intermediate block for default
-    let default_intermediate = self.builder.create_block()
-
-    // Phase 2: Emit br_table in original block
-    match original_block {
-      Some(_) =>
-        self.builder.br_table(index, intermediate_blocks, default_intermediate)
-      None => ()
-    }
-
-    // Phase 3: Fill in intermediate blocks with jumps to real targets
-    for i, intermediate in intermediate_blocks {
-      self.builder.switch_to_block(intermediate)
-      self.builder.jump(target_frames[i].block, args)
-    }
-
-    // Fill in default intermediate
-    self.builder.switch_to_block(default_intermediate)
-    self.builder.jump(default_frame.block, args)
-
-    // br_table is a terminator, code after it is unreachable
-    // Don't switch back to original - leave current_block as the last intermediate
-    self.is_unreachable = true
   }
+
+  // Get default target info
+  let (default_block, default_result_types, _) = get_target(self, default_)
+
+  // Collect arguments that would be passed on branch (same for all targets)
+  // All targets must have the same result type as the default
+  let args : Array[Value] = []
+  let num_results = default_result_types.length()
+  // Only collect results if we have enough values on the stack
+  if self.value_stack.length() >= num_results {
+    for i in 0..<num_results {
+      args.push(self.value_stack[self.value_stack.length() - num_results + i])
+    }
+  }
+  // Always pass current local values
+  for loc in self.locals {
+    args.push(loc)
+  }
+
+  // Save the original block
+  let original_block = self.builder.current_block()
+
+  // Phase 1: Create all intermediate blocks (without filling them)
+  let intermediate_blocks : Array[Block] = []
+  let target_blocks : Array[Block] = []
+  for depth in labels {
+    let (target_block, _, _) = get_target(self, depth)
+    target_blocks.push(target_block)
+    intermediate_blocks.push(self.builder.create_block())
+  }
+  // Create intermediate block for default
+  let default_intermediate = self.builder.create_block()
+
+  // Phase 2: Emit br_table in original block
+  match original_block {
+    Some(_) =>
+      self.builder.br_table(index, intermediate_blocks, default_intermediate)
+    None => ()
+  }
+
+  // Phase 3: Fill in intermediate blocks with jumps to real targets
+  for i, intermediate in intermediate_blocks {
+    self.builder.switch_to_block(intermediate)
+    self.builder.jump(target_blocks[i], args)
+  }
+
+  // Fill in default intermediate
+  self.builder.switch_to_block(default_intermediate)
+  self.builder.jump(default_block, args)
+
+  // br_table is a terminator, code after it is unreachable
+  // Don't switch back to original - leave current_block as the last intermediate
+  self.is_unreachable = true
 }
 
 ///|

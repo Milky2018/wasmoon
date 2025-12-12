@@ -250,6 +250,12 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
               dfs(func, then_b, visited, postorder)
               dfs(func, else_b, visited, postorder)
             }
+            BrTable(_, targets, default) => {
+              for t in targets {
+                dfs(func, t, visited, postorder)
+              }
+              dfs(func, default, visited, postorder)
+            }
             Return(_) | Trap(_) => ()
           }
         None => ()
@@ -524,6 +530,12 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
           Branch(_, then_b, else_b) => {
             succs.push(then_b)
             succs.push(else_b)
+          }
+          BrTable(_, targets, default) => {
+            for t in targets {
+              succs.push(t)
+            }
+            succs.push(default)
           }
           Return(_) | Trap(_) => ()
         }
@@ -1176,6 +1188,11 @@ pub fn apply_allocation(
             let new_cond = rewrite_reg_with_spill(cond, alloc, new_block)
             Branch(new_cond, then_b, else_b)
           }
+          BrTable(index, targets, default) => {
+            // Handle spilled index register
+            let new_index = rewrite_reg_with_spill(index, alloc, new_block)
+            BrTable(new_index, targets, default)
+          }
           Return(values) => {
             // Handle Return specially to use block-level scratch counter
             // This ensures each spilled value uses a different scratch register
@@ -1317,6 +1334,11 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
         match term {
           Branch(cond, _, _) =>
             match cond {
+              Virtual(vreg) => used_vregs.add(vreg.id)
+              Physical(_) => ()
+            }
+          BrTable(index, _, _) =>
+            match index {
               Virtual(vreg) => used_vregs.add(vreg.id)
               Physical(_) => ()
             }

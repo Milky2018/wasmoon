@@ -51,6 +51,8 @@ pub fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_add_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
+pub fn emit_adr(MachineCode, Int, Int) -> Unit
+
 pub fn emit_and_reg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_and_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
@@ -64,6 +66,8 @@ pub fn emit_b_cond(MachineCode, Int, Int) -> Unit
 pub fn emit_bl(MachineCode, Int) -> Unit
 
 pub fn emit_blr(MachineCode, Int) -> Unit
+
+pub fn emit_br(MachineCode, Int) -> Unit
 
 pub fn emit_cbnz(MachineCode, Int, Int) -> Unit
 
@@ -952,6 +956,7 @@ pub enum VCodeTerminator {
   Branch(Reg, Int, Int)
   Return(Array[Reg])
   Trap(String)
+  BrTable(Reg, Array[Int], Int)
 }
 pub impl Show for VCodeTerminator
 
