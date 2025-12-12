@@ -136,3 +136,139 @@ test "dot product example" {
   ])
   inspect(result, content="matched")
 }
+
+///|
+// Test for >8 parameters - args 8+ go on stack
+test "i64 9 params - get param 8 (stack arg)" {
+  let source =
+    #|(module
+    #|  (func (export "get_p8")
+    #|        (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64)
+    #|        (result i64)
+    #|    (local.get 8))
+    #|)
+  let result = compare_jit_interp(source, "get_p8", [
+    I64(1L),
+    I64(2L),
+    I64(3L),
+    I64(4L),
+    I64(5L),
+    I64(6L),
+    I64(7L),
+    I64(8L),
+    I64(9L),
+  ])
+  inspect(result, content="matched")
+}
+
+///|
+test "i64 10 params - sum all" {
+  let source =
+    #|(module
+    #|  (func (export "sum10")
+    #|        (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64)
+    #|        (result i64)
+    #|    (i64.add
+    #|      (i64.add
+    #|        (i64.add
+    #|          (i64.add
+    #|            (i64.add
+    #|              (i64.add
+    #|                (i64.add
+    #|                  (i64.add
+    #|                    (i64.add
+    #|                      (local.get 0)
+    #|                      (local.get 1))
+    #|                    (local.get 2))
+    #|                  (local.get 3))
+    #|                (local.get 4))
+    #|              (local.get 5))
+    #|            (local.get 6))
+    #|          (local.get 7))
+    #|        (local.get 8))
+    #|      (local.get 9)))
+    #|)
+  // 1+2+3+4+5+6+7+8+9+10 = 55
+  let result = compare_jit_interp(source, "sum10", [
+    I64(1L),
+    I64(2L),
+    I64(3L),
+    I64(4L),
+    I64(5L),
+    I64(6L),
+    I64(7L),
+    I64(8L),
+    I64(9L),
+    I64(10L),
+  ])
+  inspect(result, content="matched")
+}
+
+///|
+test "f64 9 params - get param 8 (stack arg)" {
+  let source =
+    #|(module
+    #|  (func (export "get_p8")
+    #|        (param f64) (param f64) (param f64) (param f64)
+    #|        (param f64) (param f64) (param f64) (param f64)
+    #|        (param f64)
+    #|        (result f64)
+    #|    (local.get 8))
+    #|)
+  let result = compare_jit_interp(source, "get_p8", [
+    F64(1.0),
+    F64(2.0),
+    F64(3.0),
+    F64(4.0),
+    F64(5.0),
+    F64(6.0),
+    F64(7.0),
+    F64(8.0),
+    F64(9.0),
+  ])
+  inspect(result, content="matched")
+}
+
+///|
+test "i64 16 params - sum all" {
+  let source =
+    #|(module
+    #|  (func (export "sum16")
+    #|        (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64)
+    #|        (param i64) (param i64) (param i64) (param i64)
+    #|        (result i64)
+    #|    (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|      (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add (i64.add
+    #|        (i64.add (local.get 0) (local.get 1))
+    #|        (local.get 2)) (local.get 3)) (local.get 4)) (local.get 5))
+    #|        (local.get 6)) (local.get 7)) (local.get 8)) (local.get 9))
+    #|        (local.get 10)) (local.get 11)) (local.get 12)) (local.get 13))
+    #|        (local.get 14)) (local.get 15)))
+    #|)
+  // 1+2+3+...+16 = 136
+  let result = compare_jit_interp(source, "sum16", [
+    I64(1L),
+    I64(2L),
+    I64(3L),
+    I64(4L),
+    I64(5L),
+    I64(6L),
+    I64(7L),
+    I64(8L),
+    I64(9L),
+    I64(10L),
+    I64(11L),
+    I64(12L),
+    I64(13L),
+    I64(14L),
+    I64(15L),
+    I64(16L),
+  ])
+  inspect(result, content="matched")
+}
