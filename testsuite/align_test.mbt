@@ -104,7 +104,7 @@ test "f64 store/load with align=1" {
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let @jit.Single((result : Double)) = jm.call_with_context_poly(f, ())
-  inspect(@types.Value::F64(result), content="F64(10)")
+  inspect(result, content="10")
 }
 
 ///|
@@ -252,5 +252,5 @@ test "f64 store/load at offset 5" {
   guard func is Some(f) else { return }
   let @jit.Single((result : Double)) = jm.call_with_context_poly(f, ())
   // Note: f64 has limited precision for comparison
-  inspect(@types.Value::F64(result), content="F64(3.14159)")
+  inspect(result, content="3.14159")
 }

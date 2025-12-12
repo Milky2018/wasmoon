@@ -183,17 +183,17 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
     f,
     @jit.Single(0L),
   )
-  inspect(@types.Value::F32(result0), content="F32(2)")
+  inspect(result0, content="2")
   let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(1L),
   )
-  inspect(@types.Value::F32(result1), content="F32(3)")
+  inspect(result1, content="3")
   let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(2L),
   )
-  inspect(@types.Value::F32(result2), content="F32(0)")
+  inspect(result2, content="0")
 }
 
 ///|
@@ -270,20 +270,20 @@ test "A critical bug as in data/f32_br_2locals" {
     f,
     @jit.Single(0L),
   )
-  inspect(@types.Value::F32(result0), content="F32(10)")
+  inspect(result0, content="10")
   let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(1L),
   )
-  inspect(@types.Value::F32(result1), content="F32(10)")
+  inspect(result1, content="10")
   let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(2L),
   )
-  inspect(@types.Value::F32(result2), content="F32(10)")
+  inspect(result2, content="10")
   let @jit.Single((result3 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(3L),
   )
-  inspect(@types.Value::F32(result3), content="F32(0)")
+  inspect(result3, content="0")
 }
