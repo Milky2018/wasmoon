@@ -1,0 +1,10 @@
+{
+  "targets": {
+    "ffi.mbt": [
+      "native"
+    ]
+  },
+  "native-stub": [
+    "ffi_jit.c"
+  ]
+}

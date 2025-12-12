@@ -788,6 +788,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_f64_ptr(void) {
 
 // ============ Linear Memory Allocation ============
 
+#define WASM_PAGE_SIZE 65536
+
 // Allocate linear memory for WASM (returns 0 on failure)
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory(int64_t size) {
     if (size <= 0) return 0;
@@ -800,6 +802,82 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory(int64_t mem_ptr) {
     if (mem_ptr) {
         free((void *)mem_ptr);
     }
+}
+
+// Grow linear memory by delta pages
+// Returns the previous size in pages, or -1 on failure
+// max_pages: maximum allowed pages (0 means no limit, use 65536 as default max)
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(int32_t delta, int32_t max_pages) {
+    if (!g_jit_context) return -1;
+    if (delta < 0) return -1;
+
+    size_t current_size = g_jit_context->memory_size;
+    int32_t current_pages = (int32_t)(current_size / WASM_PAGE_SIZE);
+
+    // Check for overflow
+    int64_t new_pages_64 = (int64_t)current_pages + (int64_t)delta;
+    if (new_pages_64 > 65536) return -1;  // Max 4GB (65536 pages)
+
+    // Check against max limit
+    int32_t effective_max = (max_pages > 0) ? max_pages : 65536;
+    if (new_pages_64 > effective_max) return -1;
+
+    int32_t new_pages = (int32_t)new_pages_64;
+    size_t new_size = (size_t)new_pages * WASM_PAGE_SIZE;
+
+    // No change needed if delta is 0
+    if (delta == 0) return current_pages;
+
+    // Reallocate memory
+    uint8_t *new_mem = (uint8_t *)realloc(g_jit_context->memory_base, new_size);
+    if (!new_mem) return -1;
+
+    // Zero-initialize the new pages
+    memset(new_mem + current_size, 0, new_size - current_size);
+
+    // Update context
+    g_jit_context->memory_base = new_mem;
+    g_jit_context->memory_size = new_size;
+
+    return current_pages;
+}
+
+// Get current memory size in pages
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size(void) {
+    if (!g_jit_context) return 0;
+    return (int32_t)(g_jit_context->memory_size / WASM_PAGE_SIZE);
+}
+
+// Get current memory base (for reloading after memory.grow)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base(void) {
+    if (!g_jit_context) return 0;
+    return (int64_t)g_jit_context->memory_base;
+}
+
+// Get current memory size in bytes (for reloading after memory.grow)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes(void) {
+    if (!g_jit_context) return 0;
+    return (int64_t)g_jit_context->memory_size;
+}
+
+// Get function pointer for memory_grow (for JIT to call directly)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_grow;
+}
+
+// Get function pointer for get_memory_base (for JIT to call directly)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base_ptr(void) {
+    return (int64_t)wasmoon_jit_get_memory_base;
+}
+
+// Get function pointer for get_memory_size_bytes (for JIT to call directly)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes_ptr(void) {
+    return (int64_t)wasmoon_jit_get_memory_size_bytes;
+}
+
+// Get function pointer for memory_size (for JIT to call directly)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_size;
 }
 
 // Copy data to linear memory at offset

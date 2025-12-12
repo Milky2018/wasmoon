@@ -134,6 +134,10 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
     Store16(offset) => "store16 \{ops} +\{offset}"
     Store32(offset) => "store32 \{ops} +\{offset}"
 
+    // Memory management
+    MemoryGrow => "memory_grow \{ops}"
+    MemorySize => "memory_size"
+
     // Misc
     Select => "select \{ops}"
     Copy => "copy \{ops}"

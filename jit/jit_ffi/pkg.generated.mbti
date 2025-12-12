@@ -1,0 +1,94 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/jit/jit_ffi"
+
+// Values
+pub fn c_jit_alloc_context(Int) -> Int64
+
+pub fn c_jit_alloc_exec(Int) -> Int64
+
+pub fn c_jit_alloc_memory(Int64) -> Int64
+
+pub fn c_jit_call_multi_return(Int64, Int64, FixedArray[Int64], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
+
+pub fn c_jit_clear_trap() -> Unit
+
+pub fn c_jit_copy_code(Int64, FixedArray[Byte], Int) -> Int
+
+pub fn c_jit_ctx_alloc_indirect_table(Int64, Int) -> Int
+
+pub fn c_jit_ctx_get_func_table(Int64) -> Int64
+
+pub fn c_jit_ctx_get_memory(Int64) -> Int64
+
+pub fn c_jit_ctx_set_func(Int64, Int, Int64) -> Unit
+
+pub fn c_jit_ctx_set_indirect(Int64, Int, Int) -> Unit
+
+pub fn c_jit_ctx_set_memory(Int64, Int64, Int64) -> Unit
+
+pub fn c_jit_free_context(Int64) -> Unit
+
+pub fn c_jit_free_exec(Int64) -> Int
+
+pub fn c_jit_free_memory(Int64) -> Unit
+
+pub fn c_jit_get_args_get_ptr() -> Int64
+
+pub fn c_jit_get_args_sizes_get_ptr() -> Int64
+
+pub fn c_jit_get_clock_time_get_ptr() -> Int64
+
+pub fn c_jit_get_environ_get_ptr() -> Int64
+
+pub fn c_jit_get_environ_sizes_get_ptr() -> Int64
+
+pub fn c_jit_get_fd_close_ptr() -> Int64
+
+pub fn c_jit_get_fd_fdstat_get_ptr() -> Int64
+
+pub fn c_jit_get_fd_prestat_get_ptr() -> Int64
+
+pub fn c_jit_get_fd_read_ptr() -> Int64
+
+pub fn c_jit_get_fd_write_ptr() -> Int64
+
+pub fn c_jit_get_memory_base_ptr() -> Int64
+
+pub fn c_jit_get_memory_grow_ptr() -> Int64
+
+pub fn c_jit_get_memory_size_bytes_ptr() -> Int64
+
+pub fn c_jit_get_memory_size_ptr() -> Int64
+
+pub fn c_jit_get_proc_exit_ptr() -> Int64
+
+pub fn c_jit_get_random_get_ptr() -> Int64
+
+pub fn c_jit_get_spectest_print_f32_ptr() -> Int64
+
+pub fn c_jit_get_spectest_print_f64_f64_ptr() -> Int64
+
+pub fn c_jit_get_spectest_print_f64_ptr() -> Int64
+
+pub fn c_jit_get_spectest_print_i32_f32_ptr() -> Int64
+
+pub fn c_jit_get_spectest_print_i32_ptr() -> Int64
+
+pub fn c_jit_get_spectest_print_i64_ptr() -> Int64
+
+pub fn c_jit_get_spectest_print_ptr() -> Int64
+
+pub fn c_jit_get_trap_code() -> Int
+
+pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
+
+pub fn c_jit_set_context(Int64) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

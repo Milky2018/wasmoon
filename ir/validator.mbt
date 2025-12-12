@@ -264,6 +264,20 @@ fn validate_instruction(
         )
       }
 
+    // Memory management
+    MemoryGrow =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "MemoryGrow expects 1 operand (delta), got \{inst.operands.length()}",
+        )
+      }
+    MemorySize =>
+      if inst.operands.length() != 0 {
+        result.add_error(
+          "MemorySize expects 0 operands, got \{inst.operands.length()}",
+        )
+      }
+
     // Calls can have any number of operands
     Call(_) | CallIndirect(_) => ()
   }
