@@ -394,6 +394,13 @@ pub enum VCodeOpcode {
   // LoadStackParam(param_idx, class): Load from [SP + frame_size + (param_idx - 8) * 8]
   // The actual offset is computed at emit time when frame_size is known
   LoadStackParam(Int, RegClass)
+  // Memory management
+  // MemoryGrow: grow memory by delta pages, returns previous size in pages or -1
+  // Uses: [delta], Defs: [result]
+  MemoryGrow
+  // MemorySize: get current memory size in pages
+  // Uses: [], Defs: [result]
+  MemorySize
 }
 
 ///|
@@ -479,6 +486,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(param_idx, class) =>
       "load_stack_param \{param_idx} (\{class})"
+    MemoryGrow => "memory_grow"
+    MemorySize => "memory_size"
   }
 }
 

@@ -1320,6 +1320,130 @@ pub fn emit_ldrsw_imm(
   mc.emit_inst(b0, b1, b2, b3)
 }
 
+// ============ Sign/Zero Extension Instructions ============
+
+///|
+/// Encode SXTB (sign-extend byte to 64-bit): SXTB Xd, Wn
+/// This is an alias for SBFM Xd, Xn, #0, #7
+/// Opcode: 0x93401C00
+pub fn emit_sxtb_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("sxtb x\{rd}, w\{rn}")
+  // SBFM Xd, Xn, #0, #7: sf=1, opc=00, N=1, immr=0, imms=7
+  // Encoding: 1001_0011_0100_0000_0001_1100_nnnn_nddd_d
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (7 << 2) // imms=7
+  let b2 = 0x40 // immr=0, N=1
+  let b3 = 0x93 // sf=1, opc=00
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode SXTH (sign-extend halfword to 64-bit): SXTH Xd, Wn
+/// This is an alias for SBFM Xd, Xn, #0, #15
+/// Opcode: 0x93403C00
+pub fn emit_sxth_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("sxth x\{rd}, w\{rn}")
+  // SBFM Xd, Xn, #0, #15: sf=1, opc=00, N=1, immr=0, imms=15
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (15 << 2) // imms=15
+  let b2 = 0x40 // immr=0, N=1
+  let b3 = 0x93 // sf=1, opc=00
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode SXTW (sign-extend word to 64-bit): SXTW Xd, Wn
+/// This is an alias for SBFM Xd, Xn, #0, #31
+/// Opcode: 0x93407C00
+pub fn emit_sxtw(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("sxtw x\{rd}, w\{rn}")
+  // SBFM Xd, Xn, #0, #31: sf=1, opc=00, N=1, immr=0, imms=31
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (31 << 2) // imms=31
+  let b2 = 0x40 // immr=0, N=1
+  let b3 = 0x93 // sf=1, opc=00
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode SXTB (sign-extend byte to 32-bit): SXTB Wd, Wn
+/// This is an alias for SBFM Wd, Wn, #0, #7
+pub fn emit_sxtb_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("sxtb w\{rd}, w\{rn}")
+  // SBFM Wd, Wn, #0, #7: sf=0, opc=00, N=0, immr=0, imms=7
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (7 << 2) // imms=7
+  let b2 = 0x00 // immr=0, N=0
+  let b3 = 0x13 // sf=0, opc=00
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode SXTH (sign-extend halfword to 32-bit): SXTH Wd, Wn
+/// This is an alias for SBFM Wd, Wn, #0, #15
+pub fn emit_sxth_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("sxth w\{rd}, w\{rn}")
+  // SBFM Wd, Wn, #0, #15: sf=0, opc=00, N=0, immr=0, imms=15
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (15 << 2) // imms=15
+  let b2 = 0x00 // immr=0, N=0
+  let b3 = 0x13 // sf=0, opc=00
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode UXTB (zero-extend byte to 64-bit): UXTB Xd, Wn
+/// This is an alias for UBFM Xd, Xn, #0, #7, but since W-register writes
+/// automatically zero-extend to X, we can use AND Wd, Wn, #0xFF
+pub fn emit_uxtb_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("uxtb x\{rd}, w\{rn}")
+  // Use AND Wd, Wn, #0xFF which zero-extends to Xd
+  // For simplicity, use UBFM Wd, Wn, #0, #7 then rely on zero-extension
+  // UBFM Wd, Wn, #0, #7: sf=0, opc=10, N=0, immr=0, imms=7
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (7 << 2) // imms=7
+  let b2 = 0x00 // immr=0, N=0
+  let b3 = 0x53 // sf=0, opc=10 (UBFM)
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode UXTH (zero-extend halfword to 64-bit): UXTH Xd, Wn
+/// This is an alias for UBFM Wd, Wn, #0, #15, W-write zero-extends to X
+pub fn emit_uxth_x(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("uxth x\{rd}, w\{rn}")
+  // UBFM Wd, Wn, #0, #15: sf=0, opc=10, N=0, immr=0, imms=15
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (15 << 2) // imms=15
+  let b2 = 0x00 // immr=0, N=0
+  let b3 = 0x53 // sf=0, opc=10 (UBFM)
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode UXTB (zero-extend byte to 32-bit): UXTB Wd, Wn
+pub fn emit_uxtb_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("uxtb w\{rd}, w\{rn}")
+  // UBFM Wd, Wn, #0, #7: sf=0, opc=10, N=0, immr=0, imms=7
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (7 << 2) // imms=7
+  let b2 = 0x00 // immr=0, N=0
+  let b3 = 0x53 // sf=0, opc=10 (UBFM)
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
+///|
+/// Encode UXTH (zero-extend halfword to 32-bit): UXTH Wd, Wn
+pub fn emit_uxth_w(mc : MachineCode, rd : Int, rn : Int) -> Unit {
+  mc.annotate("uxth w\{rd}, w\{rn}")
+  // UBFM Wd, Wn, #0, #15: sf=0, opc=10, N=0, immr=0, imms=15
+  let b0 = (rd & 31) | ((rn & 7) << 5)
+  let b1 = ((rn >> 3) & 3) | (15 << 2) // imms=15
+  let b2 = 0x00 // immr=0, N=0
+  let b3 = 0x53 // sf=0, opc=10 (UBFM)
+  mc.emit_inst(b0, b1, b2, b3)
+}
+
 // ============ Branch Instructions ============
 
 ///|
@@ -3216,7 +3340,31 @@ fn emit_instruction(
       emit_mov_reg(mc, rd, rn)
       emit_nop(mc)
     }
-    Extend(_) | Truncate => emit_nop(mc)
+    Extend(kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match kind {
+        Signed8To32 => emit_sxtb_w(mc, rd, rn)
+        Signed8To64 => emit_sxtb_x(mc, rd, rn)
+        Signed16To32 => emit_sxth_w(mc, rd, rn)
+        Signed16To64 => emit_sxth_x(mc, rd, rn)
+        Signed32To64 => emit_sxtw(mc, rd, rn)
+        Unsigned8To32 => emit_uxtb_w(mc, rd, rn)
+        Unsigned8To64 => emit_uxtb_x(mc, rd, rn)
+        Unsigned16To32 => emit_uxth_w(mc, rd, rn)
+        Unsigned16To64 => emit_uxth_x(mc, rd, rn)
+        Unsigned32To64 =>
+          // Zero-extend 32-bit to 64-bit: MOV Wd, Wn (W-write zero-extends to X)
+          emit_mov_reg32(mc, rd, rn)
+      }
+    }
+    Truncate => {
+      // Truncate from 64-bit to 32-bit: just use MOV Wd, Wn
+      // The upper 32 bits are automatically zeroed
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      emit_mov_reg32(mc, rd, rn)
+    }
     FloatToInt(kind) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -3457,13 +3605,9 @@ fn emit_instruction(
             }
           }
         }
-        // Phase 3: Copy from temps X11-X15 to final destinations X3-X7
-        for i in 0..<first_reg_args {
-          let temp = 11 + i
-          let dst = i + 3 // X3, X4, X5, X6, X7
-          emit_mov_reg(mc, dst, temp)
-        }
-        // Store stack args (args 8+) directly to stack
+        // Store stack args (args 8+) BEFORE Phase 3!
+        // CRITICAL: Must store stack args before Phase 3 copies to X3-X7,
+        // because a stack arg might be in a register (like X3) that gets clobbered.
         // Handle spilled registers: index >= 256 means value is in spill slot
         for i in max_reg_args..<num_args {
           let src = reg_num(inst.uses[i + 1])
@@ -3513,6 +3657,12 @@ fn emit_instruction(
               }
             }
           }
+        }
+        // Phase 3: Copy from temps X11-X15 to final destinations X3-X7
+        for i in 0..<first_reg_args {
+          let temp = 11 + i
+          let dst = i + 3 // X3, X4, X5, X6, X7
+          emit_mov_reg(mc, dst, temp)
         }
       }
       // If callee returns more than 2 values, it needs a buffer pointer in X7
@@ -3727,6 +3877,67 @@ fn emit_instruction(
           emit_ldr_imm(mc, 16, 31, stack_offset) // LDR X16, [SP, #offset]
           emit_fmov_x_to_d(mc, rd, 16) // FMOV Dd, X16
         }
+      }
+    }
+    MemoryGrow => {
+      // Call wasmoon_jit_memory_grow(delta, max_pages)
+      // Uses: [delta], Defs: [result]
+      // Get the delta from the use register
+      let delta_reg = reg_num(inst.uses[0])
+      let result_reg = wreg_num(inst.defs[0])
+
+      // Move delta to X0 (first argument)
+      emit_mov_reg(mc, 0, delta_reg) // MOV X0, delta
+
+      // Set X1 = 0 (max_pages = 0 means no limit)
+      emit_movz(mc, 1, 0, 0) // MOVZ X1, #0
+
+      // Load memory_grow function pointer into X16
+      let grow_ptr = @jit_ffi.c_jit_get_memory_grow_ptr()
+      emit_load_imm64(mc, 16, grow_ptr)
+
+      // Call the function
+      mc.annotate("blr x16  // memory_grow")
+      emit_blr(mc, 16)
+
+      // Move result from X0 to destination
+      if result_reg != 0 {
+        emit_mov_reg(mc, result_reg, 0) // MOV result, X0
+      }
+
+      // After memory.grow, reload memory base and size into X21/X22
+      // since realloc may have moved the memory
+
+      // Call get_memory_base() and store to X21
+      let base_ptr = @jit_ffi.c_jit_get_memory_base_ptr()
+      emit_load_imm64(mc, 16, base_ptr)
+      mc.annotate("blr x16  // get_memory_base")
+      emit_blr(mc, 16)
+      emit_mov_reg(mc, 21, 0) // MOV X21, X0
+
+      // Call get_memory_size_bytes() and store to X22
+      let size_ptr = @jit_ffi.c_jit_get_memory_size_bytes_ptr()
+      emit_load_imm64(mc, 16, size_ptr)
+      mc.annotate("blr x16  // get_memory_size_bytes")
+      emit_blr(mc, 16)
+      emit_mov_reg(mc, 22, 0) // MOV X22, X0
+    }
+    MemorySize => {
+      // Call wasmoon_jit_memory_size()
+      // Uses: [], Defs: [result]
+      let result_reg = wreg_num(inst.defs[0])
+
+      // Load memory_size function pointer into X16
+      let size_ptr = @jit_ffi.c_jit_get_memory_size_ptr()
+      emit_load_imm64(mc, 16, size_ptr)
+
+      // Call the function
+      mc.annotate("blr x16  // memory_size")
+      emit_blr(mc, 16)
+
+      // Move result from X0 to destination
+      if result_reg != 0 {
+        emit_mov_reg(mc, result_reg, 0) // MOV result, X0
       }
     }
   }

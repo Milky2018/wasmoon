@@ -1,5 +1,6 @@
 {
   "import": [
+    "Milky2018/wasmoon/jit/jit_ffi",
     "Milky2018/wasmoon/vcode",
     "Milky2018/wasmoon/cwasm",
     "Milky2018/wasmoon/types"
@@ -18,8 +19,5 @@
     "execution_wbtest.mbt": [
       "native"
     ]
-  },
-  "native-stub": [
-    "ffi_jit.c"
-  ]
+  }
 }

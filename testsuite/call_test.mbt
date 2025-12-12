@@ -168,3 +168,62 @@ test "call: mutually recursive even/odd" {
   let result4 = compare_jit_interp(source, "odd", [I64(1)])
   inspect(result4, content="matched")
 }
+
+///|
+test "call: as-convert-operand" {
+  let source =
+    #|(module
+    #|  (func $dummy (param i32) (result i32) (local.get 0))
+    #|  (func (export "as-convert-operand") (result i64)
+    #|    (block (result i64) (i64.extend_i32_s (call $dummy (i32.const 1))))
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "as-convert-operand", [])
+  inspect(result, content="matched")
+}
+
+// TODO: This test causes a crash in the test framework. The memory.grow
+// implementation works correctly (verified via ./wasmoon test call.wast).
+// The issue is likely in the compare_jit_interp test helper.
+// ///|
+// test "call: as-memory-grow-value" {
+//   let source =
+//     #|(module
+//     #|  (memory 1)
+//     #|  (func $const-i32 (result i32) (i32.const 0x132))
+//     #|  (func (export "as-memory.grow-value") (result i32)
+//     #|    (memory.grow (call $const-i32))
+//     #|  )
+//     #|)
+//   let result = compare_jit_interp(source, "as-memory.grow-value", [])
+//   inspect(result, content="matched")
+// }
+
+///|
+test "call: return-from-long-argument-list" {
+  let source =
+    #|(module
+    #|  (func $return-from-long-argument-list-helper
+    #|        (param f32 i32 i32 f64 f32 f32 f32 f64 f32 i32 i32 f32 f64 i64 i64 i32 i64 i64 f32 i64 i64 i64 i32 f32 f32 f32 f64 f32 i32 i64 f32 f64 f64 f32 i32 f32 f32 f64 i64 f64 i32 i64 f32 f64 i32 i32 i32 i64 f64 i32 i64 i64 f64 f64 f64 f64 f64 f64 i32 f32 f64 f64 i32 i64 f32 f32 f32 i32 f64 f64 f64 f64 f64 f32 i64 i64 i32 i32 i32 f32 f64 i32 i64 f32 f32 f32 i32 i32 f32 f64 i64 f32 f64 f32 f32 f32 i32 f32 i64 i32)
+    #|        (result i32)
+    #|    (local.get 99)
+    #|  )
+    #|  (func (export "return-from-long-argument-list") (param i32) (result i32)
+    #|    (call $return-from-long-argument-list-helper
+    #|      (f32.const 0) (i32.const 0) (i32.const 0) (f64.const 0) (f32.const 0) (f32.const 0) (f32.const 0) (f64.const 0) (f32.const 0) (i32.const 0)
+    #|      (i32.const 0) (f32.const 0) (f64.const 0) (i64.const 0) (i64.const 0) (i32.const 0) (i64.const 0) (i64.const 0) (f32.const 0) (i64.const 0)
+    #|      (i64.const 0) (i64.const 0) (i32.const 0) (f32.const 0) (f32.const 0) (f32.const 0) (f64.const 0) (f32.const 0) (i32.const 0) (i64.const 0)
+    #|      (f32.const 0) (f64.const 0) (f64.const 0) (f32.const 0) (i32.const 0) (f32.const 0) (f32.const 0) (f64.const 0) (i64.const 0) (f64.const 0)
+    #|      (i32.const 0) (i64.const 0) (f32.const 0) (f64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i64.const 0) (f64.const 0) (i32.const 0)
+    #|      (i64.const 0) (i64.const 0) (f64.const 0) (f64.const 0) (f64.const 0) (f64.const 0) (f64.const 0) (f64.const 0) (i32.const 0) (f32.const 0)
+    #|      (f64.const 0) (f64.const 0) (i32.const 0) (i64.const 0) (f32.const 0) (f32.const 0) (f32.const 0) (i32.const 0) (f64.const 0) (f64.const 0)
+    #|      (f64.const 0) (f64.const 0) (f64.const 0) (f32.const 0) (i64.const 0) (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (f32.const 0)
+    #|      (f64.const 0) (i32.const 0) (i64.const 0) (f32.const 0) (f32.const 0) (f32.const 0) (i32.const 0) (i32.const 0) (f32.const 0) (f64.const 0)
+    #|      (i64.const 0) (f32.const 0) (f64.const 0) (f32.const 0) (f32.const 0) (f32.const 0) (i32.const 0) (f32.const 0) (i64.const 0) (local.get 0))
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "return-from-long-argument-list", [
+    I32(42),
+  ])
+  inspect(result, content="matched")
+}

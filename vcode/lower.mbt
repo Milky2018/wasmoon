@@ -344,6 +344,10 @@ fn lower_inst(
     @ir.Opcode::Copy => lower_copy(ctx, inst, block)
     @ir.Opcode::Select => lower_select(ctx, inst, block)
 
+    // Memory management
+    @ir.Opcode::MemoryGrow => lower_memory_grow(ctx, inst, block)
+    @ir.Opcode::MemorySize => lower_memory_size(ctx, inst, block)
+
     // Function calls
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
     @ir.Opcode::CallIndirect(_type_idx) => lower_call_indirect(ctx, inst, block)
@@ -1619,6 +1623,52 @@ fn lower_call(
     call_inst.add_use(Virtual(arg_vreg))
   }
   block.add_inst(call_inst)
+}
+
+///|
+/// Lower memory.grow instruction
+/// memory.grow takes a delta (number of pages to grow) and returns the previous size or -1
+fn lower_memory_grow(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  // Get the delta operand
+  let delta_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Get the result vreg
+  guard inst.result is Some(result) else { return }
+  let result_vreg = ctx.get_vreg(result)
+
+  // Create the MemoryGrow VCode instruction
+  // Uses: [delta], Defs: [result]
+  let grow_inst = VCodeInst::new(MemoryGrow)
+  grow_inst.add_def({ reg: Virtual(result_vreg) })
+  grow_inst.add_use(Virtual(delta_vreg))
+  // Add clobbers for caller-saved registers (it's a call)
+  add_call_clobbers(grow_inst)
+  block.add_inst(grow_inst)
+}
+
+///|
+/// Lower memory.size instruction
+/// memory.size returns the current memory size in pages
+fn lower_memory_size(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+) -> Unit {
+  // Get the result vreg
+  guard inst.result is Some(result) else { return }
+  let result_vreg = ctx.get_vreg(result)
+
+  // Create the MemorySize VCode instruction
+  // Uses: [], Defs: [result]
+  let size_inst = VCodeInst::new(MemorySize)
+  size_inst.add_def({ reg: Virtual(result_vreg) })
+  // Add clobbers for caller-saved registers (it's a call)
+  add_call_clobbers(size_inst)
+  block.add_inst(size_inst)
 }
 
 ///|

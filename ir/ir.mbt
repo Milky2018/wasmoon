@@ -203,6 +203,10 @@ pub enum Opcode {
   Store16(Int) // Store low 16 bits (offset)
   Store32(Int) // Store low 32 bits of i64 (offset)
 
+  // Memory management
+  MemoryGrow // Grow memory by delta pages, returns previous size or -1
+  MemorySize // Get current memory size in pages
+
   // Misc
   Select // Conditional select (cond ? a : b)
   Copy // Copy value (for register allocation)

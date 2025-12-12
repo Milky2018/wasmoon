@@ -625,6 +625,17 @@ fn Translator::translate_instruction(
     Call(func_idx) => self.translate_call(func_idx)
     CallIndirect(type_idx, _table_idx) => self.translate_call_indirect(type_idx)
 
+    // Memory management
+    MemoryGrow => {
+      let delta = self.pop()
+      let result = self.builder.memory_grow(delta)
+      self.push(result)
+    }
+    MemorySize => {
+      let result = self.builder.memory_size()
+      self.push(result)
+    }
+
     // Not yet implemented
     _ => () // Skip unimplemented instructions
   }

@@ -251,9 +251,27 @@ pub fn emit_sub_reg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_sub_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
 
+pub fn emit_sxtb_w(MachineCode, Int, Int) -> Unit
+
+pub fn emit_sxtb_x(MachineCode, Int, Int) -> Unit
+
+pub fn emit_sxth_w(MachineCode, Int, Int) -> Unit
+
+pub fn emit_sxth_x(MachineCode, Int, Int) -> Unit
+
+pub fn emit_sxtw(MachineCode, Int, Int) -> Unit
+
 pub fn emit_ucvtf(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
 
 pub fn emit_udiv(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_uxtb_w(MachineCode, Int, Int) -> Unit
+
+pub fn emit_uxtb_x(MachineCode, Int, Int) -> Unit
+
+pub fn emit_uxth_w(MachineCode, Int, Int) -> Unit
+
+pub fn emit_uxth_x(MachineCode, Int, Int) -> Unit
 
 pub fn get_aarch64_rules() -> Array[RewriteRule]
 
@@ -924,6 +942,8 @@ pub enum VCodeOpcode {
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, RegClass)
+  MemoryGrow
+  MemorySize
 }
 pub impl Show for VCodeOpcode
 

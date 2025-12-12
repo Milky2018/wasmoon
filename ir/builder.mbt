@@ -603,6 +603,18 @@ pub fn IRBuilder::store32(
   self.emit_void_inst(Opcode::Store32(offset), [addr, value])
 }
 
+///|
+/// Grow memory by delta pages, returns previous size in pages or -1 on failure
+pub fn IRBuilder::memory_grow(self : IRBuilder, delta : Value) -> Value {
+  self.emit_inst(Type::I32, Opcode::MemoryGrow, [delta])
+}
+
+///|
+/// Get current memory size in pages
+pub fn IRBuilder::memory_size(self : IRBuilder) -> Value {
+  self.emit_inst(Type::I32, Opcode::MemorySize, [])
+}
+
 // ============ Misc Operations ============
 
 ///|

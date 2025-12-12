@@ -168,6 +168,8 @@ pub fn IRBuilder::load32_s(Self, Value, Int) -> Value
 pub fn IRBuilder::load32_u(Self, Value, Int) -> Value
 pub fn IRBuilder::load8_s(Self, Type, Value, Int) -> Value
 pub fn IRBuilder::load8_u(Self, Type, Value, Int) -> Value
+pub fn IRBuilder::memory_grow(Self, Value) -> Value
+pub fn IRBuilder::memory_size(Self) -> Value
 pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::popcnt(Self, Value) -> Value
 pub fn IRBuilder::print(Self) -> String
@@ -281,6 +283,8 @@ pub enum Opcode {
   Store8(Int)
   Store16(Int)
   Store32(Int)
+  MemoryGrow
+  MemorySize
   Select
   Copy
   Call(Int)

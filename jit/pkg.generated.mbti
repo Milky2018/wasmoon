@@ -35,6 +35,14 @@ pub fn get_fd_read_ptr() -> Int64
 
 pub fn get_fd_write_ptr() -> Int64
 
+pub fn get_memory_base_ptr() -> Int64
+
+pub fn get_memory_grow_ptr() -> Int64
+
+pub fn get_memory_size_bytes_ptr() -> Int64
+
+pub fn get_memory_size_ptr() -> Int64
+
 pub fn get_proc_exit_ptr() -> Int64
 
 pub fn get_random_get_ptr() -> Int64
