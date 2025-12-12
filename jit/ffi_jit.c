@@ -874,11 +874,18 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
     uint64_t d0_bits = 0, d1_bits = 0;
 
 #if defined(__aarch64__) || defined(_M_ARM64)
-    // JIT ABI: X0=func_table, X1=mem_base, X2=mem_size, X3-X10=args (up to 8)
+    // JIT ABI: X0=func_table, X1=mem_base, X2=mem_size, X3-X10=args (up to 8 register args)
+    // Args 8+ go on the stack at [SP + (i-8)*8]
     // indirect_table_ptr is stored at func_table[-1] and loaded into X24 by prologue
     // When needs_extra_buffer: X7=extra_results_buffer (conflicts with arg 4)
-    // For now, we support up to 8 args when needs_extra_buffer is false,
-    // and up to 4 args when needs_extra_buffer is true
+
+    // Calculate stack args (args beyond the first 8 register args)
+    int max_reg_args = 8;
+    int stack_args = (num_args > max_reg_args) ? (num_args - max_reg_args) : 0;
+    // Stack must be 16-byte aligned
+    int stack_space = ((stack_args * 8) + 15) & ~15;
+
+    // Set up register arguments
     register int64_t r0 __asm__("x0") = func_table_ptr;
     register int64_t r1 __asm__("x1") = mem_base;
     register int64_t r2 __asm__("x2") = mem_size;
@@ -895,17 +902,47 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
     register uint64_t d0 __asm__("d0");
     register uint64_t d1 __asm__("d1");
 
-    __asm__ volatile(
-        "blr %[func]"
-        : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
-        : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r8), "r"(r9), "r"(r10)
-        : "x11", "x12", "x13", "x14", "x15",
-          "x16", "x17", "x30",
-          "d2", "d3", "d4", "d5", "d6", "d7",
-          "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
-          "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
-          "memory", "cc"
-    );
+    // For stack args, allocate space and store them directly
+    if (stack_space > 0) {
+        // Allocate stack space and get pointer to it
+        int64_t *stack_args_ptr;
+        __asm__ volatile(
+            "sub sp, sp, %[size]\n\t"
+            "mov %[ptr], sp"
+            : [ptr] "=r"(stack_args_ptr)
+            : [size] "r"((int64_t)stack_space)
+        );
+
+        // Store all stack args directly from args array
+        for (int i = 0; i < stack_args; i++) {
+            stack_args_ptr[i] = args[8 + i];
+        }
+
+        __asm__ volatile(
+            "blr %[func]\n\t"
+            "add sp, sp, %[size]"
+            : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
+            : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r8), "r"(r9), "r"(r10),
+              [size] "r"((int64_t)stack_space)
+            : "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x30",
+              "d2", "d3", "d4", "d5", "d6", "d7",
+              "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
+              "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
+              "memory", "cc"
+        );
+    } else {
+        __asm__ volatile(
+            "blr %[func]"
+            : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
+            : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r8), "r"(r9), "r"(r10)
+            : "x11", "x12", "x13", "x14", "x15",
+              "x16", "x17", "x30",
+              "d2", "d3", "d4", "d5", "d6", "d7",
+              "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
+              "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
+              "memory", "cc"
+        );
+    }
 
     x0_result = r0;
     x1_result = r1;
