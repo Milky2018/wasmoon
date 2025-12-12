@@ -1013,7 +1013,6 @@ pub fn apply_allocation(
     }
 
     // Block-level scratch register counter to avoid aliasing across instructions
-    // Use 4 scratch registers (D16-D19 for float, X16-X19 for int) and cycle through them
     let mut block_scratch_idx = 0
 
     // Process instructions
@@ -1021,30 +1020,67 @@ pub fn apply_allocation(
       // First, insert reload instructions for any spilled uses
       // Track which scratch registers are used for each spilled vreg
       let spill_regs : Map[Int, PReg] = {}
-      for use_reg in inst.uses {
+
+      // Check if this is a CallIndirect instruction - needs special handling
+      let is_call_indirect = inst.opcode is CallIndirect(_, _)
+
+      // For CallIndirect with many spilled args, we use a special strategy:
+      // - func_ptr (uses[0]): reload to X18
+      // - register args (uses[1-8]): if spilled, reload to X16/X17 (max 2)
+      // - stack args (uses[9+]): if spilled, use spilled register encoding (emit handles them)
+      //
+      // X16, X17 are the only truly safe scratch registers because:
+      // - X3-X10: may hold function parameters
+      // - X11-X15: used by CallIndirect marshalling
+      // - X18: used by CallIndirect for func_ptr
+      // - X19+: allocatable callee-saved registers
+
+      let mut inst_spill_idx = 0
+      for i, use_reg in inst.uses {
         match use_reg {
           Virtual(vreg) =>
             if alloc.assignments.get(vreg.id) is None {
               // This vreg is spilled, need to reload
               match alloc.spill_slots.get(vreg.id) {
                 Some(slot) => {
-                  // Use scratch register D16-D17 for float, X16-X17 for int
-                  // NOTE: Only use X16-X17 (IP0, IP1) - NOT X18 (platform) or X19 (callee-saved)
-                  // Always use Float64 for float scratch to avoid S/D aliasing issues
                   let scratch_class = match vreg.class {
                     Float32 | Float64 => Float64
                     _ => vreg.class
                   }
-                  let scratch_preg : PReg = {
-                    index: 16 + block_scratch_idx % 2,
-                    class: scratch_class,
+
+                  // Determine how to handle this spilled use
+                  if is_call_indirect && i == 0 {
+                    // CallIndirect's func_ptr (first use): reload directly to X18
+                    let scratch_preg : PReg = {
+                      index: 18,
+                      class: scratch_class,
+                    }
+                    spill_regs.set(vreg.id, scratch_preg)
+                    let reload_inst = VCodeInst::new(StackLoad(slot * 8))
+                    reload_inst.add_def({ reg: Physical(scratch_preg) })
+                    new_block.add_inst(reload_inst)
+                  } else if is_call_indirect && i >= 1 {
+                    // CallIndirect's args (all args, including register args 0-7 and stack args 8+)
+                    // Use spilled register encoding - emit code will handle the load directly
+                    // This avoids X16/X17 aliasing when many args are spilled
+                    let spilled_preg = PReg::spilled(slot, scratch_class)
+                    spill_regs.set(vreg.id, spilled_preg)
+                    // Don't insert reload - emit code will load directly from spill slot
+                  } else {
+                    // Regular spilled uses (non-CallIndirect instructions)
+                    // Use X16, X17 as scratch registers
+                    let scratch_indices = [16, 17]
+                    let scratch_preg : PReg = {
+                      index: scratch_indices[inst_spill_idx % 2],
+                      class: scratch_class,
+                    }
+                    inst_spill_idx = inst_spill_idx + 1
+                    block_scratch_idx = block_scratch_idx + 1
+                    spill_regs.set(vreg.id, scratch_preg)
+                    let reload_inst = VCodeInst::new(StackLoad(slot * 8))
+                    reload_inst.add_def({ reg: Physical(scratch_preg) })
+                    new_block.add_inst(reload_inst)
                   }
-                  block_scratch_idx = block_scratch_idx + 1
-                  spill_regs.set(vreg.id, scratch_preg)
-                  // Insert StackLoad instruction
-                  let reload_inst = VCodeInst::new(StackLoad(slot * 8))
-                  reload_inst.add_def({ reg: Physical(scratch_preg) })
-                  new_block.add_inst(reload_inst)
                 }
                 None => ()
               }
@@ -1071,7 +1107,7 @@ pub fn apply_allocation(
       // Create new instruction with rewritten registers
       let new_inst = VCodeInst::new(inst.opcode)
 
-      // Rewrite definitions - use different scratch registers for each spilled def
+      // Rewrite definitions - use X16, X17 as scratch for spilled defs
       let spill_scratch_map : Map[Int, PReg] = {} // vreg.id -> scratch preg
       for def in inst.defs {
         match def.reg {
@@ -1079,14 +1115,14 @@ pub fn apply_allocation(
             match alloc.assignments.get(vreg.id) {
               Some(preg) => new_inst.add_def({ reg: Physical(preg) })
               None => {
-                // Spilled: use scratch register from block-level pool
-                // Always use Float64 for float scratch to avoid S/D aliasing issues
+                // Spilled: use X16, X17 as scratch registers
                 let scratch_class = match vreg.class {
                   Float32 | Float64 => Float64
                   _ => vreg.class
                 }
+                let scratch_indices = [16, 17]
                 let scratch_preg : PReg = {
-                  index: 16 + block_scratch_idx % 4,
+                  index: scratch_indices[block_scratch_idx % 2],
                   class: scratch_class,
                 }
                 block_scratch_idx = block_scratch_idx + 1
@@ -1153,13 +1189,15 @@ pub fn apply_allocation(
                       // Spilled: insert reload and use scratch register from block pool
                       match alloc.spill_slots.get(vreg.id) {
                         Some(slot) => {
-                          // Always use Float64 for float scratch to avoid S/D aliasing
+                          // Use X16, X17 as scratch registers
+                          // These are the only safe scratch registers
                           let scratch_class = match vreg.class {
                             Float32 | Float64 => Float64
                             _ => vreg.class
                           }
+                          let scratch_indices = [16, 17]
                           let scratch_preg : PReg = {
-                            index: 16 + block_scratch_idx % 4,
+                            index: scratch_indices[block_scratch_idx % 2],
                             class: scratch_class,
                           }
                           block_scratch_idx = block_scratch_idx + 1

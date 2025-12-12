@@ -273,6 +273,8 @@ pub fn lower_inst_with_patterns(LoweringContext, @ir.Inst, VCodeBlock, Array[Rew
 
 pub fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
 
+pub let spill_slot_base : Int
+
 pub fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
 
 // Errors
@@ -613,6 +615,9 @@ pub(all) struct PReg {
   index : Int
   class : RegClass
 }
+pub fn PReg::get_spill_slot(Self) -> Int
+pub fn PReg::is_spilled(Self) -> Bool
+pub fn PReg::spilled(Int, RegClass) -> Self
 pub impl Show for PReg
 
 pub enum Pattern {

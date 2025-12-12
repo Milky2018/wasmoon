@@ -3381,26 +3381,18 @@ fn emit_instruction(
       if stack_space > 0 {
         emit_sub_imm(mc, 31, 31, stack_space) // SUB SP, SP, #stack_space
       }
-      // Move arguments: use two-phase for register args to avoid clobbering
+      // Move arguments: use three-phase for register args to avoid clobbering
       // All arguments are passed as Int64 (floats converted via FMOV)
+      //
+      // CRITICAL: Order matters to avoid clobbering!
+      // - Args 0-4 might be in ANY register (including X8-X10) due to register allocation
+      // - Phase 1 must save args 0-4 to temps BEFORE Phase 2 writes to X8-X10
+      // - Otherwise, if arg 0 is in X8 and Phase 2 writes arg 5 to X8, arg 0's value is lost
       if num_args > 0 {
         let reg_args_count = @cmp.minimum(num_args, max_reg_args)
-        // Phase 1: Copy args 5-7 directly to X8-X10 (if present)
-        // These are safe to copy first since X8-X10 are not used as temps
-        for i in 5..<reg_args_count {
-          let src = reg_num(inst.uses[i + 1])
-          let dst = i + 3 // X8, X9, X10 for args 5, 6, 7
-          let arg_class = match inst.uses[i + 1] {
-            Physical(preg) => preg.class
-            Virtual(vreg) => vreg.class
-          }
-          match arg_class {
-            Int => emit_mov_reg(mc, dst, src)
-            Float32 => emit_fmov_s_to_w(mc, dst, src)
-            Float64 => emit_fmov_d_to_x(mc, dst, src)
-          }
-        }
-        // Phase 2: Copy args 0-4 to temp registers X11-X15
+        // Phase 1: Copy args 0-4 to temp registers X11-X15 (MUST be first!)
+        // This saves their values before we overwrite X8-X10 in Phase 2
+        // Handle spilled registers: load from spill slot instead of mov
         let first_reg_args = @cmp.minimum(reg_args_count, 5)
         for i in 0..<first_reg_args {
           let src = reg_num(inst.uses[i + 1])
@@ -3409,10 +3401,60 @@ fn emit_instruction(
             Physical(preg) => preg.class
             Virtual(vreg) => vreg.class
           }
-          match arg_class {
-            Int => emit_mov_reg(mc, temp, src)
-            Float32 => emit_fmov_s_to_w(mc, temp, src)
-            Float64 => emit_fmov_d_to_x(mc, temp, src)
+          if src >= spill_slot_base {
+            // Spilled: load from spill slot directly to temp register
+            let spill_slot = src - spill_slot_base
+            let spill_offset = spill_base_offset + stack_space + spill_slot * 8
+            match arg_class {
+              Int => emit_ldr_imm(mc, temp, 31, spill_offset)
+              Float32 => {
+                emit_ldr_d_imm(mc, 16, 31, spill_offset)
+                emit_fmov_s_to_w(mc, temp, 16)
+              }
+              Float64 => {
+                emit_ldr_d_imm(mc, 16, 31, spill_offset)
+                emit_fmov_d_to_x(mc, temp, 16)
+              }
+            }
+          } else {
+            match arg_class {
+              Int => emit_mov_reg(mc, temp, src)
+              Float32 => emit_fmov_s_to_w(mc, temp, src)
+              Float64 => emit_fmov_d_to_x(mc, temp, src)
+            }
+          }
+        }
+        // Phase 2: Copy args 5-7 directly to X8-X10 (if present)
+        // Now safe because args 0-4 are already saved to temps
+        // Handle spilled registers: load from spill slot instead of mov
+        for i in 5..<reg_args_count {
+          let src = reg_num(inst.uses[i + 1])
+          let dst = i + 3 // X8, X9, X10 for args 5, 6, 7
+          let arg_class = match inst.uses[i + 1] {
+            Physical(preg) => preg.class
+            Virtual(vreg) => vreg.class
+          }
+          if src >= spill_slot_base {
+            // Spilled: load from spill slot directly to destination
+            let spill_slot = src - spill_slot_base
+            let spill_offset = spill_base_offset + stack_space + spill_slot * 8
+            match arg_class {
+              Int => emit_ldr_imm(mc, dst, 31, spill_offset)
+              Float32 => {
+                emit_ldr_d_imm(mc, 16, 31, spill_offset)
+                emit_fmov_s_to_w(mc, dst, 16)
+              }
+              Float64 => {
+                emit_ldr_d_imm(mc, 16, 31, spill_offset)
+                emit_fmov_d_to_x(mc, dst, 16)
+              }
+            }
+          } else {
+            match arg_class {
+              Int => emit_mov_reg(mc, dst, src)
+              Float32 => emit_fmov_s_to_w(mc, dst, src)
+              Float64 => emit_fmov_d_to_x(mc, dst, src)
+            }
           }
         }
         // Phase 3: Copy from temps X11-X15 to final destinations X3-X7
@@ -3422,6 +3464,7 @@ fn emit_instruction(
           emit_mov_reg(mc, dst, temp)
         }
         // Store stack args (args 8+) directly to stack
+        // Handle spilled registers: index >= 256 means value is in spill slot
         for i in max_reg_args..<num_args {
           let src = reg_num(inst.uses[i + 1])
           let stack_offset = (i - max_reg_args) * 8
@@ -3429,17 +3472,45 @@ fn emit_instruction(
             Physical(preg) => preg.class
             Virtual(vreg) => vreg.class
           }
-          match arg_class {
-            Int => emit_str_imm(mc, src, 31, stack_offset) // STR Xsrc, [SP, #offset]
-            Float32 => {
-              // Move f32 to X16, then store
-              emit_fmov_s_to_w(mc, 16, src)
-              emit_str_imm(mc, 16, 31, stack_offset)
+
+          // Check if this is a spilled register (index >= 256)
+          if src >= spill_slot_base {
+            // Spilled: load from spill slot to X16, then store to call stack
+            // NOTE: SP has been adjusted by stack_space, so we need to add that to the offset
+            // Use spill_base_offset (not frame_size) as that's where spill slots start
+            let spill_slot = src - spill_slot_base
+            let spill_offset = spill_base_offset + stack_space + spill_slot * 8
+            match arg_class {
+              Int => {
+                emit_ldr_imm(mc, 16, 31, spill_offset) // LDR X16, [SP, #spill_offset]
+                emit_str_imm(mc, 16, 31, stack_offset) // STR X16, [SP, #stack_offset]
+              }
+              Float32 => {
+                // Load from spill as f64 (spill slots are 8 bytes), convert to int, store
+                emit_ldr_d_imm(mc, 16, 31, spill_offset) // LDR D16, [SP, #spill_offset]
+                emit_fmov_s_to_w(mc, 16, 16)
+                emit_str_imm(mc, 16, 31, stack_offset)
+              }
+              Float64 => {
+                emit_ldr_d_imm(mc, 16, 31, spill_offset) // LDR D16, [SP, #spill_offset]
+                emit_fmov_d_to_x(mc, 16, 16)
+                emit_str_imm(mc, 16, 31, stack_offset)
+              }
             }
-            Float64 => {
-              // Move f64 to X16, then store
-              emit_fmov_d_to_x(mc, 16, src)
-              emit_str_imm(mc, 16, 31, stack_offset)
+          } else {
+            // Normal register: store directly
+            match arg_class {
+              Int => emit_str_imm(mc, src, 31, stack_offset) // STR Xsrc, [SP, #offset]
+              Float32 => {
+                // Move f32 to X16, then store
+                emit_fmov_s_to_w(mc, 16, src)
+                emit_str_imm(mc, 16, 31, stack_offset)
+              }
+              Float64 => {
+                // Move f64 to X16, then store
+                emit_fmov_d_to_x(mc, 16, src)
+                emit_str_imm(mc, 16, 31, stack_offset)
+              }
             }
           }
         }
