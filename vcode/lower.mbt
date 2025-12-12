@@ -1511,7 +1511,6 @@ fn lower_terminator(
         cmp_inst_0.add_use(Virtual(index_vreg))
         cmp_inst_0.add_use(Virtual(zero_vreg))
         block.add_inst(cmp_inst_0)
-
         let target_0_id = ctx.get_block_id(targets[0])
         if targets.length() == 1 {
           block.set_terminator(
