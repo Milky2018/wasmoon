@@ -776,19 +776,14 @@ fn invoke_action(
 
 ///|
 /// Convert JIT result (Int64) to Value based on the given return type
-/// Note: For float types, the Int64 contains the bits of a f64 (Double),
-/// because JIT internally promotes f32 to f64.
+/// For f32: the Int64 contains the raw f32 bits in the lower 32 bits
+/// For f64: the Int64 contains the raw f64 bits
 fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
   match ty {
-    I32 => @types.Value::I32(v.to_int())
-    I64 => @types.Value::I64(v)
-    F32 => {
-      // v contains bits of a f64 (JIT promotes f32 to f64 internally)
-      // Convert f64 to f32 value
-      let f64_val = v.reinterpret_as_double()
-      @types.Value::F32(Float::from_double(f64_val))
-    }
-    F64 => @types.Value::F64(v.reinterpret_as_double())
+    I32 => @types.Value::I32(@jit.FromInt64::from_int64_bits(v))
+    I64 => @types.Value::I64(@jit.FromInt64::from_int64_bits(v))
+    F32 => @types.Value::F32(@jit.FromInt64::from_int64_bits(v))
+    F64 => @types.Value::F64(@jit.FromInt64::from_int64_bits(v))
     _ => @types.Value::I32(v.to_int())
   }
 }

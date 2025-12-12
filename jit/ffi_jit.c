@@ -862,9 +862,13 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
 
     // Call the JIT function
     int64_t x0_result = 0, x1_result = 0;
-    double d0_result = 0.0, d1_result = 0.0;
+    uint64_t d0_bits = 0, d1_bits = 0;
 
 #if defined(__aarch64__) || defined(_M_ARM64)
+    // JIT ABI: X0=func_table, X1=mem_base, X2=mem_size, X3-X10=args (up to 8)
+    // When needs_extra_buffer: X7=extra_results_buffer (conflicts with arg 4)
+    // For now, we support up to 8 args when needs_extra_buffer is false,
+    // and up to 4 args when needs_extra_buffer is true
     register int64_t r0 __asm__("x0") = func_table_ptr;
     register int64_t r1 __asm__("x1") = mem_base;
     register int64_t r2 __asm__("x2") = mem_size;
@@ -872,15 +876,20 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
     register int64_t r4 __asm__("x4") = num_args > 1 ? args[1] : 0;
     register int64_t r5 __asm__("x5") = num_args > 2 ? args[2] : 0;
     register int64_t r6 __asm__("x6") = num_args > 3 ? args[3] : 0;
-    register int64_t r7 __asm__("x7") = needs_extra_buffer ? (int64_t)extra_buffer : 0;
-    register double d0 __asm__("d0");
-    register double d1 __asm__("d1");
+    // X7 is used for extra_results_buffer OR arg 4
+    register int64_t r7 __asm__("x7") = needs_extra_buffer ? (int64_t)extra_buffer : (num_args > 4 ? args[4] : 0);
+    // X8-X10 for args 5-7 (only used when needs_extra_buffer is false)
+    register int64_t r8 __asm__("x8") = num_args > 5 ? args[5] : 0;
+    register int64_t r9 __asm__("x9") = num_args > 6 ? args[6] : 0;
+    register int64_t r10 __asm__("x10") = num_args > 7 ? args[7] : 0;
+    register uint64_t d0 __asm__("d0");
+    register uint64_t d1 __asm__("d1");
 
     __asm__ volatile(
         "blr %[func]"
         : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
-        : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7)
-        : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+        : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r8), "r"(r9), "r"(r10)
+        : "x11", "x12", "x13", "x14", "x15",
           "x16", "x17", "x30",
           "d2", "d3", "d4", "d5", "d6", "d7",
           "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
@@ -890,8 +899,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
 
     x0_result = r0;
     x1_result = r1;
-    d0_result = d0;
-    d1_result = d1;
+    d0_bits = d0;
+    d1_bits = d1;
 #else
     // Fallback for non-ARM64 platforms
     typedef int64_t (*jit_func_t)(int64_t, int64_t, int64_t);
@@ -904,11 +913,25 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
     int int_idx = 0, float_idx = 0, extra_idx = 0;
     for (int i = 0; i < num_results; i++) {
         int ty = result_types[i];
-        if (ty == 2 || ty == 3) { // F32 or F64
+        if (ty == 2) { // F32 - stored as raw 32-bit in S register (lower 32 bits of D)
             if (float_idx < 2) {
-                // From D0 or D1
-                double d = (float_idx == 0) ? d0_result : d1_result;
-                memcpy(&results[i], &d, sizeof(double));
+                // From S0 or S1 (lower 32 bits of D0 or D1)
+                // d0_bits/d1_bits contain the raw 64-bit value from D register
+                // For f32, the value is in the lower 32 bits (S register is low half of D)
+                uint64_t bits = (float_idx == 0) ? d0_bits : d1_bits;
+                uint32_t float_bits = (uint32_t)(bits & 0xFFFFFFFF);
+                // Store as int64 with float bits in lower 32 bits
+                results[i] = (int64_t)float_bits;
+                float_idx++;
+            } else {
+                // From extra buffer
+                results[i] = extra_buffer[extra_idx++];
+            }
+        } else if (ty == 3) { // F64
+            if (float_idx < 2) {
+                // From D0 or D1 - raw 64-bit value is the f64 bit pattern
+                uint64_t bits = (float_idx == 0) ? d0_bits : d1_bits;
+                results[i] = (int64_t)bits;
                 float_idx++;
             } else {
                 // From extra buffer

@@ -54,11 +54,8 @@ test "f32 store/load with align=1" {
 
   // This call may trigger Bus Error on AArch64 if the memory base
   // is not properly aligned for f32 access with align=1 hint
-  let result = jm.call_with_context(f, [])
-  inspect(
-    @types.Value::F32(Float::from_double(result[0].reinterpret_as_double())),
-    content="F32(10)",
-  )
+  let @jit.Single((result : Float)) = jm.call_with_context_poly(f, ())
+  inspect(@types.Value::F32(result), content="F32(10)")
 }
 
 ///|
@@ -106,11 +103,8 @@ test "f64 store/load with align=1" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [])
-  inspect(
-    @types.Value::F64(result[0].reinterpret_as_double()),
-    content="F64(10)",
-  )
+  let @jit.Single((result : Double)) = jm.call_with_context_poly(f, ())
+  inspect(@types.Value::F64(result), content="F64(10)")
 }
 
 ///|
@@ -158,8 +152,8 @@ test "i32 store/load at unaligned address" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [])
-  inspect(result[0].to_int(), content="42")
+  let @jit.Single((result : Int)) = jm.call_with_context_poly(f, ())
+  inspect(result, content="42")
 }
 
 ///|
@@ -207,8 +201,8 @@ test "i64 store/load at unaligned address" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [])
-  inspect(result[0], content="123456789")
+  let @jit.Single((result : Int64)) = jm.call_with_context_poly(f, ())
+  inspect(result, content="123456789")
 }
 
 ///|
@@ -256,10 +250,7 @@ test "f64 store/load at offset 5" {
   defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
-  let result = jm.call_with_context(f, [])
+  let @jit.Single((result : Double)) = jm.call_with_context_poly(f, ())
   // Note: f64 has limited precision for comparison
-  inspect(
-    @types.Value::F64(result[0].reinterpret_as_double()),
-    content="F64(3.14159)",
-  )
+  inspect(@types.Value::F64(result), content="F64(3.14159)")
 }
