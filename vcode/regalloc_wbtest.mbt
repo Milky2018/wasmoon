@@ -1424,3 +1424,192 @@ test "regalloc: mixed int, f32, f64 registers" {
     ),
   )
 }
+
+///|
+/// Test CallIndirect with many f64 arguments (8 f64 params exceeds ABI register count)
+/// This reproduces the "regalloc: many call arguments" failing test
+test "regalloc: CallIndirect with 8 f64 arguments" {
+  let func = VCodeFunction::new("test_many_f64_args")
+  func.add_result(Float64)
+  func.add_result_type(@ir.Type::F64)
+  let block = func.new_block()
+
+  // Create 8 f64 constants as arguments
+  let args : Array[VReg] = []
+  for i in 0..<8 {
+    let vreg = func.new_vreg(Float64)
+    let inst = VCodeInst::new(
+      LoadConstF64((i.to_double() + 1.0).reinterpret_as_int64()),
+    )
+    inst.add_def({ reg: Virtual(vreg) })
+    block.add_inst(inst)
+    args.push(vreg)
+  }
+
+  // Create a fake function pointer (just use an Int vreg)
+  let func_ptr = func.new_vreg(Int)
+  let ptr_inst = VCodeInst::new(LoadConst(0x1000L))
+  ptr_inst.add_def({ reg: Virtual(func_ptr) })
+  block.add_inst(ptr_inst)
+
+  // CallIndirect with 8 f64 args, 1 f64 result
+  let call_inst = VCodeInst::new(CallIndirect(8, 1))
+  let call_result = func.new_vreg(Float64)
+  call_inst.add_def({ reg: Virtual(call_result) })
+  call_inst.add_use(Virtual(func_ptr)) // First use is func_ptr
+  for arg in args {
+    call_inst.add_use(Virtual(arg))
+  }
+  block.add_inst(call_inst)
+
+  // Return the call result
+  block.set_terminator(Return([Virtual(call_result)]))
+
+  // Show VCode before allocation
+  inspect(
+    func.print(),
+    content=(
+      #|vcode test_many_f64_args() -> double {
+      #|block0:
+      #|    f0 = ldf 1
+      #|    f1 = ldf 2
+      #|    f2 = ldf 3
+      #|    f3 = ldf 4
+      #|    f4 = ldf 5
+      #|    f5 = ldf 6
+      #|    f6 = ldf 7
+      #|    f7 = ldf 8
+      #|    v8 = ldi 4096
+      #|    f9 = call_indirect(8) -> 1 results v8, f0, f1, f2, f3, f4, f5, f6, f7
+      #|    ret f9
+      #|}
+      #|
+    ),
+  )
+
+  // Compute liveness
+  let liveness = compute_liveness(func)
+
+  // Check that all f64 values are correctly tracked
+  inspect(liveness.intervals.length(), content="10")
+
+  // Check that call_points is recorded
+  inspect(liveness.call_points.length(), content="1")
+
+  // Allocate registers using AArch64 allocator
+  // Call result is assigned to callee-saved D8, no spill needed
+  let allocated = allocate_registers_aarch64(func)
+  inspect(
+    allocated,
+    content=(
+      #|vcode test_many_f64_args() -> double {
+      #|block0:
+      #|    d0 = ldf 1
+      #|    d1 = ldf 2
+      #|    d2 = ldf 3
+      #|    d3 = ldf 4
+      #|    d4 = ldf 5
+      #|    d5 = ldf 6
+      #|    d6 = ldf 7
+      #|    d7 = ldf 8
+      #|    x8 = ldi 4096
+      #|    d8 = call_indirect(8) -> 1 results x8, d0, d1, d2, d3, d4, d5, d6, d7
+      #|    ret d8
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+/// Test f32 value that must survive across a CallIndirect
+/// This reproduces the "regalloc: f32 live across call" failing test
+test "regalloc: f32 value live across CallIndirect" {
+  let func = VCodeFunction::new("test_f32_across_call")
+  func.add_result(Float32)
+  func.add_result(Float64)
+  func.add_result_type(@ir.Type::F32)
+  func.add_result_type(@ir.Type::F64)
+  let block = func.new_block()
+
+  // f0 = ldf 42.0 (f32)
+  let f32_val = func.new_vreg(Float32)
+  let f32_bits = (42.0 : Float).reinterpret_as_int()
+  let f32_inst = VCodeInst::new(LoadConstF32(f32_bits))
+  f32_inst.add_def({ reg: Virtual(f32_val) })
+  block.add_inst(f32_inst)
+
+  // f1 = ldf 3.14 (f64) - argument for call
+  let f64_arg = func.new_vreg(Float64)
+  let f64_inst = VCodeInst::new(
+    LoadConstF64((3.14 : Double).reinterpret_as_int64()),
+  )
+  f64_inst.add_def({ reg: Virtual(f64_arg) })
+  block.add_inst(f64_inst)
+
+  // Create function pointer
+  let func_ptr = func.new_vreg(Int)
+  let ptr_inst = VCodeInst::new(LoadConst(0x2000L))
+  ptr_inst.add_def({ reg: Virtual(func_ptr) })
+  block.add_inst(ptr_inst)
+
+  // CallIndirect with 1 f64 arg, returns 1 f64
+  // The f32_val must survive across this call
+  let call_inst = VCodeInst::new(CallIndirect(1, 1))
+  let call_result = func.new_vreg(Float64)
+  call_inst.add_def({ reg: Virtual(call_result) })
+  call_inst.add_use(Virtual(func_ptr))
+  call_inst.add_use(Virtual(f64_arg))
+  block.add_inst(call_inst)
+
+  // Return (f32_val, call_result) - f32_val must still be available after call
+  block.set_terminator(Return([Virtual(f32_val), Virtual(call_result)]))
+
+  // Show VCode before allocation
+  inspect(
+    func.print(),
+    content=(
+      #|vcode test_f32_across_call() -> (float, double) {
+      #|block0:
+      #|    f0 = ldf 42
+      #|    f1 = ldf 3.14
+      #|    v2 = ldi 8192
+      #|    f3 = call_indirect(1) -> 1 results v2, f1
+      #|    ret f0, f3
+      #|}
+      #|
+    ),
+  )
+
+  // Compute liveness
+  let liveness = compute_liveness(func)
+
+  // Check that f32_val (id=0) interval exists
+  guard liveness.intervals.get(0) is Some(f32_interval) else { return }
+
+  // Check that f32_val crosses the call
+  // The call is at inst_idx=3, f32_val is used at return (after inst_idx=3)
+  inspect(f32_interval.crosses_call, content="true")
+
+  // Allocate registers
+  let allocated = allocate_registers_aarch64(func)
+
+  // Print to see how it's allocated
+  inspect(
+    allocated.to_string(),
+    content=(
+      #|vcode test_f32_across_call() -> (float, double) {
+      #|block0:
+      #|    d8 = ldf 42
+      #|    d0 = ldf 3.14
+      #|    x8 = ldi 8192
+      #|    d9 = call_indirect(1) -> 1 results x8, d0
+      #|    ret d8, d9
+      #|}
+      #|
+    ),
+  )
+
+  // f32 value is assigned to callee-saved FPR (S8), no spill needed
+  inspect(allocated.num_spill_slots, content="0")
+}

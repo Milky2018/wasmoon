@@ -112,21 +112,20 @@ test "regalloc: mixed int float pressure" {
 
 ///|
 /// Test: Call with many arguments (exceeds register args)
-/// TODO: This test reveals a bug - needs investigation
-// test "regalloc: many call arguments" {
-//   let source =
-//     #|  (module
-//     #|    (func $sum8 (param f64 f64 f64 f64 f64 f64 f64 f64) (result f64)
-//     #|      (f64.add (local.get 0) (f64.add (local.get 1) (f64.add (local.get 2)
-//     #|        (f64.add (local.get 3) (f64.add (local.get 4) (f64.add (local.get 5)
-//     #|          (f64.add (local.get 6) (local.get 7)))))))))
-//     #|    (func (export "test") (result f64)
-//     #|      (call $sum8
-//     #|        (f64.const 1) (f64.const 2) (f64.const 3) (f64.const 4)
-//     #|        (f64.const 5) (f64.const 6) (f64.const 7) (f64.const 8))))
-//   let result = compare_jit_interp(source, "test", [])
-//   inspect(result, content="matched")
-// }
+test "regalloc: many call arguments" {
+  let source =
+    #|  (module
+    #|    (func $sum8 (param f64 f64 f64 f64 f64 f64 f64 f64) (result f64)
+    #|      (f64.add (local.get 0) (f64.add (local.get 1) (f64.add (local.get 2)
+    #|        (f64.add (local.get 3) (f64.add (local.get 4) (f64.add (local.get 5)
+    #|          (f64.add (local.get 6) (local.get 7)))))))))
+    #|    (func (export "test") (result f64)
+    #|      (call $sum8
+    #|        (f64.const 1) (f64.const 2) (f64.const 3) (f64.const 4)
+    #|        (f64.const 5) (f64.const 6) (f64.const 7) (f64.const 8))))
+  let result = compare_jit_interp(source, "test", [])
+  inspect(result, content="matched")
+}
 
 ///|
 /// Test: Nested calls with float values live across calls
@@ -143,20 +142,19 @@ test "regalloc: values live across nested calls" {
 }
 
 ///|
-/// Test: f32 value that survives across a call (must be spilled)
-/// TODO: This test reveals a bug - f32 spill/reload across calls
-// test "regalloc: f32 live across call" {
-//   let source =
-//     #|  (module
-//     #|    (func $consume (param f64) (result f64) (local.get 0))
-//     #|    (func (export "test") (result f32 f64)
-//     #|      (local f32)
-//     #|      (local.set 0 (f32.const 42.0))
-//     #|      (call $consume (f64.const 3.14))
-//     #|      (local.get 0)))
-//   let result = compare_jit_interp(source, "test", [])
-//   inspect(result, content="matched")
-// }
+/// Test: f32 value that survives across a call (must use callee-saved FPR)
+test "regalloc: f32 live across call" {
+  let source =
+    #|  (module
+    #|    (func $consume (param f64) (result f64) (local.get 0))
+    #|    (func (export "test") (result f32)
+    #|      (local f32)
+    #|      (local.set 0 (f32.const 42.0))
+    #|      (drop (call $consume (f64.const 3.14)))
+    #|      (local.get 0)))
+  let result = compare_jit_interp(source, "test", [])
+  inspect(result, content="matched")
+}
 
 ///|
 /// Test: Multiple spilled values used in arithmetic

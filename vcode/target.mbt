@@ -345,3 +345,19 @@ pub fn call_clobbered_fprs() -> Array[PReg] {
     { index: 7, class: Float64 },
   ]
 }
+
+///|
+/// Callee-saved floating-point registers (D8-D15 in AAPCS64)
+/// Functions must preserve these across calls
+pub fn callee_saved_fprs() -> Array[PReg] {
+  [
+    { index: 8, class: Float64 },
+    { index: 9, class: Float64 },
+    { index: 10, class: Float64 },
+    { index: 11, class: Float64 },
+    { index: 12, class: Float64 },
+    { index: 13, class: Float64 },
+    { index: 14, class: Float64 },
+    { index: 15, class: Float64 },
+  ]
+}
