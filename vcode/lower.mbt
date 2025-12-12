@@ -1488,19 +1488,71 @@ fn lower_terminator(
     }
     @ir.Terminator::Trap(msg) => block.set_terminator(Trap(msg))
     @ir.Terminator::BrTable(index, targets, default) => {
-      // Lower br_table using jump table (O(1) dispatch)
       let index_vreg = ctx.get_vreg_for_use(index, block)
       let default_id = ctx.get_block_id(default)
       if targets.is_empty() {
         // No targets, just jump to default
         block.set_terminator(Jump(default_id))
+      } else if targets.length() < 4 {
+        // Small number of targets: use comparison chain (more efficient)
+        let chain_blocks : Array[VCodeBlock] = []
+        for _ in 0..<(targets.length() - 1) {
+          chain_blocks.push(ctx.vcode_func.new_block())
+        }
+
+        // First comparison in original block
+        let cmp_result_0 = ctx.vcode_func.new_vreg(Int)
+        let zero_vreg = ctx.vcode_func.new_vreg(Int)
+        let load_zero = VCodeInst::new(LoadConst(0L))
+        load_zero.add_def({ reg: Virtual(zero_vreg) })
+        block.add_inst(load_zero)
+        let cmp_inst_0 = VCodeInst::new(Cmp(Eq))
+        cmp_inst_0.add_def({ reg: Virtual(cmp_result_0) })
+        cmp_inst_0.add_use(Virtual(index_vreg))
+        cmp_inst_0.add_use(Virtual(zero_vreg))
+        block.add_inst(cmp_inst_0)
+
+        let target_0_id = ctx.get_block_id(targets[0])
+        if targets.length() == 1 {
+          block.set_terminator(
+            Branch(Virtual(cmp_result_0), target_0_id, default_id),
+          )
+        } else {
+          block.set_terminator(
+            Branch(Virtual(cmp_result_0), target_0_id, chain_blocks[0].id),
+          )
+        }
+
+        // Chain blocks for remaining targets
+        for i in 1..<targets.length() {
+          let chain_block = chain_blocks[i - 1]
+          let target_id = ctx.get_block_id(targets[i])
+          let const_vreg = ctx.vcode_func.new_vreg(Int)
+          let load_const = VCodeInst::new(LoadConst(i.to_int64()))
+          load_const.add_def({ reg: Virtual(const_vreg) })
+          chain_block.add_inst(load_const)
+          let cmp_result = ctx.vcode_func.new_vreg(Int)
+          let cmp_inst = VCodeInst::new(Cmp(Eq))
+          cmp_inst.add_def({ reg: Virtual(cmp_result) })
+          cmp_inst.add_use(Virtual(index_vreg))
+          cmp_inst.add_use(Virtual(const_vreg))
+          chain_block.add_inst(cmp_inst)
+          if i == targets.length() - 1 {
+            chain_block.set_terminator(
+              Branch(Virtual(cmp_result), target_id, default_id),
+            )
+          } else {
+            chain_block.set_terminator(
+              Branch(Virtual(cmp_result), target_id, chain_blocks[i].id),
+            )
+          }
+        }
       } else {
-        // Collect target block IDs
+        // Large number of targets: use jump table (O(1) dispatch)
         let target_ids : Array[Int] = []
         for target in targets {
           target_ids.push(ctx.get_block_id(target))
         }
-        // Emit BrTable terminator
         block.set_terminator(
           BrTable(Virtual(index_vreg), target_ids, default_id),
         )
