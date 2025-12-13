@@ -474,7 +474,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ff0301d1  sub sp, sp, #64
+      #|  0000: ff4301d1  sub sp, sp, #80
       #|  0004: f45700a9  stp x20, x21, [sp, #0]
       #|  0008: f66301a9  stp x22, x24, [sp, #16]
       #|  000c: f35f02a9  stp x19, x23, [sp, #32]
@@ -500,7 +500,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  0054: f66341a9  ldp x22, x24, [sp, #16]
       #|  0058: f35f42a9  ldp x19, x23, [sp, #32]
       #|  005c: f91b40f9  ldr x25, [x31, #48]
-      #|  0060: ff030191  add sp, sp, #64
+      #|  0060: ff430191  add sp, sp, #80
       #|  0064: c0035fd6  ret
       #|block2:
       #|  0068: 170080d2  movz x23, #0, lsl #0

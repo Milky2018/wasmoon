@@ -83,6 +83,8 @@ pub fn emit_csel(MachineCode, Int, Int, Int, Int) -> Unit
 
 pub fn emit_cset(MachineCode, Int, Int) -> Unit
 
+pub fn emit_dmb_ish(MachineCode) -> Unit
+
 pub fn emit_eor_reg(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_eor_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
