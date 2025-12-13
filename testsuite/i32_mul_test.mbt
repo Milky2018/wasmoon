@@ -73,7 +73,7 @@ test "i32 mul" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ffc300d1  sub sp, sp, #48
+      #|  0000: ff0301d1  sub sp, sp, #64
       #|  0004: f45700a9  stp x20, x21, [sp, #0]
       #|  0008: f66301a9  stp x22, x24, [sp, #16]
       #|  000c: f37f02a9  stp x19, x31, [sp, #32]
@@ -88,7 +88,7 @@ test "i32 mul" {
       #|  002c: f45740a9  ldp x20, x21, [sp, #0]
       #|  0030: f66341a9  ldp x22, x24, [sp, #16]
       #|  0034: f31340f9  ldr x19, [x31, #32]
-      #|  0038: ffc30091  add sp, sp, #48
+      #|  0038: ff030191  add sp, sp, #64
       #|  003c: c0035fd6  ret
       #|
     ),

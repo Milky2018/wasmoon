@@ -1635,6 +1635,8 @@ fn lower_memory_grow(
   grow_inst.add_use(Virtual(delta_vreg))
   // Add clobbers for caller-saved registers (it's a call)
   add_call_clobbers(grow_inst)
+  // Also clobber X19 since emit uses it as temp to save result across internal calls
+  grow_inst.add_def({ reg: Physical({ index: 19, class: Int }) })
   block.add_inst(grow_inst)
 }
 

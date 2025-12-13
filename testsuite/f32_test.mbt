@@ -381,7 +381,7 @@ test "f32 mul" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ff8300d1  sub sp, sp, #32
+      #|  0000: ffc300d1  sub sp, sp, #48
       #|  0004: f45700a9  stp x20, x21, [sp, #0]
       #|  0008: f66301a9  stp x22, x24, [sp, #16]
       #|  000c: f40300aa  mov x20, x0
@@ -397,7 +397,7 @@ test "f32 mul" {
       #|  0030: 4040201e  fmov s0, s2
       #|  0034: f45740a9  ldp x20, x21, [sp, #0]
       #|  0038: f66341a9  ldp x22, x24, [sp, #16]
-      #|  003c: ff830091  add sp, sp, #32
+      #|  003c: ffc30091  add sp, sp, #48
       #|  0040: c0035fd6  ret
       #|
     ),

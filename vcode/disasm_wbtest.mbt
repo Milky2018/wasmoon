@@ -469,3 +469,19 @@ test "all emit functions disasm" {
     ),
   )
 }
+
+///|
+test "emit_str_imm" {
+  let mc = MachineCode::new()
+  emit_ldr_imm(mc, 0, 1, 8) // LDR X0, [X1, #8]
+  emit_str_imm(mc, 2, 3, 16) // STR X2, [X3, #16]
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 200440f9  ldr x0, [x1, #8]
+      #|  0004: 620800f9  str x2, [x3, #16]
+      #|
+    ),
+  )
+}

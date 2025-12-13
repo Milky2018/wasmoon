@@ -920,6 +920,15 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
 ) {
     if (!func_ptr) return -1;
 
+    // CRITICAL: Save the parameters that are used AFTER the BLR call.
+    // The compiler may allocate these in registers that get clobbered by our
+    // register setup for the JIT call. By saving them to volatile locals
+    // RIGHT AWAY (before any other code), we force them onto the stack
+    // where they won't be corrupted by our inline asm.
+    volatile int saved_num_results = num_results;
+    volatile int64_t *saved_results = results;
+    volatile int *saved_result_types = result_types;
+
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
@@ -1039,8 +1048,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
 
     // Distribute results from registers and extra_buffer to the output array
     int int_idx = 0, float_idx = 0, extra_idx = 0;
-    for (int i = 0; i < num_results; i++) {
-        int ty = result_types[i];
+    for (int i = 0; i < saved_num_results; i++) {
+        int ty = saved_result_types[i];
         if (ty == 2) { // F32 - stored as raw 32-bit in S register (lower 32 bits of D)
             if (float_idx < 2) {
                 // From S0 or S1 (lower 32 bits of D0 or D1)
@@ -1049,30 +1058,30 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
                 uint64_t bits = (float_idx == 0) ? d0_bits : d1_bits;
                 uint32_t float_bits = (uint32_t)(bits & 0xFFFFFFFF);
                 // Store as int64 with float bits in lower 32 bits
-                results[i] = (int64_t)float_bits;
+                saved_results[i] = (int64_t)float_bits;
                 float_idx++;
             } else {
                 // From extra buffer
-                results[i] = extra_buffer[extra_idx++];
+                saved_results[i] = extra_buffer[extra_idx++];
             }
         } else if (ty == 3) { // F64
             if (float_idx < 2) {
                 // From D0 or D1 - raw 64-bit value is the f64 bit pattern
                 uint64_t bits = (float_idx == 0) ? d0_bits : d1_bits;
-                results[i] = (int64_t)bits;
+                saved_results[i] = (int64_t)bits;
                 float_idx++;
             } else {
                 // From extra buffer
-                results[i] = extra_buffer[extra_idx++];
+                saved_results[i] = extra_buffer[extra_idx++];
             }
         } else { // I32, I64
             if (int_idx < 2) {
                 // From X0 or X1
-                results[i] = (int_idx == 0) ? x0_result : x1_result;
+                saved_results[i] = (int_idx == 0) ? x0_result : x1_result;
                 int_idx++;
             } else {
                 // From extra buffer
-                results[i] = extra_buffer[extra_idx++];
+                saved_results[i] = extra_buffer[extra_idx++];
             }
         }
     }

@@ -1564,6 +1564,17 @@ pub fn emit_blr(mc : MachineCode, rn : Int) -> Unit {
   mc.emit_inst(b0, b1, 63, 214) // 0x3F, 0xD6
 }
 
+///|
+/// Encode DMB ISH (Data Memory Barrier, Inner Shareable)
+/// Ensures all earlier memory accesses are visible before later accesses
+/// Opcode: 0xD5033BBF
+pub fn emit_dmb_ish(mc : MachineCode) -> Unit {
+  mc.annotate("dmb ish")
+  // DMB ISH encoding: 0xD5033BBF
+  // In little-endian: BF 3B 03 D5
+  mc.emit_inst(0xBF, 0x3B, 0x03, 0xD5)
+}
+
 // ============ Comparison Instructions ============
 
 ///|
@@ -2396,7 +2407,8 @@ fn collect_used_callee_saved(
   for block in func.blocks {
     for inst in block.insts {
       // Check if this instruction is a function call
-      if inst.opcode is CallIndirect(_, _) {
+      // MemoryGrow and MemorySize also use BLR internally to call C functions
+      if inst.opcode is (CallIndirect(_, _) | MemoryGrow | MemorySize) {
         has_calls = true
       }
       for def in inst.defs {
@@ -2493,7 +2505,8 @@ fn emit_prologue(
   let num_fpr_pairs = (num_fprs + 1) / 2
   let clobbered_fpr_size = num_fpr_pairs * 16
   // Calculate spill slots size (8 bytes each, aligned to 16)
-  let spill_size = (num_spill_slots * 8 + 15) / 16 * 16
+  // Always allocate at least 16 bytes for scratch space (used by MemoryGrow)
+  let spill_size = @cmp.maximum((num_spill_slots * 8 + 15) / 16 * 16, 16)
   // If we call multi-value functions, allocate 64 bytes for receiving extra results
   // This buffer will be pointed to by X23
   let call_results_buffer_size = if calls_multi_value && !needs_extra_results {
@@ -3548,8 +3561,9 @@ fn emit_instruction(
       // Return values: X0, X1 for first two int results, extra results via buffer pointed by X7/X23
       // Uses: [func_ptr, arg0, arg1, ...]
       let func_ptr = reg_num(inst.uses[0])
-      // Save function pointer to X18 (platform register, safe for JIT temp use)
-      emit_mov_reg(mc, 18, func_ptr) // MOV X18, func_ptr
+      // Save function pointer to X17 (intra-procedure call scratch register)
+      // Note: X18 is reserved on Apple platforms, must NOT use it
+      emit_mov_reg(mc, 17, func_ptr) // MOV X17, func_ptr
       // Calculate how many args go on stack (args beyond the first 8)
       let max_reg_args = 8 // X3-X10
       let stack_args = if num_args > max_reg_args {
@@ -3708,8 +3722,8 @@ fn emit_instruction(
       emit_mov_reg(mc, 0, 20) // MOV X0, X20
       emit_mov_reg(mc, 1, 21) // MOV X1, X21
       emit_mov_reg(mc, 2, 22) // MOV X2, X22
-      // Call the function (from saved X18)
-      emit_blr(mc, 18)
+      // Call the function (from saved X17)
+      emit_blr(mc, 17)
       // Move results to destination registers
       // JIT ABI: integer returns in X0, X1; float returns in D0/S0, D1/S1
       // Two-phase is only needed when there's potential conflict:
@@ -3933,10 +3947,10 @@ fn emit_instruction(
       mc.annotate("blr x16  // memory_grow")
       emit_blr(mc, 16)
 
-      // Move result from X0 to destination
-      if result_reg != 0 {
-        emit_mov_reg(mc, result_reg, 0) // MOV result, X0
-      }
+      // Save result to X19 (callee-saved) temporarily
+      // The subsequent BLR calls will clobber X0-X15, so we need a callee-saved register
+      // X19 is callee-saved and not used for our special purposes (X20-X24 are reserved)
+      emit_mov_reg32(mc, 19, 0) // MOV W19, W0 (zero-extended)
 
       // After memory.grow, reload memory base and size into X21/X22
       // since realloc may have moved the memory
@@ -3947,6 +3961,9 @@ fn emit_instruction(
       mc.annotate("blr x16  // get_memory_base")
       emit_blr(mc, 16)
       emit_mov_reg(mc, 21, 0) // MOV X21, X0
+      // Update the saved X21 on stack so epilogue restores the new value
+      // Stack layout: [SP+0]=X20, [SP+8]=X21, [SP+16]=X22, ...
+      emit_str_imm(mc, 21, 31, 8) // STR X21, [SP, #8]
 
       // Call get_memory_size_bytes() and store to X22
       let size_ptr = @jit_ffi.c_jit_get_memory_size_bytes_ptr()
@@ -3954,6 +3971,13 @@ fn emit_instruction(
       mc.annotate("blr x16  // get_memory_size_bytes")
       emit_blr(mc, 16)
       emit_mov_reg(mc, 22, 0) // MOV X22, X0
+      // Update the saved X22 on stack so epilogue restores the new value
+      emit_str_imm(mc, 22, 31, 16) // STR X22, [SP, #16]
+
+      // Move result from X19 to the destination register
+      if result_reg != 19 {
+        emit_mov_reg32(mc, result_reg, 19) // MOV W_result, W19
+      }
     }
     MemorySize => {
       // Call wasmoon_jit_memory_size()
@@ -4197,8 +4221,16 @@ fn emit_terminator_with_epilogue(
       let index_reg = reg_num(index)
       let num_targets = targets.length()
       // Use x16 and x17 as scratch registers (IP0 and IP1)
-      // First, bounds check: CMP index, #num_targets
-      emit_cmp_imm(mc, index_reg, num_targets)
+      // First, bounds check: CMP index, num_targets
+      // Note: CMP immediate only supports 12-bit immediate (0-4095)
+      // For larger values, we must load into a register and use CMP register
+      if num_targets <= 4095 {
+        emit_cmp_imm(mc, index_reg, num_targets)
+      } else {
+        // Load num_targets into x17 and compare
+        emit_load_imm64(mc, 17, num_targets.to_int64())
+        emit_cmp_reg(mc, index_reg, 17)
+      }
       // B.HS default (condition code 2 = HS/CS = unsigned >=)
       emit_b_cond(mc, 2, default)
       // Layout after this point:
