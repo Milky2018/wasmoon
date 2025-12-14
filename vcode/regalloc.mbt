@@ -746,12 +746,12 @@ pub fn LinearScanAllocator::allocate(
   // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
   // it will be handled by the normal allocation process (which will use callee-saved)
   // NOTE: Only the first 8 params (0-7) are in registers. Params 8+ are on stack.
-  let actual_param_base = if ABI_VERSION == 2 {
+  let actual_param_base = if @abi.ABI_VERSION == 2 {
     PARAM_BASE_REG
   } else {
     LEGACY_PARAM_BASE_REG
   }
-  let actual_max_reg_params = if ABI_VERSION == 2 {
+  let actual_max_reg_params = if @abi.ABI_VERSION == 2 {
     MAX_REG_PARAMS
   } else {
     LEGACY_MAX_REG_PARAMS

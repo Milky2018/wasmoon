@@ -278,7 +278,7 @@ pub fn allocatable_scratch_regs() -> Array[PReg] {
 /// X24 is reserved for indirect_table_ptr
 /// In ABI v2, X19 is reserved for context_ptr preservation across JIT-to-JIT calls
 pub fn allocatable_callee_saved_regs() -> Array[PReg] {
-  if ABI_VERSION == 2 {
+  if @abi.ABI_VERSION == 2 {
     // v2 ABI: X19 is reserved for context_ptr preservation
     [
       { index: 23, class: Int },

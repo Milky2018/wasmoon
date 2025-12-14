@@ -2603,158 +2603,93 @@ fn collect_used_callee_saved_fprs(func : VCodeFunction) -> Array[Int] {
 }
 
 ///|
-/// Emit prologue to save callee-saved registers and set up parameters
-/// Returns the stack frame size used
-/// JIT ABI: X0 = func_table_ptr, X1 = memory_base, X2 = memory_size
-/// User params start from X3 (up to X6)
-/// When function has >2 int or >2 float returns: X7 = extra_results_buffer pointer
-fn emit_prologue(
+/// Emit prologue to save callee-saved registers and set up parameters (v2 using JITStackFrame)
+fn emit_prologue_v2(
   mc : MachineCode,
-  clobbered : Array[Int],
-  clobbered_fprs : Array[Int],
+  stack_frame : @stackframe.JITStackFrame,
   params : Array[VReg],
   param_pregs : Array[PReg?],
-  needs_extra_results : Bool,
-  calls_multi_value : Bool,
-  num_spill_slots : Int,
-) -> Int {
-  // We always clobber X20, X21, X22, X24 for func_table, memory_base, memory_size, indirect_table
-  // When needs_extra_results OR calls_multi_value, we also clobber X23
-  // - needs_extra_results: X23 stores the incoming buffer pointer from X7
-  // - calls_multi_value: X23 points to a local buffer on the stack
-  // These are callee-saved registers, so we must save them first!
-  // In v2 ABI, X19 is used to save the original context pointer for JIT-to-JIT calls
-  let uses_x23 = needs_extra_results || calls_multi_value
-  let all_to_save : Array[Int] = if ABI_VERSION == 2 {
-    // v2: X19 holds context_ptr, X20 holds func_table after prologue
-    if uses_x23 {
-      [19, 20, 21, 22, 23, 24]
-    } else {
-      [19, 20, 21, 22, 24]
-    }
-    // v1: X20-X22, X24, optionally X23
-  } else if uses_x23 {
-    [20, 21, 22, 23, 24]
-  } else {
-    [20, 21, 22, 24]
-  }
-  for reg in clobbered {
-    all_to_save.push(reg)
-  }
-  // Round up to even number for STP (store pairs)
-  let num_regs = all_to_save.length()
-  let num_pairs = (num_regs + 1) / 2
-  let clobbered_gpr_size = num_pairs * 16 // 16 bytes per pair
-  // Calculate FPR save size (D8-D15, 16 bytes per pair)
-  let num_fprs = clobbered_fprs.length()
-  let num_fpr_pairs = (num_fprs + 1) / 2
-  let clobbered_fpr_size = num_fpr_pairs * 16
-  // Calculate spill slots size (8 bytes each, aligned to 16)
-  // Always allocate at least 16 bytes for scratch space (used by MemoryGrow)
-  let spill_size = @cmp.maximum((num_spill_slots * 8 + 15) / 16 * 16, 16)
-  // If we call multi-value functions, allocate 64 bytes for receiving extra results
-  // This buffer will be pointed to by X23
-  let call_results_buffer_size = if calls_multi_value && !needs_extra_results {
-    64
-  } else {
-    0
-  }
-  let frame_size = clobbered_gpr_size +
-    clobbered_fpr_size +
-    spill_size +
-    call_results_buffer_size
+) -> Unit {
+  // Use pre-calculated values from stack_frame
+  let saved_gprs = stack_frame.saved_gprs
+  let saved_fprs = stack_frame.saved_fprs
+  let frame_size = stack_frame.total_size
+  let fpr_save_offset = stack_frame.fpr_save_offset
+  let needs_extra_results = stack_frame.needs_extra_results
+  let calls_multi_value = stack_frame.calls_multi_value
+
   // Allocate stack frame first using SUB
   emit_sub_imm(mc, 31, 31, frame_size)
+
   // Save GPRs using STP with signed offset
+  let num_regs = saved_gprs.length()
   let mut i = 0
   let mut pair_idx = 0
   while i < num_regs {
-    let reg1 = all_to_save[i]
-    let reg2 = if i + 1 < num_regs { all_to_save[i + 1] } else { 31 } // XZR as padding
+    let reg1 = saved_gprs[i]
+    let reg2 = if i + 1 < num_regs { saved_gprs[i + 1] } else { 31 } // XZR as padding
     let offset = pair_idx * 16
     emit_stp_offset(mc, reg1, reg2, 31, offset)
     i = i + 2
     pair_idx = pair_idx + 1
   }
+
   // Save FPRs (D8-D15) after GPRs
-  // Handle pairs first, then single register if odd count
+  let num_fprs = saved_fprs.length()
   let mut fi = 0
   let mut fpr_pair_idx = 0
   while fi + 1 < num_fprs {
-    // Save pairs
-    let reg1 = clobbered_fprs[fi]
-    let reg2 = clobbered_fprs[fi + 1]
-    let offset = clobbered_gpr_size + fpr_pair_idx * 16
+    let reg1 = saved_fprs[fi]
+    let reg2 = saved_fprs[fi + 1]
+    let offset = fpr_save_offset + fpr_pair_idx * 16
     emit_stp_d_offset(mc, reg1, reg2, 31, offset)
     fi = fi + 2
     fpr_pair_idx = fpr_pair_idx + 1
   }
   // Handle last register if odd count
   if fi < num_fprs {
-    let reg = clobbered_fprs[fi]
-    let offset = clobbered_gpr_size + fpr_pair_idx * 16
+    let reg = saved_fprs[fi]
+    let offset = fpr_save_offset + fpr_pair_idx * 16
     emit_str_d_imm(mc, reg, 31, offset)
   }
-  // Now move parameters to reserved registers (after saving their original values)
-  // Different handling based on ABI version:
-  // v1 (old): X0=func_table, X1=memory_base, X2=memory_size, params in X3-X10
-  // v2 (new): X19=context_ptr (set by caller, callee-saved), params in X0-X7
-  if ABI_VERSION == 2 {
-    // v2 ABI: X19 = context pointer (set by caller, callee-saved)
-    // X19 is callee-saved so it's automatically preserved across calls
-    // Load fields from context structure pointed by X19
-    // Context layout: [func_table, indirect_table, memory_base, memory_size]
-    //                  +0          +8              +16           +24
-    emit_ldr_imm(mc, 20, 19, CTX_FUNC_TABLE_OFFSET) // X20 = [X19 + 0]
-    emit_ldr_imm(mc, 21, 19, CTX_MEMORY_BASE_OFFSET) // X21 = [X19 + 16]
-    emit_ldr_imm(mc, 22, 19, CTX_MEMORY_SIZE_OFFSET) // X22 = [X19 + 24]
-    emit_ldr_imm(mc, 24, 19, CTX_INDIRECT_TABLE_OFFSET) // X24 = [X19 + 8]
+
+  // Now move parameters to reserved registers
+  if @abi.ABI_VERSION == 2 {
+    // v2 ABI: Load from context structure pointed by X19
+    emit_ldr_imm(mc, 20, 19, CTX_FUNC_TABLE_OFFSET)
+    emit_ldr_imm(mc, 21, 19, CTX_MEMORY_BASE_OFFSET)
+    emit_ldr_imm(mc, 22, 19, CTX_MEMORY_SIZE_OFFSET)
+    emit_ldr_imm(mc, 24, 19, CTX_INDIRECT_TABLE_OFFSET)
   } else {
-    // v1 ABI (legacy): X0=func_table, X1=memory_base, X2=memory_size
-    emit_mov_reg(mc, 20, 0) // MOV X20, X0 (func_table_ptr)
-    emit_mov_reg(mc, 21, 1) // MOV X21, X1 (memory_base)
-    emit_mov_reg(mc, 22, 2) // MOV X22, X2 (memory_size)
-    // Load indirect_table_ptr from func_table[-1] into X24
-    // Memory layout: [indirect_table_ptr | func_ptr_0 | func_ptr_1 | ...]
-    //                ^                    ^
-    //                X20 - 8              X20
-    emit_ldr_imm_signed(mc, 24, 20, -8) // LDR X24, [X20, #-8]
+    // v1 ABI
+    emit_mov_reg(mc, 20, 0)
+    emit_mov_reg(mc, 21, 1)
+    emit_mov_reg(mc, 22, 2)
+    emit_ldr_imm_signed(mc, 24, 20, -8)
   }
+
   // Set up X23 for extra results buffer
   if needs_extra_results {
-    // When we return multi-value, X7 contains the caller-provided buffer pointer
-    emit_mov_reg(mc, 23, 7) // MOV X23, X7 (extra_results_buffer)
+    emit_mov_reg(mc, 23, 7)
   } else if calls_multi_value {
-    // When we call multi-value functions, allocate local buffer on stack
-    // Buffer is at the end of the frame: SP + GPR save + FPR save + spill_size
-    let buffer_offset = clobbered_gpr_size + clobbered_fpr_size + spill_size
-    emit_add_imm(mc, 23, 31, buffer_offset) // ADD X23, SP, #buffer_offset
+    let buffer_offset = stack_frame.call_buffer_offset
+    emit_add_imm(mc, 23, 31, buffer_offset)
   }
+
   // Move user arguments from registers to their allocated registers
-  //
-  // ABI v1: X0-X2 reserved, all params (int and float) in X3-X10
-  //   Float params need FMOV to convert from X register to D register
-  //
-  // ABI v2 (AAPCS64 compatible):
-  //   - Integer params in X0-X7
-  //   - Float params in D0-D7 (already in place!)
-  //   - Only need to move if allocated to different register
-  let actual_param_base = if ABI_VERSION == 2 {
+  let actual_param_base = if @abi.ABI_VERSION == 2 {
     PARAM_BASE_REG
   } else {
     LEGACY_PARAM_BASE_REG
   }
-  let actual_max_reg_params = if ABI_VERSION == 2 {
+  let actual_max_reg_params = if @abi.ABI_VERSION == 2 {
     MAX_REG_PARAMS
   } else {
     LEGACY_MAX_REG_PARAMS
   }
-
-  // For v2 ABI, we need to track int and float indices separately
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
-    // Check if this param needs to be moved to a different register
     let dest_preg = if param_idx < param_pregs.length() {
       param_pregs[param_idx]
     } else {
@@ -2763,7 +2698,6 @@ fn emit_prologue(
     match param.class {
       Float32 | Float64 =>
         if float_idx < actual_max_reg_params {
-          // Both v1 and v2 ABI: floats passed via X registers, need FMOV to D
           let x_src = actual_param_base + param_idx
           match param.class {
             Float32 => {
@@ -2785,24 +2719,15 @@ fn emit_prologue(
         }
       Int =>
         if int_idx < actual_max_reg_params {
-          // For v2 ABI, int params are in X0-X7 (param_idx based)
-          // For v1 ABI, all params are in X3-X10 (param_idx based)
           let x_src = actual_param_base + param_idx
           match dest_preg {
-            Some(preg) =>
-              // Param crosses a call, move to callee-saved register
-              emit_mov_reg(mc, preg.index, x_src)
-            None =>
-              // Int param: already at expected position, no move needed
-              ()
+            Some(preg) => emit_mov_reg(mc, preg.index, x_src)
+            None => ()
           }
           int_idx = int_idx + 1
         }
     }
-    // Stack params (param_idx >= 8) are now handled by LoadStackParam instruction
-    // during function body execution, not in prologue
   }
-  frame_size
 }
 
 ///|
@@ -2944,69 +2869,49 @@ fn emit_ldp_d_offset(
 }
 
 ///|
-/// Emit epilogue to restore callee-saved registers
-fn emit_epilogue(
+/// Emit epilogue to restore callee-saved registers (v2 using JITStackFrame)
+fn emit_epilogue_v2(
   mc : MachineCode,
-  clobbered : Array[Int],
-  clobbered_fprs : Array[Int],
-  clobbered_gpr_size : Int,
-  frame_size : Int,
-  needs_extra_results : Bool,
-  calls_multi_value : Bool,
+  stack_frame : @stackframe.JITStackFrame,
 ) -> Unit {
-  // Build the same list as prologue: (X19 if v2), X20, X21, X22, X24, (X23 if uses_x23) + clobbered
-  let uses_x23 = needs_extra_results || calls_multi_value
-  let all_to_restore : Array[Int] = if ABI_VERSION == 2 {
-    // v2: X19 holds context_ptr
-    if uses_x23 {
-      [19, 20, 21, 22, 23, 24]
-    } else {
-      [19, 20, 21, 22, 24]
-    }
-    // v1: X20-X22, X24, optionally X23
-  } else if uses_x23 {
-    [20, 21, 22, 23, 24]
-  } else {
-    [20, 21, 22, 24]
-  }
-  for reg in clobbered {
-    all_to_restore.push(reg)
-  }
-  let num_regs = all_to_restore.length()
-  let num_pairs = (num_regs + 1) / 2
-  // Restore FPRs first (before GPRs, since FPRs are saved after GPRs)
-  // Handle pairs first, then single register if odd count
-  let num_fprs = clobbered_fprs.length()
+  let saved_gprs = stack_frame.saved_gprs
+  let saved_fprs = stack_frame.saved_fprs
+  let fpr_save_offset = stack_frame.fpr_save_offset
+  let frame_size = stack_frame.total_size
+
+  // Restore FPRs first (before GPRs)
+  let num_fprs = saved_fprs.length()
   let mut fi = 0
   let mut fpr_pair_idx = 0
   while fi + 1 < num_fprs {
-    // Restore pairs
-    let reg1 = clobbered_fprs[fi]
-    let reg2 = clobbered_fprs[fi + 1]
-    let offset = clobbered_gpr_size + fpr_pair_idx * 16
+    let reg1 = saved_fprs[fi]
+    let reg2 = saved_fprs[fi + 1]
+    let offset = fpr_save_offset + fpr_pair_idx * 16
     emit_ldp_d_offset(mc, reg1, reg2, 31, offset)
     fi = fi + 2
     fpr_pair_idx = fpr_pair_idx + 1
   }
   // Handle last register if odd count
   if fi < num_fprs {
-    let reg = clobbered_fprs[fi]
-    let offset = clobbered_gpr_size + fpr_pair_idx * 16
+    let reg = saved_fprs[fi]
+    let offset = fpr_save_offset + fpr_pair_idx * 16
     emit_ldr_d_imm(mc, reg, 31, offset)
   }
+
   // Restore GPRs using LDP
+  let num_regs = saved_gprs.length()
+  let num_pairs = (num_regs + 1) / 2
   let mut i = 0
   let mut pair_idx = 0
   while i < num_regs {
-    let reg1 = all_to_restore[i]
+    let reg1 = saved_gprs[i]
     let has_reg2 = i + 1 < num_regs
-    let reg2 = if has_reg2 { all_to_restore[i + 1] } else { 31 }
+    let reg2 = if has_reg2 { saved_gprs[i + 1] } else { 31 }
     let offset = pair_idx * 16
     if pair_idx == num_pairs - 1 {
       // Last load
       if !has_reg2 {
         // Odd number of registers: use single LDR for the last one
-        // We can't use LDP with X31 as destination - that would corrupt SP!
         emit_ldr_imm(mc, reg1, 31, offset)
         emit_add_imm(mc, 31, 31, frame_size)
       } else if pair_idx == 0 {
@@ -3015,7 +2920,6 @@ fn emit_epilogue(
       } else {
         // Multiple pairs: load from offset, then add to SP
         emit_ldp_offset(mc, reg1, reg2, 31, offset)
-        // Add frame_size to SP
         emit_add_imm(mc, 31, 31, frame_size)
       }
     } else {
@@ -3041,57 +2945,32 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
   let clobbered = collect_used_callee_saved(func, uses_x23)
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
   let clobbered_fprs = collect_used_callee_saved_fprs(func)
-  // Calculate clobbered_gpr_size for spill offset calculation
-  // v1: Always save X20-X22, X24; optionally X23
-  // v2: Also save X19 (for context_ptr preservation)
-  let num_base_regs = if ABI_VERSION == 2 {
-    if uses_x23 {
-      6
-    } else {
-      5
-    } // X19, X20-X22, X24, (X23)
-  } else if uses_x23 {
-    5
-  } else {
-    4
-  } // X20-X22, X24, (X23)
-  let num_regs = num_base_regs + clobbered.length()
-  let num_pairs = (num_regs + 1) / 2
-  let clobbered_gpr_size = num_pairs * 16
-  // Calculate FPR save size
-  let num_fpr_pairs = (clobbered_fprs.length() + 1) / 2
-  let clobbered_fpr_size = num_fpr_pairs * 16
-  // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
-  let frame_size = emit_prologue(
-    mc,
+
+  // Build stack frame layout using JITStackFrame
+  let stack_frame = @stackframe.JITStackFrame::build(
     clobbered,
     clobbered_fprs,
-    func.params,
-    func.param_pregs,
-    needs_extra_results,
-    calls_multi_value,
     func.num_spill_slots,
+    needs_extra_results~,
+    calls_multi_value~,
   )
+
+  // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
+  emit_prologue_v2(mc, stack_frame, func.params, func.param_pregs)
+
   // Emit function body
-  // Spill slots start after the saved registers area (GPRs + FPRs)
-  let spill_base_offset = clobbered_gpr_size + clobbered_fpr_size
   for block in func.blocks {
     mc.define_label(block.id)
     for inst in block.insts {
-      emit_instruction(mc, inst, spill_base_offset, frame_size)
+      emit_instruction(mc, inst, stack_frame)
     }
     match block.terminator {
       Some(term) =>
-        emit_terminator_with_epilogue(
+        emit_terminator_with_epilogue_v2(
           mc,
           term,
-          clobbered,
-          clobbered_fprs,
-          clobbered_gpr_size,
-          frame_size,
+          stack_frame,
           func.result_types,
-          needs_extra_results,
-          calls_multi_value,
         )
       None => ()
     }
@@ -3104,9 +2983,11 @@ pub fn emit_function(func : VCodeFunction) -> MachineCode {
 fn emit_instruction(
   mc : MachineCode,
   inst : VCodeInst,
-  spill_base_offset : Int,
-  frame_size : Int,
+  stack_frame : @stackframe.JITStackFrame,
 ) -> Unit {
+  // Extract offsets from stack frame for backward compatibility
+  let spill_base_offset = stack_frame.spill_offset
+  let frame_size = stack_frame.total_size
   match inst.opcode {
     Add => {
       let rd = wreg_num(inst.defs[0])
@@ -3754,7 +3635,7 @@ fn emit_instruction(
       // Note: X18 is reserved on Apple platforms, must NOT use it
       emit_mov_reg(mc, 17, func_ptr) // MOV X17, func_ptr
       // Calculate how many args go on stack (args beyond the first 8)
-      let actual_param_base_call = if ABI_VERSION == 2 {
+      let actual_param_base_call = if @abi.ABI_VERSION == 2 {
         PARAM_BASE_REG
       } else {
         LEGACY_PARAM_BASE_REG
@@ -3892,7 +3773,7 @@ fn emit_instruction(
         emit_mov_reg(mc, 7, 23) // MOV X7, X23
       }
       // Set up context for callee
-      if ABI_VERSION == 2 {
+      if @abi.ABI_VERSION == 2 {
         // v2: X19 already contains context_ptr (callee-saved)
         // The callee's prologue will load from X19, no setup needed
         ()
@@ -3907,7 +3788,7 @@ fn emit_instruction(
       // Restore X20 (func_table) after call for v2 ABI
       // X19 is callee-saved, so it still contains our context_ptr
       // We need to reload func_table from X19
-      if ABI_VERSION == 2 {
+      if @abi.ABI_VERSION == 2 {
         emit_ldr_imm(mc, 20, 19, CTX_FUNC_TABLE_OFFSET) // X20 = [X19 + 0]
       }
       // Move results to destination registers
@@ -4312,21 +4193,12 @@ fn fcmp_kind_to_cond(kind : FCmpKind) -> Int {
 }
 
 ///|
-/// Emit terminator with epilogue for Return
-/// Handles multi-value returns:
-/// - First 2 integer returns → X0, X1
-/// - First 2 float returns → D0, D1
-/// - Extra returns → written to buffer pointed by X23 (which was passed in X7)
-fn emit_terminator_with_epilogue(
+/// Emit terminator with epilogue for Return (v2 using JITStackFrame)
+fn emit_terminator_with_epilogue_v2(
   mc : MachineCode,
   term : VCodeTerminator,
-  clobbered : Array[Int],
-  clobbered_fprs : Array[Int],
-  clobbered_gpr_size : Int,
-  frame_size : Int,
+  stack_frame : @stackframe.JITStackFrame,
   result_types : Array[@ir.Type],
-  needs_extra_results : Bool,
-  calls_multi_value : Bool,
 ) -> Unit {
   match term {
     Jump(target) => emit_b(mc, target)
@@ -4358,8 +4230,6 @@ fn emit_terminator_with_epilogue(
       }
 
       // Handle integer returns - need two-phase if sources conflict with destinations
-      // Conflict occurs when source of return[i] is destination of return[j] for j < i
-      // Example: swap(x0, x1) needs two-phase because ret[0]=x1, ret[1]=x0
       let int_need_two_phase = {
         let mut need = false
         for idx, entry in int_sources {
@@ -4473,25 +4343,16 @@ fn emit_terminator_with_epilogue(
         }
       }
       // Emit epilogue to restore callee-saved registers before return
-      emit_epilogue(
-        mc, clobbered, clobbered_fprs, clobbered_gpr_size, frame_size, needs_extra_results,
-        calls_multi_value,
-      )
+      emit_epilogue_v2(mc, stack_frame)
       emit_ret(mc, 30)
     }
     Trap(_) => mc.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000
     BrTable(index, targets, default) => {
       // Jump table implementation for br_table
-      // 1. Check bounds: if index >= num_targets, branch to default
-      // 2. Compute jump table entry address: base + index * 4
-      // 3. Branch indirectly to that entry
-      // 4. Jump table: sequence of B instructions
       let index_reg = reg_num(index)
       let num_targets = targets.length()
       // Use x16 and x17 as scratch registers (IP0 and IP1)
       // First, bounds check: CMP index, num_targets
-      // Note: CMP immediate only supports 12-bit immediate (0-4095)
-      // For larger values, we must load into a register and use CMP register
       if num_targets <= 4095 {
         emit_cmp_imm(mc, index_reg, num_targets)
       } else {
