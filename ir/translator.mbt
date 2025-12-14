@@ -671,7 +671,10 @@ fn Translator::translate_instruction(
     }
 
     // Control flow
-    Unreachable => self.builder.trap("unreachable")
+    Unreachable => {
+      self.builder.trap("unreachable")
+      self.is_unreachable = true
+    }
     Nop => () // No operation
     Return => {
       let results = self.builder.get_function().results
@@ -681,6 +684,7 @@ fn Translator::translate_instruction(
       }
       return_vals.rev_in_place()
       self.builder.return_(return_vals)
+      self.is_unreachable = true
     }
     Block(block_type, body) => self.translate_block(block_type, body)
     Loop(block_type, body) => self.translate_loop(block_type, body)
