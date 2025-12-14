@@ -607,7 +607,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
   let results : Array[(Int64, Float, Float)] = []
   for i in 1..<script.commands.length() {
     let (cmd, _) = script.commands[i]
-    if cmd is @wast.WastCommand::AssertReturn(action, expected) && action is @wast.WastAction::Invoke(_, func_name, args) {
+    if cmd is @wast.WastCommand::AssertReturn(action, expected) &&
+      action is @wast.WastAction::Invoke(_, func_name, args) {
       assert_eq(func_name, "test")
       assert_eq(args.length(), 1)
       assert_eq(expected.length(), 1)

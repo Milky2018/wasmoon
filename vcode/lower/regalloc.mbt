@@ -853,7 +853,8 @@ fn LinearScanAllocator::try_allocate_reg(
   // Build set of registers currently in use
   let used : Set[Int] = Set::new()
   for active in self.active {
-    if active.assigned is Some(preg) && reg_class_eq(preg.class, interval.vreg.class) {
+    if active.assigned is Some(preg) &&
+      reg_class_eq(preg.class, interval.vreg.class) {
       used.add(preg.index)
     }
   }
@@ -1025,7 +1026,8 @@ pub fn apply_allocation(
 
       let mut inst_spill_idx = 0
       for i, use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) && alloc.assignments.get(vreg.id) is None {
+        if use_reg is @abi.Virtual(vreg) &&
+          alloc.assignments.get(vreg.id) is None {
           // This vreg is spilled, need to reload
           if alloc.spill_slots.get(vreg.id) is Some(slot) {
             let scratch_class = match vreg.class {
@@ -1036,10 +1038,7 @@ pub fn apply_allocation(
             // Determine how to handle this spilled use
             if is_call_indirect && i == 0 {
               // CallIndirect's func_ptr (first use): reload directly to X18
-              let scratch_preg : @abi.PReg = {
-                index: 18,
-                class: scratch_class,
-              }
+              let scratch_preg : @abi.PReg = { index: 18, class: scratch_class }
               spill_regs.set(vreg.id, scratch_preg)
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
               reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
@@ -1073,7 +1072,9 @@ pub fn apply_allocation(
       // Check if any definitions are spilled - collect ALL spilled defs
       let spilled_defs : Array[(@abi.VReg, Int)] = []
       for def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) && alloc.assignments.get(vreg.id) is None && alloc.spill_slots.get(vreg.id) is Some(slot) {
+        if def.reg is @abi.Virtual(vreg) &&
+          alloc.assignments.get(vreg.id) is None &&
+          alloc.spill_slots.get(vreg.id) is Some(slot) {
           spilled_defs.push((vreg, slot))
         }
       }
@@ -1163,10 +1164,12 @@ pub fn apply_allocation(
           // This ensures each spilled value uses a different scratch register
           let new_values : Array[@abi.Reg] = []
           for v in values {
-            if v is @abi.Virtual(vreg) && alloc.assignments.get(vreg.id) is Some(preg) {
+            if v is @abi.Virtual(vreg) &&
+              alloc.assignments.get(vreg.id) is Some(preg) {
               new_values.push(@abi.Physical(preg))
               // Spilled: insert reload and use scratch register from block pool
-            } else if v is @abi.Virtual(vreg) && alloc.spill_slots.get(vreg.id) is Some(slot) {
+            } else if v is @abi.Virtual(vreg) &&
+              alloc.spill_slots.get(vreg.id) is Some(slot) {
               // Use X16, X17 as scratch registers
               // These are the only safe scratch registers
               let scratch_class = match vreg.class {

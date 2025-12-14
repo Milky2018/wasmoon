@@ -265,7 +265,8 @@ fn try_compile_jit(
 ) -> (@jit.JITModule, Int64)? {
   // Check if all imports are supported by JIT
   for imp in mod_.imports {
-    if imp.desc is Func(_) && !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+    if imp.desc is Func(_) &&
+      !@jit.has_import_trampoline(imp.mod_name, imp.name) {
       return None // Unsupported import
     }
   }
@@ -500,7 +501,8 @@ fn run_wast_command(
       ctx.current_module = Some(instance)
       // Try to compile JIT version (only if JIT is enabled)
       match try_compile_jit(mod_, instance, ctx.store) {
-        Some((jm, mem_ptr)) if ctx.use_jit => ctx.current_jit = Some((jm, mem_ptr, mod_))
+        Some((jm, mem_ptr)) if ctx.use_jit =>
+          ctx.current_jit = Some((jm, mem_ptr, mod_))
         _ => ctx.current_jit = None
       }
     }

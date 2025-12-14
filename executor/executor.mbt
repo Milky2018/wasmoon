@@ -1019,10 +1019,7 @@ pub fn instantiate_module_with_imports(
     if data.offset.length() > 0 && mem_addrs.length() > data.memory_idx {
       let mem = store.get_mem(mem_addrs[data.memory_idx])
       // Evaluate offset expression using extended const expr evaluator
-      let offset = eval_extended_const_expr(
-        data.offset,
-        globals_for_data_init,
-      )
+      let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
       // Copy data to memory
       mem.init_data(offset, data.init)
     }
