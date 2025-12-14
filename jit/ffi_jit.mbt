@@ -145,13 +145,19 @@ fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
 }
 
 ///|
-/// Set an entry in indirect table (maps table_idx to func_idx)
+/// Set an entry in indirect table (maps table_idx to func_idx with type_idx for type checking)
 fn JITContext::set_indirect(
   self : JITContext,
   table_idx : Int,
   func_idx : Int,
+  type_idx : Int,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_set_indirect(self.ctx_ptr, table_idx, func_idx)
+  @jit_ffi.c_jit_ctx_v2_set_indirect(
+    self.ctx_ptr,
+    table_idx,
+    func_idx,
+    type_idx,
+  )
 }
 
 ///|

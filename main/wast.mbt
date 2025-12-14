@@ -316,8 +316,31 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
   if table_size == 0 {
     return // No tables, nothing to do
   }
-  // Collect elem initializers: (table_idx, func_idx)
-  let elem_init : Array[(Int, Int)] = []
+  // Build function index to type hash mapping
+  // We use structural type hash for type equivalence checking
+  let func_type_hashes : Array[Int] = []
+  // Import functions
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      let type_hash = if type_idx < mod_.types.length() {
+        mod_.types[type_idx].structural_hash()
+      } else {
+        0
+      }
+      func_type_hashes.push(type_hash)
+    }
+  }
+  // Local functions
+  for type_idx in mod_.funcs {
+    let type_hash = if type_idx < mod_.types.length() {
+      mod_.types[type_idx].structural_hash()
+    } else {
+      0
+    }
+    func_type_hashes.push(type_hash)
+  }
+  // Collect elem initializers: (table_idx, func_idx, type_hash)
+  let elem_init : Array[(Int, Int, Int)] = []
   for elem in mod_.elems {
     // Only process active element segments
     if elem.mode is @types.ElemMode::Active(_table_idx, offset_expr) {
@@ -332,7 +355,13 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
           [I32Const(idx)] => idx
           _ => continue
         }
-        elem_init.push((offset + i, func_idx))
+        // Get the type hash for this function
+        let type_hash = if func_idx < func_type_hashes.length() {
+          func_type_hashes[func_idx]
+        } else {
+          0
+        }
+        elem_init.push((offset + i, func_idx, type_hash))
       }
     }
   }

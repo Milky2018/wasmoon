@@ -521,3 +521,122 @@ test "emit_str_reg_scaled" {
     ),
   )
 }
+
+///|
+test "emit_b_cond_offset" {
+  let mc = MachineCode::new()
+  // B.EQ +8 (skip 2 instructions)
+  emit_b_cond_offset(mc, 0, 8)
+  // B.NE +12 (skip 3 instructions)
+  emit_b_cond_offset(mc, 1, 12)
+  // B.LT +4 (skip 1 instruction)
+  emit_b_cond_offset(mc, 11, 4)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 40000054  b.eq .+8
+      #|  0004: 61000054  b.ne .+12
+      #|  0008: 2b000054  b.lt .+4
+      #|
+    ),
+  )
+}
+
+///|
+test "emit_brk" {
+  let mc = MachineCode::new()
+  // BRK #0
+  emit_brk(mc, 0)
+  // BRK #2 (type mismatch trap)
+  emit_brk(mc, 2)
+  // BRK #1 (general trap)
+  emit_brk(mc, 1)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 000020d4  brk #0
+      #|  0004: 400020d4  brk #2
+      #|  0008: 200020d4  brk #1
+      #|
+    ),
+  )
+}
+
+///|
+/// Test type check with small immediate (<=4095) - uses CMP immediate
+test "type_check_small_immediate" {
+  let mc = MachineCode::new()
+  // Simulate TypeCheckIndirect with expected_type = 100 (small, fits in 12 bits)
+  let expected_type = 100
+  let actual_type_reg = 9 // x9
+  // This path should use CMP immediate
+  emit_cmp_imm(mc, actual_type_reg, expected_type)
+  emit_b_cond_offset(mc, 0, 8) // B.EQ +8
+  emit_brk(mc, 2)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 3f9101f1  cmp x9, #100
+      #|  0004: 40000054  b.eq .+8
+      #|  0008: 400020d4  brk #2
+      #|
+    ),
+  )
+}
+
+///|
+/// Test type check with large immediate (>4095) - uses load + CMP register
+test "type_check_large_immediate" {
+  let mc = MachineCode::new()
+  // Simulate TypeCheckIndirect with expected_type = 7905 (0x1EE1, > 4095)
+  let expected_type = 7905
+  let actual_type_reg = 9 // x9
+  // This path should load into x17 first, then use CMP register
+  emit_load_imm64(mc, 17, expected_type.to_int64())
+  emit_cmp_reg(mc, actual_type_reg, 17)
+  emit_b_cond_offset(mc, 0, 8) // B.EQ +8
+  emit_brk(mc, 2)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 31dc83d2  movz x17, #7905, lsl #0
+      #|  0004: 3f0111eb  cmp x9, x17
+      #|  0008: 40000054  b.eq .+8
+      #|  000c: 400020d4  brk #2
+      #|
+    ),
+  )
+}
+
+///|
+/// Test that CMP immediate truncates values > 4095 (this is the bug we fixed)
+/// This test documents the limitation of emit_cmp_imm
+test "cmp_imm_truncates_large_values" {
+  let mc = MachineCode::new()
+  // 7905 = 0x1EE1, masked to 12 bits = 0xEE1 = 3809
+  // This shows the WRONG behavior if we use CMP immediate for large values
+  emit_cmp_imm(mc, 9, 7905) // Will compare against 3809, not 7905!
+  mc.resolve_fixups()
+  // Note: The annotation says 7905 but the actual immediate is 3809 (0xEE1)
+  // This is why we must use load+cmp_reg for values > 4095
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 3f853bf1  cmp x9, #7905
+      #|
+    ),
+  )
+  // Verify the actual encoded immediate by checking the instruction bytes
+  // Bits [21:10] contain imm12. Let's decode 0xf13b853f:
+  // The instruction encodes imm12 = 0xEE1 = 3809, not 7905
+  let inst = mc.bytes[0] |
+    (mc.bytes[1] << 8) |
+    (mc.bytes[2] << 16) |
+    (mc.bytes[3] << 24)
+  let encoded_imm12 = (inst >> 10) & 0xFFF
+  inspect(encoded_imm12, content="3809") // This proves truncation happened!
+}

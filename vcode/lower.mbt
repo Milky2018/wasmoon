@@ -357,7 +357,8 @@ fn lower_inst(
 
     // Function calls
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
-    @ir.Opcode::CallIndirect(_type_idx) => lower_call_indirect(ctx, inst, block)
+    @ir.Opcode::CallIndirect(type_idx) =>
+      lower_call_indirect(ctx, inst, block, type_idx)
   }
 }
 
@@ -1727,6 +1728,7 @@ fn lower_call_indirect(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : VCodeBlock,
+  expected_type_idx : Int,
 ) -> Unit {
   // For call_indirect, the first operand is the table index (callee)
   // which we need to convert to a function pointer
@@ -1751,16 +1753,17 @@ fn lower_call_indirect(
   // Create temporaries for calculation
   let offset_vreg = ctx.vcode_func.new_vreg(Int)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
 
-  // Step 1: Calculate offset = table_idx * 8
-  let const_8_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_8 = VCodeInst::new(LoadConst(8L))
-  load_8.add_def({ reg: Virtual(const_8_vreg) })
-  block.add_inst(load_8)
+  // Step 1: Calculate offset = table_idx * 16 (each entry is 16 bytes: func_ptr + type_idx)
+  let const_16_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_16 = VCodeInst::new(LoadConst(16L))
+  load_16.add_def({ reg: Virtual(const_16_vreg) })
+  block.add_inst(load_16)
   let mul_inst = VCodeInst::new(Mul)
   mul_inst.add_def({ reg: Virtual(offset_vreg) })
   mul_inst.add_use(Virtual(table_idx_vreg))
-  mul_inst.add_use(Virtual(const_8_vreg))
+  mul_inst.add_use(Virtual(const_16_vreg))
   block.add_inst(mul_inst)
 
   // Step 2: Calculate address = X24 + offset
@@ -1772,13 +1775,24 @@ fn lower_call_indirect(
   add_inst.add_use(Virtual(offset_vreg))
   block.add_inst(add_inst)
 
-  // Step 3: Load function pointer from address
-  let load_inst = VCodeInst::new(Load(I64, 0))
-  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-  load_inst.add_use(Virtual(addr_vreg))
-  block.add_inst(load_inst)
+  // Step 3: Load function pointer from address (offset 0)
+  let load_func_inst = VCodeInst::new(Load(I64, 0))
+  load_func_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_func_inst.add_use(Virtual(addr_vreg))
+  block.add_inst(load_func_inst)
 
-  // Step 4: Emit CallIndirect instruction
+  // Step 4: Load actual type index from address + 8
+  let load_type_inst = VCodeInst::new(Load(I64, 8))
+  load_type_inst.add_def({ reg: Virtual(actual_type_vreg) })
+  load_type_inst.add_use(Virtual(addr_vreg))
+  block.add_inst(load_type_inst)
+
+  // Step 5: Emit type check instruction (traps if types don't match)
+  let type_check_inst = VCodeInst::new(TypeCheckIndirect(expected_type_idx))
+  type_check_inst.add_use(Virtual(actual_type_vreg))
+  block.add_inst(type_check_inst)
+
+  // Step 6: Emit CallIndirect instruction
   let call_inst = VCodeInst::new(CallIndirect(num_args, num_results))
   // Define all results
   for result in all_results {

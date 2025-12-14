@@ -293,6 +293,47 @@ pub(all) struct FuncType {
 } derive(Eq, Show)
 
 ///|
+/// Compute a hash for structural type equivalence.
+/// Two FuncTypes with the same params and results will have the same hash.
+pub fn FuncType::structural_hash(self : FuncType) -> Int {
+  let mut h = 0
+  // Encode params
+  for param in self.params {
+    h = h * 31 + param.type_code()
+  }
+  // Separator between params and results
+  h = h * 31 + 0xFF
+  // Encode results
+  for result in self.results {
+    h = h * 31 + result.type_code()
+  }
+  // Ensure non-negative
+  if h < 0 {
+    -h
+  } else {
+    h
+  }
+}
+
+///|
+/// Get a numeric code for a value type (for hashing)
+fn ValueType::type_code(self : ValueType) -> Int {
+  match self {
+    I32 => 0
+    I64 => 1
+    F32 => 2
+    F64 => 3
+    V128 => 4
+    FuncRef => 5
+    ExternRef => 6
+    RefFunc => 7
+    RefExtern => 8
+    RefFuncTyped(idx) => 100 + idx
+    RefNullFuncTyped(idx) => 200 + idx
+  }
+}
+
+///|
 /// Limits for memory and tables
 pub(all) struct Limits {
   min : Int

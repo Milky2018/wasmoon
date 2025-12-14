@@ -985,6 +985,7 @@ pub enum VCodeOpcode {
   Msub
   Mneg
   CallIndirect(Int, Int)
+  TypeCheckIndirect(Int)
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, RegClass)
