@@ -316,7 +316,7 @@ fn build_func_signatures(
           func_type.results.copy(),
         )
       }
-      func_count += 1
+      func_count = func_count + 1
     }
   }
 

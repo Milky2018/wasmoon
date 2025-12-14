@@ -440,15 +440,12 @@ pub fn VCodeBuilder::return_(
   self : VCodeBuilder,
   values : Array[@abi.VReg],
 ) -> Unit {
-  match self.current_block {
-    Some(block) => {
-      let regs : Array[@abi.Reg] = []
-      for v in values {
-        regs.push(Virtual(v))
-      }
-      block.set_terminator(@instr.VCodeTerminator::Return(regs))
+  if self.current_block is Some(block) {
+    let regs : Array[@abi.Reg] = []
+    for v in values {
+      regs.push(Virtual(v))
     }
-    None => ()
+    block.set_terminator(@instr.VCodeTerminator::Return(regs))
   }
 }
 

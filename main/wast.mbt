@@ -265,9 +265,10 @@ fn try_compile_jit(
 ) -> (@jit.JITModule, Int64)? {
   // Check if all imports are supported by JIT
   for imp in mod_.imports {
-    if imp.desc is Func(_) &&
-      !@jit.has_import_trampoline(imp.mod_name, imp.name) {
-      return None // Unsupported import
+    if imp.desc is Func(_) {
+      if !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+        return None // Unsupported import
+      }
     }
   }
   // Compile module to JIT

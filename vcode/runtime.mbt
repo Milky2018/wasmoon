@@ -150,12 +150,9 @@ pub fn CodeCache::invalidate(self : CodeCache, func_idx : Int) -> Unit {
 ///|
 /// Remove a function from the cache
 pub fn CodeCache::remove(self : CodeCache, func_idx : Int) -> Unit {
-  match self.functions.get(func_idx) {
-    Some(func) => {
-      self.total_size = self.total_size - func.code_size
-      self.functions.remove(func_idx)
-    }
-    None => ()
+  if self.functions.get(func_idx) is Some(func) {
+    self.total_size = self.total_size - func.code_size
+    self.functions.remove(func_idx)
   }
 }
 
@@ -178,12 +175,9 @@ fn CodeCache::evict_lru(self : CodeCache) -> Unit {
       break
     }
   }
-  match to_remove {
-    Some(idx) => {
-      self.remove(idx)
-      return
-    }
-    None => ()
+  if to_remove is Some(idx) {
+    self.remove(idx)
+    return
   }
 
   // If no invalid functions, evict smallest

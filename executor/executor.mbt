@@ -1018,12 +1018,17 @@ pub fn instantiate_module_with_imports(
   let globals_for_data_init = get_global_instances(store, global_addrs)
   for data in mod.datas {
     // Active data segments have a non-empty offset expression
-    if data.offset.length() > 0 && mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(mem_addrs[data.memory_idx])
-      // Evaluate offset expression using extended const expr evaluator
-      let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
-      // Copy data to memory
-      mem.init_data(offset, data.init)
+    if data.offset.length() > 0 {
+      if mem_addrs.length() > data.memory_idx {
+        let mem = store.get_mem(mem_addrs[data.memory_idx])
+        // Evaluate offset expression using extended const expr evaluator
+        let offset = eval_extended_const_expr(
+          data.offset,
+          globals_for_data_init,
+        )
+        // Copy data to memory
+        mem.init_data(offset, data.init)
+      }
     }
   }
 

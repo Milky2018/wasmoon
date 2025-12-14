@@ -786,18 +786,15 @@ fn validate_memory_limits(limits : @types.Limits) -> Unit raise ValidationError 
   }
 
   // Check max if specified
-  match limits.max {
-    Some(max_val) => {
-      // max must not exceed allowed maximum (unsigned comparison)
-      if max_val.reinterpret_as_uint() > max_pages.reinterpret_as_uint() {
-        raise InvalidLimits("memory size must be at most 65536 pages")
-      }
-      // min must not be greater than max (unsigned comparison)
-      if limits.min.reinterpret_as_uint() > max_val.reinterpret_as_uint() {
-        raise InvalidLimits("size minimum must not be greater than maximum")
-      }
+  if limits.max is Some(max_val) {
+    // max must not exceed allowed maximum (unsigned comparison)
+    if max_val.reinterpret_as_uint() > max_pages.reinterpret_as_uint() {
+      raise InvalidLimits("memory size must be at most 65536 pages")
     }
-    None => ()
+    // min must not be greater than max (unsigned comparison)
+    if limits.min.reinterpret_as_uint() > max_val.reinterpret_as_uint() {
+      raise InvalidLimits("size minimum must not be greater than maximum")
+    }
   }
 }
 

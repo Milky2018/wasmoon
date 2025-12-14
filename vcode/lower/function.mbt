@@ -153,9 +153,8 @@ pub fn VCodeFunction::print(self : VCodeFunction) -> String {
       result = result + "    \{inst}\n"
     }
     // Terminator
-    match block.terminator {
-      Some(term) => result = result + "    \{term}\n"
-      None => ()
+    if block.terminator is Some(term) {
+      result = result + "    \{term}\n"
     }
   }
   result = result + "}\n"

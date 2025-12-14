@@ -201,55 +201,45 @@ pub fn Translator::translate(
 
   // Handle function end
   if !self.is_unreachable {
-    match self.builder.current_block() {
-      Some(block) =>
-        match block.terminator {
-          None =>
-            // Normal fall-through: check if return_continuation was created
-            match self.return_continuation {
-              Some(ret_cont) => {
-                // Someone jumped to function level, need to go through continuation
-                let args : Array[Value] = []
-                for _ in 0..<self.func_result_types.length() {
-                  if self.value_stack.length() > 0 {
-                    args.push(self.pop())
-                  }
-                }
-                args.rev_in_place()
-                for loc in self.locals {
-                  args.push(loc)
-                }
-                self.builder.jump(ret_cont, args)
-              }
-              None => {
-                // No one jumped to function level, just return directly
-                let return_vals : Array[Value] = []
-                for _ in 0..<self.func_result_types.length() {
-                  if self.value_stack.length() > 0 {
-                    return_vals.push(self.pop())
-                  }
-                }
-                return_vals.rev_in_place()
-                self.builder.return_(return_vals)
-              }
+    if self.builder.current_block() is Some(block) {
+      if block.terminator is None {
+        // Normal fall-through: check if return_continuation was created
+        if self.return_continuation is Some(ret_cont) {
+          // Someone jumped to function level, need to go through continuation
+          let args : Array[Value] = []
+          for _ in 0..<self.func_result_types.length() {
+            if self.value_stack.length() > 0 {
+              args.push(self.pop())
             }
-          Some(_) => ()
+          }
+          args.rev_in_place()
+          for loc in self.locals {
+            args.push(loc)
+          }
+          self.builder.jump(ret_cont, args)
+        } else {
+          // No one jumped to function level, just return directly
+          let return_vals : Array[Value] = []
+          for _ in 0..<self.func_result_types.length() {
+            if self.value_stack.length() > 0 {
+              return_vals.push(self.pop())
+            }
+          }
+          return_vals.rev_in_place()
+          self.builder.return_(return_vals)
         }
-      None => ()
+      }
     }
   }
 
   // If return_continuation was created, emit it
-  match self.return_continuation {
-    Some(ret_cont) => {
-      self.builder.switch_to_block(ret_cont)
-      let return_vals : Array[Value] = []
-      for i in 0..<self.func_result_types.length() {
-        return_vals.push(ret_cont.params[i].0)
-      }
-      self.builder.return_(return_vals)
+  if self.return_continuation is Some(ret_cont) {
+    self.builder.switch_to_block(ret_cont)
+    let return_vals : Array[Value] = []
+    for i in 0..<self.func_result_types.length() {
+      return_vals.push(ret_cont.params[i].0)
     }
-    None => ()
+    self.builder.return_(return_vals)
   }
   self.builder.get_function()
 }
@@ -910,25 +900,20 @@ fn Translator::translate_block(
 
   // Fall through to continuation (only if not unreachable)
   if !self.is_unreachable {
-    match self.builder.current_block() {
-      Some(block) =>
-        match block.terminator {
-          None => {
-            // Collect results from stack
-            let args : Array[Value] = []
-            for _ in 0..<result_types.length() {
-              args.push(self.pop())
-            }
-            args.rev_in_place()
-            // Then, all locals
-            for loc in self.locals {
-              args.push(loc)
-            }
-            self.builder.jump(continuation, args)
-          }
-          Some(_) => ()
+    if self.builder.current_block() is Some(block) {
+      if block.terminator is None {
+        // Collect results from stack
+        let args : Array[Value] = []
+        for _ in 0..<result_types.length() {
+          args.push(self.pop())
         }
-      None => ()
+        args.rev_in_place()
+        // Then, all locals
+        for loc in self.locals {
+          args.push(loc)
+        }
+        self.builder.jump(continuation, args)
+      }
     }
   }
 
@@ -1042,20 +1027,15 @@ fn Translator::translate_loop(
 
   // Fall through to continuation (only if not unreachable)
   if !self.is_unreachable {
-    match self.builder.current_block() {
-      Some(block) =>
-        match block.terminator {
-          None => {
-            let args : Array[Value] = []
-            for _ in 0..<result_types.length() {
-              args.push(self.pop())
-            }
-            args.rev_in_place()
-            self.builder.jump(continuation, args)
-          }
-          Some(_) => ()
+    if self.builder.current_block() is Some(block) {
+      if block.terminator is None {
+        let args : Array[Value] = []
+        for _ in 0..<result_types.length() {
+          args.push(self.pop())
         }
-      None => ()
+        args.rev_in_place()
+        self.builder.jump(continuation, args)
+      }
     }
   }
 
@@ -1139,24 +1119,19 @@ fn Translator::translate_if(
 
   // Jump to continuation from then block with locals (only if not unreachable)
   if !self.is_unreachable {
-    match self.builder.current_block() {
-      Some(block) =>
-        match block.terminator {
-          None => {
-            let args : Array[Value] = []
-            for _ in 0..<result_types.length() {
-              args.push(self.pop())
-            }
-            args.rev_in_place()
-            // Pass locals
-            for loc in self.locals {
-              args.push(loc)
-            }
-            self.builder.jump(continuation, args)
-          }
-          Some(_) => ()
+    if self.builder.current_block() is Some(block) {
+      if block.terminator is None {
+        let args : Array[Value] = []
+        for _ in 0..<result_types.length() {
+          args.push(self.pop())
         }
-      None => ()
+        args.rev_in_place()
+        // Pass locals
+        for loc in self.locals {
+          args.push(loc)
+        }
+        self.builder.jump(continuation, args)
+      }
     }
   }
 
@@ -1180,24 +1155,19 @@ fn Translator::translate_if(
 
   // Jump to continuation from else block with locals (only if not unreachable)
   if !self.is_unreachable {
-    match self.builder.current_block() {
-      Some(block) =>
-        match block.terminator {
-          None => {
-            let args : Array[Value] = []
-            for _ in 0..<result_types.length() {
-              args.push(self.pop())
-            }
-            args.rev_in_place()
-            // Pass locals
-            for loc in self.locals {
-              args.push(loc)
-            }
-            self.builder.jump(continuation, args)
-          }
-          Some(_) => ()
+    if self.builder.current_block() is Some(block) {
+      if block.terminator is None {
+        let args : Array[Value] = []
+        for _ in 0..<result_types.length() {
+          args.push(self.pop())
         }
-      None => ()
+        args.rev_in_place()
+        // Pass locals
+        for loc in self.locals {
+          args.push(loc)
+        }
+        self.builder.jump(continuation, args)
+      }
     }
   }
 

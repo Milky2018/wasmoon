@@ -177,35 +177,36 @@ fn run_wasm(
   // Initialize element segments (populate tables with function references)
   for elem in mod_.elems {
     // Only process active element segments
-    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) &&
-      instance.table_addrs.length() > table_idx {
-      let table = store.get_table(instance.table_addrs[table_idx]) catch {
-        e => {
-          println("Error getting table: \{e}")
-          return
-        }
-      }
-      let offset = match offset_expr {
-        [I32Const(n)] => n
-        _ => 0
-      }
-      for i, init_expr in elem.init {
-        // Extract function index from init expression
-        let func_idx = match init_expr {
-          [RefFunc(idx)] => idx
-          [I32Const(idx)] => idx
-          _ => continue
-        }
-        // Convert module function index to store address
-        let store_addr = if func_idx < instance.func_addrs.length() {
-          instance.func_addrs[func_idx]
-        } else {
-          func_idx // fallback, should not happen for valid modules
-        }
-        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
+    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+      if instance.table_addrs.length() > table_idx {
+        let table = store.get_table(instance.table_addrs[table_idx]) catch {
           e => {
-            println("Error setting table element: \{e}")
+            println("Error getting table: \{e}")
             return
+          }
+        }
+        let offset = match offset_expr {
+          [I32Const(n)] => n
+          _ => 0
+        }
+        for i, init_expr in elem.init {
+          // Extract function index from init expression
+          let func_idx = match init_expr {
+            [RefFunc(idx)] => idx
+            [I32Const(idx)] => idx
+            _ => continue
+          }
+          // Convert module function index to store address
+          let store_addr = if func_idx < instance.func_addrs.length() {
+            instance.func_addrs[func_idx]
+          } else {
+            func_idx // fallback, should not happen for valid modules
+          }
+          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
+            e => {
+              println("Error setting table element: \{e}")
+              return
+            }
           }
         }
       }
@@ -224,57 +225,55 @@ fn run_wasm(
   }
   // Find the function type to parse arguments correctly
   let func_type = find_exported_func_type(mod_, func_name)
-  match func_type {
-    Some(ft) => {
-      // Parse arguments according to function type
-      let args = parse_func_args(ft.params, func_args) catch {
+  if func_type is Some(ft) {
+    // Parse arguments according to function type
+    let args = parse_func_args(ft.params, func_args) catch {
+      e => {
+        println("Error parsing arguments: \{e}")
+        return
+      }
+    }
+    // Call the function
+    // Check if JIT can handle all imports
+    let can_use_jit = if use_jit {
+      check_jit_import_support(mod_, debug_config)
+    } else {
+      false
+    }
+    if can_use_jit {
+      // JIT execution path
+      let jit_results = run_with_jit(
+        mod_, instance, store, func_name, args, debug_config,
+      )
+      if jit_results.length() > 0 {
+        // Print all results separated by spaces
+        let strs = jit_results.map(format_value)
+        println(strs.join(" "))
+      }
+    } else {
+      // Interpreter execution path
+      let results = @executor.call_exported_func(
+        store, instance, func_name, args,
+      ) catch {
         e => {
-          println("Error parsing arguments: \{e}")
+          println("Error: \{e}")
           return
         }
       }
-      // Call the function
-      // Check if JIT can handle all imports
-      let can_use_jit = if use_jit {
-        check_jit_import_support(mod_, debug_config)
-      } else {
-        false
-      }
-      if can_use_jit {
-        // JIT execution path
-        let jit_results = run_with_jit(
-          mod_, instance, store, func_name, args, debug_config,
-        )
-        if jit_results.length() > 0 {
-          // Print all results separated by spaces
-          let strs = jit_results.map(format_value)
-          println(strs.join(" "))
-        }
-      } else {
-        // Interpreter execution path
-        let results = @executor.call_exported_func(
-          store, instance, func_name, args,
-        ) catch {
-          e => {
-            println("Error: \{e}")
-            return
-          }
-        }
-        // Print results
-        if results.length() > 0 {
-          let result_strs = results.map(format_value)
-          println(result_strs.join(" "))
-        }
+      // Print results
+      if results.length() > 0 {
+        let result_strs = results.map(format_value)
+        println(result_strs.join(" "))
       }
     }
-    None =>
-      // No exported function found, check if there's a start function
-      match invoke {
-        Some(name) => println("Error: function '\{name}' not found")
-        None =>
-          // Module was already initialized with start function if present
-          ()
-      }
+  } else {
+    // No exported function found, check if there's a start function
+    match invoke {
+      Some(name) => println("Error: function '\{name}' not found")
+      None =>
+        // Module was already initialized with start function if present
+        ()
+    }
   }
 }
 
@@ -818,9 +817,10 @@ fn check_jit_import_support(
 ) -> Bool {
   let unsupported : Array[String] = []
   for imp in mod_.imports {
-    if imp.desc is Func(_) &&
-      !@jit.has_import_trampoline(imp.mod_name, imp.name) {
-      unsupported.push("\{imp.mod_name}.\{imp.name}")
+    if imp.desc is Func(_) {
+      if !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+        unsupported.push("\{imp.mod_name}.\{imp.name}")
+      }
     }
   }
   if unsupported.length() > 0 {

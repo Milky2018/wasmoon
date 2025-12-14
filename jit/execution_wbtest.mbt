@@ -607,36 +607,31 @@ test "end-to-end: f32_br_2locals.wast from source" {
   let results : Array[(Int64, Float, Float)] = []
   for i in 1..<script.commands.length() {
     let (cmd, _) = script.commands[i]
-    match cmd {
-      @wast.WastCommand::AssertReturn(action, expected) =>
-        match action {
-          @wast.WastAction::Invoke(_, func_name, args) => {
-            assert_eq(func_name, "test")
-            assert_eq(args.length(), 1)
-            assert_eq(expected.length(), 1)
+    if cmd is @wast.WastCommand::AssertReturn(action, expected) {
+      if action is @wast.WastAction::Invoke(_, func_name, args) {
+        assert_eq(func_name, "test")
+        assert_eq(args.length(), 1)
+        assert_eq(expected.length(), 1)
 
-            // Get input argument
-            let arg = match args[0] {
-              @wast.WastValue::I32(n) => n
-              x => fail("Input is not I32: \{x}")
-            }
-
-            // Get expected result
-            let expected_f32 = match expected[0] {
-              @wast.WastValue::F32(f) => f
-              x => fail("Output is not F32: \{x}")
-            }
-
-            // Call the JIT-compiled function
-            let Single((result_f32 : Float)) = jm.call_with_context_poly(
-              f,
-              Single(arg),
-            )
-            results.push((arg.to_int64(), expected_f32, result_f32))
-          }
-          _ => ()
+        // Get input argument
+        let arg = match args[0] {
+          @wast.WastValue::I32(n) => n
+          x => fail("Input is not I32: \{x}")
         }
-      _ => ()
+
+        // Get expected result
+        let expected_f32 = match expected[0] {
+          @wast.WastValue::F32(f) => f
+          x => fail("Output is not F32: \{x}")
+        }
+
+        // Call the JIT-compiled function
+        let Single((result_f32 : Float)) = jm.call_with_context_poly(
+          f,
+          Single(arg),
+        )
+        results.push((arg.to_int64(), expected_f32, result_f32))
+      }
     }
   }
 

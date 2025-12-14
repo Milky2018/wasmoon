@@ -305,14 +305,12 @@ pub fn JITModule::init_indirect_table(
   table_size : Int,
   elem_init : Array[(Int, Int, Int)],
 ) -> Unit {
-  match self.context {
-    Some(ctx) =>
-      if ctx.alloc_indirect_table(table_size) {
-        for entry in elem_init {
-          let (table_idx, func_idx, type_idx) = entry
-          ctx.set_indirect(table_idx, func_idx, type_idx)
-        }
+  if self.context is Some(ctx) {
+    if ctx.alloc_indirect_table(table_size) {
+      for entry in elem_init {
+        let (table_idx, func_idx, type_idx) = entry
+        ctx.set_indirect(table_idx, func_idx, type_idx)
       }
-    None => ()
+    }
   }
 }

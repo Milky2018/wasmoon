@@ -526,15 +526,12 @@ test "regalloc: SSA deconstruction scenario" {
   inspect(alloc_result.assignments.get(f5.id) is Some(_), content="true")
 
   // Verify f5 got the right register class
-  match alloc_result.assignments.get(f5.id) {
-    Some(preg) => {
-      let class_name = match preg.class {
-        @abi.Int => "@abi.Int"
-        @abi.Float32 | @abi.Float64 => "Float"
-      }
-      inspect(class_name, content="Float")
+  if alloc_result.assignments.get(f5.id) is Some(preg) {
+    let class_name = match preg.class {
+      @abi.Int => "@abi.Int"
+      @abi.Float32 | @abi.Float64 => "Float"
     }
-    None => ()
+    inspect(class_name, content="Float")
   }
 
   // The CRITICAL question: when both block2 and block3 define f5,

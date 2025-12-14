@@ -375,18 +375,20 @@ pub fn AArch64StackFrame::gen_epilogue(
   }
 
   // Restore FP and LR if using frame pointer
-  if self.use_fp && (self.fp_slot, self.lr_slot) is (Some(fp_off), Some(lr_off)) {
-    // Restore FP
-    let load_fp = @instr.VCodeInst::new(Load(I64, fp_off))
-    load_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
-    load_fp.add_use(Physical({ index: 31, class: Int })) // SP
-    insts.push(load_fp)
+  if self.use_fp {
+    if (self.fp_slot, self.lr_slot) is (Some(fp_off), Some(lr_off)) {
+      // Restore FP
+      let load_fp = @instr.VCodeInst::new(Load(I64, fp_off))
+      load_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
+      load_fp.add_use(Physical({ index: 31, class: Int })) // SP
+      insts.push(load_fp)
 
-    // Restore LR
-    let load_lr = @instr.VCodeInst::new(Load(I64, lr_off))
-    load_lr.add_def({ reg: Physical({ index: 30, class: Int }) })
-    load_lr.add_use(Physical({ index: 31, class: Int })) // SP
-    insts.push(load_lr)
+      // Restore LR
+      let load_lr = @instr.VCodeInst::new(Load(I64, lr_off))
+      load_lr.add_def({ reg: Physical({ index: 30, class: Int }) })
+      load_lr.add_use(Physical({ index: 31, class: Int })) // SP
+      insts.push(load_lr)
+    }
   }
 
   // Restore stack pointer: ADD sp, sp, #frame_size
@@ -462,9 +464,10 @@ fn find_vreg_by_id(func : VCodeFunction, id : Int) -> @abi.VReg? {
   for block in func.blocks {
     for inst in block.insts {
       for def in inst.defs {
-        match def.reg {
-          Virtual(vreg) => if vreg.id == id { return Some(vreg) }
-          Physical(_) => ()
+        if def.reg is Virtual(vreg) {
+          if vreg.id == id {
+            return Some(vreg)
+          }
         }
       }
     }

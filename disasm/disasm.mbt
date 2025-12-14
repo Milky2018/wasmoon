@@ -92,13 +92,10 @@ pub fn disassemble(mod_ : @types.Module) -> String {
   }
 
   // Start section
-  match mod_.start {
-    Some(start_idx) => {
-      buf.write_string("  (start ")
-      buf.write_string(start_idx.to_string())
-      buf.write_string(")\n")
-    }
-    None => ()
+  if mod_.start is Some(start_idx) {
+    buf.write_string("  (start ")
+    buf.write_string(start_idx.to_string())
+    buf.write_string(")\n")
   }
 
   // Element segments
@@ -218,12 +215,9 @@ fn write_value_type(buf : StringBuilder, vt : @types.ValueType) -> Unit {
 ///|
 fn write_limits(buf : StringBuilder, limits : @types.Limits) -> Unit {
   buf.write_string(limits.min.to_string())
-  match limits.max {
-    Some(max) => {
-      buf.write_string(" ")
-      buf.write_string(max.to_string())
-    }
-    None => ()
+  if limits.max is Some(max) {
+    buf.write_string(" ")
+    buf.write_string(max.to_string())
   }
 }
 

@@ -162,37 +162,34 @@ pub fn MachineCode::add_fixup(
 /// Resolve all pending fixups
 pub fn MachineCode::resolve_fixups(self : MachineCode) -> Unit {
   for fixup in self.fixups {
-    match self.labels.get(fixup.target_block) {
-      Some(target_offset) => {
-        let pc_offset = (target_offset - fixup.offset) / 4 // Instructions are 4 bytes
-        match fixup.kind {
-          Branch26 => {
-            // Patch bits [25:0] with the 26-bit offset
-            // Keep opcode bits in byte 3
-            let imm26 = pc_offset & 0x3FFFFFF
-            self.bytes[fixup.offset] = imm26 & 255
-            self.bytes[fixup.offset + 1] = (imm26 >> 8) & 255
-            self.bytes[fixup.offset + 2] = (imm26 >> 16) & 255
-            // Keep upper bits of byte 3 (opcode)
-            let old_b3 = self.bytes[fixup.offset + 3]
-            self.bytes[fixup.offset + 3] = (old_b3 & 252) | ((imm26 >> 24) & 3)
-          }
-          Branch19 => {
-            // Patch bits [23:5] with the 19-bit offset
-            let imm19 = pc_offset & 0x7FFFF
-            // imm19 goes into bits [23:5], so bytes 0-2 primarily
-            // Byte 0: bits [7:5] from imm19 bits [2:0], keep bits [4:0] (Rt)
-            let old_b0 = self.bytes[fixup.offset]
-            self.bytes[fixup.offset] = (old_b0 & 31) | ((imm19 << 5) & 224)
-            self.bytes[fixup.offset + 1] = (imm19 >> 3) & 255
-            self.bytes[fixup.offset + 2] = (imm19 >> 11) & 255
-            // Byte 3: keep opcode, add top bits of imm19
-            let old_b3 = self.bytes[fixup.offset + 3]
-            self.bytes[fixup.offset + 3] = (old_b3 & 255) | 0
-          }
+    if self.labels.get(fixup.target_block) is Some(target_offset) {
+      let pc_offset = (target_offset - fixup.offset) / 4 // Instructions are 4 bytes
+      match fixup.kind {
+        Branch26 => {
+          // Patch bits [25:0] with the 26-bit offset
+          // Keep opcode bits in byte 3
+          let imm26 = pc_offset & 0x3FFFFFF
+          self.bytes[fixup.offset] = imm26 & 255
+          self.bytes[fixup.offset + 1] = (imm26 >> 8) & 255
+          self.bytes[fixup.offset + 2] = (imm26 >> 16) & 255
+          // Keep upper bits of byte 3 (opcode)
+          let old_b3 = self.bytes[fixup.offset + 3]
+          self.bytes[fixup.offset + 3] = (old_b3 & 252) | ((imm26 >> 24) & 3)
+        }
+        Branch19 => {
+          // Patch bits [23:5] with the 19-bit offset
+          let imm19 = pc_offset & 0x7FFFF
+          // imm19 goes into bits [23:5], so bytes 0-2 primarily
+          // Byte 0: bits [7:5] from imm19 bits [2:0], keep bits [4:0] (Rt)
+          let old_b0 = self.bytes[fixup.offset]
+          self.bytes[fixup.offset] = (old_b0 & 31) | ((imm19 << 5) & 224)
+          self.bytes[fixup.offset + 1] = (imm19 >> 3) & 255
+          self.bytes[fixup.offset + 2] = (imm19 >> 11) & 255
+          // Byte 3: keep opcode, add top bits of imm19
+          let old_b3 = self.bytes[fixup.offset + 3]
+          self.bytes[fixup.offset + 3] = (old_b3 & 255) | 0
         }
       } // imm19 high bits already covered
-      None => () // Label not found, skip (should not happen in valid code)
     }
   }
 }

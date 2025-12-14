@@ -459,9 +459,8 @@ pub fn StackTrace::depth(self : StackTrace) -> Int {
 ///|
 fn StackTrace::to_string(self : StackTrace) -> String {
   let mut result = ""
-  match self.error {
-    Some(e) => result = "Error: \{e}\n"
-    None => ()
+  if self.error is Some(e) {
+    result = "Error: \{e}\n"
   }
   result = result + "Stack trace:\n"
   for frame in self.frames {

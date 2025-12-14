@@ -26,17 +26,14 @@ pub fn CFG::build(func : Function) -> CFG {
   }
   // Build edges from terminators
   for block in func.blocks {
-    match block.terminator {
-      Some(term) => {
-        let targets = get_terminator_targets(term)
-        for target in targets {
-          if target < num_blocks {
-            successors[block.id].push(target)
-            predecessors[target].push(block.id)
-          }
+    if block.terminator is Some(term) {
+      let targets = get_terminator_targets(term)
+      for target in targets {
+        if target < num_blocks {
+          successors[block.id].push(target)
+          predecessors[target].push(block.id)
         }
       }
-      None => ()
     }
   }
   { num_blocks, successors, predecessors }

@@ -57,18 +57,16 @@ fn LoweringContext::get_vreg_for_use(
   block : @block.VCodeBlock,
 ) -> @abi.VReg {
   // First check if it's a stack parameter
-  match self.stack_param_map.get(value.id) {
-    Some((param_idx, class)) => {
-      // Generate LoadStackParam instruction
-      let result = self.vcode_func.new_vreg(class)
-      let inst = @instr.VCodeInst::new(LoadStackParam(param_idx, class))
-      inst.add_def({ reg: Virtual(result) })
-      block.add_inst(inst)
-      result
-    }
-    None =>
-      // Not a stack param, use normal get_vreg
-      self.get_vreg(value)
+  if self.stack_param_map.get(value.id) is Some((param_idx, class)) {
+    // Generate LoadStackParam instruction
+    let result = self.vcode_func.new_vreg(class)
+    let inst = @instr.VCodeInst::new(LoadStackParam(param_idx, class))
+    inst.add_def({ reg: Virtual(result) })
+    block.add_inst(inst)
+    result
+  } else {
+    // Not a stack param, use normal get_vreg
+    self.get_vreg(value)
   }
 }
 
@@ -126,23 +124,17 @@ fn match_shl_const_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> (@ir.Value, Int)? {
-  match find_defining_inst(ctx, value) {
-    Some(inst) =>
-      if inst.opcode is @ir.Opcode::Ishl {
-        // Check if shift amount is a constant
-        let shift_operand = inst.operands[1]
-        match find_defining_inst(ctx, shift_operand) {
-          Some(shift_inst) =>
-            if shift_inst.opcode is @ir.Opcode::Iconst(amount) {
-              let shift_val = amount.to_int()
-              if shift_val >= 0 && shift_val <= 63 {
-                return Some((inst.operands[0], shift_val))
-              }
-            }
-          None => ()
-        }
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Ishl {
+    // Check if shift amount is a constant
+    let shift_operand = inst.operands[1]
+    if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
+      shift_inst.opcode is @ir.Opcode::Iconst(amount) {
+      let shift_val = amount.to_int()
+      if shift_val >= 0 && shift_val <= 63 {
+        return Some((inst.operands[0], shift_val))
       }
-    None => ()
+    }
   }
   None
 }
@@ -154,10 +146,9 @@ fn match_mul_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> (@ir.Value, @ir.Value)? {
-  if find_defining_inst(ctx, value) is Some(inst) {
-    if inst.opcode is @ir.Opcode::Imul {
-      return Some((inst.operands[0], inst.operands[1]))
-    }
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Imul {
+    return Some((inst.operands[0], inst.operands[1]))
   }
   None
 }
@@ -165,10 +156,9 @@ fn match_mul_value(
 ///|
 /// Check if a value is the constant 0
 fn is_const_zero_value(ctx : LoweringContext, value : @ir.Value) -> Bool {
-  if find_defining_inst(ctx, value) is Some(inst) {
-    if inst.opcode is @ir.Opcode::Iconst(val) {
-      return val == 0L
-    }
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Iconst(val) {
+    return val == 0L
   }
   false
 }
@@ -530,17 +520,16 @@ fn lower_isub(
   let rhs_val = inst.operands[1]
 
   // Pattern: sub(0, mul(x, y)) -> MNEG
-  if is_const_zero_value(ctx, lhs_val) {
-    if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
-      let src1 = ctx.get_vreg_for_use(mul_lhs, block)
-      let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-      let vcode_inst = @instr.VCodeInst::new(Mneg)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src1))
-      vcode_inst.add_use(Virtual(src2))
-      block.add_inst(vcode_inst)
-      return
-    }
+  if is_const_zero_value(ctx, lhs_val) &&
+    match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+    let src1 = ctx.get_vreg_for_use(mul_lhs, block)
+    let src2 = ctx.get_vreg_for_use(mul_rhs, block)
+    let vcode_inst = @instr.VCodeInst::new(Mneg)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src1))
+    vcode_inst.add_use(Virtual(src2))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Pattern: sub(x, mul(y, z)) -> MSUB
