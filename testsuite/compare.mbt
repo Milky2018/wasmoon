@@ -35,9 +35,17 @@ fn jit_results_to_values(
       F64 => F64(@jit.FromInt64::from_int64_bits(raw))
       // Reference types: -1L is null sentinel
       FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
-        if raw == -1L { Null } else { FuncRef(raw.to_int()) }
+        if raw == -1L {
+          Null
+        } else {
+          FuncRef(raw.to_int())
+        }
       ExternRef | RefExtern =>
-        if raw == -1L { Null } else { ExternRef(raw.to_int()) }
+        if raw == -1L {
+          Null
+        } else {
+          ExternRef(raw.to_int())
+        }
       V128 => abort("V128 not supported in JIT")
     }
     values.push(value)
