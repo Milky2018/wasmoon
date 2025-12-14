@@ -137,11 +137,11 @@ fn ExecContext::exec_instr(
       // Declarative elem segments behave as if they have been dropped
       let is_dropped = self.instance.dropped_elems[elem_idx]
       let is_declarative = elem_segment.mode is @types.ElemMode::Declarative
-      if is_dropped || is_declarative {
+      if (is_dropped || is_declarative) && n != 0 {
         // Dropped/declarative segments behave as if they have zero length
-        if n != 0 {
-          raise @runtime.RuntimeError::OutOfBoundsTableAccess
-        }
+        raise @runtime.RuntimeError::OutOfBoundsTableAccess
+      }
+      if is_dropped || is_declarative {
         return
       }
 
@@ -652,10 +652,8 @@ fn eval_extended_const_expr(
     match instr {
       I32Const(n) => stack.push(n)
       GlobalGet(idx) =>
-        if idx < globals.length() {
-          if globals[idx].get() is I32(n) {
-            stack.push(n)
-          }
+        if idx < globals.length() && globals[idx].get() is I32(n) {
+          stack.push(n)
         }
       I32Add =>
         if stack.length() >= 2 {
@@ -1018,17 +1016,15 @@ pub fn instantiate_module_with_imports(
   let globals_for_data_init = get_global_instances(store, global_addrs)
   for data in mod.datas {
     // Active data segments have a non-empty offset expression
-    if data.offset.length() > 0 {
-      if mem_addrs.length() > data.memory_idx {
-        let mem = store.get_mem(mem_addrs[data.memory_idx])
-        // Evaluate offset expression using extended const expr evaluator
-        let offset = eval_extended_const_expr(
-          data.offset,
-          globals_for_data_init,
-        )
-        // Copy data to memory
-        mem.init_data(offset, data.init)
-      }
+    if data.offset.length() > 0 && mem_addrs.length() > data.memory_idx {
+      let mem = store.get_mem(mem_addrs[data.memory_idx])
+      // Evaluate offset expression using extended const expr evaluator
+      let offset = eval_extended_const_expr(
+        data.offset,
+        globals_for_data_init,
+      )
+      // Copy data to memory
+      mem.init_data(offset, data.init)
     }
   }
 

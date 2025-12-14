@@ -200,35 +200,33 @@ pub fn Translator::translate(
   }
 
   // Handle function end
-  if !self.is_unreachable {
-    if self.builder.current_block() is Some(block) {
-      if block.terminator is None {
-        // Normal fall-through: check if return_continuation was created
-        if self.return_continuation is Some(ret_cont) {
-          // Someone jumped to function level, need to go through continuation
-          let args : Array[Value] = []
-          for _ in 0..<self.func_result_types.length() {
-            if self.value_stack.length() > 0 {
-              args.push(self.pop())
-            }
-          }
-          args.rev_in_place()
-          for loc in self.locals {
-            args.push(loc)
-          }
-          self.builder.jump(ret_cont, args)
-        } else {
-          // No one jumped to function level, just return directly
-          let return_vals : Array[Value] = []
-          for _ in 0..<self.func_result_types.length() {
-            if self.value_stack.length() > 0 {
-              return_vals.push(self.pop())
-            }
-          }
-          return_vals.rev_in_place()
-          self.builder.return_(return_vals)
+  if !self.is_unreachable &&
+    self.builder.current_block() is Some(block) &&
+    block.terminator is None {
+    // Normal fall-through: check if return_continuation was created
+    if self.return_continuation is Some(ret_cont) {
+      // Someone jumped to function level, need to go through continuation
+      let args : Array[Value] = []
+      for _ in 0..<self.func_result_types.length() {
+        if self.value_stack.length() > 0 {
+          args.push(self.pop())
         }
       }
+      args.rev_in_place()
+      for loc in self.locals {
+        args.push(loc)
+      }
+      self.builder.jump(ret_cont, args)
+    } else {
+      // No one jumped to function level, just return directly
+      let return_vals : Array[Value] = []
+      for _ in 0..<self.func_result_types.length() {
+        if self.value_stack.length() > 0 {
+          return_vals.push(self.pop())
+        }
+      }
+      return_vals.rev_in_place()
+      self.builder.return_(return_vals)
     }
   }
 
@@ -899,22 +897,20 @@ fn Translator::translate_block(
   self.block_stack.pop() |> ignore
 
   // Fall through to continuation (only if not unreachable)
-  if !self.is_unreachable {
-    if self.builder.current_block() is Some(block) {
-      if block.terminator is None {
-        // Collect results from stack
-        let args : Array[Value] = []
-        for _ in 0..<result_types.length() {
-          args.push(self.pop())
-        }
-        args.rev_in_place()
-        // Then, all locals
-        for loc in self.locals {
-          args.push(loc)
-        }
-        self.builder.jump(continuation, args)
-      }
+  if !self.is_unreachable &&
+    self.builder.current_block() is Some(block) &&
+    block.terminator is None {
+    // Collect results from stack
+    let args : Array[Value] = []
+    for _ in 0..<result_types.length() {
+      args.push(self.pop())
     }
+    args.rev_in_place()
+    // Then, all locals
+    for loc in self.locals {
+      args.push(loc)
+    }
+    self.builder.jump(continuation, args)
   }
 
   // When unreachable, we need to restore stack to block entry height
@@ -1026,17 +1022,15 @@ fn Translator::translate_loop(
   self.block_stack.pop() |> ignore
 
   // Fall through to continuation (only if not unreachable)
-  if !self.is_unreachable {
-    if self.builder.current_block() is Some(block) {
-      if block.terminator is None {
-        let args : Array[Value] = []
-        for _ in 0..<result_types.length() {
-          args.push(self.pop())
-        }
-        args.rev_in_place()
-        self.builder.jump(continuation, args)
-      }
+  if !self.is_unreachable &&
+    self.builder.current_block() is Some(block) &&
+    block.terminator is None {
+    let args : Array[Value] = []
+    for _ in 0..<result_types.length() {
+      args.push(self.pop())
     }
+    args.rev_in_place()
+    self.builder.jump(continuation, args)
   }
 
   // Restore stack to entry height (for unreachable code cleanup)
@@ -1118,21 +1112,19 @@ fn Translator::translate_if(
   let then_is_unreachable = self.is_unreachable
 
   // Jump to continuation from then block with locals (only if not unreachable)
-  if !self.is_unreachable {
-    if self.builder.current_block() is Some(block) {
-      if block.terminator is None {
-        let args : Array[Value] = []
-        for _ in 0..<result_types.length() {
-          args.push(self.pop())
-        }
-        args.rev_in_place()
-        // Pass locals
-        for loc in self.locals {
-          args.push(loc)
-        }
-        self.builder.jump(continuation, args)
-      }
+  if !self.is_unreachable &&
+    self.builder.current_block() is Some(block) &&
+    block.terminator is None {
+    let args : Array[Value] = []
+    for _ in 0..<result_types.length() {
+      args.push(self.pop())
     }
+    args.rev_in_place()
+    // Pass locals
+    for loc in self.locals {
+      args.push(loc)
+    }
+    self.builder.jump(continuation, args)
   }
 
   // Restore stack to original height for else branch
@@ -1154,21 +1146,19 @@ fn Translator::translate_if(
   let else_is_unreachable = self.is_unreachable
 
   // Jump to continuation from else block with locals (only if not unreachable)
-  if !self.is_unreachable {
-    if self.builder.current_block() is Some(block) {
-      if block.terminator is None {
-        let args : Array[Value] = []
-        for _ in 0..<result_types.length() {
-          args.push(self.pop())
-        }
-        args.rev_in_place()
-        // Pass locals
-        for loc in self.locals {
-          args.push(loc)
-        }
-        self.builder.jump(continuation, args)
-      }
+  if !self.is_unreachable &&
+    self.builder.current_block() is Some(block) &&
+    block.terminator is None {
+    let args : Array[Value] = []
+    for _ in 0..<result_types.length() {
+      args.push(self.pop())
     }
+    args.rev_in_place()
+    // Pass locals
+    for loc in self.locals {
+      args.push(loc)
+    }
+    self.builder.jump(continuation, args)
   }
 
   // Pop frame

@@ -853,18 +853,14 @@ fn LinearScanAllocator::try_allocate_reg(
   // Build set of registers currently in use
   let used : Set[Int] = Set::new()
   for active in self.active {
-    if active.assigned is Some(preg) {
-      if reg_class_eq(preg.class, interval.vreg.class) {
-        used.add(preg.index)
-      }
+    if active.assigned is Some(preg) && reg_class_eq(preg.class, interval.vreg.class) {
+      used.add(preg.index)
     }
   }
 
   // Try hint first if available
-  if interval.hint is Some(hint) {
-    if !used.contains(hint.index) {
-      return Some(hint)
-    }
+  if interval.hint is Some(hint) && !used.contains(hint.index) {
+    return Some(hint)
   }
 
   // Find a free register
@@ -1029,48 +1025,46 @@ pub fn apply_allocation(
 
       let mut inst_spill_idx = 0
       for i, use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) {
-          if alloc.assignments.get(vreg.id) is None {
-            // This vreg is spilled, need to reload
-            if alloc.spill_slots.get(vreg.id) is Some(slot) {
-              let scratch_class = match vreg.class {
-                @abi.Float32 | @abi.Float64 => @abi.Float64
-                _ => vreg.class
-              }
+        if use_reg is @abi.Virtual(vreg) && alloc.assignments.get(vreg.id) is None {
+          // This vreg is spilled, need to reload
+          if alloc.spill_slots.get(vreg.id) is Some(slot) {
+            let scratch_class = match vreg.class {
+              @abi.Float32 | @abi.Float64 => @abi.Float64
+              _ => vreg.class
+            }
 
-              // Determine how to handle this spilled use
-              if is_call_indirect && i == 0 {
-                // CallIndirect's func_ptr (first use): reload directly to X18
-                let scratch_preg : @abi.PReg = {
-                  index: 18,
-                  class: scratch_class,
-                }
-                spill_regs.set(vreg.id, scratch_preg)
-                let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-                reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
-                new_block.add_inst(reload_inst)
-              } else if is_call_indirect && i >= 1 {
-                // CallIndirect's args (all args, including register args 0-7 and stack args 8+)
-                // Use spilled register encoding - emit code will handle the load directly
-                // This avoids X16/X17 aliasing when many args are spilled
-                let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
-                spill_regs.set(vreg.id, spilled_preg)
-                // Don't insert reload - emit code will load directly from spill slot
-              } else {
-                // Regular spilled uses (non-CallIndirect instructions)
-                // Use X16, X17 as scratch registers
-                let scratch_indices = [16, 17]
-                let scratch_preg : @abi.PReg = {
-                  index: scratch_indices[inst_spill_idx % 2],
-                  class: scratch_class,
-                }
-                inst_spill_idx = inst_spill_idx + 1
-                block_scratch_idx = block_scratch_idx + 1
-                spill_regs.set(vreg.id, scratch_preg)
-                let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-                reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
-                new_block.add_inst(reload_inst)
+            // Determine how to handle this spilled use
+            if is_call_indirect && i == 0 {
+              // CallIndirect's func_ptr (first use): reload directly to X18
+              let scratch_preg : @abi.PReg = {
+                index: 18,
+                class: scratch_class,
               }
+              spill_regs.set(vreg.id, scratch_preg)
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              new_block.add_inst(reload_inst)
+            } else if is_call_indirect && i >= 1 {
+              // CallIndirect's args (all args, including register args 0-7 and stack args 8+)
+              // Use spilled register encoding - emit code will handle the load directly
+              // This avoids X16/X17 aliasing when many args are spilled
+              let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
+              spill_regs.set(vreg.id, spilled_preg)
+              // Don't insert reload - emit code will load directly from spill slot
+            } else {
+              // Regular spilled uses (non-CallIndirect instructions)
+              // Use X16, X17 as scratch registers
+              let scratch_indices = [16, 17]
+              let scratch_preg : @abi.PReg = {
+                index: scratch_indices[inst_spill_idx % 2],
+                class: scratch_class,
+              }
+              inst_spill_idx = inst_spill_idx + 1
+              block_scratch_idx = block_scratch_idx + 1
+              spill_regs.set(vreg.id, scratch_preg)
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              new_block.add_inst(reload_inst)
             }
           }
         }
@@ -1079,12 +1073,8 @@ pub fn apply_allocation(
       // Check if any definitions are spilled - collect ALL spilled defs
       let spilled_defs : Array[(@abi.VReg, Int)] = []
       for def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) {
-          if alloc.assignments.get(vreg.id) is None {
-            if alloc.spill_slots.get(vreg.id) is Some(slot) {
-              spilled_defs.push((vreg, slot))
-            }
-          }
+        if def.reg is @abi.Virtual(vreg) && alloc.assignments.get(vreg.id) is None && alloc.spill_slots.get(vreg.id) is Some(slot) {
+          spilled_defs.push((vreg, slot))
         }
       }
 
@@ -1173,30 +1163,26 @@ pub fn apply_allocation(
           // This ensures each spilled value uses a different scratch register
           let new_values : Array[@abi.Reg] = []
           for v in values {
-            if v is @abi.Virtual(vreg) {
-              if alloc.assignments.get(vreg.id) is Some(preg) {
-                new_values.push(@abi.Physical(preg))
-                // Spilled: insert reload and use scratch register from block pool
-              } else if alloc.spill_slots.get(vreg.id) is Some(slot) {
-                // Use X16, X17 as scratch registers
-                // These are the only safe scratch registers
-                let scratch_class = match vreg.class {
-                  @abi.Float32 | @abi.Float64 => @abi.Float64
-                  _ => vreg.class
-                }
-                let scratch_indices = [16, 17]
-                let scratch_preg : @abi.PReg = {
-                  index: scratch_indices[block_scratch_idx % 2],
-                  class: scratch_class,
-                }
-                block_scratch_idx = block_scratch_idx + 1
-                let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-                reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
-                new_block.add_inst(reload_inst)
-                new_values.push(@abi.Physical(scratch_preg))
-              } else {
-                new_values.push(v) // Should not happen
+            if v is @abi.Virtual(vreg) && alloc.assignments.get(vreg.id) is Some(preg) {
+              new_values.push(@abi.Physical(preg))
+              // Spilled: insert reload and use scratch register from block pool
+            } else if v is @abi.Virtual(vreg) && alloc.spill_slots.get(vreg.id) is Some(slot) {
+              // Use X16, X17 as scratch registers
+              // These are the only safe scratch registers
+              let scratch_class = match vreg.class {
+                @abi.Float32 | @abi.Float64 => @abi.Float64
+                _ => vreg.class
               }
+              let scratch_indices = [16, 17]
+              let scratch_preg : @abi.PReg = {
+                index: scratch_indices[block_scratch_idx % 2],
+                class: scratch_class,
+              }
+              block_scratch_idx = block_scratch_idx + 1
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              new_block.add_inst(reload_inst)
+              new_values.push(@abi.Physical(scratch_preg))
             } else {
               new_values.push(v)
             }

@@ -265,10 +265,8 @@ fn try_compile_jit(
 ) -> (@jit.JITModule, Int64)? {
   // Check if all imports are supported by JIT
   for imp in mod_.imports {
-    if imp.desc is Func(_) {
-      if !@jit.has_import_trampoline(imp.mod_name, imp.name) {
-        return None // Unsupported import
-      }
+    if imp.desc is Func(_) && !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+      return None // Unsupported import
     }
   }
   // Compile module to JIT
@@ -385,11 +383,9 @@ fn build_func_signatures(
   }
   // Fill in signatures for import functions
   for i, imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      if type_idx < mod_.types.length() {
-        let func_type = mod_.types[type_idx]
-        signatures[i] = (func_type.params.copy(), func_type.results.copy())
-      }
+    if imp.desc is Func(type_idx) && type_idx < mod_.types.length() {
+      let func_type = mod_.types[type_idx]
+      signatures[i] = (func_type.params.copy(), func_type.results.copy())
     }
   }
   // Fill in signatures for local functions
@@ -503,13 +499,9 @@ fn run_wast_command(
       }
       ctx.current_module = Some(instance)
       // Try to compile JIT version (only if JIT is enabled)
-      if ctx.use_jit {
-        match try_compile_jit(mod_, instance, ctx.store) {
-          Some((jm, mem_ptr)) => ctx.current_jit = Some((jm, mem_ptr, mod_))
-          None => ctx.current_jit = None
-        }
-      } else {
-        ctx.current_jit = None
+      match try_compile_jit(mod_, instance, ctx.store) {
+        Some((jm, mem_ptr)) if ctx.use_jit => ctx.current_jit = Some((jm, mem_ptr, mod_))
+        _ => ctx.current_jit = None
       }
     }
     ModuleBinaryFailed(err) => {

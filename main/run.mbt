@@ -177,36 +177,35 @@ fn run_wasm(
   // Initialize element segments (populate tables with function references)
   for elem in mod_.elems {
     // Only process active element segments
-    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
-      if instance.table_addrs.length() > table_idx {
-        let table = store.get_table(instance.table_addrs[table_idx]) catch {
+    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) &&
+      instance.table_addrs.length() > table_idx {
+      let table = store.get_table(instance.table_addrs[table_idx]) catch {
+        e => {
+          println("Error getting table: \{e}")
+          return
+        }
+      }
+      let offset = match offset_expr {
+        [I32Const(n)] => n
+        _ => 0
+      }
+      for i, init_expr in elem.init {
+        // Extract function index from init expression
+        let func_idx = match init_expr {
+          [RefFunc(idx)] => idx
+          [I32Const(idx)] => idx
+          _ => continue
+        }
+        // Convert module function index to store address
+        let store_addr = if func_idx < instance.func_addrs.length() {
+          instance.func_addrs[func_idx]
+        } else {
+          func_idx // fallback, should not happen for valid modules
+        }
+        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
           e => {
-            println("Error getting table: \{e}")
+            println("Error setting table element: \{e}")
             return
-          }
-        }
-        let offset = match offset_expr {
-          [I32Const(n)] => n
-          _ => 0
-        }
-        for i, init_expr in elem.init {
-          // Extract function index from init expression
-          let func_idx = match init_expr {
-            [RefFunc(idx)] => idx
-            [I32Const(idx)] => idx
-            _ => continue
-          }
-          // Convert module function index to store address
-          let store_addr = if func_idx < instance.func_addrs.length() {
-            instance.func_addrs[func_idx]
-          } else {
-            func_idx // fallback, should not happen for valid modules
-          }
-          table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-            e => {
-              println("Error setting table element: \{e}")
-              return
-            }
           }
         }
       }
@@ -736,11 +735,9 @@ fn build_jit_func_signatures(
   }
   // Fill in signatures for import functions
   for i, imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      if type_idx < mod_.types.length() {
-        let func_type = mod_.types[type_idx]
-        signatures[i] = (func_type.params.copy(), func_type.results.copy())
-      }
+    if imp.desc is Func(type_idx) && type_idx < mod_.types.length() {
+      let func_type = mod_.types[type_idx]
+      signatures[i] = (func_type.params.copy(), func_type.results.copy())
     }
   }
   // Fill in signatures for local functions
@@ -817,10 +814,9 @@ fn check_jit_import_support(
 ) -> Bool {
   let unsupported : Array[String] = []
   for imp in mod_.imports {
-    if imp.desc is Func(_) {
-      if !@jit.has_import_trampoline(imp.mod_name, imp.name) {
-        unsupported.push("\{imp.mod_name}.\{imp.name}")
-      }
+    if imp.desc is Func(_) &&
+      !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+      unsupported.push("\{imp.mod_name}.\{imp.name}")
     }
   }
   if unsupported.length() > 0 {

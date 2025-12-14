@@ -60,21 +60,19 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
   // Check param_pregs: float parameters that cross calls are moved to callee-saved FPRs
   // These are defined in the prologue via `fmov sN, wM` or `fmov dN, xM`
   for preg in func.param_pregs {
-    if preg is Some(p) {
-      if (p.class is Float32 || p.class is Float64) &&
-        is_callee_saved_fpr(p.index) {
-        used.add(p.index)
-      }
+    if preg is Some(p) &&
+      (p.class is Float32 || p.class is Float64) &&
+      is_callee_saved_fpr(p.index) {
+      used.add(p.index)
     }
   }
   for block in func.blocks {
     for inst in block.insts {
       for def in inst.defs {
-        if def.reg is Physical(preg) {
-          if (preg.class is Float32 || preg.class is Float64) &&
-            is_callee_saved_fpr(preg.index) {
-            used.add(preg.index)
-          }
+        if def.reg is Physical(preg) &&
+          (preg.class is Float32 || preg.class is Float64) &&
+          is_callee_saved_fpr(preg.index) {
+          used.add(preg.index)
         }
       }
     }
