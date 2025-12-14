@@ -741,15 +741,24 @@ pub fn LinearScanAllocator::allocate(
   }
 
   // Pre-assign function parameters to ABI registers
-  // JIT ABI: X0 = func_table, X1 = memory_base, X2 = memory_size, args in X3-X10
-  // So WASM parameters start at X3
+  // JIT ABI v1: X0 = func_table, X1 = memory_base, X2 = memory_size, args in X3-X10
+  // JIT ABI v2: X0-X7 for args (AAPCS64 compatible)
   // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
   // it will be handled by the normal allocation process (which will use callee-saved)
   // NOTE: Only the first 8 params (0-7) are in registers. Params 8+ are on stack.
-  let max_reg_params = 8
+  let actual_param_base = if ABI_VERSION == 2 {
+    PARAM_BASE_REG
+  } else {
+    LEGACY_PARAM_BASE_REG
+  }
+  let actual_max_reg_params = if ABI_VERSION == 2 {
+    MAX_REG_PARAMS
+  } else {
+    LEGACY_MAX_REG_PARAMS
+  }
   for i, param in func.params {
     // Skip stack parameters - they're not in registers
-    if i >= max_reg_params {
+    if i >= actual_max_reg_params {
       continue
     }
     match liveness.intervals.get(param.id) {
@@ -761,7 +770,7 @@ pub fn LinearScanAllocator::allocate(
         } else {
           // Safe to pre-assign to ABI register
           let preg = match param.class {
-            Int => { index: i + 3, class: Int } // X3, X4, X5, ... X10
+            Int => { index: i + actual_param_base, class: Int }
             Float32 | Float64 => { index: i, class: param.class } // D0, D1, D2, ... D7
           }
           result.assignments.set(param.id, preg)

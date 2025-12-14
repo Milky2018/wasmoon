@@ -922,46 +922,46 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|block0:
       #|    d0 = ldf 10
       #|    x8 = ldi 0
-      #|    x19 = ldi 0
-      #|    x23 = cmp.eq x3, x19
-      #|    branch x23, block1, block5
+      #|    x9 = ldi 0
+      #|    x10 = cmp.eq x0, x9
+      #|    branch x10, block1, block5
       #|block1:
       #|    bounds_check +0, 4 x8
-      #|    x19 = add x21, x8
-      #|    store.f32 +0 x19, d0
+      #|    x9 = add x21, x8
+      #|    store.f32 +0 x9, d0
       #|    bounds_check +0, 4 x8
-      #|    x19 = add x21, x8
-      #|    d0 = load.f32 +0 x19
+      #|    x9 = add x21, x8
+      #|    d0 = load.f32 +0 x9
       #|    d2 = mov d0
       #|    jump block4
       #|block2:
       #|    bounds_check +0, 4 x8
-      #|    x19 = add x21, x8
-      #|    store.f32 +0 x19, d0
+      #|    x9 = add x21, x8
+      #|    store.f32 +0 x9, d0
       #|    bounds_check +0, 4 x8
-      #|    x19 = add x21, x8
-      #|    d1 = load.f32 +0 x19
+      #|    x9 = add x21, x8
+      #|    d1 = load.f32 +0 x9
       #|    d2 = mov d1
       #|    jump block4
       #|block3:
       #|    bounds_check +0, 4 x8
-      #|    x19 = add x21, x8
-      #|    store.f32 +0 x19, d0
+      #|    x9 = add x21, x8
+      #|    store.f32 +0 x9, d0
       #|    bounds_check +0, 4 x8
-      #|    x19 = add x21, x8
-      #|    d1 = load.f32 +0 x19
+      #|    x9 = add x21, x8
+      #|    d1 = load.f32 +0 x9
       #|    d2 = mov d1
       #|    jump block4
       #|block4(f1:float):
       #|    ret d2
       #|block5:
-      #|    x19 = ldi 1
-      #|    x23 = cmp.eq x3, x19
-      #|    branch x23, block2, block6
+      #|    x9 = ldi 1
+      #|    x10 = cmp.eq x0, x9
+      #|    branch x10, block2, block6
       #|block6:
-      #|    x19 = ldi 2
-      #|    x23 = cmp.eq x3, x19
-      #|    branch x23, block3, block4
+      #|    x9 = ldi 2
+      #|    x10 = cmp.eq x0, x9
+      #|    branch x10, block3, block4
       #|}
       #|
     ),
@@ -991,21 +991,21 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   inspect(block1_last.opcode, content="mov")
   match block1_last.defs[0].reg {
     Physical(preg) => inspect(preg.to_string(), content="d2")
-    Virtual(_) => inspect(false, content="true")
+    Virtual(_) => fail("block1_last is virtual")
   }
 
   // Check block2's last instruction defines d2
   let block2_last = allocated_func.blocks[2].insts.last().unwrap()
   match block2_last.defs[0].reg {
     Physical(preg) => inspect(preg.to_string(), content="d2")
-    Virtual(_) => inspect(false, content="true")
+    Virtual(_) => fail("block2_last is virtual")
   }
 
   // Check block3's last instruction defines d2
   let block3_last = allocated_func.blocks[3].insts.last().unwrap()
   match block3_last.defs[0].reg {
     Physical(preg) => inspect(preg.to_string(), content="d2")
-    Virtual(_) => inspect(false, content="true")
+    Virtual(_) => fail("block3_last is virtual")
   }
 }
 
@@ -1063,8 +1063,8 @@ test "minimal: dead float constant should not affect live values" {
       #|    d1 = ldf 10
       #|    x8 = ldi 0
       #|    bounds_check +0, 4 x8
-      #|    x19 = add x21, x8
-      #|    store.f32 +0 x19, d1
+      #|    x9 = add x21, x8
+      #|    store.f32 +0 x9, d1
       #|    ret d0
       #|}
       #|

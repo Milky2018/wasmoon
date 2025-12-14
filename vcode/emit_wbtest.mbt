@@ -163,7 +163,7 @@ test "emit: full function" {
   let mc = emit_function(func)
 
   // Should have: ADD + RET = 2 instructions = 8 bytes
-  inspect(mc.size(), content="48")
+  inspect(mc.size(), content="56")
 }
 
 ///|

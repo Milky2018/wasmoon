@@ -78,6 +78,24 @@ pub extern "c" fn c_jit_get_memory_size_bytes_ptr() -> Int64 = "wasmoon_jit_get_
 /// Get memory_size function pointer for JIT (returns pages)
 pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory_size_ptr"
 
+// ============ Memory v2 functions (for v2 ABI) ============
+
+///|
+/// Get memory_grow v2 function pointer for JIT
+pub extern "c" fn c_jit_get_memory_grow_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_v2_ptr"
+
+///|
+/// Get get_memory_base v2 function pointer for JIT
+pub extern "c" fn c_jit_get_memory_base_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_base_v2_ptr"
+
+///|
+/// Get get_memory_size_bytes v2 function pointer for JIT
+pub extern "c" fn c_jit_get_memory_size_bytes_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_size_bytes_v2_ptr"
+
+///|
+/// Get memory_size v2 function pointer for JIT (returns pages)
+pub extern "c" fn c_jit_get_memory_size_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_size_v2_ptr"
+
 ///|
 /// Get function table base address from context
 pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
@@ -100,6 +118,72 @@ pub extern "c" fn c_jit_ctx_set_indirect(
 ///|
 /// Set the global JIT context (for WASI trampolines)
 pub extern "c" fn c_jit_set_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context"
+
+// ============ JIT Context v2 Management ============
+// v2 context has fixed field offsets for JIT prologue:
+// +0: func_table, +8: indirect_table, +16: memory_base, +24: memory_size
+
+///|
+/// Allocate a JIT context v2 with function table
+pub extern "c" fn c_jit_alloc_context_v2(func_count : Int) -> Int64 = "wasmoon_jit_alloc_context_v2"
+
+///|
+/// Free a JIT context v2
+pub extern "c" fn c_jit_free_context_v2(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_context_v2"
+
+///|
+/// Set a function pointer in the context v2's function table
+pub extern "c" fn c_jit_ctx_v2_set_func(
+  ctx_ptr : Int64,
+  idx : Int,
+  func_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_v2_set_func"
+
+///|
+/// Set memory in the context v2
+pub extern "c" fn c_jit_ctx_v2_set_memory(
+  ctx_ptr : Int64,
+  mem_ptr : Int64,
+  mem_size : Int64,
+) -> Unit = "wasmoon_jit_ctx_v2_set_memory"
+
+///|
+/// Get function table base address from context v2
+pub extern "c" fn c_jit_ctx_v2_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_v2_get_func_table"
+
+///|
+/// Allocate indirect table for context v2
+pub extern "c" fn c_jit_ctx_v2_alloc_indirect_table(
+  ctx_ptr : Int64,
+  count : Int,
+) -> Int = "wasmoon_jit_ctx_v2_alloc_indirect_table"
+
+///|
+/// Set an entry in indirect table v2 (table_idx -> func_table[func_idx])
+pub extern "c" fn c_jit_ctx_v2_set_indirect(
+  ctx_ptr : Int64,
+  table_idx : Int,
+  func_idx : Int,
+) -> Unit = "wasmoon_jit_ctx_v2_set_indirect"
+
+///|
+/// Set the global JIT context v2 (for WASI trampolines)
+pub extern "c" fn c_jit_set_context_v2(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context_v2"
+
+///|
+/// C FFI for v2 ABI multi-value return calls
+/// X20 = context pointer, X0-X7 = user params
+/// result_types uses: 0=I32, 1=I64, 2=F32, 3=F64
+#borrow(args, results, result_types)
+pub extern "c" fn c_jit_call_v2(
+  ctx_ptr : Int64,
+  func_ptr : Int64,
+  args : FixedArray[Int64],
+  num_args : Int,
+  results : FixedArray[Int64],
+  result_types : FixedArray[Int],
+  num_results : Int,
+) -> Int = "wasmoon_jit_call_v2"
 
 // ============ WASI Trampoline Pointers ============
 
