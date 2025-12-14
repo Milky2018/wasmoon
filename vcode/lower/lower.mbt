@@ -154,12 +154,10 @@ fn match_mul_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> (@ir.Value, @ir.Value)? {
-  match find_defining_inst(ctx, value) {
-    Some(inst) =>
-      if inst.opcode is @ir.Opcode::Imul {
-        return Some((inst.operands[0], inst.operands[1]))
-      }
-    None => ()
+  if find_defining_inst(ctx, value) is Some(inst) {
+    if inst.opcode is @ir.Opcode::Imul {
+      return Some((inst.operands[0], inst.operands[1]))
+    }
   }
   None
 }
@@ -167,9 +165,10 @@ fn match_mul_value(
 ///|
 /// Check if a value is the constant 0
 fn is_const_zero_value(ctx : LoweringContext, value : @ir.Value) -> Bool {
-  match find_defining_inst(ctx, value) {
-    Some(inst) => if inst.opcode is @ir.Opcode::Iconst(val) { return val == 0L }
-    None => ()
+  if find_defining_inst(ctx, value) is Some(inst) {
+    if inst.opcode is @ir.Opcode::Iconst(val) {
+      return val == 0L
+    }
   }
   false
 }
@@ -375,14 +374,11 @@ fn lower_iconst(
   block : @block.VCodeBlock,
   val : Int64,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let vreg = ctx.get_vreg(result)
-      let vcode_inst = @instr.VCodeInst::new(LoadConst(val))
-      vcode_inst.add_def({ reg: Virtual(vreg) })
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let vreg = ctx.get_vreg(result)
+    let vcode_inst = @instr.VCodeInst::new(LoadConst(val))
+    vcode_inst.add_def({ reg: Virtual(vreg) })
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -394,28 +390,25 @@ fn lower_fconst(
   block : @block.VCodeBlock,
   val : Double,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let vreg = ctx.get_vreg(result)
-      // Determine if this is an F32 or F64 constant based on the result type
-      let opcode = match result.ty {
-        @ir.Type::F32 => {
-          // Convert Double to Float, then get its 32-bit representation
-          let float_val = Float::from_double(val)
-          let bits = float_val.reinterpret_as_int()
-          @instr.LoadConstF32(bits)
-        }
-        _ => {
-          // F64: get 64-bit representation
-          let bits = val.reinterpret_as_int64()
-          LoadConstF64(bits)
-        }
+  if inst.result is Some(result) {
+    let vreg = ctx.get_vreg(result)
+    // Determine if this is an F32 or F64 constant based on the result type
+    let opcode = match result.ty {
+      @ir.Type::F32 => {
+        // Convert Double to Float, then get its 32-bit representation
+        let float_val = Float::from_double(val)
+        let bits = float_val.reinterpret_as_int()
+        @instr.LoadConstF32(bits)
       }
-      let vcode_inst = @instr.VCodeInst::new(opcode)
-      vcode_inst.add_def({ reg: Virtual(vreg) })
-      block.add_inst(vcode_inst)
+      _ => {
+        // F64: get 64-bit representation
+        let bits = val.reinterpret_as_int64()
+        LoadConstF64(bits)
+      }
     }
-    None => ()
+    let vcode_inst = @instr.VCodeInst::new(opcode)
+    vcode_inst.add_def({ reg: Virtual(vreg) })
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -427,18 +420,15 @@ fn lower_binary_int(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-      let vcode_inst = @instr.VCodeInst::new(opcode)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(lhs))
-      vcode_inst.add_use(Virtual(rhs))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+    let vcode_inst = @instr.VCodeInst::new(opcode)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -462,67 +452,55 @@ fn lower_iadd(
   let rhs_val = inst.operands[1]
 
   // Pattern: add(x, mul(y, z)) -> MADD
-  match match_mul_value(ctx, rhs_val) {
-    Some((mul_lhs, mul_rhs)) => {
-      let acc = ctx.get_vreg_for_use(lhs_val, block)
-      let src1 = ctx.get_vreg_for_use(mul_lhs, block)
-      let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-      let vcode_inst = @instr.VCodeInst::new(Madd)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(acc)) // accumulator
-      vcode_inst.add_use(Virtual(src1)) // multiplicand
-      vcode_inst.add_use(Virtual(src2)) // multiplier
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+    let acc = ctx.get_vreg_for_use(lhs_val, block)
+    let src1 = ctx.get_vreg_for_use(mul_lhs, block)
+    let src2 = ctx.get_vreg_for_use(mul_rhs, block)
+    let vcode_inst = @instr.VCodeInst::new(Madd)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(acc)) // accumulator
+    vcode_inst.add_use(Virtual(src1)) // multiplicand
+    vcode_inst.add_use(Virtual(src2)) // multiplier
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Pattern: add(mul(x, y), z) -> MADD (commutative)
-  match match_mul_value(ctx, lhs_val) {
-    Some((mul_lhs, mul_rhs)) => {
-      let acc = ctx.get_vreg_for_use(rhs_val, block)
-      let src1 = ctx.get_vreg_for_use(mul_lhs, block)
-      let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-      let vcode_inst = @instr.VCodeInst::new(Madd)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(acc))
-      vcode_inst.add_use(Virtual(src1))
-      vcode_inst.add_use(Virtual(src2))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_mul_value(ctx, lhs_val) is Some((mul_lhs, mul_rhs)) {
+    let acc = ctx.get_vreg_for_use(rhs_val, block)
+    let src1 = ctx.get_vreg_for_use(mul_lhs, block)
+    let src2 = ctx.get_vreg_for_use(mul_rhs, block)
+    let vcode_inst = @instr.VCodeInst::new(Madd)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(acc))
+    vcode_inst.add_use(Virtual(src1))
+    vcode_inst.add_use(Virtual(src2))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Pattern: add(x, shl(y, n)) -> AddShifted
-  match match_shl_const_value(ctx, rhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(lhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(AddShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(AddShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Pattern: add(shl(x, n), y) -> AddShifted (commutative)
-  match match_shl_const_value(ctx, lhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(rhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(AddShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(rhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(AddShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Default: regular add
@@ -553,51 +531,42 @@ fn lower_isub(
 
   // Pattern: sub(0, mul(x, y)) -> MNEG
   if is_const_zero_value(ctx, lhs_val) {
-    match match_mul_value(ctx, rhs_val) {
-      Some((mul_lhs, mul_rhs)) => {
-        let src1 = ctx.get_vreg_for_use(mul_lhs, block)
-        let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-        let vcode_inst = @instr.VCodeInst::new(Mneg)
-        vcode_inst.add_def({ reg: Virtual(dst) })
-        vcode_inst.add_use(Virtual(src1))
-        vcode_inst.add_use(Virtual(src2))
-        block.add_inst(vcode_inst)
-        return
-      }
-      None => ()
-    }
-  }
-
-  // Pattern: sub(x, mul(y, z)) -> MSUB
-  match match_mul_value(ctx, rhs_val) {
-    Some((mul_lhs, mul_rhs)) => {
-      let acc = ctx.get_vreg_for_use(lhs_val, block)
+    if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
       let src1 = ctx.get_vreg_for_use(mul_lhs, block)
       let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-      let vcode_inst = @instr.VCodeInst::new(Msub)
+      let vcode_inst = @instr.VCodeInst::new(Mneg)
       vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(acc))
       vcode_inst.add_use(Virtual(src1))
       vcode_inst.add_use(Virtual(src2))
       block.add_inst(vcode_inst)
       return
     }
-    None => ()
+  }
+
+  // Pattern: sub(x, mul(y, z)) -> MSUB
+  if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+    let acc = ctx.get_vreg_for_use(lhs_val, block)
+    let src1 = ctx.get_vreg_for_use(mul_lhs, block)
+    let src2 = ctx.get_vreg_for_use(mul_rhs, block)
+    let vcode_inst = @instr.VCodeInst::new(Msub)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(acc))
+    vcode_inst.add_use(Virtual(src1))
+    vcode_inst.add_use(Virtual(src2))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Pattern: sub(x, shl(y, n)) -> SubShifted
-  match match_shl_const_value(ctx, rhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(lhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(SubShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(SubShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Default: regular sub
@@ -623,33 +592,27 @@ fn lower_band(
   let rhs_val = inst.operands[1]
 
   // Pattern: and(x, shl(y, n)) -> AndShifted
-  match match_shl_const_value(ctx, rhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(lhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(AndShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(AndShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Pattern: and(shl(x, n), y) -> AndShifted (commutative)
-  match match_shl_const_value(ctx, lhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(rhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(AndShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(rhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(AndShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Default: regular and
@@ -675,33 +638,27 @@ fn lower_bor(
   let rhs_val = inst.operands[1]
 
   // Pattern: or(x, shl(y, n)) -> OrShifted
-  match match_shl_const_value(ctx, rhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(lhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(OrShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(OrShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Pattern: or(shl(x, n), y) -> OrShifted (commutative)
-  match match_shl_const_value(ctx, lhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(rhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(OrShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(rhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(OrShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Default: regular or
@@ -727,33 +684,27 @@ fn lower_bxor(
   let rhs_val = inst.operands[1]
 
   // Pattern: xor(x, shl(y, n)) -> XorShifted
-  match match_shl_const_value(ctx, rhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(lhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(XorShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(XorShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Pattern: xor(shl(x, n), y) -> XorShifted (commutative)
-  match match_shl_const_value(ctx, lhs_val) {
-    Some((shifted, amount)) => {
-      let rn = ctx.get_vreg_for_use(rhs_val, block)
-      let rm = ctx.get_vreg_for_use(shifted, block)
-      let vcode_inst = @instr.VCodeInst::new(XorShifted(Lsl, amount))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(rn))
-      vcode_inst.add_use(Virtual(rm))
-      block.add_inst(vcode_inst)
-      return
-    }
-    None => ()
+  if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+    let rn = ctx.get_vreg_for_use(rhs_val, block)
+    let rm = ctx.get_vreg_for_use(shifted, block)
+    let vcode_inst = @instr.VCodeInst::new(XorShifted(Lsl, amount))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
   }
 
   // Default: regular xor
@@ -773,30 +724,27 @@ fn lower_binary_float(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-      // Determine if this is f32 based on result type
-      let is_f32 = result.ty is @ir.Type::F32
-      // Select VCode opcode based on IR opcode
-      let opcode : @instr.VCodeOpcode = match inst.opcode {
-        @ir.Opcode::Fadd => FAdd(is_f32)
-        @ir.Opcode::Fsub => FSub(is_f32)
-        @ir.Opcode::Fmul => FMul(is_f32)
-        @ir.Opcode::Fdiv => FDiv(is_f32)
-        @ir.Opcode::Fmin => FMin(is_f32)
-        @ir.Opcode::Fmax => FMax(is_f32)
-        _ => FAdd(is_f32) // Fallback, should not happen
-      }
-      let vcode_inst = @instr.VCodeInst::new(opcode)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(lhs))
-      vcode_inst.add_use(Virtual(rhs))
-      block.add_inst(vcode_inst)
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+    // Determine if this is f32 based on result type
+    let is_f32 = result.ty is @ir.Type::F32
+    // Select VCode opcode based on IR opcode
+    let opcode : @instr.VCodeOpcode = match inst.opcode {
+      @ir.Opcode::Fadd => FAdd(is_f32)
+      @ir.Opcode::Fsub => FSub(is_f32)
+      @ir.Opcode::Fmul => FMul(is_f32)
+      @ir.Opcode::Fdiv => FDiv(is_f32)
+      @ir.Opcode::Fmin => FMin(is_f32)
+      @ir.Opcode::Fmax => FMax(is_f32)
+      _ => FAdd(is_f32) // Fallback, should not happen
     }
-    None => ()
+    let vcode_inst = @instr.VCodeInst::new(opcode)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -807,29 +755,26 @@ fn lower_unary_float(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      // Determine if this is f32 based on result type
-      let is_f32 = result.ty is @ir.Type::F32
-      // Select VCode opcode based on IR opcode
-      let opcode : @instr.VCodeOpcode = match inst.opcode {
-        @ir.Opcode::Fsqrt => FSqrt(is_f32)
-        @ir.Opcode::Fabs => FAbs(is_f32)
-        @ir.Opcode::Fneg => FNeg(is_f32)
-        @ir.Opcode::Fceil => FCeil(is_f32)
-        @ir.Opcode::Ffloor => FFloor(is_f32)
-        @ir.Opcode::Ftrunc => FTrunc(is_f32)
-        @ir.Opcode::Fnearest => FNearest(is_f32)
-        _ => FSqrt(is_f32) // Fallback, should not happen
-      }
-      let vcode_inst = @instr.VCodeInst::new(opcode)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Determine if this is f32 based on result type
+    let is_f32 = result.ty is @ir.Type::F32
+    // Select VCode opcode based on IR opcode
+    let opcode : @instr.VCodeOpcode = match inst.opcode {
+      @ir.Opcode::Fsqrt => FSqrt(is_f32)
+      @ir.Opcode::Fabs => FAbs(is_f32)
+      @ir.Opcode::Fneg => FNeg(is_f32)
+      @ir.Opcode::Fceil => FCeil(is_f32)
+      @ir.Opcode::Ffloor => FFloor(is_f32)
+      @ir.Opcode::Ftrunc => FTrunc(is_f32)
+      @ir.Opcode::Fnearest => FNearest(is_f32)
+      _ => FSqrt(is_f32) // Fallback, should not happen
     }
-    None => ()
+    let vcode_inst = @instr.VCodeInst::new(opcode)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -840,16 +785,13 @@ fn lower_promote(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      let vcode_inst = @instr.VCodeInst::new(FPromote)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    let vcode_inst = @instr.VCodeInst::new(FPromote)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -860,16 +802,13 @@ fn lower_demote(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      let vcode_inst = @instr.VCodeInst::new(FDemote)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    let vcode_inst = @instr.VCodeInst::new(FDemote)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -881,16 +820,13 @@ fn lower_unary_int(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      let vcode_inst = @instr.VCodeInst::new(opcode)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    let vcode_inst = @instr.VCodeInst::new(opcode)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -905,20 +841,17 @@ fn lower_rem(
   block : @block.VCodeBlock,
   signed : Bool,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-      // Use SRem/URem VCode opcode which will be lowered to SDIV+MSUB or UDIV+MSUB
-      let opcode = if signed { @instr.SRem } else { URem }
-      let vcode_inst = @instr.VCodeInst::new(opcode)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(lhs))
-      vcode_inst.add_use(Virtual(rhs))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+    // Use SRem/URem VCode opcode which will be lowered to SDIV+MSUB or UDIV+MSUB
+    let opcode = if signed { @instr.SRem } else { URem }
+    let vcode_inst = @instr.VCodeInst::new(opcode)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -929,16 +862,13 @@ fn lower_bitcast(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      let vcode_inst = @instr.VCodeInst::new(Bitcast)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    let vcode_inst = @instr.VCodeInst::new(Bitcast)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -967,19 +897,16 @@ fn lower_icmp(
   block : @block.VCodeBlock,
   cc : @ir.IntCC,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-      let kind = ir_intcc_to_cmp_kind(cc)
-      let vcode_inst = @instr.VCodeInst::new(Cmp(kind))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(lhs))
-      vcode_inst.add_use(Virtual(rhs))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+    let kind = ir_intcc_to_cmp_kind(cc)
+    let vcode_inst = @instr.VCodeInst::new(Cmp(kind))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -1004,19 +931,16 @@ fn lower_fcmp(
   block : @block.VCodeBlock,
   cc : @ir.FloatCC,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-      let kind = ir_floatcc_to_fcmp_kind(cc)
-      let vcode_inst = @instr.VCodeInst::new(FCmp(kind))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(lhs))
-      vcode_inst.add_use(Virtual(rhs))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+    let kind = ir_floatcc_to_fcmp_kind(cc)
+    let vcode_inst = @instr.VCodeInst::new(FCmp(kind))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -1056,52 +980,49 @@ fn lower_load(
   ty : @ir.Type,
   offset : Int,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let wasm_addr = ctx.get_vreg_for_use(inst.operands[0], block)
-      // Determine access size for bounds check
-      let mem_ty = ir_type_to_mem_type(ty)
-      let access_size = mem_type_size(mem_ty)
-      // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
-      emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
-      // Compute effective address: memory_base (X21) + wasm_addr
-      let effective_addr = ctx.vcode_func.new_vreg(Int)
-      let add_inst = @instr.VCodeInst::new(Add)
-      add_inst.add_def({ reg: Virtual(effective_addr) })
-      add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
-      add_inst.add_use(Virtual(wasm_addr))
-      block.add_inst(add_inst)
-      // Now load from effective_addr + offset
-      // Check alignment requirement based on memory type
-      let alignment = match mem_ty {
-        I8 => 1
-        I16 => 2
-        I32 | F32 => 4
-        I64 | F64 => 8
-      }
-      // If offset is not aligned or too large, add it to the address first
-      if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
-        // Add offset to effective_addr using immediate add
-        let addr_with_offset = ctx.vcode_func.new_vreg(Int)
-        let offset_add = @instr.VCodeInst::new(AddImm(offset))
-        offset_add.add_def({ reg: Virtual(addr_with_offset) })
-        offset_add.add_use(Virtual(effective_addr))
-        block.add_inst(offset_add)
-        // Now load with offset=0
-        let vcode_inst = @instr.VCodeInst::new(Load(mem_ty, 0))
-        vcode_inst.add_def({ reg: Virtual(dst) })
-        vcode_inst.add_use(Virtual(addr_with_offset))
-        block.add_inst(vcode_inst)
-      } else {
-        // Offset can be encoded directly in the load instruction
-        let vcode_inst = @instr.VCodeInst::new(Load(mem_ty, offset))
-        vcode_inst.add_def({ reg: Virtual(dst) })
-        vcode_inst.add_use(Virtual(effective_addr))
-        block.add_inst(vcode_inst)
-      }
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let wasm_addr = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Determine access size for bounds check
+    let mem_ty = ir_type_to_mem_type(ty)
+    let access_size = mem_type_size(mem_ty)
+    // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
+    emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
+    // Compute effective address: memory_base (X21) + wasm_addr
+    let effective_addr = ctx.vcode_func.new_vreg(Int)
+    let add_inst = @instr.VCodeInst::new(Add)
+    add_inst.add_def({ reg: Virtual(effective_addr) })
+    add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+    add_inst.add_use(Virtual(wasm_addr))
+    block.add_inst(add_inst)
+    // Now load from effective_addr + offset
+    // Check alignment requirement based on memory type
+    let alignment = match mem_ty {
+      I8 => 1
+      I16 => 2
+      I32 | F32 => 4
+      I64 | F64 => 8
     }
-    None => ()
+    // If offset is not aligned or too large, add it to the address first
+    if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
+      // Add offset to effective_addr using immediate add
+      let addr_with_offset = ctx.vcode_func.new_vreg(Int)
+      let offset_add = @instr.VCodeInst::new(AddImm(offset))
+      offset_add.add_def({ reg: Virtual(addr_with_offset) })
+      offset_add.add_use(Virtual(effective_addr))
+      block.add_inst(offset_add)
+      // Now load with offset=0
+      let vcode_inst = @instr.VCodeInst::new(Load(mem_ty, 0))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(addr_with_offset))
+      block.add_inst(vcode_inst)
+    } else {
+      // Offset can be encoded directly in the load instruction
+      let vcode_inst = @instr.VCodeInst::new(Load(mem_ty, offset))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(effective_addr))
+      block.add_inst(vcode_inst)
+    }
   }
 }
 
@@ -1170,54 +1091,51 @@ fn lower_load_narrow(
   offset : Int,
   opcode_fn : (Int) -> @instr.VCodeOpcode,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let wasm_addr = ctx.get_vreg_for_use(inst.operands[0], block)
-      // Determine access size based on opcode type
-      let sample_opcode = opcode_fn(0)
-      let access_size = match sample_opcode {
-        Load8S(_) | Load8U(_) => 1
-        Load16S(_) | Load16U(_) => 2
-        Load32S(_) | Load32U(_) => 4
-        _ => 1
-      }
-      // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
-      emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
-      // Compute effective address: memory_base (X21) + wasm_addr
-      let effective_addr = ctx.vcode_func.new_vreg(Int)
-      let add_inst = @instr.VCodeInst::new(Add)
-      add_inst.add_def({ reg: Virtual(effective_addr) })
-      add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
-      add_inst.add_use(Virtual(wasm_addr))
-      block.add_inst(add_inst)
-      // Check alignment requirement based on opcode type
-      // Load8: any offset ok (1-byte aligned)
-      // Load16: offset must be 2-aligned for immediate encoding
-      // Load32: offset must be 4-aligned for immediate encoding
-      let alignment = access_size
-      // If offset is not aligned or too large, add it to the address first
-      if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
-        // Add offset to effective_addr using immediate add
-        let addr_with_offset = ctx.vcode_func.new_vreg(Int)
-        let offset_add = @instr.VCodeInst::new(AddImm(offset))
-        offset_add.add_def({ reg: Virtual(addr_with_offset) })
-        offset_add.add_use(Virtual(effective_addr))
-        block.add_inst(offset_add)
-        // Now load with offset=0
-        let vcode_inst = @instr.VCodeInst::new(opcode_fn(0))
-        vcode_inst.add_def({ reg: Virtual(dst) })
-        vcode_inst.add_use(Virtual(addr_with_offset))
-        block.add_inst(vcode_inst)
-      } else {
-        // Offset can be encoded directly in the load instruction
-        let vcode_inst = @instr.VCodeInst::new(opcode_fn(offset))
-        vcode_inst.add_def({ reg: Virtual(dst) })
-        vcode_inst.add_use(Virtual(effective_addr))
-        block.add_inst(vcode_inst)
-      }
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let wasm_addr = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Determine access size based on opcode type
+    let sample_opcode = opcode_fn(0)
+    let access_size = match sample_opcode {
+      Load8S(_) | Load8U(_) => 1
+      Load16S(_) | Load16U(_) => 2
+      Load32S(_) | Load32U(_) => 4
+      _ => 1
     }
-    None => ()
+    // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
+    emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
+    // Compute effective address: memory_base (X21) + wasm_addr
+    let effective_addr = ctx.vcode_func.new_vreg(Int)
+    let add_inst = @instr.VCodeInst::new(Add)
+    add_inst.add_def({ reg: Virtual(effective_addr) })
+    add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+    add_inst.add_use(Virtual(wasm_addr))
+    block.add_inst(add_inst)
+    // Check alignment requirement based on opcode type
+    // Load8: any offset ok (1-byte aligned)
+    // Load16: offset must be 2-aligned for immediate encoding
+    // Load32: offset must be 4-aligned for immediate encoding
+    let alignment = access_size
+    // If offset is not aligned or too large, add it to the address first
+    if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
+      // Add offset to effective_addr using immediate add
+      let addr_with_offset = ctx.vcode_func.new_vreg(Int)
+      let offset_add = @instr.VCodeInst::new(AddImm(offset))
+      offset_add.add_def({ reg: Virtual(addr_with_offset) })
+      offset_add.add_use(Virtual(effective_addr))
+      block.add_inst(offset_add)
+      // Now load with offset=0
+      let vcode_inst = @instr.VCodeInst::new(opcode_fn(0))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(addr_with_offset))
+      block.add_inst(vcode_inst)
+    } else {
+      // Offset can be encoded directly in the load instruction
+      let vcode_inst = @instr.VCodeInst::new(opcode_fn(offset))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(effective_addr))
+      block.add_inst(vcode_inst)
+    }
   }
 }
 
@@ -1277,20 +1195,17 @@ fn lower_extend(
   block : @block.VCodeBlock,
   signed~ : Bool,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      // Determine the extend kind based on source and destination types
-      let src_ty = inst.operands[0].ty
-      let dst_ty = result.ty
-      let kind = get_extend_kind(src_ty, dst_ty, signed)
-      let vcode_inst = @instr.VCodeInst::new(Extend(kind))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Determine the extend kind based on source and destination types
+    let src_ty = inst.operands[0].ty
+    let dst_ty = result.ty
+    let kind = get_extend_kind(src_ty, dst_ty, signed)
+    let vcode_inst = @instr.VCodeInst::new(Extend(kind))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -1316,16 +1231,13 @@ fn lower_truncate(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      let vcode_inst = @instr.VCodeInst::new(Truncate)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    let vcode_inst = @instr.VCodeInst::new(Truncate)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -1337,30 +1249,27 @@ fn lower_float_to_int(
   block : @block.VCodeBlock,
   signed~ : Bool,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      // Determine conversion kind based on source/dest types and signedness
-      let src_ty = inst.operands[0].ty
-      let dst_ty = result.ty
-      let kind : @instr.FloatToIntKind = match (src_ty, dst_ty, signed) {
-        (@ir.Type::F32, @ir.Type::I32, true) => F32ToI32S
-        (@ir.Type::F32, @ir.Type::I32, false) => F32ToI32U
-        (@ir.Type::F32, @ir.Type::I64, true) => F32ToI64S
-        (@ir.Type::F32, @ir.Type::I64, false) => F32ToI64U
-        (@ir.Type::F64, @ir.Type::I32, true) => F64ToI32S
-        (@ir.Type::F64, @ir.Type::I32, false) => F64ToI32U
-        (@ir.Type::F64, @ir.Type::I64, true) => F64ToI64S
-        (@ir.Type::F64, @ir.Type::I64, false) => F64ToI64U
-        _ => F64ToI64S // Default fallback
-      }
-      let vcode_inst = @instr.VCodeInst::new(FloatToInt(kind))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Determine conversion kind based on source/dest types and signedness
+    let src_ty = inst.operands[0].ty
+    let dst_ty = result.ty
+    let kind : @instr.FloatToIntKind = match (src_ty, dst_ty, signed) {
+      (@ir.Type::F32, @ir.Type::I32, true) => F32ToI32S
+      (@ir.Type::F32, @ir.Type::I32, false) => F32ToI32U
+      (@ir.Type::F32, @ir.Type::I64, true) => F32ToI64S
+      (@ir.Type::F32, @ir.Type::I64, false) => F32ToI64U
+      (@ir.Type::F64, @ir.Type::I32, true) => F64ToI32S
+      (@ir.Type::F64, @ir.Type::I32, false) => F64ToI32U
+      (@ir.Type::F64, @ir.Type::I64, true) => F64ToI64S
+      (@ir.Type::F64, @ir.Type::I64, false) => F64ToI64U
+      _ => F64ToI64S // Default fallback
     }
-    None => ()
+    let vcode_inst = @instr.VCodeInst::new(FloatToInt(kind))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -1372,30 +1281,27 @@ fn lower_int_to_float(
   block : @block.VCodeBlock,
   signed~ : Bool,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      // Determine conversion kind based on source/dest types and signedness
-      let src_ty = inst.operands[0].ty
-      let dst_ty = result.ty
-      let kind : @instr.IntToFloatKind = match (src_ty, dst_ty, signed) {
-        (@ir.Type::I32, @ir.Type::F32, true) => I32SToF32
-        (@ir.Type::I32, @ir.Type::F32, false) => I32UToF32
-        (@ir.Type::I64, @ir.Type::F32, true) => I64SToF32
-        (@ir.Type::I64, @ir.Type::F32, false) => I64UToF32
-        (@ir.Type::I32, @ir.Type::F64, true) => I32SToF64
-        (@ir.Type::I32, @ir.Type::F64, false) => I32UToF64
-        (@ir.Type::I64, @ir.Type::F64, true) => I64SToF64
-        (@ir.Type::I64, @ir.Type::F64, false) => I64UToF64
-        _ => I64SToF64 // Default fallback
-      }
-      let vcode_inst = @instr.VCodeInst::new(IntToFloat(kind))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Determine conversion kind based on source/dest types and signedness
+    let src_ty = inst.operands[0].ty
+    let dst_ty = result.ty
+    let kind : @instr.IntToFloatKind = match (src_ty, dst_ty, signed) {
+      (@ir.Type::I32, @ir.Type::F32, true) => I32SToF32
+      (@ir.Type::I32, @ir.Type::F32, false) => I32UToF32
+      (@ir.Type::I64, @ir.Type::F32, true) => I64SToF32
+      (@ir.Type::I64, @ir.Type::F32, false) => I64UToF32
+      (@ir.Type::I32, @ir.Type::F64, true) => I32SToF64
+      (@ir.Type::I32, @ir.Type::F64, false) => I32UToF64
+      (@ir.Type::I64, @ir.Type::F64, true) => I64SToF64
+      (@ir.Type::I64, @ir.Type::F64, false) => I64UToF64
+      _ => I64SToF64 // Default fallback
     }
-    None => ()
+    let vcode_inst = @instr.VCodeInst::new(IntToFloat(kind))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -1406,16 +1312,13 @@ fn lower_copy(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let src = ctx.get_vreg_for_use(inst.operands[0], block)
-      let vcode_inst = @instr.VCodeInst::new(Move)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(src))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    let vcode_inst = @instr.VCodeInst::new(Move)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
   }
 }
 
@@ -1427,22 +1330,19 @@ fn lower_select(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  match inst.result {
-    Some(result) => {
-      let dst = ctx.get_vreg(result)
-      let cond = ctx.get_vreg_for_use(inst.operands[0], block)
-      let true_val = ctx.get_vreg_for_use(inst.operands[1], block)
-      let false_val = ctx.get_vreg_for_use(inst.operands[2], block)
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let cond = ctx.get_vreg_for_use(inst.operands[0], block)
+    let true_val = ctx.get_vreg_for_use(inst.operands[1], block)
+    let false_val = ctx.get_vreg_for_use(inst.operands[2], block)
 
-      // Emit Select instruction: dst = cond != 0 ? true_val : false_val
-      let vcode_inst = @instr.VCodeInst::new(Select)
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(cond))
-      vcode_inst.add_use(Virtual(true_val))
-      vcode_inst.add_use(Virtual(false_val))
-      block.add_inst(vcode_inst)
-    }
-    None => ()
+    // Emit Select instruction: dst = cond != 0 ? true_val : false_val
+    let vcode_inst = @instr.VCodeInst::new(Select)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(cond))
+    vcode_inst.add_use(Virtual(true_val))
+    vcode_inst.add_use(Virtual(false_val))
+    block.add_inst(vcode_inst)
   }
 }
 
