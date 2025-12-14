@@ -36,9 +36,9 @@ test "precompiled module: add function" {
   let mod = PrecompiledModule::new(AArch64)
 
   // Create a simple compiled function
-  let mc = MachineCode::new()
-  @vcode.emit_nop(mc)
-  @emit.emit_ret(mc, 30)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.emit_ret(30)
   let func = @vcode.CompiledFunction::new("add", mc, 16)
   mod.add_function(0, "add", func, 2, 1)
   inspect(mod.function_count(), content="1")
@@ -51,8 +51,8 @@ test "serialize and deserialize: roundtrip" {
   let mod = PrecompiledModule::new(AArch64)
 
   // Add a function
-  let mc = MachineCode::new()
-  @vcode.emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   let func = @vcode.CompiledFunction::new("test", mc, 32)
   mod.add_function(42, "test", func, 3, 1)
 
@@ -78,8 +78,8 @@ test "serialize and deserialize: multiple functions" {
 
   // Add multiple functions
   for i in 0..<3 {
-    let mc = MachineCode::new()
-    @vcode.emit_nop(mc)
+    let mc = @emit.MachineCode::new()
+    mc.emit_nop()
     let func = @vcode.CompiledFunction::new("func_\{i}", mc, i * 16)
     mod.add_function(i, "func_\{i}", func, i, if i > 0 { 1 } else { 0 })
   }

@@ -4,22 +4,28 @@
 ///|
 /// VCode builder for constructing VCode functions
 pub(all) struct VCodeBuilder {
-  func : @function.VCodeFunction
+  func : @lower.VCodeFunction
   mut current_block : @block.VCodeBlock?
 }
 
 ///|
 pub fn VCodeBuilder::new(name : String) -> VCodeBuilder {
-  { func: @function.VCodeFunction::new(name), current_block: None }
+  { func: @lower.VCodeFunction::new(name), current_block: None }
 }
 
 ///|
-pub fn VCodeBuilder::add_param(self : VCodeBuilder, class : @reg.RegClass) -> @reg.VReg {
+pub fn VCodeBuilder::add_param(
+  self : VCodeBuilder,
+  class : @abi.RegClass,
+) -> @abi.VReg {
   self.func.add_param(class)
 }
 
 ///|
-pub fn VCodeBuilder::add_result(self : VCodeBuilder, class : @reg.RegClass) -> Unit {
+pub fn VCodeBuilder::add_result(
+  self : VCodeBuilder,
+  class : @abi.RegClass,
+) -> Unit {
   self.func.add_result(class)
 }
 
@@ -42,7 +48,7 @@ pub fn VCodeBuilder::current_block(self : VCodeBuilder) -> @block.VCodeBlock? {
 }
 
 ///|
-pub fn VCodeBuilder::get_function(self : VCodeBuilder) -> @function.VCodeFunction {
+pub fn VCodeBuilder::get_function(self : VCodeBuilder) -> @lower.VCodeFunction {
   self.func
 }
 
@@ -52,7 +58,10 @@ pub fn VCodeBuilder::print(self : VCodeBuilder) -> String {
 }
 
 ///|
-fn VCodeBuilder::new_vreg(self : VCodeBuilder, class : @reg.RegClass) -> @reg.VReg {
+fn VCodeBuilder::new_vreg(
+  self : VCodeBuilder,
+  class : @abi.RegClass,
+) -> @abi.VReg {
   self.func.new_vreg(class)
 }
 
@@ -67,7 +76,11 @@ fn VCodeBuilder::emit(self : VCodeBuilder, inst : @instr.VCodeInst) -> Unit {
 // ============ Integer Arithmetic ============
 
 ///|
-pub fn VCodeBuilder::add(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::add(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Add)
   inst.add_def({ reg: Virtual(result) })
@@ -78,7 +91,11 @@ pub fn VCodeBuilder::add(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @
 }
 
 ///|
-pub fn VCodeBuilder::sub(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::sub(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Sub)
   inst.add_def({ reg: Virtual(result) })
@@ -89,7 +106,11 @@ pub fn VCodeBuilder::sub(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @
 }
 
 ///|
-pub fn VCodeBuilder::mul(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::mul(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Mul)
   inst.add_def({ reg: Virtual(result) })
@@ -100,7 +121,11 @@ pub fn VCodeBuilder::mul(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @
 }
 
 ///|
-pub fn VCodeBuilder::sdiv(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::sdiv(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(SDiv)
   inst.add_def({ reg: Virtual(result) })
@@ -111,7 +136,11 @@ pub fn VCodeBuilder::sdiv(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 }
 
 ///|
-pub fn VCodeBuilder::udiv(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::udiv(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(UDiv)
   inst.add_def({ reg: Virtual(result) })
@@ -124,7 +153,11 @@ pub fn VCodeBuilder::udiv(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 // ============ Bitwise Operations ============
 
 ///|
-pub fn VCodeBuilder::band(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::band(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(And)
   inst.add_def({ reg: Virtual(result) })
@@ -135,7 +168,11 @@ pub fn VCodeBuilder::band(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 }
 
 ///|
-pub fn VCodeBuilder::bor(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::bor(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Or)
   inst.add_def({ reg: Virtual(result) })
@@ -146,7 +183,11 @@ pub fn VCodeBuilder::bor(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @
 }
 
 ///|
-pub fn VCodeBuilder::bxor(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::bxor(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Xor)
   inst.add_def({ reg: Virtual(result) })
@@ -157,7 +198,11 @@ pub fn VCodeBuilder::bxor(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 }
 
 ///|
-pub fn VCodeBuilder::shl(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::shl(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Shl)
   inst.add_def({ reg: Virtual(result) })
@@ -168,7 +213,11 @@ pub fn VCodeBuilder::shl(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @
 }
 
 ///|
-pub fn VCodeBuilder::ashr(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::ashr(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(AShr)
   inst.add_def({ reg: Virtual(result) })
@@ -179,7 +228,11 @@ pub fn VCodeBuilder::ashr(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 }
 
 ///|
-pub fn VCodeBuilder::lshr(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::lshr(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(LShr)
   inst.add_def({ reg: Virtual(result) })
@@ -192,7 +245,11 @@ pub fn VCodeBuilder::lshr(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 // ============ Floating Point ============
 
 ///|
-pub fn VCodeBuilder::fadd(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::fadd(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Float64)
   let inst = @instr.VCodeInst::new(FAdd(false)) // f64 operation
   inst.add_def({ reg: Virtual(result) })
@@ -203,7 +260,11 @@ pub fn VCodeBuilder::fadd(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 }
 
 ///|
-pub fn VCodeBuilder::fsub(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::fsub(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Float64)
   let inst = @instr.VCodeInst::new(FSub(false)) // f64 operation
   inst.add_def({ reg: Virtual(result) })
@@ -214,7 +275,11 @@ pub fn VCodeBuilder::fsub(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 }
 
 ///|
-pub fn VCodeBuilder::fmul(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::fmul(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Float64)
   let inst = @instr.VCodeInst::new(FMul(false)) // f64 operation
   inst.add_def({ reg: Virtual(result) })
@@ -225,7 +290,11 @@ pub fn VCodeBuilder::fmul(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 }
 
 ///|
-pub fn VCodeBuilder::fdiv(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::fdiv(
+  self : VCodeBuilder,
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Float64)
   let inst = @instr.VCodeInst::new(FDiv(false)) // f64 operation
   inst.add_def({ reg: Virtual(result) })
@@ -241,13 +310,13 @@ pub fn VCodeBuilder::fdiv(self : VCodeBuilder, a : @reg.VReg, b : @reg.VReg) -> 
 pub fn VCodeBuilder::load(
   self : VCodeBuilder,
   ty : @instr.MemType,
-  addr : @reg.VReg,
+  addr : @abi.VReg,
   offset : Int,
-) -> @reg.VReg {
+) -> @abi.VReg {
   let class = match ty {
-    F32 => @reg.Float32
-    F64 => @reg.Float64
-    _ => @reg.Int
+    F32 => @abi.Float32
+    F64 => @abi.Float64
+    _ => @abi.Int
   }
   let result = self.new_vreg(class)
   let inst = @instr.VCodeInst::new(Load(ty, offset))
@@ -261,8 +330,8 @@ pub fn VCodeBuilder::load(
 pub fn VCodeBuilder::store(
   self : VCodeBuilder,
   ty : @instr.MemType,
-  addr : @reg.VReg,
-  value : @reg.VReg,
+  addr : @abi.VReg,
+  value : @abi.VReg,
   offset : Int,
 ) -> Unit {
   let inst = @instr.VCodeInst::new(Store(ty, offset))
@@ -274,7 +343,7 @@ pub fn VCodeBuilder::store(
 // ============ Moves and Constants ============
 
 ///|
-pub fn VCodeBuilder::mov(self : VCodeBuilder, src : @reg.VReg) -> @reg.VReg {
+pub fn VCodeBuilder::mov(self : VCodeBuilder, src : @abi.VReg) -> @abi.VReg {
   let result = self.new_vreg(src.class)
   let inst = @instr.VCodeInst::new(Move)
   inst.add_def({ reg: Virtual(result) })
@@ -284,7 +353,7 @@ pub fn VCodeBuilder::mov(self : VCodeBuilder, src : @reg.VReg) -> @reg.VReg {
 }
 
 ///|
-pub fn VCodeBuilder::iconst(self : VCodeBuilder, value : Int64) -> @reg.VReg {
+pub fn VCodeBuilder::iconst(self : VCodeBuilder, value : Int64) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(LoadConst(value))
   inst.add_def({ reg: Virtual(result) })
@@ -293,7 +362,7 @@ pub fn VCodeBuilder::iconst(self : VCodeBuilder, value : Int64) -> @reg.VReg {
 }
 
 ///|
-pub fn VCodeBuilder::fconst(self : VCodeBuilder, value : Double) -> @reg.VReg {
+pub fn VCodeBuilder::fconst(self : VCodeBuilder, value : Double) -> @abi.VReg {
   // This builder method defaults to F64
   let result = self.new_vreg(Float64)
   let bits = value.reinterpret_as_int64()
@@ -309,9 +378,9 @@ pub fn VCodeBuilder::fconst(self : VCodeBuilder, value : Double) -> @reg.VReg {
 pub fn VCodeBuilder::cmp(
   self : VCodeBuilder,
   kind : @instr.CmpKind,
-  a : @reg.VReg,
-  b : @reg.VReg,
-) -> @reg.VReg {
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Cmp(kind))
   inst.add_def({ reg: Virtual(result) })
@@ -325,9 +394,9 @@ pub fn VCodeBuilder::cmp(
 pub fn VCodeBuilder::fcmp(
   self : VCodeBuilder,
   kind : @instr.FCmpKind,
-  a : @reg.VReg,
-  b : @reg.VReg,
-) -> @reg.VReg {
+  a : @abi.VReg,
+  b : @abi.VReg,
+) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(FCmp(kind))
   inst.add_def({ reg: Virtual(result) })
@@ -340,7 +409,10 @@ pub fn VCodeBuilder::fcmp(
 // ============ Terminators ============
 
 ///|
-pub fn VCodeBuilder::jump(self : VCodeBuilder, target : @block.VCodeBlock) -> Unit {
+pub fn VCodeBuilder::jump(
+  self : VCodeBuilder,
+  target : @block.VCodeBlock,
+) -> Unit {
   match self.current_block {
     Some(block) => block.set_terminator(@instr.VCodeTerminator::Jump(target.id))
     None => ()
@@ -350,24 +422,31 @@ pub fn VCodeBuilder::jump(self : VCodeBuilder, target : @block.VCodeBlock) -> Un
 ///|
 pub fn VCodeBuilder::branch(
   self : VCodeBuilder,
-  cond : @reg.VReg,
+  cond : @abi.VReg,
   then_block : @block.VCodeBlock,
   else_block : @block.VCodeBlock,
 ) -> Unit {
   match self.current_block {
     Some(block) =>
       block.set_terminator(
-        @instr.VCodeTerminator::Branch(Virtual(cond), then_block.id, else_block.id),
+        @instr.VCodeTerminator::Branch(
+          Virtual(cond),
+          then_block.id,
+          else_block.id,
+        ),
       )
     None => ()
   }
 }
 
 ///|
-pub fn VCodeBuilder::return_(self : VCodeBuilder, values : Array[@reg.VReg]) -> Unit {
+pub fn VCodeBuilder::return_(
+  self : VCodeBuilder,
+  values : Array[@abi.VReg],
+) -> Unit {
   match self.current_block {
     Some(block) => {
-      let regs : Array[@reg.Reg] = []
+      let regs : Array[@abi.Reg] = []
       for v in values {
         regs.push(Virtual(v))
       }

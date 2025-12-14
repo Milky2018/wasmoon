@@ -348,12 +348,12 @@ test "float comparison kinds" {
   builder.add_result(Int)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  builder.fcmp(FCmpKind::Eq, p0, p1) |> ignore
-  builder.fcmp(FCmpKind::Ne, p0, p1) |> ignore
-  builder.fcmp(FCmpKind::Lt, p0, p1) |> ignore
-  builder.fcmp(FCmpKind::Le, p0, p1) |> ignore
-  builder.fcmp(FCmpKind::Gt, p0, p1) |> ignore
-  let result = builder.fcmp(FCmpKind::Ge, p0, p1)
+  builder.fcmp(Eq, p0, p1) |> ignore
+  builder.fcmp(Ne, p0, p1) |> ignore
+  builder.fcmp(Lt, p0, p1) |> ignore
+  builder.fcmp(Le, p0, p1) |> ignore
+  builder.fcmp(Gt, p0, p1) |> ignore
+  let result = builder.fcmp(Ge, p0, p1)
   builder.return_([result])
   inspect(builder.get_function().blocks[0].insts.length(), content="6")
 }
@@ -486,21 +486,21 @@ test "AArch64 get_preg" {
 
 ///|
 test "AAPCS64 calling convention registers" {
-  let arg_gprs = aapcs64_arg_gprs()
+  let arg_gprs = @abi.aapcs64_arg_gprs()
   inspect(arg_gprs, content="[x0, x1, x2, x3, x4, x5, x6, x7]") // x0-x7
-  let ret_gprs = aapcs64_ret_gprs()
+  let ret_gprs = @abi.aapcs64_ret_gprs()
   inspect(ret_gprs, content="[x0, x1]") // x0-x1
-  let callee_saved = aapcs64_callee_saved()
+  let callee_saved = @abi.aapcs64_callee_saved()
   inspect(
     callee_saved,
     content="[x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, x30]",
   ) // x19-x28, fp, lr
-  let scratch_regs = allocatable_scratch_regs()
+  let scratch_regs = @abi.allocatable_scratch_regs()
   inspect(scratch_regs, content="[x8, x9, x10, x11, x12, x13, x14, x15]") // x8-x15
-  let callee_saved_regs = allocatable_callee_saved_regs()
+  let callee_saved_regs = @abi.allocatable_callee_saved_regs()
   inspect(callee_saved_regs, content="[x23, x25, x26, x27, x28]") // x19, x23-x28
-  let arg_fprs = aapcs64_arg_fprs()
+  let arg_fprs = @abi.aapcs64_arg_fprs()
   inspect(arg_fprs, content="[d0, d1, d2, d3, d4, d5, d6, d7]") // d0-d7
-  let ret_fprs = aapcs64_ret_fprs()
+  let ret_fprs = @abi.aapcs64_ret_fprs()
   inspect(ret_fprs, content="[d0, d1, d2, d3]") // d0-d3
 }

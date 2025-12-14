@@ -143,7 +143,7 @@ test "emit: comparison" {
 ///|
 test "emit: full function" {
   // Create a simple add function: add(a, b) -> a + b
-  let func = @function.VCodeFunction::new("test_add")
+  let func = @lower.VCodeFunction::new("test_add")
   func.add_param(Int) |> ignore
   func.add_param(Int) |> ignore
   func.add_result(Int)
@@ -151,13 +151,13 @@ test "emit: full function" {
 
   // X0 = X0 + X1 (assuming params in X0, X1)
   let add_inst = @instr.VCodeInst::new(Add)
-  add_inst.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
-  add_inst.add_use(@reg.Physical({ index: 0, class: Int }))
-  add_inst.add_use(@reg.Physical({ index: 1, class: Int }))
+  add_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  add_inst.add_use(@abi.Physical({ index: 0, class: Int }))
+  add_inst.add_use(@abi.Physical({ index: 1, class: Int }))
   block.add_inst(add_inst)
 
   // Return X0
-  block.set_terminator(Return([@reg.Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
 
   // Emit machine code
   let mc = @emit.emit_function(func)
@@ -327,7 +327,7 @@ test "emit: complete function with control flow" {
   //   else:
   //     return b
 
-  let func = @function.VCodeFunction::new("max")
+  let func = @lower.VCodeFunction::new("max")
   func.add_result(Int)
 
   // Create blocks
@@ -338,25 +338,25 @@ test "emit: complete function with control flow" {
   // block0: compare X3 (a) > X4 (b) and branch
   // CMP X3, X4; CSET X8, GT; CBNZ X8, block1; B block2
   let cmp_inst = @instr.VCodeInst::new(Cmp(Sgt))
-  cmp_inst.add_def({ reg: @reg.Physical({ index: 8, class: Int }) })
-  cmp_inst.add_use(@reg.Physical({ index: 3, class: Int }))
-  cmp_inst.add_use(@reg.Physical({ index: 4, class: Int }))
+  cmp_inst.add_def({ reg: @abi.Physical({ index: 8, class: Int }) })
+  cmp_inst.add_use(@abi.Physical({ index: 3, class: Int }))
+  cmp_inst.add_use(@abi.Physical({ index: 4, class: Int }))
   block0.add_inst(cmp_inst)
-  block0.set_terminator(Branch(@reg.Physical({ index: 8, class: Int }), 1, 2))
+  block0.set_terminator(Branch(@abi.Physical({ index: 8, class: Int }), 1, 2))
 
   // block1: MOV X0, X3; RET
   let mov1 = @instr.VCodeInst::new(Move)
-  mov1.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
-  mov1.add_use(@reg.Physical({ index: 3, class: Int }))
+  mov1.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  mov1.add_use(@abi.Physical({ index: 3, class: Int }))
   block1.add_inst(mov1)
   block1.set_terminator(Return([Physical({ index: 0, class: Int })]))
 
   // block2: MOV X0, X4; RET
   let mov2 = @instr.VCodeInst::new(Move)
-  mov2.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
-  mov2.add_use(@reg.Physical({ index: 4, class: Int }))
+  mov2.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  mov2.add_use(@abi.Physical({ index: 4, class: Int }))
   block2.add_inst(mov2)
-  block2.set_terminator(Return([@reg.Physical({ index: 0, class: Int })]))
+  block2.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
 
   // Show VCode
   inspect(
@@ -562,36 +562,36 @@ test "emit: complete VCode instruction emission" {
   // Test emit_instruction for various VCodeOpcode values
 
   // Create a simple function to test instruction emission
-  let func = @function.VCodeFunction::new("test_insts")
+  let func = @lower.VCodeFunction::new("test_insts")
   func.add_result(Int)
   let block = func.new_block()
 
   // Add various instructions using physical registers
   // LoadConst
   let ldi = @instr.VCodeInst::new(LoadConst(42L))
-  ldi.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
+  ldi.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
   block.add_inst(ldi)
 
   // Add
   let add = @instr.VCodeInst::new(Add)
-  add.add_def({ reg: @reg.Physical({ index: 1, class: Int }) })
-  add.add_use(@reg.Physical({ index: 0, class: Int }))
-  add.add_use(@reg.Physical({ index: 0, class: Int }))
+  add.add_def({ reg: @abi.Physical({ index: 1, class: Int }) })
+  add.add_use(@abi.Physical({ index: 0, class: Int }))
+  add.add_use(@abi.Physical({ index: 0, class: Int }))
   block.add_inst(add)
 
   // Mul
   let mul = @instr.VCodeInst::new(Mul)
-  mul.add_def({ reg: @reg.Physical({ index: 2, class: Int }) })
-  mul.add_use(@reg.Physical({ index: 1, class: Int }))
-  mul.add_use(@reg.Physical({ index: 0, class: Int }))
+  mul.add_def({ reg: @abi.Physical({ index: 2, class: Int }) })
+  mul.add_use(@abi.Physical({ index: 1, class: Int }))
+  mul.add_use(@abi.Physical({ index: 0, class: Int }))
   block.add_inst(mul)
 
   // Move
   let mov = @instr.VCodeInst::new(Move)
-  mov.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
-  mov.add_use(@reg.Physical({ index: 2, class: Int }))
+  mov.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  mov.add_use(@abi.Physical({ index: 2, class: Int }))
   block.add_inst(mov)
-  block.set_terminator(Return([@reg.Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
 
   // Show VCode
   inspect(

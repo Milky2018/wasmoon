@@ -43,7 +43,7 @@ test "i32 mul" {
       #|
     ),
   )
-  let vcode = @vcode.lower_function(ir_func)
+  let vcode = @lower.lower_function(ir_func)
   inspect(
     vcode,
     content=(
@@ -56,7 +56,7 @@ test "i32 mul" {
       #|
     ),
   )
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(

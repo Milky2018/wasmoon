@@ -11,20 +11,20 @@
 /// Lowering context - tracks state during IR to VCode conversion
 pub(all) struct LoweringContext {
   ir_func : @ir.Function
-  vcode_func : @function.VCodeFunction
-  // Map from IR Value id to @reg.VReg
-  value_map : Map[Int, @reg.VReg]
+  vcode_func : VCodeFunction
+  // Map from IR Value id to @abi.VReg
+  value_map : Map[Int, @abi.VReg]
   // Map from IR Block id to VCode block id
   block_map : Map[Int, Int]
   // Map from IR Value id to stack param index (for params >= 8)
-  stack_param_map : Map[Int, (Int, @reg.RegClass)]
+  stack_param_map : Map[Int, (Int, @abi.RegClass)]
 }
 
 ///|
 pub fn LoweringContext::new(ir_func : @ir.Function) -> LoweringContext {
   {
     ir_func,
-    vcode_func: @function.VCodeFunction::new(ir_func.name),
+    vcode_func: VCodeFunction::new(ir_func.name),
     value_map: {},
     block_map: {},
     stack_param_map: {},
@@ -32,8 +32,11 @@ pub fn LoweringContext::new(ir_func : @ir.Function) -> LoweringContext {
 }
 
 ///|
-/// Get or create a @reg.VReg for an IR Value
-fn LoweringContext::get_vreg(self : LoweringContext, value : @ir.Value) -> @reg.VReg {
+/// Get or create a @abi.VReg for an IR Value
+fn LoweringContext::get_vreg(
+  self : LoweringContext,
+  value : @ir.Value,
+) -> @abi.VReg {
   match self.value_map.get(value.id) {
     Some(vreg) => vreg
     None => {
@@ -46,13 +49,13 @@ fn LoweringContext::get_vreg(self : LoweringContext, value : @ir.Value) -> @reg.
 }
 
 ///|
-/// Get @reg.VReg for an IR Value, generating LoadStackParam if it's a stack parameter
+/// Get @abi.VReg for an IR Value, generating LoadStackParam if it's a stack parameter
 /// This should be used when lowering instructions that use values
 fn LoweringContext::get_vreg_for_use(
   self : LoweringContext,
   value : @ir.Value,
   block : @block.VCodeBlock,
-) -> @reg.VReg {
+) -> @abi.VReg {
   // First check if it's a stack parameter
   match self.stack_param_map.get(value.id) {
     Some((param_idx, class)) => {
@@ -70,9 +73,12 @@ fn LoweringContext::get_vreg_for_use(
 }
 
 ///|
-/// Create a new @reg.VReg with the given class
+/// Create a new @abi.VReg with the given class
 #warnings("-unused_value")
-fn LoweringContext::new_vreg(self : LoweringContext, class : @reg.RegClass) -> @reg.VReg {
+fn LoweringContext::new_vreg(
+  self : LoweringContext,
+  class : @abi.RegClass,
+) -> @abi.VReg {
   self.vcode_func.new_vreg(class)
 }
 
@@ -89,8 +95,8 @@ fn LoweringContext::get_block_id(
 }
 
 ///|
-/// Convert IR Type to @reg.RegClass
-fn ir_type_to_reg_class(ty : @ir.Type) -> @reg.RegClass {
+/// Convert IR Type to @abi.RegClass
+fn ir_type_to_reg_class(ty : @ir.Type) -> @abi.RegClass {
   match ty {
     @ir.Type::I32 | @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef =>
       Int
@@ -170,7 +176,7 @@ fn is_const_zero_value(ctx : LoweringContext, value : @ir.Value) -> Bool {
 
 ///|
 /// Lower an entire IR function to VCode
-pub fn lower_function(ir_func : @ir.Function) -> @function.VCodeFunction {
+pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   let ctx = LoweringContext::new(ir_func)
 
   // Phase 1: Create VCode blocks and set up block mapping
@@ -187,7 +193,7 @@ pub fn lower_function(ir_func : @ir.Function) -> @function.VCodeFunction {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     if i < max_reg_params {
-      // Register parameter: allocate @reg.VReg
+      // Register parameter: allocate @abi.VReg
       let vreg = ctx.vcode_func.add_param(class)
       ctx.value_map.set(value.id, vreg)
     } else {
@@ -1032,7 +1038,7 @@ fn mem_type_size(ty : @instr.MemType) -> Int {
 fn emit_bounds_check(
   _ctx : LoweringContext,
   block : @block.VCodeBlock,
-  wasm_addr : @reg.VReg,
+  wasm_addr : @abi.VReg,
   offset : Int,
   access_size : Int,
 ) -> Unit {
@@ -1488,7 +1494,7 @@ fn lower_terminator(
       block.set_terminator(Branch(Virtual(cond_vreg), then_id, else_id))
     }
     @ir.Terminator::Return(values) => {
-      let regs : Array[@reg.Reg] = []
+      let regs : Array[@abi.Reg] = []
       for v in values {
         regs.push(Virtual(ctx.get_vreg_for_use(v, block)))
       }
@@ -1580,7 +1586,7 @@ fn lower_call(
   func_idx : Int,
 ) -> Unit {
   // Collect argument vregs
-  let arg_vregs : Array[@reg.VReg] = []
+  let arg_vregs : Array[@abi.VReg] = []
   for operand in inst.operands {
     arg_vregs.push(ctx.get_vreg_for_use(operand, block))
   }
@@ -1740,7 +1746,7 @@ fn lower_call_indirect(
   let table_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Arguments are all operands except the first one
-  let arg_vregs : Array[@reg.VReg] = []
+  let arg_vregs : Array[@abi.VReg] = []
   for i in 1..<inst.operands.length() {
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
@@ -1788,7 +1794,9 @@ fn lower_call_indirect(
   block.add_inst(load_type_inst)
 
   // Step 5: Emit type check instruction (traps if types don't match)
-  let type_check_inst = @instr.VCodeInst::new(TypeCheckIndirect(expected_type_idx))
+  let type_check_inst = @instr.VCodeInst::new(
+    TypeCheckIndirect(expected_type_idx),
+  )
   type_check_inst.add_use(Virtual(actual_type_vreg))
   block.add_inst(type_check_inst)
 
@@ -1817,11 +1825,11 @@ fn lower_call_indirect(
 /// to callee-saved registers.
 fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   // Add clobbers for all caller-saved GPRs (X0-X17)
-  for preg in call_clobbered_gprs() {
+  for preg in @abi.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
   // Add clobbers for all caller-saved FPRs (D0-D7)
-  for preg in call_clobbered_fprs() {
+  for preg in @abi.call_clobbered_fprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
 }

@@ -665,14 +665,14 @@ fn compile_module_to_jit(
       println(ir_func.print())
     }
     // Stage 3: Lower to VCode
-    let vcode_func = @vcode.lower_function(ir_func)
+    let vcode_func = @lower.lower_function(ir_func)
     // DEBUG: Print VCode before regalloc
     if debug_config.verbose {
       println("[DEBUG] VCode before regalloc for \{func_name}:")
       println(vcode_func.print())
     }
     // Stage 4: Register allocation
-    let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+    let allocated = @lower.allocate_registers_aarch64(vcode_func)
     // DEBUG: Print VCode after regalloc
     if debug_config.verbose {
       println("[DEBUG] VCode after regalloc for \{func_name}:")

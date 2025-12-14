@@ -36,8 +36,8 @@ test "f32 store/load with align=1" {
     [], // import_func_type_indices
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
@@ -88,8 +88,8 @@ test "f64 store/load with align=1" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
@@ -137,8 +137,8 @@ test "i32 store/load at unaligned address" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
@@ -186,8 +186,8 @@ test "i64 store/load at unaligned address" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
@@ -235,8 +235,8 @@ test "f64 store/load at offset 5" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(

@@ -3,7 +3,7 @@
 
 ///|
 fn collect_used_callee_saved(
-  func : @function.VCodeFunction,
+  func : @lower.VCodeFunction,
   needs_extra_results : Bool,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
@@ -61,7 +61,7 @@ fn collect_used_callee_saved(
 
 ///|
 /// Collect all callee-saved FPRs (D8-D15) that are defined in the function
-fn collect_used_callee_saved_fprs(func : @function.VCodeFunction) -> Array[Int] {
+fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
   // Check param_pregs: float parameters that cross calls are moved to callee-saved FPRs
   // These are defined in the prologue via `fmov sN, wM` or `fmov dN, xM`
@@ -102,9 +102,9 @@ fn collect_used_callee_saved_fprs(func : @function.VCodeFunction) -> Array[Int] 
 /// Emit prologue to save callee-saved registers and set up parameters (v2 using JITStackFrame)
 fn MachineCode::emit_prologue_v2(
   self : MachineCode,
-  stack_frame : @stackframe.JITStackFrame,
-  params : Array[@reg.VReg],
-  param_pregs : Array[@reg.PReg?],
+  stack_frame : JITStackFrame,
+  params : Array[@abi.VReg],
+  param_pregs : Array[@abi.PReg?],
 ) -> Unit {
   // Use pre-calculated values from stack_frame
   let saved_gprs = stack_frame.saved_gprs
@@ -228,7 +228,7 @@ fn MachineCode::emit_prologue_v2(
 
 ///|
 /// Emit machine code for a VCode function
-pub fn emit_function(func : @function.VCodeFunction) -> MachineCode {
+pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
   let mc = MachineCode::new()
   // Check if we need extra results buffer (>2 int or >2 float returns)
   let needs_extra_results = func.needs_extra_results_ptr()
@@ -243,7 +243,7 @@ pub fn emit_function(func : @function.VCodeFunction) -> MachineCode {
   let clobbered_fprs = collect_used_callee_saved_fprs(func)
 
   // Build stack frame layout using JITStackFrame
-  let stack_frame = @stackframe.JITStackFrame::build(
+  let stack_frame = JITStackFrame::build(
     clobbered,
     clobbered_fprs,
     func.num_spill_slots,
@@ -278,7 +278,7 @@ pub fn emit_function(func : @function.VCodeFunction) -> MachineCode {
 fn MachineCode::emit_instruction(
   self : MachineCode,
   inst : @instr.VCodeInst,
-  stack_frame : @stackframe.JITStackFrame,
+  stack_frame : JITStackFrame,
 ) -> Unit {
   // Extract offsets from stack frame for backward compatibility
   let spill_base_offset = stack_frame.spill_offset
@@ -967,7 +967,7 @@ fn MachineCode::emit_instruction(
             Physical(preg) => preg.class
             Virtual(vreg) => vreg.class
           }
-          if src >= @reg.spill_slot_base {
+          if src >= @abi.spill_slot_base {
             // Already spilled - we'll load directly from spill slot in Phase 3
             // Store a marker value (we won't actually read this)
             ()
@@ -993,9 +993,9 @@ fn MachineCode::emit_instruction(
             Physical(preg) => preg.class
             Virtual(vreg) => vreg.class
           }
-          if src >= @reg.spill_slot_base {
+          if src >= @abi.spill_slot_base {
             // Spilled: load from spill slot to X16, then store to call stack
-            let spill_slot = src - @reg.spill_slot_base
+            let spill_slot = src - @abi.spill_slot_base
             let spill_offset = spill_base_offset +
               total_stack_space +
               spill_slot * 8
@@ -1038,9 +1038,9 @@ fn MachineCode::emit_instruction(
             Physical(preg) => preg.class
             Virtual(vreg) => vreg.class
           }
-          if src >= @reg.spill_slot_base {
+          if src >= @abi.spill_slot_base {
             // Spilled: load directly from spill slot
-            let spill_slot = src - @reg.spill_slot_base
+            let spill_slot = src - @abi.spill_slot_base
             let spill_offset = spill_base_offset +
               total_stack_space +
               spill_slot * 8
@@ -1094,7 +1094,7 @@ fn MachineCode::emit_instruction(
 
       // Collect result info
       let int_results : Array[(Int, Int)] = [] // (dest_reg, abi_idx)
-      let float_results : Array[(@reg.RegClass, Int, Int)] = [] // (class, dest_reg, abi_idx)
+      let float_results : Array[(@abi.RegClass, Int, Int)] = [] // (class, dest_reg, abi_idx)
       let mut int_abi_idx = 0
       let mut float_abi_idx = 0
       for i in 0..<num_results {
@@ -1491,7 +1491,7 @@ fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> Int {
 /// Emit epilogue to restore callee-saved registers (v2 using JITStackFrame)
 fn MachineCode::emit_epilogue_v2(
   self : MachineCode,
-  stack_frame : @stackframe.JITStackFrame,
+  stack_frame : JITStackFrame,
 ) -> Unit {
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
@@ -1551,10 +1551,10 @@ fn MachineCode::emit_epilogue_v2(
 
 ///|
 /// Emit terminator with epilogue for Return (v2 using JITStackFrame)
-fn emit_terminator_with_epilogue_v2(
+fn MachineCode::emit_terminator_with_epilogue_v2(
   self : MachineCode,
   term : @instr.VCodeTerminator,
-  stack_frame : @stackframe.JITStackFrame,
+  stack_frame : JITStackFrame,
   result_types : Array[@ir.Type],
 ) -> Unit {
   match term {

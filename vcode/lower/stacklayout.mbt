@@ -27,13 +27,13 @@ pub(all) struct StackSlot {
 #warnings("-unused_constructor")
 pub enum StackSlotKind {
   // Spilled register
-  Spill(VReg)
+  Spill(@abi.VReg)
   // Local variable
   Local(Int) // Local index
   // Outgoing argument (for calls)
   OutgoingArg(Int) // Argument index
   // Saved callee-saved register
-  CalleeSaved(PReg)
+  CalleeSaved(@abi.PReg)
   // Return address (if needed)
   ReturnAddress
 }
@@ -81,7 +81,7 @@ pub(all) struct StackFrame {
   // Offset for the next outgoing arg
   mut next_arg_offset : Int
   // Callee-saved registers used in this function
-  callee_saved_regs : Array[PReg]
+  callee_saved_regs : Array[@abi.PReg]
   // Whether this function makes calls (affects stack layout)
   mut has_calls : Bool
 }
@@ -103,7 +103,7 @@ pub fn StackFrame::new(frame_align : Int) -> StackFrame {
 /// Allocate a spill slot for a virtual register
 pub fn StackFrame::alloc_spill_slot(
   self : StackFrame,
-  vreg : VReg,
+  vreg : @abi.VReg,
   size : Int,
   align : Int,
 ) -> Int {
@@ -162,7 +162,7 @@ pub fn StackFrame::alloc_outgoing_arg(
 
 ///|
 /// Record a callee-saved register that needs to be saved
-pub fn StackFrame::add_callee_saved(self : StackFrame, preg : PReg) -> Int {
+pub fn StackFrame::add_callee_saved(self : StackFrame, preg : @abi.PReg) -> Int {
   let size = 8 // 64-bit registers
   let align = 8
   let aligned_offset = align_up(self.next_spill_offset, align)
@@ -200,7 +200,7 @@ pub fn StackFrame::size(self : StackFrame) -> Int {
 
 ///|
 /// Get all callee-saved registers that were used
-pub fn StackFrame::get_callee_saved(self : StackFrame) -> Array[PReg] {
+pub fn StackFrame::get_callee_saved(self : StackFrame) -> Array[@abi.PReg] {
   self.callee_saved_regs
 }
 
@@ -266,8 +266,8 @@ pub fn AArch64StackFrame::setup(self : AArch64StackFrame) -> Unit {
   if self.use_fp {
     // Save FP and LR at the top of the frame
     // On AArch64, FP and LR are typically saved together
-    let fp_preg : PReg = { index: 29, class: Int } // x29 = FP
-    let lr_preg : PReg = { index: 30, class: Int } // x30 = LR
+    let fp_preg : @abi.PReg = { index: 29, class: Int } // x29 = FP
+    let lr_preg : @abi.PReg = { index: 30, class: Int } // x30 = LR
     self.fp_slot = Some(self.frame.add_callee_saved(fp_preg))
     self.lr_slot = Some(self.frame.add_callee_saved(lr_preg))
   }
@@ -277,7 +277,7 @@ pub fn AArch64StackFrame::setup(self : AArch64StackFrame) -> Unit {
 /// Allocate a spill slot
 pub fn AArch64StackFrame::alloc_spill(
   self : AArch64StackFrame,
-  vreg : VReg,
+  vreg : @abi.VReg,
 ) -> Int {
   // Size based on register class
   // Note: Float32 values are promoted to f64 internally, so they also use 8 bytes
@@ -298,7 +298,7 @@ pub fn AArch64StackFrame::set_has_calls(self : AArch64StackFrame) -> Unit {
 /// Add a callee-saved register
 pub fn AArch64StackFrame::save_callee_reg(
   self : AArch64StackFrame,
-  preg : PReg,
+  preg : @abi.PReg,
 ) -> Int {
   self.frame.add_callee_saved(preg)
 }
@@ -319,8 +319,8 @@ pub fn AArch64StackFrame::size(self : AArch64StackFrame) -> Int {
 /// Generate prologue instructions
 pub fn AArch64StackFrame::gen_prologue(
   self : AArch64StackFrame,
-) -> Array[VCodeInst] {
-  let insts : Array[VCodeInst] = []
+) -> Array[@instr.VCodeInst] {
+  let insts : Array[@instr.VCodeInst] = []
   let frame_size = self.frame.size()
   if frame_size == 0 {
     return insts
@@ -334,7 +334,7 @@ pub fn AArch64StackFrame::gen_prologue(
 
   // Adjust stack pointer: SUB sp, sp, #frame_size
   // We represent this as a Sub instruction with the SP as both src and dest
-  let sub_sp = VCodeInst::new(Sub)
+  let sub_sp = @instr.VCodeInst::new(Sub)
   sub_sp.add_def({ reg: Physical({ index: 31, class: Int }) }) // SP
   sub_sp.add_use(Physical({ index: 31, class: Int })) // SP
   // The immediate is encoded in the opcode, use LoadConst to represent it
@@ -343,19 +343,19 @@ pub fn AArch64StackFrame::gen_prologue(
   // Save FP and LR if using frame pointer
   if self.use_fp && (self.fp_slot, self.lr_slot) is (Some(fp_off), Some(lr_off)) {
     // Store FP
-    let store_fp = VCodeInst::new(Store(I64, fp_off))
+    let store_fp = @instr.VCodeInst::new(Store(I64, fp_off))
     store_fp.add_use(Physical({ index: 29, class: Int })) // FP
     store_fp.add_use(Physical({ index: 31, class: Int })) // SP (conceptual)
     insts.push(store_fp)
 
     // Store LR
-    let store_lr = VCodeInst::new(Store(I64, lr_off))
+    let store_lr = @instr.VCodeInst::new(Store(I64, lr_off))
     store_lr.add_use(Physical({ index: 30, class: Int })) // LR
     store_lr.add_use(Physical({ index: 31, class: Int })) // SP
     insts.push(store_lr)
 
     // Set up frame pointer: MOV x29, sp
-    let setup_fp = VCodeInst::new(Move)
+    let setup_fp = @instr.VCodeInst::new(Move)
     setup_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
     setup_fp.add_use(Physical({ index: 31, class: Int }))
     insts.push(setup_fp)
@@ -367,8 +367,8 @@ pub fn AArch64StackFrame::gen_prologue(
 /// Generate epilogue instructions
 pub fn AArch64StackFrame::gen_epilogue(
   self : AArch64StackFrame,
-) -> Array[VCodeInst] {
-  let insts : Array[VCodeInst] = []
+) -> Array[@instr.VCodeInst] {
+  let insts : Array[@instr.VCodeInst] = []
   let frame_size = self.frame.size()
   if frame_size == 0 {
     return insts
@@ -377,20 +377,20 @@ pub fn AArch64StackFrame::gen_epilogue(
   // Restore FP and LR if using frame pointer
   if self.use_fp && (self.fp_slot, self.lr_slot) is (Some(fp_off), Some(lr_off)) {
     // Restore FP
-    let load_fp = VCodeInst::new(Load(I64, fp_off))
+    let load_fp = @instr.VCodeInst::new(Load(I64, fp_off))
     load_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
     load_fp.add_use(Physical({ index: 31, class: Int })) // SP
     insts.push(load_fp)
 
     // Restore LR
-    let load_lr = VCodeInst::new(Load(I64, lr_off))
+    let load_lr = @instr.VCodeInst::new(Load(I64, lr_off))
     load_lr.add_def({ reg: Physical({ index: 30, class: Int }) })
     load_lr.add_use(Physical({ index: 31, class: Int })) // SP
     insts.push(load_lr)
   }
 
   // Restore stack pointer: ADD sp, sp, #frame_size
-  let add_sp = VCodeInst::new(Add)
+  let add_sp = @instr.VCodeInst::new(Add)
   add_sp.add_def({ reg: Physical({ index: 31, class: Int }) }) // SP
   add_sp.add_use(Physical({ index: 31, class: Int })) // SP
   insts.push(add_sp)
@@ -452,7 +452,7 @@ pub fn build_stack_layout_aarch64(
 }
 
 ///|
-fn find_vreg_by_id(func : VCodeFunction, id : Int) -> VReg? {
+fn find_vreg_by_id(func : VCodeFunction, id : Int) -> @abi.VReg? {
   // Check params
   for param in func.params {
     if param.id == id {
@@ -474,7 +474,7 @@ fn find_vreg_by_id(func : VCodeFunction, id : Int) -> VReg? {
 }
 
 ///|
-fn is_call_instruction(inst : VCodeInst) -> Bool {
+fn is_call_instruction(inst : @instr.VCodeInst) -> Bool {
   // For now, we don't have explicit call instructions in VCode
   // This would be extended when we add call support
   ignore(inst)
@@ -491,8 +491,8 @@ fn is_call_instruction(inst : VCodeInst) -> Bool {
 #warnings("-unused_constructor")
 pub enum StackOpcode {
   AdjustSP(Int) // Adjust SP by immediate (negative = grow, positive = shrink)
-  PushReg(PReg) // Push register to stack
-  PopReg(PReg) // Pop register from stack
+  PushReg(@abi.PReg) // Push register to stack
+  PopReg(@abi.PReg) // Pop register from stack
 }
 
 ///|

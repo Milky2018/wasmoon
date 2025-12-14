@@ -1,10 +1,9 @@
-
 ///|
 /// VCode block - a basic block in VCode
 pub(all) struct VCodeBlock {
   id : Int
   insts : Array[@instr.VCodeInst] // Instructions in this block
-  params : Array[@reg.VReg] // Block parameters
+  params : Array[@abi.VReg] // Block parameters
   mut terminator : @instr.VCodeTerminator? // How the block ends
 }
 

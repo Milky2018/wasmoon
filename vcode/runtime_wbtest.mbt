@@ -2,19 +2,19 @@
 
 ///|
 test "compiled function: basic" {
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   mc.emit_ret(30)
   let func = CompiledFunction::new("test_func", mc, 16)
-  inspect(func.is_valid(), content="true")
+  assert_true(func.is_valid())
   inspect(func.code_size, content="8")
   inspect(func.frame_size, content="16")
 }
 
 ///|
 test "compiled function: invalidate" {
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   let func = CompiledFunction::new("test", mc, 0)
   inspect(func.is_valid(), content="true")
   func.invalidate()
@@ -30,8 +30,8 @@ test "code cache: basic operations" {
   inspect(cache.get(0) is None, content="true")
 
   // Insert a function
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   let func = CompiledFunction::new("func0", mc, 0)
   cache.insert(0, func)
   inspect(cache.contains(0), content="true")
@@ -41,8 +41,8 @@ test "code cache: basic operations" {
 ///|
 test "code cache: invalidation" {
   let cache = CodeCache::new(0)
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   cache.insert(0, CompiledFunction::new("func0", mc, 0))
 
   // Initially valid
@@ -57,8 +57,8 @@ test "code cache: invalidation" {
 ///|
 test "code cache: removal" {
   let cache = CodeCache::new(0)
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   cache.insert(0, CompiledFunction::new("func0", mc, 0))
   cache.remove(0)
   inspect(cache.contains(0), content="false")
@@ -67,9 +67,9 @@ test "code cache: removal" {
 ///|
 test "code cache: statistics" {
   let cache = CodeCache::new(0)
-  let mc = MachineCode::new()
-  emit_nop(mc)
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.emit_nop()
   cache.insert(0, CompiledFunction::new("func0", mc, 0))
   cache.get(0) |> ignore // Hit
   cache.get(1) |> ignore // Miss
@@ -84,8 +84,8 @@ test "code cache: statistics" {
 ///|
 test "code cache: clear" {
   let cache = CodeCache::new(0)
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   cache.insert(0, CompiledFunction::new("func0", mc, 0))
   cache.insert(1, CompiledFunction::new("func1", mc, 0))
   cache.clear()
@@ -137,9 +137,9 @@ test "memory manager: alloc region" {
 ///|
 test "memory manager: write code" {
   let mm = MemoryManager::new(4096)
-  let mc = MachineCode::new()
-  emit_nop(mc)
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.emit_nop()
   match mm.write_code(mc) {
     Ok((region, offset)) => {
       inspect(offset, content="0")
@@ -153,8 +153,8 @@ test "memory manager: write code" {
 ///|
 test "jit runtime: register and lookup" {
   let runtime = JITRuntime::new(0, 4096)
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   mc.emit_ret(30)
   let func = CompiledFunction::new("test", mc, 16)
   match runtime.register(0, func) {
@@ -168,8 +168,8 @@ test "jit runtime: register and lookup" {
 ///|
 test "jit runtime: invalidate" {
   let runtime = JITRuntime::new(0, 4096)
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   let func = CompiledFunction::new("test", mc, 0)
   runtime.register(0, func) |> ignore
   runtime.invalidate(0)
@@ -179,8 +179,8 @@ test "jit runtime: invalidate" {
 ///|
 test "jit runtime: statistics" {
   let runtime = JITRuntime::new(0, 4096)
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   runtime.register(0, CompiledFunction::new("func0", mc, 0)) |> ignore
   runtime.register(1, CompiledFunction::new("func1", mc, 0)) |> ignore
   let (comps, recomps, count, _, _, _, _) = runtime.stats()
@@ -192,8 +192,8 @@ test "jit runtime: statistics" {
 ///|
 test "jit runtime: recompilation" {
   let runtime = JITRuntime::new(0, 4096)
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   runtime.register(0, CompiledFunction::new("func0", mc, 0)) |> ignore
   // Re-register same function (recompilation)
   runtime.register(0, CompiledFunction::new("func0_v2", mc, 0)) |> ignore

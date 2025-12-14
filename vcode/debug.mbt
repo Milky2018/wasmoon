@@ -2,7 +2,7 @@
 
 ///|
 /// Dump VCode function for analysis (prints to stdout)
-pub fn dump_vcode(func : @function.VCodeFunction, tag : String) -> Unit {
+pub fn dump_vcode(func : @lower.VCodeFunction, tag : String) -> Unit {
   println("=== VCode Dump: \{tag} ===")
   println("Function: \{func.name}")
   println("Params: \{func.params.length()}")
@@ -33,8 +33,8 @@ pub fn dump_vcode(func : @function.VCodeFunction, tag : String) -> Unit {
 /// Dump register allocation details
 pub fn dump_regalloc(
   func_name : String,
-  liveness : LivenessResult,
-  alloc : RegAllocResult,
+  liveness : @lower.LivenessResult,
+  alloc : @lower.RegAllocResult,
 ) -> Unit {
   println("=== RegAlloc Dump: \{func_name} ===")
   println("Live Intervals:")

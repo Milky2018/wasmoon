@@ -162,7 +162,6 @@ test "all emit functions disasm" {
       #|  0048: 200c029b  madd x0, x1, x2, x3
       #|  004c: a49c069b  msub x4, x5, x6, x7
       #|  0050: 28fd0a9b  mneg x8, x9, x10
-      #|  0050: 28fd0a9b  msub x8, x9, x10, x31
       #|  0054: e00301aa  mov x0, x1
       #|  0058: e203032a  mov w2, w3
       #|  005c: 844682d2  movz x4, #4660, lsl #0
@@ -198,8 +197,8 @@ test "all emit functions disasm" {
       #|  00d4: 282900b9  str w8, [x9, #40]
       #|  00d8: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  00dc: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  00e0: f35300a9  stp x19, x20, [sp, #0]
-      #|  00e4: f55b41a9  ldp x21, x22, [sp, #16]
+      #|  00e0: f35380a9  stp x19, x20, [sp, #0]!
+      #|  00e4: f55bc1a8  ldp x21, x22, [sp], #16
       #|  00e8: 2028621e  fadd d0, d1, d2
       #|  00ec: 8338651e  fsub d3, d4, d5
       #|  00f0: e608681e  fmul d6, d7, d8

@@ -2,8 +2,8 @@
 /// VCode instruction - a machine-level instruction with virtual registers
 pub(all) struct VCodeInst {
   opcode : VCodeOpcode
-  defs : Array[@reg.Writable] // Registers defined (written)
-  uses : Array[@reg.Reg] // Registers used (read)
+  defs : Array[@abi.Writable] // Registers defined (written)
+  uses : Array[@abi.Reg] // Registers used (read)
 }
 
 ///|
@@ -12,12 +12,12 @@ pub fn VCodeInst::new(opcode : VCodeOpcode) -> VCodeInst {
 }
 
 ///|
-pub fn VCodeInst::add_def(self : VCodeInst, reg : @reg.Writable) -> Unit {
+pub fn VCodeInst::add_def(self : VCodeInst, reg : @abi.Writable) -> Unit {
   self.defs.push(reg)
 }
 
 ///|
-pub fn VCodeInst::add_use(self : VCodeInst, reg : @reg.Reg) -> Unit {
+pub fn VCodeInst::add_use(self : VCodeInst, reg : @abi.Reg) -> Unit {
   self.uses.push(reg)
 }
 
@@ -173,7 +173,7 @@ pub(all) enum VCodeOpcode {
   // Stack parameter load (for params >= 8 that are passed on the stack)
   // LoadStackParam(param_idx, class): Load from [SP + frame_size + (param_idx - 8) * 8]
   // The actual offset is computed at emit time when frame_size is known
-  LoadStackParam(Int, @reg.RegClass)
+  LoadStackParam(Int, @abi.RegClass)
   // Memory management
   // MemoryGrow: grow memory by delta pages, returns previous size in pages or -1
   // Int = max_pages (0 = no limit)
@@ -490,12 +490,12 @@ pub impl Show for IntToFloatKind with output(self, logger) {
 /// VCode terminator - how a block ends
 pub(all) enum VCodeTerminator {
   Jump(Int) // Unconditional jump to block
-  Branch(@reg.Reg, Int, Int) // Conditional: condition, then-block, else-block
-  Return(Array[@reg.Reg]) // Return with values
+  Branch(@abi.Reg, Int, Int) // Conditional: condition, then-block, else-block
+  Return(Array[@abi.Reg]) // Return with values
   Trap(String) // Trap with message
   // BrTable: index register, target block IDs, default block ID
   // Uses jump table for O(1) dispatch instead of comparison chain
-  BrTable(@reg.Reg, Array[Int], Int)
+  BrTable(@abi.Reg, Array[Int], Int)
 }
 
 ///|

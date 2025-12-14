@@ -38,9 +38,63 @@ pub const SCRATCH_REG_1 : Int = 16
 
 pub const SCRATCH_REG_2 : Int = 17
 
+pub fn aapcs64_arg_fprs() -> Array[PReg]
+
+pub fn aapcs64_arg_gprs() -> Array[PReg]
+
+pub fn aapcs64_callee_saved() -> Array[PReg]
+
+pub fn aapcs64_ret_fprs() -> Array[PReg]
+
+pub fn aapcs64_ret_gprs() -> Array[PReg]
+
+pub fn allocatable_callee_saved_regs() -> Array[PReg]
+
+pub fn allocatable_scratch_regs() -> Array[PReg]
+
+pub fn call_clobbered_fprs() -> Array[PReg]
+
+pub fn call_clobbered_gprs() -> Array[PReg]
+
+pub fn callee_saved_fprs() -> Array[PReg]
+
+pub let spill_slot_base : Int
+
 // Errors
 
 // Types and methods
+pub(all) struct PReg {
+  index : Int
+  class : RegClass
+}
+pub fn PReg::get_spill_slot(Self) -> Int
+pub fn PReg::is_spilled(Self) -> Bool
+pub fn PReg::spilled(Int, RegClass) -> Self
+pub impl Show for PReg
+
+pub(all) enum Reg {
+  Virtual(VReg)
+  Physical(PReg)
+}
+pub impl Show for Reg
+
+pub(all) enum RegClass {
+  Int
+  Float32
+  Float64
+}
+pub impl Show for RegClass
+
+pub(all) struct VReg {
+  id : Int
+  class : RegClass
+}
+pub impl Show for VReg
+
+pub(all) struct Writable {
+  reg : Reg
+}
+pub impl Show for Writable
 
 // Type aliases
 

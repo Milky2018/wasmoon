@@ -4,15 +4,15 @@
 /// VCode function - a complete function in VCode form
 pub(all) struct VCodeFunction {
   name : String
-  params : Array[@reg.VReg] // Function parameters
-  results : Array[@reg.RegClass] // Result types (for return value allocation)
+  params : Array[@abi.VReg] // Function parameters
+  results : Array[@abi.RegClass] // Result types (for return value allocation)
   result_types : Array[@ir.Type] // Full return type info for multi-value returns
   blocks : Array[@block.VCodeBlock]
   mut next_vreg_id : Int
   mut num_spill_slots : Int // Number of spill slots used by register allocator
   // Map from param index to allocated physical register (for params that cross calls)
   // This is filled by apply_allocation and used by emit_prologue
-  param_pregs : Array[@reg.PReg?]
+  param_pregs : Array[@abi.PReg?]
 }
 
 ///|
@@ -30,14 +30,20 @@ pub fn VCodeFunction::new(name : String) -> VCodeFunction {
 }
 
 ///|
-pub fn VCodeFunction::new_vreg(self : VCodeFunction, class : @reg.RegClass) -> @reg.VReg {
+pub fn VCodeFunction::new_vreg(
+  self : VCodeFunction,
+  class : @abi.RegClass,
+) -> @abi.VReg {
   let id = self.next_vreg_id
   self.next_vreg_id = id + 1
   { id, class }
 }
 
 ///|
-pub fn VCodeFunction::add_param(self : VCodeFunction, class : @reg.RegClass) -> @reg.VReg {
+pub fn VCodeFunction::add_param(
+  self : VCodeFunction,
+  class : @abi.RegClass,
+) -> @abi.VReg {
   let vreg = self.new_vreg(class)
   self.params.push(vreg)
   vreg
@@ -46,7 +52,7 @@ pub fn VCodeFunction::add_param(self : VCodeFunction, class : @reg.RegClass) -> 
 ///|
 pub fn VCodeFunction::add_result(
   self : VCodeFunction,
-  class : @reg.RegClass,
+  class : @abi.RegClass,
 ) -> Unit {
   self.results.push(class)
 }

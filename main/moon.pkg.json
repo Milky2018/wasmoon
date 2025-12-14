@@ -17,7 +17,8 @@
     "TheWaWaR/clap",
     "Milky2018/wasmoon/executor",
     "Milky2018/wasmoon/runtime",
-    "Milky2018/wasmoon/jit"
+    "Milky2018/wasmoon/jit",
+    "Milky2018/wasmoon/vcode/lower"
   ],
   "targets": {
     "run_cwasm.mbt": ["native"]

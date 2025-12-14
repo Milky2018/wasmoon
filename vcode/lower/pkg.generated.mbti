@@ -1,0 +1,284 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/vcode/lower"
+
+import(
+  "Milky2018/wasmoon/ir"
+  "Milky2018/wasmoon/vcode/abi"
+  "Milky2018/wasmoon/vcode/block"
+  "Milky2018/wasmoon/vcode/instr"
+  "moonbitlang/core/set"
+)
+
+// Values
+pub fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
+
+pub fn apply_aarch64_rule(String, MatchResult, @ir.Inst, LoweringContext) -> AArch64RewriteResult
+
+pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
+
+pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
+
+pub fn compute_liveness(VCodeFunction) -> LivenessResult
+
+pub fn debug_liveness(LivenessResult) -> String
+
+pub fn eliminate_dead_code(VCodeFunction) -> VCodeFunction
+
+pub fn get_aarch64_rules() -> Array[RewriteRule]
+
+pub fn get_optimization_rules() -> Array[RewriteRule]
+
+pub fn is_consecutive_ones(Int64) -> Bool
+
+pub fn is_valid_add_imm(Int64) -> Bool
+
+pub fn is_valid_logical_imm(Int64) -> Bool
+
+pub fn lower_function(@ir.Function) -> VCodeFunction
+
+pub fn lower_function_optimized(@ir.Function) -> VCodeFunction
+
+pub fn lower_inst_with_patterns(LoweringContext, @ir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool
+
+pub fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
+
+pub fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
+
+// Errors
+
+// Types and methods
+pub enum AArch64RewriteResult {
+  AddShifted(Int, Int, Int)
+  SubShifted(Int, Int, Int)
+  Madd(Int, Int, Int)
+  Msub(Int, Int, Int)
+  Mneg(Int, Int)
+  LogicalShifted(@instr.VCodeOpcode, Int, Int, Int)
+  NoMatch
+}
+
+pub(all) struct AArch64StackFrame {
+  frame : StackFrame
+  use_fp : Bool
+  mut lr_slot : Int?
+  mut fp_slot : Int?
+}
+pub fn AArch64StackFrame::alloc_spill(Self, @abi.VReg) -> Int
+pub fn AArch64StackFrame::finalize(Self) -> Unit
+pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.VCodeInst]
+pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.VCodeInst]
+pub fn AArch64StackFrame::new() -> Self
+pub fn AArch64StackFrame::save_callee_reg(Self, @abi.PReg) -> Int
+pub fn AArch64StackFrame::set_has_calls(Self) -> Unit
+pub fn AArch64StackFrame::setup(Self) -> Unit
+pub fn AArch64StackFrame::size(Self) -> Int
+pub impl Show for AArch64StackFrame
+
+pub(all) struct LinearScanAllocator {
+  int_regs : Array[@abi.PReg]
+  float_regs : Array[@abi.PReg]
+  callee_saved_int_regs : Array[@abi.PReg]
+  callee_saved_float_regs : Array[@abi.PReg]
+  mut active : Array[LiveInterval]
+  mut next_spill_slot : Int
+  block_order : Map[Int, Int]
+}
+pub fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
+pub fn LinearScanAllocator::new(Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], callee_saved_float_regs? : Array[@abi.PReg]) -> Self
+
+pub(all) struct LiveInterval {
+  vreg : @abi.VReg
+  start : ProgPoint
+  mut end : ProgPoint
+  uses : Array[ProgPoint]
+  hint : @abi.PReg?
+  mut assigned : @abi.PReg?
+  mut spill_slot : Int?
+  mut crosses_call : Bool
+}
+pub impl Show for LiveInterval
+
+pub(all) struct LivenessResult {
+  intervals : Map[Int, LiveInterval]
+  use_def : Map[Int, UseDefInfo]
+  live_in : Array[@set.Set[Int]]
+  live_out : Array[@set.Set[Int]]
+  block_order : Map[Int, Int]
+  call_points : Array[ProgPoint]
+}
+
+pub(all) struct LoweringContext {
+  ir_func : @ir.Function
+  vcode_func : VCodeFunction
+  value_map : Map[Int, @abi.VReg]
+  block_map : Map[Int, Int]
+  stack_param_map : Map[Int, (Int, @abi.RegClass)]
+}
+pub fn LoweringContext::new(@ir.Function) -> Self
+
+pub(all) struct MatchResult {
+  values : Array[@ir.Value]
+  int_consts : Array[Int64]
+  float_consts : Array[Double]
+  mut matched_inst : @ir.Inst?
+}
+
+pub enum Pattern {
+  Any
+  ConstInt(Int64)
+  ConstFloat(Double)
+  AnyConstInt
+  Inst(PatternOpcode, Array[Pattern])
+  Lowered
+}
+
+pub enum PatternOpcode {
+  Iadd
+  Isub
+  Imul
+  Sdiv
+  Udiv
+  Band
+  Bor
+  Bxor
+  Ishl
+  Sshr
+  Ushr
+  Fadd
+  Fsub
+  Fmul
+  Fdiv
+  Iconst
+  Fconst
+  Icmp
+  Fcmp
+  Load
+  Store
+  Copy
+  Select
+}
+
+pub(all) struct ProgPoint {
+  block : Int
+  inst : Int
+  pos : ProgPos
+}
+pub impl Show for ProgPoint
+
+pub enum ProgPos {
+  Before
+  After
+}
+
+pub(all) struct RegAllocResult {
+  assignments : Map[Int, @abi.PReg]
+  spill_slots : Map[Int, Int]
+  mut num_spill_slots : Int
+  spills : Array[SpillInfo]
+  reloads : Array[ReloadInfo]
+}
+
+pub(all) struct ReloadInfo {
+  vreg : @abi.VReg
+  slot : Int
+  preg : @abi.PReg
+  point : ProgPoint
+}
+
+pub enum RewriteResult {
+  Rewritten(Array[@instr.VCodeInst])
+  Identity(Int)
+  Constant(Int64)
+  ConstantFloat(Double)
+  ShiftLeft(Int, Int)
+  ShiftRight(Int, Int)
+  NoMatch
+}
+
+pub(all) struct RewriteRule {
+  name : String
+  pattern : Pattern
+  priority : Int
+}
+
+pub(all) struct SpillInfo {
+  vreg : @abi.VReg
+  slot : Int
+  point : ProgPoint
+}
+
+pub(all) struct StackFrame {
+  slots : Array[StackSlot]
+  mut frame_size : Int
+  frame_align : Int
+  mut next_spill_offset : Int
+  mut next_arg_offset : Int
+  callee_saved_regs : Array[@abi.PReg]
+  mut has_calls : Bool
+}
+pub fn StackFrame::add_callee_saved(Self, @abi.PReg) -> Int
+pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
+pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
+pub fn StackFrame::alloc_spill_slot(Self, @abi.VReg, Int, Int) -> Int
+pub fn StackFrame::finalize(Self) -> Unit
+pub fn StackFrame::get_callee_saved(Self) -> Array[@abi.PReg]
+pub fn StackFrame::new(Int) -> Self
+pub fn StackFrame::print(Self) -> String
+pub fn StackFrame::size(Self) -> Int
+pub impl Show for StackFrame
+
+pub enum StackOpcode {
+  AdjustSP(Int)
+  PushReg(@abi.PReg)
+  PopReg(@abi.PReg)
+}
+pub impl Show for StackOpcode
+
+pub(all) struct StackSlot {
+  offset : Int
+  size : Int
+  align : Int
+  kind : StackSlotKind
+}
+pub impl Show for StackSlot
+
+pub enum StackSlotKind {
+  Spill(@abi.VReg)
+  Local(Int)
+  OutgoingArg(Int)
+  CalleeSaved(@abi.PReg)
+  ReturnAddress
+}
+pub impl Show for StackSlotKind
+
+pub(all) struct UseDefInfo {
+  vreg : @abi.VReg
+  mut def_point : ProgPoint?
+  use_points : Array[ProgPoint]
+}
+
+pub(all) struct VCodeFunction {
+  name : String
+  params : Array[@abi.VReg]
+  results : Array[@abi.RegClass]
+  result_types : Array[@ir.Type]
+  blocks : Array[@block.VCodeBlock]
+  mut next_vreg_id : Int
+  mut num_spill_slots : Int
+  param_pregs : Array[@abi.PReg?]
+}
+pub fn VCodeFunction::add_param(Self, @abi.RegClass) -> @abi.VReg
+pub fn VCodeFunction::add_result(Self, @abi.RegClass) -> Unit
+pub fn VCodeFunction::add_result_type(Self, @ir.Type) -> Unit
+pub fn VCodeFunction::calls_multi_value_function(Self) -> Bool
+pub fn VCodeFunction::needs_extra_results_ptr(Self) -> Bool
+pub fn VCodeFunction::new(String) -> Self
+pub fn VCodeFunction::new_block(Self) -> @block.VCodeBlock
+pub fn VCodeFunction::new_vreg(Self, @abi.RegClass) -> @abi.VReg
+pub fn VCodeFunction::print(Self) -> String
+pub impl Show for VCodeFunction
+
+// Type aliases
+
+// Traits
+

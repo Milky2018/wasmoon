@@ -493,7 +493,7 @@ fn ByteReader::read_string(self : ByteReader, len : Int) -> String {
 pub fn CompiledEntry::to_compiled_function(
   self : CompiledEntry,
 ) -> @vcode.CompiledFunction {
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
   for b in self.code {
     mc.emit_byte(b)
   }

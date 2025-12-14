@@ -3,13 +3,8 @@
     "Milky2018/wasmoon/ir",
     "Milky2018/wasmoon/jit/jit_ffi",
     "Milky2018/wasmoon/vcode/abi",
-    "Milky2018/wasmoon/vcode/stackframe",
-    "Milky2018/wasmoon/vcode/function",
+    "Milky2018/wasmoon/vcode/lower",
     "Milky2018/wasmoon/vcode/instr",
-    "Milky2018/wasmoon/vcode/reg"
-  ],
-  "wbtest-import": [
-    "Milky2018/wasmoon/wat",
-    "Milky2018/wasmoon/types"
+    "Milky2018/wasmoon/vcode/abi"
   ]
 }

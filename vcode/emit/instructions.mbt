@@ -2,31 +2,7 @@
 // This module contains all AArch64 instruction encoders using an Instruction enum
 
 ///|
-#warnings("-unused_value")
-fn build_inst(
-  b3 : Int,
-  b2 : Int,
-  b1 : Int,
-  b0 : Int,
-  rd : Int,
-  rn : Int,
-  rm : Int,
-) -> (Int, Int, Int, Int) {
-  // Most AArch64 instructions have:
-  // - Rd in bits [4:0]
-  // - Rn in bits [9:5]
-  // - Rm in bits [20:16] (for register operations)
-  let byte0 = b0 | (rd & 31) | ((rn & 7) << 5)
-  let byte1 = b1 | ((rn >> 3) & 3) | ((rm & 15) << 4)
-  let byte2 = b2 | ((rm >> 4) & 1)
-  let byte3 = b3
-  (byte0, byte1, byte2, byte3)
-}
-
-// Register encoding helper
-
-///|
-fn reg_num(reg : @reg.Reg) -> Int {
+fn reg_num(reg : @abi.Reg) -> Int {
   match reg {
     Physical(preg) => preg.index
     Virtual(_) => abort("Virtual register in code emission")
@@ -36,7 +12,7 @@ fn reg_num(reg : @reg.Reg) -> Int {
 // Writable register encoding helper
 
 ///|
-fn wreg_num(wreg : @reg.Writable) -> Int {
+fn wreg_num(wreg : @abi.Writable) -> Int {
   reg_num(wreg.reg)
 }
 
@@ -1477,7 +1453,12 @@ pub fn Instruction::emit(self : Instruction, mc : MachineCode) -> Unit {
 // ============ Public emit functions (backward compatibility) ============
 
 ///|
-pub fn MachineCode::emit_add_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_add_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   AddReg(rd, rn, rm).emit(self)
 }
 
@@ -1564,72 +1545,142 @@ pub fn MachineCode::emit_msub(
 }
 
 ///|
-pub fn MachineCode::emit_mneg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_mneg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   Mneg(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_add_imm(self : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_add_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   AddImm(rd, rn, imm12).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_sub_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_sub_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   SubReg(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_sub_imm(self : MachineCode, rd : Int, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_sub_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   SubImm(rd, rn, imm12).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_mul(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_mul(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   Mul(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_sdiv(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_sdiv(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   Sdiv(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_udiv(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_udiv(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   Udiv(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_and_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_and_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   AndReg(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_orr_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_orr_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   OrrReg(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_eor_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_eor_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   EorReg(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_lsl_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_lsl_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   LslReg(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_asr_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_asr_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   AsrReg(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_lsr_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_lsr_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   LsrReg(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_ror_reg(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_ror_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   RorReg(rd, rn, rm).emit(self)
 }
 
@@ -1693,32 +1744,59 @@ pub fn MachineCode::emit_ucvtf(
 }
 
 ///|
-pub fn MachineCode::emit_mov_reg(self : MachineCode, rd : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_mov_reg(
+  self : MachineCode,
+  rd : Int,
+  rm : Int,
+) -> Unit {
   MovReg(rd, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_mov_reg32(self : MachineCode, rd : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_mov_reg32(
+  self : MachineCode,
+  rd : Int,
+  rm : Int,
+) -> Unit {
   MovReg32(rd, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_movz(self : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
+pub fn MachineCode::emit_movz(
+  self : MachineCode,
+  rd : Int,
+  imm16 : Int,
+  shift : Int,
+) -> Unit {
   Movz(rd, imm16, shift).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_movk(self : MachineCode, rd : Int, imm16 : Int, shift : Int) -> Unit {
+pub fn MachineCode::emit_movk(
+  self : MachineCode,
+  rd : Int,
+  imm16 : Int,
+  shift : Int,
+) -> Unit {
   Movk(rd, imm16, shift).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_load_imm64(self : MachineCode, rd : Int, imm : Int64) -> Unit {
+pub fn MachineCode::emit_load_imm64(
+  self : MachineCode,
+  rd : Int,
+  imm : Int64,
+) -> Unit {
   LoadImm64(rd, imm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_ldr_imm(self : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_ldr_imm(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   LdrImm(rt, rn, imm12).emit(self)
 }
 
@@ -1733,7 +1811,12 @@ pub fn MachineCode::emit_ldr_imm_signed(
 }
 
 ///|
-pub fn MachineCode::emit_str_imm(self : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_str_imm(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   StrImm(rt, rn, imm12).emit(self)
 }
 
@@ -1760,12 +1843,22 @@ pub fn MachineCode::emit_str_reg_scaled(
 }
 
 ///|
-pub fn MachineCode::emit_ldrb_imm(self : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_ldrb_imm(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   LdrbImm(rt, rn, imm12).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_ldrh_imm(self : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_ldrh_imm(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   LdrhImm(rt, rn, imm12).emit(self)
 }
 
@@ -1780,12 +1873,22 @@ pub fn MachineCode::emit_ldr_w_imm(
 }
 
 ///|
-pub fn MachineCode::emit_strb_imm(self : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_strb_imm(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   StrbImm(rt, rn, imm12).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_strh_imm(self : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_strh_imm(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   StrhImm(rt, rn, imm12).emit(self)
 }
 
@@ -1922,22 +2025,38 @@ pub fn MachineCode::emit_b(self : MachineCode, target_block : Int) -> Unit {
 }
 
 ///|
-pub fn MachineCode::emit_b_cond(self : MachineCode, cond : Int, target_block : Int) -> Unit {
+pub fn MachineCode::emit_b_cond(
+  self : MachineCode,
+  cond : Int,
+  target_block : Int,
+) -> Unit {
   BCond(cond, target_block).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_cbz(self : MachineCode, rt : Int, target_block : Int) -> Unit {
+pub fn MachineCode::emit_cbz(
+  self : MachineCode,
+  rt : Int,
+  target_block : Int,
+) -> Unit {
   Cbz(rt, target_block).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_cbnz(self : MachineCode, rt : Int, target_block : Int) -> Unit {
+pub fn MachineCode::emit_cbnz(
+  self : MachineCode,
+  rt : Int,
+  target_block : Int,
+) -> Unit {
   Cbnz(rt, target_block).emit(self)
 }
 
 ///|
-fn MachineCode::emit_b_cond_offset(self : MachineCode, cond : Int, offset_bytes : Int) -> Unit {
+fn MachineCode::emit_b_cond_offset(
+  self : MachineCode,
+  cond : Int,
+  offset_bytes : Int,
+) -> Unit {
   BCondOffset(cond, offset_bytes).emit(self)
 }
 
@@ -1957,7 +2076,11 @@ pub fn MachineCode::emit_br(self : MachineCode, rn : Int) -> Unit {
 }
 
 ///|
-pub fn MachineCode::emit_adr(self : MachineCode, rd : Int, offset : Int) -> Unit {
+pub fn MachineCode::emit_adr(
+  self : MachineCode,
+  rd : Int,
+  offset : Int,
+) -> Unit {
   Adr(rd, offset).emit(self)
 }
 
@@ -1977,12 +2100,20 @@ pub fn MachineCode::emit_dmb_ish(self : MachineCode) -> Unit {
 }
 
 ///|
-pub fn MachineCode::emit_cmp_reg(self : MachineCode, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_cmp_reg(
+  self : MachineCode,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   CmpReg(rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_cmp_imm(self : MachineCode, rn : Int, imm12 : Int) -> Unit {
+pub fn MachineCode::emit_cmp_imm(
+  self : MachineCode,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
   CmpImm(rn, imm12).emit(self)
 }
 
@@ -2025,72 +2156,140 @@ pub fn MachineCode::emit_fcsel_s(
 }
 
 ///|
-pub fn MachineCode::emit_fadd_d(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fadd_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FaddD(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fadd_s(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fadd_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FaddS(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fsub_d(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fsub_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FsubD(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fsub_s(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fsub_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FsubS(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmul_d(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fmul_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FmulD(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmul_s(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fmul_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FmulS(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fdiv_d(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fdiv_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FdivD(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fdiv_s(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fdiv_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FdivS(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmax_d(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fmax_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FmaxD(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmax_s(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fmax_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FmaxS(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmin_d(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fmin_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FminD(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmin_s(self : MachineCode, rd : Int, rn : Int, rm : Int) -> Unit {
+pub fn MachineCode::emit_fmin_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
   FminS(rd, rn, rm).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fsqrt_d(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_fsqrt_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FsqrtD(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fsqrt_s(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_fsqrt_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FsqrtS(rd, rn).emit(self)
 }
 
@@ -2115,42 +2314,74 @@ pub fn MachineCode::emit_fneg_s(self : MachineCode, rd : Int, rn : Int) -> Unit 
 }
 
 ///|
-pub fn MachineCode::emit_frintp_d(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_frintp_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FrintpD(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_frintp_s(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_frintp_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FrintpS(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_frintm_d(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_frintm_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FrintmD(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_frintm_s(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_frintm_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FrintmS(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_frintz_d(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_frintz_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FrintzD(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_frintz_s(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_frintz_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FrintzS(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_frintn_d(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_frintn_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FrintnD(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_frintn_s(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_frintn_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FrintnS(rd, rn).emit(self)
 }
 
@@ -2165,32 +2396,56 @@ pub fn MachineCode::emit_fmov_s(self : MachineCode, rd : Int, rm : Int) -> Unit 
 }
 
 ///|
-pub fn MachineCode::emit_fmov_d_to_x(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_fmov_d_to_x(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FmovDToX(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmov_s_to_w(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_fmov_s_to_w(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FmovSToW(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmov_x_to_d(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_fmov_x_to_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FmovXToD(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fmov_w_to_s(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_fmov_w_to_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FmovWToS(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fcvt_d_s(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_fcvt_d_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FcvtDS(rd, rn).emit(self)
 }
 
 ///|
-pub fn MachineCode::emit_fcvt_s_d(self : MachineCode, rd : Int, rn : Int) -> Unit {
+pub fn MachineCode::emit_fcvt_s_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+) -> Unit {
   FcvtSD(rd, rn).emit(self)
 }
 
@@ -2235,7 +2490,12 @@ pub fn MachineCode::emit_str_d_imm(
 }
 
 ///|
-fn MachineCode::emit_str_offset(self : MachineCode, rt : Int, rn : Int, offset : Int) -> Unit {
+fn MachineCode::emit_str_offset(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit {
   StrImm(rt, rn, offset).emit(self)
 }
 
@@ -2248,7 +2508,6 @@ fn MachineCode::emit_str_d_offset(
 ) -> Unit {
   StrDImm(rt, rn, offset).emit(self)
 }
-
 
 ///|
 /// Emit STP with signed offset (not pre/post indexed)

@@ -1,11 +1,7 @@
 {
   "import": [
-    "Milky2018/wasmoon/ir",
-    "Milky2018/wasmoon/jit/jit_ffi",
-    "Milky2018/wasmoon/vcode/abi",
-    "Milky2018/wasmoon/vcode/stackframe",
     "Milky2018/wasmoon/vcode/instr",
-    "Milky2018/wasmoon/vcode/reg"
+    "Milky2018/wasmoon/vcode/abi"
   ],
   "wbtest-import": [
     "Milky2018/wasmoon/wat",

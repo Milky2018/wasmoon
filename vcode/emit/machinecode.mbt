@@ -215,10 +215,8 @@ pub fn MachineCode::size(self : MachineCode) -> Int {
 pub fn MachineCode::align(self : MachineCode, alignment : Int) -> Unit {
   // alignment must be a power of 2
   guard alignment > 0 && (alignment & (alignment - 1)) == 0 else { return }
-  // Pad until aligned
-  while self.pos % alignment != 0 {
-    self.emit_nop()
-  }
+  // Use AlignTo instruction to emit NOPs until aligned
+  AlignTo(alignment).emit(self)
 }
 
 ///|
