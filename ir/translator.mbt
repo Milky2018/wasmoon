@@ -708,6 +708,38 @@ fn Translator::translate_instruction(
       self.push(result)
     }
 
+    // Reference types
+    RefNull(_ref_type) => {
+      // A null reference is represented as -1 (sentinel value, since 0 can be a valid index)
+      let result = self.builder.iconst(Type::I64, -1L)
+      self.push(result)
+    }
+    RefIsNull => {
+      // Check if reference is null (compare with -1)
+      let ref_val = self.pop()
+      let null_sentinel = self.builder.iconst(Type::I64, -1L)
+      let result = self.builder.icmp_eq(ref_val, null_sentinel)
+      self.push(result)
+    }
+    RefFunc(func_idx) => {
+      // Create a function reference - store the function index
+      // The actual function pointer will be looked up at runtime
+      let result = self.builder.iconst(Type::I64, func_idx.to_int64())
+      self.push(result)
+    }
+    TableGet(table_idx) => {
+      // Get element from table
+      let elem_idx = self.pop()
+      let result = self.builder.table_get(table_idx, elem_idx)
+      self.push(result)
+    }
+    TableSet(table_idx) => {
+      // Set element in table
+      let value = self.pop()
+      let elem_idx = self.pop()
+      self.builder.table_set(table_idx, elem_idx, value)
+    }
+
     // Not yet implemented
     _ => () // Skip unimplemented instructions
   }

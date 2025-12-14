@@ -416,6 +416,13 @@ pub enum VCodeOpcode {
   // MemorySize: get current memory size in pages
   // Uses: [], Defs: [result]
   MemorySize
+  // Table operations (for reference types)
+  // TableGet(table_idx): load from indirect table at index
+  // Uses: [elem_idx], Defs: [result (function pointer)]
+  TableGet(Int)
+  // TableSet(table_idx): store to indirect table at index
+  // Uses: [elem_idx, value], Defs: []
+  TableSet(Int)
 }
 
 ///|
@@ -508,6 +515,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
         "memory_grow max=\{max_pages}"
       }
     MemorySize => "memory_size"
+    TableGet(table_idx) => "table_get \{table_idx}"
+    TableSet(table_idx) => "table_set \{table_idx}"
   }
 }
 

@@ -278,6 +278,20 @@ fn validate_instruction(
         )
       }
 
+    // Table operations
+    TableGet(_) =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "TableGet expects 1 operand (elem_idx), got \{inst.operands.length()}",
+        )
+      }
+    TableSet(_) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "TableSet expects 2 operands (elem_idx, value), got \{inst.operands.length()}",
+        )
+      }
+
     // Calls can have any number of operands
     Call(_) | CallIndirect(_) => ()
   }

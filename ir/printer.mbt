@@ -146,6 +146,10 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
     Select => "select \{ops}"
     Copy => "copy \{ops}"
 
+    // Table operations
+    TableGet(idx) => "table_get \{idx} \{ops}"
+    TableSet(idx) => "table_set \{idx} \{ops}"
+
     // Function calls
     Call(idx) => "call \{idx}(\{ops})"
     CallIndirect(idx) => "call_indirect \{idx}(\{ops})"

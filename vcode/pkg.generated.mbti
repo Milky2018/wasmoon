@@ -215,6 +215,8 @@ pub fn emit_ldr_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_ldr_imm_signed(MachineCode, Int, Int, Int) -> Unit
 
+pub fn emit_ldr_reg_scaled(MachineCode, Int, Int, Int, Int) -> Unit
+
 pub fn emit_ldr_s_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_ldr_w_imm(MachineCode, Int, Int, Int) -> Unit
@@ -278,6 +280,8 @@ pub fn emit_stp_pre(MachineCode, Int, Int, Int, Int) -> Unit
 pub fn emit_str_d_imm(MachineCode, Int, Int, Int) -> Unit
 
 pub fn emit_str_imm(MachineCode, Int, Int, Int) -> Unit
+
+pub fn emit_str_reg_scaled(MachineCode, Int, Int, Int, Int) -> Unit
 
 pub fn emit_str_s_imm(MachineCode, Int, Int, Int) -> Unit
 
@@ -986,6 +990,8 @@ pub enum VCodeOpcode {
   LoadStackParam(Int, RegClass)
   MemoryGrow(Int)
   MemorySize
+  TableGet(Int)
+  TableSet(Int)
 }
 pub impl Show for VCodeOpcode
 

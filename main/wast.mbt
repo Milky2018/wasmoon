@@ -703,7 +703,13 @@ fn invoke_action(
                   I64(n) => n
                   F32(n) => n.reinterpret_as_int().to_int64()
                   F64(n) => n.reinterpret_as_int64()
-                  _ => 0L
+                  F32CanonicalNan | F32ArithmeticNan =>
+                    @float.not_a_number.reinterpret_as_int().to_int64()
+                  F64CanonicalNan | F64ArithmeticNan =>
+                    @double.not_a_number.reinterpret_as_int64()
+                  RefNull(_) => -1L // null sentinel
+                  RefExtern(n) => n.to_int64()
+                  RefFunc => 0L // func ref (placeholder)
                 }
                 i64_args.push(v)
               }
@@ -775,13 +781,27 @@ fn invoke_action(
 /// Convert JIT result (Int64) to Value based on the given return type
 /// For f32: the Int64 contains the raw f32 bits in the lower 32 bits
 /// For f64: the Int64 contains the raw f64 bits
+/// For reference types: -1L represents null, otherwise it's an index
 fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
   match ty {
     I32 => @types.Value::I32(@jit.FromInt64::from_int64_bits(v))
     I64 => @types.Value::I64(@jit.FromInt64::from_int64_bits(v))
     F32 => @types.Value::F32(@jit.FromInt64::from_int64_bits(v))
     F64 => @types.Value::F64(@jit.FromInt64::from_int64_bits(v))
-    _ => @types.Value::I32(v.to_int())
+    // Reference types: -1L is null sentinel, otherwise index
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
+      if v == -1L {
+        @types.Value::Null
+      } else {
+        @types.Value::FuncRef(v.to_int())
+      }
+    ExternRef | RefExtern =>
+      if v == -1L {
+        @types.Value::Null
+      } else {
+        @types.Value::ExternRef(v.to_int())
+      }
+    V128 => abort("V128 not supported in JIT")
   }
 }
 
