@@ -396,8 +396,9 @@ pub enum VCodeOpcode {
   LoadStackParam(Int, RegClass)
   // Memory management
   // MemoryGrow: grow memory by delta pages, returns previous size in pages or -1
+  // Int = max_pages (0 = no limit)
   // Uses: [delta], Defs: [result]
-  MemoryGrow
+  MemoryGrow(Int)
   // MemorySize: get current memory size in pages
   // Uses: [], Defs: [result]
   MemorySize
@@ -486,7 +487,12 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(param_idx, class) =>
       "load_stack_param \{param_idx} (\{class})"
-    MemoryGrow => "memory_grow"
+    MemoryGrow(max_pages) =>
+      if max_pages == 0 {
+        "memory_grow"
+      } else {
+        "memory_grow max=\{max_pages}"
+      }
     MemorySize => "memory_size"
   }
 }

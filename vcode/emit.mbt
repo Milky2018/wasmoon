@@ -2408,7 +2408,7 @@ fn collect_used_callee_saved(
     for inst in block.insts {
       // Check if this instruction is a function call
       // MemoryGrow and MemorySize also use BLR internally to call C functions
-      if inst.opcode is (CallIndirect(_, _) | MemoryGrow | MemorySize) {
+      if inst.opcode is (CallIndirect(_, _) | MemoryGrow(_) | MemorySize) {
         has_calls = true
       }
       for def in inst.defs {
@@ -2594,16 +2594,15 @@ fn emit_prologue(
     let buffer_offset = clobbered_gpr_size + clobbered_fpr_size + spill_size
     emit_add_imm(mc, 23, 31, buffer_offset) // ADD X23, SP, #buffer_offset
   }
-  // Move user arguments from X registers to their allocated registers
-  // FFI passes all args as Int64 in X registers
-  // Float params need special handling:
-  //   - For f32: lower 32 bits of X register contain f32 bit pattern
-  //     We use FMOV W->S to move bits directly (no conversion)
-  //   - For f64: full 64 bits of X register contain f64 bit pattern
-  //     We use FMOV X->D to move bits directly
+  // Move user arguments from registers to their allocated registers
   //
-  // ABI v1: X0-X2 reserved, user params in X3-X10
-  // ABI v2: user params in X0-X7 (AAPCS64 compatible)
+  // ABI v1: X0-X2 reserved, all params (int and float) in X3-X10
+  //   Float params need FMOV to convert from X register to D register
+  //
+  // ABI v2 (AAPCS64 compatible):
+  //   - Integer params in X0-X7
+  //   - Float params in D0-D7 (already in place!)
+  //   - Only need to move if allocated to different register
   let actual_param_base = if ABI_VERSION == 2 {
     PARAM_BASE_REG
   } else {
@@ -2614,6 +2613,10 @@ fn emit_prologue(
   } else {
     LEGACY_MAX_REG_PARAMS
   }
+
+  // For v2 ABI, we need to track int and float indices separately
+  let mut int_idx = 0
+  let mut float_idx = 0
   for param_idx, param in params {
     // Check if this param needs to be moved to a different register
     let dest_preg = if param_idx < param_pregs.length() {
@@ -2621,40 +2624,44 @@ fn emit_prologue(
     } else {
       None
     }
-    if param_idx < actual_max_reg_params {
-      // Register param: in X(base+param_idx)
-      let x_src = actual_param_base + param_idx
-      match param.class {
-        Float32 => {
-          // Float32 param: extract f32 from lower 32 bits
-          // FMOV S(dest), W(x_src) - bit-exact transfer, no conversion
-          let s_dest = match dest_preg {
-            Some(preg) => preg.index
-            None => param_idx
+    match param.class {
+      Float32 | Float64 =>
+        if float_idx < actual_max_reg_params {
+          // Both v1 and v2 ABI: floats passed via X registers, need FMOV to D
+          let x_src = actual_param_base + param_idx
+          match param.class {
+            Float32 => {
+              let s_dest = match dest_preg {
+                Some(preg) => preg.index
+                None => float_idx
+              }
+              emit_fmov_w_to_s(mc, s_dest, x_src)
+            }
+            _ => {
+              let d_dest = match dest_preg {
+                Some(preg) => preg.index
+                None => float_idx
+              }
+              emit_fmov_x_to_d(mc, d_dest, x_src)
+            }
           }
-          emit_fmov_w_to_s(mc, s_dest, x_src) // FMOV Sd, Wn (raw bits)
+          float_idx = float_idx + 1
         }
-        Float64 => {
-          // Float64 param: move full 64 bits from X register to D register
-          // FMOV D(dest), X(x_src)
-          let d_dest = match dest_preg {
-            Some(preg) => preg.index
-            None => param_idx
-          }
-          emit_fmov_x_to_d(mc, d_dest, x_src)
-        }
-        Int =>
-          // Int param: may need to move from X(base+i) to allocated register
+      Int =>
+        if int_idx < actual_max_reg_params {
+          // For v2 ABI, int params are in X0-X7 (param_idx based)
+          // For v1 ABI, all params are in X3-X10 (param_idx based)
+          let x_src = actual_param_base + param_idx
           match dest_preg {
             Some(preg) =>
               // Param crosses a call, move to callee-saved register
               emit_mov_reg(mc, preg.index, x_src)
             None =>
-              // Int param: already at X(base+i) where regalloc expects it
-              // No move needed
+              // Int param: already at expected position, no move needed
               ()
           }
-      }
+          int_idx = int_idx + 1
+        }
     }
     // Stack params (param_idx >= 8) are now handled by LoadStackParam instruction
     // during function body execution, not in prologue
@@ -3969,7 +3976,7 @@ fn emit_instruction(
         }
       }
     }
-    MemoryGrow => {
+    MemoryGrow(max_pages) => {
       // Call wasmoon_jit_memory_grow(delta, max_pages)
       // Uses: [delta], Defs: [result]
       // Get the delta from the use register
@@ -3979,8 +3986,11 @@ fn emit_instruction(
       // Move delta to X0 (first argument)
       emit_mov_reg(mc, 0, delta_reg) // MOV X0, delta
 
-      // Set X1 = 0 (max_pages = 0 means no limit)
-      emit_movz(mc, 1, 0, 0) // MOVZ X1, #0
+      // Set X1 = max_pages
+      emit_movz(mc, 1, max_pages & 0xFFFF, 0) // MOVZ X1, #(max_pages & 0xFFFF)
+      if max_pages > 0xFFFF {
+        emit_movk(mc, 1, (max_pages >> 16) & 0xFFFF, 16) // MOVK X1, #((max_pages >> 16) & 0xFFFF), LSL #16
+      }
 
       // Load memory_grow function pointer into X16
       let grow_ptr = @jit_ffi.c_jit_get_memory_grow_v2_ptr()

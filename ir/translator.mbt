@@ -26,6 +26,8 @@ pub(all) struct Translator {
   mut return_continuation : Block?
   // Function result types - needed for lazy return continuation creation
   func_result_types : Array[Type]
+  // Memory max pages limit (None = no limit)
+  memory_max : Int?
 }
 
 ///|
@@ -59,6 +61,7 @@ pub fn Translator::new(
   func_type_indices : Array[Int],
   num_imports : Int,
   import_func_type_indices : Array[Int],
+  memory_max? : Int? = None,
 ) -> Translator {
   let builder = IRBuilder::new(name)
   // Add function parameters
@@ -96,6 +99,7 @@ pub fn Translator::new(
     is_unreachable: false,
     return_continuation: None,
     func_result_types,
+    memory_max,
   }
 }
 
@@ -693,7 +697,10 @@ fn Translator::translate_instruction(
     // Memory management
     MemoryGrow => {
       let delta = self.pop()
-      let result = self.builder.memory_grow(delta)
+      let result = match self.memory_max {
+        Some(max) => self.builder.memory_grow(delta, max_pages=max)
+        None => self.builder.memory_grow(delta)
+      }
       self.push(result)
     }
     MemorySize => {

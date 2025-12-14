@@ -984,7 +984,7 @@ pub enum VCodeOpcode {
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, RegClass)
-  MemoryGrow
+  MemoryGrow(Int)
   MemorySize
 }
 pub impl Show for VCodeOpcode

@@ -204,7 +204,7 @@ pub enum Opcode {
   Store32(Int) // Store low 32 bits of i64 (offset)
 
   // Memory management
-  MemoryGrow // Grow memory by delta pages, returns previous size or -1
+  MemoryGrow(Int?) // Grow memory by delta pages, returns previous size or -1. Int? = max_pages (None = no limit)
   MemorySize // Get current memory size in pages
 
   // Misc

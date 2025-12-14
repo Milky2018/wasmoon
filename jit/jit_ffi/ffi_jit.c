@@ -476,20 +476,23 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context_v2(void) {
 }
 
 // Call JIT function with new ABI (v2)
-// - X20 = context pointer (set by this trampoline, preserved across calls)
-// - X0-X7 = user parameters (AAPCS64 compatible)
-// - D0-D7 = float parameters (AAPCS64 compatible)
-// JIT prologue loads X21/X22/X24 from context pointed by X20
+// - X19 = context pointer (callee-saved, set by this trampoline)
+// - X0-X7 = parameters (all params passed via X registers, floats as bit patterns)
+// - Stack for params 8+
+// JIT prologue loads X20/X21/X22/X24 from context pointed by X19
+// param_types: 0=I32, 1=I64, 2=F32, 3=F64 (currently unused, for future D register optimization)
 MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
     int64_t ctx_ptr,
     int64_t func_ptr,
     int64_t* args,
+    int* param_types,
     int num_args,
     int64_t* results,
     int* result_types,
     int num_results
 ) {
     if (!func_ptr || !ctx_ptr) return -1;
+    (void)param_types;  // Reserved for future use
 
     // Save parameters for use after call
     volatile int saved_num_results = num_results;
@@ -526,14 +529,18 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
     uint64_t d0_bits = 0, d1_bits = 0;
 
 #if defined(__aarch64__) || defined(_M_ARM64)
-    // New ABI: X19 = context pointer (callee-saved), X0-X7 = user params
-    // X7 is extra_results_buffer when needed, otherwise arg 7
+    // New ABI: X19 = context pointer (callee-saved)
+    // All params in X0-X7 (floats passed as bit patterns in X registers)
+    // Params 8+ go on the stack
+    // JIT prologue will use FMOV to move floats from X to D registers
 
-    int max_reg_args = needs_extra_buffer ? 7 : 8;  // X7 reserved for buffer when needed
+    // Calculate stack args (args beyond the first 8 register args)
+    int max_reg_args = 8;
     int stack_args = (num_args > max_reg_args) ? (num_args - max_reg_args) : 0;
+    // Stack must be 16-byte aligned
     int stack_space = ((stack_args * 8) + 15) & ~15;
 
-    // Allocate and store stack args
+    // For stack args, allocate space and store them BEFORE setting up register args
     if (stack_space > 0) {
         int64_t *stack_args_ptr;
         __asm__ volatile(
@@ -542,15 +549,18 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
             : [ptr] "=r"(stack_args_ptr)
             : [size] "r"((int64_t)stack_space)
         );
+
+        // Store all stack args directly from args array
         for (int i = 0; i < stack_args; i++) {
-            stack_args_ptr[i] = args[max_reg_args + i];
+            stack_args_ptr[i] = args[8 + i];
         }
     }
 
     // Set up X19 = context pointer (callee-saved, JIT will preserve it)
     register int64_t r19 __asm__("x19") = ctx_ptr;
 
-    // User params in X0-X7 (AAPCS64)
+    // All params in X0-X7 (AAPCS64 style, floats as bit patterns)
+    // X7 is used for extra_results_buffer when needed
     register int64_t r0 __asm__("x0") = num_args > 0 ? args[0] : 0;
     register int64_t r1 __asm__("x1") = num_args > 1 ? args[1] : 0;
     register int64_t r2 __asm__("x2") = num_args > 2 ? args[2] : 0;
@@ -558,17 +568,18 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
     register int64_t r4 __asm__("x4") = num_args > 4 ? args[4] : 0;
     register int64_t r5 __asm__("x5") = num_args > 5 ? args[5] : 0;
     register int64_t r6 __asm__("x6") = num_args > 6 ? args[6] : 0;
-    // X7: extra_results_buffer OR arg 7
     register int64_t r7 __asm__("x7") = needs_extra_buffer ? (int64_t)extra_buffer : (num_args > 7 ? args[7] : 0);
-    register uint64_t d0 __asm__("d0");
-    register uint64_t d1 __asm__("d1");
+
+    register uint64_t fd0 __asm__("d0");
+    register uint64_t fd1 __asm__("d1");
 
     if (stack_space > 0) {
         __asm__ volatile(
             "blr %[func]\n\t"
             "add sp, sp, %[size]"
-            : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
-            : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r19),
+            : "+r"(r0), "+r"(r1), "=w"(fd0), "=w"(fd1)
+            : [func] "r"(func_ptr),
+              "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r19),
               [size] "r"((int64_t)stack_space)
             : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x30",
               "d2", "d3", "d4", "d5", "d6", "d7",
@@ -579,8 +590,9 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
     } else {
         __asm__ volatile(
             "blr %[func]"
-            : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
-            : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r19)
+            : "+r"(r0), "+r"(r1), "=w"(fd0), "=w"(fd1)
+            : [func] "r"(func_ptr),
+              "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r19)
             : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x30",
               "d2", "d3", "d4", "d5", "d6", "d7",
               "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
@@ -591,8 +603,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
 
     x0_result = r0;
     x1_result = r1;
-    d0_bits = d0;
-    d1_bits = d1;
+    d0_bits = fd0;
+    d1_bits = fd1;
 #else
     // Fallback for non-ARM64
     typedef int64_t (*jit_func_t)(int64_t);

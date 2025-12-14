@@ -60,6 +60,13 @@ fn run_compile(
   }
   println("Compiling \{mod_.codes.length()} functions...")
 
+  // Get memory max limit from module (if memory is defined)
+  let memory_max : Int? = if mod_.memories.length() > 0 {
+    mod_.memories[0].limits.max
+  } else {
+    None
+  }
+
   // Compile each function
   for i, code in mod_.codes {
     let func_idx = num_imports + i
@@ -76,6 +83,7 @@ fn run_compile(
       mod_.funcs,
       num_imports,
       import_func_type_indices,
+      memory_max~,
     )
     let ir_func = translator.translate(code.body)
 

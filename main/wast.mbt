@@ -342,23 +342,23 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
 
 ///|
 /// Build func_signatures array for JIT module loading
-/// Returns Array[(num_params, result_types)] for each function
+/// Returns Array[(param_types, result_types)] for each function
 fn build_func_signatures(
   mod_ : @types.Module,
-) -> Array[(Int, Array[@types.ValueType])] {
+) -> Array[(Array[@types.ValueType], Array[@types.ValueType])] {
   let num_imports = count_func_imports(mod_.imports)
   let total_funcs = num_imports + mod_.funcs.length()
-  let signatures : Array[(Int, Array[@types.ValueType])] = []
+  let signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])] = []
   // Pre-fill with empty signatures for all functions
   for _ in 0..<total_funcs {
-    signatures.push((0, []))
+    signatures.push(([], []))
   }
   // Fill in signatures for import functions
   for i, imp in mod_.imports {
     if imp.desc is Func(type_idx) {
       if type_idx < mod_.types.length() {
         let func_type = mod_.types[type_idx]
-        signatures[i] = (func_type.params.length(), func_type.results.copy())
+        signatures[i] = (func_type.params.copy(), func_type.results.copy())
       }
     }
   }
@@ -367,10 +367,7 @@ fn build_func_signatures(
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
       let func_type = mod_.types[type_idx]
-      signatures[func_idx] = (
-        func_type.params.length(),
-        func_type.results.copy(),
-      )
+      signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
     }
   }
   signatures

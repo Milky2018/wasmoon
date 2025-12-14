@@ -26,15 +26,22 @@ fn run_cwasm(
     }
   }
   // Build func_signatures array from the precompiled module
-  // For .cwasm files, we don't have full type info, so use empty result_types
-  let func_signatures : Array[(Int, Array[@types.ValueType])] = []
+  // For .cwasm files, we don't have full type info, so use default types
+  let func_signatures : Array[
+    (Array[@types.ValueType], Array[@types.ValueType]),
+  ] = []
   for entry in precompiled.functions {
-    // Create empty result_types array - the actual types aren't stored in cwasm
+    // Create param_types array - default to I64 for all params
+    let param_types : Array[@types.ValueType] = []
+    for _ in 0..<entry.num_params {
+      param_types.push(@types.ValueType::I64)
+    }
+    // Create result_types array - default to I64 for all results
     let result_types : Array[@types.ValueType] = []
     for _ in 0..<entry.num_results {
-      result_types.push(@types.ValueType::I64) // Default to I64
+      result_types.push(@types.ValueType::I64)
     }
-    func_signatures.push((entry.num_params, result_types))
+    func_signatures.push((param_types, result_types))
   }
   // Load the JIT module
   let jit_module = @jit.JITModule::load(precompiled, func_signatures)

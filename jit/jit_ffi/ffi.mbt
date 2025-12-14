@@ -97,6 +97,10 @@ pub extern "c" fn c_jit_get_memory_size_bytes_v2_ptr() -> Int64 = "wasmoon_jit_g
 pub extern "c" fn c_jit_get_memory_size_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_size_v2_ptr"
 
 ///|
+/// Get current memory base from v2 context (for proper cleanup after memory.grow)
+pub extern "c" fn c_jit_get_current_memory_base_v2() -> Int64 = "wasmoon_jit_get_memory_base_v2"
+
+///|
 /// Get function table base address from context
 pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
 
@@ -172,13 +176,14 @@ pub extern "c" fn c_jit_set_context_v2(ctx_ptr : Int64) -> Unit = "wasmoon_jit_s
 
 ///|
 /// C FFI for v2 ABI multi-value return calls
-/// X20 = context pointer, X0-X7 = user params
-/// result_types uses: 0=I32, 1=I64, 2=F32, 3=F64
-#borrow(args, results, result_types)
+/// X19 = context pointer, X0-X7 = int params, D0-D7 = float params
+/// param_types and result_types use: 0=I32, 1=I64, 2=F32, 3=F64
+#borrow(args, param_types, results, result_types)
 pub extern "c" fn c_jit_call_v2(
   ctx_ptr : Int64,
   func_ptr : Int64,
   args : FixedArray[Int64],
+  param_types : FixedArray[Int],
   num_args : Int,
   results : FixedArray[Int64],
   result_types : FixedArray[Int],

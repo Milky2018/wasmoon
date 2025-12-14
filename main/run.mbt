@@ -614,6 +614,12 @@ fn compile_module_to_jit(
       )
     }
   }
+  // Get memory max limit from module (if memory is defined)
+  let memory_max : Int? = if mod_.memories.length() > 0 {
+    mod_.memories[0].limits.max
+  } else {
+    None
+  }
   // Compile each function
   for i, code in mod_.codes {
     let func_idx = num_imports + i
@@ -629,6 +635,7 @@ fn compile_module_to_jit(
       mod_.funcs,
       num_imports,
       import_func_type_indices,
+      memory_max~,
     )
     let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (O2 level)
@@ -698,23 +705,23 @@ fn init_data_segments(mod_ : @types.Module, mem_ptr : Int64) -> Unit {
 
 ///|
 /// Build func_signatures array for JIT module loading
-/// Returns Array[(num_params, result_types)] for each function
+/// Returns Array[(param_types, result_types)] for each function
 fn build_jit_func_signatures(
   mod_ : @types.Module,
-) -> Array[(Int, Array[@types.ValueType])] {
+) -> Array[(Array[@types.ValueType], Array[@types.ValueType])] {
   let num_imports = count_func_imports(mod_.imports)
   let total_funcs = num_imports + mod_.funcs.length()
-  let signatures : Array[(Int, Array[@types.ValueType])] = []
+  let signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])] = []
   // Pre-fill with empty signatures for all functions
   for _ in 0..<total_funcs {
-    signatures.push((0, []))
+    signatures.push(([], []))
   }
   // Fill in signatures for import functions
   for i, imp in mod_.imports {
     if imp.desc is Func(type_idx) {
       if type_idx < mod_.types.length() {
         let func_type = mod_.types[type_idx]
-        signatures[i] = (func_type.params.length(), func_type.results.copy())
+        signatures[i] = (func_type.params.copy(), func_type.results.copy())
       }
     }
   }
@@ -723,10 +730,7 @@ fn build_jit_func_signatures(
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
       let func_type = mod_.types[type_idx]
-      signatures[func_idx] = (
-        func_type.params.length(),
-        func_type.results.copy(),
-      )
+      signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
     }
   }
   signatures

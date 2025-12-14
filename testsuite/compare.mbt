@@ -171,6 +171,13 @@ fn run_jit(
       }
     }
 
+    // Get memory max limit from module (if memory is defined)
+    let memory_max : Int? = if mod_.memories.length() > 0 {
+      mod_.memories[0].limits.max
+    } else {
+      None
+    }
+
     // Compile each function in the module
     for i, code in mod_.codes {
       let f_idx = num_imports + i
@@ -187,6 +194,7 @@ fn run_jit(
         mod_.funcs,
         num_imports,
         import_func_type_indices,
+        memory_max~,
       )
       let ir_func = translator.translate(code.body)
 
@@ -219,14 +227,13 @@ fn run_jit(
     }
     defer jm.free()
 
-    // Allocate memory
+    // Allocate memory using JITMemory wrapper (handles memory.grow correctly)
     let mem_size = 65536L // 64KB
-    let mem_ptr = @jit.alloc_memory(mem_size)
-    if mem_ptr == 0L {
+    guard @jit.JITMemory::new(mem_size) is Some(memory) else {
       return Err("Failed to allocate memory")
     }
-    defer @jit.free_memory(mem_ptr)
-    jm.set_memory(mem_ptr, mem_size)
+    defer memory.free() // Safe to use defer - JITMemory.free() gets current address
+    jm.set_memory(memory.ptr(), mem_size)
 
     // Initialize indirect table for call_indirect support
     init_elem_segments(mod_, jm)
@@ -274,13 +281,13 @@ fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
 fn build_func_signatures(
   mod_ : @types.Module,
   num_imports : Int,
-) -> Array[(Int, Array[@types.ValueType])] {
+) -> Array[(Array[@types.ValueType], Array[@types.ValueType])] {
   let total_funcs = num_imports + mod_.funcs.length()
-  let signatures : Array[(Int, Array[@types.ValueType])] = []
+  let signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])] = []
 
   // Pre-fill with empty signatures
   for _ in 0..<total_funcs {
-    signatures.push((0, []))
+    signatures.push(([], []))
   }
 
   // Fill in signatures for import functions
@@ -290,7 +297,7 @@ fn build_func_signatures(
       if type_idx < mod_.types.length() {
         let func_type = mod_.types[type_idx]
         signatures[func_count] = (
-          func_type.params.length(),
+          func_type.params.copy(),
           func_type.results.copy(),
         )
       }
@@ -303,10 +310,7 @@ fn build_func_signatures(
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
       let func_type = mod_.types[type_idx]
-      signatures[func_idx] = (
-        func_type.params.length(),
-        func_type.results.copy(),
-      )
+      signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
     }
   }
   signatures
