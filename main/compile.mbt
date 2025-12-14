@@ -111,13 +111,13 @@ fn run_compile(
     }
 
     // Stage 3: Lower to VCode
-    let vcode_func = @vcode.lower_function(ir_func)
+    let vcode_func = @lower.lower_function(ir_func)
 
     // Stage 4: Register allocation
-    let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+    let allocated = @lower.allocate_registers_aarch64(vcode_func)
 
     // Stage 5: Emit machine code
-    let mc = @vcode.emit_function(allocated)
+    let mc = @emit.emit_function(allocated)
 
     // Stage 6: Create compiled function and add to module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)

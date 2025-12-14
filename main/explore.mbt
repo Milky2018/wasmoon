@@ -152,7 +152,7 @@ fn run_explore(
     }
 
     // Stage 4: VCode (Low-level IR)
-    let vcode_func = @vcode.lower_function(ir_func)
+    let vcode_func = @lower.lower_function(ir_func)
     let vcode_text = vcode_func.to_string()
     if !html_output && show_vcode {
       println("")
@@ -161,7 +161,7 @@ fn run_explore(
     }
 
     // Stage 5: Register Allocation
-    let allocated = @vcode.allocate_registers_aarch64(vcode_func)
+    let allocated = @lower.allocate_registers_aarch64(vcode_func)
     let allocated_text = allocated.to_string()
     if !html_output && show_regalloc {
       println("")
@@ -170,7 +170,7 @@ fn run_explore(
     }
 
     // Stage 6: Machine Code
-    let mc = @vcode.emit_function(allocated)
+    let mc = @emit.emit_function(allocated)
     let mc_text = mc.dump_disasm()
     if !html_output && show_mc {
       println("")

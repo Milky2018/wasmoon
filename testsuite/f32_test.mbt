@@ -43,7 +43,7 @@ test "f32 add" {
       #|
     ),
   )
-  let vcode = @vcode.lower_function(ir_func)
+  let vcode = @lower.lower_function(ir_func)
   inspect(
     vcode,
     content=(
@@ -56,7 +56,7 @@ test "f32 add" {
       #|
     ),
   )
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(
@@ -69,7 +69,7 @@ test "f32 add" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -146,7 +146,7 @@ test "f64 add" {
       #|
     ),
   )
-  let vcode = @vcode.lower_function(ir_func)
+  let vcode = @lower.lower_function(ir_func)
   inspect(
     vcode,
     content=(
@@ -159,7 +159,7 @@ test "f64 add" {
       #|
     ),
   )
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(
@@ -172,7 +172,7 @@ test "f64 add" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -247,7 +247,7 @@ test "f32 sub" {
       #|
     ),
   )
-  let vcode = @vcode.lower_function(ir_func)
+  let vcode = @lower.lower_function(ir_func)
   inspect(
     vcode,
     content=(
@@ -260,7 +260,7 @@ test "f32 sub" {
       #|
     ),
   )
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(
@@ -273,7 +273,7 @@ test "f32 sub" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -351,7 +351,7 @@ test "f32 mul" {
       #|
     ),
   )
-  let vcode = @vcode.lower_function(ir_func)
+  let vcode = @lower.lower_function(ir_func)
   inspect(
     vcode,
     content=(
@@ -364,7 +364,7 @@ test "f32 mul" {
       #|
     ),
   )
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(
@@ -377,7 +377,7 @@ test "f32 mul" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   inspect(
     mc.dump_disasm(),
     content=(

@@ -1,0 +1,192 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/vcode/instr"
+
+import(
+  "Milky2018/wasmoon/vcode/abi"
+)
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum CmpKind {
+  Eq
+  Ne
+  Slt
+  Sle
+  Sgt
+  Sge
+  Ult
+  Ule
+  Ugt
+  Uge
+}
+pub impl Show for CmpKind
+
+pub(all) enum ExtendKind {
+  Signed8To32
+  Signed8To64
+  Signed16To32
+  Signed16To64
+  Signed32To64
+  Unsigned8To32
+  Unsigned8To64
+  Unsigned16To32
+  Unsigned16To64
+  Unsigned32To64
+}
+pub impl Show for ExtendKind
+
+pub(all) enum FCmpKind {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+}
+pub impl Show for FCmpKind
+
+pub(all) enum FloatToIntKind {
+  F32ToI32S
+  F32ToI32U
+  F32ToI64S
+  F32ToI64U
+  F64ToI32S
+  F64ToI32U
+  F64ToI64S
+  F64ToI64U
+}
+pub impl Show for FloatToIntKind
+
+pub(all) enum IntToFloatKind {
+  I32SToF32
+  I32UToF32
+  I64SToF32
+  I64UToF32
+  I32SToF64
+  I32UToF64
+  I64SToF64
+  I64UToF64
+}
+pub impl Show for IntToFloatKind
+
+pub(all) enum MemType {
+  I8
+  I16
+  I32
+  I64
+  F32
+  F64
+}
+pub impl Show for MemType
+
+pub(all) enum ShiftType {
+  Lsl
+  Lsr
+  Asr
+}
+pub impl Show for ShiftType
+
+pub(all) struct VCodeInst {
+  opcode : VCodeOpcode
+  defs : Array[@abi.Writable]
+  uses : Array[@abi.Reg]
+}
+pub fn VCodeInst::add_def(Self, @abi.Writable) -> Unit
+pub fn VCodeInst::add_use(Self, @abi.Reg) -> Unit
+pub fn VCodeInst::new(VCodeOpcode) -> Self
+pub impl Show for VCodeInst
+
+pub(all) enum VCodeOpcode {
+  Add
+  AddImm(Int)
+  Sub
+  Mul
+  SDiv
+  UDiv
+  SRem
+  URem
+  And
+  Or
+  Xor
+  Shl
+  AShr
+  LShr
+  Rotr
+  Rotl
+  Not
+  FAdd(Bool)
+  FSub(Bool)
+  FMul(Bool)
+  FDiv(Bool)
+  FMin(Bool)
+  FMax(Bool)
+  FSqrt(Bool)
+  FAbs(Bool)
+  FNeg(Bool)
+  FCeil(Bool)
+  FFloor(Bool)
+  FTrunc(Bool)
+  FNearest(Bool)
+  Load(MemType, Int)
+  Store(MemType, Int)
+  Load8S(Int)
+  Load8U(Int)
+  Load16S(Int)
+  Load16U(Int)
+  Load32S(Int)
+  Load32U(Int)
+  Move
+  LoadConst(Int64)
+  LoadConstF32(Int)
+  LoadConstF64(Int64)
+  Cmp(CmpKind)
+  FCmp(FCmpKind)
+  Extend(ExtendKind)
+  Truncate
+  IntToFloat(IntToFloatKind)
+  FloatToInt(FloatToIntKind)
+  FPromote
+  FDemote
+  Bitcast
+  Select
+  Clz
+  Ctz
+  Popcnt
+  Nop
+  BoundsCheck(Int, Int)
+  AddShifted(ShiftType, Int)
+  SubShifted(ShiftType, Int)
+  AndShifted(ShiftType, Int)
+  OrShifted(ShiftType, Int)
+  XorShifted(ShiftType, Int)
+  Madd
+  Msub
+  Mneg
+  CallIndirect(Int, Int)
+  TypeCheckIndirect(Int)
+  StackLoad(Int)
+  StackStore(Int)
+  LoadStackParam(Int, @abi.RegClass)
+  MemoryGrow(Int)
+  MemorySize
+  TableGet(Int)
+  TableSet(Int)
+}
+pub impl Show for VCodeOpcode
+
+pub(all) enum VCodeTerminator {
+  Jump(Int)
+  Branch(@abi.Reg, Int, Int)
+  Return(Array[@abi.Reg])
+  Trap(String)
+  BrTable(@abi.Reg, Array[Int], Int)
+}
+pub impl Show for VCodeTerminator
+
+// Type aliases
+
+// Traits
+

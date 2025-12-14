@@ -1,0 +1,10 @@
+{
+  "import": [
+    "Milky2018/wasmoon/vcode/instr",
+    "Milky2018/wasmoon/vcode/abi"
+  ],
+  "wbtest-import": [
+    "Milky2018/wasmoon/wat",
+    "Milky2018/wasmoon/types"
+  ]
+}

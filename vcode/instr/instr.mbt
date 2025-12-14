@@ -1,224 +1,9 @@
-// VCode - Virtual-register code representation
-// A low-level IR that is closer to machine code than the high-level IR
-//
-// VCode is structured with traditional basic blocks, where each block is
-// terminated by an unconditional branch, conditional branch, or return.
-// Register slots can refer to virtual registers in addition to physical registers.
-
-// ============ Virtual Registers ============
-
-///|
-/// Virtual register - an abstract register before register allocation
-pub(all) struct VReg {
-  id : Int
-  class : RegClass // Which register class this vreg belongs to
-}
-
-///|
-fn VReg::to_string(self : VReg) -> String {
-  match self.class {
-    Int => "v\{self.id}"
-    Float32 | Float64 => "f\{self.id}"
-  }
-}
-
-///|
-pub impl Show for VReg with output(self, logger) {
-  logger.write_string(self.to_string())
-}
-
-///|
-/// Register class - categorizes registers by their purpose
-pub(all) enum RegClass {
-  Int // Integer/general-purpose registers
-  Float32 // 32-bit floating-point registers
-  Float64 // 64-bit floating-point registers
-}
-
-///|
-fn RegClass::to_string(self : RegClass) -> String {
-  match self {
-    Int => "int"
-    Float32 => "float"
-    Float64 => "double"
-  }
-}
-
-///|
-pub impl Show for RegClass with output(self, logger) {
-  logger.write_string(self.to_string())
-}
-
-///|
-/// Physical register - a real machine register
-pub(all) struct PReg {
-  index : Int // Register number (e.g., x0-x30 for AArch64)
-  class : RegClass
-}
-
-///|
-fn PReg::to_string(self : PReg) -> String {
-  match self.class {
-    Int => "x\{self.index}"
-    Float32 | Float64 => "d\{self.index}"
-  }
-}
-
-///|
-pub impl Show for PReg with output(self, logger) {
-  logger.write_string(self.to_string())
-}
-
-// ============ Spilled Register Encoding ============
-// For CallIndirect with many spilled args, we encode the spill slot in the register index.
-// Register indices >= SPILL_SLOT_BASE represent spilled values at slot (index - SPILL_SLOT_BASE).
-
-///|
-/// Base index for encoding spilled operands in PReg.index
-/// PReg with index >= 256 represents a spilled value at slot (index - 256)
-pub let spill_slot_base : Int = 256
-
-///|
-/// Check if a physical register represents a spilled value
-pub fn PReg::is_spilled(self : PReg) -> Bool {
-  self.index >= spill_slot_base
-}
-
-///|
-/// Get the spill slot for a spilled register (returns -1 if not spilled)
-pub fn PReg::get_spill_slot(self : PReg) -> Int {
-  if self.index >= spill_slot_base {
-    self.index - spill_slot_base
-  } else {
-    -1
-  }
-}
-
-///|
-/// Create a PReg that represents a spilled value at the given slot
-pub fn PReg::spilled(slot : Int, class : RegClass) -> PReg {
-  { index: spill_slot_base + slot, class }
-}
-
-///|
-/// A register reference - either virtual or physical
-pub enum Reg {
-  Virtual(VReg)
-  Physical(PReg)
-}
-
-///|
-fn Reg::to_string(self : Reg) -> String {
-  match self {
-    Virtual(vreg) => vreg.to_string()
-    Physical(preg) => preg.to_string()
-  }
-}
-
-///|
-pub impl Show for Reg with output(self, logger) {
-  logger.write_string(self.to_string())
-}
-
-///|
-/// A writable register reference (for instruction destinations)
-pub(all) struct Writable {
-  reg : Reg
-}
-
-///|
-fn Writable::to_string(self : Writable) -> String {
-  self.reg.to_string()
-}
-
-///|
-pub impl Show for Writable with output(self, logger) {
-  logger.write_string(self.to_string())
-}
-
-// ============ Operands ============
-
-///|
-/// Operand - an instruction operand with constraints
-pub(all) struct Operand {
-  reg : VReg
-  kind : OperandKind
-  constraint : OperandConstraint
-}
-
-///|
-/// Operand kind - how the operand is used
-#warnings("-unused_constructor")
-pub enum OperandKind {
-  Use // Read from
-  Def // Written to
-  UseDef // Both read and written
-}
-
-///|
-#warnings("-unused_value")
-fn OperandKind::to_string(self : OperandKind) -> String {
-  match self {
-    Use => "use"
-    Def => "def"
-    UseDef => "use-def"
-  }
-}
-
-///|
-/// Operand constraint - register allocation constraint
-#warnings("-unused_constructor")
-pub enum OperandConstraint {
-  Any // Any register in the class
-  Fixed(PReg) // Must be this specific physical register
-  Reuse(Int) // Must reuse the same register as operand at index
-}
-
-///|
-#warnings("-unused_value")
-fn OperandConstraint::to_string(self : OperandConstraint) -> String {
-  match self {
-    Any => "any"
-    Fixed(preg) => "fixed(\{preg})"
-    Reuse(idx) => "reuse(\{idx})"
-  }
-}
-
-// ============ VCode Structure ============
-
-///|
-/// VCode block - a basic block in VCode
-pub(all) struct VCodeBlock {
-  id : Int
-  insts : Array[VCodeInst] // Instructions in this block
-  params : Array[VReg] // Block parameters
-  mut terminator : VCodeTerminator? // How the block ends
-}
-
-///|
-pub fn VCodeBlock::new(id : Int) -> VCodeBlock {
-  { id, insts: [], params: [], terminator: None }
-}
-
-///|
-pub fn VCodeBlock::add_inst(self : VCodeBlock, inst : VCodeInst) -> Unit {
-  self.insts.push(inst)
-}
-
-///|
-pub fn VCodeBlock::set_terminator(
-  self : VCodeBlock,
-  term : VCodeTerminator,
-) -> Unit {
-  self.terminator = Some(term)
-}
-
 ///|
 /// VCode instruction - a machine-level instruction with virtual registers
 pub(all) struct VCodeInst {
   opcode : VCodeOpcode
-  defs : Array[Writable] // Registers defined (written)
-  uses : Array[Reg] // Registers used (read)
+  defs : Array[@abi.Writable] // Registers defined (written)
+  uses : Array[@abi.Reg] // Registers used (read)
 }
 
 ///|
@@ -227,12 +12,12 @@ pub fn VCodeInst::new(opcode : VCodeOpcode) -> VCodeInst {
 }
 
 ///|
-pub fn VCodeInst::add_def(self : VCodeInst, reg : Writable) -> Unit {
+pub fn VCodeInst::add_def(self : VCodeInst, reg : @abi.Writable) -> Unit {
   self.defs.push(reg)
 }
 
 ///|
-pub fn VCodeInst::add_use(self : VCodeInst, reg : Reg) -> Unit {
+pub fn VCodeInst::add_use(self : VCodeInst, reg : @abi.Reg) -> Unit {
   self.uses.push(reg)
 }
 
@@ -284,31 +69,8 @@ pub impl Show for VCodeInst with output(self, logger) {
 }
 
 ///|
-/// Shift type for shifted operand instructions
-pub(all) enum ShiftType {
-  Lsl // Logical shift left
-  Lsr // Logical shift right
-  Asr // Arithmetic shift right
-}
-
-///|
-fn ShiftType::to_string(self : ShiftType) -> String {
-  match self {
-    Lsl => "lsl"
-    Lsr => "lsr"
-    Asr => "asr"
-  }
-}
-
-///|
-pub impl Show for ShiftType with output(self, logger) {
-  logger.write_string(self.to_string())
-}
-
-///|
 /// VCode opcode - machine-level operation (target-independent subset)
-#warnings("-unused_constructor")
-pub enum VCodeOpcode {
+pub(all) enum VCodeOpcode {
   // Integer arithmetic
   Add
   AddImm(Int) // ADD Xd, Xn, #imm (immediate add)
@@ -411,7 +173,7 @@ pub enum VCodeOpcode {
   // Stack parameter load (for params >= 8 that are passed on the stack)
   // LoadStackParam(param_idx, class): Load from [SP + frame_size + (param_idx - 8) * 8]
   // The actual offset is computed at emit time when frame_size is known
-  LoadStackParam(Int, RegClass)
+  LoadStackParam(Int, @abi.RegClass)
   // Memory management
   // MemoryGrow: grow memory by delta pages, returns previous size in pages or -1
   // Int = max_pages (0 = no limit)
@@ -532,7 +294,7 @@ pub impl Show for VCodeOpcode with output(self, logger) {
 
 ///|
 /// Memory type for load/store
-pub enum MemType {
+pub(all) enum MemType {
   I8
   I16
   I32
@@ -596,7 +358,7 @@ pub impl Show for CmpKind with output(self, logger) {
 
 ///|
 /// Comparison kind for float comparisons
-pub enum FCmpKind {
+pub(all) enum FCmpKind {
   Eq
   Ne
   Lt
@@ -624,8 +386,7 @@ pub impl Show for FCmpKind with output(self, logger) {
 
 ///|
 /// Extend kind - how to extend a value
-#warnings("-unused_constructor")
-pub enum ExtendKind {
+pub(all) enum ExtendKind {
   Signed8To32
   Signed8To64
   Signed16To32
@@ -727,14 +488,14 @@ pub impl Show for IntToFloatKind with output(self, logger) {
 
 ///|
 /// VCode terminator - how a block ends
-pub enum VCodeTerminator {
+pub(all) enum VCodeTerminator {
   Jump(Int) // Unconditional jump to block
-  Branch(Reg, Int, Int) // Conditional: condition, then-block, else-block
-  Return(Array[Reg]) // Return with values
+  Branch(@abi.Reg, Int, Int) // Conditional: condition, then-block, else-block
+  Return(Array[@abi.Reg]) // Return with values
   Trap(String) // Trap with message
   // BrTable: index register, target block IDs, default block ID
   // Uses jump table for O(1) dispatch instead of comparison chain
-  BrTable(Reg, Array[Int], Int)
+  BrTable(@abi.Reg, Array[Int], Int)
 }
 
 ///|
@@ -776,165 +537,24 @@ pub impl Show for VCodeTerminator with output(self, logger) {
   logger.write_string(self.to_string())
 }
 
-// ============ VCode Function ============
-
 ///|
-/// VCode function - a complete function in VCode form
-pub(all) struct VCodeFunction {
-  name : String
-  params : Array[VReg] // Function parameters
-  results : Array[RegClass] // Result types (for return value allocation)
-  result_types : Array[@ir.Type] // Full return type info for multi-value returns
-  blocks : Array[VCodeBlock]
-  mut next_vreg_id : Int
-  mut num_spill_slots : Int // Number of spill slots used by register allocator
-  // Map from param index to allocated physical register (for params that cross calls)
-  // This is filled by apply_allocation and used by emit_prologue
-  param_pregs : Array[PReg?]
+/// Shift type for shifted operand instructions
+pub(all) enum ShiftType {
+  Lsl // Logical shift left
+  Lsr // Logical shift right
+  Asr // Arithmetic shift right
 }
 
 ///|
-pub fn VCodeFunction::new(name : String) -> VCodeFunction {
-  {
-    name,
-    params: [],
-    results: [],
-    result_types: [],
-    blocks: [],
-    next_vreg_id: 0,
-    num_spill_slots: 0,
-    param_pregs: [],
+fn ShiftType::to_string(self : ShiftType) -> String {
+  match self {
+    Lsl => "lsl"
+    Lsr => "lsr"
+    Asr => "asr"
   }
 }
 
 ///|
-pub fn VCodeFunction::new_vreg(self : VCodeFunction, class : RegClass) -> VReg {
-  let id = self.next_vreg_id
-  self.next_vreg_id = id + 1
-  { id, class }
-}
-
-///|
-pub fn VCodeFunction::add_param(self : VCodeFunction, class : RegClass) -> VReg {
-  let vreg = self.new_vreg(class)
-  self.params.push(vreg)
-  vreg
-}
-
-///|
-pub fn VCodeFunction::add_result(
-  self : VCodeFunction,
-  class : RegClass,
-) -> Unit {
-  self.results.push(class)
-}
-
-///|
-/// Add a result type with full type information for multi-value returns
-pub fn VCodeFunction::add_result_type(
-  self : VCodeFunction,
-  ty : @ir.Type,
-) -> Unit {
-  self.result_types.push(ty)
-}
-
-///|
-/// Check if this function needs a hidden pointer for extra return values
-/// Returns true if there are more than 2 integer or 2 float returns
-pub fn VCodeFunction::needs_extra_results_ptr(self : VCodeFunction) -> Bool {
-  let mut int_count = 0
-  let mut float_count = 0
-  for ty in self.result_types {
-    match ty {
-      I32 | I64 => int_count = int_count + 1
-      F32 | F64 => float_count = float_count + 1
-      _ => ()
-    }
-  }
-  int_count > 2 || float_count > 2
-}
-
-///|
-/// Check if this function calls any function that returns more than 2 values
-/// In that case, we need to allocate a local buffer for receiving extra results
-pub fn VCodeFunction::calls_multi_value_function(self : VCodeFunction) -> Bool {
-  for block in self.blocks {
-    for inst in block.insts {
-      if inst.opcode is CallIndirect(_, num_results) {
-        if num_results > 2 {
-          return true
-        }
-      }
-    }
-  }
-  false
-}
-
-///|
-pub fn VCodeFunction::new_block(self : VCodeFunction) -> VCodeBlock {
-  let id = self.blocks.length()
-  let block = VCodeBlock::new(id)
-  self.blocks.push(block)
-  block
-}
-
-///|
-pub fn VCodeFunction::print(self : VCodeFunction) -> String {
-  let mut result = "vcode \{self.name}("
-  // Parameters
-  for i, param in self.params {
-    if i > 0 {
-      result = result + ", "
-    }
-    result = result + param.to_string() + ":" + param.class.to_string()
-  }
-  result = result + ")"
-  // Results
-  if self.results.length() > 0 {
-    result = result + " -> "
-    if self.results.length() == 1 {
-      result = result + self.results[0].to_string()
-    } else {
-      result = result + "("
-      for i, r in self.results {
-        if i > 0 {
-          result = result + ", "
-        }
-        result = result + r.to_string()
-      }
-      result = result + ")"
-    }
-  }
-  result = result + " {\n"
-  // Blocks
-  for block in self.blocks {
-    result = result + "block\{block.id}"
-    if block.params.length() > 0 {
-      result = result + "("
-      for i, param in block.params {
-        if i > 0 {
-          result = result + ", "
-        }
-        result = result + param.to_string() + ":" + param.class.to_string()
-      }
-      result = result + ")"
-    }
-    result = result + ":\n"
-    // Instructions
-    for inst in block.insts {
-      result = result + "    \{inst}\n"
-    }
-    // Terminator
-    match block.terminator {
-      Some(term) => result = result + "    \{term}\n"
-      None => ()
-    }
-  }
-  result = result + "}\n"
-  result
-}
-
-///|
-pub impl Show for VCodeFunction with output(self, logger) {
-  logger.write_string(self.print())
+pub impl Show for ShiftType with output(self, logger) {
+  logger.write_string(self.to_string())
 }

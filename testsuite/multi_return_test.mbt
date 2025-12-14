@@ -30,9 +30,9 @@ test "multi return: 3 integers" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
-  let mc = @vcode.emit_function(allocated_func)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -89,9 +89,9 @@ test "multi return: 4 integers" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
-  let mc = @vcode.emit_function(allocated_func)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -147,9 +147,9 @@ test "multi return: 3 floats" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
-  let mc = @vcode.emit_function(allocated_func)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -201,9 +201,9 @@ test "multi return: mixed int and float" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
-  let mc = @vcode.emit_function(allocated_func)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -258,9 +258,9 @@ test "multi return: 2 integers (no extra buffer)" {
     [],
   )
   let ir_func = translator.translate(func_code.body)
-  let vcode = @vcode.lower_function(ir_func)
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode)
-  let mc = @vcode.emit_function(allocated_func)
+  let vcode = @lower.lower_function(ir_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,

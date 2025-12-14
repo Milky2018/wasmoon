@@ -214,13 +214,13 @@ fn run_jit(
       let ir_func = translator.translate(code.body)
 
       // Lower to VCode
-      let vcode = @vcode.lower_function(ir_func)
+      let vcode = @lower.lower_function(ir_func)
 
       // Register allocation
-      let allocated_func = @vcode.allocate_registers_aarch64(vcode)
+      let allocated_func = @lower.allocate_registers_aarch64(vcode)
 
       // Emit machine code
-      let mc = @vcode.emit_function(allocated_func)
+      let mc = @emit.emit_function(allocated_func)
 
       // Add to precompiled module
       let compiled = @vcode.CompiledFunction::new(f_name, mc, 0)

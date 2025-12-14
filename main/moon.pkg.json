@@ -10,13 +10,15 @@
     "Milky2018/wasmoon/cwasm",
     "Milky2018/wasmoon/ir",
     "Milky2018/wasmoon/vcode",
+    "Milky2018/wasmoon/vcode/emit",
     "Milky2018/wasmoon/wasi",
     "moonbitlang/x/sys",
     "moonbitlang/x/fs",
     "TheWaWaR/clap",
     "Milky2018/wasmoon/executor",
     "Milky2018/wasmoon/runtime",
-    "Milky2018/wasmoon/jit"
+    "Milky2018/wasmoon/jit",
+    "Milky2018/wasmoon/vcode/lower"
   ],
   "targets": {
     "run_cwasm.mbt": ["native"]

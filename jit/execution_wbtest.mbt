@@ -65,13 +65,13 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
 
   // ============ Compilation Pipeline ============
   // 1. Lower IR to VCode
-  let vcode_func = @vcode.lower_function(builder.get_function())
+  let vcode_func = @lower.lower_function(builder.get_function())
 
   // 2. Register allocation
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode_func)
 
   // 3. Emit machine code
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
 
   // Debug: print allocated VCode for the working test
   inspect(
@@ -297,7 +297,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
   )
 
   // ============ Phase 4: Lower IR → VCode → Machine Code ============
-  let vcode_func = @vcode.lower_function(ir_func)
+  let vcode_func = @lower.lower_function(ir_func)
 
   // Debug: print VCode to understand structure
   inspect(
@@ -384,7 +384,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|
     ),
   )
-  let allocated_func = @vcode.allocate_registers_aarch64(vcode_func)
+  let allocated_func = @lower.allocate_registers_aarch64(vcode_func)
 
   // Debug: print allocated VCode
   inspect(
@@ -470,7 +470,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   inspect(
     mc.dump_disasm(),
     content=(

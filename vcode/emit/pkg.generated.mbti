@@ -1,0 +1,212 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/vcode/emit"
+
+import(
+  "Milky2018/wasmoon/vcode/instr"
+  "Milky2018/wasmoon/vcode/lower"
+)
+
+// Values
+pub fn emit_function(@lower.VCodeFunction) -> MachineCode
+
+// Errors
+
+// Types and methods
+pub(all) enum CondCode {
+  EQ
+  NE
+  HS
+  LO
+  MI
+  PL
+  VS
+  VC
+  HI
+  LS
+  GE
+  LT
+  GT
+  LE
+  AL
+}
+pub fn CondCode::to_int(Self) -> Int
+
+type Fixup
+
+pub(all) enum FixupKind {
+  Branch26
+  Branch19
+}
+
+type Instruction
+pub fn Instruction::emit(Self, MachineCode) -> Unit
+
+pub struct JITStackFrame {
+  gpr_save_size : Int
+  fpr_save_size : Int
+  spill_size : Int
+  call_buffer_size : Int
+  gpr_save_offset : Int
+  fpr_save_offset : Int
+  spill_offset : Int
+  call_buffer_offset : Int
+  total_size : Int
+  saved_gprs : Array[Int]
+  saved_fprs : Array[Int]
+  needs_extra_results : Bool
+  calls_multi_value : Bool
+  uses_x23 : Bool
+}
+pub fn JITStackFrame::build(Array[Int], Array[Int], Int, needs_extra_results~ : Bool, calls_multi_value~ : Bool) -> Self
+pub fn JITStackFrame::get_call_buffer_offset(Self) -> Int
+pub fn JITStackFrame::get_spill_offset(Self, Int) -> Int
+
+pub struct MachineCode {
+  bytes : Array[Int]
+  mut pos : Int
+  labels : Map[Int, Int]
+  fixups : Array[Fixup]
+  disasm : Array[(Int, String)]
+}
+pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
+pub fn MachineCode::align(Self, Int) -> Unit
+pub fn MachineCode::align_block(Self) -> Unit
+pub fn MachineCode::align_function(Self) -> Unit
+pub fn MachineCode::annotate(Self, String) -> Unit
+pub fn MachineCode::current_pos(Self) -> Int
+pub fn MachineCode::define_label(Self, Int) -> Unit
+pub fn MachineCode::dump_disasm(Self) -> String
+pub fn MachineCode::emit_add_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_add_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_add_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_adr(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_and_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_and_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_asr_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_b(Self, Int) -> Unit
+pub fn MachineCode::emit_b_cond(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_bl(Self, Int) -> Unit
+pub fn MachineCode::emit_blr(Self, Int) -> Unit
+pub fn MachineCode::emit_br(Self, Int) -> Unit
+pub fn MachineCode::emit_byte(Self, Int) -> Unit
+pub fn MachineCode::emit_cbnz(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_cbz(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_clz(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_cmp_imm(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_cmp_reg(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_csel(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_cset(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_dmb_ish(Self) -> Unit
+pub fn MachineCode::emit_eor_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_eor_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_fabs_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fabs_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fadd_d(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fadd_s(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fcmp_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fcmp_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fcsel_d(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fcsel_s(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fcvt_d_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fcvt_s_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fcvtzs(Self, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
+pub fn MachineCode::emit_fcvtzu(Self, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
+pub fn MachineCode::emit_fdiv_d(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fdiv_s(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fmax_d(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fmax_s(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fmin_d(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fmin_s(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fmov_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fmov_d_to_x(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fmov_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fmov_s_to_w(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fmov_w_to_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fmov_x_to_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fmul_d(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fmul_s(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fneg_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fneg_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_frintm_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_frintm_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_frintn_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_frintn_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_frintp_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_frintp_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_frintz_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_frintz_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fsqrt_d(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fsqrt_s(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_fsub_d(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fsub_s(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_inst(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldp_d_offset(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldp_offset(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldp_post(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_d_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_imm_signed(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_reg_scaled(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_s_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_w_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrb_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrh_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrsb_w_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrsb_x_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrsh_w_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrsh_x_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrsw_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_load_imm64(Self, Int, Int64) -> Unit
+pub fn MachineCode::emit_lsl_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_lsr_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_madd(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_mneg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_mov_reg(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_mov_reg32(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_movk(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_movz(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_msub(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_mul(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_mvn(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_nop(Self) -> Unit
+pub fn MachineCode::emit_orr_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_orr_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_rbit(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_ret(Self, Int) -> Unit
+pub fn MachineCode::emit_ror_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_scvtf(Self, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
+pub fn MachineCode::emit_sdiv(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_stp_d_offset(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_stp_offset(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_stp_pre(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_d_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_reg_scaled(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_s_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_w_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_strb_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_strh_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_sub_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_sub_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_sub_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_sxtb_w(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_sxtb_x(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_sxth_w(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_sxth_x(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_sxtw(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_ucvtf(Self, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
+pub fn MachineCode::emit_udiv(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_uxtb_w(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_uxtb_x(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_uxth_w(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_uxth_x(Self, Int, Int) -> Unit
+pub fn MachineCode::get_bytes(Self) -> Array[Int]
+pub fn MachineCode::hex_dump(Self) -> String
+pub fn MachineCode::new() -> Self
+pub fn MachineCode::resolve_fixups(Self) -> Unit
+pub fn MachineCode::size(Self) -> Int
+
+// Type aliases
+
+// Traits
+

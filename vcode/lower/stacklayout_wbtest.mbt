@@ -5,12 +5,12 @@ test "stack frame: basic allocation" {
   let frame = StackFrame::new(16)
 
   // Allocate a spill slot
-  let vreg : VReg = { id: 0, class: Int }
+  let vreg : @abi.VReg = { id: 0, class: Int }
   let offset1 = frame.alloc_spill_slot(vreg, 8, 8)
   inspect(offset1, content="-8")
 
   // Allocate another spill slot
-  let vreg2 : VReg = { id: 1, class: Int }
+  let vreg2 : @abi.VReg = { id: 1, class: Int }
   let offset2 = frame.alloc_spill_slot(vreg2, 8, 8)
   inspect(offset2, content="-16")
 
@@ -24,12 +24,12 @@ test "stack frame: alignment" {
   let frame = StackFrame::new(16)
 
   // Allocate a 4-byte slot
-  let vreg : VReg = { id: 0, class: Int }
+  let vreg : @abi.VReg = { id: 0, class: Int }
   let offset1 = frame.alloc_spill_slot(vreg, 4, 4)
   inspect(offset1, content="-4")
 
   // Allocate an 8-byte slot (should be aligned to 8)
-  let vreg2 : VReg = { id: 1, class: Int }
+  let vreg2 : @abi.VReg = { id: 1, class: Int }
   let offset2 = frame.alloc_spill_slot(vreg2, 8, 8)
   inspect(offset2, content="-16") // aligned to 8
   frame.finalize()
@@ -42,8 +42,8 @@ test "stack frame: callee saved" {
   let frame = StackFrame::new(16)
 
   // Save some callee-saved registers
-  let x19 : PReg = { index: 19, class: Int }
-  let x20 : PReg = { index: 20, class: Int }
+  let x19 : @abi.PReg = { index: 19, class: Int }
+  let x20 : @abi.PReg = { index: 20, class: Int }
   let offset1 = frame.add_callee_saved(x19)
   inspect(offset1, content="-8")
   let offset2 = frame.add_callee_saved(x20)
@@ -82,8 +82,8 @@ test "aarch64 frame: with spills" {
   frame.setup()
 
   // Add some spill slots
-  let vreg1 : VReg = { id: 0, class: Int }
-  let vreg2 : VReg = { id: 1, class: Float64 }
+  let vreg1 : @abi.VReg = { id: 0, class: Int }
+  let vreg2 : @abi.VReg = { id: 1, class: Float64 }
   frame.alloc_spill(vreg1) |> ignore
   frame.alloc_spill(vreg2) |> ignore
   frame.finalize()
@@ -95,7 +95,7 @@ test "aarch64 frame: with spills" {
 test "aarch64 frame: prologue generation" {
   let frame = AArch64StackFrame::new()
   frame.setup()
-  let vreg : VReg = { id: 0, class: Int }
+  let vreg : @abi.VReg = { id: 0, class: Int }
   frame.alloc_spill(vreg) |> ignore
   frame.finalize()
   let prologue = frame.gen_prologue()
@@ -107,7 +107,7 @@ test "aarch64 frame: prologue generation" {
 test "aarch64 frame: epilogue generation" {
   let frame = AArch64StackFrame::new()
   frame.setup()
-  let vreg : VReg = { id: 0, class: Int }
+  let vreg : @abi.VReg = { id: 0, class: Int }
   frame.alloc_spill(vreg) |> ignore
   frame.finalize()
   let epilogue = frame.gen_epilogue()
@@ -131,7 +131,7 @@ test "aarch64 frame: empty frame" {
 ///|
 test "stack frame: print" {
   let frame = StackFrame::new(16)
-  let vreg : VReg = { id: 0, class: Int }
+  let vreg : @abi.VReg = { id: 0, class: Int }
   frame.alloc_spill_slot(vreg, 8, 8) |> ignore
   frame.finalize()
   let output = frame.print()
@@ -148,11 +148,11 @@ test "align_up: basic cases" {
   let frame = StackFrame::new(16)
 
   // 1 byte aligned to 8 should use 8 bytes of space
-  let vreg : VReg = { id: 0, class: Int }
+  let vreg : @abi.VReg = { id: 0, class: Int }
   frame.alloc_spill_slot(vreg, 1, 8) |> ignore
 
   // Next 8-byte allocation should be at offset -16
-  let vreg2 : VReg = { id: 1, class: Int }
+  let vreg2 : @abi.VReg = { id: 1, class: Int }
   let offset = frame.alloc_spill_slot(vreg2, 8, 8)
   inspect(offset, content="-16")
 }
@@ -164,7 +164,7 @@ test "build_stack_layout: from regalloc result" {
   let a = func.add_param(Int)
   func.add_result(Int)
   let block = func.new_block()
-  let inst = VCodeInst::new(Move)
+  let inst = @instr.VCodeInst::new(Move)
   inst.add_def({ reg: Virtual(a) })
   inst.add_use(Virtual(a))
   block.add_inst(inst)

@@ -7,7 +7,9 @@
   ],
   "wbtest-import": [
     "Milky2018/wasmoon/ir",
-    "Milky2018/wasmoon/wast"
+    "Milky2018/wasmoon/wast",
+    "Milky2018/wasmoon/vcode/lower",
+    "Milky2018/wasmoon/vcode/emit"
   ],
   "targets": {
     "ffi_jit.mbt": [

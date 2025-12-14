@@ -65,15 +65,15 @@ pub impl Show for ProgPoint with output(self, logger) {
 ///|
 /// A live interval - the range where a virtual register is live
 pub(all) struct LiveInterval {
-  vreg : VReg
+  vreg : @abi.VReg
   start : ProgPoint // First use or definition
   mut end : ProgPoint // Last use
   // Use positions within the interval (for spill cost calculation)
   uses : Array[ProgPoint]
   // Register hint (e.g., from a move instruction)
-  hint : PReg?
+  hint : @abi.PReg?
   // Assigned physical register (filled by allocator)
-  mut assigned : PReg?
+  mut assigned : @abi.PReg?
   // Spill slot if spilled (filled by allocator)
   mut spill_slot : Int?
   // Whether this interval crosses a function call (cannot use caller-saved registers)
@@ -81,7 +81,7 @@ pub(all) struct LiveInterval {
 }
 
 ///|
-fn LiveInterval::new(vreg : VReg, start : ProgPoint) -> LiveInterval {
+fn LiveInterval::new(vreg : @abi.VReg, start : ProgPoint) -> LiveInterval {
   {
     vreg,
     start,
@@ -131,13 +131,13 @@ pub impl Show for LiveInterval with output(self, logger) {
 ///|
 /// Use-def information for a single vreg
 pub(all) struct UseDefInfo {
-  vreg : VReg
+  vreg : @abi.VReg
   mut def_point : ProgPoint? // Where this vreg is defined
   use_points : Array[ProgPoint] // Where this vreg is used
 }
 
 ///|
-fn UseDefInfo::new(vreg : VReg) -> UseDefInfo {
+fn UseDefInfo::new(vreg : @abi.VReg) -> UseDefInfo {
   { vreg, def_point: None, use_points: [] }
 }
 
@@ -348,7 +348,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       // Record uses (before the instruction)
       for use_reg in inst.uses {
         match use_reg {
-          Virtual(vreg) => {
+          @abi.Virtual(vreg) => {
             let info = match result.use_def.get(vreg.id) {
               Some(existing) => existing
               None => {
@@ -363,14 +363,14 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
               pos: Before,
             })
           }
-          Physical(_) => () // Physical regs don't need liveness tracking
+          @abi.Physical(_) => () // Physical regs don't need liveness tracking
         }
       }
 
       // Record definitions (after the instruction)
       for def in inst.defs {
         match def.reg {
-          Virtual(vreg) => {
+          @abi.Virtual(vreg) => {
             let info = match result.use_def.get(vreg.id) {
               Some(existing) => existing
               None => {
@@ -397,7 +397,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
                 }
             }
           }
-          Physical(_) => ()
+          @abi.Physical(_) => ()
         }
       }
     }
@@ -407,7 +407,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       match term {
         Branch(cond, _, _) =>
           match cond {
-            Virtual(vreg) => {
+            @abi.Virtual(vreg) => {
               let info = match result.use_def.get(vreg.id) {
                 Some(existing) => existing
                 None => {
@@ -423,12 +423,12 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
                 pos: Before,
               })
             }
-            Physical(_) => ()
+            @abi.Physical(_) => ()
           }
         Return(values) =>
           for value in values {
             match value {
-              Virtual(vreg) => {
+              @abi.Virtual(vreg) => {
                 let info = match result.use_def.get(vreg.id) {
                   Some(existing) => existing
                   None => {
@@ -444,7 +444,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
                   pos: Before,
                 })
               }
-              Physical(_) => ()
+              @abi.Physical(_) => ()
             }
           }
         _ => ()
@@ -476,18 +476,18 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       // Uses that are not already defined locally
       for use_reg in inst.uses {
         match use_reg {
-          Virtual(vreg) =>
+          @abi.Virtual(vreg) =>
             if !def_set.contains(vreg.id) {
               use_set.add(vreg.id)
             }
-          Physical(_) => ()
+          @abi.Physical(_) => ()
         }
       }
       // Definitions
       for def in inst.defs {
         match def.reg {
-          Virtual(vreg) => def_set.add(vreg.id)
-          Physical(_) => ()
+          @abi.Virtual(vreg) => def_set.add(vreg.id)
+          @abi.Physical(_) => ()
         }
       }
     }
@@ -497,20 +497,20 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       match term {
         Branch(cond, _, _) =>
           match cond {
-            Virtual(vreg) =>
+            @abi.Virtual(vreg) =>
               if !def_set.contains(vreg.id) {
                 use_set.add(vreg.id)
               }
-            Physical(_) => ()
+            @abi.Physical(_) => ()
           }
         Return(values) =>
           for value in values {
             match value {
-              Virtual(vreg) =>
+              @abi.Virtual(vreg) =>
                 if !def_set.contains(vreg.id) {
                   use_set.add(vreg.id)
                 }
-              Physical(_) => ()
+              @abi.Physical(_) => ()
             }
           }
         _ => ()
@@ -658,7 +658,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
 /// Register allocation result
 pub(all) struct RegAllocResult {
   // Map from vreg id to assigned physical register
-  assignments : Map[Int, PReg]
+  assignments : Map[Int, @abi.PReg]
   // Map from vreg id to spill slot (if spilled)
   spill_slots : Map[Int, Int]
   // Total number of spill slots used
@@ -671,7 +671,7 @@ pub(all) struct RegAllocResult {
 ///|
 /// Information about a spill
 pub(all) struct SpillInfo {
-  vreg : VReg
+  vreg : @abi.VReg
   slot : Int
   point : ProgPoint
 }
@@ -679,9 +679,9 @@ pub(all) struct SpillInfo {
 ///|
 /// Information about a reload
 pub(all) struct ReloadInfo {
-  vreg : VReg
+  vreg : @abi.VReg
   slot : Int
-  preg : PReg
+  preg : @abi.PReg
   point : ProgPoint
 }
 
@@ -689,12 +689,12 @@ pub(all) struct ReloadInfo {
 /// Linear scan register allocator
 pub(all) struct LinearScanAllocator {
   // Available physical registers by class
-  int_regs : Array[PReg]
-  float_regs : Array[PReg]
+  int_regs : Array[@abi.PReg]
+  float_regs : Array[@abi.PReg]
   // Callee-saved registers for cross-call allocation (may exclude X23)
-  callee_saved_int_regs : Array[PReg]
+  callee_saved_int_regs : Array[@abi.PReg]
   // Callee-saved float registers for cross-call allocation (D8-D15)
-  callee_saved_float_regs : Array[PReg]
+  callee_saved_float_regs : Array[@abi.PReg]
   // Current state
   mut active : Array[LiveInterval] // Intervals currently occupying registers
   mut next_spill_slot : Int
@@ -704,10 +704,10 @@ pub(all) struct LinearScanAllocator {
 
 ///|
 pub fn LinearScanAllocator::new(
-  int_regs : Array[PReg],
-  float_regs : Array[PReg],
-  callee_saved_int_regs : Array[PReg],
-  callee_saved_float_regs? : Array[PReg] = [],
+  int_regs : Array[@abi.PReg],
+  float_regs : Array[@abi.PReg],
+  callee_saved_int_regs : Array[@abi.PReg],
+  callee_saved_float_regs? : Array[@abi.PReg] = [],
 ) -> LinearScanAllocator {
   {
     int_regs,
@@ -747,14 +747,14 @@ pub fn LinearScanAllocator::allocate(
   // it will be handled by the normal allocation process (which will use callee-saved)
   // NOTE: Only the first 8 params (0-7) are in registers. Params 8+ are on stack.
   let actual_param_base = if @abi.ABI_VERSION == 2 {
-    PARAM_BASE_REG
+    @abi.PARAM_BASE_REG
   } else {
-    LEGACY_PARAM_BASE_REG
+    @abi.LEGACY_PARAM_BASE_REG
   }
   let actual_max_reg_params = if @abi.ABI_VERSION == 2 {
-    MAX_REG_PARAMS
+    @abi.MAX_REG_PARAMS
   } else {
-    LEGACY_MAX_REG_PARAMS
+    @abi.LEGACY_MAX_REG_PARAMS
   }
   for i, param in func.params {
     // Skip stack parameters - they're not in registers
@@ -769,9 +769,9 @@ pub fn LinearScanAllocator::allocate(
           continue
         } else {
           // Safe to pre-assign to ABI register
-          let preg = match param.class {
-            Int => { index: i + actual_param_base, class: Int }
-            Float32 | Float64 => { index: i, class: param.class } // D0, D1, D2, ... D7
+          let preg : @abi.PReg = match param.class {
+            @abi.Int => { index: i + actual_param_base, class: @abi.Int }
+            @abi.Float32 | @abi.Float64 => { index: i, class: param.class } // D0, D1, D2, ... D7
           }
           result.assignments.set(param.id, preg)
           interval.assigned = Some(preg)
@@ -805,15 +805,15 @@ pub fn LinearScanAllocator::allocate(
     // If interval crosses a call, only use callee-saved registers
     let avail_regs = if interval.crosses_call {
       match interval.vreg.class {
-        Int => self.callee_saved_int_regs
-        Float32 | Float64 =>
+        @abi.Int => self.callee_saved_int_regs
+        @abi.Float32 | @abi.Float64 =>
           // Use callee-saved FPRs (D8-D15) for floats that must survive across calls
           self.callee_saved_float_regs
       }
     } else {
       match interval.vreg.class {
-        Int => self.int_regs
-        Float32 | Float64 => self.float_regs
+        @abi.Int => self.int_regs
+        @abi.Float32 | @abi.Float64 => self.float_regs
       }
     }
 
@@ -823,7 +823,7 @@ pub fn LinearScanAllocator::allocate(
       Some(preg) => {
         // Preserve the original vreg's class when storing the assignment
         // This is important for Bitcast to distinguish f32 vs f64 operations
-        let assigned_preg : PReg = {
+        let assigned_preg : @abi.PReg = {
           index: preg.index,
           class: interval.vreg.class,
         }
@@ -876,13 +876,13 @@ fn LinearScanAllocator::expire_old_intervals(
 
 ///|
 /// Check if two register classes are compatible (can use same physical registers)
-fn reg_class_eq(a : RegClass, b : RegClass) -> Bool {
+fn reg_class_eq(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
   match (a, b) {
-    (Int, Int) => true
-    (Float32, Float32)
-    | (Float32, Float64)
-    | (Float64, Float32)
-    | (Float64, Float64) => true
+    (@abi.Int, @abi.Int) => true
+    (@abi.Float32, @abi.Float32)
+    | (@abi.Float32, @abi.Float64)
+    | (@abi.Float64, @abi.Float32)
+    | (@abi.Float64, @abi.Float64) => true
     _ => false
   }
 }
@@ -892,8 +892,8 @@ fn reg_class_eq(a : RegClass, b : RegClass) -> Bool {
 fn LinearScanAllocator::try_allocate_reg(
   self : LinearScanAllocator,
   interval : LiveInterval,
-  avail_regs : Array[PReg],
-) -> PReg? {
+  avail_regs : Array[@abi.PReg],
+) -> @abi.PReg? {
   // Build set of registers currently in use
   let used : Set[Int] = Set::new()
   for active in self.active {
@@ -948,8 +948,8 @@ fn LinearScanAllocator::spill_interval(
   for use_point in interval.uses {
     // Get a register for this reload (use first available)
     let avail_regs = match interval.vreg.class {
-      Int => self.int_regs
-      Float32 | Float64 => self.float_regs
+      @abi.Int => self.int_regs
+      @abi.Float32 | @abi.Float64 => self.float_regs
     }
     if avail_regs.length() > 0 {
       result.reloads.push({
@@ -989,7 +989,7 @@ pub fn apply_allocation(
       Some(preg) => {
         // Parameter is assigned to physical register
         // We still track it as vreg but note the assignment
-        let new_vreg = { id: param.id, class: param.class }
+        let new_vreg : @abi.VReg = { id: param.id, class: param.class }
         new_func.params.push(new_vreg)
         // Store the physical register assignment for emit_prologue
         // For register params (0-7): only need move if not in default ABI register
@@ -1003,11 +1003,11 @@ pub fn apply_allocation(
           // In emit_prologue:
           // - Ints default to X[int_idx] (v2) or X[3 + param_idx] (v1)
           // - Floats default to D[float_idx]
-          let default_preg : PReg = match param.class {
-            Int => { index: int_idx, class: Int } // X[int_idx] after prologue setup
-            Float32 => { index: float_idx, class: Float32 } // D[float_idx]
-            Float64 => { index: float_idx, class: Float64 } // D[float_idx]
-          }
+          let default_preg : @abi.PReg = match param.class {
+            @abi.Int => { index: int_idx, class: @abi.Int } // X[int_idx] after prologue setup
+            @abi.Float32 => { index: float_idx, class: @abi.Float32 } // D[float_idx]
+            @abi.Float64 => { index: float_idx, class: @abi.Float64 }
+          } // D[float_idx]
           if preg.index != default_preg.index {
             new_func.param_pregs.push(Some(preg))
           } else {
@@ -1016,8 +1016,8 @@ pub fn apply_allocation(
         }
         // Increment type-specific indices
         match param.class {
-          Int => int_idx += 1
-          Float32 | Float64 => float_idx += 1
+          @abi.Int => int_idx += 1
+          @abi.Float32 | @abi.Float64 => float_idx += 1
         }
       }
       None => {
@@ -1025,8 +1025,8 @@ pub fn apply_allocation(
         new_func.param_pregs.push(None)
         // Still need to increment indices for unassigned params
         match param.class {
-          Int => int_idx += 1
-          Float32 | Float64 => float_idx += 1
+          @abi.Int => int_idx += 1
+          @abi.Float32 | @abi.Float64 => float_idx += 1
         }
       }
     }
@@ -1058,7 +1058,7 @@ pub fn apply_allocation(
     for inst in block.insts {
       // First, insert reload instructions for any spilled uses
       // Track which scratch registers are used for each spilled vreg
-      let spill_regs : Map[Int, PReg] = {}
+      let spill_regs : Map[Int, @abi.PReg] = {}
 
       // Check if this is a CallIndirect instruction - needs special handling
       let is_call_indirect = inst.opcode is CallIndirect(_, _)
@@ -1077,120 +1077,124 @@ pub fn apply_allocation(
       let mut inst_spill_idx = 0
       for i, use_reg in inst.uses {
         match use_reg {
-          Virtual(vreg) =>
+          @abi.Virtual(vreg) =>
             if alloc.assignments.get(vreg.id) is None {
               // This vreg is spilled, need to reload
               match alloc.spill_slots.get(vreg.id) {
                 Some(slot) => {
                   let scratch_class = match vreg.class {
-                    Float32 | Float64 => Float64
+                    @abi.Float32 | @abi.Float64 => @abi.Float64
                     _ => vreg.class
                   }
 
                   // Determine how to handle this spilled use
                   if is_call_indirect && i == 0 {
                     // CallIndirect's func_ptr (first use): reload directly to X18
-                    let scratch_preg : PReg = {
+                    let scratch_preg : @abi.PReg = {
                       index: 18,
                       class: scratch_class,
                     }
                     spill_regs.set(vreg.id, scratch_preg)
-                    let reload_inst = VCodeInst::new(StackLoad(slot * 8))
-                    reload_inst.add_def({ reg: Physical(scratch_preg) })
+                    let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+                    reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
                     new_block.add_inst(reload_inst)
                   } else if is_call_indirect && i >= 1 {
                     // CallIndirect's args (all args, including register args 0-7 and stack args 8+)
                     // Use spilled register encoding - emit code will handle the load directly
                     // This avoids X16/X17 aliasing when many args are spilled
-                    let spilled_preg = PReg::spilled(slot, scratch_class)
+                    let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
                     spill_regs.set(vreg.id, spilled_preg)
                     // Don't insert reload - emit code will load directly from spill slot
                   } else {
                     // Regular spilled uses (non-CallIndirect instructions)
                     // Use X16, X17 as scratch registers
                     let scratch_indices = [16, 17]
-                    let scratch_preg : PReg = {
+                    let scratch_preg : @abi.PReg = {
                       index: scratch_indices[inst_spill_idx % 2],
                       class: scratch_class,
                     }
                     inst_spill_idx = inst_spill_idx + 1
                     block_scratch_idx = block_scratch_idx + 1
                     spill_regs.set(vreg.id, scratch_preg)
-                    let reload_inst = VCodeInst::new(StackLoad(slot * 8))
-                    reload_inst.add_def({ reg: Physical(scratch_preg) })
+                    let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+                    reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
                     new_block.add_inst(reload_inst)
                   }
                 }
                 None => ()
               }
             }
-          Physical(_) => ()
+          @abi.Physical(_) => ()
         }
       }
 
       // Check if any definitions are spilled - collect ALL spilled defs
-      let spilled_defs : Array[(VReg, Int)] = []
+      let spilled_defs : Array[(@abi.VReg, Int)] = []
       for def in inst.defs {
         match def.reg {
-          Virtual(vreg) =>
+          @abi.Virtual(vreg) =>
             if alloc.assignments.get(vreg.id) is None {
               match alloc.spill_slots.get(vreg.id) {
                 Some(slot) => spilled_defs.push((vreg, slot))
                 None => ()
               }
             }
-          Physical(_) => ()
+          @abi.Physical(_) => ()
         }
       }
 
       // Create new instruction with rewritten registers
-      let new_inst = VCodeInst::new(inst.opcode)
+      let new_inst = @instr.VCodeInst::new(inst.opcode)
 
       // Rewrite definitions - use X16, X17 as scratch for spilled defs
-      let spill_scratch_map : Map[Int, PReg] = {} // vreg.id -> scratch preg
+      let spill_scratch_map : Map[Int, @abi.PReg] = {} // vreg.id -> scratch preg
       for def in inst.defs {
         match def.reg {
-          Virtual(vreg) =>
+          @abi.Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
-              Some(preg) => new_inst.add_def({ reg: Physical(preg) })
+              Some(preg) => new_inst.add_def({ reg: @abi.Physical(preg) })
               None => {
                 // Spilled: use X16, X17 as scratch registers
                 let scratch_class = match vreg.class {
-                  Float32 | Float64 => Float64
+                  @abi.Float32 | @abi.Float64 => @abi.Float64
                   _ => vreg.class
                 }
                 let scratch_indices = [16, 17]
-                let scratch_preg : PReg = {
+                let scratch_preg : @abi.PReg = {
                   index: scratch_indices[block_scratch_idx % 2],
                   class: scratch_class,
                 }
                 block_scratch_idx = block_scratch_idx + 1
                 spill_scratch_map.set(vreg.id, scratch_preg)
-                new_inst.add_def({ reg: Physical(scratch_preg) })
+                new_inst.add_def({ reg: @abi.Physical(scratch_preg) })
               }
             }
-          Physical(_) => new_inst.add_def(def)
+          @abi.Physical(_) => new_inst.add_def(def)
         }
       }
 
       // Rewrite uses
       for use_reg in inst.uses {
         match use_reg {
-          Virtual(vreg) =>
+          @abi.Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
-              Some(preg) => new_inst.add_use(Physical(preg))
+              Some(preg) => new_inst.add_use(@abi.Physical(preg))
               None =>
                 // Spilled: use the scratch register we reloaded into
                 match spill_regs.get(vreg.id) {
-                  Some(scratch_preg) => new_inst.add_use(Physical(scratch_preg))
+                  Some(scratch_preg) =>
+                    new_inst.add_use(@abi.Physical(scratch_preg))
                   None => {
                     // Fallback: use X16 if somehow not in spill_regs
-                    let scratch_preg : PReg = { index: 16, class: vreg.class }
-                    new_inst.add_use(Physical(scratch_preg))
+                    let scratch_preg : @abi.PReg = {
+                      index: 16,
+                      class: vreg.class,
+                    }
+                    new_inst.add_use(@abi.Physical(scratch_preg))
                   }
                 }
             }
-          Physical(_) => new_inst.add_use(use_reg)
+          @abi.Physical(_) => new_inst.add_use(use_reg)
         }
       }
       new_block.add_inst(new_inst)
@@ -1198,9 +1202,9 @@ pub fn apply_allocation(
       // Insert spill instructions after the defining instruction for ALL spilled defs
       for entry in spilled_defs {
         let (vreg, slot) = entry
-        let spill_inst = VCodeInst::new(StackStore(slot * 8))
+        let spill_inst = @instr.VCodeInst::new(StackStore(slot * 8))
         let scratch_preg = spill_scratch_map.get(vreg.id).unwrap()
-        spill_inst.add_use(Physical(scratch_preg))
+        spill_inst.add_use(@abi.Physical(scratch_preg))
         new_block.add_inst(spill_inst)
       }
     }
@@ -1209,7 +1213,7 @@ pub fn apply_allocation(
     match block.terminator {
       Some(term) => {
         let new_term = match term {
-          Jump(target) => Jump(target)
+          Jump(target) => @instr.Jump(target)
           Branch(cond, then_b, else_b) => {
             // Handle spilled condition register
             let new_cond = rewrite_reg_with_spill(cond, alloc, new_block)
@@ -1223,12 +1227,12 @@ pub fn apply_allocation(
           Return(values) => {
             // Handle Return specially to use block-level scratch counter
             // This ensures each spilled value uses a different scratch register
-            let new_values : Array[Reg] = []
+            let new_values : Array[@abi.Reg] = []
             for v in values {
               match v {
-                Virtual(vreg) =>
+                @abi.Virtual(vreg) =>
                   match alloc.assignments.get(vreg.id) {
-                    Some(preg) => new_values.push(Physical(preg))
+                    Some(preg) => new_values.push(@abi.Physical(preg))
                     None =>
                       // Spilled: insert reload and use scratch register from block pool
                       match alloc.spill_slots.get(vreg.id) {
@@ -1236,24 +1240,28 @@ pub fn apply_allocation(
                           // Use X16, X17 as scratch registers
                           // These are the only safe scratch registers
                           let scratch_class = match vreg.class {
-                            Float32 | Float64 => Float64
+                            @abi.Float32 | @abi.Float64 => @abi.Float64
                             _ => vreg.class
                           }
                           let scratch_indices = [16, 17]
-                          let scratch_preg : PReg = {
+                          let scratch_preg : @abi.PReg = {
                             index: scratch_indices[block_scratch_idx % 2],
                             class: scratch_class,
                           }
                           block_scratch_idx = block_scratch_idx + 1
-                          let reload_inst = VCodeInst::new(StackLoad(slot * 8))
-                          reload_inst.add_def({ reg: Physical(scratch_preg) })
+                          let reload_inst = @instr.VCodeInst::new(
+                            StackLoad(slot * 8),
+                          )
+                          reload_inst.add_def({
+                            reg: @abi.Physical(scratch_preg),
+                          })
                           new_block.add_inst(reload_inst)
-                          new_values.push(Physical(scratch_preg))
+                          new_values.push(@abi.Physical(scratch_preg))
                         }
                         None => new_values.push(v) // Should not happen
                       }
                   }
-                Physical(_) => new_values.push(v)
+                @abi.Physical(_) => new_values.push(v)
               }
             }
             Return(new_values)
@@ -1271,41 +1279,41 @@ pub fn apply_allocation(
 ///|
 /// Rewrite a register, inserting reload if spilled
 fn rewrite_reg_with_spill(
-  reg : Reg,
+  reg : @abi.Reg,
   alloc : RegAllocResult,
-  block : VCodeBlock,
-) -> Reg {
+  block : @block.VCodeBlock,
+) -> @abi.Reg {
   match reg {
-    Virtual(vreg) =>
+    @abi.Virtual(vreg) =>
       match alloc.assignments.get(vreg.id) {
-        Some(preg) => Physical(preg)
+        Some(preg) => @abi.Physical(preg)
         None =>
           // Spilled: insert reload and use scratch register
           match alloc.spill_slots.get(vreg.id) {
             Some(slot) => {
-              let scratch_preg : PReg = { index: 16, class: vreg.class }
-              let reload_inst = VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: Physical(scratch_preg) })
+              let scratch_preg : @abi.PReg = { index: 16, class: vreg.class }
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
               block.add_inst(reload_inst)
-              Physical(scratch_preg)
+              @abi.Physical(scratch_preg)
             }
             None => reg // Should not happen
           }
       }
-    Physical(_) => reg
+    @abi.Physical(_) => reg
   }
 }
 
 ///|
 #warnings("-unused_value")
-fn rewrite_reg(reg : Reg, alloc : RegAllocResult) -> Reg {
+fn rewrite_reg(reg : @abi.Reg, alloc : RegAllocResult) -> @abi.Reg {
   match reg {
-    Virtual(vreg) =>
+    @abi.Virtual(vreg) =>
       match alloc.assignments.get(vreg.id) {
-        Some(preg) => Physical(preg)
+        Some(preg) => @abi.Physical(preg)
         None => reg // Keep as virtual if not allocated (spilled)
       }
-    Physical(_) => reg
+    @abi.Physical(_) => reg
   }
 }
 
@@ -1313,7 +1321,7 @@ fn rewrite_reg(reg : Reg, alloc : RegAllocResult) -> Reg {
 
 ///|
 /// Check if an opcode has side effects (cannot be eliminated even if dead)
-fn has_side_effects(opcode : VCodeOpcode) -> Bool {
+fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     // Memory stores have side effects
     Store(_, _) | StackStore(_) => true
@@ -1351,8 +1359,8 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
     for inst in block.insts {
       for use_reg in inst.uses {
         match use_reg {
-          Virtual(vreg) => used_vregs.add(vreg.id)
-          Physical(_) => ()
+          @abi.Virtual(vreg) => used_vregs.add(vreg.id)
+          @abi.Physical(_) => ()
         }
       }
     }
@@ -1363,19 +1371,19 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
         match term {
           Branch(cond, _, _) =>
             match cond {
-              Virtual(vreg) => used_vregs.add(vreg.id)
-              Physical(_) => ()
+              @abi.Virtual(vreg) => used_vregs.add(vreg.id)
+              @abi.Physical(_) => ()
             }
           BrTable(index, _, _) =>
             match index {
-              Virtual(vreg) => used_vregs.add(vreg.id)
-              Physical(_) => ()
+              @abi.Virtual(vreg) => used_vregs.add(vreg.id)
+              @abi.Physical(_) => ()
             }
           Return(values) =>
             for v in values {
               match v {
-                Virtual(vreg) => used_vregs.add(vreg.id)
-                Physical(_) => ()
+                @abi.Virtual(vreg) => used_vregs.add(vreg.id)
+                @abi.Physical(_) => ()
               }
             }
           Jump(_) | Trap(_) => ()
@@ -1418,11 +1426,11 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
         let mut any_def_used = false
         for def in inst.defs {
           match def.reg {
-            Virtual(vreg) =>
+            @abi.Virtual(vreg) =>
               if used_vregs.contains(vreg.id) {
                 any_def_used = true
               }
-            Physical(_) => any_def_used = true // Always keep physical reg defs
+            @abi.Physical(_) => any_def_used = true // Always keep physical reg defs
           }
         }
         // Also keep instructions with no defs (shouldn't happen for pure ops, but be safe)
@@ -1461,12 +1469,12 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   // Build allocatable register pool:
   // 1. Scratch regs (caller-saved, no save needed) - use first
   // 2. Callee-saved regs (must save/restore) - use when scratch exhausted
-  let int_regs : Array[PReg] = []
-  let callee_saved_int_regs : Array[PReg] = []
-  for r in allocatable_scratch_regs() {
+  let int_regs : Array[@abi.PReg] = []
+  let callee_saved_int_regs : Array[@abi.PReg] = []
+  for r in @abi.allocatable_scratch_regs() {
     int_regs.push(r)
   }
-  for r in allocatable_callee_saved_regs() {
+  for r in @abi.allocatable_callee_saved_regs() {
     // X23 (index 23) is reserved for extra_results_buffer when needed
     if needs_x23_reserved && r.index == 23 {
       continue
@@ -1476,14 +1484,14 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   }
   // Float regs pool: D0-D7 (caller-saved) + D8-D15 (callee-saved)
   // This mirrors the int_regs structure which includes both scratch and callee-saved
-  let float_regs : Array[PReg] = []
-  for r in aapcs64_arg_fprs() {
+  let float_regs : Array[@abi.PReg] = []
+  for r in @abi.aapcs64_arg_fprs() {
     float_regs.push(r)
   }
-  for r in callee_saved_fprs() {
+  for r in @abi.callee_saved_fprs() {
     float_regs.push(r)
   }
-  let callee_saved_float_regs = callee_saved_fprs()
+  let callee_saved_float_regs = @abi.callee_saved_fprs()
 
   // Compute liveness
   let liveness = compute_liveness(func)

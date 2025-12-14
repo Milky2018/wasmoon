@@ -14,7 +14,7 @@ pub(all) struct CompiledFunction {
   // Function name or identifier
   name : String
   // The compiled machine code bytes
-  code : MachineCode
+  code : @emit.MachineCode
   // Entry point offset (usually 0)
   entry_offset : Int
   // Size of the code in bytes
@@ -28,7 +28,7 @@ pub(all) struct CompiledFunction {
 ///|
 pub fn CompiledFunction::new(
   name : String,
-  code : MachineCode,
+  code : @emit.MachineCode,
   frame_size : Int,
 ) -> CompiledFunction {
   {
@@ -386,7 +386,7 @@ pub fn MemoryManager::get_current_region(
 /// Write code to the current region
 pub fn MemoryManager::write_code(
   self : MemoryManager,
-  code : MachineCode,
+  code : @emit.MachineCode,
 ) -> Result[(ExecutableRegion, Int), String] {
   let bytes = code.get_bytes()
   let region = self.get_current_region()

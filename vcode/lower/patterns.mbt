@@ -420,7 +420,7 @@ pub fn get_optimization_rules() -> Array[RewriteRule] {
 #warnings("-unused_constructor")
 pub enum RewriteResult {
   // The instruction was optimized - emit the given VCode instructions
-  Rewritten(Array[VCodeInst])
+  Rewritten(Array[@instr.VCodeInst])
   // Use the identity value (just copy from operand)
   Identity(Int) // Index of the operand to use as identity
   // Produce a constant
@@ -530,7 +530,7 @@ fn apply_rule(
 pub fn lower_inst_with_patterns(
   ctx : LoweringContext,
   inst : @ir.Inst,
-  block : VCodeBlock,
+  block : @block.VCodeBlock,
   rules : Array[RewriteRule],
 ) -> Bool {
   let rewrite_result = try_apply_rules(inst, ctx, rules)
@@ -546,9 +546,9 @@ pub fn lower_inst_with_patterns(
       if inst.result is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        let vcode_inst = VCodeInst::new(Move)
-        vcode_inst.add_def({ reg: Virtual(dst) })
-        vcode_inst.add_use(Virtual(src))
+        let vcode_inst = @instr.VCodeInst::new(@instr.Move)
+        vcode_inst.add_def({ reg: @abi.Virtual(dst) })
+        vcode_inst.add_use(@abi.Virtual(src))
         block.add_inst(vcode_inst)
         true
       } else {
@@ -558,8 +558,8 @@ pub fn lower_inst_with_patterns(
       // Emit a load constant
       if inst.result is Some(result) {
         let dst = ctx.get_vreg(result)
-        let vcode_inst = VCodeInst::new(LoadConst(val))
-        vcode_inst.add_def({ reg: Virtual(dst) })
+        let vcode_inst = @instr.VCodeInst::new(@instr.LoadConst(val))
+        vcode_inst.add_def({ reg: @abi.Virtual(dst) })
         block.add_inst(vcode_inst)
         true
       } else {
@@ -574,16 +574,16 @@ pub fn lower_inst_with_patterns(
             // Convert Double to Float, then get its 32-bit representation
             let float_val = Float::from_double(val)
             let bits = float_val.reinterpret_as_int()
-            LoadConstF32(bits)
+            @instr.LoadConstF32(bits)
           }
           _ => {
             // F64: get 64-bit representation
             let bits = val.reinterpret_as_int64()
-            LoadConstF64(bits)
+            @instr.LoadConstF64(bits)
           }
         }
-        let vcode_inst = VCodeInst::new(opcode)
-        vcode_inst.add_def({ reg: Virtual(dst) })
+        let vcode_inst = @instr.VCodeInst::new(opcode)
+        vcode_inst.add_def({ reg: @abi.Virtual(dst) })
         block.add_inst(vcode_inst)
         true
       } else {
@@ -596,14 +596,16 @@ pub fn lower_inst_with_patterns(
         let src = ctx.get_vreg(inst.operands[operand_idx])
         // Load shift amount as constant
         let shift_vreg = ctx.vcode_func.new_vreg(Int)
-        let load_shift = VCodeInst::new(LoadConst(shift_amount.to_int64()))
-        load_shift.add_def({ reg: Virtual(shift_vreg) })
+        let load_shift = @instr.VCodeInst::new(
+          @instr.LoadConst(shift_amount.to_int64()),
+        )
+        load_shift.add_def({ reg: @abi.Virtual(shift_vreg) })
         block.add_inst(load_shift)
         // Emit shift left
-        let shl_inst = VCodeInst::new(Shl)
-        shl_inst.add_def({ reg: Virtual(dst) })
-        shl_inst.add_use(Virtual(src))
-        shl_inst.add_use(Virtual(shift_vreg))
+        let shl_inst = @instr.VCodeInst::new(@instr.Shl)
+        shl_inst.add_def({ reg: @abi.Virtual(dst) })
+        shl_inst.add_use(@abi.Virtual(src))
+        shl_inst.add_use(@abi.Virtual(shift_vreg))
         block.add_inst(shl_inst)
         true
       } else {
@@ -616,14 +618,16 @@ pub fn lower_inst_with_patterns(
         let src = ctx.get_vreg(inst.operands[operand_idx])
         // Load shift amount as constant
         let shift_vreg = ctx.vcode_func.new_vreg(Int)
-        let load_shift = VCodeInst::new(LoadConst(shift_amount.to_int64()))
-        load_shift.add_def({ reg: Virtual(shift_vreg) })
+        let load_shift = @instr.VCodeInst::new(
+          @instr.LoadConst(shift_amount.to_int64()),
+        )
+        load_shift.add_def({ reg: @abi.Virtual(shift_vreg) })
         block.add_inst(load_shift)
         // Emit logical shift right
-        let lshr_inst = VCodeInst::new(LShr)
-        lshr_inst.add_def({ reg: Virtual(dst) })
-        lshr_inst.add_use(Virtual(src))
-        lshr_inst.add_use(Virtual(shift_vreg))
+        let lshr_inst = @instr.VCodeInst::new(@instr.LShr)
+        lshr_inst.add_def({ reg: @abi.Virtual(dst) })
+        lshr_inst.add_use(@abi.Virtual(src))
+        lshr_inst.add_use(@abi.Virtual(shift_vreg))
         block.add_inst(lshr_inst)
         true
       } else {
@@ -670,7 +674,7 @@ pub fn lower_function_optimized(ir_func : @ir.Function) -> VCodeFunction {
 fn lower_block_optimized(
   ctx : LoweringContext,
   ir_block : @ir.Block,
-  vcode_block : VCodeBlock,
+  vcode_block : @block.VCodeBlock,
   rules : Array[RewriteRule],
 ) -> Unit {
   // Lower block parameters
@@ -702,7 +706,7 @@ fn lower_block_optimized(
 fn lower_inst_default(
   ctx : LoweringContext,
   inst : @ir.Inst,
-  block : VCodeBlock,
+  block : @block.VCodeBlock,
 ) -> Unit {
   match inst.opcode {
     // Constants
@@ -710,19 +714,19 @@ fn lower_inst_default(
     @ir.Opcode::Fconst(val) => lower_fconst(ctx, inst, block, val)
 
     // Integer arithmetic
-    @ir.Opcode::Iadd => lower_binary_int(ctx, inst, block, Add)
-    @ir.Opcode::Isub => lower_binary_int(ctx, inst, block, Sub)
-    @ir.Opcode::Imul => lower_binary_int(ctx, inst, block, Mul)
-    @ir.Opcode::Sdiv => lower_binary_int(ctx, inst, block, SDiv)
-    @ir.Opcode::Udiv => lower_binary_int(ctx, inst, block, UDiv)
+    @ir.Opcode::Iadd => lower_binary_int(ctx, inst, block, @instr.Add)
+    @ir.Opcode::Isub => lower_binary_int(ctx, inst, block, @instr.Sub)
+    @ir.Opcode::Imul => lower_binary_int(ctx, inst, block, @instr.Mul)
+    @ir.Opcode::Sdiv => lower_binary_int(ctx, inst, block, @instr.SDiv)
+    @ir.Opcode::Udiv => lower_binary_int(ctx, inst, block, @instr.UDiv)
 
     // Bitwise operations
-    @ir.Opcode::Band => lower_binary_int(ctx, inst, block, And)
-    @ir.Opcode::Bor => lower_binary_int(ctx, inst, block, Or)
-    @ir.Opcode::Bxor => lower_binary_int(ctx, inst, block, Xor)
-    @ir.Opcode::Ishl => lower_binary_int(ctx, inst, block, Shl)
-    @ir.Opcode::Sshr => lower_binary_int(ctx, inst, block, AShr)
-    @ir.Opcode::Ushr => lower_binary_int(ctx, inst, block, LShr)
+    @ir.Opcode::Band => lower_binary_int(ctx, inst, block, @instr.And)
+    @ir.Opcode::Bor => lower_binary_int(ctx, inst, block, @instr.Or)
+    @ir.Opcode::Bxor => lower_binary_int(ctx, inst, block, @instr.Xor)
+    @ir.Opcode::Ishl => lower_binary_int(ctx, inst, block, @instr.Shl)
+    @ir.Opcode::Sshr => lower_binary_int(ctx, inst, block, @instr.AShr)
+    @ir.Opcode::Ushr => lower_binary_int(ctx, inst, block, @instr.LShr)
 
     // Integer comparisons
     @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)
