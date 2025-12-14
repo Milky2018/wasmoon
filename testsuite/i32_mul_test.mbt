@@ -81,16 +81,15 @@ test "i32 mul" {
       #|  0014: 750a40f9  ldr x21, [x19, #16]
       #|  0018: 760e40f9  ldr x22, [x19, #24]
       #|  001c: 780640f9  ldr x24, [x19, #8]
-      #|  0020: e00300aa  mov x0, x0
       #|block0:
-      #|  0024: 680080d2  movz x8, #3, lsl #0
-      #|  0028: 097c089b  mul x9, x0, x8
-      #|  002c: e00309aa  mov x0, x9
-      #|  0030: f35340a9  ldp x19, x20, [sp, #0]
-      #|  0034: f55b41a9  ldp x21, x22, [sp, #16]
-      #|  0038: f81340f9  ldr x24, [x31, #32]
-      #|  003c: ff030191  add sp, sp, #64
-      #|  0040: c0035fd6  ret
+      #|  0020: 680080d2  movz x8, #3, lsl #0
+      #|  0024: 097c089b  mul x9, x0, x8
+      #|  0028: e00309aa  mov x0, x9
+      #|  002c: f35340a9  ldp x19, x20, [sp, #0]
+      #|  0030: f55b41a9  ldp x21, x22, [sp, #16]
+      #|  0034: f81340f9  ldr x24, [x31, #32]
+      #|  0038: ff030191  add sp, sp, #64
+      #|  003c: c0035fd6  ret
       #|
     ),
   )
@@ -98,7 +97,7 @@ test "i32 mul" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1, // num_params
+    [@types.ValueType::I32], // param_types
     [@types.ValueType::I32], // result_types
     4096L, // mem_size
   )

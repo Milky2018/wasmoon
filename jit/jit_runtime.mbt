@@ -7,7 +7,7 @@
 pub struct JITFunction {
   name : String
   priv exec_code : ExecCode
-  num_params : Int
+  param_types : Array[@types.ValueType] // Parameter types for proper register allocation
   result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
 }
 
@@ -15,10 +15,10 @@ pub struct JITFunction {
 fn JITFunction::new(
   name : String,
   exec_code : ExecCode,
-  num_params : Int,
+  param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> JITFunction {
-  { name, exec_code, num_params, result_types }
+  { name, exec_code, param_types, result_types }
 }
 
 ///|
@@ -42,10 +42,10 @@ pub fn JITModule::new() -> JITModule {
 
 ///|
 /// Load a precompiled module
-/// func_signatures: Array of (num_params, result_types) for each func_idx
+/// func_signatures: Array of (param_types, result_types) for each func_idx
 pub fn JITModule::load(
   precompiled : @cwasm.PrecompiledModule,
-  func_signatures : Array[(Int, Array[@types.ValueType])],
+  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
 ) -> JITModule? {
   let jit_module = JITModule::new()
   let num_imports = precompiled.imports.length()
@@ -71,16 +71,16 @@ pub fn JITModule::load(
         match exec_code {
           Some(ec) => {
             // Get function signature
-            let (num_params, result_types) = if entry.func_idx <
+            let (param_types, result_types) = if entry.func_idx <
               func_signatures.length() {
               func_signatures[entry.func_idx]
             } else {
-              (0, [])
+              ([], [])
             }
             let jit_func = JITFunction::new(
               entry.name,
               ec,
-              num_params,
+              param_types,
               result_types,
             )
             jit_module.functions.set(entry.func_idx, jit_func)
@@ -112,7 +112,7 @@ pub fn JITModule::load(
 pub fn JITModule::from_single_function(
   code_bytes : Array[Int],
   func_name : String,
-  num_params : Int,
+  param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
   mem_size : Int64,
 ) -> JITModule? {
@@ -141,7 +141,7 @@ pub fn JITModule::from_single_function(
           ctx.set_func(0, ec.ptr)
           // Create JIT function
           let jit_func = JITFunction::new(
-            func_name, ec, num_params, result_types,
+            func_name, ec, param_types, result_types,
           )
           // Create module
           let jit_module = JITModule::new()
@@ -246,6 +246,7 @@ pub fn JITModule::call_with_context(
       ctx.call_multi_return(
         func.exec_code.ptr,
         args,
+        func.param_types,
         results,
         func.result_types,
       )

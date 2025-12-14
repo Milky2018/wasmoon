@@ -177,8 +177,8 @@ pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly
   args : Arg,
 ) -> Ret raise PolycallError {
   let args_array = DynamicArgs::to_int64_array(args)
-  if args_array.length() != func.num_params {
-    raise InputNumber(func.num_params, args_array.length())
+  if args_array.length() != func.param_types.length() {
+    raise InputNumber(func.param_types.length(), args_array.length())
   }
   let result_array = self.call_with_context(func, args_array) catch {
     e => raise JIT(e)

@@ -350,12 +350,13 @@ fn ExecCode::free(self : ExecCode) -> Unit {
 
 ///|
 /// Call a JIT function with multiple return values (v2 ABI)
-/// X20 = context pointer, X0-X7 = user params
+/// X20 = context pointer, X0-X7 = int params, D0-D7 = float params
 /// Returns 0 on success, trap code on error
 fn JITContext::call_multi_return(
   self : JITContext,
   func_ptr : Int64,
   args : Array[Int64],
+  param_types : Array[@types.ValueType],
   results : Array[Int64],
   result_types : Array[@types.ValueType],
 ) -> Unit raise JITTrap {
@@ -366,10 +367,25 @@ fn JITContext::call_multi_return(
   for i in 0..<num_args {
     args_fixed[i] = args[i]
   }
+  // Convert param_types to int codes
+  let param_types_fixed = FixedArray::make(num_args.max(1), 0)
+  for i in 0..<num_args {
+    param_types_fixed[i] = if i < param_types.length() {
+      match param_types[i] {
+        I32 => 0
+        I64 => 1
+        F32 => 2
+        F64 => 3
+        _ => 0
+      }
+    } else {
+      0
+    }
+  }
   // Convert result_types to int codes
-  let types_fixed = FixedArray::make(num_results, 0)
+  let result_types_fixed = FixedArray::make(num_results.max(1), 0)
   for i in 0..<num_results {
-    types_fixed[i] = match result_types[i] {
+    result_types_fixed[i] = match result_types[i] {
       I32 => 0
       I64 => 1
       F32 => 2
@@ -380,14 +396,15 @@ fn JITContext::call_multi_return(
   // Prepare results array
   let results_fixed = FixedArray::make(num_results.max(1), 0L)
   // Call FFI with v2 ABI
-  // X20 = ctx_ptr (context pointer), X0-X7 = user params
+  // X19 = ctx_ptr (context pointer), X0-X7 = int params, D0-D7 = float params
   let trap_code = @jit_ffi.c_jit_call_v2(
     self.ctx_ptr, // Context pointer for v2 ABI
     func_ptr,
     args_fixed,
+    param_types_fixed,
     num_args,
     results_fixed,
-    types_fixed,
+    result_types_fixed,
     num_results,
   )
   if trap_code != 0 {

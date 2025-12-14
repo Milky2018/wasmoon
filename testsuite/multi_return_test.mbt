@@ -37,7 +37,7 @@ test "multi return: 3 integers" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1,
+    [@types.ValueType::I32],
     [@types.ValueType::I32, @types.ValueType::I32, @types.ValueType::I32],
     4096L,
   )
@@ -96,7 +96,7 @@ test "multi return: 4 integers" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1,
+    [@types.ValueType::I32],
     [
       @types.ValueType::I32,
       @types.ValueType::I32,
@@ -154,7 +154,7 @@ test "multi return: 3 floats" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    0,
+    [],
     [@types.ValueType::F64, @types.ValueType::F64, @types.ValueType::F64],
     4096L,
   )
@@ -208,7 +208,7 @@ test "multi return: mixed int and float" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1,
+    [@types.ValueType::I32],
     [
       @types.ValueType::I32,
       @types.ValueType::I32,
@@ -265,7 +265,7 @@ test "multi return: 2 integers (no extra buffer)" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    0,
+    [],
     [@types.ValueType::I32, @types.ValueType::I32],
     4096L,
   )

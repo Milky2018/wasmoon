@@ -979,7 +979,11 @@ pub fn apply_allocation(
   new_func.num_spill_slots = alloc.num_spill_slots
 
   // Convert function parameters
+  // Track int_idx and float_idx separately since emit_prologue uses these indices
+  // for determining the default register location (not overall param index)
   let max_reg_params = 8 // Params 0-7 are passed in registers, 8+ on stack
+  let mut int_idx = 0
+  let mut float_idx = 0
   for i, param in func.params {
     match alloc.assignments.get(param.id) {
       Some(preg) => {
@@ -996,9 +1000,13 @@ pub fn apply_allocation(
           new_func.param_pregs.push(Some(preg))
         } else {
           // Register param - check if it needs a move from default location
+          // In emit_prologue:
+          // - Ints default to X[int_idx] (v2) or X[3 + param_idx] (v1)
+          // - Floats default to D[float_idx]
           let default_preg : PReg = match param.class {
-            Int => { index: i + 3, class: Int } // X3-X10
-            Float32 | Float64 => { index: i, class: param.class } // D0-D7
+            Int => { index: int_idx, class: Int } // X[int_idx] after prologue setup
+            Float32 => { index: float_idx, class: Float32 } // D[float_idx]
+            Float64 => { index: float_idx, class: Float64 } // D[float_idx]
           }
           if preg.index != default_preg.index {
             new_func.param_pregs.push(Some(preg))
@@ -1006,10 +1014,20 @@ pub fn apply_allocation(
             new_func.param_pregs.push(None) // No move needed
           }
         }
+        // Increment type-specific indices
+        match param.class {
+          Int => int_idx += 1
+          Float32 | Float64 => float_idx += 1
+        }
       }
       None => {
         new_func.params.push(param)
         new_func.param_pregs.push(None)
+        // Still need to increment indices for unassigned params
+        match param.class {
+          Int => int_idx += 1
+          Float32 | Float64 => float_idx += 1
+        }
       }
     }
   }

@@ -171,7 +171,7 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1, // num_params
+    [@types.ValueType::I32], // param_types
     [@types.ValueType::F32], // result_types
     4096L, // mem_size
   )
@@ -261,7 +261,7 @@ test "A critical bug as in data/f32_br_2locals" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1, // num_params
+    [@types.ValueType::I32], // param_types
     [@types.ValueType::F32], // result_types
     4096L, // mem_size
   )

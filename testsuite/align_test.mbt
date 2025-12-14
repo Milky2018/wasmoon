@@ -43,7 +43,7 @@ test "f32 store/load with align=1" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    0, // num_params
+    [], // param_types
     [@types.ValueType::F32], // result_types
     4096L, // mem_size
   )
@@ -95,7 +95,7 @@ test "f64 store/load with align=1" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    0,
+    [],
     [@types.ValueType::F64],
     4096L,
   )
@@ -144,7 +144,7 @@ test "i32 store/load at unaligned address" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    0,
+    [],
     [@types.ValueType::I32],
     4096L,
   )
@@ -193,7 +193,7 @@ test "i64 store/load at unaligned address" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    0,
+    [],
     [@types.ValueType::I64],
     4096L,
   )
@@ -242,7 +242,7 @@ test "f64 store/load at offset 5" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    0,
+    [],
     [@types.ValueType::F64],
     4096L,
   )

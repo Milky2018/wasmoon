@@ -74,7 +74,7 @@ test "f32 add" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1, // num_params
+    [@types.ValueType::F32], // param_types
     [@types.ValueType::F32], // result_types
     4096L, // mem_size
   )
@@ -177,7 +177,7 @@ test "f64 add" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1, // num_params
+    [@types.ValueType::F64], // param_types
     [@types.ValueType::F64], // result_types
     4096L, // mem_size
   )
@@ -278,7 +278,7 @@ test "f32 sub" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1, // num_params
+    [@types.ValueType::F32], // param_types
     [@types.ValueType::F32], // result_types
     4096L, // mem_size
   )
@@ -408,7 +408,7 @@ test "f32 mul" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    1, // num_params
+    [@types.ValueType::F32], // param_types
     [@types.ValueType::F32], // result_types
     4096L, // mem_size
   )
