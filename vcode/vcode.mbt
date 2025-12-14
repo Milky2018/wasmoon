@@ -239,9 +239,15 @@ pub fn VCodeInst::add_use(self : VCodeInst, reg : Reg) -> Unit {
 ///|
 fn VCodeInst::to_string(self : VCodeInst) -> String {
   let mut result = ""
-  // Print definitions
-  if self.defs.length() > 0 {
-    for i, def in self.defs {
+  // Print definitions (skip clobbers for CallIndirect)
+  let defs_to_print = match self.opcode {
+    CallIndirect(_, num_results) =>
+      // Only print result registers, not clobbers
+      self.defs.iter().take(num_results).collect()
+    _ => self.defs
+  }
+  if defs_to_print.length() > 0 {
+    for i, def in defs_to_print {
       if i > 0 {
         result = result + ", "
       }
@@ -251,15 +257,23 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
   }
   // Print opcode
   result = result + self.opcode.to_string()
-  // Print uses
-  if self.uses.length() > 0 {
-    result = result + " "
-    for i, use_ in self.uses {
-      if i > 0 {
-        result = result + ", "
+  // Print uses (simplified for CallIndirect)
+  match self.opcode {
+    CallIndirect(_, _) =>
+      // For call_indirect, only print the function pointer (first use)
+      if self.uses.length() > 0 {
+        result = result + " " + self.uses[0].to_string()
       }
-      result = result + use_.to_string()
-    }
+    _ =>
+      if self.uses.length() > 0 {
+        result = result + " "
+        for i, use_ in self.uses {
+          if i > 0 {
+            result = result + ", "
+          }
+          result = result + use_.to_string()
+        }
+      }
   }
   result
 }
