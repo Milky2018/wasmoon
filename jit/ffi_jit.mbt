@@ -75,6 +75,14 @@ pub fn get_memory_size_v2_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_size_v2_ptr()
 }
 
+///|
+/// Get current memory base from v2 context (for proper cleanup after memory.grow)
+/// Returns the actual current memory base address, which may differ from the
+/// originally allocated address if memory.grow caused a realloc.
+pub fn get_current_memory_base_v2() -> Int64 {
+  @jit_ffi.c_jit_get_current_memory_base_v2()
+}
+
 // ============ JIT Argument Trait ============
 
 ///|
@@ -154,6 +162,42 @@ fn JITContext::set_memory(
   mem_size : Int64,
 ) -> Unit {
   @jit_ffi.c_jit_ctx_v2_set_memory(self.ctx_ptr, mem_ptr, mem_size)
+}
+
+///|
+/// JIT linear memory wrapper that handles memory.grow correctly.
+/// When memory.grow is called, realloc may return a new address.
+/// This wrapper ensures we free the correct (current) address.
+pub struct JITMemory {
+  priv initial_ptr : Int64 // For debugging only
+}
+
+///|
+/// Allocate JIT linear memory
+pub fn JITMemory::new(size : Int64) -> JITMemory? {
+  let ptr = @jit_ffi.c_jit_alloc_memory(size)
+  if ptr == 0L {
+    return None
+  }
+  Some(JITMemory::{ initial_ptr: ptr })
+}
+
+///|
+/// Get the initial memory pointer (for setting up JIT context)
+pub fn JITMemory::ptr(self : JITMemory) -> Int64 {
+  self.initial_ptr
+}
+
+///|
+/// Free the memory. This gets the current memory base from the v2 context,
+/// which may have changed due to memory.grow calling realloc.
+pub fn JITMemory::free(self : JITMemory) -> Unit {
+  // Get the current actual memory address (may have changed due to memory.grow)
+  let current_ptr = get_current_memory_base_v2()
+  if current_ptr != 0L {
+    @jit_ffi.c_jit_free_memory(current_ptr)
+  }
+  ignore(self.initial_ptr) // Suppress unused warning
 }
 
 ///|

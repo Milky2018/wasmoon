@@ -227,14 +227,13 @@ fn run_jit(
     }
     defer jm.free()
 
-    // Allocate memory
+    // Allocate memory using JITMemory wrapper (handles memory.grow correctly)
     let mem_size = 65536L // 64KB
-    let mem_ptr = @jit.alloc_memory(mem_size)
-    if mem_ptr == 0L {
+    guard @jit.JITMemory::new(mem_size) is Some(memory) else {
       return Err("Failed to allocate memory")
     }
-    defer @jit.free_memory(mem_ptr)
-    jm.set_memory(mem_ptr, mem_size)
+    defer memory.free() // Safe to use defer - JITMemory.free() gets current address
+    jm.set_memory(memory.ptr(), mem_size)
 
     // Initialize indirect table for call_indirect support
     init_elem_segments(mod_, jm)

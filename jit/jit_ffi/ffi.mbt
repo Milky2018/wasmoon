@@ -97,6 +97,10 @@ pub extern "c" fn c_jit_get_memory_size_bytes_v2_ptr() -> Int64 = "wasmoon_jit_g
 pub extern "c" fn c_jit_get_memory_size_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_size_v2_ptr"
 
 ///|
+/// Get current memory base from v2 context (for proper cleanup after memory.grow)
+pub extern "c" fn c_jit_get_current_memory_base_v2() -> Int64 = "wasmoon_jit_get_memory_base_v2"
+
+///|
 /// Get function table base address from context
 pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
 

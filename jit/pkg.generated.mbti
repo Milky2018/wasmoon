@@ -21,6 +21,8 @@ pub fn get_args_sizes_get_ptr() -> Int64
 
 pub fn get_clock_time_get_ptr() -> Int64
 
+pub fn get_current_memory_base_v2() -> Int64
+
 pub fn get_environ_get_ptr() -> Int64
 
 pub fn get_environ_sizes_get_ptr() -> Int64
@@ -254,6 +256,13 @@ pub struct JITFunction {
   result_types : Array[@types.ValueType]
   // private fields
 }
+
+pub struct JITMemory {
+  // private fields
+}
+pub fn JITMemory::free(Self) -> Unit
+pub fn JITMemory::new(Int64) -> Self?
+pub fn JITMemory::ptr(Self) -> Int64
 
 pub struct JITModule {
   // private fields

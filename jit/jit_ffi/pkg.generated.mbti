@@ -54,6 +54,8 @@ pub fn c_jit_get_args_sizes_get_ptr() -> Int64
 
 pub fn c_jit_get_clock_time_get_ptr() -> Int64
 
+pub fn c_jit_get_current_memory_base_v2() -> Int64
+
 pub fn c_jit_get_environ_get_ptr() -> Int64
 
 pub fn c_jit_get_environ_sizes_get_ptr() -> Int64
