@@ -1575,6 +1575,49 @@ pub fn emit_cbnz(mc : MachineCode, rt : Int, target_block : Int) -> Unit {
 }
 
 ///|
+/// Encode B.cond with a fixed byte offset (no fixup needed)
+/// Used for short forward branches like skipping a trap instruction
+/// offset_bytes must be a multiple of 4
+fn emit_b_cond_offset(mc : MachineCode, cond : Int, offset_bytes : Int) -> Unit {
+  let cond_name = match cond {
+    0 => "eq"
+    1 => "ne"
+    2 => "hs"
+    3 => "lo"
+    10 => "ge"
+    11 => "lt"
+    12 => "gt"
+    13 => "le"
+    _ => "?\{cond}"
+  }
+  mc.annotate("b.\{cond_name} .+\{offset_bytes}")
+  let imm19 = offset_bytes / 4 // Convert bytes to instruction count
+  // B.cond encoding: 0x54000000 | (imm19 << 5) | cond
+  let inst = 0x54000000 | ((imm19 & 0x7FFFF) << 5) | (cond & 0xF)
+  mc.emit_inst(
+    inst & 0xFF,
+    (inst >> 8) & 0xFF,
+    (inst >> 16) & 0xFF,
+    (inst >> 24) & 0xFF,
+  )
+}
+
+///|
+/// Encode BRK: BRK #imm16
+/// Used for trap/breakpoint instructions
+fn emit_brk(mc : MachineCode, imm16 : Int) -> Unit {
+  mc.annotate("brk #\{imm16}")
+  // BRK encoding: 0xD4200000 | (imm16 << 5)
+  let inst = 0xD4200000 | ((imm16 & 0xFFFF) << 5)
+  mc.emit_inst(
+    inst & 0xFF,
+    (inst >> 8) & 0xFF,
+    (inst >> 16) & 0xFF,
+    (inst >> 24) & 0xFF,
+  )
+}
+
+///|
 /// Encode RET: RET Xn
 /// Opcode: 0xD65F0000 (with Rn in bits [9:5])
 pub fn emit_ret(mc : MachineCode, rn : Int) -> Unit {
@@ -2524,6 +2567,18 @@ fn collect_used_callee_saved(
 /// Collect all callee-saved FPRs (D8-D15) that are defined in the function
 fn collect_used_callee_saved_fprs(func : VCodeFunction) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
+  // Check param_pregs: float parameters that cross calls are moved to callee-saved FPRs
+  // These are defined in the prologue via `fmov sN, wM` or `fmov dN, xM`
+  for preg in func.param_pregs {
+    match preg {
+      Some(p) =>
+        if (p.class is Float32 || p.class is Float64) &&
+          is_callee_saved_fpr(p.index) {
+          used.add(p.index)
+        }
+      None => ()
+    }
+  }
   for block in func.blocks {
     for inst in block.insts {
       for def in inst.defs {
@@ -4002,6 +4057,25 @@ fn emit_instruction(
       if total_stack_space > 0 {
         emit_add_imm(mc, 31, 31, total_stack_space) // ADD SP, SP, #total_stack_space
       }
+    }
+    TypeCheckIndirect(expected_type) => {
+      // Check if actual_type == expected_type, trap if not
+      // Uses: [actual_type_vreg]
+      // Emits: CMP actual, expected; B.EQ +8; BRK #2
+      let actual_type_reg = reg_num(inst.uses[0])
+      // CMP immediate can only handle 12-bit values (0-4095)
+      // For larger values, load into scratch register and use CMP register
+      if expected_type <= 4095 {
+        emit_cmp_imm(mc, actual_type_reg, expected_type)
+      } else {
+        // Load expected_type into x17 and compare
+        emit_load_imm64(mc, 17, expected_type.to_int64())
+        emit_cmp_reg(mc, actual_type_reg, 17)
+      }
+      // B.EQ +8: skip BRK (4 bytes) if types match
+      emit_b_cond_offset(mc, 0, 8) // cond=0 is EQ
+      // BRK #2: trap with code 2 for type mismatch
+      emit_brk(mc, 2)
     }
     StackLoad(offset) => {
       // Load from [SP + spill_base_offset + offset] into the def register

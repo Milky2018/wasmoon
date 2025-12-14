@@ -399,6 +399,10 @@ pub enum VCodeOpcode {
   // Defs: [result0, result1, ...] (multiple results supported)
   // Parameters: num_args, num_results
   CallIndirect(Int, Int)
+  // TypeCheckIndirect: check if actual_type == expected_type, trap if not
+  // Uses: [actual_type_vreg], Parameters: expected_type (immediate)
+  // Emits: CMP actual, expected; B.EQ +8; BRK #2 (type mismatch trap)
+  TypeCheckIndirect(Int)
   // Stack operations for spilling
   // StackLoad(offset): Load from [SP + offset] into the def register
   // StackStore(offset): Store the use register to [SP + offset]
@@ -504,6 +508,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Mneg => "mneg"
     CallIndirect(num_args, num_results) =>
       "call_indirect(\{num_args}) -> \{num_results} results"
+    TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(param_idx, class) =>

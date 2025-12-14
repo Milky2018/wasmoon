@@ -281,6 +281,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
 
 // Allocate indirect table for call_indirect
 // This table is separate from func_table and used only for call_indirect
+// Each entry is 16 bytes: (func_ptr, type_idx) pair
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;
@@ -290,11 +291,15 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int
         free(ctx->indirect_table);
     }
 
-    // Allocate exactly 'count' entries for the WASM table
-    ctx->indirect_table = (void **)calloc(count, sizeof(void *));
+    // Allocate 2 slots per entry: func_ptr and type_idx
+    ctx->indirect_table = (void **)calloc(count * 2, sizeof(void *));
     if (!ctx->indirect_table) {
         ctx->indirect_count = 0;
         return 0;
+    }
+    // Initialize type indices to -1 (uninitialized marker)
+    for (int i = 0; i < count; i++) {
+        ctx->indirect_table[i * 2 + 1] = (void*)(intptr_t)(-1);
     }
     ctx->indirect_count = count;
 
@@ -308,12 +313,15 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int
 // Set an entry in indirect table
 // table_idx: the WASM table index (0, 1, 2, ...)
 // func_idx: the function index to look up in func_table
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx) {
+// type_idx: the type index of the function (for type checking)
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx && ctx->indirect_table &&
         table_idx >= 0 && table_idx < ctx->indirect_count &&
         func_idx >= 0 && func_idx < ctx->func_count) {
-        ctx->indirect_table[table_idx] = ctx->func_table[func_idx];
+        // Store func_ptr at offset 0, type_idx at offset 8
+        ctx->indirect_table[table_idx * 2] = ctx->func_table[func_idx];
+        ctx->indirect_table[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
     }
 }
 
@@ -416,6 +424,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_v2_get_func_table(int64_t ctx_ptr) {
 }
 
 // Allocate indirect table for context v2
+// Each entry is 16 bytes: (func_ptr, type_idx) pair
+// Layout: [func_ptr_0, type_idx_0, func_ptr_1, type_idx_1, ...]
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_v2_alloc_indirect_table(int64_t ctx_ptr, int count) {
     jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;
@@ -424,22 +434,31 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_v2_alloc_indirect_table(int64_t ctx_ptr, 
         free(ctx->indirect_table);
     }
 
-    ctx->indirect_table = (void **)calloc(count, sizeof(void *));
+    // Allocate 2 slots per entry: func_ptr and type_idx
+    // Initialize to 0 (NULL func_ptr, type -1 would indicate uninitialized but we use 0)
+    ctx->indirect_table = (void **)calloc(count * 2, sizeof(void *));
     if (!ctx->indirect_table) {
         ctx->indirect_count = 0;
         return 0;
+    }
+    // Initialize type indices to -1 (uninitialized marker)
+    for (int i = 0; i < count; i++) {
+        ctx->indirect_table[i * 2 + 1] = (void*)(intptr_t)(-1);
     }
     ctx->indirect_count = count;
     return 1;
 }
 
 // Set indirect table entry in context v2
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx) {
+// Now takes type_idx parameter to store alongside func_ptr
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
     jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
     if (ctx && ctx->indirect_table &&
         table_idx >= 0 && table_idx < ctx->indirect_count &&
         func_idx >= 0 && func_idx < ctx->func_count) {
-        ctx->indirect_table[table_idx] = ctx->func_table[func_idx];
+        // Store func_ptr at offset 0, type_idx at offset 8
+        ctx->indirect_table[table_idx * 2] = ctx->func_table[func_idx];
+        ctx->indirect_table[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
     }
 }
 

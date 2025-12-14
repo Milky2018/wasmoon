@@ -113,10 +113,12 @@ pub extern "c" fn c_jit_ctx_alloc_indirect_table(
 
 ///|
 /// Set an entry in indirect table (table_idx -> func_table[func_idx])
+/// type_idx: the type index of the function (for type checking)
 pub extern "c" fn c_jit_ctx_set_indirect(
   ctx_ptr : Int64,
   table_idx : Int,
   func_idx : Int,
+  type_idx : Int,
 ) -> Unit = "wasmoon_jit_ctx_set_indirect"
 
 ///|
@@ -164,10 +166,12 @@ pub extern "c" fn c_jit_ctx_v2_alloc_indirect_table(
 
 ///|
 /// Set an entry in indirect table v2 (table_idx -> func_table[func_idx])
+/// type_idx: the type index of the function (for type checking)
 pub extern "c" fn c_jit_ctx_v2_set_indirect(
   ctx_ptr : Int64,
   table_idx : Int,
   func_idx : Int,
+  type_idx : Int,
 ) -> Unit = "wasmoon_jit_ctx_v2_set_indirect"
 
 ///|

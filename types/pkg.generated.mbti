@@ -60,6 +60,7 @@ pub(all) struct FuncType {
   params : Array[ValueType]
   results : Array[ValueType]
 }
+pub fn FuncType::structural_hash(Self) -> Int
 pub impl Eq for FuncType
 pub impl Show for FuncType
 

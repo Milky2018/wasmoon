@@ -301,18 +301,18 @@ pub fn JITModule::set_memory(
 ///|
 /// Initialize indirect table for call_indirect.
 /// table_size: number of table elements
-/// elem_init: array of (table_idx, func_idx) pairs
+/// elem_init: array of (table_idx, func_idx, type_idx) triples
 pub fn JITModule::init_indirect_table(
   self : JITModule,
   table_size : Int,
-  elem_init : Array[(Int, Int)],
+  elem_init : Array[(Int, Int, Int)],
 ) -> Unit {
   match self.context {
     Some(ctx) =>
       if ctx.alloc_indirect_table(table_size) {
         for entry in elem_init {
-          let (table_idx, func_idx) = entry
-          ctx.set_indirect(table_idx, func_idx)
+          let (table_idx, func_idx, type_idx) = entry
+          ctx.set_indirect(table_idx, func_idx, type_idx)
         }
       }
     None => ()

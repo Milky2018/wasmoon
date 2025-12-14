@@ -26,7 +26,7 @@ pub fn c_jit_ctx_get_memory(Int64) -> Int64
 
 pub fn c_jit_ctx_set_func(Int64, Int, Int64) -> Unit
 
-pub fn c_jit_ctx_set_indirect(Int64, Int, Int) -> Unit
+pub fn c_jit_ctx_set_indirect(Int64, Int, Int, Int) -> Unit
 
 pub fn c_jit_ctx_set_memory(Int64, Int64, Int64) -> Unit
 
@@ -36,7 +36,7 @@ pub fn c_jit_ctx_v2_get_func_table(Int64) -> Int64
 
 pub fn c_jit_ctx_v2_set_func(Int64, Int, Int64) -> Unit
 
-pub fn c_jit_ctx_v2_set_indirect(Int64, Int, Int) -> Unit
+pub fn c_jit_ctx_v2_set_indirect(Int64, Int, Int, Int) -> Unit
 
 pub fn c_jit_ctx_v2_set_memory(Int64, Int64, Int64) -> Unit
 

@@ -1454,6 +1454,8 @@ fn Translator::translate_call_indirect(
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
+    // Compute structural type hash for type checking at runtime
+    let type_hash = func_type.structural_hash()
     // Pop callee (function reference)
     let callee = self.pop()
     // Pop arguments
@@ -1464,9 +1466,9 @@ fn Translator::translate_call_indirect(
     args.rev_in_place()
     // Get result types
     let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
-    // Emit call_indirect with multi-value support
+    // Emit call_indirect with type hash (not type index) for structural equivalence
     let results = self.builder.call_indirect_multi(
-      type_idx, result_types, callee, args,
+      type_hash, result_types, callee, args,
     )
     // Push all results onto the stack
     for v in results {

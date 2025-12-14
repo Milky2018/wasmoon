@@ -1319,6 +1319,8 @@ fn has_side_effects(opcode : VCodeOpcode) -> Bool {
     Store(_, _) | StackStore(_) => true
     // Bounds check can trap
     BoundsCheck(_, _) => true
+    // Type check can trap
+    TypeCheckIndirect(_) => true
     // Function calls have side effects
     CallIndirect(_, _) => true
     // Everything else is pure computation
