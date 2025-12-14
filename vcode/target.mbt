@@ -257,24 +257,47 @@ pub fn aapcs64_callee_saved() -> Array[PReg] {
 
 ///|
 /// Scratch registers available for allocation (caller-saved, no save/restore needed)
-/// Only X8 is available - X9-X17 are used by CallIndirect
+/// X8-X15 are available for allocation.
+/// X16-X17 (IP0/IP1) are reserved for linker/code emission scratch.
 pub fn allocatable_scratch_regs() -> Array[PReg] {
-  [{ index: 8, class: Int }]
+  [
+    { index: 8, class: Int },
+    { index: 9, class: Int },
+    { index: 10, class: Int },
+    { index: 11, class: Int },
+    { index: 12, class: Int },
+    { index: 13, class: Int },
+    { index: 14, class: Int },
+    { index: 15, class: Int },
+  ]
 }
 
 ///|
 /// Callee-saved registers available for allocation (must be saved/restored)
 /// X20-X22 are reserved for func_table, memory_base, memory_size
 /// X24 is reserved for indirect_table_ptr
+/// In ABI v2, X19 is reserved for context_ptr preservation across JIT-to-JIT calls
 pub fn allocatable_callee_saved_regs() -> Array[PReg] {
-  [
-    { index: 19, class: Int },
-    { index: 23, class: Int },
-    { index: 25, class: Int },
-    { index: 26, class: Int },
-    { index: 27, class: Int },
-    { index: 28, class: Int },
-  ]
+  if ABI_VERSION == 2 {
+    // v2 ABI: X19 is reserved for context_ptr preservation
+    [
+      { index: 23, class: Int },
+      { index: 25, class: Int },
+      { index: 26, class: Int },
+      { index: 27, class: Int },
+      { index: 28, class: Int },
+    ]
+  } else {
+    // v1 ABI: X19 is allocatable
+    [
+      { index: 19, class: Int },
+      { index: 23, class: Int },
+      { index: 25, class: Int },
+      { index: 26, class: Int },
+      { index: 27, class: Int },
+      { index: 28, class: Int },
+    ]
+  }
 }
 
 ///|

@@ -63,8 +63,8 @@ test "i32 mul" {
       #|vcode test(v0:int) -> int {
       #|block0:
       #|    x8 = ldi 3
-      #|    x19 = mul x3, x8
-      #|    ret x19
+      #|    x9 = mul x0, x8
+      #|    ret x9
       #|}
       #|
     ),
@@ -74,22 +74,24 @@ test "i32 mul" {
     mc.dump_disasm(),
     content=(
       #|  0000: ff0301d1  sub sp, sp, #64
-      #|  0004: f45700a9  stp x20, x21, [sp, #0]
-      #|  0008: f66301a9  stp x22, x24, [sp, #16]
-      #|  000c: f37f02a9  stp x19, x31, [sp, #32]
-      #|  0010: f40300aa  mov x20, x0
-      #|  0014: f50301aa  mov x21, x1
-      #|  0018: f60302aa  mov x22, x2
-      #|  001c: 98825ff8  ldur x24, [x20, #-8]
+      #|  0004: f35300a9  stp x19, x20, [sp, #0]
+      #|  0008: f55b01a9  stp x21, x22, [sp, #16]
+      #|  000c: f87f02a9  stp x24, x31, [sp, #32]
+      #|  0010: f30314aa  mov x19, x20
+      #|  0014: 950a40f9  ldr x21, [x20, #16]
+      #|  0018: 960e40f9  ldr x22, [x20, #24]
+      #|  001c: 980640f9  ldr x24, [x20, #8]
+      #|  0020: 940240f9  ldr x20, [x20, #0]
+      #|  0024: e00300aa  mov x0, x0
       #|block0:
-      #|  0020: 680080d2  movz x8, #3, lsl #0
-      #|  0024: 737c089b  mul x19, x3, x8
-      #|  0028: e00313aa  mov x0, x19
-      #|  002c: f45740a9  ldp x20, x21, [sp, #0]
-      #|  0030: f66341a9  ldp x22, x24, [sp, #16]
-      #|  0034: f31340f9  ldr x19, [x31, #32]
-      #|  0038: ff030191  add sp, sp, #64
-      #|  003c: c0035fd6  ret
+      #|  0028: 680080d2  movz x8, #3, lsl #0
+      #|  002c: 097c089b  mul x9, x0, x8
+      #|  0030: e00309aa  mov x0, x9
+      #|  0034: f35340a9  ldp x19, x20, [sp, #0]
+      #|  0038: f55b41a9  ldp x21, x22, [sp, #16]
+      #|  003c: f81340f9  ldr x24, [x31, #32]
+      #|  0040: ff030191  add sp, sp, #64
+      #|  0044: c0035fd6  ret
       #|
     ),
   )
@@ -110,17 +112,17 @@ test "i32 mul" {
     f,
     @jit.Single(4),
   )
-  inspect(result0, content="12")
+  assert_eq(result0, 12)
   // 7 * 3 = 21
   let @jit.Single((result1 : Int)) = jm.call_with_context_poly(
     f,
     @jit.Single(7),
   )
-  inspect(result1, content="21")
+  assert_eq(result1, 21)
   // 0 * 3 = 0
   let @jit.Single((result2 : Int)) = jm.call_with_context_poly(
     f,
     @jit.Single(0),
   )
-  inspect(result2, content="0")
+  assert_eq(result2, 0)
 }

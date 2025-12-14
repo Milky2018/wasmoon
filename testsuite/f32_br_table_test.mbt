@@ -127,41 +127,41 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    d0 = ldf 0
       #|    d1 = ldf 0
       #|    x8 = ldi 0
-      #|    x19 = cmp.eq x3, x8
-      #|    branch x19, block4, block7
+      #|    x9 = cmp.eq x0, x8
+      #|    branch x9, block4, block7
       #|block1(v1:int, f2:float, f3:float):
       #|    ret d2
       #|block2(v4:int, f5:float, f6:float):
       #|    d6 = ldf 3
-      #|    x8 = mov x19
+      #|    x8 = mov x9
       #|    d2 = mov d6
       #|    d3 = mov d5
       #|    jump block1
       #|block3(v7:int, f8:float, f9:float):
       #|    d0 = ldf 2
-      #|    x8 = mov x19
+      #|    x8 = mov x9
       #|    d2 = mov d0
       #|    d3 = mov d5
       #|    jump block1
       #|block4:
-      #|    x19 = mov x3
+      #|    x9 = mov x0
       #|    d4 = mov d0
       #|    d5 = mov d1
       #|    jump block3
       #|block5:
-      #|    x19 = mov x3
+      #|    x9 = mov x0
       #|    d4 = mov d0
       #|    d5 = mov d1
       #|    jump block2
       #|block6:
-      #|    x8 = mov x3
+      #|    x8 = mov x0
       #|    d2 = mov d0
       #|    d3 = mov d1
       #|    jump block1
       #|block7:
       #|    x8 = ldi 1
-      #|    x19 = cmp.eq x3, x8
-      #|    branch x19, block5, block6
+      #|    x9 = cmp.eq x0, x8
+      #|    branch x9, block5, block6
       #|}
       #|
     ),
@@ -184,16 +184,19 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
     @jit.Single(0L),
   )
   inspect(result0, content="2")
+  assert_eq(result0, 2)
   let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(1L),
   )
   inspect(result1, content="3")
+  assert_eq(result1, 3)
   let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(2L),
   )
   inspect(result2, content="0")
+  assert_eq(result2, 0)
 }
 
 ///|

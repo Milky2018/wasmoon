@@ -49,6 +49,32 @@ pub fn get_memory_size_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_size_ptr()
 }
 
+// ============ Memory v2 functions (for v2 ABI) ============
+
+///|
+/// Get memory_grow v2 function pointer for JIT
+pub fn get_memory_grow_v2_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_memory_grow_v2_ptr()
+}
+
+///|
+/// Get get_memory_base v2 function pointer for JIT
+pub fn get_memory_base_v2_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_memory_base_v2_ptr()
+}
+
+///|
+/// Get get_memory_size_bytes v2 function pointer for JIT
+pub fn get_memory_size_bytes_v2_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_memory_size_bytes_v2_ptr()
+}
+
+///|
+/// Get memory_size v2 function pointer for JIT (returns pages)
+pub fn get_memory_size_v2_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_memory_size_v2_ptr()
+}
+
 // ============ JIT Argument Trait ============
 
 ///|
@@ -81,37 +107,33 @@ pub impl JITArg for Double with to_jit_arg(self) {
 // ============ JIT Context Wrapper ============
 
 ///|
-/// JIT execution context
+/// JIT execution context (v2 ABI)
+/// Uses fixed field offsets for JIT prologue:
+/// +0: func_table, +8: indirect_table, +16: memory_base, +24: memory_size
 priv struct JITContext {
   ctx_ptr : Int64
-  // func_table_ptr is used for direct calls (via func_idx)
-  // Passed to JIT functions as X0, stored in X20
-  // indirect_table_ptr is stored at func_table[-1] and loaded into X24 by prologue
-  func_table_ptr : Int64
 }
 
 ///|
-/// Create a new JIT context
+/// Create a new JIT context (v2)
 fn JITContext::new(total_funcs : Int) -> JITContext? {
-  let ctx_ptr = @jit_ffi.c_jit_alloc_context(total_funcs)
+  let ctx_ptr = @jit_ffi.c_jit_alloc_context_v2(total_funcs)
   if ctx_ptr == 0L {
     return None
   }
-  let func_table_ptr = @jit_ffi.c_jit_ctx_get_func_table(ctx_ptr)
-  Some(JITContext::{ ctx_ptr, func_table_ptr })
+  Some(JITContext::{ ctx_ptr, })
 }
 
 ///|
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_set_func(self.ctx_ptr, idx, func_ptr)
+  @jit_ffi.c_jit_ctx_v2_set_func(self.ctx_ptr, idx, func_ptr)
 }
 
 ///|
 /// Allocate indirect table for call_indirect
-/// The C code stores the indirect_table pointer at func_table[-1]
 fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
-  @jit_ffi.c_jit_ctx_alloc_indirect_table(self.ctx_ptr, count) != 0
+  @jit_ffi.c_jit_ctx_v2_alloc_indirect_table(self.ctx_ptr, count) != 0
 }
 
 ///|
@@ -121,7 +143,7 @@ fn JITContext::set_indirect(
   table_idx : Int,
   func_idx : Int,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_set_indirect(self.ctx_ptr, table_idx, func_idx)
+  @jit_ffi.c_jit_ctx_v2_set_indirect(self.ctx_ptr, table_idx, func_idx)
 }
 
 ///|
@@ -131,7 +153,7 @@ fn JITContext::set_memory(
   mem_ptr : Int64,
   mem_size : Int64,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_set_memory(self.ctx_ptr, mem_ptr, mem_size)
+  @jit_ffi.c_jit_ctx_v2_set_memory(self.ctx_ptr, mem_ptr, mem_size)
 }
 
 ///|
@@ -161,15 +183,15 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
 }
 
 ///|
-/// Activate this context for WASI calls
+/// Activate this context for WASI calls (v2)
 fn JITContext::activate(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_set_context(self.ctx_ptr)
+  @jit_ffi.c_jit_set_context_v2(self.ctx_ptr)
 }
 
 ///|
-/// Free the context
+/// Free the context (v2)
 fn JITContext::free(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_free_context(self.ctx_ptr)
+  @jit_ffi.c_jit_free_context_v2(self.ctx_ptr)
 }
 
 ///|
@@ -327,7 +349,8 @@ fn ExecCode::free(self : ExecCode) -> Unit {
 // ============ Multi-value Return Support ============
 
 ///|
-/// Call a JIT function with multiple return values
+/// Call a JIT function with multiple return values (v2 ABI)
+/// X20 = context pointer, X0-X7 = user params
 /// Returns 0 on success, trap code on error
 fn JITContext::call_multi_return(
   self : JITContext,
@@ -356,12 +379,11 @@ fn JITContext::call_multi_return(
   }
   // Prepare results array
   let results_fixed = FixedArray::make(num_results.max(1), 0L)
-  // Call FFI
-  // Pass func_table_ptr to X0 (stored in X20 for direct calls)
-  // indirect_table_ptr is stored in func_table[-1] and loaded into X24 in prologue
-  let trap_code = @jit_ffi.c_jit_call_multi_return(
+  // Call FFI with v2 ABI
+  // X20 = ctx_ptr (context pointer), X0-X7 = user params
+  let trap_code = @jit_ffi.c_jit_call_v2(
+    self.ctx_ptr, // Context pointer for v2 ABI
     func_ptr,
-    self.func_table_ptr, // Use func_table for direct calls
     args_fixed,
     num_args,
     results_fixed,

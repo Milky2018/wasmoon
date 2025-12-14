@@ -771,8 +771,8 @@ test "regalloc: complete allocation output for simple function" {
   inspect(
     assignments_str,
     content=(
-      #|v0 -> x3
-      #|v1 -> x4
+      #|v0 -> x0
+      #|v1 -> x1
       #|v2 -> x8
       #|
     ),
@@ -785,7 +785,7 @@ test "regalloc: complete allocation output for simple function" {
     content=(
       #|vcode alloc_demo(v0:int, v1:int) -> int {
       #|block0:
-      #|    x8 = add x3, x4
+      #|    x8 = add x0, x1
       #|    ret x8
       #|}
       #|
@@ -1238,7 +1238,7 @@ test "regalloc: br_table pattern with 4 targets" {
       _ => inspect(false, content="true")
     }
   }
-  inspect(pregs, content="[Some(x8), Some(x8), Some(x8), Some(x8)]")
+  inspect(pregs, content="[Some(d0), Some(d0), Some(d0), Some(d0)]")
 }
 
 ///|
@@ -1414,10 +1414,10 @@ test "regalloc: mixed int, f32, f64 registers" {
       #|    x8 = ldi 10
       #|    d0 = ldf 3.140000104904175
       #|    d1 = ldf 2.718
-      #|    x19 = add x8, x8
+      #|    x9 = add x8, x8
       #|    d2 = fadd.d d0, d1
       #|    d3 = fadd.d d2, d2
-      #|    store.i32 +0 x19, x19
+      #|    store.i32 +0 x9, x9
       #|    ret d3
       #|}
       #|
