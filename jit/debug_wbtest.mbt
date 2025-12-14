@@ -113,9 +113,8 @@ test "breakpoint manager: at location" {
     Some(bp) => inspect(bp.offset, content="10")
     None => panic()
   }
-  match mgr.at_location(0, 15) {
-    Some(_) => panic()
-    None => ()
+  if mgr.at_location(0, 15) is Some(_) {
+    panic()
   }
 }
 

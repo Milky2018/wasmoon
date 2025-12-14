@@ -260,14 +260,8 @@ pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
     for inst in block.insts {
       mc.emit_instruction(inst, stack_frame)
     }
-    match block.terminator {
-      Some(term) =>
-        mc.emit_terminator_with_epilogue_v2(
-          term,
-          stack_frame,
-          func.result_types,
-        )
-      None => ()
+    if block.terminator is Some(term) {
+      mc.emit_terminator_with_epilogue_v2(term, stack_frame, func.result_types)
     }
   }
   mc.resolve_fixups()

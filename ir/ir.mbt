@@ -111,9 +111,8 @@ pub fn Inst::new_multi(
 /// Get all results of this instruction
 pub fn Inst::all_results(self : Inst) -> Array[Value] {
   let results : Array[Value] = []
-  match self.result {
-    Some(v) => results.push(v)
-    None => ()
+  if self.result is Some(v) {
+    results.push(v)
   }
   for v in self.extra_results {
     results.push(v)

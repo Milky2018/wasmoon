@@ -485,9 +485,8 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       }
       // Definitions
       for def in inst.defs {
-        match def.reg {
-          @abi.Virtual(vreg) => def_set.add(vreg.id)
-          @abi.Physical(_) => ()
+        if def.reg is @abi.Virtual(vreg) {
+          def_set.add(vreg.id)
         }
       }
     }
@@ -496,21 +495,17 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     if block.terminator is Some(term) {
       match term {
         Branch(cond, _, _) =>
-          match cond {
-            @abi.Virtual(vreg) =>
-              if !def_set.contains(vreg.id) {
-                use_set.add(vreg.id)
-              }
-            @abi.Physical(_) => ()
+          if cond is @abi.Virtual(vreg) {
+            if !def_set.contains(vreg.id) {
+              use_set.add(vreg.id)
+            }
           }
         Return(values) =>
           for value in values {
-            match value {
-              @abi.Virtual(vreg) =>
-                if !def_set.contains(vreg.id) {
-                  use_set.add(vreg.id)
-                }
-              @abi.Physical(_) => ()
+            if value is @abi.Virtual(vreg) {
+              if !def_set.contains(vreg.id) {
+                use_set.add(vreg.id)
+              }
             }
           }
         _ => ()
@@ -1131,15 +1126,12 @@ pub fn apply_allocation(
       // Check if any definitions are spilled - collect ALL spilled defs
       let spilled_defs : Array[(@abi.VReg, Int)] = []
       for def in inst.defs {
-        match def.reg {
-          @abi.Virtual(vreg) =>
-            if alloc.assignments.get(vreg.id) is None {
-              match alloc.spill_slots.get(vreg.id) {
-                Some(slot) => spilled_defs.push((vreg, slot))
-                None => ()
-              }
+        if def.reg is @abi.Virtual(vreg) {
+          if alloc.assignments.get(vreg.id) is None {
+            if alloc.spill_slots.get(vreg.id) is Some(slot) {
+              spilled_defs.push((vreg, slot))
             }
-          @abi.Physical(_) => ()
+          }
         }
       }
 
@@ -1358,37 +1350,31 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
     // Instruction uses
     for inst in block.insts {
       for use_reg in inst.uses {
-        match use_reg {
-          @abi.Virtual(vreg) => used_vregs.add(vreg.id)
-          @abi.Physical(_) => ()
+        if use_reg is @abi.Virtual(vreg) {
+          used_vregs.add(vreg.id)
         }
       }
     }
 
     // Terminator uses
-    match block.terminator {
-      Some(term) =>
-        match term {
-          Branch(cond, _, _) =>
-            match cond {
-              @abi.Virtual(vreg) => used_vregs.add(vreg.id)
-              @abi.Physical(_) => ()
+    if block.terminator is Some(term) {
+      match term {
+        Branch(cond, _, _) =>
+          if cond is @abi.Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        BrTable(index, _, _) =>
+          if index is @abi.Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        Return(values) =>
+          for v in values {
+            if v is @abi.Virtual(vreg) {
+              used_vregs.add(vreg.id)
             }
-          BrTable(index, _, _) =>
-            match index {
-              @abi.Virtual(vreg) => used_vregs.add(vreg.id)
-              @abi.Physical(_) => ()
-            }
-          Return(values) =>
-            for v in values {
-              match v {
-                @abi.Virtual(vreg) => used_vregs.add(vreg.id)
-                @abi.Physical(_) => ()
-              }
-            }
-          Jump(_) | Trap(_) => ()
-        }
-      None => ()
+          }
+        Jump(_) | Trap(_) => ()
+      }
     }
   }
 
@@ -1425,12 +1411,12 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
         // Keep if any defined vreg is used
         let mut any_def_used = false
         for def in inst.defs {
-          match def.reg {
-            @abi.Virtual(vreg) =>
-              if used_vregs.contains(vreg.id) {
-                any_def_used = true
-              }
-            @abi.Physical(_) => any_def_used = true // Always keep physical reg defs
+          if def.reg is @abi.Virtual(vreg) {
+            if used_vregs.contains(vreg.id) {
+              any_def_used = true
+            }
+          } else {
+            any_def_used = true // Always keep physical reg defs
           }
         }
         // Also keep instructions with no defs (shouldn't happen for pure ops, but be safe)
@@ -1442,9 +1428,8 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
     }
 
     // Copy terminator
-    match block.terminator {
-      Some(term) => new_block.set_terminator(term)
-      None => ()
+    if block.terminator is Some(term) {
+      new_block.set_terminator(term)
     }
   }
   new_func

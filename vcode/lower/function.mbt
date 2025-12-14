@@ -73,10 +73,10 @@ pub fn VCodeFunction::needs_extra_results_ptr(self : VCodeFunction) -> Bool {
   let mut int_count = 0
   let mut float_count = 0
   for ty in self.result_types {
-    match ty {
-      I32 | I64 => int_count = int_count + 1
-      F32 | F64 => float_count = float_count + 1
-      _ => ()
+    if ty is (I32 | I64) {
+      int_count = int_count + 1
+    } else if ty is (F32 | F64) {
+      float_count = float_count + 1
     }
   }
   int_count > 2 || float_count > 2

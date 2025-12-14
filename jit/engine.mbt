@@ -208,9 +208,8 @@ pub fn JITEngine::is_compiled(self : JITEngine, func_idx : Int) -> Bool {
 /// Invalidate a compiled function
 pub fn JITEngine::invalidate(self : JITEngine, func_idx : Int) -> Unit {
   self.runtime.invalidate(func_idx)
-  match self.functions.get(func_idx) {
-    Some(entry) => entry.status = NotCompiled
-    None => ()
+  if self.functions.get(func_idx) is Some(entry) {
+    entry.status = NotCompiled
   }
 }
 

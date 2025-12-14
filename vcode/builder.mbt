@@ -67,9 +67,8 @@ fn VCodeBuilder::new_vreg(
 
 ///|
 fn VCodeBuilder::emit(self : VCodeBuilder, inst : @instr.VCodeInst) -> Unit {
-  match self.current_block {
-    Some(block) => block.add_inst(inst)
-    None => () // Silently ignore if no current block
+  if self.current_block is Some(block) {
+    block.add_inst(inst)
   }
 }
 
@@ -413,9 +412,8 @@ pub fn VCodeBuilder::jump(
   self : VCodeBuilder,
   target : @block.VCodeBlock,
 ) -> Unit {
-  match self.current_block {
-    Some(block) => block.set_terminator(@instr.VCodeTerminator::Jump(target.id))
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(@instr.VCodeTerminator::Jump(target.id))
   }
 }
 
@@ -426,16 +424,14 @@ pub fn VCodeBuilder::branch(
   then_block : @block.VCodeBlock,
   else_block : @block.VCodeBlock,
 ) -> Unit {
-  match self.current_block {
-    Some(block) =>
-      block.set_terminator(
-        @instr.VCodeTerminator::Branch(
-          Virtual(cond),
-          then_block.id,
-          else_block.id,
-        ),
-      )
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(
+      @instr.VCodeTerminator::Branch(
+        Virtual(cond),
+        then_block.id,
+        else_block.id,
+      ),
+    )
   }
 }
 
@@ -458,8 +454,7 @@ pub fn VCodeBuilder::return_(
 
 ///|
 pub fn VCodeBuilder::trap(self : VCodeBuilder, msg : String) -> Unit {
-  match self.current_block {
-    Some(block) => block.set_terminator(@instr.VCodeTerminator::Trap(msg))
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(@instr.VCodeTerminator::Trap(msg))
   }
 }

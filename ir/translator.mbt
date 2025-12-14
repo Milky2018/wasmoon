@@ -1387,10 +1387,8 @@ fn Translator::translate_br_table(
   let default_intermediate = self.builder.create_block()
 
   // Phase 2: Emit br_table in original block
-  match original_block {
-    Some(_) =>
-      self.builder.br_table(index, intermediate_blocks, default_intermediate)
-    None => ()
+  if original_block is Some(_) {
+    self.builder.br_table(index, intermediate_blocks, default_intermediate)
   }
 
   // Phase 3: Fill in intermediate blocks with jumps to real targets

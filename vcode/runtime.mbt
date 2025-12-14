@@ -132,9 +132,8 @@ pub fn CodeCache::insert(
   }
 
   // Remove old version if exists
-  match self.functions.get(func_idx) {
-    Some(old) => self.total_size = self.total_size - old.code_size
-    None => ()
+  if self.functions.get(func_idx) is Some(old) {
+    self.total_size = self.total_size - old.code_size
   }
   self.total_size = self.total_size + func.code_size
   self.functions.set(func_idx, func)
@@ -143,9 +142,8 @@ pub fn CodeCache::insert(
 ///|
 /// Invalidate a cached function
 pub fn CodeCache::invalidate(self : CodeCache, func_idx : Int) -> Unit {
-  match self.functions.get(func_idx) {
-    Some(func) => func.invalidate()
-    None => ()
+  if self.functions.get(func_idx) is Some(func) {
+    func.invalidate()
   }
 }
 
@@ -198,9 +196,8 @@ fn CodeCache::evict_lru(self : CodeCache) -> Unit {
       smallest_idx = Some(idx)
     }
   }
-  match smallest_idx {
-    Some(idx) => self.remove(idx)
-    None => ()
+  if smallest_idx is Some(idx) {
+    self.remove(idx)
   }
 }
 

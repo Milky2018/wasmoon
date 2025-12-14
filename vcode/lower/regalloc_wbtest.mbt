@@ -399,14 +399,10 @@ test "liveness: mutually exclusive paths with same vreg" {
   let liveness = compute_liveness(func)
 
   // Get v1's use-def info
-  let v1_info = liveness.use_def.get(v1.id).unwrap()
-
   // CRITICAL: v1 has TWO definitions: (1:0a) and (2:0a)
   // Current code only keeps ONE def_point
-  match v1_info.def_point {
-    Some(_) => ()
-    None => ()
-  }
+  // This is just capturing the current behavior, whether Some or None
+  liveness.use_def.get(v1.id).unwrap() |> ignore
 
   // v1 should be in block3's live-in set
   inspect(liveness.live_in[3].contains(v1.id), content="true")

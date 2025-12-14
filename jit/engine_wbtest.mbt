@@ -63,9 +63,8 @@ test "jit engine: mark compiled" {
 
   // Check it's compiled
   inspect(engine.is_compiled(0), content="true")
-  match engine.get_compiled(0) {
-    Some(_) => ()
-    None => panic()
+  if engine.get_compiled(0) is None {
+    panic()
   }
 }
 
@@ -110,13 +109,12 @@ test "jit engine: invalidate" {
   engine.invalidate(0)
   // Note: strategy still shows compiled, but runtime is invalidated
   // The function entry status is updated
-  match engine.functions.get(0) {
-    Some(entry) =>
-      match entry.status {
-        NotCompiled => ()
-        _ => panic()
-      }
-    None => ()
+  if engine.functions.get(0) is Some(entry) {
+    if entry.status is NotCompiled {
+      ()
+    } else {
+      panic()
+    }
   }
 }
 

@@ -2091,9 +2091,8 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
       Keyword("param") => {
         self.advance()
         // Optional name
-        match self.current {
-          Id(_) => self.advance()
-          _ => ()
+        if self.current is Id(_) {
+          self.advance()
         }
         // Parse types until )
         while self.current != RParen {
@@ -2798,11 +2797,12 @@ fn Parser::parse_plain_instruction(
             let mut depth = 1 // We're inside (result ...)
             while depth > 0 {
               self.advance()
-              match self.current {
-                LParen => depth += 1
-                RParen => depth -= 1
-                Eof => break
-                _ => ()
+              if self.current is LParen {
+                depth += 1
+              } else if self.current is RParen {
+                depth -= 1
+              } else if self.current is Eof {
+                break
               }
             }
             self.advance() // Move past the closing RParen

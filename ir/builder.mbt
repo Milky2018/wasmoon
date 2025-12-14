@@ -74,9 +74,8 @@ fn IRBuilder::emit_inst(
 ) -> Value {
   let result = self.func.new_value(ty)
   let inst = Inst::new(Some(result), opcode, operands)
-  match self.current_block {
-    Some(block) => block.add_inst(inst)
-    None => () // No current block, instruction is dropped
+  if self.current_block is Some(block) {
+    block.add_inst(inst)
   }
   result
 }
@@ -89,9 +88,8 @@ fn IRBuilder::emit_void_inst(
   operands : Array[Value],
 ) -> Unit {
   let inst = Inst::new(None, opcode, operands)
-  match self.current_block {
-    Some(block) => block.add_inst(inst)
-    None => ()
+  if self.current_block is Some(block) {
+    block.add_inst(inst)
   }
 }
 
@@ -701,9 +699,8 @@ pub fn IRBuilder::call_multi(
   }
   // Create instruction with multiple results
   let inst = Inst::new_multi(results, Opcode::Call(func_idx), args)
-  match self.current_block {
-    Some(block) => block.add_inst(inst)
-    None => ()
+  if self.current_block is Some(block) {
+    block.add_inst(inst)
   }
   results
 }
@@ -755,9 +752,8 @@ pub fn IRBuilder::call_indirect_multi(
   }
   // Create instruction with multiple results
   let inst = Inst::new_multi(results, Opcode::CallIndirect(type_idx), all_args)
-  match self.current_block {
-    Some(block) => block.add_inst(inst)
-    None => ()
+  if self.current_block is Some(block) {
+    block.add_inst(inst)
   }
   results
 }
@@ -771,9 +767,8 @@ pub fn IRBuilder::jump(
   target : Block,
   args : Array[Value],
 ) -> Unit {
-  match self.current_block {
-    Some(block) => block.set_terminator(Terminator::Jump(target.id, args))
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(Terminator::Jump(target.id, args))
   }
 }
 
@@ -785,10 +780,8 @@ pub fn IRBuilder::brz(
   then_block : Block,
   else_block : Block,
 ) -> Unit {
-  match self.current_block {
-    Some(block) =>
-      block.set_terminator(Terminator::Brz(cond, then_block.id, else_block.id))
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(Terminator::Brz(cond, then_block.id, else_block.id))
   }
 }
 
@@ -800,10 +793,8 @@ pub fn IRBuilder::brnz(
   then_block : Block,
   else_block : Block,
 ) -> Unit {
-  match self.current_block {
-    Some(block) =>
-      block.set_terminator(Terminator::Brnz(cond, then_block.id, else_block.id))
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(Terminator::Brnz(cond, then_block.id, else_block.id))
   }
 }
 
@@ -816,29 +807,25 @@ pub fn IRBuilder::br_table(
   default_target : Block,
 ) -> Unit {
   let target_ids = targets.map(fn(b) { b.id })
-  match self.current_block {
-    Some(block) =>
-      block.set_terminator(
-        Terminator::BrTable(index, target_ids, default_target.id),
-      )
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(
+      Terminator::BrTable(index, target_ids, default_target.id),
+    )
   }
 }
 
 ///|
 /// Return from function
 pub fn IRBuilder::return_(self : IRBuilder, values : Array[Value]) -> Unit {
-  match self.current_block {
-    Some(block) => block.set_terminator(Terminator::Return(values))
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(Terminator::Return(values))
   }
 }
 
 ///|
 /// Trap/unreachable
 pub fn IRBuilder::trap(self : IRBuilder, reason : String) -> Unit {
-  match self.current_block {
-    Some(block) => block.set_terminator(Terminator::Trap(reason))
-    None => ()
+  if self.current_block is Some(block) {
+    block.set_terminator(Terminator::Trap(reason))
   }
 }

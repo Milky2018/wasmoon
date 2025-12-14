@@ -244,9 +244,8 @@ fn lower_block_body(
   }
 
   // Lower terminator
-  match ir_block.terminator {
-    Some(term) => lower_terminator(ctx, term, vcode_block)
-    None => ()
+  if ir_block.terminator is Some(term) {
+    lower_terminator(ctx, term, vcode_block)
   }
 }
 

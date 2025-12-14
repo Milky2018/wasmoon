@@ -430,9 +430,8 @@ pub fn build_stack_layout_aarch64(
     let (vreg_id, _slot_idx) = entry
     // Find the vreg info
     let vreg = find_vreg_by_id(func, vreg_id)
-    match vreg {
-      Some(v) => frame.alloc_spill(v) |> ignore
-      None => ()
+    if vreg is Some(v) {
+      frame.alloc_spill(v) |> ignore
     }
   }
 
