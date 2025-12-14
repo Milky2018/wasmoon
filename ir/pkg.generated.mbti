@@ -187,6 +187,8 @@ pub fn IRBuilder::store16(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store32(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store8(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
+pub fn IRBuilder::table_get(Self, Int, Value) -> Value
+pub fn IRBuilder::table_set(Self, Int, Value, Value) -> Unit
 pub fn IRBuilder::trap(Self, String) -> Unit
 pub fn IRBuilder::udiv(Self, Value, Value) -> Value
 pub fn IRBuilder::uextend(Self, Type, Value) -> Value
@@ -287,6 +289,8 @@ pub enum Opcode {
   MemorySize
   Select
   Copy
+  TableGet(Int)
+  TableSet(Int)
   Call(Int)
   CallIndirect(Int)
 }

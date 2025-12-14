@@ -485,3 +485,39 @@ test "emit_str_imm" {
     ),
   )
 }
+
+///|
+test "emit_ldr_reg_scaled" {
+  let mc = MachineCode::new()
+  // LDR X0, [X1, X2, LSL #3] - scaled by 8 (for 64-bit elements)
+  emit_ldr_reg_scaled(mc, 0, 1, 2, 3)
+  // LDR X3, [X4, X5, LSL #0] - no scaling
+  emit_ldr_reg_scaled(mc, 3, 4, 5, 0)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 207862f8  ldr x0, [x1, x2, lsl #3]
+      #|  0004: 836865f8  ldr x3, [x4, x5, lsl #0]
+      #|
+    ),
+  )
+}
+
+///|
+test "emit_str_reg_scaled" {
+  let mc = MachineCode::new()
+  // STR X0, [X1, X2, LSL #3] - scaled by 8 (for 64-bit elements)
+  emit_str_reg_scaled(mc, 0, 1, 2, 3)
+  // STR X3, [X4, X5, LSL #0] - no scaling
+  emit_str_reg_scaled(mc, 3, 4, 5, 0)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 207822f8  str x0, [x1, x2, lsl #3]
+      #|  0004: 836825f8  str x3, [x4, x5, lsl #0]
+      #|
+    ),
+  )
+}

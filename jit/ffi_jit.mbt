@@ -420,7 +420,14 @@ fn JITContext::call_multi_return(
         I64 => 1
         F32 => 2
         F64 => 3
-        _ => 0
+        // Reference types are 64-bit integer values (indices/pointers)
+        FuncRef
+        | ExternRef
+        | RefFunc
+        | RefExtern
+        | RefFuncTyped(_)
+        | RefNullFuncTyped(_) => 1
+        V128 => abort("V128 not supported in JIT")
       }
     } else {
       0
@@ -434,7 +441,14 @@ fn JITContext::call_multi_return(
       I64 => 1
       F32 => 2
       F64 => 3
-      _ => 0
+      // Reference types are 64-bit integer values (indices/pointers)
+      FuncRef
+      | ExternRef
+      | RefFunc
+      | RefExtern
+      | RefFuncTyped(_)
+      | RefNullFuncTyped(_) => 1
+      V128 => abort("V128 not supported in JIT")
     }
   }
   // Prepare results array

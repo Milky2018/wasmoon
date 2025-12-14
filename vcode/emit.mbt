@@ -1053,6 +1053,87 @@ pub fn emit_str_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
 }
 
 ///|
+/// Encode LDR (64-bit, register offset with LSL): LDR Xt, [Xn, Xm, LSL #shift]
+/// shift must be 0 or 3 (for 64-bit elements, LSL #3 = multiply by 8)
+/// Opcode base: 0xF8606800 (S=0) or 0xF8607800 (S=1 for scaled)
+pub fn emit_ldr_reg_scaled(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  mc.annotate("ldr x\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]")
+  // AArch64 LDR (register) encoding:
+  // [31:30] = size = 11 (64-bit)
+  // [29:27] = 111 (fixed)
+  // [26] = V = 0 (general purpose register)
+  // [25:24] = 00 (register offset)
+  // [23:22] = opc = 01 (LDR)
+  // [21] = 1 (fixed for register offset)
+  // [20:16] = Rm (index register)
+  // [15:13] = option = 011 (LSL/UXTX)
+  // [12] = S (1 if scaled by size, 0 if not)
+  // [11:10] = 10 (fixed)
+  // [9:5] = Rn (base register)
+  // [4:0] = Rt (destination register)
+  let s_bit = if shift == 3 { 1 } else { 0 }
+  let inst = (0b11 << 30) |
+    (0b111 << 27) |
+    (0 << 26) |
+    (0b00 << 24) |
+    (0b01 << 22) |
+    (1 << 21) |
+    ((rm & 31) << 16) |
+    (0b011 << 13) |
+    (s_bit << 12) |
+    (0b10 << 10) |
+    ((rn & 31) << 5) |
+    (rt & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
+}
+
+///|
+/// Encode STR (64-bit, register offset with LSL): STR Xt, [Xn, Xm, LSL #shift]
+/// shift must be 0 or 3 (for 64-bit elements, LSL #3 = multiply by 8)
+/// Opcode base: 0xF8206800 (S=0) or 0xF8207800 (S=1 for scaled)
+pub fn emit_str_reg_scaled(
+  mc : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  mc.annotate("str x\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]")
+  // AArch64 STR (register) encoding:
+  // Same as LDR but opc = 00 instead of 01
+  let s_bit = if shift == 3 { 1 } else { 0 }
+  let inst = (0b11 << 30) |
+    (0b111 << 27) |
+    (0 << 26) |
+    (0b00 << 24) |
+    (0b00 << 22) |
+    (1 << 21) |
+    ((rm & 31) << 16) |
+    (0b011 << 13) |
+    (s_bit << 12) |
+    (0b10 << 10) |
+    ((rn & 31) << 5) |
+    (rt & 31)
+  mc.emit_inst(
+    inst & 255,
+    (inst >> 8) & 255,
+    (inst >> 16) & 255,
+    (inst >> 24) & 255,
+  )
+}
+
+///|
 /// Encode LDRB (unsigned offset): LDRB Wt, [Xn, #imm]
 /// Opcode: 0x39400000
 pub fn emit_ldrb_imm(mc : MachineCode, rt : Int, rn : Int, imm12 : Int) -> Unit {
@@ -4042,6 +4123,28 @@ fn emit_instruction(
       if result_reg != 0 {
         emit_mov_reg(mc, result_reg, 0) // MOV result, X0
       }
+    }
+    TableGet(_table_idx) => {
+      // Load function reference from indirect table
+      // Uses: [elem_idx], Defs: [result]
+      // X24 = indirect_table base pointer
+      // result = indirect_table[elem_idx] = [X24 + elem_idx * 8]
+      let result_reg = wreg_num(inst.defs[0])
+      let elem_idx_reg = reg_num(inst.uses[0])
+      // Use LDR Xd, [Xn, Xm, LSL #3] - scaled register offset
+      // This automatically multiplies elem_idx by 8 (LSL #3)
+      emit_ldr_reg_scaled(mc, result_reg, 24, elem_idx_reg, 3)
+    }
+    TableSet(_table_idx) => {
+      // Store function reference to indirect table
+      // Uses: [elem_idx, value], Defs: []
+      // X24 = indirect_table base pointer
+      // indirect_table[elem_idx] = value => [X24 + elem_idx * 8] = value
+      let elem_idx_reg = reg_num(inst.uses[0])
+      let value_reg = reg_num(inst.uses[1])
+      // Use STR Xd, [Xn, Xm, LSL #3] - scaled register offset
+      // This automatically multiplies elem_idx by 8 (LSL #3)
+      emit_str_reg_scaled(mc, value_reg, 24, elem_idx_reg, 3)
     }
   }
 }

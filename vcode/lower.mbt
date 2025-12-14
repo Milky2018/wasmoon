@@ -349,6 +349,12 @@ fn lower_inst(
       lower_memory_grow(ctx, inst, block, max_pages)
     @ir.Opcode::MemorySize => lower_memory_size(ctx, inst, block)
 
+    // Table operations
+    @ir.Opcode::TableGet(table_idx) =>
+      lower_table_get(ctx, inst, block, table_idx)
+    @ir.Opcode::TableSet(table_idx) =>
+      lower_table_set(ctx, inst, block, table_idx)
+
     // Function calls
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
     @ir.Opcode::CallIndirect(_type_idx) => lower_call_indirect(ctx, inst, block)
@@ -1663,6 +1669,55 @@ fn lower_memory_size(
   // Add clobbers for caller-saved registers (it's a call)
   add_call_clobbers(size_inst)
   block.add_inst(size_inst)
+}
+
+///|
+/// Lower table.get instruction
+/// Loads a function reference from the indirect table
+fn lower_table_get(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+  table_idx : Int,
+) -> Unit {
+  ignore(table_idx) // Currently only table 0 is supported
+  // Get the result vreg
+  guard inst.result is Some(result) else { return }
+  let result_vreg = ctx.get_vreg(result)
+
+  // Get the element index operand
+  guard inst.operands.length() > 0 else { return }
+  let elem_idx = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Create the TableGet VCode instruction
+  // Uses: [elem_idx], Defs: [result]
+  let get_inst = VCodeInst::new(TableGet(table_idx))
+  get_inst.add_def({ reg: Virtual(result_vreg) })
+  get_inst.add_use(Virtual(elem_idx))
+  block.add_inst(get_inst)
+}
+
+///|
+/// Lower table.set instruction
+/// Stores a function reference to the indirect table
+fn lower_table_set(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : VCodeBlock,
+  table_idx : Int,
+) -> Unit {
+  ignore(table_idx) // Currently only table 0 is supported
+  // Get the operands: elem_idx and value
+  guard inst.operands.length() >= 2 else { return }
+  let elem_idx = ctx.get_vreg_for_use(inst.operands[0], block)
+  let value = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Create the TableSet VCode instruction
+  // Uses: [elem_idx, value], Defs: []
+  let set_inst = VCodeInst::new(TableSet(table_idx))
+  set_inst.add_use(Virtual(elem_idx))
+  set_inst.add_use(Virtual(value))
+  block.add_inst(set_inst)
 }
 
 ///|

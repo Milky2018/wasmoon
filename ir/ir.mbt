@@ -211,6 +211,10 @@ pub enum Opcode {
   Select // Conditional select (cond ? a : b)
   Copy // Copy value (for register allocation)
 
+  // Table operations (for reference types)
+  TableGet(Int) // Get element from table (table index)
+  TableSet(Int) // Set element in table (table index)
+
   // Function calls
   Call(Int) // Direct call (function index)
   CallIndirect(Int) // Indirect call (type index)

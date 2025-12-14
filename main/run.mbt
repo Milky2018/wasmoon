@@ -541,7 +541,9 @@ fn run_with_jit(
                   I64(n) => n
                   F32(n) => n.reinterpret_as_int().to_int64()
                   F64(n) => n.reinterpret_as_int64()
-                  _ => 0L
+                  FuncRef(idx) => idx.to_int64()
+                  ExternRef(idx) => idx.to_int64()
+                  Null => -1L // Sentinel value for null reference
                 }
                 i64_args.push(v)
               }
@@ -560,6 +562,11 @@ fn run_with_jit(
               let values : Array[@types.Value] = []
               for i, r in results {
                 if i < f.result_types.length() {
+                  if debug_config.verbose {
+                    println(
+                      "[DEBUG] result[\{i}] type: \{f.result_types[i]}, raw value: \{r}",
+                    )
+                  }
                   let v = match f.result_types[i] {
                     I32 => @types.Value::I32(r.to_int())
                     I64 => @types.Value::I64(r)
@@ -569,7 +576,19 @@ fn run_with_jit(
                       @types.Value::F32(Float::from_double(f64_val))
                     }
                     F64 => @types.Value::F64(r.reinterpret_as_double())
-                    _ => @types.Value::I32(r.to_int())
+                    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
+                      if r == -1L {
+                        @types.Value::Null
+                      } else {
+                        @types.Value::FuncRef(r.to_int())
+                      }
+                    ExternRef | RefExtern =>
+                      if r == -1L {
+                        @types.Value::Null
+                      } else {
+                        @types.Value::ExternRef(r.to_int())
+                      }
+                    V128 => @types.Value::I64(r) // Placeholder for V128
                   }
                   values.push(v)
                 }

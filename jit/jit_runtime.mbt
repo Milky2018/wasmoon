@@ -172,7 +172,7 @@ fn get_import_trampoline(module_name : String, field_name : String) -> Int64 {
       "environ_get" => get_environ_get_ptr()
       "clock_time_get" => get_clock_time_get_ptr()
       "random_get" => get_random_get_ptr()
-      _ => 0L // Unknown WASI function
+      _ => abort("Unknown WASI function: \{field_name}")
     }
   } else if module_name == "spectest" {
     match field_name {
@@ -183,17 +183,46 @@ fn get_import_trampoline(module_name : String, field_name : String) -> Int64 {
       "print_f64" => get_spectest_print_f64_ptr()
       "print_i32_f32" => get_spectest_print_i32_f32_ptr()
       "print_f64_f64" => get_spectest_print_f64_f64_ptr()
-      _ => 0L // Unknown spectest function
+      _ => abort("Unknown spectest function: \{field_name}")
     }
   } else {
-    0L // Unknown module
+    abort("Unknown import module: \{module_name}")
   }
 }
 
 ///|
 /// Check if an import has a JIT trampoline implementation
 pub fn has_import_trampoline(module_name : String, field_name : String) -> Bool {
-  get_import_trampoline(module_name, field_name) != 0L
+  if module_name == "wasi_snapshot_preview1" {
+    match field_name {
+      "fd_write"
+      | "fd_read"
+      | "fd_close"
+      | "fd_fdstat_get"
+      | "fd_prestat_get"
+      | "proc_exit"
+      | "args_sizes_get"
+      | "args_get"
+      | "environ_sizes_get"
+      | "environ_get"
+      | "clock_time_get"
+      | "random_get" => true
+      _ => false
+    }
+  } else if module_name == "spectest" {
+    match field_name {
+      "print"
+      | "print_i32"
+      | "print_i64"
+      | "print_f32"
+      | "print_f64"
+      | "print_i32_f32"
+      | "print_f64_f64" => true
+      _ => false
+    }
+  } else {
+    false
+  }
 }
 
 ///|

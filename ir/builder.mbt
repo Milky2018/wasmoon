@@ -620,6 +620,30 @@ pub fn IRBuilder::memory_size(self : IRBuilder) -> Value {
   self.emit_inst(Type::I32, Opcode::MemorySize, [])
 }
 
+// ============ Table Operations ============
+
+///|
+/// Get element from table (for reference types)
+/// Returns i64 (function reference/pointer)
+pub fn IRBuilder::table_get(
+  self : IRBuilder,
+  table_idx : Int,
+  elem_idx : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::TableGet(table_idx), [elem_idx])
+}
+
+///|
+/// Set element in table (for reference types)
+pub fn IRBuilder::table_set(
+  self : IRBuilder,
+  table_idx : Int,
+  elem_idx : Value,
+  value : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::TableSet(table_idx), [elem_idx, value])
+}
+
 // ============ Misc Operations ============
 
 ///|

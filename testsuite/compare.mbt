@@ -33,7 +33,12 @@ fn jit_results_to_values(
       I64 => I64(@jit.FromInt64::from_int64_bits(raw))
       F32 => F32(@jit.FromInt64::from_int64_bits(raw))
       F64 => F64(@jit.FromInt64::from_int64_bits(raw))
-      _ => I32(0) // fallback for V128, FuncRef, etc.
+      // Reference types: -1L is null sentinel
+      FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
+        if raw == -1L { Null } else { FuncRef(raw.to_int()) }
+      ExternRef | RefExtern =>
+        if raw == -1L { Null } else { ExternRef(raw.to_int()) }
+      V128 => abort("V128 not supported in JIT")
     }
     values.push(value)
   }
@@ -48,7 +53,9 @@ fn value_to_jit_arg(value : @types.Value) -> Int64 {
     I64(n) => n
     F32(f) => f.reinterpret_as_int().to_int64()
     F64(d) => d.reinterpret_as_int64()
-    _ => 0L
+    FuncRef(idx) => idx.to_int64()
+    ExternRef(idx) => idx.to_int64()
+    Null => -1L // null sentinel
   }
 }
 
