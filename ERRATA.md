@@ -596,4 +596,4 @@ _请在此处继续添加新的意见和建议_
 - [x] CLI 的诸多命令描述有误，比如现在的 test 命令和 wast 命令实际上是一回事，而且都和 json 无关。`debug` 等参数应该有 choices 参数。在 `.mooncakes/TheWaWaR/clap/src/clap.mbti` 中查看 named 函数的声明。 → 已修复：更新 test 命令描述为 "Run WebAssembly test script (.wast format)"，为 debug 和 config action 参数添加 choices
 - [x] Sign/Zero Extension Instructions、br、adr 也需要添加到 "all emit functions disasm" 中
 - [ ] `pub fn` 过多了
-- [ ] call_indirect 在 vcode 的 dump 中会打印很长一个东西，比如 `f9 = call_indirect(8) -> 1 results v8, f0, f1, f2, f3, f4, f5, f6, f7`
+- [x] call_indirect 在 vcode 的 dump 中会打印很长一个东西，比如 `f9 = call_indirect(8) -> 1 results v8, f0, f1, f2, f3, f4, f5, f6, f7` → 已简化：只打印函数指针（第一个 use），不打印所有参数；只打印结果寄存器，不打印 clobber 寄存器
