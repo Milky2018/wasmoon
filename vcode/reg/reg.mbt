@@ -1,0 +1,41 @@
+///|
+/// Register class - categorizes registers by their purpose
+pub(all) enum RegClass {
+  Int // Integer/general-purpose registers
+  Float32 // 32-bit floating-point registers
+  Float64 // 64-bit floating-point registers
+}
+
+///|
+fn RegClass::to_string(self : RegClass) -> String {
+  match self {
+    Int => "int"
+    Float32 => "float"
+    Float64 => "double"
+  }
+}
+
+///|
+pub impl Show for RegClass with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// A register reference - either virtual or physical
+pub(all) enum Reg {
+  Virtual(VReg)
+  Physical(PReg)
+}
+
+///|
+fn Reg::to_string(self : Reg) -> String {
+  match self {
+    Virtual(vreg) => vreg.to_string()
+    Physical(preg) => preg.to_string()
+  }
+}
+
+///|
+pub impl Show for Reg with output(self, logger) {
+  logger.write_string(self.to_string())
+}

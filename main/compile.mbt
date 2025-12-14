@@ -117,7 +117,7 @@ fn run_compile(
     let allocated = @vcode.allocate_registers_aarch64(vcode_func)
 
     // Stage 5: Emit machine code
-    let mc = @vcode.emit_function(allocated)
+    let mc = @emit.emit_function(allocated)
 
     // Stage 6: Create compiled function and add to module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)

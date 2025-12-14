@@ -2,8 +2,8 @@
 
 ///|
 test "emit: add register" {
-  let mc = MachineCode::new()
-  emit_add_reg(mc, 0, 1, 2) // ADD X0, X1, X2
+  let mc = @emit.MachineCode::new()
+  mc.emit_add_reg(0, 1, 2)
   let bytes = mc.get_bytes()
   // 64-bit ADD: 0x8B020020
   inspect(bytes[0], content="32") // 0x20 = rd=0 | (rn[2:0]=1)<<5
@@ -14,8 +14,8 @@ test "emit: add register" {
 
 ///|
 test "emit: sub register" {
-  let mc = MachineCode::new()
-  emit_sub_reg(mc, 3, 4, 5) // SUB X3, X4, X5
+  let mc = @emit.MachineCode::new()
+  mc.emit_sub_reg(3, 4, 5) // SUB X3, X4, X5
   let bytes = mc.get_bytes()
   // 64-bit SUB: 0xCB050083
   inspect(bytes[0], content="131") // 0x83 = rd=3 | (rn[2:0]=4)<<5
@@ -26,8 +26,8 @@ test "emit: sub register" {
 
 ///|
 test "emit: mov register" {
-  let mc = MachineCode::new()
-  emit_mov_reg(mc, 0, 1) // MOV X0, X1 (ORR X0, XZR, X1)
+  let mc = @emit.MachineCode::new()
+  mc.emit_mov_reg(0, 1) // MOV X0, X1 (ORR X0, XZR, X1)
   let bytes = mc.get_bytes()
   // MOV is ORR X0, XZR, X1: 0xAA0103E0
   // rd=0, rn=31 (XZR), rm=1
@@ -39,8 +39,8 @@ test "emit: mov register" {
 
 ///|
 test "emit: movz immediate" {
-  let mc = MachineCode::new()
-  emit_movz(mc, 0, 0x1234, 0) // MOVZ X0, #0x1234
+  let mc = @emit.MachineCode::new()
+  mc.emit_movz(0, 0x1234, 0) // MOVZ X0, #0x1234
   let bytes = mc.get_bytes()
   // MOVZ X0, #0x1234: 0xD2824680 (little-endian: 80 46 82 D2)
   inspect(bytes[3], content="210") // 0xD2
@@ -49,8 +49,8 @@ test "emit: movz immediate" {
 
 ///|
 test "emit: movz immediate 42" {
-  let mc = MachineCode::new()
-  emit_movz(mc, 0, 42, 0) // MOVZ X0, #42
+  let mc = @emit.MachineCode::new()
+  mc.emit_movz(0, 42, 0) // MOVZ X0, #42
   let bytes = mc.get_bytes()
   // MOVZ X0, #42: 0xD2800540 (little-endian: 40 05 80 D2)
   inspect(bytes[0], content="64") // 0x40
@@ -61,28 +61,28 @@ test "emit: movz immediate 42" {
 
 ///|
 test "emit: load immediate 64-bit" {
-  let mc = MachineCode::new()
-  emit_load_imm64(mc, 0, 42L) // Load 42 into X0
+  let mc = @emit.MachineCode::new()
+  mc.emit_load_imm64(0, 42L) // Load 42 into X0
   // Should emit MOVZ X0, #42
   inspect(mc.size() > 0, content="true")
 }
 
 ///|
 test "emit: ldr/str" {
-  let mc = MachineCode::new()
-  emit_ldr_imm(mc, 0, 1, 8) // LDR X0, [X1, #8]
-  emit_str_imm(mc, 2, 3, 16) // STR X2, [X3, #16]
+  let mc = @emit.MachineCode::new()
+  mc.emit_ldr_imm(0, 1, 8) // LDR X0, [X1, #8]
+  mc.emit_str_imm(2, 3, 16) // STR X2, [X3, #16]
   inspect(mc.size(), content="8")
 }
 
 ///|
 test "emit: branch" {
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
   mc.define_label(0)
-  emit_nop(mc) // Some code in block 0
+  mc.emit_nop() // Some code in block 0
   mc.define_label(1)
-  emit_nop(mc) // Some code in block 1
-  emit_b(mc, 0) // B to block 0
+  mc.emit_nop() // Some code in block 1
+  mc.emit_b(0) // B to block 0
   mc.resolve_fixups()
   // Should have 3 instructions = 12 bytes
   inspect(mc.size(), content="12")
@@ -90,19 +90,19 @@ test "emit: branch" {
 
 ///|
 test "emit: conditional branch" {
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
   mc.define_label(0)
-  emit_cbz(mc, 0, 1) // CBZ X0, block1
+  mc.emit_cbz(0, 1) // CBZ X0, block1
   mc.define_label(1)
-  emit_nop(mc)
+  mc.emit_nop()
   mc.resolve_fixups()
   inspect(mc.size(), content="8")
 }
 
 ///|
 test "emit: ret" {
-  let mc = MachineCode::new()
-  emit_ret(mc, 30) // RET X30
+  let mc = @emit.MachineCode::new()
+  mc.emit_ret(30) // RET X30
   let bytes = mc.get_bytes()
   // RET X30: 0xD65F03C0 (little-endian: C0 03 5F D6)
   inspect(bytes[0], content="192") // 0xC0
@@ -113,8 +113,8 @@ test "emit: ret" {
 
 ///|
 test "emit: nop" {
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   let bytes = mc.get_bytes()
   // NOP: 0xD503201F
   inspect(bytes[0], content="31") // 0x1F
@@ -125,8 +125,8 @@ test "emit: nop" {
 
 ///|
 test "emit: fadd" {
-  let mc = MachineCode::new()
-  emit_fadd_d(mc, 0, 1, 2) // FADD D0, D1, D2
+  let mc = @emit.MachineCode::new()
+  mc.emit_fadd_d(0, 1, 2) // FADD D0, D1, D2
   let bytes = mc.get_bytes()
   // FADD (double): 0x1E622820
   inspect(bytes[3], content="30") // 0x1E
@@ -134,33 +134,33 @@ test "emit: fadd" {
 
 ///|
 test "emit: comparison" {
-  let mc = MachineCode::new()
-  emit_cmp_reg(mc, 0, 1) // CMP X0, X1
-  emit_cset(mc, 2, EQ.to_int()) // CSET X2, EQ
+  let mc = @emit.MachineCode::new()
+  mc.emit_cmp_reg(0, 1) // CMP X0, X1
+  mc.emit_cset(2, @emit.EQ.to_int()) // CSET X2, EQ
   inspect(mc.size(), content="8")
 }
 
 ///|
 test "emit: full function" {
   // Create a simple add function: add(a, b) -> a + b
-  let func = VCodeFunction::new("test_add")
+  let func = @function.VCodeFunction::new("test_add")
   func.add_param(Int) |> ignore
   func.add_param(Int) |> ignore
   func.add_result(Int)
   let block = func.new_block()
 
   // X0 = X0 + X1 (assuming params in X0, X1)
-  let add_inst = VCodeInst::new(Add)
-  add_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-  add_inst.add_use(Physical({ index: 0, class: Int }))
-  add_inst.add_use(Physical({ index: 1, class: Int }))
+  let add_inst = @instr.VCodeInst::new(Add)
+  add_inst.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
+  add_inst.add_use(@reg.Physical({ index: 0, class: Int }))
+  add_inst.add_use(@reg.Physical({ index: 1, class: Int }))
   block.add_inst(add_inst)
 
   // Return X0
-  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([@reg.Physical({ index: 0, class: Int })]))
 
   // Emit machine code
-  let mc = emit_function(func)
+  let mc = @emit.emit_function(func)
 
   // Should have: ADD + RET = 2 instructions = 8 bytes
   inspect(mc.size(), content="56")
@@ -168,8 +168,8 @@ test "emit: full function" {
 
 ///|
 test "emit: hex dump" {
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   let hex = mc.hex_dump()
   // NOP bytes in hex
   inspect(hex.length() > 0, content="true")
@@ -177,68 +177,68 @@ test "emit: hex dump" {
 
 ///|
 test "emit: mul/div" {
-  let mc = MachineCode::new()
-  emit_mul(mc, 0, 1, 2) // MUL X0, X1, X2
-  emit_sdiv(mc, 3, 4, 5) // SDIV X3, X4, X5
-  emit_udiv(mc, 6, 7, 8) // UDIV X6, X7, X8
+  let mc = @emit.MachineCode::new()
+  mc.emit_mul(0, 1, 2) // MUL X0, X1, X2
+  mc.emit_sdiv(3, 4, 5) // SDIV X3, X4, X5
+  mc.emit_udiv(6, 7, 8) // UDIV X6, X7, X8
   inspect(mc.size(), content="12")
 }
 
 ///|
 test "emit: bitwise" {
-  let mc = MachineCode::new()
-  emit_and_reg(mc, 0, 1, 2) // AND X0, X1, X2
-  emit_orr_reg(mc, 0, 1, 2) // ORR X0, X1, X2
-  emit_eor_reg(mc, 0, 1, 2) // EOR X0, X1, X2
+  let mc = @emit.MachineCode::new()
+  mc.emit_and_reg(0, 1, 2) // AND X0, X1, X2
+  mc.emit_orr_reg(0, 1, 2) // ORR X0, X1, X2
+  mc.emit_eor_reg(0, 1, 2) // EOR X0, X1, X2
   inspect(mc.size(), content="12")
 }
 
 ///|
 test "emit: shifts" {
-  let mc = MachineCode::new()
-  emit_lsl_reg(mc, 0, 1, 2) // LSL X0, X1, X2
-  emit_lsr_reg(mc, 0, 1, 2) // LSR X0, X1, X2
-  emit_asr_reg(mc, 0, 1, 2) // ASR X0, X1, X2
+  let mc = @emit.MachineCode::new()
+  mc.emit_lsl_reg(0, 1, 2) // LSL X0, X1, X2
+  mc.emit_lsr_reg(0, 1, 2) // LSR X0, X1, X2
+  mc.emit_asr_reg(0, 1, 2) // ASR X0, X1, X2
   inspect(mc.size(), content="12")
 }
 
 ///|
 test "emit: various loads" {
-  let mc = MachineCode::new()
-  emit_ldrb_imm(mc, 0, 1, 0) // LDRB W0, [X1]
-  emit_ldrh_imm(mc, 0, 1, 0) // LDRH W0, [X1]
-  emit_ldr_w_imm(mc, 0, 1, 0) // LDR W0, [X1]
-  emit_ldr_imm(mc, 0, 1, 0) // LDR X0, [X1]
+  let mc = @emit.MachineCode::new()
+  mc.emit_ldrb_imm(0, 1, 0) // LDRB W0, [X1]
+  mc.emit_ldrh_imm(0, 1, 0) // LDRH W0, [X1]
+  mc.emit_ldr_w_imm(0, 1, 0) // LDR W0, [X1]
+  mc.emit_ldr_imm(0, 1, 0) // LDR X0, [X1]
   inspect(mc.size(), content="16")
 }
 
 ///|
 test "emit: various stores" {
-  let mc = MachineCode::new()
-  emit_strb_imm(mc, 0, 1, 0) // STRB W0, [X1]
-  emit_strh_imm(mc, 0, 1, 0) // STRH W0, [X1]
-  emit_str_w_imm(mc, 0, 1, 0) // STR W0, [X1]
-  emit_str_imm(mc, 0, 1, 0) // STR X0, [X1]
+  let mc = @emit.MachineCode::new()
+  mc.emit_strb_imm(0, 1, 0) // STRB W0, [X1]
+  mc.emit_strh_imm(0, 1, 0) // STRH W0, [X1]
+  mc.emit_str_w_imm(0, 1, 0) // STR W0, [X1]
+  mc.emit_str_imm(0, 1, 0) // STR X0, [X1]
   inspect(mc.size(), content="16")
 }
 
 ///|
 test "emit: float operations" {
-  let mc = MachineCode::new()
-  emit_fadd_d(mc, 0, 1, 2)
-  emit_fsub_d(mc, 0, 1, 2)
-  emit_fmul_d(mc, 0, 1, 2)
-  emit_fdiv_d(mc, 0, 1, 2)
-  emit_fmov_d(mc, 0, 1)
-  emit_fcmp_d(mc, 0, 1)
+  let mc = @emit.MachineCode::new()
+  mc.emit_fadd_d(0, 1, 2)
+  mc.emit_fsub_d(0, 1, 2)
+  mc.emit_fmul_d(0, 1, 2)
+  mc.emit_fdiv_d(0, 1, 2)
+  mc.emit_fmov_d(0, 1)
+  mc.emit_fcmp_d(0, 1)
   inspect(mc.size(), content="24")
 }
 
 ///|
 test "emit: branch with link" {
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
   mc.define_label(0)
-  emit_bl(mc, 0) // BL to self (for testing)
+  mc.emit_bl(0) // BL to self (for testing)
   mc.resolve_fixups()
   let bytes = mc.get_bytes()
   // BL instruction
@@ -247,15 +247,15 @@ test "emit: branch with link" {
 
 ///|
 test "machine code: label and fixup" {
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // Block 0: jump to block 1
   mc.define_label(0)
-  emit_b(mc, 1)
+  mc.emit_b(1)
 
   // Block 1: return
   mc.define_label(1)
-  emit_ret(mc, 30)
+  mc.emit_ret(30)
   mc.resolve_fixups()
 
   // The branch should now point to block 1
@@ -266,10 +266,10 @@ test "machine code: label and fixup" {
 
 ///|
 test "machine code: alignment" {
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // Emit a single instruction (4 bytes)
-  emit_nop(mc)
+  mc.emit_nop()
   inspect(mc.size(), content="4")
 
   // Align to 16 bytes - should pad with 3 more NOPs
@@ -281,7 +281,7 @@ test "machine code: alignment" {
   inspect(mc.size(), content="16")
 
   // Emit one more instruction
-  emit_nop(mc)
+  mc.emit_nop()
   inspect(mc.size(), content="20")
 
   // Align to 8 bytes - should pad with 1 NOP
@@ -291,11 +291,11 @@ test "machine code: alignment" {
 
 ///|
 test "machine code: align_function" {
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // Emit 2 instructions (8 bytes)
-  emit_nop(mc)
-  emit_nop(mc)
+  mc.emit_nop()
+  mc.emit_nop()
   inspect(mc.size(), content="8")
 
   // Align to function boundary (16 bytes)
@@ -305,8 +305,8 @@ test "machine code: align_function" {
 
 ///|
 test "machine code: align with invalid alignment" {
-  let mc = MachineCode::new()
-  emit_nop(mc)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
   inspect(mc.size(), content="4")
 
   // Invalid alignment (not power of 2) should do nothing
@@ -327,7 +327,7 @@ test "emit: complete function with control flow" {
   //   else:
   //     return b
 
-  let func = VCodeFunction::new("max")
+  let func = @function.VCodeFunction::new("max")
   func.add_result(Int)
 
   // Create blocks
@@ -337,26 +337,26 @@ test "emit: complete function with control flow" {
 
   // block0: compare X3 (a) > X4 (b) and branch
   // CMP X3, X4; CSET X8, GT; CBNZ X8, block1; B block2
-  let cmp_inst = VCodeInst::new(Cmp(Sgt))
-  cmp_inst.add_def({ reg: Physical({ index: 8, class: Int }) })
-  cmp_inst.add_use(Physical({ index: 3, class: Int }))
-  cmp_inst.add_use(Physical({ index: 4, class: Int }))
+  let cmp_inst = @instr.VCodeInst::new(Cmp(Sgt))
+  cmp_inst.add_def({ reg: @reg.Physical({ index: 8, class: Int }) })
+  cmp_inst.add_use(@reg.Physical({ index: 3, class: Int }))
+  cmp_inst.add_use(@reg.Physical({ index: 4, class: Int }))
   block0.add_inst(cmp_inst)
-  block0.set_terminator(Branch(Physical({ index: 8, class: Int }), 1, 2))
+  block0.set_terminator(Branch(@reg.Physical({ index: 8, class: Int }), 1, 2))
 
   // block1: MOV X0, X3; RET
-  let mov1 = VCodeInst::new(Move)
-  mov1.add_def({ reg: Physical({ index: 0, class: Int }) })
-  mov1.add_use(Physical({ index: 3, class: Int }))
+  let mov1 = @instr.VCodeInst::new(Move)
+  mov1.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
+  mov1.add_use(@reg.Physical({ index: 3, class: Int }))
   block1.add_inst(mov1)
   block1.set_terminator(Return([Physical({ index: 0, class: Int })]))
 
   // block2: MOV X0, X4; RET
-  let mov2 = VCodeInst::new(Move)
-  mov2.add_def({ reg: Physical({ index: 0, class: Int }) })
-  mov2.add_use(Physical({ index: 4, class: Int }))
+  let mov2 = @instr.VCodeInst::new(Move)
+  mov2.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
+  mov2.add_use(@reg.Physical({ index: 4, class: Int }))
   block2.add_inst(mov2)
-  block2.set_terminator(Return([Physical({ index: 0, class: Int })]))
+  block2.set_terminator(Return([@reg.Physical({ index: 0, class: Int })]))
 
   // Show VCode
   inspect(
@@ -378,7 +378,7 @@ test "emit: complete function with control flow" {
   )
 
   // Emit machine code
-  let mc = emit_function(func)
+  let mc = @emit.emit_function(func)
 
   // Should have:
   // - prologue (STP, MOV X21, MOV X22, SUB SP)
@@ -398,17 +398,17 @@ test "emit: arithmetic operations encoding verification" {
   // Test that arithmetic instructions are encoded correctly
   // by checking specific byte patterns
 
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // ADD X0, X1, X2 -> 0x8B020020
-  emit_add_reg(mc, 0, 1, 2)
+  mc.emit_add_reg(0, 1, 2)
   inspect(mc.get_bytes()[0], content="32") // 0x20
   inspect(mc.get_bytes()[1], content="0") // 0x00
   inspect(mc.get_bytes()[2], content="2") // 0x02
   inspect(mc.get_bytes()[3], content="139") // 0x8B
 
   // SUB X3, X4, X5 -> 0xCB050083
-  emit_sub_reg(mc, 3, 4, 5)
+  mc.emit_sub_reg(3, 4, 5)
   inspect(mc.get_bytes()[4], content="131") // 0x83
   inspect(mc.get_bytes()[5], content="0") // 0x00
   inspect(mc.get_bytes()[6], content="5") // 0x05
@@ -422,26 +422,26 @@ test "emit: arithmetic operations encoding verification" {
 test "emit: memory operations with offset" {
   // Test load/store with various offsets
 
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // LDR X0, [X1, #0]
-  emit_ldr_imm(mc, 0, 1, 0)
+  mc.emit_ldr_imm(0, 1, 0)
   inspect(mc.size(), content="4")
 
   // LDR X0, [X1, #8] - offset must be aligned to 8 bytes for X register
-  emit_ldr_imm(mc, 0, 1, 8)
+  mc.emit_ldr_imm(0, 1, 8)
   inspect(mc.size(), content="8")
 
   // STR X2, [X3, #16]
-  emit_str_imm(mc, 2, 3, 16)
+  mc.emit_str_imm(2, 3, 16)
   inspect(mc.size(), content="12")
 
   // LDR W0, [X1, #4] - 32-bit load with 4-byte aligned offset
-  emit_ldr_w_imm(mc, 0, 1, 4)
+  mc.emit_ldr_w_imm(0, 1, 4)
   inspect(mc.size(), content="16")
 
   // STR W2, [X3, #8] - 32-bit store
-  emit_str_w_imm(mc, 2, 3, 8)
+  mc.emit_str_w_imm(2, 3, 8)
   inspect(mc.size(), content="20")
 }
 
@@ -449,27 +449,27 @@ test "emit: memory operations with offset" {
 test "emit: float operations encoding" {
   // Test floating-point instruction encoding
 
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // FADD D0, D1, D2 - double-precision add
-  emit_fadd_d(mc, 0, 1, 2)
+  mc.emit_fadd_d(0, 1, 2)
   let bytes = mc.get_bytes()
   inspect(bytes[3], content="30") // 0x1E - FP opcode
 
   // FMUL D3, D4, D5
-  emit_fmul_d(mc, 3, 4, 5)
+  mc.emit_fmul_d(3, 4, 5)
   inspect(mc.size(), content="8")
 
   // FMOV D0, D1 - FP register move
-  emit_fmov_d(mc, 0, 1)
+  mc.emit_fmov_d(0, 1)
   inspect(mc.size(), content="12")
 
   // LDR D0, [X1, #0] - FP load
-  emit_ldr_d_imm(mc, 0, 1, 0)
+  mc.emit_ldr_d_imm(0, 1, 0)
   inspect(mc.size(), content="16")
 
   // STR D2, [X3, #8] - FP store
-  emit_str_d_imm(mc, 2, 3, 8)
+  mc.emit_str_d_imm(2, 3, 8)
   inspect(mc.size(), content="20")
 }
 
@@ -477,19 +477,19 @@ test "emit: float operations encoding" {
 test "emit: branch fixup forward reference" {
   // Test that forward branch references are correctly resolved
 
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // block0: B block2 (forward reference)
   mc.define_label(0)
-  emit_b(mc, 2) // Jump forward to block2
+  mc.emit_b(2) // Jump forward to block2
 
   // block1: NOP
   mc.define_label(1)
-  emit_nop(mc)
+  mc.emit_nop()
 
   // block2: RET
   mc.define_label(2)
-  emit_ret(mc, 30)
+  mc.emit_ret(30)
 
   // Resolve fixups
   mc.resolve_fixups()
@@ -509,26 +509,26 @@ test "emit: branch fixup forward reference" {
 test "emit: shifted register operations" {
   // Test AArch64-specific shifted operand instructions
 
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // ADD X0, X1, X2, LSL #3
-  emit_add_shifted(mc, 0, 1, 2, Lsl, 3)
+  mc.emit_add_shifted(0, 1, 2, Lsl, 3)
   inspect(mc.size(), content="4")
 
   // SUB X3, X4, X5, LSR #2
-  emit_sub_shifted(mc, 3, 4, 5, Lsr, 2)
+  mc.emit_sub_shifted(3, 4, 5, Lsr, 2)
   inspect(mc.size(), content="8")
 
   // AND X6, X7, X8, ASR #1
-  emit_and_shifted(mc, 6, 7, 8, Asr, 1)
+  mc.emit_and_shifted(6, 7, 8, Asr, 1)
   inspect(mc.size(), content="12")
 
   // ORR X9, X10, X11, LSL #4
-  emit_orr_shifted(mc, 9, 10, 11, Lsl, 4)
+  mc.emit_orr_shifted(9, 10, 11, Lsl, 4)
   inspect(mc.size(), content="16")
 
   // EOR X12, X13, X14, LSL #0 (no shift)
-  emit_eor_shifted(mc, 12, 13, 14, Lsl, 0)
+  mc.emit_eor_shifted(12, 13, 14, Lsl, 0)
   inspect(mc.size(), content="20")
 }
 
@@ -536,24 +536,24 @@ test "emit: shifted register operations" {
 test "emit: multiply-accumulate instructions" {
   // Test MADD, MSUB, MNEG instructions
 
-  let mc = MachineCode::new()
+  let mc = @emit.MachineCode::new()
 
   // MADD X0, X1, X2, X3 -> X0 = X3 + X1 * X2
-  emit_madd(mc, 0, 1, 2, 3)
+  mc.emit_madd(0, 1, 2, 3)
   let bytes = mc.get_bytes()
   inspect(bytes[3], content="155") // 0x9B - MADD opcode
   inspect(mc.size(), content="4")
 
   // MSUB X4, X5, X6, X7 -> X4 = X7 - X5 * X6
-  emit_msub(mc, 4, 5, 6, 7)
+  mc.emit_msub(4, 5, 6, 7)
   inspect(mc.size(), content="8")
 
   // MNEG X8, X9, X10 -> X8 = -(X9 * X10) = MSUB X8, X9, X10, XZR
-  emit_mneg(mc, 8, 9, 10)
+  mc.emit_mneg(8, 9, 10)
   inspect(mc.size(), content="12")
 
   // MUL X11, X12, X13 -> X11 = X12 * X13 = MADD X11, X12, X13, XZR
-  emit_mul(mc, 11, 12, 13)
+  mc.emit_mul(11, 12, 13)
   inspect(mc.size(), content="16")
 }
 
@@ -562,36 +562,36 @@ test "emit: complete VCode instruction emission" {
   // Test emit_instruction for various VCodeOpcode values
 
   // Create a simple function to test instruction emission
-  let func = VCodeFunction::new("test_insts")
+  let func = @function.VCodeFunction::new("test_insts")
   func.add_result(Int)
   let block = func.new_block()
 
   // Add various instructions using physical registers
   // LoadConst
-  let ldi = VCodeInst::new(LoadConst(42L))
-  ldi.add_def({ reg: Physical({ index: 0, class: Int }) })
+  let ldi = @instr.VCodeInst::new(LoadConst(42L))
+  ldi.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
   block.add_inst(ldi)
 
   // Add
-  let add = VCodeInst::new(Add)
-  add.add_def({ reg: Physical({ index: 1, class: Int }) })
-  add.add_use(Physical({ index: 0, class: Int }))
-  add.add_use(Physical({ index: 0, class: Int }))
+  let add = @instr.VCodeInst::new(Add)
+  add.add_def({ reg: @reg.Physical({ index: 1, class: Int }) })
+  add.add_use(@reg.Physical({ index: 0, class: Int }))
+  add.add_use(@reg.Physical({ index: 0, class: Int }))
   block.add_inst(add)
 
   // Mul
-  let mul = VCodeInst::new(Mul)
-  mul.add_def({ reg: Physical({ index: 2, class: Int }) })
-  mul.add_use(Physical({ index: 1, class: Int }))
-  mul.add_use(Physical({ index: 0, class: Int }))
+  let mul = @instr.VCodeInst::new(Mul)
+  mul.add_def({ reg: @reg.Physical({ index: 2, class: Int }) })
+  mul.add_use(@reg.Physical({ index: 1, class: Int }))
+  mul.add_use(@reg.Physical({ index: 0, class: Int }))
   block.add_inst(mul)
 
   // Move
-  let mov = VCodeInst::new(Move)
-  mov.add_def({ reg: Physical({ index: 0, class: Int }) })
-  mov.add_use(Physical({ index: 2, class: Int }))
+  let mov = @instr.VCodeInst::new(Move)
+  mov.add_def({ reg: @reg.Physical({ index: 0, class: Int }) })
+  mov.add_use(@reg.Physical({ index: 2, class: Int }))
   block.add_inst(mov)
-  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([@reg.Physical({ index: 0, class: Int })]))
 
   // Show VCode
   inspect(
@@ -610,7 +610,7 @@ test "emit: complete VCode instruction emission" {
   )
 
   // Emit and verify
-  let mc = emit_function(func)
+  let mc = @emit.emit_function(func)
   inspect(mc.size() > 0, content="true")
 }
 
@@ -625,8 +625,8 @@ test "emit_mul encoding verification" {
   //   = 0x9b187ee8
   //   Little endian bytes: e8 7e 18 9b
 
-  let mc = MachineCode::new()
-  emit_mul(mc, 8, 23, 24) // MUL X8, X23, X24
+  let mc = @emit.MachineCode::new()
+  mc.emit_mul(8, 23, 24)
   let bytes = mc.get_bytes()
   inspect(bytes.length(), content="4")
   inspect(bytes[0], content="232")

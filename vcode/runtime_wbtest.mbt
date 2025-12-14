@@ -4,7 +4,7 @@
 test "compiled function: basic" {
   let mc = MachineCode::new()
   emit_nop(mc)
-  emit_ret(mc, 30)
+  mc.emit_ret(30)
   let func = CompiledFunction::new("test_func", mc, 16)
   inspect(func.is_valid(), content="true")
   inspect(func.code_size, content="8")
@@ -155,7 +155,7 @@ test "jit runtime: register and lookup" {
   let runtime = JITRuntime::new(0, 4096)
   let mc = MachineCode::new()
   emit_nop(mc)
-  emit_ret(mc, 30)
+  mc.emit_ret(30)
   let func = CompiledFunction::new("test", mc, 16)
   match runtime.register(0, func) {
     Ok(_addr) => ()

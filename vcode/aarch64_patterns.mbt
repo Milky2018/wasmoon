@@ -27,7 +27,7 @@ pub enum AArch64RewriteResult {
   // Emit negated multiply
   Mneg(Int, Int) // src1_idx, src2_idx
   // Emit and/or/xor with shifted operand
-  LogicalShifted(VCodeOpcode, Int, Int, Int) // op, src1_idx, src2_idx, shift
+  LogicalShifted(@instr.VCodeOpcode, Int, Int, Int) // op, src1_idx, src2_idx, shift
   // No AArch64-specific optimization applies
   NoMatch
 }

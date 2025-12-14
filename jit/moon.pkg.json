@@ -2,6 +2,7 @@
   "import": [
     "Milky2018/wasmoon/jit/jit_ffi",
     "Milky2018/wasmoon/vcode",
+    "Milky2018/wasmoon/vcode/emit",
     "Milky2018/wasmoon/cwasm",
     "Milky2018/wasmoon/types"
   ],

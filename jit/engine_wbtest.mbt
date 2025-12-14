@@ -55,9 +55,9 @@ test "jit engine: mark compiled" {
   }
 
   // Mark as compiled
-  let mc = @vcode.MachineCode::new()
+  let mc = MachineCode::new()
   @vcode.emit_nop(mc)
-  @vcode.emit_ret(mc, 30)
+  @emit.emit_ret(mc, 30)
   let code = @vcode.CompiledFunction::new("test", mc, 16)
   engine.mark_compiled(0, code)
 
@@ -74,7 +74,7 @@ test "jit engine: compiled calls use jit" {
   let engine = JITEngine::default()
 
   // Mark as compiled first
-  let mc = @vcode.MachineCode::new()
+  let mc = MachineCode::new()
   @vcode.emit_nop(mc)
   let code = @vcode.CompiledFunction::new("test", mc, 0)
   engine.mark_compiled(0, code)
@@ -100,7 +100,7 @@ test "jit engine: invalidate" {
   let engine = JITEngine::default()
 
   // Compile first
-  let mc = @vcode.MachineCode::new()
+  let mc = MachineCode::new()
   @vcode.emit_nop(mc)
   let code = @vcode.CompiledFunction::new("test", mc, 0)
   engine.mark_compiled(0, code)

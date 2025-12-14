@@ -69,7 +69,7 @@ test "f32 add" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -172,7 +172,7 @@ test "f64 add" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -273,7 +273,7 @@ test "f32 sub" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -377,7 +377,7 @@ test "f32 mul" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   inspect(
     mc.dump_disasm(),
     content=(

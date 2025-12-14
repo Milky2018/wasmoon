@@ -69,7 +69,7 @@ test "i32 mul" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   inspect(
     mc.dump_disasm(),
     content=(

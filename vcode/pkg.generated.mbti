@@ -81,243 +81,7 @@ pub fn dump_vcode(VCodeFunction, String) -> Unit
 
 pub fn eliminate_dead_code(VCodeFunction) -> VCodeFunction
 
-pub fn emit_add_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_add_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_add_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
-
-pub fn emit_adr(MachineCode, Int, Int) -> Unit
-
-pub fn emit_and_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_and_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
-
-pub fn emit_asr_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_b(MachineCode, Int) -> Unit
-
-pub fn emit_b_cond(MachineCode, Int, Int) -> Unit
-
-pub fn emit_bl(MachineCode, Int) -> Unit
-
-pub fn emit_blr(MachineCode, Int) -> Unit
-
-pub fn emit_br(MachineCode, Int) -> Unit
-
-pub fn emit_cbnz(MachineCode, Int, Int) -> Unit
-
-pub fn emit_cbz(MachineCode, Int, Int) -> Unit
-
-pub fn emit_clz(MachineCode, Int, Int) -> Unit
-
-pub fn emit_cmp_imm(MachineCode, Int, Int) -> Unit
-
-pub fn emit_cmp_reg(MachineCode, Int, Int) -> Unit
-
-pub fn emit_csel(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_cset(MachineCode, Int, Int) -> Unit
-
-pub fn emit_dmb_ish(MachineCode) -> Unit
-
-pub fn emit_eor_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_eor_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
-
-pub fn emit_fabs_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fabs_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fadd_d(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fadd_s(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fcmp_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fcmp_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fcsel_d(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_fcsel_s(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_fcvt_d_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fcvt_s_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fcvtzs(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
-
-pub fn emit_fcvtzu(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
-
-pub fn emit_fdiv_d(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fdiv_s(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fmax_d(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fmax_s(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fmin_d(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fmin_s(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fmov_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fmov_d_to_x(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fmov_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fmov_s_to_w(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fmov_w_to_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fmov_x_to_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fmul_d(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fmul_s(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fneg_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fneg_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_frintm_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_frintm_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_frintn_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_frintn_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_frintp_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_frintp_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_frintz_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_frintz_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fsqrt_d(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fsqrt_s(MachineCode, Int, Int) -> Unit
-
-pub fn emit_fsub_d(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_fsub_s(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_function(VCodeFunction) -> MachineCode
-
-pub fn emit_ldp_post(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_ldr_d_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldr_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldr_imm_signed(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldr_reg_scaled(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_ldr_s_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldr_w_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldrb_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldrh_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldrsb_w_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldrsb_x_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldrsh_w_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldrsh_x_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_ldrsw_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_load_imm64(MachineCode, Int, Int64) -> Unit
-
-pub fn emit_lsl_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_lsr_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_madd(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_mneg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_mov_reg(MachineCode, Int, Int) -> Unit
-
-pub fn emit_mov_reg32(MachineCode, Int, Int) -> Unit
-
-pub fn emit_movk(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_movz(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_msub(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_mul(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_mvn(MachineCode, Int, Int) -> Unit
-
 pub fn emit_nop(MachineCode) -> Unit
-
-pub fn emit_orr_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_orr_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
-
-pub fn emit_rbit(MachineCode, Int, Int) -> Unit
-
-pub fn emit_ret(MachineCode, Int) -> Unit
-
-pub fn emit_ror_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_scvtf(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
-
-pub fn emit_sdiv(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_stp_pre(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_str_d_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_str_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_str_reg_scaled(MachineCode, Int, Int, Int, Int) -> Unit
-
-pub fn emit_str_s_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_str_w_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_strb_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_strh_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_sub_imm(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_sub_reg(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_sub_shifted(MachineCode, Int, Int, Int, ShiftType, Int) -> Unit
-
-pub fn emit_sxtb_w(MachineCode, Int, Int) -> Unit
-
-pub fn emit_sxtb_x(MachineCode, Int, Int) -> Unit
-
-pub fn emit_sxth_w(MachineCode, Int, Int) -> Unit
-
-pub fn emit_sxth_x(MachineCode, Int, Int) -> Unit
-
-pub fn emit_sxtw(MachineCode, Int, Int) -> Unit
-
-pub fn emit_ucvtf(MachineCode, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
-
-pub fn emit_udiv(MachineCode, Int, Int, Int) -> Unit
-
-pub fn emit_uxtb_w(MachineCode, Int, Int) -> Unit
-
-pub fn emit_uxtb_x(MachineCode, Int, Int) -> Unit
-
-pub fn emit_uxth_w(MachineCode, Int, Int) -> Unit
-
-pub fn emit_uxth_x(MachineCode, Int, Int) -> Unit
 
 pub fn get_aarch64_rules() -> Array[RewriteRule]
 
@@ -512,13 +276,9 @@ pub enum FCmpKind {
 }
 pub impl Show for FCmpKind
 
-pub(all) struct Fixup {
-  offset : Int
-  target_block : Int
-  kind : FixupKind
-}
+type Fixup
 
-pub enum FixupKind {
+pub(all) enum FixupKind {
   Branch26
   Branch19
 }
@@ -603,7 +363,7 @@ pub(all) struct LoweringContext {
 }
 pub fn LoweringContext::new(@ir.Function) -> Self
 
-pub(all) struct MachineCode {
+pub struct MachineCode {
   bytes : Array[Int]
   mut pos : Int
   labels : Map[Int, Int]
@@ -614,6 +374,7 @@ pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
 pub fn MachineCode::align(Self, Int) -> Unit
 pub fn MachineCode::align_block(Self) -> Unit
 pub fn MachineCode::align_function(Self) -> Unit
+pub fn MachineCode::annotate(Self, String) -> Unit
 pub fn MachineCode::current_pos(Self) -> Int
 pub fn MachineCode::define_label(Self, Int) -> Unit
 pub fn MachineCode::dump_disasm(Self) -> String

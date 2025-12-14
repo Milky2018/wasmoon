@@ -2,7 +2,7 @@
 
 ///|
 /// Dump VCode function for analysis (prints to stdout)
-pub fn dump_vcode(func : VCodeFunction, tag : String) -> Unit {
+pub fn dump_vcode(func : @function.VCodeFunction, tag : String) -> Unit {
   println("=== VCode Dump: \{tag} ===")
   println("Function: \{func.name}")
   println("Params: \{func.params.length()}")

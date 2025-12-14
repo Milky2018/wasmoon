@@ -220,7 +220,7 @@ fn run_jit(
       let allocated_func = @vcode.allocate_registers_aarch64(vcode)
 
       // Emit machine code
-      let mc = @vcode.emit_function(allocated_func)
+      let mc = @emit.emit_function(allocated_func)
 
       // Add to precompiled module
       let compiled = @vcode.CompiledFunction::new(f_name, mc, 0)

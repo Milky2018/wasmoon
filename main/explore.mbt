@@ -170,7 +170,7 @@ fn run_explore(
     }
 
     // Stage 6: Machine Code
-    let mc = @vcode.emit_function(allocated)
+    let mc = @emit.emit_function(allocated)
     let mc_text = mc.dump_disasm()
     if !html_output && show_mc {
       println("")

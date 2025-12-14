@@ -679,7 +679,7 @@ fn compile_module_to_jit(
       println(allocated.print())
     }
     // Stage 5: Emit machine code
-    let mc = @vcode.emit_function(allocated)
+    let mc = @emit.emit_function(allocated)
     // Stage 6: Add to precompiled module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
     let num_params = func_type.params.length()

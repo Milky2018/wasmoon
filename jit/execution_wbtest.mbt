@@ -71,7 +71,7 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   let allocated_func = @vcode.allocate_registers_aarch64(vcode_func)
 
   // 3. Emit machine code
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
 
   // Debug: print allocated VCode for the working test
   inspect(
@@ -470,7 +470,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   inspect(
     mc.dump_disasm(),
     content=(

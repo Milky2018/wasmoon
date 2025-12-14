@@ -166,7 +166,7 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|
     ),
   )
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
@@ -256,7 +256,7 @@ test "A critical bug as in data/f32_br_2locals" {
   let ir_func = translator.translate(func_code.body)
   let vcode = @vcode.lower_function(ir_func)
   let allocated_func = @vcode.allocate_registers_aarch64(vcode)
-  let mc = @vcode.emit_function(allocated_func)
+  let mc = @emit.emit_function(allocated_func)
   let code_bytes = mc.get_bytes()
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
