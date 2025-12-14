@@ -63,6 +63,13 @@ fn run_explore(
     }
   }
 
+  // Get memory max limit from module (if memory is defined)
+  let memory_max : Int? = if mod_.memories.length() > 0 {
+    mod_.memories[0].limits.max
+  } else {
+    None
+  }
+
   // Determine which functions to explore
   let func_indices : Array[Int] = match func_index {
     Some(idx) => {
@@ -124,6 +131,7 @@ fn run_explore(
       mod_.funcs,
       num_imports,
       import_func_type_indices,
+      memory_max~,
     )
     let ir_func = translator.translate(code.body)
     let ir_text = ir_func.print()

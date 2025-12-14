@@ -345,7 +345,8 @@ fn lower_inst(
     @ir.Opcode::Select => lower_select(ctx, inst, block)
 
     // Memory management
-    @ir.Opcode::MemoryGrow => lower_memory_grow(ctx, inst, block)
+    @ir.Opcode::MemoryGrow(max_pages) =>
+      lower_memory_grow(ctx, inst, block, max_pages)
     @ir.Opcode::MemorySize => lower_memory_size(ctx, inst, block)
 
     // Function calls
@@ -1620,6 +1621,7 @@ fn lower_memory_grow(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : VCodeBlock,
+  max_pages : Int?,
 ) -> Unit {
   // Get the delta operand
   let delta_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
@@ -1630,7 +1632,9 @@ fn lower_memory_grow(
 
   // Create the MemoryGrow VCode instruction
   // Uses: [delta], Defs: [result]
-  let grow_inst = VCodeInst::new(MemoryGrow)
+  // Convert Int? to Int (0 = no limit)
+  let max_pages_value = max_pages.unwrap_or(0)
+  let grow_inst = VCodeInst::new(MemoryGrow(max_pages_value))
   grow_inst.add_def({ reg: Virtual(result_vreg) })
   grow_inst.add_use(Virtual(delta_vreg))
   // Add clobbers for caller-saved registers (it's a call)

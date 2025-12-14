@@ -171,6 +171,13 @@ fn run_jit(
       }
     }
 
+    // Get memory max limit from module (if memory is defined)
+    let memory_max : Int? = if mod_.memories.length() > 0 {
+      mod_.memories[0].limits.max
+    } else {
+      None
+    }
+
     // Compile each function in the module
     for i, code in mod_.codes {
       let f_idx = num_imports + i
@@ -187,6 +194,7 @@ fn run_jit(
         mod_.funcs,
         num_imports,
         import_func_type_indices,
+        memory_max~,
       )
       let ir_func = translator.translate(code.body)
 

@@ -265,7 +265,7 @@ fn validate_instruction(
       }
 
     // Memory management
-    MemoryGrow =>
+    MemoryGrow(_) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "MemoryGrow expects 1 operand (delta), got \{inst.operands.length()}",

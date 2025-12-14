@@ -135,7 +135,11 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
     Store32(offset) => "store32 \{ops} +\{offset}"
 
     // Memory management
-    MemoryGrow => "memory_grow \{ops}"
+    MemoryGrow(max_pages) =>
+      match max_pages {
+        Some(max) => "memory_grow \{ops} max=\{max}"
+        None => "memory_grow \{ops}"
+      }
     MemorySize => "memory_size"
 
     // Misc

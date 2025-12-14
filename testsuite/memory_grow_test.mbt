@@ -38,10 +38,35 @@ test "memory.grow: grow with dynamic delta" {
   inspect(result, content="matched")
 }
 
-// NOTE: Test for memory.grow failure (returning -1) is skipped because
-// the JIT's memory.grow implementation doesn't currently enforce the max memory limit.
-// The interpreter correctly returns -1, but JIT returns old_size (success).
-// TODO: Fix JIT memory.grow to respect max memory limit from module definition.
+///|
+test "memory.grow: fails when exceeding max limit" {
+  let source =
+    #|(module
+    #|  (memory 1 2)  ;; min=1 page, max=2 pages
+    #|  (func (export "test") (result i32)
+    #|    ;; Try to grow by 2 pages - should fail because 1+2=3 > max(2)
+    #|    (memory.grow (i32.const 2))
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "test", [])
+  // Both JIT and interpreter should return -1 (failure)
+  inspect(result, content="matched")
+}
+
+///|
+test "memory.grow: succeeds when within max limit" {
+  let source =
+    #|(module
+    #|  (memory 1 3)  ;; min=1 page, max=3 pages
+    #|  (func (export "test") (result i32)
+    #|    ;; Grow by 1 page - should succeed because 1+1=2 <= max(3)
+    #|    (memory.grow (i32.const 1))
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "test", [])
+  // Both should return 1 (old size before grow)
+  inspect(result, content="matched")
+}
 
 ///|
 test "memory.size: returns initial size" {

@@ -2408,7 +2408,7 @@ fn collect_used_callee_saved(
     for inst in block.insts {
       // Check if this instruction is a function call
       // MemoryGrow and MemorySize also use BLR internally to call C functions
-      if inst.opcode is (CallIndirect(_, _) | MemoryGrow | MemorySize) {
+      if inst.opcode is (CallIndirect(_, _) | MemoryGrow(_) | MemorySize) {
         has_calls = true
       }
       for def in inst.defs {
@@ -3976,7 +3976,7 @@ fn emit_instruction(
         }
       }
     }
-    MemoryGrow => {
+    MemoryGrow(max_pages) => {
       // Call wasmoon_jit_memory_grow(delta, max_pages)
       // Uses: [delta], Defs: [result]
       // Get the delta from the use register
@@ -3986,8 +3986,11 @@ fn emit_instruction(
       // Move delta to X0 (first argument)
       emit_mov_reg(mc, 0, delta_reg) // MOV X0, delta
 
-      // Set X1 = 0 (max_pages = 0 means no limit)
-      emit_movz(mc, 1, 0, 0) // MOVZ X1, #0
+      // Set X1 = max_pages
+      emit_movz(mc, 1, max_pages & 0xFFFF, 0) // MOVZ X1, #(max_pages & 0xFFFF)
+      if max_pages > 0xFFFF {
+        emit_movk(mc, 1, (max_pages >> 16) & 0xFFFF, 16) // MOVK X1, #((max_pages >> 16) & 0xFFFF), LSL #16
+      }
 
       // Load memory_grow function pointer into X16
       let grow_ptr = @jit_ffi.c_jit_get_memory_grow_v2_ptr()

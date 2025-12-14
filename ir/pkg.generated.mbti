@@ -168,7 +168,7 @@ pub fn IRBuilder::load32_s(Self, Value, Int) -> Value
 pub fn IRBuilder::load32_u(Self, Value, Int) -> Value
 pub fn IRBuilder::load8_s(Self, Type, Value, Int) -> Value
 pub fn IRBuilder::load8_u(Self, Type, Value, Int) -> Value
-pub fn IRBuilder::memory_grow(Self, Value) -> Value
+pub fn IRBuilder::memory_grow(Self, Value, max_pages? : Int) -> Value
 pub fn IRBuilder::memory_size(Self) -> Value
 pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::popcnt(Self, Value) -> Value
@@ -283,7 +283,7 @@ pub enum Opcode {
   Store8(Int)
   Store16(Int)
   Store32(Int)
-  MemoryGrow
+  MemoryGrow(Int?)
   MemorySize
   Select
   Copy
@@ -328,8 +328,9 @@ pub(all) struct Translator {
   mut is_unreachable : Bool
   mut return_continuation : Block?
   func_result_types : Array[Type]
+  memory_max : Int?
 }
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int]) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {
