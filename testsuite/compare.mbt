@@ -250,7 +250,7 @@ fn run_jit(
     jm.set_memory(memory.ptr(), mem_size)
 
     // Initialize indirect table for call_indirect support
-    init_elem_segments(mod_, jm)
+    init_elem_segments(mod_, jm, [])
 
     // Call the target function
     guard jm.get_func_by_name(func_name) is Some(f) else {
@@ -332,12 +332,19 @@ fn build_func_signatures(
 
 ///|
 /// Evaluate element segment offset constant expression
-/// Supports i32.const, i32.add, i32.sub, i32.mul for computing offsets
-fn eval_elem_offset_expr(instrs : Array[@types.Instruction]) -> Int {
+/// Supports i32.const, i32.add, i32.sub, i32.mul, global.get for computing offsets
+fn eval_elem_offset_expr(
+  instrs : Array[@types.Instruction],
+  globals : Array[@runtime.GlobalInstance],
+) -> Int {
   let stack : Array[Int] = []
   for instr in instrs {
     match instr {
       I32Const(n) => stack.push(n)
+      GlobalGet(idx) =>
+        if idx < globals.length() && globals[idx].get() is I32(n) {
+          stack.push(n)
+        }
       I32Add =>
         if stack.length() >= 2 {
           let b = stack.pop()
@@ -368,7 +375,11 @@ fn eval_elem_offset_expr(instrs : Array[@types.Instruction]) -> Int {
 
 ///|
 /// Initialize element segments for call_indirect support
-fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
+fn init_elem_segments(
+  mod_ : @types.Module,
+  jm : @jit.JITModule,
+  globals : Array[@runtime.GlobalInstance],
+) -> Unit {
   // For now, we only properly support table 0 (or a single table)
   // Multi-table support requires storing table base offsets in the JIT context
   // and loading them during call_indirect execution
@@ -414,7 +425,7 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
     for elem in mod_.elems {
       if elem.mode is @types.ElemMode::Active(elem_table_idx, offset_expr) &&
         elem_table_idx == table_idx {
-        let offset = eval_elem_offset_expr(offset_expr)
+        let offset = eval_elem_offset_expr(offset_expr, globals)
         for i, init_expr in elem.init {
           let func_idx = match init_expr {
             [RefFunc(idx)] => idx
