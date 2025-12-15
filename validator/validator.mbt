@@ -440,10 +440,8 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     raise MultipleMemories
   }
 
-  // Check for multiple tables (not allowed in MVP)
-  if ctx.tables.length() > 1 {
-    raise MultipleTables
-  }
+  // Multi-table support is now enabled
+  // The restriction has been removed to support WebAssembly reference types proposal
 
   // Validate memory limits
   for mem in ctx.mems {

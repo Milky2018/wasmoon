@@ -132,6 +132,7 @@ fn run_explore(
       num_imports,
       import_func_type_indices,
       memory_max~,
+      tables=mod_.tables,
     )
     let ir_func = translator.translate(code.body)
     let ir_text = ir_func.print()

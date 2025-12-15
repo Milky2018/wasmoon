@@ -28,6 +28,12 @@ pub(all) struct Translator {
   func_result_types : Array[Type]
   // Memory max pages limit (None = no limit)
   memory_max : Int?
+  // Table base offsets for multi-table support
+  // table_base_offsets[i] = starting index of table i in the flattened indirect_table
+  table_base_offsets : Array[Int]
+  // Table sizes for bounds checking
+  // table_sizes[i] = number of elements in table i
+  table_sizes : Array[Int]
 }
 
 ///|
@@ -62,6 +68,7 @@ pub fn Translator::new(
   num_imports : Int,
   import_func_type_indices : Array[Int],
   memory_max? : Int? = None,
+  tables? : Array[@types.Table] = [],
 ) -> Translator {
   let builder = IRBuilder::new(name)
   // Add function parameters
@@ -87,6 +94,18 @@ pub fn Translator::new(
       ),
     )
   }
+  // Calculate table base offsets for multi-table support
+  // All tables are flattened into a single indirect_table at runtime
+  // table_base_offsets[i] = starting index of table i in the flattened table
+  let table_base_offsets : Array[Int] = []
+  let table_sizes : Array[Int] = []
+  let mut offset = 0
+  for table in tables {
+    let size = table.type_.limits.min
+    table_base_offsets.push(offset)
+    table_sizes.push(size)
+    offset = offset + size
+  }
   {
     builder,
     value_stack: [],
@@ -100,6 +119,8 @@ pub fn Translator::new(
     return_continuation: None,
     func_result_types,
     memory_max,
+    table_base_offsets,
+    table_sizes,
   }
 }
 
@@ -684,7 +705,8 @@ fn Translator::translate_instruction(
 
     // Function calls
     Call(func_idx) => self.translate_call(func_idx)
-    CallIndirect(type_idx, _table_idx) => self.translate_call_indirect(type_idx)
+    CallIndirect(type_idx, table_idx) =>
+      self.translate_call_indirect(type_idx, table_idx)
 
     // Memory management
     MemoryGrow => {
@@ -1409,13 +1431,57 @@ fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
 fn Translator::translate_call_indirect(
   self : Translator,
   type_idx : Int,
+  table_idx : Int,
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
     // Compute structural type hash for type checking at runtime
     let type_hash = func_type.structural_hash()
-    // Pop callee (function reference)
-    let callee = self.pop()
+    // Pop callee (element index within the table)
+    let elem_idx = self.pop()
+
+    // Bounds check: elem_idx must be < table_size[table_idx]
+    // Generate: if (elem_idx >= table_size) trap "out of bounds table access"
+    if table_idx < self.table_sizes.length() {
+      let table_size = self.table_sizes[table_idx]
+      let size_const = self.builder.iconst(elem_idx.ty, table_size.to_int64())
+      let out_of_bounds = self.builder.icmp_uge(elem_idx, size_const)
+
+      // Create trap block and continuation block
+      let trap_block = self.builder.create_block()
+      let continue_block = self.builder.create_block()
+
+      // Branch: if out_of_bounds goto trap_block else continue_block
+      self.builder.brnz(out_of_bounds, trap_block, continue_block)
+
+      // Trap block: emit trap instruction
+      self.builder.switch_to_block(trap_block)
+      self.builder.trap("out of bounds table access")
+
+      // Continue block: proceed with call
+      self.builder.switch_to_block(continue_block)
+    }
+
+    // Calculate flattened index for multi-table support
+    // flattened_idx = table_base_offset[table_idx] + elem_idx
+    let flattened_callee = if table_idx < self.table_base_offsets.length() {
+      let base_offset = self.table_base_offsets[table_idx]
+      if base_offset == 0 {
+        // Table 0 or single table: no offset needed
+        elem_idx
+      } else {
+        // Multi-table: add base offset
+        // Match the type of elem_idx (I32 for element indices)
+        let offset_const = self.builder.iconst(
+          elem_idx.ty,
+          base_offset.to_int64(),
+        )
+        self.builder.iadd(elem_idx, offset_const)
+      }
+    } else {
+      // Fallback: use element index directly (shouldn't happen in valid WASM)
+      elem_idx
+    }
     // Pop arguments
     let args : Array[Value] = []
     for _ in 0..<func_type.params.length() {
@@ -1425,8 +1491,9 @@ fn Translator::translate_call_indirect(
     // Get result types
     let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
     // Emit call_indirect with type hash (not type index) for structural equivalence
+    // Pass flattened_callee instead of original elem_idx
     let results = self.builder.call_indirect_multi(
-      type_hash, result_types, callee, args,
+      type_hash, table_idx, result_types, flattened_callee, args,
     )
     // Push all results onto the stack
     for v in results {

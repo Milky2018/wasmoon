@@ -152,7 +152,8 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
 
     // Function calls
     Call(idx) => "call \{idx}(\{ops})"
-    CallIndirect(idx) => "call_indirect \{idx}(\{ops})"
+    CallIndirect(type_idx, table_idx) =>
+      "call_indirect type=\{type_idx} table=\{table_idx}(\{ops})"
   }
 }
 
