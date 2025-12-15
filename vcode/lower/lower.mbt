@@ -351,8 +351,8 @@ fn lower_inst(
 
     // Function calls
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
-    @ir.Opcode::CallIndirect(type_idx) =>
-      lower_call_indirect(ctx, inst, block, type_idx)
+    @ir.Opcode::CallIndirect(type_idx, table_idx) =>
+      lower_call_indirect(ctx, inst, block, type_idx, table_idx)
   }
 }
 
@@ -1623,15 +1623,27 @@ fn lower_call_indirect(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
   expected_type_idx : Int,
+  table_idx : Int,
 ) -> Unit {
-  // For call_indirect, the first operand is the table index (callee)
+  // For call_indirect, the first operand is the element index within the table
   // which we need to convert to a function pointer
   if inst.operands.length() == 0 {
     return
   }
 
-  // First operand is the table index (callee)
-  let table_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // First operand is the element index within the specific table
+  let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // LIMITATION: Multi-table support is partial
+  // The table_idx parameter is currently not used during lookup.
+  // All tables are flattened into a single indirect_table during initialization,
+  // but we don't add the table base offset during lookup.
+  // Full fix requires:
+  //   1. Storing table base offsets in JIT context
+  //   2. Loading the offset here based on table_idx
+  //   3. Adding it to elem_idx before lookup
+  // For now, only table 0 works correctly. Tests with multiple tables will fail.
+  ignore(table_idx)
 
   // Arguments are all operands except the first one
   let arg_vregs : Array[@abi.VReg] = []
@@ -1649,14 +1661,14 @@ fn lower_call_indirect(
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
 
-  // Step 1: Calculate offset = table_idx * 16 (each entry is 16 bytes: func_ptr + type_idx)
+  // Step 1: Calculate offset = elem_idx * 16 (each entry is 16 bytes: func_ptr + type_idx)
   let const_16_vreg = ctx.vcode_func.new_vreg(Int)
   let load_16 = @instr.VCodeInst::new(LoadConst(16L))
   load_16.add_def({ reg: Virtual(const_16_vreg) })
   block.add_inst(load_16)
   let mul_inst = @instr.VCodeInst::new(Mul)
   mul_inst.add_def({ reg: Virtual(offset_vreg) })
-  mul_inst.add_use(Virtual(table_idx_vreg))
+  mul_inst.add_use(Virtual(elem_idx_vreg))
   mul_inst.add_use(Virtual(const_16_vreg))
   block.add_inst(mul_inst)
 

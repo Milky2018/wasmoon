@@ -208,6 +208,7 @@ fn run_jit(
         num_imports,
         import_func_type_indices,
         memory_max~,
+        tables=mod_.tables,
       )
       let ir_func = translator.translate(code.body)
 
@@ -332,7 +333,11 @@ fn build_func_signatures(
 ///|
 /// Initialize element segments for call_indirect support
 fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
-  // Calculate total table size from all tables
+  // For now, we only properly support table 0 (or a single table)
+  // Multi-table support requires storing table base offsets in the JIT context
+  // and loading them during call_indirect execution
+
+  // Calculate total table size (flatten all tables)
   let mut table_size = 0
   for table in mod_.tables {
     let min_size = table.type_.limits.min
@@ -341,10 +346,9 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
   if table_size == 0 {
     return // No tables, nothing to do
   }
+
   // Build function index to type hash mapping
-  // We use structural type hash for type equivalence checking
   let func_type_hashes : Array[Int] = []
-  // Import functions
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
       let type_hash = if type_idx < mod_.types.length() {
@@ -355,7 +359,6 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
       func_type_hashes.push(type_hash)
     }
   }
-  // Local functions
   for type_idx in mod_.funcs {
     let type_hash = if type_idx < mod_.types.length() {
       mod_.types[type_idx].structural_hash()
@@ -364,33 +367,42 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
     }
     func_type_hashes.push(type_hash)
   }
-  // Collect elem initializers: (table_idx, func_idx, type_hash)
+
+  // For single table or table 0: use offset directly
+  // For multiple tables: elements are indexed relative to each table
+  // but we need to flatten them for the single indirect_table
   let elem_init : Array[(Int, Int, Int)] = []
-  for elem in mod_.elems {
-    // Only process active element segments
-    if elem.mode is @types.ElemMode::Active(_table_idx, offset_expr) {
-      let offset = match offset_expr {
-        [I32Const(n)] => n
-        _ => 0
-      }
-      for i, init_expr in elem.init {
-        // Extract function index from init expression
-        let func_idx = match init_expr {
-          [RefFunc(idx)] => idx
-          [I32Const(idx)] => idx
-          _ => continue
+  let mut table_base_offset = 0
+  for table_idx, table in mod_.tables {
+    // Process elem segments for this table
+    for elem in mod_.elems {
+      if elem.mode is @types.ElemMode::Active(elem_table_idx, offset_expr) &&
+        elem_table_idx == table_idx {
+        let offset = match offset_expr {
+          [I32Const(n)] => n
+          _ => 0
         }
-        // Get the type hash for this function
-        let type_hash = if func_idx < func_type_hashes.length() {
-          func_type_hashes[func_idx]
-        } else {
-          0
+        for i, init_expr in elem.init {
+          let func_idx = match init_expr {
+            [RefFunc(idx)] => idx
+            [I32Const(idx)] => idx
+            _ => continue
+          }
+          let type_hash = if func_idx < func_type_hashes.length() {
+            func_type_hashes[func_idx]
+          } else {
+            0
+          }
+          // Flatten: base_offset + offset_in_table + i
+          let flattened_idx = table_base_offset + offset + i
+          elem_init.push((flattened_idx, func_idx, type_hash))
         }
-        elem_init.push((offset + i, func_idx, type_hash))
       }
     }
+    // Move base offset for next table
+    table_base_offset += table.type_.limits.min
   }
-  // Initialize the indirect table
+
   jm.init_indirect_table(table_size, elem_init)
 }
 

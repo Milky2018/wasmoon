@@ -216,7 +216,7 @@ pub enum Opcode {
 
   // Function calls
   Call(Int) // Direct call (function index)
-  CallIndirect(Int) // Indirect call (type index)
+  CallIndirect(Int, Int) // Indirect call (type index, table index)
 } derive(Show)
 
 ///|

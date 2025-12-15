@@ -710,6 +710,7 @@ pub fn IRBuilder::call_multi(
 pub fn IRBuilder::call_indirect(
   self : IRBuilder,
   type_idx : Int,
+  table_idx : Int,
   result_ty : Type?,
   callee : Value,
   args : Array[Value],
@@ -720,9 +721,11 @@ pub fn IRBuilder::call_indirect(
   }
   match result_ty {
     Some(ty) =>
-      Some(self.emit_inst(ty, Opcode::CallIndirect(type_idx), all_args))
+      Some(
+        self.emit_inst(ty, Opcode::CallIndirect(type_idx, table_idx), all_args),
+      )
     None => {
-      self.emit_void_inst(Opcode::CallIndirect(type_idx), all_args)
+      self.emit_void_inst(Opcode::CallIndirect(type_idx, table_idx), all_args)
       None
     }
   }
@@ -733,6 +736,7 @@ pub fn IRBuilder::call_indirect(
 pub fn IRBuilder::call_indirect_multi(
   self : IRBuilder,
   type_idx : Int,
+  table_idx : Int,
   result_types : Array[Type],
   callee : Value,
   args : Array[Value],
@@ -742,7 +746,7 @@ pub fn IRBuilder::call_indirect_multi(
     all_args.push(arg)
   }
   if result_types.length() == 0 {
-    self.emit_void_inst(Opcode::CallIndirect(type_idx), all_args)
+    self.emit_void_inst(Opcode::CallIndirect(type_idx, table_idx), all_args)
     return []
   }
   // Create result values for each return type
@@ -751,7 +755,11 @@ pub fn IRBuilder::call_indirect_multi(
     results.push(self.func.new_value(ty))
   }
   // Create instruction with multiple results
-  let inst = Inst::new_multi(results, Opcode::CallIndirect(type_idx), all_args)
+  let inst = Inst::new_multi(
+    results,
+    Opcode::CallIndirect(type_idx, table_idx),
+    all_args,
+  )
   if self.current_block is Some(block) {
     block.add_inst(inst)
   }

@@ -653,6 +653,7 @@ fn compile_module_to_jit(
       num_imports,
       import_func_type_indices,
       memory_max~,
+      tables=mod_.tables,
     )
     let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (O2 level)
