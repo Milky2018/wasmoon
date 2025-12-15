@@ -97,6 +97,14 @@ pub extern "c" fn c_jit_get_memory_size_bytes_v2_ptr() -> Int64 = "wasmoon_jit_g
 pub extern "c" fn c_jit_get_memory_size_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_size_v2_ptr"
 
 ///|
+/// Get memory_fill v2 function pointer for JIT
+pub extern "c" fn c_jit_get_memory_fill_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_v2_ptr"
+
+///|
+/// Get memory_copy v2 function pointer for JIT
+pub extern "c" fn c_jit_get_memory_copy_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_v2_ptr"
+
+///|
 /// Get current memory base from v2 context (for proper cleanup after memory.grow)
 pub extern "c" fn c_jit_get_current_memory_base_v2() -> Int64 = "wasmoon_jit_get_memory_base_v2"
 
@@ -311,6 +319,29 @@ pub extern "c" fn c_jit_get_spectest_print_i32_f32_ptr() -> Int64 = "wasmoon_jit
 ///|
 /// Get spectest print_f64_f64 trampoline pointer
 pub extern "c" fn c_jit_get_spectest_print_f64_f64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f64_f64_ptr"
+
+// ============ Bulk Memory Operations ============
+
+///|
+/// memory.fill: Fill memory region with a byte value
+/// Parameters: dst (offset), val (byte value), size (count)
+/// Traps if out of bounds
+pub extern "c" fn c_jit_memory_fill_v2(
+  dst : Int,
+  val : Int,
+  size : Int,
+) -> Unit = "wasmoon_jit_memory_fill_v2"
+
+///|
+/// memory.copy: Copy memory region
+/// Parameters: dst (dest offset), src (source offset), size (count)
+/// Handles overlapping regions correctly
+/// Traps if out of bounds
+pub extern "c" fn c_jit_memory_copy_v2(
+  dst : Int,
+  src : Int,
+  size : Int,
+) -> Unit = "wasmoon_jit_memory_copy_v2"
 
 // ============ Executable Memory Management ============
 

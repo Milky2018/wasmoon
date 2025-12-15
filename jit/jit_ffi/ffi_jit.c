@@ -1983,6 +1983,73 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_copy_code(int64_t dest, moonbit_bytes_t src, 
     return 0;
 }
 
+// ============ Bulk Memory Operations ============
+
+// memory.fill: Fill memory region with a byte value
+// Parameters: dst (offset), val (byte value), size (count)
+// Traps if: dst + size > memory_size (out of bounds)
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v2(int32_t dst, int32_t val, int32_t size) {
+    jit_context_v2_t *ctx = g_jit_context_v2;
+    if (!ctx || !ctx->memory_base) {
+        g_trap_code = 1;  // Out of bounds memory access
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+
+    // Check bounds
+    if (dst < 0 || size < 0 || (uint32_t)dst + (uint32_t)size > ctx->memory_size) {
+        g_trap_code = 1;  // Out of bounds memory access
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+
+    // Fill memory with byte value (val & 0xFF)
+    memset(ctx->memory_base + dst, val & 0xFF, size);
+}
+
+// memory.copy: Copy memory region
+// Parameters: dst (dest offset), src (source offset), size (count)
+// Traps if: dst + size > memory_size || src + size > memory_size
+// Handles overlapping regions correctly (like memmove)
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v2(int32_t dst, int32_t src, int32_t size) {
+    jit_context_v2_t *ctx = g_jit_context_v2;
+    if (!ctx || !ctx->memory_base) {
+        g_trap_code = 1;  // Out of bounds memory access
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+
+    // Check bounds for both source and destination
+    if (dst < 0 || src < 0 || size < 0 ||
+        (uint32_t)dst + (uint32_t)size > ctx->memory_size ||
+        (uint32_t)src + (uint32_t)size > ctx->memory_size) {
+        g_trap_code = 1;  // Out of bounds memory access
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+
+    // Use memmove to handle overlapping regions correctly
+    memmove(ctx->memory_base + dst, ctx->memory_base + src, size);
+}
+
+// Get function pointer for memory_fill v2
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_v2_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_fill_v2;
+}
+
+// Get function pointer for memory_copy v2
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_v2_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_copy_v2;
+}
+
 // Free executable memory
 MOONBIT_FFI_EXPORT int wasmoon_jit_free_exec(int64_t ptr_i64) {
     void *ptr = (void *)ptr_i64;

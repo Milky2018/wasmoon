@@ -143,6 +143,8 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
         None => "memory_grow \{ops}"
       }
     MemorySize => "memory_size"
+    MemoryFill => "memory_fill \{ops}"
+    MemoryCopy => "memory_copy \{ops}"
 
     // Misc
     Select => "select \{ops}"

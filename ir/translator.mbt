@@ -742,6 +742,18 @@ fn Translator::translate_instruction(
       let result = self.builder.memory_size()
       self.push(result)
     }
+    MemoryFill => {
+      let n = self.pop() // size
+      let val = self.pop() // value (byte)
+      let d = self.pop() // destination
+      self.builder.memory_fill(d, val, n)
+    }
+    MemoryCopy => {
+      let n = self.pop() // size
+      let s = self.pop() // source
+      let d = self.pop() // destination
+      self.builder.memory_copy(d, s, n)
+    }
 
     // Reference types
     RefNull(_ref_type) => {

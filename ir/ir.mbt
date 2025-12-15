@@ -207,6 +207,8 @@ pub enum Opcode {
   // Memory management
   MemoryGrow(Int?) // Grow memory by delta pages, returns previous size or -1. Int? = max_pages (None = no limit)
   MemorySize // Get current memory size in pages
+  MemoryFill // Fill memory region with a byte value (dst, val, size)
+  MemoryCopy // Copy memory region (dst, src, size)
 
   // Misc
   Select // Conditional select (cond ? a : b)

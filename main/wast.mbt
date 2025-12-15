@@ -297,8 +297,9 @@ fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool 
       // Table bulk operations - not supported by JIT
       TableInit(_, _) | TableCopy(_, _) | TableFill(_) | ElemDrop(_) =>
         return true
-      // Memory bulk operations - not supported by JIT
-      MemoryInit(_) | MemoryCopy | MemoryFill | DataDrop(_) => return true
+      // Memory bulk operations with segments - not supported by JIT
+      // (memory.fill and memory.copy are now supported)
+      MemoryInit(_) | DataDrop(_) => return true
       // Block instructions - need to check nested instructions
       Block(_, body) | Loop(_, body) =>
         if contains_unsupported_instruction(body) {

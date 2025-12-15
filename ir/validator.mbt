@@ -279,6 +279,18 @@ fn validate_instruction(
           "MemorySize expects 0 operands, got \{inst.operands.length()}",
         )
       }
+    MemoryFill =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "MemoryFill expects 3 operands (dst, val, size), got \{inst.operands.length()}",
+        )
+      }
+    MemoryCopy =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "MemoryCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
+        )
+      }
 
     // Table operations
     TableGet(_) =>

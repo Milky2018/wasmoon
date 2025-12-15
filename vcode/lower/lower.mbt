@@ -346,6 +346,8 @@ fn lower_inst(
     @ir.Opcode::MemoryGrow(max_pages) =>
       lower_memory_grow(ctx, inst, block, max_pages)
     @ir.Opcode::MemorySize => lower_memory_size(ctx, inst, block)
+    @ir.Opcode::MemoryFill => lower_memory_fill(ctx, inst, block)
+    @ir.Opcode::MemoryCopy => lower_memory_copy(ctx, inst, block)
 
     // Table operations
     @ir.Opcode::TableGet(table_idx) =>
@@ -1600,6 +1602,64 @@ fn lower_memory_size(
   // Add clobbers for caller-saved registers (it's a call)
   add_call_clobbers(size_inst)
   block.add_inst(size_inst)
+}
+
+///|
+/// Lower memory.fill instruction
+/// memory.fill fills a memory region with a byte value
+fn lower_memory_fill(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  // Get the operands: dst, val, size
+  guard inst.operands.length() >= 3 else { return }
+  let dst = ctx.get_vreg_for_use(inst.operands[0], block)
+  let val = ctx.get_vreg_for_use(inst.operands[1], block)
+  let size = ctx.get_vreg_for_use(inst.operands[2], block)
+
+  // Create the MemoryFill VCode instruction
+  // Uses: [dst, val, size], Defs: []
+  let fill_inst = @instr.VCodeInst::new(MemoryFill)
+  fill_inst.add_use(Virtual(dst))
+  fill_inst.add_use(Virtual(val))
+  fill_inst.add_use(Virtual(size))
+  // Only clobber registers actually used by codegen: x0-x2 (args), x16 (func ptr)
+  // Don't clobber all caller-saved regs to avoid breaking value reuse
+  fill_inst.add_def({ reg: Physical({ index: 0, class: Int }) }) // x0
+  fill_inst.add_def({ reg: Physical({ index: 1, class: Int }) }) // x1
+  fill_inst.add_def({ reg: Physical({ index: 2, class: Int }) }) // x2
+  fill_inst.add_def({ reg: Physical({ index: 16, class: Int }) }) // x16
+  block.add_inst(fill_inst)
+}
+
+///|
+/// Lower memory.copy instruction
+/// memory.copy copies a memory region (handles overlapping regions correctly)
+fn lower_memory_copy(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  // Get the operands: dst, src, size
+  guard inst.operands.length() >= 3 else { return }
+  let dst = ctx.get_vreg_for_use(inst.operands[0], block)
+  let src = ctx.get_vreg_for_use(inst.operands[1], block)
+  let size = ctx.get_vreg_for_use(inst.operands[2], block)
+
+  // Create the MemoryCopy VCode instruction
+  // Uses: [dst, src, size], Defs: []
+  let copy_inst = @instr.VCodeInst::new(MemoryCopy)
+  copy_inst.add_use(Virtual(dst))
+  copy_inst.add_use(Virtual(src))
+  copy_inst.add_use(Virtual(size))
+  // Only clobber registers actually used by codegen: x0-x2 (args), x16 (func ptr)
+  // Don't clobber all caller-saved regs to avoid breaking value reuse
+  copy_inst.add_def({ reg: Physical({ index: 0, class: Int }) }) // x0
+  copy_inst.add_def({ reg: Physical({ index: 1, class: Int }) }) // x1
+  copy_inst.add_def({ reg: Physical({ index: 2, class: Int }) }) // x2
+  copy_inst.add_def({ reg: Physical({ index: 16, class: Int }) }) // x16
+  block.add_inst(copy_inst)
 }
 
 ///|

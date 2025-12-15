@@ -179,6 +179,12 @@ pub(all) enum VCodeOpcode {
   // MemorySize: get current memory size in pages
   // Uses: [], Defs: [result]
   MemorySize
+  // MemoryFill: fill memory region with a byte value
+  // Uses: [dst, val, size], Defs: []
+  MemoryFill
+  // MemoryCopy: copy memory region (handles overlapping regions)
+  // Uses: [dst, src, size], Defs: []
+  MemoryCopy
   // Table operations (for reference types)
   // TableGet(table_idx): load from indirect table at index
   // Uses: [elem_idx], Defs: [result (function pointer)]
@@ -279,6 +285,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
         "memory_grow max=\{max_pages}"
       }
     MemorySize => "memory_size"
+    MemoryFill => "memory_fill"
+    MemoryCopy => "memory_copy"
     TableGet(table_idx) => "table_get \{table_idx}"
     TableSet(table_idx) => "table_set \{table_idx}"
   }

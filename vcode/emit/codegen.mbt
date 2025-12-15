@@ -23,8 +23,9 @@ fn collect_used_callee_saved(
   for block in func.blocks {
     for inst in block.insts {
       // Check if this instruction is a function call
-      // MemoryGrow and MemorySize also use BLR internally to call C functions
-      if inst.opcode is (CallIndirect(_, _) | MemoryGrow(_) | MemorySize) {
+      // MemoryGrow, MemorySize, MemoryFill, and MemoryCopy also use BLR internally to call C functions
+      if inst.opcode is (CallIndirect(_, _) | MemoryGrow(_) | MemorySize |
+        MemoryFill | MemoryCopy) {
         has_calls = true
       }
       for def in inst.defs {
@@ -1632,6 +1633,46 @@ fn MachineCode::emit_instruction(
       if result_reg != 0 {
         self.emit_mov_reg(result_reg, 0) // MOV result, X0
       }
+    }
+    MemoryFill => {
+      // Call wasmoon_jit_memory_fill_v2(dst, val, size)
+      // Uses: [dst, val, size], Defs: []
+      let dst_reg = reg_num(inst.uses[0])
+      let val_reg = reg_num(inst.uses[1])
+      let size_reg = reg_num(inst.uses[2])
+
+      // Move arguments to X0, X1, X2
+      self.emit_mov_reg(0, dst_reg) // MOV X0, dst
+      self.emit_mov_reg(1, val_reg) // MOV X1, val
+      self.emit_mov_reg(2, size_reg) // MOV X2, size
+
+      // Load memory_fill function pointer into X16
+      let fill_ptr = @jit_ffi.c_jit_get_memory_fill_v2_ptr()
+      self.emit_load_imm64(16, fill_ptr)
+
+      // Call the function
+      self.annotate("blr x16  // memory_fill")
+      self.emit_blr(16)
+    }
+    MemoryCopy => {
+      // Call wasmoon_jit_memory_copy_v2(dst, src, size)
+      // Uses: [dst, src, size], Defs: []
+      let dst_reg = reg_num(inst.uses[0])
+      let src_reg = reg_num(inst.uses[1])
+      let size_reg = reg_num(inst.uses[2])
+
+      // Move arguments to X0, X1, X2
+      self.emit_mov_reg(0, dst_reg) // MOV X0, dst
+      self.emit_mov_reg(1, src_reg) // MOV X1, src
+      self.emit_mov_reg(2, size_reg) // MOV X2, size
+
+      // Load memory_copy function pointer into X16
+      let copy_ptr = @jit_ffi.c_jit_get_memory_copy_v2_ptr()
+      self.emit_load_imm64(16, copy_ptr)
+
+      // Call the function
+      self.annotate("blr x16  // memory_copy")
+      self.emit_blr(16)
     }
     TableGet(_table_idx) => {
       // Load function reference from indirect table
