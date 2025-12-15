@@ -257,12 +257,57 @@ fn WastContext::build_imports(self : WastContext) -> @runtime.Imports {
 }
 
 ///|
+/// Check if a module contains JIT-unsupported instructions
+fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
+  // Check all function bodies for unsupported instructions
+  for code in mod_.codes {
+    if contains_unsupported_instruction(code.body) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Recursively check if instruction list contains unsupported instructions
+fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool {
+  for instr in instrs {
+    match instr {
+      // Table bulk operations - not supported by JIT
+      TableInit(_, _) | TableCopy(_, _) | TableFill(_) | ElemDrop(_) =>
+        return true
+      // Memory bulk operations - not supported by JIT
+      MemoryInit(_) | MemoryCopy | MemoryFill | DataDrop(_) => return true
+      // Block instructions - need to check nested instructions
+      Block(_, body) | Loop(_, body) =>
+        if contains_unsupported_instruction(body) {
+          return true
+        }
+      If(_, then_body, else_body) => {
+        if contains_unsupported_instruction(then_body) {
+          return true
+        }
+        if !else_body.is_empty() && contains_unsupported_instruction(else_body) {
+          return true
+        }
+      }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 /// Try to compile a module to JIT and return (JITModule, memory_ptr) if successful
 fn try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> (@jit.JITModule, Int64)? {
+  // Check for unsupported instructions
+  if has_unsupported_instructions(mod_) {
+    return None // Module contains instructions not supported by JIT
+  }
   // Check if all imports are supported by JIT
   for imp in mod_.imports {
     if imp.desc is Func(_) &&
