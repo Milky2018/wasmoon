@@ -269,6 +269,31 @@ fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
   if has_unsupported_elem_init(mod_) {
     return true
   }
+  // Check if module imports or exports table (not supported by JIT)
+  if has_table_import_or_export(mod_) {
+    return true
+  }
+  false
+}
+
+///|
+/// Check if module imports or exports a table
+/// JIT doesn't support:
+/// - Imported tables: indirect table is per-module
+/// - Exported tables: other modules may modify the table at runtime
+fn has_table_import_or_export(mod_ : @types.Module) -> Bool {
+  // Check imports
+  for imp in mod_.imports {
+    if imp.desc is @types.ImportDesc::Table(_) {
+      return true
+    }
+  }
+  // Check exports
+  for exp in mod_.exports {
+    if exp.desc is @types.ExportDesc::Table(_) {
+      return true
+    }
+  }
   false
 }
 
