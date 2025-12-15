@@ -96,16 +96,12 @@ Wasmoon 是一个用 MoonBit 编写的 WebAssembly 运行时，目标是实现�
 
 ---
 
-## 已知问题
+## 历史问题（已解决）
 
-### MoonBit 条件表达式浮点零 Bug
+### ~~MoonBit 条件表达式浮点零 Bug~~ (已修复)
 
 `if neg { -0.0 } else { 0.0 }` 在 `neg = false` 时错误返回 `-0.0`。
 
-**解决方案**: 使用 bit 操作绕过
-```moonbit
-let sign_bit : Int64 = if neg { 0x8000000000000000L } else { 0L }
-return sign_bit.reinterpret_as_double()
-```
+**状态**: MoonBit 已在最新版本中修复此问题。
 
-**跟踪测试**: `wat/parser_wbtest.mbt` 中的 `test "moonbit-bug: conditional 0.0 vs -0.0 returns wrong value"`
+**回归测试**: `wat/parser_wbtest.mbt` 中的 `test "regression: conditional 0.0 vs -0.0 now works correctly"`
