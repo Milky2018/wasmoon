@@ -82,6 +82,10 @@ pub fn c_jit_get_memory_base_ptr() -> Int64
 
 pub fn c_jit_get_memory_base_v2_ptr() -> Int64
 
+pub fn c_jit_get_memory_copy_v2_ptr() -> Int64
+
+pub fn c_jit_get_memory_fill_v2_ptr() -> Int64
+
 pub fn c_jit_get_memory_grow_ptr() -> Int64
 
 pub fn c_jit_get_memory_grow_v2_ptr() -> Int64
@@ -113,6 +117,10 @@ pub fn c_jit_get_spectest_print_i64_ptr() -> Int64
 pub fn c_jit_get_spectest_print_ptr() -> Int64
 
 pub fn c_jit_get_trap_code() -> Int
+
+pub fn c_jit_memory_copy_v2(Int, Int, Int) -> Unit
+
+pub fn c_jit_memory_fill_v2(Int, Int, Int) -> Unit
 
 pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 

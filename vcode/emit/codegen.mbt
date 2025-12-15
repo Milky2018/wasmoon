@@ -24,8 +24,12 @@ fn collect_used_callee_saved(
     for inst in block.insts {
       // Check if this instruction is a function call
       // MemoryGrow, MemorySize, MemoryFill, and MemoryCopy also use BLR internally to call C functions
-      if inst.opcode is (CallIndirect(_, _) | MemoryGrow(_) | MemorySize |
-        MemoryFill | MemoryCopy) {
+      if inst.opcode
+        is (CallIndirect(_, _)
+        | MemoryGrow(_)
+        | MemorySize
+        | MemoryFill
+        | MemoryCopy) {
         has_calls = true
       }
       for def in inst.defs {

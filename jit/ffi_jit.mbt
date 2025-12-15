@@ -270,16 +270,6 @@ fn JITContext::free(self : JITContext) -> Unit {
   @jit_ffi.c_jit_free_context_v2(self.ctx_ptr)
 }
 
-///|
-/// Configure context to use a shared indirect table
-fn JITContext::use_shared_table(self : JITContext, table : JITTable) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_use_shared_table(
-    self.ctx_ptr,
-    table.table_ptr,
-    table.size,
-  )
-}
-
 // ============ Shared JIT Indirect Table ============
 
 ///|

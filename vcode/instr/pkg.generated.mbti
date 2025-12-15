@@ -180,6 +180,8 @@ pub(all) enum VCodeOpcode {
   LoadStackParam(Int, @abi.RegClass)
   MemoryGrow(Int)
   MemorySize
+  MemoryFill
+  MemoryCopy
   TableGet(Int)
   TableSet(Int)
 }

@@ -170,6 +170,8 @@ pub fn IRBuilder::load32_s(Self, Value, Int) -> Value
 pub fn IRBuilder::load32_u(Self, Value, Int) -> Value
 pub fn IRBuilder::load8_s(Self, Type, Value, Int) -> Value
 pub fn IRBuilder::load8_u(Self, Type, Value, Int) -> Value
+pub fn IRBuilder::memory_copy(Self, Value, Value, Value) -> Unit
+pub fn IRBuilder::memory_fill(Self, Value, Value, Value) -> Unit
 pub fn IRBuilder::memory_grow(Self, Value, max_pages? : Int) -> Value
 pub fn IRBuilder::memory_size(Self) -> Value
 pub fn IRBuilder::new(String) -> Self
@@ -291,6 +293,8 @@ pub enum Opcode {
   Store32(Int)
   MemoryGrow(Int?)
   MemorySize
+  MemoryFill
+  MemoryCopy
   Select
   Copy
   TableGet(Int)
