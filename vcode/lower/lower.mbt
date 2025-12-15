@@ -328,6 +328,10 @@ fn lower_inst(
     @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
     @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
     @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
+    @ir.Opcode::FcvtToSintSat =>
+      lower_float_to_int_sat(ctx, inst, block, signed=true)
+    @ir.Opcode::FcvtToUintSat =>
+      lower_float_to_int_sat(ctx, inst, block, signed=false)
     @ir.Opcode::SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
     @ir.Opcode::UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
     @ir.Opcode::Fpromote => lower_promote(ctx, inst, block)
@@ -342,6 +346,8 @@ fn lower_inst(
     @ir.Opcode::MemoryGrow(max_pages) =>
       lower_memory_grow(ctx, inst, block, max_pages)
     @ir.Opcode::MemorySize => lower_memory_size(ctx, inst, block)
+    @ir.Opcode::MemoryFill => lower_memory_fill(ctx, inst, block)
+    @ir.Opcode::MemoryCopy => lower_memory_copy(ctx, inst, block)
 
     // Table operations
     @ir.Opcode::TableGet(table_idx) =>
@@ -1263,6 +1269,38 @@ fn lower_float_to_int(
 }
 
 ///|
+/// Lower saturating float to int conversion
+fn lower_float_to_int_sat(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  signed~ : Bool,
+) -> Unit {
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Determine conversion kind based on source/dest types and signedness
+    let src_ty = inst.operands[0].ty
+    let dst_ty = result.ty
+    let kind : @instr.FloatToIntKind = match (src_ty, dst_ty, signed) {
+      (@ir.Type::F32, @ir.Type::I32, true) => F32ToI32SSat
+      (@ir.Type::F32, @ir.Type::I32, false) => F32ToI32USat
+      (@ir.Type::F32, @ir.Type::I64, true) => F32ToI64SSat
+      (@ir.Type::F32, @ir.Type::I64, false) => F32ToI64USat
+      (@ir.Type::F64, @ir.Type::I32, true) => F64ToI32SSat
+      (@ir.Type::F64, @ir.Type::I32, false) => F64ToI32USat
+      (@ir.Type::F64, @ir.Type::I64, true) => F64ToI64SSat
+      (@ir.Type::F64, @ir.Type::I64, false) => F64ToI64USat
+      _ => F64ToI64SSat // Default fallback
+    }
+    let vcode_inst = @instr.VCodeInst::new(FloatToInt(kind))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
+  }
+}
+
+///|
 /// Lower int to float conversion
 fn lower_int_to_float(
   ctx : LoweringContext,
@@ -1567,6 +1605,64 @@ fn lower_memory_size(
 }
 
 ///|
+/// Lower memory.fill instruction
+/// memory.fill fills a memory region with a byte value
+fn lower_memory_fill(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  // Get the operands: dst, val, size
+  guard inst.operands.length() >= 3 else { return }
+  let dst = ctx.get_vreg_for_use(inst.operands[0], block)
+  let val = ctx.get_vreg_for_use(inst.operands[1], block)
+  let size = ctx.get_vreg_for_use(inst.operands[2], block)
+
+  // Create the MemoryFill VCode instruction
+  // Uses: [dst, val, size], Defs: []
+  let fill_inst = @instr.VCodeInst::new(MemoryFill)
+  fill_inst.add_use(Virtual(dst))
+  fill_inst.add_use(Virtual(val))
+  fill_inst.add_use(Virtual(size))
+  // Only clobber registers actually used by codegen: x0-x2 (args), x16 (func ptr)
+  // Don't clobber all caller-saved regs to avoid breaking value reuse
+  fill_inst.add_def({ reg: Physical({ index: 0, class: Int }) }) // x0
+  fill_inst.add_def({ reg: Physical({ index: 1, class: Int }) }) // x1
+  fill_inst.add_def({ reg: Physical({ index: 2, class: Int }) }) // x2
+  fill_inst.add_def({ reg: Physical({ index: 16, class: Int }) }) // x16
+  block.add_inst(fill_inst)
+}
+
+///|
+/// Lower memory.copy instruction
+/// memory.copy copies a memory region (handles overlapping regions correctly)
+fn lower_memory_copy(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  // Get the operands: dst, src, size
+  guard inst.operands.length() >= 3 else { return }
+  let dst = ctx.get_vreg_for_use(inst.operands[0], block)
+  let src = ctx.get_vreg_for_use(inst.operands[1], block)
+  let size = ctx.get_vreg_for_use(inst.operands[2], block)
+
+  // Create the MemoryCopy VCode instruction
+  // Uses: [dst, src, size], Defs: []
+  let copy_inst = @instr.VCodeInst::new(MemoryCopy)
+  copy_inst.add_use(Virtual(dst))
+  copy_inst.add_use(Virtual(src))
+  copy_inst.add_use(Virtual(size))
+  // Only clobber registers actually used by codegen: x0-x2 (args), x16 (func ptr)
+  // Don't clobber all caller-saved regs to avoid breaking value reuse
+  copy_inst.add_def({ reg: Physical({ index: 0, class: Int }) }) // x0
+  copy_inst.add_def({ reg: Physical({ index: 1, class: Int }) }) // x1
+  copy_inst.add_def({ reg: Physical({ index: 2, class: Int }) }) // x2
+  copy_inst.add_def({ reg: Physical({ index: 16, class: Int }) }) // x16
+  block.add_inst(copy_inst)
+}
+
+///|
 /// Lower table.get instruction
 /// Loads a function reference from the indirect table
 fn lower_table_get(
@@ -1634,16 +1730,32 @@ fn lower_call_indirect(
   // First operand is the element index within the specific table
   let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // LIMITATION: Multi-table support is partial
-  // The table_idx parameter is currently not used during lookup.
-  // All tables are flattened into a single indirect_table during initialization,
-  // but we don't add the table base offset during lookup.
-  // Full fix requires:
-  //   1. Storing table base offsets in JIT context
-  //   2. Loading the offset here based on table_idx
-  //   3. Adding it to elem_idx before lookup
-  // For now, only table 0 works correctly. Tests with multiple tables will fail.
-  ignore(table_idx)
+  // Multi-table support: determine which table pointer to use
+  // If table_idx == 0, use X24 (already loaded in prologue)
+  // If table_idx != 0, load the table pointer from indirect_tables[table_idx]
+  let table_ptr_preg : @abi.Reg = if table_idx == 0 {
+    // Fast path: use X24 which already points to table 0
+    Physical({ index: 24, class: Int })
+  } else {
+    // Slow path: load indirect_tables[table_idx] from context
+    // 1. Load indirect_tables array pointer: [X19 + 32]
+    let indirect_tables_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_array_inst = @instr.VCodeInst::new(
+      Load(I64, @abi.CTX_INDIRECT_TABLES_OFFSET),
+    )
+    load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
+    load_array_inst.add_use(Physical({ index: 19, class: Int }))
+    block.add_inst(load_array_inst)
+    // 2. Calculate offset = table_idx * 8 (pointer size)
+    let table_offset = table_idx * 8
+    // 3. Load table pointer: [indirect_tables + offset]
+    let table_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_table_inst = @instr.VCodeInst::new(Load(I64, table_offset))
+    load_table_inst.add_def({ reg: Virtual(table_ptr_vreg) })
+    load_table_inst.add_use(Virtual(indirect_tables_vreg))
+    block.add_inst(load_table_inst)
+    Virtual(table_ptr_vreg)
+  }
 
   // Arguments are all operands except the first one
   let arg_vregs : Array[@abi.VReg] = []
@@ -1672,12 +1784,12 @@ fn lower_call_indirect(
   mul_inst.add_use(Virtual(const_16_vreg))
   block.add_inst(mul_inst)
 
-  // Step 2: Calculate address = X24 + offset
-  // X24 holds the indirect_table_ptr (separate from func_table in X20)
+  // Step 2: Calculate address = table_ptr + offset
+  // table_ptr holds the correct table pointer (X24 for table 0, or loaded for other tables)
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
   let add_inst = @instr.VCodeInst::new(Add)
   add_inst.add_def({ reg: Virtual(addr_vreg) })
-  add_inst.add_use(Physical({ index: 24, class: Int }))
+  add_inst.add_use(table_ptr_preg)
   add_inst.add_use(Virtual(offset_vreg))
   block.add_inst(add_inst)
 

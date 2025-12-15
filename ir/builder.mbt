@@ -462,6 +462,26 @@ pub fn IRBuilder::fcvt_to_uint(self : IRBuilder, ty : Type, a : Value) -> Value 
 }
 
 ///|
+/// Float to signed int (saturating - NaN->0, overflow->max/min)
+pub fn IRBuilder::fcvt_to_sint_sat(
+  self : IRBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
+  self.emit_inst(ty, Opcode::FcvtToSintSat, [a])
+}
+
+///|
+/// Float to unsigned int (saturating - NaN->0, overflow->max, negative->0)
+pub fn IRBuilder::fcvt_to_uint_sat(
+  self : IRBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
+  self.emit_inst(ty, Opcode::FcvtToUintSat, [a])
+}
+
+///|
 /// Signed int to float
 pub fn IRBuilder::sint_to_fcvt(self : IRBuilder, ty : Type, a : Value) -> Value {
   self.emit_inst(ty, Opcode::SintToFcvt, [a])
@@ -616,6 +636,32 @@ pub fn IRBuilder::memory_grow(
 /// Get current memory size in pages
 pub fn IRBuilder::memory_size(self : IRBuilder) -> Value {
   self.emit_inst(Type::I32, Opcode::MemorySize, [])
+}
+
+///|
+/// Fill memory region with a byte value
+/// Operands: dst (i32), val (i32), size (i32)
+/// No return value
+pub fn IRBuilder::memory_fill(
+  self : IRBuilder,
+  dst : Value,
+  val : Value,
+  size : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::MemoryFill, [dst, val, size])
+}
+
+///|
+/// Copy memory region
+/// Operands: dst (i32), src (i32), size (i32)
+/// No return value
+pub fn IRBuilder::memory_copy(
+  self : IRBuilder,
+  dst : Value,
+  src : Value,
+  size : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::MemoryCopy, [dst, src, size])
 }
 
 // ============ Table Operations ============

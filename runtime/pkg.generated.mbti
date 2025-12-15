@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/runtime"
 
 import(
+  "Milky2018/wasmoon/jit"
   "Milky2018/wasmoon/types"
 )
 
@@ -178,17 +179,19 @@ pub struct Store {
   globals : Array[GlobalInstance]
   func_owners : Array[Int]
   instances : Array[ModuleInstance]
+  jit_tables : Array[@jit.JITTable?]
 }
 pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType) -> Int
 pub fn Store::alloc_global(Self, GlobalInstance) -> Int
 pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Int
 pub fn Store::alloc_mem(Self, Memory) -> Int
-pub fn Store::alloc_table(Self, Table) -> Int
+pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 pub fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
 pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_func_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
+pub fn Store::get_jit_table(Self, Int) -> @jit.JITTable?
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory
 pub fn Store::get_table(Self, Int) -> Table raise RuntimeError

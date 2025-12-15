@@ -13,13 +13,21 @@
 
 // ============ JITContext Structure Offsets ============
 // These must match the C struct layout in ffi_jit.c
+// Context structure offsets:
+//   +0:  func_table (void**) - array of function pointers
+//   +8:  indirect_table (void**) - single indirect table (table 0)
+//   +16: memory_base (uint8_t*) - linear memory base
+//   +24: memory_size (size_t) - memory size in bytes
+//   +32: indirect_tables (void***) - array of indirect table pointers (multi-table)
+//   +40: table_count (int) - number of tables
 
 ///|
 /// Offset of func_table in JITContext
 pub const CTX_FUNC_TABLE_OFFSET : Int = 0
 
 ///|
-/// Offset of indirect_table in JITContext
+/// Offset of indirect_table in JITContext (single table, table 0)
+/// This is used by prologue for fast access to table 0
 pub const CTX_INDIRECT_TABLE_OFFSET : Int = 8
 
 ///|
@@ -29,6 +37,16 @@ pub const CTX_MEMORY_BASE_OFFSET : Int = 16
 ///|
 /// Offset of memory_size in JITContext
 pub const CTX_MEMORY_SIZE_OFFSET : Int = 24
+
+///|
+/// Offset of indirect_tables array in JITContext (multi-table support)
+/// This is a pointer to an array of table pointers: void ***indirect_tables
+/// Used only for table_idx != 0
+pub const CTX_INDIRECT_TABLES_OFFSET : Int = 32
+
+///|
+/// Offset of table_count in JITContext
+pub const CTX_TABLE_COUNT_OFFSET : Int = 40
 
 // ============ Reserved Registers ============
 

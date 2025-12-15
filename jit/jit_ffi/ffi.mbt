@@ -97,6 +97,14 @@ pub extern "c" fn c_jit_get_memory_size_bytes_v2_ptr() -> Int64 = "wasmoon_jit_g
 pub extern "c" fn c_jit_get_memory_size_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_size_v2_ptr"
 
 ///|
+/// Get memory_fill v2 function pointer for JIT
+pub extern "c" fn c_jit_get_memory_fill_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_v2_ptr"
+
+///|
+/// Get memory_copy v2 function pointer for JIT
+pub extern "c" fn c_jit_get_memory_copy_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_v2_ptr"
+
+///|
 /// Get current memory base from v2 context (for proper cleanup after memory.grow)
 pub extern "c" fn c_jit_get_current_memory_base_v2() -> Int64 = "wasmoon_jit_get_memory_base_v2"
 
@@ -173,6 +181,44 @@ pub extern "c" fn c_jit_ctx_v2_set_indirect(
   func_idx : Int,
   type_idx : Int,
 ) -> Unit = "wasmoon_jit_ctx_v2_set_indirect"
+
+// ============ Shared Indirect Table ============
+
+///|
+/// Allocate a shared indirect table that can be used by multiple JIT modules
+pub extern "c" fn c_jit_alloc_shared_indirect_table(count : Int) -> Int64 = "wasmoon_jit_alloc_shared_indirect_table"
+
+///|
+/// Free a shared indirect table
+pub extern "c" fn c_jit_free_shared_indirect_table(table_ptr : Int64) -> Unit = "wasmoon_jit_free_shared_indirect_table"
+
+///|
+/// Set an entry in a shared indirect table
+pub extern "c" fn c_jit_shared_table_set(
+  table_ptr : Int64,
+  table_idx : Int,
+  func_ptr : Int64,
+  type_hash : Int,
+) -> Unit = "wasmoon_jit_shared_table_set"
+
+///|
+/// Configure a JIT context to use a shared indirect table
+pub extern "c" fn c_jit_ctx_v2_use_shared_table(
+  ctx_ptr : Int64,
+  shared_table_ptr : Int64,
+  count : Int,
+) -> Unit = "wasmoon_jit_ctx_v2_use_shared_table"
+
+///|
+/// Configure JIT context with multiple indirect tables (for multi-table support)
+/// table_ptrs: FixedArray of Int64 (table pointers from Store.jit_tables)
+/// table_count: Number of tables
+#borrow(table_ptrs)
+pub extern "c" fn c_jit_ctx_v2_set_table_pointers(
+  ctx_ptr : Int64,
+  table_ptrs : FixedArray[Int64],
+  table_count : Int,
+) -> Unit = "wasmoon_jit_ctx_v2_set_table_pointers"
 
 ///|
 /// Set the global JIT context v2 (for WASI trampolines)
@@ -273,6 +319,29 @@ pub extern "c" fn c_jit_get_spectest_print_i32_f32_ptr() -> Int64 = "wasmoon_jit
 ///|
 /// Get spectest print_f64_f64 trampoline pointer
 pub extern "c" fn c_jit_get_spectest_print_f64_f64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f64_f64_ptr"
+
+// ============ Bulk Memory Operations ============
+
+///|
+/// memory.fill: Fill memory region with a byte value
+/// Parameters: dst (offset), val (byte value), size (count)
+/// Traps if out of bounds
+pub extern "c" fn c_jit_memory_fill_v2(
+  dst : Int,
+  val : Int,
+  size : Int,
+) -> Unit = "wasmoon_jit_memory_fill_v2"
+
+///|
+/// memory.copy: Copy memory region
+/// Parameters: dst (dest offset), src (source offset), size (count)
+/// Handles overlapping regions correctly
+/// Traps if out of bounds
+pub extern "c" fn c_jit_memory_copy_v2(
+  dst : Int,
+  src : Int,
+  size : Int,
+) -> Unit = "wasmoon_jit_memory_copy_v2"
 
 // ============ Executable Memory Management ============
 

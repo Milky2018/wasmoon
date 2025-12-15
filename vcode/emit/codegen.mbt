@@ -23,8 +23,13 @@ fn collect_used_callee_saved(
   for block in func.blocks {
     for inst in block.insts {
       // Check if this instruction is a function call
-      // MemoryGrow and MemorySize also use BLR internally to call C functions
-      if inst.opcode is (CallIndirect(_, _) | MemoryGrow(_) | MemorySize) {
+      // MemoryGrow, MemorySize, MemoryFill, and MemoryCopy also use BLR internally to call C functions
+      if inst.opcode
+        is (CallIndirect(_, _)
+        | MemoryGrow(_)
+        | MemorySize
+        | MemoryFill
+        | MemoryCopy) {
         has_calls = true
       }
       for def in inst.defs {
@@ -111,10 +116,18 @@ fn MachineCode::emit_prologue_v2(
   let mut pair_idx = 0
   while i < num_regs {
     let reg1 = saved_gprs[i]
-    let reg2 = if i + 1 < num_regs { saved_gprs[i + 1] } else { 31 } // XZR as padding
+    let has_reg2 = i + 1 < num_regs
     let offset = pair_idx * 16
-    self.emit_stp_offset(reg1, reg2, 31, offset)
-    i = i + 2
+    if has_reg2 {
+      // We have a pair: use STP
+      let reg2 = saved_gprs[i + 1]
+      self.emit_stp_offset(reg1, reg2, 31, offset)
+      i = i + 2
+    } else {
+      // Odd number: use single STR for the last register
+      self.emit_str_imm(reg1, 31, offset)
+      i = i + 1
+    }
     pair_idx = pair_idx + 1
   }
 
@@ -142,6 +155,8 @@ fn MachineCode::emit_prologue_v2(
   self.emit_ldr_imm(20, 19, @abi.CTX_FUNC_TABLE_OFFSET)
   self.emit_ldr_imm(21, 19, @abi.CTX_MEMORY_BASE_OFFSET)
   self.emit_ldr_imm(22, 19, @abi.CTX_MEMORY_SIZE_OFFSET)
+  // Load indirect_table (single table, table 0) for fast access
+  // X24 = [X19 + 8]  -> load indirect_table (table 0)
   self.emit_ldr_imm(24, 19, @abi.CTX_INDIRECT_TABLE_OFFSET)
 
   // Set up X23 for extra results buffer
@@ -749,16 +764,324 @@ fn MachineCode::emit_instruction(
       // f32 values are stored as raw bits in S registers
       // f64 values are stored in D registers
       match kind {
-        F32ToI32S =>
-          // S register contains f32, convert directly
-          self.emit_fcvtzs(rd, rn, int64=false, double=false) // FCVTZS Wd, Sn
-        F32ToI32U => self.emit_fcvtzu(rd, rn, int64=false, double=false)
-        F32ToI64S => self.emit_fcvtzs(rd, rn, int64=true, double=false)
-        F32ToI64U => self.emit_fcvtzu(rd, rn, int64=true, double=false)
-        F64ToI32S => self.emit_fcvtzs(rd, rn, int64=false, double=true)
-        F64ToI32U => self.emit_fcvtzu(rd, rn, int64=false, double=true)
-        F64ToI64S => self.emit_fcvtzs(rd, rn, int64=true, double=true)
-        F64ToI64U => self.emit_fcvtzu(rd, rn, int64=true, double=true)
+        F32ToI32S => {
+          // i32.trunc_f32_s: trap on NaN or overflow
+          // Check for NaN: rn != rn
+          self.emit_fcmp_s(rn, rn)
+          self.emit_b_cond_offset(7, 8) // VC (no overflow): skip trap if ordered
+          self.emit_brk(3) // Trap: invalid conversion to integer
+          // Check for underflow: rn < INT32_MIN (-2147483648.0 = 0xCF000000)
+          // Note: f32 precision means -2147483648.9 rounds to -2147483648.0
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0xCF00, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fcmp_s(rn, 16)
+          self.emit_b_cond_offset(10, 8) // GE: skip trap if rn >= INT32_MIN
+          self.emit_brk(3) // Trap: integer overflow
+          // Check for overflow: rn >= INT32_MAX (2147483648.0 = 0x4F000000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0x4F00, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fcmp_s(rn, 16)
+          self.emit_b_cond_offset(4, 8) // MI: skip trap if < max
+          self.emit_brk(3) // Trap: integer overflow
+          // Convert
+          self.emit_fcvtzs(rd, rn, int64=false, double=false)
+        }
+        F32ToI32U => {
+          // i32.trunc_f32_u: trap on NaN or overflow
+          self.emit_fcmp_s(rn, rn)
+          self.emit_b_cond_offset(7, 8) // VC
+          self.emit_brk(3)
+          // Check for underflow: rn <= -1.0 (values <= -1.0 are invalid)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0xBF80, 16) // -1.0 = 0xBF800000
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fcmp_s(rn, 16)
+          self.emit_b_cond_offset(12, 8) // GT: skip trap if > -1.0
+          self.emit_brk(3)
+          // Check for overflow: rn >= UINT32_MAX (4294967296.0 = 0x4F800000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0x4F80, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fcmp_s(rn, 16)
+          self.emit_b_cond_offset(4, 8) // MI: skip trap if < max
+          self.emit_brk(3)
+          self.emit_fcvtzu(rd, rn, int64=false, double=false)
+        }
+        F32ToI64S => {
+          // i64.trunc_f32_s: trap on NaN or overflow
+          self.emit_fcmp_s(rn, rn)
+          self.emit_b_cond_offset(7, 8) // VC
+          self.emit_brk(3)
+          // Check for underflow: rn < INT64_MIN (-2^63 = 0xDF000000)
+          // Note: f32 precision means fractional parts are lost
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0xDF00, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fcmp_s(rn, 16)
+          self.emit_b_cond_offset(10, 8) // GE: skip trap if rn >= INT64_MIN
+          self.emit_brk(3)
+          // Check for overflow: rn >= INT64_MAX (2^63 = 0x5F000000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0x5F00, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fcmp_s(rn, 16)
+          self.emit_b_cond_offset(4, 8) // MI: skip trap if < max
+          self.emit_brk(3)
+          self.emit_fcvtzs(rd, rn, int64=true, double=false)
+        }
+        F32ToI64U => {
+          // i64.trunc_f32_u: trap on NaN or overflow
+          self.emit_fcmp_s(rn, rn)
+          self.emit_b_cond_offset(7, 8) // VC
+          self.emit_brk(3)
+          // Check for underflow: rn <= -1.0
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0xBF80, 16) // -1.0
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fcmp_s(rn, 16)
+          self.emit_b_cond_offset(12, 8) // GT
+          self.emit_brk(3)
+          // Check for overflow: rn >= UINT64_MAX (2^64 = 0x5F800000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0x5F80, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fcmp_s(rn, 16)
+          self.emit_b_cond_offset(4, 8) // MI
+          self.emit_brk(3)
+          self.emit_fcvtzu(rd, rn, int64=true, double=false)
+        }
+        F64ToI32S => {
+          // i32.trunc_f64_s: trap on NaN or overflow
+          self.emit_fcmp_d(rn, rn)
+          self.emit_b_cond_offset(7, 8) // VC
+          self.emit_brk(3)
+          // Check for underflow: rn <= INT32_MIN-1 (-2^31-1 = 0xC1E0000000200000)
+          self.emit_load_imm64(16, 0xC1E0000000200000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fcmp_d(rn, 16)
+          self.emit_b_cond_offset(12, 8) // GT: skip trap if rn > INT32_MIN-1
+          self.emit_brk(3)
+          // Check for overflow: rn >= INT32_MAX (2^31 = 0x41E0000000000000)
+          self.emit_load_imm64(16, 0x41E0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fcmp_d(rn, 16)
+          self.emit_b_cond_offset(4, 8) // MI
+          self.emit_brk(3)
+          self.emit_fcvtzs(rd, rn, int64=false, double=true)
+        }
+        F64ToI32U => {
+          // i32.trunc_f64_u: trap on NaN or overflow
+          self.emit_fcmp_d(rn, rn)
+          self.emit_b_cond_offset(7, 8) // VC
+          self.emit_brk(3)
+          // Check for underflow: rn <= -1.0
+          self.emit_load_imm64(16, 0xBFF0000000000000L) // -1.0
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fcmp_d(rn, 16)
+          self.emit_b_cond_offset(12, 8) // GT
+          self.emit_brk(3)
+          // Check for overflow: rn >= UINT32_MAX (2^32 = 0x41F0000000000000)
+          self.emit_load_imm64(16, 0x41F0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fcmp_d(rn, 16)
+          self.emit_b_cond_offset(4, 8) // MI
+          self.emit_brk(3)
+          self.emit_fcvtzu(rd, rn, int64=false, double=true)
+        }
+        F64ToI64S => {
+          // i64.trunc_f64_s: trap on NaN or overflow
+          self.emit_fcmp_d(rn, rn)
+          self.emit_b_cond_offset(7, 8) // VC
+          self.emit_brk(3)
+          // Check for underflow: rn < INT64_MIN (-2^63 = 0xC3E0000000000000)
+          // Note: f64 precision is limited for 64-bit integers
+          self.emit_load_imm64(16, 0xC3E0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fcmp_d(rn, 16)
+          self.emit_b_cond_offset(10, 8) // GE: skip trap if rn >= INT64_MIN
+          self.emit_brk(3)
+          // Check for overflow: rn >= INT64_MAX (2^63 = 0x43E0000000000000)
+          self.emit_load_imm64(16, 0x43E0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fcmp_d(rn, 16)
+          self.emit_b_cond_offset(4, 8) // MI
+          self.emit_brk(3)
+          self.emit_fcvtzs(rd, rn, int64=true, double=true)
+        }
+        F64ToI64U => {
+          // i64.trunc_f64_u: trap on NaN or overflow
+          self.emit_fcmp_d(rn, rn)
+          self.emit_b_cond_offset(7, 8) // VC
+          self.emit_brk(3)
+          // Check for underflow: rn <= -1.0
+          self.emit_load_imm64(16, 0xBFF0000000000000L) // -1.0
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fcmp_d(rn, 16)
+          self.emit_b_cond_offset(12, 8) // GT
+          self.emit_brk(3)
+          // Check for overflow: rn >= UINT64_MAX (2^64 = 0x43F0000000000000)
+          self.emit_load_imm64(16, 0x43F0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fcmp_d(rn, 16)
+          self.emit_b_cond_offset(4, 8) // MI
+          self.emit_brk(3)
+          self.emit_fcvtzu(rd, rn, int64=true, double=true)
+        }
+        // Saturating conversions
+        // Implements proper saturation: NaN → 0, overflow → clamp to min/max
+        // Strategy: use FCSEL for NaN, FMAX/FMIN for clamping, then convert
+        F32ToI32SSat => {
+          // i32.trunc_sat_f32_s: NaN→0, clamp to [-2^31, 2^31-1]
+          // Step 1: Handle NaN → replace with 0.0
+          self.emit_movz(16, 0, 0)
+          self.emit_fmov_w_to_s(16, 16) // S16 = 0.0
+          self.emit_fcmp_s(rn, rn)
+          self.emit_fcsel_s(17, rn, 16, 7) // VC: S17 = ordered ? rn : 0.0
+          // Step 2: Clamp to [INT32_MIN, INT32_MAX]
+          // Load INT32_MIN as f32 (-2^31 = 0xCF000000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0xCF00, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fmaxnm_s(17, 17, 16) // S17 = max(S17, INT32_MIN)
+          // Load INT32_MAX as f32 (2^31-1 ≈ 0x4F000000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0x4F00, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fminnm_s(17, 17, 16) // S17 = min(S17, INT32_MAX)
+          // Convert to integer
+          self.emit_fcvtzs(rd, 17, int64=false, double=false)
+        }
+        F32ToI32USat => {
+          // i32.trunc_sat_f32_u: NaN→0, clamp to [0, 2^32-1]
+          // Step 1: Handle NaN → replace with 0.0
+          self.emit_movz(16, 0, 0)
+          self.emit_fmov_w_to_s(16, 16) // S16 = 0.0
+          self.emit_fcmp_s(rn, rn)
+          self.emit_fcsel_s(17, rn, 16, 7) // VC: S17 = ordered ? rn : 0.0
+          // Step 2: Clamp lower bound (negative → 0.0)
+          self.emit_fmaxnm_s(17, 17, 16) // S17 = max(S17, 0.0)
+          // Step 3: Clamp upper bound
+          // Load UINT32_MAX as f32 (2^32 = 0x4F800000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0x4F80, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fminnm_s(17, 17, 16) // S17 = min(S17, UINT32_MAX)
+          // Convert to integer
+          self.emit_fcvtzu(rd, 17, int64=false, double=false)
+        }
+        F32ToI64SSat => {
+          // i64.trunc_sat_f32_s: NaN→0, clamp to [-2^63, 2^63-1]
+          // Step 1: Handle NaN → replace with 0.0
+          self.emit_movz(16, 0, 0)
+          self.emit_fmov_w_to_s(16, 16) // S16 = 0.0
+          self.emit_fcmp_s(rn, rn)
+          self.emit_fcsel_s(17, rn, 16, 7) // VC: S17 = ordered ? rn : 0.0
+          // Step 2: Clamp to [INT64_MIN, INT64_MAX]
+          // Load INT64_MIN as f32 (-2^63 = 0xDF000000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0xDF00, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fmaxnm_s(17, 17, 16) // S17 = max(S17, INT64_MIN)
+          // Load INT64_MAX as f32 (2^63 = 0x5F000000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0x5F00, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fminnm_s(17, 17, 16) // S17 = min(S17, INT64_MAX)
+          // Convert to integer
+          self.emit_fcvtzs(rd, 17, int64=true, double=false)
+        }
+        F32ToI64USat => {
+          // i64.trunc_sat_f32_u: NaN→0, clamp to [0, 2^64-1]
+          // Step 1: Handle NaN → replace with 0.0
+          self.emit_movz(16, 0, 0)
+          self.emit_fmov_w_to_s(16, 16) // S16 = 0.0
+          self.emit_fcmp_s(rn, rn)
+          self.emit_fcsel_s(17, rn, 16, 7) // VC: S17 = ordered ? rn : 0.0
+          // Step 2: Clamp lower bound (negative → 0.0)
+          self.emit_fmaxnm_s(17, 17, 16) // S17 = max(S17, 0.0)
+          // Step 3: Clamp upper bound
+          // Load UINT64_MAX as f32 (2^64 = 0x5F800000)
+          self.emit_movz(16, 0x0000, 0)
+          self.emit_movk(16, 0x5F80, 16)
+          self.emit_fmov_w_to_s(16, 16)
+          self.emit_fminnm_s(17, 17, 16) // S17 = min(S17, UINT64_MAX)
+          // Convert to integer
+          self.emit_fcvtzu(rd, 17, int64=true, double=false)
+        }
+        F64ToI32SSat => {
+          // i32.trunc_sat_f64_s: NaN→0, clamp to [-2^31, 2^31-1]
+          // Step 1: Handle NaN → replace with 0.0
+          self.emit_movz(16, 0, 0)
+          self.emit_fmov_x_to_d(16, 16) // D16 = 0.0
+          self.emit_fcmp_d(rn, rn)
+          self.emit_fcsel_d(17, rn, 16, 7) // VC: D17 = ordered ? rn : 0.0
+          // Step 2: Clamp to [INT32_MIN, INT32_MAX]
+          // Load INT32_MIN as f64 (-2^31 = 0xC1E0000000000000)
+          self.emit_load_imm64(16, 0xC1E0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fmaxnm_d(17, 17, 16) // D17 = max(D17, INT32_MIN)
+          // Load INT32_MAX as f64 (2^31 = 0x41E0000000000000)
+          self.emit_load_imm64(16, 0x41E0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fminnm_d(17, 17, 16) // D17 = min(D17, INT32_MAX)
+          // Convert to integer
+          self.emit_fcvtzs(rd, 17, int64=false, double=true)
+        }
+        F64ToI32USat => {
+          // i32.trunc_sat_f64_u: NaN→0, clamp to [0, 2^32-1]
+          // Step 1: Handle NaN → replace with 0.0
+          self.emit_movz(16, 0, 0)
+          self.emit_fmov_x_to_d(16, 16) // D16 = 0.0
+          self.emit_fcmp_d(rn, rn)
+          self.emit_fcsel_d(17, rn, 16, 7) // VC: D17 = ordered ? rn : 0.0
+          // Step 2: Clamp lower bound (negative → 0.0)
+          self.emit_fmaxnm_d(17, 17, 16) // D17 = max(D17, 0.0)
+          // Step 3: Clamp upper bound
+          // Load UINT32_MAX as f64 (2^32 = 0x41F0000000000000)
+          self.emit_load_imm64(16, 0x41F0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fminnm_d(17, 17, 16) // D17 = min(D17, UINT32_MAX)
+          // Convert to integer
+          self.emit_fcvtzu(rd, 17, int64=false, double=true)
+        }
+        F64ToI64SSat => {
+          // i64.trunc_sat_f64_s: NaN→0, clamp to [-2^63, 2^63-1]
+          // Step 1: Handle NaN → replace with 0.0
+          self.emit_movz(16, 0, 0)
+          self.emit_fmov_x_to_d(16, 16) // D16 = 0.0
+          self.emit_fcmp_d(rn, rn)
+          self.emit_fcsel_d(17, rn, 16, 7) // VC: D17 = ordered ? rn : 0.0
+          // Step 2: Clamp to [INT64_MIN, INT64_MAX]
+          // Load INT64_MIN as f64 (-2^63 = 0xC3E0000000000000)
+          self.emit_load_imm64(16, 0xC3E0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fmaxnm_d(17, 17, 16) // D17 = max(D17, INT64_MIN)
+          // Load INT64_MAX as f64 (2^63 = 0x43E0000000000000)
+          self.emit_load_imm64(16, 0x43E0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fminnm_d(17, 17, 16) // D17 = min(D17, INT64_MAX)
+          // Convert to integer
+          self.emit_fcvtzs(rd, 17, int64=true, double=true)
+        }
+        F64ToI64USat => {
+          // i64.trunc_sat_f64_u: NaN→0, clamp to [0, 2^64-1]
+          // Step 1: Handle NaN → replace with 0.0
+          self.emit_movz(16, 0, 0)
+          self.emit_fmov_x_to_d(16, 16) // D16 = 0.0
+          self.emit_fcmp_d(rn, rn)
+          self.emit_fcsel_d(17, rn, 16, 7) // VC: D17 = ordered ? rn : 0.0
+          // Step 2: Clamp lower bound (negative → 0.0)
+          self.emit_fmaxnm_d(17, 17, 16) // D17 = max(D17, 0.0)
+          // Step 3: Clamp upper bound
+          // Load UINT64_MAX as f64 (2^64 = 0x43F0000000000000)
+          self.emit_load_imm64(16, 0x43F0000000000000L)
+          self.emit_fmov_x_to_d(16, 16)
+          self.emit_fminnm_d(17, 17, 16) // D17 = min(D17, UINT64_MAX)
+          // Convert to integer
+          self.emit_fcvtzu(rd, 17, int64=true, double=true)
+        }
       }
     }
     IntToFloat(kind) => {
@@ -1322,6 +1645,46 @@ fn MachineCode::emit_instruction(
       if result_reg != 0 {
         self.emit_mov_reg(result_reg, 0) // MOV result, X0
       }
+    }
+    MemoryFill => {
+      // Call wasmoon_jit_memory_fill_v2(dst, val, size)
+      // Uses: [dst, val, size], Defs: []
+      let dst_reg = reg_num(inst.uses[0])
+      let val_reg = reg_num(inst.uses[1])
+      let size_reg = reg_num(inst.uses[2])
+
+      // Move arguments to X0, X1, X2
+      self.emit_mov_reg(0, dst_reg) // MOV X0, dst
+      self.emit_mov_reg(1, val_reg) // MOV X1, val
+      self.emit_mov_reg(2, size_reg) // MOV X2, size
+
+      // Load memory_fill function pointer into X16
+      let fill_ptr = @jit_ffi.c_jit_get_memory_fill_v2_ptr()
+      self.emit_load_imm64(16, fill_ptr)
+
+      // Call the function
+      self.annotate("blr x16  // memory_fill")
+      self.emit_blr(16)
+    }
+    MemoryCopy => {
+      // Call wasmoon_jit_memory_copy_v2(dst, src, size)
+      // Uses: [dst, src, size], Defs: []
+      let dst_reg = reg_num(inst.uses[0])
+      let src_reg = reg_num(inst.uses[1])
+      let size_reg = reg_num(inst.uses[2])
+
+      // Move arguments to X0, X1, X2
+      self.emit_mov_reg(0, dst_reg) // MOV X0, dst
+      self.emit_mov_reg(1, src_reg) // MOV X1, src
+      self.emit_mov_reg(2, size_reg) // MOV X2, size
+
+      // Load memory_copy function pointer into X16
+      let copy_ptr = @jit_ffi.c_jit_get_memory_copy_v2_ptr()
+      self.emit_load_imm64(16, copy_ptr)
+
+      // Call the function
+      self.annotate("blr x16  // memory_copy")
+      self.emit_blr(16)
     }
     TableGet(_table_idx) => {
       // Load function reference from indirect table

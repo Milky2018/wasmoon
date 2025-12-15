@@ -250,7 +250,7 @@ fn run_jit(
     jm.set_memory(memory.ptr(), mem_size)
 
     // Initialize indirect table for call_indirect support
-    init_elem_segments(mod_, jm)
+    init_elem_segments(mod_, jm, [])
 
     // Call the target function
     guard jm.get_func_by_name(func_name) is Some(f) else {
@@ -331,19 +331,57 @@ fn build_func_signatures(
 }
 
 ///|
-/// Initialize element segments for call_indirect support
-fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
-  // For now, we only properly support table 0 (or a single table)
-  // Multi-table support requires storing table base offsets in the JIT context
-  // and loading them during call_indirect execution
-
-  // Calculate total table size (flatten all tables)
-  let mut table_size = 0
-  for table in mod_.tables {
-    let min_size = table.type_.limits.min
-    table_size = table_size + min_size
+/// Evaluate element segment offset constant expression
+/// Supports i32.const, i32.add, i32.sub, i32.mul, global.get for computing offsets
+fn eval_elem_offset_expr(
+  instrs : Array[@types.Instruction],
+  globals : Array[@runtime.GlobalInstance],
+) -> Int {
+  let stack : Array[Int] = []
+  for instr in instrs {
+    match instr {
+      I32Const(n) => stack.push(n)
+      GlobalGet(idx) =>
+        if idx < globals.length() && globals[idx].get() is I32(n) {
+          stack.push(n)
+        }
+      I32Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() + b.unwrap())
+        }
+      I32Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() - b.unwrap())
+        }
+      I32Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() * b.unwrap())
+        }
+      _ => () // Ignore other instructions
+    }
   }
-  if table_size == 0 {
+  if stack.length() > 0 {
+    stack[stack.length() - 1]
+  } else {
+    0
+  }
+}
+
+///|
+/// Initialize element segments for call_indirect support
+fn init_elem_segments(
+  mod_ : @types.Module,
+  jm : @jit.JITModule,
+  globals : Array[@runtime.GlobalInstance],
+) -> Unit {
+  // Multi-table support: create a separate JIT table for each WebAssembly table
+  if mod_.tables.is_empty() {
     return // No tables, nothing to do
   }
 
@@ -368,20 +406,25 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
     func_type_hashes.push(type_hash)
   }
 
-  // For single table or table 0: use offset directly
-  // For multiple tables: elements are indexed relative to each table
-  // but we need to flatten them for the single indirect_table
-  let elem_init : Array[(Int, Int, Int)] = []
-  let mut table_base_offset = 0
-  for table_idx, table in mod_.tables {
+  // Create a JIT table for each WebAssembly table
+  let jit_tables : Array[@jit.JITTable?] = []
+  for table in mod_.tables {
+    let min_size = table.type_.limits.min
+    let max_size = table.type_.limits.max
+    match @jit.JITTable::new(min_size, max_size) {
+      Some(jit_table) => jit_tables.push(Some(jit_table))
+      None => jit_tables.push(None)
+    }
+  }
+
+  // Process elem segments: build (table_idx, elem_idx, func_idx, type_hash) tuples
+  let elem_init : Array[(Int, Int, Int, Int)] = []
+  for table_idx, _table in mod_.tables {
     // Process elem segments for this table
     for elem in mod_.elems {
       if elem.mode is @types.ElemMode::Active(elem_table_idx, offset_expr) &&
         elem_table_idx == table_idx {
-        let offset = match offset_expr {
-          [I32Const(n)] => n
-          _ => 0
-        }
+        let offset = eval_elem_offset_expr(offset_expr, globals)
         for i, init_expr in elem.init {
           let func_idx = match init_expr {
             [RefFunc(idx)] => idx
@@ -393,16 +436,16 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
           } else {
             0
           }
-          // Flatten: base_offset + offset_in_table + i
-          let flattened_idx = table_base_offset + offset + i
-          elem_init.push((flattened_idx, func_idx, type_hash))
+          // Element index within this specific table
+          let elem_idx = offset + i
+          elem_init.push((table_idx, elem_idx, func_idx, type_hash))
         }
       }
     }
-    // Move base offset for next table
-    table_base_offset += table.type_.limits.min
   }
-  jm.init_indirect_table(table_size, elem_init)
+
+  // Initialize shared tables (new multi-table approach)
+  jm.init_shared_tables(jit_tables, elem_init)
 }
 
 ///|

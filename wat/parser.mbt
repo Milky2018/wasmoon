@@ -1190,11 +1190,7 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
 
   // Handle zero
   if significand == 0UL {
-    return if neg {
-      Float::reinterpret_from_uint(0x80000000U) // -0.0
-    } else {
-      (0.0 : Float)
-    }
+    return if neg { (-0.0 : Float) } else { (0.0 : Float) }
   }
 
   // Calculate the binary exponent
@@ -1457,11 +1453,8 @@ fn parse_hex_float64(s : String) -> Double raise WatError {
   }
 
   // Handle zero
-  // NOTE: Using bit manipulation to work around MoonBit compiler bug
-  // where `if neg { -0.0 } else { 0.0 }` incorrectly returns -0.0 even when neg=false
   if significand == 0UL {
-    let sign_bit : Int64 = if neg { 0x8000000000000000L } else { 0L }
-    return sign_bit.reinterpret_as_double()
+    return if neg { -0.0 } else { 0.0 }
   }
 
   // Calculate the binary exponent

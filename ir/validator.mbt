@@ -247,6 +247,8 @@ fn validate_instruction(
     | Fdemote
     | FcvtToSint
     | FcvtToUint
+    | FcvtToSintSat
+    | FcvtToUintSat
     | SintToFcvt
     | UintToFcvt
     | Bitcast =>
@@ -275,6 +277,18 @@ fn validate_instruction(
       if inst.operands.length() != 0 {
         result.add_error(
           "MemorySize expects 0 operands, got \{inst.operands.length()}",
+        )
+      }
+    MemoryFill =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "MemoryFill expects 3 operands (dst, val, size), got \{inst.operands.length()}",
+        )
+      }
+    MemoryCopy =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "MemoryCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
         )
       }
 

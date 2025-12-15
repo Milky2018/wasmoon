@@ -244,6 +244,16 @@ pub fn JITModule::get_func_by_name(
 }
 
 ///|
+/// Get function pointer by function index (for indirect table initialization)
+/// Returns the executable code pointer for the function, or 0 if not found
+pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
+  match self.functions.get(func_idx) {
+    Some(f) => f.exec_code.ptr
+    None => 0L
+  }
+}
+
+///|
 /// Free all executable memory
 pub fn JITModule::free(self : JITModule) -> Unit {
   for kv in self.functions.iter() {
@@ -310,5 +320,44 @@ pub fn JITModule::init_indirect_table(
       let (table_idx, func_idx, type_idx) = entry
       ctx.set_indirect(table_idx, func_idx, type_idx)
     }
+  }
+}
+
+///|
+/// Initialize shared tables from Store (for multi-table support with table imports/exports).
+/// jit_tables: Array of JITTable from Store (one per runtime table)
+/// elem_init: Array of (table_idx, elem_idx, func_idx, type_hash) tuples
+pub fn JITModule::init_shared_tables(
+  self : JITModule,
+  jit_tables : Array[JITTable?],
+  elem_init : Array[(Int, Int, Int, Int)],
+) -> Unit {
+  if self.context is None {
+    return
+  }
+  let ctx = match self.context {
+    Some(c) => c
+    None => return
+  }
+  // Set up context to use the shared tables
+  ctx.set_table_pointers(jit_tables)
+  // Initialize table elements directly in the shared tables
+  for entry in elem_init {
+    let (table_idx, elem_idx, func_idx, type_hash) = entry
+    // Get the JIT table
+    if table_idx < 0 || table_idx >= jit_tables.length() {
+      continue
+    }
+    let jit_table = match jit_tables[table_idx] {
+      Some(tbl) => tbl
+      None => continue
+    }
+    // Get function pointer
+    let func_ptr = self.get_func_ptr(func_idx)
+    if func_ptr == 0L {
+      continue
+    }
+    // Set the table entry
+    jit_table.set(elem_idx, func_ptr, type_hash)
   }
 }

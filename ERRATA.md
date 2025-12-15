@@ -597,3 +597,4 @@ _请在此处继续添加新的意见和建议_
 - [x] Sign/Zero Extension Instructions、br、adr 也需要添加到 "all emit functions disasm" 中
 - [ ] `pub fn` 过多了
 - [x] call_indirect 在 vcode 的 dump 中会打印很长一个东西，比如 `f9 = call_indirect(8) -> 1 results v8, f0, f1, f2, f3, f4, f5, f6, f7` → 已简化：只打印函数指针（第一个 use），不打印所有参数；只打印结果寄存器，不打印 clobber 寄存器
+- [ ] 大量使用 X16、X17 等寄存器，而不是分配通用寄存器

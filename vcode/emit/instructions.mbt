@@ -107,6 +107,10 @@ enum Instruction {
   FmaxS(Int, Int, Int)
   FminD(Int, Int, Int)
   FminS(Int, Int, Int)
+  FmaxnmD(Int, Int, Int)
+  FmaxnmS(Int, Int, Int)
+  FminnmD(Int, Int, Int)
+  FminnmS(Int, Int, Int)
   // Float unary
   FsqrtD(Int, Int)
   FsqrtS(Int, Int)
@@ -326,6 +330,10 @@ fn Instruction::annotate(self : Instruction) -> String {
     FmaxS(rd, rn, rm) => "fmax s\{rd}, s\{rn}, s\{rm}"
     FminD(rd, rn, rm) => "fmin d\{rd}, d\{rn}, d\{rm}"
     FminS(rd, rn, rm) => "fmin s\{rd}, s\{rn}, s\{rm}"
+    FmaxnmD(rd, rn, rm) => "fmaxnm d\{rd}, d\{rn}, d\{rm}"
+    FmaxnmS(rd, rn, rm) => "fmaxnm s\{rd}, s\{rn}, s\{rm}"
+    FminnmD(rd, rn, rm) => "fminnm d\{rd}, d\{rn}, d\{rm}"
+    FminnmS(rd, rn, rm) => "fminnm s\{rd}, s\{rn}, s\{rm}"
     FsqrtD(rd, rn) => "fsqrt d\{rd}, d\{rn}"
     FsqrtS(rd, rn) => "fsqrt s\{rd}, s\{rn}"
     FabsD(rd, rn) => "fabs d\{rd}, d\{rn}"
@@ -1064,6 +1072,34 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
     FminS(rd, rn, rm) => {
       let b0 = (rd & 31) | ((rn & 7) << 5)
       let b1 = ((rn >> 3) & 3) | 0x58
+      let b2 = 0x20 | (rm & 31)
+      let b3 = 0x1E
+      (b0, b1, b2, b3)
+    }
+    FmaxnmD(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 0x68
+      let b2 = 0x60 | (rm & 31)
+      let b3 = 0x1E
+      (b0, b1, b2, b3)
+    }
+    FmaxnmS(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 0x68
+      let b2 = 0x20 | (rm & 31)
+      let b3 = 0x1E
+      (b0, b1, b2, b3)
+    }
+    FminnmD(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 0x78
+      let b2 = 0x60 | (rm & 31)
+      let b3 = 0x1E
+      (b0, b1, b2, b3)
+    }
+    FminnmS(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 0x78
       let b2 = 0x20 | (rm & 31)
       let b3 = 0x1E
       (b0, b1, b2, b3)
@@ -2273,6 +2309,46 @@ pub fn MachineCode::emit_fmin_s(
   rm : Int,
 ) -> Unit {
   FminS(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_fmaxnm_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  FmaxnmD(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_fmaxnm_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  FmaxnmS(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_fminnm_d(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  FminnmD(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_fminnm_s(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  FminnmS(rd, rn, rm).emit(self)
 }
 
 ///|

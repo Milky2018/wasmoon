@@ -179,6 +179,12 @@ pub(all) enum VCodeOpcode {
   // MemorySize: get current memory size in pages
   // Uses: [], Defs: [result]
   MemorySize
+  // MemoryFill: fill memory region with a byte value
+  // Uses: [dst, val, size], Defs: []
+  MemoryFill
+  // MemoryCopy: copy memory region (handles overlapping regions)
+  // Uses: [dst, src, size], Defs: []
+  MemoryCopy
   // Table operations (for reference types)
   // TableGet(table_idx): load from indirect table at index
   // Uses: [elem_idx], Defs: [result (function pointer)]
@@ -279,6 +285,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
         "memory_grow max=\{max_pages}"
       }
     MemorySize => "memory_size"
+    MemoryFill => "memory_fill"
+    MemoryCopy => "memory_copy"
     TableGet(table_idx) => "table_get \{table_idx}"
     TableSet(table_idx) => "table_set \{table_idx}"
   }
@@ -421,14 +429,23 @@ pub impl Show for ExtendKind with output(self, logger) {
 /// Float to Int conversion kind
 /// Encodes: source float type, destination int type, signedness
 pub(all) enum FloatToIntKind {
-  F32ToI32S // f32 -> i32 signed (FCVTZS Wd, Sn)
-  F32ToI32U // f32 -> i32 unsigned (FCVTZU Wd, Sn)
-  F32ToI64S // f32 -> i64 signed (FCVTZS Xd, Sn)
-  F32ToI64U // f32 -> i64 unsigned (FCVTZU Xd, Sn)
-  F64ToI32S // f64 -> i32 signed (FCVTZS Wd, Dn)
-  F64ToI32U // f64 -> i32 unsigned (FCVTZU Wd, Dn)
-  F64ToI64S // f64 -> i64 signed (FCVTZS Xd, Dn)
-  F64ToI64U // f64 -> i64 unsigned (FCVTZU Xd, Dn)
+  F32ToI32S // f32 -> i32 signed (FCVTZS Wd, Sn) - trapping
+  F32ToI32U // f32 -> i32 unsigned (FCVTZU Wd, Sn) - trapping
+  F32ToI64S // f32 -> i64 signed (FCVTZS Xd, Sn) - trapping
+  F32ToI64U // f32 -> i64 unsigned (FCVTZU Xd, Sn) - trapping
+  F64ToI32S // f64 -> i32 signed (FCVTZS Wd, Dn) - trapping
+  F64ToI32U // f64 -> i32 unsigned (FCVTZU Wd, Dn) - trapping
+  F64ToI64S // f64 -> i64 signed (FCVTZS Xd, Dn) - trapping
+  F64ToI64U // f64 -> i64 unsigned (FCVTZU Xd, Dn) - trapping
+  // Saturating conversions (NaN->0, overflow->max/min)
+  F32ToI32SSat // f32 -> i32 signed saturating
+  F32ToI32USat // f32 -> i32 unsigned saturating
+  F32ToI64SSat // f32 -> i64 signed saturating
+  F32ToI64USat // f32 -> i64 unsigned saturating
+  F64ToI32SSat // f64 -> i32 signed saturating
+  F64ToI32USat // f64 -> i32 unsigned saturating
+  F64ToI64SSat // f64 -> i64 signed saturating
+  F64ToI64USat // f64 -> i64 unsigned saturating
 }
 
 ///|
@@ -442,6 +459,14 @@ fn FloatToIntKind::to_string(self : FloatToIntKind) -> String {
     F64ToI32U => "f64_i32_u"
     F64ToI64S => "f64_i64_s"
     F64ToI64U => "f64_i64_u"
+    F32ToI32SSat => "f32_i32_s_sat"
+    F32ToI32USat => "f32_i32_u_sat"
+    F32ToI64SSat => "f32_i64_s_sat"
+    F32ToI64USat => "f32_i64_u_sat"
+    F64ToI32SSat => "f64_i32_s_sat"
+    F64ToI32USat => "f64_i32_u_sat"
+    F64ToI64SSat => "f64_i64_s_sat"
+    F64ToI64USat => "f64_i64_u_sat"
   }
 }
 

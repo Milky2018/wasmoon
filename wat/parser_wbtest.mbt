@@ -317,15 +317,12 @@ test "debug: MoonBit 0.0 bit pattern" {
 }
 
 ///|
-// NOTE: This test documents a MoonBit compiler bug where
-// `if neg { -0.0 } else { 0.0 }` returns -0.0 even when neg=false.
-// Keep this test to track when the bug is fixed.
-test "moonbit-bug: conditional 0.0 vs -0.0 returns wrong value" {
+test "regression: conditional 0.0 vs -0.0 now works correctly" {
   let neg = false
   let result = if neg { -0.0 } else { 0.0 }
   let bits = result.reinterpret_as_int64()
-  // BUG: Should be 0, but MoonBit returns -9223372036854775808 (negative zero)
-  inspect(bits, content="-9223372036854775808")
+  // After MoonBit fix: correctly returns 0 (positive zero)
+  inspect(bits, content="0")
 }
 
 ///|

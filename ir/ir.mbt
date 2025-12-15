@@ -181,8 +181,10 @@ pub enum Opcode {
   Uextend // Zero extend (e.g., i32 -> i64)
   Fpromote // Promote float (f32 -> f64)
   Fdemote // Demote float (f64 -> f32)
-  FcvtToSint // Float to signed int
-  FcvtToUint // Float to unsigned int
+  FcvtToSint // Float to signed int (trapping)
+  FcvtToUint // Float to unsigned int (trapping)
+  FcvtToSintSat // Float to signed int (saturating)
+  FcvtToUintSat // Float to unsigned int (saturating)
   SintToFcvt // Signed int to float
   UintToFcvt // Unsigned int to float
   Bitcast // Reinterpret bits
@@ -205,6 +207,8 @@ pub enum Opcode {
   // Memory management
   MemoryGrow(Int?) // Grow memory by delta pages, returns previous size or -1. Int? = max_pages (None = no limit)
   MemorySize // Get current memory size in pages
+  MemoryFill // Fill memory region with a byte value (dst, val, size)
+  MemoryCopy // Copy memory region (dst, src, size)
 
   // Misc
   Select // Conditional select (cond ? a : b)
