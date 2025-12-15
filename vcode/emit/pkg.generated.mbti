@@ -115,8 +115,12 @@ pub fn MachineCode::emit_fdiv_d(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fdiv_s(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fmax_d(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fmax_s(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fmaxnm_d(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fmaxnm_s(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fmin_d(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fmin_s(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fminnm_d(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_fminnm_s(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fmov_d(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_fmov_d_to_x(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_fmov_s(Self, Int, Int) -> Unit
