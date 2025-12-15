@@ -60,12 +60,9 @@ test "has_import_trampoline: unknown module" {
 test "JITContext: allocation and free" {
   let ctx = JITContext::new(10)
   assert_true(ctx is Some(_))
-  match ctx {
-    Some(c) => {
-      assert_true(c.ctx_ptr != 0L)
-      c.free()
-    }
-    None => ()
+  if ctx is Some(c) {
+    assert_true(c.ctx_ptr != 0L)
+    c.free()
   }
 }
 

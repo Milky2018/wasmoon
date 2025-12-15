@@ -41,18 +41,20 @@ fn ExecContext::exec_control(
       self.push_label(false, arity) // Block branches use result arity
       let result = try? self.exec_block(body)
       self.pop_label()
-      match result {
-        Ok(_) => () // Normal completion
-        Err(BranchWith(0, values)) => {
-          // Restore stack to block entry point (discard intermediate values)
-          self.restore_stack_to(stack_height)
-          // Push the branch values back onto the stack
-          for v in values {
-            self.stack.push(v)
+      if !(result is Ok(_)) {
+        match result {
+          Ok(_) => ()
+          Err(BranchWith(0, values)) => {
+            // Restore stack to block entry point (discard intermediate values)
+            self.restore_stack_to(stack_height)
+            // Push the branch values back onto the stack
+            for v in values {
+              self.stack.push(v)
+            }
           }
+          Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
+          Err(e) => raise e
         }
-        Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
-        Err(e) => raise e
       }
     }
     // Loop: execute body, br 0 jumps to start

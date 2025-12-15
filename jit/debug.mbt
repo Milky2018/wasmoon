@@ -296,17 +296,15 @@ pub fn BreakpointManager::add_conditional(
 ///|
 /// Remove a breakpoint by ID
 pub fn BreakpointManager::remove(self : BreakpointManager, id : Int) -> Bool {
-  match self.breakpoints.get(id) {
-    Some(bp) => {
-      // Remove from location index
-      match self.by_location.get(bp.func_idx) {
-        Some(func_map) => func_map.remove(bp.offset) |> ignore
-        None => ()
-      }
-      self.breakpoints.remove(id) |> ignore
-      true
+  if self.breakpoints.get(id) is Some(bp) {
+    // Remove from location index
+    if self.by_location.get(bp.func_idx) is Some(func_map) {
+      func_map.remove(bp.offset) |> ignore
     }
-    None => false
+    self.breakpoints.remove(id) |> ignore
+    true
+  } else {
+    false
   }
 }
 
@@ -461,9 +459,8 @@ pub fn StackTrace::depth(self : StackTrace) -> Int {
 ///|
 fn StackTrace::to_string(self : StackTrace) -> String {
   let mut result = ""
-  match self.error {
-    Some(e) => result = "Error: \{e}\n"
-    None => ()
+  if self.error is Some(e) {
+    result = "Error: \{e}\n"
   }
   result = result + "Stack trace:\n"
   for frame in self.frames {
@@ -573,9 +570,8 @@ pub fn DebugContext::on_pause(
   offset : Int,
 ) -> Unit {
   // Record hit if it's a breakpoint
-  match self.breakpoints.at_location(func_idx, offset) {
-    Some(bp) => bp.hit()
-    None => ()
+  if self.breakpoints.at_location(func_idx, offset) is Some(bp) {
+    bp.hit()
   }
   // Reset step mode to continue
   self.step_mode = Continue

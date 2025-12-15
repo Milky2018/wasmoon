@@ -113,9 +113,8 @@ test "executable region: finalize" {
   region.finalize()
 
   // Cannot write after finalize
-  match region.write(bytes) {
-    Ok(_) => panic()
-    Err(_) => ()
+  if region.write(bytes) is Ok(_) {
+    panic()
   }
 }
 
@@ -157,9 +156,8 @@ test "jit runtime: register and lookup" {
   mc.emit_nop()
   mc.emit_ret(30)
   let func = CompiledFunction::new("test", mc, 16)
-  match runtime.register(0, func) {
-    Ok(_addr) => ()
-    Err(_) => panic()
+  if runtime.register(0, func) is Err(_) {
+    panic()
   }
   inspect(runtime.lookup(0) is Some(_), content="true")
   inspect(runtime.lookup(1) is None, content="true")

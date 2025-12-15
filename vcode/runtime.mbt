@@ -132,9 +132,8 @@ pub fn CodeCache::insert(
   }
 
   // Remove old version if exists
-  match self.functions.get(func_idx) {
-    Some(old) => self.total_size = self.total_size - old.code_size
-    None => ()
+  if self.functions.get(func_idx) is Some(old) {
+    self.total_size = self.total_size - old.code_size
   }
   self.total_size = self.total_size + func.code_size
   self.functions.set(func_idx, func)
@@ -143,21 +142,17 @@ pub fn CodeCache::insert(
 ///|
 /// Invalidate a cached function
 pub fn CodeCache::invalidate(self : CodeCache, func_idx : Int) -> Unit {
-  match self.functions.get(func_idx) {
-    Some(func) => func.invalidate()
-    None => ()
+  if self.functions.get(func_idx) is Some(func) {
+    func.invalidate()
   }
 }
 
 ///|
 /// Remove a function from the cache
 pub fn CodeCache::remove(self : CodeCache, func_idx : Int) -> Unit {
-  match self.functions.get(func_idx) {
-    Some(func) => {
-      self.total_size = self.total_size - func.code_size
-      self.functions.remove(func_idx)
-    }
-    None => ()
+  if self.functions.get(func_idx) is Some(func) {
+    self.total_size = self.total_size - func.code_size
+    self.functions.remove(func_idx)
   }
 }
 
@@ -180,12 +175,9 @@ fn CodeCache::evict_lru(self : CodeCache) -> Unit {
       break
     }
   }
-  match to_remove {
-    Some(idx) => {
-      self.remove(idx)
-      return
-    }
-    None => ()
+  if to_remove is Some(idx) {
+    self.remove(idx)
+    return
   }
 
   // If no invalid functions, evict smallest
@@ -198,9 +190,8 @@ fn CodeCache::evict_lru(self : CodeCache) -> Unit {
       smallest_idx = Some(idx)
     }
   }
-  match smallest_idx {
-    Some(idx) => self.remove(idx)
-    None => ()
+  if smallest_idx is Some(idx) {
+    self.remove(idx)
   }
 }
 

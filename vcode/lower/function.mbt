@@ -73,10 +73,10 @@ pub fn VCodeFunction::needs_extra_results_ptr(self : VCodeFunction) -> Bool {
   let mut int_count = 0
   let mut float_count = 0
   for ty in self.result_types {
-    match ty {
-      I32 | I64 => int_count = int_count + 1
-      F32 | F64 => float_count = float_count + 1
-      _ => ()
+    if ty is (I32 | I64) {
+      int_count = int_count + 1
+    } else if ty is (F32 | F64) {
+      float_count = float_count + 1
     }
   }
   int_count > 2 || float_count > 2
@@ -88,10 +88,8 @@ pub fn VCodeFunction::needs_extra_results_ptr(self : VCodeFunction) -> Bool {
 pub fn VCodeFunction::calls_multi_value_function(self : VCodeFunction) -> Bool {
   for block in self.blocks {
     for inst in block.insts {
-      if inst.opcode is CallIndirect(_, num_results) {
-        if num_results > 2 {
-          return true
-        }
+      if inst.opcode is CallIndirect(_, num_results) && num_results > 2 {
+        return true
       }
     }
   }
@@ -153,9 +151,8 @@ pub fn VCodeFunction::print(self : VCodeFunction) -> String {
       result = result + "    \{inst}\n"
     }
     // Terminator
-    match block.terminator {
-      Some(term) => result = result + "    \{term}\n"
-      None => ()
+    if block.terminator is Some(term) {
+      result = result + "    \{term}\n"
     }
   }
   result = result + "}\n"

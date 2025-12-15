@@ -50,13 +50,10 @@ fn run_compile(
     Some(_) => Some(StringBuilder::new())
     None => None
   }
-  match ir_output {
-    Some(buf) => {
-      buf.write_string(";; IR for \{input_path}\n")
-      buf.write_string(";; Functions: \{mod_.codes.length()}\n")
-      buf.write_string(";; Optimization level: O\{config.opt_level}\n\n")
-    }
-    None => ()
+  if ir_output is Some(buf) {
+    buf.write_string(";; IR for \{input_path}\n")
+    buf.write_string(";; Functions: \{mod_.codes.length()}\n")
+    buf.write_string(";; Optimization level: O\{config.opt_level}\n\n")
   }
   println("Compiling \{mod_.codes.length()} functions...")
 
@@ -88,26 +85,20 @@ fn run_compile(
     let ir_func = translator.translate(code.body)
 
     // Record IR before optimization
-    match ir_output {
-      Some(buf) => {
-        buf.write_string(";; Function \{func_idx}: \{func_name}\n")
-        buf.write_string(ir_func.print())
-        buf.write_string("\n")
-      }
-      None => ()
+    if ir_output is Some(buf) {
+      buf.write_string(";; Function \{func_idx}: \{func_name}\n")
+      buf.write_string(ir_func.print())
+      buf.write_string("\n")
     }
 
     // Stage 2: Optimize IR
     @ir.optimize_with_level(ir_func, opt_level) |> ignore
 
     // Record optimized IR
-    match ir_output {
-      Some(buf) => {
-        buf.write_string(";; After optimization:\n")
-        buf.write_string(ir_func.print())
-        buf.write_string("\n")
-      }
-      None => ()
+    if ir_output is Some(buf) {
+      buf.write_string(";; After optimization:\n")
+      buf.write_string(ir_func.print())
+      buf.write_string("\n")
     }
 
     // Stage 3: Lower to VCode

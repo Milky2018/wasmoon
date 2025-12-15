@@ -12,16 +12,12 @@ fn collect_used_callee_saved(
   // Check param_pregs: parameters that cross calls are moved to callee-saved registers
   // These are defined in the prologue via `mov xN, x(3+i)`
   for preg in func.param_pregs {
-    match preg {
-      Some(p) =>
-        if is_callee_saved_alloc(p.index) {
-          // X23 is reserved for extra_buffer when needs_extra_results
-          if needs_extra_results && p.index == 23 {
-            continue
-          }
-          used.add(p.index)
-        }
-      None => ()
+    if preg is Some(p) && is_callee_saved_alloc(p.index) {
+      // X23 is reserved for extra_buffer when needs_extra_results
+      if needs_extra_results && p.index == 23 {
+        continue
+      }
+      used.add(p.index)
     }
   }
   for block in func.blocks {
@@ -32,16 +28,14 @@ fn collect_used_callee_saved(
         has_calls = true
       }
       for def in inst.defs {
-        match def.reg {
-          Physical(preg) =>
-            if preg.class is Int && is_callee_saved_alloc(preg.index) {
-              // X23 is reserved for extra_buffer when needs_extra_results
-              if needs_extra_results && preg.index == 23 {
-                continue
-              }
-              used.add(preg.index)
-            }
-          Virtual(_) => ()
+        if def.reg is Physical(preg) &&
+          preg.class is Int &&
+          is_callee_saved_alloc(preg.index) {
+          // X23 is reserved for extra_buffer when needs_extra_results
+          if needs_extra_results && preg.index == 23 {
+            continue
+          }
+          used.add(preg.index)
         }
       }
     }
@@ -66,25 +60,19 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
   // Check param_pregs: float parameters that cross calls are moved to callee-saved FPRs
   // These are defined in the prologue via `fmov sN, wM` or `fmov dN, xM`
   for preg in func.param_pregs {
-    match preg {
-      Some(p) =>
-        if (p.class is Float32 || p.class is Float64) &&
-          is_callee_saved_fpr(p.index) {
-          used.add(p.index)
-        }
-      None => ()
+    if preg is Some(p) &&
+      (p.class is Float32 || p.class is Float64) &&
+      is_callee_saved_fpr(p.index) {
+      used.add(p.index)
     }
   }
   for block in func.blocks {
     for inst in block.insts {
       for def in inst.defs {
-        match def.reg {
-          Physical(preg) =>
-            if (preg.class is Float32 || preg.class is Float64) &&
-              is_callee_saved_fpr(preg.index) {
-              used.add(preg.index)
-            }
-          Virtual(_) => ()
+        if def.reg is Physical(preg) &&
+          (preg.class is Float32 || preg.class is Float64) &&
+          is_callee_saved_fpr(preg.index) {
+          used.add(preg.index)
         }
       }
     }
@@ -260,14 +248,8 @@ pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
     for inst in block.insts {
       mc.emit_instruction(inst, stack_frame)
     }
-    match block.terminator {
-      Some(term) =>
-        mc.emit_terminator_with_epilogue_v2(
-          term,
-          stack_frame,
-          func.result_types,
-        )
-      None => ()
+    if block.terminator is Some(term) {
+      mc.emit_terminator_with_epilogue_v2(term, stack_frame, func.result_types)
     }
   }
   mc.resolve_fixups()
@@ -1157,11 +1139,9 @@ fn MachineCode::emit_instruction(
         // Direct move: no conflict
         for entry in int_results {
           let (rd, abi_idx) = entry
-          if abi_idx < 2 {
-            if rd != abi_idx {
-              self.emit_mov_reg(rd, abi_idx)
-            }
-          } else {
+          if abi_idx < 2 && rd != abi_idx {
+            self.emit_mov_reg(rd, abi_idx)
+          } else if abi_idx >= 2 {
             let offset = (abi_idx - 2) * 8
             self.emit_ldr_imm(rd, 23, offset)
           }
@@ -1632,11 +1612,9 @@ fn MachineCode::emit_terminator_with_epilogue_v2(
         // Direct move: no conflict
         for idx, entry in int_sources {
           let (src, _) = entry
-          if idx < 2 {
-            if src != idx {
-              self.emit_mov_reg(idx, src)
-            }
-          } else {
+          if idx < 2 && src != idx {
+            self.emit_mov_reg(idx, src)
+          } else if idx >= 2 {
             self.emit_str_offset(src, 23, extra_offset)
             extra_offset = extra_offset + 8
           }

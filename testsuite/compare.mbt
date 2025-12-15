@@ -129,10 +129,8 @@ pub fn compare_jit_interp(
 ///|
 fn find_func_index_by_name(mod_ : @types.Module, name : String) -> Int? {
   for exp in mod_.exports {
-    if exp.name == name {
-      if exp.desc is @types.ExportDesc::Func(idx) {
-        return Some(idx)
-      }
+    if exp.name == name && exp.desc is @types.ExportDesc::Func(idx) {
+      return Some(idx)
     }
   }
   None
@@ -316,7 +314,7 @@ fn build_func_signatures(
           func_type.results.copy(),
         )
       }
-      func_count += 1
+      func_count = func_count + 1
     }
   }
 

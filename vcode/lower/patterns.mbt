@@ -189,10 +189,10 @@ fn match_pattern_impl(
         None => return false
       }
       // For iconst/fconst, capture the constant
-      match inst.opcode {
-        @ir.Opcode::Iconst(v) => result.add_int_const(v)
-        @ir.Opcode::Fconst(v) => result.add_float_const(v)
-        _ => ()
+      if inst.opcode is @ir.Opcode::Iconst(v) {
+        result.add_int_const(v)
+      } else if inst.opcode is @ir.Opcode::Fconst(v) {
+        result.add_float_const(v)
       }
       // Match sub-patterns against operands
       if sub_patterns.length() != inst.operands.length() {

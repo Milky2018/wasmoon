@@ -181,16 +181,14 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
     preopens.push((Fd(fd), host, guest))
     // Open the preopen directory with native open
     let native_fd = native_open(host, [ReadOnly, Directory], 0)
-    match native_fd {
-      Some(nfd) =>
-        open_files.set(fd, {
-          native_fd: nfd,
-          file_type: Directory,
-          host_path: host,
-          position: 0L,
-          flags: 0, // Read-only
-        })
-      None => () // Skip if directory cannot be opened
+    if native_fd is Some(nfd) {
+      open_files.set(fd, {
+        native_fd: nfd,
+        file_type: Directory,
+        host_path: host,
+        position: 0L,
+        flags: 0, // Read-only
+      })
     }
     fd = fd + 1
   }
@@ -282,32 +280,31 @@ pub fn WasiContext::resolve_path(
   path : String,
 ) -> String? {
   // If dir_fd is a preopen directory, resolve relative to it
-  match self.get_preopen_host_path(dir_fd) {
-    Some(host_path) =>
-      if path.length() == 0 {
-        Some(host_path)
-      } else if path.has_prefix("/") {
-        // Absolute path - should be restricted, but for simplicity we just use host_path as root
-        Some(host_path + path)
-      } else {
-        Some(host_path + "/" + path)
-      }
-    None =>
-      // Check if it's a regular open directory
-      match self.get_file(dir_fd) {
-        Some(file) =>
-          if file.file_type is Directory {
-            if path.length() == 0 {
-              Some(file.host_path)
-            } else if path.has_prefix("/") {
-              Some(file.host_path + path)
-            } else {
-              Some(file.host_path + "/" + path)
-            }
+  if self.get_preopen_host_path(dir_fd) is Some(host_path) {
+    if path.length() == 0 {
+      Some(host_path)
+    } else if path.has_prefix("/") {
+      // Absolute path - should be restricted, but for simplicity we just use host_path as root
+      Some(host_path + path)
+    } else {
+      Some(host_path + "/" + path)
+    }
+  } else {
+    // Check if it's a regular open directory
+    match self.get_file(dir_fd) {
+      Some(file) =>
+        if file.file_type is Directory {
+          if path.length() == 0 {
+            Some(file.host_path)
+          } else if path.has_prefix("/") {
+            Some(file.host_path + path)
           } else {
-            None
+            Some(file.host_path + "/" + path)
           }
-        None => None
-      }
+        } else {
+          None
+        }
+      None => None
+    }
   }
 }

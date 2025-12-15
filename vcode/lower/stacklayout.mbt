@@ -430,9 +430,8 @@ pub fn build_stack_layout_aarch64(
     let (vreg_id, _slot_idx) = entry
     // Find the vreg info
     let vreg = find_vreg_by_id(func, vreg_id)
-    match vreg {
-      Some(v) => frame.alloc_spill(v) |> ignore
-      None => ()
+    if vreg is Some(v) {
+      frame.alloc_spill(v) |> ignore
     }
   }
 
@@ -463,9 +462,8 @@ fn find_vreg_by_id(func : VCodeFunction, id : Int) -> @abi.VReg? {
   for block in func.blocks {
     for inst in block.insts {
       for def in inst.defs {
-        match def.reg {
-          Virtual(vreg) => if vreg.id == id { return Some(vreg) }
-          Physical(_) => ()
+        if def.reg is Virtual(vreg) && vreg.id == id {
+          return Some(vreg)
         }
       }
     }

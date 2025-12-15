@@ -242,23 +242,21 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
     // Since block ID equals array index, we can use direct indexing
     if block_id >= 0 && block_id < func.blocks.length() {
       let block = func.blocks[block_id]
-      match block.terminator {
-        Some(term) =>
-          match term {
-            Jump(target) => dfs(func, target, visited, postorder)
-            Branch(_, then_b, else_b) => {
-              dfs(func, then_b, visited, postorder)
-              dfs(func, else_b, visited, postorder)
-            }
-            BrTable(_, targets, default) => {
-              for t in targets {
-                dfs(func, t, visited, postorder)
-              }
-              dfs(func, default, visited, postorder)
-            }
-            Return(_) | Trap(_) => ()
+      if block.terminator is Some(term) {
+        match term {
+          Jump(target) => dfs(func, target, visited, postorder)
+          Branch(_, then_b, else_b) => {
+            dfs(func, then_b, visited, postorder)
+            dfs(func, else_b, visited, postorder)
           }
-        None => ()
+          BrTable(_, targets, default) => {
+            for t in targets {
+              dfs(func, t, visited, postorder)
+            }
+            dfs(func, default, visited, postorder)
+          }
+          Return(_) | Trap(_) => ()
+        }
       }
     }
 
@@ -326,13 +324,12 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     // Block parameters receive values from predecessor block moves (SSA deconstruction).
     // Add a use point at block entry to keep them live through the block.
     for param in block.params {
-      let info = match result.use_def.get(param.id) {
-        Some(existing) => existing
-        None => {
-          let new_info = UseDefInfo::new(param)
-          result.use_def.set(param.id, new_info)
-          new_info
-        }
+      let info = if result.use_def.get(param.id) is Some(existing) {
+        existing
+      } else {
+        let new_info = UseDefInfo::new(param)
+        result.use_def.set(param.id, new_info)
+        new_info
       }
       // Add use point at block entry (before first instruction)
       info.use_points.push({ block: block_idx, inst: 0, pos: Before })
@@ -347,57 +344,44 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
       // Record uses (before the instruction)
       for use_reg in inst.uses {
-        match use_reg {
-          @abi.Virtual(vreg) => {
-            let info = match result.use_def.get(vreg.id) {
-              Some(existing) => existing
-              None => {
-                let new_info = UseDefInfo::new(vreg)
-                result.use_def.set(vreg.id, new_info)
-                new_info
-              }
-            }
-            info.use_points.push({
-              block: block_idx,
-              inst: inst_idx,
-              pos: Before,
-            })
+        if use_reg is @abi.Virtual(vreg) {
+          let info = if result.use_def.get(vreg.id) is Some(existing) {
+            existing
+          } else {
+            let new_info = UseDefInfo::new(vreg)
+            result.use_def.set(vreg.id, new_info)
+            new_info
           }
-          @abi.Physical(_) => () // Physical regs don't need liveness tracking
+          info.use_points.push({ block: block_idx, inst: inst_idx, pos: Before })
         }
       }
 
       // Record definitions (after the instruction)
       for def in inst.defs {
-        match def.reg {
-          @abi.Virtual(vreg) => {
-            let info = match result.use_def.get(vreg.id) {
-              Some(existing) => existing
-              None => {
-                let new_info = UseDefInfo::new(vreg)
-                result.use_def.set(vreg.id, new_info)
-                new_info
-              }
-            }
-            // For SSA deconstruction, the same vreg may be defined in multiple
-            // blocks on different paths. Keep the earliest definition in
-            // execution order (using block_order for comparison).
-            let new_def : ProgPoint = {
-              block: block_idx,
-              inst: inst_idx,
-              pos: After,
-            }
-            match info.def_point {
-              None => info.def_point = Some(new_def)
-              Some(existing_def) =>
-                // Keep the earlier definition (lower order = earlier in execution)
-                if new_def.compare_with_order(existing_def, result.block_order) <
-                  0 {
-                  info.def_point = Some(new_def)
-                }
+        if def.reg is @abi.Virtual(vreg) {
+          let info = match result.use_def.get(vreg.id) {
+            Some(existing) => existing
+            None => {
+              let new_info = UseDefInfo::new(vreg)
+              result.use_def.set(vreg.id, new_info)
+              new_info
             }
           }
-          @abi.Physical(_) => ()
+          // For SSA deconstruction, the same vreg may be defined in multiple
+          // blocks on different paths. Keep the earliest definition in
+          // execution order (using block_order for comparison).
+          let new_def : ProgPoint = {
+            block: block_idx,
+            inst: inst_idx,
+            pos: After,
+          }
+          if info.def_point is Some(existing_def) &&
+            new_def.compare_with_order(existing_def, result.block_order) < 0 {
+            // Keep the earlier definition (lower order = earlier in execution)
+            info.def_point = Some(new_def)
+          } else if info.def_point is None {
+            info.def_point = Some(new_def)
+          }
         }
       }
     }
@@ -406,15 +390,30 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     if block.terminator is Some(term) {
       match term {
         Branch(cond, _, _) =>
-          match cond {
-            @abi.Virtual(vreg) => {
-              let info = match result.use_def.get(vreg.id) {
-                Some(existing) => existing
-                None => {
-                  let new_info = UseDefInfo::new(vreg)
-                  result.use_def.set(vreg.id, new_info)
-                  new_info
-                }
+          if cond is @abi.Virtual(vreg) {
+            let info = if result.use_def.get(vreg.id) is Some(existing) {
+              existing
+            } else {
+              let new_info = UseDefInfo::new(vreg)
+              result.use_def.set(vreg.id, new_info)
+              new_info
+            }
+            let inst_idx = block.insts.length()
+            info.use_points.push({
+              block: block_idx,
+              inst: inst_idx,
+              pos: Before,
+            })
+          }
+        Return(values) =>
+          for value in values {
+            if value is @abi.Virtual(vreg) {
+              let info = if result.use_def.get(vreg.id) is Some(existing) {
+                existing
+              } else {
+                let new_info = UseDefInfo::new(vreg)
+                result.use_def.set(vreg.id, new_info)
+                new_info
               }
               let inst_idx = block.insts.length()
               info.use_points.push({
@@ -422,29 +421,6 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
                 inst: inst_idx,
                 pos: Before,
               })
-            }
-            @abi.Physical(_) => ()
-          }
-        Return(values) =>
-          for value in values {
-            match value {
-              @abi.Virtual(vreg) => {
-                let info = match result.use_def.get(vreg.id) {
-                  Some(existing) => existing
-                  None => {
-                    let new_info = UseDefInfo::new(vreg)
-                    result.use_def.set(vreg.id, new_info)
-                    new_info
-                  }
-                }
-                let inst_idx = block.insts.length()
-                info.use_points.push({
-                  block: block_idx,
-                  inst: inst_idx,
-                  pos: Before,
-                })
-              }
-              @abi.Physical(_) => ()
             }
           }
         _ => ()
@@ -475,19 +451,14 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     for inst in block.insts {
       // Uses that are not already defined locally
       for use_reg in inst.uses {
-        match use_reg {
-          @abi.Virtual(vreg) =>
-            if !def_set.contains(vreg.id) {
-              use_set.add(vreg.id)
-            }
-          @abi.Physical(_) => ()
+        if use_reg is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+          use_set.add(vreg.id)
         }
       }
       // Definitions
       for def in inst.defs {
-        match def.reg {
-          @abi.Virtual(vreg) => def_set.add(vreg.id)
-          @abi.Physical(_) => ()
+        if def.reg is @abi.Virtual(vreg) {
+          def_set.add(vreg.id)
         }
       }
     }
@@ -496,21 +467,13 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     if block.terminator is Some(term) {
       match term {
         Branch(cond, _, _) =>
-          match cond {
-            @abi.Virtual(vreg) =>
-              if !def_set.contains(vreg.id) {
-                use_set.add(vreg.id)
-              }
-            @abi.Physical(_) => ()
+          if cond is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+            use_set.add(vreg.id)
           }
         Return(values) =>
           for value in values {
-            match value {
-              @abi.Virtual(vreg) =>
-                if !def_set.contains(vreg.id) {
-                  use_set.add(vreg.id)
-                }
-              @abi.Physical(_) => ()
+            if value is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+              use_set.add(vreg.id)
             }
           }
         _ => ()
@@ -523,23 +486,21 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Get successors for each block
   fn get_successors(func : VCodeFunction, block_idx : Int) -> Array[Int] {
     let succs : Array[Int] = []
-    match func.blocks[block_idx].terminator {
-      Some(term) =>
-        match term {
-          Jump(target) => succs.push(target)
-          Branch(_, then_b, else_b) => {
-            succs.push(then_b)
-            succs.push(else_b)
-          }
-          BrTable(_, targets, default) => {
-            for t in targets {
-              succs.push(t)
-            }
-            succs.push(default)
-          }
-          Return(_) | Trap(_) => ()
+    if func.blocks[block_idx].terminator is Some(term) {
+      match term {
+        Jump(target) => succs.push(target)
+        Branch(_, then_b, else_b) => {
+          succs.push(then_b)
+          succs.push(else_b)
         }
-      None => ()
+        BrTable(_, targets, default) => {
+          for t in targets {
+            succs.push(t)
+          }
+          succs.push(default)
+        }
+        Return(_) | Trap(_) => ()
+      }
     }
     succs
   }
@@ -592,15 +553,13 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // For each vreg, create an interval spanning from def to last use
   for entry in result.use_def {
     let (vreg_id, info) = entry
-    let start = match info.def_point {
-      Some(def) => def
-      None =>
-        // If no def point, use the first use (shouldn't happen in valid code)
-        if info.use_points.length() > 0 {
-          info.use_points[0]
-        } else {
-          continue // No uses or defs, skip
-        }
+    let start = if info.def_point is Some(def) {
+      def
+      // If no def point, use the first use (shouldn't happen in valid code)
+    } else if info.use_points.length() > 0 {
+      info.use_points[0]
+    } else {
+      continue // No uses or defs, skip
     }
     let interval = LiveInterval::new(info.vreg, start)
 
@@ -761,23 +720,21 @@ pub fn LinearScanAllocator::allocate(
     if i >= actual_max_reg_params {
       continue
     }
-    match liveness.intervals.get(param.id) {
-      Some(interval) =>
-        if interval.crosses_call {
-          // Parameter crosses a call, don't pre-assign to caller-saved register
-          // The allocation loop below will handle it and assign to callee-saved
-          continue
-        } else {
-          // Safe to pre-assign to ABI register
-          let preg : @abi.PReg = match param.class {
-            @abi.Int => { index: i + actual_param_base, class: @abi.Int }
-            @abi.Float32 | @abi.Float64 => { index: i, class: param.class } // D0, D1, D2, ... D7
-          }
-          result.assignments.set(param.id, preg)
-          interval.assigned = Some(preg)
-          self.active.push(interval)
+    if liveness.intervals.get(param.id) is Some(interval) {
+      if interval.crosses_call {
+        // Parameter crosses a call, don't pre-assign to caller-saved register
+        // The allocation loop below will handle it and assign to callee-saved
+        continue
+      } else {
+        // Safe to pre-assign to ABI register
+        let preg : @abi.PReg = match param.class {
+          @abi.Int => { index: i + actual_param_base, class: @abi.Int }
+          @abi.Float32 | @abi.Float64 => { index: i, class: param.class } // D0, D1, D2, ... D7
         }
-      None => ()
+        result.assignments.set(param.id, preg)
+        interval.assigned = Some(preg)
+        self.active.push(interval)
+      }
     }
   }
 
@@ -804,17 +761,16 @@ pub fn LinearScanAllocator::allocate(
     // Get available registers for this class
     // If interval crosses a call, only use callee-saved registers
     let avail_regs = if interval.crosses_call {
-      match interval.vreg.class {
-        @abi.Int => self.callee_saved_int_regs
-        @abi.Float32 | @abi.Float64 =>
-          // Use callee-saved FPRs (D8-D15) for floats that must survive across calls
-          self.callee_saved_float_regs
+      if interval.vreg.class is @abi.Int {
+        self.callee_saved_int_regs
+      } else {
+        // Use callee-saved FPRs (D8-D15) for floats that must survive across calls
+        self.callee_saved_float_regs
       }
+    } else if interval.vreg.class is @abi.Int {
+      self.int_regs
     } else {
-      match interval.vreg.class {
-        @abi.Int => self.int_regs
-        @abi.Float32 | @abi.Float64 => self.float_regs
-      }
+      self.float_regs
     }
 
     // Try to allocate a register
@@ -897,19 +853,15 @@ fn LinearScanAllocator::try_allocate_reg(
   // Build set of registers currently in use
   let used : Set[Int] = Set::new()
   for active in self.active {
-    match active.assigned {
-      Some(preg) =>
-        if reg_class_eq(preg.class, interval.vreg.class) {
-          used.add(preg.index)
-        }
-      None => ()
+    if active.assigned is Some(preg) &&
+      reg_class_eq(preg.class, interval.vreg.class) {
+      used.add(preg.index)
     }
   }
 
   // Try hint first if available
-  match interval.hint {
-    Some(hint) => if !used.contains(hint.index) { return Some(hint) }
-    None => ()
+  if interval.hint is Some(hint) && !used.contains(hint.index) {
+    return Some(hint)
   }
 
   // Find a free register
@@ -937,10 +889,8 @@ fn LinearScanAllocator::spill_interval(
   result.spill_slots.set(interval.vreg.id, slot)
 
   // Record spill at definition point
-  match interval.start.pos {
-    After =>
-      result.spills.push({ vreg: interval.vreg, slot, point: interval.start })
-    Before => ()
+  if interval.start.pos is After {
+    result.spills.push({ vreg: interval.vreg, slot, point: interval.start })
   }
 
   // For each use, we need to reload into a temporary
@@ -1076,70 +1026,56 @@ pub fn apply_allocation(
 
       let mut inst_spill_idx = 0
       for i, use_reg in inst.uses {
-        match use_reg {
-          @abi.Virtual(vreg) =>
-            if alloc.assignments.get(vreg.id) is None {
-              // This vreg is spilled, need to reload
-              match alloc.spill_slots.get(vreg.id) {
-                Some(slot) => {
-                  let scratch_class = match vreg.class {
-                    @abi.Float32 | @abi.Float64 => @abi.Float64
-                    _ => vreg.class
-                  }
-
-                  // Determine how to handle this spilled use
-                  if is_call_indirect && i == 0 {
-                    // CallIndirect's func_ptr (first use): reload directly to X18
-                    let scratch_preg : @abi.PReg = {
-                      index: 18,
-                      class: scratch_class,
-                    }
-                    spill_regs.set(vreg.id, scratch_preg)
-                    let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-                    reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
-                    new_block.add_inst(reload_inst)
-                  } else if is_call_indirect && i >= 1 {
-                    // CallIndirect's args (all args, including register args 0-7 and stack args 8+)
-                    // Use spilled register encoding - emit code will handle the load directly
-                    // This avoids X16/X17 aliasing when many args are spilled
-                    let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
-                    spill_regs.set(vreg.id, spilled_preg)
-                    // Don't insert reload - emit code will load directly from spill slot
-                  } else {
-                    // Regular spilled uses (non-CallIndirect instructions)
-                    // Use X16, X17 as scratch registers
-                    let scratch_indices = [16, 17]
-                    let scratch_preg : @abi.PReg = {
-                      index: scratch_indices[inst_spill_idx % 2],
-                      class: scratch_class,
-                    }
-                    inst_spill_idx = inst_spill_idx + 1
-                    block_scratch_idx = block_scratch_idx + 1
-                    spill_regs.set(vreg.id, scratch_preg)
-                    let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-                    reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
-                    new_block.add_inst(reload_inst)
-                  }
-                }
-                None => ()
-              }
+        if use_reg is @abi.Virtual(vreg) &&
+          alloc.assignments.get(vreg.id) is None {
+          // This vreg is spilled, need to reload
+          if alloc.spill_slots.get(vreg.id) is Some(slot) {
+            let scratch_class = match vreg.class {
+              @abi.Float32 | @abi.Float64 => @abi.Float64
+              _ => vreg.class
             }
-          @abi.Physical(_) => ()
+
+            // Determine how to handle this spilled use
+            if is_call_indirect && i == 0 {
+              // CallIndirect's func_ptr (first use): reload directly to X18
+              let scratch_preg : @abi.PReg = { index: 18, class: scratch_class }
+              spill_regs.set(vreg.id, scratch_preg)
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              new_block.add_inst(reload_inst)
+            } else if is_call_indirect && i >= 1 {
+              // CallIndirect's args (all args, including register args 0-7 and stack args 8+)
+              // Use spilled register encoding - emit code will handle the load directly
+              // This avoids X16/X17 aliasing when many args are spilled
+              let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
+              spill_regs.set(vreg.id, spilled_preg)
+              // Don't insert reload - emit code will load directly from spill slot
+            } else {
+              // Regular spilled uses (non-CallIndirect instructions)
+              // Use X16, X17 as scratch registers
+              let scratch_indices = [16, 17]
+              let scratch_preg : @abi.PReg = {
+                index: scratch_indices[inst_spill_idx % 2],
+                class: scratch_class,
+              }
+              inst_spill_idx = inst_spill_idx + 1
+              block_scratch_idx = block_scratch_idx + 1
+              spill_regs.set(vreg.id, scratch_preg)
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              new_block.add_inst(reload_inst)
+            }
+          }
         }
       }
 
       // Check if any definitions are spilled - collect ALL spilled defs
       let spilled_defs : Array[(@abi.VReg, Int)] = []
       for def in inst.defs {
-        match def.reg {
-          @abi.Virtual(vreg) =>
-            if alloc.assignments.get(vreg.id) is None {
-              match alloc.spill_slots.get(vreg.id) {
-                Some(slot) => spilled_defs.push((vreg, slot))
-                None => ()
-              }
-            }
-          @abi.Physical(_) => ()
+        if def.reg is @abi.Virtual(vreg) &&
+          alloc.assignments.get(vreg.id) is None &&
+          alloc.spill_slots.get(vreg.id) is Some(slot) {
+          spilled_defs.push((vreg, slot))
         }
       }
 
@@ -1210,67 +1146,55 @@ pub fn apply_allocation(
     }
 
     // Rewrite terminator
-    match block.terminator {
-      Some(term) => {
-        let new_term = match term {
-          Jump(target) => @instr.Jump(target)
-          Branch(cond, then_b, else_b) => {
-            // Handle spilled condition register
-            let new_cond = rewrite_reg_with_spill(cond, alloc, new_block)
-            Branch(new_cond, then_b, else_b)
-          }
-          BrTable(index, targets, default) => {
-            // Handle spilled index register
-            let new_index = rewrite_reg_with_spill(index, alloc, new_block)
-            BrTable(new_index, targets, default)
-          }
-          Return(values) => {
-            // Handle Return specially to use block-level scratch counter
-            // This ensures each spilled value uses a different scratch register
-            let new_values : Array[@abi.Reg] = []
-            for v in values {
-              match v {
-                @abi.Virtual(vreg) =>
-                  match alloc.assignments.get(vreg.id) {
-                    Some(preg) => new_values.push(@abi.Physical(preg))
-                    None =>
-                      // Spilled: insert reload and use scratch register from block pool
-                      match alloc.spill_slots.get(vreg.id) {
-                        Some(slot) => {
-                          // Use X16, X17 as scratch registers
-                          // These are the only safe scratch registers
-                          let scratch_class = match vreg.class {
-                            @abi.Float32 | @abi.Float64 => @abi.Float64
-                            _ => vreg.class
-                          }
-                          let scratch_indices = [16, 17]
-                          let scratch_preg : @abi.PReg = {
-                            index: scratch_indices[block_scratch_idx % 2],
-                            class: scratch_class,
-                          }
-                          block_scratch_idx = block_scratch_idx + 1
-                          let reload_inst = @instr.VCodeInst::new(
-                            StackLoad(slot * 8),
-                          )
-                          reload_inst.add_def({
-                            reg: @abi.Physical(scratch_preg),
-                          })
-                          new_block.add_inst(reload_inst)
-                          new_values.push(@abi.Physical(scratch_preg))
-                        }
-                        None => new_values.push(v) // Should not happen
-                      }
-                  }
-                @abi.Physical(_) => new_values.push(v)
-              }
-            }
-            Return(new_values)
-          }
-          Trap(msg) => Trap(msg)
+    if block.terminator is Some(term) {
+      let new_term = match term {
+        Jump(target) => @instr.Jump(target)
+        Branch(cond, then_b, else_b) => {
+          // Handle spilled condition register
+          let new_cond = rewrite_reg_with_spill(cond, alloc, new_block)
+          Branch(new_cond, then_b, else_b)
         }
-        new_block.set_terminator(new_term)
+        BrTable(index, targets, default) => {
+          // Handle spilled index register
+          let new_index = rewrite_reg_with_spill(index, alloc, new_block)
+          BrTable(new_index, targets, default)
+        }
+        Return(values) => {
+          // Handle Return specially to use block-level scratch counter
+          // This ensures each spilled value uses a different scratch register
+          let new_values : Array[@abi.Reg] = []
+          for v in values {
+            if v is @abi.Virtual(vreg) &&
+              alloc.assignments.get(vreg.id) is Some(preg) {
+              new_values.push(@abi.Physical(preg))
+              // Spilled: insert reload and use scratch register from block pool
+            } else if v is @abi.Virtual(vreg) &&
+              alloc.spill_slots.get(vreg.id) is Some(slot) {
+              // Use X16, X17 as scratch registers
+              // These are the only safe scratch registers
+              let scratch_class = match vreg.class {
+                @abi.Float32 | @abi.Float64 => @abi.Float64
+                _ => vreg.class
+              }
+              let scratch_indices = [16, 17]
+              let scratch_preg : @abi.PReg = {
+                index: scratch_indices[block_scratch_idx % 2],
+                class: scratch_class,
+              }
+              block_scratch_idx = block_scratch_idx + 1
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              new_block.add_inst(reload_inst)
+              new_values.push(@abi.Physical(scratch_preg))
+            } else {
+              new_values.push(v)
+            }
+          }
+          Return(new_values)
+        }
+        Trap(msg) => Trap(msg)
       }
-      None => ()
+      new_block.set_terminator(new_term)
     }
   }
   new_func
@@ -1358,37 +1282,31 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
     // Instruction uses
     for inst in block.insts {
       for use_reg in inst.uses {
-        match use_reg {
-          @abi.Virtual(vreg) => used_vregs.add(vreg.id)
-          @abi.Physical(_) => ()
+        if use_reg is @abi.Virtual(vreg) {
+          used_vregs.add(vreg.id)
         }
       }
     }
 
     // Terminator uses
-    match block.terminator {
-      Some(term) =>
-        match term {
-          Branch(cond, _, _) =>
-            match cond {
-              @abi.Virtual(vreg) => used_vregs.add(vreg.id)
-              @abi.Physical(_) => ()
+    if block.terminator is Some(term) {
+      match term {
+        Branch(cond, _, _) =>
+          if cond is @abi.Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        BrTable(index, _, _) =>
+          if index is @abi.Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        Return(values) =>
+          for v in values {
+            if v is @abi.Virtual(vreg) {
+              used_vregs.add(vreg.id)
             }
-          BrTable(index, _, _) =>
-            match index {
-              @abi.Virtual(vreg) => used_vregs.add(vreg.id)
-              @abi.Physical(_) => ()
-            }
-          Return(values) =>
-            for v in values {
-              match v {
-                @abi.Virtual(vreg) => used_vregs.add(vreg.id)
-                @abi.Physical(_) => ()
-              }
-            }
-          Jump(_) | Trap(_) => ()
-        }
-      None => ()
+          }
+        Jump(_) | Trap(_) => ()
+      }
     }
   }
 
@@ -1425,12 +1343,12 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
         // Keep if any defined vreg is used
         let mut any_def_used = false
         for def in inst.defs {
-          match def.reg {
-            @abi.Virtual(vreg) =>
-              if used_vregs.contains(vreg.id) {
-                any_def_used = true
-              }
-            @abi.Physical(_) => any_def_used = true // Always keep physical reg defs
+          if def.reg is @abi.Virtual(vreg) {
+            if used_vregs.contains(vreg.id) {
+              any_def_used = true
+            }
+          } else {
+            any_def_used = true // Always keep physical reg defs
           }
         }
         // Also keep instructions with no defs (shouldn't happen for pure ops, but be safe)
@@ -1442,9 +1360,8 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
     }
 
     // Copy terminator
-    match block.terminator {
-      Some(term) => new_block.set_terminator(term)
-      None => ()
+    if block.terminator is Some(term) {
+      new_block.set_terminator(term)
     }
   }
   new_func

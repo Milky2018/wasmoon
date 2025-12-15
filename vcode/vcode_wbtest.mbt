@@ -473,14 +473,12 @@ test "AArch64 get_preg" {
     None => panic()
   }
   // Invalid GPR (x31 is zero register, not available)
-  match target.get_preg(Int, 31) {
-    Some(_) => panic()
-    None => ()
+  if target.get_preg(Int, 31) is Some(_) {
+    panic()
   }
   // Out of range FPR
-  match target.get_preg(Float64, 32) {
-    Some(_) => panic()
-    None => ()
+  if target.get_preg(Float64, 32) is Some(_) {
+    panic()
   }
 }
 

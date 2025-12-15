@@ -469,12 +469,12 @@ test "f32 decimal literal rounding - case 551" {
     #|  (func (export "f") (result f32) (f32.const +8.8817847263968443574e-16))
     #|)
   let mod_ = parse(wat)
-  match mod_.codes[0].body[0] {
-    F32Const(f) =>
-      // Expected: 0x1.000002p-50 = 8.881785255792436e-16
-      // Bits: 0x26800001 = 645922817
-      inspect(f.reinterpret_as_int(), content="645922817")
-    _ => panic()
+  if mod_.codes[0].body[0] is F32Const(f) {
+    // Expected: 0x1.000002p-50 = 8.881785255792436e-16
+    // Bits: 0x26800001 = 645922817
+    inspect(f.reinterpret_as_int(), content="645922817")
+  } else {
+    panic()
   }
 }
 
@@ -486,12 +486,12 @@ test "f32 decimal literal rounding - case 553" {
     #|  (func (export "f") (result f32) (f32.const -8.8817847263968443574e-16))
     #|)
   let mod_ = parse(wat)
-  match mod_.codes[0].body[0] {
-    F32Const(f) =>
-      // Expected: -0x1.000002p-50 = -8.881785255792436e-16
-      // Bits: 0xa6800001 = -1501560831 as signed
-      inspect(f.reinterpret_as_int(), content="-1501560831")
-    _ => panic()
+  if mod_.codes[0].body[0] is F32Const(f) {
+    // Expected: -0x1.000002p-50 = -8.881785255792436e-16
+    // Bits: 0xa6800001 = -1501560831 as signed
+    inspect(f.reinterpret_as_int(), content="-1501560831")
+  } else {
+    panic()
   }
 }
 
@@ -503,12 +503,12 @@ test "f32 decimal literal rounding - case 555" {
     #|  (func (export "f") (result f32) (f32.const +8.8817857851880284252e-16))
     #|)
   let mod_ = parse(wat)
-  match mod_.codes[0].body[0] {
-    F32Const(f) =>
-      // Expected: 0x1.000002p-50 = 8.881785255792436e-16
-      // Bits: 0x26800001 = 645922817
-      inspect(f.reinterpret_as_int(), content="645922817")
-    _ => panic()
+  if mod_.codes[0].body[0] is F32Const(f) {
+    // Expected: 0x1.000002p-50 = 8.881785255792436e-16
+    // Bits: 0x26800001 = 645922817
+    inspect(f.reinterpret_as_int(), content="645922817")
+  } else {
+    panic()
   }
 }
 
@@ -520,12 +520,12 @@ test "f32 decimal literal rounding - case 557" {
     #|  (func (export "f") (result f32) (f32.const -8.8817857851880284252e-16))
     #|)
   let mod_ = parse(wat)
-  match mod_.codes[0].body[0] {
-    F32Const(f) =>
-      // Expected: -0x1.000002p-50 = -8.881785255792436e-16
-      // Bits: 0xa6800001 = -1501560831 as signed
-      inspect(f.reinterpret_as_int(), content="-1501560831")
-    _ => panic()
+  if mod_.codes[0].body[0] is F32Const(f) {
+    // Expected: -0x1.000002p-50 = -8.881785255792436e-16
+    // Bits: 0xa6800001 = -1501560831 as signed
+    inspect(f.reinterpret_as_int(), content="-1501560831")
+  } else {
+    panic()
   }
 }
 

@@ -249,9 +249,8 @@ pub fn JITModule::free(self : JITModule) -> Unit {
   for kv in self.functions.iter() {
     kv.1.free()
   }
-  match self.context {
-    Some(ctx) => ctx.free()
-    None => ()
+  if self.context is Some(ctx) {
+    ctx.free()
   }
 }
 
@@ -292,9 +291,8 @@ pub fn JITModule::set_memory(
   mem_ptr : Int64,
   mem_size : Int64,
 ) -> Unit {
-  match self.context {
-    Some(ctx) => ctx.set_memory(mem_ptr, mem_size)
-    None => ()
+  if self.context is Some(ctx) {
+    ctx.set_memory(mem_ptr, mem_size)
   }
 }
 
@@ -307,14 +305,10 @@ pub fn JITModule::init_indirect_table(
   table_size : Int,
   elem_init : Array[(Int, Int, Int)],
 ) -> Unit {
-  match self.context {
-    Some(ctx) =>
-      if ctx.alloc_indirect_table(table_size) {
-        for entry in elem_init {
-          let (table_idx, func_idx, type_idx) = entry
-          ctx.set_indirect(table_idx, func_idx, type_idx)
-        }
-      }
-    None => ()
+  if self.context is Some(ctx) && ctx.alloc_indirect_table(table_size) {
+    for entry in elem_init {
+      let (table_idx, func_idx, type_idx) = entry
+      ctx.set_indirect(table_idx, func_idx, type_idx)
+    }
   }
 }

@@ -92,13 +92,10 @@ pub fn disassemble(mod_ : @types.Module) -> String {
   }
 
   // Start section
-  match mod_.start {
-    Some(start_idx) => {
-      buf.write_string("  (start ")
-      buf.write_string(start_idx.to_string())
-      buf.write_string(")\n")
-    }
-    None => ()
+  if mod_.start is Some(start_idx) {
+    buf.write_string("  (start ")
+    buf.write_string(start_idx.to_string())
+    buf.write_string(")\n")
   }
 
   // Element segments
@@ -218,12 +215,9 @@ fn write_value_type(buf : StringBuilder, vt : @types.ValueType) -> Unit {
 ///|
 fn write_limits(buf : StringBuilder, limits : @types.Limits) -> Unit {
   buf.write_string(limits.min.to_string())
-  match limits.max {
-    Some(max) => {
-      buf.write_string(" ")
-      buf.write_string(max.to_string())
-    }
-    None => ()
+  if limits.max is Some(max) {
+    buf.write_string(" ")
+    buf.write_string(max.to_string())
   }
 }
 
@@ -391,44 +385,40 @@ fn write_instruction(
 
 ///|
 fn write_block_type(buf : StringBuilder, bt : @types.BlockType) -> Unit {
-  match bt {
-    Empty => ()
-    Value(vt) => {
-      buf.write_string(" (result ")
+  if bt is Empty {
+    ()
+  } else if bt is Value(vt) {
+    buf.write_string(" (result ")
+    write_value_type(buf, vt)
+    buf.write_string(")")
+  } else if bt is MultiValue(vts) {
+    buf.write_string(" (result")
+    for vt in vts {
+      buf.write_string(" ")
       write_value_type(buf, vt)
-      buf.write_string(")")
     }
-    MultiValue(vts) => {
-      buf.write_string(" (result")
-      for vt in vts {
+    buf.write_string(")")
+  } else if bt is InlineType(params, results) {
+    if params.length() > 0 {
+      buf.write_string(" (param")
+      for vt in params {
         buf.write_string(" ")
         write_value_type(buf, vt)
       }
       buf.write_string(")")
     }
-    InlineType(params, results) => {
-      if params.length() > 0 {
-        buf.write_string(" (param")
-        for vt in params {
-          buf.write_string(" ")
-          write_value_type(buf, vt)
-        }
-        buf.write_string(")")
+    if results.length() > 0 {
+      buf.write_string(" (result")
+      for vt in results {
+        buf.write_string(" ")
+        write_value_type(buf, vt)
       }
-      if results.length() > 0 {
-        buf.write_string(" (result")
-        for vt in results {
-          buf.write_string(" ")
-          write_value_type(buf, vt)
-        }
-        buf.write_string(")")
-      }
-    }
-    TypeIndex(idx) => {
-      buf.write_string(" (type ")
-      buf.write_string(idx.to_string())
       buf.write_string(")")
     }
+  } else if bt is TypeIndex(idx) {
+    buf.write_string(" (type ")
+    buf.write_string(idx.to_string())
+    buf.write_string(")")
   }
 }
 

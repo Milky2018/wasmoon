@@ -137,11 +137,11 @@ fn ExecContext::exec_instr(
       // Declarative elem segments behave as if they have been dropped
       let is_dropped = self.instance.dropped_elems[elem_idx]
       let is_declarative = elem_segment.mode is @types.ElemMode::Declarative
-      if is_dropped || is_declarative {
+      if (is_dropped || is_declarative) && n != 0 {
         // Dropped/declarative segments behave as if they have zero length
-        if n != 0 {
-          raise @runtime.RuntimeError::OutOfBoundsTableAccess
-        }
+        raise @runtime.RuntimeError::OutOfBoundsTableAccess
+      }
+      if is_dropped || is_declarative {
         return
       }
 
@@ -582,27 +582,24 @@ fn eval_const_expr(
         if stack.length() >= 2 {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          match (a, b) {
-            (I32(av), I32(bv)) => stack.push(I32(av + bv))
-            _ => ()
+          if (a, b) is (I32(av), I32(bv)) {
+            stack.push(I32(av + bv))
           }
         }
       I32Sub =>
         if stack.length() >= 2 {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          match (a, b) {
-            (I32(av), I32(bv)) => stack.push(I32(av - bv))
-            _ => ()
+          if (a, b) is (I32(av), I32(bv)) {
+            stack.push(I32(av - bv))
           }
         }
       I32Mul =>
         if stack.length() >= 2 {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          match (a, b) {
-            (I32(av), I32(bv)) => stack.push(I32(av * bv))
-            _ => ()
+          if (a, b) is (I32(av), I32(bv)) {
+            stack.push(I32(av * bv))
           }
         }
       // i64 arithmetic operations
@@ -610,18 +607,16 @@ fn eval_const_expr(
         if stack.length() >= 2 {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          match (a, b) {
-            (I64(av), I64(bv)) => stack.push(I64(av + bv))
-            _ => ()
+          if (a, b) is (I64(av), I64(bv)) {
+            stack.push(I64(av + bv))
           }
         }
       I64Sub =>
         if stack.length() >= 2 {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          match (a, b) {
-            (I64(av), I64(bv)) => stack.push(I64(av - bv))
-            _ => ()
+          if (a, b) is (I64(av), I64(bv)) {
+            stack.push(I64(av - bv))
           }
         }
       I64Mul =>
@@ -657,11 +652,8 @@ fn eval_extended_const_expr(
     match instr {
       I32Const(n) => stack.push(n)
       GlobalGet(idx) =>
-        if idx < globals.length() {
-          match globals[idx].get() {
-            I32(n) => stack.push(n)
-            _ => ()
-          }
+        if idx < globals.length() && globals[idx].get() is I32(n) {
+          stack.push(n)
         }
       I32Add =>
         if stack.length() >= 2 {

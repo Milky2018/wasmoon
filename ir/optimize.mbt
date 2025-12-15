@@ -36,23 +36,21 @@ pub fn eliminate_dead_code(func : Function) -> OptResult {
       let mut i = block.instructions.length() - 1
       while i >= 0 {
         let inst = block.instructions[i]
-        match inst.result {
-          Some(v) =>
-            // If the result is never used and the instruction has no side effects
-            if use_counts.get(v.id).unwrap_or(0) == 0 && !has_side_effects(inst) {
-              // Remove this instruction
-              block.instructions.remove(i) |> ignore
-              // Decrement use counts for operands
-              for op in inst.operands {
-                let count = use_counts.get(op.id).unwrap_or(0)
-                if count > 0 {
-                  use_counts.set(op.id, count - 1)
-                }
+        if inst.result is Some(v) {
+          // If the result is never used and the instruction has no side effects
+          if use_counts.get(v.id).unwrap_or(0) == 0 && !has_side_effects(inst) {
+            // Remove this instruction
+            block.instructions.remove(i) |> ignore
+            // Decrement use counts for operands
+            for op in inst.operands {
+              let count = use_counts.get(op.id).unwrap_or(0)
+              if count > 0 {
+                use_counts.set(op.id, count - 1)
               }
-              changed = true
-              result.mark_changed()
             }
-          None => () // Void instructions can't be dead by this criterion
+            changed = true
+            result.mark_changed()
+          }
         }
         i = i - 1
       }
@@ -74,13 +72,11 @@ fn compute_use_counts(func : Function) -> @hashmap.HashMap[Int, Int] {
       }
     }
     // Count uses in terminator
-    match block.terminator {
-      Some(term) =>
-        for v in get_terminator_uses(term) {
-          let count = counts.get(v.id).unwrap_or(0)
-          counts.set(v.id, count + 1)
-        }
-      None => ()
+    if block.terminator is Some(term) {
+      for v in get_terminator_uses(term) {
+        let count = counts.get(v.id).unwrap_or(0)
+        counts.set(v.id, count + 1)
+      }
     }
   }
   counts
@@ -155,20 +151,14 @@ pub fn fold_constants(func : Function) -> OptResult {
         _ => ()
       }
       // Then try to fold the instruction
-      match try_fold_constant(inst, constants) {
-        Some(const_val) =>
-          match inst.result {
-            Some(v) => {
-              constants.set(v.id, const_val)
-              // Replace instruction with constant
-              inst.opcode = const_val.to_opcode()
-              // Clear operands since this is now a constant
-              inst.operands.clear()
-              result.mark_changed()
-            }
-            None => ()
-          }
-        None => ()
+      if try_fold_constant(inst, constants) is Some(const_val) &&
+        inst.result is Some(v) {
+        constants.set(v.id, const_val)
+        // Replace instruction with constant
+        inst.opcode = const_val.to_opcode()
+        // Clear operands since this is now a constant
+        inst.operands.clear()
+        result.mark_changed()
       }
     }
   }
@@ -414,23 +404,16 @@ pub fn propagate_copies(func : Function) -> OptResult {
     // Second pass: replace uses of copied values in this block
     for inst in block.instructions {
       for i, op in inst.operands {
-        match resolve_copy(op, copies) {
-          Some(resolved) =>
-            if resolved.id != op.id {
-              inst.operands[i] = resolved
-              result.mark_changed()
-            }
-          None => ()
+        if resolve_copy(op, copies) is Some(resolved) && resolved.id != op.id {
+          inst.operands[i] = resolved
+          result.mark_changed()
         }
       }
     }
     // Also update terminator operands
-    match block.terminator {
-      Some(term) => {
-        let new_term = propagate_copies_in_terminator(term, copies, result)
-        block.terminator = Some(new_term)
-      }
-      None => ()
+    if block.terminator is Some(term) {
+      let new_term = propagate_copies_in_terminator(term, copies, result)
+      block.terminator = Some(new_term)
     }
   }
   result
@@ -548,24 +531,19 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
         i = i + 1
         continue
       }
-      match inst.result {
-        Some(result_val) => {
-          let sig = compute_expression_signature(inst)
-          match expressions.get(sig) {
-            Some(existing) => {
-              // Replace this instruction with a copy
-              inst.opcode = Opcode::Copy
-              // Clear operands and add the existing value
-              inst.operands.clear()
-              inst.operands.push(existing)
-              result.mark_changed()
-            }
-            None =>
-              // Record this expression
-              expressions.set(sig, result_val)
-          }
+      if inst.result is Some(result_val) {
+        let sig = compute_expression_signature(inst)
+        if expressions.get(sig) is Some(existing) {
+          // Replace this instruction with a copy
+          inst.opcode = Opcode::Copy
+          // Clear operands and add the existing value
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+        } else {
+          // Record this expression
+          expressions.set(sig, result_val)
         }
-        None => ()
       }
       i = i + 1
     }
@@ -763,52 +741,39 @@ pub fn simplify_branches(func : Function) -> OptResult {
   }
   // Simplify branches
   for block in func.blocks {
-    match block.terminator {
-      Some(Brz(cond, then_target, else_target)) =>
-        match constants.get(cond.id) {
-          Some(I32(v)) => {
-            // brz: branch if zero
-            let target = if v == 0 { then_target } else { else_target }
-            block.terminator = Some(Terminator::Jump(target, []))
-            result.mark_changed()
-          }
-          Some(I64(v)) => {
-            let target = if v == 0L { then_target } else { else_target }
-            block.terminator = Some(Terminator::Jump(target, []))
-            result.mark_changed()
-          }
-          _ => ()
+    if block.terminator is Some(Brz(cond, then_target, else_target)) {
+      if constants.get(cond.id) is Some(I32(v)) {
+        // brz: branch if zero
+        let target = if v == 0 { then_target } else { else_target }
+        block.terminator = Some(Terminator::Jump(target, []))
+        result.mark_changed()
+      } else if constants.get(cond.id) is Some(I64(v)) {
+        let target = if v == 0L { then_target } else { else_target }
+        block.terminator = Some(Terminator::Jump(target, []))
+        result.mark_changed()
+      }
+    } else if block.terminator is Some(Brnz(cond, then_target, else_target)) {
+      if constants.get(cond.id) is Some(I32(v)) {
+        // brnz: branch if not zero
+        let target = if v != 0 { then_target } else { else_target }
+        block.terminator = Some(Terminator::Jump(target, []))
+        result.mark_changed()
+      } else if constants.get(cond.id) is Some(I64(v)) {
+        let target = if v != 0L { then_target } else { else_target }
+        block.terminator = Some(Terminator::Jump(target, []))
+        result.mark_changed()
+      }
+    } else if block.terminator is Some(BrTable(index, targets, default_target)) {
+      if constants.get(index.id) is Some(I32(v)) {
+        // Convert to direct jump if index is constant
+        let target = if v >= 0 && v < targets.length() {
+          targets[v]
+        } else {
+          default_target
         }
-      Some(Brnz(cond, then_target, else_target)) =>
-        match constants.get(cond.id) {
-          Some(I32(v)) => {
-            // brnz: branch if not zero
-            let target = if v != 0 { then_target } else { else_target }
-            block.terminator = Some(Terminator::Jump(target, []))
-            result.mark_changed()
-          }
-          Some(I64(v)) => {
-            let target = if v != 0L { then_target } else { else_target }
-            block.terminator = Some(Terminator::Jump(target, []))
-            result.mark_changed()
-          }
-          _ => ()
-        }
-      Some(BrTable(index, targets, default_target)) =>
-        match constants.get(index.id) {
-          Some(I32(v)) => {
-            // Convert to direct jump if index is constant
-            let target = if v >= 0 && v < targets.length() {
-              targets[v]
-            } else {
-              default_target
-            }
-            block.terminator = Some(Terminator::Jump(target, []))
-            result.mark_changed()
-          }
-          _ => ()
-        }
-      _ => ()
+        block.terminator = Some(Terminator::Jump(target, []))
+        result.mark_changed()
+      }
     }
   }
   result
@@ -836,14 +801,12 @@ pub fn eliminate_unreachable_code(func : Function) -> OptResult {
     // Find the block and add successors to worklist
     for block in func.blocks {
       if block.id == block_id {
-        match block.terminator {
-          Some(term) =>
-            for succ in get_terminator_targets(term) {
-              if !reachable.get(succ).unwrap_or(false) {
-                worklist.push(succ)
-              }
+        if block.terminator is Some(term) {
+          for succ in get_terminator_targets(term) {
+            if !reachable.get(succ).unwrap_or(false) {
+              worklist.push(succ)
             }
-          None => ()
+          }
         }
         break
       }
@@ -881,23 +844,20 @@ pub fn merge_blocks(func : Function) -> OptResult {
     succ_count.set(block.id, 0)
   }
   for block in func.blocks {
-    match block.terminator {
-      Some(term) => {
-        let targets = get_terminator_targets(term)
-        succ_count.set(block.id, targets.length())
-        for target in targets {
-          let count = pred_count.get(target).unwrap_or(0)
-          pred_count.set(target, count + 1)
-          // Track the predecessor if this is the first one
-          if count == 0 {
-            single_pred.set(target, block.id)
-          } else {
-            // More than one predecessor, clear
-            single_pred.remove(target)
-          }
+    if block.terminator is Some(term) {
+      let targets = get_terminator_targets(term)
+      succ_count.set(block.id, targets.length())
+      for target in targets {
+        let count = pred_count.get(target).unwrap_or(0)
+        pred_count.set(target, count + 1)
+        // Track the predecessor if this is the first one
+        if count == 0 {
+          single_pred.set(target, block.id)
+        } else {
+          // More than one predecessor, clear
+          single_pred.remove(target)
         }
       }
-      None => ()
     }
   }
   // Find mergeable pairs: pred has 1 successor, succ has 1 predecessor
@@ -1086,30 +1046,22 @@ pub fn hoist_loop_invariants(func : Function) -> OptResult {
   // Process each loop
   for loop_ in loops {
     // Find preheader - the unique predecessor outside the loop
-    match cfg.get_loop_preheader(loop_) {
-      Some(preheader_id) => {
-        // Find preheader block
-        let mut preheader_block : Block? = None
-        for block in func.blocks {
-          if block.id == preheader_id {
-            preheader_block = Some(block)
-            break
-          }
-        }
-        match preheader_block {
-          Some(preheader) => {
-            // Find loop-invariant instructions and move them
-            let hoisted = hoist_from_loop(
-              func, loop_, preheader, value_to_block,
-            )
-            if hoisted {
-              result.mark_changed()
-            }
-          }
-          None => ()
+    if cfg.get_loop_preheader(loop_) is Some(preheader_id) {
+      // Find preheader block
+      let mut preheader_block : Block? = None
+      for block in func.blocks {
+        if block.id == preheader_id {
+          preheader_block = Some(block)
+          break
         }
       }
-      None => () // No unique preheader, can't hoist
+      if preheader_block is Some(preheader) {
+        // Find loop-invariant instructions and move them
+        let hoisted = hoist_from_loop(func, loop_, preheader, value_to_block)
+        if hoisted {
+          result.mark_changed()
+        }
+      }
     }
   }
   result
