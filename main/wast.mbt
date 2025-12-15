@@ -372,7 +372,6 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
     // Move base offset for next table
     table_base_offset += table.type_.limits.min
   }
-
   jm.init_indirect_table(table_size, elem_init)
 }
 

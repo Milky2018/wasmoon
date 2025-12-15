@@ -1472,7 +1472,10 @@ fn Translator::translate_call_indirect(
       } else {
         // Multi-table: add base offset
         // Match the type of elem_idx (I32 for element indices)
-        let offset_const = self.builder.iconst(elem_idx.ty, base_offset.to_int64())
+        let offset_const = self.builder.iconst(
+          elem_idx.ty,
+          base_offset.to_int64(),
+        )
         self.builder.iadd(elem_idx, offset_const)
       }
     } else {
