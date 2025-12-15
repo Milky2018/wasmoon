@@ -265,6 +265,27 @@ fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
       return true
     }
   }
+  // Check if elem segments contain unsupported initializers
+  if has_unsupported_elem_init(mod_) {
+    return true
+  }
+  false
+}
+
+///|
+/// Check if elem segments contain unsupported initializers
+/// JIT doesn't support cross-module function references in elem segments
+fn has_unsupported_elem_init(mod_ : @types.Module) -> Bool {
+  for elem in mod_.elems {
+    for init_expr in elem.init {
+      match init_expr {
+        // GlobalGet in elem init is not supported by JIT
+        // because it may reference imported funcref globals (cross-module)
+        [GlobalGet(_)] => return true
+        _ => ()
+      }
+    }
+  }
   false
 }
 
