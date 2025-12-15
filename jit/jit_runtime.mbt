@@ -244,6 +244,16 @@ pub fn JITModule::get_func_by_name(
 }
 
 ///|
+/// Get function pointer by function index (for indirect table initialization)
+/// Returns the executable code pointer for the function, or 0 if not found
+pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
+  match self.functions.get(func_idx) {
+    Some(f) => f.exec_code.ptr
+    None => 0L
+  }
+}
+
+///|
 /// Free all executable memory
 pub fn JITModule::free(self : JITModule) -> Unit {
   for kv in self.functions.iter() {

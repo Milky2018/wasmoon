@@ -11,6 +11,9 @@ pub struct Store {
   func_owners : Array[Int] // -1 means host function or not yet registered
   // Registered module instances by their address/index
   instances : Array[ModuleInstance]
+  // JIT tables corresponding to runtime tables (for cross-module sharing)
+  // jit_tables[i] is the JIT table for tables[i], or None if not using JIT
+  jit_tables : Array[@jit.JITTable?]
 } derive(Show)
 
 ///|
@@ -23,6 +26,7 @@ pub fn Store::new() -> Store {
     globals: [],
     func_owners: [],
     instances: [],
+    jit_tables: [],
   }
 }
 
@@ -55,9 +59,24 @@ pub fn Store::alloc_host_func(
 }
 
 ///|
-pub fn Store::alloc_table(self : Store, table : Table) -> Int {
+/// Allocate a table in the store
+/// Optionally creates a corresponding JIT table for cross-module sharing
+pub fn Store::alloc_table(
+  self : Store,
+  table : Table,
+  use_jit? : Bool = false,
+) -> Int {
   let idx = self.tables.length()
   self.tables.push(table)
+
+  // Create corresponding JIT table if requested
+  if use_jit {
+    let (min, max) = table.get_limits()
+    let jit_table = @jit.JITTable::new(min, max)
+    self.jit_tables.push(jit_table)
+  } else {
+    self.jit_tables.push(None)
+  }
   idx
 }
 
@@ -116,6 +135,15 @@ pub fn Store::get_table(self : Store, idx : Int) -> Table raise RuntimeError {
     raise UndefinedElement
   }
   self.tables[idx]
+}
+
+///|
+/// Get the JIT table corresponding to a runtime table (if exists)
+pub fn Store::get_jit_table(self : Store, idx : Int) -> @jit.JITTable? {
+  if idx < 0 || idx >= self.jit_tables.length() {
+    return None
+  }
+  self.jit_tables[idx]
 }
 
 ///|

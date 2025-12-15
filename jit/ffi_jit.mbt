@@ -264,7 +264,7 @@ pub struct JITTable {
   priv size : Int
   priv max : Int?
   priv mut is_owned : Bool // Track if we should free this table
-}
+} derive(Show)
 
 ///|
 /// Create a new shared JIT table
