@@ -380,17 +380,8 @@ fn init_elem_segments(
   jm : @jit.JITModule,
   globals : Array[@runtime.GlobalInstance],
 ) -> Unit {
-  // For now, we only properly support table 0 (or a single table)
-  // Multi-table support requires storing table base offsets in the JIT context
-  // and loading them during call_indirect execution
-
-  // Calculate total table size (flatten all tables)
-  let mut table_size = 0
-  for table in mod_.tables {
-    let min_size = table.type_.limits.min
-    table_size = table_size + min_size
-  }
-  if table_size == 0 {
+  // Multi-table support: create a separate JIT table for each WebAssembly table
+  if mod_.tables.is_empty() {
     return // No tables, nothing to do
   }
 
@@ -415,12 +406,20 @@ fn init_elem_segments(
     func_type_hashes.push(type_hash)
   }
 
-  // For single table or table 0: use offset directly
-  // For multiple tables: elements are indexed relative to each table
-  // but we need to flatten them for the single indirect_table
-  let elem_init : Array[(Int, Int, Int)] = []
-  let mut table_base_offset = 0
-  for table_idx, table in mod_.tables {
+  // Create a JIT table for each WebAssembly table
+  let jit_tables : Array[@jit.JITTable?] = []
+  for table in mod_.tables {
+    let min_size = table.type_.limits.min
+    let max_size = table.type_.limits.max
+    match @jit.JITTable::new(min_size, max_size) {
+      Some(jit_table) => jit_tables.push(Some(jit_table))
+      None => jit_tables.push(None)
+    }
+  }
+
+  // Process elem segments: build (table_idx, elem_idx, func_idx, type_hash) tuples
+  let elem_init : Array[(Int, Int, Int, Int)] = []
+  for table_idx, _table in mod_.tables {
     // Process elem segments for this table
     for elem in mod_.elems {
       if elem.mode is @types.ElemMode::Active(elem_table_idx, offset_expr) &&
@@ -437,16 +436,16 @@ fn init_elem_segments(
           } else {
             0
           }
-          // Flatten: base_offset + offset_in_table + i
-          let flattened_idx = table_base_offset + offset + i
-          elem_init.push((flattened_idx, func_idx, type_hash))
+          // Element index within this specific table
+          let elem_idx = offset + i
+          elem_init.push((table_idx, elem_idx, func_idx, type_hash))
         }
       }
     }
-    // Move base offset for next table
-    table_base_offset += table.type_.limits.min
   }
-  jm.init_indirect_table(table_size, elem_init)
+
+  // Initialize shared tables (new multi-table approach)
+  jm.init_shared_tables(jit_tables, elem_init)
 }
 
 ///|

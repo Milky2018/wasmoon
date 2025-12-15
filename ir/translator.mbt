@@ -1495,26 +1495,8 @@ fn Translator::translate_call_indirect(
       self.builder.switch_to_block(continue_block)
     }
 
-    // Calculate flattened index for multi-table support
-    // flattened_idx = table_base_offset[table_idx] + elem_idx
-    let flattened_callee = if table_idx < self.table_base_offsets.length() {
-      let base_offset = self.table_base_offsets[table_idx]
-      if base_offset == 0 {
-        // Table 0 or single table: no offset needed
-        elem_idx
-      } else {
-        // Multi-table: add base offset
-        // Match the type of elem_idx (I32 for element indices)
-        let offset_const = self.builder.iconst(
-          elem_idx.ty,
-          base_offset.to_int64(),
-        )
-        self.builder.iadd(elem_idx, offset_const)
-      }
-    } else {
-      // Fallback: use element index directly (shouldn't happen in valid WASM)
-      elem_idx
-    }
+    // Multi-table support: use elem_idx directly (no flattening needed)
+    // The lowering phase handles table access via indirect_tables[table_idx]
     // Pop arguments
     let args : Array[Value] = []
     for _ in 0..<func_type.params.length() {
@@ -1524,9 +1506,9 @@ fn Translator::translate_call_indirect(
     // Get result types
     let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
     // Emit call_indirect with type hash (not type index) for structural equivalence
-    // Pass flattened_callee instead of original elem_idx
+    // Pass elem_idx directly (table_idx tells lowering which table to use)
     let results = self.builder.call_indirect_multi(
-      type_hash, table_idx, result_types, flattened_callee, args,
+      type_hash, table_idx, result_types, elem_idx, args,
     )
     // Push all results onto the stack
     for v in results {
