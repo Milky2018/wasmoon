@@ -11,20 +11,13 @@ test "jit_stack_frame_basic" {
     calls_multi_value=false,
   )
 
-  // v2 ABI: saves X19, X20, X21, X22, X24 (5 regs = 3 pairs = 48 bytes)
-  // v1 ABI: saves X20, X21, X22, X24 (4 regs = 2 pairs = 32 bytes)
-  if @abi.ABI_VERSION == 2 {
-    inspect(frame.gpr_save_size, content="48")
-    inspect(frame.fpr_save_size, content="0")
-    inspect(frame.spill_size, content="16") // MIN_SPILL_SIZE
-    inspect(frame.call_buffer_size, content="0")
-    inspect(frame.total_size, content="64") // 48 + 0 + 16 + 0 = 64, aligned to 16
-    inspect(frame.saved_gprs.length(), content="5")
-  } else {
-    inspect(frame.gpr_save_size, content="32")
-    inspect(frame.total_size, content="48") // 32 + 0 + 16 + 0 = 48
-    inspect(frame.saved_gprs.length(), content="4")
-  }
+  // Saves X19, X20, X21, X22, X24 (5 regs = 3 pairs = 48 bytes)
+  inspect(frame.gpr_save_size, content="48")
+  inspect(frame.fpr_save_size, content="0")
+  inspect(frame.spill_size, content="16") // MIN_SPILL_SIZE
+  inspect(frame.call_buffer_size, content="0")
+  inspect(frame.total_size, content="64") // 48 + 0 + 16 + 0 = 64, aligned to 16
+  inspect(frame.saved_gprs.length(), content="5")
 }
 
 ///|
@@ -40,11 +33,7 @@ test "jit_stack_frame_with_spills" {
 
   // 5 spills = 40 bytes, aligned to 16 = 48 bytes
   inspect(frame.spill_size, content="48")
-  if @abi.ABI_VERSION == 2 {
-    inspect(frame.total_size, content="96") // 48 + 0 + 48 + 0 = 96
-  } else {
-    inspect(frame.total_size, content="80") // 32 + 0 + 48 + 0 = 80
-  }
+  inspect(frame.total_size, content="96") // 48 + 0 + 48 + 0 = 96
 }
 
 ///|
@@ -61,11 +50,7 @@ test "jit_stack_frame_with_fprs" {
   // 2 FPRs = 1 pair = 16 bytes
   inspect(frame.fpr_save_size, content="16")
   inspect(frame.saved_fprs.length(), content="2")
-  if @abi.ABI_VERSION == 2 {
-    inspect(frame.total_size, content="80") // 48 + 16 + 16 + 0 = 80
-  } else {
-    inspect(frame.total_size, content="64") // 32 + 16 + 16 + 0 = 64
-  }
+  inspect(frame.total_size, content="80") // 48 + 16 + 16 + 0 = 80
 }
 
 ///|
@@ -81,13 +66,8 @@ test "jit_stack_frame_with_extra_results" {
 
   // needs_extra_results=true adds X23 to saved GPRs
   inspect(frame.uses_x23, content="true")
-  if @abi.ABI_VERSION == 2 {
-    inspect(frame.saved_gprs.length(), content="6") // X19, X20, X21, X22, X23, X24
-    inspect(frame.gpr_save_size, content="48") // 6 regs = 3 pairs = 48 bytes
-  } else {
-    inspect(frame.saved_gprs.length(), content="5") // X20, X21, X22, X23, X24
-    inspect(frame.gpr_save_size, content="48") // 5 regs = 3 pairs = 48 bytes
-  }
+  inspect(frame.saved_gprs.length(), content="6") // X19, X20, X21, X22, X23, X24
+  inspect(frame.gpr_save_size, content="48") // 6 regs = 3 pairs = 48 bytes
   // No call buffer allocated (callee doesn't allocate buffer when it returns multi-value)
   inspect(frame.call_buffer_size, content="0")
 }
@@ -106,13 +86,8 @@ test "jit_stack_frame_calls_multi_value" {
   // calls_multi_value=true adds X23 and allocates buffer
   inspect(frame.uses_x23, content="true")
   inspect(frame.call_buffer_size, content="64")
-  if @abi.ABI_VERSION == 2 {
-    inspect(frame.saved_gprs.length(), content="6")
-    inspect(frame.total_size, content="128") // 48 + 0 + 16 + 64 = 128
-  } else {
-    inspect(frame.saved_gprs.length(), content="5")
-    inspect(frame.total_size, content="128") // 48 + 0 + 16 + 64 = 128
-  }
+  inspect(frame.saved_gprs.length(), content="6")
+  inspect(frame.total_size, content="128") // 48 + 0 + 16 + 64 = 128
 }
 
 ///|
@@ -127,15 +102,9 @@ test "jit_stack_frame_with_clobbered_gprs" {
   )
 
   // Base regs + clobbered (deduplicated and sorted)
-  if @abi.ABI_VERSION == 2 {
-    // Base: 19, 20, 21, 22, 24; Clobbered: 19, 25, 26 -> 19, 20, 21, 22, 24, 25, 26
-    inspect(frame.saved_gprs.length(), content="7")
-    inspect(frame.gpr_save_size, content="64") // 7 regs = 4 pairs = 64 bytes
-  } else {
-    // Base: 20, 21, 22, 24; Clobbered: 19, 25, 26 -> 19, 20, 21, 22, 24, 25, 26
-    inspect(frame.saved_gprs.length(), content="7")
-    inspect(frame.gpr_save_size, content="64")
-  }
+  // Base: 19, 20, 21, 22, 24; Clobbered: 19, 25, 26 -> 19, 20, 21, 22, 24, 25, 26
+  inspect(frame.saved_gprs.length(), content="7")
+  inspect(frame.gpr_save_size, content="64") // 7 regs = 4 pairs = 64 bytes
 }
 
 ///|
@@ -235,14 +204,12 @@ test "jit_stack_frame_matches_legacy" {
     needs_extra_results=false,
     calls_multi_value=true,
   )
-  if @abi.ABI_VERSION == 2 {
-    // Base + clobbered: 19, 20, 21, 22, 23, 24, 25, 26, 30 = 9 regs = 5 pairs = 80 bytes
-    inspect(frame.gpr_save_size, content="80")
-    inspect(frame.fpr_save_size, content="16") // 2 FPRs = 1 pair
-    inspect(frame.spill_size, content="48") // 5 slots = 40 bytes, aligned to 48
-    inspect(frame.call_buffer_size, content="64")
-    inspect(frame.total_size, content="208") // 80 + 16 + 48 + 64 = 208
-  }
+  // Base + clobbered: 19, 20, 21, 22, 23, 24, 25, 26, 30 = 9 regs = 5 pairs = 80 bytes
+  inspect(frame.gpr_save_size, content="80")
+  inspect(frame.fpr_save_size, content="16") // 2 FPRs = 1 pair
+  inspect(frame.spill_size, content="48") // 5 slots = 40 bytes, aligned to 48
+  inspect(frame.call_buffer_size, content="64")
+  inspect(frame.total_size, content="208") // 80 + 16 + 48 + 64 = 208
 }
 
 ///|

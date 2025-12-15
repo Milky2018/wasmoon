@@ -1,10 +1,11 @@
 // ABI Constants and Definitions
 // Centralized definition of JIT calling convention
 //
-// New JIT ABI (v2):
+// JIT ABI:
 // - X0-X7: User parameters (AAPCS64 compatible)
 // - D0-D7: Float parameters (AAPCS64 compatible)
-// - X20: Context pointer (callee-saved, shared across calls)
+// - X19: Context pointer (callee-saved, shared across calls)
+// - X20: Func table pointer (cached from context)
 // - X21: Memory base (cached from context)
 // - X22: Memory size (cached from context)
 // - X23: Extra results buffer pointer (optional)
@@ -33,7 +34,11 @@ pub const CTX_MEMORY_SIZE_OFFSET : Int = 24
 
 ///|
 /// Register holding context pointer (callee-saved)
-pub const REG_CONTEXT : Int = 20
+pub const REG_CONTEXT : Int = 19
+
+///|
+/// Register holding cached func_table
+pub const REG_FUNC_TABLE : Int = 20
 
 ///|
 /// Register holding cached memory base
@@ -54,7 +59,7 @@ pub const REG_INDIRECT_TABLE : Int = 24
 // ============ Parameter Passing ============
 
 ///|
-/// First register for user parameters (new ABI: X0)
+/// First register for user parameters (X0)
 pub const PARAM_BASE_REG : Int = 0
 
 ///|
@@ -69,17 +74,6 @@ pub const FLOAT_PARAM_BASE_REG : Int = 0
 /// Maximum number of float parameters in registers
 pub const MAX_FLOAT_REG_PARAMS : Int = 8
 
-// ============ Legacy ABI Constants (for compatibility) ============
-// Old ABI: X0=func_table, X1=mem_base, X2=mem_size, X3-X10=params
-
-///|
-/// First register for user parameters (old ABI: X3)
-pub const LEGACY_PARAM_BASE_REG : Int = 3
-
-///|
-/// Maximum number of parameters in registers (old ABI)
-pub const LEGACY_MAX_REG_PARAMS : Int = 8
-
 // ============ Scratch Registers ============
 
 ///|
@@ -89,14 +83,6 @@ pub const SCRATCH_REG_1 : Int = 16
 ///|
 /// Secondary scratch register (used for br_table, etc.)
 pub const SCRATCH_REG_2 : Int = 17
-
-// ============ ABI Version ============
-
-///|
-/// Current ABI version
-/// v1: Legacy ABI with X0-X2 for context
-/// v2: New ABI with X20 for context pointer
-pub const ABI_VERSION : Int = 2
 
 // ============ Register Usage in AAPCS64 ============
 
@@ -161,28 +147,15 @@ pub fn allocatable_scratch_regs() -> Array[PReg] {
 /// Callee-saved registers available for allocation (must be saved/restored)
 /// X20-X22 are reserved for func_table, memory_base, memory_size
 /// X24 is reserved for indirect_table_ptr
-/// In ABI v2, X19 is reserved for context_ptr preservation across JIT-to-JIT calls
+/// X19 is reserved for context_ptr preservation across JIT-to-JIT calls
 pub fn allocatable_callee_saved_regs() -> Array[PReg] {
-  if ABI_VERSION == 2 {
-    // v2 ABI: X19 is reserved for context_ptr preservation
-    [
-      { index: 23, class: Int },
-      { index: 25, class: Int },
-      { index: 26, class: Int },
-      { index: 27, class: Int },
-      { index: 28, class: Int },
-    ]
-  } else {
-    // v1 ABI: X19 is allocatable
-    [
-      { index: 19, class: Int },
-      { index: 23, class: Int },
-      { index: 25, class: Int },
-      { index: 26, class: Int },
-      { index: 27, class: Int },
-      { index: 28, class: Int },
-    ]
-  }
+  [
+    { index: 23, class: Int },
+    { index: 25, class: Int },
+    { index: 26, class: Int },
+    { index: 27, class: Int },
+    { index: 28, class: Int },
+  ]
 }
 
 ///|

@@ -125,22 +125,15 @@ pub fn JITStackFrame::get_call_buffer_offset(self : JITStackFrame) -> Int {
 
 ///|
 /// Build the list of GPRs to save
-/// Combines base registers (X19-X24 depending on ABI) with clobbered registers
+/// Combines base registers (X19-X24) with clobbered registers
 fn build_gpr_save_list(uses_x23 : Bool, clobbered : Array[Int]) -> Array[Int] {
   // Base registers that are always saved:
-  // v2 ABI: X19 (context), X20 (func_table), X21 (mem_base), X22 (mem_size), X24 (indirect_table)
-  // v1 ABI: X20 (func_table), X21 (mem_base), X22 (mem_size), X24 (indirect_table)
+  // X19 (context), X20 (func_table), X21 (mem_base), X22 (mem_size), X24 (indirect_table)
   // Plus X23 if uses_x23 is true
-  let base_regs : Array[Int] = if @abi.ABI_VERSION == 2 {
-    if uses_x23 {
-      [19, 20, 21, 22, 23, 24]
-    } else {
-      [19, 20, 21, 22, 24]
-    }
-  } else if uses_x23 {
-    [20, 21, 22, 23, 24]
+  let base_regs : Array[Int] = if uses_x23 {
+    [19, 20, 21, 22, 23, 24]
   } else {
-    [20, 21, 22, 24]
+    [19, 20, 21, 22, 24]
   }
 
   // Combine base registers with clobbered registers (avoiding duplicates)

@@ -10,42 +10,6 @@ import(
 )
 
 // Values
-pub const ABI_VERSION : Int = 2
-
-pub const CTX_FUNC_TABLE_OFFSET : Int = 0
-
-pub const CTX_INDIRECT_TABLE_OFFSET : Int = 8
-
-pub const CTX_MEMORY_BASE_OFFSET : Int = 16
-
-pub const CTX_MEMORY_SIZE_OFFSET : Int = 24
-
-pub const FLOAT_PARAM_BASE_REG : Int = 0
-
-pub const LEGACY_MAX_REG_PARAMS : Int = 8
-
-pub const LEGACY_PARAM_BASE_REG : Int = 3
-
-pub const MAX_FLOAT_REG_PARAMS : Int = 8
-
-pub const MAX_REG_PARAMS : Int = 8
-
-pub const PARAM_BASE_REG : Int = 0
-
-pub const REG_CONTEXT : Int = 20
-
-pub const REG_EXTRA_RESULTS : Int = 23
-
-pub const REG_INDIRECT_TABLE : Int = 24
-
-pub const REG_MEMORY_BASE : Int = 21
-
-pub const REG_MEMORY_SIZE : Int = 22
-
-pub const SCRATCH_REG_1 : Int = 16
-
-pub const SCRATCH_REG_2 : Int = 17
-
 pub fn dump_regalloc(String, @lower.LivenessResult, @lower.RegAllocResult) -> Unit
 
 pub fn dump_vcode(@lower.VCodeFunction, String) -> Unit

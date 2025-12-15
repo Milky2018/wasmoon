@@ -138,19 +138,11 @@ fn MachineCode::emit_prologue_v2(
   }
 
   // Now move parameters to reserved registers
-  if @abi.ABI_VERSION == 2 {
-    // v2 ABI: Load from context structure pointed by X19
-    self.emit_ldr_imm(20, 19, @abi.CTX_FUNC_TABLE_OFFSET)
-    self.emit_ldr_imm(21, 19, @abi.CTX_MEMORY_BASE_OFFSET)
-    self.emit_ldr_imm(22, 19, @abi.CTX_MEMORY_SIZE_OFFSET)
-    self.emit_ldr_imm(24, 19, @abi.CTX_INDIRECT_TABLE_OFFSET)
-  } else {
-    // v1 ABI
-    self.emit_mov_reg(20, 0)
-    self.emit_mov_reg(21, 1)
-    self.emit_mov_reg(22, 2)
-    self.emit_ldr_imm_signed(24, 20, -8)
-  }
+  // Load from context structure pointed by X19
+  self.emit_ldr_imm(20, 19, @abi.CTX_FUNC_TABLE_OFFSET)
+  self.emit_ldr_imm(21, 19, @abi.CTX_MEMORY_BASE_OFFSET)
+  self.emit_ldr_imm(22, 19, @abi.CTX_MEMORY_SIZE_OFFSET)
+  self.emit_ldr_imm(24, 19, @abi.CTX_INDIRECT_TABLE_OFFSET)
 
   // Set up X23 for extra results buffer
   if needs_extra_results {
@@ -161,16 +153,8 @@ fn MachineCode::emit_prologue_v2(
   }
 
   // Move user arguments from registers to their allocated registers
-  let actual_param_base = if @abi.ABI_VERSION == 2 {
-    @abi.PARAM_BASE_REG
-  } else {
-    @abi.LEGACY_PARAM_BASE_REG
-  }
-  let actual_max_reg_params = if @abi.ABI_VERSION == 2 {
-    @abi.MAX_REG_PARAMS
-  } else {
-    @abi.LEGACY_MAX_REG_PARAMS
-  }
+  let actual_param_base = @abi.PARAM_BASE_REG
+  let actual_max_reg_params = @abi.MAX_REG_PARAMS
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
@@ -903,8 +887,7 @@ fn MachineCode::emit_instruction(
     }
     CallIndirect(num_args, num_results) => {
       // Call through a function pointer in a register
-      // ABI v1: X0=func_table, X1=memory_base, X2=memory_size, args in X3-X10
-      // ABI v2: args in X0-X7 (AAPCS64 compatible), context via X20 (callee-saved)
+      // ABI: args in X0-X7 (AAPCS64 compatible), context via X20 (callee-saved)
       // Return values: X0, X1 for first two int results, extra results via buffer pointed by X7/X23
       // Uses: [func_ptr, arg0, arg1, ...]
       let func_ptr = reg_num(inst.uses[0])
@@ -912,11 +895,7 @@ fn MachineCode::emit_instruction(
       // Note: X18 is reserved on Apple platforms, must NOT use it
       self.emit_mov_reg(17, func_ptr) // MOV X17, func_ptr
       // Calculate how many args go on stack (args beyond the first 8)
-      let actual_param_base_call = if @abi.ABI_VERSION == 2 {
-        @abi.PARAM_BASE_REG
-      } else {
-        @abi.LEGACY_PARAM_BASE_REG
-      }
+      let actual_param_base_call = @abi.PARAM_BASE_REG
       let call_max_reg_args = 8
       let stack_args = if num_args > call_max_reg_args {
         num_args - call_max_reg_args
@@ -1050,24 +1029,14 @@ fn MachineCode::emit_instruction(
         self.emit_mov_reg(7, 23) // MOV X7, X23
       }
       // Set up context for callee
-      if @abi.ABI_VERSION == 2 {
-        // v2: X19 already contains context_ptr (callee-saved)
-        // The callee's prologue will load from X19, no setup needed
-        ()
-      } else {
-        // v1: Set up X0 = func_table (X20), X1 = memory_base (X21), X2 = memory_size (X22)
-        self.emit_mov_reg(0, 20) // MOV X0, X20
-        self.emit_mov_reg(1, 21) // MOV X1, X21
-        self.emit_mov_reg(2, 22) // MOV X2, X22
-      }
+      // X19 already contains context_ptr (callee-saved)
+      // The callee's prologue will load from X19, no setup needed
       // Call the function (from saved X17)
       self.emit_blr(17)
-      // Restore X20 (func_table) after call for v2 ABI
+      // Restore X20 (func_table) after call
       // X19 is callee-saved, so it still contains our context_ptr
       // We need to reload func_table from X19
-      if @abi.ABI_VERSION == 2 {
-        self.emit_ldr_imm(20, 19, @abi.CTX_FUNC_TABLE_OFFSET) // X20 = [X19 + 0]
-      }
+      self.emit_ldr_imm(20, 19, @abi.CTX_FUNC_TABLE_OFFSET) // X20 = [X19 + 0]
       // Move results to destination registers
       // JIT ABI: integer returns in X0, X1; float returns in D0/S0, D1/S1
       // Two-phase is only needed when there's potential conflict:
