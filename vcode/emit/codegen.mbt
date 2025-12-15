@@ -112,10 +112,18 @@ fn MachineCode::emit_prologue_v2(
   let mut pair_idx = 0
   while i < num_regs {
     let reg1 = saved_gprs[i]
-    let reg2 = if i + 1 < num_regs { saved_gprs[i + 1] } else { 31 } // XZR as padding
+    let has_reg2 = i + 1 < num_regs
     let offset = pair_idx * 16
-    self.emit_stp_offset(reg1, reg2, 31, offset)
-    i = i + 2
+    if has_reg2 {
+      // We have a pair: use STP
+      let reg2 = saved_gprs[i + 1]
+      self.emit_stp_offset(reg1, reg2, 31, offset)
+      i = i + 2
+    } else {
+      // Odd number: use single STR for the last register
+      self.emit_str_imm(reg1, 31, offset)
+      i = i + 1
+    }
     pair_idx = pair_idx + 1
   }
 
