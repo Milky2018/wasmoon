@@ -305,6 +305,42 @@ fn try_compile_jit(
 }
 
 ///|
+/// Evaluate element segment offset constant expression
+/// Supports i32.const, i32.add, i32.sub, i32.mul for computing offsets
+fn eval_elem_offset_expr(instrs : Array[@types.Instruction]) -> Int {
+  let stack : Array[Int] = []
+  for instr in instrs {
+    match instr {
+      I32Const(n) => stack.push(n)
+      I32Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() + b.unwrap())
+        }
+      I32Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() - b.unwrap())
+        }
+      I32Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() * b.unwrap())
+        }
+      _ => () // Ignore other instructions
+    }
+  }
+  if stack.length() > 0 {
+    stack[stack.length() - 1]
+  } else {
+    0
+  }
+}
+
+///|
 /// Initialize element segments for call_indirect support
 fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
   // Calculate total table size (flatten all tables)
@@ -348,10 +384,7 @@ fn init_elem_segments(mod_ : @types.Module, jm : @jit.JITModule) -> Unit {
     for elem in mod_.elems {
       if elem.mode is @types.ElemMode::Active(elem_table_idx, offset_expr) &&
         elem_table_idx == table_idx {
-        let offset = match offset_expr {
-          [I32Const(n)] => n
-          _ => 0
-        }
+        let offset = eval_elem_offset_expr(offset_expr)
         for i, init_expr in elem.init {
           let func_idx = match init_expr {
             [RefFunc(idx)] => idx
