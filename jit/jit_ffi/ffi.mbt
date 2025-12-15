@@ -174,6 +174,33 @@ pub extern "c" fn c_jit_ctx_v2_set_indirect(
   type_idx : Int,
 ) -> Unit = "wasmoon_jit_ctx_v2_set_indirect"
 
+// ============ Shared Indirect Table ============
+
+///|
+/// Allocate a shared indirect table that can be used by multiple JIT modules
+pub extern "c" fn c_jit_alloc_shared_indirect_table(count : Int) -> Int64 = "wasmoon_jit_alloc_shared_indirect_table"
+
+///|
+/// Free a shared indirect table
+pub extern "c" fn c_jit_free_shared_indirect_table(table_ptr : Int64) -> Unit = "wasmoon_jit_free_shared_indirect_table"
+
+///|
+/// Set an entry in a shared indirect table
+pub extern "c" fn c_jit_shared_table_set(
+  table_ptr : Int64,
+  table_idx : Int,
+  func_ptr : Int64,
+  type_hash : Int,
+) -> Unit = "wasmoon_jit_shared_table_set"
+
+///|
+/// Configure a JIT context to use a shared indirect table
+pub extern "c" fn c_jit_ctx_v2_use_shared_table(
+  ctx_ptr : Int64,
+  shared_table_ptr : Int64,
+  count : Int,
+) -> Unit = "wasmoon_jit_ctx_v2_use_shared_table"
+
 ///|
 /// Set the global JIT context v2 (for WASI trampolines)
 pub extern "c" fn c_jit_set_context_v2(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context_v2"

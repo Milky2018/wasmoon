@@ -481,6 +481,61 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_context_v2(int64_t ctx_ptr) {
     }
 }
 
+// ============ Shared Indirect Table Support ============
+
+// Allocate a shared indirect table that can be used by multiple JIT modules
+// Returns pointer to allocated table, or 0 on failure
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
+    if (count <= 0) return 0;
+
+    // Allocate 2 slots per entry: func_ptr and type_idx
+    void **table = (void **)calloc(count * 2, sizeof(void *));
+    if (!table) return 0;
+
+    // Initialize type indices to -1 (uninitialized marker)
+    for (int i = 0; i < count; i++) {
+        table[i * 2 + 1] = (void*)(intptr_t)(-1);
+    }
+
+    return (int64_t)table;
+}
+
+// Free a shared indirect table
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_shared_indirect_table(int64_t table_ptr) {
+    void **table = (void **)table_ptr;
+    if (table) {
+        free(table);
+    }
+}
+
+// Set an entry in a shared indirect table
+// table_idx: index in the table
+// func_ptr: pointer to the function
+// type_idx: type index for type checking
+MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int table_idx, int64_t func_ptr, int type_idx) {
+    void **table = (void **)table_ptr;
+    if (table && table_idx >= 0) {
+        table[table_idx * 2] = (void *)func_ptr;
+        table[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+    }
+}
+
+// Configure a JIT context to use a shared indirect table instead of allocating its own
+// This allows multiple modules to share the same table
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
+    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+    if (!ctx) return;
+
+    // Free existing indirect table if any (we're replacing it)
+    if (ctx->indirect_table) {
+        free(ctx->indirect_table);
+    }
+
+    // Point to the shared table
+    ctx->indirect_table = (void **)shared_table_ptr;
+    ctx->indirect_count = count;
+}
+
 // Global v2 context (for WASI trampolines)
 static jit_context_v2_t *g_jit_context_v2 = NULL;
 

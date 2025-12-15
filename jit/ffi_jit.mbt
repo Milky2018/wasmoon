@@ -245,6 +245,81 @@ fn JITContext::free(self : JITContext) -> Unit {
 }
 
 ///|
+/// Configure context to use a shared indirect table
+fn JITContext::use_shared_table(self : JITContext, table : JITTable) -> Unit {
+  @jit_ffi.c_jit_ctx_v2_use_shared_table(
+    self.ctx_ptr,
+    table.table_ptr,
+    table.size,
+  )
+}
+
+// ============ Shared JIT Indirect Table ============
+
+///|
+/// Shared indirect table that can be used by multiple JIT modules
+/// This enables cross-module table sharing and runtime modifications
+pub struct JITTable {
+  priv table_ptr : Int64 // Pointer to the shared C-side table
+  priv size : Int
+  priv max : Int?
+  priv mut is_owned : Bool // Track if we should free this table
+}
+
+///|
+/// Create a new shared JIT table
+pub fn JITTable::new(size : Int, max : Int?) -> JITTable? {
+  if size <= 0 {
+    return None
+  }
+  let table_ptr = @jit_ffi.c_jit_alloc_shared_indirect_table(size)
+  if table_ptr == 0L {
+    return None
+  }
+  Some(JITTable::{ table_ptr, size, max, is_owned: true })
+}
+
+///|
+/// Set an entry in the shared table
+/// table_idx: index in the table
+/// func_ptr: pointer to the function
+/// type_hash: type hash for type checking
+pub fn JITTable::set(
+  self : JITTable,
+  table_idx : Int,
+  func_ptr : Int64,
+  type_hash : Int,
+) -> Unit {
+  @jit_ffi.c_jit_shared_table_set(
+    self.table_ptr,
+    table_idx,
+    func_ptr,
+    type_hash,
+  )
+}
+
+///|
+/// Get the table size
+pub fn JITTable::get_size(self : JITTable) -> Int {
+  self.size
+}
+
+///|
+/// Get the table max size
+pub fn JITTable::get_max(self : JITTable) -> Int? {
+  self.max
+}
+
+///|
+/// Free the shared table
+pub fn JITTable::free(self : JITTable) -> Unit {
+  if self.is_owned && self.table_ptr != 0L {
+    @jit_ffi.c_jit_free_shared_indirect_table(self.table_ptr)
+    self.is_owned = false
+  }
+}
+
+///|
 /// Get fd_write trampoline pointer
 pub fn get_fd_write_ptr() -> Int64 {
   @jit_ffi.c_jit_get_fd_write_ptr()

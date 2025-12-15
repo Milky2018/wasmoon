@@ -459,7 +459,11 @@ fn init_elem_segments(
   // Get global instances for evaluating offset expressions
   let globals : Array[@runtime.GlobalInstance] = []
   for global_addr in instance.global_addrs {
-    let global = store.get_global(global_addr) catch { _ => continue }
+    // All addresses in instance.global_addrs should exist in store
+    // If not, it's an internal error
+    let global = store.get_global(global_addr) catch {
+      _ => abort("Internal error: global address not found in store")
+    }
     globals.push(global)
   }
 
