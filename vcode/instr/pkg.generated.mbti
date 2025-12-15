@@ -57,6 +57,14 @@ pub(all) enum FloatToIntKind {
   F64ToI32U
   F64ToI64S
   F64ToI64U
+  F32ToI32SSat
+  F32ToI32USat
+  F32ToI64SSat
+  F32ToI64USat
+  F64ToI32SSat
+  F64ToI32USat
+  F64ToI64SSat
+  F64ToI64USat
 }
 pub impl Show for FloatToIntKind
 

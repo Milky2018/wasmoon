@@ -247,6 +247,8 @@ fn validate_instruction(
     | Fdemote
     | FcvtToSint
     | FcvtToUint
+    | FcvtToSintSat
+    | FcvtToUintSat
     | SintToFcvt
     | UintToFcvt
     | Bitcast =>

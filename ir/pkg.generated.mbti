@@ -127,7 +127,9 @@ pub fn IRBuilder::fconst(Self, Type, Double) -> Value
 pub fn IRBuilder::fconst_f32(Self, Float) -> Value
 pub fn IRBuilder::fconst_f64(Self, Double) -> Value
 pub fn IRBuilder::fcvt_to_sint(Self, Type, Value) -> Value
+pub fn IRBuilder::fcvt_to_sint_sat(Self, Type, Value) -> Value
 pub fn IRBuilder::fcvt_to_uint(Self, Type, Value) -> Value
+pub fn IRBuilder::fcvt_to_uint_sat(Self, Type, Value) -> Value
 pub fn IRBuilder::fdemote(Self, Value) -> Value
 pub fn IRBuilder::fdiv(Self, Value, Value) -> Value
 pub fn IRBuilder::ffloor(Self, Value) -> Value
@@ -271,6 +273,8 @@ pub enum Opcode {
   Fdemote
   FcvtToSint
   FcvtToUint
+  FcvtToSintSat
+  FcvtToUintSat
   SintToFcvt
   UintToFcvt
   Bitcast

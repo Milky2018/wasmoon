@@ -328,6 +328,10 @@ fn lower_inst(
     @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
     @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
     @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
+    @ir.Opcode::FcvtToSintSat =>
+      lower_float_to_int_sat(ctx, inst, block, signed=true)
+    @ir.Opcode::FcvtToUintSat =>
+      lower_float_to_int_sat(ctx, inst, block, signed=false)
     @ir.Opcode::SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
     @ir.Opcode::UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
     @ir.Opcode::Fpromote => lower_promote(ctx, inst, block)
@@ -1254,6 +1258,38 @@ fn lower_float_to_int(
       (@ir.Type::F64, @ir.Type::I64, true) => F64ToI64S
       (@ir.Type::F64, @ir.Type::I64, false) => F64ToI64U
       _ => F64ToI64S // Default fallback
+    }
+    let vcode_inst = @instr.VCodeInst::new(FloatToInt(kind))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
+  }
+}
+
+///|
+/// Lower saturating float to int conversion
+fn lower_float_to_int_sat(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  signed~ : Bool,
+) -> Unit {
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Determine conversion kind based on source/dest types and signedness
+    let src_ty = inst.operands[0].ty
+    let dst_ty = result.ty
+    let kind : @instr.FloatToIntKind = match (src_ty, dst_ty, signed) {
+      (@ir.Type::F32, @ir.Type::I32, true) => F32ToI32SSat
+      (@ir.Type::F32, @ir.Type::I32, false) => F32ToI32USat
+      (@ir.Type::F32, @ir.Type::I64, true) => F32ToI64SSat
+      (@ir.Type::F32, @ir.Type::I64, false) => F32ToI64USat
+      (@ir.Type::F64, @ir.Type::I32, true) => F64ToI32SSat
+      (@ir.Type::F64, @ir.Type::I32, false) => F64ToI32USat
+      (@ir.Type::F64, @ir.Type::I64, true) => F64ToI64SSat
+      (@ir.Type::F64, @ir.Type::I64, false) => F64ToI64USat
+      _ => F64ToI64SSat // Default fallback
     }
     let vcode_inst = @instr.VCodeInst::new(FloatToInt(kind))
     vcode_inst.add_def({ reg: Virtual(dst) })

@@ -462,6 +462,26 @@ pub fn IRBuilder::fcvt_to_uint(self : IRBuilder, ty : Type, a : Value) -> Value 
 }
 
 ///|
+/// Float to signed int (saturating - NaN->0, overflow->max/min)
+pub fn IRBuilder::fcvt_to_sint_sat(
+  self : IRBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
+  self.emit_inst(ty, Opcode::FcvtToSintSat, [a])
+}
+
+///|
+/// Float to unsigned int (saturating - NaN->0, overflow->max, negative->0)
+pub fn IRBuilder::fcvt_to_uint_sat(
+  self : IRBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
+  self.emit_inst(ty, Opcode::FcvtToUintSat, [a])
+}
+
+///|
 /// Signed int to float
 pub fn IRBuilder::sint_to_fcvt(self : IRBuilder, ty : Type, a : Value) -> Value {
   self.emit_inst(ty, Opcode::SintToFcvt, [a])

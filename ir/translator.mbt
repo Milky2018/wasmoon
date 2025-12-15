@@ -542,6 +542,27 @@ fn Translator::translate_instruction(
       let result = self.builder.uint_to_fcvt(Type::F64, a)
       self.push(result)
     }
+    // Saturating truncation operations
+    I32TruncSatF32S | I32TruncSatF64S => {
+      let a = self.pop()
+      let result = self.builder.fcvt_to_sint_sat(Type::I32, a)
+      self.push(result)
+    }
+    I32TruncSatF32U | I32TruncSatF64U => {
+      let a = self.pop()
+      let result = self.builder.fcvt_to_uint_sat(Type::I32, a)
+      self.push(result)
+    }
+    I64TruncSatF32S | I64TruncSatF64S => {
+      let a = self.pop()
+      let result = self.builder.fcvt_to_sint_sat(Type::I64, a)
+      self.push(result)
+    }
+    I64TruncSatF32U | I64TruncSatF64U => {
+      let a = self.pop()
+      let result = self.builder.fcvt_to_uint_sat(Type::I64, a)
+      self.push(result)
+    }
     I32ReinterpretF32
     | I64ReinterpretF64
     | F32ReinterpretI32
