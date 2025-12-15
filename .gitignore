@@ -3,3 +3,6 @@ target/
 .mooncakes/
 .moonagent/
 wasmoon
+
+# Claude Code skills (packaged)
+*.skill
