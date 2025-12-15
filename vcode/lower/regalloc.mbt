@@ -700,21 +700,12 @@ pub fn LinearScanAllocator::allocate(
   }
 
   // Pre-assign function parameters to ABI registers
-  // JIT ABI v1: X0 = func_table, X1 = memory_base, X2 = memory_size, args in X3-X10
-  // JIT ABI v2: X0-X7 for args (AAPCS64 compatible)
+  // JIT ABI: X0-X7 for args (AAPCS64 compatible)
   // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
   // it will be handled by the normal allocation process (which will use callee-saved)
   // NOTE: Only the first 8 params (0-7) are in registers. Params 8+ are on stack.
-  let actual_param_base = if @abi.ABI_VERSION == 2 {
-    @abi.PARAM_BASE_REG
-  } else {
-    @abi.LEGACY_PARAM_BASE_REG
-  }
-  let actual_max_reg_params = if @abi.ABI_VERSION == 2 {
-    @abi.MAX_REG_PARAMS
-  } else {
-    @abi.LEGACY_MAX_REG_PARAMS
-  }
+  let actual_param_base = @abi.PARAM_BASE_REG
+  let actual_max_reg_params = @abi.MAX_REG_PARAMS
   for i, param in func.params {
     // Skip stack parameters - they're not in registers
     if i >= actual_max_reg_params {

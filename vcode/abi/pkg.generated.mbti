@@ -2,8 +2,6 @@
 package "Milky2018/wasmoon/vcode/abi"
 
 // Values
-pub const ABI_VERSION : Int = 2
-
 pub const CTX_FUNC_TABLE_OFFSET : Int = 0
 
 pub const CTX_INDIRECT_TABLE_OFFSET : Int = 8
@@ -14,19 +12,17 @@ pub const CTX_MEMORY_SIZE_OFFSET : Int = 24
 
 pub const FLOAT_PARAM_BASE_REG : Int = 0
 
-pub const LEGACY_MAX_REG_PARAMS : Int = 8
-
-pub const LEGACY_PARAM_BASE_REG : Int = 3
-
 pub const MAX_FLOAT_REG_PARAMS : Int = 8
 
 pub const MAX_REG_PARAMS : Int = 8
 
 pub const PARAM_BASE_REG : Int = 0
 
-pub const REG_CONTEXT : Int = 20
+pub const REG_CONTEXT : Int = 19
 
 pub const REG_EXTRA_RESULTS : Int = 23
+
+pub const REG_FUNC_TABLE : Int = 20
 
 pub const REG_INDIRECT_TABLE : Int = 24
 

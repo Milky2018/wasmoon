@@ -1,16 +1,16 @@
-# Wasmoon JIT ABI for AArch64 (v2)
+# Wasmoon JIT ABI for AArch64
 
 本文档定义了 wasmoon JIT 编译器在 AArch64 架构上使用的调用约定（Application Binary Interface）。
 
 ## 概述
 
-Wasmoon v2 ABI 采用**混合设计**：
+Wasmoon JIT ABI 采用**混合设计**：
 
 1. **用户参数传递**: 兼容 AAPCS64，参数通过 X0-X7 传递
 2. **运行时上下文**: 通过 callee-saved 寄存器 X19 传递 context 指针
 3. **多返回值支持**: 通过 X0/X1、D0/D1 和 extra_results_buffer 支持
 
-### v2 ABI 设计理念
+### 设计理念
 
 - **X19 = context_ptr**: 由调用者设置，被调用者保存（callee-saved）
 - **X0-X7 = 用户参数**: 直接用于 WASM 函数参数，无上下文参数占用
@@ -53,7 +53,7 @@ Wasmoon v2 ABI 采用**混合设计**：
 
 ## JIT Context 结构
 
-v2 ABI 使用固定布局的 context 结构体：
+JIT ABI 使用固定布局的 context 结构体：
 
 ```c
 typedef struct {
@@ -62,7 +62,7 @@ typedef struct {
     uint8_t *memory_base;   // +16: 线性内存基地址
     size_t memory_size;     // +24: 内存大小 (字节)
     // ... 其他字段
-} jit_context_v2_t;
+} jit_context_t;
 ```
 
 Prologue 从 X19 加载这些字段：
@@ -78,7 +78,7 @@ LDR X22, [X19, #24]   ; memory_size
 
 ### 入口参数 (FFI -> JIT)
 
-v2 ABI 的参数布局：
+JIT ABI 的参数布局：
 
 ```
 X19 = context_ptr      (JIT 上下文指针，由 FFI trampoline 设置)
@@ -215,7 +215,7 @@ BLR X16
 
 当 JIT 代码调用另一个函数时，需要将参数从当前寄存器分配移动到 ABI 规定的位置。
 
-v2 ABI 简化了 marshalling，因为 X0-X7 直接用于 WASM 参数：
+JIT ABI 简化了 marshalling，因为 X0-X7 直接用于 WASM 参数：
 
 ```asm
 ; === 保存可能被覆盖的参数到临时寄存器 ===
@@ -367,8 +367,8 @@ RET
 
 ## 与 AAPCS64 的对比
 
-| 特性 | AAPCS64 | Wasmoon JIT ABI v2 |
-|------|---------|-------------------|
+| 特性 | AAPCS64 | Wasmoon JIT ABI |
+|------|---------|-----------------|
 | 参数寄存器 (整数) | X0-X7 | X0-X7 (WASM 参数直接使用) |
 | 参数寄存器 (浮点) | D0-D7 | 通过 X 寄存器传位模式 |
 | 上下文传递 | N/A | X19 = context_ptr |
@@ -379,17 +379,6 @@ RET
 | X20-X22,X24 | Callee-saved | 固定用途 (从 context 加载) |
 | X23 | Callee-saved | extra_results_buffer |
 | 多返回值 | 不支持 | 通过 X23 指向的 buffer 支持 |
-
-## v1 ABI vs v2 ABI 对比
-
-| 特性 | v1 ABI (旧) | v2 ABI (新) |
-|------|-------------|-------------|
-| 上下文传递 | X0=func_table, X1=mem_base, X2=mem_size | X19=context_ptr |
-| WASM 参数起始 | X3 | X0 |
-| 最大寄存器参数 | 8 个 (X3-X10) | 8 个 (X0-X7) |
-| Prologue 操作 | MOV X20, X0; MOV X21, X1; MOV X22, X2 | LDR X20, [X19, #0]; LDR X21, [X19, #16]; ... |
-| indirect_table 加载 | LDR X24, [X20, #-8] | LDR X24, [X19, #8] |
-| 内存操作函数 | g_jit_context (v1) | g_jit_context_v2 |
 
 ## Trap 处理
 
