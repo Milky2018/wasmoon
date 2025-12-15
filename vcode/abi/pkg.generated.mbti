@@ -4,11 +4,15 @@ package "Milky2018/wasmoon/vcode/abi"
 // Values
 pub const CTX_FUNC_TABLE_OFFSET : Int = 0
 
+pub const CTX_INDIRECT_TABLES_OFFSET : Int = 32
+
 pub const CTX_INDIRECT_TABLE_OFFSET : Int = 8
 
 pub const CTX_MEMORY_BASE_OFFSET : Int = 16
 
 pub const CTX_MEMORY_SIZE_OFFSET : Int = 24
+
+pub const CTX_TABLE_COUNT_OFFSET : Int = 40
 
 pub const FLOAT_PARAM_BASE_REG : Int = 0
 

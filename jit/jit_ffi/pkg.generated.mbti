@@ -42,6 +42,8 @@ pub fn c_jit_ctx_v2_set_indirect(Int64, Int, Int, Int) -> Unit
 
 pub fn c_jit_ctx_v2_set_memory(Int64, Int64, Int64) -> Unit
 
+pub fn c_jit_ctx_v2_set_table_pointers(Int64, FixedArray[Int64], Int) -> Unit
+
 pub fn c_jit_ctx_v2_use_shared_table(Int64, Int64, Int) -> Unit
 
 pub fn c_jit_free_context(Int64) -> Unit

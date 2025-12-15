@@ -202,6 +202,17 @@ pub extern "c" fn c_jit_ctx_v2_use_shared_table(
 ) -> Unit = "wasmoon_jit_ctx_v2_use_shared_table"
 
 ///|
+/// Configure JIT context with multiple indirect tables (for multi-table support)
+/// table_ptrs: FixedArray of Int64 (table pointers from Store.jit_tables)
+/// table_count: Number of tables
+#borrow(table_ptrs)
+pub extern "c" fn c_jit_ctx_v2_set_table_pointers(
+  ctx_ptr : Int64,
+  table_ptrs : FixedArray[Int64],
+  table_count : Int,
+) -> Unit = "wasmoon_jit_ctx_v2_set_table_pointers"
+
+///|
 /// Set the global JIT context v2 (for WASI trampolines)
 pub extern "c" fn c_jit_set_context_v2(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context_v2"
 

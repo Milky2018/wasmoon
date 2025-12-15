@@ -142,6 +142,8 @@ fn MachineCode::emit_prologue_v2(
   self.emit_ldr_imm(20, 19, @abi.CTX_FUNC_TABLE_OFFSET)
   self.emit_ldr_imm(21, 19, @abi.CTX_MEMORY_BASE_OFFSET)
   self.emit_ldr_imm(22, 19, @abi.CTX_MEMORY_SIZE_OFFSET)
+  // Load indirect_table (single table, table 0) for fast access
+  // X24 = [X19 + 8]  -> load indirect_table (table 0)
   self.emit_ldr_imm(24, 19, @abi.CTX_INDIRECT_TABLE_OFFSET)
 
   // Set up X23 for extra results buffer

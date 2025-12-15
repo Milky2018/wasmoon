@@ -60,16 +60,16 @@ pub fn Store::alloc_host_func(
 
 ///|
 /// Allocate a table in the store
-/// Optionally creates a corresponding JIT table for cross-module sharing
+/// Always creates a corresponding JIT table for cross-module sharing
 pub fn Store::alloc_table(
   self : Store,
   table : Table,
-  use_jit? : Bool = false,
+  use_jit? : Bool = true,
 ) -> Int {
   let idx = self.tables.length()
   self.tables.push(table)
 
-  // Create corresponding JIT table if requested
+  // Create corresponding JIT table (always enabled for cross-module sharing)
   if use_jit {
     let (min, max) = table.get_limits()
     let jit_table = @jit.JITTable::new(min, max)

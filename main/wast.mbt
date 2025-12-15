@@ -269,31 +269,6 @@ fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
   if has_unsupported_elem_init(mod_) {
     return true
   }
-  // Check if module imports or exports table (not supported by JIT)
-  if has_table_import_or_export(mod_) {
-    return true
-  }
-  false
-}
-
-///|
-/// Check if module imports or exports a table
-/// JIT doesn't support:
-/// - Imported tables: indirect table is per-module
-/// - Exported tables: other modules may modify the table at runtime
-fn has_table_import_or_export(mod_ : @types.Module) -> Bool {
-  // Check imports
-  for imp in mod_.imports {
-    if imp.desc is @types.ImportDesc::Table(_) {
-      return true
-    }
-  }
-  // Check exports
-  for exp in mod_.exports {
-    if exp.desc is @types.ExportDesc::Table(_) {
-      return true
-    }
-  }
   false
 }
 
@@ -446,16 +421,6 @@ fn init_elem_segments(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> Unit {
-  // Calculate total table size (flatten all tables)
-  let mut table_size = 0
-  for table in mod_.tables {
-    let min_size = table.type_.limits.min
-    table_size = table_size + min_size
-  }
-  if table_size == 0 {
-    return // No tables, nothing to do
-  }
-
   // Get global instances for evaluating offset expressions
   let globals : Array[@runtime.GlobalInstance] = []
   for global_addr in instance.global_addrs {
@@ -488,38 +453,38 @@ fn init_elem_segments(
     func_type_hashes.push(type_hash)
   }
 
-  // For single table or table 0: use offset directly
-  // For multiple tables: elements are indexed relative to each table
-  // but we need to flatten them for the single indirect_table
-  let elem_init : Array[(Int, Int, Int)] = []
-  let mut table_base_offset = 0
-  for table_idx, table in mod_.tables {
-    // Process elem segments for this table
-    for elem in mod_.elems {
-      if elem.mode is @types.ElemMode::Active(elem_table_idx, offset_expr) &&
-        elem_table_idx == table_idx {
-        let offset = eval_elem_offset_expr(offset_expr, globals)
-        for i, init_expr in elem.init {
-          let func_idx = match init_expr {
-            [RefFunc(idx)] => idx
-            [I32Const(idx)] => idx
-            _ => continue
-          }
-          let type_hash = if func_idx < func_type_hashes.length() {
-            func_type_hashes[func_idx]
-          } else {
-            0
-          }
-          // Flatten: base_offset + offset_in_table + i
-          let flattened_idx = table_base_offset + offset + i
-          elem_init.push((flattened_idx, func_idx, type_hash))
+  // Get shared JIT tables from Store (one per runtime table)
+  let jit_tables : Array[@jit.JITTable?] = []
+  for table_addr in instance.table_addrs {
+    let jit_table = store.get_jit_table(table_addr)
+    jit_tables.push(jit_table)
+  }
+
+  // Initialize elements: (table_idx, elem_idx, func_idx, type_hash)
+  let elem_init : Array[(Int, Int, Int, Int)] = []
+  for elem in mod_.elems {
+    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+      let offset = eval_elem_offset_expr(offset_expr, globals)
+      for i, init_expr in elem.init {
+        let func_idx = match init_expr {
+          [RefFunc(idx)] => idx
+          [I32Const(idx)] => idx
+          _ => continue
         }
+        let type_hash = if func_idx < func_type_hashes.length() {
+          func_type_hashes[func_idx]
+        } else {
+          0
+        }
+        // No flattening: use actual table_idx and elem_idx
+        let elem_idx = offset + i
+        elem_init.push((table_idx, elem_idx, func_idx, type_hash))
       }
     }
-    // Move base offset for next table
-    table_base_offset += table.type_.limits.min
   }
-  jm.init_indirect_table(table_size, elem_init)
+
+  // Initialize shared tables
+  jm.init_shared_tables(jit_tables, elem_init)
 }
 
 ///|

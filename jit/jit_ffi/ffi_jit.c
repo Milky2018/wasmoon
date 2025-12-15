@@ -360,21 +360,26 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
 
 // JIT Context v2 - layout MUST match vcode/abi.mbt constants:
 //   +0:  func_table (void**)
-//   +8:  indirect_table (void**)
+//   +8:  indirect_table (void**)    - Single indirect table (table 0)
 //   +16: memory_base (uint8_t*)
 //   +24: memory_size (size_t)
+//   +32: indirect_tables (void***)  - Array of table pointers (multi-table support)
+//   +40: table_count (int)          - Number of tables
 typedef struct {
-    void **func_table;      // +0:  Array of function pointers
-    void **indirect_table;  // +8:  Array for call_indirect
-    uint8_t *memory_base;   // +16: WebAssembly linear memory base
-    size_t memory_size;     // +24: Memory size in bytes
+    void **func_table;        // +0:  Array of function pointers
+    void **indirect_table;    // +8:  Single indirect table (table 0) - used by prologue
+    uint8_t *memory_base;     // +16: WebAssembly linear memory base
+    size_t memory_size;       // +24: Memory size in bytes
+    // Multi-table support fields (offset +32 onwards)
+    void ***indirect_tables;  // +32: Array of indirect table pointers
+    int table_count;          // +40: Number of tables
     // Additional fields (not accessed by JIT prologue directly)
-    int func_count;         // Number of entries in func_table
-    int indirect_count;     // Number of entries in indirect_table
-    char **args;            // WASI: command line arguments
-    int argc;               // WASI: number of arguments
-    char **envp;            // WASI: environment variables
-    int envc;               // WASI: number of env vars
+    int func_count;           // Number of entries in func_table
+    int indirect_count;       // Number of entries in indirect_table (table 0)
+    char **args;              // WASI: command line arguments
+    int argc;                 // WASI: number of arguments
+    char **envp;              // WASI: environment variables
+    int envc;                 // WASI: number of env vars
 } jit_context_v2_t;
 
 // Allocate a JIT context v2
@@ -388,7 +393,9 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context_v2(int func_count) {
         return 0;
     }
     ctx->func_count = func_count;
-    ctx->indirect_table = NULL;
+    ctx->indirect_tables = NULL;  // Multi-table support (set via set_table_pointers)
+    ctx->table_count = 0;
+    ctx->indirect_table = NULL;   // Legacy single-table support
     ctx->indirect_count = 0;
     ctx->memory_base = NULL;
     ctx->memory_size = 0;
@@ -476,6 +483,10 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_context_v2(int64_t ctx_ptr) {
     jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
     if (ctx) {
         if (ctx->func_table) free(ctx->func_table);
+        // NOTE: Don't free indirect_tables array itself - it's owned by Store
+        // Only free the pointer array
+        if (ctx->indirect_tables) free(ctx->indirect_tables);
+        // Legacy single-table mode: free if owned
         if (ctx->indirect_table) free(ctx->indirect_table);
         free(ctx);
     }
@@ -535,6 +546,46 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_use_shared_table(int64_t ctx_ptr, int
     ctx->indirect_table = (void **)shared_table_ptr;
     ctx->indirect_count = count;
 }
+
+// Configure JIT context with multiple indirect tables (for multi-table support)
+// table_ptrs: Array of Int64 (table pointers from Store.jit_tables)
+// table_count: Number of tables
+// This enables proper multi-table support where each call_indirect can specify which table to use
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_table_pointers(
+    int64_t ctx_ptr,
+    int64_t* table_ptrs,
+    int table_count
+) {
+    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+    if (!ctx || table_count <= 0 || !table_ptrs) return;
+
+    // Free existing indirect_tables array if any
+    if (ctx->indirect_tables) {
+        free(ctx->indirect_tables);
+        ctx->indirect_tables = NULL;
+        ctx->table_count = 0;
+    }
+
+    // Allocate array to hold table pointers
+    ctx->indirect_tables = (void ***)calloc(table_count, sizeof(void **));
+    if (!ctx->indirect_tables) {
+        ctx->table_count = 0;
+        return;
+    }
+
+    // Copy table pointers (note: tables themselves are owned by Store, we just hold pointers)
+    for (int i = 0; i < table_count; i++) {
+        ctx->indirect_tables[i] = (void **)table_ptrs[i];
+    }
+    ctx->table_count = table_count;
+
+    // For backward compatibility: if there's at least one table, set it as the legacy single table
+    if (table_count > 0 && table_ptrs[0] != 0) {
+        ctx->indirect_table = (void **)table_ptrs[0];
+        // Note: We don't set indirect_count here because we don't own this table
+    }
+}
+
 
 // Global v2 context (for WASI trampolines)
 static jit_context_v2_t *g_jit_context_v2 = NULL;

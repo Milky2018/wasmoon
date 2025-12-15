@@ -1670,16 +1670,32 @@ fn lower_call_indirect(
   // First operand is the element index within the specific table
   let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // LIMITATION: Multi-table support is partial
-  // The table_idx parameter is currently not used during lookup.
-  // All tables are flattened into a single indirect_table during initialization,
-  // but we don't add the table base offset during lookup.
-  // Full fix requires:
-  //   1. Storing table base offsets in JIT context
-  //   2. Loading the offset here based on table_idx
-  //   3. Adding it to elem_idx before lookup
-  // For now, only table 0 works correctly. Tests with multiple tables will fail.
-  ignore(table_idx)
+  // Multi-table support: determine which table pointer to use
+  // If table_idx == 0, use X24 (already loaded in prologue)
+  // If table_idx != 0, load the table pointer from indirect_tables[table_idx]
+  let table_ptr_preg : @abi.Reg = if table_idx == 0 {
+    // Fast path: use X24 which already points to table 0
+    Physical({ index: 24, class: Int })
+  } else {
+    // Slow path: load indirect_tables[table_idx] from context
+    // 1. Load indirect_tables array pointer: [X19 + 32]
+    let indirect_tables_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_array_inst = @instr.VCodeInst::new(
+      Load(I64, @abi.CTX_INDIRECT_TABLES_OFFSET),
+    )
+    load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
+    load_array_inst.add_use(Physical({ index: 19, class: Int }))
+    block.add_inst(load_array_inst)
+    // 2. Calculate offset = table_idx * 8 (pointer size)
+    let table_offset = table_idx * 8
+    // 3. Load table pointer: [indirect_tables + offset]
+    let table_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_table_inst = @instr.VCodeInst::new(Load(I64, table_offset))
+    load_table_inst.add_def({ reg: Virtual(table_ptr_vreg) })
+    load_table_inst.add_use(Virtual(indirect_tables_vreg))
+    block.add_inst(load_table_inst)
+    Virtual(table_ptr_vreg)
+  }
 
   // Arguments are all operands except the first one
   let arg_vregs : Array[@abi.VReg] = []
@@ -1708,12 +1724,12 @@ fn lower_call_indirect(
   mul_inst.add_use(Virtual(const_16_vreg))
   block.add_inst(mul_inst)
 
-  // Step 2: Calculate address = X24 + offset
-  // X24 holds the indirect_table_ptr (separate from func_table in X20)
+  // Step 2: Calculate address = table_ptr + offset
+  // table_ptr holds the correct table pointer (X24 for table 0, or loaded for other tables)
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
   let add_inst = @instr.VCodeInst::new(Add)
   add_inst.add_def({ reg: Virtual(addr_vreg) })
-  add_inst.add_use(Physical({ index: 24, class: Int }))
+  add_inst.add_use(table_ptr_preg)
   add_inst.add_use(Virtual(offset_vreg))
   block.add_inst(add_inst)
 

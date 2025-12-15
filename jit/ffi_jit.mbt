@@ -171,6 +171,32 @@ fn JITContext::set_memory(
 }
 
 ///|
+/// Set multiple indirect tables (for multi-table support)
+/// jit_tables: Array of JITTable? from Store
+/// This enables proper multi-table support where each call_indirect can specify which table to use
+fn JITContext::set_table_pointers(
+  self : JITContext,
+  jit_tables : Array[JITTable?],
+) -> Unit {
+  if jit_tables.is_empty() {
+    return
+  }
+  // Convert Array[JITTable?] to FixedArray[Int64] of table pointers
+  let table_ptrs = FixedArray::make(jit_tables.length(), 0L)
+  for i, jit_table_opt in jit_tables {
+    match jit_table_opt {
+      Some(jit_table) => table_ptrs[i] = jit_table.table_ptr
+      None => table_ptrs[i] = 0L // Null table pointer
+    }
+  }
+  @jit_ffi.c_jit_ctx_v2_set_table_pointers(
+    self.ctx_ptr,
+    table_ptrs,
+    jit_tables.length(),
+  )
+}
+
+///|
 /// JIT linear memory wrapper that handles memory.grow correctly.
 /// When memory.grow is called, realloc may return a new address.
 /// This wrapper ensures we free the correct (current) address.
