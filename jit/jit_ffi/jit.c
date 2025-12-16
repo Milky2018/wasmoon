@@ -1042,7 +1042,6 @@ typedef struct {
 // The finalize function MUST NOT free the container itself (GC does that)
 static void finalize_exec_code(void *self) {
     int64_t *ptr = (int64_t *)self;
-    // TEMPORARY: Don't actually free to test if premature collection is the issue
     if (*ptr != 0) {
         wasmoon_jit_free_exec(*ptr);
         *ptr = 0;
@@ -1244,7 +1243,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
 }
 
 // Free executable memory
-MOONBIT_FFI_EXPORT int wasmoon_jit_free_exec(int64_t ptr_i64) {
+static int wasmoon_jit_free_exec(int64_t ptr_i64) {
     void *ptr = (void *)ptr_i64;
     if (!ptr) {
         return -1;

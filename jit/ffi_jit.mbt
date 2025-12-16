@@ -228,11 +228,11 @@ fn JITContext::activate(self : JITContext) -> Unit {
 ///|
 /// Shared indirect table that can be used by multiple JIT modules
 /// This enables cross-module table sharing and runtime modifications
-pub struct JITTable {
-  priv table_ptr : Int64 // Pointer to the shared C-side table
-  priv size : Int
-  priv max : Int?
-  priv mut is_owned : Bool // Track if we should free this table
+struct JITTable {
+  table_ptr : Int64 // Pointer to the shared C-side table
+  size : Int
+  max : Int?
+  mut is_owned : Bool // Track if we should free this table
 } derive(Show)
 
 ///|

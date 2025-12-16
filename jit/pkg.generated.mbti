@@ -258,9 +258,7 @@ pub struct JITFunction {
   // private fields
 }
 
-pub struct JITModule {
-  // private fields
-}
+type JITModule
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
@@ -274,9 +272,7 @@ pub fn JITModule::new() -> Self
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
 
-pub struct JITTable {
-  // private fields
-}
+type JITTable
 pub fn JITTable::free(Self) -> Unit
 pub fn JITTable::get_max(Self) -> Int?
 pub fn JITTable::get_size(Self) -> Int

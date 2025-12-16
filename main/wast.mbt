@@ -1,6 +1,6 @@
 ///|
 /// Run a WAST test script
-fn run_wast(wast_path : String, use_jit : Bool) -> Unit {
+fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   println("Running WAST script: \{wast_path}")
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   println("JIT: \{jit_status}")
@@ -24,7 +24,7 @@ fn run_wast(wast_path : String, use_jit : Bool) -> Unit {
 
   // Run WAST commands
   let base_dir = find_base_dir(wast_path)
-  let result = run_wast_commands(script, base_dir, use_jit)
+  let result = run_wast_commands(script, base_dir, use_jit, show_success)
 
   // Print results
   println("")
@@ -539,12 +539,13 @@ fn run_wast_commands(
   script : @wast.WastScript,
   base_dir : String,
   use_jit : Bool,
+  show_success : Bool,
 ) -> WastResult {
   let result = WastResult::new()
   let ctx = WastContext::new(use_jit)
   for item in script.commands {
     let (cmd, line) = item
-    run_wast_command(ctx, cmd, line, result, base_dir)
+    run_wast_command(ctx, cmd, line, result, base_dir, show_success)
   }
   result
 }
@@ -556,6 +557,7 @@ fn run_wast_command(
   line : Int,
   result : WastResult,
   base_dir : String,
+  show_success : Bool,
 ) -> Unit {
   ignore(base_dir)
   match cmd {
@@ -667,7 +669,13 @@ fn run_wast_command(
     }
     AssertReturn(action, expected) =>
       match run_assert_return(ctx, action, expected) {
-        None => result.passed = result.passed + 1
+        None => {
+          result.passed = result.passed + 1
+          if show_success {
+            let action_desc = format_action(action)
+            println("line \{line}: assert_return \{action_desc}: PASSED")
+          }
+        }
         Some(err) => {
           result.failed = result.failed + 1
           let action_desc = format_action(action)
@@ -680,6 +688,10 @@ fn run_wast_command(
       let success = run_assert_trap(ctx, action, expected_msg)
       if success {
         result.passed = result.passed + 1
+        if show_success {
+          let action_desc = format_action(action)
+          println("line \{line}: assert_trap \{action_desc}: PASSED")
+        }
       } else {
         result.failed = result.failed + 1
         result.failures.push(
@@ -691,6 +703,10 @@ fn run_wast_command(
       // Just try to invoke - should cause stack exhaustion
       if (try? invoke_action(ctx, action)) is Err(_) {
         result.passed = result.passed + 1
+        if show_success {
+          let action_desc = format_action(action)
+          println("line \{line}: assert_exhaustion \{action_desc}: PASSED")
+        }
       } else {
         result.failed = result.failed + 1
         result.failures.push(
@@ -703,6 +719,9 @@ fn run_wast_command(
       let trapped = try_instantiate_source_traps(ctx, source)
       if trapped {
         result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_trap (module): PASSED")
+        }
       } else {
         result.failed = result.failed + 1
         result.failures.push(
@@ -719,6 +738,9 @@ fn run_wast_command(
         )
       } else {
         result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_invalid: PASSED")
+        }
       }
     }
     AssertMalformed(source, msg) => {
@@ -732,6 +754,9 @@ fn run_wast_command(
         )
       } else {
         result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_malformed: PASSED")
+        }
       }
     }
     AssertUnlinkable(source, msg) => {
@@ -744,6 +769,9 @@ fn run_wast_command(
         )
       } else {
         result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_unlinkable: PASSED")
+        }
       }
     }
     Register(name, module_name) => {

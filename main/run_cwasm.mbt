@@ -55,13 +55,6 @@ fn run_cwasm(
         // NOTE: No need to manually free - GC handles cleanup
         return
       }
-      // Initialize data segments based on file name
-      // This is a temporary hardcoded solution until we add data segments to cwasm format
-      if cwasm_path.has_suffix("benchmark.cwasm") {
-        init_benchmark_data(mem_ptr)
-      } else if cwasm_path.has_suffix("simple_loop.cwasm") {
-        init_simple_loop_data(mem_ptr)
-      }
       // Set memory in JIT context
       jm.set_memory(mem_ptr, mem_size)
       // Determine which function to call
@@ -104,28 +97,4 @@ fn run_cwasm(
     }
     None => println("Error: failed to load JIT module")
   }
-}
-
-///|
-/// Initialize data segments for benchmark.wat
-/// This is a temporary hardcoded solution until we add data segments to cwasm format
-fn init_benchmark_data(mem_ptr : Int64) -> Unit {
-  // Data segments from benchmark.wat:
-  // (data (i32.const 128) "Running benchmark...\n")
-  // (data (i32.const 152) "Iteration ")
-  // (data (i32.const 164) "/10\n")
-  // (data (i32.const 176) "Benchmark complete!\n")
-  @jit.memory_init(mem_ptr, 128L, b"Running benchmark...\n") |> ignore
-  @jit.memory_init(mem_ptr, 152L, b"Iteration ") |> ignore
-  @jit.memory_init(mem_ptr, 164L, b"/10\n") |> ignore
-  @jit.memory_init(mem_ptr, 176L, b"Benchmark complete!\n") |> ignore
-}
-
-///|
-/// Initialize data segments for simple_loop.wat
-fn init_simple_loop_data(mem_ptr : Int64) -> Unit {
-  // (data (i32.const 128) "Loop iteration\n")
-  // (data (i32.const 144) "Done!\n")
-  @jit.memory_init(mem_ptr, 128L, b"Loop iteration\n") |> ignore
-  @jit.memory_init(mem_ptr, 144L, b"Done!\n") |> ignore
 }

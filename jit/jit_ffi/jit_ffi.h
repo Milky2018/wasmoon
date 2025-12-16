@@ -44,6 +44,6 @@ static jit_context_t *g_jit_context;
 
 int64_t wasmoon_jit_alloc_exec(int size);
 int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
-int wasmoon_jit_free_exec(int64_t ptr);
+static int wasmoon_jit_free_exec(int64_t ptr);
 
 #endif // JIT_FFI_H

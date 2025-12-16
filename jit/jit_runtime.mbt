@@ -23,10 +23,10 @@ fn JITFunction::new(
 
 ///|
 /// Loaded precompiled module with executable functions
-pub struct JITModule {
-  priv functions : Map[Int, JITFunction]
-  priv by_name : Map[String, Int]
-  priv mut context : JITContext?
+struct JITModule {
+  functions : Map[Int, JITFunction]
+  by_name : Map[String, Int]
+  mut context : JITContext?
 }
 
 ///|

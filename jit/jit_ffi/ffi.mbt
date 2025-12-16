@@ -294,11 +294,6 @@ pub extern "c" fn c_jit_copy_code(
   size : Int,
 ) -> Int = "wasmoon_jit_copy_code"
 
-///|
-/// Free executable memory
-/// Returns 0 on success, -1 on failure
-pub extern "c" fn c_jit_free_exec(ptr : Int64) -> Int = "wasmoon_jit_free_exec"
-
 // ============ GC-managed ExecCode ============
 
 ///|

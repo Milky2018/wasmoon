@@ -42,8 +42,6 @@ pub fn c_jit_ctx_use_shared_table(Int64, Int64, Int) -> Unit
 
 pub fn c_jit_exec_code_ptr(ExecCode) -> Int64
 
-pub fn c_jit_free_exec(Int64) -> Int
-
 pub fn c_jit_free_memory(Int64) -> Unit
 
 pub fn c_jit_free_shared_indirect_table(Int64) -> Unit
