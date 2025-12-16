@@ -353,11 +353,13 @@ pub fn JITModule::init_shared_tables(
       None => continue
     }
     // Get function pointer
-    let func_ptr = self.get_func_ptr(func_idx)
-    if func_ptr == 0L {
-      continue
+    // func_idx = -1 represents ref.null (null reference sentinel)
+    let func_ptr = if func_idx == -1 {
+      -1L // Use -1L for null reference (matching IR translator convention)
+    } else {
+      self.get_func_ptr(func_idx)
     }
-    // Set the table entry
+    // Set the table entry (including null references)
     jit_table.set(elem_idx, func_ptr, type_hash)
   }
 }
