@@ -442,10 +442,23 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
 
 // Global v2 context (for WASI trampolines)
 static jit_context_t *g_jit_context = NULL;
+// Global reference to managed JITContext object (to prevent GC collection)
+static void *g_jit_context_obj = NULL;
 
-// Set global v2 context
-MOONBIT_FFI_EXPORT void wasmoon_jit_set_context(int64_t ctx_ptr) {
-    g_jit_context = (jit_context_t *)ctx_ptr;
+// Set global v2 context with managed object (handles reference counting)
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_context_managed(void *jit_context) {
+    // Decref old context object
+    if (g_jit_context_obj != NULL) {
+        moonbit_decref(g_jit_context_obj);
+    }
+    // Incref new context object
+    if (jit_context != NULL) {
+        moonbit_incref(jit_context);
+        g_jit_context = (jit_context_t *)(*(int64_t *)jit_context);
+    } else {
+        g_jit_context = NULL;
+    }
+    g_jit_context_obj = jit_context;
 }
 
 // Get global v2 context

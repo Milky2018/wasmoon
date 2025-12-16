@@ -2,8 +2,6 @@
 package "Milky2018/wasmoon/jit/jit_ffi"
 
 // Values
-pub fn c_jit_alloc_context(Int) -> Int64
-
 pub fn c_jit_alloc_context_managed(Int) -> JITContext
 
 pub fn c_jit_alloc_exec(Int) -> Int64
@@ -43,8 +41,6 @@ pub fn c_jit_ctx_set_table_pointers(Int64, FixedArray[Int64], Int) -> Unit
 pub fn c_jit_ctx_use_shared_table(Int64, Int64, Int) -> Unit
 
 pub fn c_jit_exec_code_ptr(ExecCode) -> Int64
-
-pub fn c_jit_free_context(Int64) -> Unit
 
 pub fn c_jit_free_exec(Int64) -> Int
 
@@ -112,7 +108,7 @@ pub fn c_jit_memory_fill(Int, Int, Int) -> Unit
 
 pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 
-pub fn c_jit_set_context(Int64) -> Unit
+pub fn c_jit_set_context_managed(JITContext) -> Unit
 
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
 

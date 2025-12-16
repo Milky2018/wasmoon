@@ -247,8 +247,9 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
 
 ///|
 /// Activate this context for WASI calls (v2)
+/// Uses reference counting to prevent GC from collecting this context
 fn JITContext::activate(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_set_context(self.ptr())
+  @jit_ffi.c_jit_set_context_managed(self.ctx)
 }
 
 // NOTE: No free() method needed - GC handles cleanup automatically!

@@ -12,16 +12,6 @@ pub extern "c" fn c_jit_get_trap_code() -> Int = "wasmoon_jit_get_trap_code"
 /// Clear trap code
 pub extern "c" fn c_jit_clear_trap() -> Unit = "wasmoon_jit_clear_trap"
 
-// ============ Memory v2 functions (for v2 ABI) ============
-
-///|
-/// Allocate a JIT context with function table
-pub extern "c" fn c_jit_alloc_context(func_count : Int) -> Int64 = "wasmoon_jit_alloc_context"
-
-///|
-/// Free a JIT context
-pub extern "c" fn c_jit_free_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_context"
-
 // ============ GC-managed JITContext ============
 
 ///|
@@ -171,8 +161,10 @@ pub extern "c" fn c_jit_ctx_set_table_pointers(
 ) -> Unit = "wasmoon_jit_ctx_set_table_pointers"
 
 ///|
-/// Set the global JIT context v2 (for WASI trampolines)
-pub extern "c" fn c_jit_set_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context"
+/// Set the global JIT context v2 with managed object (handles reference counting)
+/// This prevents GC from collecting the context while it's active
+#borrow(jit_context)
+pub extern "c" fn c_jit_set_context_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_set_context_managed"
 
 ///|
 /// C FFI for v2 ABI multi-value return calls
