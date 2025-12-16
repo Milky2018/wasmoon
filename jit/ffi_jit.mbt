@@ -232,7 +232,6 @@ struct JITTable {
   table_ptr : Int64 // Pointer to the shared C-side table
   size : Int
   max : Int?
-  mut is_owned : Bool // Track if we should free this table
 } derive(Show)
 
 ///|
@@ -245,7 +244,7 @@ pub fn JITTable::new(size : Int, max : Int?) -> JITTable? {
   if table_ptr == 0L {
     return None
   }
-  Some(JITTable::{ table_ptr, size, max, is_owned: true })
+  Some(JITTable::{ table_ptr, size, max })
 }
 
 ///|
@@ -277,15 +276,6 @@ pub fn JITTable::get_size(self : JITTable) -> Int {
 /// Get the table max size
 pub fn JITTable::get_max(self : JITTable) -> Int? {
   self.max
-}
-
-///|
-/// Free the shared table
-pub fn JITTable::free(self : JITTable) -> Unit {
-  if self.is_owned && self.table_ptr != 0L {
-    @jit_ffi.c_jit_free_shared_indirect_table(self.table_ptr)
-    self.is_owned = false
-  }
 }
 
 ///|
