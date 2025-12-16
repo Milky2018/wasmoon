@@ -142,7 +142,13 @@ pub fn fold_constants(func : Function) -> OptResult {
           match inst.result {
             Some(r) =>
               if r.ty is F32 {
-                constants.set(r.id, ConstValue::F32(Float::from_double(v)))
+                // F32 bits are packed in the lower 32 bits of the Double's bit representation
+                // Extract them directly to preserve NaN payloads
+                let f32_bits = v.reinterpret_as_int64().to_int()
+                constants.set(
+                  r.id,
+                  ConstValue::F32(Float::reinterpret_from_int(f32_bits)),
+                )
               } else {
                 constants.set(r.id, ConstValue::F64(v))
               }
@@ -180,7 +186,11 @@ fn ConstValue::to_opcode(self : ConstValue) -> Opcode {
   match self {
     I32(v) => Opcode::Iconst(v.to_int64())
     I64(v) => Opcode::Iconst(v)
-    F32(v) => Opcode::Fconst(v.to_double())
+    F32(v) => {
+      // Pack F32 bits into Double's bit representation to preserve NaN payloads
+      let f32_bits = v.reinterpret_as_int().to_int64()
+      Opcode::Fconst(f32_bits.reinterpret_as_double())
+    }
     F64(v) => Opcode::Fconst(v)
   }
 }

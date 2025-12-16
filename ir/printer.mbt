@@ -52,12 +52,25 @@ fn format_floatcc(cc : FloatCC) -> String {
 
 ///|
 /// Print an opcode with its operands
-fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
+/// result_ty is needed for Fconst to correctly decode F32 bit-packed constants
+fn format_opcode(
+  opcode : Opcode,
+  operands : Array[Value],
+  result_ty : Type?,
+) -> String {
   let ops = operands.map(format_value).join(", ")
   match opcode {
     // Constants
     Iconst(n) => "iconst \{n}"
-    Fconst(n) => "fconst \{n}"
+    Fconst(n) =>
+      // For F32, the bits are packed in the lower 32 bits of the Double
+      if result_ty is Some(F32) {
+        let f32_bits = n.reinterpret_as_int64().to_int()
+        let f32_val = Float::reinterpret_from_int(f32_bits)
+        "fconst \{f32_val}"
+      } else {
+        "fconst \{n}"
+      }
 
     // Integer arithmetic
     Iadd => "iadd \{ops}"
@@ -168,7 +181,8 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
 ///|
 /// Print an instruction
 fn format_inst(inst : Inst) -> String {
-  let opcode_str = format_opcode(inst.opcode, inst.operands)
+  let result_ty = inst.result.map(v => v.ty)
+  let opcode_str = format_opcode(inst.opcode, inst.operands, result_ty)
   if inst.result is Some(r) {
     // Check for extra results (multi-value returns)
     if inst.extra_results.length() > 0 {

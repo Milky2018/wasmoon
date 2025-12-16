@@ -121,8 +121,12 @@ pub fn IRBuilder::fconst(self : IRBuilder, ty : Type, value : Double) -> Value {
 
 ///|
 /// Emit an f32 constant
+/// Note: We pack the f32 bits into the Double's bit representation to preserve
+/// NaN payloads. Using value.to_double() would go through the FPU and convert
+/// signaling NaNs to quiet NaNs.
 pub fn IRBuilder::fconst_f32(self : IRBuilder, value : Float) -> Value {
-  self.fconst(Type::F32, value.to_double())
+  let f32_bits = value.reinterpret_as_int().to_int64()
+  self.fconst(Type::F32, f32_bits.reinterpret_as_double())
 }
 
 ///|
