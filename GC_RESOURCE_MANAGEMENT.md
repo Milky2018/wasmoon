@@ -161,3 +161,118 @@ After each phase:
 - ✅ No double-free issues
 - ✅ No memory leaks
 - ✅ Clean, simple, idiomatic MoonBit code
+
+---
+
+## FFI Reference Counting Knowledge
+
+### Core Concepts
+
+#### 1. `moonbit_make_external_object(finalizer, payload_size)`
+
+创建 GC 管理的外部对象：
+- `finalizer`: 回调函数，对象被 GC 回收时调用
+- `payload_size`: payload 大小（通常是 `sizeof(int64_t)` 用于存储 C 指针）
+- 返回: 指向 payload 的指针，同时也是 MoonBit 的外部对象
+
+```c
+static void finalize_foo(void *self) {
+    int64_t *ptr = (int64_t *)self;
+    if (*ptr != 0) {
+        free_foo(*ptr);
+        *ptr = 0;
+    }
+}
+
+void *create_foo_managed() {
+    int64_t raw_ptr = alloc_foo();
+    int64_t *payload = moonbit_make_external_object(finalize_foo, sizeof(int64_t));
+    *payload = raw_ptr;
+    return payload;
+}
+```
+
+#### 2. 参数传递语义
+
+**默认（owned）**：
+- C 函数获得参数所有权
+- **必须**在函数结束前调用 `moonbit_decref` 释放
+
+**`#borrow`**：
+- C 函数只是借用参数
+- **不需要**调用 `moonbit_decref`
+- 如果要存储到数据结构，**必须**调用 `moonbit_incref`
+
+```moonbit
+// Borrowed - C 函数只读取，不存储
+#borrow(data)
+pub extern "c" fn read_data(data : Bytes) -> Int = "read_data"
+
+// Owned (默认) - C 函数需要负责 decref
+pub extern "c" fn consume_data(data : Bytes) -> Unit = "consume_data"
+```
+
+#### 3. 外部引用问题
+
+当 C 代码持有 MoonBit 对象的引用（如全局变量），GC 不知道这个引用存在，可能过早回收对象。
+
+**解决方案**：使用 `moonbit_incref` / `moonbit_decref`
+
+```c
+static void *g_current_object = NULL;
+
+void set_current_object(void *obj) {
+    // 释放旧引用
+    if (g_current_object != NULL) {
+        moonbit_decref(g_current_object);
+    }
+    // 获取新引用
+    if (obj != NULL) {
+        moonbit_incref(obj);
+    }
+    g_current_object = obj;
+}
+```
+
+对应的 MoonBit 声明使用 `#borrow`：
+```moonbit
+#borrow(obj)
+pub extern "c" fn set_current_object(obj : MyObject) -> Unit = "set_current_object"
+```
+
+#### 4. 返回 Option 类型的限制
+
+C 函数**不能直接返回** `T?`（Option 类型）给外部对象类型，因为 MoonBit 的 Option 内存布局不公开。
+
+**错误做法**：
+```moonbit
+// ❌ 不工作 - C 返回的指针不会被正确解析为 Option
+pub extern "c" fn create_foo() -> Foo? = "create_foo"
+```
+
+**正确做法**：返回非 Option 类型，在 MoonBit 侧检查有效性
+```moonbit
+// C 返回外部对象（可能是 NULL）
+pub extern "c" fn create_foo_raw() -> Foo = "create_foo"
+pub extern "c" fn foo_get_ptr(foo : Foo) -> Int64 = "foo_get_ptr"
+
+// MoonBit 侧包装
+fn create_foo() -> Foo? {
+    let foo = create_foo_raw()
+    if foo_get_ptr(foo) != 0L {
+        Some(foo)
+    } else {
+        None
+    }
+}
+```
+
+### 实践总结
+
+| 场景 | 操作 |
+|------|------|
+| 创建 GC 管理对象 | `moonbit_make_external_object` |
+| C 函数只读参数 | 使用 `#borrow`，无需 decref |
+| C 函数存储参数到全局/结构 | 使用 `#borrow` + `incref` |
+| 替换全局引用 | 先 `decref` 旧的，再 `incref` 新的 |
+| 返回可能失败的外部对象 | 返回非 Option，MoonBit 侧检查 |
