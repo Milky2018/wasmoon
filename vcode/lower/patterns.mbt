@@ -169,7 +169,15 @@ fn match_pattern_impl(
     ConstFloat(expected) =>
       // Check if this is an fconst with the expected value
       if inst.opcode is @ir.Opcode::Fconst(val) {
-        val == expected
+        // For F32, bits are packed in the lower 32 bits of the Double
+        // For F64, the Double is the actual value
+        if inst.result is Some(r) && r.ty is @ir.Type::F32 {
+          let stored_bits = val.reinterpret_as_int64().to_int()
+          let expected_bits = Float::from_double(expected).reinterpret_as_int()
+          stored_bits == expected_bits
+        } else {
+          val == expected
+        }
       } else {
         false
       }
@@ -225,7 +233,16 @@ fn match_pattern_impl(
             match def_inst {
               Some(def) =>
                 if def.opcode is @ir.Opcode::Fconst(val) {
-                  if val != expected {
+                  // For F32, bits are packed in the lower 32 bits of the Double
+                  let matches = if def.result is Some(r) &&
+                    r.ty is @ir.Type::F32 {
+                    let stored_bits = val.reinterpret_as_int64().to_int()
+                    let expected_bits = Float::from_double(expected).reinterpret_as_int()
+                    stored_bits == expected_bits
+                  } else {
+                    val == expected
+                  }
+                  if !matches {
                     return false
                   }
                   result.add_float_const(val)

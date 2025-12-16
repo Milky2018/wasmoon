@@ -394,9 +394,9 @@ fn lower_fconst(
     // Determine if this is an F32 or F64 constant based on the result type
     let opcode = match result.ty {
       @ir.Type::F32 => {
-        // Convert Double to Float, then get its 32-bit representation
-        let float_val = Float::from_double(val)
-        let bits = float_val.reinterpret_as_int()
+        // F32 bits are packed in the lower 32 bits of the Double's bit representation
+        // (see IRBuilder::fconst_f32). Extract them directly to preserve NaN payloads.
+        let bits = val.reinterpret_as_int64().to_int()
         @instr.LoadConstF32(bits)
       }
       _ => {
