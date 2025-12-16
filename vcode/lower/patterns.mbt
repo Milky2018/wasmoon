@@ -756,8 +756,6 @@ fn lower_inst_default(
     // Misc
     @ir.Opcode::Copy => lower_copy(ctx, inst, block)
     @ir.Opcode::Select => lower_select(ctx, inst, block)
-
-    // Unimplemented opcodes - emit nop for now
-    _ => ()
+    opcode => abort("unimplemented vcode lowering for opcode \{opcode}")
   }
 }
