@@ -433,6 +433,26 @@ fn Translator::translate_instruction(
     F32Div => self.translate_binary_f32(fn(b, a, v) { b.fdiv(a, v) })
     F32Min => self.translate_binary_f32(fn(b, a, v) { b.fmin(a, v) })
     F32Max => self.translate_binary_f32(fn(b, a, v) { b.fmax(a, v) })
+    F32Copysign => {
+      // copysign(x, y) = magnitude of x with sign of y
+      let y = self.pop() // sign source
+      let x = self.pop() // magnitude source
+      // Use bitwise operations to implement copysign
+      // result_bits = (x_bits & 0x7FFFFFFF) | (y_bits & 0x80000000)
+      let x_bits = self.builder.bitcast(Type::I32, x)
+      let y_bits = self.builder.bitcast(Type::I32, y)
+      let magnitude = self.builder.band(
+        x_bits,
+        self.builder.iconst_i32(0x7FFFFFFF),
+      )
+      let sign = self.builder.band(
+        y_bits,
+        self.builder.iconst_i32(0x80000000U.reinterpret_as_int()),
+      )
+      let result_bits = self.builder.bor(magnitude, sign)
+      let result = self.builder.bitcast(Type::F32, result_bits)
+      self.push(result)
+    }
 
     // f32 unary
     F32Neg => self.translate_unary_f32(fn(b, a) { b.fneg(a) })
@@ -458,6 +478,26 @@ fn Translator::translate_instruction(
     F64Div => self.translate_binary_f64(fn(b, a, v) { b.fdiv(a, v) })
     F64Min => self.translate_binary_f64(fn(b, a, v) { b.fmin(a, v) })
     F64Max => self.translate_binary_f64(fn(b, a, v) { b.fmax(a, v) })
+    F64Copysign => {
+      // copysign(x, y) = magnitude of x with sign of y
+      let y = self.pop() // sign source
+      let x = self.pop() // magnitude source
+      // Use bitwise operations to implement copysign
+      // result_bits = (x_bits & 0x7FFFFFFFFFFFFFFF) | (y_bits & 0x8000000000000000)
+      let x_bits = self.builder.bitcast(Type::I64, x)
+      let y_bits = self.builder.bitcast(Type::I64, y)
+      let magnitude = self.builder.band(
+        x_bits,
+        self.builder.iconst_i64(0x7FFFFFFFFFFFFFFFL),
+      )
+      let sign = self.builder.band(
+        y_bits,
+        self.builder.iconst_i64(0x8000000000000000UL.reinterpret_as_int64()),
+      )
+      let result_bits = self.builder.bor(magnitude, sign)
+      let result = self.builder.bitcast(Type::F64, result_bits)
+      self.push(result)
+    }
 
     // f64 unary
     F64Neg => self.translate_unary_f64(fn(b, a) { b.fneg(a) })
