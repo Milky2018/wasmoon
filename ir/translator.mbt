@@ -826,9 +826,7 @@ fn Translator::translate_instruction(
       let elem_idx = self.pop()
       self.builder.table_set(table_idx, elem_idx, value)
     }
-
-    // Not yet implemented
-    _ => () // Skip unimplemented instructions
+    inst => abort("unimplemented ir instruction \{inst}")
   }
 }
 

@@ -86,10 +86,7 @@ fn LoweringContext::get_block_id(
   self : LoweringContext,
   ir_block_id : Int,
 ) -> Int {
-  match self.block_map.get(ir_block_id) {
-    Some(id) => id
-    None => panic()
-  }
+  self.block_map.get(ir_block_id).unwrap()
 }
 
 ///|
