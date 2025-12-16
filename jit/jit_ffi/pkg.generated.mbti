@@ -4,17 +4,15 @@ package "Milky2018/wasmoon/jit/jit_ffi"
 // Values
 pub fn c_jit_alloc_context(Int) -> Int64
 
-pub fn c_jit_alloc_context_v2(Int) -> Int64
-
 pub fn c_jit_alloc_exec(Int) -> Int64
 
 pub fn c_jit_alloc_memory(Int64) -> Int64
 
 pub fn c_jit_alloc_shared_indirect_table(Int) -> Int64
 
-pub fn c_jit_call_multi_return(Int64, Int64, FixedArray[Int64], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
+pub fn c_jit_call(Int64, Int64, FixedArray[Int64], FixedArray[Int], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
 
-pub fn c_jit_call_v2(Int64, Int64, FixedArray[Int64], FixedArray[Int], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
+pub fn c_jit_call_multi_return(Int64, Int64, FixedArray[Int64], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
 
 pub fn c_jit_clear_trap() -> Unit
 
@@ -28,29 +26,17 @@ pub fn c_jit_ctx_get_memory(Int64) -> Int64
 
 pub fn c_jit_ctx_set_func(Int64, Int, Int64) -> Unit
 
+pub fn c_jit_ctx_set_globals(Int64, Int64) -> Unit
+
 pub fn c_jit_ctx_set_indirect(Int64, Int, Int, Int) -> Unit
 
 pub fn c_jit_ctx_set_memory(Int64, Int64, Int64) -> Unit
 
-pub fn c_jit_ctx_v2_alloc_indirect_table(Int64, Int) -> Int
+pub fn c_jit_ctx_set_table_pointers(Int64, FixedArray[Int64], Int) -> Unit
 
-pub fn c_jit_ctx_v2_get_func_table(Int64) -> Int64
-
-pub fn c_jit_ctx_v2_set_func(Int64, Int, Int64) -> Unit
-
-pub fn c_jit_ctx_v2_set_globals(Int64, Int64) -> Unit
-
-pub fn c_jit_ctx_v2_set_indirect(Int64, Int, Int, Int) -> Unit
-
-pub fn c_jit_ctx_v2_set_memory(Int64, Int64, Int64) -> Unit
-
-pub fn c_jit_ctx_v2_set_table_pointers(Int64, FixedArray[Int64], Int) -> Unit
-
-pub fn c_jit_ctx_v2_use_shared_table(Int64, Int64, Int) -> Unit
+pub fn c_jit_ctx_use_shared_table(Int64, Int64, Int) -> Unit
 
 pub fn c_jit_free_context(Int64) -> Unit
-
-pub fn c_jit_free_context_v2(Int64) -> Unit
 
 pub fn c_jit_free_exec(Int64) -> Int
 
@@ -64,7 +50,7 @@ pub fn c_jit_get_args_sizes_get_ptr() -> Int64
 
 pub fn c_jit_get_clock_time_get_ptr() -> Int64
 
-pub fn c_jit_get_current_memory_base_v2() -> Int64
+pub fn c_jit_get_current_memory_base() -> Int64
 
 pub fn c_jit_get_environ_get_ptr() -> Int64
 
@@ -82,23 +68,15 @@ pub fn c_jit_get_fd_write_ptr() -> Int64
 
 pub fn c_jit_get_memory_base_ptr() -> Int64
 
-pub fn c_jit_get_memory_base_v2_ptr() -> Int64
+pub fn c_jit_get_memory_copy_ptr() -> Int64
 
-pub fn c_jit_get_memory_copy_v2_ptr() -> Int64
-
-pub fn c_jit_get_memory_fill_v2_ptr() -> Int64
+pub fn c_jit_get_memory_fill_ptr() -> Int64
 
 pub fn c_jit_get_memory_grow_ptr() -> Int64
 
-pub fn c_jit_get_memory_grow_v2_ptr() -> Int64
-
 pub fn c_jit_get_memory_size_bytes_ptr() -> Int64
 
-pub fn c_jit_get_memory_size_bytes_v2_ptr() -> Int64
-
 pub fn c_jit_get_memory_size_ptr() -> Int64
-
-pub fn c_jit_get_memory_size_v2_ptr() -> Int64
 
 pub fn c_jit_get_proc_exit_ptr() -> Int64
 
@@ -120,15 +98,13 @@ pub fn c_jit_get_spectest_print_ptr() -> Int64
 
 pub fn c_jit_get_trap_code() -> Int
 
-pub fn c_jit_memory_copy_v2(Int, Int, Int) -> Unit
+pub fn c_jit_memory_copy(Int, Int, Int) -> Unit
 
-pub fn c_jit_memory_fill_v2(Int, Int, Int) -> Unit
+pub fn c_jit_memory_fill(Int, Int, Int) -> Unit
 
 pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_set_context(Int64) -> Unit
-
-pub fn c_jit_set_context_v2(Int64) -> Unit
 
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
 

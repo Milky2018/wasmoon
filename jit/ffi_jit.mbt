@@ -23,64 +23,38 @@ pub fn check_trap() -> Unit raise JITTrap {
   }
 }
 
-// ============ Memory Grow Support ============
+// ============ Memory v2 functions (for v2 ABI) ============
 
 ///|
-/// Get memory_grow function pointer for JIT
+/// Get memory_grow v2 function pointer for JIT
 pub fn get_memory_grow_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_grow_ptr()
 }
 
 ///|
-/// Get get_memory_base function pointer for JIT
+/// Get get_memory_base v2 function pointer for JIT
 pub fn get_memory_base_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_base_ptr()
 }
 
 ///|
-/// Get get_memory_size_bytes function pointer for JIT
+/// Get get_memory_size_bytes v2 function pointer for JIT
 pub fn get_memory_size_bytes_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_size_bytes_ptr()
 }
 
 ///|
-/// Get memory_size function pointer for JIT (returns pages)
+/// Get memory_size v2 function pointer for JIT (returns pages)
 pub fn get_memory_size_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_size_ptr()
-}
-
-// ============ Memory v2 functions (for v2 ABI) ============
-
-///|
-/// Get memory_grow v2 function pointer for JIT
-pub fn get_memory_grow_v2_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_grow_v2_ptr()
-}
-
-///|
-/// Get get_memory_base v2 function pointer for JIT
-pub fn get_memory_base_v2_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_base_v2_ptr()
-}
-
-///|
-/// Get get_memory_size_bytes v2 function pointer for JIT
-pub fn get_memory_size_bytes_v2_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_size_bytes_v2_ptr()
-}
-
-///|
-/// Get memory_size v2 function pointer for JIT (returns pages)
-pub fn get_memory_size_v2_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_size_v2_ptr()
 }
 
 ///|
 /// Get current memory base from v2 context (for proper cleanup after memory.grow)
 /// Returns the actual current memory base address, which may differ from the
 /// originally allocated address if memory.grow caused a realloc.
-pub fn get_current_memory_base_v2() -> Int64 {
-  @jit_ffi.c_jit_get_current_memory_base_v2()
+pub fn get_current_memory_base() -> Int64 {
+  @jit_ffi.c_jit_get_current_memory_base()
 }
 
 // ============ JIT Argument Trait ============
@@ -125,7 +99,7 @@ priv struct JITContext {
 ///|
 /// Create a new JIT context (v2)
 fn JITContext::new(total_funcs : Int) -> JITContext? {
-  let ctx_ptr = @jit_ffi.c_jit_alloc_context_v2(total_funcs)
+  let ctx_ptr = @jit_ffi.c_jit_alloc_context(total_funcs)
   if ctx_ptr == 0L {
     return None
   }
@@ -135,13 +109,13 @@ fn JITContext::new(total_funcs : Int) -> JITContext? {
 ///|
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_set_func(self.ctx_ptr, idx, func_ptr)
+  @jit_ffi.c_jit_ctx_set_func(self.ctx_ptr, idx, func_ptr)
 }
 
 ///|
 /// Allocate indirect table for call_indirect
 fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
-  @jit_ffi.c_jit_ctx_v2_alloc_indirect_table(self.ctx_ptr, count) != 0
+  @jit_ffi.c_jit_ctx_alloc_indirect_table(self.ctx_ptr, count) != 0
 }
 
 ///|
@@ -152,12 +126,7 @@ fn JITContext::set_indirect(
   func_idx : Int,
   type_idx : Int,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_set_indirect(
-    self.ctx_ptr,
-    table_idx,
-    func_idx,
-    type_idx,
-  )
+  @jit_ffi.c_jit_ctx_set_indirect(self.ctx_ptr, table_idx, func_idx, type_idx)
 }
 
 ///|
@@ -167,13 +136,13 @@ fn JITContext::set_memory(
   mem_ptr : Int64,
   mem_size : Int64,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_set_memory(self.ctx_ptr, mem_ptr, mem_size)
+  @jit_ffi.c_jit_ctx_set_memory(self.ctx_ptr, mem_ptr, mem_size)
 }
 
 ///|
 /// Set globals array in the context
 fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_set_globals(self.ctx_ptr, globals_ptr)
+  @jit_ffi.c_jit_ctx_set_globals(self.ctx_ptr, globals_ptr)
 }
 
 ///|
@@ -195,7 +164,7 @@ fn JITContext::set_table_pointers(
       None => table_ptrs[i] = 0L // Null table pointer
     }
   }
-  @jit_ffi.c_jit_ctx_v2_set_table_pointers(
+  @jit_ffi.c_jit_ctx_set_table_pointers(
     self.ctx_ptr,
     table_ptrs,
     jit_tables.length(),
@@ -231,7 +200,7 @@ pub fn JITMemory::ptr(self : JITMemory) -> Int64 {
 /// which may have changed due to memory.grow calling realloc.
 pub fn JITMemory::free(self : JITMemory) -> Unit {
   // Get the current actual memory address (may have changed due to memory.grow)
-  let current_ptr = get_current_memory_base_v2()
+  let current_ptr = get_current_memory_base()
   if current_ptr != 0L {
     @jit_ffi.c_jit_free_memory(current_ptr)
   }
@@ -270,13 +239,13 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
 ///|
 /// Activate this context for WASI calls (v2)
 fn JITContext::activate(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_set_context_v2(self.ctx_ptr)
+  @jit_ffi.c_jit_set_context(self.ctx_ptr)
 }
 
 ///|
 /// Free the context (v2)
 fn JITContext::free(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_free_context_v2(self.ctx_ptr)
+  @jit_ffi.c_jit_free_context(self.ctx_ptr)
 }
 
 // ============ Shared JIT Indirect Table ============
@@ -561,7 +530,7 @@ fn JITContext::call_multi_return(
   let results_fixed = FixedArray::make(num_results.max(1), 0L)
   // Call FFI with v2 ABI
   // X19 = ctx_ptr (context pointer), X0-X7 = int params, D0-D7 = float params
-  let trap_code = @jit_ffi.c_jit_call_v2(
+  let trap_code = @jit_ffi.c_jit_call(
     self.ctx_ptr, // Context pointer for v2 ABI
     func_ptr,
     args_fixed,

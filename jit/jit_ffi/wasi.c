@@ -377,15 +377,15 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_ptr(void) {
 // - X20 = context pointer (callee-saved, set before call)
 // - X0-X7 = actual WASM arguments (AAPCS64 compatible)
 // - No dummy func_table/mem_base parameters
-// - Uses g_jit_context_v2 for memory access
+// - Uses g_jit_context for memory access
 
 // fd_write v2: (fd, iovs, iovs_len, nwritten) -> errno
-static int64_t wasi_fd_write_v2(int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nwritten_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+static int64_t wasi_fd_write(int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nwritten_ptr) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
+    uint8_t *mem = g_jit_context->memory_base;
     int32_t total_written = 0;
 
     // Only handle stdout (1) and stderr (2)
@@ -413,18 +413,18 @@ static int64_t wasi_fd_write_v2(int64_t fd, int64_t iovs, int64_t iovs_len, int6
 }
 
 // proc_exit v2: (exit_code) -> noreturn
-static int64_t wasi_proc_exit_v2(int64_t exit_code) {
+static int64_t wasi_proc_exit(int64_t exit_code) {
     exit((int)exit_code);
     return 0; // Never reached
 }
 
 // fd_read v2: (fd, iovs, iovs_len, nread_ptr) -> errno
-static int64_t wasi_fd_read_v2(int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nread_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+static int64_t wasi_fd_read(int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nread_ptr) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
+    uint8_t *mem = g_jit_context->memory_base;
     int32_t total_read = 0;
 
     // Only handle stdin (0)
@@ -454,14 +454,14 @@ static int64_t wasi_fd_read_v2(int64_t fd, int64_t iovs, int64_t iovs_len, int64
 }
 
 // args_sizes_get v2: (argc_ptr, argv_buf_size_ptr) -> errno
-static int64_t wasi_args_sizes_get_v2(int64_t argc_ptr, int64_t argv_buf_size_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+static int64_t wasi_args_sizes_get(int64_t argc_ptr, int64_t argv_buf_size_ptr) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int argc = g_jit_context_v2->argc;
-    char **args = g_jit_context_v2->args;
+    uint8_t *mem = g_jit_context->memory_base;
+    int argc = g_jit_context->argc;
+    char **args = g_jit_context->args;
 
     size_t buf_size = 0;
     for (int i = 0; i < argc; i++) {
@@ -475,14 +475,14 @@ static int64_t wasi_args_sizes_get_v2(int64_t argc_ptr, int64_t argv_buf_size_pt
 }
 
 // args_get v2: (argv_ptr, argv_buf_ptr) -> errno
-static int64_t wasi_args_get_v2(int64_t argv_ptr, int64_t argv_buf_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+static int64_t wasi_args_get(int64_t argv_ptr, int64_t argv_buf_ptr) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int argc = g_jit_context_v2->argc;
-    char **args = g_jit_context_v2->args;
+    uint8_t *mem = g_jit_context->memory_base;
+    int argc = g_jit_context->argc;
+    char **args = g_jit_context->args;
 
     int32_t buf_offset = (int32_t)argv_buf_ptr;
     for (int i = 0; i < argc; i++) {
@@ -496,14 +496,14 @@ static int64_t wasi_args_get_v2(int64_t argv_ptr, int64_t argv_buf_ptr) {
 }
 
 // environ_sizes_get v2: (environc_ptr, environ_buf_size_ptr) -> errno
-static int64_t wasi_environ_sizes_get_v2(int64_t environc_ptr, int64_t environ_buf_size_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+static int64_t wasi_environ_sizes_get(int64_t environc_ptr, int64_t environ_buf_size_ptr) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int envc = g_jit_context_v2->envc;
-    char **envp = g_jit_context_v2->envp;
+    uint8_t *mem = g_jit_context->memory_base;
+    int envc = g_jit_context->envc;
+    char **envp = g_jit_context->envp;
 
     size_t buf_size = 0;
     for (int i = 0; i < envc; i++) {
@@ -517,14 +517,14 @@ static int64_t wasi_environ_sizes_get_v2(int64_t environc_ptr, int64_t environ_b
 }
 
 // environ_get v2: (environ_ptr, environ_buf_ptr) -> errno
-static int64_t wasi_environ_get_v2(int64_t environ_ptr, int64_t environ_buf_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+static int64_t wasi_environ_get(int64_t environ_ptr, int64_t environ_buf_ptr) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int envc = g_jit_context_v2->envc;
-    char **envp = g_jit_context_v2->envp;
+    uint8_t *mem = g_jit_context->memory_base;
+    int envc = g_jit_context->envc;
+    char **envp = g_jit_context->envp;
 
     int32_t buf_offset = (int32_t)environ_buf_ptr;
     for (int i = 0; i < envc; i++) {
@@ -538,14 +538,14 @@ static int64_t wasi_environ_get_v2(int64_t environ_ptr, int64_t environ_buf_ptr)
 }
 
 // clock_time_get v2: (clock_id, precision, time_ptr) -> errno
-static int64_t wasi_clock_time_get_v2(int64_t clock_id, int64_t precision, int64_t time_ptr) {
+static int64_t wasi_clock_time_get(int64_t clock_id, int64_t precision, int64_t time_ptr) {
     (void)precision;
 
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
+    uint8_t *mem = g_jit_context->memory_base;
     int64_t time_ns = 0;
 
     if (clock_id == 0 || clock_id == 1) {
@@ -568,12 +568,12 @@ static int64_t wasi_clock_time_get_v2(int64_t clock_id, int64_t precision, int64
 }
 
 // random_get v2: (buf_ptr, buf_len) -> errno
-static int64_t wasi_random_get_v2(int64_t buf_ptr, int64_t buf_len) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+static int64_t wasi_random_get(int64_t buf_ptr, int64_t buf_len) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
+    uint8_t *mem = g_jit_context->memory_base;
 
     for (int64_t i = 0; i < buf_len; i++) {
         mem[buf_ptr + i] = (uint8_t)(rand() & 0xFF);
@@ -583,7 +583,7 @@ static int64_t wasi_random_get_v2(int64_t buf_ptr, int64_t buf_len) {
 }
 
 // fd_close v2: (fd) -> errno
-static int64_t wasi_fd_close_v2(int64_t fd) {
+static int64_t wasi_fd_close(int64_t fd) {
     if (fd >= 0 && fd <= 2) {
         return 0; // Success
     }
@@ -591,12 +591,12 @@ static int64_t wasi_fd_close_v2(int64_t fd) {
 }
 
 // fd_fdstat_get v2: (fd, fdstat_ptr) -> errno
-static int64_t wasi_fd_fdstat_get_v2(int64_t fd, int64_t fdstat_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
+static int64_t wasi_fd_fdstat_get(int64_t fd, int64_t fdstat_ptr) {
+    if (!g_jit_context || !g_jit_context->memory_base) {
         return 8; // ERRNO_BADF
     }
 
-    uint8_t *mem = g_jit_context_v2->memory_base;
+    uint8_t *mem = g_jit_context->memory_base;
 
     if (fd >= 0 && fd <= 2) {
         mem[fdstat_ptr] = 2; // FILETYPE_CHARACTER_DEVICE
@@ -609,57 +609,57 @@ static int64_t wasi_fd_fdstat_get_v2(int64_t fd, int64_t fdstat_ptr) {
 }
 
 // fd_prestat_get v2: (fd, prestat_ptr) -> errno
-static int64_t wasi_fd_prestat_get_v2(int64_t fd, int64_t prestat_ptr) {
+static int64_t wasi_fd_prestat_get(int64_t fd, int64_t prestat_ptr) {
     (void)fd;
     (void)prestat_ptr;
     return 8; // ERRNO_BADF - no preopened directories
 }
 
 // Get v2 trampoline pointers
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_v2_ptr(void) {
-    return (int64_t)wasi_fd_write_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) {
+    return (int64_t)wasi_fd_write;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_v2_ptr(void) {
-    return (int64_t)wasi_proc_exit_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) {
+    return (int64_t)wasi_proc_exit;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_v2_ptr(void) {
-    return (int64_t)wasi_fd_read_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_ptr(void) {
+    return (int64_t)wasi_fd_read;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_v2_ptr(void) {
-    return (int64_t)wasi_args_sizes_get_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_ptr(void) {
+    return (int64_t)wasi_args_sizes_get;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_v2_ptr(void) {
-    return (int64_t)wasi_args_get_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_ptr(void) {
+    return (int64_t)wasi_args_get;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_v2_ptr(void) {
-    return (int64_t)wasi_environ_sizes_get_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_ptr(void) {
+    return (int64_t)wasi_environ_sizes_get;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_v2_ptr(void) {
-    return (int64_t)wasi_environ_get_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_ptr(void) {
+    return (int64_t)wasi_environ_get;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_v2_ptr(void) {
-    return (int64_t)wasi_clock_time_get_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_ptr(void) {
+    return (int64_t)wasi_clock_time_get;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_v2_ptr(void) {
-    return (int64_t)wasi_random_get_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_ptr(void) {
+    return (int64_t)wasi_random_get;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_v2_ptr(void) {
-    return (int64_t)wasi_fd_close_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_ptr(void) {
+    return (int64_t)wasi_fd_close;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_v2_ptr(void) {
-    return (int64_t)wasi_fd_fdstat_get_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_ptr(void) {
+    return (int64_t)wasi_fd_fdstat_get;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_v2_ptr(void) {
-    return (int64_t)wasi_fd_prestat_get_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_ptr(void) {
+    return (int64_t)wasi_fd_prestat_get;
 }

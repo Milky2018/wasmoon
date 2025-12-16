@@ -1,20 +1,5 @@
 // Copyright 2025
 
-// JIT execution context - holds function table and memory pointer
-typedef struct {
-    void **func_table;      // Array of function pointers (indexed by func_idx)
-    int func_count;         // Number of entries in func_table
-    void **indirect_table;  // Array for call_indirect (indexed by table element index)
-    int indirect_count;     // Number of entries in indirect_table
-    uint8_t *memory_base;   // WebAssembly linear memory base
-    size_t memory_size;     // Memory size in bytes
-    // WASI args/env storage
-    char **args;            // Command line arguments
-    int argc;               // Number of arguments
-    char **envp;            // Environment variables (NAME=VALUE format)
-    int envc;               // Number of environment variables
-} jit_context_t;
-
 // ============ JIT Context v2 (New ABI) ============
 // New ABI uses X20 as context pointer (callee-saved)
 // User params in X0-X7 (AAPCS64 compatible)
@@ -44,8 +29,6 @@ typedef struct {
     int argc;                 // WASI: number of arguments
     char **envp;              // WASI: environment variables
     int envc;                 // WASI: number of env vars
-} jit_context_v2_t;
-
+} jit_context_t;
 
 static jit_context_t *g_jit_context;
-static jit_context_v2_t *g_jit_context_v2;
