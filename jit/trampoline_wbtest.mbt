@@ -57,12 +57,12 @@ test "has_import_trampoline: unknown module" {
 }
 
 ///|
-test "JITContext: allocation and free" {
+test "JITContext: allocation (GC-managed)" {
   let ctx = JITContext::new(10)
   assert_true(ctx is Some(_))
   if ctx is Some(c) {
-    assert_true(c.ctx_ptr != 0L)
-    c.free()
+    assert_true(c.ptr() != 0L)
+    // No need to call free() - GC handles cleanup
   }
 }
 

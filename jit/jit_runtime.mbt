@@ -84,12 +84,9 @@ pub fn JITModule::load(
             // Set function pointer in context's function table
             ctx.set_func(entry.func_idx, ec.ptr())
           }
-          None => {
-            // Failed to allocate, clean up
-            // NOTE: JITFunctions are GC-managed, no need to free them
-            ctx.free()
+          None =>
+            // Failed to allocate - GC will clean up the context
             return None
-          }
         }
       }
 
@@ -118,7 +115,6 @@ pub fn JITModule::from_single_function(
       // Allocate memory
       let mem_ptr = alloc_memory(mem_size)
       if mem_ptr == 0L {
-        ctx.free()
         return None
       }
       ctx.set_memory(mem_ptr, mem_size)
@@ -127,7 +123,6 @@ pub fn JITModule::from_single_function(
       match exec_code {
         None => {
           free_memory(mem_ptr)
-          ctx.free()
           return None
         }
         Some(ec) => {
@@ -250,10 +245,9 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
 ///|
 /// Free JIT context (executable functions are GC-managed)
 pub fn JITModule::free(self : JITModule) -> Unit {
-  // NOTE: JITFunctions/ExecCodes are GC-managed, no need to free them
-  if self.context is Some(ctx) {
-    ctx.free()
-  }
+  // NOTE: All resources (JITFunctions, ExecCodes, JITContext) are now GC-managed
+  // This method is kept for API compatibility but does nothing
+  ignore(self)
 }
 
 ///|

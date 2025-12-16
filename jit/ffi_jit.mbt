@@ -89,33 +89,42 @@ pub impl JITArg for Double with to_jit_arg(self) {
 // ============ JIT Context Wrapper ============
 
 ///|
-/// JIT execution context (v2 ABI)
+/// JIT execution context (v2 ABI) - GC managed
 /// Uses fixed field offsets for JIT prologue:
 /// +0: func_table, +8: indirect_table, +16: memory_base, +24: memory_size
+/// Memory is automatically freed when the object is garbage collected
 priv struct JITContext {
-  ctx_ptr : Int64
+  ctx : @jit_ffi.JITContext
 }
 
 ///|
-/// Create a new JIT context (v2)
+/// Create a new JIT context (v2) - GC managed
 fn JITContext::new(total_funcs : Int) -> JITContext? {
-  let ctx_ptr = @jit_ffi.c_jit_alloc_context(total_funcs)
-  if ctx_ptr == 0L {
-    return None
+  let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
+  // Check if allocation succeeded by verifying the pointer is valid
+  if @jit_ffi.c_jit_context_ptr(ctx) != 0L {
+    Some(JITContext::{ ctx, })
+  } else {
+    None
   }
-  Some(JITContext::{ ctx_ptr, })
+}
+
+///|
+/// Get the raw context pointer (for FFI calls)
+fn JITContext::ptr(self : JITContext) -> Int64 {
+  @jit_ffi.c_jit_context_ptr(self.ctx)
 }
 
 ///|
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_set_func(self.ctx_ptr, idx, func_ptr)
+  @jit_ffi.c_jit_ctx_set_func(self.ptr(), idx, func_ptr)
 }
 
 ///|
 /// Allocate indirect table for call_indirect
 fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
-  @jit_ffi.c_jit_ctx_alloc_indirect_table(self.ctx_ptr, count) != 0
+  @jit_ffi.c_jit_ctx_alloc_indirect_table(self.ptr(), count) != 0
 }
 
 ///|
@@ -126,7 +135,7 @@ fn JITContext::set_indirect(
   func_idx : Int,
   type_idx : Int,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_set_indirect(self.ctx_ptr, table_idx, func_idx, type_idx)
+  @jit_ffi.c_jit_ctx_set_indirect(self.ptr(), table_idx, func_idx, type_idx)
 }
 
 ///|
@@ -136,13 +145,13 @@ fn JITContext::set_memory(
   mem_ptr : Int64,
   mem_size : Int64,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_set_memory(self.ctx_ptr, mem_ptr, mem_size)
+  @jit_ffi.c_jit_ctx_set_memory(self.ptr(), mem_ptr, mem_size)
 }
 
 ///|
 /// Set globals array in the context
 fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_set_globals(self.ctx_ptr, globals_ptr)
+  @jit_ffi.c_jit_ctx_set_globals(self.ptr(), globals_ptr)
 }
 
 ///|
@@ -165,7 +174,7 @@ fn JITContext::set_table_pointers(
     }
   }
   @jit_ffi.c_jit_ctx_set_table_pointers(
-    self.ctx_ptr,
+    self.ptr(),
     table_ptrs,
     jit_tables.length(),
   )
@@ -239,14 +248,10 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
 ///|
 /// Activate this context for WASI calls (v2)
 fn JITContext::activate(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_set_context(self.ctx_ptr)
+  @jit_ffi.c_jit_set_context(self.ptr())
 }
 
-///|
-/// Free the context (v2)
-fn JITContext::free(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_free_context(self.ctx_ptr)
-}
+// NOTE: No free() method needed - GC handles cleanup automatically!
 
 // ============ Shared JIT Indirect Table ============
 
@@ -529,7 +534,7 @@ fn JITContext::call_multi_return(
   // Call FFI with v2 ABI
   // X19 = ctx_ptr (context pointer), X0-X7 = int params, D0-D7 = float params
   let trap_code = @jit_ffi.c_jit_call(
-    self.ctx_ptr, // Context pointer for v2 ABI
+    self.ptr(), // Context pointer for v2 ABI
     func_ptr,
     args_fixed,
     param_types_fixed,

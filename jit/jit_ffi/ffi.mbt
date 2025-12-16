@@ -22,6 +22,22 @@ pub extern "c" fn c_jit_alloc_context(func_count : Int) -> Int64 = "wasmoon_jit_
 /// Free a JIT context
 pub extern "c" fn c_jit_free_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_context"
 
+// ============ GC-managed JITContext ============
+
+///|
+/// GC-managed JIT context object
+/// The context is automatically freed when the object is garbage collected
+pub type JITContext
+
+///|
+/// Allocate GC-managed JIT context
+pub extern "c" fn c_jit_alloc_context_managed(func_count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
+
+///|
+/// Get the context pointer from a GC-managed JITContext object
+#borrow(jit_context)
+pub extern "c" fn c_jit_context_ptr(jit_context : JITContext) -> Int64 = "wasmoon_jit_context_ptr"
+
 ///|
 /// Set a function pointer in the context's function table
 pub extern "c" fn c_jit_ctx_set_func(

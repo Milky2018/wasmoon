@@ -306,6 +306,42 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
     }
 }
 
+// ============ GC-managed JITContext ============
+
+// Finalize function for GC-managed JITContext
+static void finalize_jit_context(void *self) {
+    int64_t *ptr = (int64_t *)self;
+    if (*ptr != 0) {
+        wasmoon_jit_free_context(*ptr);
+        *ptr = 0;
+    }
+}
+
+// Create a GC-managed JIT context
+// Returns external object pointer (managed by MoonBit GC)
+MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_context_managed(int func_count) {
+    int64_t ctx_ptr = wasmoon_jit_alloc_context(func_count);
+    if (ctx_ptr == 0) {
+        return NULL;
+    }
+
+    // Create GC-managed external object with Int64 payload
+    int64_t *payload = (int64_t *)moonbit_make_external_object(finalize_jit_context, sizeof(int64_t));
+    if (!payload) {
+        wasmoon_jit_free_context(ctx_ptr);
+        return NULL;
+    }
+
+    *payload = ctx_ptr;
+    return payload;
+}
+
+// Get the context pointer from a managed JITContext object
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_context_ptr(void *jit_context) {
+    if (!jit_context) return 0;
+    return *(int64_t *)jit_context;
+}
+
 // ============ Shared Indirect Table Support ============
 
 // Allocate a shared indirect table that can be used by multiple JIT modules

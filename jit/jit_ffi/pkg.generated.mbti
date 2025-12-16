@@ -4,6 +4,8 @@ package "Milky2018/wasmoon/jit/jit_ffi"
 // Values
 pub fn c_jit_alloc_context(Int) -> Int64
 
+pub fn c_jit_alloc_context_managed(Int) -> JITContext
+
 pub fn c_jit_alloc_exec(Int) -> Int64
 
 pub fn c_jit_alloc_exec_managed(FixedArray[Byte], Int) -> ExecCode
@@ -17,6 +19,8 @@ pub fn c_jit_call(Int64, Int64, FixedArray[Int64], FixedArray[Int], Int, FixedAr
 pub fn c_jit_call_multi_return(Int64, Int64, FixedArray[Int64], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
 
 pub fn c_jit_clear_trap() -> Unit
+
+pub fn c_jit_context_ptr(JITContext) -> Int64
 
 pub fn c_jit_copy_code(Int64, FixedArray[Byte], Int) -> Int
 
@@ -118,6 +122,8 @@ pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
 // Types and methods
 pub type ExecCode
+
+pub type JITContext
 
 // Type aliases
 
