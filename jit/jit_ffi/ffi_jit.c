@@ -365,6 +365,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
 //   +24: memory_size (size_t)
 //   +32: indirect_tables (void***)  - Array of table pointers (multi-table support)
 //   +40: table_count (int)          - Number of tables
+//   +48: globals (void*)            - Array of global variable values (WasmValue*)
 typedef struct {
     void **func_table;        // +0:  Array of function pointers
     void **indirect_table;    // +8:  Single indirect table (table 0) - used by prologue
@@ -373,6 +374,7 @@ typedef struct {
     // Multi-table support fields (offset +32 onwards)
     void ***indirect_tables;  // +32: Array of indirect table pointers
     int table_count;          // +40: Number of tables
+    void *globals;            // +48: Array of global variable values (WasmValue*)
     // Additional fields (not accessed by JIT prologue directly)
     int func_count;           // Number of entries in func_table
     int indirect_count;       // Number of entries in indirect_table (table 0)
@@ -399,6 +401,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context_v2(int func_count) {
     ctx->indirect_count = 0;
     ctx->memory_base = NULL;
     ctx->memory_size = 0;
+    ctx->globals = NULL;
     ctx->args = NULL;
     ctx->argc = 0;
     ctx->envp = NULL;
@@ -421,6 +424,14 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_memory(int64_t ctx_ptr, int64_t m
     if (ctx) {
         ctx->memory_base = (uint8_t *)mem_ptr;
         ctx->memory_size = (size_t)mem_size;
+    }
+}
+
+// Set globals array in context v2
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_globals(int64_t ctx_ptr, int64_t globals_ptr) {
+    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+    if (ctx) {
+        ctx->globals = (void *)globals_ptr;
     }
 }
 
@@ -2078,6 +2089,13 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_free_exec(int64_t ptr_i64) {
     }
 
     return -1;  // Not found
+}
+
+// Write an int64 value to a memory address
+MOONBIT_FFI_EXPORT void wasmoon_jit_write_i64(int64_t addr, int64_t value) {
+    if (addr != 0) {
+        *((int64_t*)addr) = value;
+    }
 }
 
 #ifdef __cplusplus

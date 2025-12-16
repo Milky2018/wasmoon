@@ -307,6 +307,14 @@ pub fn JITModule::set_memory(
 }
 
 ///|
+/// Set globals array for the JIT context
+pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
+  if self.context is Some(ctx) {
+    ctx.set_globals(globals_ptr)
+  }
+}
+
+///|
 /// Initialize indirect table for call_indirect.
 /// table_size: number of table elements
 /// elem_init: array of (table_idx, func_idx, type_idx) triples

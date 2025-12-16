@@ -154,6 +154,10 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
     TableGet(idx) => "table_get \{idx} \{ops}"
     TableSet(idx) => "table_set \{idx} \{ops}"
 
+    // Global operations
+    GlobalGet(idx) => "global_get \{idx}"
+    GlobalSet(idx) => "global_set \{idx} \{ops}"
+
     // Function calls
     Call(idx) => "call \{idx}(\{ops})"
     CallIndirect(type_idx, table_idx) =>

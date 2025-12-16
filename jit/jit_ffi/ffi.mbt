@@ -162,6 +162,13 @@ pub extern "c" fn c_jit_ctx_v2_set_memory(
 ) -> Unit = "wasmoon_jit_ctx_v2_set_memory"
 
 ///|
+/// Set globals array in the context v2
+pub extern "c" fn c_jit_ctx_v2_set_globals(
+  ctx_ptr : Int64,
+  globals_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_v2_set_globals"
+
+///|
 /// Get function table base address from context v2
 pub extern "c" fn c_jit_ctx_v2_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_v2_get_func_table"
 
@@ -380,3 +387,7 @@ pub extern "c" fn c_jit_call_multi_return(
   result_types : FixedArray[Int],
   num_results : Int,
 ) -> Int = "wasmoon_jit_call_multi_return"
+
+///|
+/// Write an int64 value to a memory address
+pub extern "c" fn c_jit_write_i64(addr : Int64, value : Int64) -> Unit = "wasmoon_jit_write_i64"

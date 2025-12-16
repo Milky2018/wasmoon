@@ -352,6 +352,12 @@ fn lower_inst(
     @ir.Opcode::TableSet(table_idx) =>
       lower_table_set(ctx, inst, block, table_idx)
 
+    // Global operations
+    @ir.Opcode::GlobalGet(global_idx) =>
+      lower_global_get(ctx, inst, block, global_idx)
+    @ir.Opcode::GlobalSet(global_idx) =>
+      lower_global_set(ctx, inst, block, global_idx)
+
     // Function calls
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
     @ir.Opcode::CallIndirect(type_idx, table_idx) =>
@@ -1841,4 +1847,44 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   for preg in @abi.call_clobbered_fprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
+}
+
+///|
+/// Lower global.get instruction
+/// Loads a global variable value
+fn lower_global_get(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  global_idx : Int,
+) -> Unit {
+  // Get the result vreg
+  guard inst.result is Some(result) else { return }
+  let result_vreg = ctx.get_vreg(result)
+
+  // Create the GlobalGet VCode instruction
+  // Uses: [], Defs: [result]
+  let get_inst = @instr.VCodeInst::new(GlobalGet(global_idx))
+  get_inst.add_def({ reg: Virtual(result_vreg) })
+  block.add_inst(get_inst)
+}
+
+///|
+/// Lower global.set instruction
+/// Stores a value to a global variable
+fn lower_global_set(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  global_idx : Int,
+) -> Unit {
+  // Get the value operand
+  guard inst.operands.length() > 0 else { return }
+  let value = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Create the GlobalSet VCode instruction
+  // Uses: [value], Defs: []
+  let set_inst = @instr.VCodeInst::new(GlobalSet(global_idx))
+  set_inst.add_use(Virtual(value))
+  block.add_inst(set_inst)
 }

@@ -63,6 +63,17 @@ fn run_explore(
     }
   }
 
+  // Build global types array (imports + module globals)
+  let global_types : Array[@types.GlobalType] = []
+  for imp in mod_.imports {
+    if imp.desc is Global(global_type) {
+      global_types.push(global_type)
+    }
+  }
+  for global in mod_.globals {
+    global_types.push(global.type_)
+  }
+
   // Get memory max limit from module (if memory is defined)
   let memory_max : Int? = if mod_.memories.length() > 0 {
     mod_.memories[0].limits.max
@@ -133,6 +144,7 @@ fn run_explore(
       import_func_type_indices,
       memory_max~,
       tables=mod_.tables,
+      global_types~,
     )
     let ir_func = translator.translate(code.body)
     let ir_text = ir_func.print()

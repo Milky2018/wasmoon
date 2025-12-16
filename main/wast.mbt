@@ -57,6 +57,14 @@ fn WastResult::new() -> WastResult {
 }
 
 ///|
+/// JIT module context containing compiled module and runtime state
+priv struct JITModuleContext {
+  jit_module : @jit.JITModule
+  memory_ptr : Int64
+  globals_ptr : Int64
+}
+
+///|
 /// WAST execution context
 priv struct WastContext {
   store : @runtime.Store
@@ -64,9 +72,9 @@ priv struct WastContext {
   named_modules : Map[String, @runtime.ModuleInstance]
   // Registered modules for imports (module_name -> exports)
   registered_modules : Map[String, @runtime.ModuleInstance]
-  // JIT support: module -> (JITModule, memory_ptr, original Module)
-  jit_modules : Map[String, (@jit.JITModule, Int64, @types.Module)]
-  mut current_jit : (@jit.JITModule, Int64, @types.Module)?
+  // JIT support
+  jit_modules : Map[String, JITModuleContext]
+  mut current_jit : JITModuleContext?
   use_jit : Bool
 }
 
@@ -320,12 +328,12 @@ fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool 
 }
 
 ///|
-/// Try to compile a module to JIT and return (JITModule, memory_ptr) if successful
+/// Try to compile a module to JIT and return JITModuleContext if successful
 fn try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-) -> (@jit.JITModule, Int64)? {
+) -> JITModuleContext? {
   // Check for unsupported instructions
   if has_unsupported_instructions(mod_) {
     return None // Module contains instructions not supported by JIT
@@ -362,9 +370,20 @@ fn try_compile_jit(
           init_data_segments(mod_, mem_ptr)
           // Set memory in JIT context
           jm.set_memory(mem_ptr, mem_size)
+          // Initialize globals
+          let globals_ptr = init_jit_globals(instance, store)
+          if globals_ptr != 0L {
+            jm.set_globals(globals_ptr)
+          }
           // Initialize indirect table for call_indirect
           init_elem_segments(mod_, jm, instance, store)
-          Some((jm, mem_ptr))
+          Some(
+            JITModuleContext::{
+              jit_module: jm,
+              memory_ptr: mem_ptr,
+              globals_ptr,
+            },
+          )
         }
       }
     }
@@ -571,10 +590,10 @@ fn run_wast_command(
       // Try to compile JIT version (only if JIT is enabled)
       if ctx.use_jit {
         match try_compile_jit(mod_, instance, ctx.store) {
-          Some((jm, mem_ptr)) => {
-            ctx.current_jit = Some((jm, mem_ptr, mod_))
+          Some(jit_ctx) => {
+            ctx.current_jit = Some(jit_ctx)
             if name is Some(n) {
-              ctx.jit_modules.set(n, (jm, mem_ptr, mod_))
+              ctx.jit_modules.set(n, jit_ctx)
             }
           }
           None => ctx.current_jit = None
@@ -621,8 +640,7 @@ fn run_wast_command(
       ctx.current_module = Some(instance)
       // Try to compile JIT version (only if JIT is enabled)
       match try_compile_jit(mod_, instance, ctx.store) {
-        Some((jm, mem_ptr)) if ctx.use_jit =>
-          ctx.current_jit = Some((jm, mem_ptr, mod_))
+        Some(jit_ctx) if ctx.use_jit => ctx.current_jit = Some(jit_ctx)
         _ => ctx.current_jit = None
       }
     }
@@ -829,15 +847,14 @@ fn invoke_action(
           }
       }
       // Try JIT execution first
-      let jit_info : (@jit.JITModule, Int64, @types.Module)? = match
-        module_name {
+      let jit_ctx : JITModuleContext? = match module_name {
         Some(name) => ctx.jit_modules.get(name)
         None => ctx.current_jit
       }
-      match jit_info {
-        Some((jm, _mem_ptr, _mod)) =>
+      match jit_ctx {
+        Some(jit) =>
           // Find and call JIT function
-          match jm.get_func_by_name(func_name) {
+          match jit.jit_module.get_func_by_name(func_name) {
             Some(f) => {
               // Convert args to Int64
               let i64_args : Array[Int64] = []
@@ -857,7 +874,7 @@ fn invoke_action(
                 }
                 i64_args.push(v)
               }
-              let results = jm.call_with_context(f, i64_args) catch {
+              let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => raise RuntimeError(msg)
               }
               // Convert results back to Values based on function return types

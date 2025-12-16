@@ -688,6 +688,26 @@ pub fn IRBuilder::table_set(
   self.emit_void_inst(Opcode::TableSet(table_idx), [elem_idx, value])
 }
 
+///|
+/// Get global variable value
+pub fn IRBuilder::global_get(
+  self : IRBuilder,
+  global_idx : Int,
+  ty : Type,
+) -> Value {
+  self.emit_inst(ty, Opcode::GlobalGet(global_idx), [])
+}
+
+///|
+/// Set global variable value
+pub fn IRBuilder::global_set(
+  self : IRBuilder,
+  global_idx : Int,
+  value : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::GlobalSet(global_idx), [value])
+}
+
 // ============ Misc Operations ============
 
 ///|

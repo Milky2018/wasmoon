@@ -171,6 +171,12 @@ fn JITContext::set_memory(
 }
 
 ///|
+/// Set globals array in the context
+fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_ctx_v2_set_globals(self.ctx_ptr, globals_ptr)
+}
+
+///|
 /// Set multiple indirect tables (for multi-table support)
 /// jit_tables: Array of JITTable? from Store
 /// This enables proper multi-table support where each call_indirect can specify which table to use
@@ -243,6 +249,9 @@ pub fn alloc_memory(size : Int64) -> Int64 {
 pub fn free_memory(mem_ptr : Int64) -> Unit {
   @jit_ffi.c_jit_free_memory(mem_ptr)
 }
+
+///|
+pub using @jit_ffi {c_jit_write_i64}
 
 ///|
 /// Initialize memory with data at offset

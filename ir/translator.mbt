@@ -34,6 +34,9 @@ pub(all) struct Translator {
   // Table sizes for bounds checking
   // table_sizes[i] = number of elements in table i
   table_sizes : Array[Int]
+  // Global variable types
+  // global_types[i] = type of global variable i
+  global_types : Array[@types.GlobalType]
 }
 
 ///|
@@ -69,6 +72,7 @@ pub fn Translator::new(
   import_func_type_indices : Array[Int],
   memory_max? : Int? = None,
   tables? : Array[@types.Table] = [],
+  global_types? : Array[@types.GlobalType] = [],
 ) -> Translator {
   let builder = IRBuilder::new(name)
   // Add function parameters
@@ -121,6 +125,7 @@ pub fn Translator::new(
     memory_max,
     table_base_offsets,
     table_sizes,
+    global_types,
   }
 }
 
@@ -825,6 +830,18 @@ fn Translator::translate_instruction(
       let value = self.pop()
       let elem_idx = self.pop()
       self.builder.table_set(table_idx, elem_idx, value)
+    }
+    GlobalGet(idx) => {
+      // Get global variable value
+      let global_type = self.global_types[idx]
+      let ty = Type::from_wasm(global_type.value_type)
+      let result = self.builder.global_get(idx, ty)
+      self.push(result)
+    }
+    GlobalSet(idx) => {
+      // Set global variable value
+      let value = self.pop()
+      self.builder.global_set(idx, value)
     }
     inst => abort("unimplemented ir instruction \{inst}")
   }

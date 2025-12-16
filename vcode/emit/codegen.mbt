@@ -1714,6 +1714,30 @@ fn MachineCode::emit_instruction(
       // STR value, [X16]
       self.emit_str_imm(value_reg, 16, 0)
     }
+    GlobalGet(global_idx) => {
+      // Load global variable value
+      // Uses: [], Defs: [result]
+      // X19 = context pointer
+      // Load globals array pointer from context: X16 = [X19 + 48]
+      self.emit_ldr_imm(16, 19, @abi.CTX_GLOBALS_OFFSET)
+      // Load global value: result = [X16 + global_idx * 16]
+      // Each WasmValue is 16 bytes (i64/f64 + tag)
+      let result_reg = wreg_num(inst.defs[0])
+      let offset = global_idx * 16
+      self.emit_ldr_imm(result_reg, 16, offset)
+    }
+    GlobalSet(global_idx) => {
+      // Store global variable value
+      // Uses: [value], Defs: []
+      // X19 = context pointer
+      // Load globals array pointer from context: X16 = [X19 + 48]
+      self.emit_ldr_imm(16, 19, @abi.CTX_GLOBALS_OFFSET)
+      // Store global value: [X16 + global_idx * 16] = value
+      // Each WasmValue is 16 bytes (i64/f64 + tag)
+      let value_reg = reg_num(inst.uses[0])
+      let offset = global_idx * 16
+      self.emit_str_imm(value_reg, 16, offset)
+    }
   }
 }
 

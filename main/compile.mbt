@@ -45,6 +45,17 @@ fn run_compile(
     }
   }
 
+  // Build global types array (imports + module globals)
+  let global_types : Array[@types.GlobalType] = []
+  for imp in mod_.imports {
+    if imp.desc is Global(global_type) {
+      global_types.push(global_type)
+    }
+  }
+  for global in mod_.globals {
+    global_types.push(global.type_)
+  }
+
   // IR output buffer (if requested)
   let ir_output = match emit_ir {
     Some(_) => Some(StringBuilder::new())
@@ -82,6 +93,7 @@ fn run_compile(
       import_func_type_indices,
       memory_max~,
       tables=mod_.tables,
+      global_types~,
     )
     let ir_func = translator.translate(code.body)
 
