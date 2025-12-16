@@ -432,7 +432,8 @@ fn init_elem_segments(
             [RefNull(_)] => -1 // Use -1 to represent null reference
             _ => continue
           }
-          let type_hash = if func_idx >= 0 && func_idx < func_type_hashes.length() {
+          let type_hash = if func_idx >= 0 &&
+            func_idx < func_type_hashes.length() {
             func_type_hashes[func_idx]
           } else {
             0
