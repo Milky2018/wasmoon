@@ -311,67 +311,6 @@ static int64_t wasi_fd_prestat_get_impl(int64_t func_table, int64_t mem_base, in
     return 8; // ERRNO_BADF - no preopened directories
 }
 
-// Get fd_write trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) {
-    return (int64_t)wasi_fd_write_impl;
-}
-
-// Get proc_exit trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) {
-    return (int64_t)wasi_proc_exit_impl;
-}
-
-// Get fd_read trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_ptr(void) {
-    return (int64_t)wasi_fd_read_impl;
-}
-
-// Get args_sizes_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_ptr(void) {
-    return (int64_t)wasi_args_sizes_get_impl;
-}
-
-
-// Get args_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_ptr(void) {
-    return (int64_t)wasi_args_get_impl;
-}
-
-// Get environ_sizes_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_ptr(void) {
-    return (int64_t)wasi_environ_sizes_get_impl;
-}
-
-// Get environ_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_ptr(void) {
-    return (int64_t)wasi_environ_get_impl;
-}
-
-// Get clock_time_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_ptr(void) {
-    return (int64_t)wasi_clock_time_get_impl;
-}
-
-// Get random_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_ptr(void) {
-    return (int64_t)wasi_random_get_impl;
-}
-
-// Get fd_close trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_ptr(void) {
-    return (int64_t)wasi_fd_close_impl;
-}
-
-// Get fd_fdstat_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_ptr(void) {
-    return (int64_t)wasi_fd_fdstat_get_impl;
-}
-
-// Get fd_prestat_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_ptr(void) {
-    return (int64_t)wasi_fd_prestat_get_impl;
-}
-
 // ============ WASI Trampolines v2 (New ABI) ============
 // These trampolines use the new JIT ABI v2:
 // - X20 = context pointer (callee-saved, set before call)

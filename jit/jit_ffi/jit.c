@@ -187,157 +187,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_trap(void) {
     g_trap_code = 0;
 }
 
-// ============ JIT Context for function calls ============
-
-// Global JIT context (set before calling JIT functions)
-static jit_context_t *g_jit_context = NULL;
-
-// Set the global JIT context
-MOONBIT_FFI_EXPORT void wasmoon_jit_set_context(int64_t ctx_ptr) {
-    g_jit_context = (jit_context_t *)ctx_ptr;
-}
-
-// Get the global JIT context
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context(void) {
-    return (int64_t)g_jit_context;
-}
-
-// Allocate a JIT context
-// Memory layout for func_table:
-//   [indirect_table_ptr | func_ptr_0 | func_ptr_1 | ...]
-//   ^                    ^
-//   raw_alloc            func_table (returned pointer, offset +8)
-// This allows LDR X24, [X20, #-8] to load indirect_table_ptr in prologue
+// Allocate a JIT context v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
     jit_context_t *ctx = (jit_context_t *)malloc(sizeof(jit_context_t));
-    if (!ctx) return 0;
-
-    // Allocate func_count + 1 entries: first slot for indirect_table_ptr
-    void **raw_alloc = (void **)calloc(func_count + 1, sizeof(void *));
-    if (!raw_alloc) {
-        free(ctx);
-        return 0;
-    }
-    // func_table points to second element, so func_table[-1] = indirect_table_ptr
-    ctx->func_table = raw_alloc + 1;
-    // Initialize indirect_table_ptr slot to NULL (will be set when indirect table is allocated)
-    raw_alloc[0] = NULL;
-    ctx->func_count = func_count;
-    ctx->indirect_table = NULL;
-    ctx->indirect_count = 0;
-    ctx->memory_base = NULL;
-    ctx->memory_size = 0;
-    ctx->args = NULL;
-    ctx->argc = 0;
-    ctx->envp = NULL;
-    ctx->envc = 0;
-
-    return (int64_t)ctx;
-}
-
-// Set a function pointer in the context
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func(int64_t ctx_ptr, int idx, int64_t func_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && idx >= 0 && idx < ctx->func_count) {
-        ctx->func_table[idx] = (void *)func_ptr;
-    }
-}
-
-// Set memory in the context
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem_ptr, int64_t mem_size) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) {
-        ctx->memory_base = (uint8_t *)mem_ptr;
-        ctx->memory_size = (size_t)mem_size;
-    }
-}
-
-// Get function table base address
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) {
-        return (int64_t)ctx->func_table;
-    }
-    return 0;
-}
-
-// Allocate indirect table for call_indirect
-// This table is separate from func_table and used only for call_indirect
-// Each entry is 16 bytes: (func_ptr, type_idx) pair
-MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx || count <= 0) return 0;
-
-    // Free existing indirect table if any
-    if (ctx->indirect_table) {
-        free(ctx->indirect_table);
-    }
-
-    // Allocate 2 slots per entry: func_ptr and type_idx
-    ctx->indirect_table = (void **)calloc(count * 2, sizeof(void *));
-    if (!ctx->indirect_table) {
-        ctx->indirect_count = 0;
-        return 0;
-    }
-    // Initialize type indices to -1 (uninitialized marker)
-    for (int i = 0; i < count; i++) {
-        ctx->indirect_table[i * 2 + 1] = (void*)(intptr_t)(-1);
-    }
-    ctx->indirect_count = count;
-
-    // Store indirect_table pointer in func_table[-1] for prologue to load
-    // This is accessed via LDR X24, [X20, #-8]
-    ctx->func_table[-1] = ctx->indirect_table;
-
-    return 1;
-}
-
-// Set an entry in indirect table
-// table_idx: the WASM table index (0, 1, 2, ...)
-// func_idx: the function index to look up in func_table
-// type_idx: the type index of the function (for type checking)
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && ctx->indirect_table &&
-        table_idx >= 0 && table_idx < ctx->indirect_count &&
-        func_idx >= 0 && func_idx < ctx->func_count) {
-        // Store func_ptr at offset 0, type_idx at offset 8
-        ctx->indirect_table[table_idx * 2] = ctx->func_table[func_idx];
-        ctx->indirect_table[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
-    }
-}
-
-// Get indirect table base address (this is what X20 should point to for call_indirect)
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && ctx->indirect_table) {
-        return (int64_t)ctx->indirect_table;
-    }
-    // Fall back to func_table if no indirect table (backward compatibility)
-    if (ctx) {
-        return (int64_t)ctx->func_table;
-    }
-    return 0;
-}
-
-// Free a JIT context
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) {
-        if (ctx->func_table) {
-            // func_table points to raw_alloc + 1, so subtract 1 to get original allocation
-            free(ctx->func_table - 1);
-        }
-        if (ctx->indirect_table) {
-            free(ctx->indirect_table);
-        }
-        free(ctx);
-    }
-}
-
-// Allocate a JIT context v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context_v2(int func_count) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)malloc(sizeof(jit_context_v2_t));
     if (!ctx) return 0;
 
     ctx->func_table = (void **)calloc(func_count, sizeof(void *));
@@ -362,16 +214,16 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context_v2(int func_count) {
 }
 
 // Set a function pointer in context v2
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_func(int64_t ctx_ptr, int idx, int64_t func_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func(int64_t ctx_ptr, int idx, int64_t func_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx && idx >= 0 && idx < ctx->func_count) {
         ctx->func_table[idx] = (void *)func_ptr;
     }
 }
 
 // Set memory in context v2
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_memory(int64_t ctx_ptr, int64_t mem_ptr, int64_t mem_size) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem_ptr, int64_t mem_size) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         ctx->memory_base = (uint8_t *)mem_ptr;
         ctx->memory_size = (size_t)mem_size;
@@ -379,24 +231,24 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_memory(int64_t ctx_ptr, int64_t m
 }
 
 // Set globals array in context v2
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_globals(int64_t ctx_ptr, int64_t globals_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_globals(int64_t ctx_ptr, int64_t globals_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         ctx->globals = (void *)globals_ptr;
     }
 }
 
 // Get function table base from context v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_v2_get_func_table(int64_t ctx_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return ctx ? (int64_t)ctx->func_table : 0;
 }
 
 // Allocate indirect table for context v2
 // Each entry is 16 bytes: (func_ptr, type_idx) pair
 // Layout: [func_ptr_0, type_idx_0, func_ptr_1, type_idx_1, ...]
-MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_v2_alloc_indirect_table(int64_t ctx_ptr, int count) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;
 
     if (ctx->indirect_table) {
@@ -420,8 +272,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_v2_alloc_indirect_table(int64_t ctx_ptr, 
 
 // Set indirect table entry in context v2
 // Now takes type_idx parameter to store alongside func_ptr
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx && ctx->indirect_table &&
         table_idx >= 0 && table_idx < ctx->indirect_count &&
         func_idx >= 0 && func_idx < ctx->func_count) {
@@ -432,8 +284,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_indirect(int64_t ctx_ptr, int tab
 }
 
 // Get indirect table base from context v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_v2_get_indirect_table(int64_t ctx_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx && ctx->indirect_table) {
         return (int64_t)ctx->indirect_table;
     }
@@ -441,8 +293,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_v2_get_indirect_table(int64_t ctx_ptr
 }
 
 // Free context v2
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_context_v2(int64_t ctx_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         if (ctx->func_table) free(ctx->func_table);
         // NOTE: Don't free indirect_tables array itself - it's owned by Store
@@ -498,8 +350,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
 
 // Configure a JIT context to use a shared indirect table instead of allocating its own
 // This allows multiple modules to share the same table
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx) return;
 
     // Free existing indirect table if any (we're replacing it)
@@ -516,12 +368,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_use_shared_table(int64_t ctx_ptr, int
 // table_ptrs: Array of Int64 (table pointers from Store.jit_tables)
 // table_count: Number of tables
 // This enables proper multi-table support where each call_indirect can specify which table to use
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_table_pointers(
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     int64_t ctx_ptr,
     int64_t* table_ptrs,
     int table_count
 ) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || table_count <= 0 || !table_ptrs) return;
 
     // Free existing indirect_tables array if any
@@ -553,16 +405,16 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_table_pointers(
 
 
 // Global v2 context (for WASI trampolines)
-static jit_context_v2_t *g_jit_context_v2 = NULL;
+static jit_context_t *g_jit_context = NULL;
 
 // Set global v2 context
-MOONBIT_FFI_EXPORT void wasmoon_jit_set_context_v2(int64_t ctx_ptr) {
-    g_jit_context_v2 = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_context(int64_t ctx_ptr) {
+    g_jit_context = (jit_context_t *)ctx_ptr;
 }
 
 // Get global v2 context
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context_v2(void) {
-    return (int64_t)g_jit_context_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context(void) {
+    return (int64_t)g_jit_context;
 }
 
 // Call JIT function with new ABI (v2)
@@ -571,7 +423,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context_v2(void) {
 // - Stack for params 8+
 // JIT prologue loads X20/X21/X22/X24 from context pointed by X19
 // param_types: 0=I32, 1=I64, 2=F32, 3=F64 (currently unused, for future D register optimization)
-MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
+MOONBIT_FFI_EXPORT int wasmoon_jit_call(
     int64_t ctx_ptr,
     int64_t func_ptr,
     int64_t* args,
@@ -594,7 +446,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
     g_trap_active = 1;
 
     // Set global context for WASI trampolines
-    g_jit_context_v2 = (jit_context_v2_t *)ctx_ptr;
+    g_jit_context = (jit_context_t *)ctx_ptr;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
@@ -837,9 +689,10 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory(int64_t mem_ptr) {
     }
 }
 
-// Grow linear memory by delta pages
-// Returns the previous size in pages, or -1 on failure
-// max_pages: maximum allowed pages (0 means no limit, use 65536 as default max)
+// ============ Memory operations v2 (for new ABI) ============
+// These use g_jit_context instead of g_jit_context
+
+// Grow linear memory by delta pages (v2)
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(int32_t delta, int32_t max_pages) {
     if (!g_jit_context) return -1;
     if (delta < 0) return -1;
@@ -875,119 +728,42 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(int32_t delta, int32_t max_pa
     return current_pages;
 }
 
-// Get current memory size in pages
+// Get current memory size in pages (v2)
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size(void) {
     if (!g_jit_context) return 0;
     return (int32_t)(g_jit_context->memory_size / WASM_PAGE_SIZE);
 }
 
-// Get current memory base (for reloading after memory.grow)
+// Get current memory base (v2)
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base(void) {
     if (!g_jit_context) return 0;
     return (int64_t)g_jit_context->memory_base;
 }
 
-// Get current memory size in bytes (for reloading after memory.grow)
+// Get current memory size in bytes (v2)
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes(void) {
     if (!g_jit_context) return 0;
     return (int64_t)g_jit_context->memory_size;
 }
 
-// Get function pointer for memory_grow (for JIT to call directly)
+// Get function pointer for memory_grow v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
     return (int64_t)wasmoon_jit_memory_grow;
 }
 
-// Get function pointer for get_memory_base (for JIT to call directly)
+// Get function pointer for get_memory_base v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base_ptr(void) {
     return (int64_t)wasmoon_jit_get_memory_base;
 }
 
-// Get function pointer for get_memory_size_bytes (for JIT to call directly)
+// Get function pointer for get_memory_size_bytes v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes_ptr(void) {
     return (int64_t)wasmoon_jit_get_memory_size_bytes;
 }
 
-// Get function pointer for memory_size (for JIT to call directly)
+// Get function pointer for memory_size v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr(void) {
     return (int64_t)wasmoon_jit_memory_size;
-}
-
-// ============ Memory operations v2 (for new ABI) ============
-// These use g_jit_context_v2 instead of g_jit_context
-
-// Grow linear memory by delta pages (v2)
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow_v2(int32_t delta, int32_t max_pages) {
-    if (!g_jit_context_v2) return -1;
-    if (delta < 0) return -1;
-
-    size_t current_size = g_jit_context_v2->memory_size;
-    int32_t current_pages = (int32_t)(current_size / WASM_PAGE_SIZE);
-
-    // Check for overflow
-    int64_t new_pages_64 = (int64_t)current_pages + (int64_t)delta;
-    if (new_pages_64 > 65536) return -1;  // Max 4GB (65536 pages)
-
-    // Check against max limit
-    int32_t effective_max = (max_pages > 0) ? max_pages : 65536;
-    if (new_pages_64 > effective_max) return -1;
-
-    int32_t new_pages = (int32_t)new_pages_64;
-    size_t new_size = (size_t)new_pages * WASM_PAGE_SIZE;
-
-    // No change needed if delta is 0
-    if (delta == 0) return current_pages;
-
-    // Reallocate memory
-    uint8_t *new_mem = (uint8_t *)realloc(g_jit_context_v2->memory_base, new_size);
-    if (!new_mem) return -1;
-
-    // Zero-initialize the new pages
-    memset(new_mem + current_size, 0, new_size - current_size);
-
-    // Update context
-    g_jit_context_v2->memory_base = new_mem;
-    g_jit_context_v2->memory_size = new_size;
-
-    return current_pages;
-}
-
-// Get current memory size in pages (v2)
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size_v2(void) {
-    if (!g_jit_context_v2) return 0;
-    return (int32_t)(g_jit_context_v2->memory_size / WASM_PAGE_SIZE);
-}
-
-// Get current memory base (v2)
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base_v2(void) {
-    if (!g_jit_context_v2) return 0;
-    return (int64_t)g_jit_context_v2->memory_base;
-}
-
-// Get current memory size in bytes (v2)
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes_v2(void) {
-    if (!g_jit_context_v2) return 0;
-    return (int64_t)g_jit_context_v2->memory_size;
-}
-
-// Get function pointer for memory_grow v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_grow_v2;
-}
-
-// Get function pointer for get_memory_base v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_get_memory_base_v2;
-}
-
-// Get function pointer for get_memory_size_bytes v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_get_memory_size_bytes_v2;
-}
-
-// Get function pointer for memory_size v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_size_v2;
 }
 
 // Copy data to linear memory at offset
@@ -1302,8 +1078,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_copy_code(int64_t dest, moonbit_bytes_t src, 
 // memory.fill: Fill memory region with a byte value
 // Parameters: dst (offset), val (byte value), size (count)
 // Traps if: dst + size > memory_size (out of bounds)
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v2(int32_t dst, int32_t val, int32_t size) {
-    jit_context_v2_t *ctx = g_jit_context_v2;
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill(int32_t dst, int32_t val, int32_t size) {
+    jit_context_t *ctx = g_jit_context;
     if (!ctx || !ctx->memory_base) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
@@ -1329,8 +1105,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v2(int32_t dst, int32_t val, int
 // Parameters: dst (dest offset), src (source offset), size (count)
 // Traps if: dst + size > memory_size || src + size > memory_size
 // Handles overlapping regions correctly (like memmove)
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v2(int32_t dst, int32_t src, int32_t size) {
-    jit_context_v2_t *ctx = g_jit_context_v2;
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(int32_t dst, int32_t src, int32_t size) {
+    jit_context_t *ctx = g_jit_context;
     if (!ctx || !ctx->memory_base) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
@@ -1355,13 +1131,13 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v2(int32_t dst, int32_t src, int
 }
 
 // Get function pointer for memory_fill v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_fill_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_fill;
 }
 
 // Get function pointer for memory_copy v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_copy_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_copy;
 }
 
 // Free executable memory
