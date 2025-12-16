@@ -430,20 +430,15 @@ pub fn get_spectest_print_f64_f64_ptr() -> Int64 {
 // ============ Executable Code Block ============
 
 ///|
-/// Executable code block
-priv struct ExecCode {
-  ptr : Int64
-}
+/// GC-managed executable code block wrapper
+/// Memory is automatically freed when the object is garbage collected
+pub struct ExecCode(@jit_ffi.ExecCode)
 
 ///|
-/// Allocate and copy code to executable memory
-fn ExecCode::new(code : Array[Int]) -> ExecCode? {
+/// Allocate and copy code to executable memory (GC-managed)
+pub fn ExecCode::new(code : Array[Int]) -> ExecCode? {
   let size = code.length()
   if size == 0 {
-    return None
-  }
-  let ptr = @jit_ffi.c_jit_alloc_exec(size)
-  if ptr == 0L {
     return None
   }
   // Copy code bytes
@@ -451,19 +446,22 @@ fn ExecCode::new(code : Array[Int]) -> ExecCode? {
   for i, b in code {
     bytes[i] = b.to_byte()
   }
-  let result = @jit_ffi.c_jit_copy_code(ptr, bytes, size)
-  if result != 0 {
-    @jit_ffi.c_jit_free_exec(ptr) |> ignore
-    return None
+  let ec = @jit_ffi.c_jit_alloc_exec_managed(bytes, size)
+  // Check if allocation succeeded by verifying the pointer is valid
+  if @jit_ffi.c_jit_exec_code_ptr(ec) != 0L {
+    Some(ExecCode(ec))
+  } else {
+    None
   }
-  Some(ExecCode::{ ptr, })
 }
 
 ///|
-/// Free the executable memory
-fn ExecCode::free(self : ExecCode) -> Unit {
-  @jit_ffi.c_jit_free_exec(self.ptr) |> ignore
+/// Get the function pointer from this executable code
+pub fn ExecCode::ptr(self : ExecCode) -> Int64 {
+  @jit_ffi.c_jit_exec_code_ptr(self.0)
 }
+
+// NOTE: No free() method needed - GC handles cleanup automatically!
 
 // ============ Multi-value Return Support ============
 

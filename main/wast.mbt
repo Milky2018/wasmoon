@@ -357,7 +357,7 @@ fn try_compile_jit(
       // Load JIT module
       let jit_module = @jit.JITModule::load(pc, func_signatures)
       match jit_module {
-        None => None
+        None => abort("Failed to create JIT module")
         Some(jm) => {
           // Allocate linear memory
           let mem_size = get_memory_size(instance, store)

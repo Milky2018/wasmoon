@@ -6,6 +6,8 @@ pub fn c_jit_alloc_context(Int) -> Int64
 
 pub fn c_jit_alloc_exec(Int) -> Int64
 
+pub fn c_jit_alloc_exec_managed(FixedArray[Byte], Int) -> ExecCode
+
 pub fn c_jit_alloc_memory(Int64) -> Int64
 
 pub fn c_jit_alloc_shared_indirect_table(Int) -> Int64
@@ -35,6 +37,8 @@ pub fn c_jit_ctx_set_memory(Int64, Int64, Int64) -> Unit
 pub fn c_jit_ctx_set_table_pointers(Int64, FixedArray[Int64], Int) -> Unit
 
 pub fn c_jit_ctx_use_shared_table(Int64, Int64, Int) -> Unit
+
+pub fn c_jit_exec_code_ptr(ExecCode) -> Int64
 
 pub fn c_jit_free_context(Int64) -> Unit
 
@@ -113,6 +117,7 @@ pub fn c_jit_write_i64(Int64, Int64) -> Unit
 // Errors
 
 // Types and methods
+pub type ExecCode
 
 // Type aliases
 

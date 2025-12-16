@@ -983,6 +983,56 @@ typedef struct {
     size_t size;
 } jit_code_block_t;
 
+// ============ GC-managed ExecCode ============
+
+// Finalize function for ExecCode - releases the executable memory
+// NOTE: This is called by MoonBit GC when the object becomes unreachable
+// The finalize function MUST NOT free the container itself (GC does that)
+static void finalize_exec_code(void *self) {
+    int64_t *ptr = (int64_t *)self;
+    if (*ptr != 0) {
+        wasmoon_jit_free_exec(*ptr);
+        *ptr = 0;
+    }
+}
+
+// Create a GC-managed executable code object
+// Returns external object pointer (managed by MoonBit GC)
+MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_exec_managed(moonbit_bytes_t code, int size) {
+    if (size <= 0 || !code) {
+        return NULL;
+    }
+
+    // Allocate executable memory
+    int64_t ptr = wasmoon_jit_alloc_exec(size);
+    if (ptr == 0) {
+        return NULL;
+    }
+
+    // Copy code to executable memory
+    int result = wasmoon_jit_copy_code(ptr, code, size);
+    if (result != 0) {
+        wasmoon_jit_free_exec(ptr);
+        return NULL;
+    }
+
+    // Create GC-managed external object with Int64 payload
+    int64_t *payload = (int64_t *)moonbit_make_external_object(finalize_exec_code, sizeof(int64_t));
+    if (!payload) {
+        wasmoon_jit_free_exec(ptr);
+        return NULL;
+    }
+
+    *payload = ptr;
+    return payload;
+}
+
+// Get the executable pointer from a managed ExecCode object
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exec_code_ptr(void *exec_code) {
+    if (!exec_code) return 0;
+    return *(int64_t *)exec_code;
+}
+
 // Maximum number of allocated code blocks (simple implementation)
 #define MAX_CODE_BLOCKS 1024
 static jit_code_block_t code_blocks[MAX_CODE_BLOCKS];

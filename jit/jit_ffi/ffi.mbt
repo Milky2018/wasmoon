@@ -291,6 +291,27 @@ pub extern "c" fn c_jit_copy_code(
 /// Returns 0 on success, -1 on failure
 pub extern "c" fn c_jit_free_exec(ptr : Int64) -> Int = "wasmoon_jit_free_exec"
 
+// ============ GC-managed ExecCode ============
+
+///|
+/// GC-managed executable code object
+/// The memory is automatically freed when the object is garbage collected
+pub type ExecCode
+
+///|
+/// Allocate GC-managed executable code
+/// Returns the allocated ExecCode object
+#borrow(code)
+pub extern "c" fn c_jit_alloc_exec_managed(
+  code : FixedArray[Byte],
+  size : Int,
+) -> ExecCode = "wasmoon_jit_alloc_exec_managed"
+
+///|
+/// Get the function pointer from a GC-managed ExecCode object
+#borrow(exec_code)
+pub extern "c" fn c_jit_exec_code_ptr(exec_code : ExecCode) -> Int64 = "wasmoon_jit_exec_code_ptr"
+
 // ============ Multi-value Return Support ============
 
 ///|

@@ -1,5 +1,11 @@
 // Copyright 2025
 
+#ifndef JIT_FFI_H
+#define JIT_FFI_H
+
+#include <stdint.h>
+#include <stddef.h>
+
 // ============ JIT Context v2 (New ABI) ============
 // New ABI uses X20 as context pointer (callee-saved)
 // User params in X0-X7 (AAPCS64 compatible)
@@ -32,3 +38,12 @@ typedef struct {
 } jit_context_t;
 
 static jit_context_t *g_jit_context;
+
+// ============ Executable Memory Functions ============
+// Forward declarations for GC-managed ExecCode
+
+int64_t wasmoon_jit_alloc_exec(int size);
+int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
+int wasmoon_jit_free_exec(int64_t ptr);
+
+#endif // JIT_FFI_H

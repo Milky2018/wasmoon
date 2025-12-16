@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/jit"
 
 import(
   "Milky2018/wasmoon/cwasm"
+  "Milky2018/wasmoon/jit/jit_ffi"
   "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/vcode"
   "moonbitlang/core/hashset"
@@ -199,6 +200,12 @@ pub fn DebugContext::on_pause(Self, Int, Int) -> Unit
 pub fn DebugContext::set_step_mode(Self, StepMode) -> Unit
 pub fn DebugContext::should_pause(Self, Int, Int) -> Bool
 pub impl Show for DebugContext
+
+pub struct ExecCode(@jit_ffi.ExecCode)
+#deprecated
+pub fn ExecCode::inner(Self) -> @jit_ffi.ExecCode
+pub fn ExecCode::new(Array[Int]) -> Self?
+pub fn ExecCode::ptr(Self) -> Int64
 
 pub(all) struct FunctionEntry {
   func_idx : Int

@@ -21,11 +21,7 @@ fn JITFunction::new(
   { name, exec_code, param_types, result_types }
 }
 
-///|
-/// Free the JIT function's executable memory
-fn JITFunction::free(self : JITFunction) -> Unit {
-  self.exec_code.free()
-}
+// NOTE: No free() method needed - ExecCode is GC-managed!
 
 ///|
 /// Loaded precompiled module with executable functions
@@ -86,13 +82,11 @@ pub fn JITModule::load(
             jit_module.functions.set(entry.func_idx, jit_func)
             jit_module.by_name.set(entry.name, entry.func_idx)
             // Set function pointer in context's function table
-            ctx.set_func(entry.func_idx, ec.ptr)
+            ctx.set_func(entry.func_idx, ec.ptr())
           }
           None => {
             // Failed to allocate, clean up
-            for kv in jit_module.functions.iter() {
-              kv.1.free()
-            }
+            // NOTE: JITFunctions are GC-managed, no need to free them
             ctx.free()
             return None
           }
@@ -138,7 +132,7 @@ pub fn JITModule::from_single_function(
         }
         Some(ec) => {
           // Set function in table
-          ctx.set_func(0, ec.ptr)
+          ctx.set_func(0, ec.ptr())
           // Create JIT function
           let jit_func = JITFunction::new(
             func_name, ec, param_types, result_types,
@@ -248,17 +242,15 @@ pub fn JITModule::get_func_by_name(
 /// Returns the executable code pointer for the function, or 0 if not found
 pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
   match self.functions.get(func_idx) {
-    Some(f) => f.exec_code.ptr
+    Some(f) => f.exec_code.ptr()
     None => 0L
   }
 }
 
 ///|
-/// Free all executable memory
+/// Free JIT context (executable functions are GC-managed)
 pub fn JITModule::free(self : JITModule) -> Unit {
-  for kv in self.functions.iter() {
-    kv.1.free()
-  }
+  // NOTE: JITFunctions/ExecCodes are GC-managed, no need to free them
   if self.context is Some(ctx) {
     ctx.free()
   }
@@ -282,7 +274,7 @@ pub fn JITModule::call_with_context(
       let num_results = func.result_types.length()
       let results : Array[Int64] = Array::make(num_results, 0L)
       ctx.call_multi_return(
-        func.exec_code.ptr,
+        func.exec_code.ptr(),
         args,
         func.param_types,
         results,
