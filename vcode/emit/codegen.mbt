@@ -93,7 +93,7 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
 
 ///|
 /// Emit prologue to save callee-saved registers and set up parameters (v2 using JITStackFrame)
-fn MachineCode::emit_prologue_v2(
+fn MachineCode::emit_prologue(
   self : MachineCode,
   stack_frame : JITStackFrame,
   params : Array[@abi.VReg],
@@ -239,7 +239,7 @@ pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
   )
 
   // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
-  mc.emit_prologue_v2(stack_frame, func.params, func.param_pregs)
+  mc.emit_prologue(stack_frame, func.params, func.param_pregs)
 
   // Emit function body
   for block in func.blocks {
@@ -248,7 +248,7 @@ pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
       mc.emit_instruction(inst, stack_frame)
     }
     if block.terminator is Some(term) {
-      mc.emit_terminator_with_epilogue_v2(term, stack_frame, func.result_types)
+      mc.emit_terminator_with_epilogue(term, stack_frame, func.result_types)
     }
   }
   mc.resolve_fixups()
@@ -1596,7 +1596,7 @@ fn MachineCode::emit_instruction(
       }
 
       // Load memory_grow function pointer into X16
-      let grow_ptr = @jit_ffi.c_jit_get_memory_grow_v2_ptr()
+      let grow_ptr = @jit_ffi.c_jit_get_memory_grow_ptr()
       self.emit_load_imm64(16, grow_ptr)
 
       // Call the function
@@ -1612,14 +1612,14 @@ fn MachineCode::emit_instruction(
       // since realloc may have moved the memory
 
       // Call get_memory_base() and store to X21
-      let base_ptr = @jit_ffi.c_jit_get_memory_base_v2_ptr()
+      let base_ptr = @jit_ffi.c_jit_get_memory_base_ptr()
       self.emit_load_imm64(16, base_ptr)
       self.annotate("blr x16  // get_memory_base")
       self.emit_blr(16)
       self.emit_mov_reg(21, 0) // MOV X21, X0
 
       // Call get_memory_size_bytes() and store to X22
-      let size_ptr = @jit_ffi.c_jit_get_memory_size_bytes_v2_ptr()
+      let size_ptr = @jit_ffi.c_jit_get_memory_size_bytes_ptr()
       self.emit_load_imm64(16, size_ptr)
       self.annotate("blr x16  // get_memory_size_bytes")
       self.emit_blr(16)
@@ -1634,7 +1634,7 @@ fn MachineCode::emit_instruction(
       let result_reg = wreg_num(inst.defs[0])
 
       // Load memory_size function pointer into X16
-      let size_ptr = @jit_ffi.c_jit_get_memory_size_v2_ptr()
+      let size_ptr = @jit_ffi.c_jit_get_memory_size_ptr()
       self.emit_load_imm64(16, size_ptr)
 
       // Call the function
@@ -1647,7 +1647,7 @@ fn MachineCode::emit_instruction(
       }
     }
     MemoryFill => {
-      // Call wasmoon_jit_memory_fill_v2(dst, val, size)
+      // Call wasmoon_jit_memory_fill(dst, val, size)
       // Uses: [dst, val, size], Defs: []
       let dst_reg = reg_num(inst.uses[0])
       let val_reg = reg_num(inst.uses[1])
@@ -1659,7 +1659,7 @@ fn MachineCode::emit_instruction(
       self.emit_mov_reg(2, size_reg) // MOV X2, size
 
       // Load memory_fill function pointer into X16
-      let fill_ptr = @jit_ffi.c_jit_get_memory_fill_v2_ptr()
+      let fill_ptr = @jit_ffi.c_jit_get_memory_fill_ptr()
       self.emit_load_imm64(16, fill_ptr)
 
       // Call the function
@@ -1667,7 +1667,7 @@ fn MachineCode::emit_instruction(
       self.emit_blr(16)
     }
     MemoryCopy => {
-      // Call wasmoon_jit_memory_copy_v2(dst, src, size)
+      // Call wasmoon_jit_memory_copy(dst, src, size)
       // Uses: [dst, src, size], Defs: []
       let dst_reg = reg_num(inst.uses[0])
       let src_reg = reg_num(inst.uses[1])
@@ -1679,7 +1679,7 @@ fn MachineCode::emit_instruction(
       self.emit_mov_reg(2, size_reg) // MOV X2, size
 
       // Load memory_copy function pointer into X16
-      let copy_ptr = @jit_ffi.c_jit_get_memory_copy_v2_ptr()
+      let copy_ptr = @jit_ffi.c_jit_get_memory_copy_ptr()
       self.emit_load_imm64(16, copy_ptr)
 
       // Call the function
@@ -1713,6 +1713,30 @@ fn MachineCode::emit_instruction(
       self.emit_add_shifted(16, 24, elem_idx_reg, @instr.ShiftType::Lsl, 4)
       // STR value, [X16]
       self.emit_str_imm(value_reg, 16, 0)
+    }
+    GlobalGet(global_idx) => {
+      // Load global variable value
+      // Uses: [], Defs: [result]
+      // X19 = context pointer
+      // Load globals array pointer from context: X16 = [X19 + 48]
+      self.emit_ldr_imm(16, 19, @abi.CTX_GLOBALS_OFFSET)
+      // Load global value: result = [X16 + global_idx * 16]
+      // Each WasmValue is 16 bytes (i64/f64 + tag)
+      let result_reg = wreg_num(inst.defs[0])
+      let offset = global_idx * 16
+      self.emit_ldr_imm(result_reg, 16, offset)
+    }
+    GlobalSet(global_idx) => {
+      // Store global variable value
+      // Uses: [value], Defs: []
+      // X19 = context pointer
+      // Load globals array pointer from context: X16 = [X19 + 48]
+      self.emit_ldr_imm(16, 19, @abi.CTX_GLOBALS_OFFSET)
+      // Store global value: [X16 + global_idx * 16] = value
+      // Each WasmValue is 16 bytes (i64/f64 + tag)
+      let value_reg = reg_num(inst.uses[0])
+      let offset = global_idx * 16
+      self.emit_str_imm(value_reg, 16, offset)
     }
   }
 }
@@ -1807,7 +1831,7 @@ fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> Int {
 
 ///|
 /// Emit epilogue to restore callee-saved registers (v2 using JITStackFrame)
-fn MachineCode::emit_epilogue_v2(
+fn MachineCode::emit_epilogue(
   self : MachineCode,
   stack_frame : JITStackFrame,
 ) -> Unit {
@@ -1869,7 +1893,7 @@ fn MachineCode::emit_epilogue_v2(
 
 ///|
 /// Emit terminator with epilogue for Return (v2 using JITStackFrame)
-fn MachineCode::emit_terminator_with_epilogue_v2(
+fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
   term : @instr.VCodeTerminator,
   stack_frame : JITStackFrame,
@@ -2016,7 +2040,7 @@ fn MachineCode::emit_terminator_with_epilogue_v2(
         }
       }
       // Emit epilogue to restore callee-saved registers before return
-      self.emit_epilogue_v2(stack_frame)
+      self.emit_epilogue(stack_frame)
       self.emit_ret(30)
     }
     Trap(_) => self.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000

@@ -86,6 +86,9 @@ fn main {
           "no-jit": @clap.Arg::flag(
             help="Disable JIT compilation (use interpreter)",
           ),
+          "show-success": @clap.Arg::flag(
+            help="Print successful assertions (default: only print failures)",
+          ),
         },
       ),
       "disasm": @clap.SubCommand::new(
@@ -223,7 +226,7 @@ fn main {
                   )
                 }
               } else {
-                println("Error: missing file argument")
+                abort("missing file argument")
               }
             }
             "compile" => {
@@ -279,7 +282,8 @@ fn main {
                   Some(true) => false
                   _ => true
                 }
-                run_testsuite(positional[0], use_jit)
+                let show_success = sub.flags.get("show-success") is Some(true)
+                run_testsuite(positional[0], use_jit, show_success)
               } else {
                 println("Error: missing file argument")
               }

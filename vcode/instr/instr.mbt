@@ -192,6 +192,13 @@ pub(all) enum VCodeOpcode {
   // TableSet(table_idx): store to indirect table at index
   // Uses: [elem_idx, value], Defs: []
   TableSet(Int)
+  // Global operations
+  // GlobalGet(global_idx): load global variable value
+  // Uses: [], Defs: [result]
+  GlobalGet(Int)
+  // GlobalSet(global_idx): store global variable value
+  // Uses: [value], Defs: []
+  GlobalSet(Int)
 }
 
 ///|
@@ -289,6 +296,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     MemoryCopy => "memory_copy"
     TableGet(table_idx) => "table_get \{table_idx}"
     TableSet(table_idx) => "table_set \{table_idx}"
+    GlobalGet(global_idx) => "global_get \{global_idx}"
+    GlobalSet(global_idx) => "global_set \{global_idx}"
   }
 }
 

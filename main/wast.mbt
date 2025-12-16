@@ -1,6 +1,6 @@
 ///|
 /// Run a WAST test script
-fn run_wast(wast_path : String, use_jit : Bool) -> Unit {
+fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   println("Running WAST script: \{wast_path}")
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   println("JIT: \{jit_status}")
@@ -24,7 +24,7 @@ fn run_wast(wast_path : String, use_jit : Bool) -> Unit {
 
   // Run WAST commands
   let base_dir = find_base_dir(wast_path)
-  let result = run_wast_commands(script, base_dir, use_jit)
+  let result = run_wast_commands(script, base_dir, use_jit, show_success)
 
   // Print results
   println("")
@@ -57,6 +57,13 @@ fn WastResult::new() -> WastResult {
 }
 
 ///|
+/// JIT module context containing compiled module and runtime state
+/// NOTE: Memory and globals are now owned by JITContext and freed by its finalizer
+priv struct JITModuleContext {
+  jit_module : @jit.JITModule
+}
+
+///|
 /// WAST execution context
 priv struct WastContext {
   store : @runtime.Store
@@ -64,9 +71,9 @@ priv struct WastContext {
   named_modules : Map[String, @runtime.ModuleInstance]
   // Registered modules for imports (module_name -> exports)
   registered_modules : Map[String, @runtime.ModuleInstance]
-  // JIT support: module -> (JITModule, memory_ptr, original Module)
-  jit_modules : Map[String, (@jit.JITModule, Int64, @types.Module)]
-  mut current_jit : (@jit.JITModule, Int64, @types.Module)?
+  // JIT support
+  jit_modules : Map[String, JITModuleContext]
+  mut current_jit : JITModuleContext?
   use_jit : Bool
 }
 
@@ -320,12 +327,12 @@ fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool 
 }
 
 ///|
-/// Try to compile a module to JIT and return (JITModule, memory_ptr) if successful
+/// Try to compile a module to JIT and return JITModuleContext if successful
 fn try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-) -> (@jit.JITModule, Int64)? {
+) -> JITModuleContext? {
   // Check for unsupported instructions
   if has_unsupported_instructions(mod_) {
     return None // Module contains instructions not supported by JIT
@@ -349,22 +356,28 @@ fn try_compile_jit(
       // Load JIT module
       let jit_module = @jit.JITModule::load(pc, func_signatures)
       match jit_module {
-        None => None
+        None => abort("Failed to create JIT module")
         Some(jm) => {
           // Allocate linear memory
           let mem_size = get_memory_size(instance, store)
           let mem_ptr = @jit.alloc_memory(mem_size)
           if mem_ptr == 0L {
-            jm.free()
+            // NOTE: No need to manually free - GC handles cleanup
             return None
           }
           // Initialize data segments
           init_data_segments(mod_, mem_ptr)
           // Set memory in JIT context
           jm.set_memory(mem_ptr, mem_size)
+          // Initialize globals
+          let globals_ptr = init_jit_globals(instance, store)
+          if globals_ptr != 0L {
+            jm.set_globals(globals_ptr)
+          }
           // Initialize indirect table for call_indirect
           init_elem_segments(mod_, jm, instance, store)
-          Some((jm, mem_ptr))
+          // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
+          Some(JITModuleContext::{ jit_module: jm })
         }
       }
     }
@@ -526,12 +539,13 @@ fn run_wast_commands(
   script : @wast.WastScript,
   base_dir : String,
   use_jit : Bool,
+  show_success : Bool,
 ) -> WastResult {
   let result = WastResult::new()
   let ctx = WastContext::new(use_jit)
   for item in script.commands {
     let (cmd, line) = item
-    run_wast_command(ctx, cmd, line, result, base_dir)
+    run_wast_command(ctx, cmd, line, result, base_dir, show_success)
   }
   result
 }
@@ -543,6 +557,7 @@ fn run_wast_command(
   line : Int,
   result : WastResult,
   base_dir : String,
+  show_success : Bool,
 ) -> Unit {
   ignore(base_dir)
   match cmd {
@@ -571,10 +586,10 @@ fn run_wast_command(
       // Try to compile JIT version (only if JIT is enabled)
       if ctx.use_jit {
         match try_compile_jit(mod_, instance, ctx.store) {
-          Some((jm, mem_ptr)) => {
-            ctx.current_jit = Some((jm, mem_ptr, mod_))
+          Some(jit_ctx) => {
+            ctx.current_jit = Some(jit_ctx)
             if name is Some(n) {
-              ctx.jit_modules.set(n, (jm, mem_ptr, mod_))
+              ctx.jit_modules.set(n, jit_ctx)
             }
           }
           None => ctx.current_jit = None
@@ -621,8 +636,7 @@ fn run_wast_command(
       ctx.current_module = Some(instance)
       // Try to compile JIT version (only if JIT is enabled)
       match try_compile_jit(mod_, instance, ctx.store) {
-        Some((jm, mem_ptr)) if ctx.use_jit =>
-          ctx.current_jit = Some((jm, mem_ptr, mod_))
+        Some(jit_ctx) if ctx.use_jit => ctx.current_jit = Some(jit_ctx)
         _ => ctx.current_jit = None
       }
     }
@@ -655,7 +669,13 @@ fn run_wast_command(
     }
     AssertReturn(action, expected) =>
       match run_assert_return(ctx, action, expected) {
-        None => result.passed = result.passed + 1
+        None => {
+          result.passed = result.passed + 1
+          if show_success {
+            let action_desc = format_action(action)
+            println("line \{line}: assert_return \{action_desc}: PASSED")
+          }
+        }
         Some(err) => {
           result.failed = result.failed + 1
           let action_desc = format_action(action)
@@ -668,6 +688,10 @@ fn run_wast_command(
       let success = run_assert_trap(ctx, action, expected_msg)
       if success {
         result.passed = result.passed + 1
+        if show_success {
+          let action_desc = format_action(action)
+          println("line \{line}: assert_trap \{action_desc}: PASSED")
+        }
       } else {
         result.failed = result.failed + 1
         result.failures.push(
@@ -679,6 +703,10 @@ fn run_wast_command(
       // Just try to invoke - should cause stack exhaustion
       if (try? invoke_action(ctx, action)) is Err(_) {
         result.passed = result.passed + 1
+        if show_success {
+          let action_desc = format_action(action)
+          println("line \{line}: assert_exhaustion \{action_desc}: PASSED")
+        }
       } else {
         result.failed = result.failed + 1
         result.failures.push(
@@ -691,6 +719,9 @@ fn run_wast_command(
       let trapped = try_instantiate_source_traps(ctx, source)
       if trapped {
         result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_trap (module): PASSED")
+        }
       } else {
         result.failed = result.failed + 1
         result.failures.push(
@@ -707,6 +738,9 @@ fn run_wast_command(
         )
       } else {
         result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_invalid: PASSED")
+        }
       }
     }
     AssertMalformed(source, msg) => {
@@ -720,6 +754,9 @@ fn run_wast_command(
         )
       } else {
         result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_malformed: PASSED")
+        }
       }
     }
     AssertUnlinkable(source, msg) => {
@@ -732,6 +769,9 @@ fn run_wast_command(
         )
       } else {
         result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_unlinkable: PASSED")
+        }
       }
     }
     Register(name, module_name) => {
@@ -829,15 +869,14 @@ fn invoke_action(
           }
       }
       // Try JIT execution first
-      let jit_info : (@jit.JITModule, Int64, @types.Module)? = match
-        module_name {
+      let jit_ctx : JITModuleContext? = match module_name {
         Some(name) => ctx.jit_modules.get(name)
         None => ctx.current_jit
       }
-      match jit_info {
-        Some((jm, _mem_ptr, _mod)) =>
+      match jit_ctx {
+        Some(jit) =>
           // Find and call JIT function
-          match jm.get_func_by_name(func_name) {
+          match jit.jit_module.get_func_by_name(func_name) {
             Some(f) => {
               // Convert args to Int64
               let i64_args : Array[Int64] = []
@@ -857,7 +896,7 @@ fn invoke_action(
                 }
                 i64_args.push(v)
               }
-              let results = jm.call_with_context(f, i64_args) catch {
+              let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => raise RuntimeError(msg)
               }
               // Convert results back to Values based on function return types

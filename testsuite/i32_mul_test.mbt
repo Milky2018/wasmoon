@@ -102,7 +102,6 @@ test "i32 mul" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   // 4 * 3 = 12

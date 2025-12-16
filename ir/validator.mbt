@@ -306,6 +306,20 @@ fn validate_instruction(
         )
       }
 
+    // Global operations
+    GlobalGet(_) =>
+      if inst.operands.length() != 0 {
+        result.add_error(
+          "GlobalGet expects 0 operands, got \{inst.operands.length()}",
+        )
+      }
+    GlobalSet(_) =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "GlobalSet expects 1 operand (value), got \{inst.operands.length()}",
+        )
+      }
+
     // Calls can have any number of operands
     Call(_) | CallIndirect(_) => ()
   }

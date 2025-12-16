@@ -12,15 +12,21 @@ pub extern "c" fn c_jit_get_trap_code() -> Int = "wasmoon_jit_get_trap_code"
 /// Clear trap code
 pub extern "c" fn c_jit_clear_trap() -> Unit = "wasmoon_jit_clear_trap"
 
-// ============ JIT Context Management ============
+// ============ GC-managed JITContext ============
 
 ///|
-/// Allocate a JIT context with function table
-pub extern "c" fn c_jit_alloc_context(func_count : Int) -> Int64 = "wasmoon_jit_alloc_context"
+/// GC-managed JIT context object
+/// The context is automatically freed when the object is garbage collected
+pub type JITContext
 
 ///|
-/// Free a JIT context
-pub extern "c" fn c_jit_free_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_context"
+/// Allocate GC-managed JIT context
+pub extern "c" fn c_jit_alloc_context_managed(func_count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
+
+///|
+/// Get the context pointer from a GC-managed JITContext object
+#borrow(jit_context)
+pub extern "c" fn c_jit_context_ptr(jit_context : JITContext) -> Int64 = "wasmoon_jit_context_ptr"
 
 ///|
 /// Set a function pointer in the context's function table
@@ -29,6 +35,16 @@ pub extern "c" fn c_jit_ctx_set_func(
   idx : Int,
   func_ptr : Int64,
 ) -> Unit = "wasmoon_jit_ctx_set_func"
+
+///|
+/// Copy data to linear memory at offset
+#borrow(data)
+pub extern "c" fn c_jit_memory_init(
+  mem_ptr : Int64,
+  offset : Int64,
+  data : FixedArray[Byte],
+  size : Int,
+) -> Int = "wasmoon_jit_memory_init"
 
 ///|
 /// Set memory in the context
@@ -51,76 +67,53 @@ pub extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc
 pub extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory"
 
 ///|
-/// Copy data to linear memory at offset
-#borrow(data)
-pub extern "c" fn c_jit_memory_init(
-  mem_ptr : Int64,
-  offset : Int64,
-  data : FixedArray[Byte],
-  size : Int,
-) -> Int = "wasmoon_jit_memory_init"
-
-// ============ Memory Grow Support ============
-
-///|
-/// Get memory_grow function pointer for JIT
+/// Get memory_grow v2 function pointer for JIT
 pub extern "c" fn c_jit_get_memory_grow_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_ptr"
 
 ///|
-/// Get get_memory_base function pointer for JIT
+/// Get get_memory_base v2 function pointer for JIT
 pub extern "c" fn c_jit_get_memory_base_ptr() -> Int64 = "wasmoon_jit_get_memory_base_ptr"
 
 ///|
-/// Get get_memory_size_bytes function pointer for JIT
+/// Get get_memory_size_bytes v2 function pointer for JIT
 pub extern "c" fn c_jit_get_memory_size_bytes_ptr() -> Int64 = "wasmoon_jit_get_memory_size_bytes_ptr"
 
 ///|
-/// Get memory_size function pointer for JIT (returns pages)
-pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory_size_ptr"
-
-// ============ Memory v2 functions (for v2 ABI) ============
-
-///|
-/// Get memory_grow v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_grow_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_v2_ptr"
-
-///|
-/// Get get_memory_base v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_base_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_base_v2_ptr"
-
-///|
-/// Get get_memory_size_bytes v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_size_bytes_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_size_bytes_v2_ptr"
-
-///|
 /// Get memory_size v2 function pointer for JIT (returns pages)
-pub extern "c" fn c_jit_get_memory_size_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_size_v2_ptr"
+pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory_size_ptr"
 
 ///|
 /// Get memory_fill v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_fill_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_v2_ptr"
+pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_ptr"
 
 ///|
 /// Get memory_copy v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_copy_v2_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_v2_ptr"
+pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
 
 ///|
 /// Get current memory base from v2 context (for proper cleanup after memory.grow)
-pub extern "c" fn c_jit_get_current_memory_base_v2() -> Int64 = "wasmoon_jit_get_memory_base_v2"
+pub extern "c" fn c_jit_get_current_memory_base() -> Int64 = "wasmoon_jit_get_memory_base"
 
 ///|
-/// Get function table base address from context
+/// Set globals array in the context v2
+pub extern "c" fn c_jit_ctx_set_globals(
+  ctx_ptr : Int64,
+  globals_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_set_globals"
+
+///|
+/// Get function table base address from context v2
 pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
 
 ///|
-/// Allocate indirect table for call_indirect
+/// Allocate indirect table for context v2
 pub extern "c" fn c_jit_ctx_alloc_indirect_table(
   ctx_ptr : Int64,
   count : Int,
 ) -> Int = "wasmoon_jit_ctx_alloc_indirect_table"
 
 ///|
-/// Set an entry in indirect table (table_idx -> func_table[func_idx])
+/// Set an entry in indirect table v2 (table_idx -> func_table[func_idx])
 /// type_idx: the type index of the function (for type checking)
 pub extern "c" fn c_jit_ctx_set_indirect(
   ctx_ptr : Int64,
@@ -128,59 +121,6 @@ pub extern "c" fn c_jit_ctx_set_indirect(
   func_idx : Int,
   type_idx : Int,
 ) -> Unit = "wasmoon_jit_ctx_set_indirect"
-
-///|
-/// Set the global JIT context (for WASI trampolines)
-pub extern "c" fn c_jit_set_context(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context"
-
-// ============ JIT Context v2 Management ============
-// v2 context has fixed field offsets for JIT prologue:
-// +0: func_table, +8: indirect_table, +16: memory_base, +24: memory_size
-
-///|
-/// Allocate a JIT context v2 with function table
-pub extern "c" fn c_jit_alloc_context_v2(func_count : Int) -> Int64 = "wasmoon_jit_alloc_context_v2"
-
-///|
-/// Free a JIT context v2
-pub extern "c" fn c_jit_free_context_v2(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_context_v2"
-
-///|
-/// Set a function pointer in the context v2's function table
-pub extern "c" fn c_jit_ctx_v2_set_func(
-  ctx_ptr : Int64,
-  idx : Int,
-  func_ptr : Int64,
-) -> Unit = "wasmoon_jit_ctx_v2_set_func"
-
-///|
-/// Set memory in the context v2
-pub extern "c" fn c_jit_ctx_v2_set_memory(
-  ctx_ptr : Int64,
-  mem_ptr : Int64,
-  mem_size : Int64,
-) -> Unit = "wasmoon_jit_ctx_v2_set_memory"
-
-///|
-/// Get function table base address from context v2
-pub extern "c" fn c_jit_ctx_v2_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_v2_get_func_table"
-
-///|
-/// Allocate indirect table for context v2
-pub extern "c" fn c_jit_ctx_v2_alloc_indirect_table(
-  ctx_ptr : Int64,
-  count : Int,
-) -> Int = "wasmoon_jit_ctx_v2_alloc_indirect_table"
-
-///|
-/// Set an entry in indirect table v2 (table_idx -> func_table[func_idx])
-/// type_idx: the type index of the function (for type checking)
-pub extern "c" fn c_jit_ctx_v2_set_indirect(
-  ctx_ptr : Int64,
-  table_idx : Int,
-  func_idx : Int,
-  type_idx : Int,
-) -> Unit = "wasmoon_jit_ctx_v2_set_indirect"
 
 // ============ Shared Indirect Table ============
 
@@ -203,33 +143,35 @@ pub extern "c" fn c_jit_shared_table_set(
 
 ///|
 /// Configure a JIT context to use a shared indirect table
-pub extern "c" fn c_jit_ctx_v2_use_shared_table(
+pub extern "c" fn c_jit_ctx_use_shared_table(
   ctx_ptr : Int64,
   shared_table_ptr : Int64,
   count : Int,
-) -> Unit = "wasmoon_jit_ctx_v2_use_shared_table"
+) -> Unit = "wasmoon_jit_ctx_use_shared_table"
 
 ///|
 /// Configure JIT context with multiple indirect tables (for multi-table support)
 /// table_ptrs: FixedArray of Int64 (table pointers from Store.jit_tables)
 /// table_count: Number of tables
 #borrow(table_ptrs)
-pub extern "c" fn c_jit_ctx_v2_set_table_pointers(
+pub extern "c" fn c_jit_ctx_set_table_pointers(
   ctx_ptr : Int64,
   table_ptrs : FixedArray[Int64],
   table_count : Int,
-) -> Unit = "wasmoon_jit_ctx_v2_set_table_pointers"
+) -> Unit = "wasmoon_jit_ctx_set_table_pointers"
 
 ///|
-/// Set the global JIT context v2 (for WASI trampolines)
-pub extern "c" fn c_jit_set_context_v2(ctx_ptr : Int64) -> Unit = "wasmoon_jit_set_context_v2"
+/// Set the global JIT context v2 with managed object (handles reference counting)
+/// This prevents GC from collecting the context while it's active
+#borrow(jit_context)
+pub extern "c" fn c_jit_set_context_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_set_context_managed"
 
 ///|
 /// C FFI for v2 ABI multi-value return calls
 /// X19 = context pointer, X0-X7 = int params, D0-D7 = float params
 /// param_types and result_types use: 0=I32, 1=I64, 2=F32, 3=F64
 #borrow(args, param_types, results, result_types)
-pub extern "c" fn c_jit_call_v2(
+pub extern "c" fn c_jit_call(
   ctx_ptr : Int64,
   func_ptr : Int64,
   args : FixedArray[Int64],
@@ -238,7 +180,7 @@ pub extern "c" fn c_jit_call_v2(
   results : FixedArray[Int64],
   result_types : FixedArray[Int],
   num_results : Int,
-) -> Int = "wasmoon_jit_call_v2"
+) -> Int = "wasmoon_jit_call"
 
 // ============ WASI Trampoline Pointers ============
 
@@ -326,22 +268,14 @@ pub extern "c" fn c_jit_get_spectest_print_f64_f64_ptr() -> Int64 = "wasmoon_jit
 /// memory.fill: Fill memory region with a byte value
 /// Parameters: dst (offset), val (byte value), size (count)
 /// Traps if out of bounds
-pub extern "c" fn c_jit_memory_fill_v2(
-  dst : Int,
-  val : Int,
-  size : Int,
-) -> Unit = "wasmoon_jit_memory_fill_v2"
+pub extern "c" fn c_jit_memory_fill(dst : Int, val : Int, size : Int) -> Unit = "wasmoon_jit_memory_fill"
 
 ///|
 /// memory.copy: Copy memory region
 /// Parameters: dst (dest offset), src (source offset), size (count)
 /// Handles overlapping regions correctly
 /// Traps if out of bounds
-pub extern "c" fn c_jit_memory_copy_v2(
-  dst : Int,
-  src : Int,
-  size : Int,
-) -> Unit = "wasmoon_jit_memory_copy_v2"
+pub extern "c" fn c_jit_memory_copy(dst : Int, src : Int, size : Int) -> Unit = "wasmoon_jit_memory_copy"
 
 // ============ Executable Memory Management ============
 
@@ -360,10 +294,26 @@ pub extern "c" fn c_jit_copy_code(
   size : Int,
 ) -> Int = "wasmoon_jit_copy_code"
 
+// ============ GC-managed ExecCode ============
+
 ///|
-/// Free executable memory
-/// Returns 0 on success, -1 on failure
-pub extern "c" fn c_jit_free_exec(ptr : Int64) -> Int = "wasmoon_jit_free_exec"
+/// GC-managed executable code object
+/// The memory is automatically freed when the object is garbage collected
+pub type ExecCode
+
+///|
+/// Allocate GC-managed executable code
+/// Returns the allocated ExecCode object
+#borrow(code)
+pub extern "c" fn c_jit_alloc_exec_managed(
+  code : FixedArray[Byte],
+  size : Int,
+) -> ExecCode = "wasmoon_jit_alloc_exec_managed"
+
+///|
+/// Get the function pointer from a GC-managed ExecCode object
+#owned(exec_code)
+pub extern "c" fn c_jit_exec_code_ptr(exec_code : ExecCode) -> Int64 = "wasmoon_jit_exec_code_ptr"
 
 // ============ Multi-value Return Support ============
 
@@ -380,3 +330,7 @@ pub extern "c" fn c_jit_call_multi_return(
   result_types : FixedArray[Int],
   num_results : Int,
 ) -> Int = "wasmoon_jit_call_multi_return"
+
+///|
+/// Write an int64 value to a memory address
+pub extern "c" fn c_jit_write_i64(addr : Int64, value : Int64) -> Unit = "wasmoon_jit_write_i64"

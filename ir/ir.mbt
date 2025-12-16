@@ -218,6 +218,10 @@ pub enum Opcode {
   TableGet(Int) // Get element from table (table index)
   TableSet(Int) // Set element in table (table index)
 
+  // Global operations
+  GlobalGet(Int) // Get global variable value (global index)
+  GlobalSet(Int) // Set global variable value (global index)
+
   // Function calls
   Call(Int) // Direct call (function index)
   CallIndirect(Int, Int) // Indirect call (type index, table index)

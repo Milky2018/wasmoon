@@ -42,7 +42,6 @@ test "multi return: 3 integers" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let (r0, r1, r2) : (Int, Int, Int) = jm.call_with_context_poly(
@@ -106,7 +105,6 @@ test "multi return: 4 integers" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let (r0, r1, r2, r3) : (Int, Int, Int, Int) = jm.call_with_context_poly(
@@ -159,7 +157,6 @@ test "multi return: 3 floats" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let (r0, r1, r2) : (Double, Double, Double) = jm.call_with_context_poly(f, ())
@@ -218,7 +215,6 @@ test "multi return: mixed int and float" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let (r0, r1, r2, r3) : (Int, Int, Int, Double) = jm.call_with_context_poly(
@@ -270,7 +266,6 @@ test "multi return: 2 integers (no extra buffer)" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let (r0, r1) : (Int, Int) = jm.call_with_context_poly(f, ())

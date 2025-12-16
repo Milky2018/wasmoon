@@ -23,64 +23,38 @@ pub fn check_trap() -> Unit raise JITTrap {
   }
 }
 
-// ============ Memory Grow Support ============
+// ============ Memory v2 functions (for v2 ABI) ============
 
 ///|
-/// Get memory_grow function pointer for JIT
+/// Get memory_grow v2 function pointer for JIT
 pub fn get_memory_grow_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_grow_ptr()
 }
 
 ///|
-/// Get get_memory_base function pointer for JIT
+/// Get get_memory_base v2 function pointer for JIT
 pub fn get_memory_base_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_base_ptr()
 }
 
 ///|
-/// Get get_memory_size_bytes function pointer for JIT
+/// Get get_memory_size_bytes v2 function pointer for JIT
 pub fn get_memory_size_bytes_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_size_bytes_ptr()
 }
 
 ///|
-/// Get memory_size function pointer for JIT (returns pages)
+/// Get memory_size v2 function pointer for JIT (returns pages)
 pub fn get_memory_size_ptr() -> Int64 {
   @jit_ffi.c_jit_get_memory_size_ptr()
-}
-
-// ============ Memory v2 functions (for v2 ABI) ============
-
-///|
-/// Get memory_grow v2 function pointer for JIT
-pub fn get_memory_grow_v2_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_grow_v2_ptr()
-}
-
-///|
-/// Get get_memory_base v2 function pointer for JIT
-pub fn get_memory_base_v2_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_base_v2_ptr()
-}
-
-///|
-/// Get get_memory_size_bytes v2 function pointer for JIT
-pub fn get_memory_size_bytes_v2_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_size_bytes_v2_ptr()
-}
-
-///|
-/// Get memory_size v2 function pointer for JIT (returns pages)
-pub fn get_memory_size_v2_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_size_v2_ptr()
 }
 
 ///|
 /// Get current memory base from v2 context (for proper cleanup after memory.grow)
 /// Returns the actual current memory base address, which may differ from the
 /// originally allocated address if memory.grow caused a realloc.
-pub fn get_current_memory_base_v2() -> Int64 {
-  @jit_ffi.c_jit_get_current_memory_base_v2()
+pub fn get_current_memory_base() -> Int64 {
+  @jit_ffi.c_jit_get_current_memory_base()
 }
 
 // ============ JIT Argument Trait ============
@@ -115,33 +89,42 @@ pub impl JITArg for Double with to_jit_arg(self) {
 // ============ JIT Context Wrapper ============
 
 ///|
-/// JIT execution context (v2 ABI)
+/// JIT execution context (v2 ABI) - GC managed
 /// Uses fixed field offsets for JIT prologue:
 /// +0: func_table, +8: indirect_table, +16: memory_base, +24: memory_size
+/// Memory is automatically freed when the object is garbage collected
 priv struct JITContext {
-  ctx_ptr : Int64
+  ctx : @jit_ffi.JITContext
 }
 
 ///|
-/// Create a new JIT context (v2)
+/// Create a new JIT context (v2) - GC managed
 fn JITContext::new(total_funcs : Int) -> JITContext? {
-  let ctx_ptr = @jit_ffi.c_jit_alloc_context_v2(total_funcs)
-  if ctx_ptr == 0L {
-    return None
+  let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
+  // Check if allocation succeeded by verifying the pointer is valid
+  if @jit_ffi.c_jit_context_ptr(ctx) != 0L {
+    Some(JITContext::{ ctx, })
+  } else {
+    None
   }
-  Some(JITContext::{ ctx_ptr, })
+}
+
+///|
+/// Get the raw context pointer (for FFI calls)
+fn JITContext::ptr(self : JITContext) -> Int64 {
+  @jit_ffi.c_jit_context_ptr(self.ctx)
 }
 
 ///|
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_set_func(self.ctx_ptr, idx, func_ptr)
+  @jit_ffi.c_jit_ctx_set_func(self.ptr(), idx, func_ptr)
 }
 
 ///|
 /// Allocate indirect table for call_indirect
 fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
-  @jit_ffi.c_jit_ctx_v2_alloc_indirect_table(self.ctx_ptr, count) != 0
+  @jit_ffi.c_jit_ctx_alloc_indirect_table(self.ptr(), count) != 0
 }
 
 ///|
@@ -152,12 +135,7 @@ fn JITContext::set_indirect(
   func_idx : Int,
   type_idx : Int,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_set_indirect(
-    self.ctx_ptr,
-    table_idx,
-    func_idx,
-    type_idx,
-  )
+  @jit_ffi.c_jit_ctx_set_indirect(self.ptr(), table_idx, func_idx, type_idx)
 }
 
 ///|
@@ -167,7 +145,13 @@ fn JITContext::set_memory(
   mem_ptr : Int64,
   mem_size : Int64,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_v2_set_memory(self.ctx_ptr, mem_ptr, mem_size)
+  @jit_ffi.c_jit_ctx_set_memory(self.ptr(), mem_ptr, mem_size)
+}
+
+///|
+/// Set globals array in the context
+fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_ctx_set_globals(self.ptr(), globals_ptr)
 }
 
 ///|
@@ -189,60 +173,32 @@ fn JITContext::set_table_pointers(
       None => table_ptrs[i] = 0L // Null table pointer
     }
   }
-  @jit_ffi.c_jit_ctx_v2_set_table_pointers(
-    self.ctx_ptr,
+  @jit_ffi.c_jit_ctx_set_table_pointers(
+    self.ptr(),
     table_ptrs,
     jit_tables.length(),
   )
 }
 
 ///|
-/// JIT linear memory wrapper that handles memory.grow correctly.
-/// When memory.grow is called, realloc may return a new address.
-/// This wrapper ensures we free the correct (current) address.
-pub struct JITMemory {
-  priv initial_ptr : Int64 // For debugging only
-}
-
-///|
-/// Allocate JIT linear memory
-pub fn JITMemory::new(size : Int64) -> JITMemory? {
-  let ptr = @jit_ffi.c_jit_alloc_memory(size)
-  if ptr == 0L {
-    return None
-  }
-  Some(JITMemory::{ initial_ptr: ptr })
-}
-
-///|
-/// Get the initial memory pointer (for setting up JIT context)
-pub fn JITMemory::ptr(self : JITMemory) -> Int64 {
-  self.initial_ptr
-}
-
-///|
-/// Free the memory. This gets the current memory base from the v2 context,
-/// which may have changed due to memory.grow calling realloc.
-pub fn JITMemory::free(self : JITMemory) -> Unit {
-  // Get the current actual memory address (may have changed due to memory.grow)
-  let current_ptr = get_current_memory_base_v2()
-  if current_ptr != 0L {
-    @jit_ffi.c_jit_free_memory(current_ptr)
-  }
-  ignore(self.initial_ptr) // Suppress unused warning
-}
-
-///|
 /// Allocate linear memory for WASM (returns 0 on failure)
+/// NOTE: If you set the memory to a JITContext (via set_memory), the context
+/// takes ownership and its finalizer will free the memory. Do NOT call
+/// free_memory after that.
 pub fn alloc_memory(size : Int64) -> Int64 {
   @jit_ffi.c_jit_alloc_memory(size)
 }
 
 ///|
-/// Free linear memory
+/// Free linear memory that was NOT set to a JITContext.
+/// WARNING: Do NOT call this if memory was set to a context - the context's
+/// finalizer will handle cleanup.
 pub fn free_memory(mem_ptr : Int64) -> Unit {
   @jit_ffi.c_jit_free_memory(mem_ptr)
 }
+
+///|
+pub using @jit_ffi {c_jit_write_i64}
 
 ///|
 /// Initialize memory with data at offset
@@ -260,26 +216,23 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
 
 ///|
 /// Activate this context for WASI calls (v2)
+/// Uses reference counting to prevent GC from collecting this context
 fn JITContext::activate(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_set_context_v2(self.ctx_ptr)
+  @jit_ffi.c_jit_set_context_managed(self.ctx)
 }
 
-///|
-/// Free the context (v2)
-fn JITContext::free(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_free_context_v2(self.ctx_ptr)
-}
+// NOTE: No free() method needed - GC handles cleanup automatically!
 
 // ============ Shared JIT Indirect Table ============
 
 ///|
 /// Shared indirect table that can be used by multiple JIT modules
 /// This enables cross-module table sharing and runtime modifications
-pub struct JITTable {
-  priv table_ptr : Int64 // Pointer to the shared C-side table
-  priv size : Int
-  priv max : Int?
-  priv mut is_owned : Bool // Track if we should free this table
+struct JITTable {
+  table_ptr : Int64 // Pointer to the shared C-side table
+  size : Int
+  max : Int?
+  mut is_owned : Bool // Track if we should free this table
 } derive(Show)
 
 ///|
@@ -452,20 +405,15 @@ pub fn get_spectest_print_f64_f64_ptr() -> Int64 {
 // ============ Executable Code Block ============
 
 ///|
-/// Executable code block
-priv struct ExecCode {
-  ptr : Int64
-}
+/// GC-managed executable code block wrapper
+/// Memory is automatically freed when the object is garbage collected
+pub struct ExecCode(@jit_ffi.ExecCode)
 
 ///|
-/// Allocate and copy code to executable memory
-fn ExecCode::new(code : Array[Int]) -> ExecCode? {
+/// Allocate and copy code to executable memory (GC-managed)
+pub fn ExecCode::new(code : Array[Int]) -> ExecCode? {
   let size = code.length()
   if size == 0 {
-    return None
-  }
-  let ptr = @jit_ffi.c_jit_alloc_exec(size)
-  if ptr == 0L {
     return None
   }
   // Copy code bytes
@@ -473,19 +421,22 @@ fn ExecCode::new(code : Array[Int]) -> ExecCode? {
   for i, b in code {
     bytes[i] = b.to_byte()
   }
-  let result = @jit_ffi.c_jit_copy_code(ptr, bytes, size)
-  if result != 0 {
-    @jit_ffi.c_jit_free_exec(ptr) |> ignore
-    return None
+  let ec = @jit_ffi.c_jit_alloc_exec_managed(bytes, size)
+  // Check if allocation succeeded by verifying the pointer is valid
+  if @jit_ffi.c_jit_exec_code_ptr(ec) != 0L {
+    Some(ExecCode(ec))
+  } else {
+    None
   }
-  Some(ExecCode::{ ptr, })
 }
 
 ///|
-/// Free the executable memory
-fn ExecCode::free(self : ExecCode) -> Unit {
-  @jit_ffi.c_jit_free_exec(self.ptr) |> ignore
+/// Get the function pointer from this executable code
+pub fn ExecCode::ptr(self : ExecCode) -> Int64 {
+  @jit_ffi.c_jit_exec_code_ptr(self.0)
 }
+
+// NOTE: No free() method needed - GC handles cleanup automatically!
 
 // ============ Multi-value Return Support ============
 
@@ -552,8 +503,8 @@ fn JITContext::call_multi_return(
   let results_fixed = FixedArray::make(num_results.max(1), 0L)
   // Call FFI with v2 ABI
   // X19 = ctx_ptr (context pointer), X0-X7 = int params, D0-D7 = float params
-  let trap_code = @jit_ffi.c_jit_call_v2(
-    self.ctx_ptr, // Context pointer for v2 ABI
+  let trap_code = @jit_ffi.c_jit_call(
+    self.ptr(), // Context pointer for v2 ABI
     func_ptr,
     args_fixed,
     param_types_fixed,

@@ -2,10 +2,6 @@
 // JIT runtime FFI implementation
 // Provides executable memory allocation and function invocation
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -29,6 +25,7 @@ extern "C" {
 #endif
 
 #include "moonbit.h"
+#include "jit_ffi.h"
 
 // ============ Trap Handling ============
 // Jump buffer for catching JIT traps (BRK instructions and stack overflow)
@@ -190,201 +187,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_trap(void) {
     g_trap_code = 0;
 }
 
-// ============ JIT Context for function calls ============
-
-// JIT execution context - holds function table and memory pointer
-typedef struct {
-    void **func_table;      // Array of function pointers (indexed by func_idx)
-    int func_count;         // Number of entries in func_table
-    void **indirect_table;  // Array for call_indirect (indexed by table element index)
-    int indirect_count;     // Number of entries in indirect_table
-    uint8_t *memory_base;   // WebAssembly linear memory base
-    size_t memory_size;     // Memory size in bytes
-    // WASI args/env storage
-    char **args;            // Command line arguments
-    int argc;               // Number of arguments
-    char **envp;            // Environment variables (NAME=VALUE format)
-    int envc;               // Number of environment variables
-} jit_context_t;
-
-// Global JIT context (set before calling JIT functions)
-static jit_context_t *g_jit_context = NULL;
-
-// Set the global JIT context
-MOONBIT_FFI_EXPORT void wasmoon_jit_set_context(int64_t ctx_ptr) {
-    g_jit_context = (jit_context_t *)ctx_ptr;
-}
-
-// Get the global JIT context
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context(void) {
-    return (int64_t)g_jit_context;
-}
-
-// Allocate a JIT context
-// Memory layout for func_table:
-//   [indirect_table_ptr | func_ptr_0 | func_ptr_1 | ...]
-//   ^                    ^
-//   raw_alloc            func_table (returned pointer, offset +8)
-// This allows LDR X24, [X20, #-8] to load indirect_table_ptr in prologue
+// Allocate a JIT context v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
     jit_context_t *ctx = (jit_context_t *)malloc(sizeof(jit_context_t));
-    if (!ctx) return 0;
-
-    // Allocate func_count + 1 entries: first slot for indirect_table_ptr
-    void **raw_alloc = (void **)calloc(func_count + 1, sizeof(void *));
-    if (!raw_alloc) {
-        free(ctx);
-        return 0;
-    }
-    // func_table points to second element, so func_table[-1] = indirect_table_ptr
-    ctx->func_table = raw_alloc + 1;
-    // Initialize indirect_table_ptr slot to NULL (will be set when indirect table is allocated)
-    raw_alloc[0] = NULL;
-    ctx->func_count = func_count;
-    ctx->indirect_table = NULL;
-    ctx->indirect_count = 0;
-    ctx->memory_base = NULL;
-    ctx->memory_size = 0;
-    ctx->args = NULL;
-    ctx->argc = 0;
-    ctx->envp = NULL;
-    ctx->envc = 0;
-
-    return (int64_t)ctx;
-}
-
-// Set a function pointer in the context
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func(int64_t ctx_ptr, int idx, int64_t func_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && idx >= 0 && idx < ctx->func_count) {
-        ctx->func_table[idx] = (void *)func_ptr;
-    }
-}
-
-// Set memory in the context
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem_ptr, int64_t mem_size) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) {
-        ctx->memory_base = (uint8_t *)mem_ptr;
-        ctx->memory_size = (size_t)mem_size;
-    }
-}
-
-// Get function table base address
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) {
-        return (int64_t)ctx->func_table;
-    }
-    return 0;
-}
-
-// Allocate indirect table for call_indirect
-// This table is separate from func_table and used only for call_indirect
-// Each entry is 16 bytes: (func_ptr, type_idx) pair
-MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx || count <= 0) return 0;
-
-    // Free existing indirect table if any
-    if (ctx->indirect_table) {
-        free(ctx->indirect_table);
-    }
-
-    // Allocate 2 slots per entry: func_ptr and type_idx
-    ctx->indirect_table = (void **)calloc(count * 2, sizeof(void *));
-    if (!ctx->indirect_table) {
-        ctx->indirect_count = 0;
-        return 0;
-    }
-    // Initialize type indices to -1 (uninitialized marker)
-    for (int i = 0; i < count; i++) {
-        ctx->indirect_table[i * 2 + 1] = (void*)(intptr_t)(-1);
-    }
-    ctx->indirect_count = count;
-
-    // Store indirect_table pointer in func_table[-1] for prologue to load
-    // This is accessed via LDR X24, [X20, #-8]
-    ctx->func_table[-1] = ctx->indirect_table;
-
-    return 1;
-}
-
-// Set an entry in indirect table
-// table_idx: the WASM table index (0, 1, 2, ...)
-// func_idx: the function index to look up in func_table
-// type_idx: the type index of the function (for type checking)
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && ctx->indirect_table &&
-        table_idx >= 0 && table_idx < ctx->indirect_count &&
-        func_idx >= 0 && func_idx < ctx->func_count) {
-        // Store func_ptr at offset 0, type_idx at offset 8
-        ctx->indirect_table[table_idx * 2] = ctx->func_table[func_idx];
-        ctx->indirect_table[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
-    }
-}
-
-// Get indirect table base address (this is what X20 should point to for call_indirect)
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && ctx->indirect_table) {
-        return (int64_t)ctx->indirect_table;
-    }
-    // Fall back to func_table if no indirect table (backward compatibility)
-    if (ctx) {
-        return (int64_t)ctx->func_table;
-    }
-    return 0;
-}
-
-// Free a JIT context
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) {
-        if (ctx->func_table) {
-            // func_table points to raw_alloc + 1, so subtract 1 to get original allocation
-            free(ctx->func_table - 1);
-        }
-        if (ctx->indirect_table) {
-            free(ctx->indirect_table);
-        }
-        free(ctx);
-    }
-}
-
-// ============ JIT Context v2 (New ABI) ============
-// New ABI uses X20 as context pointer (callee-saved)
-// User params in X0-X7 (AAPCS64 compatible)
-// Float params in D0-D7 (AAPCS64 compatible)
-
-// JIT Context v2 - layout MUST match vcode/abi.mbt constants:
-//   +0:  func_table (void**)
-//   +8:  indirect_table (void**)    - Single indirect table (table 0)
-//   +16: memory_base (uint8_t*)
-//   +24: memory_size (size_t)
-//   +32: indirect_tables (void***)  - Array of table pointers (multi-table support)
-//   +40: table_count (int)          - Number of tables
-typedef struct {
-    void **func_table;        // +0:  Array of function pointers
-    void **indirect_table;    // +8:  Single indirect table (table 0) - used by prologue
-    uint8_t *memory_base;     // +16: WebAssembly linear memory base
-    size_t memory_size;       // +24: Memory size in bytes
-    // Multi-table support fields (offset +32 onwards)
-    void ***indirect_tables;  // +32: Array of indirect table pointers
-    int table_count;          // +40: Number of tables
-    // Additional fields (not accessed by JIT prologue directly)
-    int func_count;           // Number of entries in func_table
-    int indirect_count;       // Number of entries in indirect_table (table 0)
-    char **args;              // WASI: command line arguments
-    int argc;                 // WASI: number of arguments
-    char **envp;              // WASI: environment variables
-    int envc;                 // WASI: number of env vars
-} jit_context_v2_t;
-
-// Allocate a JIT context v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context_v2(int func_count) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)malloc(sizeof(jit_context_v2_t));
     if (!ctx) return 0;
 
     ctx->func_table = (void **)calloc(func_count, sizeof(void *));
@@ -397,8 +202,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context_v2(int func_count) {
     ctx->table_count = 0;
     ctx->indirect_table = NULL;   // Legacy single-table support
     ctx->indirect_count = 0;
+    ctx->owns_indirect_table = 0; // Default: does not own indirect_table
     ctx->memory_base = NULL;
     ctx->memory_size = 0;
+    ctx->globals = NULL;
     ctx->args = NULL;
     ctx->argc = 0;
     ctx->envp = NULL;
@@ -408,36 +215,45 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context_v2(int func_count) {
 }
 
 // Set a function pointer in context v2
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_func(int64_t ctx_ptr, int idx, int64_t func_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func(int64_t ctx_ptr, int idx, int64_t func_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx && idx >= 0 && idx < ctx->func_count) {
         ctx->func_table[idx] = (void *)func_ptr;
     }
 }
 
 // Set memory in context v2
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_memory(int64_t ctx_ptr, int64_t mem_ptr, int64_t mem_size) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem_ptr, int64_t mem_size) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         ctx->memory_base = (uint8_t *)mem_ptr;
         ctx->memory_size = (size_t)mem_size;
     }
 }
 
+// Set globals array in context v2
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_globals(int64_t ctx_ptr, int64_t globals_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (ctx) {
+        ctx->globals = (void *)globals_ptr;
+    }
+}
+
 // Get function table base from context v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_v2_get_func_table(int64_t ctx_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return ctx ? (int64_t)ctx->func_table : 0;
 }
 
 // Allocate indirect table for context v2
 // Each entry is 16 bytes: (func_ptr, type_idx) pair
 // Layout: [func_ptr_0, type_idx_0, func_ptr_1, type_idx_1, ...]
-MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_v2_alloc_indirect_table(int64_t ctx_ptr, int count) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;
 
-    if (ctx->indirect_table) {
+    // Only free if we own the current indirect_table
+    if (ctx->indirect_table && ctx->owns_indirect_table) {
         free(ctx->indirect_table);
     }
 
@@ -446,6 +262,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_v2_alloc_indirect_table(int64_t ctx_ptr, 
     ctx->indirect_table = (void **)calloc(count * 2, sizeof(void *));
     if (!ctx->indirect_table) {
         ctx->indirect_count = 0;
+        ctx->owns_indirect_table = 0;
         return 0;
     }
     // Initialize type indices to -1 (uninitialized marker)
@@ -453,13 +270,14 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_v2_alloc_indirect_table(int64_t ctx_ptr, 
         ctx->indirect_table[i * 2 + 1] = (void*)(intptr_t)(-1);
     }
     ctx->indirect_count = count;
+    ctx->owns_indirect_table = 1;  // We own this table
     return 1;
 }
 
 // Set indirect table entry in context v2
 // Now takes type_idx parameter to store alongside func_ptr
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx && ctx->indirect_table &&
         table_idx >= 0 && table_idx < ctx->indirect_count &&
         func_idx >= 0 && func_idx < ctx->func_count) {
@@ -470,8 +288,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_indirect(int64_t ctx_ptr, int tab
 }
 
 // Get indirect table base from context v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_v2_get_indirect_table(int64_t ctx_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx && ctx->indirect_table) {
         return (int64_t)ctx->indirect_table;
     }
@@ -479,17 +297,56 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_v2_get_indirect_table(int64_t ctx_ptr
 }
 
 // Free context v2
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_context_v2(int64_t ctx_ptr) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+// Also frees memory_base and globals (owned by context)
+// Note: indirect_table is only freed if owns_indirect_table is set
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         if (ctx->func_table) free(ctx->func_table);
-        // NOTE: Don't free indirect_tables array itself - it's owned by Store
-        // Only free the pointer array
         if (ctx->indirect_tables) free(ctx->indirect_tables);
-        // Legacy single-table mode: free if owned
-        if (ctx->indirect_table) free(ctx->indirect_table);
+        // Only free indirect_table if we own it (allocated via alloc_indirect_table)
+        // Borrowed tables (from set_table_pointers) are managed by JITTable's GC
+        if (ctx->indirect_table && ctx->owns_indirect_table) free(ctx->indirect_table);
+        if (ctx->memory_base) free(ctx->memory_base);
+        if (ctx->globals) free(ctx->globals);
         free(ctx);
     }
+}
+
+// ============ GC-managed JITContext ============
+
+// Finalize function for GC-managed JITContext
+static void finalize_jit_context(void *self) {
+    int64_t *ptr = (int64_t *)self;
+    if (*ptr != 0) {
+        wasmoon_jit_free_context(*ptr);
+        *ptr = 0;
+    }
+}
+
+// Create a GC-managed JIT context
+// Returns external object pointer (managed by MoonBit GC)
+MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_context_managed(int func_count) {
+    int64_t ctx_ptr = wasmoon_jit_alloc_context(func_count);
+    if (ctx_ptr == 0) {
+        return NULL;
+    }
+
+    // Create GC-managed external object with Int64 payload
+    int64_t *payload = (int64_t *)moonbit_make_external_object(finalize_jit_context, sizeof(int64_t));
+    if (!payload) {
+        wasmoon_jit_free_context(ctx_ptr);
+        return NULL;
+    }
+
+    *payload = ctx_ptr;
+    return payload;
+}
+
+// Get the context pointer from a managed JITContext object
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_context_ptr(void *jit_context) {
+    if (!jit_context) return 0;
+    return *(int64_t *)jit_context;
 }
 
 // ============ Shared Indirect Table Support ============
@@ -536,30 +393,31 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
 
 // Configure a JIT context to use a shared indirect table instead of allocating its own
 // This allows multiple modules to share the same table
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx) return;
 
-    // Free existing indirect table if any (we're replacing it)
-    if (ctx->indirect_table) {
+    // Free existing indirect table only if we own it
+    if (ctx->indirect_table && ctx->owns_indirect_table) {
         free(ctx->indirect_table);
     }
 
-    // Point to the shared table
+    // Point to the shared table (borrowed, not owned)
     ctx->indirect_table = (void **)shared_table_ptr;
     ctx->indirect_count = count;
+    ctx->owns_indirect_table = 0;  // We don't own this table
 }
 
 // Configure JIT context with multiple indirect tables (for multi-table support)
 // table_ptrs: Array of Int64 (table pointers from Store.jit_tables)
 // table_count: Number of tables
 // This enables proper multi-table support where each call_indirect can specify which table to use
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_table_pointers(
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     int64_t ctx_ptr,
     int64_t* table_ptrs,
     int table_count
 ) {
-    jit_context_v2_t *ctx = (jit_context_v2_t *)ctx_ptr;
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || table_count <= 0 || !table_ptrs) return;
 
     // Free existing indirect_tables array if any
@@ -583,24 +441,38 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_v2_set_table_pointers(
     ctx->table_count = table_count;
 
     // For backward compatibility: if there's at least one table, set it as the legacy single table
+    // Note: This is a borrowed pointer, we don't own it
     if (table_count > 0 && table_ptrs[0] != 0) {
         ctx->indirect_table = (void **)table_ptrs[0];
-        // Note: We don't set indirect_count here because we don't own this table
+        ctx->owns_indirect_table = 0;  // Borrowed from JITTable, not owned
     }
 }
 
 
 // Global v2 context (for WASI trampolines)
-static jit_context_v2_t *g_jit_context_v2 = NULL;
+static jit_context_t *g_jit_context = NULL;
+// Global reference to managed JITContext object (to prevent GC collection)
+static void *g_jit_context_obj = NULL;
 
-// Set global v2 context
-MOONBIT_FFI_EXPORT void wasmoon_jit_set_context_v2(int64_t ctx_ptr) {
-    g_jit_context_v2 = (jit_context_v2_t *)ctx_ptr;
+// Set global v2 context with managed object (handles reference counting)
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_context_managed(void *jit_context) {
+    // Decref old context object
+    if (g_jit_context_obj != NULL) {
+        moonbit_decref(g_jit_context_obj);
+    }
+    // Incref new context object
+    if (jit_context != NULL) {
+        moonbit_incref(jit_context);
+        g_jit_context = (jit_context_t *)(*(int64_t *)jit_context);
+    } else {
+        g_jit_context = NULL;
+    }
+    g_jit_context_obj = jit_context;
 }
 
 // Get global v2 context
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context_v2(void) {
-    return (int64_t)g_jit_context_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context(void) {
+    return (int64_t)g_jit_context;
 }
 
 // Call JIT function with new ABI (v2)
@@ -609,7 +481,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context_v2(void) {
 // - Stack for params 8+
 // JIT prologue loads X20/X21/X22/X24 from context pointed by X19
 // param_types: 0=I32, 1=I64, 2=F32, 3=F64 (currently unused, for future D register optimization)
-MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
+MOONBIT_FFI_EXPORT int wasmoon_jit_call(
     int64_t ctx_ptr,
     int64_t func_ptr,
     int64_t* args,
@@ -622,6 +494,9 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
     if (!func_ptr || !ctx_ptr) return -1;
     (void)param_types;  // Reserved for future use
 
+    // Debug: print context info
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+
     // Save parameters for use after call
     volatile int saved_num_results = num_results;
     volatile int64_t *saved_results = results;
@@ -632,7 +507,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
     g_trap_active = 1;
 
     // Set global context for WASI trampolines
-    g_jit_context_v2 = (jit_context_v2_t *)ctx_ptr;
+    g_jit_context = (jit_context_t *)ctx_ptr;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
@@ -775,657 +650,6 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_v2(
     return 0;
 }
 
-// ============ WASI Trampolines ============
-// These trampolines use the JIT ABI:
-// X0 = func_table_ptr (ignored), X1 = memory_base (ignored since we use global context)
-// X2, X3, ... = actual WASM arguments
-
-// fd_write trampoline: (func_table, mem_base, fd, iovs, iovs_len, nwritten) -> errno
-// Note: The first two args (func_table, mem_base) are passed by JIT calling convention
-// but we use the global context for memory access
-static int64_t wasi_fd_write_impl(int64_t func_table, int64_t mem_base, int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nwritten_ptr) {
-    (void)func_table;  // unused
-    (void)mem_base;    // we use global context instead
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-    int32_t total_written = 0;
-
-    // Only handle stdout (1) and stderr (2)
-    if (fd != 1 && fd != 2) {
-        return 8; // ERRNO_BADF
-    }
-
-    for (int64_t i = 0; i < iovs_len; i++) {
-        int32_t iov_offset = (int32_t)(iovs + i * 8);
-        int32_t buf_ptr = *(int32_t *)(mem + iov_offset);
-        int32_t buf_len = *(int32_t *)(mem + iov_offset + 4);
-
-        if (buf_len > 0) {
-            // Write to stdout/stderr
-            fwrite(mem + buf_ptr, 1, buf_len, (fd == 1) ? stdout : stderr);
-            fflush((fd == 1) ? stdout : stderr);
-            total_written += buf_len;
-        }
-    }
-
-    // Write the number of bytes written
-    if (nwritten_ptr > 0) {
-        *(int32_t *)(mem + nwritten_ptr) = total_written;
-    }
-
-    return 0; // Success
-}
-
-// proc_exit trampoline: (func_table, mem_base, exit_code) -> noreturn
-// Note: The first two args are JIT calling convention overhead
-static int64_t wasi_proc_exit_impl(int64_t func_table, int64_t mem_base, int64_t exit_code) {
-    (void)func_table;
-    (void)mem_base;
-    exit((int)exit_code);
-    return 0; // Never reached
-}
-
-// fd_read trampoline: (func_table, mem_base, fd, iovs, iovs_len, nread_ptr) -> errno
-// Only supports stdin (fd=0)
-static int64_t wasi_fd_read_impl(int64_t func_table, int64_t mem_base, int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nread_ptr) {
-    (void)func_table;
-    (void)mem_base;
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-    int32_t total_read = 0;
-
-    // Only handle stdin (0)
-    if (fd != 0) {
-        return 8; // ERRNO_BADF
-    }
-
-    for (int64_t i = 0; i < iovs_len; i++) {
-        int32_t iov_offset = (int32_t)(iovs + i * 8);
-        int32_t buf_ptr = *(int32_t *)(mem + iov_offset);
-        int32_t buf_len = *(int32_t *)(mem + iov_offset + 4);
-
-        if (buf_len > 0) {
-            size_t bytes_read = fread(mem + buf_ptr, 1, buf_len, stdin);
-            total_read += (int32_t)bytes_read;
-            if (bytes_read < (size_t)buf_len) {
-                break; // EOF or error
-            }
-        }
-    }
-
-    // Write the number of bytes read
-    if (nread_ptr > 0) {
-        *(int32_t *)(mem + nread_ptr) = total_read;
-    }
-
-    return 0; // Success
-}
-
-// args_sizes_get trampoline: (func_table, mem_base, argc_ptr, argv_buf_size_ptr) -> errno
-static int64_t wasi_args_sizes_get_impl(int64_t func_table, int64_t mem_base, int64_t argc_ptr, int64_t argv_buf_size_ptr) {
-    (void)func_table;
-    (void)mem_base;
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-    int argc = g_jit_context->argc;
-    char **args = g_jit_context->args;
-
-    // Calculate total buffer size
-    size_t buf_size = 0;
-    for (int i = 0; i < argc; i++) {
-        buf_size += strlen(args[i]) + 1; // +1 for null terminator
-    }
-
-    *(int32_t *)(mem + argc_ptr) = argc;
-    *(int32_t *)(mem + argv_buf_size_ptr) = (int32_t)buf_size;
-
-    return 0; // Success
-}
-
-// args_get trampoline: (func_table, mem_base, argv_ptr, argv_buf_ptr) -> errno
-static int64_t wasi_args_get_impl(int64_t func_table, int64_t mem_base, int64_t argv_ptr, int64_t argv_buf_ptr) {
-    (void)func_table;
-    (void)mem_base;
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-    int argc = g_jit_context->argc;
-    char **args = g_jit_context->args;
-
-    int32_t buf_offset = (int32_t)argv_buf_ptr;
-    for (int i = 0; i < argc; i++) {
-        // Store pointer to string in argv array
-        *(int32_t *)(mem + argv_ptr + i * 4) = buf_offset;
-        // Copy string to buffer
-        size_t len = strlen(args[i]) + 1;
-        memcpy(mem + buf_offset, args[i], len);
-        buf_offset += (int32_t)len;
-    }
-
-    return 0; // Success
-}
-
-// environ_sizes_get trampoline: (func_table, mem_base, environc_ptr, environ_buf_size_ptr) -> errno
-static int64_t wasi_environ_sizes_get_impl(int64_t func_table, int64_t mem_base, int64_t environc_ptr, int64_t environ_buf_size_ptr) {
-    (void)func_table;
-    (void)mem_base;
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-    int envc = g_jit_context->envc;
-    char **envp = g_jit_context->envp;
-
-    // Calculate total buffer size
-    size_t buf_size = 0;
-    for (int i = 0; i < envc; i++) {
-        buf_size += strlen(envp[i]) + 1; // +1 for null terminator
-    }
-
-    *(int32_t *)(mem + environc_ptr) = envc;
-    *(int32_t *)(mem + environ_buf_size_ptr) = (int32_t)buf_size;
-
-    return 0; // Success
-}
-
-// environ_get trampoline: (func_table, mem_base, environ_ptr, environ_buf_ptr) -> errno
-static int64_t wasi_environ_get_impl(int64_t func_table, int64_t mem_base, int64_t environ_ptr, int64_t environ_buf_ptr) {
-    (void)func_table;
-    (void)mem_base;
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-    int envc = g_jit_context->envc;
-    char **envp = g_jit_context->envp;
-
-    int32_t buf_offset = (int32_t)environ_buf_ptr;
-    for (int i = 0; i < envc; i++) {
-        // Store pointer to string in environ array
-        *(int32_t *)(mem + environ_ptr + i * 4) = buf_offset;
-        // Copy string to buffer
-        size_t len = strlen(envp[i]) + 1;
-        memcpy(mem + buf_offset, envp[i], len);
-        buf_offset += (int32_t)len;
-    }
-
-    return 0; // Success
-}
-
-// clock_time_get trampoline: (func_table, mem_base, clock_id, precision, time_ptr) -> errno
-static int64_t wasi_clock_time_get_impl(int64_t func_table, int64_t mem_base, int64_t clock_id, int64_t precision, int64_t time_ptr) {
-    (void)func_table;
-    (void)mem_base;
-    (void)precision;
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-    int64_t time_ns = 0;
-
-    // clock_id: 0 = realtime, 1 = monotonic
-    if (clock_id == 0 || clock_id == 1) {
-#ifdef _WIN32
-        FILETIME ft;
-        GetSystemTimeAsFileTime(&ft);
-        uint64_t time_100ns = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-        // Convert from 100ns intervals since 1601 to ns since 1970
-        time_ns = (int64_t)((time_100ns - 116444736000000000ULL) * 100);
-#else
-        struct timespec ts;
-        clock_gettime(clock_id == 0 ? CLOCK_REALTIME : CLOCK_MONOTONIC, &ts);
-        time_ns = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-#endif
-    } else {
-        return 28; // ERRNO_INVAL
-    }
-
-    *(int64_t *)(mem + time_ptr) = time_ns;
-    return 0; // Success
-}
-
-// random_get trampoline: (func_table, mem_base, buf_ptr, buf_len) -> errno
-static int64_t wasi_random_get_impl(int64_t func_table, int64_t mem_base, int64_t buf_ptr, int64_t buf_len) {
-    (void)func_table;
-    (void)mem_base;
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-
-    // Simple PRNG - not cryptographically secure
-    for (int64_t i = 0; i < buf_len; i++) {
-        mem[buf_ptr + i] = (uint8_t)(rand() & 0xFF);
-    }
-
-    return 0; // Success
-}
-
-// fd_close trampoline: (func_table, mem_base, fd) -> errno
-// Stub - just returns success for stdio fds
-static int64_t wasi_fd_close_impl(int64_t func_table, int64_t mem_base, int64_t fd) {
-    (void)func_table;
-    (void)mem_base;
-
-    // For stdio fds (0, 1, 2), just return success
-    if (fd >= 0 && fd <= 2) {
-        return 0; // Success
-    }
-    return 8; // ERRNO_BADF
-}
-
-// fd_fdstat_get trampoline: (func_table, mem_base, fd, fdstat_ptr) -> errno
-static int64_t wasi_fd_fdstat_get_impl(int64_t func_table, int64_t mem_base, int64_t fd, int64_t fdstat_ptr) {
-    (void)func_table;
-    (void)mem_base;
-
-    if (!g_jit_context || !g_jit_context->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context->memory_base;
-
-    // For stdio fds (0, 1, 2), return basic fdstat
-    if (fd >= 0 && fd <= 2) {
-        // fdstat structure:
-        // u8 fs_filetype
-        // u16 fs_flags
-        // u64 fs_rights_base
-        // u64 fs_rights_inheriting
-        mem[fdstat_ptr] = 2; // FILETYPE_CHARACTER_DEVICE
-        *(uint16_t *)(mem + fdstat_ptr + 2) = 0; // fs_flags
-        *(uint64_t *)(mem + fdstat_ptr + 8) = 0xFFFFFFFFFFFFFFFFULL; // all rights
-        *(uint64_t *)(mem + fdstat_ptr + 16) = 0xFFFFFFFFFFFFFFFFULL; // all rights
-        return 0; // Success
-    }
-    return 8; // ERRNO_BADF
-}
-
-// fd_prestat_get trampoline: (func_table, mem_base, fd, prestat_ptr) -> errno
-// Returns BADF for now (no preopened directories in JIT mode)
-static int64_t wasi_fd_prestat_get_impl(int64_t func_table, int64_t mem_base, int64_t fd, int64_t prestat_ptr) {
-    (void)func_table;
-    (void)mem_base;
-    (void)fd;
-    (void)prestat_ptr;
-    return 8; // ERRNO_BADF - no preopened directories
-}
-
-// Get fd_write trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) {
-    return (int64_t)wasi_fd_write_impl;
-}
-
-// Get proc_exit trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) {
-    return (int64_t)wasi_proc_exit_impl;
-}
-
-// Get fd_read trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_ptr(void) {
-    return (int64_t)wasi_fd_read_impl;
-}
-
-// Get args_sizes_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_ptr(void) {
-    return (int64_t)wasi_args_sizes_get_impl;
-}
-
-// Get args_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_ptr(void) {
-    return (int64_t)wasi_args_get_impl;
-}
-
-// Get environ_sizes_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_ptr(void) {
-    return (int64_t)wasi_environ_sizes_get_impl;
-}
-
-// Get environ_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_ptr(void) {
-    return (int64_t)wasi_environ_get_impl;
-}
-
-// Get clock_time_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_ptr(void) {
-    return (int64_t)wasi_clock_time_get_impl;
-}
-
-// Get random_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_ptr(void) {
-    return (int64_t)wasi_random_get_impl;
-}
-
-// Get fd_close trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_ptr(void) {
-    return (int64_t)wasi_fd_close_impl;
-}
-
-// Get fd_fdstat_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_ptr(void) {
-    return (int64_t)wasi_fd_fdstat_get_impl;
-}
-
-// Get fd_prestat_get trampoline pointer
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_ptr(void) {
-    return (int64_t)wasi_fd_prestat_get_impl;
-}
-
-// ============ WASI Trampolines v2 (New ABI) ============
-// These trampolines use the new JIT ABI v2:
-// - X20 = context pointer (callee-saved, set before call)
-// - X0-X7 = actual WASM arguments (AAPCS64 compatible)
-// - No dummy func_table/mem_base parameters
-// - Uses g_jit_context_v2 for memory access
-
-// fd_write v2: (fd, iovs, iovs_len, nwritten) -> errno
-static int64_t wasi_fd_write_v2(int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nwritten_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int32_t total_written = 0;
-
-    // Only handle stdout (1) and stderr (2)
-    if (fd != 1 && fd != 2) {
-        return 8; // ERRNO_BADF
-    }
-
-    for (int64_t i = 0; i < iovs_len; i++) {
-        int32_t iov_offset = (int32_t)(iovs + i * 8);
-        int32_t buf_ptr = *(int32_t *)(mem + iov_offset);
-        int32_t buf_len = *(int32_t *)(mem + iov_offset + 4);
-
-        if (buf_len > 0) {
-            fwrite(mem + buf_ptr, 1, buf_len, (fd == 1) ? stdout : stderr);
-            fflush((fd == 1) ? stdout : stderr);
-            total_written += buf_len;
-        }
-    }
-
-    if (nwritten_ptr > 0) {
-        *(int32_t *)(mem + nwritten_ptr) = total_written;
-    }
-
-    return 0; // Success
-}
-
-// proc_exit v2: (exit_code) -> noreturn
-static int64_t wasi_proc_exit_v2(int64_t exit_code) {
-    exit((int)exit_code);
-    return 0; // Never reached
-}
-
-// fd_read v2: (fd, iovs, iovs_len, nread_ptr) -> errno
-static int64_t wasi_fd_read_v2(int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nread_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int32_t total_read = 0;
-
-    // Only handle stdin (0)
-    if (fd != 0) {
-        return 8; // ERRNO_BADF
-    }
-
-    for (int64_t i = 0; i < iovs_len; i++) {
-        int32_t iov_offset = (int32_t)(iovs + i * 8);
-        int32_t buf_ptr = *(int32_t *)(mem + iov_offset);
-        int32_t buf_len = *(int32_t *)(mem + iov_offset + 4);
-
-        if (buf_len > 0) {
-            size_t bytes_read = fread(mem + buf_ptr, 1, buf_len, stdin);
-            total_read += (int32_t)bytes_read;
-            if (bytes_read < (size_t)buf_len) {
-                break; // EOF or error
-            }
-        }
-    }
-
-    if (nread_ptr > 0) {
-        *(int32_t *)(mem + nread_ptr) = total_read;
-    }
-
-    return 0; // Success
-}
-
-// args_sizes_get v2: (argc_ptr, argv_buf_size_ptr) -> errno
-static int64_t wasi_args_sizes_get_v2(int64_t argc_ptr, int64_t argv_buf_size_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int argc = g_jit_context_v2->argc;
-    char **args = g_jit_context_v2->args;
-
-    size_t buf_size = 0;
-    for (int i = 0; i < argc; i++) {
-        buf_size += strlen(args[i]) + 1;
-    }
-
-    *(int32_t *)(mem + argc_ptr) = argc;
-    *(int32_t *)(mem + argv_buf_size_ptr) = (int32_t)buf_size;
-
-    return 0; // Success
-}
-
-// args_get v2: (argv_ptr, argv_buf_ptr) -> errno
-static int64_t wasi_args_get_v2(int64_t argv_ptr, int64_t argv_buf_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int argc = g_jit_context_v2->argc;
-    char **args = g_jit_context_v2->args;
-
-    int32_t buf_offset = (int32_t)argv_buf_ptr;
-    for (int i = 0; i < argc; i++) {
-        *(int32_t *)(mem + argv_ptr + i * 4) = buf_offset;
-        size_t len = strlen(args[i]) + 1;
-        memcpy(mem + buf_offset, args[i], len);
-        buf_offset += (int32_t)len;
-    }
-
-    return 0; // Success
-}
-
-// environ_sizes_get v2: (environc_ptr, environ_buf_size_ptr) -> errno
-static int64_t wasi_environ_sizes_get_v2(int64_t environc_ptr, int64_t environ_buf_size_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int envc = g_jit_context_v2->envc;
-    char **envp = g_jit_context_v2->envp;
-
-    size_t buf_size = 0;
-    for (int i = 0; i < envc; i++) {
-        buf_size += strlen(envp[i]) + 1;
-    }
-
-    *(int32_t *)(mem + environc_ptr) = envc;
-    *(int32_t *)(mem + environ_buf_size_ptr) = (int32_t)buf_size;
-
-    return 0; // Success
-}
-
-// environ_get v2: (environ_ptr, environ_buf_ptr) -> errno
-static int64_t wasi_environ_get_v2(int64_t environ_ptr, int64_t environ_buf_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int envc = g_jit_context_v2->envc;
-    char **envp = g_jit_context_v2->envp;
-
-    int32_t buf_offset = (int32_t)environ_buf_ptr;
-    for (int i = 0; i < envc; i++) {
-        *(int32_t *)(mem + environ_ptr + i * 4) = buf_offset;
-        size_t len = strlen(envp[i]) + 1;
-        memcpy(mem + buf_offset, envp[i], len);
-        buf_offset += (int32_t)len;
-    }
-
-    return 0; // Success
-}
-
-// clock_time_get v2: (clock_id, precision, time_ptr) -> errno
-static int64_t wasi_clock_time_get_v2(int64_t clock_id, int64_t precision, int64_t time_ptr) {
-    (void)precision;
-
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-    int64_t time_ns = 0;
-
-    if (clock_id == 0 || clock_id == 1) {
-#ifdef _WIN32
-        FILETIME ft;
-        GetSystemTimeAsFileTime(&ft);
-        uint64_t time_100ns = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-        time_ns = (int64_t)((time_100ns - 116444736000000000ULL) * 100);
-#else
-        struct timespec ts;
-        clock_gettime(clock_id == 0 ? CLOCK_REALTIME : CLOCK_MONOTONIC, &ts);
-        time_ns = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-#endif
-    } else {
-        return 28; // ERRNO_INVAL
-    }
-
-    *(int64_t *)(mem + time_ptr) = time_ns;
-    return 0; // Success
-}
-
-// random_get v2: (buf_ptr, buf_len) -> errno
-static int64_t wasi_random_get_v2(int64_t buf_ptr, int64_t buf_len) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-
-    for (int64_t i = 0; i < buf_len; i++) {
-        mem[buf_ptr + i] = (uint8_t)(rand() & 0xFF);
-    }
-
-    return 0; // Success
-}
-
-// fd_close v2: (fd) -> errno
-static int64_t wasi_fd_close_v2(int64_t fd) {
-    if (fd >= 0 && fd <= 2) {
-        return 0; // Success
-    }
-    return 8; // ERRNO_BADF
-}
-
-// fd_fdstat_get v2: (fd, fdstat_ptr) -> errno
-static int64_t wasi_fd_fdstat_get_v2(int64_t fd, int64_t fdstat_ptr) {
-    if (!g_jit_context_v2 || !g_jit_context_v2->memory_base) {
-        return 8; // ERRNO_BADF
-    }
-
-    uint8_t *mem = g_jit_context_v2->memory_base;
-
-    if (fd >= 0 && fd <= 2) {
-        mem[fdstat_ptr] = 2; // FILETYPE_CHARACTER_DEVICE
-        *(uint16_t *)(mem + fdstat_ptr + 2) = 0; // fs_flags
-        *(uint64_t *)(mem + fdstat_ptr + 8) = 0xFFFFFFFFFFFFFFFFULL; // all rights
-        *(uint64_t *)(mem + fdstat_ptr + 16) = 0xFFFFFFFFFFFFFFFFULL; // all rights
-        return 0; // Success
-    }
-    return 8; // ERRNO_BADF
-}
-
-// fd_prestat_get v2: (fd, prestat_ptr) -> errno
-static int64_t wasi_fd_prestat_get_v2(int64_t fd, int64_t prestat_ptr) {
-    (void)fd;
-    (void)prestat_ptr;
-    return 8; // ERRNO_BADF - no preopened directories
-}
-
-// Get v2 trampoline pointers
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_v2_ptr(void) {
-    return (int64_t)wasi_fd_write_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_v2_ptr(void) {
-    return (int64_t)wasi_proc_exit_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_v2_ptr(void) {
-    return (int64_t)wasi_fd_read_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_v2_ptr(void) {
-    return (int64_t)wasi_args_sizes_get_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_v2_ptr(void) {
-    return (int64_t)wasi_args_get_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_v2_ptr(void) {
-    return (int64_t)wasi_environ_sizes_get_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_v2_ptr(void) {
-    return (int64_t)wasi_environ_get_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_v2_ptr(void) {
-    return (int64_t)wasi_clock_time_get_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_v2_ptr(void) {
-    return (int64_t)wasi_random_get_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_v2_ptr(void) {
-    return (int64_t)wasi_fd_close_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_v2_ptr(void) {
-    return (int64_t)wasi_fd_fdstat_get_v2;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_v2_ptr(void) {
-    return (int64_t)wasi_fd_prestat_get_v2;
-}
-
 // ============ Spectest Trampolines ============
 // These are no-op functions used by the WebAssembly test suite
 
@@ -1526,9 +750,10 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory(int64_t mem_ptr) {
     }
 }
 
-// Grow linear memory by delta pages
-// Returns the previous size in pages, or -1 on failure
-// max_pages: maximum allowed pages (0 means no limit, use 65536 as default max)
+// ============ Memory operations v2 (for new ABI) ============
+// These use g_jit_context instead of g_jit_context
+
+// Grow linear memory by delta pages (v2)
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(int32_t delta, int32_t max_pages) {
     if (!g_jit_context) return -1;
     if (delta < 0) return -1;
@@ -1564,119 +789,42 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(int32_t delta, int32_t max_pa
     return current_pages;
 }
 
-// Get current memory size in pages
+// Get current memory size in pages (v2)
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size(void) {
     if (!g_jit_context) return 0;
     return (int32_t)(g_jit_context->memory_size / WASM_PAGE_SIZE);
 }
 
-// Get current memory base (for reloading after memory.grow)
+// Get current memory base (v2)
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base(void) {
     if (!g_jit_context) return 0;
     return (int64_t)g_jit_context->memory_base;
 }
 
-// Get current memory size in bytes (for reloading after memory.grow)
+// Get current memory size in bytes (v2)
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes(void) {
     if (!g_jit_context) return 0;
     return (int64_t)g_jit_context->memory_size;
 }
 
-// Get function pointer for memory_grow (for JIT to call directly)
+// Get function pointer for memory_grow v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
     return (int64_t)wasmoon_jit_memory_grow;
 }
 
-// Get function pointer for get_memory_base (for JIT to call directly)
+// Get function pointer for get_memory_base v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base_ptr(void) {
     return (int64_t)wasmoon_jit_get_memory_base;
 }
 
-// Get function pointer for get_memory_size_bytes (for JIT to call directly)
+// Get function pointer for get_memory_size_bytes v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes_ptr(void) {
     return (int64_t)wasmoon_jit_get_memory_size_bytes;
 }
 
-// Get function pointer for memory_size (for JIT to call directly)
+// Get function pointer for memory_size v2
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr(void) {
     return (int64_t)wasmoon_jit_memory_size;
-}
-
-// ============ Memory operations v2 (for new ABI) ============
-// These use g_jit_context_v2 instead of g_jit_context
-
-// Grow linear memory by delta pages (v2)
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow_v2(int32_t delta, int32_t max_pages) {
-    if (!g_jit_context_v2) return -1;
-    if (delta < 0) return -1;
-
-    size_t current_size = g_jit_context_v2->memory_size;
-    int32_t current_pages = (int32_t)(current_size / WASM_PAGE_SIZE);
-
-    // Check for overflow
-    int64_t new_pages_64 = (int64_t)current_pages + (int64_t)delta;
-    if (new_pages_64 > 65536) return -1;  // Max 4GB (65536 pages)
-
-    // Check against max limit
-    int32_t effective_max = (max_pages > 0) ? max_pages : 65536;
-    if (new_pages_64 > effective_max) return -1;
-
-    int32_t new_pages = (int32_t)new_pages_64;
-    size_t new_size = (size_t)new_pages * WASM_PAGE_SIZE;
-
-    // No change needed if delta is 0
-    if (delta == 0) return current_pages;
-
-    // Reallocate memory
-    uint8_t *new_mem = (uint8_t *)realloc(g_jit_context_v2->memory_base, new_size);
-    if (!new_mem) return -1;
-
-    // Zero-initialize the new pages
-    memset(new_mem + current_size, 0, new_size - current_size);
-
-    // Update context
-    g_jit_context_v2->memory_base = new_mem;
-    g_jit_context_v2->memory_size = new_size;
-
-    return current_pages;
-}
-
-// Get current memory size in pages (v2)
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size_v2(void) {
-    if (!g_jit_context_v2) return 0;
-    return (int32_t)(g_jit_context_v2->memory_size / WASM_PAGE_SIZE);
-}
-
-// Get current memory base (v2)
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base_v2(void) {
-    if (!g_jit_context_v2) return 0;
-    return (int64_t)g_jit_context_v2->memory_base;
-}
-
-// Get current memory size in bytes (v2)
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes_v2(void) {
-    if (!g_jit_context_v2) return 0;
-    return (int64_t)g_jit_context_v2->memory_size;
-}
-
-// Get function pointer for memory_grow v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_grow_v2;
-}
-
-// Get function pointer for get_memory_base v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_get_memory_base_v2;
-}
-
-// Get function pointer for get_memory_size_bytes v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_get_memory_size_bytes_v2;
-}
-
-// Get function pointer for memory_size v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_size_v2;
 }
 
 // Copy data to linear memory at offset
@@ -1896,6 +1044,56 @@ typedef struct {
     size_t size;
 } jit_code_block_t;
 
+// ============ GC-managed ExecCode ============
+
+// Finalize function for ExecCode - releases the executable memory
+// NOTE: This is called by MoonBit GC when the object becomes unreachable
+// The finalize function MUST NOT free the container itself (GC does that)
+static void finalize_exec_code(void *self) {
+    int64_t *ptr = (int64_t *)self;
+    if (*ptr != 0) {
+        wasmoon_jit_free_exec(*ptr);
+        *ptr = 0;
+    }
+}
+
+// Create a GC-managed executable code object
+// Returns external object pointer (managed by MoonBit GC)
+MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_exec_managed(moonbit_bytes_t code, int size) {
+    if (size <= 0 || !code) {
+        return NULL;
+    }
+
+    // Allocate executable memory
+    int64_t ptr = wasmoon_jit_alloc_exec(size);
+    if (ptr == 0) {
+        return NULL;
+    }
+
+    // Copy code to executable memory
+    int result = wasmoon_jit_copy_code(ptr, code, size);
+    if (result != 0) {
+        wasmoon_jit_free_exec(ptr);
+        return NULL;
+    }
+
+    // Create GC-managed external object with Int64 payload
+    int64_t *payload = (int64_t *)moonbit_make_external_object(finalize_exec_code, sizeof(int64_t));
+    if (!payload) {
+        wasmoon_jit_free_exec(ptr);
+        return NULL;
+    }
+
+    *payload = ptr;
+    return payload;
+}
+
+// Get the executable pointer from a managed ExecCode object
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exec_code_ptr(void *exec_code) {
+    if (!exec_code) return 0;
+    return *(int64_t *)exec_code;
+}
+
 // Maximum number of allocated code blocks (simple implementation)
 #define MAX_CODE_BLOCKS 1024
 static jit_code_block_t code_blocks[MAX_CODE_BLOCKS];
@@ -1991,8 +1189,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_copy_code(int64_t dest, moonbit_bytes_t src, 
 // memory.fill: Fill memory region with a byte value
 // Parameters: dst (offset), val (byte value), size (count)
 // Traps if: dst + size > memory_size (out of bounds)
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v2(int32_t dst, int32_t val, int32_t size) {
-    jit_context_v2_t *ctx = g_jit_context_v2;
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill(int32_t dst, int32_t val, int32_t size) {
+    jit_context_t *ctx = g_jit_context;
     if (!ctx || !ctx->memory_base) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
@@ -2018,8 +1216,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v2(int32_t dst, int32_t val, int
 // Parameters: dst (dest offset), src (source offset), size (count)
 // Traps if: dst + size > memory_size || src + size > memory_size
 // Handles overlapping regions correctly (like memmove)
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v2(int32_t dst, int32_t src, int32_t size) {
-    jit_context_v2_t *ctx = g_jit_context_v2;
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(int32_t dst, int32_t src, int32_t size) {
+    jit_context_t *ctx = g_jit_context;
     if (!ctx || !ctx->memory_base) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
@@ -2044,17 +1242,17 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v2(int32_t dst, int32_t src, int
 }
 
 // Get function pointer for memory_fill v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_fill_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_fill;
 }
 
 // Get function pointer for memory_copy v2
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_v2_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_copy_v2;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_copy;
 }
 
 // Free executable memory
-MOONBIT_FFI_EXPORT int wasmoon_jit_free_exec(int64_t ptr_i64) {
+static int wasmoon_jit_free_exec(int64_t ptr_i64) {
     void *ptr = (void *)ptr_i64;
     if (!ptr) {
         return -1;
@@ -2080,6 +1278,9 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_free_exec(int64_t ptr_i64) {
     return -1;  // Not found
 }
 
-#ifdef __cplusplus
+// Write an int64 value to a memory address
+MOONBIT_FFI_EXPORT void wasmoon_jit_write_i64(int64_t addr, int64_t value) {
+    if (addr != 0) {
+        *((int64_t*)addr) = value;
+    }
 }
-#endif

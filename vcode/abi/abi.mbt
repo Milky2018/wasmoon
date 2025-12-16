@@ -48,6 +48,11 @@ pub const CTX_INDIRECT_TABLES_OFFSET : Int = 32
 /// Offset of table_count in JITContext
 pub const CTX_TABLE_COUNT_OFFSET : Int = 40
 
+///|
+/// Offset of globals array in JITContext
+/// This is a pointer to an array of global variable values (WasmValue*)
+pub const CTX_GLOBALS_OFFSET : Int = 48
+
 // ============ Reserved Registers ============
 
 ///|

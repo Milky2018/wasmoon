@@ -485,6 +485,47 @@ fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
 }
 
 ///|
+/// Allocate and initialize globals array for JIT
+/// Returns the pointer to the allocated array, or 0 on failure
+/// The caller is responsible for freeing the memory
+fn init_jit_globals(
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+) -> Int64 {
+  let num_globals = instance.global_addrs.length()
+  if num_globals == 0 {
+    return 0L // No globals, no need to allocate
+  }
+  // Allocate 16 bytes per global (8 bytes value + 8 bytes tag)
+  let size = (num_globals * 16).to_int64()
+  let globals_ptr = @jit.alloc_memory(size)
+  if globals_ptr == 0L {
+    return 0L
+  }
+  // Write each global value to the array
+  for i in 0..<num_globals {
+    let global_addr = instance.global_addrs[i]
+    let global_inst = store.globals[global_addr]
+    let value = global_inst.get()
+    // Convert value to Int64 for storage
+    let raw_value = match value {
+      I32(n) => n.to_int64()
+      I64(n) => n
+      F32(f) => f.reinterpret_as_int().to_int64()
+      F64(d) => d.reinterpret_as_int64()
+      FuncRef(idx) => idx.to_int64()
+      ExternRef(idx) => idx.to_int64()
+      Null => 0L
+    }
+    // Write value at offset i * 16
+    let offset = globals_ptr + (i * 16).to_int64()
+    // Use FFI to write the value
+    @jit.c_jit_write_i64(offset, raw_value)
+  }
+  globals_ptr
+}
+
+///|
 /// Run a function using JIT compilation
 fn run_with_jit(
   mod_ : @types.Module,
@@ -520,13 +561,18 @@ fn run_with_jit(
           let mem_ptr = @jit.alloc_memory(mem_size)
           if mem_ptr == 0L {
             println("Error: Failed to allocate linear memory")
-            jm.free()
+            // NOTE: No need to manually free - GC handles cleanup
             return []
           }
           // Initialize data segments
           init_data_segments(mod_, mem_ptr)
           // Set memory in JIT context
           jm.set_memory(mem_ptr, mem_size)
+          // Initialize globals
+          let globals_ptr = init_jit_globals(instance, store)
+          if globals_ptr != 0L {
+            jm.set_globals(globals_ptr)
+          }
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {
@@ -551,8 +597,7 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   println("JIT Trap: \{msg}")
-                  @jit.free_memory(mem_ptr)
-                  jm.free()
+                  // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
                   return []
                 }
               }
@@ -591,15 +636,11 @@ fn run_with_jit(
                   values.push(v)
                 }
               }
-              // Cleanup
-              @jit.free_memory(mem_ptr)
-              jm.free()
+              // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)
               values
             }
             None => {
               println("Error: Function '\{func_name}' not found in JIT module")
-              @jit.free_memory(mem_ptr)
-              jm.free()
               []
             }
           }
@@ -631,6 +672,16 @@ fn compile_module_to_jit(
       )
     }
   }
+  // Build global types array (imports + module globals)
+  let global_types : Array[@types.GlobalType] = []
+  for imp in mod_.imports {
+    if imp.desc is Global(global_type) {
+      global_types.push(global_type)
+    }
+  }
+  for global in mod_.globals {
+    global_types.push(global.type_)
+  }
   // Get memory max limit from module (if memory is defined)
   let memory_max : Int? = if mod_.memories.length() > 0 {
     mod_.memories[0].limits.max
@@ -654,6 +705,7 @@ fn compile_module_to_jit(
       import_func_type_indices,
       memory_max~,
       tables=mod_.tables,
+      global_types~,
     )
     let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (O2 level)

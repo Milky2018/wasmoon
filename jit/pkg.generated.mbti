@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/jit"
 
 import(
   "Milky2018/wasmoon/cwasm"
+  "Milky2018/wasmoon/jit/jit_ffi"
   "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/vcode"
   "moonbitlang/core/hashset"
@@ -10,6 +11,8 @@ import(
 
 // Values
 pub fn alloc_memory(Int64) -> Int64
+
+pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
 pub fn check_trap() -> Unit raise JITTrap
 
@@ -21,7 +24,7 @@ pub fn get_args_sizes_get_ptr() -> Int64
 
 pub fn get_clock_time_get_ptr() -> Int64
 
-pub fn get_current_memory_base_v2() -> Int64
+pub fn get_current_memory_base() -> Int64
 
 pub fn get_environ_get_ptr() -> Int64
 
@@ -39,19 +42,11 @@ pub fn get_fd_write_ptr() -> Int64
 
 pub fn get_memory_base_ptr() -> Int64
 
-pub fn get_memory_base_v2_ptr() -> Int64
-
 pub fn get_memory_grow_ptr() -> Int64
-
-pub fn get_memory_grow_v2_ptr() -> Int64
 
 pub fn get_memory_size_bytes_ptr() -> Int64
 
-pub fn get_memory_size_bytes_v2_ptr() -> Int64
-
 pub fn get_memory_size_ptr() -> Int64
-
-pub fn get_memory_size_v2_ptr() -> Int64
 
 pub fn get_proc_exit_ptr() -> Int64
 
@@ -206,6 +201,12 @@ pub fn DebugContext::set_step_mode(Self, StepMode) -> Unit
 pub fn DebugContext::should_pause(Self, Int, Int) -> Bool
 pub impl Show for DebugContext
 
+pub struct ExecCode(@jit_ffi.ExecCode)
+#deprecated
+pub fn ExecCode::inner(Self) -> @jit_ffi.ExecCode
+pub fn ExecCode::new(Array[Int]) -> Self?
+pub fn ExecCode::ptr(Self) -> Int64
+
 pub(all) struct FunctionEntry {
   func_idx : Int
   mut status : CompilationStatus
@@ -257,19 +258,9 @@ pub struct JITFunction {
   // private fields
 }
 
-pub struct JITMemory {
-  // private fields
-}
-pub fn JITMemory::free(Self) -> Unit
-pub fn JITMemory::new(Int64) -> Self?
-pub fn JITMemory::ptr(Self) -> Int64
-
-pub struct JITModule {
-  // private fields
-}
+type JITModule
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
-pub fn JITModule::free(Self) -> Unit
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
@@ -278,11 +269,10 @@ pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int, Int)]) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])]) -> Self?
 pub fn JITModule::new() -> Self
+pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
 
-pub struct JITTable {
-  // private fields
-}
+type JITTable
 pub fn JITTable::free(Self) -> Unit
 pub fn JITTable::get_max(Self) -> Int?
 pub fn JITTable::get_size(Self) -> Int

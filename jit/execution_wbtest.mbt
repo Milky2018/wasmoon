@@ -137,7 +137,6 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
 
@@ -597,7 +596,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
 
