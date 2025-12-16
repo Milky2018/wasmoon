@@ -503,9 +503,12 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
     void **table = (void **)calloc(count * 2, sizeof(void *));
     if (!table) return 0;
 
-    // Initialize type indices to -1 (uninitialized marker)
+    // Initialize all entries to -1 (null reference sentinel)
+    // func_ptr = -1 represents ref.null (matching IR translator convention)
+    // type_idx = -1 represents uninitialized/invalid type
     for (int i = 0; i < count; i++) {
-        table[i * 2 + 1] = (void*)(intptr_t)(-1);
+        table[i * 2] = (void*)(intptr_t)(-1);     // func_ptr (null reference)
+        table[i * 2 + 1] = (void*)(intptr_t)(-1); // type_idx
     }
 
     return (int64_t)table;
