@@ -143,6 +143,8 @@ pub fn IRBuilder::fsqrt(Self, Value) -> Value
 pub fn IRBuilder::fsub(Self, Value, Value) -> Value
 pub fn IRBuilder::ftrunc(Self, Value) -> Value
 pub fn IRBuilder::get_function(Self) -> Function
+pub fn IRBuilder::global_get(Self, Int, Type) -> Value
+pub fn IRBuilder::global_set(Self, Int, Value) -> Unit
 pub fn IRBuilder::iadd(Self, Value, Value) -> Value
 pub fn IRBuilder::icmp(Self, IntCC, Value, Value) -> Value
 pub fn IRBuilder::icmp_eq(Self, Value, Value) -> Value
@@ -299,6 +301,8 @@ pub enum Opcode {
   Copy
   TableGet(Int)
   TableSet(Int)
+  GlobalGet(Int)
+  GlobalSet(Int)
   Call(Int)
   CallIndirect(Int, Int)
 }
@@ -343,8 +347,9 @@ pub(all) struct Translator {
   memory_max : Int?
   table_base_offsets : Array[Int]
   table_sizes : Array[Int]
+  global_types : Array[@types.GlobalType]
 }
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table]) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table], global_types? : Array[@types.GlobalType]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {

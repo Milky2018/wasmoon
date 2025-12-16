@@ -184,6 +184,8 @@ pub(all) enum VCodeOpcode {
   MemoryCopy
   TableGet(Int)
   TableSet(Int)
+  GlobalGet(Int)
+  GlobalSet(Int)
 }
 pub impl Show for VCodeOpcode
 

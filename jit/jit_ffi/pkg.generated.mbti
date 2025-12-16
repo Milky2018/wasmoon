@@ -38,6 +38,8 @@ pub fn c_jit_ctx_v2_get_func_table(Int64) -> Int64
 
 pub fn c_jit_ctx_v2_set_func(Int64, Int, Int64) -> Unit
 
+pub fn c_jit_ctx_v2_set_globals(Int64, Int64) -> Unit
+
 pub fn c_jit_ctx_v2_set_indirect(Int64, Int, Int, Int) -> Unit
 
 pub fn c_jit_ctx_v2_set_memory(Int64, Int64, Int64) -> Unit
@@ -129,6 +131,8 @@ pub fn c_jit_set_context(Int64) -> Unit
 pub fn c_jit_set_context_v2(Int64) -> Unit
 
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
+
+pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
 // Errors
 

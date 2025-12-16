@@ -11,6 +11,8 @@ import(
 // Values
 pub fn alloc_memory(Int64) -> Int64
 
+pub fn c_jit_write_i64(Int64, Int64) -> Unit
+
 pub fn check_trap() -> Unit raise JITTrap
 
 pub fn free_memory(Int64) -> Unit
@@ -278,6 +280,7 @@ pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int, Int)]) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])]) -> Self?
 pub fn JITModule::new() -> Self
+pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
 
 pub struct JITTable {

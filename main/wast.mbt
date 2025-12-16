@@ -377,13 +377,11 @@ fn try_compile_jit(
           }
           // Initialize indirect table for call_indirect
           init_elem_segments(mod_, jm, instance, store)
-          Some(
-            JITModuleContext::{
-              jit_module: jm,
-              memory_ptr: mem_ptr,
-              globals_ptr,
-            },
-          )
+          Some(JITModuleContext::{
+            jit_module: jm,
+            memory_ptr: mem_ptr,
+            globals_ptr,
+          })
         }
       }
     }
