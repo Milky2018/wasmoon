@@ -202,6 +202,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
     ctx->table_count = 0;
     ctx->indirect_table = NULL;   // Legacy single-table support
     ctx->indirect_count = 0;
+    ctx->owns_indirect_table = 0; // Default: does not own indirect_table
     ctx->memory_base = NULL;
     ctx->memory_size = 0;
     ctx->globals = NULL;
@@ -251,7 +252,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;
 
-    if (ctx->indirect_table) {
+    // Only free if we own the current indirect_table
+    if (ctx->indirect_table && ctx->owns_indirect_table) {
         free(ctx->indirect_table);
     }
 
@@ -260,6 +262,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int
     ctx->indirect_table = (void **)calloc(count * 2, sizeof(void *));
     if (!ctx->indirect_table) {
         ctx->indirect_count = 0;
+        ctx->owns_indirect_table = 0;
         return 0;
     }
     // Initialize type indices to -1 (uninitialized marker)
@@ -267,6 +270,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int
         ctx->indirect_table[i * 2 + 1] = (void*)(intptr_t)(-1);
     }
     ctx->indirect_count = count;
+    ctx->owns_indirect_table = 1;  // We own this table
     return 1;
 }
 
@@ -294,12 +298,15 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
 
 // Free context v2
 // Also frees memory_base and globals (owned by context)
+// Note: indirect_table is only freed if owns_indirect_table is set
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         if (ctx->func_table) free(ctx->func_table);
         if (ctx->indirect_tables) free(ctx->indirect_tables);
-        if (ctx->indirect_table) free(ctx->indirect_table);
+        // Only free indirect_table if we own it (allocated via alloc_indirect_table)
+        // Borrowed tables (from set_table_pointers) are managed by JITTable's GC
+        if (ctx->indirect_table && ctx->owns_indirect_table) free(ctx->indirect_table);
         if (ctx->memory_base) free(ctx->memory_base);
         if (ctx->globals) free(ctx->globals);
         free(ctx);
@@ -390,14 +397,15 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx) return;
 
-    // Free existing indirect table if any (we're replacing it)
-    if (ctx->indirect_table) {
+    // Free existing indirect table only if we own it
+    if (ctx->indirect_table && ctx->owns_indirect_table) {
         free(ctx->indirect_table);
     }
 
-    // Point to the shared table
+    // Point to the shared table (borrowed, not owned)
     ctx->indirect_table = (void **)shared_table_ptr;
     ctx->indirect_count = count;
+    ctx->owns_indirect_table = 0;  // We don't own this table
 }
 
 // Configure JIT context with multiple indirect tables (for multi-table support)
@@ -433,9 +441,10 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     ctx->table_count = table_count;
 
     // For backward compatibility: if there's at least one table, set it as the legacy single table
+    // Note: This is a borrowed pointer, we don't own it
     if (table_count > 0 && table_ptrs[0] != 0) {
         ctx->indirect_table = (void **)table_ptrs[0];
-        // Note: We don't set indirect_count here because we don't own this table
+        ctx->owns_indirect_table = 0;  // Borrowed from JITTable, not owned
     }
 }
 

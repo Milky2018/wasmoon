@@ -31,6 +31,7 @@ typedef struct {
     // Additional fields (not accessed by JIT prologue directly)
     int func_count;           // Number of entries in func_table
     int indirect_count;       // Number of entries in indirect_table (table 0)
+    int owns_indirect_table;  // Whether this context owns indirect_table (should free it)
     char **args;              // WASI: command line arguments
     int argc;                 // WASI: number of arguments
     char **envp;              // WASI: environment variables
