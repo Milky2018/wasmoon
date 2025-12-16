@@ -21,8 +21,6 @@ fn JITFunction::new(
   { name, exec_code, param_types, result_types }
 }
 
-// NOTE: No free() method needed - ExecCode is GC-managed!
-
 ///|
 /// Loaded precompiled module with executable functions
 pub struct JITModule {
@@ -84,9 +82,7 @@ pub fn JITModule::load(
             // Set function pointer in context's function table
             ctx.set_func(entry.func_idx, ec.ptr())
           }
-          None =>
-            // Failed to allocate - GC will clean up the context
-            return None
+          None => return None
         }
       }
 
@@ -121,10 +117,7 @@ pub fn JITModule::from_single_function(
       // Create executable code
       let exec_code = ExecCode::new(code_bytes)
       match exec_code {
-        None => {
-          free_memory(mem_ptr)
-          return None
-        }
+        None => return None
         Some(ec) => {
           // Set function in table
           ctx.set_func(0, ec.ptr())
@@ -240,14 +233,6 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
     Some(f) => f.exec_code.ptr()
     None => 0L
   }
-}
-
-///|
-/// Free JIT context (executable functions are GC-managed)
-pub fn JITModule::free(self : JITModule) -> Unit {
-  // NOTE: All resources (JITFunctions, ExecCodes, JITContext) are now GC-managed
-  // This method is kept for API compatibility but does nothing
-  ignore(self)
 }
 
 ///|

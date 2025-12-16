@@ -58,10 +58,9 @@ fn WastResult::new() -> WastResult {
 
 ///|
 /// JIT module context containing compiled module and runtime state
+/// NOTE: Memory and globals are now owned by JITContext and freed by its finalizer
 priv struct JITModuleContext {
   jit_module : @jit.JITModule
-  memory_ptr : Int64
-  globals_ptr : Int64
 }
 
 ///|
@@ -363,7 +362,7 @@ fn try_compile_jit(
           let mem_size = get_memory_size(instance, store)
           let mem_ptr = @jit.alloc_memory(mem_size)
           if mem_ptr == 0L {
-            jm.free()
+            // NOTE: No need to manually free - GC handles cleanup
             return None
           }
           // Initialize data segments
@@ -377,11 +376,8 @@ fn try_compile_jit(
           }
           // Initialize indirect table for call_indirect
           init_elem_segments(mod_, jm, instance, store)
-          Some(JITModuleContext::{
-            jit_module: jm,
-            memory_ptr: mem_ptr,
-            globals_ptr,
-          })
+          // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
+          Some(JITModuleContext::{ jit_module: jm })
         }
       }
     }

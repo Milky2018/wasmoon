@@ -561,7 +561,7 @@ fn run_with_jit(
           let mem_ptr = @jit.alloc_memory(mem_size)
           if mem_ptr == 0L {
             println("Error: Failed to allocate linear memory")
-            jm.free()
+            // NOTE: No need to manually free - GC handles cleanup
             return []
           }
           // Initialize data segments
@@ -597,11 +597,7 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   println("JIT Trap: \{msg}")
-                  @jit.free_memory(mem_ptr)
-                  if globals_ptr != 0L {
-                    @jit.free_memory(globals_ptr)
-                  }
-                  jm.free()
+                  // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
                   return []
                 }
               }
@@ -640,21 +636,11 @@ fn run_with_jit(
                   values.push(v)
                 }
               }
-              // Cleanup
-              @jit.free_memory(mem_ptr)
-              if globals_ptr != 0L {
-                @jit.free_memory(globals_ptr)
-              }
-              jm.free()
+              // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)
               values
             }
             None => {
               println("Error: Function '\{func_name}' not found in JIT module")
-              @jit.free_memory(mem_ptr)
-              if globals_ptr != 0L {
-                @jit.free_memory(globals_ptr)
-              }
-              jm.free()
               []
             }
           }

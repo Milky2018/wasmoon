@@ -258,19 +258,11 @@ pub struct JITFunction {
   // private fields
 }
 
-pub struct JITMemory {
-  // private fields
-}
-pub fn JITMemory::free(Self) -> Unit
-pub fn JITMemory::new(Int64) -> Self?
-pub fn JITMemory::ptr(Self) -> Int64
-
 pub struct JITModule {
   // private fields
 }
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
-pub fn JITModule::free(Self) -> Unit
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?

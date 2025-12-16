@@ -48,7 +48,6 @@ test "f32 store/load with align=1" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
 
@@ -100,7 +99,6 @@ test "f64 store/load with align=1" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let @jit.Single((result : Double)) = jm.call_with_context_poly(f, ())
@@ -149,7 +147,6 @@ test "i32 store/load at unaligned address" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let @jit.Single((result : Int)) = jm.call_with_context_poly(f, ())
@@ -198,7 +195,6 @@ test "i64 store/load at unaligned address" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let @jit.Single((result : Int64)) = jm.call_with_context_poly(f, ())
@@ -247,7 +243,6 @@ test "f64 store/load at offset 5" {
     4096L,
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let @jit.Single((result : Double)) = jm.call_with_context_poly(f, ())

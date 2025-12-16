@@ -176,7 +176,6 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let @jit.Single((result0 : Float)) = jm.call_with_context_poly(
@@ -266,7 +265,6 @@ test "A critical bug as in data/f32_br_2locals" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let @jit.Single((result0 : Float)) = jm.call_with_context_poly(

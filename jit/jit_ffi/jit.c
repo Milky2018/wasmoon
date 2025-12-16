@@ -293,15 +293,15 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
 }
 
 // Free context v2
+// Also frees memory_base and globals (owned by context)
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         if (ctx->func_table) free(ctx->func_table);
-        // NOTE: Don't free indirect_tables array itself - it's owned by Store
-        // Only free the pointer array
         if (ctx->indirect_tables) free(ctx->indirect_tables);
-        // Legacy single-table mode: free if owned
         if (ctx->indirect_table) free(ctx->indirect_table);
+        if (ctx->memory_base) free(ctx->memory_base);
+        if (ctx->globals) free(ctx->globals);
         free(ctx);
     }
 }
@@ -484,6 +484,9 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call(
 ) {
     if (!func_ptr || !ctx_ptr) return -1;
     (void)param_types;  // Reserved for future use
+
+    // Debug: print context info
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
 
     // Save parameters for use after call
     volatile int saved_num_results = num_results;
@@ -1039,6 +1042,7 @@ typedef struct {
 // The finalize function MUST NOT free the container itself (GC does that)
 static void finalize_exec_code(void *self) {
     int64_t *ptr = (int64_t *)self;
+    // TEMPORARY: Don't actually free to test if premature collection is the issue
     if (*ptr != 0) {
         wasmoon_jit_free_exec(*ptr);
         *ptr = 0;

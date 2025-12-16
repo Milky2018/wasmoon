@@ -52,7 +52,7 @@ fn run_cwasm(
       let mem_ptr = @jit.alloc_memory(mem_size)
       if mem_ptr == 0L {
         println("Error: failed to allocate linear memory")
-        jm.free()
+        // NOTE: No need to manually free - GC handles cleanup
         return
       }
       // Initialize data segments based on file name
@@ -79,8 +79,7 @@ fn run_cwasm(
             let n = @strconv.parse_int64(arg) catch {
               _ => {
                 println("Error: invalid argument '\{arg}'")
-                @jit.free_memory(mem_ptr)
-                jm.free()
+                // NOTE: Memory is freed by JITContext finalizer (GC-managed)
                 return
               }
             }
@@ -90,8 +89,7 @@ fn run_cwasm(
           let results = jm.call_with_context(f, args) catch {
             @jit.JITTrap(msg) => {
               println("JIT Trap: \{msg}")
-              @jit.free_memory(mem_ptr)
-              jm.free()
+              // NOTE: Memory is freed by JITContext finalizer (GC-managed)
               return
             }
           }
@@ -102,9 +100,7 @@ fn run_cwasm(
         }
         None => println("Error: function '\{func_name}' not found")
       }
-      // Free memory and module
-      @jit.free_memory(mem_ptr)
-      jm.free()
+      // NOTE: Memory and JIT module are freed automatically by GC
     }
     None => println("Error: failed to load JIT module")
   }

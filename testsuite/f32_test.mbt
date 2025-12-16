@@ -79,7 +79,6 @@ test "f32 add" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   // Pass Float values (f32) since the WASM function takes f32 parameter
@@ -182,7 +181,6 @@ test "f64 add" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   let @jit.Single((result0 : Double)) = jm.call_with_context_poly(
@@ -283,7 +281,6 @@ test "f32 sub" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   // 10.0 - 3.5 = 6.5
@@ -413,7 +410,6 @@ test "f32 mul" {
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
-  defer jm.free()
   let func = jm.get_func_by_name("test")
   guard func is Some(f) else { return }
   // 4.0 * 2.5 = 10.0

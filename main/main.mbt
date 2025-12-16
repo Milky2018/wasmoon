@@ -223,7 +223,7 @@ fn main {
                   )
                 }
               } else {
-                println("Error: missing file argument")
+                abort("missing file argument")
               }
             }
             "compile" => {

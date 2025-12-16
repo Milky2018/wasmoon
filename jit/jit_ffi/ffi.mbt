@@ -317,7 +317,7 @@ pub extern "c" fn c_jit_alloc_exec_managed(
 
 ///|
 /// Get the function pointer from a GC-managed ExecCode object
-#borrow(exec_code)
+#owned(exec_code)
 pub extern "c" fn c_jit_exec_code_ptr(exec_code : ExecCode) -> Int64 = "wasmoon_jit_exec_code_ptr"
 
 // ============ Multi-value Return Support ============
