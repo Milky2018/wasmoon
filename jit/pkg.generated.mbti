@@ -273,7 +273,6 @@ pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
 
 type JITTable
-pub fn JITTable::free(Self) -> Unit
 pub fn JITTable::get_max(Self) -> Int?
 pub fn JITTable::get_size(Self) -> Int
 pub fn JITTable::new(Int, Int?) -> Self?
