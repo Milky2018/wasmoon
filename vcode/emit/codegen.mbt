@@ -1687,26 +1687,32 @@ fn MachineCode::emit_instruction(
       self.emit_blr(16)
     }
     TableGet(_table_idx) => {
-      // Load function reference from indirect table
+      // Load reference from indirect table
       // Uses: [elem_idx], Defs: [result]
       // X24 = indirect_table base pointer
-      // result = indirect_table[elem_idx] = [X24 + elem_idx * 8]
+      // Table layout: each element is 16 bytes (func_ptr, type_idx)
+      // result = table[elem_idx].func_ptr = [X24 + elem_idx * 16]
       let result_reg = wreg_num(inst.defs[0])
       let elem_idx_reg = reg_num(inst.uses[0])
-      // Use LDR Xd, [Xn, Xm, LSL #3] - scaled register offset
-      // This automatically multiplies elem_idx by 8 (LSL #3)
-      self.emit_ldr_reg_scaled(result_reg, 24, elem_idx_reg, 3)
+      // Calculate address: X16 = X24 + (elem_idx << 4)
+      // Use ADD (shifted register): ADD X16, X24, elem_idx, LSL #4
+      self.emit_add_shifted(16, 24, elem_idx_reg, @instr.ShiftType::Lsl, 4)
+      // LDR result, [X16]
+      self.emit_ldr_imm(result_reg, 16, 0)
     }
     TableSet(_table_idx) => {
-      // Store function reference to indirect table
+      // Store reference to indirect table
       // Uses: [elem_idx, value], Defs: []
       // X24 = indirect_table base pointer
-      // indirect_table[elem_idx] = value => [X24 + elem_idx * 8] = value
+      // Table layout: each element is 16 bytes (func_ptr, type_idx)
+      // table[elem_idx].func_ptr = value => [X24 + elem_idx * 16] = value
       let elem_idx_reg = reg_num(inst.uses[0])
       let value_reg = reg_num(inst.uses[1])
-      // Use STR Xd, [Xn, Xm, LSL #3] - scaled register offset
-      // This automatically multiplies elem_idx by 8 (LSL #3)
-      self.emit_str_reg_scaled(value_reg, 24, elem_idx_reg, 3)
+      // Calculate address: X16 = X24 + (elem_idx << 4)
+      // Use ADD (shifted register): ADD X16, X24, elem_idx, LSL #4
+      self.emit_add_shifted(16, 24, elem_idx_reg, @instr.ShiftType::Lsl, 4)
+      // STR value, [X16]
+      self.emit_str_imm(value_reg, 16, 0)
     }
   }
 }
