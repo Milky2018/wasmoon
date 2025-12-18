@@ -102,8 +102,6 @@ pub(all) enum VCodeOpcode {
   Mul
   SDiv
   UDiv
-  SRem // Signed remainder (implemented as: rem = a - (a/b)*b)
-  URem // Unsigned remainder
   // Bitwise operations
   And
   Or
@@ -112,7 +110,6 @@ pub(all) enum VCodeOpcode {
   AShr // Arithmetic shift right
   LShr // Logical shift right
   Rotr // Rotate right
-  Rotl // Rotate left (emulated as rotr with (64-n))
   Not // Bitwise NOT
   // Floating-point operations (Bool = true for f32, false for f64)
   FAdd(Bool)
@@ -150,7 +147,6 @@ pub(all) enum VCodeOpcode {
   Extend(ExtendKind)
   Truncate
   IntToFloat(IntToFloatKind)
-  FloatToInt(FloatToIntKind)
   FPromote // f32 -> f64
   FDemote // f64 -> f32
   Bitcast // Reinterpret bits between int/float of same size
@@ -160,7 +156,6 @@ pub(all) enum VCodeOpcode {
   Select
   // Bit counting operations
   Clz // Count leading zeros
-  Ctz // Count trailing zeros
   Popcnt // Population count (number of 1 bits)
   Rbit // Reverse bits in register
   // Special
@@ -208,11 +203,6 @@ pub(all) enum VCodeOpcode {
   // Returns the smaller value; if one is NaN, returns the other
   FpuMinnm(Bool)
 
-  // Memory bounds check (for WASM linear memory safety) - DEPRECATED
-  // Use TrapIfUgt with pre-computed end_addr and memory_size instead
-  // BoundsCheck(offset, access_size): checks wasm_addr + offset + access_size <= memory_size
-  // Uses: [wasm_addr], traps if out of bounds
-  BoundsCheck(Int, Int)
   // AArch64-specific: shifted operand instructions
   // These combine an arithmetic/logical op with a shift in one instruction
   AddShifted(ShiftType, Int) // ADD Xd, Xn, Xm, shift #amount
@@ -311,8 +301,6 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Mul => "mul"
     SDiv => "sdiv"
     UDiv => "udiv"
-    SRem => "srem"
-    URem => "urem"
     And => "and"
     Or => "or"
     Xor => "xor"
@@ -320,7 +308,6 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     AShr => "ashr"
     LShr => "lshr"
     Rotr => "rotr"
-    Rotl => "rotl"
     Not => "not"
     FAdd(is_f32) => if is_f32 { "fadd.s" } else { "fadd.d" }
     FSub(is_f32) => if is_f32 { "fsub.s" } else { "fsub.d" }
@@ -360,13 +347,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Extend(kind) => "extend.\{kind}"
     Truncate => "trunc"
     IntToFloat(kind) => "i2f.\{kind}"
-    FloatToInt(kind) => "f2i.\{kind}"
     FPromote => "fpromote"
     FDemote => "fdemote"
     Bitcast => "bitcast"
     Select => "select"
     Clz => "clz"
-    Ctz => "ctz"
     Popcnt => "popcnt"
     Rbit => "rbit"
     Nop => "nop"
@@ -387,7 +372,6 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       }
     FpuMaxnm(is_f32) => if is_f32 { "fmaxnm.s" } else { "fmaxnm.d" }
     FpuMinnm(is_f32) => if is_f32 { "fminnm.s" } else { "fminnm.d" }
-    BoundsCheck(offset, size) => "bounds_check +\{offset}, \{size}"
     // AArch64-specific
     AddShifted(shift, amount) => "add.\{shift} #\{amount}"
     SubShifted(shift, amount) => "sub.\{shift} #\{amount}"

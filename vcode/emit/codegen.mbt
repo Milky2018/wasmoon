@@ -408,23 +408,11 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_ror_reg(rd, rn, rm)
     }
-    Rotl =>
-      // DEPRECATED: Rotl is now expanded in lower phase to LoadConst(0) + Sub + Rotr
-      // This handler should never be reached
-      abort("Rotl should be expanded in lower phase")
     Not => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.emit_mvn(rd, rn)
     }
-    SRem =>
-      // DEPRECATED: SRem is now expanded in lower phase to SDiv + Msub
-      // This handler should never be reached
-      abort("SRem should be expanded in lower phase")
-    URem =>
-      // DEPRECATED: URem is now expanded in lower phase to UDiv + Msub
-      // This handler should never be reached
-      abort("URem should be expanded in lower phase")
     Bitcast => {
       // Reinterpret bits between int and float
       // IMPORTANT: For f32 bitcast, we must preserve exact bits (including NaN payloads)
@@ -755,10 +743,6 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       self.emit_clz(rd, rn)
     }
-    Ctz =>
-      // DEPRECATED: Ctz is now expanded in lower phase to Rbit + Clz
-      // This handler should never be reached
-      abort("Ctz should be expanded in lower phase")
     Rbit => {
       // Reverse bits in register
       let rd = wreg_num(inst.defs[0])
@@ -806,37 +790,6 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       self.emit_mov_reg32(rd, rn)
     }
-    FloatToInt(kind) =>
-      // Both trapping and saturating FloatToInt are now expanded in lower phase.
-      // Trapping: FpuCmp + TrapIf + FcvtToInt
-      // Saturating: FcvtToInt directly (AArch64 handles saturation)
-      match kind {
-        // Trapping conversions - should never reach emit phase
-        F32ToI32S
-        | F32ToI32U
-        | F32ToI64S
-        | F32ToI64U
-        | F64ToI32S
-        | F64ToI32U
-        | F64ToI64S
-        | F64ToI64U =>
-          abort(
-            "Trapping FloatToInt should be expanded in lower phase to FpuCmp + TrapIf + FcvtToInt",
-          )
-        // Saturating conversions (now handled by FcvtToInt directly)
-        // AArch64 FCVTZS/FCVTZU already implements WebAssembly saturating semantics
-        F32ToI32SSat
-        | F32ToI32USat
-        | F32ToI64SSat
-        | F32ToI64USat
-        | F64ToI32SSat
-        | F64ToI32USat
-        | F64ToI64SSat
-        | F64ToI64USat =>
-          abort(
-            "Saturating FloatToInt should use FcvtToInt directly in lower phase",
-          )
-      }
     IntToFloat(kind) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -956,12 +909,6 @@ fn MachineCode::emit_instruction(
         self.emit_fminnm_d(rd, rn, rm)
       }
     }
-    BoundsCheck(_offset, _access_size) =>
-      // DEPRECATED: BoundsCheck is now expanded in lower phase to:
-      // Extend + AddImm/Add + LoadPtr + TrapIfUgt
-      // This handler should never be reached
-      abort("BoundsCheck should be expanded in lower phase")
-    // AArch64-specific: shifted operand instructions
     AddShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])

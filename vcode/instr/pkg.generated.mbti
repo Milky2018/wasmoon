@@ -138,8 +138,6 @@ pub(all) enum VCodeOpcode {
   Mul
   SDiv
   UDiv
-  SRem
-  URem
   And
   Or
   Xor
@@ -147,7 +145,6 @@ pub(all) enum VCodeOpcode {
   AShr
   LShr
   Rotr
-  Rotl
   Not
   FAdd(Bool)
   FSub(Bool)
@@ -179,13 +176,11 @@ pub(all) enum VCodeOpcode {
   Extend(ExtendKind)
   Truncate
   IntToFloat(IntToFloatKind)
-  FloatToInt(FloatToIntKind)
   FPromote
   FDemote
   Bitcast
   Select
   Clz
-  Ctz
   Popcnt
   Rbit
   Nop
@@ -196,7 +191,6 @@ pub(all) enum VCodeOpcode {
   FpuSel(Bool, Cond)
   FpuMaxnm(Bool)
   FpuMinnm(Bool)
-  BoundsCheck(Int, Int)
   AddShifted(ShiftType, Int)
   SubShifted(ShiftType, Int)
   AndShifted(ShiftType, Int)
