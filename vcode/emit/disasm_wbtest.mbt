@@ -637,3 +637,51 @@ test "cranelift_style_epilogue_sequence" {
     ),
   )
 }
+
+///|
+/// Test 32-bit instruction variants for i32 operations
+test "32-bit instruction variants" {
+  let mc = MachineCode::new()
+
+  // 32-bit arithmetic
+  mc.emit_sdiv32(0, 1, 2) // SDIV W0, W1, W2
+  mc.emit_udiv32(3, 4, 5) // UDIV W3, W4, W5
+  mc.emit_sub_reg32(6, 7, 8) // SUB W6, W7, W8
+
+  // 32-bit shifts
+  mc.emit_lsl_reg32(9, 10, 11) // LSL W9, W10, W11
+  mc.emit_lsr_reg32(12, 13, 14) // LSR W12, W13, W14
+  mc.emit_asr_reg32(15, 16, 17) // ASR W15, W16, W17
+  mc.emit_ror_reg32(18, 19, 20) // ROR W18, W19, W20
+
+  // 32-bit bit manipulation
+  mc.emit_clz32(21, 22) // CLZ W21, W22
+  mc.emit_rbit32(23, 24) // RBIT W23, W24
+
+  // 32-bit comparison
+  mc.emit_cmp_reg32(25, 26) // CMP W25, W26
+  mc.emit_cmp_imm32(27, 42) // CMP W27, #42
+
+  // 32-bit move
+  mc.emit_mov_reg32(28, 29) // MOV W28, W29
+
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 200cc21a  sdiv w0, w1, w2
+      #|  0004: 8308c51a  udiv w3, w4, w5
+      #|  0008: e600084b  sub w6, w7, w8
+      #|  000c: 49210b1a  lsl w9, w10, w11
+      #|  0010: 8c250e1a  lsr w12, w13, w14
+      #|  0014: 0f2a111a  asr w15, w16, w17
+      #|  0018: 722e141a  ror w18, w19, w20
+      #|  001c: d502c05a  clz w21, w22
+      #|  0020: 1703c05a  rbit w23, w24
+      #|  0024: 3f031a6b  cmp w25, w26
+      #|  0028: 7fa80071  cmp w27, #42
+      #|  002c: fc031d2a  mov w28, w29
+      #|
+    ),
+  )
+}

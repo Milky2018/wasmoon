@@ -341,7 +341,7 @@ test "emit: complete function with control flow" {
 
   // block0: compare X3 (a) > X4 (b) and branch
   // CMP X3, X4; CSET X8, GT; CBNZ X8, block1; B block2
-  let cmp_inst = @instr.VCodeInst::new(Cmp(Sgt))
+  let cmp_inst = @instr.VCodeInst::new(Cmp(Sgt, true))
   cmp_inst.add_def({ reg: @abi.Physical({ index: 8, class: Int }) })
   cmp_inst.add_use(@abi.Physical({ index: 3, class: Int }))
   cmp_inst.add_use(@abi.Physical({ index: 4, class: Int }))

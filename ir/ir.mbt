@@ -189,6 +189,12 @@ pub enum Opcode {
   UintToFcvt // Unsigned int to float
   Bitcast // Reinterpret bits
 
+  // In-place sign extension (like Cranelift's ireduce + sextend)
+  // These sign-extend the low N bits to fill the full register
+  Sextend8 // Sign extend from 8 bits (i32 or i64)
+  Sextend16 // Sign extend from 16 bits (i32 or i64)
+  Sextend32 // Sign extend from 32 bits (i64 only)
+
   // Memory operations
   Load(Type, Int) // Load from memory (type, offset)
   Store(Type, Int) // Store to memory (type, offset)

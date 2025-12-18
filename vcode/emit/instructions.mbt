@@ -32,6 +32,9 @@ enum Instruction {
   Mneg(Int, Int, Int)
   Sdiv(Int, Int, Int)
   Udiv(Int, Int, Int)
+  Sdiv32(Int, Int, Int) // 32-bit signed divide
+  Udiv32(Int, Int, Int) // 32-bit unsigned divide
+  SubReg32(Int, Int, Int) // 32-bit subtract
   // Bitwise - Register
   AndReg(Int, Int, Int)
   AndShifted(Int, Int, Int, @instr.ShiftType, Int)
@@ -40,14 +43,22 @@ enum Instruction {
   EorReg(Int, Int, Int)
   EorShifted(Int, Int, Int, @instr.ShiftType, Int)
   Mvn(Int, Int)
-  // Shift/Rotate - Register
+  // Shift/Rotate - Register (64-bit)
   LslReg(Int, Int, Int)
   LsrReg(Int, Int, Int)
   AsrReg(Int, Int, Int)
   RorReg(Int, Int, Int)
-  // Bit manipulation
+  // Shift/Rotate - Register (32-bit)
+  LslReg32(Int, Int, Int)
+  LsrReg32(Int, Int, Int)
+  AsrReg32(Int, Int, Int)
+  RorReg32(Int, Int, Int)
+  // Bit manipulation (64-bit)
   Clz(Int, Int)
   Rbit(Int, Int)
+  // Bit manipulation (32-bit)
+  Clz32(Int, Int)
+  Rbit32(Int, Int)
   // Move
   MovReg(Int, Int)
   MovReg32(Int, Int)
@@ -154,7 +165,9 @@ enum Instruction {
   FcmpS(Int, Int)
   // Comparison
   CmpReg(Int, Int)
+  CmpReg32(Int, Int) // 32-bit compare
   CmpImm(Int, Int)
+  CmpImm32(Int, Int) // 32-bit compare immediate
   Cset(Int, Int)
   Csel(Int, Int, Int, Int)
   FcselD(Int, Int, Int, Int)
@@ -216,6 +229,9 @@ fn Instruction::annotate(self : Instruction) -> String {
     Mneg(rd, rn, rm) => "mneg x\{rd}, x\{rn}, x\{rm}"
     Sdiv(rd, rn, rm) => "sdiv x\{rd}, x\{rn}, x\{rm}"
     Udiv(rd, rn, rm) => "udiv x\{rd}, x\{rn}, x\{rm}"
+    Sdiv32(rd, rn, rm) => "sdiv w\{rd}, w\{rn}, w\{rm}"
+    Udiv32(rd, rn, rm) => "udiv w\{rd}, w\{rn}, w\{rm}"
+    SubReg32(rd, rn, rm) => "sub w\{rd}, w\{rn}, w\{rm}"
     AndReg(rd, rn, rm) => "and x\{rd}, x\{rn}, x\{rm}"
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
@@ -248,8 +264,14 @@ fn Instruction::annotate(self : Instruction) -> String {
     LsrReg(rd, rn, rm) => "lsr x\{rd}, x\{rn}, x\{rm}"
     AsrReg(rd, rn, rm) => "asr x\{rd}, x\{rn}, x\{rm}"
     RorReg(rd, rn, rm) => "ror x\{rd}, x\{rn}, x\{rm}"
+    LslReg32(rd, rn, rm) => "lsl w\{rd}, w\{rn}, w\{rm}"
+    LsrReg32(rd, rn, rm) => "lsr w\{rd}, w\{rn}, w\{rm}"
+    AsrReg32(rd, rn, rm) => "asr w\{rd}, w\{rn}, w\{rm}"
+    RorReg32(rd, rn, rm) => "ror w\{rd}, w\{rn}, w\{rm}"
     Clz(rd, rn) => "clz x\{rd}, x\{rn}"
     Rbit(rd, rn) => "rbit x\{rd}, x\{rn}"
+    Clz32(rd, rn) => "clz w\{rd}, w\{rn}"
+    Rbit32(rd, rn) => "rbit w\{rd}, w\{rn}"
     MovReg(rd, rm) => "mov x\{rd}, x\{rm}"
     MovReg32(rd, rm) => "mov w\{rd}, w\{rm}"
     Movz(rd, imm16, shift) => "movz x\{rd}, #\{imm16}, lsl #\{shift}"
@@ -395,7 +417,9 @@ fn Instruction::annotate(self : Instruction) -> String {
     FcmpD(rn, rm) => "fcmp d\{rn}, d\{rm}"
     FcmpS(rn, rm) => "fcmp s\{rn}, s\{rm}"
     CmpReg(rn, rm) => "cmp x\{rn}, x\{rm}"
+    CmpReg32(rn, rm) => "cmp w\{rn}, w\{rm}"
     CmpImm(rn, imm12) => "cmp x\{rn}, #\{imm12}"
+    CmpImm32(rn, imm12) => "cmp w\{rn}, #\{imm12}"
     Cset(rd, cond) => {
       let cond_name = cond_name_str(cond)
       "cset x\{rd}, \{cond_name}"
@@ -560,6 +584,27 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x9A
       (b0, b1, b2, b3)
     }
+    Sdiv32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | (3 << 2)
+      let b2 = 0xC0 | (rm & 31)
+      let b3 = 0x1A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    Udiv32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | (2 << 2)
+      let b2 = 0xC0 | (rm & 31)
+      let b3 = 0x1A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    SubReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 0x4B // SUB 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
     AndReg(rd, rn, rm) => {
       let b0 = (rd & 31) | ((rn & 7) << 5)
       let b1 = (rn >> 3) & 3
@@ -655,6 +700,34 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x9A
       (b0, b1, b2, b3)
     }
+    LslReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | (8 << 2)
+      let b2 = 0xC0 | (rm & 31)
+      let b3 = 0x1A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    LsrReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | (9 << 2)
+      let b2 = 0xC0 | (rm & 31)
+      let b3 = 0x1A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    AsrReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | (10 << 2)
+      let b2 = 0xC0 | (rm & 31)
+      let b3 = 0x1A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    RorReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | (11 << 2)
+      let b2 = 0xC0 | (rm & 31)
+      let b3 = 0x1A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
     Clz(rd, rn) => {
       let b0 = (rd & 31) | ((rn & 7) << 5)
       let b1 = ((rn >> 3) & 3) | 16
@@ -667,6 +740,20 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = (rn >> 3) & 3
       let b2 = 192
       let b3 = 218
+      (b0, b1, b2, b3)
+    }
+    Clz32(rd, rn) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 16
+      let b2 = 192
+      let b3 = 0x5A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    Rbit32(rd, rn) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = 192
+      let b3 = 0x5A // 32-bit: sf=0
       (b0, b1, b2, b3)
     }
     MovReg(rd, rm) => {
@@ -1418,6 +1505,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 241
       (b0, b1, b2, b3)
     }
+    CmpReg32(rn, rm) => {
+      let b0 = 31 | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 0x6B // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    CmpImm32(rn, imm12) => {
+      let imm = imm12 & 0xFFF
+      let b0 = 31 | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
+      let b2 = (imm >> 6) & 63
+      let b3 = 0x71 // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
     Cset(rd, cond) => {
       let inv_cond = cond ^ 1
       let xe0 = 224
@@ -1832,6 +1934,104 @@ pub fn MachineCode::emit_clz(self : MachineCode, rd : Int, rn : Int) -> Unit {
 ///|
 pub fn MachineCode::emit_rbit(self : MachineCode, rd : Int, rn : Int) -> Unit {
   Rbit(rd, rn).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_sdiv32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  Sdiv32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_udiv32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  Udiv32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_sub_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  SubReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_lsl_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  LslReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_lsr_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  LsrReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_asr_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  AsrReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_ror_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  RorReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_clz32(self : MachineCode, rd : Int, rn : Int) -> Unit {
+  Clz32(rd, rn).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_rbit32(self : MachineCode, rd : Int, rn : Int) -> Unit {
+  Rbit32(rd, rn).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_cmp_reg32(
+  self : MachineCode,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  CmpReg32(rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_cmp_imm32(
+  self : MachineCode,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  CmpImm32(rn, imm12).emit(self)
 }
 
 ///|

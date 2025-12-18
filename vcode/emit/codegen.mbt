@@ -342,11 +342,15 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       self.emit_add_imm(rd, rn, imm)
     }
-    Sub => {
+    Sub(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_sub_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_sub_reg(rd, rn, rm)
+      } else {
+        self.emit_sub_reg32(rd, rn, rm)
+      }
     }
     Mul => {
       let rd = wreg_num(inst.defs[0])
@@ -354,17 +358,25 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_mul(rd, rn, rm)
     }
-    SDiv => {
+    SDiv(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_sdiv(rd, rn, rm)
+      if is_64 {
+        self.emit_sdiv(rd, rn, rm)
+      } else {
+        self.emit_sdiv32(rd, rn, rm)
+      }
     }
-    UDiv => {
+    UDiv(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_udiv(rd, rn, rm)
+      if is_64 {
+        self.emit_udiv(rd, rn, rm)
+      } else {
+        self.emit_udiv32(rd, rn, rm)
+      }
     }
     And => {
       let rd = wreg_num(inst.defs[0])
@@ -384,29 +396,45 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_eor_reg(rd, rn, rm)
     }
-    Shl => {
+    Shl(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_lsl_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_lsl_reg(rd, rn, rm)
+      } else {
+        self.emit_lsl_reg32(rd, rn, rm)
+      }
     }
-    AShr => {
+    AShr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_asr_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_asr_reg(rd, rn, rm)
+      } else {
+        self.emit_asr_reg32(rd, rn, rm)
+      }
     }
-    LShr => {
+    LShr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_lsr_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_lsr_reg(rd, rn, rm)
+      } else {
+        self.emit_lsr_reg32(rd, rn, rm)
+      }
     }
-    Rotr => {
+    Rotr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_ror_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_ror_reg(rd, rn, rm)
+      } else {
+        self.emit_ror_reg32(rd, rn, rm)
+      }
     }
     Not => {
       let rd = wreg_num(inst.defs[0])
@@ -687,10 +715,14 @@ fn MachineCode::emit_instruction(
       // FMOV Dd, Xn
       self.emit_fmov_x_to_d(rd, 16)
     }
-    Cmp(kind) => {
+    Cmp(kind, is_64) => {
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_cmp_reg(rn, rm)
+      if is_64 {
+        self.emit_cmp_reg(rn, rm)
+      } else {
+        self.emit_cmp_reg32(rn, rm)
+      }
       let rd = wreg_num(inst.defs[0])
       let cond = cmp_kind_to_cond(kind)
       self.emit_cset(rd, cond)
@@ -737,19 +769,27 @@ fn MachineCode::emit_instruction(
           self.emit_csel(rd, true_val, false_val, NE.to_int())
       }
     }
-    Clz => {
+    Clz(is_64) => {
       // Count leading zeros
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      self.emit_clz(rd, rn)
+      if is_64 {
+        self.emit_clz(rd, rn)
+      } else {
+        self.emit_clz32(rd, rn)
+      }
     }
-    Rbit => {
+    Rbit(is_64) => {
       // Reverse bits in register
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      self.emit_rbit(rd, rn)
+      if is_64 {
+        self.emit_rbit(rd, rn)
+      } else {
+        self.emit_rbit32(rd, rn)
+      }
     }
-    Popcnt => {
+    Popcnt(is_64) => {
       // Population count (count number of 1 bits)
       // AArch64 doesn't have a direct POPCNT for GPRs, we use SIMD:
       // 1. FMOV D16, Xn (move to vector register)
@@ -762,7 +802,11 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       // For now, emit NOP and move the input to output (placeholder)
       // This needs proper implementation
-      self.emit_mov_reg(rd, rn)
+      if is_64 {
+        self.emit_mov_reg(rd, rn)
+      } else {
+        self.emit_mov_reg32(rd, rn)
+      }
       self.emit_nop()
     }
     Extend(kind) => {

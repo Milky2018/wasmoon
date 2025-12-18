@@ -243,6 +243,9 @@ fn validate_instruction(
     Ireduce
     | Sextend
     | Uextend
+    | Sextend8
+    | Sextend16
+    | Sextend32
     | Fpromote
     | Fdemote
     | FcvtToSint
