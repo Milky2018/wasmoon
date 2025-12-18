@@ -95,21 +95,21 @@ pub impl Show for VCodeInst with output(self, logger) {
 ///|
 /// VCode opcode - machine-level operation (target-independent subset)
 pub(all) enum VCodeOpcode {
-  // Integer arithmetic
+  // Integer arithmetic (Bool = true for 64-bit, false for 32-bit)
   Add
   AddImm(Int) // ADD Xd, Xn, #imm (immediate add)
-  Sub
+  Sub(Bool) // SUB with size: true = 64-bit, false = 32-bit
   Mul
-  SDiv
-  UDiv
-  // Bitwise operations
+  SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
+  UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
+  // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
   And
   Or
   Xor
-  Shl
-  AShr // Arithmetic shift right
-  LShr // Logical shift right
-  Rotr // Rotate right
+  Shl(Bool) // LSL with size
+  AShr(Bool) // Arithmetic shift right with size
+  LShr(Bool) // Logical shift right with size
+  Rotr(Bool) // Rotate right with size
   Not // Bitwise NOT
   // Floating-point operations (Bool = true for f32, false for f64)
   FAdd(Bool)
@@ -141,7 +141,8 @@ pub(all) enum VCodeOpcode {
   LoadConstF32(Int) // Load f32 immediate (stored as bits)
   LoadConstF64(Int64) // Load f64 immediate (stored as bits)
   // Comparisons (result is 0 or 1)
-  Cmp(CmpKind)
+  // Cmp(kind, is_64bit): CMP Xn/Wn, Xm/Wm; CSET Wd, cond
+  Cmp(CmpKind, Bool)
   FCmp(FCmpKind)
   // Conversions
   Extend(ExtendKind)
@@ -154,10 +155,10 @@ pub(all) enum VCodeOpcode {
   // Select: Xd = cond ? Xn : Xm
   // Uses: [cond, true_val, false_val], Defs: [result]
   Select
-  // Bit counting operations
-  Clz // Count leading zeros
-  Popcnt // Population count (number of 1 bits)
-  Rbit // Reverse bits in register
+  // Bit counting operations (Bool = true for 64-bit, false for 32-bit)
+  Clz(Bool) // Count leading zeros with size
+  Popcnt(Bool) // Population count with size
+  Rbit(Bool) // Reverse bits in register with size
   // Special
   Nop
   // Trap if first operand is unsigned greater than second operand
@@ -176,6 +177,16 @@ pub(all) enum VCodeOpcode {
   // Uses: [], Defs: [] (uses flags from previous compare)
   // trap_code: 1=out_of_bounds, 2=type_mismatch, 3=bad_conversion, 4=integer_overflow
   TrapIf(Cond, Int)
+
+  // Trap if operand is zero (for division by zero)
+  // TrapIfZero(is_64, trap_code): CBNZ rn, skip; BRK #trap_code
+  // Uses: [rn], Defs: [] (traps if rn is zero)
+  TrapIfZero(Bool, Int)
+
+  // Trap if signed division would overflow (INT_MIN / -1)
+  // TrapIfDivOverflow(is_64, trap_code): checks if lhs == INT_MIN && rhs == -1
+  // Uses: [lhs, rhs], Defs: [] (traps if overflow would occur)
+  TrapIfDivOverflow(Bool, Int)
 
   // Raw float-to-int conversion (FCVTZS/FCVTZU without NaN/overflow checks)
   // FcvtToInt(is_f32, is_i64, is_signed): FCVTZS/FCVTZU Wd/Xd, Sn/Dn
@@ -297,17 +308,17 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
   match self {
     Add => "add"
     AddImm(imm) => "add #\{imm}"
-    Sub => "sub"
+    Sub(is_64) => if is_64 { "sub" } else { "sub32" }
     Mul => "mul"
-    SDiv => "sdiv"
-    UDiv => "udiv"
+    SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
+    UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
     And => "and"
     Or => "or"
     Xor => "xor"
-    Shl => "shl"
-    AShr => "ashr"
-    LShr => "lshr"
-    Rotr => "rotr"
+    Shl(is_64) => if is_64 { "shl" } else { "shl32" }
+    AShr(is_64) => if is_64 { "ashr" } else { "ashr32" }
+    LShr(is_64) => if is_64 { "lshr" } else { "lshr32" }
+    Rotr(is_64) => if is_64 { "rotr" } else { "rotr32" }
     Not => "not"
     FAdd(is_f32) => if is_f32 { "fadd.s" } else { "fadd.d" }
     FSub(is_f32) => if is_f32 { "fsub.s" } else { "fsub.d" }
@@ -342,7 +353,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       let f = v.reinterpret_as_double()
       "ldf \{f}"
     }
-    Cmp(kind) => "cmp.\{kind}"
+    Cmp(kind, is_64) => if is_64 { "cmp.\{kind}" } else { "cmp32.\{kind}" }
     FCmp(kind) => "fcmp.\{kind}"
     Extend(kind) => "extend.\{kind}"
     Truncate => "trunc"
@@ -351,13 +362,25 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FDemote => "fdemote"
     Bitcast => "bitcast"
     Select => "select"
-    Clz => "clz"
-    Popcnt => "popcnt"
-    Rbit => "rbit"
+    Clz(is_64) => if is_64 { "clz" } else { "clz32" }
+    Popcnt(is_64) => if is_64 { "popcnt" } else { "popcnt32" }
+    Rbit(is_64) => if is_64 { "rbit" } else { "rbit32" }
     Nop => "nop"
     TrapIfUgt(trap_code) => "trap_if_ugt #\{trap_code}"
     FpuCmp(is_f32) => if is_f32 { "fcmp.s" } else { "fcmp.d" }
     TrapIf(cond, trap_code) => "trap_if.\{cond} #\{trap_code}"
+    TrapIfZero(is_64, trap_code) =>
+      if is_64 {
+        "trap_if_zero #\{trap_code}"
+      } else {
+        "trap_if_zero32 #\{trap_code}"
+      }
+    TrapIfDivOverflow(is_64, trap_code) =>
+      if is_64 {
+        "trap_if_div_overflow #\{trap_code}"
+      } else {
+        "trap_if_div_overflow32 #\{trap_code}"
+      }
     FcvtToInt(is_f32, is_i64, is_signed) => {
       let src = if is_f32 { "f32" } else { "f64" }
       let dst = if is_i64 { "i64" } else { "i32" }

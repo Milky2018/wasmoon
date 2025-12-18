@@ -442,6 +442,27 @@ pub fn IRBuilder::uextend(self : IRBuilder, ty : Type, a : Value) -> Value {
 }
 
 ///|
+/// Sign extend from 8 bits (in-place, keeps the same type)
+/// Like Cranelift's ireduce(I8) + sextend(ty)
+pub fn IRBuilder::sextend8(self : IRBuilder, ty : Type, a : Value) -> Value {
+  self.emit_inst(ty, Opcode::Sextend8, [a])
+}
+
+///|
+/// Sign extend from 16 bits (in-place, keeps the same type)
+/// Like Cranelift's ireduce(I16) + sextend(ty)
+pub fn IRBuilder::sextend16(self : IRBuilder, ty : Type, a : Value) -> Value {
+  self.emit_inst(ty, Opcode::Sextend16, [a])
+}
+
+///|
+/// Sign extend from 32 bits to 64 bits
+/// Like Cranelift's ireduce(I32) + sextend(I64)
+pub fn IRBuilder::sextend32(self : IRBuilder, a : Value) -> Value {
+  self.emit_inst(Type::I64, Opcode::Sextend32, [a])
+}
+
+///|
 /// Promote float (f32 -> f64)
 pub fn IRBuilder::fpromote(self : IRBuilder, a : Value) -> Value {
   self.emit_inst(Type::F64, Opcode::Fpromote, [a])

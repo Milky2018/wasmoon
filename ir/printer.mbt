@@ -134,6 +134,11 @@ fn format_opcode(
     UintToFcvt => "uint_to_fcvt \{ops}"
     Bitcast => "bitcast \{ops}"
 
+    // In-place sign extension
+    Sextend8 => "sextend8 \{ops}"
+    Sextend16 => "sextend16 \{ops}"
+    Sextend32 => "sextend32 \{ops}"
+
     // Memory operations
     Load(ty, offset) => "load.\{format_type(ty)} \{ops} +\{offset}"
     Store(ty, offset) => "store.\{format_type(ty)} \{ops} +\{offset}"

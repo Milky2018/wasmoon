@@ -94,9 +94,10 @@ pub fn VCodeBuilder::sub(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(Sub)
+  let inst = @instr.VCodeInst::new(Sub(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -124,9 +125,10 @@ pub fn VCodeBuilder::sdiv(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(SDiv)
+  let inst = @instr.VCodeInst::new(SDiv(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -139,9 +141,10 @@ pub fn VCodeBuilder::udiv(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(UDiv)
+  let inst = @instr.VCodeInst::new(UDiv(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -201,9 +204,10 @@ pub fn VCodeBuilder::shl(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(Shl)
+  let inst = @instr.VCodeInst::new(Shl(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -216,9 +220,10 @@ pub fn VCodeBuilder::ashr(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(AShr)
+  let inst = @instr.VCodeInst::new(AShr(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -231,9 +236,10 @@ pub fn VCodeBuilder::lshr(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(LShr)
+  let inst = @instr.VCodeInst::new(LShr(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -379,9 +385,10 @@ pub fn VCodeBuilder::cmp(
   kind : @instr.CmpKind,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(Cmp(kind))
+  let inst = @instr.VCodeInst::new(Cmp(kind, is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))

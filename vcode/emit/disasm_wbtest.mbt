@@ -637,3 +637,136 @@ test "cranelift_style_epilogue_sequence" {
     ),
   )
 }
+
+///|
+/// Test 32-bit instruction variants for i32 operations
+test "32-bit instruction variants" {
+  let mc = MachineCode::new()
+
+  // 32-bit arithmetic
+  mc.emit_sdiv32(0, 1, 2) // SDIV W0, W1, W2
+  mc.emit_udiv32(3, 4, 5) // UDIV W3, W4, W5
+  mc.emit_sub_reg32(6, 7, 8) // SUB W6, W7, W8
+
+  // 32-bit shifts
+  mc.emit_lsl_reg32(9, 10, 11) // LSL W9, W10, W11
+  mc.emit_lsr_reg32(12, 13, 14) // LSR W12, W13, W14
+  mc.emit_asr_reg32(15, 16, 17) // ASR W15, W16, W17
+  mc.emit_ror_reg32(18, 19, 20) // ROR W18, W19, W20
+
+  // 32-bit bit manipulation
+  mc.emit_clz32(21, 22) // CLZ W21, W22
+  mc.emit_rbit32(23, 24) // RBIT W23, W24
+
+  // 32-bit comparison
+  mc.emit_cmp_reg32(25, 26) // CMP W25, W26
+  mc.emit_cmp_imm32(27, 42) // CMP W27, #42
+
+  // 32-bit move
+  mc.emit_mov_reg32(28, 29) // MOV W28, W29
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 200cc21a  sdiv w0, w1, w2
+      #|  0004: 8308c51a  udiv w3, w4, w5
+      #|  0008: e600084b  sub w6, w7, w8
+      #|  000c: 4921cb1a  lsl w9, w10, w11
+      #|  0010: ac25ce1a  lsr w12, w13, w14
+      #|  0014: 0f2ad11a  asr w15, w16, w17
+      #|  0018: 722ed41a  ror w18, w19, w20
+      #|  001c: d512c05a  clz w21, w22
+      #|  0020: 1703c05a  rbit w23, w24
+      #|  0024: 3f031a6b  cmp w25, w26
+      #|  0028: 7fab0071  cmp w27, #42
+      #|  002c: fc031d2a  mov w28, w29
+      #|
+    ),
+  )
+}
+
+///|
+/// Test CBNZ with immediate offset (for TrapIfZero)
+test "cbnz_offset instruction" {
+  let mc = MachineCode::new()
+  // CBNZ X0, +8 (64-bit)
+  CbnzOffset(0, true, 8).emit(mc)
+  // CBNZ W1, +8 (32-bit)
+  CbnzOffset(1, false, 8).emit(mc)
+  // BRK #4
+  mc.emit_brk(4)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 400000b5  cbnz x0, .+8
+      #|  0004: 41000035  cbnz w1, .+8
+      #|  0008: 800020d4  brk #4
+      #|
+    ),
+  )
+}
+
+///|
+/// Test ADDS with zero register (for checking rhs == -1)
+test "adds_imm_zr instruction" {
+  let mc = MachineCode::new()
+  // ADDS XZR, X0, #1 (64-bit) - check if X0 == -1
+  AddsImmZr(0, 1, true).emit(mc)
+  // ADDS WZR, W1, #1 (32-bit) - check if W1 == -1
+  AddsImmZr(1, 1, false).emit(mc)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 1f0400b1  adds xzr, x0, #1
+      #|  0004: 3f040031  adds wzr, w1, #1
+      #|
+    ),
+  )
+}
+
+///|
+/// Test CCMP (conditional compare immediate)
+test "ccmp_imm instruction" {
+  let mc = MachineCode::new()
+  // CCMP X0, #1, #0, EQ (64-bit) - if Z set, compare X0-1
+  CCmpImm(0, 1, 0, 0, true).emit(mc)
+  // CCMP W1, #1, #0, EQ (32-bit) - if Z set, compare W1-1
+  CCmpImm(1, 1, 0, 0, false).emit(mc)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 000841fa  ccmp x0, #1, #0, eq
+      #|  0004: 2008417a  ccmp w1, #1, #0, eq
+      #|
+    ),
+  )
+}
+
+///|
+/// Test div overflow trap sequence (INT_MIN / -1)
+test "div_overflow_trap_sequence" {
+  let mc = MachineCode::new()
+  // Full sequence for checking INT_MIN / -1 (64-bit):
+  // 1. ADDS XZR, X1, #1 - check if divisor == -1
+  AddsImmZr(1, 1, true).emit(mc)
+  // 2. CCMP X0, #1, #0, EQ - if divisor == -1, check if dividend-1 overflows
+  CCmpImm(0, 1, 0, 0, true).emit(mc)
+  // 3. B.VC +8 - skip trap if no overflow
+  mc.emit_b_cond_offset(7, 8) // VC = condition 7
+  // 4. BRK #4 - trap on overflow
+  mc.emit_brk(4)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 3f0400b1  adds xzr, x1, #1
+      #|  0004: 000841fa  ccmp x0, #1, #0, eq
+      #|  0008: 47000054  b.vc .+8
+      #|  000c: 800020d4  brk #4
+      #|
+    ),
+  )
+}

@@ -548,6 +548,32 @@ fn Translator::translate_instruction(
       let result = self.builder.uextend(Type::I64, a)
       self.push(result)
     }
+    // In-place sign extension instructions (like Cranelift's ireduce + sextend)
+    I32Extend8S => {
+      let a = self.pop()
+      let result = self.builder.sextend8(Type::I32, a)
+      self.push(result)
+    }
+    I32Extend16S => {
+      let a = self.pop()
+      let result = self.builder.sextend16(Type::I32, a)
+      self.push(result)
+    }
+    I64Extend8S => {
+      let a = self.pop()
+      let result = self.builder.sextend8(Type::I64, a)
+      self.push(result)
+    }
+    I64Extend16S => {
+      let a = self.pop()
+      let result = self.builder.sextend16(Type::I64, a)
+      self.push(result)
+    }
+    I64Extend32S => {
+      let a = self.pop()
+      let result = self.builder.sextend32(a)
+      self.push(result)
+    }
     F32DemoteF64 => {
       let a = self.pop()
       let result = self.builder.fdemote(a)

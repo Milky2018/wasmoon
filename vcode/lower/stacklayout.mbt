@@ -334,7 +334,8 @@ pub fn AArch64StackFrame::gen_prologue(
 
   // Adjust stack pointer: SUB sp, sp, #frame_size
   // We represent this as a Sub instruction with the SP as both src and dest
-  let sub_sp = @instr.VCodeInst::new(Sub)
+  // Stack pointer operations are always 64-bit
+  let sub_sp = @instr.VCodeInst::new(Sub(true))
   sub_sp.add_def({ reg: Physical({ index: 31, class: Int }) }) // SP
   sub_sp.add_use(Physical({ index: 31, class: Int })) // SP
   // The immediate is encoded in the opcode, use LoadConst to represent it

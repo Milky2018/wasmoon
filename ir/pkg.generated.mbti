@@ -187,6 +187,9 @@ pub fn IRBuilder::rotr(Self, Value, Value) -> Value
 pub fn IRBuilder::sdiv(Self, Value, Value) -> Value
 pub fn IRBuilder::select(Self, Value, Value, Value) -> Value
 pub fn IRBuilder::sextend(Self, Type, Value) -> Value
+pub fn IRBuilder::sextend16(Self, Type, Value) -> Value
+pub fn IRBuilder::sextend32(Self, Value) -> Value
+pub fn IRBuilder::sextend8(Self, Type, Value) -> Value
 pub fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
 pub fn IRBuilder::srem(Self, Value, Value) -> Value
 pub fn IRBuilder::sshr(Self, Value, Value) -> Value
@@ -285,6 +288,9 @@ pub enum Opcode {
   SintToFcvt
   UintToFcvt
   Bitcast
+  Sextend8
+  Sextend16
+  Sextend32
   Load(Type, Int)
   Store(Type, Int)
   Load8S(Type, Int)

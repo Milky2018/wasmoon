@@ -285,8 +285,8 @@ fn lower_inst(
     @ir.Opcode::Iadd => lower_iadd(ctx, inst, block)
     @ir.Opcode::Isub => lower_isub(ctx, inst, block)
     @ir.Opcode::Imul => lower_binary_int(ctx, inst, block, Mul)
-    @ir.Opcode::Sdiv => lower_binary_int(ctx, inst, block, SDiv)
-    @ir.Opcode::Udiv => lower_binary_int(ctx, inst, block, UDiv)
+    @ir.Opcode::Sdiv => lower_div(ctx, inst, block, signed=true)
+    @ir.Opcode::Udiv => lower_div(ctx, inst, block, signed=false)
     @ir.Opcode::Srem => lower_rem(ctx, inst, block, true)
     @ir.Opcode::Urem => lower_rem(ctx, inst, block, false)
 
@@ -294,11 +294,11 @@ fn lower_inst(
     @ir.Opcode::Band => lower_band(ctx, inst, block)
     @ir.Opcode::Bor => lower_bor(ctx, inst, block)
     @ir.Opcode::Bxor => lower_bxor(ctx, inst, block)
-    @ir.Opcode::Ishl => lower_binary_int(ctx, inst, block, Shl)
-    @ir.Opcode::Sshr => lower_binary_int(ctx, inst, block, AShr)
-    @ir.Opcode::Ushr => lower_binary_int(ctx, inst, block, LShr)
+    @ir.Opcode::Ishl => lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) })
+    @ir.Opcode::Sshr => lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) })
+    @ir.Opcode::Ushr => lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) })
     @ir.Opcode::Rotl => lower_rotl(ctx, inst, block)
-    @ir.Opcode::Rotr => lower_binary_int(ctx, inst, block, Rotr)
+    @ir.Opcode::Rotr => lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) })
     @ir.Opcode::Bnot => lower_unary_int(ctx, inst, block, Not)
 
     // Integer comparisons
@@ -322,9 +322,11 @@ fn lower_inst(
     @ir.Opcode::Fnearest => lower_unary_float(ctx, inst, block)
 
     // Bit counting operations
-    @ir.Opcode::Clz => lower_unary_int(ctx, inst, block, Clz)
+    @ir.Opcode::Clz =>
+      lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
     @ir.Opcode::Ctz => lower_ctz(ctx, inst, block)
-    @ir.Opcode::Popcnt => lower_unary_int(ctx, inst, block, Popcnt)
+    @ir.Opcode::Popcnt =>
+      lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
 
     // Floating point comparisons
     @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
@@ -356,6 +358,11 @@ fn lower_inst(
     // Conversions
     @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
     @ir.Opcode::Uextend => lower_extend(ctx, inst, block, signed=false)
+    @ir.Opcode::Sextend8 => lower_sextend_inplace(ctx, inst, block, from_bits=8)
+    @ir.Opcode::Sextend16 =>
+      lower_sextend_inplace(ctx, inst, block, from_bits=16)
+    @ir.Opcode::Sextend32 =>
+      lower_sextend_inplace(ctx, inst, block, from_bits=32)
     @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
     @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
     @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
@@ -467,6 +474,84 @@ fn lower_binary_int(
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
     vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+  }
+}
+
+///|
+/// Lower division with proper 32/64-bit selection and trapping
+fn lower_div(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  signed~ : Bool,
+) -> Unit {
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+    let is_64 = result.ty is @ir.Type::I64
+    // Trap if divisor is zero (trap_code 4 = integer_overflow)
+    let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
+    trap_zero.add_use(Virtual(rhs))
+    block.add_inst(trap_zero)
+    // For signed division, also trap if INT_MIN / -1 (would overflow)
+    if signed {
+      let trap_overflow = @instr.VCodeInst::new(TrapIfDivOverflow(is_64, 4))
+      trap_overflow.add_use(Virtual(lhs))
+      trap_overflow.add_use(Virtual(rhs))
+      block.add_inst(trap_overflow)
+    }
+    // Emit division
+    let opcode : @instr.VCodeOpcode = if signed {
+      @instr.VCodeOpcode::SDiv(is_64)
+    } else {
+      @instr.VCodeOpcode::UDiv(is_64)
+    }
+    let vcode_inst = @instr.VCodeInst::new(opcode)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+  }
+}
+
+///|
+/// Lower shift/rotate operations with proper 32/64-bit selection
+fn lower_shift(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  make_opcode : (Bool) -> @instr.VCodeOpcode,
+) -> Unit {
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+    let is_64 = result.ty is @ir.Type::I64
+    let vcode_inst = @instr.VCodeInst::new(make_opcode(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+  }
+}
+
+///|
+/// Lower bit counting operations (clz, popcnt) with proper 32/64-bit selection
+fn lower_bitcount(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  make_opcode : (Bool) -> @instr.VCodeOpcode,
+) -> Unit {
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    let is_64 = result.ty is @ir.Type::I64
+    let vcode_inst = @instr.VCodeInst::new(make_opcode(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
     block.add_inst(vcode_inst)
   }
 }
@@ -610,7 +695,8 @@ fn lower_isub(
   // Default: regular sub
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Sub)
+  let is_64 = result.ty is @ir.Type::I64
+  let vcode_inst = @instr.VCodeInst::new(Sub(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
   vcode_inst.add_use(Virtual(rhs))
@@ -776,6 +862,7 @@ fn lower_rotl(
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   let amount = ctx.get_vreg_for_use(inst.operands[1], block)
+  let is_64 = result.ty is @ir.Type::I64
 
   // Step 1: Load constant 0 into temp
   let zero = ctx.vcode_func.new_vreg(Int)
@@ -785,14 +872,14 @@ fn lower_rotl(
 
   // Step 2: Compute (0 - n) = -n
   let neg_n = ctx.vcode_func.new_vreg(Int)
-  let sub_inst = @instr.VCodeInst::new(Sub)
+  let sub_inst = @instr.VCodeInst::new(Sub(is_64))
   sub_inst.add_def({ reg: Virtual(neg_n) })
   sub_inst.add_use(Virtual(zero))
   sub_inst.add_use(Virtual(amount))
   block.add_inst(sub_inst)
 
   // Step 3: Rotate right by -n (effectively rotl by n)
-  let rotr_inst = @instr.VCodeInst::new(Rotr)
+  let rotr_inst = @instr.VCodeInst::new(Rotr(is_64))
   rotr_inst.add_def({ reg: Virtual(dst) })
   rotr_inst.add_use(Virtual(src))
   rotr_inst.add_use(Virtual(neg_n))
@@ -815,16 +902,17 @@ fn lower_ctz(
   guard inst.result is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
+  let is_64 = result.ty is @ir.Type::I64
 
   // Step 1: Reverse bits
   let reversed = ctx.vcode_func.new_vreg(Int)
-  let rbit_inst = @instr.VCodeInst::new(Rbit)
+  let rbit_inst = @instr.VCodeInst::new(Rbit(is_64))
   rbit_inst.add_def({ reg: Virtual(reversed) })
   rbit_inst.add_use(Virtual(src))
   block.add_inst(rbit_inst)
 
   // Step 2: Count leading zeros
-  let clz_inst = @instr.VCodeInst::new(Clz)
+  let clz_inst = @instr.VCodeInst::new(Clz(is_64))
   clz_inst.add_def({ reg: Virtual(dst) })
   clz_inst.add_use(Virtual(reversed))
   block.add_inst(clz_inst)
@@ -964,10 +1052,16 @@ fn lower_rem(
   let dst = ctx.get_vreg(result)
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block) // a (dividend)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block) // b (divisor)
+  let is_64 = result.ty is @ir.Type::I64
+
+  // Trap if divisor is zero (trap_code 4 = integer_overflow)
+  let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
+  trap_zero.add_use(Virtual(rhs))
+  block.add_inst(trap_zero)
 
   // Step 1: Compute quotient = a / b
   let quotient = ctx.vcode_func.new_vreg(Int)
-  let div_opcode = if signed { @instr.SDiv } else { UDiv }
+  let div_opcode = if signed { @instr.SDiv(is_64) } else { @instr.UDiv(is_64) }
   let div_inst = @instr.VCodeInst::new(div_opcode)
   div_inst.add_def({ reg: Virtual(quotient) })
   div_inst.add_use(Virtual(lhs))
@@ -1032,7 +1126,9 @@ fn lower_icmp(
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let kind = ir_intcc_to_cmp_kind(cc)
-    let vcode_inst = @instr.VCodeInst::new(Cmp(kind))
+    // Determine is_64 from operand type, not result type (result is always i32)
+    let is_64 = inst.operands[0].ty is @ir.Type::I64
+    let vcode_inst = @instr.VCodeInst::new(Cmp(kind, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
     vcode_inst.add_use(Virtual(rhs))
@@ -1463,6 +1559,36 @@ fn lower_extend(
 }
 
 ///|
+/// Lower in-place sign extension (Sextend8, Sextend16, Sextend32)
+/// These operations sign-extend the low N bits to fill the full register
+fn lower_sextend_inplace(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  from_bits~ : Int,
+) -> Unit {
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let src = ctx.get_vreg_for_use(inst.operands[0], block)
+    let dst_ty = result.ty
+    let is_i64 = dst_ty is @ir.Type::I64
+    // Determine extend kind based on source bits and destination type
+    let kind : @instr.ExtendKind = match (from_bits, is_i64) {
+      (8, false) => Signed8To32
+      (8, true) => Signed8To64
+      (16, false) => Signed16To32
+      (16, true) => Signed16To64
+      (32, _) => Signed32To64 // 32-bit extend is always to 64-bit
+      _ => Signed8To32 // fallback
+    }
+    let vcode_inst = @instr.VCodeInst::new(Extend(kind))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(src))
+    block.add_inst(vcode_inst)
+  }
+}
+
+///|
 /// Determine the extend kind based on source and destination types
 fn get_extend_kind(
   src_ty : @ir.Type,
@@ -1791,6 +1917,8 @@ fn lower_terminator(
     @ir.Terminator::BrTable(index, targets, default) => {
       let index_vreg = ctx.get_vreg_for_use(index, block)
       let default_id = ctx.get_block_id(default)
+      // WebAssembly br_table index is i32, but check IR type to be safe
+      let is_64 = index.ty is @ir.Type::I64
       if targets.is_empty() {
         // No targets, just jump to default
         block.set_terminator(Jump(default_id))
@@ -1807,7 +1935,7 @@ fn lower_terminator(
         let load_zero = @instr.VCodeInst::new(LoadConst(0L))
         load_zero.add_def({ reg: Virtual(zero_vreg) })
         block.add_inst(load_zero)
-        let cmp_inst_0 = @instr.VCodeInst::new(Cmp(Eq))
+        let cmp_inst_0 = @instr.VCodeInst::new(Cmp(Eq, is_64))
         cmp_inst_0.add_def({ reg: Virtual(cmp_result_0) })
         cmp_inst_0.add_use(Virtual(index_vreg))
         cmp_inst_0.add_use(Virtual(zero_vreg))
@@ -1832,7 +1960,7 @@ fn lower_terminator(
           load_const.add_def({ reg: Virtual(const_vreg) })
           chain_block.add_inst(load_const)
           let cmp_result = ctx.vcode_func.new_vreg(Int)
-          let cmp_inst = @instr.VCodeInst::new(Cmp(Eq))
+          let cmp_inst = @instr.VCodeInst::new(Cmp(Eq, is_64))
           cmp_inst.add_def({ reg: Virtual(cmp_result) })
           cmp_inst.add_use(Virtual(index_vreg))
           cmp_inst.add_use(Virtual(const_vreg))

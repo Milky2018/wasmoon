@@ -474,7 +474,7 @@ test "regalloc: SSA deconstruction scenario" {
   let inst2 = @instr.VCodeInst::new(@instr.LoadConst(1L))
   inst2.add_def({ reg: @abi.Virtual(v2) })
   block0.add_inst(inst2)
-  let inst3 = @instr.VCodeInst::new(@instr.Cmp(Eq))
+  let inst3 = @instr.VCodeInst::new(@instr.Cmp(Eq, true))
   inst3.add_use(@abi.Virtual(v0))
   inst3.add_use(@abi.Virtual(v2))
   inst3.add_def({ reg: @abi.Virtual(v3) })

@@ -619,7 +619,8 @@ pub fn lower_inst_with_patterns(
         load_shift.add_def({ reg: @abi.Virtual(shift_vreg) })
         block.add_inst(load_shift)
         // Emit shift left
-        let shl_inst = @instr.VCodeInst::new(@instr.Shl)
+        let is_64 = result.ty is @ir.Type::I64
+        let shl_inst = @instr.VCodeInst::new(@instr.Shl(is_64))
         shl_inst.add_def({ reg: @abi.Virtual(dst) })
         shl_inst.add_use(@abi.Virtual(src))
         shl_inst.add_use(@abi.Virtual(shift_vreg))
@@ -641,7 +642,8 @@ pub fn lower_inst_with_patterns(
         load_shift.add_def({ reg: @abi.Virtual(shift_vreg) })
         block.add_inst(load_shift)
         // Emit logical shift right
-        let lshr_inst = @instr.VCodeInst::new(@instr.LShr)
+        let is_64 = result.ty is @ir.Type::I64
+        let lshr_inst = @instr.VCodeInst::new(@instr.LShr(is_64))
         lshr_inst.add_def({ reg: @abi.Virtual(dst) })
         lshr_inst.add_use(@abi.Virtual(src))
         lshr_inst.add_use(@abi.Virtual(shift_vreg))
@@ -732,18 +734,21 @@ fn lower_inst_default(
 
     // Integer arithmetic
     @ir.Opcode::Iadd => lower_binary_int(ctx, inst, block, @instr.Add)
-    @ir.Opcode::Isub => lower_binary_int(ctx, inst, block, @instr.Sub)
+    @ir.Opcode::Isub => lower_isub(ctx, inst, block)
     @ir.Opcode::Imul => lower_binary_int(ctx, inst, block, @instr.Mul)
-    @ir.Opcode::Sdiv => lower_binary_int(ctx, inst, block, @instr.SDiv)
-    @ir.Opcode::Udiv => lower_binary_int(ctx, inst, block, @instr.UDiv)
+    @ir.Opcode::Sdiv => lower_div(ctx, inst, block, signed=true)
+    @ir.Opcode::Udiv => lower_div(ctx, inst, block, signed=false)
 
     // Bitwise operations
     @ir.Opcode::Band => lower_binary_int(ctx, inst, block, @instr.And)
     @ir.Opcode::Bor => lower_binary_int(ctx, inst, block, @instr.Or)
     @ir.Opcode::Bxor => lower_binary_int(ctx, inst, block, @instr.Xor)
-    @ir.Opcode::Ishl => lower_binary_int(ctx, inst, block, @instr.Shl)
-    @ir.Opcode::Sshr => lower_binary_int(ctx, inst, block, @instr.AShr)
-    @ir.Opcode::Ushr => lower_binary_int(ctx, inst, block, @instr.LShr)
+    @ir.Opcode::Ishl =>
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.Shl(is_64) })
+    @ir.Opcode::Sshr =>
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.AShr(is_64) })
+    @ir.Opcode::Ushr =>
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.LShr(is_64) })
 
     // Integer comparisons
     @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)
