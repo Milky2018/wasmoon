@@ -491,13 +491,14 @@ fn lower_div(
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let is_64 = result.ty is @ir.Type::I64
-    // Trap if divisor is zero (trap_code 4 = integer_overflow)
+    // Trap if divisor is zero (trap_code 4 = integer divide by zero)
     let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
     trap_zero.add_use(Virtual(rhs))
     block.add_inst(trap_zero)
     // For signed division, also trap if INT_MIN / -1 (would overflow)
+    // Use trap_code 5 = integer overflow
     if signed {
-      let trap_overflow = @instr.VCodeInst::new(TrapIfDivOverflow(is_64, 4))
+      let trap_overflow = @instr.VCodeInst::new(TrapIfDivOverflow(is_64, 5))
       trap_overflow.add_use(Virtual(lhs))
       trap_overflow.add_use(Virtual(rhs))
       block.add_inst(trap_overflow)
