@@ -24,6 +24,26 @@ pub(all) enum CmpKind {
 }
 pub impl Show for CmpKind
 
+pub(all) enum Cond {
+  Eq
+  Ne
+  Hs
+  Lo
+  Mi
+  Pl
+  Vs
+  Vc
+  Hi
+  Ls
+  Ge
+  Lt
+  Gt
+  Le
+  Al
+}
+pub fn Cond::to_bits(Self) -> Int
+pub impl Show for Cond
+
 pub(all) enum ExtendKind {
   Signed8To32
   Signed8To64
@@ -170,6 +190,12 @@ pub(all) enum VCodeOpcode {
   Rbit
   Nop
   TrapIfUgt(Int)
+  FpuCmp(Bool)
+  TrapIf(Cond, Int)
+  FcvtToInt(Bool, Bool, Bool)
+  FpuSel(Bool, Cond)
+  FpuMaxnm(Bool)
+  FpuMinnm(Bool)
   BoundsCheck(Int, Int)
   AddShifted(ShiftType, Int)
   SubShifted(ShiftType, Int)

@@ -169,6 +169,45 @@ pub(all) enum VCodeOpcode {
   // TrapIfUgt(trap_code): CMP rn, rm; B.LS skip; BRK #trap_code
   // Uses: [lhs, rhs], traps if lhs > rhs (unsigned)
   TrapIfUgt(Int)
+
+  // Floating-point compare (sets NZCV flags, no result value)
+  // FpuCmp(is_f32): FCMP Sn, Sm or FCMP Dn, Dm
+  // Uses: [lhs, rhs], Defs: [] (only sets flags)
+  // Used for NaN check (compare with self) and bound checks
+  FpuCmp(Bool)
+
+  // Conditional trap based on condition flags
+  // TrapIf(cond, trap_code): B.cond skip; BRK #trap_code
+  // Uses: [], Defs: [] (uses flags from previous compare)
+  // trap_code: 1=out_of_bounds, 2=type_mismatch, 3=bad_conversion, 4=integer_overflow
+  TrapIf(Cond, Int)
+
+  // Raw float-to-int conversion (FCVTZS/FCVTZU without NaN/overflow checks)
+  // FcvtToInt(is_f32, is_i64, is_signed): FCVTZS/FCVTZU Wd/Xd, Sn/Dn
+  // Uses: [src_fp], Defs: [dst_int]
+  // The trapping FloatToInt opcodes are expanded in lower phase to:
+  //   FpuCmp + TrapIf(Vs) + LoadConstF32/F64 + FpuCmp + TrapIf + ... + FcvtToInt
+  FcvtToInt(Bool, Bool, Bool)
+
+  // Floating-point conditional select (for saturating conversions)
+  // FpuSel(is_f32, cond): FCSEL Sd, Sn, Sm, cond or FCSEL Dd, Dn, Dm, cond
+  // Uses: [true_val, false_val], Defs: [result]
+  // Selects true_val if condition is true, false_val otherwise
+  // Used for NaN handling: select 0.0 if NaN, original value otherwise
+  FpuSel(Bool, Cond)
+
+  // Floating-point maximum (NaN-propagating)
+  // FpuMaxnm(is_f32): FMAXNM Sd, Sn, Sm or FMAXNM Dd, Dn, Dm
+  // Uses: [lhs, rhs], Defs: [result]
+  // Returns the larger value; if one is NaN, returns the other
+  FpuMaxnm(Bool)
+
+  // Floating-point minimum (NaN-propagating)
+  // FpuMinnm(is_f32): FMINNM Sd, Sn, Sm or FMINNM Dd, Dn, Dm
+  // Uses: [lhs, rhs], Defs: [result]
+  // Returns the smaller value; if one is NaN, returns the other
+  FpuMinnm(Bool)
+
   // Memory bounds check (for WASM linear memory safety) - DEPRECATED
   // Use TrapIfUgt with pre-computed end_addr and memory_size instead
   // BoundsCheck(offset, access_size): checks wasm_addr + offset + access_size <= memory_size
@@ -332,6 +371,22 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Rbit => "rbit"
     Nop => "nop"
     TrapIfUgt(trap_code) => "trap_if_ugt #\{trap_code}"
+    FpuCmp(is_f32) => if is_f32 { "fcmp.s" } else { "fcmp.d" }
+    TrapIf(cond, trap_code) => "trap_if.\{cond} #\{trap_code}"
+    FcvtToInt(is_f32, is_i64, is_signed) => {
+      let src = if is_f32 { "f32" } else { "f64" }
+      let dst = if is_i64 { "i64" } else { "i32" }
+      let sign = if is_signed { "s" } else { "u" }
+      "fcvt.\{src}_\{dst}_\{sign}"
+    }
+    FpuSel(is_f32, cond) =>
+      if is_f32 {
+        "fcsel.s.\{cond}"
+      } else {
+        "fcsel.d.\{cond}"
+      }
+    FpuMaxnm(is_f32) => if is_f32 { "fmaxnm.s" } else { "fmaxnm.d" }
+    FpuMinnm(is_f32) => if is_f32 { "fminnm.s" } else { "fminnm.d" }
     BoundsCheck(offset, size) => "bounds_check +\{offset}, \{size}"
     // AArch64-specific
     AddShifted(shift, amount) => "add.\{shift} #\{amount}"
@@ -590,6 +645,75 @@ fn IntToFloatKind::to_string(self : IntToFloatKind) -> String {
 ///|
 pub impl Show for IntToFloatKind with output(self, logger) {
   logger.write_string(self.to_string())
+}
+
+///|
+/// AArch64 condition codes (for conditional branches and traps)
+/// Following Cranelift's Cond enum
+pub(all) enum Cond {
+  Eq // Equal (Z=1)
+  Ne // Not equal (Z=0)
+  Hs // Unsigned higher or same (C=1), also known as CS
+  Lo // Unsigned lower (C=0), also known as CC
+  Mi // Minus/negative (N=1)
+  Pl // Plus/positive or zero (N=0)
+  Vs // Overflow (V=1) - used for NaN check in float compare
+  Vc // No overflow (V=0)
+  Hi // Unsigned higher (C=1 && Z=0)
+  Ls // Unsigned lower or same (C=0 || Z=1)
+  Ge // Signed greater or equal (N=V)
+  Lt // Signed less than (N!=V)
+  Gt // Signed greater than (Z=0 && N=V)
+  Le // Signed less or equal (Z=1 || N!=V)
+  Al // Always (unconditional)
+}
+
+///|
+fn Cond::to_string(self : Cond) -> String {
+  match self {
+    Eq => "eq"
+    Ne => "ne"
+    Hs => "hs"
+    Lo => "lo"
+    Mi => "mi"
+    Pl => "pl"
+    Vs => "vs"
+    Vc => "vc"
+    Hi => "hi"
+    Ls => "ls"
+    Ge => "ge"
+    Lt => "lt"
+    Gt => "gt"
+    Le => "le"
+    Al => "al"
+  }
+}
+
+///|
+pub impl Show for Cond with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// Get the condition code value for AArch64 encoding
+pub fn Cond::to_bits(self : Cond) -> Int {
+  match self {
+    Eq => 0
+    Ne => 1
+    Hs => 2
+    Lo => 3
+    Mi => 4
+    Pl => 5
+    Vs => 6
+    Vc => 7
+    Hi => 8
+    Ls => 9
+    Ge => 10
+    Lt => 11
+    Gt => 12
+    Le => 13
+    Al => 14
+  }
 }
 
 ///|
