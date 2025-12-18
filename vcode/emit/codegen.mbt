@@ -20,14 +20,9 @@ fn collect_used_callee_saved(
   for block in func.blocks {
     for inst in block.insts {
       // Check if this instruction is a function call
-      // MemoryGrow, MemorySize, MemoryFill, and MemoryCopy also use BLR internally to call C functions
-      if inst.opcode
-        is (CallIndirect(_, _)
-        | CallPtr(_, _)
-        | MemoryGrow(_)
-        | MemorySize
-        | MemoryFill
-        | MemoryCopy) {
+      // Following Cranelift's design: use call_type() to determine if an instruction
+      // behaves like a call (clobbers caller-saved registers)
+      if inst.opcode.call_type() is @instr.Regular {
         has_calls = true
       }
       for def in inst.defs {

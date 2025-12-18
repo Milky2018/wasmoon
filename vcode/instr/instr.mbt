@@ -1,4 +1,13 @@
 ///|
+/// Call type - classifies instructions that behave like calls
+/// Following Cranelift's CallType enum
+pub(all) enum CallType {
+  None // Not a call instruction
+  Regular // Regular call that returns to caller
+  TailCall // Tail call that doesn't return to caller
+}
+
+///|
 /// VCode instruction - a machine-level instruction with virtual registers
 /// Following Cranelift's design with operand constraints for fixed register allocation
 pub(all) struct VCodeInst {
@@ -772,6 +781,21 @@ fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
 ///|
 pub impl Show for VCodeTerminator with output(self, logger) {
   logger.write_string(self.to_string())
+}
+
+///|
+/// Get the call type for this opcode
+/// Following Cranelift's design: instructions that clobber caller-saved registers
+/// are classified as calls for register allocation purposes
+pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
+  match self {
+    // Direct and indirect function calls
+    CallIndirect(_, _) | CallPtr(_, _) => Regular
+    // Memory operations that call C runtime functions
+    MemoryGrow(_) | MemorySize | MemoryFill | MemoryCopy => Regular
+    // Everything else is not a call
+    _ => None
+  }
 }
 
 ///|

@@ -338,8 +338,9 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     // Process instructions
     for inst_idx, inst in block.insts {
       // Record call points for caller-saved register handling
-      // Both CallIndirect and CallPtr clobber caller-saved registers
-      if inst.opcode is (CallIndirect(_, _) | CallPtr(_, _)) {
+      // Following Cranelift's design: use call_type() to determine if an instruction
+      // behaves like a call (clobbers caller-saved registers)
+      if inst.opcode.call_type() is @instr.Regular {
         result.call_points.push({ block: block_idx, inst: inst_idx, pos: After })
       }
 
@@ -1573,6 +1574,8 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     TypeCheckIndirect(_) => true
     // Function calls have side effects
     CallIndirect(_, _) | CallPtr(_, _) => true
+    // Memory operations have side effects (modify memory or global state)
+    MemoryGrow(_) | MemoryFill | MemoryCopy => true
     // Everything else is pure computation
     _ => false
   }
