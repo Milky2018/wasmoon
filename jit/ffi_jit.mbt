@@ -10,6 +10,15 @@ pub suberror JITTrap String derive(Show)
 
 ///|
 /// Check if trap occurred and raise error if so
+/// Trap codes (matching WebAssembly trap types):
+/// 1 = out of bounds memory access
+/// 2 = call stack exhausted
+/// 3 = unreachable executed
+/// 4 = indirect call type mismatch
+/// 5 = invalid conversion to integer
+/// 6 = integer divide by zero
+/// 7 = integer overflow
+/// 99 = unknown trap
 pub fn check_trap() -> Unit raise JITTrap {
   let code = @jit_ffi.c_jit_get_trap_code()
   if code != 0 {
@@ -17,6 +26,11 @@ pub fn check_trap() -> Unit raise JITTrap {
     let msg = match code {
       1 => "out of bounds memory access"
       2 => "call stack exhausted"
+      3 => "unreachable"
+      4 => "indirect call type mismatch"
+      5 => "invalid conversion to integer"
+      6 => "integer divide by zero"
+      7 => "integer overflow"
       _ => "unknown trap"
     }
     raise JITTrap(msg)
@@ -519,8 +533,12 @@ fn JITContext::call_multi_return(
   if trap_code != 0 {
     let msg = match trap_code {
       1 => "out of bounds memory access"
-      2 => "indirect call type mismatch"
-      3 => "integer overflow or invalid conversion to integer"
+      2 => "call stack exhausted"
+      3 => "unreachable"
+      4 => "indirect call type mismatch"
+      5 => "invalid conversion to integer"
+      6 => "integer divide by zero"
+      7 => "integer overflow"
       _ => "unknown trap"
     }
     raise JITTrap(msg)

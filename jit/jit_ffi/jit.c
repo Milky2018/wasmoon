@@ -34,10 +34,23 @@ sigjmp_buf g_trap_jmp_buf;
 volatile sig_atomic_t g_trap_code = 0;
 volatile sig_atomic_t g_trap_active = 0;
 
-// Trap codes:
+// Trap codes (matching WebAssembly trap types):
 // 0 = no trap
 // 1 = out of bounds memory access
 // 2 = call stack exhausted
+// 3 = unreachable executed
+// 4 = indirect call type mismatch
+// 5 = invalid conversion to integer
+// 6 = integer divide by zero
+// 7 = integer overflow
+// 99 = unknown trap
+//
+// BRK immediate mapping (from codegen):
+// BRK #0 -> unreachable (trap code 3)
+// BRK #2 -> type mismatch (trap code 4)
+// BRK #3 -> invalid conversion (trap code 5)
+// BRK #4 -> divide by zero (trap code 6)
+// BRK #5 -> integer overflow (trap code 7)
 
 // Alternate signal stack for handling stack overflow
 #define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
@@ -115,10 +128,54 @@ static void install_alt_stack(void) {
 }
 
 // Signal handler for SIGTRAP (triggered by BRK instruction)
-static void trap_signal_handler(int sig) {
+// Uses SA_SIGINFO to get ucontext and extract BRK immediate
+static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
     (void)sig;
+    (void)info;
+
     if (g_trap_active) {
-        g_trap_code = 1;  // Out of bounds memory access
+        int trap_code = 99;  // Default to unknown
+
+#if defined(__APPLE__) && defined(__aarch64__)
+        // On macOS ARM64, extract PC from ucontext and read BRK immediate
+        ucontext_t *uc = (ucontext_t *)ucontext;
+        uint64_t pc = uc->uc_mcontext->__ss.__pc;
+        // PC points to the instruction after BRK, so read at PC-4
+        uint32_t instr = *(uint32_t *)(pc - 4);
+        // BRK encoding: 0xD4200000 | (imm16 << 5)
+        // Extract imm16: (instr >> 5) & 0xFFFF
+        int brk_imm = (instr >> 5) & 0xFFFF;
+
+        // Map BRK immediate to trap code
+        switch (brk_imm) {
+            case 0: trap_code = 3; break;   // unreachable
+            case 2: trap_code = 4; break;   // indirect call type mismatch
+            case 3: trap_code = 5; break;   // invalid conversion to integer
+            case 4: trap_code = 6; break;   // integer divide by zero
+            case 5: trap_code = 7; break;   // integer overflow
+            default: trap_code = 99; break; // unknown
+        }
+#elif defined(__linux__) && defined(__aarch64__)
+        // On Linux ARM64
+        ucontext_t *uc = (ucontext_t *)ucontext;
+        uint64_t pc = uc->uc_mcontext.pc;
+        uint32_t instr = *(uint32_t *)(pc - 4);
+        int brk_imm = (instr >> 5) & 0xFFFF;
+
+        switch (brk_imm) {
+            case 0: trap_code = 3; break;   // unreachable
+            case 2: trap_code = 4; break;   // indirect call type mismatch
+            case 3: trap_code = 5; break;   // invalid conversion to integer
+            case 4: trap_code = 6; break;   // integer divide by zero
+            case 5: trap_code = 7; break;   // integer overflow
+            default: trap_code = 99; break; // unknown
+        }
+#else
+        (void)ucontext;
+        trap_code = 99;  // Unknown on unsupported platforms
+#endif
+
+        g_trap_code = trap_code;
         siglongjmp(g_trap_jmp_buf, 1);
     }
 }
@@ -136,9 +193,9 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             g_trap_code = 2;  // call stack exhausted
             siglongjmp(g_trap_jmp_buf, 1);
         } else {
-            // Could be WASM memory access violation
-            // For now, treat as out of bounds
-            g_trap_code = 1;
+            // Could be WASM memory access violation or other error
+            // Use unknown trap code since we can't determine the exact cause
+            g_trap_code = 99;
             siglongjmp(g_trap_jmp_buf, 1);
         }
     }
@@ -157,10 +214,11 @@ void install_trap_handler(void) {
         install_alt_stack();  // Must install alternate stack first
 
         // Install SIGTRAP handler (for BRK instructions)
+        // Use SA_SIGINFO to get ucontext for extracting BRK immediate
         struct sigaction sa_trap;
-        sa_trap.sa_handler = trap_signal_handler;
+        sa_trap.sa_sigaction = trap_signal_handler;
         sigemptyset(&sa_trap.sa_mask);
-        sa_trap.sa_flags = 0;
+        sa_trap.sa_flags = SA_SIGINFO;
         sigaction(SIGTRAP, &sa_trap, NULL);
 
         // Install SIGSEGV handler (for stack overflow)

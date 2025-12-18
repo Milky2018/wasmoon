@@ -285,7 +285,7 @@ test "lower division operations" {
       #|vcode division(v0:int, v1:int) -> int {
       #|block0:
       #|    trap_if_zero32 #4 v1
-      #|    trap_if_div_overflow32 #4 v0, v1
+      #|    trap_if_div_overflow32 #5 v0, v1
       #|    v2 = sdiv32 v0, v1
       #|    trap_if_zero32 #4 v1
       #|    v3 = udiv32 v0, v1
