@@ -508,6 +508,7 @@ fn init_jit_globals(
     let global_inst = store.globals[global_addr]
     let value = global_inst.get()
     // Convert value to Int64 for storage
+    // Note: -1L is used as null sentinel in JIT
     let raw_value = match value {
       I32(n) => n.to_int64()
       I64(n) => n
@@ -515,7 +516,7 @@ fn init_jit_globals(
       F64(d) => d.reinterpret_as_int64()
       FuncRef(idx) => idx.to_int64()
       ExternRef(idx) => idx.to_int64()
-      Null => 0L
+      Null => -1L // null sentinel
     }
     // Write value at offset i * 16
     let offset = globals_ptr + (i * 16).to_int64()

@@ -111,7 +111,8 @@ fn ir_type_to_mem_type(ty : @ir.Type) -> @instr.MemType {
     @ir.Type::I64 => I64
     @ir.Type::F32 => F32
     @ir.Type::F64 => F64
-    _ => I32 // Fallback
+    // Reference types use 64-bit storage (-1L as null sentinel)
+    @ir.Type::FuncRef | @ir.Type::ExternRef => I64
   }
 }
 
@@ -2294,7 +2295,8 @@ fn lower_global_get(
   // Step 2: Load global value from globals array
   // Each global is 16 bytes (value + type tag)
   let offset = global_idx * 16
-  let load_value = @instr.VCodeInst::new(LoadPtr(@instr.I64, offset))
+  let mem_ty = ir_type_to_mem_type(result.ty)
+  let load_value = @instr.VCodeInst::new(LoadPtr(mem_ty, offset))
   load_value.add_use(Virtual(globals_ptr))
   load_value.add_def({ reg: Virtual(result_vreg) })
   block.add_inst(load_value)
@@ -2334,7 +2336,8 @@ fn lower_global_set(
   // Step 2: Store global value to globals array
   // Each global is 16 bytes (value + type tag)
   let offset = global_idx * 16
-  let store_value = @instr.VCodeInst::new(StorePtr(@instr.I64, offset))
+  let mem_ty = ir_type_to_mem_type(inst.operands[0].ty)
+  let store_value = @instr.VCodeInst::new(StorePtr(mem_ty, offset))
   store_value.add_use(Virtual(globals_ptr)) // base address
   store_value.add_use(Virtual(value)) // value to store
   block.add_inst(store_value)
