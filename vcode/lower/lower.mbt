@@ -284,7 +284,7 @@ fn lower_inst(
     // Integer arithmetic - with pattern matching for AArch64
     @ir.Opcode::Iadd => lower_iadd(ctx, inst, block)
     @ir.Opcode::Isub => lower_isub(ctx, inst, block)
-    @ir.Opcode::Imul => lower_binary_int(ctx, inst, block, Mul)
+    @ir.Opcode::Imul => lower_imul(ctx, inst, block)
     @ir.Opcode::Sdiv => lower_div(ctx, inst, block, signed=true)
     @ir.Opcode::Udiv => lower_div(ctx, inst, block, signed=false)
     @ir.Opcode::Srem => lower_rem(ctx, inst, block, true)
@@ -631,7 +631,27 @@ fn lower_iadd(
   // Default: regular add
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Add)
+  let is_64 = result.ty is @ir.Type::I64
+  let vcode_inst = @instr.VCodeInst::new(Add(is_64))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(lhs))
+  vcode_inst.add_use(Virtual(rhs))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower integer multiply with proper 32/64-bit size
+fn lower_imul(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+  let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+  let is_64 = result.ty is @ir.Type::I64
+  let vcode_inst = @instr.VCodeInst::new(Mul(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
   vcode_inst.add_use(Virtual(rhs))
@@ -1217,18 +1237,18 @@ fn emit_bounds_check(
   let end_addr = if end_offset > 0L {
     let result = ctx.vcode_func.new_vreg(Int)
     if end_offset <= 4095L {
-      // Use AddImm for small offsets
-      let add_inst = @instr.VCodeInst::new(AddImm(end_offset.to_int()))
+      // Use AddImm for small offsets (64-bit pointer arithmetic)
+      let add_inst = @instr.VCodeInst::new(AddImm(end_offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(zero_ext))
       block.add_inst(add_inst)
     } else {
-      // Load constant and use Add for large offsets
+      // Load constant and use Add for large offsets (64-bit pointer arithmetic)
       let const_vreg = ctx.vcode_func.new_vreg(Int)
       let load_const = @instr.VCodeInst::new(LoadConst(end_offset))
       load_const.add_def({ reg: Virtual(const_vreg) })
       block.add_inst(load_const)
-      let add_inst = @instr.VCodeInst::new(Add)
+      let add_inst = @instr.VCodeInst::new(Add(true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(zero_ext))
       add_inst.add_use(Virtual(const_vreg))
@@ -1329,9 +1349,9 @@ fn lower_load(
     emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
     // Load memory_base from vmctx on-demand
     let memory_base = emit_load_memory_base(ctx, block)
-    // Compute effective address: memory_base + wasm_addr
+    // Compute effective address: memory_base + wasm_addr (64-bit pointer arithmetic)
     let effective_addr = ctx.vcode_func.new_vreg(Int)
-    let add_inst = @instr.VCodeInst::new(Add)
+    let add_inst = @instr.VCodeInst::new(Add(true))
     add_inst.add_def({ reg: Virtual(effective_addr) })
     add_inst.add_use(Virtual(memory_base))
     add_inst.add_use(Virtual(wasm_addr))
@@ -1346,9 +1366,9 @@ fn lower_load(
     }
     // If offset is not aligned or too large, add it to the address first
     if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
-      // Add offset to effective_addr using immediate add
+      // Add offset to effective_addr using immediate add (64-bit pointer arithmetic)
       let addr_with_offset = ctx.vcode_func.new_vreg(Int)
-      let offset_add = @instr.VCodeInst::new(AddImm(offset))
+      let offset_add = @instr.VCodeInst::new(AddImm(offset, true))
       offset_add.add_def({ reg: Virtual(addr_with_offset) })
       offset_add.add_use(Virtual(effective_addr))
       block.add_inst(offset_add)
@@ -1388,9 +1408,9 @@ fn lower_store(
   emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
   // Load memory_base from vmctx on-demand
   let memory_base = emit_load_memory_base(ctx, block)
-  // Compute effective address: memory_base + wasm_addr
+  // Compute effective address: memory_base + wasm_addr (64-bit pointer arithmetic)
   let effective_addr = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(Add)
+  let add_inst = @instr.VCodeInst::new(Add(true))
   add_inst.add_def({ reg: Virtual(effective_addr) })
   add_inst.add_use(Virtual(memory_base))
   add_inst.add_use(Virtual(wasm_addr))
@@ -1405,9 +1425,9 @@ fn lower_store(
   }
   // If offset is not aligned or too large, add it to the address first
   if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
-    // Add offset to effective_addr using immediate add
+    // Add offset to effective_addr using immediate add (64-bit pointer arithmetic)
     let addr_with_offset = ctx.vcode_func.new_vreg(Int)
-    let offset_add = @instr.VCodeInst::new(AddImm(offset))
+    let offset_add = @instr.VCodeInst::new(AddImm(offset, true))
     offset_add.add_def({ reg: Virtual(addr_with_offset) })
     offset_add.add_use(Virtual(effective_addr))
     block.add_inst(offset_add)
@@ -1451,9 +1471,9 @@ fn lower_load_narrow(
     emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
     // Load memory_base from vmctx on-demand
     let memory_base = emit_load_memory_base(ctx, block)
-    // Compute effective address: memory_base + wasm_addr
+    // Compute effective address: memory_base + wasm_addr (64-bit pointer arithmetic)
     let effective_addr = ctx.vcode_func.new_vreg(Int)
-    let add_inst = @instr.VCodeInst::new(Add)
+    let add_inst = @instr.VCodeInst::new(Add(true))
     add_inst.add_def({ reg: Virtual(effective_addr) })
     add_inst.add_use(Virtual(memory_base))
     add_inst.add_use(Virtual(wasm_addr))
@@ -1465,9 +1485,9 @@ fn lower_load_narrow(
     let alignment = access_size
     // If offset is not aligned or too large, add it to the address first
     if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
-      // Add offset to effective_addr using immediate add
+      // Add offset to effective_addr using immediate add (64-bit pointer arithmetic)
       let addr_with_offset = ctx.vcode_func.new_vreg(Int)
-      let offset_add = @instr.VCodeInst::new(AddImm(offset))
+      let offset_add = @instr.VCodeInst::new(AddImm(offset, true))
       offset_add.add_def({ reg: Virtual(addr_with_offset) })
       offset_add.add_use(Virtual(effective_addr))
       block.add_inst(offset_add)
@@ -1506,9 +1526,9 @@ fn lower_store_narrow(
   emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
   // Load memory_base from vmctx on-demand
   let memory_base = emit_load_memory_base(ctx, block)
-  // Compute effective address: memory_base + wasm_addr
+  // Compute effective address: memory_base + wasm_addr (64-bit pointer arithmetic)
   let effective_addr = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(Add)
+  let add_inst = @instr.VCodeInst::new(Add(true))
   add_inst.add_def({ reg: Virtual(effective_addr) })
   add_inst.add_use(Virtual(memory_base))
   add_inst.add_use(Virtual(wasm_addr))
@@ -1517,9 +1537,9 @@ fn lower_store_narrow(
   let alignment = access_size
   // If offset is not aligned or too large, add it to the address first
   if offset != 0 && (offset % alignment != 0 || offset > 4095 * alignment) {
-    // Add offset to effective_addr using immediate add
+    // Add offset to effective_addr using immediate add (64-bit pointer arithmetic)
     let addr_with_offset = ctx.vcode_func.new_vreg(Int)
-    let offset_add = @instr.VCodeInst::new(AddImm(offset))
+    let offset_add = @instr.VCodeInst::new(AddImm(offset, true))
     offset_add.add_def({ reg: Virtual(addr_with_offset) })
     offset_add.add_use(Virtual(effective_addr))
     block.add_inst(offset_add)
@@ -2318,20 +2338,21 @@ fn lower_call_indirect(
   let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
 
   // Step 1: Calculate offset = elem_idx * 16 (each entry is 16 bytes: func_ptr + type_idx)
+  // Use 64-bit multiply since we're working with 64-bit pointers
   let const_16_vreg = ctx.vcode_func.new_vreg(Int)
   let load_16 = @instr.VCodeInst::new(LoadConst(16L))
   load_16.add_def({ reg: Virtual(const_16_vreg) })
   block.add_inst(load_16)
-  let mul_inst = @instr.VCodeInst::new(Mul)
+  let mul_inst = @instr.VCodeInst::new(Mul(true))
   mul_inst.add_def({ reg: Virtual(offset_vreg) })
   mul_inst.add_use(Virtual(elem_idx_vreg))
   mul_inst.add_use(Virtual(const_16_vreg))
   block.add_inst(mul_inst)
 
-  // Step 2: Calculate address = table_ptr + offset
+  // Step 2: Calculate address = table_ptr + offset (64-bit pointer arithmetic)
   // table_ptr is loaded on-demand from vmctx (following Cranelift's approach)
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(Add)
+  let add_inst = @instr.VCodeInst::new(Add(true))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
   add_inst.add_use(Virtual(table_ptr_vreg))
   add_inst.add_use(Virtual(offset_vreg))

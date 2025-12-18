@@ -50,7 +50,7 @@ test "i32 mul" {
       #|vcode test(v0:int, v1:int, v2:int) -> int {
       #|block0:
       #|    v3 = ldi 3
-      #|    v4 = mul v2, v3
+      #|    v4 = mul32 v2, v3
       #|    ret v4
       #|}
       #|
@@ -63,7 +63,7 @@ test "i32 mul" {
       #|vcode test(v0:int, v1:int, v2:int) -> int {
       #|block0:
       #|    x8 = ldi 3
-      #|    x9 = mul x2, x8
+      #|    x9 = mul32 x2, x8
       #|    ret x9
       #|}
       #|
@@ -80,7 +80,7 @@ test "i32 mul" {
       #|  0010: f30300aa  mov x19, x0
       #|block0:
       #|  0014: 680080d2  movz x8, #3, lsl #0
-      #|  0018: 497c089b  mul x9, x2, x8
+      #|  0018: 497c081b  mul w9, w2, w8
       #|  001c: e00309aa  mov x0, x9
       #|  0020: ff430091  add sp, sp, #16
       #|  0024: f30741f8  ldr x19, [sp], #16

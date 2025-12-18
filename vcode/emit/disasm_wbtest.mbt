@@ -647,6 +647,9 @@ test "32-bit instruction variants" {
   mc.emit_sdiv32(0, 1, 2) // SDIV W0, W1, W2
   mc.emit_udiv32(3, 4, 5) // UDIV W3, W4, W5
   mc.emit_sub_reg32(6, 7, 8) // SUB W6, W7, W8
+  mc.emit_add_reg32(0, 1, 2) // ADD W0, W1, W2
+  mc.emit_add_imm32(3, 4, 100) // ADD W3, W4, #100
+  mc.emit_mul32(5, 6, 7) // MUL W5, W6, W7
 
   // 32-bit shifts
   mc.emit_lsl_reg32(9, 10, 11) // LSL W9, W10, W11
@@ -671,15 +674,18 @@ test "32-bit instruction variants" {
       #|  0000: 200cc21a  sdiv w0, w1, w2
       #|  0004: 8308c51a  udiv w3, w4, w5
       #|  0008: e600084b  sub w6, w7, w8
-      #|  000c: 4921cb1a  lsl w9, w10, w11
-      #|  0010: ac25ce1a  lsr w12, w13, w14
-      #|  0014: 0f2ad11a  asr w15, w16, w17
-      #|  0018: 722ed41a  ror w18, w19, w20
-      #|  001c: d512c05a  clz w21, w22
-      #|  0020: 1703c05a  rbit w23, w24
-      #|  0024: 3f031a6b  cmp w25, w26
-      #|  0028: 7fab0071  cmp w27, #42
-      #|  002c: fc031d2a  mov w28, w29
+      #|  000c: 2000020b  add w0, w1, w2
+      #|  0010: 83900111  add w3, w4, #100
+      #|  0014: c57c071b  mul w5, w6, w7
+      #|  0018: 4921cb1a  lsl w9, w10, w11
+      #|  001c: ac25ce1a  lsr w12, w13, w14
+      #|  0020: 0f2ad11a  asr w15, w16, w17
+      #|  0024: 722ed41a  ror w18, w19, w20
+      #|  0028: d512c05a  clz w21, w22
+      #|  002c: 1703c05a  rbit w23, w24
+      #|  0030: 3f031a6b  cmp w25, w26
+      #|  0034: 7fab0071  cmp w27, #42
+      #|  0038: fc031d2a  mov w28, w29
       #|
     ),
   )

@@ -35,6 +35,9 @@ enum Instruction {
   Sdiv32(Int, Int, Int) // 32-bit signed divide
   Udiv32(Int, Int, Int) // 32-bit unsigned divide
   SubReg32(Int, Int, Int) // 32-bit subtract
+  AddReg32(Int, Int, Int) // 32-bit add
+  AddImm32(Int, Int, Int) // 32-bit add immediate
+  Mul32(Int, Int, Int) // 32-bit multiply
   // Bitwise - Register
   AndReg(Int, Int, Int)
   AndShifted(Int, Int, Int, @instr.ShiftType, Int)
@@ -240,6 +243,9 @@ fn Instruction::annotate(self : Instruction) -> String {
     Sdiv32(rd, rn, rm) => "sdiv w\{rd}, w\{rn}, w\{rm}"
     Udiv32(rd, rn, rm) => "udiv w\{rd}, w\{rn}, w\{rm}"
     SubReg32(rd, rn, rm) => "sub w\{rd}, w\{rn}, w\{rm}"
+    AddReg32(rd, rn, rm) => "add w\{rd}, w\{rn}, w\{rm}"
+    AddImm32(rd, rn, imm) => "add w\{rd}, w\{rn}, #\{imm}"
+    Mul32(rd, rn, rm) => "mul w\{rd}, w\{rn}, w\{rm}"
     AndReg(rd, rn, rm) => "and x\{rd}, x\{rn}, x\{rm}"
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
@@ -627,6 +633,29 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = (rn >> 3) & 3
       let b2 = rm & 31
       let b3 = 0x4B // SUB 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    AddReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 0x0B // ADD 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    AddImm32(rd, rn, imm) => {
+      // ADD Wd, Wn, #imm (32-bit)
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((imm & 0x3F) << 2)
+      let b2 = (imm >> 6) & 0x3F
+      let b3 = 0x11 // ADD imm 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    Mul32(rd, rn, rm) => {
+      // MUL Wd, Wn, Wm (32-bit) = MADD Wd, Wn, Wm, WZR
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | (0x1F << 2) // ra = 31 (WZR)
+      let b2 = (rm & 31) | (0 << 5)
+      let b3 = 0x1B // MADD 32-bit: sf=0
       (b0, b1, b2, b3)
     }
     AndReg(rd, rn, rm) => {
@@ -2047,6 +2076,36 @@ pub fn MachineCode::emit_sub_reg32(
   rm : Int,
 ) -> Unit {
   SubReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_add_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  AddReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_add_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm : Int,
+) -> Unit {
+  AddImm32(rd, rn, imm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_mul32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  Mul32(rd, rn, rm).emit(self)
 }
 
 ///|

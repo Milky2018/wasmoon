@@ -150,7 +150,7 @@ test "emit: full function" {
   let block = func.new_block()
 
   // X0 = X0 + X1 (assuming params in X0, X1)
-  let add_inst = @instr.VCodeInst::new(Add)
+  let add_inst = @instr.VCodeInst::new(Add(true))
   add_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
   add_inst.add_use(@abi.Physical({ index: 0, class: Int }))
   add_inst.add_use(@abi.Physical({ index: 1, class: Int }))
@@ -577,14 +577,14 @@ test "emit: complete VCode instruction emission" {
   block.add_inst(ldi)
 
   // Add
-  let add = @instr.VCodeInst::new(Add)
+  let add = @instr.VCodeInst::new(Add(true))
   add.add_def({ reg: @abi.Physical({ index: 1, class: Int }) })
   add.add_use(@abi.Physical({ index: 0, class: Int }))
   add.add_use(@abi.Physical({ index: 0, class: Int }))
   block.add_inst(add)
 
   // Mul
-  let mul = @instr.VCodeInst::new(Mul)
+  let mul = @instr.VCodeInst::new(Mul(true))
   mul.add_def({ reg: @abi.Physical({ index: 2, class: Int }) })
   mul.add_use(@abi.Physical({ index: 1, class: Int }))
   mul.add_use(@abi.Physical({ index: 0, class: Int }))

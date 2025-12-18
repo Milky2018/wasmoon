@@ -134,7 +134,7 @@ pub(all) struct VCodeBuilder {
   func : @lower.VCodeFunction
   mut current_block : @block.VCodeBlock?
 }
-pub fn VCodeBuilder::add(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::add(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::add_param(Self, @abi.RegClass) -> @abi.VReg
 pub fn VCodeBuilder::add_result(Self, @abi.RegClass) -> Unit
 pub fn VCodeBuilder::ashr(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
@@ -157,7 +157,7 @@ pub fn VCodeBuilder::jump(Self, @block.VCodeBlock) -> Unit
 pub fn VCodeBuilder::load(Self, @instr.MemType, @abi.VReg, Int) -> @abi.VReg
 pub fn VCodeBuilder::lshr(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::mov(Self, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::mul(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::mul(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::new(String) -> Self
 pub fn VCodeBuilder::print(Self) -> String
 pub fn VCodeBuilder::return_(Self, Array[@abi.VReg]) -> Unit

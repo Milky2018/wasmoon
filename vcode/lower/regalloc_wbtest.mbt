@@ -10,7 +10,7 @@ test "liveness: simple function" {
   let block = func.new_block()
 
   // v2 = add v0, v1
-  let add_inst = @instr.VCodeInst::new(@instr.Add)
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
   let result_vreg = func.new_vreg(@abi.Int)
   add_inst.add_def({ reg: @abi.Virtual(result_vreg) })
   add_inst.add_use(@abi.Virtual(a))
@@ -49,7 +49,7 @@ test "regalloc: simple allocation" {
   let block = func.new_block()
 
   // v2 = add v0, v1
-  let add_inst = @instr.VCodeInst::new(@instr.Add)
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
   let result_vreg = func.new_vreg(@abi.Int)
   add_inst.add_def({ reg: @abi.Virtual(result_vreg) })
   add_inst.add_use(@abi.Virtual(a))
@@ -90,7 +90,7 @@ test "regalloc: with spilling" {
 
   // All params live at the same time, need more than 2 registers
   // v4 = add v0, v1
-  let add1 = @instr.VCodeInst::new(@instr.Add)
+  let add1 = @instr.VCodeInst::new(@instr.Add(true))
   let t1 = func.new_vreg(@abi.Int)
   add1.add_def({ reg: @abi.Virtual(t1) })
   add1.add_use(@abi.Virtual(a))
@@ -98,7 +98,7 @@ test "regalloc: with spilling" {
   block.add_inst(add1)
 
   // v5 = add v2, v3
-  let add2 = @instr.VCodeInst::new(@instr.Add)
+  let add2 = @instr.VCodeInst::new(@instr.Add(true))
   let t2 = func.new_vreg(@abi.Int)
   add2.add_def({ reg: @abi.Virtual(t2) })
   add2.add_use(@abi.Virtual(c))
@@ -106,7 +106,7 @@ test "regalloc: with spilling" {
   block.add_inst(add2)
 
   // v6 = add v4, v5
-  let add3 = @instr.VCodeInst::new(@instr.Add)
+  let add3 = @instr.VCodeInst::new(@instr.Add(true))
   let result = func.new_vreg(@abi.Int)
   add3.add_def({ reg: @abi.Virtual(result) })
   add3.add_use(@abi.Virtual(t1))
@@ -181,7 +181,7 @@ test "apply_allocation: rewrites virtual to physical" {
   block.add_inst(const_inst)
 
   // v2 = add v0, v1
-  let add_inst = @instr.VCodeInst::new(@instr.Add)
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
   let result_vreg = func.new_vreg(@abi.Int)
   add_inst.add_def({ reg: @abi.Virtual(result_vreg) })
   add_inst.add_use(@abi.Virtual(a))
@@ -256,7 +256,7 @@ test "regalloc: aarch64 convenience function" {
   let b = func.add_param(@abi.Int)
   func.add_result(@abi.Int)
   let block = func.new_block()
-  let add_inst = @instr.VCodeInst::new(@instr.Add)
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
   let result_vreg = func.new_vreg(@abi.Int)
   add_inst.add_def({ reg: @abi.Virtual(result_vreg) })
   add_inst.add_use(@abi.Virtual(a))
@@ -572,7 +572,7 @@ test "liveness: complete output for linear function" {
   let block = func.new_block()
 
   // v2 = add v0, v1
-  let add_inst = @instr.VCodeInst::new(@instr.Add)
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
   let sum = func.new_vreg(@abi.Int)
   add_inst.add_def({ reg: @abi.Virtual(sum) })
   add_inst.add_use(@abi.Virtual(a))
@@ -586,7 +586,7 @@ test "liveness: complete output for linear function" {
   block.add_inst(const_inst)
 
   // v4 = mul v2, v3
-  let mul_inst = @instr.VCodeInst::new(@instr.Mul)
+  let mul_inst = @instr.VCodeInst::new(@instr.Mul(true))
   let result = func.new_vreg(@abi.Int)
   mul_inst.add_def({ reg: @abi.Virtual(result) })
   mul_inst.add_use(@abi.Virtual(sum))
@@ -664,7 +664,7 @@ test "liveness: complete output for diamond CFG" {
   block0.set_terminator(@instr.Branch(@abi.Virtual(cond), block1.id, block2.id))
 
   // block1: v3 = add v1, v1
-  let add1 = @instr.VCodeInst::new(@instr.Add)
+  let add1 = @instr.VCodeInst::new(@instr.Add(true))
   add1.add_use(@abi.Virtual(v1))
   add1.add_use(@abi.Virtual(v1))
   add1.add_def({ reg: @abi.Virtual(v3) })
@@ -672,7 +672,7 @@ test "liveness: complete output for diamond CFG" {
   block1.set_terminator(@instr.Jump(block3.id))
 
   // block2: v3 = add v2, v2
-  let add2 = @instr.VCodeInst::new(@instr.Add)
+  let add2 = @instr.VCodeInst::new(@instr.Add(true))
   add2.add_use(@abi.Virtual(v2))
   add2.add_use(@abi.Virtual(v2))
   add2.add_def({ reg: @abi.Virtual(v3) })
@@ -719,7 +719,7 @@ test "regalloc: complete allocation output for simple function" {
   let block = func.new_block()
 
   // v2 = add v0, v1
-  let add_inst = @instr.VCodeInst::new(@instr.Add)
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
   let result = func.new_vreg(@abi.Int)
   add_inst.add_def({ reg: @abi.Virtual(result) })
   add_inst.add_use(@abi.Virtual(a))
@@ -809,7 +809,7 @@ test "regalloc: same instruction use-def conflict" {
   block.add_inst(load_inst)
 
   // v1 = add v0, v0
-  let add_inst = @instr.VCodeInst::new(@instr.Add)
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
   add_inst.add_use(@abi.Virtual(v0))
   add_inst.add_use(@abi.Virtual(v0))
   add_inst.add_def({ reg: @abi.Virtual(v1) })
@@ -875,7 +875,7 @@ test "regalloc: interval extension across blocks" {
   block0.set_terminator(@instr.Jump(block1.id))
 
   // block1
-  let add_inst = @instr.VCodeInst::new(@instr.Add)
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
   add_inst.add_use(@abi.Virtual(v0))
   add_inst.add_use(@abi.Virtual(v0))
   add_inst.add_def({ reg: @abi.Virtual(v1) })
@@ -940,7 +940,7 @@ test "regalloc: float and int mixed allocation" {
   block.add_inst(inst1)
 
   // v2 = add v0, v0
-  let inst2 = @instr.VCodeInst::new(@instr.Add)
+  let inst2 = @instr.VCodeInst::new(@instr.Add(true))
   inst2.add_use(@abi.Virtual(v0))
   inst2.add_use(@abi.Virtual(v0))
   inst2.add_def({ reg: @abi.Virtual(v2) })
@@ -1040,12 +1040,12 @@ test "regalloc: spill and reload complete flow" {
   let inst2 = @instr.VCodeInst::new(@instr.LoadConst(3L))
   inst2.add_def({ reg: @abi.Virtual(v2) })
   block.add_inst(inst2)
-  let inst3 = @instr.VCodeInst::new(@instr.Add)
+  let inst3 = @instr.VCodeInst::new(@instr.Add(true))
   inst3.add_use(@abi.Virtual(v0))
   inst3.add_use(@abi.Virtual(v1))
   inst3.add_def({ reg: @abi.Virtual(v3) })
   block.add_inst(inst3)
-  let inst4 = @instr.VCodeInst::new(@instr.Add)
+  let inst4 = @instr.VCodeInst::new(@instr.Add(true))
   inst4.add_use(@abi.Virtual(v3))
   inst4.add_use(@abi.Virtual(v2))
   inst4.add_def({ reg: @abi.Virtual(v4) })
@@ -1366,7 +1366,7 @@ test "regalloc: mixed int, f32, f64 registers" {
   block.add_inst(inst2)
 
   // v3 = add v0, v0
-  let inst3 = @instr.VCodeInst::new(@instr.Add)
+  let inst3 = @instr.VCodeInst::new(@instr.Add(true))
   inst3.add_use(@abi.Virtual(v0))
   inst3.add_use(@abi.Virtual(v0))
   inst3.add_def({ reg: @abi.Virtual(v3) })

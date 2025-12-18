@@ -138,10 +138,10 @@ pub fn VCodeInst::new(VCodeOpcode) -> Self
 pub impl Show for VCodeInst
 
 pub(all) enum VCodeOpcode {
-  Add
-  AddImm(Int)
+  Add(Bool)
+  AddImm(Int, Bool)
   Sub(Bool)
-  Mul
+  Mul(Bool)
   SDiv(Bool)
   UDiv(Bool)
   And

@@ -230,14 +230,17 @@ test "no pattern match: regular add" {
   let vcode_func = lower_function_optimized(builder.get_function())
   let output = vcode_func.print()
   // No optimization applies, so regular add is emitted
-  let expected =
-    #|vcode regular_add(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = add v0, v1
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode regular_add(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = add32 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -257,15 +260,18 @@ test "optimized vs non-optimized comparison" {
   let output_non_opt = vcode_non_opt.print()
 
   // Should have an 'add' instruction
-  let expected_non_opt =
-    #|vcode comparison(v0:int) -> int {
-    #|block0:
-    #|    v1 = ldi 0
-    #|    v2 = add v0, v1
-    #|    ret v2
-    #|}
-    #|
-  inspect(output_non_opt, content=expected_non_opt)
+  inspect(
+    output_non_opt,
+    content=(
+      #|vcode comparison(v0:int) -> int {
+      #|block0:
+      #|    v1 = ldi 0
+      #|    v2 = add32 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 
   // Rebuild for optimized test (builders consume the function)
   let builder2 = @ir.IRBuilder::new("comparison")
@@ -444,13 +450,16 @@ test "no strength reduction: mul x, 3 (not power of 2)" {
   let vcode_func = lower_function_optimized(builder.get_function())
   let output = vcode_func.print()
   // 3 is not a power of 2, so regular mul is used
-  let expected =
-    #|vcode mul_non_pow2_test(v0:int) -> int {
-    #|block0:
-    #|    v1 = ldi 3
-    #|    v2 = mul v0, v1
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode mul_non_pow2_test(v0:int) -> int {
+      #|block0:
+      #|    v1 = ldi 3
+      #|    v2 = mul32 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
