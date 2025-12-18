@@ -89,7 +89,9 @@ pub fn MachineCode::current_pos(Self) -> Int
 pub fn MachineCode::define_label(Self, Int) -> Unit
 pub fn MachineCode::dump_disasm(Self) -> String
 pub fn MachineCode::emit_add_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_add_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_add_reg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_add_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_add_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_addv_b(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_adr(Self, Int, Int) -> Unit
@@ -194,6 +196,7 @@ pub fn MachineCode::emit_movk(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_movz(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_msub(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mul(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_mul32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mvn(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_nop(Self) -> Unit
 pub fn MachineCode::emit_orr_reg(Self, Int, Int, Int) -> Unit

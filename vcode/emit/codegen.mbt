@@ -326,16 +326,24 @@ fn MachineCode::emit_instruction(
   let spill_base_offset = stack_frame.spill_offset
   let frame_size = stack_frame.total_size
   match inst.opcode {
-    Add => {
+    Add(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_add_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_add_reg(rd, rn, rm)
+      } else {
+        self.emit_add_reg32(rd, rn, rm)
+      }
     }
-    AddImm(imm) => {
+    AddImm(imm, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      self.emit_add_imm(rd, rn, imm)
+      if is_64 {
+        self.emit_add_imm(rd, rn, imm)
+      } else {
+        self.emit_add_imm32(rd, rn, imm)
+      }
     }
     Sub(is_64) => {
       let rd = wreg_num(inst.defs[0])
@@ -347,11 +355,15 @@ fn MachineCode::emit_instruction(
         self.emit_sub_reg32(rd, rn, rm)
       }
     }
-    Mul => {
+    Mul(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_mul(rd, rn, rm)
+      if is_64 {
+        self.emit_mul(rd, rn, rm)
+      } else {
+        self.emit_mul32(rd, rn, rm)
+      }
     }
     SDiv(is_64) => {
       let rd = wreg_num(inst.defs[0])

@@ -390,8 +390,8 @@ pub fn AArch64StackFrame::gen_epilogue(
     insts.push(load_lr)
   }
 
-  // Restore stack pointer: ADD sp, sp, #frame_size
-  let add_sp = @instr.VCodeInst::new(Add)
+  // Restore stack pointer: ADD sp, sp, #frame_size (64-bit)
+  let add_sp = @instr.VCodeInst::new(Add(true))
   add_sp.add_def({ reg: Physical({ index: 31, class: Int }) }) // SP
   add_sp.add_use(Physical({ index: 31, class: Int })) // SP
   insts.push(add_sp)

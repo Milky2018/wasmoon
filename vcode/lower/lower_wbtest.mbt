@@ -15,14 +15,17 @@ test "lower simple add function" {
   // Lower to VCode
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode add(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = add v0, v1
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode add(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = add32 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -63,16 +66,19 @@ test "lower constants" {
   builder.return_([sum])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode const_test() -> int {
-    #|block0:
-    #|    v0 = ldi 10
-    #|    v1 = ldi 20
-    #|    v2 = add v0, v1
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode const_test() -> int {
+      #|block0:
+      #|    v0 = ldi 10
+      #|    v1 = ldi 20
+      #|    v2 = add32 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -195,7 +201,7 @@ test "lower memory operations" {
       #|    v6 = add v5, v0
       #|    v1 = load.i32 +0 v6
       #|    v7 = ldi 1
-      #|    v8 = add v1, v7
+      #|    v8 = add32 v1, v7
       #|    v9 = extend.u32_64 v0
       #|    v10 = add #8 v9
       #|    v11 = load_ptr.i64 +8 x19
@@ -289,7 +295,7 @@ test "lower division operations" {
       #|    v2 = sdiv32 v0, v1
       #|    trap_if_zero32 #4 v1
       #|    v3 = udiv32 v0, v1
-      #|    v4 = add v2, v3
+      #|    v4 = add32 v2, v3
       #|    ret v4
       #|}
       #|

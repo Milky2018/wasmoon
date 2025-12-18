@@ -79,9 +79,10 @@ pub fn VCodeBuilder::add(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(Add)
+  let inst = @instr.VCodeInst::new(Add(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -110,9 +111,10 @@ pub fn VCodeBuilder::mul(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(Mul)
+  let inst = @instr.VCodeInst::new(Mul(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))

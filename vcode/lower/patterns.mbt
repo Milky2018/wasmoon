@@ -733,9 +733,9 @@ fn lower_inst_default(
     @ir.Opcode::Fconst(val) => lower_fconst(ctx, inst, block, val)
 
     // Integer arithmetic
-    @ir.Opcode::Iadd => lower_binary_int(ctx, inst, block, @instr.Add)
+    @ir.Opcode::Iadd => lower_iadd(ctx, inst, block)
     @ir.Opcode::Isub => lower_isub(ctx, inst, block)
-    @ir.Opcode::Imul => lower_binary_int(ctx, inst, block, @instr.Mul)
+    @ir.Opcode::Imul => lower_imul(ctx, inst, block)
     @ir.Opcode::Sdiv => lower_div(ctx, inst, block, signed=true)
     @ir.Opcode::Udiv => lower_div(ctx, inst, block, signed=false)
 

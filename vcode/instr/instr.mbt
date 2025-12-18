@@ -105,10 +105,10 @@ pub impl Show for VCodeInst with output(self, logger) {
 /// VCode opcode - machine-level operation (target-independent subset)
 pub(all) enum VCodeOpcode {
   // Integer arithmetic (Bool = true for 64-bit, false for 32-bit)
-  Add
-  AddImm(Int) // ADD Xd, Xn, #imm (immediate add)
+  Add(Bool) // ADD with size: true = 64-bit, false = 32-bit
+  AddImm(Int, Bool) // ADD Xd, Xn, #imm with size: true = 64-bit, false = 32-bit
   Sub(Bool) // SUB with size: true = 64-bit, false = 32-bit
-  Mul
+  Mul(Bool) // MUL with size: true = 64-bit, false = 32-bit
   SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
   // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
@@ -315,10 +315,10 @@ pub(all) enum VCodeOpcode {
 ///|
 fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
   match self {
-    Add => "add"
-    AddImm(imm) => "add #\{imm}"
+    Add(is_64) => if is_64 { "add" } else { "add32" }
+    AddImm(imm, is_64) => if is_64 { "add #\{imm}" } else { "add32 #\{imm}" }
     Sub(is_64) => if is_64 { "sub" } else { "sub32" }
-    Mul => "mul"
+    Mul(is_64) => if is_64 { "mul" } else { "mul32" }
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
     And => "and"
