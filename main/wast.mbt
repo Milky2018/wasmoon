@@ -408,8 +408,8 @@ fn try_compile_jit(
             // NOTE: No need to manually free - GC handles cleanup
             return None
           }
-          // Initialize data segments
-          init_data_segments(mod_, mem_ptr)
+          // Copy interpreter memory to JIT memory (preserves start function effects)
+          copy_interp_memory_to_jit(instance, store, mem_ptr)
           // Set memory in JIT context
           jm.set_memory(mem_ptr, mem_size)
           // Initialize globals

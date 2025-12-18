@@ -143,72 +143,16 @@ fn run_wasm(
     )
   }
   // Instantiate the main module
+  // Note: instantiate_module_with_imports already handles:
+  // - Data segment initialization
+  // - Element segment initialization
+  // - Start function execution
   let store = linker.get_store()
   let imports = linker.build_imports()
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
     e => {
       println("Error instantiating module: \{e}")
       return
-    }
-  }
-
-  // Initialize data segments (copy data to memory)
-  for data in mod_.datas {
-    if instance.mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(instance.mem_addrs[data.memory_idx]) catch {
-        e => {
-          println("Error getting memory: \{e}")
-          return
-        }
-      }
-      let offset = match data.offset {
-        [I32Const(n)] => n
-        _ => 0
-      }
-      mem.init_data(offset, data.init) catch {
-        e => {
-          println("Error initializing data segment: \{e}")
-          return
-        }
-      }
-    }
-  }
-
-  // Initialize element segments (populate tables with function references)
-  for elem in mod_.elems {
-    // Only process active element segments
-    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) &&
-      instance.table_addrs.length() > table_idx {
-      let table = store.get_table(instance.table_addrs[table_idx]) catch {
-        e => {
-          println("Error getting table: \{e}")
-          return
-        }
-      }
-      let offset = match offset_expr {
-        [I32Const(n)] => n
-        _ => 0
-      }
-      for i, init_expr in elem.init {
-        // Extract function index from init expression
-        let func_idx = match init_expr {
-          [RefFunc(idx)] => idx
-          [I32Const(idx)] => idx
-          _ => continue
-        }
-        // Convert module function index to store address
-        let store_addr = if func_idx < instance.func_addrs.length() {
-          instance.func_addrs[func_idx]
-        } else {
-          func_idx // fallback, should not happen for valid modules
-        }
-        table.set(offset + i, @types.Value::FuncRef(store_addr)) catch {
-          e => {
-            println("Error setting table element: \{e}")
-            return
-          }
-        }
-      }
     }
   }
   if debug_config.verbose {
@@ -565,8 +509,8 @@ fn run_with_jit(
             // NOTE: No need to manually free - GC handles cleanup
             return []
           }
-          // Initialize data segments
-          init_data_segments(mod_, mem_ptr)
+          // Copy interpreter memory to JIT memory (preserves start function effects)
+          copy_interp_memory_to_jit(instance, store, mem_ptr)
           // Set memory in JIT context
           jm.set_memory(mem_ptr, mem_size)
           // Initialize globals
@@ -763,14 +707,21 @@ fn get_memory_size(
 }
 
 ///|
-/// Initialize data segments in JIT memory
-fn init_data_segments(mod_ : @types.Module, mem_ptr : Int64) -> Unit {
-  for data in mod_.datas {
-    let offset = match data.offset {
-      [I32Const(n)] => n.to_int64()
-      _ => 0L
-    }
-    @jit.memory_init(mem_ptr, offset, data.init) |> ignore
+/// Copy interpreter memory to JIT memory
+/// This preserves any modifications made by the start function
+fn copy_interp_memory_to_jit(
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+  mem_ptr : Int64,
+) -> Unit {
+  if instance.mem_addrs.is_empty() {
+    return
+  }
+  let mem = store.get_memory(instance.mem_addrs[0])
+  let size = mem.size_pages() * 65536 // Convert pages to bytes
+  if size > 0 {
+    let data = mem.read_bytes(0, size)
+    @jit.memory_init(mem_ptr, 0L, data) |> ignore
   }
 }
 
