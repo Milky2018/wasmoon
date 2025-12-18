@@ -112,6 +112,9 @@ fn has_side_effects(inst : Inst) -> Bool {
     Call(_) | CallIndirect(_) => true
     // Memory operations that modify global state
     MemoryGrow(_) | MemoryFill | MemoryCopy => true
+    // Global operations: GlobalGet reads mutable state, GlobalSet modifies it
+    // Mark both as having side effects to prevent incorrect CSE
+    GlobalGet(_) | GlobalSet(_) => true
     // Other instructions are pure
     _ => false
   }
