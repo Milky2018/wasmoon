@@ -12,6 +12,8 @@ import(
 // Values
 pub fn alloc_memory(Int64) -> Int64
 
+pub fn c_jit_read_i64(Int64) -> Int64
+
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
 pub fn check_trap() -> Unit raise JITTrap
