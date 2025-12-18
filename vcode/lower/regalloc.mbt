@@ -1569,8 +1569,6 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     // Memory stores have side effects
     Store(_, _) | StackStore(_) | StorePtr(_, _) => true
-    // Bounds check can trap
-    BoundsCheck(_, _) => true
     // Type check can trap
     TypeCheckIndirect(_) => true
     // Function calls have side effects
