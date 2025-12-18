@@ -338,7 +338,8 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     // Process instructions
     for inst_idx, inst in block.insts {
       // Record call points for caller-saved register handling
-      if inst.opcode is CallIndirect(_, _) {
+      // Both CallIndirect and CallPtr clobber caller-saved registers
+      if inst.opcode is (CallIndirect(_, _) | CallPtr(_, _)) {
         result.call_points.push({ block: block_idx, inst: inst_idx, pos: After })
       }
 
@@ -614,6 +615,38 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
 // ============ Linear Scan Register Allocator ============
 
 ///|
+/// A register move instruction (from regalloc constraint processing)
+/// Following Cranelift's Edit::Move design
+pub(all) struct RegMove {
+  from : @abi.PReg // Source register (or spill slot encoded as negative index)
+  to : @abi.PReg // Destination register
+  class : @abi.RegClass
+}
+
+///|
+fn RegMove::to_string(self : RegMove) -> String {
+  "mov \{self.to} <- \{self.from}"
+}
+
+///|
+pub impl Show for RegMove with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// Edits to insert before/after an instruction
+/// Following Cranelift's Edits design for constraint handling
+pub(all) struct InstEdits {
+  before : Array[RegMove] // Moves to insert before the instruction
+  after : Array[RegMove] // Moves to insert after the instruction
+}
+
+///|
+fn InstEdits::new() -> InstEdits {
+  { before: [], after: [] }
+}
+
+///|
 /// Register allocation result
 pub(all) struct RegAllocResult {
   // Map from vreg id to assigned physical register
@@ -625,6 +658,9 @@ pub(all) struct RegAllocResult {
   // Instructions to insert (for spills/reloads)
   spills : Array[SpillInfo]
   reloads : Array[ReloadInfo]
+  // Constraint edits: (block_idx, inst_idx) -> edits to insert
+  // Following Cranelift's design for fixed register constraints
+  inst_edits : Map[(Int, Int), InstEdits]
 }
 
 ///|
@@ -659,6 +695,11 @@ pub(all) struct LinearScanAllocator {
   mut next_spill_slot : Int
   // Block order for correct interval comparison in non-linear CFGs
   block_order : Map[Int, Int]
+  // Reserved registers at each instruction point (for FixedReg constraints)
+  // Key: (block_idx, inst_idx), Value: set of reserved register indices
+  // Following Cranelift: constraints must be respected during allocation
+  reserved_int_regs : Map[(Int, Int), Set[Int]]
+  reserved_float_regs : Map[(Int, Int), Set[Int]]
 }
 
 ///|
@@ -676,7 +717,95 @@ pub fn LinearScanAllocator::new(
     active: [],
     next_spill_slot: 0,
     block_order: {},
+    reserved_int_regs: {},
+    reserved_float_regs: {},
   }
+}
+
+///|
+/// Collect FixedReg constraints from all instructions
+/// This must be called before allocation so that constrained registers
+/// can be avoided during the allocation process.
+/// Following Cranelift's design: constraints are known before allocation.
+fn LinearScanAllocator::collect_constraints(
+  self : LinearScanAllocator,
+  func : VCodeFunction,
+) -> Unit {
+  for block_idx, block in func.blocks {
+    for inst_idx, inst in block.insts {
+      // Collect use constraints
+      for constraint in inst.use_constraints {
+        if constraint is @abi.FixedReg(preg) {
+          let key = (block_idx, inst_idx)
+          match preg.class {
+            @abi.Int => {
+              if self.reserved_int_regs.get(key) is None {
+                self.reserved_int_regs.set(key, Set::new())
+              }
+              self.reserved_int_regs.get(key).unwrap().add(preg.index)
+            }
+            @abi.Float32 | @abi.Float64 => {
+              if self.reserved_float_regs.get(key) is None {
+                self.reserved_float_regs.set(key, Set::new())
+              }
+              self.reserved_float_regs.get(key).unwrap().add(preg.index)
+            }
+          }
+        }
+      }
+      // Collect def constraints
+      for constraint in inst.def_constraints {
+        if constraint is @abi.FixedReg(preg) {
+          let key = (block_idx, inst_idx)
+          match preg.class {
+            @abi.Int => {
+              if self.reserved_int_regs.get(key) is None {
+                self.reserved_int_regs.set(key, Set::new())
+              }
+              self.reserved_int_regs.get(key).unwrap().add(preg.index)
+            }
+            @abi.Float32 | @abi.Float64 => {
+              if self.reserved_float_regs.get(key) is None {
+                self.reserved_float_regs.set(key, Set::new())
+              }
+              self.reserved_float_regs.get(key).unwrap().add(preg.index)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Check if a register is reserved at any point in an interval's live range
+fn LinearScanAllocator::is_reserved_in_range(
+  self : LinearScanAllocator,
+  preg : @abi.PReg,
+  interval : LiveInterval,
+) -> Bool {
+  let reserved_map = match preg.class {
+    @abi.Int => self.reserved_int_regs
+    @abi.Float32 | @abi.Float64 => self.reserved_float_regs
+  }
+  let block_order = self.block_order
+
+  // Check all reserved points to see if any overlap with this interval
+  for entry in reserved_map {
+    let ((block_idx, inst_idx), reserved_set) = entry
+    if !reserved_set.contains(preg.index) {
+      continue
+    }
+    // Check if this point is within the interval's live range
+    let point : ProgPoint = { block: block_idx, inst: inst_idx, pos: Before }
+    let start_cmp = interval.start.compare_with_order(point, block_order)
+    let end_cmp = interval.end.compare_with_order(point, block_order)
+    // interval.start <= point <= interval.end
+    if start_cmp <= 0 && end_cmp >= 0 {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -686,6 +815,10 @@ pub fn LinearScanAllocator::allocate(
   func : VCodeFunction,
   liveness : LivenessResult,
 ) -> RegAllocResult {
+  // Step 0: Collect constraints from all instructions
+  // This allows us to avoid constrained registers during allocation
+  self.collect_constraints(func)
+
   // Copy block order from liveness result
   for entry in liveness.block_order {
     let (block_id, order) = entry
@@ -697,35 +830,50 @@ pub fn LinearScanAllocator::allocate(
     num_spill_slots: 0,
     spills: [],
     reloads: [],
+    inst_edits: {},
   }
 
   // Pre-assign function parameters to ABI registers
-  // JIT ABI: X0-X7 for args (AAPCS64 compatible)
+  // Following Cranelift: all params use X0-X7 (int) or V0-V7 (float)
+  // vmctx is an explicit param in the function signature, not special-cased here
   // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
   // it will be handled by the normal allocation process (which will use callee-saved)
-  // NOTE: Only the first 8 params (0-7) are in registers. Params 8+ are on stack.
-  let actual_param_base = @abi.PARAM_BASE_REG
-  let actual_max_reg_params = @abi.MAX_REG_PARAMS
-  for i, param in func.params {
-    // Skip stack parameters - they're not in registers
-    if i >= actual_max_reg_params {
-      continue
-    }
+  let max_int_params = @abi.MAX_REG_PARAMS // 8
+  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let mut int_idx = 0
+  let mut float_idx = 0
+  for param in func.params {
     if liveness.intervals.get(param.id) is Some(interval) {
-      if interval.crosses_call {
-        // Parameter crosses a call, don't pre-assign to caller-saved register
-        // The allocation loop below will handle it and assign to callee-saved
-        continue
-      } else {
-        // Safe to pre-assign to ABI register
-        let preg : @abi.PReg = match param.class {
-          @abi.Int => { index: i + actual_param_base, class: @abi.Int }
-          @abi.Float32 | @abi.Float64 => { index: i, class: param.class } // D0, D1, D2, ... D7
-        }
-        result.assignments.set(param.id, preg)
-        interval.assigned = Some(preg)
-        self.active.push(interval)
+      // Determine which register this param comes in
+      let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
+        @abi.Int =>
+          if int_idx < max_int_params {
+            (Some(@abi.PReg::{ index: int_idx, class: @abi.Int }), true)
+          } else {
+            (None, true) // Stack param
+          }
+        @abi.Float32 | @abi.Float64 =>
+          if float_idx < max_float_params {
+            (Some(@abi.PReg::{ index: float_idx, class: param.class }), false)
+          } else {
+            (None, false) // Stack param
+          }
       }
+      // Update counters
+      if is_int {
+        int_idx = int_idx + 1
+      } else {
+        float_idx = float_idx + 1
+      }
+      // Skip if crosses call or no register available
+      if interval.crosses_call || preg_opt is None {
+        continue
+      }
+      // Safe to pre-assign to ABI register
+      let preg = preg_opt.unwrap()
+      result.assignments.set(param.id, preg)
+      interval.assigned = Some(preg)
+      self.active.push(interval)
     }
   }
 
@@ -836,12 +984,13 @@ fn reg_class_eq(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 
 ///|
 /// Try to allocate a physical register for an interval
+/// Following Cranelift: avoid registers that are reserved by constraints
 fn LinearScanAllocator::try_allocate_reg(
   self : LinearScanAllocator,
   interval : LiveInterval,
   avail_regs : Array[@abi.PReg],
 ) -> @abi.PReg? {
-  // Build set of registers currently in use
+  // Build set of registers currently in use by active intervals
   let used : Set[Int] = Set::new()
   for active in self.active {
     if active.assigned is Some(preg) &&
@@ -850,14 +999,17 @@ fn LinearScanAllocator::try_allocate_reg(
     }
   }
 
-  // Try hint first if available
-  if interval.hint is Some(hint) && !used.contains(hint.index) {
+  // Try hint first if available and not reserved
+  if interval.hint is Some(hint) &&
+    !used.contains(hint.index) &&
+    !self.is_reserved_in_range(hint, interval) {
     return Some(hint)
   }
 
-  // Find a free register
+  // Find a free register that is not reserved by any constraint
+  // in the interval's live range
   for preg in avail_regs {
-    if !used.contains(preg.index) {
+    if !used.contains(preg.index) && !self.is_reserved_in_range(preg, interval) {
       return Some(preg)
     }
   }
@@ -903,6 +1055,98 @@ fn LinearScanAllocator::spill_interval(
   }
 }
 
+// ============ Constraint Processing ============
+
+///|
+/// Process operand constraints and generate RegMove edits
+/// Following Cranelift's design: constraints are processed after allocation
+/// and moves are inserted when the allocated register doesn't match the constraint
+pub fn process_constraints(
+  func : VCodeFunction,
+  alloc : RegAllocResult,
+) -> Unit {
+  for block_idx, block in func.blocks {
+    for inst_idx, inst in block.insts {
+      // Skip if no constraints
+      if inst.use_constraints.is_empty() && inst.def_constraints.is_empty() {
+        continue
+      }
+      let edits = InstEdits::new()
+
+      // Process use constraints (moves before the instruction)
+      for i, constraint in inst.use_constraints {
+        if constraint is @abi.FixedReg(required_preg) {
+          let use_reg = inst.uses[i]
+          if use_reg is @abi.Virtual(vreg) {
+            // Check if already allocated to the required register
+            match alloc.assignments.get(vreg.id) {
+              Some(assigned_preg) =>
+                if assigned_preg.index != required_preg.index {
+                  // Need to move from assigned to required
+                  edits.before.push({
+                    from: assigned_preg,
+                    to: required_preg,
+                    class: vreg.class,
+                  })
+                }
+              // If already at required_preg, no move needed
+              None =>
+                // Spilled: need to reload to the required register
+                if alloc.spill_slots.get(vreg.id) is Some(slot) {
+                  // Encode spill slot as negative index in 'from'
+                  // The emit phase will interpret this as a reload
+                  let spilled_preg = @abi.PReg::spilled(slot, vreg.class)
+                  edits.before.push({
+                    from: spilled_preg,
+                    to: required_preg,
+                    class: vreg.class,
+                  })
+                }
+            }
+          }
+        }
+      }
+
+      // Process def constraints (moves after the instruction)
+      for i, constraint in inst.def_constraints {
+        if constraint is @abi.FixedReg(required_preg) {
+          let def = inst.defs[i]
+          if def.reg is @abi.Virtual(vreg) {
+            // Check if already allocated to the required register
+            match alloc.assignments.get(vreg.id) {
+              Some(assigned_preg) =>
+                if assigned_preg.index != required_preg.index {
+                  // Need to move from required to assigned
+                  // (the instruction produces in required_preg, we need to move to assigned)
+                  edits.after.push({
+                    from: required_preg,
+                    to: assigned_preg,
+                    class: vreg.class,
+                  })
+                }
+              None =>
+                // Spilled: need to store from required register to spill slot
+                if alloc.spill_slots.get(vreg.id) is Some(slot) {
+                  let spilled_preg = @abi.PReg::spilled(slot, vreg.class)
+                  edits.after.push({
+                    from: required_preg,
+                    to: spilled_preg,
+                    class: vreg.class,
+                  })
+                }
+            }
+          }
+        }
+      }
+
+      // Store edits if any
+      if !edits.before.is_empty() || !edits.after.is_empty() {
+        alloc.inst_edits.set((block_idx, inst_idx), edits)
+      }
+    }
+  }
+}
+
 // ============ Apply Allocation ============
 
 // Scratch registers for spill/reload (not allocatable)
@@ -918,47 +1162,67 @@ pub fn apply_allocation(
   let new_func = VCodeFunction::new(func.name)
   new_func.next_vreg_id = func.next_vreg_id
   new_func.num_spill_slots = alloc.num_spill_slots
+  new_func.int_stack_params = func.int_stack_params
+  new_func.max_outgoing_args_size = func.max_outgoing_args_size
 
   // Convert function parameters
-  // Track int_idx and float_idx separately since emit_prologue uses these indices
-  // for determining the default register location (not overall param index)
-  let max_reg_params = 8 // Params 0-7 are passed in registers, 8+ on stack
+  // Following Cranelift: all params use X0-X7 (int) or V0-V7 (float)
+  // vmctx is an explicit param in the function signature
+  let max_int_params = @abi.MAX_REG_PARAMS // 8
+  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
   let mut int_idx = 0
   let mut float_idx = 0
-  for i, param in func.params {
+  for param in func.params {
     match alloc.assignments.get(param.id) {
       Some(preg) => {
         // Parameter is assigned to physical register
-        // We still track it as vreg but note the assignment
         let new_vreg : @abi.VReg = { id: param.id, class: param.class }
         new_func.params.push(new_vreg)
-        // Store the physical register assignment for emit_prologue
-        // For register params (0-7): only need move if not in default ABI register
-        // For stack params (8+): ALWAYS need to store the assigned register
-        //   because emit_prologue must load them from the stack
-        if i >= max_reg_params {
-          // Stack param - always store the assigned register
-          new_func.param_pregs.push(Some(preg))
-        } else {
-          // Register param - check if it needs a move from default location
-          // In emit_prologue:
-          // - Ints default to X[int_idx] (v2) or X[3 + param_idx] (v1)
-          // - Floats default to D[float_idx]
-          let default_preg : @abi.PReg = match param.class {
-            @abi.Int => { index: int_idx, class: @abi.Int } // X[int_idx] after prologue setup
-            @abi.Float32 => { index: float_idx, class: @abi.Float32 } // D[float_idx]
-            @abi.Float64 => { index: float_idx, class: @abi.Float64 }
-          } // D[float_idx]
-          if preg.index != default_preg.index {
-            new_func.param_pregs.push(Some(preg))
-          } else {
-            new_func.param_pregs.push(None) // No move needed
-          }
+        // Check if param is in register or on stack, and whether it needs a move
+        let (default_preg_opt, is_int) : (@abi.PReg?, Bool) = match
+          param.class {
+          @abi.Int =>
+            if int_idx < max_int_params {
+              (Some(@abi.PReg::{ index: int_idx, class: @abi.Int }), true)
+            } else {
+              (None, true) // Stack param
+            }
+          @abi.Float32 =>
+            if float_idx < max_float_params {
+              (
+                Some(@abi.PReg::{ index: float_idx, class: @abi.Float32 }),
+                false,
+              )
+            } else {
+              (None, false)
+            }
+          @abi.Float64 =>
+            if float_idx < max_float_params {
+              (
+                Some(@abi.PReg::{ index: float_idx, class: @abi.Float64 }),
+                false,
+              )
+            } else {
+              (None, false)
+            }
         }
-        // Increment type-specific indices
-        match param.class {
-          @abi.Int => int_idx += 1
-          @abi.Float32 | @abi.Float64 => float_idx += 1
+        // Update counters
+        if is_int {
+          int_idx += 1
+        } else {
+          float_idx += 1
+        }
+        // Decide whether to store preg in param_pregs
+        match default_preg_opt {
+          Some(default_preg) =>
+            if preg.index != default_preg.index {
+              new_func.param_pregs.push(Some(preg))
+            } else {
+              new_func.param_pregs.push(None) // No move needed
+            }
+          None =>
+            // Stack param - always store the assigned register
+            new_func.param_pregs.push(Some(preg))
         }
       }
       None => {
@@ -984,7 +1248,7 @@ pub fn apply_allocation(
   }
 
   // Process each block
-  for block in func.blocks {
+  for block_idx, block in func.blocks {
     let new_block = new_func.new_block()
 
     // Copy block params
@@ -996,7 +1260,7 @@ pub fn apply_allocation(
     let mut block_scratch_idx = 0
 
     // Process instructions
-    for inst in block.insts {
+    for inst_idx, inst in block.insts {
       // First, insert reload instructions for any spilled uses
       // Track which scratch registers are used for each spilled vreg
       let spill_regs : Map[Int, @abi.PReg] = {}
@@ -1060,13 +1324,22 @@ pub fn apply_allocation(
         }
       }
 
-      // Check if any definitions are spilled - collect ALL spilled defs
+      // Check if any definitions are spilled - collect spilled defs WITHOUT fixed constraints
+      // Defs with fixed constraints are handled by process_constraints, not here
       let spilled_defs : Array[(@abi.VReg, Int)] = []
-      for def in inst.defs {
+      for i, def in inst.defs {
         if def.reg is @abi.Virtual(vreg) &&
           alloc.assignments.get(vreg.id) is None &&
           alloc.spill_slots.get(vreg.id) is Some(slot) {
-          spilled_defs.push((vreg, slot))
+          // Skip defs with fixed constraints - they are handled by constraint processing
+          let has_fixed_constraint = if i < inst.def_constraints.length() {
+            inst.def_constraints[i] is @abi.FixedReg(_)
+          } else {
+            false
+          }
+          if !has_fixed_constraint {
+            spilled_defs.push((vreg, slot))
+          }
         }
       }
 
@@ -1074,26 +1347,43 @@ pub fn apply_allocation(
       let new_inst = @instr.VCodeInst::new(inst.opcode)
 
       // Rewrite definitions - use X16, X17 as scratch for spilled defs
+      // But for defs with fixed constraints, use the fixed register
       let spill_scratch_map : Map[Int, @abi.PReg] = {} // vreg.id -> scratch preg
-      for def in inst.defs {
+      for i, def in inst.defs {
         match def.reg {
           @abi.Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
               Some(preg) => new_inst.add_def({ reg: @abi.Physical(preg) })
               None => {
-                // Spilled: use X16, X17 as scratch registers
-                let scratch_class = match vreg.class {
-                  @abi.Float32 | @abi.Float64 => @abi.Float64
-                  _ => vreg.class
+                // Check if this def has a fixed constraint
+                let fixed_preg_opt = if i < inst.def_constraints.length() {
+                  match inst.def_constraints[i] {
+                    @abi.FixedReg(preg) => Some(preg)
+                    _ => None
+                  }
+                } else {
+                  None
                 }
-                let scratch_indices = [16, 17]
-                let scratch_preg : @abi.PReg = {
-                  index: scratch_indices[block_scratch_idx % 2],
-                  class: scratch_class,
+                match fixed_preg_opt {
+                  Some(fixed_preg) =>
+                    // Use the fixed register - constraint processing handles the spill
+                    new_inst.add_def({ reg: @abi.Physical(fixed_preg) })
+                  None => {
+                    // Spilled without constraint: use X16, X17 as scratch registers
+                    let scratch_class = match vreg.class {
+                      @abi.Float32 | @abi.Float64 => @abi.Float64
+                      _ => vreg.class
+                    }
+                    let scratch_indices = [16, 17]
+                    let scratch_preg : @abi.PReg = {
+                      index: scratch_indices[block_scratch_idx % 2],
+                      class: scratch_class,
+                    }
+                    block_scratch_idx = block_scratch_idx + 1
+                    spill_scratch_map.set(vreg.id, scratch_preg)
+                    new_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+                  }
                 }
-                block_scratch_idx = block_scratch_idx + 1
-                spill_scratch_map.set(vreg.id, scratch_preg)
-                new_inst.add_def({ reg: @abi.Physical(scratch_preg) })
               }
             }
           @abi.Physical(_) => new_inst.add_def(def)
@@ -1124,7 +1414,46 @@ pub fn apply_allocation(
           @abi.Physical(_) => new_inst.add_use(use_reg)
         }
       }
+
+      // Process constraint edits: insert moves before the instruction
+      // Following Cranelift's design for fixed register constraints
+      if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
+        for mv in edits.before {
+          if mv.from.is_spilled() {
+            // Reload from spill slot to target register
+            let slot = mv.from.get_spill_slot()
+            let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+            reload_inst.add_def({ reg: @abi.Physical(mv.to) })
+            new_block.add_inst(reload_inst)
+          } else {
+            // Register to register move
+            let move_inst = @instr.VCodeInst::new(Move)
+            move_inst.add_def({ reg: @abi.Physical(mv.to) })
+            move_inst.add_use(@abi.Physical(mv.from))
+            new_block.add_inst(move_inst)
+          }
+        }
+      }
       new_block.add_inst(new_inst)
+
+      // Process constraint edits: insert moves after the instruction
+      if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
+        for mv in edits.after {
+          if mv.to.is_spilled() {
+            // Store to spill slot from source register
+            let slot = mv.to.get_spill_slot()
+            let store_inst = @instr.VCodeInst::new(StackStore(slot * 8))
+            store_inst.add_use(@abi.Physical(mv.from))
+            new_block.add_inst(store_inst)
+          } else {
+            // Register to register move
+            let move_inst = @instr.VCodeInst::new(Move)
+            move_inst.add_def({ reg: @abi.Physical(mv.to) })
+            move_inst.add_use(@abi.Physical(mv.from))
+            new_block.add_inst(move_inst)
+          }
+        }
+      }
 
       // Insert spill instructions after the defining instruction for ALL spilled defs
       for entry in spilled_defs {
@@ -1239,13 +1568,13 @@ fn rewrite_reg(reg : @abi.Reg, alloc : RegAllocResult) -> @abi.Reg {
 fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     // Memory stores have side effects
-    Store(_, _) | StackStore(_) => true
+    Store(_, _) | StackStore(_) | StorePtr(_, _) => true
     // Bounds check can trap
     BoundsCheck(_, _) => true
     // Type check can trap
     TypeCheckIndirect(_) => true
     // Function calls have side effects
-    CallIndirect(_, _) => true
+    CallIndirect(_, _) | CallPtr(_, _) => true
     // Everything else is pure computation
     _ => false
   }
@@ -1304,6 +1633,8 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
   // Step 2: Build new function without dead instructions
   let new_func = VCodeFunction::new(func.name)
   new_func.next_vreg_id = func.next_vreg_id
+  new_func.int_stack_params = func.int_stack_params
+  new_func.max_outgoing_args_size = func.max_outgoing_args_size
 
   // Copy params and results
   for param in func.params {
@@ -1412,6 +1743,10 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
     callee_saved_float_regs~,
   )
   let alloc_result = allocator.allocate(func, liveness)
+
+  // Process constraints and generate RegMove edits
+  // Following Cranelift's design: constraints are resolved after allocation
+  process_constraints(func, alloc_result)
 
   // Apply allocation
   let allocated_func = apply_allocation(func, alloc_result)

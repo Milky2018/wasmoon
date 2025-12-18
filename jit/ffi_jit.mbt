@@ -89,21 +89,25 @@ pub impl JITArg for Double with to_jit_arg(self) {
 // ============ JIT Context Wrapper ============
 
 ///|
-/// JIT execution context (v2 ABI) - GC managed
-/// Uses fixed field offsets for JIT prologue:
-/// +0: func_table, +8: indirect_table, +16: memory_base, +24: memory_size
+/// JIT execution context (v3 ABI) - GC managed
+/// Uses Cranelift-style on-demand loading from vmctx:
+/// +0: memory_base, +8: memory_size, +16: func_table, +24: table0_base
+/// Only X19 caches vmctx; all other values are loaded on-demand.
 /// Memory is automatically freed when the object is garbage collected
 priv struct JITContext {
   ctx : @jit_ffi.JITContext
+  // Trampoline cache: maps signature hash to generated trampoline
+  // Signature hash = hash of (param_types, result_types)
+  trampoline_cache : Map[Int64, ExecCode]
 }
 
 ///|
-/// Create a new JIT context (v2) - GC managed
+/// Create a new JIT context (v3) - GC managed
 fn JITContext::new(total_funcs : Int) -> JITContext? {
   let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
   // Check if allocation succeeded by verifying the pointer is valid
   if @jit_ffi.c_jit_context_ptr(ctx) != 0L {
-    Some(JITContext::{ ctx, })
+    Some(JITContext::{ ctx, trampoline_cache: Map::new() })
   } else {
     None
   }
@@ -431,8 +435,9 @@ pub fn ExecCode::ptr(self : ExecCode) -> Int64 {
 // ============ Multi-value Return Support ============
 
 ///|
-/// Call a JIT function with multiple return values (v2 ABI)
-/// X20 = context pointer, X0-X7 = int params, D0-D7 = float params
+/// Call a JIT function with multiple return values (v3 ABI)
+/// Uses JIT-generated trampolines following Cranelift's approach.
+/// X19 = ctx_ptr (vmctx), all other values loaded on-demand from vmctx.
 /// Returns 0 on success, trap code on error
 fn JITContext::call_multi_return(
   self : JITContext,
@@ -444,75 +449,144 @@ fn JITContext::call_multi_return(
 ) -> Unit raise JITTrap {
   let num_args = args.length()
   let num_results = result_types.length()
-  // Convert args to FixedArray
-  let args_fixed = FixedArray::make(num_args.max(1), 0L)
+
+  // Convert param_types to int codes for trampoline generation
+  let param_type_codes = FixedArray::make(num_args.max(1), 0)
   for i in 0..<num_args {
-    args_fixed[i] = args[i]
-  }
-  // Convert param_types to int codes
-  let param_types_fixed = FixedArray::make(num_args.max(1), 0)
-  for i in 0..<num_args {
-    param_types_fixed[i] = if i < param_types.length() {
-      match param_types[i] {
-        I32 => 0
-        I64 => 1
-        F32 => 2
-        F64 => 3
-        // Reference types are 64-bit integer values (indices/pointers)
-        FuncRef
-        | ExternRef
-        | RefFunc
-        | RefExtern
-        | RefFuncTyped(_)
-        | RefNullFuncTyped(_) => 1
-        V128 => abort("V128 not supported in JIT")
-      }
+    param_type_codes[i] = if i < param_types.length() {
+      value_type_to_code(param_types[i])
     } else {
       0
     }
   }
-  // Convert result_types to int codes
-  let result_types_fixed = FixedArray::make(num_results.max(1), 0)
+
+  // Convert result_types to int codes for trampoline generation
+  let result_type_codes = FixedArray::make(num_results.max(1), 0)
   for i in 0..<num_results {
-    result_types_fixed[i] = match result_types[i] {
-      I32 => 0
-      I64 => 1
-      F32 => 2
-      F64 => 3
-      // Reference types are 64-bit integer values (indices/pointers)
-      FuncRef
-      | ExternRef
-      | RefFunc
-      | RefExtern
-      | RefFuncTyped(_)
-      | RefNullFuncTyped(_) => 1
-      V128 => abort("V128 not supported in JIT")
+    result_type_codes[i] = value_type_to_code(result_types[i])
+  }
+
+  // Compute signature hash for trampoline cache lookup
+  let sig_hash = compute_signature_hash(
+    param_type_codes, num_args, result_type_codes, num_results,
+  )
+
+  // Get or generate trampoline
+  let trampoline_ptr = match self.trampoline_cache.get(sig_hash) {
+    Some(trampoline) => trampoline.ptr()
+    None => {
+      // Generate trampoline using emit_entry_trampoline
+      let param_codes_arr : Array[Int] = []
+      for i in 0..<num_args {
+        param_codes_arr.push(param_type_codes[i])
+      }
+      let result_codes_arr : Array[Int] = []
+      for i in 0..<num_results {
+        result_codes_arr.push(result_type_codes[i])
+      }
+      let mc = @emit.emit_entry_trampoline(param_codes_arr, result_codes_arr)
+      let code_ints = mc.get_bytes()
+      let trampoline = ExecCode::new(code_ints)
+      match trampoline {
+        Some(t) => {
+          let ptr = t.ptr()
+          self.trampoline_cache.set(sig_hash, t)
+          ptr
+        }
+        None => abort("Failed to allocate trampoline")
+      }
     }
   }
-  // Prepare results array
-  let results_fixed = FixedArray::make(num_results.max(1), 0L)
-  // Call FFI with v2 ABI
-  // X19 = ctx_ptr (context pointer), X0-X7 = int params, D0-D7 = float params
-  let trap_code = @jit_ffi.c_jit_call(
-    self.ptr(), // Context pointer for v2 ABI
+
+  // Prepare values_vec: [args..., results...]
+  // Each slot is 8 bytes (Int64)
+  let values_len = num_args + num_results
+  let values_vec = FixedArray::make(values_len.max(1), 0L)
+
+  // Copy args to values_vec
+  for i in 0..<num_args {
+    values_vec[i] = args[i]
+  }
+
+  // Call via trampoline (Cranelift-style: all ABI complexity in JIT code)
+  let trap_code = @jit_ffi.c_jit_call_trampoline(
+    trampoline_ptr,
+    self.ptr(),
     func_ptr,
-    args_fixed,
-    param_types_fixed,
-    num_args,
-    results_fixed,
-    result_types_fixed,
-    num_results,
+    values_vec,
+    values_len,
   )
   if trap_code != 0 {
     let msg = match trap_code {
       1 => "out of bounds memory access"
-      2 => "call stack exhausted"
+      2 => "indirect call type mismatch"
+      3 => "integer overflow or invalid conversion to integer"
       _ => "unknown trap"
     }
     raise JITTrap(msg)
   }
-  // Copy results back
+
+  // Copy results back from values_vec (results start after args)
   for i in 0..<num_results {
-    results[i] = results_fixed[i]
+    results[i] = values_vec[num_args + i]
   }
+}
+
+///|
+/// Convert ValueType to type code for trampoline generation
+/// 0=I32, 1=I64, 2=F32, 3=F64
+fn value_type_to_code(ty : @types.ValueType) -> Int {
+  match ty {
+    I32 => 0
+    I64 => 1
+    F32 => 2
+    F64 => 3
+    // Reference types are 64-bit integer values (indices/pointers)
+    FuncRef
+    | ExternRef
+    | RefFunc
+    | RefExtern
+    | RefFuncTyped(_)
+    | RefNullFuncTyped(_) => 1
+    V128 => abort("V128 not supported in JIT")
+  }
+}
+
+///|
+/// Compute a hash for function signature (param_types, result_types)
+/// Used for trampoline cache lookup
+fn compute_signature_hash(
+  param_types : FixedArray[Int],
+  num_params : Int,
+  result_types : FixedArray[Int],
+  num_results : Int,
+) -> Int64 {
+  // Simple FNV-1a hash
+  let mut hash = 0xcbf29ce484222325L // FNV offset basis
+  let fnv_prime = 0x100000001b3L
+
+  // Hash number of params
+  hash = hash ^ num_params.to_int64()
+  hash = hash * fnv_prime
+
+  // Hash param types
+  for i in 0..<num_params {
+    hash = hash ^ param_types[i].to_int64()
+    hash = hash * fnv_prime
+  }
+
+  // Hash separator
+  hash = hash ^ 0xffL
+  hash = hash * fnv_prime
+
+  // Hash number of results
+  hash = hash ^ num_results.to_int64()
+  hash = hash * fnv_prime
+
+  // Hash result types
+  for i in 0..<num_results {
+    hash = hash ^ result_types[i].to_int64()
+    hash = hash * fnv_prime
+  }
+  hash
 }

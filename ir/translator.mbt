@@ -37,6 +37,9 @@ pub(all) struct Translator {
   // Global variable types
   // global_types[i] = type of global variable i
   global_types : Array[@types.GlobalType]
+  // Number of wasm function parameters (excludes vmctx params)
+  // Used to distinguish params from locals in self.locals array
+  num_wasm_params : Int
 }
 
 ///|
@@ -75,7 +78,14 @@ pub fn Translator::new(
   global_types? : Array[@types.GlobalType] = [],
 ) -> Translator {
   let builder = IRBuilder::new(name)
-  // Add function parameters
+  // Following Cranelift: add vmctx as explicit params
+  // - params[0] = callee_vmctx (X0)
+  // - params[1] = caller_vmctx (X1)
+  // These are not referenced by wasm code, but needed for ABI
+  builder.add_param(Type::I64) |> ignore // callee_vmctx
+  builder.add_param(Type::I64) |> ignore // caller_vmctx
+
+  // Add wasm function parameters (starting from params[2])
   let local_values : Array[Value] = []
   for param in func_type.params {
     let p = builder.add_param(Type::from_wasm(param))
@@ -126,6 +136,7 @@ pub fn Translator::new(
     table_base_offsets,
     table_sizes,
     global_types,
+    num_wasm_params: func_type.params.length(),
   }
 }
 
@@ -205,8 +216,8 @@ pub fn Translator::translate(
   // Initialize locals with default values
   for i, loc in self.locals {
     // Skip parameters - they already have values
-    let num_params = self.builder.get_function().params.length()
-    if i >= num_params {
+    // Use num_wasm_params (not IR params.length which includes vmctx)
+    if i >= self.num_wasm_params {
       let zero_val = match loc.ty {
         I32 => self.builder.iconst_i32(0)
         I64 => self.builder.iconst_i64(0L)

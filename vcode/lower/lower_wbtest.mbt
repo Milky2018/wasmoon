@@ -181,15 +181,23 @@ test "lower memory operations" {
     content=(
       #|vcode load_store(v0:int) -> int {
       #|block0:
-      #|    bounds_check +0, 4 v0
-      #|    v2 = add x21, v0
-      #|    v1 = load.i32 +0 v2
-      #|    v3 = ldi 1
-      #|    v4 = add v1, v3
-      #|    bounds_check +4, 4 v0
-      #|    v5 = add x21, v0
-      #|    store.i32 +4 v5, v4
-      #|    ret v4
+      #|    v2 = extend.u32_64 v0
+      #|    v3 = add #4 v2
+      #|    v4 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v3, v4
+      #|    v5 = load.i64 +0 x19
+      #|    v6 = add v5, v0
+      #|    v1 = load.i32 +0 v6
+      #|    v7 = ldi 1
+      #|    v8 = add v1, v7
+      #|    v9 = extend.u32_64 v0
+      #|    v10 = add #8 v9
+      #|    v11 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v10, v11
+      #|    v12 = load.i64 +0 x19
+      #|    v13 = add v12, v0
+      #|    store.i32 +4 v13, v8
+      #|    ret v8
       #|}
       #|
     ),
@@ -866,31 +874,55 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    v5 = cmp.eq v0, v6
       #|    branch v5, block1, block5
       #|block1:
-      #|    bounds_check +0, 4 v4
-      #|    v11 = add x21, v4
-      #|    store.f32 +0 v11, f2
-      #|    bounds_check +0, 4 v4
-      #|    v13 = add x21, v4
-      #|    f12 = load.f32 +0 v13
-      #|    f1 = mov f12
+      #|    v11 = extend.u32_64 v4
+      #|    v12 = add #4 v11
+      #|    v13 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v12, v13
+      #|    v14 = load.i64 +0 x19
+      #|    v15 = add v14, v4
+      #|    store.f32 +0 v15, f2
+      #|    v17 = extend.u32_64 v4
+      #|    v18 = add #4 v17
+      #|    v19 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v18, v19
+      #|    v20 = load.i64 +0 x19
+      #|    v21 = add v20, v4
+      #|    f16 = load.f32 +0 v21
+      #|    f1 = mov f16
       #|    jump block4
       #|block2:
-      #|    bounds_check +0, 4 v4
-      #|    v14 = add x21, v4
-      #|    store.f32 +0 v14, f2
-      #|    bounds_check +0, 4 v4
-      #|    v16 = add x21, v4
-      #|    f15 = load.f32 +0 v16
-      #|    f1 = mov f15
+      #|    v22 = extend.u32_64 v4
+      #|    v23 = add #4 v22
+      #|    v24 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v23, v24
+      #|    v25 = load.i64 +0 x19
+      #|    v26 = add v25, v4
+      #|    store.f32 +0 v26, f2
+      #|    v28 = extend.u32_64 v4
+      #|    v29 = add #4 v28
+      #|    v30 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v29, v30
+      #|    v31 = load.i64 +0 x19
+      #|    v32 = add v31, v4
+      #|    f27 = load.f32 +0 v32
+      #|    f1 = mov f27
       #|    jump block4
       #|block3:
-      #|    bounds_check +0, 4 v4
-      #|    v17 = add x21, v4
-      #|    store.f32 +0 v17, f2
-      #|    bounds_check +0, 4 v4
-      #|    v19 = add x21, v4
-      #|    f18 = load.f32 +0 v19
-      #|    f1 = mov f18
+      #|    v33 = extend.u32_64 v4
+      #|    v34 = add #4 v33
+      #|    v35 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v34, v35
+      #|    v36 = load.i64 +0 x19
+      #|    v37 = add v36, v4
+      #|    store.f32 +0 v37, f2
+      #|    v39 = extend.u32_64 v4
+      #|    v40 = add #4 v39
+      #|    v41 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v40, v41
+      #|    v42 = load.i64 +0 x19
+      #|    v43 = add v42, v4
+      #|    f38 = load.f32 +0 v43
+      #|    f1 = mov f38
       #|    jump block4
       #|block4(f1:float):
       #|    ret f1
@@ -926,30 +958,54 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    x10 = cmp.eq x0, x9
       #|    branch x10, block1, block5
       #|block1:
-      #|    bounds_check +0, 4 x8
-      #|    x9 = add x21, x8
-      #|    store.f32 +0 x9, d0
-      #|    bounds_check +0, 4 x8
-      #|    x9 = add x21, x8
-      #|    d0 = load.f32 +0 x9
+      #|    x9 = extend.u32_64 x8
+      #|    x10 = add #4 x9
+      #|    x11 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 x10, x11
+      #|    x9 = load.i64 +0 x19
+      #|    x10 = add x9, x8
+      #|    store.f32 +0 x10, d0
+      #|    x9 = extend.u32_64 x8
+      #|    x10 = add #4 x9
+      #|    x11 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 x10, x11
+      #|    x9 = load.i64 +0 x19
+      #|    x10 = add x9, x8
+      #|    d0 = load.f32 +0 x10
       #|    d2 = mov d0
       #|    jump block4
       #|block2:
-      #|    bounds_check +0, 4 x8
-      #|    x9 = add x21, x8
-      #|    store.f32 +0 x9, d0
-      #|    bounds_check +0, 4 x8
-      #|    x9 = add x21, x8
-      #|    d1 = load.f32 +0 x9
+      #|    x9 = extend.u32_64 x8
+      #|    x10 = add #4 x9
+      #|    x11 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 x10, x11
+      #|    x9 = load.i64 +0 x19
+      #|    x10 = add x9, x8
+      #|    store.f32 +0 x10, d0
+      #|    x9 = extend.u32_64 x8
+      #|    x10 = add #4 x9
+      #|    x11 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 x10, x11
+      #|    x9 = load.i64 +0 x19
+      #|    x10 = add x9, x8
+      #|    d1 = load.f32 +0 x10
       #|    d2 = mov d1
       #|    jump block4
       #|block3:
-      #|    bounds_check +0, 4 x8
-      #|    x9 = add x21, x8
-      #|    store.f32 +0 x9, d0
-      #|    bounds_check +0, 4 x8
-      #|    x9 = add x21, x8
-      #|    d1 = load.f32 +0 x9
+      #|    x9 = extend.u32_64 x8
+      #|    x10 = add #4 x9
+      #|    x11 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 x10, x11
+      #|    x9 = load.i64 +0 x19
+      #|    x10 = add x9, x8
+      #|    store.f32 +0 x10, d0
+      #|    x9 = extend.u32_64 x8
+      #|    x10 = add #4 x9
+      #|    x11 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 x10, x11
+      #|    x9 = load.i64 +0 x19
+      #|    x10 = add x9, x8
+      #|    d1 = load.f32 +0 x10
       #|    d2 = mov d1
       #|    jump block4
       #|block4(f1:float):
@@ -1041,9 +1097,13 @@ test "minimal: dead float constant should not affect live values" {
       #|    f1 = ldf 2
       #|    f2 = ldf 10
       #|    v3 = ldi 0
-      #|    bounds_check +0, 4 v3
-      #|    v4 = add x21, v3
-      #|    store.f32 +0 v4, f2
+      #|    v4 = extend.u32_64 v3
+      #|    v5 = add #4 v4
+      #|    v6 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 v5, v6
+      #|    v7 = load.i64 +0 x19
+      #|    v8 = add v7, v3
+      #|    store.f32 +0 v8, f2
       #|    ret f1
       #|}
       #|
@@ -1062,9 +1122,13 @@ test "minimal: dead float constant should not affect live values" {
       #|    d0 = ldf 2
       #|    d1 = ldf 10
       #|    x8 = ldi 0
-      #|    bounds_check +0, 4 x8
-      #|    x9 = add x21, x8
-      #|    store.f32 +0 x9, d1
+      #|    x9 = extend.u32_64 x8
+      #|    x10 = add #4 x9
+      #|    x11 = load_ptr.i64 +8 x19
+      #|    trap_if_ugt #1 x10, x11
+      #|    x9 = load.i64 +0 x19
+      #|    x10 = add x9, x8
+      #|    store.f32 +0 x10, d1
       #|    ret d0
       #|}
       #|
@@ -1117,26 +1181,26 @@ test "br_table with block arguments from WAT" {
   inspect(
     vcode_func.print(),
     content=(
-      #|vcode test(v0:int) -> int {
+      #|vcode test(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    v5 = ldi 0
       #|    v7 = ldi 0
-      #|    v6 = cmp.eq v0, v7
-      #|    branch v6, block3, block4
-      #|block1(v1:int, v2:int):
-      #|    ret v2
-      #|block2(v3:int, v4:int):
-      #|    v8 = ldi 100
-      #|    v1 = mov v3
-      #|    v2 = mov v8
+      #|    v9 = ldi 0
+      #|    v8 = cmp.eq v2, v9
+      #|    branch v8, block3, block4
+      #|block1(v3:int, v4:int):
+      #|    ret v4
+      #|block2(v5:int, v6:int):
+      #|    v10 = ldi 100
+      #|    v3 = mov v5
+      #|    v4 = mov v10
       #|    jump block1
       #|block3:
-      #|    v3 = mov v0
-      #|    v4 = mov v5
+      #|    v5 = mov v2
+      #|    v6 = mov v7
       #|    jump block2
       #|block4:
-      #|    v1 = mov v0
-      #|    v2 = mov v5
+      #|    v3 = mov v2
+      #|    v4 = mov v7
       #|    jump block1
       #|}
       #|

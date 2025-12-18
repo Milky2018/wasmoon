@@ -1,24 +1,51 @@
 ///|
 /// VCode instruction - a machine-level instruction with virtual registers
+/// Following Cranelift's design with operand constraints for fixed register allocation
 pub(all) struct VCodeInst {
   opcode : VCodeOpcode
   defs : Array[@abi.Writable] // Registers defined (written)
   uses : Array[@abi.Reg] // Registers used (read)
+  use_constraints : Array[@abi.OperandConstraint] // Constraints for uses
+  def_constraints : Array[@abi.OperandConstraint] // Constraints for defs
 }
 
 ///|
 pub fn VCodeInst::new(opcode : VCodeOpcode) -> VCodeInst {
-  { opcode, defs: [], uses: [] }
+  { opcode, defs: [], uses: [], use_constraints: [], def_constraints: [] }
 }
 
 ///|
 pub fn VCodeInst::add_def(self : VCodeInst, reg : @abi.Writable) -> Unit {
   self.defs.push(reg)
+  self.def_constraints.push(@abi.Any)
 }
 
 ///|
 pub fn VCodeInst::add_use(self : VCodeInst, reg : @abi.Reg) -> Unit {
   self.uses.push(reg)
+  self.use_constraints.push(@abi.Any)
+}
+
+///|
+/// Add a use operand with a fixed register constraint
+pub fn VCodeInst::add_use_fixed(
+  self : VCodeInst,
+  reg : @abi.Reg,
+  preg : @abi.PReg,
+) -> Unit {
+  self.uses.push(reg)
+  self.use_constraints.push(@abi.FixedReg(preg))
+}
+
+///|
+/// Add a def operand with a fixed register constraint
+pub fn VCodeInst::add_def_fixed(
+  self : VCodeInst,
+  reg : @abi.Writable,
+  preg : @abi.PReg,
+) -> Unit {
+  self.defs.push(reg)
+  self.def_constraints.push(@abi.FixedReg(preg))
 }
 
 ///|
@@ -135,9 +162,15 @@ pub(all) enum VCodeOpcode {
   Clz // Count leading zeros
   Ctz // Count trailing zeros
   Popcnt // Population count (number of 1 bits)
+  Rbit // Reverse bits in register
   // Special
   Nop
-  // Memory bounds check (for WASM linear memory safety)
+  // Trap if first operand is unsigned greater than second operand
+  // TrapIfUgt(trap_code): CMP rn, rm; B.LS skip; BRK #trap_code
+  // Uses: [lhs, rhs], traps if lhs > rhs (unsigned)
+  TrapIfUgt(Int)
+  // Memory bounds check (for WASM linear memory safety) - DEPRECATED
+  // Use TrapIfUgt with pre-computed end_addr and memory_size instead
   // BoundsCheck(offset, access_size): checks wasm_addr + offset + access_size <= memory_size
   // Uses: [wasm_addr], traps if out of bounds
   BoundsCheck(Int, Int)
@@ -167,10 +200,12 @@ pub(all) enum VCodeOpcode {
   // StackStore(offset): Store the use register to [SP + offset]
   StackLoad(Int)
   StackStore(Int)
-  // Stack parameter load (for params >= 8 that are passed on the stack)
-  // LoadStackParam(param_idx, class): Load from [SP + frame_size + (param_idx - 8) * 8]
-  // The actual offset is computed at emit time when frame_size is known
-  LoadStackParam(Int, @abi.RegClass)
+  // Stack parameter load (for params that overflow registers)
+  // LoadStackParam(param_idx, class, int_overflow_count):
+  //   param_idx >= 0: int overflow param at index param_idx
+  //   param_idx < 0: float overflow param at index (-param_idx - 1), after int_overflow_count int params
+  // Stack layout: [int_overflow..., float_overflow...]
+  LoadStackParam(Int, @abi.RegClass, Int)
   // Memory management
   // MemoryGrow: grow memory by delta pages, returns previous size in pages or -1
   // Int = max_pages (0 = no limit)
@@ -199,6 +234,33 @@ pub(all) enum VCodeOpcode {
   // GlobalSet(global_idx): store global variable value
   // Uses: [value], Defs: []
   GlobalSet(Int)
+
+  // Raw pointer operations (for trampolines, no bounds checking)
+  // LoadPtr(type, offset): Load from [base + offset]
+  // Uses: [base], Defs: [result]
+  LoadPtr(MemType, Int)
+  // StorePtr(type, offset): Store to [base + offset]
+  // Uses: [base, value], Defs: []
+  StorePtr(MemType, Int)
+
+  // CallPtr: call through a function pointer (for trampolines)
+  // Uses: [func_ptr, vmctx, arg0, arg1, ...]
+  // Defs: [result0, result1, ...] (multiple results supported)
+  // Parameters: num_args (excluding vmctx), num_results
+  CallPtr(Int, Int)
+
+  // Stack pointer adjustment for outgoing call arguments (Cranelift-style)
+  // AdjustSP(delta): Adjust SP by delta bytes
+  //   delta > 0: deallocate (add to SP)
+  //   delta < 0: allocate (sub from SP)
+  // Used in call lowering to allocate space for overflow args
+  AdjustSP(Int)
+
+  // Store to outgoing call argument area (Cranelift-style)
+  // StoreToStack(offset): Store use[0] to [SP + offset]
+  // Used in call lowering to store overflow args before the call
+  // Uses: [value], Defs: []
+  StoreToStack(Int)
 }
 
 ///|
@@ -267,7 +329,9 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Clz => "clz"
     Ctz => "ctz"
     Popcnt => "popcnt"
+    Rbit => "rbit"
     Nop => "nop"
+    TrapIfUgt(trap_code) => "trap_if_ugt #\{trap_code}"
     BoundsCheck(offset, size) => "bounds_check +\{offset}, \{size}"
     // AArch64-specific
     AddShifted(shift, amount) => "add.\{shift} #\{amount}"
@@ -283,7 +347,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
-    LoadStackParam(param_idx, class) =>
+    LoadStackParam(param_idx, class, _) =>
       "load_stack_param \{param_idx} (\{class})"
     MemoryGrow(max_pages) =>
       if max_pages == 0 {
@@ -298,6 +362,17 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     TableSet(table_idx) => "table_set \{table_idx}"
     GlobalGet(global_idx) => "global_get \{global_idx}"
     GlobalSet(global_idx) => "global_set \{global_idx}"
+    LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
+    StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
+    CallPtr(num_args, num_results) =>
+      "call_ptr(\{num_args}) -> \{num_results} results"
+    AdjustSP(delta) =>
+      if delta >= 0 {
+        "add sp, sp, #\{delta}"
+      } else {
+        "sub sp, sp, #\{-delta}"
+      }
+    StoreToStack(offset) => "str [sp+\{offset}]"
   }
 }
 

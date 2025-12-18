@@ -907,3 +907,74 @@ pub fn IRBuilder::trap(self : IRBuilder, reason : String) -> Unit {
     block.set_terminator(Terminator::Trap(reason))
   }
 }
+
+// ============ Raw Pointer Operations (for trampolines) ============
+
+///|
+/// Load from raw pointer (no bounds checking)
+/// For trampoline code that operates on host memory
+pub fn IRBuilder::load_ptr(
+  self : IRBuilder,
+  ty : Type,
+  base : Value,
+  offset : Value,
+) -> Value {
+  self.emit_inst(ty, Opcode::LoadPtr(ty), [base, offset])
+}
+
+///|
+/// Store to raw pointer (no bounds checking)
+/// For trampoline code that operates on host memory
+pub fn IRBuilder::store_ptr(
+  self : IRBuilder,
+  ty : Type,
+  base : Value,
+  value : Value,
+  offset : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::StorePtr(ty), [base, value, offset])
+}
+
+///|
+/// Call via function pointer with multiple return values
+/// For trampolines calling WASM functions
+///
+/// Following Cranelift's design: callee_vmctx and caller_vmctx are explicit
+/// arguments, allowing the register allocator to properly handle values that
+/// need to survive across the call (like values_vec in trampolines).
+///
+/// Operand layout: [func_ptr, callee_vmctx, caller_vmctx, user_args...]
+pub fn IRBuilder::call_ptr(
+  self : IRBuilder,
+  func_ptr : Value,
+  callee_vmctx : Value,
+  caller_vmctx : Value,
+  args : Array[Value],
+  result_types : Array[Type],
+) -> Array[Value] {
+  let all_args : Array[Value] = [func_ptr, callee_vmctx, caller_vmctx]
+  for arg in args {
+    all_args.push(arg)
+  }
+  let num_args = args.length()
+  let num_results = result_types.length()
+  if num_results == 0 {
+    self.emit_void_inst(Opcode::CallPtr(num_args, 0), all_args)
+    return []
+  }
+  // Create result values for each return type
+  let results : Array[Value] = []
+  for ty in result_types {
+    results.push(self.func.new_value(ty))
+  }
+  // Create instruction with multiple results
+  let inst = Inst::new_multi(
+    results,
+    Opcode::CallPtr(num_args, num_results),
+    all_args,
+  )
+  if self.current_block is Some(block) {
+    block.add_inst(inst)
+  }
+  results
+}

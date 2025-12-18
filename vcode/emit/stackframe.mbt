@@ -1,11 +1,26 @@
-// JIT Stack Frame Layout
+// JIT Stack Frame Layout (ABI v3 - Cranelift style)
 // Encapsulates stack frame layout computation for JIT-compiled functions
 //
-// This module provides a clean interface for managing:
-// 1. Callee-saved register storage (GPRs and FPRs)
-// 2. Spill slot allocation
-// 3. Multi-value call result buffers
-// 4. Stack pointer adjustment calculations
+// Cranelift-style Stack Frame Layout (from high to low address):
+// ┌───────────────────────────┐
+// │  Caller's Stack Args      │ (if any)
+// ├═══════════════════════════┤ ← SP at function entry
+// │  Frame Pointer (X29)      │ ← Pushed first with STP pre-indexed
+// ├───────────────────────────┤
+// │  Link Register (X30)      │
+// ├───────────────────────────┤ ← FP points here
+// │  Clobbered GPRs (X19-X28) │ ← Pushed second
+// ├───────────────────────────┤
+// │  Clobbered FPRs (V8-V15)  │ ← Pushed third
+// ├───────────────────────────┤
+// │  Spill Slots              │ ← Allocated via SUB SP
+// ├───────────────────────────┤
+// │  Outgoing Arguments       │ ← Allocated via SUB SP
+// └═══════════════════════════┘ ← SP after prologue
+//
+// Key difference from old layout: FP/LR is at the TOP (highest address),
+// not at SP+0. This matches Cranelift's approach using fixed-size pre-indexed
+// pushes that avoid SImm7 overflow issues with large frames.
 
 // ============ Constants ============
 
@@ -19,10 +34,11 @@ const SPILL_ALIGNMENT : Int = 16
 const MIN_SPILL_SIZE : Int = 16
 
 ///|
-const CALL_RESULTS_BUFFER_SIZE : Int = 64
+const PAIR_SIZE : Int = 16
 
 ///|
-const PAIR_SIZE : Int = 16
+/// Size of setup area (FP + LR)
+const SETUP_AREA_SIZE : Int = 16
 
 // ============ JITStackFrame ============
 
@@ -30,79 +46,95 @@ const PAIR_SIZE : Int = 16
 /// Encapsulates the stack frame layout for a JIT-compiled function
 pub struct JITStackFrame {
   // Size of each region (in bytes)
-  gpr_save_size : Int
-  fpr_save_size : Int
-  spill_size : Int
-  call_buffer_size : Int
+  setup_area_size : Int // FP + LR (16 bytes if present)
+  gpr_save_size : Int // Callee-saved GPRs (excluding FP/LR)
+  fpr_save_size : Int // Callee-saved FPRs
+  spill_size : Int // Spill slots
+  outgoing_args_size : Int // Stack space for call arguments
   // Offset of each region from SP (after frame allocation)
+  // These are positive offsets from SP pointing upward
   gpr_save_offset : Int
   fpr_save_offset : Int
   spill_offset : Int
-  call_buffer_offset : Int
-  // Total frame size (16-byte aligned)
+  outgoing_args_offset : Int
+  // Total frame size (16-byte aligned, including setup area)
   total_size : Int
+  // Size of frame excluding setup area (for sub sp, sp, #size)
+  frame_size : Int
   // Lists of saved registers
-  saved_gprs : Array[Int]
-  saved_fprs : Array[Int]
+  saved_gprs : Array[Int] // Callee-saved GPRs to save (excluding FP/LR)
+  saved_fprs : Array[Int] // Callee-saved FPRs to save
   // Flags
-  needs_extra_results : Bool
-  calls_multi_value : Bool
-  uses_x23 : Bool
+  has_setup_area : Bool // Whether FP/LR are saved
 }
 
 ///|
 /// Build a JITStackFrame from function metadata
+///
+/// Parameters:
+/// - clobbered_gprs: GPRs that are clobbered and need saving (callee-saved only)
+/// - clobbered_fprs: FPRs that are clobbered and need saving (callee-saved only)
+/// - num_spill_slots: Number of spill slots needed
+/// - has_calls: Whether function contains calls (requires FP/LR save)
+/// - outgoing_args_size: Stack space needed for outgoing call arguments
 pub fn JITStackFrame::build(
   clobbered_gprs : Array[Int],
   clobbered_fprs : Array[Int],
   num_spill_slots : Int,
-  needs_extra_results~ : Bool,
-  calls_multi_value~ : Bool,
+  has_calls? : Bool = false,
+  outgoing_args_size? : Int = 0,
 ) -> JITStackFrame {
-  // Determine if we need X23 for extra results buffer
-  let uses_x23 = needs_extra_results || calls_multi_value
+  // Build the list of GPRs to save
+  // In v3 ABI, we only save X19 (vmctx) and any clobbered callee-saved regs
+  let saved_gprs = build_gpr_save_list_v3(clobbered_gprs)
 
-  // Build the list of GPRs to save (base registers + clobbered)
-  let saved_gprs = build_gpr_save_list(uses_x23, clobbered_gprs)
+  // Determine if we need setup area (FP/LR)
+  // Required if function has calls, has callee-saves, or has spills
+  let has_setup_area = has_calls ||
+    saved_gprs.length() > 0 ||
+    clobbered_fprs.length() > 0 ||
+    num_spill_slots > 0
 
   // Calculate size of each region
+  let setup_area_size = if has_setup_area { SETUP_AREA_SIZE } else { 0 }
   let gpr_save_size = calc_gpr_save_size(saved_gprs.length())
   let fpr_save_size = calc_fpr_save_size(clobbered_fprs.length())
   let spill_size = calc_spill_size(num_spill_slots)
-  let call_buffer_size = if calls_multi_value && !needs_extra_results {
-    CALL_RESULTS_BUFFER_SIZE
-  } else {
-    0
-  }
+  let aligned_outgoing = align_up(outgoing_args_size, 16)
 
-  // Calculate offsets (regions are stacked from SP upward)
-  // Layout: [GPR saves][FPR saves][spill slots][call buffer]
-  let gpr_save_offset = 0
-  let fpr_save_offset = gpr_save_offset + gpr_save_size
-  let spill_offset = fpr_save_offset + fpr_save_size
-  let call_buffer_offset = spill_offset + spill_size
+  // Calculate frame size (excluding setup area, which is handled separately)
+  // Cranelift-style layout from SP upward:
+  // [SP+0]: outgoing args
+  // [SP+outgoing]: spill slots
+  // [SP+outgoing+spill]: FPR saves
+  // [SP+outgoing+spill+fpr]: GPR saves
+  // [SP+total-16]: FP/LR (at the top)
+  let frame_size = gpr_save_size + fpr_save_size + spill_size + aligned_outgoing
 
-  // Total size (must be 16-byte aligned)
-  let unaligned_total = gpr_save_size +
-    fpr_save_size +
-    spill_size +
-    call_buffer_size
-  let total_size = align_up(unaligned_total, 16)
+  // Calculate offsets (from SP after frame allocation)
+  // Cranelift style: outgoing args at bottom, FP/LR at top
+  let outgoing_args_offset = 0
+  let spill_offset = aligned_outgoing
+  let fpr_save_offset = spill_offset + spill_size
+  let gpr_save_offset = fpr_save_offset + fpr_save_size
+
+  // Total size includes setup area
+  let total_size = setup_area_size + frame_size
   {
+    setup_area_size,
     gpr_save_size,
     fpr_save_size,
     spill_size,
-    call_buffer_size,
+    outgoing_args_size: aligned_outgoing,
     gpr_save_offset,
     fpr_save_offset,
     spill_offset,
-    call_buffer_offset,
+    outgoing_args_offset,
     total_size,
+    frame_size,
     saved_gprs,
     saved_fprs: clobbered_fprs.copy(),
-    needs_extra_results,
-    calls_multi_value,
-    uses_x23,
+    has_setup_area,
   }
 }
 
@@ -116,33 +148,65 @@ pub fn JITStackFrame::get_spill_offset(
 }
 
 ///|
-/// Get the stack offset for the call results buffer
-pub fn JITStackFrame::get_call_buffer_offset(self : JITStackFrame) -> Int {
-  self.call_buffer_offset
+/// Get the stack offset for outgoing arguments
+pub fn JITStackFrame::get_outgoing_arg_offset(
+  self : JITStackFrame,
+  arg_offset : Int,
+) -> Int {
+  self.outgoing_args_offset + arg_offset
+}
+
+///|
+/// Get the offset for saving a specific GPR (relative to SP after frame setup)
+pub fn JITStackFrame::get_gpr_save_offset(
+  self : JITStackFrame,
+  reg_idx : Int,
+) -> Int {
+  // Find the register in the saved list
+  for i, reg in self.saved_gprs {
+    if reg == reg_idx {
+      // Registers are saved in pairs at gpr_save_offset
+      // First pair at gpr_save_offset, second at gpr_save_offset + 16, etc.
+      let pair_idx = i / 2
+      let in_pair_offset = i % 2 * 8
+      return self.gpr_save_offset + pair_idx * PAIR_SIZE + in_pair_offset
+    }
+  }
+  // Register not found, should not happen
+  -1
+}
+
+///|
+/// Get the offset for saving a specific FPR (relative to SP after frame setup)
+pub fn JITStackFrame::get_fpr_save_offset(
+  self : JITStackFrame,
+  reg_idx : Int,
+) -> Int {
+  for i, reg in self.saved_fprs {
+    if reg == reg_idx {
+      let pair_idx = i / 2
+      let in_pair_offset = i % 2 * 8
+      return self.fpr_save_offset + pair_idx * PAIR_SIZE + in_pair_offset
+    }
+  }
+  -1
 }
 
 // ============ Helper Functions ============
 
 ///|
-/// Build the list of GPRs to save
-/// Combines base registers (X19-X24) with clobbered registers
-fn build_gpr_save_list(uses_x23 : Bool, clobbered : Array[Int]) -> Array[Int] {
-  // Base registers that are always saved:
-  // X19 (context), X20 (func_table), X21 (mem_base), X22 (mem_size), X24 (indirect_table)
-  // Plus X23 if uses_x23 is true
-  let base_regs : Array[Int] = if uses_x23 {
-    [19, 20, 21, 22, 23, 24]
-  } else {
-    [19, 20, 21, 22, 24]
-  }
+/// Build the list of GPRs to save for ABI v3
+/// Only saves X19 (vmctx) and clobbered callee-saved registers
+fn build_gpr_save_list_v3(clobbered : Array[Int]) -> Array[Int] {
+  // In v3 ABI, only X19 is always saved (for vmctx caching)
+  // Other callee-saved regs (X20-X28) only saved if clobbered
+  let result : Array[Int] = [19] // X19 always saved for vmctx
 
-  // Combine base registers with clobbered registers (avoiding duplicates)
-  let result : Array[Int] = []
-  for reg in base_regs {
-    result.push(reg)
-  }
+  // Add clobbered callee-saved registers
   for reg in clobbered {
-    if !result.contains(reg) {
+    // Only include callee-saved registers (X20-X28)
+    // X19 already included, X29/X30 handled separately in setup area
+    if reg >= 20 && reg <= 28 && !result.contains(reg) {
       result.push(reg)
     }
   }
@@ -153,6 +217,9 @@ fn build_gpr_save_list(uses_x23 : Bool, clobbered : Array[Int]) -> Array[Int] {
 ///|
 /// Calculate GPR save area size (pairs are 16 bytes each)
 fn calc_gpr_save_size(num_gprs : Int) -> Int {
+  if num_gprs == 0 {
+    return 0
+  }
   let num_pairs = (num_gprs + 1) / 2
   num_pairs * PAIR_SIZE
 }
@@ -160,6 +227,9 @@ fn calc_gpr_save_size(num_gprs : Int) -> Int {
 ///|
 /// Calculate FPR save area size (pairs are 16 bytes each)
 fn calc_fpr_save_size(num_fprs : Int) -> Int {
+  if num_fprs == 0 {
+    return 0
+  }
   let num_pairs = (num_fprs + 1) / 2
   num_pairs * PAIR_SIZE
 }
@@ -167,6 +237,9 @@ fn calc_fpr_save_size(num_fprs : Int) -> Int {
 ///|
 /// Calculate spill slot area size (minimum 16 bytes for scratch space)
 fn calc_spill_size(num_slots : Int) -> Int {
+  if num_slots == 0 {
+    return MIN_SPILL_SIZE // Always have minimum for scratch
+  }
   let raw_size = num_slots * SPILL_SLOT_SIZE
   let aligned_size = align_up(raw_size, SPILL_ALIGNMENT)
   if aligned_size < MIN_SPILL_SIZE {

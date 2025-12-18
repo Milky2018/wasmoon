@@ -12,9 +12,9 @@ pub fn c_jit_alloc_memory(Int64) -> Int64
 
 pub fn c_jit_alloc_shared_indirect_table(Int) -> Int64
 
-pub fn c_jit_call(Int64, Int64, FixedArray[Int64], FixedArray[Int], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
-
 pub fn c_jit_call_multi_return(Int64, Int64, FixedArray[Int64], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
+
+pub fn c_jit_call_trampoline(Int64, Int64, Int64, FixedArray[Int64], Int) -> Int
 
 pub fn c_jit_clear_trap() -> Unit
 

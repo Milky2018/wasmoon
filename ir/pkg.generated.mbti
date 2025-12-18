@@ -114,6 +114,7 @@ pub fn IRBuilder::call(Self, Int, Type?, Array[Value]) -> Value?
 pub fn IRBuilder::call_indirect(Self, Int, Int, Type?, Value, Array[Value]) -> Value?
 pub fn IRBuilder::call_indirect_multi(Self, Int, Int, Array[Type], Value, Array[Value]) -> Array[Value]
 pub fn IRBuilder::call_multi(Self, Int, Array[Type], Array[Value]) -> Array[Value]
+pub fn IRBuilder::call_ptr(Self, Value, Value, Value, Array[Value], Array[Type]) -> Array[Value]
 pub fn IRBuilder::clz(Self, Value) -> Value
 pub fn IRBuilder::copy(Self, Value) -> Value
 pub fn IRBuilder::create_block(Self) -> Block
@@ -172,6 +173,7 @@ pub fn IRBuilder::load32_s(Self, Value, Int) -> Value
 pub fn IRBuilder::load32_u(Self, Value, Int) -> Value
 pub fn IRBuilder::load8_s(Self, Type, Value, Int) -> Value
 pub fn IRBuilder::load8_u(Self, Type, Value, Int) -> Value
+pub fn IRBuilder::load_ptr(Self, Type, Value, Value) -> Value
 pub fn IRBuilder::memory_copy(Self, Value, Value, Value) -> Unit
 pub fn IRBuilder::memory_fill(Self, Value, Value, Value) -> Unit
 pub fn IRBuilder::memory_grow(Self, Value, max_pages? : Int) -> Value
@@ -192,6 +194,7 @@ pub fn IRBuilder::store(Self, Type, Value, Value, Int) -> Unit
 pub fn IRBuilder::store16(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store32(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store8(Self, Value, Value, Int) -> Unit
+pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
 pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
 pub fn IRBuilder::table_get(Self, Int, Value) -> Value
 pub fn IRBuilder::table_set(Self, Int, Value, Value) -> Unit
@@ -305,6 +308,9 @@ pub enum Opcode {
   GlobalSet(Int)
   Call(Int)
   CallIndirect(Int, Int)
+  LoadPtr(Type)
+  StorePtr(Type)
+  CallPtr(Int, Int)
 }
 pub impl Show for Opcode
 
@@ -348,6 +354,7 @@ pub(all) struct Translator {
   table_base_offsets : Array[Int]
   table_sizes : Array[Int]
   global_types : Array[@types.GlobalType]
+  num_wasm_params : Int
 }
 pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table], global_types? : Array[@types.GlobalType]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function

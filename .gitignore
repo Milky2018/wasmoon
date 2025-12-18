@@ -6,3 +6,4 @@ wasmoon
 
 # Claude Code skills (packaged)
 *.skill
+.TODO.md

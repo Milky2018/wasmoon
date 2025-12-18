@@ -162,8 +162,12 @@ test "emit: full function" {
   // Emit machine code
   let mc = @emit.emit_function(func)
 
-  // Should have: ADD + RET = 2 instructions = 8 bytes
-  inspect(mc.size(), content="56")
+  // Cranelift-style prologue/epilogue:
+  // Prologue: stp x29,x30 + mov x29,sp + str x19 + sub sp + mov x19,x0 = 5 inst
+  // Body: add x0,x0,x1 = 1 inst
+  // Epilogue: add sp + ldr x19 + ldp x29,x30 + ret = 4 inst
+  // Total: 10 instructions = 40 bytes
+  inspect(mc.size(), content="40")
 }
 
 ///|
@@ -633,4 +637,109 @@ test "emit_mul encoding verification" {
   inspect(bytes[1], content="126")
   inspect(bytes[2], content="24")
   inspect(bytes[3], content="155")
+}
+
+///|
+test "emit: memory_grow instruction disasm" {
+  // Test MemoryGrow instruction emission with disassembly dump
+  // This verifies that annotations are not duplicated
+  let func = @lower.VCodeFunction::new("test_memory_grow")
+  func.add_param(Int) |> ignore // delta
+  func.add_result(Int) // returns previous size
+  let block = func.new_block()
+
+  // MemoryGrow(max_pages)
+  let grow_inst = @instr.VCodeInst::new(MemoryGrow(65536))
+  grow_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  grow_inst.add_use(@abi.Physical({ index: 3, class: Int })) // delta in X3
+  block.add_inst(grow_inst)
+  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  let mc = @emit.emit_function(func)
+  let disasm = mc.dump_disasm()
+
+  // Should NOT have duplicate "blr x16" annotations
+  // Count occurrences of "blr x16" - should be exactly 1
+  let mut blr_count = 0
+  let lines = disasm.split("\n")
+  for line in lines {
+    if line.contains("blr x16") {
+      blr_count = blr_count + 1
+    }
+  }
+  // If there are duplicate annotations, this will fail
+  inspect(blr_count, content="1")
+}
+
+///|
+test "emit: memory_size instruction disasm" {
+  // Test MemorySize instruction emission
+  let func = @lower.VCodeFunction::new("test_memory_size")
+  func.add_result(Int)
+  let block = func.new_block()
+  let size_inst = @instr.VCodeInst::new(MemorySize)
+  size_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  block.add_inst(size_inst)
+  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  let mc = @emit.emit_function(func)
+  let disasm = mc.dump_disasm()
+
+  // Count "blr x16" - should be exactly 1
+  let mut blr_count = 0
+  let lines = disasm.split("\n")
+  for line in lines {
+    if line.contains("blr x16") {
+      blr_count = blr_count + 1
+    }
+  }
+  inspect(blr_count, content="1")
+}
+
+///|
+test "emit: memory_fill instruction disasm" {
+  // Test MemoryFill instruction emission
+  let func = @lower.VCodeFunction::new("test_memory_fill")
+  let block = func.new_block()
+  let fill_inst = @instr.VCodeInst::new(MemoryFill)
+  fill_inst.add_use(@abi.Physical({ index: 3, class: Int })) // dst
+  fill_inst.add_use(@abi.Physical({ index: 4, class: Int })) // val
+  fill_inst.add_use(@abi.Physical({ index: 5, class: Int })) // size
+  block.add_inst(fill_inst)
+  block.set_terminator(Return([]))
+  let mc = @emit.emit_function(func)
+  let disasm = mc.dump_disasm()
+
+  // Count "blr x16" - should be exactly 1
+  let mut blr_count = 0
+  let lines = disasm.split("\n")
+  for line in lines {
+    if line.contains("blr x16") {
+      blr_count = blr_count + 1
+    }
+  }
+  inspect(blr_count, content="1")
+}
+
+///|
+test "emit: memory_copy instruction disasm" {
+  // Test MemoryCopy instruction emission
+  let func = @lower.VCodeFunction::new("test_memory_copy")
+  let block = func.new_block()
+  let copy_inst = @instr.VCodeInst::new(MemoryCopy)
+  copy_inst.add_use(@abi.Physical({ index: 3, class: Int })) // dst
+  copy_inst.add_use(@abi.Physical({ index: 4, class: Int })) // src
+  copy_inst.add_use(@abi.Physical({ index: 5, class: Int })) // size
+  block.add_inst(copy_inst)
+  block.set_terminator(Return([]))
+  let mc = @emit.emit_function(func)
+  let disasm = mc.dump_disasm()
+
+  // Count "blr x16" - should be exactly 1
+  let mut blr_count = 0
+  let lines = disasm.split("\n")
+  for line in lines {
+    if line.contains("blr x16") {
+      blr_count = blr_count + 1
+    }
+  }
+  inspect(blr_count, content="1")
 }

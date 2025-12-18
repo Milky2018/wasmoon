@@ -30,9 +30,9 @@
 // ============ Trap Handling ============
 // Jump buffer for catching JIT traps (BRK instructions and stack overflow)
 // Using sigjmp_buf/sigsetjmp/siglongjmp for proper signal handler support
-static sigjmp_buf g_trap_jmp_buf;
-static volatile sig_atomic_t g_trap_code = 0;
-static volatile sig_atomic_t g_trap_active = 0;
+sigjmp_buf g_trap_jmp_buf;
+volatile sig_atomic_t g_trap_code = 0;
+volatile sig_atomic_t g_trap_active = 0;
 
 // Trap codes:
 // 0 = no trap
@@ -149,7 +149,8 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 }
 
 // Install trap handler
-static void install_trap_handler(void) {
+
+void install_trap_handler(void) {
     static int installed = 0;
     if (!installed) {
         init_stack_bounds();
@@ -187,25 +188,33 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_trap(void) {
     g_trap_code = 0;
 }
 
-// Allocate a JIT context v2
+// Allocate a JIT context v3
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
     jit_context_t *ctx = (jit_context_t *)malloc(sizeof(jit_context_t));
     if (!ctx) return 0;
 
+    // Initialize all fields to match VMContext v3 layout
+    // High frequency fields
+    ctx->memory_base = NULL;
+    ctx->memory_size = 0;
     ctx->func_table = (void **)calloc(func_count, sizeof(void *));
     if (!ctx->func_table) {
         free(ctx);
         return 0;
     }
-    ctx->func_count = func_count;
-    ctx->indirect_tables = NULL;  // Multi-table support (set via set_table_pointers)
-    ctx->table_count = 0;
-    ctx->indirect_table = NULL;   // Legacy single-table support
-    ctx->indirect_count = 0;
-    ctx->owns_indirect_table = 0; // Default: does not own indirect_table
-    ctx->memory_base = NULL;
-    ctx->memory_size = 0;
+    ctx->table0_base = NULL;      // Table 0 base (fast path for call_indirect)
+
+    // Medium frequency fields
+    ctx->table0_elements = 0;     // Table 0 element count
     ctx->globals = NULL;
+
+    // Low frequency fields (multi-table support)
+    ctx->tables = NULL;           // Array of table pointers (for table_idx != 0)
+    ctx->table_count = 0;
+    ctx->func_count = func_count;
+
+    // Additional fields (not accessed by JIT code directly)
+    ctx->owns_indirect_table = 0; // Default: does not own table0_base
     ctx->args = NULL;
     ctx->argc = 0;
     ctx->envp = NULL;
@@ -245,68 +254,68 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
     return ctx ? (int64_t)ctx->func_table : 0;
 }
 
-// Allocate indirect table for context v2
+// Allocate indirect table for context v3
 // Each entry is 16 bytes: (func_ptr, type_idx) pair
 // Layout: [func_ptr_0, type_idx_0, func_ptr_1, type_idx_1, ...]
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;
 
-    // Only free if we own the current indirect_table
-    if (ctx->indirect_table && ctx->owns_indirect_table) {
-        free(ctx->indirect_table);
+    // Only free if we own the current table0_base
+    if (ctx->table0_base && ctx->owns_indirect_table) {
+        free(ctx->table0_base);
     }
 
     // Allocate 2 slots per entry: func_ptr and type_idx
     // Initialize to 0 (NULL func_ptr, type -1 would indicate uninitialized but we use 0)
-    ctx->indirect_table = (void **)calloc(count * 2, sizeof(void *));
-    if (!ctx->indirect_table) {
-        ctx->indirect_count = 0;
+    ctx->table0_base = (void **)calloc(count * 2, sizeof(void *));
+    if (!ctx->table0_base) {
+        ctx->table0_elements = 0;
         ctx->owns_indirect_table = 0;
         return 0;
     }
     // Initialize type indices to -1 (uninitialized marker)
     for (int i = 0; i < count; i++) {
-        ctx->indirect_table[i * 2 + 1] = (void*)(intptr_t)(-1);
+        ctx->table0_base[i * 2 + 1] = (void*)(intptr_t)(-1);
     }
-    ctx->indirect_count = count;
+    ctx->table0_elements = count;
     ctx->owns_indirect_table = 1;  // We own this table
     return 1;
 }
 
-// Set indirect table entry in context v2
+// Set indirect table entry in context v3
 // Now takes type_idx parameter to store alongside func_ptr
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && ctx->indirect_table &&
-        table_idx >= 0 && table_idx < ctx->indirect_count &&
+    if (ctx && ctx->table0_base &&
+        table_idx >= 0 && (size_t)table_idx < ctx->table0_elements &&
         func_idx >= 0 && func_idx < ctx->func_count) {
         // Store func_ptr at offset 0, type_idx at offset 8
-        ctx->indirect_table[table_idx * 2] = ctx->func_table[func_idx];
-        ctx->indirect_table[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+        ctx->table0_base[table_idx * 2] = ctx->func_table[func_idx];
+        ctx->table0_base[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
     }
 }
 
-// Get indirect table base from context v2
+// Get indirect table base from context v3
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && ctx->indirect_table) {
-        return (int64_t)ctx->indirect_table;
+    if (ctx && ctx->table0_base) {
+        return (int64_t)ctx->table0_base;
     }
     return ctx ? (int64_t)ctx->func_table : 0;
 }
 
-// Free context v2
+// Free context v3
 // Also frees memory_base and globals (owned by context)
-// Note: indirect_table is only freed if owns_indirect_table is set
+// Note: table0_base is only freed if owns_indirect_table is set
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
         if (ctx->func_table) free(ctx->func_table);
-        if (ctx->indirect_tables) free(ctx->indirect_tables);
-        // Only free indirect_table if we own it (allocated via alloc_indirect_table)
+        if (ctx->tables) free(ctx->tables);
+        // Only free table0_base if we own it (allocated via alloc_indirect_table)
         // Borrowed tables (from set_table_pointers) are managed by JITTable's GC
-        if (ctx->indirect_table && ctx->owns_indirect_table) free(ctx->indirect_table);
+        if (ctx->table0_base && ctx->owns_indirect_table) free(ctx->table0_base);
         if (ctx->memory_base) free(ctx->memory_base);
         if (ctx->globals) free(ctx->globals);
         free(ctx);
@@ -397,14 +406,14 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx) return;
 
-    // Free existing indirect table only if we own it
-    if (ctx->indirect_table && ctx->owns_indirect_table) {
-        free(ctx->indirect_table);
+    // Free existing table0_base only if we own it
+    if (ctx->table0_base && ctx->owns_indirect_table) {
+        free(ctx->table0_base);
     }
 
     // Point to the shared table (borrowed, not owned)
-    ctx->indirect_table = (void **)shared_table_ptr;
-    ctx->indirect_count = count;
+    ctx->table0_base = (void **)shared_table_ptr;
+    ctx->table0_elements = count;
     ctx->owns_indirect_table = 0;  // We don't own this table
 }
 
@@ -420,37 +429,38 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || table_count <= 0 || !table_ptrs) return;
 
-    // Free existing indirect_tables array if any
-    if (ctx->indirect_tables) {
-        free(ctx->indirect_tables);
-        ctx->indirect_tables = NULL;
+    // Free existing tables array if any
+    if (ctx->tables) {
+        free(ctx->tables);
+        ctx->tables = NULL;
         ctx->table_count = 0;
     }
 
     // Allocate array to hold table pointers
-    ctx->indirect_tables = (void ***)calloc(table_count, sizeof(void **));
-    if (!ctx->indirect_tables) {
+    ctx->tables = (void ***)calloc(table_count, sizeof(void **));
+    if (!ctx->tables) {
         ctx->table_count = 0;
         return;
     }
 
     // Copy table pointers (note: tables themselves are owned by Store, we just hold pointers)
     for (int i = 0; i < table_count; i++) {
-        ctx->indirect_tables[i] = (void **)table_ptrs[i];
+        ctx->tables[i] = (void **)table_ptrs[i];
     }
     ctx->table_count = table_count;
 
-    // For backward compatibility: if there's at least one table, set it as the legacy single table
+    // For backward compatibility: if there's at least one table, set it as table0_base
     // Note: This is a borrowed pointer, we don't own it
     if (table_count > 0 && table_ptrs[0] != 0) {
-        ctx->indirect_table = (void **)table_ptrs[0];
+        ctx->table0_base = (void **)table_ptrs[0];
         ctx->owns_indirect_table = 0;  // Borrowed from JITTable, not owned
     }
 }
 
 
 // Global v2 context (for WASI trampolines)
-static jit_context_t *g_jit_context = NULL;
+
+jit_context_t *g_jit_context = NULL;
 // Global reference to managed JITContext object (to prevent GC collection)
 static void *g_jit_context_obj = NULL;
 
@@ -475,179 +485,52 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context(void) {
     return (int64_t)g_jit_context;
 }
 
-// Call JIT function with new ABI (v2)
-// - X19 = context pointer (callee-saved, set by this trampoline)
-// - X0-X7 = parameters (all params passed via X registers, floats as bit patterns)
-// - Stack for params 8+
-// JIT prologue loads X20/X21/X22/X24 from context pointed by X19
-// param_types: 0=I32, 1=I64, 2=F32, 3=F64 (currently unused, for future D register optimization)
-MOONBIT_FFI_EXPORT int wasmoon_jit_call(
+// ============ Trampoline-based Call (New, Simple) ============
+// Call via a JIT-generated entry trampoline
+// The trampoline handles all ABI complexity - no inline assembly here!
+//
+// Trampoline signature: int trampoline(vmctx, values_vec, func_ptr)
+// - vmctx: VMContext pointer
+// - values_vec: Array of int64_t for args (in) and results (out)
+// - func_ptr: Target WASM function pointer
+// Returns: trap code (0 = success)
+typedef int (*entry_trampoline_fn)(jit_context_t *vmctx, int64_t *values_vec, void *func_ptr);
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
+    int64_t trampoline_ptr,
     int64_t ctx_ptr,
     int64_t func_ptr,
-    int64_t* args,
-    int* param_types,
-    int num_args,
-    int64_t* results,
-    int* result_types,
-    int num_results
+    int64_t* values_vec,
+    int values_len
 ) {
-    if (!func_ptr || !ctx_ptr) return -1;
-    (void)param_types;  // Reserved for future use
-
-    // Debug: print context info
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-
-    // Save parameters for use after call
-    volatile int saved_num_results = num_results;
-    volatile int64_t *saved_results = results;
-    volatile int *saved_result_types = result_types;
+    if (!trampoline_ptr || !ctx_ptr || !func_ptr) return -1;
 
     install_trap_handler();
     g_trap_code = 0;
     g_trap_active = 1;
 
     // Set global context for WASI trampolines
-    g_jit_context = (jit_context_t *)ctx_ptr;
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    g_jit_context = ctx;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         return (int)g_trap_code;
     }
 
-    // Count result types for extra buffer
-    int int_count = 0, float_count = 0;
-    for (int i = 0; i < num_results; i++) {
-        if (result_types[i] == 2 || result_types[i] == 3) {
-            float_count++;
-        } else {
-            int_count++;
-        }
-    }
-    int needs_extra_buffer = (int_count > 2 || float_count > 2);
-
-    int64_t extra_buffer[16];
-    memset(extra_buffer, 0, sizeof(extra_buffer));
-
-    int64_t x0_result = 0, x1_result = 0;
-    uint64_t d0_bits = 0, d1_bits = 0;
-
-#if defined(__aarch64__) || defined(_M_ARM64)
-    // New ABI: X19 = context pointer (callee-saved)
-    // All params in X0-X7 (floats passed as bit patterns in X registers)
-    // Params 8+ go on the stack
-    // JIT prologue will use FMOV to move floats from X to D registers
-
-    // Calculate stack args (args beyond the first 8 register args)
-    int max_reg_args = 8;
-    int stack_args = (num_args > max_reg_args) ? (num_args - max_reg_args) : 0;
-    // Stack must be 16-byte aligned
-    int stack_space = ((stack_args * 8) + 15) & ~15;
-
-    // For stack args, allocate space and store them BEFORE setting up register args
-    if (stack_space > 0) {
-        int64_t *stack_args_ptr;
-        __asm__ volatile(
-            "sub sp, sp, %[size]\n\t"
-            "mov %[ptr], sp"
-            : [ptr] "=r"(stack_args_ptr)
-            : [size] "r"((int64_t)stack_space)
-        );
-
-        // Store all stack args directly from args array
-        for (int i = 0; i < stack_args; i++) {
-            stack_args_ptr[i] = args[8 + i];
-        }
-    }
-
-    // Set up X19 = context pointer (callee-saved, JIT will preserve it)
-    register int64_t r19 __asm__("x19") = ctx_ptr;
-
-    // All params in X0-X7 (AAPCS64 style, floats as bit patterns)
-    // X7 is used for extra_results_buffer when needed
-    register int64_t r0 __asm__("x0") = num_args > 0 ? args[0] : 0;
-    register int64_t r1 __asm__("x1") = num_args > 1 ? args[1] : 0;
-    register int64_t r2 __asm__("x2") = num_args > 2 ? args[2] : 0;
-    register int64_t r3 __asm__("x3") = num_args > 3 ? args[3] : 0;
-    register int64_t r4 __asm__("x4") = num_args > 4 ? args[4] : 0;
-    register int64_t r5 __asm__("x5") = num_args > 5 ? args[5] : 0;
-    register int64_t r6 __asm__("x6") = num_args > 6 ? args[6] : 0;
-    register int64_t r7 __asm__("x7") = needs_extra_buffer ? (int64_t)extra_buffer : (num_args > 7 ? args[7] : 0);
-
-    register uint64_t fd0 __asm__("d0");
-    register uint64_t fd1 __asm__("d1");
-
-    if (stack_space > 0) {
-        __asm__ volatile(
-            "blr %[func]\n\t"
-            "add sp, sp, %[size]"
-            : "+r"(r0), "+r"(r1), "=w"(fd0), "=w"(fd1)
-            : [func] "r"(func_ptr),
-              "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r19),
-              [size] "r"((int64_t)stack_space)
-            : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x30",
-              "d2", "d3", "d4", "d5", "d6", "d7",
-              "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
-              "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
-              "memory", "cc"
-        );
-    } else {
-        __asm__ volatile(
-            "blr %[func]"
-            : "+r"(r0), "+r"(r1), "=w"(fd0), "=w"(fd1)
-            : [func] "r"(func_ptr),
-              "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r19)
-            : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x30",
-              "d2", "d3", "d4", "d5", "d6", "d7",
-              "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
-              "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
-              "memory", "cc"
-        );
-    }
-
-    x0_result = r0;
-    x1_result = r1;
-    d0_bits = fd0;
-    d1_bits = fd1;
-#else
-    // Fallback for non-ARM64
-    typedef int64_t (*jit_func_t)(int64_t);
-    x0_result = ((jit_func_t)func_ptr)(num_args > 0 ? args[0] : 0);
-#endif
+    // Call the JIT-generated trampoline
+    // This is a simple C function call - no inline assembly needed!
+    entry_trampoline_fn trampoline = (entry_trampoline_fn)trampoline_ptr;
+    int result = trampoline(ctx, values_vec, (void *)func_ptr);
 
     g_trap_active = 0;
 
-    // Distribute results
-    int int_idx = 0, float_idx = 0, extra_idx = 0;
-    for (int i = 0; i < saved_num_results; i++) {
-        int ty = saved_result_types[i];
-        if (ty == 2) { // F32
-            if (float_idx < 2) {
-                uint64_t bits = (float_idx == 0) ? d0_bits : d1_bits;
-                uint32_t float_bits = (uint32_t)(bits & 0xFFFFFFFF);
-                saved_results[i] = (int64_t)float_bits;
-                float_idx++;
-            } else {
-                saved_results[i] = extra_buffer[extra_idx++];
-            }
-        } else if (ty == 3) { // F64
-            if (float_idx < 2) {
-                uint64_t bits = (float_idx == 0) ? d0_bits : d1_bits;
-                saved_results[i] = (int64_t)bits;
-                float_idx++;
-            } else {
-                saved_results[i] = extra_buffer[extra_idx++];
-            }
-        } else { // I32, I64
-            if (int_idx < 2) {
-                saved_results[i] = (int_idx == 0) ? x0_result : x1_result;
-                int_idx++;
-            } else {
-                saved_results[i] = extra_buffer[extra_idx++];
-            }
-        }
+    // Check if a trap occurred
+    if (g_trap_code != 0) {
+        return (int)g_trap_code;
     }
 
-    return 0;
+    return result;
 }
 
 // ============ Spectest Trampolines ============
@@ -845,196 +728,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory(int64_t ctx_ptr) {
 }
 
 // ============ Multi-value return support ============
-// All JIT calls go through wasmoon_jit_call_multi_return
-// - JIT ABI: X0 = func_table, X1 = mem_base, X2 = mem_size, X3 = indirect_table, X4-X10 = args
-// - When >2 int or >2 float returns: X7 = extra_results_buffer pointer
-// - Returns: X0/X1 for first 2 ints, D0/D1 for first 2 floats
-// - Extra returns: callee writes to buffer pointed by X7 (saved to X23)
 
-// Call a JIT function that returns multiple values
-// result_types: array of type codes (0=I32, 1=I64, 2=F32, 3=F64)
-// num_results: number of return values
-// Returns: 0 on success, trap code on error
-// Note: indirect_table_ptr is stored at func_table[-1] and loaded by prologue into X24
-MOONBIT_FFI_EXPORT int wasmoon_jit_call_multi_return(
-    int64_t func_ptr,
-    int64_t func_table_ptr,
-    int64_t* args,
-    int num_args,
-    int64_t* results,
-    int* result_types,
-    int num_results
-) {
-    if (!func_ptr) return -1;
-
-    // CRITICAL: Save the parameters that are used AFTER the BLR call.
-    // The compiler may allocate these in registers that get clobbered by our
-    // register setup for the JIT call. By saving them to volatile locals
-    // RIGHT AWAY (before any other code), we force them onto the stack
-    // where they won't be corrupted by our inline asm.
-    volatile int saved_num_results = num_results;
-    volatile int64_t *saved_results = results;
-    volatile int *saved_result_types = result_types;
-
-    install_trap_handler();
-    g_trap_code = 0;
-    g_trap_active = 1;
-
-    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
-        g_trap_active = 0;
-        return (int)g_trap_code;
-    }
-
-    int64_t mem_base = g_jit_context ? (int64_t)g_jit_context->memory_base : 0;
-    int64_t mem_size = g_jit_context ? (int64_t)g_jit_context->memory_size : 0;
-
-    // Count how many extra results need buffer
-    int int_count = 0, float_count = 0;
-    for (int i = 0; i < num_results; i++) {
-        if (result_types[i] == 2 || result_types[i] == 3) { // F32 or F64
-            float_count++;
-        } else { // I32, I64
-            int_count++;
-        }
-    }
-    int needs_extra_buffer = (int_count > 2 || float_count > 2);
-
-    // Buffer for extra results
-    int64_t extra_buffer[16];
-    memset(extra_buffer, 0, sizeof(extra_buffer));
-
-    // Call the JIT function
-    int64_t x0_result = 0, x1_result = 0;
-    uint64_t d0_bits = 0, d1_bits = 0;
-
-#if defined(__aarch64__) || defined(_M_ARM64)
-    // JIT ABI: X0=func_table, X1=mem_base, X2=mem_size, X3-X10=args (up to 8 register args)
-    // Args 8+ go on the stack at [SP + (i-8)*8]
-    // indirect_table_ptr is stored at func_table[-1] and loaded into X24 by prologue
-    // When needs_extra_buffer: X7=extra_results_buffer (conflicts with arg 4)
-
-    // Calculate stack args (args beyond the first 8 register args)
-    int max_reg_args = 8;
-    int stack_args = (num_args > max_reg_args) ? (num_args - max_reg_args) : 0;
-    // Stack must be 16-byte aligned
-    int stack_space = ((stack_args * 8) + 15) & ~15;
-
-    // For stack args, allocate space and store them BEFORE setting up register args
-    // (C code in the loop may clobber register variables)
-    if (stack_space > 0) {
-        // Allocate stack space and get pointer to it
-        int64_t *stack_args_ptr;
-        __asm__ volatile(
-            "sub sp, sp, %[size]\n\t"
-            "mov %[ptr], sp"
-            : [ptr] "=r"(stack_args_ptr)
-            : [size] "r"((int64_t)stack_space)
-        );
-
-        // Store all stack args directly from args array
-        for (int i = 0; i < stack_args; i++) {
-            stack_args_ptr[i] = args[8 + i];
-        }
-    }
-
-    // Set up register arguments AFTER the C loop to avoid clobbering
-    register int64_t r0 __asm__("x0") = func_table_ptr;
-    register int64_t r1 __asm__("x1") = mem_base;
-    register int64_t r2 __asm__("x2") = mem_size;
-    register int64_t r3 __asm__("x3") = num_args > 0 ? args[0] : 0;
-    register int64_t r4 __asm__("x4") = num_args > 1 ? args[1] : 0;
-    register int64_t r5 __asm__("x5") = num_args > 2 ? args[2] : 0;
-    register int64_t r6 __asm__("x6") = num_args > 3 ? args[3] : 0;
-    // X7 is used for extra_results_buffer OR arg 4
-    register int64_t r7 __asm__("x7") = needs_extra_buffer ? (int64_t)extra_buffer : (num_args > 4 ? args[4] : 0);
-    // X8-X10 for args 5-7 (only used when needs_extra_buffer is false)
-    register int64_t r8 __asm__("x8") = num_args > 5 ? args[5] : 0;
-    register int64_t r9 __asm__("x9") = num_args > 6 ? args[6] : 0;
-    register int64_t r10 __asm__("x10") = num_args > 7 ? args[7] : 0;
-    register uint64_t d0 __asm__("d0");
-    register uint64_t d1 __asm__("d1");
-
-    if (stack_space > 0) {
-        __asm__ volatile(
-            "blr %[func]\n\t"
-            "add sp, sp, %[size]"
-            : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
-            : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r8), "r"(r9), "r"(r10),
-              [size] "r"((int64_t)stack_space)
-            : "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x30",
-              "d2", "d3", "d4", "d5", "d6", "d7",
-              "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
-              "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
-              "memory", "cc"
-        );
-    } else {
-        __asm__ volatile(
-            "blr %[func]"
-            : "+r"(r0), "+r"(r1), "=w"(d0), "=w"(d1)
-            : [func] "r"(func_ptr), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(r7), "r"(r8), "r"(r9), "r"(r10)
-            : "x11", "x12", "x13", "x14", "x15",
-              "x16", "x17", "x30",
-              "d2", "d3", "d4", "d5", "d6", "d7",
-              "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
-              "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
-              "memory", "cc"
-        );
-    }
-
-    x0_result = r0;
-    x1_result = r1;
-    d0_bits = d0;
-    d1_bits = d1;
-#else
-    // Fallback for non-ARM64 platforms
-    typedef int64_t (*jit_func_t)(int64_t, int64_t, int64_t);
-    x0_result = ((jit_func_t)func_ptr)(func_table_ptr, mem_base, mem_size);
-#endif
-
-    g_trap_active = 0;
-
-    // Distribute results from registers and extra_buffer to the output array
-    int int_idx = 0, float_idx = 0, extra_idx = 0;
-    for (int i = 0; i < saved_num_results; i++) {
-        int ty = saved_result_types[i];
-        if (ty == 2) { // F32 - stored as raw 32-bit in S register (lower 32 bits of D)
-            if (float_idx < 2) {
-                // From S0 or S1 (lower 32 bits of D0 or D1)
-                // d0_bits/d1_bits contain the raw 64-bit value from D register
-                // For f32, the value is in the lower 32 bits (S register is low half of D)
-                uint64_t bits = (float_idx == 0) ? d0_bits : d1_bits;
-                uint32_t float_bits = (uint32_t)(bits & 0xFFFFFFFF);
-                // Store as int64 with float bits in lower 32 bits
-                saved_results[i] = (int64_t)float_bits;
-                float_idx++;
-            } else {
-                // From extra buffer
-                saved_results[i] = extra_buffer[extra_idx++];
-            }
-        } else if (ty == 3) { // F64
-            if (float_idx < 2) {
-                // From D0 or D1 - raw 64-bit value is the f64 bit pattern
-                uint64_t bits = (float_idx == 0) ? d0_bits : d1_bits;
-                saved_results[i] = (int64_t)bits;
-                float_idx++;
-            } else {
-                // From extra buffer
-                saved_results[i] = extra_buffer[extra_idx++];
-            }
-        } else { // I32, I64
-            if (int_idx < 2) {
-                // From X0 or X1
-                saved_results[i] = (int_idx == 0) ? x0_result : x1_result;
-                int_idx++;
-            } else {
-                // From extra buffer
-                saved_results[i] = extra_buffer[extra_idx++];
-            }
-        }
-    }
-
-    return 0; // Success
-}
+// The new v3 ABI uses wasmoon_jit_call with X0=callee_vmctx, X1=caller_vmctx
 
 // ============ Executable memory management ============
 

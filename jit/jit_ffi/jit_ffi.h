@@ -6,39 +6,48 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// ============ JIT Context v2 (New ABI) ============
-// New ABI uses X20 as context pointer (callee-saved)
-// User params in X0-X7 (AAPCS64 compatible)
-// Float params in D0-D7 (AAPCS64 compatible)
+// ============ JIT Context v3 (Cranelift-style ABI) ============
+// New ABI passes vmctx via X0 (callee_vmctx) and X1 (caller_vmctx)
+// User integer params in X2-X7 (up to 6 in registers)
+// Float params in V0-V7 (S for f32, D for f64)
+// X19 caches callee_vmctx for fast access within the function
 
-// JIT Context v2 - layout MUST match vcode/abi.mbt constants:
-//   +0:  func_table (void**)
-//   +8:  indirect_table (void**)    - Single indirect table (table 0)
-//   +16: memory_base (uint8_t*)
-//   +24: memory_size (size_t)
-//   +32: indirect_tables (void***)  - Array of table pointers (multi-table support)
-//   +40: table_count (int)          - Number of tables
-//   +48: globals (void*)            - Array of global variable values (WasmValue*)
+// VMContext v3 - layout MUST match vcode/abi/abi.mbt constants:
+//   +0:  memory_base (uint8_t*)     - High frequency: linear memory base
+//   +8:  memory_size (size_t)       - High frequency: memory size in bytes
+//   +16: func_table (void**)        - High frequency: function pointer array
+//   +24: table0_base (void**)       - High frequency: table 0 base (fast path for call_indirect)
+//   +32: table0_elements (size_t)   - Medium frequency: table 0 element count
+//   +40: globals (void*)            - Medium frequency: global variable array
+//   +48: tables (void***)           - Low frequency: multi-table pointer array
+//   +56: table_count (int)          - Low frequency: number of tables
+//   +60: func_count (int)           - Low frequency: number of functions
 typedef struct {
-    void **func_table;        // +0:  Array of function pointers
-    void **indirect_table;    // +8:  Single indirect table (table 0) - used by prologue
-    uint8_t *memory_base;     // +16: WebAssembly linear memory base
-    size_t memory_size;       // +24: Memory size in bytes
-    // Multi-table support fields (offset +32 onwards)
-    void ***indirect_tables;  // +32: Array of indirect table pointers
-    int table_count;          // +40: Number of tables
-    void *globals;            // +48: Array of global variable values (WasmValue*)
-    // Additional fields (not accessed by JIT prologue directly)
-    int func_count;           // Number of entries in func_table
-    int indirect_count;       // Number of entries in indirect_table (table 0)
-    int owns_indirect_table;  // Whether this context owns indirect_table (should free it)
+    // High frequency fields (accessed in hot paths)
+    uint8_t *memory_base;     // +0:  WebAssembly linear memory base
+    size_t memory_size;       // +8:  Memory size in bytes
+    void **func_table;        // +16: Array of function pointers
+    void **table0_base;       // +24: Table 0 base (for fast call_indirect)
+
+    // Medium frequency fields
+    size_t table0_elements;   // +32: Number of elements in table 0
+    void *globals;            // +40: Array of global variable values (WasmValue*)
+
+    // Low frequency fields (multi-table support)
+    void ***tables;           // +48: Array of table pointers (for table_idx != 0)
+    int table_count;          // +56: Number of tables
+    int func_count;           // +60: Number of entries in func_table
+
+    // Additional fields (not accessed by JIT code directly)
+    int owns_indirect_table;  // Whether this context owns table0_base (should free it)
     char **args;              // WASI: command line arguments
     int argc;                 // WASI: number of arguments
     char **envp;              // WASI: environment variables
     int envc;                 // WASI: number of env vars
 } jit_context_t;
 
-static jit_context_t *g_jit_context;
+// Global JIT context (defined in jit.c, used by wasi.c)
+extern jit_context_t *g_jit_context;
 
 // ============ Executable Memory Functions ============
 // Forward declarations for GC-managed ExecCode

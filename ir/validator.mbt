@@ -321,7 +321,21 @@ fn validate_instruction(
       }
 
     // Calls can have any number of operands
-    Call(_) | CallIndirect(_) => ()
+    Call(_) | CallIndirect(_) | CallPtr(_, _) => ()
+
+    // Raw pointer operations (for trampolines)
+    LoadPtr(_) =>
+      if inst.operands.length() < 1 {
+        result.add_error(
+          "LoadPtr expects at least 1 operand (base), got \{inst.operands.length()}",
+        )
+      }
+    StorePtr(_) =>
+      if inst.operands.length() < 2 {
+        result.add_error(
+          "StorePtr expects at least 2 operands (base, value), got \{inst.operands.length()}",
+        )
+      }
   }
 }
 

@@ -39,3 +39,24 @@ fn Reg::to_string(self : Reg) -> String {
 pub impl Show for Reg with output(self, logger) {
   logger.write_string(self.to_string())
 }
+
+///|
+/// Operand constraint for register allocation
+/// Following Cranelift's design for fixed register constraints
+pub(all) enum OperandConstraint {
+  Any // Any register is acceptable
+  FixedReg(PReg) // Must use specific physical register
+}
+
+///|
+fn OperandConstraint::to_string(self : OperandConstraint) -> String {
+  match self {
+    Any => "any"
+    FixedReg(preg) => "fixed(\{preg})"
+  }
+}
+
+///|
+pub impl Show for OperandConstraint with output(self, logger) {
+  logger.write_string(self.to_string())
+}

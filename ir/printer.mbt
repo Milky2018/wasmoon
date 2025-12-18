@@ -175,6 +175,12 @@ fn format_opcode(
     Call(idx) => "call \{idx}(\{ops})"
     CallIndirect(type_idx, table_idx) =>
       "call_indirect type=\{type_idx} table=\{table_idx}(\{ops})"
+
+    // Raw pointer operations (for trampolines)
+    LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
+    StorePtr(ty) => "store_ptr.\{ty} \{ops}"
+    CallPtr(num_args, num_results) =>
+      "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
   }
 }
 
