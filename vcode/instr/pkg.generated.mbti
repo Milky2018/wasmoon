@@ -10,6 +10,12 @@ import(
 // Errors
 
 // Types and methods
+pub(all) enum CallType {
+  None
+  Regular
+  TailCall
+}
+
 pub(all) enum CmpKind {
   Eq
   Ne
@@ -220,6 +226,7 @@ pub(all) enum VCodeOpcode {
   AdjustSP(Int)
   StoreToStack(Int)
 }
+pub fn VCodeOpcode::call_type(Self) -> CallType
 pub impl Show for VCodeOpcode
 
 pub(all) enum VCodeTerminator {
