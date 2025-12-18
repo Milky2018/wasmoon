@@ -106,6 +106,8 @@ pub fn c_jit_memory_fill(Int, Int, Int) -> Unit
 
 pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 
+pub fn c_jit_read_i64(Int64) -> Int64
+
 pub fn c_jit_set_context_managed(JITContext) -> Unit
 
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit

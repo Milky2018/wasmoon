@@ -61,6 +61,9 @@ fn WastResult::new() -> WastResult {
 /// NOTE: Memory and globals are now owned by JITContext and freed by its finalizer
 priv struct JITModuleContext {
   jit_module : @jit.JITModule
+  // For syncing globals back to store after JIT calls
+  globals_ptr : Int64
+  global_addrs : Array[Int]
 }
 
 ///|
@@ -327,6 +330,36 @@ fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool 
 }
 
 ///|
+/// Check if a module has cross-module imports (imports from user modules)
+/// JIT can't properly share state with interpreter for cross-module globals/memory/tables
+fn has_cross_module_imports(mod_ : @types.Module) -> Bool {
+  for imp in mod_.imports {
+    // spectest and wasi_snapshot_preview1 are handled by JIT trampolines
+    // Other modules are user modules that need state sharing
+    if imp.mod_name != "spectest" && imp.mod_name != "wasi_snapshot_preview1" {
+      // User module import - check if it's a global/memory/table
+      if imp.desc is (Global(_) | Memory(_) | Table(_)) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Check if a module exports memory or tables
+/// These might be imported by other modules, and JIT can't share the backing storage
+fn exports_shared_resources(mod_ : @types.Module) -> Bool {
+  for exp in mod_.exports {
+    match exp.desc {
+      Memory(_) | Table(_) => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 /// Try to compile a module to JIT and return JITModuleContext if successful
 fn try_compile_jit(
   mod_ : @types.Module,
@@ -336,6 +369,16 @@ fn try_compile_jit(
   // Check for unsupported instructions
   if has_unsupported_instructions(mod_) {
     return None // Module contains instructions not supported by JIT
+  }
+  // Check for cross-module imports that require state sharing
+  // JIT can't properly share globals/memory/tables with other modules
+  if has_cross_module_imports(mod_) {
+    return None // Fall back to interpreter for cross-module scenarios
+  }
+  // Check if module exports memory or tables that might be imported by others
+  // JIT can't share its internal memory/table storage with the interpreter
+  if exports_shared_resources(mod_) {
+    return None // Fall back to interpreter for potential cross-module sharing
   }
   // Check if all imports are supported by JIT
   for imp in mod_.imports {
@@ -377,8 +420,64 @@ fn try_compile_jit(
           // Initialize indirect table for call_indirect
           init_elem_segments(mod_, jm, instance, store)
           // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
-          Some(JITModuleContext::{ jit_module: jm })
+          // Store global_addrs for syncing after JIT calls
+          let global_addrs_copy : Array[Int] = []
+          for addr in instance.global_addrs {
+            global_addrs_copy.push(addr)
+          }
+          Some(JITModuleContext::{
+            jit_module: jm,
+            globals_ptr,
+            global_addrs: global_addrs_copy,
+          })
         }
+      }
+    }
+  }
+}
+
+///|
+/// Sync JIT globals back to the store after a JIT function call
+/// This ensures that global changes made by JIT are visible to the interpreter
+fn sync_jit_globals_to_store(
+  jit_ctx : JITModuleContext,
+  store : @runtime.Store,
+) -> Unit {
+  if jit_ctx.globals_ptr == 0L || jit_ctx.global_addrs.is_empty() {
+    return
+  }
+  // Read each global from JIT memory and write to store
+  for i, global_addr in jit_ctx.global_addrs {
+    let global_inst = store.globals[global_addr]
+    // Only sync mutable globals (immutable globals don't change)
+    if global_inst.get_type().mutable {
+      // Read raw value from JIT memory (16 bytes per global: 8 value + 8 tag)
+      let offset = jit_ctx.globals_ptr + (i * 16).to_int64()
+      let raw_value = @jit.c_jit_read_i64(offset)
+      // Convert based on global's type
+      let new_value : @types.Value = match global_inst.get_type().value_type {
+        I32 => @types.Value::I32(raw_value.to_int())
+        I64 => @types.Value::I64(raw_value)
+        F32 =>
+          @types.Value::F32(Float::reinterpret_from_int(raw_value.to_int()))
+        F64 => @types.Value::F64(raw_value.reinterpret_as_double())
+        FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
+          if raw_value == -1L {
+            @types.Value::Null
+          } else {
+            @types.Value::FuncRef(raw_value.to_int())
+          }
+        ExternRef | RefExtern =>
+          if raw_value == -1L {
+            @types.Value::Null
+          } else {
+            @types.Value::ExternRef(raw_value.to_int())
+          }
+        V128 => abort("V128 not supported in JIT global sync")
+      }
+      // We already checked mutability, so set should succeed
+      global_inst.set(new_value) catch {
+        _ => () // Should not happen since we checked mutability
       }
     }
   }
@@ -897,8 +996,14 @@ fn invoke_action(
                 i64_args.push(v)
               }
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
-                @jit.JITTrap(msg) => raise RuntimeError(msg)
+                @jit.JITTrap(msg) => {
+                  // Sync globals even on trap (in case globals were modified before trap)
+                  sync_jit_globals_to_store(jit, ctx.store)
+                  raise RuntimeError(msg)
+                }
               }
+              // Sync JIT globals back to store after successful call
+              sync_jit_globals_to_store(jit, ctx.store)
               // Convert results back to Values based on function return types
               let values : Array[@types.Value] = []
               for i, r in results {
