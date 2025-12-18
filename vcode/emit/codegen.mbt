@@ -792,22 +792,31 @@ fn MachineCode::emit_instruction(
     Popcnt(is_64) => {
       // Population count (count number of 1 bits)
       // AArch64 doesn't have a direct POPCNT for GPRs, we use SIMD:
-      // 1. FMOV D16, Xn (move to vector register)
-      // 2. CNT V16.8B, V16.8B (count bits in each byte)
-      // 3. ADDV B17, V16.8B (sum all byte counts)
-      // 4. FMOV Xd, D17 (move back to GPR)
-      // For simplicity, we'll use a software fallback sequence
-      // TODO: Implement proper SIMD version for better performance
+      // For 64-bit:
+      //   1. FMOV D16, Xn (move to vector register)
+      //   2. CNT V16.8B, V16.8B (count bits in each byte)
+      //   3. ADDV B16, V16.8B (sum all byte counts)
+      //   4. FMOV Wd, S16 (move back to GPR)
+      // For 32-bit:
+      //   1. FMOV S16, Wn (move to vector register, upper bytes zero)
+      //   2. CNT V16.8B, V16.8B (count bits in each byte)
+      //   3. ADDV B16, V16.8B (sum all byte counts)
+      //   4. FMOV Wd, S16 (move back to GPR)
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      // For now, emit NOP and move the input to output (placeholder)
-      // This needs proper implementation
       if is_64 {
-        self.emit_mov_reg(rd, rn)
+        // FMOV D16, Xn
+        self.emit_fmov_x_to_d(16, rn)
       } else {
-        self.emit_mov_reg32(rd, rn)
+        // FMOV S16, Wn
+        self.emit_fmov_w_to_s(16, rn)
       }
-      self.emit_nop()
+      // CNT V16.8B, V16.8B
+      self.emit_cnt_8b(16, 16)
+      // ADDV B16, V16.8B
+      self.emit_addv_b(16, 16)
+      // FMOV Wd, S16 (result is small enough to fit in W register)
+      self.emit_fmov_s_to_w(rd, 16)
     }
     Extend(kind) => {
       let rd = wreg_num(inst.defs[0])
@@ -902,6 +911,41 @@ fn MachineCode::emit_instruction(
       }
       // B.!cond +8 (skip BRK)
       self.emit_b_cond_offset(skip_cond, 8)
+      // BRK #trap_code
+      self.emit_brk(trap_code)
+    }
+    TrapIfZero(is_64, trap_code) => {
+      // Trap if operand is zero (for division by zero)
+      // Uses: [rn]
+      // Emits: CBNZ rn, +8; BRK #trap_code
+      let rn = reg_num(inst.uses[0])
+      // CBNZ rn, +8 (skip BRK if not zero)
+      self.emit_cbnz_offset(rn, is_64, 8)
+      // BRK #trap_code
+      self.emit_brk(trap_code)
+    }
+    TrapIfDivOverflow(is_64, trap_code) => {
+      // Trap if signed division would overflow (INT_MIN / -1)
+      // Uses: [lhs, rhs]
+      // Following Cranelift's approach (no scratch registers needed):
+      //   ADDS XZR, rhs, #1      ; Check rhs == -1 (sets Z if rhs == -1)
+      //   CCMP lhs, #1, #0, Eq   ; If Z set, do CMP lhs-1 (sets V if overflow), else NZCV=0
+      //   B.VC +8                ; Skip BRK if V clear
+      //   BRK #trap_code         ; Trap on overflow
+      //
+      // The key insight: INT_MIN - 1 overflows, setting V flag.
+      // - If rhs != -1: CCMP sets NZCV=0, V=0, no trap
+      // - If rhs == -1 && lhs != INT_MIN: lhs-1 doesn't overflow, V=0, no trap
+      // - If rhs == -1 && lhs == INT_MIN: INT_MIN-1 overflows, V=1, trap!
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      // ADDS XZR/WZR, rhs, #1 - check if rhs == -1
+      self.emit_adds_imm_zr(rhs, 1, is_64)
+      // CCMP lhs, #1, #0, Eq - if Z set (rhs==-1), do lhs-1, else set NZCV=0
+      // Eq condition code = 0
+      self.emit_ccmp_imm(lhs, 1, 0, 0, is_64)
+      // B.VC +8 (VC = V clear = condition 7, skip BRK if no overflow)
+      self.emit_b_cond_offset(7, 8)
       // BRK #trap_code
       self.emit_brk(trap_code)
     }

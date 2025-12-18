@@ -168,6 +168,10 @@ enum Instruction {
   CmpReg32(Int, Int) // 32-bit compare
   CmpImm(Int, Int)
   CmpImm32(Int, Int) // 32-bit compare immediate
+  // ADDS XZR/WZR, Xn, #imm - add immediate and set flags (result discarded)
+  AddsImmZr(Int, Int, Bool) // rn, imm12, is_64
+  // CCMP Xn, #imm, #nzcv, cond - conditional compare immediate
+  CCmpImm(Int, Int, Int, Int, Bool) // rn, imm5, nzcv, cond, is_64
   Cset(Int, Int)
   Csel(Int, Int, Int, Int)
   FcselD(Int, Int, Int, Int)
@@ -178,6 +182,7 @@ enum Instruction {
   Cbz(Int, Int)
   Cbnz(Int, Int)
   BCondOffset(Int, Int)
+  CbnzOffset(Int, Bool, Int) // rt, is_64, offset_bytes - branch if not zero with immediate offset
   Brk(Int)
   Ret(Int)
   Br(Int)
@@ -190,6 +195,9 @@ enum Instruction {
   Nop
   // Alignment helper (emits multiple NOPs)
   AlignTo(Int)
+  // SIMD for popcnt
+  Cnt8B(Int, Int) // CNT Vd.8B, Vn.8B - count bits in each byte
+  AddvB(Int, Int) // ADDV Bd, Vn.8B - sum all bytes
 }
 
 ///|
@@ -420,6 +428,16 @@ fn Instruction::annotate(self : Instruction) -> String {
     CmpReg32(rn, rm) => "cmp w\{rn}, w\{rm}"
     CmpImm(rn, imm12) => "cmp x\{rn}, #\{imm12}"
     CmpImm32(rn, imm12) => "cmp w\{rn}, #\{imm12}"
+    AddsImmZr(rn, imm12, is_64) => {
+      let reg = if is_64 { "x" } else { "w" }
+      let zr = if is_64 { "xzr" } else { "wzr" }
+      "adds \{zr}, \{reg}\{rn}, #\{imm12}"
+    }
+    CCmpImm(rn, imm5, nzcv, cond, is_64) => {
+      let reg = if is_64 { "x" } else { "w" }
+      let cond_name = cond_name_str(cond)
+      "ccmp \{reg}\{rn}, #\{imm5}, #\{nzcv}, \{cond_name}"
+    }
     Cset(rd, cond) => {
       let cond_name = cond_name_str(cond)
       "cset x\{rd}, \{cond_name}"
@@ -447,6 +465,10 @@ fn Instruction::annotate(self : Instruction) -> String {
       let cond_name = cond_name_str(cond)
       "b.\{cond_name} .+\{offset_bytes}"
     }
+    CbnzOffset(rt, is_64, offset_bytes) => {
+      let reg = if is_64 { "x" } else { "w" }
+      "cbnz \{reg}\{rt}, .+\{offset_bytes}"
+    }
     Brk(imm16) => "brk #\{imm16}"
     Ret(_) => "ret"
     Br(rn) => "br x\{rn}"
@@ -456,6 +478,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     DmbIsh => "dmb ish"
     Nop => "nop"
     AlignTo(alignment) => "align to \{alignment} bytes"
+    Cnt8B(rd, rn) => "cnt v\{rd}.8b, v\{rn}.8b"
+    AddvB(rd, rn) => "addv b\{rd}, v\{rn}.8b"
   }
 }
 
@@ -1520,6 +1544,34 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x71 // 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    AddsImmZr(rn, imm12, is_64) => {
+      // ADDS XZR/WZR, Xn, #imm - add immediate with flags, result discarded
+      // 64-bit: 0xB1000000 | (imm12 << 10) | (Rn << 5) | 31 (XZR)
+      // 32-bit: 0x31000000 | (imm12 << 10) | (Rn << 5) | 31 (WZR)
+      let imm = imm12 & 0xFFF
+      let b0 = 31 | ((rn & 7) << 5) // Rd = 31 (XZR/WZR)
+      let b1 = ((rn >> 3) & 3) | ((imm & 63) << 2)
+      let b2 = (imm >> 6) & 63
+      let b3 = if is_64 { 0xB1 } else { 0x31 }
+      (b0, b1, b2, b3)
+    }
+    CCmpImm(rn, imm5, nzcv, cond, is_64) => {
+      // CCMP Xn, #imm5, #nzcv, cond - conditional compare immediate
+      // 64-bit: 0xFA400800 | (imm5 << 16) | (cond << 12) | (Rn << 5) | nzcv
+      // 32-bit: 0x7A400800 | (imm5 << 16) | (cond << 12) | (Rn << 5) | nzcv
+      let base = if is_64 { 0xFA400800 } else { 0x7A400800 }
+      let inst = base |
+        ((imm5 & 0x1F) << 16) |
+        ((cond & 0xF) << 12) |
+        ((rn & 0x1F) << 5) |
+        (nzcv & 0xF)
+      (
+        inst & 0xFF,
+        (inst >> 8) & 0xFF,
+        (inst >> 16) & 0xFF,
+        (inst >> 24) & 0xFF,
+      )
+    }
     Cset(rd, cond) => {
       let inv_cond = cond ^ 1
       let xe0 = 224
@@ -1566,6 +1618,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (inst >> 24) & 0xFF,
       )
     }
+    CbnzOffset(rt, is_64, offset_bytes) => {
+      // CBNZ Xt: 0xB5000000 | (imm19 << 5) | Rt
+      // CBNZ Wt: 0x35000000 | (imm19 << 5) | Rt
+      let imm19 = offset_bytes / 4
+      let base = if is_64 { 0xB5000000 } else { 0x35000000 }
+      let inst = base | ((imm19 & 0x7FFFF) << 5) | (rt & 0x1F)
+      (
+        inst & 0xFF,
+        (inst >> 8) & 0xFF,
+        (inst >> 16) & 0xFF,
+        (inst >> 24) & 0xFF,
+      )
+    }
     Brk(imm16) => {
       let inst = 0xD4200000 | ((imm16 & 0xFFFF) << 5)
       (
@@ -1603,6 +1668,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
     DmbIsh => (0xBF, 0x3B, 0x03, 0xD5)
     Nop => (31, 32, 3, 213)
     AlignTo(_) => abort("AlignTo does not have single instruction bytes")
+    Cnt8B(rd, rn) => {
+      // CNT Vd.8B, Vn.8B: 0x0E205800 | (Rn << 5) | Rd
+      let enc = 0x0E205800 | ((rn & 31) << 5) | (rd & 31)
+      let b0 = enc & 0xFF
+      let b1 = (enc >> 8) & 0xFF
+      let b2 = (enc >> 16) & 0xFF
+      let b3 = (enc >> 24) & 0xFF
+      (b0, b1, b2, b3)
+    }
+    AddvB(rd, rn) => {
+      // ADDV Bd, Vn.8B: 0x0E31B800 | (Rn << 5) | Rd
+      let enc = 0x0E31B800 | ((rn & 31) << 5) | (rd & 31)
+      let b0 = enc & 0xFF
+      let b1 = (enc >> 8) & 0xFF
+      let b2 = (enc >> 16) & 0xFF
+      let b3 = (enc >> 24) & 0xFF
+      (b0, b1, b2, b3)
+    }
   }
 }
 
@@ -2035,6 +2118,28 @@ pub fn MachineCode::emit_cmp_imm32(
 }
 
 ///|
+fn MachineCode::emit_adds_imm_zr(
+  self : MachineCode,
+  rn : Int,
+  imm12 : Int,
+  is_64 : Bool,
+) -> Unit {
+  AddsImmZr(rn, imm12, is_64).emit(self)
+}
+
+///|
+fn MachineCode::emit_ccmp_imm(
+  self : MachineCode,
+  rn : Int,
+  imm5 : Int,
+  nzcv : Int,
+  cond : Int,
+  is_64 : Bool,
+) -> Unit {
+  CCmpImm(rn, imm5, nzcv, cond, is_64).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_fcvtzs(
   self : MachineCode,
   rd : Int,
@@ -2398,6 +2503,16 @@ fn MachineCode::emit_b_cond_offset(
 ///|
 fn MachineCode::emit_brk(self : MachineCode, imm16 : Int) -> Unit {
   Brk(imm16).emit(self)
+}
+
+///|
+fn MachineCode::emit_cbnz_offset(
+  self : MachineCode,
+  rt : Int,
+  is_64 : Bool,
+  offset_bytes : Int,
+) -> Unit {
+  CbnzOffset(rt, is_64, offset_bytes).emit(self)
 }
 
 ///|
@@ -3013,6 +3128,18 @@ pub fn MachineCode::emit_fcmp_s(self : MachineCode, rn : Int, rm : Int) -> Unit 
 ///|
 pub fn MachineCode::emit_nop(self : MachineCode) -> Unit {
   Nop.emit(self)
+}
+
+///|
+/// CNT Vd.8B, Vn.8B - count bits in each byte
+pub fn MachineCode::emit_cnt_8b(self : MachineCode, rd : Int, rn : Int) -> Unit {
+  Cnt8B(rd, rn).emit(self)
+}
+
+///|
+/// ADDV Bd, Vn.8B - sum all bytes into Bd
+pub fn MachineCode::emit_addv_b(self : MachineCode, rd : Int, rn : Int) -> Unit {
+  AddvB(rd, rn).emit(self)
 }
 
 // ============ VCode to Machine Code ============

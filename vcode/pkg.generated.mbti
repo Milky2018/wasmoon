@@ -137,12 +137,12 @@ pub(all) struct VCodeBuilder {
 pub fn VCodeBuilder::add(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
 pub fn VCodeBuilder::add_param(Self, @abi.RegClass) -> @abi.VReg
 pub fn VCodeBuilder::add_result(Self, @abi.RegClass) -> Unit
-pub fn VCodeBuilder::ashr(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::ashr(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::band(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
 pub fn VCodeBuilder::bor(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
 pub fn VCodeBuilder::branch(Self, @abi.VReg, @block.VCodeBlock, @block.VCodeBlock) -> Unit
 pub fn VCodeBuilder::bxor(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::cmp(Self, @instr.CmpKind, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::cmp(Self, @instr.CmpKind, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::create_block(Self) -> @block.VCodeBlock
 pub fn VCodeBuilder::current_block(Self) -> @block.VCodeBlock?
 pub fn VCodeBuilder::fadd(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
@@ -155,19 +155,19 @@ pub fn VCodeBuilder::get_function(Self) -> @lower.VCodeFunction
 pub fn VCodeBuilder::iconst(Self, Int64) -> @abi.VReg
 pub fn VCodeBuilder::jump(Self, @block.VCodeBlock) -> Unit
 pub fn VCodeBuilder::load(Self, @instr.MemType, @abi.VReg, Int) -> @abi.VReg
-pub fn VCodeBuilder::lshr(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::lshr(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::mov(Self, @abi.VReg) -> @abi.VReg
 pub fn VCodeBuilder::mul(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
 pub fn VCodeBuilder::new(String) -> Self
 pub fn VCodeBuilder::print(Self) -> String
 pub fn VCodeBuilder::return_(Self, Array[@abi.VReg]) -> Unit
-pub fn VCodeBuilder::sdiv(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::shl(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::sdiv(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
+pub fn VCodeBuilder::shl(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::store(Self, @instr.MemType, @abi.VReg, @abi.VReg, Int) -> Unit
-pub fn VCodeBuilder::sub(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::sub(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::switch_to_block(Self, @block.VCodeBlock) -> Unit
 pub fn VCodeBuilder::trap(Self, String) -> Unit
-pub fn VCodeBuilder::udiv(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::udiv(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 
 // Type aliases
 

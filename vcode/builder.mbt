@@ -94,7 +94,7 @@ pub fn VCodeBuilder::sub(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
-  is_64~ : Bool = true,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Sub(is_64))
@@ -125,7 +125,7 @@ pub fn VCodeBuilder::sdiv(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
-  is_64~ : Bool = true,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(SDiv(is_64))
@@ -141,7 +141,7 @@ pub fn VCodeBuilder::udiv(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
-  is_64~ : Bool = true,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(UDiv(is_64))
@@ -204,7 +204,7 @@ pub fn VCodeBuilder::shl(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
-  is_64~ : Bool = true,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Shl(is_64))
@@ -220,7 +220,7 @@ pub fn VCodeBuilder::ashr(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
-  is_64~ : Bool = true,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(AShr(is_64))
@@ -236,7 +236,7 @@ pub fn VCodeBuilder::lshr(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
-  is_64~ : Bool = true,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(LShr(is_64))
@@ -385,7 +385,7 @@ pub fn VCodeBuilder::cmp(
   kind : @instr.CmpKind,
   a : @abi.VReg,
   b : @abi.VReg,
-  is_64~ : Bool = true,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
   let inst = @instr.VCodeInst::new(Cmp(kind, is_64))

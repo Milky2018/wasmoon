@@ -332,16 +332,19 @@ test "strength reduction: mul x, 2 -> shl x, 1" {
   let vcode_func = lower_function_optimized(builder.get_function())
   let output = vcode_func.print()
   // mul(a, 2) -> shl(a, 1)
-  let expected =
-    #|vcode mul_pow2_test(v0:int) -> int {
-    #|block0:
-    #|    v1 = ldi 2
-    #|    v3 = ldi 1
-    #|    v2 = shl v0, v3
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode mul_pow2_test(v0:int) -> int {
+      #|block0:
+      #|    v1 = ldi 2
+      #|    v3 = ldi 1
+      #|    v2 = shl32 v0, v3
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -357,16 +360,19 @@ test "strength reduction: mul x, 8 -> shl x, 3" {
   let vcode_func = lower_function_optimized(builder.get_function())
   let output = vcode_func.print()
   // mul(a, 8) -> shl(a, 3)
-  let expected =
-    #|vcode mul_pow2_8_test(v0:int) -> int {
-    #|block0:
-    #|    v1 = ldi 8
-    #|    v3 = ldi 3
-    #|    v2 = shl v0, v3
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode mul_pow2_8_test(v0:int) -> int {
+      #|block0:
+      #|    v1 = ldi 8
+      #|    v3 = ldi 3
+      #|    v2 = shl32 v0, v3
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -382,16 +388,19 @@ test "strength reduction: 4 * x -> shl x, 2" {
   let vcode_func = lower_function_optimized(builder.get_function())
   let output = vcode_func.print()
   // mul(4, a) -> shl(a, 2)
-  let expected =
-    #|vcode pow2_mul_test(v0:int) -> int {
-    #|block0:
-    #|    v1 = ldi 4
-    #|    v3 = ldi 2
-    #|    v2 = shl v0, v3
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode pow2_mul_test(v0:int) -> int {
+      #|block0:
+      #|    v1 = ldi 4
+      #|    v3 = ldi 2
+      #|    v2 = shl32 v0, v3
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -407,16 +416,19 @@ test "strength reduction: udiv x, 4 -> lshr x, 2" {
   let vcode_func = lower_function_optimized(builder.get_function())
   let output = vcode_func.print()
   // udiv(a, 4) -> lshr(a, 2)
-  let expected =
-    #|vcode udiv_pow2_test(v0:int) -> int {
-    #|block0:
-    #|    v1 = ldi 4
-    #|    v3 = ldi 2
-    #|    v2 = lshr v0, v3
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode udiv_pow2_test(v0:int) -> int {
+      #|block0:
+      #|    v1 = ldi 4
+      #|    v3 = ldi 2
+      #|    v2 = lshr32 v0, v3
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|

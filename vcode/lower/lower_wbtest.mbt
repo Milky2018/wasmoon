@@ -114,14 +114,17 @@ test "lower comparison" {
   builder.return_([cmp_result])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode cmp_test(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = cmp.sgt v0, v1
-    #|    ret v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode cmp_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = cmp32.sgt v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -148,18 +151,21 @@ test "lower conditional branch" {
   builder.return_([b])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode max(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = cmp.sgt v0, v1
-    #|    branch v2, block1, block2
-    #|block1:
-    #|    ret v0
-    #|block2:
-    #|    ret v1
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode max(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = cmp32.sgt v0, v1
+      #|    branch v2, block1, block2
+      #|block1:
+      #|    ret v0
+      #|block2:
+      #|    ret v1
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -244,16 +250,19 @@ test "lower shift operations" {
   builder.return_([ushr_res])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode shifts(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = shl v0, v1
-    #|    v3 = ashr v2, v1
-    #|    v4 = lshr v3, v1
-    #|    ret v4
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode shifts(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = shl32 v0, v1
+      #|    v3 = ashr32 v2, v1
+      #|    v4 = lshr32 v3, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -270,16 +279,22 @@ test "lower division operations" {
   builder.return_([sum])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode division(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = sdiv v0, v1
-    #|    v3 = udiv v0, v1
-    #|    v4 = add v2, v3
-    #|    ret v4
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode division(v0:int, v1:int) -> int {
+      #|block0:
+      #|    trap_if_zero32 #4 v1
+      #|    trap_if_div_overflow32 #4 v0, v1
+      #|    v2 = sdiv32 v0, v1
+      #|    trap_if_zero32 #4 v1
+      #|    v3 = udiv32 v0, v1
+      #|    v4 = add v2, v3
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -871,7 +886,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    f3 = ldf 0
       #|    v4 = ldi 0
       #|    v6 = ldi 0
-      #|    v5 = cmp.eq v0, v6
+      #|    v5 = cmp32.eq v0, v6
       #|    branch v5, block1, block5
       #|block1:
       #|    v11 = extend.u32_64 v4
@@ -928,11 +943,11 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    ret f1
       #|block5:
       #|    v7 = ldi 1
-      #|    v8 = cmp.eq v0, v7
+      #|    v8 = cmp32.eq v0, v7
       #|    branch v8, block2, block6
       #|block6:
       #|    v9 = ldi 2
-      #|    v10 = cmp.eq v0, v9
+      #|    v10 = cmp32.eq v0, v9
       #|    branch v10, block3, block4
       #|}
       #|
@@ -955,7 +970,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    d0 = ldf 10
       #|    x8 = ldi 0
       #|    x9 = ldi 0
-      #|    x10 = cmp.eq x0, x9
+      #|    x10 = cmp32.eq x0, x9
       #|    branch x10, block1, block5
       #|block1:
       #|    x9 = extend.u32_64 x8
@@ -1012,11 +1027,11 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    ret d2
       #|block5:
       #|    x9 = ldi 1
-      #|    x10 = cmp.eq x0, x9
+      #|    x10 = cmp32.eq x0, x9
       #|    branch x10, block2, block6
       #|block6:
       #|    x9 = ldi 2
-      #|    x10 = cmp.eq x0, x9
+      #|    x10 = cmp32.eq x0, x9
       #|    branch x10, block3, block4
       #|}
       #|
@@ -1185,7 +1200,7 @@ test "br_table with block arguments from WAT" {
       #|block0:
       #|    v7 = ldi 0
       #|    v9 = ldi 0
-      #|    v8 = cmp.eq v2, v9
+      #|    v8 = cmp32.eq v2, v9
       #|    branch v8, block3, block4
       #|block1(v3:int, v4:int):
       #|    ret v4

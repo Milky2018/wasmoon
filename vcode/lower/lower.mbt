@@ -322,9 +322,11 @@ fn lower_inst(
     @ir.Opcode::Fnearest => lower_unary_float(ctx, inst, block)
 
     // Bit counting operations
-    @ir.Opcode::Clz => lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
+    @ir.Opcode::Clz =>
+      lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
     @ir.Opcode::Ctz => lower_ctz(ctx, inst, block)
-    @ir.Opcode::Popcnt => lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
+    @ir.Opcode::Popcnt =>
+      lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
 
     // Floating point comparisons
     @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
@@ -357,8 +359,10 @@ fn lower_inst(
     @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
     @ir.Opcode::Uextend => lower_extend(ctx, inst, block, signed=false)
     @ir.Opcode::Sextend8 => lower_sextend_inplace(ctx, inst, block, from_bits=8)
-    @ir.Opcode::Sextend16 => lower_sextend_inplace(ctx, inst, block, from_bits=16)
-    @ir.Opcode::Sextend32 => lower_sextend_inplace(ctx, inst, block, from_bits=32)
+    @ir.Opcode::Sextend16 =>
+      lower_sextend_inplace(ctx, inst, block, from_bits=16)
+    @ir.Opcode::Sextend32 =>
+      lower_sextend_inplace(ctx, inst, block, from_bits=32)
     @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
     @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
     @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
@@ -475,7 +479,7 @@ fn lower_binary_int(
 }
 
 ///|
-/// Lower division with proper 32/64-bit selection
+/// Lower division with proper 32/64-bit selection and trapping
 fn lower_div(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -487,6 +491,18 @@ fn lower_div(
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let is_64 = result.ty is @ir.Type::I64
+    // Trap if divisor is zero (trap_code 4 = integer_overflow)
+    let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
+    trap_zero.add_use(Virtual(rhs))
+    block.add_inst(trap_zero)
+    // For signed division, also trap if INT_MIN / -1 (would overflow)
+    if signed {
+      let trap_overflow = @instr.VCodeInst::new(TrapIfDivOverflow(is_64, 4))
+      trap_overflow.add_use(Virtual(lhs))
+      trap_overflow.add_use(Virtual(rhs))
+      block.add_inst(trap_overflow)
+    }
+    // Emit division
     let opcode : @instr.VCodeOpcode = if signed {
       @instr.VCodeOpcode::SDiv(is_64)
     } else {
@@ -1037,6 +1053,11 @@ fn lower_rem(
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block) // a (dividend)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block) // b (divisor)
   let is_64 = result.ty is @ir.Type::I64
+
+  // Trap if divisor is zero (trap_code 4 = integer_overflow)
+  let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
+  trap_zero.add_use(Virtual(rhs))
+  block.add_inst(trap_zero)
 
   // Step 1: Compute quotient = a / b
   let quotient = ctx.vcode_func.new_vreg(Int)

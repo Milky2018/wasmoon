@@ -134,17 +134,17 @@ pub impl Show for VCodeInst
 pub(all) enum VCodeOpcode {
   Add
   AddImm(Int)
-  Sub
+  Sub(Bool)
   Mul
-  SDiv
-  UDiv
+  SDiv(Bool)
+  UDiv(Bool)
   And
   Or
   Xor
-  Shl
-  AShr
-  LShr
-  Rotr
+  Shl(Bool)
+  AShr(Bool)
+  LShr(Bool)
+  Rotr(Bool)
   Not
   FAdd(Bool)
   FSub(Bool)
@@ -171,7 +171,7 @@ pub(all) enum VCodeOpcode {
   LoadConst(Int64)
   LoadConstF32(Int)
   LoadConstF64(Int64)
-  Cmp(CmpKind)
+  Cmp(CmpKind, Bool)
   FCmp(FCmpKind)
   Extend(ExtendKind)
   Truncate
@@ -180,13 +180,15 @@ pub(all) enum VCodeOpcode {
   FDemote
   Bitcast
   Select
-  Clz
-  Popcnt
-  Rbit
+  Clz(Bool)
+  Popcnt(Bool)
+  Rbit(Bool)
   Nop
   TrapIfUgt(Int)
   FpuCmp(Bool)
   TrapIf(Cond, Int)
+  TrapIfZero(Bool, Int)
+  TrapIfDivOverflow(Bool, Int)
   FcvtToInt(Bool, Bool, Bool)
   FpuSel(Bool, Cond)
   FpuMaxnm(Bool)

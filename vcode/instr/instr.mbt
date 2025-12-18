@@ -178,6 +178,16 @@ pub(all) enum VCodeOpcode {
   // trap_code: 1=out_of_bounds, 2=type_mismatch, 3=bad_conversion, 4=integer_overflow
   TrapIf(Cond, Int)
 
+  // Trap if operand is zero (for division by zero)
+  // TrapIfZero(is_64, trap_code): CBNZ rn, skip; BRK #trap_code
+  // Uses: [rn], Defs: [] (traps if rn is zero)
+  TrapIfZero(Bool, Int)
+
+  // Trap if signed division would overflow (INT_MIN / -1)
+  // TrapIfDivOverflow(is_64, trap_code): checks if lhs == INT_MIN && rhs == -1
+  // Uses: [lhs, rhs], Defs: [] (traps if overflow would occur)
+  TrapIfDivOverflow(Bool, Int)
+
   // Raw float-to-int conversion (FCVTZS/FCVTZU without NaN/overflow checks)
   // FcvtToInt(is_f32, is_i64, is_signed): FCVTZS/FCVTZU Wd/Xd, Sn/Dn
   // Uses: [src_fp], Defs: [dst_int]
@@ -359,6 +369,18 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     TrapIfUgt(trap_code) => "trap_if_ugt #\{trap_code}"
     FpuCmp(is_f32) => if is_f32 { "fcmp.s" } else { "fcmp.d" }
     TrapIf(cond, trap_code) => "trap_if.\{cond} #\{trap_code}"
+    TrapIfZero(is_64, trap_code) =>
+      if is_64 {
+        "trap_if_zero #\{trap_code}"
+      } else {
+        "trap_if_zero32 #\{trap_code}"
+      }
+    TrapIfDivOverflow(is_64, trap_code) =>
+      if is_64 {
+        "trap_if_div_overflow #\{trap_code}"
+      } else {
+        "trap_if_div_overflow32 #\{trap_code}"
+      }
     FcvtToInt(is_f32, is_i64, is_signed) => {
       let src = if is_f32 { "f32" } else { "f64" }
       let dst = if is_i64 { "i64" } else { "i32" }

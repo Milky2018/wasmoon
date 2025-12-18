@@ -743,9 +743,12 @@ fn lower_inst_default(
     @ir.Opcode::Band => lower_binary_int(ctx, inst, block, @instr.And)
     @ir.Opcode::Bor => lower_binary_int(ctx, inst, block, @instr.Or)
     @ir.Opcode::Bxor => lower_binary_int(ctx, inst, block, @instr.Xor)
-    @ir.Opcode::Ishl => lower_shift(ctx, inst, block, fn(is_64) { @instr.Shl(is_64) })
-    @ir.Opcode::Sshr => lower_shift(ctx, inst, block, fn(is_64) { @instr.AShr(is_64) })
-    @ir.Opcode::Ushr => lower_shift(ctx, inst, block, fn(is_64) { @instr.LShr(is_64) })
+    @ir.Opcode::Ishl =>
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.Shl(is_64) })
+    @ir.Opcode::Sshr =>
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.AShr(is_64) })
+    @ir.Opcode::Ushr =>
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.LShr(is_64) })
 
     // Integer comparisons
     @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)
