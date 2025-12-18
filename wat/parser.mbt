@@ -42,6 +42,8 @@ priv struct Parser {
   // Label stack for block/loop/if - stores (name, depth) pairs
   // depth is the index from the innermost block (0 = current block)
   label_stack : Array[String?]
+  // Reference to module types for inline type resolution in call_indirect
+  mut types : Array[@types.FuncType]
 }
 
 ///|
@@ -58,6 +60,7 @@ fn Parser::new(input : String) -> Parser raise WatError {
     memory_names: {},
     table_names: {},
     label_stack: [],
+    types: [],
   }
 }
 
@@ -1872,6 +1875,9 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
     }
   }
 
+  // Share types array with parser for inline type resolution in call_indirect
+  self.types = mod_.types
+
   // Restore lexer state for main parsing pass
   self.lexer.pos = saved_pos
   self.lexer.line = saved_line
@@ -2719,6 +2725,8 @@ fn Parser::parse_plain_instruction(
       // (call_indirect ...)  - empty type
       let mut table_idx = 0
       let mut type_idx = -1
+      let inline_params : Array[@types.ValueType] = []
+      let inline_results : Array[@types.ValueType] = []
 
       // Check for optional table index/name before the type
       match self.current {
@@ -2748,10 +2756,23 @@ fn Parser::parse_plain_instruction(
             type_idx = self.parse_type_idx()
             self.expect_rparen()
           }
-          Keyword("param") | Keyword("result") => {
-            // Skip inline param/result - they should match the type
-            while self.current != RParen {
+          Keyword("param") => {
+            // Parse inline param types
+            self.advance()
+            // Skip optional name
+            if self.current is Id(_) {
               self.advance()
+            }
+            while self.current != RParen {
+              inline_params.push(self.parse_value_type())
+            }
+            self.expect_rparen()
+          }
+          Keyword("result") => {
+            // Parse inline result types
+            self.advance()
+            while self.current != RParen {
+              inline_results.push(self.parse_value_type())
             }
             self.expect_rparen()
           }
@@ -2768,7 +2789,8 @@ fn Parser::parse_plain_instruction(
         }
       }
       if type_idx < 0 {
-        type_idx = 0 // Default to type 0 if not specified
+        // No explicit (type $t), need to find or create type from inline annotations
+        type_idx = self.find_or_create_func_type(inline_params, inline_results)
       }
       @types.Instruction::CallIndirect(type_idx, table_idx)
     }
@@ -3218,6 +3240,45 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
   } else {
     @types.BlockType::MultiValue(results)
   }
+}
+
+///|
+/// Find an existing function type that matches the given params/results,
+/// or create a new one if not found.
+fn Parser::find_or_create_func_type(
+  self : Parser,
+  params : Array[@types.ValueType],
+  results : Array[@types.ValueType],
+) -> Int {
+  // Search existing types for a match
+  for i, ft in self.types {
+    if ft.params.length() == params.length() &&
+      ft.results.length() == results.length() {
+      let mut match_ = true
+      for j in 0..<params.length() {
+        if params[j] != ft.params[j] {
+          match_ = false
+          break
+        }
+      }
+      if match_ {
+        for j in 0..<results.length() {
+          if results[j] != ft.results[j] {
+            match_ = false
+            break
+          }
+        }
+      }
+      if match_ {
+        return i
+      }
+    }
+  }
+  // No match found, create a new type
+  let new_type = @types.FuncType::{ params, results }
+  let idx = self.types.length()
+  self.types.push(new_type)
+  idx
 }
 
 ///|
