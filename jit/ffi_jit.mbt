@@ -202,7 +202,7 @@ pub fn free_memory(mem_ptr : Int64) -> Unit {
 }
 
 ///|
-pub using @jit_ffi {c_jit_write_i64}
+pub using @jit_ffi {c_jit_write_i64, c_jit_read_i64}
 
 ///|
 /// Initialize memory with data at offset
