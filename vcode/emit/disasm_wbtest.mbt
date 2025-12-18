@@ -409,3 +409,231 @@ test "cmp_imm_truncates_large_values" {
   let encoded_imm12 = (inst >> 10) & 0xFFF
   inspect(encoded_imm12, content="3809") // This proves truncation happened!
 }
+
+///|
+/// Test Cranelift-style pre-indexed stores for prologue
+test "emit_str_pre - GPR pre-indexed store" {
+  let mc = MachineCode::new()
+  // STR X19, [SP, #-16]! - single GPR push
+  mc.emit_str_pre(19, 31, -16)
+  // STR X20, [SP, #-8]!
+  mc.emit_str_pre(20, 31, -8)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: f30f1ff8  str x19, [sp, #-16]!
+      #|  0004: f48f1ff8  str x20, [sp, #-8]!
+      #|
+    ),
+  )
+}
+
+///|
+/// Test Cranelift-style pre-indexed stores for FPR pairs
+test "emit_stp_d_pre - FPR pair pre-indexed store" {
+  let mc = MachineCode::new()
+  // STP D8, D9, [SP, #-16]! - FPR pair push
+  mc.emit_stp_d_pre(8, 9, 31, -16)
+  // STP D10, D11, [SP, #-32]!
+  mc.emit_stp_d_pre(10, 11, 31, -32)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: e827bf6d  stp d8, d9, [sp, #-16]!
+      #|  0004: ea2fbe6d  stp d10, d11, [sp, #-32]!
+      #|
+    ),
+  )
+}
+
+///|
+/// Test Cranelift-style pre-indexed store for single FPR
+test "emit_str_d_pre - FPR pre-indexed store" {
+  let mc = MachineCode::new()
+  // STR D8, [SP, #-16]! - single FPR push
+  mc.emit_str_d_pre(8, 31, -16)
+  // STR D15, [SP, #-8]!
+  mc.emit_str_d_pre(15, 31, -8)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: e80f1ffc  str d8, [sp, #-16]!
+      #|  0004: ef8f1ffc  str d15, [sp, #-8]!
+      #|
+    ),
+  )
+}
+
+///|
+/// Test Cranelift-style post-indexed loads for epilogue
+test "emit_ldr_post - GPR post-indexed load" {
+  let mc = MachineCode::new()
+  // LDR X19, [SP], #16 - single GPR pop
+  mc.emit_ldr_post(19, 31, 16)
+  // LDR X20, [SP], #8
+  mc.emit_ldr_post(20, 31, 8)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: f30741f8  ldr x19, [sp], #16
+      #|  0004: f48740f8  ldr x20, [sp], #8
+      #|
+    ),
+  )
+}
+
+///|
+/// Test Cranelift-style post-indexed loads for FPR pairs
+test "emit_ldp_d_post - FPR pair post-indexed load" {
+  let mc = MachineCode::new()
+  // LDP D8, D9, [SP], #16 - FPR pair pop
+  mc.emit_ldp_d_post(8, 9, 31, 16)
+  // LDP D10, D11, [SP], #32
+  mc.emit_ldp_d_post(10, 11, 31, 32)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: e827c16c  ldp d8, d9, [sp], #16
+      #|  0004: ea2fc26c  ldp d10, d11, [sp], #32
+      #|
+    ),
+  )
+}
+
+///|
+/// Test Cranelift-style post-indexed load for single FPR
+test "emit_ldr_d_post - FPR post-indexed load" {
+  let mc = MachineCode::new()
+  // LDR D8, [SP], #16 - single FPR pop
+  mc.emit_ldr_d_post(8, 31, 16)
+  // LDR D15, [SP], #8
+  mc.emit_ldr_d_post(15, 31, 8)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: e80741fc  ldr d8, [sp], #16
+      #|  0004: ef8740fc  ldr d15, [sp], #8
+      #|
+    ),
+  )
+}
+
+///|
+/// Test offset-based STP/LDP for GPRs (not pre/post indexed)
+test "emit_stp_ldp_offset - GPR pairs with offset" {
+  let mc = MachineCode::new()
+  // STP X19, X20, [SP, #0]
+  mc.emit_stp_offset(19, 20, 31, 0)
+  // STP X21, X22, [SP, #16]
+  mc.emit_stp_offset(21, 22, 31, 16)
+  // LDP X19, X20, [SP, #0]
+  mc.emit_ldp_offset(19, 20, 31, 0)
+  // LDP X21, X22, [SP, #16]
+  mc.emit_ldp_offset(21, 22, 31, 16)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: f35300a9  stp x19, x20, [sp, #0]
+      #|  0004: f55b01a9  stp x21, x22, [sp, #16]
+      #|  0008: f35340a9  ldp x19, x20, [sp, #0]
+      #|  000c: f55b41a9  ldp x21, x22, [sp, #16]
+      #|
+    ),
+  )
+}
+
+///|
+/// Test offset-based STP/LDP for FPRs (D registers)
+test "emit_stp_ldp_d_offset - FPR pairs with offset" {
+  let mc = MachineCode::new()
+  // STP D8, D9, [SP, #0]
+  mc.emit_stp_d_offset(8, 9, 31, 0)
+  // STP D10, D11, [SP, #16]
+  mc.emit_stp_d_offset(10, 11, 31, 16)
+  // LDP D8, D9, [SP, #0]
+  mc.emit_ldp_d_offset(8, 9, 31, 0)
+  // LDP D10, D11, [SP, #16]
+  mc.emit_ldp_d_offset(10, 11, 31, 16)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: e827006d  stp d8, d9, [sp, #0]
+      #|  0004: ea2f016d  stp d10, d11, [sp, #16]
+      #|  0008: e827406d  ldp d8, d9, [sp, #0]
+      #|  000c: ea2f416d  ldp d10, d11, [sp, #16]
+      #|
+    ),
+  )
+}
+
+///|
+/// Test complete Cranelift-style prologue sequence
+test "cranelift_style_prologue_sequence" {
+  let mc = MachineCode::new()
+  // Step 1: Save FP/LR with fixed -16 pre-indexed
+  mc.emit_stp_pre(29, 30, 31, -16)
+  // MOV X29, SP (set frame pointer)
+  mc.emit_mov_reg(29, 31)
+  // Step 2: Save GPRs with pre-indexed pushes
+  mc.emit_stp_pre(19, 20, 31, -16)
+  mc.emit_str_pre(21, 31, -16) // Single GPR
+  // Step 3: Save FPRs with pre-indexed pushes
+  mc.emit_stp_d_pre(8, 9, 31, -16)
+  mc.emit_str_d_pre(10, 31, -16) // Single FPR
+  // Step 4: Allocate remaining stack (spill + outgoing)
+  mc.emit_sub_imm(31, 31, 64)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  0004: fd031faa  mov x29, x31
+      #|  0008: f353bfa9  stp x19, x20, [sp, #-16]!
+      #|  000c: f50f1ff8  str x21, [sp, #-16]!
+      #|  0010: e827bf6d  stp d8, d9, [sp, #-16]!
+      #|  0014: ea0f1ffc  str d10, [sp, #-16]!
+      #|  0018: ff0301d1  sub sp, sp, #64
+      #|
+    ),
+  )
+}
+
+///|
+/// Test complete Cranelift-style epilogue sequence
+test "cranelift_style_epilogue_sequence" {
+  let mc = MachineCode::new()
+  // Step 1: Deallocate remaining stack
+  mc.emit_add_imm(31, 31, 64)
+  // Step 2: Restore FPRs with post-indexed pops (reverse order)
+  mc.emit_ldr_d_post(10, 31, 16) // Single FPR first
+  mc.emit_ldp_d_post(8, 9, 31, 16)
+  // Step 3: Restore GPRs with post-indexed pops (reverse order)
+  mc.emit_ldr_post(21, 31, 16) // Single GPR first
+  mc.emit_ldp_post(19, 20, 31, 16)
+  // Step 4: Restore FP/LR with post-indexed pop
+  mc.emit_ldp_post(29, 30, 31, 16)
+  // Return
+  mc.emit_ret(30)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: ff030191  add sp, sp, #64
+      #|  0004: ea0741fc  ldr d10, [sp], #16
+      #|  0008: e827c16c  ldp d8, d9, [sp], #16
+      #|  000c: f50741f8  ldr x21, [sp], #16
+      #|  0010: f353c1a8  ldp x19, x20, [sp], #16
+      #|  0014: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0018: c0035fd6  ret
+      #|
+    ),
+  )
+}

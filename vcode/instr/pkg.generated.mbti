@@ -101,9 +101,13 @@ pub(all) struct VCodeInst {
   opcode : VCodeOpcode
   defs : Array[@abi.Writable]
   uses : Array[@abi.Reg]
+  use_constraints : Array[@abi.OperandConstraint]
+  def_constraints : Array[@abi.OperandConstraint]
 }
 pub fn VCodeInst::add_def(Self, @abi.Writable) -> Unit
+pub fn VCodeInst::add_def_fixed(Self, @abi.Writable, @abi.PReg) -> Unit
 pub fn VCodeInst::add_use(Self, @abi.Reg) -> Unit
+pub fn VCodeInst::add_use_fixed(Self, @abi.Reg, @abi.PReg) -> Unit
 pub fn VCodeInst::new(VCodeOpcode) -> Self
 pub impl Show for VCodeInst
 
@@ -163,7 +167,9 @@ pub(all) enum VCodeOpcode {
   Clz
   Ctz
   Popcnt
+  Rbit
   Nop
+  TrapIfUgt(Int)
   BoundsCheck(Int, Int)
   AddShifted(ShiftType, Int)
   SubShifted(ShiftType, Int)
@@ -177,7 +183,7 @@ pub(all) enum VCodeOpcode {
   TypeCheckIndirect(Int)
   StackLoad(Int)
   StackStore(Int)
-  LoadStackParam(Int, @abi.RegClass)
+  LoadStackParam(Int, @abi.RegClass, Int)
   MemoryGrow(Int)
   MemorySize
   MemoryFill
@@ -186,6 +192,11 @@ pub(all) enum VCodeOpcode {
   TableSet(Int)
   GlobalGet(Int)
   GlobalSet(Int)
+  LoadPtr(MemType, Int)
+  StorePtr(MemType, Int)
+  CallPtr(Int, Int)
+  AdjustSP(Int)
+  StoreToStack(Int)
 }
 pub impl Show for VCodeOpcode
 

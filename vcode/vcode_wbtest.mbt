@@ -487,7 +487,7 @@ test "AAPCS64 calling convention registers" {
   let arg_gprs = @abi.aapcs64_arg_gprs()
   inspect(arg_gprs, content="[x0, x1, x2, x3, x4, x5, x6, x7]") // x0-x7
   let ret_gprs = @abi.aapcs64_ret_gprs()
-  inspect(ret_gprs, content="[x0, x1]") // x0-x1
+  inspect(ret_gprs, content="[x0, x1, x2, x3, x4, x5, x6, x7]") // x0-x1
   let callee_saved = @abi.aapcs64_callee_saved()
   inspect(
     callee_saved,
@@ -496,9 +496,12 @@ test "AAPCS64 calling convention registers" {
   let scratch_regs = @abi.allocatable_scratch_regs()
   inspect(scratch_regs, content="[x8, x9, x10, x11, x12, x13, x14, x15]") // x8-x15
   let callee_saved_regs = @abi.allocatable_callee_saved_regs()
-  inspect(callee_saved_regs, content="[x23, x25, x26, x27, x28]") // x19, x23-x28
+  inspect(
+    callee_saved_regs,
+    content="[x20, x21, x22, x23, x24, x25, x26, x27, x28]",
+  ) // x19, x23-x28
   let arg_fprs = @abi.aapcs64_arg_fprs()
   inspect(arg_fprs, content="[d0, d1, d2, d3, d4, d5, d6, d7]") // d0-d7
   let ret_fprs = @abi.aapcs64_ret_fprs()
-  inspect(ret_fprs, content="[d0, d1, d2, d3]") // d0-d3
+  inspect(ret_fprs, content="[d0, d1, d2, d3, d4, d5, d6, d7]") // d0-d3
 }

@@ -4,8 +4,9 @@
 ///|
 fn collect_used_callee_saved(
   func : @lower.VCodeFunction,
-  needs_extra_results : Bool,
+  _needs_sret : Bool,
 ) -> Array[Int] {
+  // v3 ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
   let used : @hashset.HashSet[Int] = @hashset.new()
   let mut has_calls = false
 
@@ -13,10 +14,6 @@ fn collect_used_callee_saved(
   // These are defined in the prologue via `mov xN, x(3+i)`
   for preg in func.param_pregs {
     if preg is Some(p) && is_callee_saved_alloc(p.index) {
-      // X23 is reserved for extra_buffer when needs_extra_results
-      if needs_extra_results && p.index == 23 {
-        continue
-      }
       used.add(p.index)
     }
   }
@@ -26,6 +23,7 @@ fn collect_used_callee_saved(
       // MemoryGrow, MemorySize, MemoryFill, and MemoryCopy also use BLR internally to call C functions
       if inst.opcode
         is (CallIndirect(_, _)
+        | CallPtr(_, _)
         | MemoryGrow(_)
         | MemorySize
         | MemoryFill
@@ -36,18 +34,16 @@ fn collect_used_callee_saved(
         if def.reg is Physical(preg) &&
           preg.class is Int &&
           is_callee_saved_alloc(preg.index) {
-          // X23 is reserved for extra_buffer when needs_extra_results
-          if needs_extra_results && preg.index == 23 {
-            continue
-          }
           used.add(preg.index)
         }
       }
     }
   }
   // If the function makes any calls, we must save LR (X30)
+  // Note: X20-X24 are no longer pre-loaded in prologue (following Cranelift's approach)
+  // They are loaded on-demand from vmctx and only need saving if used by regalloc
   if has_calls {
-    used.add(30)
+    used.add(30) // LR
   }
   // Sort the registers for consistent ordering
   let result : Array[Int] = []
@@ -92,84 +88,151 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
 }
 
 ///|
-/// Emit prologue to save callee-saved registers and set up parameters (v2 using JITStackFrame)
+/// Emit prologue for ABI v3
+///
+/// Stack Frame Layout (from high to low address):
+/// ┌───────────────────────────┐
+/// │  Caller's Stack Args      │ (if any)
+/// ├═══════════════════════════┤ ← SP at function entry
+/// │  Frame Pointer (X29)      │ ← Setup area (16 bytes)
+/// ├───────────────────────────┤
+/// │  Link Register (X30)      │
+/// ├───────────────────────────┤ ← FP points here after setup
+/// │  Clobbered Callee-Saves   │ (X19-X28 as needed)
+/// ├───────────────────────────┤
+/// │  Clobbered FPRs           │ (V8-V15 as needed)
+/// ├───────────────────────────┤
+/// │  Spill Slots              │ (register spill area)
+/// ├───────────────────────────┤
+/// │  Outgoing Arguments       │ (for calls with stack args)
+/// └═══════════════════════════┘ ← SP after prologue
+///
+/// ABI v3 Parameter Passing:
+/// - X0 = callee_vmctx (cached to X19)
+/// - X1 = caller_vmctx (unused in current impl)
+/// - X2-X7 = user integer params (up to 6)
+/// - V0-V7 = user float params (S for f32, D for f64)
+/// Emit stack pointer adjustment for arbitrary sizes (Cranelift-style)
+///
+/// Handles any size by using:
+/// - ADD/SUB with imm12 for values <= 4095
+/// - Load constant to X16 + ADD/SUB reg for larger values
+fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
+  if amount == 0 {
+    return
+  }
+  let (abs_amount, is_sub) = if amount < 0 {
+    (-amount, true)
+  } else {
+    (amount, false)
+  }
+  if abs_amount <= 4095 {
+    // Use immediate form
+    if is_sub {
+      self.emit_sub_imm(31, 31, abs_amount)
+    } else {
+      self.emit_add_imm(31, 31, abs_amount)
+    }
+  } else {
+    // Load constant to X16, then use register form
+    self.emit_load_imm64(16, abs_amount.to_int64())
+    if is_sub {
+      self.emit_sub_reg(31, 31, 16)
+    } else {
+      self.emit_add_reg(31, 31, 16)
+    }
+  }
+}
+
+///|
 fn MachineCode::emit_prologue(
   self : MachineCode,
   stack_frame : JITStackFrame,
   params : Array[@abi.VReg],
   param_pregs : Array[@abi.PReg?],
 ) -> Unit {
-  // Use pre-calculated values from stack_frame
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
-  let frame_size = stack_frame.total_size
-  let fpr_save_offset = stack_frame.fpr_save_offset
-  let needs_extra_results = stack_frame.needs_extra_results
-  let calls_multi_value = stack_frame.calls_multi_value
 
-  // Allocate stack frame first using SUB
-  self.emit_sub_imm(31, 31, frame_size)
+  // Cranelift-style prologue:
+  // 1. Save FP/LR with fixed -16 pre-indexed (avoids SImm7 overflow)
+  // 2. Save clobbered GPRs with -16 pre-indexed pushes
+  // 3. Save clobbered FPRs with -16 pre-indexed pushes
+  // 4. Allocate remaining stack (spill + outgoing) with emit_sp_adjust
 
-  // Save GPRs using STP with signed offset
-  let num_regs = saved_gprs.length()
-  let mut i = 0
-  let mut pair_idx = 0
-  while i < num_regs {
-    let reg1 = saved_gprs[i]
-    let has_reg2 = i + 1 < num_regs
-    let offset = pair_idx * 16
-    if has_reg2 {
-      // We have a pair: use STP
-      let reg2 = saved_gprs[i + 1]
-      self.emit_stp_offset(reg1, reg2, 31, offset)
-      i = i + 2
-    } else {
-      // Odd number: use single STR for the last register
-      self.emit_str_imm(reg1, 31, offset)
-      i = i + 1
+  // Step 1: Save FP/LR with fixed -16 pre-indexed
+  // stp x29, x30, [sp, #-16]!
+  if stack_frame.has_setup_area {
+    self.emit_stp_pre(29, 30, 31, -16)
+    // mov x29, sp (set frame pointer)
+    self.emit_mov_reg(29, 31)
+  }
+
+  // Step 2: Save callee-saved GPRs with pre-indexed pushes (Cranelift style)
+  // Cranelift approach: handle remainder first, then reverse iterate pairs
+  // This ensures save/restore order matches perfectly
+  let num_gprs = saved_gprs.length()
+  if num_gprs > 0 {
+    // Handle remainder first (if odd number of registers)
+    if num_gprs % 2 == 1 {
+      let last_reg = saved_gprs[num_gprs - 1]
+      // str last_reg, [sp, #-16]!
+      self.emit_str_pre(last_reg, 31, -16)
     }
-    pair_idx = pair_idx + 1
+
+    // Reverse iterate pairs: from the last pair to the first
+    let num_pairs = num_gprs / 2
+    let mut pi = num_pairs - 1
+    while pi >= 0 {
+      let reg1 = saved_gprs[pi * 2]
+      let reg2 = saved_gprs[pi * 2 + 1]
+      // stp reg1, reg2, [sp, #-16]!
+      self.emit_stp_pre(reg1, reg2, 31, -16)
+      pi = pi - 1
+    }
   }
 
-  // Save FPRs (D8-D15) after GPRs
+  // Step 3: Save callee-saved FPRs with pre-indexed pushes (Cranelift style)
+  // Cranelift approach: handle remainder first, then reverse iterate pairs
   let num_fprs = saved_fprs.length()
-  let mut fi = 0
-  let mut fpr_pair_idx = 0
-  while fi + 1 < num_fprs {
-    let reg1 = saved_fprs[fi]
-    let reg2 = saved_fprs[fi + 1]
-    let offset = fpr_save_offset + fpr_pair_idx * 16
-    self.emit_stp_d_offset(reg1, reg2, 31, offset)
-    fi = fi + 2
-    fpr_pair_idx = fpr_pair_idx + 1
-  }
-  // Handle last register if odd count
-  if fi < num_fprs {
-    let reg = saved_fprs[fi]
-    let offset = fpr_save_offset + fpr_pair_idx * 16
-    self.emit_str_d_imm(reg, 31, offset)
-  }
+  if num_fprs > 0 {
+    // Handle remainder first (if odd number of registers)
+    if num_fprs % 2 == 1 {
+      let last_reg = saved_fprs[num_fprs - 1]
+      // str d_reg, [sp, #-16]!
+      self.emit_str_d_pre(last_reg, 31, -16)
+    }
 
-  // Now move parameters to reserved registers
-  // Load from context structure pointed by X19
-  self.emit_ldr_imm(20, 19, @abi.CTX_FUNC_TABLE_OFFSET)
-  self.emit_ldr_imm(21, 19, @abi.CTX_MEMORY_BASE_OFFSET)
-  self.emit_ldr_imm(22, 19, @abi.CTX_MEMORY_SIZE_OFFSET)
-  // Load indirect_table (single table, table 0) for fast access
-  // X24 = [X19 + 8]  -> load indirect_table (table 0)
-  self.emit_ldr_imm(24, 19, @abi.CTX_INDIRECT_TABLE_OFFSET)
-
-  // Set up X23 for extra results buffer
-  if needs_extra_results {
-    self.emit_mov_reg(23, 7)
-  } else if calls_multi_value {
-    let buffer_offset = stack_frame.call_buffer_offset
-    self.emit_add_imm(23, 31, buffer_offset)
+    // Reverse iterate pairs: from the last pair to the first
+    let num_pairs = num_fprs / 2
+    let mut pi = num_pairs - 1
+    while pi >= 0 {
+      let reg1 = saved_fprs[pi * 2]
+      let reg2 = saved_fprs[pi * 2 + 1]
+      // stp d_reg1, d_reg2, [sp, #-16]!
+      self.emit_stp_d_pre(reg1, reg2, 31, -16)
+      pi = pi - 1
+    }
   }
 
-  // Move user arguments from registers to their allocated registers
-  let actual_param_base = @abi.PARAM_BASE_REG
-  let actual_max_reg_params = @abi.MAX_REG_PARAMS
+  // Step 4: Allocate remaining stack space (spill slots + outgoing args)
+  // This uses emit_sp_adjust which handles any size correctly
+  let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
+  if remaining_size > 0 {
+    self.emit_sp_adjust(-remaining_size)
+  }
+
+  // Step 5: Cache vmctx to X19 (the only pinned register, like Cranelift's X21)
+  // Following Cranelift: vmctx is params[0], passed in X0
+  // All other values (memory_base, memory_size, func_table, table0_base) are
+  // loaded on-demand from vmctx, following Cranelift's approach.
+  self.emit_mov_reg(19, 0)
+
+  // Step 6: Move arguments from ABI registers to allocated registers
+  // Following Cranelift: all params use X0-X7 (int) or V0-V7 (float)
+  // vmctx is params[0] and comes in X0, already cached to X19 above
+  let max_int_params = @abi.MAX_REG_PARAMS // 8
+  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
@@ -180,31 +243,30 @@ fn MachineCode::emit_prologue(
     }
     match param.class {
       Float32 | Float64 =>
-        if float_idx < actual_max_reg_params {
-          let x_src = actual_param_base + param_idx
-          match param.class {
-            Float32 => {
-              let s_dest = match dest_preg {
-                Some(preg) => preg.index
-                None => float_idx
+        // Float params come in V0-V7 directly
+        if float_idx < max_float_params {
+          let v_src = float_idx // V0, V1, V2, ...
+          match dest_preg {
+            Some(preg) =>
+              if preg.index != v_src {
+                match param.class {
+                  Float32 => self.emit_fmov_s(preg.index, v_src)
+                  _ => self.emit_fmov_d(preg.index, v_src)
+                }
               }
-              self.emit_fmov_w_to_s(s_dest, x_src)
-            }
-            _ => {
-              let d_dest = match dest_preg {
-                Some(preg) => preg.index
-                None => float_idx
-              }
-              self.emit_fmov_x_to_d(d_dest, x_src)
-            }
+            None => ()
           }
           float_idx = float_idx + 1
         }
       Int =>
-        if int_idx < actual_max_reg_params {
-          let x_src = actual_param_base + param_idx
+        // Integer params come in X0-X7
+        if int_idx < max_int_params {
+          let x_src = int_idx // X0, X1, X2, ...
           match dest_preg {
-            Some(preg) => self.emit_mov_reg(preg.index, x_src)
+            Some(preg) =>
+              if preg.index != x_src {
+                self.emit_mov_reg(preg.index, x_src)
+              }
             None => ()
           }
           int_idx = int_idx + 1
@@ -217,28 +279,32 @@ fn MachineCode::emit_prologue(
 /// Emit machine code for a VCode function
 pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
   let mc = MachineCode::new()
-  // Check if we need extra results buffer (>2 int or >2 float returns)
-  let needs_extra_results = func.needs_extra_results_ptr()
-  // Check if we call functions that return more than 2 values
-  // In that case, we need to allocate a local buffer and use X23 to point to it
+  // v3 ABI: Check if we need SRET (more than 8 int or 8 float returns)
+  let needs_sret = func.needs_extra_results_ptr()
+  // Check if we call functions that return more than register capacity
+  // In that case, we need to allocate a local buffer and use X8 (SRET) to point to it
   let calls_multi_value = func.calls_multi_value_function()
-  // We need X23 if either we return multi-value OR we call multi-value functions
-  let uses_x23 = needs_extra_results || calls_multi_value
+  // We need SRET if either we return multi-value OR we call multi-value functions
+  let uses_sret = needs_sret || calls_multi_value
   // Collect callee-saved GPRs that this function clobbers
-  let clobbered = collect_used_callee_saved(func, uses_x23)
+  let clobbered = collect_used_callee_saved(func, uses_sret)
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
   let clobbered_fprs = collect_used_callee_saved_fprs(func)
 
   // Build stack frame layout using JITStackFrame
+  // has_calls is true if function needs SRET, calls multi-value functions, or has outgoing args
+  let has_calls = needs_sret ||
+    calls_multi_value ||
+    func.max_outgoing_args_size > 0
   let stack_frame = JITStackFrame::build(
     clobbered,
     clobbered_fprs,
     func.num_spill_slots,
-    needs_extra_results~,
-    calls_multi_value~,
+    has_calls~,
+    outgoing_args_size=func.max_outgoing_args_size,
   )
 
-  // Emit prologue: save callee-saved registers, set up X20/X21/X22, and move params
+  // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
   mc.emit_prologue(stack_frame, func.params, func.param_pregs)
 
   // Emit function body
@@ -342,42 +408,23 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_ror_reg(rd, rn, rm)
     }
-    Rotl => {
-      // Rotate left by n is rotate right by (64 - n)
-      // rotl(x, n) = rotr(x, 64 - n)
-      // We need to compute 64 - rm, then rotate right
-      let rd = wreg_num(inst.defs[0])
-      let rn = reg_num(inst.uses[0])
-      let rm = reg_num(inst.uses[1])
-      // Use scratch register x16 to compute (64 - rm)
-      self.emit_movz(16, 64, 0) // x16 = 64
-      self.emit_sub_reg(16, 16, rm) // x16 = 64 - rm
-      self.emit_ror_reg(rd, rn, 16) // rd = rotr(rn, x16)
-    }
+    Rotl =>
+      // DEPRECATED: Rotl is now expanded in lower phase to LoadConst(0) + Sub + Rotr
+      // This handler should never be reached
+      abort("Rotl should be expanded in lower phase")
     Not => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.emit_mvn(rd, rn)
     }
-    SRem => {
-      // Signed remainder: rem = a - (a / b) * b
-      // Using MSUB: rd = ra - rn * rm
-      // 1. Compute quotient: x16 = a / b (SDIV)
-      // 2. Compute remainder: rd = a - x16 * b (MSUB)
-      let rd = wreg_num(inst.defs[0])
-      let rn = reg_num(inst.uses[0]) // dividend (a)
-      let rm = reg_num(inst.uses[1]) // divisor (b)
-      self.emit_sdiv(16, rn, rm) // x16 = a / b
-      self.emit_msub(rd, 16, rm, rn) // rd = a - x16 * b
-    }
-    URem => {
-      // Unsigned remainder: rem = a - (a / b) * b
-      let rd = wreg_num(inst.defs[0])
-      let rn = reg_num(inst.uses[0]) // dividend (a)
-      let rm = reg_num(inst.uses[1]) // divisor (b)
-      self.emit_udiv(16, rn, rm) // x16 = a / b (unsigned)
-      self.emit_msub(rd, 16, rm, rn) // rd = a - x16 * b
-    }
+    SRem =>
+      // DEPRECATED: SRem is now expanded in lower phase to SDiv + Msub
+      // This handler should never be reached
+      abort("SRem should be expanded in lower phase")
+    URem =>
+      // DEPRECATED: URem is now expanded in lower phase to UDiv + Msub
+      // This handler should never be reached
+      abort("URem should be expanded in lower phase")
     Bitcast => {
       // Reinterpret bits between int and float
       // IMPORTANT: For f32 bitcast, we must preserve exact bits (including NaN payloads)
@@ -708,14 +755,15 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       self.emit_clz(rd, rn)
     }
-    Ctz => {
-      // Count trailing zeros: CTZ(x) = CLZ(RBIT(x))
-      // First reverse the bits, then count leading zeros
+    Ctz =>
+      // DEPRECATED: Ctz is now expanded in lower phase to Rbit + Clz
+      // This handler should never be reached
+      abort("Ctz should be expanded in lower phase")
+    Rbit => {
+      // Reverse bits in register
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      // Use X16 as scratch register
-      self.emit_rbit(16, rn) // X16 = RBIT(rn)
-      self.emit_clz(rd, 16) // rd = CLZ(X16)
+      self.emit_rbit(rd, rn)
     }
     Popcnt => {
       // Population count (count number of 1 bits)
@@ -1103,56 +1151,25 @@ fn MachineCode::emit_instruction(
       }
     }
     Nop => self.emit_nop()
-    BoundsCheck(offset, access_size) => {
-      // Memory bounds check: trap if wasm_addr + offset + access_size > memory_size
-      // Uses: [wasm_addr]
-      // X22 = memory_size (stored in prologue)
-      // We use X16 as a temporary register for calculation (platform scratch, not allocatable)
-      //
-      // IMPORTANT: WASM addresses are 32-bit unsigned. We must zero-extend to 64-bit
-      // to avoid overflow issues when the 32-bit value is negative (like 0xFFFFFFFF).
-      let wasm_addr = reg_num(inst.uses[0])
-      // First zero-extend the 32-bit wasm_addr to X16 (clear upper 32 bits)
-      self.emit_mov_reg32(16, wasm_addr)
-      // Compute end_addr = X16 + offset + access_size
-      // Handle offset as unsigned 32-bit, then add access_size
-      let offset_u64 = offset
-        .reinterpret_as_uint()
-        .to_uint64()
-        .reinterpret_as_int64()
-      let end_offset = offset_u64 + access_size.to_int64()
-      if end_offset > 0L {
-        // Compute end_addr = X16 + (offset + access_size)
-        if end_offset <= 4095L {
-          // Use ADD immediate for small offsets: X16 = X16 + end_offset
-          self.emit_add_imm(16, 16, end_offset.to_int())
-        } else {
-          // For large offsets, load the offset into X17 first, then ADD register
-          self.emit_load_imm64(17, end_offset)
-          // ADD X16, X16, X17
-          self.emit_add_reg(16, 16, 17)
-        }
-      }
-      // CMP X16, X22 (compare end_addr with memory_size)
-      self.emit_cmp_reg(16, 22)
-      // B.HI trap (branch if unsigned higher, meaning out of bounds)
-      // We need to emit: B.HI +8 (skip the BRK if in bounds)
-      // B.LS is condition code 9 (LS = lower or same, unsigned <=)
-      // So we use B.LS to skip the trap
-      // B.cond encoding: imm19 in bits [23:5], cond in bits [3:0]
-      // We want to jump +2 instructions (8 bytes) to skip the BRK
-      let skip_imm19 = 2 // Skip 2 instructions = 8 bytes
-      let b_ls_cond = 9 // LS condition
-      let b0 = b_ls_cond | ((skip_imm19 & 7) << 5)
-      let b1 = (skip_imm19 >> 3) & 0xFF
-      let b2 = (skip_imm19 >> 11) & 0xFF
-      let b3 = 0x54 // B.cond opcode
-      self.emit_inst(b0, b1, b2, b3)
-      // BRK #1 - trap with code 1 for out of bounds memory access
-      // BRK encoding: 0xD4200000 + (imm16 << 5)
-      // BRK #1 = 0xD4200020
-      self.emit_inst(0x20, 0x00, 0x20, 0xD4)
+    TrapIfUgt(trap_code) => {
+      // Trap if lhs > rhs (unsigned comparison)
+      // Uses: [lhs, rhs]
+      // Emits: CMP lhs, rhs; B.LS skip; BRK #trap_code
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      // CMP lhs, rhs
+      self.emit_cmp_reg(lhs, rhs)
+      // B.LS +8 (skip BRK if lhs <= rhs)
+      // LS condition code = 9
+      self.emit_b_cond_offset(9, 8)
+      // BRK #trap_code
+      self.emit_brk(trap_code)
     }
+    BoundsCheck(_offset, _access_size) =>
+      // DEPRECATED: BoundsCheck is now expanded in lower phase to:
+      // Extend + AddImm/Add + LoadPtr + TrapIfUgt
+      // This handler should never be reached
+      abort("BoundsCheck should be expanded in lower phase")
     // AArch64-specific: shifted operand instructions
     AddShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
@@ -1210,156 +1227,187 @@ fn MachineCode::emit_instruction(
     }
     CallIndirect(num_args, num_results) => {
       // Call through a function pointer in a register
-      // ABI: args in X0-X7 (AAPCS64 compatible), context via X20 (callee-saved)
-      // Return values: X0, X1 for first two int results, extra results via buffer pointed by X7/X23
+      // v3 ABI: X0=callee_vmctx, X1=caller_vmctx, X2-X7=user int params, V0-V7=float params
+      // Return values: X0-X7 for up to 8 int results, V0-V7 for up to 8 float results
+      // Integer and float params are counted SEPARATELY!
       // Uses: [func_ptr, arg0, arg1, ...]
       let func_ptr = reg_num(inst.uses[0])
       // Save function pointer to X17 (intra-procedure call scratch register)
-      // Note: X18 is reserved on Apple platforms, must NOT use it
       self.emit_mov_reg(17, func_ptr) // MOV X17, func_ptr
-      // Calculate how many args go on stack (args beyond the first 8)
-      let actual_param_base_call = @abi.PARAM_BASE_REG
-      let call_max_reg_args = 8
-      let stack_args = if num_args > call_max_reg_args {
-        num_args - call_max_reg_args
+
+      // v3 ABI: Separate integer and float arguments
+      // Integer params go in X2-X7 (up to 6), float params go in V0-V7 (up to 8)
+      let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6
+      let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8
+
+      // Classify arguments by type
+      let int_args : Array[(Int, @abi.RegClass, Int)] = [] // (src_reg, class, use_idx)
+      let float_args : Array[(Int, @abi.RegClass, Int)] = [] // (src_reg, class, use_idx)
+      for i in 0..<num_args {
+        let src = reg_num(inst.uses[i + 1])
+        let arg_class = match inst.uses[i + 1] {
+          Physical(preg) => preg.class
+          Virtual(vreg) => vreg.class
+        }
+        match arg_class {
+          Int => int_args.push((src, arg_class, i + 1))
+          Float32 | Float64 => float_args.push((src, arg_class, i + 1))
+        }
+      }
+
+      // Calculate stack space needed
+      let int_stack_args = if int_args.length() > max_int_reg_args {
+        int_args.length() - max_int_reg_args
       } else {
         0
       }
-      let reg_args_count = @cmp.minimum(num_args, call_max_reg_args)
-      // Allocate stack space for:
-      // 1. Overflow args (args 8+)
-      // 2. Temp space for register args (to avoid register clobbering during parallel copy)
-      let overflow_space = stack_args * 8
-      let temp_space = reg_args_count * 8
+      let float_stack_args = if float_args.length() > max_float_reg_args {
+        float_args.length() - max_float_reg_args
+      } else {
+        0
+      }
+      let overflow_space = (int_stack_args + float_stack_args) * 8
+      // Temp space for all args to avoid register clobbering
+      let temp_space = num_args * 8
       let total_stack_space = (overflow_space + temp_space + 15) / 16 * 16
       if total_stack_space > 0 {
-        self.emit_sub_imm(31, 31, total_stack_space) // SUB SP, SP, #total_stack_space
+        self.emit_sub_imm(31, 31, total_stack_space)
       }
-      // Move arguments using stack-based parallel copy to avoid register conflicts
-      // This approach doesn't require reserving any GPRs (like X11-X15)
-      //
-      // Layout on stack after SUB SP:
-      // [SP + 0 ... overflow_space-1]: overflow args (args 8+)
-      // [SP + overflow_space ... overflow_space + temp_space - 1]: temp space for register args
-      if num_args > 0 {
-        // Phase 1: Store all register args to temp space on stack
-        // This saves their values before we load to destination registers
-        for i in 0..<reg_args_count {
-          let src = reg_num(inst.uses[i + 1])
-          let temp_offset = overflow_space + i * 8
-          let arg_class = match inst.uses[i + 1] {
-            Physical(preg) => preg.class
-            Virtual(vreg) => vreg.class
-          }
-          if src >= @abi.spill_slot_base {
-            // Already spilled - we'll load directly from spill slot in Phase 3
-            // Store a marker value (we won't actually read this)
-            ()
-          } else {
-            match arg_class {
-              Int => self.emit_str_imm(src, 31, temp_offset)
-              Float32 => {
-                self.emit_fmov_s_to_w(16, src)
-                self.emit_str_imm(16, 31, temp_offset)
-              }
-              Float64 => {
-                self.emit_fmov_d_to_x(16, src)
-                self.emit_str_imm(16, 31, temp_offset)
-              }
-            }
-          }
+
+      // Phase 1: Save all arguments to temp space on stack
+      for i in 0..<num_args {
+        let src = reg_num(inst.uses[i + 1])
+        let temp_offset = overflow_space + i * 8
+        let arg_class = match inst.uses[i + 1] {
+          Physical(preg) => preg.class
+          Virtual(vreg) => vreg.class
         }
-        // Phase 2: Store overflow args (args 8+) to call stack area
-        for i in call_max_reg_args..<num_args {
-          let src = reg_num(inst.uses[i + 1])
-          let stack_offset = (i - call_max_reg_args) * 8
-          let arg_class = match inst.uses[i + 1] {
-            Physical(preg) => preg.class
-            Virtual(vreg) => vreg.class
-          }
-          if src >= @abi.spill_slot_base {
-            // Spilled: load from spill slot to X16, then store to call stack
-            let spill_slot = src - @abi.spill_slot_base
-            let spill_offset = spill_base_offset +
-              total_stack_space +
-              spill_slot * 8
-            match arg_class {
-              Int => {
-                self.emit_ldr_imm(16, 31, spill_offset)
-                self.emit_str_imm(16, 31, stack_offset)
-              }
-              Float32 => {
-                self.emit_ldr_d_imm(16, 31, spill_offset)
-                self.emit_fmov_s_to_w(16, 16)
-                self.emit_str_imm(16, 31, stack_offset)
-              }
-              Float64 => {
-                self.emit_ldr_d_imm(16, 31, spill_offset)
-                self.emit_fmov_d_to_x(16, 16)
-                self.emit_str_imm(16, 31, stack_offset)
-              }
-            }
-          } else {
-            match arg_class {
-              Int => self.emit_str_imm(src, 31, stack_offset)
-              Float32 => {
-                self.emit_fmov_s_to_w(16, src)
-                self.emit_str_imm(16, 31, stack_offset)
-              }
-              Float64 => {
-                self.emit_fmov_d_to_x(16, src)
-                self.emit_str_imm(16, 31, stack_offset)
-              }
-            }
-          }
-        }
-        // Phase 3: Load from temp space (or spill slot) to destination registers
-        for i in 0..<reg_args_count {
-          let src = reg_num(inst.uses[i + 1])
-          let dst = i + actual_param_base_call
-          let temp_offset = overflow_space + i * 8
-          let arg_class = match inst.uses[i + 1] {
-            Physical(preg) => preg.class
-            Virtual(vreg) => vreg.class
-          }
-          if src >= @abi.spill_slot_base {
-            // Spilled: load directly from spill slot
-            let spill_slot = src - @abi.spill_slot_base
-            let spill_offset = spill_base_offset +
-              total_stack_space +
-              spill_slot * 8
-            match arg_class {
-              Int => self.emit_ldr_imm(dst, 31, spill_offset)
-              Float32 => {
-                self.emit_ldr_d_imm(16, 31, spill_offset)
-                self.emit_fmov_s_to_w(dst, 16)
-              }
-              Float64 => {
-                self.emit_ldr_d_imm(16, 31, spill_offset)
-                self.emit_fmov_d_to_x(dst, 16)
-              }
-            }
-          } else {
-            // Load from temp space on stack
-            self.emit_ldr_imm(dst, 31, temp_offset)
+        if src >= @abi.spill_slot_base {
+          // Already spilled - skip, we'll load from spill slot later
+          ()
+        } else {
+          match arg_class {
+            Int => self.emit_str_imm(src, 31, temp_offset)
+            Float32 => self.emit_str_s_imm(src, 31, temp_offset)
+            Float64 => self.emit_str_d_imm(src, 31, temp_offset)
           }
         }
       }
-      // If callee returns more than 2 values, it needs a buffer pointer in X7
-      // Note: This overwrites arg4 if it was set, so multi-return functions
-      // can only have up to 4 user args when using the buffer
-      if num_results > 2 {
-        self.emit_mov_reg(7, 23) // MOV X7, X23
+
+      // Phase 2: Load integer arguments to X2-X7
+      let int_reg_count = @cmp.minimum(int_args.length(), max_int_reg_args)
+      for i in 0..<int_reg_count {
+        let (src, _, use_idx) = int_args[i]
+        let dst = @abi.USER_PARAM_BASE_REG + i // X2, X3, X4, ...
+        let temp_offset = overflow_space + (use_idx - 1) * 8
+        if src >= @abi.spill_slot_base {
+          let spill_slot = src - @abi.spill_slot_base
+          let spill_offset = spill_base_offset +
+            total_stack_space +
+            spill_slot * 8
+          self.emit_ldr_imm(dst, 31, spill_offset)
+        } else {
+          self.emit_ldr_imm(dst, 31, temp_offset)
+        }
       }
-      // Set up context for callee
-      // X19 already contains context_ptr (callee-saved)
-      // The callee's prologue will load from X19, no setup needed
-      // Call the function (from saved X17)
+
+      // Phase 3: Load float arguments to V0-V7
+      let float_reg_count = @cmp.minimum(
+        float_args.length(),
+        max_float_reg_args,
+      )
+      for i in 0..<float_reg_count {
+        let (src, arg_class, use_idx) = float_args[i]
+        let dst = i // V0, V1, V2, ...
+        let temp_offset = overflow_space + (use_idx - 1) * 8
+        if src >= @abi.spill_slot_base {
+          let spill_slot = src - @abi.spill_slot_base
+          let spill_offset = spill_base_offset +
+            total_stack_space +
+            spill_slot * 8
+          match arg_class {
+            Float32 => self.emit_ldr_s_imm(dst, 31, spill_offset)
+            Float64 => self.emit_ldr_d_imm(dst, 31, spill_offset)
+            _ => ()
+          }
+        } else {
+          match arg_class {
+            Float32 => self.emit_ldr_s_imm(dst, 31, temp_offset)
+            Float64 => self.emit_ldr_d_imm(dst, 31, temp_offset)
+            _ => ()
+          }
+        }
+      }
+
+      // Phase 4: Store overflow args to call stack
+      // Stack layout: [int_overflow..., float_overflow...]
+      // Int overflow args
+      for i in max_int_reg_args..<int_args.length() {
+        let (src, _, use_idx) = int_args[i]
+        let stack_idx = i - max_int_reg_args
+        let overflow_offset = stack_idx * 8
+        let temp_offset = overflow_space + (use_idx - 1) * 8
+        if src >= @abi.spill_slot_base {
+          let spill_slot = src - @abi.spill_slot_base
+          let spill_offset = spill_base_offset +
+            total_stack_space +
+            spill_slot * 8
+          self.emit_ldr_imm(16, 31, spill_offset) // Load from spill slot to X16
+          self.emit_str_imm(16, 31, overflow_offset) // Store to overflow area
+        } else {
+          self.emit_ldr_imm(16, 31, temp_offset) // Load from temp to X16
+          self.emit_str_imm(16, 31, overflow_offset) // Store to overflow area
+        }
+      }
+      // Float overflow args (after int overflow)
+      for i in max_float_reg_args..<float_args.length() {
+        let (src, arg_class, use_idx) = float_args[i]
+        let stack_idx = i - max_float_reg_args
+        let overflow_offset = int_stack_args * 8 + stack_idx * 8
+        let temp_offset = overflow_space + (use_idx - 1) * 8
+        if src >= @abi.spill_slot_base {
+          let spill_slot = src - @abi.spill_slot_base
+          let spill_offset = spill_base_offset +
+            total_stack_space +
+            spill_slot * 8
+          match arg_class {
+            Float32 => {
+              self.emit_ldr_w_imm(16, 31, spill_offset)
+              self.emit_str_w_imm(16, 31, overflow_offset)
+            }
+            Float64 => {
+              self.emit_ldr_imm(16, 31, spill_offset)
+              self.emit_str_imm(16, 31, overflow_offset)
+            }
+            _ => ()
+          }
+        } else {
+          match arg_class {
+            Float32 => {
+              self.emit_ldr_w_imm(16, 31, temp_offset)
+              self.emit_str_w_imm(16, 31, overflow_offset)
+            }
+            Float64 => {
+              self.emit_ldr_imm(16, 31, temp_offset)
+              self.emit_str_imm(16, 31, overflow_offset)
+            }
+            _ => ()
+          }
+        }
+      }
+
+      // Set up vmctx for callee (v3 ABI requires X0=callee_vmctx, X1=caller_vmctx)
+      self.emit_mov_reg(0, 19) // X0 = callee_vmctx
+      self.emit_mov_reg(1, 19) // X1 = caller_vmctx
+
+      // Call the function
       self.emit_blr(17)
-      // Restore X20 (func_table) after call
-      // X19 is callee-saved, so it still contains our context_ptr
-      // We need to reload func_table from X19
-      self.emit_ldr_imm(20, 19, @abi.CTX_FUNC_TABLE_OFFSET) // X20 = [X19 + 0]
+
+      // Restore stack
+      if total_stack_space > 0 {
+        self.emit_add_imm(31, 31, total_stack_space)
+      }
+      // Note: func_table is loaded on-demand from vmctx, no need to reload
       // Move results to destination registers
       // JIT ABI: integer returns in X0, X1; float returns in D0/S0, D1/S1
       // Two-phase is only needed when there's potential conflict:
@@ -1392,14 +1440,15 @@ fn MachineCode::emit_instruction(
         }
       }
 
-      // Handle integer results
-      // Need two-phase if: multiple results AND any dest is X0 or X1 (would conflict)
+      // v3 ABI: Handle integer results (up to 8 in X0-X7)
+      // Need two-phase if: multiple results AND any dest is in return register range (would conflict)
+      let max_int_ret = 8 // X0-X7
       let int_need_two_phase = int_results.length() >= 2 &&
         {
           let mut has_conflict = false
           for entry in int_results {
             let (rd, _) = entry
-            if rd == 0 || rd == 1 {
+            if rd >= 0 && rd < max_int_ret {
               has_conflict = true
               break
             }
@@ -1407,41 +1456,49 @@ fn MachineCode::emit_instruction(
           has_conflict
         }
       if int_need_two_phase {
-        // Two-phase: save to temps first
+        // Two-phase: save to temps first (X10-X17 as temps)
         let temp_int_base = 10
-        for entry in int_results {
-          let (_, abi_idx) = entry
-          if abi_idx < 2 {
+        let num_in_regs = if int_results.length() < max_int_ret {
+          int_results.length()
+        } else {
+          max_int_ret
+        }
+        for i in 0..<num_in_regs {
+          let (_, abi_idx) = int_results[i]
+          if abi_idx < max_int_ret {
             self.emit_mov_reg(temp_int_base + abi_idx, abi_idx)
           }
         }
         for entry in int_results {
           let (rd, abi_idx) = entry
-          if abi_idx < 2 {
+          if abi_idx < max_int_ret {
             let temp = temp_int_base + abi_idx
             if rd != temp {
               self.emit_mov_reg(rd, temp)
             }
           } else {
-            let offset = (abi_idx - 2) * 8
-            self.emit_ldr_imm(rd, 23, offset)
+            // Extra results from SRET buffer (X8)
+            let offset = (abi_idx - max_int_ret) * 8
+            self.emit_ldr_imm(rd, 8, offset)
           }
         }
       } else {
         // Direct move: no conflict
         for entry in int_results {
           let (rd, abi_idx) = entry
-          if abi_idx < 2 && rd != abi_idx {
+          if abi_idx < max_int_ret && rd != abi_idx {
             self.emit_mov_reg(rd, abi_idx)
-          } else if abi_idx >= 2 {
-            let offset = (abi_idx - 2) * 8
-            self.emit_ldr_imm(rd, 23, offset)
+          } else if abi_idx >= max_int_ret {
+            // Extra results from SRET buffer (X8)
+            let offset = (abi_idx - max_int_ret) * 8
+            self.emit_ldr_imm(rd, 8, offset)
           }
         }
       }
 
-      // Handle float results
+      // v3 ABI: Handle float results (up to 8 in V0-V7)
       // Need two-phase only when mixing f32 and f64 (D/S register aliasing)
+      let max_float_ret = 8 // V0-V7
       let mut has_f32 = false
       let mut has_f64 = false
       for entry in float_results {
@@ -1455,17 +1512,22 @@ fn MachineCode::emit_instruction(
         has_f64 &&
         float_results.length() >= 2
       if float_need_two_phase {
-        // Two-phase: save to temps first
+        // Two-phase: save to temps first (V24-V31 as temps)
         let temp_float_base = 24
-        for entry in float_results {
-          let (_, _, abi_idx) = entry
-          if abi_idx < 2 {
+        let num_in_regs = if float_results.length() < max_float_ret {
+          float_results.length()
+        } else {
+          max_float_ret
+        }
+        for i in 0..<num_in_regs {
+          let (_, _, abi_idx) = float_results[i]
+          if abi_idx < max_float_ret {
             self.emit_fmov_d(temp_float_base + abi_idx, abi_idx)
           }
         }
         for entry in float_results {
           let (class, rd, abi_idx) = entry
-          if abi_idx < 2 {
+          if abi_idx < max_float_ret {
             let temp = temp_float_base + abi_idx
             if rd != temp {
               match class {
@@ -1474,10 +1536,11 @@ fn MachineCode::emit_instruction(
               }
             }
           } else {
-            let offset = (abi_idx - 2) * 8
+            // Extra results from SRET buffer (X8)
+            let offset = (abi_idx - max_float_ret) * 8
             match class {
-              Float32 => self.emit_ldr_s_imm(rd, 23, offset)
-              _ => self.emit_ldr_d_imm(rd, 23, offset)
+              Float32 => self.emit_ldr_s_imm(rd, 8, offset)
+              _ => self.emit_ldr_d_imm(rd, 8, offset)
             }
           }
         }
@@ -1485,7 +1548,7 @@ fn MachineCode::emit_instruction(
         // Direct move: no conflict
         for entry in float_results {
           let (class, rd, abi_idx) = entry
-          if abi_idx < 2 {
+          if abi_idx < max_float_ret {
             if rd != abi_idx {
               match class {
                 Float32 => self.emit_fmov_s(rd, abi_idx)
@@ -1493,18 +1556,16 @@ fn MachineCode::emit_instruction(
               }
             }
           } else {
-            let offset = (abi_idx - 2) * 8
+            // Extra results from SRET buffer (X8)
+            let offset = (abi_idx - max_float_ret) * 8
             match class {
-              Float32 => self.emit_ldr_s_imm(rd, 23, offset)
-              _ => self.emit_ldr_d_imm(rd, 23, offset)
+              Float32 => self.emit_ldr_s_imm(rd, 8, offset)
+              _ => self.emit_ldr_d_imm(rd, 8, offset)
             }
           }
         }
       }
-      // Restore stack pointer if we allocated space for stack args
-      if total_stack_space > 0 {
-        self.emit_add_imm(31, 31, total_stack_space) // ADD SP, SP, #total_stack_space
-      }
+      // Stack already restored after blr, no need to restore again
     }
     TypeCheckIndirect(expected_type) => {
       // Check if actual_type == expected_type, trap if not
@@ -1559,11 +1620,35 @@ fn MachineCode::emit_instruction(
           self.emit_str_d_imm(rt, 31, spill_base_offset + offset) // STR Dt, [SP, #offset]
       }
     }
-    LoadStackParam(param_idx, class) => {
-      // Load stack parameter from [SP + frame_size + (param_idx - 8) * 8]
-      // Stack parameters are located above the current frame
-      let max_reg_params = 8
-      let stack_offset = frame_size + (param_idx - max_reg_params) * 8
+    LoadStackParam(param_idx, class, int_overflow_count) => {
+      // Load stack parameter from stack (Cranelift-style layout)
+      //
+      // Stack layout from callee's perspective:
+      // ┌───────────────────────────┐
+      // │  Caller's overflow args   │ ← [entry_SP + 0], [entry_SP + 8], ...
+      // ├═══════════════════════════┤ ← entry_SP (= current_SP + total_size)
+      // │  FP/LR (setup area)       │
+      // │  GPR saves                │
+      // │  FPR saves                │
+      // │  Spill slots              │
+      // │  Outgoing args            │
+      // └═══════════════════════════┘ ← current_SP
+      //
+      // param_idx >= 0: int overflow at index param_idx
+      // param_idx < 0: float overflow at index (-param_idx - 1)
+      //
+      // The offset calculation:
+      // - frame_size (= total_size) gets us from current_SP to entry_SP
+      // - param_idx * 8 for the specific argument
+      // Note: total_size already includes setup_area_size, so we don't add it again
+      let stack_offset = if param_idx >= 0 {
+        // Int stack param: directly at param_idx * 8
+        frame_size + param_idx * 8
+      } else {
+        // Float stack param: after all int overflow params
+        let float_idx = -param_idx - 1
+        frame_size + int_overflow_count * 8 + float_idx * 8
+      }
       let rd = wreg_num(inst.defs[0])
       match class {
         Int => self.emit_ldr_imm(rd, 31, stack_offset) // LDR Xd, [SP, #offset]
@@ -1600,33 +1685,14 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64(16, grow_ptr)
 
       // Call the function
-      self.annotate("blr x16  // memory_grow")
       self.emit_blr(16)
 
-      // Save result to stack temporarily (at spill_base_offset, which is scratch space)
-      // The subsequent BLR calls will clobber X0-X17, so we save to stack
-      // We use spill_base_offset which points to the spill slot area
-      self.emit_str_imm(0, 31, spill_base_offset) // STR X0, [SP, #spill_base_offset]
-
-      // After memory.grow, reload memory base and size into X21/X22
-      // since realloc may have moved the memory
-
-      // Call get_memory_base() and store to X21
-      let base_ptr = @jit_ffi.c_jit_get_memory_base_ptr()
-      self.emit_load_imm64(16, base_ptr)
-      self.annotate("blr x16  // get_memory_base")
-      self.emit_blr(16)
-      self.emit_mov_reg(21, 0) // MOV X21, X0
-
-      // Call get_memory_size_bytes() and store to X22
-      let size_ptr = @jit_ffi.c_jit_get_memory_size_bytes_ptr()
-      self.emit_load_imm64(16, size_ptr)
-      self.annotate("blr x16  // get_memory_size_bytes")
-      self.emit_blr(16)
-      self.emit_mov_reg(22, 0) // MOV X22, X0
-
-      // Load result from stack to the destination register
-      self.emit_ldr_imm(result_reg, 31, spill_base_offset) // LDR Xd, [SP, #spill_base_offset]
+      // Move result from X0 to destination
+      // Note: memory_base and memory_size are loaded on-demand from vmctx,
+      // and wasmoon_jit_memory_grow already updates the vmctx structure.
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0) // MOV result, X0
+      }
     }
     MemorySize => {
       // Call wasmoon_jit_memory_size()
@@ -1638,7 +1704,6 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64(16, size_ptr)
 
       // Call the function
-      self.annotate("blr x16  // memory_size")
       self.emit_blr(16)
 
       // Move result from X0 to destination
@@ -1663,7 +1728,6 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64(16, fill_ptr)
 
       // Call the function
-      self.annotate("blr x16  // memory_fill")
       self.emit_blr(16)
     }
     MemoryCopy => {
@@ -1683,34 +1747,35 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64(16, copy_ptr)
 
       // Call the function
-      self.annotate("blr x16  // memory_copy")
       self.emit_blr(16)
     }
     TableGet(_table_idx) => {
       // Load reference from indirect table
       // Uses: [elem_idx], Defs: [result]
-      // X24 = indirect_table base pointer
       // Table layout: each element is 16 bytes (func_ptr, type_idx)
-      // result = table[elem_idx].func_ptr = [X24 + elem_idx * 16]
+      // result = table[elem_idx].func_ptr = [table0_base + elem_idx * 16]
       let result_reg = wreg_num(inst.defs[0])
       let elem_idx_reg = reg_num(inst.uses[0])
-      // Calculate address: X16 = X24 + (elem_idx << 4)
-      // Use ADD (shifted register): ADD X16, X24, elem_idx, LSL #4
-      self.emit_add_shifted(16, 24, elem_idx_reg, @instr.ShiftType::Lsl, 4)
+      // Load table0_base from vmctx on-demand: X17 = [X19 + VMCTX_TABLE0_BASE_OFFSET]
+      self.emit_ldr_imm(17, 19, @abi.VMCTX_TABLE0_BASE_OFFSET)
+      // Calculate address: X16 = X17 + (elem_idx << 4)
+      // Use ADD (shifted register): ADD X16, X17, elem_idx, LSL #4
+      self.emit_add_shifted(16, 17, elem_idx_reg, @instr.ShiftType::Lsl, 4)
       // LDR result, [X16]
       self.emit_ldr_imm(result_reg, 16, 0)
     }
     TableSet(_table_idx) => {
       // Store reference to indirect table
       // Uses: [elem_idx, value], Defs: []
-      // X24 = indirect_table base pointer
       // Table layout: each element is 16 bytes (func_ptr, type_idx)
-      // table[elem_idx].func_ptr = value => [X24 + elem_idx * 16] = value
+      // table[elem_idx].func_ptr = value => [table0_base + elem_idx * 16] = value
       let elem_idx_reg = reg_num(inst.uses[0])
       let value_reg = reg_num(inst.uses[1])
-      // Calculate address: X16 = X24 + (elem_idx << 4)
-      // Use ADD (shifted register): ADD X16, X24, elem_idx, LSL #4
-      self.emit_add_shifted(16, 24, elem_idx_reg, @instr.ShiftType::Lsl, 4)
+      // Load table0_base from vmctx on-demand: X17 = [X19 + VMCTX_TABLE0_BASE_OFFSET]
+      self.emit_ldr_imm(17, 19, @abi.VMCTX_TABLE0_BASE_OFFSET)
+      // Calculate address: X16 = X17 + (elem_idx << 4)
+      // Use ADD (shifted register): ADD X16, X17, elem_idx, LSL #4
+      self.emit_add_shifted(16, 17, elem_idx_reg, @instr.ShiftType::Lsl, 4)
       // STR value, [X16]
       self.emit_str_imm(value_reg, 16, 0)
     }
@@ -1719,7 +1784,7 @@ fn MachineCode::emit_instruction(
       // Uses: [], Defs: [result]
       // X19 = context pointer
       // Load globals array pointer from context: X16 = [X19 + 48]
-      self.emit_ldr_imm(16, 19, @abi.CTX_GLOBALS_OFFSET)
+      self.emit_ldr_imm(16, 19, @abi.VMCTX_GLOBALS_OFFSET)
       // Load global value: result = [X16 + global_idx * 16]
       // Each WasmValue is 16 bytes (i64/f64 + tag)
       let result_reg = wreg_num(inst.defs[0])
@@ -1731,12 +1796,71 @@ fn MachineCode::emit_instruction(
       // Uses: [value], Defs: []
       // X19 = context pointer
       // Load globals array pointer from context: X16 = [X19 + 48]
-      self.emit_ldr_imm(16, 19, @abi.CTX_GLOBALS_OFFSET)
+      self.emit_ldr_imm(16, 19, @abi.VMCTX_GLOBALS_OFFSET)
       // Store global value: [X16 + global_idx * 16] = value
       // Each WasmValue is 16 bytes (i64/f64 + tag)
       let value_reg = reg_num(inst.uses[0])
       let offset = global_idx * 16
       self.emit_str_imm(value_reg, 16, offset)
+    }
+    LoadPtr(ty, offset) => {
+      // Raw pointer load (no bounds checking)
+      // Uses: [base], Defs: [result]
+      let result_reg = wreg_num(inst.defs[0])
+      let base_reg = reg_num(inst.uses[0])
+      self.emit_load(ty, result_reg, base_reg, offset)
+    }
+    StorePtr(ty, offset) => {
+      // Raw pointer store (no bounds checking)
+      // Uses: [base, value], Defs: []
+      let base_reg = reg_num(inst.uses[0])
+      let value_reg = reg_num(inst.uses[1])
+      self.emit_store(ty, value_reg, base_reg, offset)
+    }
+    CallPtr(_, _) =>
+      // Cranelift-style call: all arguments are already in place
+      //
+      // The lower phase generates:
+      // - AdjustSP to allocate stack space for overflow args
+      // - StoreToStack for each overflow arg
+      // - CallPtr with FixedReg constraints for register args
+      // - AdjustSP to deallocate stack space
+      //
+      // The regalloc phase processes constraints and inserts moves:
+      // - func_ptr is constrained to X17
+      // - callee_vmctx is constrained to X0
+      // - caller_vmctx is constrained to X1
+      // - int user args are constrained to X2-X7
+      // - float user args are constrained to V0-V7
+      // - results are constrained to X0/V0 etc.
+      //
+      // By the time we get here, everything is in the right place!
+      // Just emit the branch-and-link instruction.
+      self.emit_blr(17)
+    AdjustSP(delta) =>
+      // Adjust stack pointer by delta bytes
+      // Used in Cranelift-style call lowering for outgoing args
+      if delta > 0 {
+        self.emit_add_imm(31, 31, delta)
+      } else if delta < 0 {
+        self.emit_sub_imm(31, 31, -delta)
+      }
+    // delta == 0: nop
+    StoreToStack(offset) => {
+      // Store value to [SP + outgoing_args_offset + offset]
+      // Used in Cranelift-style call lowering for overflow args
+      // The outgoing args area is pre-allocated in prologue, so SP doesn't change
+      let actual_offset = stack_frame.outgoing_args_offset + offset
+      let src = reg_num(inst.uses[0])
+      let src_class = match inst.uses[0] {
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
+      }
+      match src_class {
+        Int => self.emit_str_imm(src, 31, actual_offset)
+        Float32 => self.emit_str_s_imm(src, 31, actual_offset)
+        Float64 => self.emit_str_d_imm(src, 31, actual_offset)
+      }
     }
   }
 }
@@ -1830,69 +1954,82 @@ fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> Int {
 }
 
 ///|
-/// Emit epilogue to restore callee-saved registers (v2 using JITStackFrame)
+/// Emit epilogue for ABI v3 (Cranelift-style)
+///
+/// Reverses the prologue operations in reverse order (Cranelift style):
+/// 1. Deallocate remaining stack space (spill + outgoing)
+/// 2. Restore callee-saved FPRs with post-indexed pops (forward pairs, then remainder)
+/// 3. Restore callee-saved GPRs with post-indexed pops (forward pairs, then remainder)
+/// 4. Restore FP/LR with post-indexed pop
 fn MachineCode::emit_epilogue(
   self : MachineCode,
   stack_frame : JITStackFrame,
 ) -> Unit {
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
-  let fpr_save_offset = stack_frame.fpr_save_offset
-  let frame_size = stack_frame.total_size
 
-  // Restore FPRs first (before GPRs)
+  // Step 1: Deallocate remaining stack space (spill slots + outgoing args)
+  let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
+  if remaining_size > 0 {
+    self.emit_sp_adjust(remaining_size)
+  }
+
+  // Step 2: Restore callee-saved FPRs with post-indexed pops (Cranelift style)
+  // Cranelift approach: forward iterate pairs, then handle remainder
+  // This mirrors the prologue which does: remainder first, then reverse pairs
   let num_fprs = saved_fprs.length()
-  let mut fi = 0
-  let mut fpr_pair_idx = 0
-  while fi + 1 < num_fprs {
-    let reg1 = saved_fprs[fi]
-    let reg2 = saved_fprs[fi + 1]
-    let offset = fpr_save_offset + fpr_pair_idx * 16
-    self.emit_ldp_d_offset(reg1, reg2, 31, offset)
-    fi = fi + 2
-    fpr_pair_idx = fpr_pair_idx + 1
-  }
-  // Handle last register if odd count
-  if fi < num_fprs {
-    let reg = saved_fprs[fi]
-    let offset = fpr_save_offset + fpr_pair_idx * 16
-    self.emit_ldr_d_imm(reg, 31, offset)
+  if num_fprs > 0 {
+    // Forward iterate pairs
+    let num_pairs = num_fprs / 2
+    let mut pi = 0
+    while pi < num_pairs {
+      let reg1 = saved_fprs[pi * 2]
+      let reg2 = saved_fprs[pi * 2 + 1]
+      // ldp d_reg1, d_reg2, [sp], #16
+      self.emit_ldp_d_post(reg1, reg2, 31, 16)
+      pi = pi + 1
+    }
+
+    // Handle remainder last (if odd number of registers)
+    if num_fprs % 2 == 1 {
+      let last_reg = saved_fprs[num_fprs - 1]
+      // ldr d_reg, [sp], #16
+      self.emit_ldr_d_post(last_reg, 31, 16)
+    }
   }
 
-  // Restore GPRs using LDP
-  let num_regs = saved_gprs.length()
-  let num_pairs = (num_regs + 1) / 2
-  let mut i = 0
-  let mut pair_idx = 0
-  while i < num_regs {
-    let reg1 = saved_gprs[i]
-    let has_reg2 = i + 1 < num_regs
-    let reg2 = if has_reg2 { saved_gprs[i + 1] } else { 31 }
-    let offset = pair_idx * 16
-    if pair_idx == num_pairs - 1 {
-      // Last load
-      if !has_reg2 {
-        // Odd number of registers: use single LDR for the last one
-        self.emit_ldr_imm(reg1, 31, offset)
-        self.emit_add_imm(31, 31, frame_size)
-      } else if pair_idx == 0 {
-        // Only one pair, use post-indexed directly
-        self.emit_ldp_post(reg1, reg2, 31, frame_size)
-      } else {
-        // Multiple pairs: load from offset, then add to SP
-        self.emit_ldp_offset(reg1, reg2, 31, offset)
-        self.emit_add_imm(31, 31, frame_size)
-      }
-    } else {
-      self.emit_ldp_offset(reg1, reg2, 31, offset)
+  // Step 3: Restore callee-saved GPRs with post-indexed pops (Cranelift style)
+  // Cranelift approach: forward iterate pairs, then handle remainder
+  let num_gprs = saved_gprs.length()
+  if num_gprs > 0 {
+    // Forward iterate pairs
+    let num_pairs = num_gprs / 2
+    let mut pi = 0
+    while pi < num_pairs {
+      let reg1 = saved_gprs[pi * 2]
+      let reg2 = saved_gprs[pi * 2 + 1]
+      // ldp reg1, reg2, [sp], #16
+      self.emit_ldp_post(reg1, reg2, 31, 16)
+      pi = pi + 1
     }
-    i = i + 2
-    pair_idx = pair_idx + 1
+
+    // Handle remainder last (if odd number of registers)
+    if num_gprs % 2 == 1 {
+      let last_reg = saved_gprs[num_gprs - 1]
+      // ldr reg, [sp], #16
+      self.emit_ldr_post(last_reg, 31, 16)
+    }
+  }
+
+  // Step 4: Restore FP/LR with post-indexed pop
+  if stack_frame.has_setup_area {
+    // ldp x29, x30, [sp], #16
+    self.emit_ldp_post(29, 30, 31, 16)
   }
 }
 
 ///|
-/// Emit terminator with epilogue for Return (v2 using JITStackFrame)
+/// Emit terminator with epilogue for Return (v3 ABI using JITStackFrame)
 fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
   term : @instr.VCodeTerminator,
@@ -1907,7 +2044,8 @@ fn MachineCode::emit_terminator_with_epilogue(
       self.emit_b(else_b)
     }
     Return(values) => {
-      // For multi-value returns, we need to carefully place each value
+      // v3 ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7
+      // If more returns are needed, SRET pointer is passed in X8
       // Two-phase approach is ONLY needed when there's potential for D/S clobbering:
       // - D_n and S_n share the same V_n register
       // - So mixing f32 and f64 returns can cause issues if source overlaps dest
@@ -1928,12 +2066,16 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
 
+      // v3 ABI: Use X0-X7 for integer returns (up to 8)
+      let max_int_ret_regs = @abi.MAX_INT_RET_REGS // 8
+      let max_float_ret_regs = @abi.MAX_FLOAT_RET_REGS // 8
+
       // Handle integer returns - need two-phase if sources conflict with destinations
       let int_need_two_phase = {
         let mut need = false
         for idx, entry in int_sources {
           let (src, _) = entry
-          if idx < 2 {
+          if idx < max_int_ret_regs {
             // Check if src will be overwritten by an earlier return
             for j in 0..<idx {
               if j == src {
@@ -1951,33 +2093,35 @@ fn MachineCode::emit_terminator_with_epilogue(
       let mut extra_offset = 0
       if int_need_two_phase {
         // Two-phase: save sources to temp registers first
-        let temp_int_base = 10 // X10, X11 as temps
-        for idx, entry in int_sources {
-          let (src, _) = entry
-          if idx < 2 {
-            self.emit_mov_reg(temp_int_base + idx, src)
-          }
+        let temp_int_base = 10 // X10-X17 as temps (we have up to 8)
+        let num_in_regs = if int_sources.length() < max_int_ret_regs {
+          int_sources.length()
+        } else {
+          max_int_ret_regs
+        }
+        for idx in 0..<num_in_regs {
+          let (src, _) = int_sources[idx]
+          self.emit_mov_reg(temp_int_base + idx, src)
         }
         // Then move from temps to destinations
-        for idx, entry in int_sources {
-          let (_, _) = entry
-          if idx < 2 {
-            self.emit_mov_reg(idx, temp_int_base + idx)
-          } else {
-            // For extra results, load from the temp if it was a register return
-            let src = int_sources[idx].0
-            self.emit_str_offset(src, 23, extra_offset)
-            extra_offset = extra_offset + 8
-          }
+        for idx in 0..<num_in_regs {
+          self.emit_mov_reg(idx, temp_int_base + idx)
+        }
+        // Extra results go to SRET buffer (X8)
+        for idx in max_int_ret_regs..<int_sources.length() {
+          let (src, _) = int_sources[idx]
+          self.emit_str_offset(src, @abi.REG_SRET, extra_offset)
+          extra_offset = extra_offset + 8
         }
       } else {
         // Direct move: no conflict
         for idx, entry in int_sources {
           let (src, _) = entry
-          if idx < 2 && src != idx {
+          if idx < max_int_ret_regs && src != idx {
             self.emit_mov_reg(idx, src)
-          } else if idx >= 2 {
-            self.emit_str_offset(src, 23, extra_offset)
+          } else if idx >= max_int_ret_regs {
+            // Extra results go to SRET buffer (X8)
+            self.emit_str_offset(src, @abi.REG_SRET, extra_offset)
             extra_offset = extra_offset + 8
           }
         }
@@ -1996,9 +2140,14 @@ fn MachineCode::emit_terminator_with_epilogue(
       let need_two_phase = has_f32 && has_f64 && float_sources.length() >= 2
       if need_two_phase {
         // Two-phase: copy to temps first, then to final registers
-        let temp_float_base = 28
-        for idx, entry in float_sources {
-          let (ty, src, _) = entry
+        let temp_float_base = 24 // V24-V31 as temps
+        let num_in_regs = if float_sources.length() < max_float_ret_regs {
+          float_sources.length()
+        } else {
+          max_float_ret_regs
+        }
+        for idx in 0..<num_in_regs {
+          let (ty, src, _) = float_sources[idx]
           let temp = temp_float_base + idx
           if src != temp {
             match ty {
@@ -2007,26 +2156,27 @@ fn MachineCode::emit_terminator_with_epilogue(
             }
           }
         }
-        for idx, entry in float_sources {
-          let (ty, _, _) = entry
+        for idx in 0..<num_in_regs {
+          let (ty, _, _) = float_sources[idx]
           let temp = temp_float_base + idx
-          if idx < 2 {
-            if temp != idx {
-              match ty {
-                F32 => self.emit_fmov_s(idx, temp)
-                _ => self.emit_fmov_d(idx, temp)
-              }
+          if temp != idx {
+            match ty {
+              F32 => self.emit_fmov_s(idx, temp)
+              _ => self.emit_fmov_d(idx, temp)
             }
-          } else {
-            self.emit_str_d_offset(temp, 23, extra_offset)
-            extra_offset = extra_offset + 8
           }
+        }
+        // Extra float results go to SRET buffer (X8)
+        for idx in max_float_ret_regs..<float_sources.length() {
+          let (_, src, _) = float_sources[idx]
+          self.emit_str_d_offset(src, @abi.REG_SRET, extra_offset)
+          extra_offset = extra_offset + 8
         }
       } else {
         // Direct move: no conflict possible
         for idx, entry in float_sources {
           let (ty, src, _) = entry
-          if idx < 2 {
+          if idx < max_float_ret_regs {
             if src != idx {
               match ty {
                 F32 => self.emit_fmov_s(idx, src)
@@ -2034,7 +2184,8 @@ fn MachineCode::emit_terminator_with_epilogue(
               }
             }
           } else {
-            self.emit_str_d_offset(src, 23, extra_offset)
+            // Extra float results go to SRET buffer (X8)
+            self.emit_str_d_offset(src, @abi.REG_SRET, extra_offset)
             extra_offset = extra_offset + 8
           }
         }

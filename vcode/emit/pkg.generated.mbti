@@ -7,6 +7,16 @@ import(
 )
 
 // Values
+pub const TYPE_F32 : Int = 2
+
+pub const TYPE_F64 : Int = 3
+
+pub const TYPE_I32 : Int = 0
+
+pub const TYPE_I64 : Int = 1
+
+pub fn emit_entry_trampoline(Array[Int], Array[Int]) -> MachineCode
+
 pub fn emit_function(@lower.VCodeFunction) -> MachineCode
 
 // Errors
@@ -42,23 +52,25 @@ type Instruction
 pub fn Instruction::emit(Self, MachineCode) -> Unit
 
 pub struct JITStackFrame {
+  setup_area_size : Int
   gpr_save_size : Int
   fpr_save_size : Int
   spill_size : Int
-  call_buffer_size : Int
+  outgoing_args_size : Int
   gpr_save_offset : Int
   fpr_save_offset : Int
   spill_offset : Int
-  call_buffer_offset : Int
+  outgoing_args_offset : Int
   total_size : Int
+  frame_size : Int
   saved_gprs : Array[Int]
   saved_fprs : Array[Int]
-  needs_extra_results : Bool
-  calls_multi_value : Bool
-  uses_x23 : Bool
+  has_setup_area : Bool
 }
-pub fn JITStackFrame::build(Array[Int], Array[Int], Int, needs_extra_results~ : Bool, calls_multi_value~ : Bool) -> Self
-pub fn JITStackFrame::get_call_buffer_offset(Self) -> Int
+pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int) -> Self
+pub fn JITStackFrame::get_fpr_save_offset(Self, Int) -> Int
+pub fn JITStackFrame::get_gpr_save_offset(Self, Int) -> Int
+pub fn JITStackFrame::get_outgoing_arg_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_spill_offset(Self, Int) -> Int
 
 pub struct MachineCode {
@@ -145,11 +157,14 @@ pub fn MachineCode::emit_fsub_d(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fsub_s(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_inst(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldp_d_offset(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldp_d_post(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldp_offset(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldp_post(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_d_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_d_post(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_imm_signed(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_post(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_reg_scaled(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_s_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_w_imm(Self, Int, Int, Int) -> Unit
@@ -181,10 +196,13 @@ pub fn MachineCode::emit_ror_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_scvtf(Self, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
 pub fn MachineCode::emit_sdiv(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_stp_d_offset(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_stp_d_pre(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_stp_offset(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_stp_pre(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_d_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_d_pre(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_pre(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_reg_scaled(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_s_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_w_imm(Self, Int, Int, Int) -> Unit

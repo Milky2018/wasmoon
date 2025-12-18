@@ -79,6 +79,14 @@ enum Instruction {
   LdpOffset(Int, Int, Int, Int) // rt1, rt2, rn, offset
   StpDOffset(Int, Int, Int, Int) // rt1(d), rt2(d), rn, offset (FPR)
   LdpDOffset(Int, Int, Int, Int) // rt1(d), rt2(d), rn, offset (FPR)
+  // Pre-indexed stores (Cranelift-style prologue)
+  StrPre(Int, Int, Int) // rt, rn, simm9 - STR Xt, [Xn, #simm9]!
+  StpDPre(Int, Int, Int, Int) // rt1, rt2, rn, imm7 - STP Dt1, Dt2, [Xn, #imm7]!
+  StrDPre(Int, Int, Int) // rt, rn, simm9 - STR Dt, [Xn, #simm9]!
+  // Post-indexed loads (Cranelift-style epilogue)
+  LdrPost(Int, Int, Int) // rt, rn, simm9 - LDR Xt, [Xn], #simm9
+  LdpDPost(Int, Int, Int, Int) // rt1, rt2, rn, imm7 - LDP Dt1, Dt2, [Xn], #imm7
+  LdrDPost(Int, Int, Int) // rt, rn, simm9 - LDR Dt, [Xn], #simm9
   // Sign/Zero extension
   SxtbX(Int, Int)
   SxthX(Int, Int)
@@ -289,6 +297,30 @@ fn Instruction::annotate(self : Instruction) -> String {
       let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
       "ldp d\{rt1}, d\{rt2}, [\{rn_name}, #\{offset}]"
     }
+    StrPre(rt, rn, simm9) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      "str x\{rt}, [\{rn_name}, #\{simm9}]!"
+    }
+    StpDPre(rt1, rt2, rn, imm) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      "stp d\{rt1}, d\{rt2}, [\{rn_name}, #\{imm}]!"
+    }
+    StrDPre(rt, rn, simm9) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      "str d\{rt}, [\{rn_name}, #\{simm9}]!"
+    }
+    LdrPost(rt, rn, simm9) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      "ldr x\{rt}, [\{rn_name}], #\{simm9}"
+    }
+    LdpDPost(rt1, rt2, rn, imm) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      "ldp d\{rt1}, d\{rt2}, [\{rn_name}], #\{imm}"
+    }
+    LdrDPost(rt, rn, simm9) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      "ldr d\{rt}, [\{rn_name}], #\{simm9}"
+    }
     SxtbX(rd, rn) => "sxtb x\{rd}, w\{rn}"
     SxthX(rd, rn) => "sxth x\{rd}, w\{rn}"
     Sxtw(rd, rn) => "sxtw x\{rd}, w\{rn}"
@@ -410,10 +442,17 @@ fn cond_name_str(cond : Int) -> String {
     1 => "ne"
     2 => "hs"
     3 => "lo"
+    4 => "mi"
+    5 => "pl"
+    6 => "vs"
+    7 => "vc"
+    8 => "hi"
+    9 => "ls"
     10 => "ge"
     11 => "lt"
     12 => "gt"
     13 => "le"
+    14 => "al"
     _ => "?\{cond}"
   }
 }
@@ -899,6 +938,66 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         ((rt2 & 31) << 10) |
         ((rn & 31) << 5) |
         (rt1 & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    StrPre(rt, rn, simm9) => {
+      // STR (immediate, pre-indexed): STR Xt, [Xn|SP, #simm9]!
+      // Encoding: 11 | 111 | 0 | 00 | 00 | imm9 | 11 | Rn | Rt
+      // = 0xF8000C00 | (imm9 << 12) | (Rn << 5) | Rt
+      let imm9 = simm9 & 0x1FF
+      let inst = 0xF8000C00 | (imm9 << 12) | ((rn & 31) << 5) | (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    StpDPre(rt1, rt2, rn, imm) => {
+      // STP (SIMD&FP, pre-indexed): STP Dt1, Dt2, [Xn|SP, #imm]!
+      // opc=01 for 64-bit, V=1
+      // Encoding: 01 | 101 | 1 | 011 | imm7 | Rt2 | Rn | Rt1
+      // = 0x6D800000 | (imm7 << 15) | (Rt2 << 10) | (Rn << 5) | Rt1
+      let imm7 = (imm / 8) & 0x7F
+      let inst = 0x6D800000 |
+        (imm7 << 15) |
+        ((rt2 & 31) << 10) |
+        ((rn & 31) << 5) |
+        (rt1 & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    StrDPre(rt, rn, simm9) => {
+      // STR (SIMD&FP, immediate, pre-indexed): STR Dt, [Xn|SP, #simm9]!
+      // size=11 for 64-bit, V=1
+      // Encoding: 11 | 111 | 1 | 00 | 00 | imm9 | 11 | Rn | Rt
+      // = 0xFC000C00 | (imm9 << 12) | (Rn << 5) | Rt
+      let imm9 = simm9 & 0x1FF
+      let inst = 0xFC000C00 | (imm9 << 12) | ((rn & 31) << 5) | (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    LdrPost(rt, rn, simm9) => {
+      // LDR (immediate, post-indexed): LDR Xt, [Xn|SP], #simm9
+      // Encoding: 11 | 111 | 0 | 00 | 01 | imm9 | 01 | Rn | Rt
+      // = 0xF8400400 | (imm9 << 12) | (Rn << 5) | Rt
+      let imm9 = simm9 & 0x1FF
+      let inst = 0xF8400400 | (imm9 << 12) | ((rn & 31) << 5) | (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    LdpDPost(rt1, rt2, rn, imm) => {
+      // LDP (SIMD&FP, post-indexed): LDP Dt1, Dt2, [Xn|SP], #imm
+      // opc=01 for 64-bit, V=1
+      // Encoding: 01 | 101 | 1 | 001 | imm7 | Rt2 | Rn | Rt1
+      // = 0x6CC00000 | (imm7 << 15) | (Rt2 << 10) | (Rn << 5) | Rt1
+      let imm7 = (imm / 8) & 0x7F
+      let inst = 0x6CC00000 |
+        (imm7 << 15) |
+        ((rt2 & 31) << 10) |
+        ((rn & 31) << 5) |
+        (rt1 & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    LdrDPost(rt, rn, simm9) => {
+      // LDR (SIMD&FP, immediate, post-indexed): LDR Dt, [Xn|SP], #simm9
+      // size=11 for 64-bit, V=1
+      // Encoding: 11 | 111 | 1 | 00 | 01 | imm9 | 01 | Rn | Rt
+      // = 0xFC400400 | (imm9 << 12) | (Rn << 5) | Rt
+      let imm9 = simm9 & 0x1FF
+      let inst = 0xFC400400 | (imm9 << 12) | ((rn & 31) << 5) | (rt & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
     SxtbX(rd, rn) => {
@@ -2634,6 +2733,74 @@ pub fn MachineCode::emit_ldp_d_offset(
 }
 
 ///|
+/// Emit STR with pre-indexed addressing: STR Xt, [Xn, #simm9]!
+pub fn MachineCode::emit_str_pre(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  simm9 : Int,
+) -> Unit {
+  StrPre(rt, rn, simm9).emit(self)
+}
+
+///|
+/// Emit STP for FPR pairs with pre-indexed addressing: STP Dt1, Dt2, [Xn, #imm]!
+pub fn MachineCode::emit_stp_d_pre(
+  self : MachineCode,
+  rt1 : Int,
+  rt2 : Int,
+  rn : Int,
+  imm : Int,
+) -> Unit {
+  StpDPre(rt1, rt2, rn, imm).emit(self)
+}
+
+///|
+/// Emit STR for FPR with pre-indexed addressing: STR Dt, [Xn, #simm9]!
+pub fn MachineCode::emit_str_d_pre(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  simm9 : Int,
+) -> Unit {
+  StrDPre(rt, rn, simm9).emit(self)
+}
+
+///|
+/// Emit LDR with post-indexed addressing: LDR Xt, [Xn], #simm9
+pub fn MachineCode::emit_ldr_post(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  simm9 : Int,
+) -> Unit {
+  LdrPost(rt, rn, simm9).emit(self)
+}
+
+///|
+/// Emit LDP for FPR pairs with post-indexed addressing: LDP Dt1, Dt2, [Xn], #imm
+pub fn MachineCode::emit_ldp_d_post(
+  self : MachineCode,
+  rt1 : Int,
+  rt2 : Int,
+  rn : Int,
+  imm : Int,
+) -> Unit {
+  LdpDPost(rt1, rt2, rn, imm).emit(self)
+}
+
+///|
+/// Emit LDR for FPR with post-indexed addressing: LDR Dt, [Xn], #simm9
+pub fn MachineCode::emit_ldr_d_post(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  simm9 : Int,
+) -> Unit {
+  LdrDPost(rt, rn, simm9).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_fcmp_d(self : MachineCode, rn : Int, rm : Int) -> Unit {
   FcmpD(rn, rm).emit(self)
 }
@@ -2651,8 +2818,11 @@ pub fn MachineCode::emit_nop(self : MachineCode) -> Unit {
 // ============ VCode to Machine Code ============
 
 ///|
+/// Check if a register is a callee-saved allocatable GPR (X19-X28)
+/// All callee-saved registers are now available for allocation since
+/// we use Cranelift-style on-demand loading from vmctx (X19).
 fn is_callee_saved_alloc(reg : Int) -> Bool {
-  reg == 19 || (reg >= 23 && reg <= 28)
+  reg >= 19 && reg <= 28
 }
 
 ///|

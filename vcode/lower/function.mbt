@@ -13,6 +13,11 @@ pub(all) struct VCodeFunction {
   // Map from param index to allocated physical register (for params that cross calls)
   // This is filled by apply_allocation and used by emit_prologue
   param_pregs : Array[@abi.PReg?]
+  // Stack parameter count for ABI: tracks int overflow count for correct stack layout
+  mut int_stack_params : Int
+  // Maximum outgoing argument space needed by any call in this function
+  // Pre-allocated in prologue so SP doesn't move during call sequences
+  mut max_outgoing_args_size : Int
 }
 
 ///|
@@ -26,6 +31,8 @@ pub fn VCodeFunction::new(name : String) -> VCodeFunction {
     next_vreg_id: 0,
     num_spill_slots: 0,
     param_pregs: [],
+    int_stack_params: 0,
+    max_outgoing_args_size: 0,
   }
 }
 

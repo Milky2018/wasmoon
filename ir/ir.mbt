@@ -225,6 +225,16 @@ pub enum Opcode {
   // Function calls
   Call(Int) // Direct call (function index)
   CallIndirect(Int, Int) // Indirect call (type index, table index)
+
+  // Raw pointer operations (for trampolines, no bounds checking)
+  // These follow Cranelift's approach for host code generation
+  LoadPtr(Type) // Load from pointer+offset (operand 0 = base ptr)
+  StorePtr(Type) // Store to pointer+offset (operand 0 = base ptr, operand 1 = value)
+
+  // Raw function pointer call (for trampolines)
+  // CallPtr(num_args, num_results) - call via function pointer
+  // operand 0 = function pointer, operands 1..n = vmctx + args
+  CallPtr(Int, Int)
 } derive(Show)
 
 ///|

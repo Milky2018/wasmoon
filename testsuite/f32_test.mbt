@@ -34,11 +34,11 @@ test "f32 add" {
   inspect(
     ir_func.print(),
     content=(
-      #|function test(v0:f32) -> f32 {
+      #|function test(v0:i64, v1:i64, v2:f32) -> f32 {
       #|block0:
-      #|    v1:f32 = fconst 15.5
-      #|    v2:f32 = fadd v0, v1
-      #|    return v2
+      #|    v3:f32 = fconst 15.5
+      #|    v4:f32 = fadd v2, v3
+      #|    return v4
       #|}
       #|
     ),
@@ -47,11 +47,11 @@ test "f32 add" {
   inspect(
     vcode,
     content=(
-      #|vcode test(f0:float) -> float {
+      #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
-      #|    f1 = ldf 15.5
-      #|    f2 = fadd.s f0, f1
-      #|    ret f2
+      #|    f3 = ldf 15.5
+      #|    f4 = fadd.s f2, f3
+      #|    ret f4
       #|}
       #|
     ),
@@ -60,7 +60,7 @@ test "f32 add" {
   inspect(
     allocated_func.print(),
     content=(
-      #|vcode test(f0:float) -> float {
+      #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
       #|    d1 = ldf 15.5
       #|    d2 = fadd.s d0, d1
@@ -136,11 +136,11 @@ test "f64 add" {
   inspect(
     ir_func.print(),
     content=(
-      #|function test(v0:f64) -> f64 {
+      #|function test(v0:i64, v1:i64, v2:f64) -> f64 {
       #|block0:
-      #|    v1:f64 = fconst 15.5
-      #|    v2:f64 = fadd v0, v1
-      #|    return v2
+      #|    v3:f64 = fconst 15.5
+      #|    v4:f64 = fadd v2, v3
+      #|    return v4
       #|}
       #|
     ),
@@ -149,11 +149,11 @@ test "f64 add" {
   inspect(
     vcode,
     content=(
-      #|vcode test(f0:double) -> double {
+      #|vcode test(v0:int, v1:int, f2:double) -> double {
       #|block0:
-      #|    f1 = ldf 15.5
-      #|    f2 = fadd.d f0, f1
-      #|    ret f2
+      #|    f3 = ldf 15.5
+      #|    f4 = fadd.d f2, f3
+      #|    ret f4
       #|}
       #|
     ),
@@ -162,7 +162,7 @@ test "f64 add" {
   inspect(
     allocated_func.print(),
     content=(
-      #|vcode test(f0:double) -> double {
+      #|vcode test(v0:int, v1:int, f2:double) -> double {
       #|block0:
       #|    d1 = ldf 15.5
       #|    d2 = fadd.d d0, d1
@@ -236,11 +236,11 @@ test "f32 sub" {
   inspect(
     ir_func.print(),
     content=(
-      #|function test(v0:f32) -> f32 {
+      #|function test(v0:i64, v1:i64, v2:f32) -> f32 {
       #|block0:
-      #|    v1:f32 = fconst 3.5
-      #|    v2:f32 = fsub v0, v1
-      #|    return v2
+      #|    v3:f32 = fconst 3.5
+      #|    v4:f32 = fsub v2, v3
+      #|    return v4
       #|}
       #|
     ),
@@ -249,11 +249,11 @@ test "f32 sub" {
   inspect(
     vcode,
     content=(
-      #|vcode test(f0:float) -> float {
+      #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
-      #|    f1 = ldf 3.5
-      #|    f2 = fsub.s f0, f1
-      #|    ret f2
+      #|    f3 = ldf 3.5
+      #|    f4 = fsub.s f2, f3
+      #|    ret f4
       #|}
       #|
     ),
@@ -262,7 +262,7 @@ test "f32 sub" {
   inspect(
     allocated_func.print(),
     content=(
-      #|vcode test(f0:float) -> float {
+      #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
       #|    d1 = ldf 3.5
       #|    d2 = fsub.s d0, d1
@@ -339,11 +339,11 @@ test "f32 mul" {
   inspect(
     ir_func.print(),
     content=(
-      #|function test(v0:f32) -> f32 {
+      #|function test(v0:i64, v1:i64, v2:f32) -> f32 {
       #|block0:
-      #|    v1:f32 = fconst 2.5
-      #|    v2:f32 = fmul v0, v1
-      #|    return v2
+      #|    v3:f32 = fconst 2.5
+      #|    v4:f32 = fmul v2, v3
+      #|    return v4
       #|}
       #|
     ),
@@ -352,11 +352,11 @@ test "f32 mul" {
   inspect(
     vcode,
     content=(
-      #|vcode test(f0:float) -> float {
+      #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
-      #|    f1 = ldf 2.5
-      #|    f2 = fmul.s f0, f1
-      #|    ret f2
+      #|    f3 = ldf 2.5
+      #|    f4 = fmul.s f2, f3
+      #|    ret f4
       #|}
       #|
     ),
@@ -365,7 +365,7 @@ test "f32 mul" {
   inspect(
     allocated_func.print(),
     content=(
-      #|vcode test(f0:float) -> float {
+      #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
       #|    d1 = ldf 2.5
       #|    d2 = fmul.s d0, d1
@@ -378,26 +378,21 @@ test "f32 mul" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ff0301d1  sub sp, sp, #64
-      #|  0004: f35300a9  stp x19, x20, [sp, #0]
-      #|  0008: f55b01a9  stp x21, x22, [sp, #16]
-      #|  000c: f81300f9  str x24, [x31, #32]
-      #|  0010: 740240f9  ldr x20, [x19, #0]
-      #|  0014: 750a40f9  ldr x21, [x19, #16]
-      #|  0018: 760e40f9  ldr x22, [x19, #24]
-      #|  001c: 780640f9  ldr x24, [x19, #8]
-      #|  0020: 0000271e  fmov s0, w0
+      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  0004: fd031faa  mov x29, x31
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
+      #|  000c: ff4300d1  sub sp, sp, #16
+      #|  0010: f30300aa  mov x19, x0
       #|block0:
-      #|  0024: 100080d2  movz x16, #0, lsl #0
-      #|  0028: 1004a8f2  movk x16, #16416, lsl #16
-      #|  002c: 0102271e  fmov s1, w16
-      #|  0030: 0208211e  fmul s2, s0, s1
-      #|  0034: 4040201e  fmov s0, s2
-      #|  0038: f35340a9  ldp x19, x20, [sp, #0]
-      #|  003c: f55b41a9  ldp x21, x22, [sp, #16]
-      #|  0040: f81340f9  ldr x24, [x31, #32]
-      #|  0044: ff030191  add sp, sp, #64
-      #|  0048: c0035fd6  ret
+      #|  0014: 100080d2  movz x16, #0, lsl #0
+      #|  0018: 1004a8f2  movk x16, #16416, lsl #16
+      #|  001c: 0102271e  fmov s1, w16
+      #|  0020: 0208211e  fmul s2, s0, s1
+      #|  0024: 4040201e  fmov s0, s2
+      #|  0028: ff430091  add sp, sp, #16
+      #|  002c: f30741f8  ldr x19, [sp], #16
+      #|  0030: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0034: c0035fd6  ret
       #|
     ),
   )

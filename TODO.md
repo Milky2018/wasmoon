@@ -1,0 +1,13 @@
+- [x] `MachineCode::emit_instruction` 中存在大量硬编码寄存器使用，比如 `self.emit_ldr_imm(17, 19, @abi.VMCTX_TABLE0_BASE_OFFSET)`
+  - [ ] 出现 "should be expanded" 的指令应当被删除
+- [ ] VCodeFunction::new 参数太少
+- [ ] `jit.c` 文件过长，应该拆分
+- [ ] `run` 命令调用函数时，返回值或许不正确
+- [ ] 有许多 unused warning
+- [ ] 有许多 For now
+- [ ] 诸多优化未做，可对比 wasmtime 的输出
+- [ ] wasm-gc 
+- [ ] 组件模型
+- [ ] 代码中的中文字符
+- [x] "// Alias for table0_elements (for compatibility)" 是什么情况
+- [ ] `emit_instruction` 的 `F32ToI32S` 涉嫌硬编码寄存器

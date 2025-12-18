@@ -59,8 +59,11 @@ fn LoweringContext::get_vreg_for_use(
   // First check if it's a stack parameter
   if self.stack_param_map.get(value.id) is Some((param_idx, class)) {
     // Generate LoadStackParam instruction
+    // Pass int_stack_params so emit can calculate correct offset for float overflow params
     let result = self.vcode_func.new_vreg(class)
-    let inst = @instr.VCodeInst::new(LoadStackParam(param_idx, class))
+    let inst = @instr.VCodeInst::new(
+      LoadStackParam(param_idx, class, self.vcode_func.int_stack_params),
+    )
     inst.add_def({ reg: Virtual(result) })
     block.add_inst(inst)
     result
@@ -172,21 +175,51 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   }
 
   // Phase 2: Lower function parameters
-  // Only the first 8 parameters are passed in registers (X3-X10)
-  // Parameters 8+ are passed on the stack and loaded on demand
-  let max_reg_params = 8
-  for i, param in ir_func.params {
+  // v3 ABI with separate int/float register pools:
+  // - params[0] = callee_vmctx (X0) - always int register
+  // - params[1] = caller_vmctx (X1) - always int register
+  // - user int params: X2-X7 (up to 6)
+  // - user float params: V0-V7 (up to 8)
+  // - overflow: int overflow first, then float overflow
+  let max_int_reg_params = @abi.MAX_REG_PARAMS // X0-X7 (includes vmctx which ARE in ir_func.params)
+  let max_float_reg_params = @abi.MAX_FLOAT_REG_PARAMS // V0-V7
+  let mut int_reg_count = 0
+  let mut float_reg_count = 0
+  let mut int_stack_count = 0
+  let mut float_stack_count = 0
+  for param in ir_func.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
-    if i < max_reg_params {
-      // Register parameter: allocate @abi.VReg
-      let vreg = ctx.vcode_func.add_param(class)
-      ctx.value_map.set(value.id, vreg)
-    } else {
-      // Stack parameter: record in stack_param_map for on-demand loading
-      ctx.stack_param_map.set(value.id, (i, class))
+    match class {
+      Int =>
+        if int_reg_count < max_int_reg_params {
+          // Register parameter: allocate @abi.VReg
+          let vreg = ctx.vcode_func.add_param(class)
+          ctx.value_map.set(value.id, vreg)
+          int_reg_count = int_reg_count + 1
+        } else {
+          // Stack parameter: int overflow comes first in stack layout
+          ctx.stack_param_map.set(value.id, (int_stack_count, class))
+          int_stack_count = int_stack_count + 1
+        }
+      Float32 | Float64 =>
+        if float_reg_count < max_float_reg_params {
+          // Register parameter: allocate @abi.VReg
+          let vreg = ctx.vcode_func.add_param(class)
+          ctx.value_map.set(value.id, vreg)
+          float_reg_count = float_reg_count + 1
+        } else {
+          // Stack parameter: float overflow comes after int overflow
+          // We encode this as negative index to distinguish from int
+          // Actual offset = int_overflow_count * 8 + float_idx * 8
+          // We'll compute this in emit using special encoding
+          ctx.stack_param_map.set(value.id, (-(float_stack_count + 1), class)) // negative = float stack param
+          float_stack_count = float_stack_count + 1
+        }
     }
   }
+  // Store int overflow count for emit to calculate correct offsets
+  ctx.vcode_func.int_stack_params = int_stack_count
 
   // Phase 3: Lower result types
   for ty in ir_func.results {
@@ -263,7 +296,7 @@ fn lower_inst(
     @ir.Opcode::Ishl => lower_binary_int(ctx, inst, block, Shl)
     @ir.Opcode::Sshr => lower_binary_int(ctx, inst, block, AShr)
     @ir.Opcode::Ushr => lower_binary_int(ctx, inst, block, LShr)
-    @ir.Opcode::Rotl => lower_binary_int(ctx, inst, block, Rotl)
+    @ir.Opcode::Rotl => lower_rotl(ctx, inst, block)
     @ir.Opcode::Rotr => lower_binary_int(ctx, inst, block, Rotr)
     @ir.Opcode::Bnot => lower_unary_int(ctx, inst, block, Not)
 
@@ -289,7 +322,7 @@ fn lower_inst(
 
     // Bit counting operations
     @ir.Opcode::Clz => lower_unary_int(ctx, inst, block, Clz)
-    @ir.Opcode::Ctz => lower_unary_int(ctx, inst, block, Ctz)
+    @ir.Opcode::Ctz => lower_ctz(ctx, inst, block)
     @ir.Opcode::Popcnt => lower_unary_int(ctx, inst, block, Popcnt)
 
     // Floating point comparisons
@@ -362,6 +395,12 @@ fn lower_inst(
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
     @ir.Opcode::CallIndirect(type_idx, table_idx) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx)
+
+    // Raw pointer operations (for trampolines)
+    @ir.Opcode::LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
+    @ir.Opcode::StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
+    @ir.Opcode::CallPtr(num_args, num_results) =>
+      lower_call_ptr(ctx, inst, block, num_args, num_results)
   }
 }
 
@@ -716,6 +755,81 @@ fn lower_bxor(
 }
 
 ///|
+/// Lower rotate left instruction
+/// Cranelift-style lowering: expand to primitive instructions here
+/// rotl(x, n) = rotr(x, 0 - n)
+///
+/// AArch64 ROR only looks at lower bits of shift amount, so negating
+/// via two's complement effectively gives us (size - n) mod size.
+///
+/// Generated sequence:
+/// 1. zero = LoadConst(0)
+/// 2. neg_n = Sub(zero, n)
+/// 3. result = Rotr(x, neg_n)
+fn lower_rotl(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let src = ctx.get_vreg_for_use(inst.operands[0], block)
+  let amount = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Step 1: Load constant 0 into temp
+  let zero = ctx.vcode_func.new_vreg(Int)
+  let load_zero = @instr.VCodeInst::new(LoadConst(0L))
+  load_zero.add_def({ reg: Virtual(zero) })
+  block.add_inst(load_zero)
+
+  // Step 2: Compute (0 - n) = -n
+  let neg_n = ctx.vcode_func.new_vreg(Int)
+  let sub_inst = @instr.VCodeInst::new(Sub)
+  sub_inst.add_def({ reg: Virtual(neg_n) })
+  sub_inst.add_use(Virtual(zero))
+  sub_inst.add_use(Virtual(amount))
+  block.add_inst(sub_inst)
+
+  // Step 3: Rotate right by -n (effectively rotl by n)
+  let rotr_inst = @instr.VCodeInst::new(Rotr)
+  rotr_inst.add_def({ reg: Virtual(dst) })
+  rotr_inst.add_use(Virtual(src))
+  rotr_inst.add_use(Virtual(neg_n))
+  block.add_inst(rotr_inst)
+}
+
+///|
+/// Lower count trailing zeros instruction
+/// Cranelift-style lowering: expand to primitive instructions here
+/// ctz(x) = clz(rbit(x))
+///
+/// Generated sequence:
+/// 1. temp = Rbit(x)
+/// 2. result = Clz(temp)
+fn lower_ctz(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let src = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Step 1: Reverse bits
+  let reversed = ctx.vcode_func.new_vreg(Int)
+  let rbit_inst = @instr.VCodeInst::new(Rbit)
+  rbit_inst.add_def({ reg: Virtual(reversed) })
+  rbit_inst.add_use(Virtual(src))
+  block.add_inst(rbit_inst)
+
+  // Step 2: Count leading zeros
+  let clz_inst = @instr.VCodeInst::new(Clz)
+  clz_inst.add_def({ reg: Virtual(dst) })
+  clz_inst.add_use(Virtual(reversed))
+  block.add_inst(clz_inst)
+}
+
+///|
 /// Lower binary float operation
 fn lower_binary_float(
   ctx : LoweringContext,
@@ -830,27 +944,44 @@ fn lower_unary_int(
 
 ///|
 /// Lower integer remainder: rem = a - (a / b) * b
-/// AArch64 doesn't have a direct remainder instruction, so we use MSUB:
-/// MSUB rd, rn, rm, ra computes: ra - rn * rm
-/// For remainder: a - (a / b) * b = MSUB result, quotient, b, a
+/// Cranelift-style lowering: expand to primitive instructions here
+///
+/// AArch64 doesn't have a direct remainder instruction, so we expand:
+///   div = a / b  (SDIV or UDIV)
+///   result = msub(div, b, a) = a - div * b
+///
+/// Generated sequence:
+/// 1. div = SDiv/UDiv(a, b)
+/// 2. result = Msub(div, b, a)
 fn lower_rem(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : @block.VCodeBlock,
   signed : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
-    let dst = ctx.get_vreg(result)
-    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-    // Use SRem/URem VCode opcode which will be lowered to SDIV+MSUB or UDIV+MSUB
-    let opcode = if signed { @instr.SRem } else { URem }
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
-  }
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs = ctx.get_vreg_for_use(inst.operands[0], block) // a (dividend)
+  let rhs = ctx.get_vreg_for_use(inst.operands[1], block) // b (divisor)
+
+  // Step 1: Compute quotient = a / b
+  let quotient = ctx.vcode_func.new_vreg(Int)
+  let div_opcode = if signed { @instr.SDiv } else { UDiv }
+  let div_inst = @instr.VCodeInst::new(div_opcode)
+  div_inst.add_def({ reg: Virtual(quotient) })
+  div_inst.add_use(Virtual(lhs))
+  div_inst.add_use(Virtual(rhs))
+  block.add_inst(div_inst)
+
+  // Step 2: Compute remainder = a - quotient * b using MSUB
+  // MSUB rd, rn, rm, ra computes: ra - rn * rm
+  // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
+  let msub_inst = @instr.VCodeInst::new(Msub)
+  msub_inst.add_def({ reg: Virtual(dst) })
+  msub_inst.add_use(Virtual(lhs)) // accumulator (a)
+  msub_inst.add_use(Virtual(quotient)) // multiplicand
+  msub_inst.add_use(Virtual(rhs)) // multiplier (b)
+  block.add_inst(msub_inst)
 }
 
 ///|
@@ -955,22 +1086,134 @@ fn mem_type_size(ty : @instr.MemType) -> Int {
 
 ///|
 /// Emit bounds check instruction
+/// Cranelift-style lowering: expand to primitive instructions here
+///
 /// Checks that wasm_addr + offset + access_size <= memory_size
+///
+/// Generated sequence:
+/// 1. zero_ext = Extend(wasm_addr, Unsigned32To64) // zero-extend 32->64
+/// 2. end_addr = Add(zero_ext, offset + access_size) // or AddImm
+/// 3. memory_size = LoadPtr(vmctx, VMCTX_MEMORY_SIZE_OFFSET)
+/// 4. TrapIfUgt(end_addr, memory_size, 1)
 fn emit_bounds_check(
-  _ctx : LoweringContext,
+  ctx : LoweringContext,
   block : @block.VCodeBlock,
   wasm_addr : @abi.VReg,
   offset : Int,
   access_size : Int,
 ) -> Unit {
-  let bounds_check = @instr.VCodeInst::new(BoundsCheck(offset, access_size))
-  bounds_check.add_use(Virtual(wasm_addr))
-  block.add_inst(bounds_check)
+  // Step 1: Zero-extend wasm_addr from 32-bit to 64-bit
+  let zero_ext = ctx.vcode_func.new_vreg(Int)
+  let extend_inst = @instr.VCodeInst::new(Extend(Unsigned32To64))
+  extend_inst.add_def({ reg: Virtual(zero_ext) })
+  extend_inst.add_use(Virtual(wasm_addr))
+  block.add_inst(extend_inst)
+
+  // Step 2: Compute end_addr = zero_ext + (offset + access_size)
+  // Handle offset as unsigned 32-bit, then add access_size
+  let offset_u64 = offset
+    .reinterpret_as_uint()
+    .to_uint64()
+    .reinterpret_as_int64()
+  let end_offset = offset_u64 + access_size.to_int64()
+  let end_addr = if end_offset > 0L {
+    let result = ctx.vcode_func.new_vreg(Int)
+    if end_offset <= 4095L {
+      // Use AddImm for small offsets
+      let add_inst = @instr.VCodeInst::new(AddImm(end_offset.to_int()))
+      add_inst.add_def({ reg: Virtual(result) })
+      add_inst.add_use(Virtual(zero_ext))
+      block.add_inst(add_inst)
+    } else {
+      // Load constant and use Add for large offsets
+      let const_vreg = ctx.vcode_func.new_vreg(Int)
+      let load_const = @instr.VCodeInst::new(LoadConst(end_offset))
+      load_const.add_def({ reg: Virtual(const_vreg) })
+      block.add_inst(load_const)
+      let add_inst = @instr.VCodeInst::new(Add)
+      add_inst.add_def({ reg: Virtual(result) })
+      add_inst.add_use(Virtual(zero_ext))
+      add_inst.add_use(Virtual(const_vreg))
+      block.add_inst(add_inst)
+    }
+    result
+  } else {
+    zero_ext
+  }
+
+  // Step 3: Load memory_size from vmctx
+  let memory_size = ctx.vcode_func.new_vreg(Int)
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let load_size = @instr.VCodeInst::new(
+    LoadPtr(@instr.I64, @abi.VMCTX_MEMORY_SIZE_OFFSET),
+  )
+  load_size.add_def({ reg: Virtual(memory_size) })
+  load_size.add_use(Physical(vmctx_preg))
+  block.add_inst(load_size)
+
+  // Step 4: Emit TrapIfUgt - trap if end_addr > memory_size
+  let trap_inst = @instr.VCodeInst::new(TrapIfUgt(1)) // trap code 1 = out of bounds
+  trap_inst.add_use(Virtual(end_addr))
+  trap_inst.add_use(Virtual(memory_size))
+  block.add_inst(trap_inst)
+}
+
+///|
+/// Emit instruction to load memory_base from vmctx on-demand (Cranelift-style)
+/// Returns a virtual register containing memory_base
+/// This is called before memory operations to get the current memory base address
+fn emit_load_memory_base(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+) -> @abi.VReg {
+  let memory_base_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_inst = @instr.VCodeInst::new(
+    Load(I64, @abi.VMCTX_MEMORY_BASE_OFFSET),
+  )
+  load_inst.add_def({ reg: Virtual(memory_base_vreg) })
+  load_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int })) // X19 = vmctx
+  block.add_inst(load_inst)
+  memory_base_vreg
+}
+
+///|
+/// Emit instruction to load func_table from vmctx on-demand (Cranelift-style)
+/// Returns a virtual register containing func_table pointer
+/// This is called before function calls to get the function table base address
+fn emit_load_func_table(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+) -> @abi.VReg {
+  let func_table_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_inst = @instr.VCodeInst::new(Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET))
+  load_inst.add_def({ reg: Virtual(func_table_vreg) })
+  load_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int })) // X19 = vmctx
+  block.add_inst(load_inst)
+  func_table_vreg
+}
+
+///|
+/// Emit instruction to load table0_base from vmctx on-demand (Cranelift-style)
+/// Returns a virtual register containing table0_base pointer
+/// This is called before indirect calls to get the indirect table base address
+fn emit_load_table0_base(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+) -> @abi.VReg {
+  let table0_base_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_inst = @instr.VCodeInst::new(
+    Load(I64, @abi.VMCTX_TABLE0_BASE_OFFSET),
+  )
+  load_inst.add_def({ reg: Virtual(table0_base_vreg) })
+  load_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int })) // X19 = vmctx
+  block.add_inst(load_inst)
+  table0_base_vreg
 }
 
 ///|
 /// Lower load instruction
-/// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
+/// For WASM, addr is an offset within linear memory, so we need to add memory_base
+/// Memory_base is loaded on-demand from vmctx (Cranelift-style)
 fn lower_load(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -986,11 +1229,13 @@ fn lower_load(
     let access_size = mem_type_size(mem_ty)
     // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
     emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
-    // Compute effective address: memory_base (X21) + wasm_addr
+    // Load memory_base from vmctx on-demand
+    let memory_base = emit_load_memory_base(ctx, block)
+    // Compute effective address: memory_base + wasm_addr
     let effective_addr = ctx.vcode_func.new_vreg(Int)
     let add_inst = @instr.VCodeInst::new(Add)
     add_inst.add_def({ reg: Virtual(effective_addr) })
-    add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+    add_inst.add_use(Virtual(memory_base))
     add_inst.add_use(Virtual(wasm_addr))
     block.add_inst(add_inst)
     // Now load from effective_addr + offset
@@ -1026,7 +1271,8 @@ fn lower_load(
 
 ///|
 /// Lower store instruction
-/// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
+/// For WASM, addr is an offset within linear memory, so we need to add memory_base
+/// Memory_base is loaded on-demand from vmctx (Cranelift-style)
 fn lower_store(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -1042,11 +1288,13 @@ fn lower_store(
   let access_size = mem_type_size(mem_ty)
   // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
   emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
-  // Compute effective address: memory_base (X21) + wasm_addr
+  // Load memory_base from vmctx on-demand
+  let memory_base = emit_load_memory_base(ctx, block)
+  // Compute effective address: memory_base + wasm_addr
   let effective_addr = ctx.vcode_func.new_vreg(Int)
   let add_inst = @instr.VCodeInst::new(Add)
   add_inst.add_def({ reg: Virtual(effective_addr) })
-  add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+  add_inst.add_use(Virtual(memory_base))
   add_inst.add_use(Virtual(wasm_addr))
   block.add_inst(add_inst)
   // Now store to effective_addr + offset
@@ -1081,7 +1329,8 @@ fn lower_store(
 
 ///|
 /// Lower narrow load instruction (8/16/32-bit with sign/zero extension)
-/// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
+/// For WASM, addr is an offset within linear memory, so we need to add memory_base
+/// Memory_base is loaded on-demand from vmctx (Cranelift-style)
 fn lower_load_narrow(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -1102,11 +1351,13 @@ fn lower_load_narrow(
     }
     // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
     emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
-    // Compute effective address: memory_base (X21) + wasm_addr
+    // Load memory_base from vmctx on-demand
+    let memory_base = emit_load_memory_base(ctx, block)
+    // Compute effective address: memory_base + wasm_addr
     let effective_addr = ctx.vcode_func.new_vreg(Int)
     let add_inst = @instr.VCodeInst::new(Add)
     add_inst.add_def({ reg: Virtual(effective_addr) })
-    add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+    add_inst.add_use(Virtual(memory_base))
     add_inst.add_use(Virtual(wasm_addr))
     block.add_inst(add_inst)
     // Check alignment requirement based on opcode type
@@ -1139,7 +1390,8 @@ fn lower_load_narrow(
 
 ///|
 /// Lower narrow store instruction (8/16/32-bit)
-/// For WASM, addr is an offset within linear memory, so we need to add memory_base (X21)
+/// For WASM, addr is an offset within linear memory, so we need to add memory_base
+/// Memory_base is loaded on-demand from vmctx (Cranelift-style)
 fn lower_store_narrow(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -1154,11 +1406,13 @@ fn lower_store_narrow(
   let access_size = mem_type_size(mem_ty)
   // Emit bounds check: trap if wasm_addr + offset + access_size > memory_size
   emit_bounds_check(ctx, block, wasm_addr, offset, access_size)
-  // Compute effective address: memory_base (X21) + wasm_addr
+  // Load memory_base from vmctx on-demand
+  let memory_base = emit_load_memory_base(ctx, block)
+  // Compute effective address: memory_base + wasm_addr
   let effective_addr = ctx.vcode_func.new_vreg(Int)
   let add_inst = @instr.VCodeInst::new(Add)
   add_inst.add_def({ reg: Virtual(effective_addr) })
-  add_inst.add_use(Physical({ index: 21, class: Int })) // X21 = memory_base
+  add_inst.add_use(Virtual(memory_base))
   add_inst.add_use(Virtual(wasm_addr))
   block.add_inst(add_inst)
   // Check alignment requirement based on memory type
@@ -1506,8 +1760,9 @@ fn lower_terminator(
 ///|
 /// Lower a direct function call
 /// Generates code to:
-/// 1. Load the function pointer from the function table (base at X20)
-/// 2. Call through the function pointer with arguments
+/// 1. Load func_table from vmctx on-demand
+/// 2. Load the function pointer from the function table
+/// 3. Call through the function pointer with arguments
 fn lower_call(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -1525,17 +1780,18 @@ fn lower_call(
   let all_results = inst.all_results()
   let num_results = all_results.length()
 
+  // Load func_table from vmctx on-demand
+  let func_table = emit_load_func_table(ctx, block)
+
   // Create a temporary vreg for the function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
 
   // Step 1: Load function pointer from table
-  // Function table base is assumed to be in X20 (a callee-saved register)
-  // func_ptr = [X20 + func_idx * 8]
+  // func_ptr = [func_table + func_idx * 8]
   let offset = func_idx * 8
   let load_inst = @instr.VCodeInst::new(Load(I64, offset))
   load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-  // We use physical register X20 as the function table base
-  load_inst.add_use(Physical({ index: 20, class: Int }))
+  load_inst.add_use(Virtual(func_table))
   block.add_inst(load_inst)
 
   // Step 2: Emit CallIndirect instruction
@@ -1668,6 +1924,14 @@ fn lower_memory_copy(
 ///|
 /// Lower table.get instruction
 /// Loads a function reference from the indirect table
+///
+/// Cranelift-style lowering: expand to primitive instructions here
+/// instead of deferring to emit phase with hardcoded registers.
+///
+/// Generated sequence:
+/// 1. table_base = LoadPtr(I64, VMCTX_TABLE0_BASE_OFFSET) from vmctx (X19)
+/// 2. addr = AddShifted(table_base, elem_idx, Lsl, 4)  // addr = table_base + elem_idx * 16
+/// 3. result = LoadPtr(I64, 0) from addr
 fn lower_table_get(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -1683,17 +1947,43 @@ fn lower_table_get(
   guard inst.operands.length() > 0 else { return }
   let elem_idx = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // Create the TableGet VCode instruction
-  // Uses: [elem_idx], Defs: [result]
-  let get_inst = @instr.VCodeInst::new(TableGet(table_idx))
-  get_inst.add_def({ reg: Virtual(result_vreg) })
-  get_inst.add_use(Virtual(elem_idx))
-  block.add_inst(get_inst)
+  // Step 1: Load table0_base from vmctx
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let table_base = ctx.new_vreg(@abi.Int)
+  let load_table = @instr.VCodeInst::new(
+    LoadPtr(@instr.I64, @abi.VMCTX_TABLE0_BASE_OFFSET),
+  )
+  load_table.add_use(Physical(vmctx_preg))
+  load_table.add_def({ reg: Virtual(table_base) })
+  block.add_inst(load_table)
+
+  // Step 2: Calculate address: addr = table_base + (elem_idx << 4)
+  // Each table element is 16 bytes (func_ptr + type_idx)
+  let addr = ctx.new_vreg(@abi.Int)
+  let calc_addr = @instr.VCodeInst::new(AddShifted(@instr.Lsl, 4))
+  calc_addr.add_use(Virtual(table_base))
+  calc_addr.add_use(Virtual(elem_idx))
+  calc_addr.add_def({ reg: Virtual(addr) })
+  block.add_inst(calc_addr)
+
+  // Step 3: Load result from addr
+  let load_result = @instr.VCodeInst::new(LoadPtr(@instr.I64, 0))
+  load_result.add_use(Virtual(addr))
+  load_result.add_def({ reg: Virtual(result_vreg) })
+  block.add_inst(load_result)
 }
 
 ///|
 /// Lower table.set instruction
 /// Stores a function reference to the indirect table
+///
+/// Cranelift-style lowering: expand to primitive instructions here
+/// instead of deferring to emit phase with hardcoded registers.
+///
+/// Generated sequence:
+/// 1. table_base = LoadPtr(I64, VMCTX_TABLE0_BASE_OFFSET) from vmctx (X19)
+/// 2. addr = AddShifted(table_base, elem_idx, Lsl, 4)  // addr = table_base + elem_idx * 16
+/// 3. StorePtr(I64, 0) value to addr
 fn lower_table_set(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -1706,12 +1996,30 @@ fn lower_table_set(
   let elem_idx = ctx.get_vreg_for_use(inst.operands[0], block)
   let value = ctx.get_vreg_for_use(inst.operands[1], block)
 
-  // Create the TableSet VCode instruction
-  // Uses: [elem_idx, value], Defs: []
-  let set_inst = @instr.VCodeInst::new(TableSet(table_idx))
-  set_inst.add_use(Virtual(elem_idx))
-  set_inst.add_use(Virtual(value))
-  block.add_inst(set_inst)
+  // Step 1: Load table0_base from vmctx
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let table_base = ctx.new_vreg(@abi.Int)
+  let load_table = @instr.VCodeInst::new(
+    LoadPtr(@instr.I64, @abi.VMCTX_TABLE0_BASE_OFFSET),
+  )
+  load_table.add_use(Physical(vmctx_preg))
+  load_table.add_def({ reg: Virtual(table_base) })
+  block.add_inst(load_table)
+
+  // Step 2: Calculate address: addr = table_base + (elem_idx << 4)
+  // Each table element is 16 bytes (func_ptr + type_idx)
+  let addr = ctx.new_vreg(@abi.Int)
+  let calc_addr = @instr.VCodeInst::new(AddShifted(@instr.Lsl, 4))
+  calc_addr.add_use(Virtual(table_base))
+  calc_addr.add_use(Virtual(elem_idx))
+  calc_addr.add_def({ reg: Virtual(addr) })
+  block.add_inst(calc_addr)
+
+  // Step 3: Store value to addr
+  let store_value = @instr.VCodeInst::new(StorePtr(@instr.I64, 0))
+  store_value.add_use(Virtual(addr))
+  store_value.add_use(Virtual(value))
+  block.add_inst(store_value)
 }
 
 ///|
@@ -1734,17 +2042,17 @@ fn lower_call_indirect(
   let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Multi-table support: determine which table pointer to use
-  // If table_idx == 0, use X24 (already loaded in prologue)
-  // If table_idx != 0, load the table pointer from indirect_tables[table_idx]
-  let table_ptr_preg : @abi.Reg = if table_idx == 0 {
-    // Fast path: use X24 which already points to table 0
-    Physical({ index: 24, class: Int })
+  // Both table_idx == 0 and table_idx != 0 load the table pointer on-demand
+  // following Cranelift's approach (no pre-loaded registers for table pointers)
+  let table_ptr_vreg : @abi.VReg = if table_idx == 0 {
+    // Fast path for table 0: load table0_base from vmctx on-demand
+    emit_load_table0_base(ctx, block)
   } else {
     // Slow path: load indirect_tables[table_idx] from context
     // 1. Load indirect_tables array pointer: [X19 + 32]
     let indirect_tables_vreg = ctx.vcode_func.new_vreg(Int)
     let load_array_inst = @instr.VCodeInst::new(
-      Load(I64, @abi.CTX_INDIRECT_TABLES_OFFSET),
+      Load(I64, @abi.VMCTX_TABLES_OFFSET),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
     load_array_inst.add_use(Physical({ index: 19, class: Int }))
@@ -1752,12 +2060,12 @@ fn lower_call_indirect(
     // 2. Calculate offset = table_idx * 8 (pointer size)
     let table_offset = table_idx * 8
     // 3. Load table pointer: [indirect_tables + offset]
-    let table_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let ptr_vreg = ctx.vcode_func.new_vreg(Int)
     let load_table_inst = @instr.VCodeInst::new(Load(I64, table_offset))
-    load_table_inst.add_def({ reg: Virtual(table_ptr_vreg) })
+    load_table_inst.add_def({ reg: Virtual(ptr_vreg) })
     load_table_inst.add_use(Virtual(indirect_tables_vreg))
     block.add_inst(load_table_inst)
-    Virtual(table_ptr_vreg)
+    ptr_vreg
   }
 
   // Arguments are all operands except the first one
@@ -1788,11 +2096,11 @@ fn lower_call_indirect(
   block.add_inst(mul_inst)
 
   // Step 2: Calculate address = table_ptr + offset
-  // table_ptr holds the correct table pointer (X24 for table 0, or loaded for other tables)
+  // table_ptr is loaded on-demand from vmctx (following Cranelift's approach)
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
   let add_inst = @instr.VCodeInst::new(Add)
   add_inst.add_def({ reg: Virtual(addr_vreg) })
-  add_inst.add_use(table_ptr_preg)
+  add_inst.add_use(Virtual(table_ptr_vreg))
   add_inst.add_use(Virtual(offset_vreg))
   block.add_inst(add_inst)
 
@@ -1852,6 +2160,13 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
 ///|
 /// Lower global.get instruction
 /// Loads a global variable value
+///
+/// Cranelift-style lowering: expand to LoadPtr instructions here
+/// instead of deferring to emit phase with hardcoded registers.
+///
+/// Generated sequence:
+/// 1. globals_ptr = LoadPtr(I64, VMCTX_GLOBALS_OFFSET) from vmctx (X19)
+/// 2. result = LoadPtr(I64, global_idx * 16) from globals_ptr
 fn lower_global_get(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -1862,16 +2177,36 @@ fn lower_global_get(
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
-  // Create the GlobalGet VCode instruction
-  // Uses: [], Defs: [result]
-  let get_inst = @instr.VCodeInst::new(GlobalGet(global_idx))
-  get_inst.add_def({ reg: Virtual(result_vreg) })
-  block.add_inst(get_inst)
+  // Step 1: Load globals array pointer from vmctx
+  // vmctx is pinned to X19, use it as Physical register
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let globals_ptr = ctx.new_vreg(@abi.Int)
+  let load_globals = @instr.VCodeInst::new(
+    LoadPtr(@instr.I64, @abi.VMCTX_GLOBALS_OFFSET),
+  )
+  load_globals.add_use(Physical(vmctx_preg))
+  load_globals.add_def({ reg: Virtual(globals_ptr) })
+  block.add_inst(load_globals)
+
+  // Step 2: Load global value from globals array
+  // Each global is 16 bytes (value + type tag)
+  let offset = global_idx * 16
+  let load_value = @instr.VCodeInst::new(LoadPtr(@instr.I64, offset))
+  load_value.add_use(Virtual(globals_ptr))
+  load_value.add_def({ reg: Virtual(result_vreg) })
+  block.add_inst(load_value)
 }
 
 ///|
 /// Lower global.set instruction
 /// Stores a value to a global variable
+///
+/// Cranelift-style lowering: expand to LoadPtr + StorePtr instructions
+/// instead of deferring to emit phase with hardcoded registers.
+///
+/// Generated sequence:
+/// 1. globals_ptr = LoadPtr(I64, VMCTX_GLOBALS_OFFSET) from vmctx (X19)
+/// 2. StorePtr(I64, global_idx * 16) value to globals_ptr
 fn lower_global_set(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -1882,9 +2217,267 @@ fn lower_global_set(
   guard inst.operands.length() > 0 else { return }
   let value = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // Create the GlobalSet VCode instruction
-  // Uses: [value], Defs: []
-  let set_inst = @instr.VCodeInst::new(GlobalSet(global_idx))
-  set_inst.add_use(Virtual(value))
-  block.add_inst(set_inst)
+  // Step 1: Load globals array pointer from vmctx
+  // vmctx is pinned to X19, use it as Physical register
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let globals_ptr = ctx.new_vreg(@abi.Int)
+  let load_globals = @instr.VCodeInst::new(
+    LoadPtr(@instr.I64, @abi.VMCTX_GLOBALS_OFFSET),
+  )
+  load_globals.add_use(Physical(vmctx_preg))
+  load_globals.add_def({ reg: Virtual(globals_ptr) })
+  block.add_inst(load_globals)
+
+  // Step 2: Store global value to globals array
+  // Each global is 16 bytes (value + type tag)
+  let offset = global_idx * 16
+  let store_value = @instr.VCodeInst::new(StorePtr(@instr.I64, offset))
+  store_value.add_use(Virtual(globals_ptr)) // base address
+  store_value.add_use(Virtual(value)) // value to store
+  block.add_inst(store_value)
+}
+
+// ============ Raw Pointer Operations (for trampolines) ============
+
+///|
+/// Lower load_ptr instruction (raw pointer load without bounds checking)
+/// Used in trampolines to load arguments from values_vec
+fn lower_load_ptr(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  ty : @ir.Type,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let result_vreg = ctx.get_vreg(result)
+
+  // Get the base pointer and offset from operands
+  // operand 0 = base pointer (values_vec)
+  // operand 1 = offset constant (optional, if 2 operands)
+  let base = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Check if we have an offset from a second operand (must be an iconst)
+  let offset = if inst.operands.length() > 1 {
+    // Try to extract constant offset
+    if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
+      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      off.to_int()
+    } else {
+      // If not a constant, we'd need to add the offset separately
+      // For simplicity in trampolines, we assume constant offsets
+      0
+    }
+  } else {
+    0
+  }
+
+  // Convert IR type to VCode memory type
+  let mem_ty = ir_type_to_mem_type(ty)
+
+  // Create LoadPtr instruction
+  let load_inst = @instr.VCodeInst::new(LoadPtr(mem_ty, offset))
+  load_inst.add_def({ reg: Virtual(result_vreg) })
+  load_inst.add_use(Virtual(base))
+  block.add_inst(load_inst)
+}
+
+///|
+/// Lower store_ptr instruction (raw pointer store without bounds checking)
+/// Used in trampolines to store results to values_vec
+fn lower_store_ptr(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  ty : @ir.Type,
+) -> Unit {
+  // operand 0 = base pointer
+  // operand 1 = value to store
+  // operand 2 = offset constant (optional)
+  guard inst.operands.length() >= 2 else { return }
+  let base = ctx.get_vreg_for_use(inst.operands[0], block)
+  let value = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Check if we have an offset from a third operand
+  let offset = if inst.operands.length() > 2 {
+    if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
+      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      off.to_int()
+    } else {
+      0
+    }
+  } else {
+    0
+  }
+
+  // Convert IR type to VCode memory type
+  let mem_ty = ir_type_to_mem_type(ty)
+
+  // Create StorePtr instruction
+  let store_inst = @instr.VCodeInst::new(StorePtr(mem_ty, offset))
+  store_inst.add_use(Virtual(base))
+  store_inst.add_use(Virtual(value))
+  block.add_inst(store_inst)
+}
+
+///|
+/// Lower call_ptr instruction (call through a function pointer)
+/// Used in trampolines to call the target WASM function
+///
+/// Operand layout (following Cranelift):
+///   operand 0 = function pointer
+///   operand 1 = callee_vmctx (X0)
+///   operand 2 = caller_vmctx (X1)
+///   operands 3..n = user arguments
+///
+/// Cranelift-style ABI refactoring:
+/// - Stack args are handled in lower phase via StoreToStack instructions
+/// - Register args use FixedReg constraints to tell regalloc which physical registers to use
+/// - X17 is used for func_ptr (constraint ensures no conflicts)
+fn lower_call_ptr(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  num_args : Int,
+  num_results : Int,
+) -> Unit {
+  // Collect function pointer
+  let func_ptr = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Collect vmctx arguments
+  let callee_vmctx = ctx.get_vreg_for_use(inst.operands[1], block)
+  let caller_vmctx = ctx.get_vreg_for_use(inst.operands[2], block)
+
+  // Classify user arguments by type (starting from operand index 3)
+  // int_args and float_args contain (vreg, class) tuples
+  let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  for i in 3..<inst.operands.length() {
+    let vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+    match vreg.class {
+      @abi.Int => int_args.push((vreg, @abi.Int))
+      @abi.Float32 => float_args.push((vreg, @abi.Float32))
+      @abi.Float64 => float_args.push((vreg, @abi.Float64))
+    }
+  }
+
+  // Calculate overflow args count
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6 (X2-X7)
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
+  let int_overflow = if int_args.length() > max_int_reg_args {
+    int_args.length() - max_int_reg_args
+  } else {
+    0
+  }
+  let float_overflow = if float_args.length() > max_float_reg_args {
+    float_args.length() - max_float_reg_args
+  } else {
+    0
+  }
+  let stack_arg_space = (int_overflow + float_overflow) * 8
+  // Align to 16 bytes
+  let aligned_stack_space = (stack_arg_space + 15) / 16 * 16
+
+  // Update max_outgoing_args_size (Cranelift-style: pre-allocate in prologue)
+  // This ensures SP doesn't move during call sequences, avoiding spill slot issues
+  if aligned_stack_space > ctx.vcode_func.max_outgoing_args_size {
+    ctx.vcode_func.max_outgoing_args_size = aligned_stack_space
+  }
+
+  // Step 1: Store overflow int args to stack (space is pre-allocated in prologue)
+  for i in max_int_reg_args..<int_args.length() {
+    let (vreg, _) = int_args[i]
+    let stack_idx = i - max_int_reg_args
+    let offset = stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+
+  // Step 2: Store overflow float args to stack (after int overflow args)
+  for i in max_float_reg_args..<float_args.length() {
+    let (vreg, _) = float_args[i]
+    let stack_idx = i - max_float_reg_args
+    let offset = int_overflow * 8 + stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+
+  // Step 3: Create CallPtr instruction with FixedReg constraints
+  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results))
+
+  // func_ptr constrained to X17
+  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
+    index: 17,
+    class: @abi.Int,
+  })
+
+  // callee_vmctx constrained to X0
+  call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
+    index: 0,
+    class: @abi.Int,
+  })
+
+  // caller_vmctx constrained to X1
+  call_inst.add_use_fixed(Virtual(caller_vmctx), @abi.PReg::{
+    index: 1,
+    class: @abi.Int,
+  })
+
+  // Register int args: X2-X7
+  let int_reg_count = if int_args.length() < max_int_reg_args {
+    int_args.length()
+  } else {
+    max_int_reg_args
+  }
+  for i in 0..<int_reg_count {
+    let (vreg, _) = int_args[i]
+    let preg_idx = 2 + i // X2, X3, X4, X5, X6, X7
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: preg_idx,
+      class: @abi.Int,
+    })
+  }
+
+  // Register float args: V0-V7
+  let float_reg_count = if float_args.length() < max_float_reg_args {
+    float_args.length()
+  } else {
+    max_float_reg_args
+  }
+  for i in 0..<float_reg_count {
+    let (vreg, class) = float_args[i]
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+  }
+
+  // Step 4: Define results with constraints
+  let all_results = inst.all_results()
+  let mut int_result_idx = 0
+  let mut float_result_idx = 0
+  for result in all_results {
+    let dst = ctx.get_vreg(result)
+    match dst.class {
+      @abi.Int => {
+        // Integer results go to X0, X1, ...
+        call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
+          index: int_result_idx,
+          class: @abi.Int,
+        })
+        int_result_idx = int_result_idx + 1
+      }
+      @abi.Float32 | @abi.Float64 => {
+        // Float results go to V0, V1, ...
+        call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
+          index: float_result_idx,
+          class: dst.class,
+        })
+        float_result_idx = float_result_idx + 1
+      }
+    }
+  }
+
+  // Add clobbers for all caller-saved registers
+  add_call_clobbers(call_inst)
+  block.add_inst(call_inst)
+  // No AdjustSP needed - outgoing args space is pre-allocated in prologue
 }

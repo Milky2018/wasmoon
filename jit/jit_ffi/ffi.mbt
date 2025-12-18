@@ -167,20 +167,21 @@ pub extern "c" fn c_jit_ctx_set_table_pointers(
 pub extern "c" fn c_jit_set_context_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_set_context_managed"
 
 ///|
-/// C FFI for v2 ABI multi-value return calls
-/// X19 = context pointer, X0-X7 = int params, D0-D7 = float params
-/// param_types and result_types use: 0=I32, 1=I64, 2=F32, 3=F64
-#borrow(args, param_types, results, result_types)
-pub extern "c" fn c_jit_call(
+/// C FFI for trampoline-based calls (new, simple interface)
+/// Uses JIT-generated trampoline that handles all ABI complexity
+/// trampoline_ptr: Pointer to JIT-generated entry trampoline
+/// ctx_ptr: VMContext pointer
+/// func_ptr: Target WASM function pointer
+/// values_vec: Array of Int64 for args (in) and results (out)
+/// values_len: Total number of slots in values_vec
+#borrow(values_vec)
+pub extern "c" fn c_jit_call_trampoline(
+  trampoline_ptr : Int64,
   ctx_ptr : Int64,
   func_ptr : Int64,
-  args : FixedArray[Int64],
-  param_types : FixedArray[Int],
-  num_args : Int,
-  results : FixedArray[Int64],
-  result_types : FixedArray[Int],
-  num_results : Int,
-) -> Int = "wasmoon_jit_call"
+  values_vec : FixedArray[Int64],
+  values_len : Int,
+) -> Int = "wasmoon_jit_call_trampoline"
 
 // ============ WASI Trampoline Pointers ============
 

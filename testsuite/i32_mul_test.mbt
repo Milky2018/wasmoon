@@ -34,11 +34,11 @@ test "i32 mul" {
   inspect(
     ir_func.print(),
     content=(
-      #|function test(v0:i32) -> i32 {
+      #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
       #|block0:
-      #|    v1:i32 = iconst 3
-      #|    v2:i32 = imul v0, v1
-      #|    return v2
+      #|    v3:i32 = iconst 3
+      #|    v4:i32 = imul v2, v3
+      #|    return v4
       #|}
       #|
     ),
@@ -47,11 +47,11 @@ test "i32 mul" {
   inspect(
     vcode,
     content=(
-      #|vcode test(v0:int) -> int {
+      #|vcode test(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    v1 = ldi 3
-      #|    v2 = mul v0, v1
-      #|    ret v2
+      #|    v3 = ldi 3
+      #|    v4 = mul v2, v3
+      #|    ret v4
       #|}
       #|
     ),
@@ -60,10 +60,10 @@ test "i32 mul" {
   inspect(
     allocated_func.print(),
     content=(
-      #|vcode test(v0:int) -> int {
+      #|vcode test(v0:int, v1:int, v2:int) -> int {
       #|block0:
       #|    x8 = ldi 3
-      #|    x9 = mul x0, x8
+      #|    x9 = mul x2, x8
       #|    ret x9
       #|}
       #|
@@ -73,23 +73,19 @@ test "i32 mul" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ff0301d1  sub sp, sp, #64
-      #|  0004: f35300a9  stp x19, x20, [sp, #0]
-      #|  0008: f55b01a9  stp x21, x22, [sp, #16]
-      #|  000c: f81300f9  str x24, [x31, #32]
-      #|  0010: 740240f9  ldr x20, [x19, #0]
-      #|  0014: 750a40f9  ldr x21, [x19, #16]
-      #|  0018: 760e40f9  ldr x22, [x19, #24]
-      #|  001c: 780640f9  ldr x24, [x19, #8]
+      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  0004: fd031faa  mov x29, x31
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
+      #|  000c: ff4300d1  sub sp, sp, #16
+      #|  0010: f30300aa  mov x19, x0
       #|block0:
-      #|  0020: 680080d2  movz x8, #3, lsl #0
-      #|  0024: 097c089b  mul x9, x0, x8
-      #|  0028: e00309aa  mov x0, x9
-      #|  002c: f35340a9  ldp x19, x20, [sp, #0]
-      #|  0030: f55b41a9  ldp x21, x22, [sp, #16]
-      #|  0034: f81340f9  ldr x24, [x31, #32]
-      #|  0038: ff030191  add sp, sp, #64
-      #|  003c: c0035fd6  ret
+      #|  0014: 680080d2  movz x8, #3, lsl #0
+      #|  0018: 497c089b  mul x9, x2, x8
+      #|  001c: e00309aa  mov x0, x9
+      #|  0020: ff430091  add sp, sp, #16
+      #|  0024: f30741f8  ldr x19, [sp], #16
+      #|  0028: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  002c: c0035fd6  ret
       #|
     ),
   )

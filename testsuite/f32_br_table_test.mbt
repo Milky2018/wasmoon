@@ -47,25 +47,25 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   inspect(
     ir_func.print(),
     content=(
-      #|function test(v0:i32) -> f32 {
+      #|function test(v0:i64, v1:i64, v2:i32) -> f32 {
       #|block0:
-      #|    v1:f32 = fconst 0
-      #|    v2:f32 = fconst 0
-      #|    br_table v0, [block4, block5], block6
-      #|block1(v3:i32, v4:f32, v5:f32):
-      #|    return v4
-      #|block2(v6:i32, v7:f32, v8:f32):
-      #|    v13:f32 = fconst 3
-      #|    jump block1(v6, v13, v8)
-      #|block3(v9:i32, v10:f32, v11:f32):
-      #|    v12:f32 = fconst 2
-      #|    jump block1(v9, v12, v11)
+      #|    v3:f32 = fconst 0
+      #|    v4:f32 = fconst 0
+      #|    br_table v2, [block4, block5], block6
+      #|block1(v5:i32, v6:f32, v7:f32):
+      #|    return v6
+      #|block2(v8:i32, v9:f32, v10:f32):
+      #|    v15:f32 = fconst 3
+      #|    jump block1(v8, v15, v10)
+      #|block3(v11:i32, v12:f32, v13:f32):
+      #|    v14:f32 = fconst 2
+      #|    jump block1(v11, v14, v13)
       #|block4:
-      #|    jump block3(v0, v1, v2)
+      #|    jump block3(v2, v3, v4)
       #|block5:
-      #|    jump block2(v0, v1, v2)
+      #|    jump block2(v2, v3, v4)
       #|block6:
-      #|    jump block1(v0, v1, v2)
+      #|    jump block1(v2, v3, v4)
       #|}
       #|
     ),
@@ -74,46 +74,46 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   inspect(
     vcode,
     content=(
-      #|vcode test(v0:int) -> float {
+      #|vcode test(v0:int, v1:int, v2:int) -> float {
       #|block0:
-      #|    f10 = ldf 0
-      #|    f11 = ldf 0
-      #|    v13 = ldi 0
-      #|    v12 = cmp.eq v0, v13
-      #|    branch v12, block4, block7
-      #|block1(v1:int, f2:float, f3:float):
-      #|    ret f2
-      #|block2(v4:int, f5:float, f6:float):
-      #|    f16 = ldf 3
-      #|    v1 = mov v4
-      #|    f2 = mov f16
-      #|    f3 = mov f6
+      #|    f12 = ldf 0
+      #|    f13 = ldf 0
+      #|    v15 = ldi 0
+      #|    v14 = cmp.eq v2, v15
+      #|    branch v14, block4, block7
+      #|block1(v3:int, f4:float, f5:float):
+      #|    ret f4
+      #|block2(v6:int, f7:float, f8:float):
+      #|    f18 = ldf 3
+      #|    v3 = mov v6
+      #|    f4 = mov f18
+      #|    f5 = mov f8
       #|    jump block1
-      #|block3(v7:int, f8:float, f9:float):
-      #|    f17 = ldf 2
-      #|    v1 = mov v7
-      #|    f2 = mov f17
-      #|    f3 = mov f9
+      #|block3(v9:int, f10:float, f11:float):
+      #|    f19 = ldf 2
+      #|    v3 = mov v9
+      #|    f4 = mov f19
+      #|    f5 = mov f11
       #|    jump block1
       #|block4:
-      #|    v7 = mov v0
-      #|    f8 = mov f10
-      #|    f9 = mov f11
+      #|    v9 = mov v2
+      #|    f10 = mov f12
+      #|    f11 = mov f13
       #|    jump block3
       #|block5:
-      #|    v4 = mov v0
-      #|    f5 = mov f10
-      #|    f6 = mov f11
+      #|    v6 = mov v2
+      #|    f7 = mov f12
+      #|    f8 = mov f13
       #|    jump block2
       #|block6:
-      #|    v1 = mov v0
-      #|    f2 = mov f10
-      #|    f3 = mov f11
+      #|    v3 = mov v2
+      #|    f4 = mov f12
+      #|    f5 = mov f13
       #|    jump block1
       #|block7:
-      #|    v14 = ldi 1
-      #|    v15 = cmp.eq v0, v14
-      #|    branch v15, block5, block6
+      #|    v16 = ldi 1
+      #|    v17 = cmp.eq v2, v16
+      #|    branch v17, block5, block6
       #|}
       #|
     ),
@@ -122,45 +122,45 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   inspect(
     allocated_func.print(),
     content=(
-      #|vcode test(v0:int) -> float {
+      #|vcode test(v0:int, v1:int, v2:int) -> float {
       #|block0:
       #|    d0 = ldf 0
       #|    d1 = ldf 0
       #|    x8 = ldi 0
-      #|    x9 = cmp.eq x0, x8
+      #|    x9 = cmp.eq x2, x8
       #|    branch x9, block4, block7
-      #|block1(v1:int, f2:float, f3:float):
+      #|block1(v3:int, f4:float, f5:float):
       #|    ret d2
-      #|block2(v4:int, f5:float, f6:float):
+      #|block2(v6:int, f7:float, f8:float):
       #|    d6 = ldf 3
       #|    x8 = mov x9
       #|    d2 = mov d6
       #|    d3 = mov d5
       #|    jump block1
-      #|block3(v7:int, f8:float, f9:float):
+      #|block3(v9:int, f10:float, f11:float):
       #|    d0 = ldf 2
       #|    x8 = mov x9
       #|    d2 = mov d0
       #|    d3 = mov d5
       #|    jump block1
       #|block4:
-      #|    x9 = mov x0
+      #|    x9 = mov x2
       #|    d4 = mov d0
       #|    d5 = mov d1
       #|    jump block3
       #|block5:
-      #|    x9 = mov x0
+      #|    x9 = mov x2
       #|    d4 = mov d0
       #|    d5 = mov d1
       #|    jump block2
       #|block6:
-      #|    x8 = mov x0
+      #|    x8 = mov x2
       #|    d2 = mov d0
       #|    d3 = mov d1
       #|    jump block1
       #|block7:
       #|    x8 = ldi 1
-      #|    x9 = cmp.eq x0, x8
+      #|    x9 = cmp.eq x2, x8
       #|    branch x9, block5, block6
       #|}
       #|

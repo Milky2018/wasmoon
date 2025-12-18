@@ -191,14 +191,17 @@ test "translate simple add function" {
   let translator = Translator::new("add", func_type, [], [func_type], [0], 0, [])
   let func = translator.translate(instrs)
   let output = func.print()
-  let expected =
-    #|function add(v0:i32, v1:i32) -> i32 {
-    #|block0:
-    #|    v2:i32 = iadd v0, v1
-    #|    return v2
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|function add(v0:i64, v1:i64, v2:i32, v3:i32) -> i32 {
+      #|block0:
+      #|    v4:i32 = iadd v2, v3
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -226,16 +229,19 @@ test "translate multiply and add" {
   )
   let func = translator.translate(instrs)
   let output = func.print()
-  let expected =
-    #|function mul_add(v0:i32, v1:i32) -> i32 {
-    #|block0:
-    #|    v2:i32 = imul v0, v1
-    #|    v3:i32 = iconst 1
-    #|    v4:i32 = iadd v2, v3
-    #|    return v4
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|function mul_add(v0:i64, v1:i64, v2:i32, v3:i32) -> i32 {
+      #|block0:
+      #|    v4:i32 = imul v2, v3
+      #|    v5:i32 = iconst 1
+      #|    v6:i32 = iadd v4, v5
+      #|    return v6
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -269,17 +275,20 @@ test "translate with local variable" {
   )
   let func = translator.translate(instrs)
   let output = func.print()
-  let expected =
-    #|function with_local(v0:i32, v1:i32) -> i32 {
-    #|block0:
-    #|    v2:i32 = iconst 0
-    #|    v3:i32 = iadd v0, v1
-    #|    v4:i32 = iconst 2
-    #|    v5:i32 = imul v3, v4
-    #|    return v5
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|function with_local(v0:i64, v1:i64, v2:i32, v3:i32) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 0
+      #|    v5:i32 = iadd v2, v3
+      #|    v6:i32 = iconst 2
+      #|    v7:i32 = imul v5, v6
+      #|    return v7
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -302,15 +311,18 @@ test "translate comparison" {
   let translator = Translator::new("max", func_type, [], [func_type], [0], 0, [])
   let func = translator.translate(instrs)
   let output = func.print()
-  let expected =
-    #|function max(v0:i32, v1:i32) -> i32 {
-    #|block0:
-    #|    v2:i32 = icmp.sgt v0, v1
-    #|    v3:i32 = select v2, v0, v1
-    #|    return v3
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|function max(v0:i64, v1:i64, v2:i32, v3:i32) -> i32 {
+      #|block0:
+      #|    v4:i32 = icmp.sgt v2, v3
+      #|    v5:i32 = select v4, v2, v3
+      #|    return v5
+      #|}
+      #|
+    ),
+  )
 }
 
 // ============ Validator Tests ============

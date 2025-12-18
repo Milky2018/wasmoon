@@ -1,23 +1,27 @@
-// Tests for JITStackFrame
+// Tests for JITStackFrame (ABI v3)
 
 ///|
 test "jit_stack_frame_basic" {
-  // Basic frame with no spills or clobbered registers
+  // Basic frame with no spills or clobbered registers, no calls
   let frame = JITStackFrame::build(
     [],
     [],
     0,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
 
-  // Saves X19, X20, X21, X22, X24 (5 regs = 3 pairs = 48 bytes)
-  inspect(frame.gpr_save_size, content="48")
+  // Only X19 is saved (vmctx) = 1 reg = 1 pair = 16 bytes
+  inspect(frame.gpr_save_size, content="16")
   inspect(frame.fpr_save_size, content="0")
   inspect(frame.spill_size, content="16") // MIN_SPILL_SIZE
-  inspect(frame.call_buffer_size, content="0")
-  inspect(frame.total_size, content="64") // 48 + 0 + 16 + 0 = 64, aligned to 16
-  inspect(frame.saved_gprs.length(), content="5")
+  inspect(frame.outgoing_args_size, content="0")
+  // has_setup_area = true because we have saved_gprs
+  inspect(frame.has_setup_area, content="true")
+  // total = setup_area(16) + gpr(16) + fpr(0) + spill(16) + outgoing(0) = 48
+  inspect(frame.total_size, content="48")
+  inspect(frame.frame_size, content="32") // gpr + fpr + spill + outgoing
+  inspect(frame.saved_gprs.length(), content="1") // Only X19
 }
 
 ///|
@@ -27,13 +31,14 @@ test "jit_stack_frame_with_spills" {
     [],
     [],
     5,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
 
   // 5 spills = 40 bytes, aligned to 16 = 48 bytes
   inspect(frame.spill_size, content="48")
-  inspect(frame.total_size, content="96") // 48 + 0 + 48 + 0 = 96
+  // total = setup(16) + gpr(16) + fpr(0) + spill(48) = 80
+  inspect(frame.total_size, content="80")
 }
 
 ///|
@@ -43,68 +48,48 @@ test "jit_stack_frame_with_fprs" {
     [],
     [8, 9],
     0,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
 
   // 2 FPRs = 1 pair = 16 bytes
   inspect(frame.fpr_save_size, content="16")
   inspect(frame.saved_fprs.length(), content="2")
-  inspect(frame.total_size, content="80") // 48 + 16 + 16 + 0 = 80
+  // total = setup(16) + gpr(16) + fpr(16) + spill(16) = 64
+  inspect(frame.total_size, content="64")
 }
 
 ///|
-test "jit_stack_frame_with_extra_results" {
-  // Frame with extra results buffer
+test "jit_stack_frame_with_calls" {
+  // Frame with calls (requires FP/LR save)
   let frame = JITStackFrame::build(
     [],
     [],
     0,
-    needs_extra_results=true,
-    calls_multi_value=false,
+    has_calls=true,
+    outgoing_args_size=0,
   )
 
-  // needs_extra_results=true adds X23 to saved GPRs
-  inspect(frame.uses_x23, content="true")
-  inspect(frame.saved_gprs.length(), content="6") // X19, X20, X21, X22, X23, X24
-  inspect(frame.gpr_save_size, content="48") // 6 regs = 3 pairs = 48 bytes
-  // No call buffer allocated (callee doesn't allocate buffer when it returns multi-value)
-  inspect(frame.call_buffer_size, content="0")
-}
-
-///|
-test "jit_stack_frame_calls_multi_value" {
-  // Frame that calls multi-value functions
-  let frame = JITStackFrame::build(
-    [],
-    [],
-    0,
-    needs_extra_results=false,
-    calls_multi_value=true,
-  )
-
-  // calls_multi_value=true adds X23 and allocates buffer
-  inspect(frame.uses_x23, content="true")
-  inspect(frame.call_buffer_size, content="64")
-  inspect(frame.saved_gprs.length(), content="6")
-  inspect(frame.total_size, content="128") // 48 + 0 + 16 + 64 = 128
+  // has_calls=true means we need setup area
+  inspect(frame.has_setup_area, content="true")
+  inspect(frame.setup_area_size, content="16")
+  inspect(frame.saved_gprs.length(), content="1") // Only X19
 }
 
 ///|
 test "jit_stack_frame_with_clobbered_gprs" {
   // Frame with additional clobbered GPRs
   let frame = JITStackFrame::build(
-    [19, 25, 26],
+    [20, 25, 26],
     [],
     0,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
 
-  // Base regs + clobbered (deduplicated and sorted)
-  // Base: 19, 20, 21, 22, 24; Clobbered: 19, 25, 26 -> 19, 20, 21, 22, 24, 25, 26
-  inspect(frame.saved_gprs.length(), content="7")
-  inspect(frame.gpr_save_size, content="64") // 7 regs = 4 pairs = 64 bytes
+  // X19 (always) + clobbered: 20, 25, 26 -> 19, 20, 25, 26 = 4 regs
+  inspect(frame.saved_gprs.length(), content="4")
+  inspect(frame.gpr_save_size, content="32") // 4 regs = 2 pairs = 32 bytes
 }
 
 ///|
@@ -114,8 +99,8 @@ test "jit_stack_frame_odd_fprs" {
     [],
     [8, 9, 10],
     0,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
 
   // 3 FPRs = 2 pairs = 32 bytes
@@ -130,24 +115,24 @@ test "jit_stack_frame_alignment" {
     [],
     [],
     1,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
   inspect(frame1.total_size % 16, content="0")
   let frame2 = JITStackFrame::build(
     [],
     [],
     3,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
   inspect(frame2.total_size % 16, content="0")
   let frame3 = JITStackFrame::build(
     [],
     [8],
     2,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
   inspect(frame3.total_size % 16, content="0")
 }
@@ -159,8 +144,8 @@ test "jit_stack_frame_spill_offset" {
     [],
     [],
     5,
-    needs_extra_results=false,
-    calls_multi_value=false,
+    has_calls=false,
+    outgoing_args_size=0,
   )
   inspect(frame.get_spill_offset(0), content=frame.spill_offset.to_string())
   inspect(
@@ -174,64 +159,91 @@ test "jit_stack_frame_spill_offset" {
 }
 
 ///|
-test "jit_stack_frame_call_buffer_offset" {
-  // Test call buffer offset calculation
+test "jit_stack_frame_outgoing_args" {
+  // Test outgoing arguments area
   let frame = JITStackFrame::build(
     [],
     [],
-    3,
-    needs_extra_results=false,
-    calls_multi_value=true,
+    0,
+    has_calls=true,
+    outgoing_args_size=32,
   )
-  inspect(
-    frame.get_call_buffer_offset(),
-    content=frame.call_buffer_offset.to_string(),
-  )
-  inspect(frame.call_buffer_offset > frame.spill_offset, content="true")
+  inspect(frame.outgoing_args_size, content="32")
+  inspect(frame.outgoing_args_offset, content="0") // At SP
+  // total = setup(16) + gpr(16) + fpr(0) + spill(16) + outgoing(32) = 80
+  inspect(frame.total_size, content="80")
 }
 
 ///|
-test "jit_stack_frame_matches_legacy" {
-  // Complex scenario that should match the old hardcoded implementation
-  // Clobbered: X19, X25, X26, X30 (LR)
+test "jit_stack_frame_complex" {
+  // Complex scenario
+  // Clobbered: X20, X25, X26
   // FPRs: D8, D9
   // Spills: 5 slots
-  // calls_multi_value: true
+  // has_calls: true
+  // outgoing_args: 16
   let frame = JITStackFrame::build(
-    [19, 25, 26, 30],
+    [20, 25, 26],
     [8, 9],
     5,
-    needs_extra_results=false,
-    calls_multi_value=true,
+    has_calls=true,
+    outgoing_args_size=16,
   )
-  // Base + clobbered: 19, 20, 21, 22, 23, 24, 25, 26, 30 = 9 regs = 5 pairs = 80 bytes
-  inspect(frame.gpr_save_size, content="80")
+  // X19 + clobbered: 19, 20, 25, 26 = 4 regs = 2 pairs = 32 bytes
+  inspect(frame.gpr_save_size, content="32")
   inspect(frame.fpr_save_size, content="16") // 2 FPRs = 1 pair
   inspect(frame.spill_size, content="48") // 5 slots = 40 bytes, aligned to 48
-  inspect(frame.call_buffer_size, content="64")
-  inspect(frame.total_size, content="208") // 80 + 16 + 48 + 64 = 208
+  inspect(frame.outgoing_args_size, content="16")
+  // frame_size = 32 + 16 + 48 + 16 = 112
+  inspect(frame.frame_size, content="112")
+  // total = setup(16) + frame_size(112) = 128
+  inspect(frame.total_size, content="128")
 }
 
 ///|
 test "jit_stack_frame_region_offsets" {
   // Verify that region offsets are correctly computed
+  // Layout from SP upward: [outgoing][spill][fpr][gpr]
   let frame = JITStackFrame::build(
     [],
     [8],
     3,
-    needs_extra_results=false,
-    calls_multi_value=true,
+    has_calls=true,
+    outgoing_args_size=16,
   )
 
-  // Offsets should be cumulative
-  inspect(frame.gpr_save_offset, content="0")
-  inspect(frame.fpr_save_offset, content=frame.gpr_save_size.to_string())
-  inspect(
-    frame.spill_offset,
-    content=(frame.gpr_save_size + frame.fpr_save_size).to_string(),
+  // outgoing_args at SP (offset 0)
+  inspect(frame.outgoing_args_offset, content="0")
+  // spill after outgoing
+  inspect(frame.spill_offset, content="16") // outgoing_args_size
+  // fpr after spill: 3 spill slots = 24 bytes, aligned to 32
+  inspect(frame.fpr_save_offset, content="48") // 16 + spill_size(32)
+  // gpr after fpr: 1 FPR = 1 pair = 16 bytes
+  inspect(frame.gpr_save_offset, content="64") // 48 + fpr_save_size(16)
+}
+
+///|
+test "jit_stack_frame_gpr_save_offset" {
+  // Test get_gpr_save_offset method
+  let frame = JITStackFrame::build(
+    [20, 25],
+    [],
+    0,
+    has_calls=false,
+    outgoing_args_size=0,
   )
-  inspect(
-    frame.call_buffer_offset,
-    content=(frame.gpr_save_size + frame.fpr_save_size + frame.spill_size).to_string(),
-  )
+
+  // saved_gprs = [19, 20, 25] (X19 always saved)
+  inspect(frame.saved_gprs.length(), content="3")
+  // X19 is at index 0, pair 0, offset 0
+  let offset_19 = frame.get_gpr_save_offset(19)
+  inspect(offset_19 >= 0, content="true")
+  // X20 is at index 1, pair 0, offset 8
+  let offset_20 = frame.get_gpr_save_offset(20)
+  inspect(offset_20 >= 0, content="true")
+  inspect(offset_20 > offset_19, content="true")
+  // X25 is at index 2, pair 1, offset 16
+  let offset_25 = frame.get_gpr_save_offset(25)
+  inspect(offset_25 >= 0, content="true")
+  inspect(offset_25 > offset_20, content="true")
 }

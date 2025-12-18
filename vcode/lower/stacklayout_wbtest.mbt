@@ -177,6 +177,7 @@ test "build_stack_layout: from regalloc result" {
     num_spill_slots: 0,
     spills: [],
     reloads: [],
+    inst_edits: {},
   }
 
   // Build stack layout
