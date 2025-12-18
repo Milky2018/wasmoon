@@ -1200,8 +1200,10 @@ fn Translator::translate_loop(
 ///|
 /// Translate an if-else construct
 ///
-/// For proper SSA form, we need to pass all mutable locals through the
-/// continuation block as parameters.
+/// Following Cranelift's approach:
+/// - Support block params (multi-value extension)
+/// - Pass params to both then and else blocks
+/// - Pass all mutable locals through continuation for SSA phi nodes
 fn Translator::translate_if(
   self : Translator,
   block_type : @types.BlockType,
@@ -1211,15 +1213,33 @@ fn Translator::translate_if(
   // Save the unreachable state from outer context
   let outer_is_unreachable = self.is_unreachable
   let result_types = get_block_result_types(block_type, self.func_types)
+  let param_types = get_block_param_types(block_type, self.func_types)
+
+  // Pop condition first (it's on top of the stack)
   let cond = if outer_is_unreachable {
     // Create a dummy value when unreachable
     self.builder.iconst_i32(0)
   } else {
     self.pop()
   }
+
+  // Pop param values from stack (following Cranelift: params are below condition)
+  let param_values : Array[Value] = []
+  if !outer_is_unreachable {
+    for _ in 0..<param_types.length() {
+      param_values.push(self.pop())
+    }
+    param_values.rev_in_place()
+  }
   let then_block = self.builder.create_block()
   let else_block = self.builder.create_block()
   let continuation = self.builder.create_block()
+
+  // Add block params to then_block and else_block for the if's input params
+  for ty in param_types {
+    self.builder.add_block_param(then_block, ty) |> ignore
+    self.builder.add_block_param(else_block, ty) |> ignore
+  }
 
   // Add continuation parameters for explicit results
   for ty in result_types {
@@ -1232,10 +1252,28 @@ fn Translator::translate_if(
     self.builder.add_block_param(continuation, loc.ty) |> ignore
   }
 
-  // Branch (only if not unreachable)
+  // Branch with param values (only if not unreachable)
+  // Following Cranelift: pass params to both then and else blocks
   if !outer_is_unreachable {
-    self.builder.brnz(cond, then_block, else_block)
+    if param_values.is_empty() {
+      // No params, use simple branch
+      self.builder.brnz(cond, then_block, else_block)
+    } else {
+      // Has params, use trampoline blocks to pass arguments
+      let then_trampoline = self.builder.create_block()
+      let else_trampoline = self.builder.create_block()
+      self.builder.brnz(cond, then_trampoline, else_trampoline)
+      // Then trampoline jumps to then_block with args
+      self.builder.switch_to_block(then_trampoline)
+      self.builder.jump(then_block, param_values)
+      // Else trampoline jumps to else_block with args
+      self.builder.switch_to_block(else_trampoline)
+      self.builder.jump(else_block, param_values)
+    }
   }
+
+  // Record stack height AFTER popping params (for stack restoration)
+  let stack_height_after_params = self.value_stack.length()
 
   // Push frame for then branch (else block as the "else" continuation)
   let frame : BlockFrame = {
@@ -1243,7 +1281,7 @@ fn Translator::translate_if(
     block: continuation,
     result_types,
     loop_header: None,
-    stack_height: self.value_stack.length(),
+    stack_height: stack_height_after_params,
   }
   self.block_stack.push(frame)
 
@@ -1253,10 +1291,14 @@ fn Translator::translate_if(
   // Translate then body
   self.builder.switch_to_block(then_block)
   self.is_unreachable = outer_is_unreachable // Reset for then body
+
+  // Push block params onto value stack (they become available in the then body)
+  for i, _ty in param_types {
+    self.push(then_block.params[i].0)
+  }
   for instr in then_body {
     self.translate_instruction(instr)
   }
-  let then_is_unreachable = self.is_unreachable
 
   // Jump to continuation from then block with locals (only if not unreachable)
   if !self.is_unreachable &&
@@ -1287,10 +1329,14 @@ fn Translator::translate_if(
   // Translate else body
   self.builder.switch_to_block(else_block)
   self.is_unreachable = outer_is_unreachable // Reset for else body
+
+  // Push block params onto value stack (they become available in the else body)
+  for i, _ty in param_types {
+    self.push(else_block.params[i].0)
+  }
   for instr in else_body {
     self.translate_instruction(instr)
   }
-  let else_is_unreachable = self.is_unreachable
 
   // Jump to continuation from else block with locals (only if not unreachable)
   if !self.is_unreachable &&
@@ -1314,10 +1360,11 @@ fn Translator::translate_if(
   // Switch to continuation
   self.builder.switch_to_block(continuation)
 
-  // Continuation is reachable if either branch is reachable
-  // (unless outer was unreachable)
-  self.is_unreachable = outer_is_unreachable ||
-    (then_is_unreachable && else_is_unreachable)
+  // Continuation is reachable if outer was reachable.
+  // Even if both branches end with `br 0` (making them "unreachable" after the br),
+  // those branches jump TO the continuation, so the continuation is still reachable.
+  // Only mark continuation unreachable if the outer context was unreachable.
+  self.is_unreachable = outer_is_unreachable
 
   // Push results onto stack
   for i, _ty in result_types {

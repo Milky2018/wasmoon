@@ -563,12 +563,23 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
 
 ///|
 /// Compute a signature for an expression (opcode + operands)
+/// For Fconst, we use the raw bits to distinguish different float values
+/// (since f32 bit patterns stored as Double may print as "NaN" even for different values)
 fn compute_expression_signature(inst : Inst) -> String {
-  let mut sig = inst.opcode.to_string()
-  for op in inst.operands {
-    sig = sig + "_v" + op.id.to_string()
+  let sig = match inst.opcode {
+    Fconst(val) => {
+      // Use raw bits for float constants to distinguish different NaN payloads
+      // and f32 values stored as Double bit patterns
+      let bits = val.reinterpret_as_int64()
+      "Fconst_" + bits.to_string()
+    }
+    _ => inst.opcode.to_string()
   }
-  sig
+  let mut result = sig
+  for op in inst.operands {
+    result = result + "_v" + op.id.to_string()
+  }
+  result
 }
 
 // ============ Run All Optimizations ============
