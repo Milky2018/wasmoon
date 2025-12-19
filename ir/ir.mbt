@@ -35,7 +35,11 @@ pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
     F64 => Type::F64
     FuncRef => Type::FuncRef
     ExternRef => Type::ExternRef
-    _ => Type::I32 // Fallback
+    // Typed function references are represented as I64 (function index)
+    RefFuncTyped(_) | RefNullFuncTyped(_) => Type::I64
+    RefFunc => Type::I64
+    RefExtern => Type::I64
+    _ => Type::I32 // Fallback for other types
   }
 }
 

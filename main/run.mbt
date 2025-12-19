@@ -429,6 +429,24 @@ fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
 }
 
 ///|
+/// Convert a store function address to module function index
+/// Returns -1 if not found (for null reference sentinel)
+fn store_addr_to_module_func_idx(
+  store_addr : Int,
+  instance : @runtime.ModuleInstance,
+) -> Int {
+  // Search for the store address in the instance's func_addrs
+  for i, addr in instance.func_addrs {
+    if addr == store_addr {
+      return i
+    }
+  }
+  // Not found - this shouldn't happen for valid function references
+  // Return -1 to trigger a null reference trap
+  -1
+}
+
+///|
 /// Allocate and initialize globals array for JIT
 /// Returns the pointer to the allocated array, or 0 on failure
 /// The caller is responsible for freeing the memory
@@ -453,12 +471,15 @@ fn init_jit_globals(
     let value = global_inst.get()
     // Convert value to Int64 for storage
     // Note: -1L is used as null sentinel in JIT
+    // For FuncRef, we need to convert store address to module function index
+    // because JIT func_table is indexed by module function index
     let raw_value = match value {
       I32(n) => n.to_int64()
       I64(n) => n
       F32(f) => f.reinterpret_as_int().to_int64()
       F64(d) => d.reinterpret_as_int64()
-      FuncRef(idx) => idx.to_int64()
+      FuncRef(store_addr) =>
+        store_addr_to_module_func_idx(store_addr, instance).to_int64()
       ExternRef(idx) => idx.to_int64()
       Null => -1L // null sentinel
     }

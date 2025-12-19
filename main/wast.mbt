@@ -64,6 +64,8 @@ priv struct JITModuleContext {
   // For syncing globals back to store after JIT calls
   globals_ptr : Int64
   global_addrs : Array[Int]
+  // For converting module function indices to store addresses
+  func_addrs : Array[Int]
 }
 
 ///|
@@ -420,15 +422,20 @@ fn try_compile_jit(
           // Initialize indirect table for call_indirect
           init_elem_segments(mod_, jm, instance, store)
           // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
-          // Store global_addrs for syncing after JIT calls
+          // Store global_addrs and func_addrs for syncing after JIT calls
           let global_addrs_copy : Array[Int] = []
           for addr in instance.global_addrs {
             global_addrs_copy.push(addr)
+          }
+          let func_addrs_copy : Array[Int] = []
+          for addr in instance.func_addrs {
+            func_addrs_copy.push(addr)
           }
           Some(JITModuleContext::{
             jit_module: jm,
             globals_ptr,
             global_addrs: global_addrs_copy,
+            func_addrs: func_addrs_copy,
           })
         }
       }
@@ -455,6 +462,8 @@ fn sync_jit_globals_to_store(
       let offset = jit_ctx.globals_ptr + (i * 16).to_int64()
       let raw_value = @jit.c_jit_read_i64(offset)
       // Convert based on global's type
+      // Note: For FuncRef, JIT stores module function index, we need to convert
+      // it back to store address for the interpreter
       let new_value : @types.Value = match global_inst.get_type().value_type {
         I32 => @types.Value::I32(raw_value.to_int())
         I64 => @types.Value::I64(raw_value)
@@ -465,7 +474,14 @@ fn sync_jit_globals_to_store(
           if raw_value == -1L {
             @types.Value::Null
           } else {
-            @types.Value::FuncRef(raw_value.to_int())
+            // Convert module function index back to store address
+            let mod_func_idx = raw_value.to_int()
+            if mod_func_idx >= 0 && mod_func_idx < jit_ctx.func_addrs.length() {
+              @types.Value::FuncRef(jit_ctx.func_addrs[mod_func_idx])
+            } else {
+              // Invalid index - treat as null
+              @types.Value::Null
+            }
           }
         ExternRef | RefExtern =>
           if raw_value == -1L {
