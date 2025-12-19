@@ -117,6 +117,10 @@ fn has_side_effects(inst : Inst) -> Bool {
     // Global operations: GlobalGet reads mutable state, GlobalSet modifies it
     // Mark both as having side effects to prevent incorrect CSE
     GlobalGet(_) | GlobalSet(_) => true
+    // Division/remainder can trap on divide-by-zero or overflow (INT_MIN / -1)
+    Sdiv | Udiv | Srem | Urem => true
+    // Float-to-int conversion can trap on NaN or out-of-range values
+    FcvtToSint | FcvtToUint => true
     // Other instructions are pure
     _ => false
   }
