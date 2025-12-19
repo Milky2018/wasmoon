@@ -490,24 +490,28 @@ fn lower_div(
   block : @block.VCodeBlock,
   signed~ : Bool,
 ) -> Unit {
+  let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+  let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+  let is_64 = inst.operands[0].ty is @ir.Type::I64
+
+  // Trap if divisor is zero (trap_code 4 = integer divide by zero)
+  // Must always emit even if result is unused (for side effect)
+  let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
+  trap_zero.add_use(Virtual(rhs))
+  block.add_inst(trap_zero)
+
+  // For signed division, also trap if INT_MIN / -1 (would overflow)
+  // Use trap_code 5 = integer overflow
+  if signed {
+    let trap_overflow = @instr.VCodeInst::new(TrapIfDivOverflow(is_64, 5))
+    trap_overflow.add_use(Virtual(lhs))
+    trap_overflow.add_use(Virtual(rhs))
+    block.add_inst(trap_overflow)
+  }
+
+  // Only emit division if result is used
   if inst.result is Some(result) {
     let dst = ctx.get_vreg(result)
-    let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-    let is_64 = result.ty is @ir.Type::I64
-    // Trap if divisor is zero (trap_code 4 = integer divide by zero)
-    let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
-    trap_zero.add_use(Virtual(rhs))
-    block.add_inst(trap_zero)
-    // For signed division, also trap if INT_MIN / -1 (would overflow)
-    // Use trap_code 5 = integer overflow
-    if signed {
-      let trap_overflow = @instr.VCodeInst::new(TrapIfDivOverflow(is_64, 5))
-      trap_overflow.add_use(Virtual(lhs))
-      trap_overflow.add_use(Virtual(rhs))
-      block.add_inst(trap_overflow)
-    }
-    // Emit division
     let opcode : @instr.VCodeOpcode = if signed {
       @instr.VCodeOpcode::SDiv(is_64)
     } else {
@@ -1073,35 +1077,43 @@ fn lower_rem(
   block : @block.VCodeBlock,
   signed : Bool,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
-  let dst = ctx.get_vreg(result)
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block) // a (dividend)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block) // b (divisor)
-  let is_64 = result.ty is @ir.Type::I64
+  let is_64 = inst.operands[0].ty is @ir.Type::I64
 
-  // Trap if divisor is zero (trap_code 4 = integer_overflow)
+  // Trap if divisor is zero (trap_code 4 = integer divide by zero)
+  // Must always emit even if result is unused (for side effect)
   let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
   trap_zero.add_use(Virtual(rhs))
   block.add_inst(trap_zero)
 
-  // Step 1: Compute quotient = a / b
-  let quotient = ctx.vcode_func.new_vreg(Int)
-  let div_opcode = if signed { @instr.SDiv(is_64) } else { @instr.UDiv(is_64) }
-  let div_inst = @instr.VCodeInst::new(div_opcode)
-  div_inst.add_def({ reg: Virtual(quotient) })
-  div_inst.add_use(Virtual(lhs))
-  div_inst.add_use(Virtual(rhs))
-  block.add_inst(div_inst)
+  // Only emit remainder computation if result is used
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
 
-  // Step 2: Compute remainder = a - quotient * b using MSUB
-  // MSUB rd, rn, rm, ra computes: ra - rn * rm
-  // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
-  let msub_inst = @instr.VCodeInst::new(Msub)
-  msub_inst.add_def({ reg: Virtual(dst) })
-  msub_inst.add_use(Virtual(lhs)) // accumulator (a)
-  msub_inst.add_use(Virtual(quotient)) // multiplicand
-  msub_inst.add_use(Virtual(rhs)) // multiplier (b)
-  block.add_inst(msub_inst)
+    // Step 1: Compute quotient = a / b
+    let quotient = ctx.vcode_func.new_vreg(Int)
+    let div_opcode = if signed {
+      @instr.SDiv(is_64)
+    } else {
+      @instr.UDiv(is_64)
+    }
+    let div_inst = @instr.VCodeInst::new(div_opcode)
+    div_inst.add_def({ reg: Virtual(quotient) })
+    div_inst.add_use(Virtual(lhs))
+    div_inst.add_use(Virtual(rhs))
+    block.add_inst(div_inst)
+
+    // Step 2: Compute remainder = a - quotient * b using MSUB
+    // MSUB rd, rn, rm, ra computes: ra - rn * rm
+    // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
+    let msub_inst = @instr.VCodeInst::new(Msub)
+    msub_inst.add_def({ reg: Virtual(dst) })
+    msub_inst.add_use(Virtual(lhs)) // accumulator (a)
+    msub_inst.add_use(Virtual(quotient)) // multiplicand
+    msub_inst.add_use(Virtual(rhs)) // multiplier (b)
+    block.add_inst(msub_inst)
+  }
 }
 
 ///|
