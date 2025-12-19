@@ -2,8 +2,8 @@
 // Centralized definition of JIT calling convention
 //
 // Wasmoon JIT ABI v3 (Cranelift-style):
-// - X0: callee_vmctx (被调用者的 VMContext)
-// - X1: caller_vmctx (调用者的 VMContext)
+// - X0: callee_vmctx (callee's VMContext)
+// - X1: caller_vmctx (caller's VMContext)
 // - X2-X7: User integer parameters (up to 6 in registers)
 // - V0-V7: Float parameters (S for f32, D for f64)
 // - X19: Cached callee_vmctx (callee-saved, set in prologue)
