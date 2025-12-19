@@ -160,7 +160,7 @@ test "LocatedToken: lparen position tracking" {
 ///|
 test "LocatedToken: keyword position tracking" {
   let lexer = Lexer::new("(module)")
-  let _ = lexer.next_token() catch { _ => fail("unexpected error") }
+  (lexer.next_token() catch { _ => fail("unexpected error") }) |> ignore
   let tok = lexer.next_token() catch { _ => fail("unexpected error") }
   inspect(tok.token, content="Keyword(\"module\")")
   inspect(tok.span.start_line, content="1")
