@@ -358,9 +358,9 @@ fn Lexer::read_id_or_keyword(self : Lexer) -> String {
 
 ///|
 fn Lexer::read_string(self : Lexer) -> String raise WatError {
-  // Accumulate raw bytes since hex escapes like \ef produce raw bytes
-  // that may form multi-byte UTF-8 sequences
-  let bytes : Array[Byte] = []
+  // Write directly to StringBuilder - hex escapes produce raw byte values
+  // that are stored as character code units (not UTF-8 interpreted)
+  let buf = StringBuilder::new()
   let start_loc = self.current_loc()
   // Skip opening quote
   self.advance_pos()
@@ -368,18 +368,17 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
     match self.peek_char() {
       Some('"') => {
         self.advance_pos()
-        // Convert accumulated bytes to UTF-8 string
-        return bytes_to_string(bytes)
+        return buf.to_string()
       }
       Some('\\') => {
         self.advance_pos()
         match self.next_char() {
-          Some('n') => bytes.push(b'\n')
-          Some('t') => bytes.push(b'\t')
-          Some('r') => bytes.push(b'\r')
-          Some('"') => bytes.push(b'"')
-          Some('\\') => bytes.push(b'\\')
-          Some('\'') => bytes.push(b'\'')
+          Some('n') => buf.write_char('\n')
+          Some('t') => buf.write_char('\t')
+          Some('r') => buf.write_char('\r')
+          Some('"') => buf.write_char('"')
+          Some('\\') => buf.write_char('\\')
+          Some('\'') => buf.write_char('\'')
           Some('u') =>
             // Unicode escape \u{xxxx}
             match self.next_char() {
@@ -409,7 +408,7 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
                   raise WatError::ParseError("Empty Unicode escape", start_loc)
                 }
                 match parse_hex_codepoint(hex) {
-                  Some(cp) => write_codepoint_bytes(bytes, cp)
+                  Some(cp) => buf.write_char(cp.unsafe_to_char())
                   None =>
                     raise WatError::ParseError(
                       "Invalid Unicode escape: \\u{\{hex}}",
@@ -424,13 +423,13 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
                 )
             }
           Some(c) =>
-            // Hex escape \xx - produces a raw byte
+            // Hex escape \xx - produces a raw byte value as character
             if is_hex_digit(c) {
               match self.next_char() {
                 Some(c2) => {
                   let hex = String::make(1, c) + String::make(1, c2)
                   match parse_hex_byte(hex) {
-                    Some(b) => bytes.push(b.to_byte())
+                    Some(b) => buf.write_char(b.unsafe_to_char())
                     None =>
                       raise WatError::ParseError(
                         "Invalid hex escape: \{hex}",
@@ -442,146 +441,21 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
               }
             } else {
               // Unknown escape - just output the character
-              write_char_bytes(bytes, c)
+              buf.write_char(c)
             }
           None => raise WatError::UnexpectedEof(self.current_loc())
         }
       }
       Some(_) =>
-        // Regular character - read it and encode as UTF-8 bytes
+        // Regular character
         match self.next_char() {
-          Some(c) => write_char_bytes(bytes, c)
+          Some(c) => buf.write_char(c)
           None => raise WatError::UnexpectedEof(self.current_loc())
         }
       None => raise WatError::UnexpectedEof(self.current_loc())
     }
   }
   raise WatError::UnexpectedEof(self.current_loc())
-}
-
-///|
-/// Write a character's UTF-8 encoding to a byte array
-fn write_char_bytes(bytes : Array[Byte], c : Char) -> Unit {
-  let cp = c.to_int()
-  if cp < 0x80 {
-    bytes.push(cp.to_byte())
-  } else if cp < 0x800 {
-    bytes.push((0xC0 | (cp >> 6)).to_byte())
-    bytes.push((0x80 | (cp & 0x3F)).to_byte())
-  } else if cp < 0x10000 {
-    bytes.push((0xE0 | (cp >> 12)).to_byte())
-    bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
-    bytes.push((0x80 | (cp & 0x3F)).to_byte())
-  } else {
-    bytes.push((0xF0 | (cp >> 18)).to_byte())
-    bytes.push((0x80 | ((cp >> 12) & 0x3F)).to_byte())
-    bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
-    bytes.push((0x80 | (cp & 0x3F)).to_byte())
-  }
-}
-
-///|
-/// Write a codepoint's UTF-8 encoding to a byte array
-fn write_codepoint_bytes(bytes : Array[Byte], cp : Int) -> Unit {
-  if cp < 0x80 {
-    bytes.push(cp.to_byte())
-  } else if cp < 0x800 {
-    bytes.push((0xC0 | (cp >> 6)).to_byte())
-    bytes.push((0x80 | (cp & 0x3F)).to_byte())
-  } else if cp < 0x10000 {
-    bytes.push((0xE0 | (cp >> 12)).to_byte())
-    bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
-    bytes.push((0x80 | (cp & 0x3F)).to_byte())
-  } else {
-    bytes.push((0xF0 | (cp >> 18)).to_byte())
-    bytes.push((0x80 | ((cp >> 12) & 0x3F)).to_byte())
-    bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
-    bytes.push((0x80 | (cp & 0x3F)).to_byte())
-  }
-}
-
-///|
-/// Convert a byte array to a UTF-8 string
-fn bytes_to_string(bytes : Array[Byte]) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < bytes.length() {
-    let b = bytes[i].to_int()
-    if b < 0x80 {
-      // ASCII
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xC0 {
-      // Invalid leading byte, treat as raw byte (Latin-1)
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xE0 {
-      // 2-byte sequence
-      if i + 1 < bytes.length() {
-        let b2 = bytes[i + 1].to_int()
-        let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
-        if is_valid_codepoint(cp) {
-          buf.write_char(cp.unsafe_to_char())
-        } else {
-          // Invalid codepoint, output bytes as Latin-1
-          buf.write_char(b.unsafe_to_char())
-          buf.write_char(b2.unsafe_to_char())
-        }
-        i = i + 2
-      } else {
-        buf.write_char(b.unsafe_to_char())
-        i = i + 1
-      }
-    } else if b < 0xF0 {
-      // 3-byte sequence
-      if i + 2 < bytes.length() {
-        let b2 = bytes[i + 1].to_int()
-        let b3 = bytes[i + 2].to_int()
-        let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
-        if is_valid_codepoint(cp) {
-          buf.write_char(cp.unsafe_to_char())
-        } else {
-          // Invalid codepoint, output bytes as Latin-1
-          buf.write_char(b.unsafe_to_char())
-          buf.write_char(b2.unsafe_to_char())
-          buf.write_char(b3.unsafe_to_char())
-        }
-        i = i + 3
-      } else {
-        buf.write_char(b.unsafe_to_char())
-        i = i + 1
-      }
-      // 4-byte sequence
-    } else if i + 3 < bytes.length() {
-      let b2 = bytes[i + 1].to_int()
-      let b3 = bytes[i + 2].to_int()
-      let b4 = bytes[i + 3].to_int()
-      let cp = ((b & 0x07) << 18) |
-        ((b2 & 0x3F) << 12) |
-        ((b3 & 0x3F) << 6) |
-        (b4 & 0x3F)
-      if is_valid_codepoint(cp) {
-        buf.write_char(cp.unsafe_to_char())
-      } else {
-        // Invalid codepoint, output bytes as Latin-1
-        buf.write_char(b.unsafe_to_char())
-        buf.write_char(b2.unsafe_to_char())
-        buf.write_char(b3.unsafe_to_char())
-        buf.write_char(b4.unsafe_to_char())
-      }
-      i = i + 4
-    } else {
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    }
-  }
-  buf.to_string()
-}
-
-///|
-/// Check if a codepoint is valid Unicode (not surrogate, not > U+10FFFF)
-fn is_valid_codepoint(cp : Int) -> Bool {
-  cp <= 0x10FFFF && (cp < 0xD800 || cp > 0xDFFF)
 }
 
 ///|
