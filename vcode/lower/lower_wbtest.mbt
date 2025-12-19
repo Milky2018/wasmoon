@@ -779,7 +779,7 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
 }
 
 // ============ br_table Pattern Test (f32_br_2locals reproduction) ============
-// This test reproduces the pattern from testsuite/data/f32_br_2locals.wast
+// This test reproduces the pattern from spec/f32_br_2locals.wast
 //
 // The WASM function:
 //   (func (export "test") (param i32) (result f32)

@@ -161,11 +161,12 @@ priv struct Lexer {
   input : String
   mut pos : Int
   mut line : Int
+  mut token_start_pos : Int // Position where the current token started
 }
 
 ///|
 fn Lexer::new(input : String) -> Lexer {
-  { input, pos: 0, line: 1 }
+  { input, pos: 0, line: 1, token_start_pos: 0 }
 }
 
 ///|
@@ -248,10 +249,144 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
               self.pos += 1
             }
           }
+        } else if self.pos + 1 < self.input.length() &&
+          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == '@' {
+          // Skip annotation (@id ...)
+          self.skip_annotation()
         } else {
           break
         }
       _ => break
+    }
+  }
+}
+
+///|
+/// Skip an annotation (@id ...) including nested parentheses
+fn Lexer::skip_annotation(self : Lexer) -> Unit {
+  // Skip '(@'
+  self.pos += 2
+  // Skip annotation id (can be identifier or string)
+  while !self.is_eof() {
+    match self.peek_char() {
+      Some(' ') | Some('\t') | Some('\r') => break
+      Some('\n') => {
+        self.line += 1
+        break
+      }
+      Some('(') | Some(')') => break
+      Some('"') => {
+        // Skip string in annotation id
+        self.pos += 1
+        while !self.is_eof() {
+          match self.peek_char() {
+            Some('"') => {
+              self.pos += 1
+              break
+            }
+            Some('\\') => self.pos += 2 // skip escaped char
+            Some('\n') => {
+              self.pos += 1
+              self.line += 1
+            }
+            _ => self.pos += 1
+          }
+        }
+        break
+      }
+      _ => self.pos += 1
+    }
+  }
+  // Skip whitespace after id
+  while !self.is_eof() {
+    match self.peek_char() {
+      Some(' ') | Some('\t') | Some('\r') => self.pos += 1
+      Some('\n') => {
+        self.pos += 1
+        self.line += 1
+      }
+      _ => break
+    }
+  }
+  // Skip content with balanced parentheses until closing ')'
+  let mut depth = 1
+  while !self.is_eof() && depth > 0 {
+    match self.peek_char() {
+      Some('(') =>
+        // Check for block comment inside annotation
+        if self.pos + 1 < self.input.length() &&
+          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
+          // Block comment inside annotation - skip it
+          self.pos += 2
+          let mut comment_depth = 1
+          while !self.is_eof() && comment_depth > 0 {
+            if self.pos + 1 < self.input.length() {
+              let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
+              let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
+              if c1 == ';' && c2 == ')' {
+                comment_depth -= 1
+                self.pos += 2
+              } else if c1 == '(' && c2 == ';' {
+                comment_depth += 1
+                self.pos += 2
+              } else if c1 == '\n' {
+                self.pos += 1
+                self.line += 1
+              } else {
+                self.pos += 1
+              }
+            } else {
+              self.pos += 1
+            }
+          }
+        } else {
+          depth += 1
+          self.pos += 1
+        }
+      Some(')') => {
+        depth -= 1
+        self.pos += 1
+      }
+      Some('"') => {
+        // Skip string inside annotation
+        self.pos += 1
+        while !self.is_eof() {
+          match self.peek_char() {
+            Some('"') => {
+              self.pos += 1
+              break
+            }
+            Some('\\') => self.pos += 2 // skip escaped char
+            Some('\n') => {
+              self.pos += 1
+              self.line += 1
+            }
+            _ => self.pos += 1
+          }
+        }
+      }
+      Some(';') =>
+        // Check for line comment inside annotation
+        if self.pos + 1 < self.input.length() &&
+          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
+          while !self.is_eof() {
+            match self.peek_char() {
+              Some('\n') => {
+                self.pos += 1
+                self.line += 1
+                break
+              }
+              _ => self.pos += 1
+            }
+          }
+        } else {
+          self.pos += 1
+        }
+      Some('\n') => {
+        self.pos += 1
+        self.line += 1
+      }
+      _ => self.pos += 1
     }
   }
 }
@@ -377,47 +512,6 @@ fn hex_digit_value(c : Char) -> Int? {
 }
 
 ///|
-/// Escape a string for WAT format output
-/// Converts special characters and non-printable bytes to escape sequences
-fn escape_string_to(s : String, buf : StringBuilder) -> Unit {
-  for i in 0..<s.length() {
-    let c = s.code_unit_at(i).to_int()
-    if c == '"'.to_int() {
-      buf.write_string("\\\"")
-    } else if c == '\\'.to_int() {
-      buf.write_string("\\\\")
-    } else if c == '\n'.to_int() {
-      buf.write_string("\\n")
-    } else if c == '\r'.to_int() {
-      buf.write_string("\\r")
-    } else if c == '\t'.to_int() {
-      buf.write_string("\\t")
-    } else if c >= 0x20 && c < 0x7f {
-      // Printable ASCII
-      buf.write_char(c.unsafe_to_char())
-    } else if c < 0x100 {
-      // Non-printable byte (0x00-0x1F, 0x7F-0xFF): use hex escape
-      buf.write_string("\\")
-      buf.write_char(hex_char((c / 16) & 0x0f))
-      buf.write_char(hex_char(c & 0x0f))
-    } else {
-      // Unicode code point > 0xFF: write directly (WAT parser handles UTF-8)
-      buf.write_char(c.unsafe_to_char())
-    }
-  }
-}
-
-///|
-/// Convert a nibble (0-15) to hex character
-fn hex_char(n : Int) -> Char {
-  if n < 10 {
-    ('0'.to_int() + n).unsafe_to_char()
-  } else {
-    ('a'.to_int() + n - 10).unsafe_to_char()
-  }
-}
-
-///|
 fn Lexer::read_number(self : Lexer) -> String {
   let buf = StringBuilder::new()
   // Handle optional sign
@@ -504,6 +598,8 @@ fn Lexer::read_number(self : Lexer) -> String {
 ///|
 fn Lexer::next_token(self : Lexer) -> Token raise WastError {
   self.skip_whitespace()
+  // Record where this token starts
+  self.token_start_pos = self.pos
   if self.is_eof() {
     return Eof
   }
@@ -658,13 +754,16 @@ fn Parser::parse_module_command(self : Parser) -> WastCommand raise WastError {
   self.advance() // skip "module"
   // Check for optional module name
   let name = self.parse_optional_id()
+  // Record the position where module content starts (before current token)
+  // We need to find where in the input the content starts
+  let content_start_pos = self.find_content_start_pos()
   // Check for binary, quote, or definition module
   match self.current {
     Keyword("definition") => {
       // module definition - defines but doesn't instantiate
       self.advance()
       let module_start_line = self.current_line()
-      let wat_text = self.collect_module_text()
+      let wat_text = self.collect_module_text(content_start_pos)
       self.expect_rparen()
       let mod_ = @wat.parse(wat_text) catch {
         e => raise WatError(e, module_start_line)
@@ -700,7 +799,7 @@ fn Parser::parse_module_command(self : Parser) -> WastCommand raise WastError {
       // Inline WAT module - collect the rest and parse with WAT parser
       // Record the line number where the module starts for error reporting
       let module_start_line = self.current_line()
-      let wat_text = self.collect_module_text()
+      let wat_text = self.collect_module_text(content_start_pos)
       self.expect_rparen()
       let mod_ = @wat.parse(wat_text) catch {
         e => raise WatError(e, module_start_line)
@@ -711,53 +810,169 @@ fn Parser::parse_module_command(self : Parser) -> WastCommand raise WastError {
 }
 
 ///|
-fn Parser::collect_module_text(self : Parser) -> String raise WastError {
-  // We need to reconstruct the module text from current position
-  // This is a simplified approach - collect tokens until matching rparen
-  let buf = StringBuilder::new()
-  buf.write_string("(module ")
+/// Get the position where the current token starts in the input
+fn Parser::find_content_start_pos(self : Parser) -> Int {
+  self.lexer.token_start_pos
+}
+
+///|
+fn Parser::collect_module_text(
+  self : Parser,
+  content_start_pos : Int,
+) -> String raise WastError {
+  // Extract raw module text from input, preserving original formatting
+  // This keeps line numbers and column positions accurate for error reporting
+  let input = self.lexer.input
+  let start_pos = content_start_pos
+
+  // We need to find the matching closing parenthesis
+  // Track depth starting at 1 (we're inside the module)
   let mut depth = 1
-  while depth > 0 && self.current != Eof {
-    match self.current {
-      LParen => {
-        buf.write_string("(")
-        depth += 1
-        self.advance()
-      }
-      RParen => {
+  let mut pos = start_pos
+  while depth > 0 && pos < input.length() {
+    let c = input.code_unit_at(pos).unsafe_to_char()
+    match c {
+      '(' =>
+        // Check for block comment
+        if pos + 1 < input.length() &&
+          input.code_unit_at(pos + 1).unsafe_to_char() == ';' {
+          // Skip block comment
+          pos += 2
+          let mut comment_depth = 1
+          while comment_depth > 0 && pos < input.length() {
+            let c2 = input.code_unit_at(pos).unsafe_to_char()
+            if c2 == ';' &&
+              pos + 1 < input.length() &&
+              input.code_unit_at(pos + 1).unsafe_to_char() == ')' {
+              comment_depth -= 1
+              pos += 2
+            } else if c2 == '(' &&
+              pos + 1 < input.length() &&
+              input.code_unit_at(pos + 1).unsafe_to_char() == ';' {
+              comment_depth += 1
+              pos += 2
+            } else {
+              pos += 1
+            }
+          }
+        } else if pos + 1 < input.length() &&
+          input.code_unit_at(pos + 1).unsafe_to_char() == '@' {
+          // Skip annotation (@id ...)
+          pos += 2
+          // Skip annotation id
+          while pos < input.length() {
+            let c2 = input.code_unit_at(pos).unsafe_to_char()
+            if c2 == ' ' || c2 == '\t' || c2 == '\n' || c2 == '\r' || c2 == ')' {
+              break
+            }
+            if c2 == '"' {
+              // String annotation id
+              pos += 1
+              while pos < input.length() {
+                let c3 = input.code_unit_at(pos).unsafe_to_char()
+                if c3 == '"' {
+                  pos += 1
+                  break
+                } else if c3 == '\\' {
+                  pos += 2
+                } else {
+                  pos += 1
+                }
+              }
+              break
+            }
+            pos += 1
+          }
+          // Skip annotation content with balanced parens
+          let mut ann_depth = 1
+          while ann_depth > 0 && pos < input.length() {
+            let c2 = input.code_unit_at(pos).unsafe_to_char()
+            if c2 == '(' {
+              ann_depth += 1
+              pos += 1
+            } else if c2 == ')' {
+              ann_depth -= 1
+              pos += 1
+            } else if c2 == '"' {
+              pos += 1
+              while pos < input.length() {
+                let c3 = input.code_unit_at(pos).unsafe_to_char()
+                if c3 == '"' {
+                  pos += 1
+                  break
+                } else if c3 == '\\' {
+                  pos += 2
+                } else {
+                  pos += 1
+                }
+              }
+            } else {
+              pos += 1
+            }
+          }
+        } else {
+          depth += 1
+          pos += 1
+        }
+      ')' => {
         depth -= 1
         if depth > 0 {
-          buf.write_string(")")
-          self.advance()
+          pos += 1
         }
       }
-      Keyword(k) => {
-        buf.write_string(k)
-        buf.write_string(" ")
-        self.advance()
+      ';' =>
+        // Check for line comment
+        if pos + 1 < input.length() &&
+          input.code_unit_at(pos + 1).unsafe_to_char() == ';' {
+          // Skip to end of line
+          while pos < input.length() {
+            let c2 = input.code_unit_at(pos).unsafe_to_char()
+            if c2 == '\n' {
+              pos += 1
+              break
+            }
+            pos += 1
+          }
+        } else {
+          pos += 1
+        }
+      '"' => {
+        // Skip string
+        pos += 1
+        while pos < input.length() {
+          let c2 = input.code_unit_at(pos).unsafe_to_char()
+          if c2 == '"' {
+            pos += 1
+            break
+          } else if c2 == '\\' {
+            pos += 2
+          } else {
+            pos += 1
+          }
+        }
       }
-      Id(id) => {
-        buf.write_string("$")
-        buf.write_string(id)
-        buf.write_string(" ")
-        self.advance()
-      }
-      Number(n) => {
-        buf.write_string(n)
-        buf.write_string(" ")
-        self.advance()
-      }
-      String_(s) => {
-        buf.write_string("\"")
-        // Re-escape string contents for WAT parser
-        escape_string_to(s, buf)
-        buf.write_string("\" ")
-        self.advance()
-      }
-      Eof => break
+      _ => pos += 1
     }
   }
+
+  // Extract the raw text and build the module string
+  let buf = StringBuilder::new()
+  buf.write_string("(module ")
+  for i in start_pos..<pos {
+    buf.write_char(input.code_unit_at(i).unsafe_to_char())
+  }
   buf.write_string(")")
+
+  // Update the lexer position to point past the extracted content
+  // We need to count newlines to keep line tracking accurate
+  for i in self.lexer.pos..<pos {
+    if input.code_unit_at(i).unsafe_to_char() == '\n' {
+      self.lexer.line += 1
+    }
+  }
+  self.lexer.pos = pos
+  // Read the next token (should be RParen)
+  self.current = self.lexer.next_token()
   buf.to_string()
 }
 
@@ -874,6 +1089,8 @@ fn Parser::parse_module_source(
   self.expect_keyword("module")
   // Check for optional name
   self.parse_optional_id() |> ignore
+  // Record content start position before consuming tokens
+  let content_start_pos = self.find_content_start_pos()
   match self.current {
     Keyword("binary") => {
       self.advance()
@@ -896,7 +1113,7 @@ fn Parser::parse_module_source(
     }
     _ => {
       // Inline module
-      let wat_text = self.collect_module_text()
+      let wat_text = self.collect_module_text(content_start_pos)
       // Try to parse; if it fails, store the error for assert_invalid/malformed
       let mod_ = @wat.parse(wat_text) catch {
         e => return FailedToParse(e.to_string())

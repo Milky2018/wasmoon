@@ -2,7 +2,7 @@
 // These tests compile IR functions to machine code and actually execute them
 
 // ============ f32_br_2locals.wast Reproduction ============
-// This test reproduces the exact test pattern from testsuite/data/f32_br_2locals.wast
+// This test reproduces the exact test pattern from spec/f32_br_2locals.wast
 // and verifies the JIT-compiled code returns correct values:
 //   (assert_return (invoke "test" (i32.const 0)) (f32.const 10.0))
 //   (assert_return (invoke "test" (i32.const 1)) (f32.const 10.0))
@@ -198,7 +198,7 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
 
 ///|
 test "end-to-end: f32_br_2locals.wast from source" {
-  // The actual WAST source from testsuite/data/f32_br_2locals.wast
+  // The actual WAST source from spec/f32_br_2locals.wast
   let wast_source =
     #|(module
     #|  (memory 1)

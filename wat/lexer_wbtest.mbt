@@ -124,19 +124,168 @@ test "read_number: nan with payload and underscores" {
 test "next_token: nan without sign is Number" {
   let lexer = Lexer::new("nan")
   let tok = lexer.next_token() catch { _ => fail("unexpected error") }
-  inspect(tok, content="Number(\"nan\")")
+  inspect(tok.token, content="Number(\"nan\")")
 }
 
 ///|
 test "next_token: nan:payload without sign is Number" {
   let lexer = Lexer::new("nan:0x1")
   let tok = lexer.next_token() catch { _ => fail("unexpected error") }
-  inspect(tok, content="Number(\"nan:0x1\")")
+  inspect(tok.token, content="Number(\"nan:0x1\")")
 }
 
 ///|
 test "next_token: inf without sign is Number" {
   let lexer = Lexer::new("inf")
   let tok = lexer.next_token() catch { _ => fail("unexpected error") }
-  inspect(tok, content="Number(\"inf\")")
+  inspect(tok.token, content="Number(\"inf\")")
+}
+
+// ============================================================
+// LocatedToken source position tests
+// ============================================================
+
+///|
+test "LocatedToken: lparen position tracking" {
+  let lexer = Lexer::new("(module)")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="LParen")
+  inspect(tok.span.start_line, content="1")
+  inspect(tok.span.start_column, content="1")
+  inspect(tok.span.end_line, content="1")
+  inspect(tok.span.end_column, content="2")
+  inspect(tok.raw, content="(")
+}
+
+///|
+test "LocatedToken: keyword position tracking" {
+  let lexer = Lexer::new("(module)")
+  let _ = lexer.next_token() catch { _ => fail("unexpected error") }
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="Keyword(\"module\")")
+  inspect(tok.span.start_line, content="1")
+  inspect(tok.span.start_column, content="2")
+  inspect(tok.span.end_line, content="1")
+  inspect(tok.span.end_column, content="8")
+  inspect(tok.raw, content="module")
+}
+
+///|
+test "LocatedToken: multiline position tracking" {
+  let lexer = Lexer::new("(\n  module\n)")
+  let lparen = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(lparen.span.start_line, content="1")
+  inspect(lparen.span.start_column, content="1")
+  let module_ = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(module_.span.start_line, content="2")
+  inspect(module_.span.start_column, content="3")
+  inspect(module_.span.end_line, content="2")
+  inspect(module_.span.end_column, content="9")
+  let rparen = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(rparen.span.start_line, content="3")
+  inspect(rparen.span.start_column, content="1")
+}
+
+///|
+test "LocatedToken: id position tracking" {
+  let lexer = Lexer::new("$myname")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="Id(\"myname\")")
+  inspect(tok.span.start_column, content="1")
+  inspect(tok.span.end_column, content="8")
+  inspect(tok.raw, content="$myname")
+}
+
+///|
+test "LocatedToken: string position tracking" {
+  let lexer = Lexer::new("\"hello\"")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="String_(\"hello\")")
+  inspect(tok.span.start_column, content="1")
+  inspect(tok.span.end_column, content="8")
+  inspect(tok.raw, content="\"hello\"")
+}
+
+///|
+test "LocatedToken: number position tracking" {
+  let lexer = Lexer::new("12345")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="Number(\"12345\")")
+  inspect(tok.span.start_column, content="1")
+  inspect(tok.span.end_column, content="6")
+  inspect(tok.raw, content="12345")
+}
+
+///|
+test "LocatedToken: to_loc conversion" {
+  let lexer = Lexer::new("  keyword")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  let loc = tok.to_loc()
+  inspect(loc.line, content="1")
+  inspect(loc.column, content="3")
+}
+
+// ============================================================
+// Annotation skipping tests
+// ============================================================
+
+///|
+test "annotation: simple annotation skipped" {
+  let lexer = Lexer::new("(@id) module")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  // The annotation should be skipped, next token is "module"
+  inspect(tok.token, content="Keyword(\"module\")")
+}
+
+///|
+test "annotation: annotation with content skipped" {
+  let lexer = Lexer::new("(@custom \"some content\") func")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="Keyword(\"func\")")
+}
+
+///|
+test "annotation: nested annotations skipped" {
+  let lexer = Lexer::new("(@outer (@inner)) keyword")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="Keyword(\"keyword\")")
+}
+
+///|
+test "annotation: multiple annotations skipped" {
+  let lexer = Lexer::new("(@a) (@b) (@c) global")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="Keyword(\"global\")")
+}
+
+///|
+test "annotation: annotation after lparen" {
+  let lexer = Lexer::new("((@a) module)")
+  let lparen = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(lparen.token, content="LParen")
+  let module_ = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(module_.token, content="Keyword(\"module\")")
+}
+
+///|
+test "annotation: position after annotation" {
+  let lexer = Lexer::new("(@a) module")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  // After skipping annotation, position should be correct
+  inspect(tok.span.start_column, content="6") // "module" starts at column 6
+}
+
+///|
+test "annotation: annotation with string id" {
+  let lexer = Lexer::new("(@\"custom-id\") func")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="Keyword(\"func\")")
+}
+
+///|
+test "annotation: annotation spanning multiple lines" {
+  let lexer = Lexer::new("(@a\n  content\n) module")
+  let tok = lexer.next_token() catch { _ => fail("unexpected error") }
+  inspect(tok.token, content="Keyword(\"module\")")
+  inspect(tok.span.start_line, content="3")
 }

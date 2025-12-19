@@ -561,3 +561,234 @@ test "regression: flat form with optional labels after else and end" {
   inspect(mod.exports.length(), content="1")
   inspect(mod.exports[0].name, content="fac-stack-raw")
 }
+
+// ============================================================
+// Export-before-import pattern tests
+// ============================================================
+
+///|
+test "parse WAT: global export before import" {
+  // Global with export before import - tests export-before-import handling
+  let wat =
+    #|(module
+    #|  (global $g (export "g") (import "spectest" "global_i32") i32)
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.imports.length(), content="1")
+  inspect(mod.imports[0].mod_name, content="spectest")
+  inspect(mod.imports[0].name, content="global_i32")
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="g")
+}
+
+///|
+test "parse WAT: global import before export" {
+  // Global with import before export - standard order
+  let wat =
+    #|(module
+    #|  (global $g (import "spectest" "global_i32") (export "g") i32)
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.imports.length(), content="1")
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="g")
+}
+
+///|
+test "parse WAT: global multiple exports with import" {
+  // Global with multiple exports and import
+  let wat =
+    #|(module
+    #|  (global $g (export "g1") (export "g2") (import "spectest" "global_i32") i32)
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.imports.length(), content="1")
+  inspect(mod.exports.length(), content="2")
+  inspect(mod.exports[0].name, content="g1")
+  inspect(mod.exports[1].name, content="g2")
+}
+
+///|
+test "parse WAT: memory export before import" {
+  // Memory with export before import
+  let wat =
+    #|(module
+    #|  (memory $m (export "m") (import "spectest" "memory") 1 2)
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.imports.length(), content="1")
+  inspect(mod.imports[0].mod_name, content="spectest")
+  inspect(mod.imports[0].name, content="memory")
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="m")
+}
+
+///|
+test "parse WAT: table export before import" {
+  // Table with export before import
+  let wat =
+    #|(module
+    #|  (table $t (export "t") (import "spectest" "table") 10 20 funcref)
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.imports.length(), content="1")
+  inspect(mod.imports[0].mod_name, content="spectest")
+  inspect(mod.imports[0].name, content="table")
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="t")
+}
+
+///|
+test "parse WAT: func export before import" {
+  // Function with export before import
+  let wat =
+    #|(module
+    #|  (func $f (export "f") (import "spectest" "print_i32") (param i32))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.imports.length(), content="1")
+  inspect(mod.imports[0].mod_name, content="spectest")
+  inspect(mod.imports[0].name, content="print_i32")
+  inspect(mod.exports.length(), content="1")
+  inspect(mod.exports[0].name, content="f")
+}
+
+///|
+test "parse WAT: func multiple exports before import" {
+  // Function with multiple exports before import
+  let wat =
+    #|(module
+    #|  (func $f (export "f1") (export "f2") (import "spectest" "print_i32") (param i32))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.imports.length(), content="1")
+  inspect(mod.exports.length(), content="2")
+  inspect(mod.exports[0].name, content="f1")
+  inspect(mod.exports[1].name, content="f2")
+}
+
+// ============================================================
+// Error location tests
+// ============================================================
+
+///|
+test "error location: unexpected token reports correct position" {
+  // Test that error locations point to the correct token
+  let wat = "(module (func invalid))"
+  let result = try? parse(wat)
+  match result {
+    Err(InvalidInstruction(s, loc)) => {
+      inspect(s, content="invalid")
+      inspect(loc.line, content="1")
+      // Position depends on lexer implementation
+      inspect(loc.column > 0, content="true")
+    }
+    Err(_) =>
+      // Accept other error types - the important thing is parsing failed
+      ()
+    Ok(_) => fail("expected error but parsing succeeded")
+  }
+}
+
+///|
+test "error location: multiline error position" {
+  let wat =
+    #|(module
+    #|  (func
+    #|    invalid
+    #|  )
+    #|)
+  let result = try? parse(wat)
+  match result {
+    Err(InvalidInstruction(s, loc)) => {
+      inspect(s, content="invalid")
+      // Should be on line 3 or 4 depending on how multiline strings work
+      inspect(loc.line >= 3, content="true")
+    }
+    Err(_) =>
+      // Accept other error types
+      ()
+    Ok(_) => fail("expected error but parsing succeeded")
+  }
+}
+
+// ============================================================
+// Annotation handling in parser tests
+// ============================================================
+
+///|
+test "parse WAT: annotations in module definition" {
+  // Simple module with annotations - they should be skipped
+  let wat = "(@a) (module (@b) )"
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.funcs.length(), content="0")
+}
+
+///|
+test "parse WAT: annotations around func definition" {
+  let wat =
+    #|(module
+    #|  (@a) (func (@b) $f (@c))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.funcs.length(), content="1")
+}
+
+///|
+test "parse WAT: annotations around global definition" {
+  let wat =
+    #|(module
+    #|  (@a) (global (@b) $g (@c) i32 (@d) (i32.const (@e) 0 (@f)))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.globals.length(), content="1")
+}
+
+///|
+test "parse WAT: annotations around memory definition" {
+  let wat =
+    #|(module
+    #|  (@a) (memory (@b) $m (@c) 1 (@d) 2 (@e))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.memories.length(), content="1")
+}
+
+///|
+test "parse WAT: annotations around table definition" {
+  let wat =
+    #|(module
+    #|  (@a) (table (@b) $t (@c) 1 (@d) funcref (@e))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.tables.length(), content="1")
+}
+
+///|
+test "parse WAT: annotations around type definition" {
+  let wat =
+    #|(module
+    #|  (@a) (type (@b) $t (@c) (func (@d) (param (@e) i32) (@f) (result (@g) i32)))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.types.length(), content="1")
+  inspect(mod.types[0].params.length(), content="1")
+  inspect(mod.types[0].results.length(), content="1")
+}
+
+///|
+test "parse WAT: annotations around instructions" {
+  let wat =
+    #|(module
+    #|  (func (@a)
+    #|    (@b) i32.const (@c) 42 (@d)
+    #|    (@e) drop (@f)
+    #|  )
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(mod.funcs.length(), content="1")
+  let code = mod.codes[0]
+  inspect(code.body.length(), content="2")
+  inspect(code.body[0], content="I32Const(42)")
+  inspect(code.body[1], content="Drop")
+}

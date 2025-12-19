@@ -11,6 +11,48 @@ priv enum Token {
 } derive(Show, Eq)
 
 ///|
+/// Source span with start and end positions
+priv struct SourceSpan {
+  start_line : Int
+  start_column : Int
+  end_line : Int
+  end_column : Int
+} derive(Show)
+
+///|
+/// Token with source location and raw text
+priv struct LocatedToken {
+  token : Token
+  span : SourceSpan
+  raw : String // Original text representation
+} derive(Show)
+
+///|
+fn LocatedToken::to_loc(self : LocatedToken) -> SourceLoc {
+  { line: self.span.start_line, column: self.span.start_column }
+}
+
+///|
+/// Create a synthetic LocatedToken for push-back operations during lookahead
+fn LocatedToken::synthetic(token : Token) -> LocatedToken {
+  {
+    token,
+    span: { start_line: 0, start_column: 0, end_line: 0, end_column: 0 },
+    raw: "",
+  }
+}
+
+///|
+/// Extract substring from input without raising errors
+fn extract_substring(s : String, start : Int, end : Int) -> String {
+  let buf = StringBuilder::new()
+  for i in start..<end {
+    buf.write_char(s.code_unit_at(i).unsafe_to_char())
+  }
+  buf.to_string()
+}
+
+///|
 /// WAT Lexer
 priv struct Lexer {
   input : String
@@ -131,10 +173,135 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
               self.advance_pos()
             }
           }
+        } else if self.pos + 1 < self.input.length() &&
+          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == '@' {
+          // Skip annotation (@id ...)
+          self.skip_annotation()
         } else {
           break
         }
       _ => break
+    }
+  }
+}
+
+///|
+/// Skip an annotation (@id ...) including nested parentheses
+fn Lexer::skip_annotation(self : Lexer) -> Unit {
+  // Skip '(@'
+  self.advance_pos()
+  self.advance_pos()
+  // Skip annotation id (can be identifier or string)
+  while !self.is_eof() {
+    match self.peek_char() {
+      Some(' ') | Some('\t') | Some('\n') | Some('\r') => break
+      Some('(') | Some(')') => break
+      Some('"') => {
+        // Skip string in annotation id
+        self.advance_pos()
+        while !self.is_eof() {
+          match self.peek_char() {
+            Some('"') => {
+              self.advance_pos()
+              break
+            }
+            Some('\\') => {
+              self.advance_pos()
+              self.advance_pos() // skip escaped char
+            }
+            _ => self.advance_pos()
+          }
+        }
+        break
+      }
+      _ => self.advance_pos()
+    }
+  }
+  // Skip whitespace after id
+  while !self.is_eof() {
+    match self.peek_char() {
+      Some(' ') | Some('\t') | Some('\n') | Some('\r') => self.advance_pos()
+      _ => break
+    }
+  }
+  // Skip content with balanced parentheses until closing ')'
+  let mut depth = 1
+  while !self.is_eof() && depth > 0 {
+    match self.peek_char() {
+      Some('(') =>
+        // Check for nested annotation or block comment
+        if self.pos + 1 < self.input.length() {
+          let next = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
+          if next == ';' {
+            // Block comment inside annotation - skip it
+            self.advance_pos()
+            self.advance_pos()
+            let mut comment_depth = 1
+            while !self.is_eof() && comment_depth > 0 {
+              if self.pos + 1 < self.input.length() {
+                let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
+                let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
+                if c1 == ';' && c2 == ')' {
+                  comment_depth -= 1
+                  self.advance_pos()
+                  self.advance_pos()
+                } else if c1 == '(' && c2 == ';' {
+                  comment_depth += 1
+                  self.advance_pos()
+                  self.advance_pos()
+                } else {
+                  self.advance_pos()
+                }
+              } else {
+                self.advance_pos()
+              }
+            }
+          } else {
+            depth += 1
+            self.advance_pos()
+          }
+        } else {
+          depth += 1
+          self.advance_pos()
+        }
+      Some(')') => {
+        depth -= 1
+        self.advance_pos()
+      }
+      Some('"') => {
+        // Skip string inside annotation
+        self.advance_pos()
+        while !self.is_eof() {
+          match self.peek_char() {
+            Some('"') => {
+              self.advance_pos()
+              break
+            }
+            Some('\\') => {
+              self.advance_pos()
+              self.advance_pos() // skip escaped char
+            }
+            _ => self.advance_pos()
+          }
+        }
+      }
+      Some(';') =>
+        // Check for line comment inside annotation
+        if self.pos + 1 < self.input.length() &&
+          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
+          while !self.is_eof() {
+            match self.peek_char() {
+              Some('\n') | Some('\r') => {
+                self.advance_pos()
+                break
+              }
+              _ => self.advance_pos()
+            }
+          }
+        } else {
+          self.advance_pos()
+        }
+      _ => self.advance_pos()
     }
   }
 }
@@ -364,15 +531,27 @@ fn Lexer::read_number(self : Lexer) -> String {
 }
 
 ///|
-fn Lexer::next_token(self : Lexer) -> Token raise WatError {
+fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
   self.skip_whitespace()
   // Save token start position
-  self.token_start_line = self.line
-  self.token_start_column = self.column
+  let start_pos = self.pos
+  let start_line = self.line
+  let start_column = self.column
+  self.token_start_line = start_line
+  self.token_start_column = start_column
   if self.is_eof() {
-    return Eof
+    return {
+      token: Eof,
+      span: {
+        start_line,
+        start_column,
+        end_line: start_line,
+        end_column: start_column,
+      },
+      raw: "",
+    }
   }
-  match self.peek_char() {
+  let token = match self.peek_char() {
     Some('(') => {
       self.advance_pos()
       LParen
@@ -412,5 +591,18 @@ fn Lexer::next_token(self : Lexer) -> Token raise WatError {
         raise UnexpectedToken(String::make(1, c), self.current_loc())
       }
     None => Eof
+  }
+  // Extract raw text
+  let end_pos = self.pos
+  let raw = extract_substring(self.input, start_pos, end_pos)
+  {
+    token,
+    span: {
+      start_line,
+      start_column,
+      end_line: self.line,
+      end_column: self.column,
+    },
+    raw,
   }
 }

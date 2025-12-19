@@ -46,7 +46,7 @@ def run_test(wast_file: Path, use_jit: bool) -> tuple[int | None, int | None, st
         return None, None, str(e)
 
 
-def run_tests_for_mode(wast_files: list[Path], use_jit: bool) -> dict:
+def run_tests_for_mode(wast_files: list[Path], test_dir: Path, use_jit: bool) -> dict:
     """Run all tests for a specific mode and return results."""
     mode_name = "JIT" if use_jit else "Interpreter"
     print(f"\n{'='*60}")
@@ -60,7 +60,7 @@ def run_tests_for_mode(wast_files: list[Path], use_jit: bool) -> dict:
     has_errors: list[str] = []
 
     for wast_file in wast_files:
-        name = wast_file.name
+        name = str(wast_file.relative_to(test_dir))
         passed, failed, error = run_test(wast_file, use_jit)
 
         if error or passed is None or failed is None:
@@ -76,7 +76,7 @@ def run_tests_for_mode(wast_files: list[Path], use_jit: bool) -> dict:
             total_failed += failed
             has_failures.append((name, passed, failed))
 
-        print(f"{name:40} {status}")
+        print(f"{name:50} {status}")
 
     return {
         "mode": mode_name,
@@ -115,10 +115,10 @@ def main() -> None:
     print(f"Found {len(wast_files)} .wast test files")
 
     # Run tests with interpreter (--no-jit)
-    interp_results = run_tests_for_mode(wast_files, use_jit=False)
+    interp_results = run_tests_for_mode(wast_files, test_dir, use_jit=False)
 
     # Run tests with JIT
-    jit_results = run_tests_for_mode(wast_files, use_jit=True)
+    jit_results = run_tests_for_mode(wast_files, test_dir, use_jit=True)
 
     # Print combined summary
     print("\n" + "=" * 60)
