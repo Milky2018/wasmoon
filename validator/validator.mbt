@@ -1809,6 +1809,89 @@ fn validate_instr(
         stack.push(result)
       }
     }
+    ReturnCall(func_idx) => {
+      if func_idx >= ctx.funcs.length() {
+        raise InvalidFunctionIndex(func_idx)
+      }
+      let type_idx = ctx.funcs[func_idx]
+      let func_type = ctx.types[type_idx]
+      // Pop parameters in reverse order
+      let num_params = func_type.params.length()
+      for offset in 0..<num_params {
+        let i = num_params - 1 - offset
+        stack.pop(func_type.params[i])
+      }
+      // Validate results match current function's return type
+      // (For tail calls, we return the called function's results)
+      for i = 0; i < func_type.results.length(); i = i + 1 {
+        if i >= ctx.returns.length() || func_type.results[i] != ctx.returns[i] {
+          raise TypeMismatch("return_call result type mismatch")
+        }
+      }
+      if func_type.results.length() != ctx.returns.length() {
+        raise TypeMismatch("return_call result count mismatch")
+      }
+      // After return_call, the stack is unreachable
+      stack.set_polymorphic()
+    }
+    ReturnCallIndirect(type_idx, table_idx) => {
+      if table_idx < 0 || table_idx >= ctx.tables.length() {
+        raise InvalidTableIndex(table_idx)
+      }
+      // return_call_indirect requires a funcref table
+      let table_type = ctx.tables[table_idx]
+      if table_type.elem_type != @types.ValueType::FuncRef {
+        raise TypeMismatch(
+          "return_call_indirect requires funcref table, got \{table_type.elem_type}",
+        )
+      }
+      if type_idx < 0 || type_idx >= ctx.types.length() {
+        raise InvalidTypeIndex(type_idx)
+      }
+      stack.pop(@types.ValueType::I32) // table index
+      let func_type = ctx.types[type_idx]
+      let num_params = func_type.params.length()
+      for offset in 0..<num_params {
+        let i = num_params - 1 - offset
+        stack.pop(func_type.params[i])
+      }
+      // Validate results match current function's return type
+      for i = 0; i < func_type.results.length(); i = i + 1 {
+        if i >= ctx.returns.length() || func_type.results[i] != ctx.returns[i] {
+          raise TypeMismatch("return_call_indirect result type mismatch")
+        }
+      }
+      if func_type.results.length() != ctx.returns.length() {
+        raise TypeMismatch("return_call_indirect result count mismatch")
+      }
+      // After return_call_indirect, the stack is unreachable
+      stack.set_polymorphic()
+    }
+    ReturnCallRef(type_idx) => {
+      if type_idx < 0 || type_idx >= ctx.types.length() {
+        raise InvalidTypeIndex(type_idx)
+      }
+      let func_type = ctx.types[type_idx]
+      // Pop the function reference (ref null $t)
+      stack.pop(@types.ValueType::RefNullFuncTyped(type_idx))
+      // Pop parameters in reverse order
+      let num_params = func_type.params.length()
+      for offset in 0..<num_params {
+        let i = num_params - 1 - offset
+        stack.pop(func_type.params[i])
+      }
+      // Validate results match current function's return type
+      for i = 0; i < func_type.results.length(); i = i + 1 {
+        if i >= ctx.returns.length() || func_type.results[i] != ctx.returns[i] {
+          raise TypeMismatch("return_call_ref result type mismatch")
+        }
+      }
+      if func_type.results.length() != ctx.returns.length() {
+        raise TypeMismatch("return_call_ref result count mismatch")
+      }
+      // After return_call_ref, the stack is unreachable
+      stack.set_polymorphic()
+    }
 
     // Block, Loop, If - with stack height validation and label tracking
     Block(bt, body) => {

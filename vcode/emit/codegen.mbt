@@ -1430,8 +1430,8 @@ fn MachineCode::emit_instruction(
       }
       // B.EQ +8: skip BRK (4 bytes) if types match
       self.emit_b_cond_offset(0, 8) // cond=0 is EQ
-      // BRK #2: trap with code 2 for type mismatch
-      self.emit_brk(2)
+      // BRK #4: trap with code 4 for indirect call type mismatch
+      self.emit_brk(4)
     }
     StackLoad(offset) => {
       // Load from [SP + spill_base_offset + offset] into the def register
