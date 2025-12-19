@@ -130,7 +130,11 @@ fn Parser::skip_to_matching_rparen(self : Parser) -> Unit raise WatError {
 fn Parser::expect_lparen(self : Parser) -> Unit raise WatError {
   match self.current.token {
     LParen => self.advance()
-    _ => raise UnexpectedToken("expected '(', got \{self.current}", self.loc())
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected '(', got \{self.current}",
+        self.loc(),
+      )
   }
 }
 
@@ -138,7 +142,11 @@ fn Parser::expect_lparen(self : Parser) -> Unit raise WatError {
 fn Parser::expect_rparen(self : Parser) -> Unit raise WatError {
   match self.current.token {
     RParen => self.advance()
-    _ => raise UnexpectedToken("expected ')', got \{self.current}", self.loc())
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected ')', got \{self.current}",
+        self.loc(),
+      )
   }
 }
 
@@ -149,10 +157,16 @@ fn Parser::expect_keyword(self : Parser, kw : String) -> Unit raise WatError {
       if k == kw {
         self.advance()
       } else {
-        raise UnexpectedToken("expected '\{kw}', got '\{k}'", self.loc())
+        raise WatError::UnexpectedToken(
+          "expected '\{kw}', got '\{k}'",
+          self.loc(),
+        )
       }
     _ =>
-      raise UnexpectedToken("expected '\{kw}', got \{self.current}", self.loc())
+      raise WatError::UnexpectedToken(
+        "expected '\{kw}', got \{self.current}",
+        self.loc(),
+      )
   }
 }
 
@@ -172,7 +186,10 @@ fn Parser::parse_u32(self : Parser) -> Int raise WatError {
       parse_u32(s)
     }
     _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
+      raise WatError::UnexpectedToken(
+        "expected number, got \{self.current}",
+        self.loc(),
+      )
   }
 }
 
@@ -184,7 +201,10 @@ fn Parser::parse_i32(self : Parser) -> Int raise WatError {
       parse_int(s)
     }
     _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
+      raise WatError::UnexpectedToken(
+        "expected number, got \{self.current}",
+        self.loc(),
+      )
   }
 }
 
@@ -196,7 +216,10 @@ fn Parser::parse_i64(self : Parser) -> Int64 raise WatError {
       parse_int64(s)
     }
     _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
+      raise WatError::UnexpectedToken(
+        "expected number, got \{self.current}",
+        self.loc(),
+      )
   }
 }
 
@@ -208,7 +231,10 @@ fn Parser::parse_f32(self : Parser) -> Float raise WatError {
       parse_float32(s)
     }
     _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
+      raise WatError::UnexpectedToken(
+        "expected number, got \{self.current}",
+        self.loc(),
+      )
   }
 }
 
@@ -220,7 +246,10 @@ fn Parser::parse_f64(self : Parser) -> Double raise WatError {
       parse_float64(s)
     }
     _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
+      raise WatError::UnexpectedToken(
+        "expected number, got \{self.current}",
+        self.loc(),
+      )
   }
 }
 
@@ -235,7 +264,7 @@ fn parse_int(s : String) -> Int raise WatError {
       }
       parse_hex_int(hex_part.to_string())
     } else {
-      raise InvalidNumber(s, default_loc())
+      raise WatError::InvalidNumber(s, default_loc())
     }
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
@@ -245,7 +274,7 @@ fn parse_int(s : String) -> Int raise WatError {
       }
       -parse_hex_int(hex_part.to_string())
     } else {
-      raise InvalidNumber(s, default_loc())
+      raise WatError::InvalidNumber(s, default_loc())
     }
   } else {
     // Try signed first, then unsigned (for values like 4294967295 which is -1 in i32)
@@ -253,11 +282,11 @@ fn parse_int(s : String) -> Int raise WatError {
       _ => {
         // Try parsing as unsigned and reinterpret
         let u64 = @strconv.parse_uint64(trimmed) catch {
-          _ => raise InvalidNumber(s, default_loc())
+          _ => raise WatError::InvalidNumber(s, default_loc())
         }
         // Check if it fits in u32 range
         if u64 > 0xFFFFFFFFUL {
-          raise InvalidNumber(s, default_loc())
+          raise WatError::InvalidNumber(s, default_loc())
         }
         u64.reinterpret_as_int64().to_int()
       }
@@ -276,7 +305,7 @@ fn parse_hex_int(s : String) -> Int raise WatError {
     }
     match hex_digit_value(c) {
       Some(v) => result = result * 16 + v
-      None => raise InvalidNumber(s, default_loc())
+      None => raise WatError::InvalidNumber(s, default_loc())
     }
   }
   result
@@ -296,16 +325,16 @@ fn parse_u32(s : String) -> Int raise WatError {
       }
       parse_hex_u32(hex_part.to_string())
     } else {
-      raise InvalidNumber(s, default_loc())
+      raise WatError::InvalidNumber(s, default_loc())
     }
   } else {
     // Parse decimal as unsigned 64-bit first to check range
     let u64 = @strconv.parse_uint64(trimmed) catch {
-      _ => raise InvalidNumber(s, default_loc())
+      _ => raise WatError::InvalidNumber(s, default_loc())
     }
     // Check if value exceeds u32 max
     if u64 > 0xFFFFFFFFUL {
-      raise InvalidNumber(s, default_loc())
+      raise WatError::InvalidNumber(s, default_loc())
     }
     u64.reinterpret_as_int64().to_int()
   }
@@ -329,12 +358,12 @@ fn parse_hex_u32(s : String) -> Int raise WatError {
         }
         result = new_result
       }
-      None => raise InvalidNumber(s, default_loc())
+      None => raise WatError::InvalidNumber(s, default_loc())
     }
   }
   // Check if value exceeds u32 max
   if result > 0xFFFFFFFFUL || overflow {
-    raise InvalidNumber(s, default_loc())
+    raise WatError::InvalidNumber(s, default_loc())
   }
   result.reinterpret_as_int64().to_int()
 }
@@ -350,7 +379,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       }
       parse_hex_int64(hex_part.to_string())
     } else {
-      raise InvalidNumber(s, default_loc())
+      raise WatError::InvalidNumber(s, default_loc())
     }
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
@@ -360,7 +389,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       }
       -parse_hex_int64(hex_part.to_string())
     } else {
-      raise InvalidNumber(s, default_loc())
+      raise WatError::InvalidNumber(s, default_loc())
     }
   } else {
     // Try signed first, then unsigned (for values like 18446744073709551615 which is -1 in i64)
@@ -368,7 +397,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       _ => {
         // Try parsing as unsigned and reinterpret
         let u64 = @strconv.parse_uint64(trimmed) catch {
-          _ => raise InvalidNumber(s, default_loc())
+          _ => raise WatError::InvalidNumber(s, default_loc())
         }
         u64.reinterpret_as_int64()
       }
@@ -387,7 +416,7 @@ fn parse_hex_int64(s : String) -> Int64 raise WatError {
     }
     match hex_digit_value(c) {
       Some(v) => result = result * 16L + v.to_int64()
-      None => raise InvalidNumber(s, default_loc())
+      None => raise WatError::InvalidNumber(s, default_loc())
     }
   }
   result
@@ -727,7 +756,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
       idx += 1
     } else if c == '.' {
       if decimal_pos >= 0 {
-        raise InvalidNumber(s, default_loc())
+        raise WatError::InvalidNumber(s, default_loc())
       }
       decimal_pos = digits.length()
       idx += 1
@@ -742,7 +771,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
     }
   }
   if !seen_digit {
-    raise InvalidNumber(s, default_loc())
+    raise WatError::InvalidNumber(s, default_loc())
   }
   if decimal_pos < 0 {
     decimal_pos = digits.length()
@@ -1158,7 +1187,7 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
         }
         idx += 1
       }
-      None => raise InvalidNumber(s, default_loc())
+      None => raise WatError::InvalidNumber(s, default_loc())
     }
   }
   if !seen_digit {
@@ -1358,7 +1387,7 @@ fn parse_float64(s : String) -> Double raise WatError {
     return parse_hex_float64(s)
   }
   @strconv.parse_double(s) catch {
-    _ => raise InvalidNumber(s, default_loc())
+    _ => raise WatError::InvalidNumber(s, default_loc())
   }
 }
 
@@ -1422,7 +1451,7 @@ fn parse_hex_float64(s : String) -> Double raise WatError {
         }
         idx += 1
       }
-      None => raise InvalidNumber(s, default_loc())
+      None => raise WatError::InvalidNumber(s, default_loc())
     }
   }
   if !seen_digit {
@@ -1647,11 +1676,14 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         "funcref" => FuncRef
         "externref" => ExternRef
         _ =>
-          raise UnexpectedToken("expected value type, got '\{kw}'", self.loc())
+          raise WatError::UnexpectedToken(
+            "expected value type, got '\{kw}'",
+            self.loc(),
+          )
       }
     }
     _ =>
-      raise UnexpectedToken(
+      raise WatError::UnexpectedToken(
         "expected value type, got \{self.current}",
         self.loc(),
       )
@@ -2058,11 +2090,15 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             mod_.elems.push(elem)
           }
           Keyword(kw) =>
-            raise UnexpectedToken("unexpected module field: \{kw}", self.loc())
-          _ => raise UnexpectedToken("expected module field", self.loc())
+            raise WatError::UnexpectedToken(
+              "unexpected module field: \{kw}",
+              self.loc(),
+            )
+          _ =>
+            raise WatError::UnexpectedToken("expected module field", self.loc())
         }
       }
-      _ => raise UnexpectedToken("expected '(' in module", self.loc())
+      _ => raise WatError::UnexpectedToken("expected '(' in module", self.loc())
     }
   }
   self.expect_rparen()
@@ -2164,7 +2200,8 @@ fn Parser::parse_func_def(
             export_names.push(s)
             self.advance()
           }
-          _ => raise UnexpectedToken("expected export name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -2176,14 +2213,16 @@ fn Parser::parse_func_def(
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected module name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected import name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -2199,7 +2238,11 @@ fn Parser::parse_func_def(
                   export_names.push(s)
                   self.advance()
                 }
-                _ => raise UnexpectedToken("expected export name", self.loc())
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected export name",
+                    self.loc(),
+                  )
               }
               self.expect_rparen()
             }
@@ -2573,7 +2616,10 @@ fn Parser::parse_folded_instructions(
               self.expect_rparen()
             }
             _ =>
-              raise UnexpectedToken("expected 'then' in folded if", self.loc())
+              raise WatError::UnexpectedToken(
+                "expected 'then' in folded if",
+                self.loc(),
+              )
           }
         }
         if self.current.token == LParen {
@@ -2616,7 +2662,7 @@ fn Parser::parse_folded_instructions(
         }
       }
     }
-    _ => raise UnexpectedToken("expected instruction", self.loc())
+    _ => raise WatError::UnexpectedToken("expected instruction", self.loc())
   }
 }
 
@@ -2705,7 +2751,10 @@ fn Parser::parse_plain_instruction(
         }
       }
       if labels.length() == 0 {
-        raise ParseError("br_table requires at least one label", self.loc())
+        raise WatError::ParseError(
+          "br_table requires at least one label",
+          self.loc(),
+        )
       }
       let default_label = labels.pop().unwrap()
       @types.Instruction::BrTable(labels, default_label)
@@ -2756,7 +2805,7 @@ fn Parser::parse_plain_instruction(
             let idx = self.parse_type_idx()
             // Validate type index is in range (0xffffffff becomes -1 after parsing)
             if idx < 0 || idx >= self.types.length() {
-              raise ParseError("unknown type", self.loc())
+              raise WatError::ParseError("unknown type", self.loc())
             }
             type_idx = Some(idx)
             self.expect_rparen()
@@ -3128,7 +3177,7 @@ fn Parser::parse_plain_instruction(
     "i64.trunc_sat_f32_u" => @types.Instruction::I64TruncSatF32U
     "i64.trunc_sat_f64_s" => @types.Instruction::I64TruncSatF64S
     "i64.trunc_sat_f64_u" => @types.Instruction::I64TruncSatF64U
-    _ => raise InvalidInstruction(kw, self.loc())
+    _ => raise WatError::InvalidInstruction(kw, self.loc())
   }
 }
 
@@ -3302,9 +3351,9 @@ fn Parser::parse_type_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("type $\{name}", self.loc())
+        None => raise WatError::UndefinedIdentifier("type $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected type index", self.loc())
+    _ => raise WatError::UnexpectedToken("expected type index", self.loc())
   }
 }
 
@@ -3321,9 +3370,9 @@ fn Parser::parse_func_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("func $\{name}", self.loc())
+        None => raise WatError::UndefinedIdentifier("func $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected func index", self.loc())
+    _ => raise WatError::UnexpectedToken("expected func index", self.loc())
   }
 }
 
@@ -3340,9 +3389,10 @@ fn Parser::parse_local_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("local $\{name}", self.loc())
+        None =>
+          raise WatError::UndefinedIdentifier("local $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected local index", self.loc())
+    _ => raise WatError::UnexpectedToken("expected local index", self.loc())
   }
 }
 
@@ -3359,9 +3409,10 @@ fn Parser::parse_global_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("global $\{name}", self.loc())
+        None =>
+          raise WatError::UndefinedIdentifier("global $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected global index", self.loc())
+    _ => raise WatError::UnexpectedToken("expected global index", self.loc())
   }
 }
 
@@ -3378,7 +3429,8 @@ fn Parser::parse_table_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("table $\{name}", self.loc())
+        None =>
+          raise WatError::UndefinedIdentifier("table $\{name}", self.loc())
       }
     _ =>
       // Default to table 0 if no index specified
@@ -3393,7 +3445,8 @@ fn Parser::parse_data_idx(self : Parser) -> Int raise WatError {
       self.advance()
       parse_int(s)
     }
-    _ => raise UnexpectedToken("expected data segment index", self.loc())
+    _ =>
+      raise WatError::UnexpectedToken("expected data segment index", self.loc())
   }
 }
 
@@ -3404,7 +3457,8 @@ fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
       self.advance()
       parse_int(s)
     }
-    _ => raise UnexpectedToken("expected elem segment index", self.loc())
+    _ =>
+      raise WatError::UnexpectedToken("expected elem segment index", self.loc())
   }
 }
 
@@ -3426,7 +3480,7 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       @types.ValueType::FuncRef
     }
     _ =>
-      raise UnexpectedToken(
+      raise WatError::UnexpectedToken(
         "expected reference type (func, extern, funcref, externref)",
         self.loc(),
       )
@@ -3446,9 +3500,10 @@ fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("label $\{name}", self.loc())
+        None =>
+          raise WatError::UndefinedIdentifier("label $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected label index", self.loc())
+    _ => raise WatError::UnexpectedToken("expected label index", self.loc())
   }
 }
 
@@ -3480,14 +3535,16 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected module name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected import name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -3503,7 +3560,11 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   export_names.push(s)
                   self.advance()
                 }
-                _ => raise UnexpectedToken("expected export name", self.loc())
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected export name",
+                    self.loc(),
+                  )
               }
               self.expect_rparen()
             }
@@ -3539,7 +3600,11 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   self.advance()
                   s
                 }
-                _ => raise UnexpectedToken("expected export name", self.loc())
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected export name",
+                    self.loc(),
+                  )
               }
             }
           },
@@ -3561,7 +3626,11 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   export_names.push(s)
                   self.advance()
                 }
-                _ => raise UnexpectedToken("expected export name", self.loc())
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected export name",
+                    self.loc(),
+                  )
               }
               self.expect_rparen()
             }
@@ -3573,14 +3642,22 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   self.advance()
                   s
                 }
-                _ => raise UnexpectedToken("expected module name", self.loc())
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected module name",
+                    self.loc(),
+                  )
               }
               let import_name = match self.current.token {
                 String_(s) => {
                   self.advance()
                   s
                 }
-                _ => raise UnexpectedToken("expected import name", self.loc())
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected import name",
+                    self.loc(),
+                  )
               }
               self.expect_rparen() // close import
               // Parse limits
@@ -3684,14 +3761,16 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected module name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected import name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -3707,7 +3786,11 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
                   export_names.push(s)
                   self.advance()
                 }
-                _ => raise UnexpectedToken("expected export name", self.loc())
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected export name",
+                    self.loc(),
+                  )
               }
               self.expect_rparen()
             }
@@ -3782,7 +3865,8 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             export_names.push(s)
             self.advance()
           }
-          _ => raise UnexpectedToken("expected export name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -3794,14 +3878,16 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected module name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected import name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -3817,7 +3903,11 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
                   export_names.push(s)
                   self.advance()
                 }
-                _ => raise UnexpectedToken("expected export name", self.loc())
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected export name",
+                    self.loc(),
+                  )
               }
               self.expect_rparen()
             }
@@ -3935,7 +4025,8 @@ fn Parser::parse_table_def(
             export_name = Some(s)
             self.advance()
           }
-          _ => raise UnexpectedToken("expected export name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -3963,14 +4054,16 @@ fn Parser::parse_table_def(
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected module name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ => raise UnexpectedToken("expected import name", self.loc())
+          _ =>
+            raise WatError::UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -4115,7 +4208,10 @@ fn Parser::parse_table_def(
             self.lexer.token_start_line = saved_token_start_line
             self.lexer.token_start_column = saved_token_start_column
             self.current = LocatedToken::synthetic(LParen)
-            raise UnexpectedToken("expected elem in inline table", self.loc())
+            raise WatError::UnexpectedToken(
+              "expected elem in inline table",
+              self.loc(),
+            )
           }
         }
       } else {
@@ -4164,7 +4260,7 @@ fn Parser::parse_table_def(
             // Check if this global is imported (only imported globals can be used in table init)
             let num_imported_globals = count_global_imports(mod_.imports)
             if global_idx >= num_imported_globals {
-              raise UndefinedIdentifier(
+              raise WatError::UndefinedIdentifier(
                 "unknown global (table init can only reference imported globals)",
                 self.loc(),
               )
@@ -4205,7 +4301,7 @@ fn Parser::parse_export_def(
       self.advance()
       s
     }
-    _ => raise UnexpectedToken("expected export name", self.loc())
+    _ => raise WatError::UnexpectedToken("expected export name", self.loc())
   }
   self.expect_lparen()
   let desc = match self.current.token {
@@ -4224,7 +4320,8 @@ fn Parser::parse_export_def(
               self.advance()
               idx
             }
-            None => raise UndefinedIdentifier("memory $\{name}", self.loc())
+            None =>
+              raise WatError::UndefinedIdentifier("memory $\{name}", self.loc())
           }
         _ => 0
       }
@@ -4240,7 +4337,8 @@ fn Parser::parse_export_def(
               self.advance()
               idx
             }
-            None => raise UndefinedIdentifier("table $\{name}", self.loc())
+            None =>
+              raise WatError::UndefinedIdentifier("table $\{name}", self.loc())
           }
         _ => 0
       }
@@ -4251,7 +4349,7 @@ fn Parser::parse_export_def(
       let idx = self.parse_global_idx()
       @types.ExportDesc::Global(idx)
     }
-    _ => raise UnexpectedToken("expected export kind", self.loc())
+    _ => raise WatError::UnexpectedToken("expected export kind", self.loc())
   }
   ignore(mod_)
   self.expect_rparen()
@@ -4270,14 +4368,14 @@ fn Parser::parse_import_def(
       self.advance()
       s
     }
-    _ => raise UnexpectedToken("expected module name", self.loc())
+    _ => raise WatError::UnexpectedToken("expected module name", self.loc())
   }
   let name = match self.current.token {
     String_(s) => {
       self.advance()
       s
     }
-    _ => raise UnexpectedToken("expected import name", self.loc())
+    _ => raise WatError::UnexpectedToken("expected import name", self.loc())
   }
   self.expect_lparen()
   let desc = match self.current.token {
@@ -4384,7 +4482,7 @@ fn Parser::parse_import_def(
       }
       @types.ImportDesc::Global({ value_type, mutable })
     }
-    _ => raise UnexpectedToken("expected import kind", self.loc())
+    _ => raise WatError::UnexpectedToken("expected import kind", self.loc())
   }
   self.expect_rparen()
   self.expect_rparen()
@@ -4547,7 +4645,11 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
                   self.advance()
                   idx
                 }
-                None => raise UndefinedIdentifier("table $\{name}", self.loc())
+                None =>
+                  raise WatError::UndefinedIdentifier(
+                    "table $\{name}",
+                    self.loc(),
+                  )
               }
             _ => 0
           }
@@ -4593,7 +4695,11 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
         init: [],
       }
     }
-    _ => raise UnexpectedToken("expected elem segment content", self.loc())
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected elem segment content",
+        self.loc(),
+      )
   }
 }
 
@@ -4692,5 +4798,923 @@ fn Parser::parse_elem_type(
     _ =>
       // Default to funcref with expressions (empty elem)
       (@types.ValueType::FuncRef, false)
+  }
+}
+
+// ============================================================================
+// WAST (WebAssembly Test Script) Parsing
+// ============================================================================
+
+///|
+/// WAST command types
+pub enum WastCommand {
+  Module(@types.Module, String?)
+  ModuleDefinition(@types.Module, String?)
+  ModuleQuote(Array[String])
+  ModuleBinaryFailed(String)
+  AssertReturn(WastAction, Array[WastValue])
+  AssertTrap(WastAction, String)
+  AssertModuleTrap(WastModuleSource, String)
+  AssertExhaustion(WastAction, String)
+  AssertInvalid(WastModuleSource, String)
+  AssertMalformed(WastModuleSource, String)
+  AssertUnlinkable(WastModuleSource, String)
+  Register(String, String?)
+  Action(WastAction)
+} derive(Show)
+
+///|
+/// Module source for assert_invalid/malformed
+pub enum WastModuleSource {
+  Binary(Bytes)
+  Quote(Array[String])
+  Inline(@types.Module)
+  FailedToParse(String)
+} derive(Show)
+
+///|
+/// WAST action (invoke or get)
+pub enum WastAction {
+  Invoke(String?, String, Array[WastValue])
+  Get(String?, String)
+} derive(Show)
+
+///|
+/// WAST value (typed constant)
+pub enum WastValue {
+  I32(Int)
+  I64(Int64)
+  F32(Float)
+  F64(Double)
+  F32CanonicalNan
+  F32ArithmeticNan
+  F64CanonicalNan
+  F64ArithmeticNan
+  RefNull(String)
+  RefExtern(Int)
+  RefFunc
+} derive(Show)
+
+///|
+/// WAST script (collection of commands with line numbers)
+pub struct WastScript {
+  commands : Array[(WastCommand, Int)]
+}
+
+///|
+/// Parse a WAST script (sequence of commands)
+pub fn parse_wast(input : String) -> WastScript raise WatError {
+  let parser = Parser::new(input)
+  let commands : Array[(WastCommand, Int)] = []
+  while parser.current.token != Eof {
+    let line = parser.lexer.line
+    let cmd = parser.parse_wast_command()
+    commands.push((cmd, line))
+  }
+  WastScript::{ commands, }
+}
+
+///|
+fn Parser::parse_wast_command(self : Parser) -> WastCommand raise WatError {
+  self.expect_lparen()
+  match self.current.token {
+    Keyword("module") => self.parse_wast_module_command()
+    Keyword("assert_return") => self.parse_wast_assert_return()
+    Keyword("assert_trap") => self.parse_wast_assert_trap()
+    Keyword("assert_exhaustion") => self.parse_wast_assert_exhaustion()
+    Keyword("assert_invalid") => self.parse_wast_assert_invalid()
+    Keyword("assert_malformed") => self.parse_wast_assert_malformed()
+    Keyword("assert_unlinkable") => self.parse_wast_assert_unlinkable()
+    Keyword("register") => self.parse_wast_register()
+    Keyword("invoke") | Keyword("get") => {
+      let action = self.parse_wast_action()
+      self.expect_rparen()
+      Action(action)
+    }
+    _ =>
+      raise WatError::UnexpectedToken(
+        "unexpected command: \{self.current.token}",
+        self.loc(),
+      )
+  }
+}
+
+///|
+fn Parser::parse_wast_module_command(
+  self : Parser,
+) -> WastCommand raise WatError {
+  self.advance() // consume 'module'
+  let name = self.parse_wast_optional_id()
+  match self.current.token {
+    Keyword("binary") => {
+      self.advance()
+      let bytes = self.parse_wast_binary_module()
+      self.expect_rparen()
+      let mod_ = @parser.parse_module(bytes) catch {
+        e => return ModuleBinaryFailed(e.to_string())
+      }
+      Module(mod_, name)
+    }
+    Keyword("quote") => {
+      self.advance()
+      let parts : Array[String] = []
+      while self.current.token != RParen {
+        match self.current.token {
+          String_(s) => {
+            parts.push(s)
+            self.advance()
+          }
+          _ => break
+        }
+      }
+      self.expect_rparen()
+      ModuleQuote(parts)
+    }
+    Keyword("definition") => {
+      self.advance()
+      let def_name = self.parse_wast_optional_id()
+      let final_name = match (name, def_name) {
+        (Some(n), _) => Some(n)
+        (None, Some(n)) => Some(n)
+        (None, None) => None
+      }
+      match self.current.token {
+        Keyword("binary") => {
+          self.advance()
+          let bytes = self.parse_wast_binary_module()
+          self.expect_rparen()
+          let mod_ = @parser.parse_module(bytes) catch {
+            e => return ModuleBinaryFailed(e.to_string())
+          }
+          ModuleDefinition(mod_, final_name)
+        }
+        _ => {
+          let module_text = self.collect_wast_module_text()
+          self.expect_rparen()
+          let mod_ = parse("(module " + module_text + ")") catch {
+            e => raise e
+          }
+          ModuleDefinition(mod_, final_name)
+        }
+      }
+    }
+    _ => {
+      let module_text = self.collect_wast_module_text()
+      self.expect_rparen()
+      let mod_ = parse("(module " + module_text + ")") catch { e => raise e }
+      Module(mod_, name)
+    }
+  }
+}
+
+///|
+fn Parser::collect_wast_module_text(self : Parser) -> String raise WatError {
+  // Extract raw module text from input, preserving original formatting
+  // Use token_start_pos to include the opening '(' that was already consumed
+  let input = self.lexer.input
+  let start_pos = self.lexer.token_start_pos
+  let mut depth = 0
+  let mut pos = start_pos
+  while pos < input.length() {
+    let c = input.code_unit_at(pos).unsafe_to_char()
+    match c {
+      '(' =>
+        if pos + 1 < input.length() &&
+          input.code_unit_at(pos + 1).unsafe_to_char() == ';' {
+          // Skip block comment
+          pos += 2
+          let mut comment_depth = 1
+          while comment_depth > 0 && pos < input.length() {
+            let c2 = input.code_unit_at(pos).unsafe_to_char()
+            if c2 == ';' &&
+              pos + 1 < input.length() &&
+              input.code_unit_at(pos + 1).unsafe_to_char() == ')' {
+              comment_depth -= 1
+              pos += 2
+            } else if c2 == '(' &&
+              pos + 1 < input.length() &&
+              input.code_unit_at(pos + 1).unsafe_to_char() == ';' {
+              comment_depth += 1
+              pos += 2
+            } else {
+              pos += 1
+            }
+          }
+        } else if pos + 1 < input.length() &&
+          input.code_unit_at(pos + 1).unsafe_to_char() == '@' {
+          // Skip annotation - find matching close paren
+          pos += 2
+          let mut ann_depth = 1
+          while ann_depth > 0 && pos < input.length() {
+            let c2 = input.code_unit_at(pos).unsafe_to_char()
+            if c2 == '(' {
+              ann_depth += 1
+              pos += 1
+            } else if c2 == ')' {
+              ann_depth -= 1
+              pos += 1
+            } else if c2 == '"' {
+              pos += 1
+              while pos < input.length() {
+                let c3 = input.code_unit_at(pos).unsafe_to_char()
+                if c3 == '"' {
+                  pos += 1
+                  break
+                } else if c3 == '\\' {
+                  pos += 2
+                } else {
+                  pos += 1
+                }
+              }
+            } else {
+              pos += 1
+            }
+          }
+        } else {
+          depth += 1
+          pos += 1
+        }
+      ')' => {
+        if depth == 0 {
+          break
+        }
+        depth -= 1
+        pos += 1
+      }
+      ';' =>
+        if pos + 1 < input.length() &&
+          input.code_unit_at(pos + 1).unsafe_to_char() == ';' {
+          while pos < input.length() {
+            if input.code_unit_at(pos).unsafe_to_char() == '\n' {
+              pos += 1
+              break
+            }
+            pos += 1
+          }
+        } else {
+          pos += 1
+        }
+      '"' => {
+        pos += 1
+        while pos < input.length() {
+          let c2 = input.code_unit_at(pos).unsafe_to_char()
+          if c2 == '"' {
+            pos += 1
+            break
+          } else if c2 == '\\' {
+            pos += 2
+          } else {
+            pos += 1
+          }
+        }
+      }
+      _ => pos += 1
+    }
+  }
+  let buf = StringBuilder::new()
+  for i in start_pos..<pos {
+    buf.write_char(input.code_unit_at(i).unsafe_to_char())
+  }
+  for i in self.lexer.pos..<pos {
+    if input.code_unit_at(i).unsafe_to_char() == '\n' {
+      self.lexer.line += 1
+    }
+  }
+  self.lexer.pos = pos
+  self.current = self.lexer.next_token()
+  buf.to_string()
+}
+
+///|
+fn Parser::parse_wast_binary_module(self : Parser) -> Bytes raise WatError {
+  let parts : Array[Byte] = []
+  while self.current.token != RParen {
+    match self.current.token {
+      String_(s) => {
+        for i in 0..<s.length() {
+          parts.push(s.code_unit_at(i).to_byte())
+        }
+        self.advance()
+      }
+      _ => break
+    }
+  }
+  Bytes::from_array(parts)
+}
+
+///|
+fn Parser::parse_wast_optional_id(self : Parser) -> String? raise WatError {
+  match self.current.token {
+    Id(name) => {
+      self.advance()
+      Some(name)
+    }
+    _ => None
+  }
+}
+
+///|
+fn Parser::parse_wast_string(self : Parser) -> String raise WatError {
+  match self.current.token {
+    String_(s) => {
+      self.advance()
+      s
+    }
+    _ => raise WatError::UnexpectedToken("expected string", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_wast_assert_return(
+  self : Parser,
+) -> WastCommand raise WatError {
+  self.advance() // consume 'assert_return'
+  self.expect_lparen()
+  let action = self.parse_wast_action()
+  self.expect_rparen()
+  let expected : Array[WastValue] = []
+  while self.current.token == LParen {
+    self.expect_lparen()
+    let value = self.parse_wast_const_value()
+    expected.push(value)
+    self.expect_rparen()
+  }
+  self.expect_rparen()
+  AssertReturn(action, expected)
+}
+
+///|
+fn Parser::parse_wast_assert_trap(self : Parser) -> WastCommand raise WatError {
+  self.advance() // consume 'assert_trap'
+  self.expect_lparen()
+  match self.current.token {
+    Keyword("module") => {
+      let source = self.parse_wast_module_source()
+      self.expect_rparen()
+      let msg = self.parse_wast_string()
+      self.expect_rparen()
+      AssertModuleTrap(source, msg)
+    }
+    _ => {
+      let action = self.parse_wast_action()
+      self.expect_rparen()
+      let msg = self.parse_wast_string()
+      self.expect_rparen()
+      AssertTrap(action, msg)
+    }
+  }
+}
+
+///|
+fn Parser::parse_wast_assert_exhaustion(
+  self : Parser,
+) -> WastCommand raise WatError {
+  self.advance()
+  self.expect_lparen()
+  let action = self.parse_wast_action()
+  self.expect_rparen()
+  let msg = self.parse_wast_string()
+  self.expect_rparen()
+  AssertExhaustion(action, msg)
+}
+
+///|
+fn Parser::parse_wast_assert_invalid(
+  self : Parser,
+) -> WastCommand raise WatError {
+  self.advance()
+  self.expect_lparen()
+  let source = self.parse_wast_module_source()
+  self.expect_rparen()
+  let msg = self.parse_wast_string()
+  self.expect_rparen()
+  AssertInvalid(source, msg)
+}
+
+///|
+fn Parser::parse_wast_assert_malformed(
+  self : Parser,
+) -> WastCommand raise WatError {
+  self.advance()
+  self.expect_lparen()
+  let source = self.parse_wast_module_source()
+  self.expect_rparen()
+  let msg = self.parse_wast_string()
+  self.expect_rparen()
+  AssertMalformed(source, msg)
+}
+
+///|
+fn Parser::parse_wast_assert_unlinkable(
+  self : Parser,
+) -> WastCommand raise WatError {
+  self.advance()
+  self.expect_lparen()
+  let source = self.parse_wast_module_source()
+  self.expect_rparen()
+  let msg = self.parse_wast_string()
+  self.expect_rparen()
+  AssertUnlinkable(source, msg)
+}
+
+///|
+fn Parser::parse_wast_module_source(
+  self : Parser,
+) -> WastModuleSource raise WatError {
+  match self.current.token {
+    Keyword("module") => {
+      self.advance()
+      self.parse_wast_optional_id() |> ignore
+      match self.current.token {
+        Keyword("binary") => {
+          self.advance()
+          let bytes = self.parse_wast_binary_module()
+          Binary(bytes)
+        }
+        Keyword("quote") => {
+          self.advance()
+          let parts : Array[String] = []
+          while self.current.token != RParen {
+            match self.current.token {
+              String_(s) => {
+                parts.push(s)
+                self.advance()
+              }
+              _ => break
+            }
+          }
+          Quote(parts)
+        }
+        _ => {
+          let module_text = self.collect_wast_module_text()
+          let mod_ = parse("(module " + module_text + ")") catch {
+            e => return FailedToParse(e.to_string())
+          }
+          Inline(mod_)
+        }
+      }
+    }
+    _ => raise WatError::UnexpectedToken("expected 'module'", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_wast_register(self : Parser) -> WastCommand raise WatError {
+  self.advance()
+  let name = self.parse_wast_string()
+  let module_name = self.parse_wast_optional_id()
+  self.expect_rparen()
+  Register(name, module_name)
+}
+
+///|
+fn Parser::parse_wast_action(self : Parser) -> WastAction raise WatError {
+  match self.current.token {
+    Keyword("invoke") => {
+      self.advance()
+      let module_name = self.parse_wast_optional_id()
+      let func_name = self.parse_wast_string()
+      let args : Array[WastValue] = []
+      while self.current.token == LParen {
+        self.expect_lparen()
+        let value = self.parse_wast_const_value()
+        args.push(value)
+        self.expect_rparen()
+      }
+      Invoke(module_name, func_name, args)
+    }
+    Keyword("get") => {
+      self.advance()
+      let module_name = self.parse_wast_optional_id()
+      let global_name = self.parse_wast_string()
+      Get(module_name, global_name)
+    }
+    _ =>
+      raise WatError::UnexpectedToken("expected 'invoke' or 'get'", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
+  match self.current.token {
+    Keyword("i32.const") => {
+      self.advance()
+      let n = self.parse_wast_i32()
+      I32(n)
+    }
+    Keyword("i64.const") => {
+      self.advance()
+      let n = self.parse_wast_i64()
+      I64(n)
+    }
+    Keyword("f32.const") => {
+      self.advance()
+      match self.current.token {
+        Keyword("nan:canonical") => {
+          self.advance()
+          F32CanonicalNan
+        }
+        Keyword("nan:arithmetic") => {
+          self.advance()
+          F32ArithmeticNan
+        }
+        _ => F32(self.parse_wast_f32())
+      }
+    }
+    Keyword("f64.const") => {
+      self.advance()
+      match self.current.token {
+        Keyword("nan:canonical") => {
+          self.advance()
+          F64CanonicalNan
+        }
+        Keyword("nan:arithmetic") => {
+          self.advance()
+          F64ArithmeticNan
+        }
+        _ => F64(self.parse_wast_f64())
+      }
+    }
+    Keyword("ref.null") => {
+      self.advance()
+      match self.current.token {
+        Keyword(t) => {
+          self.advance()
+          RefNull(t)
+        }
+        _ => RefNull("")
+      }
+    }
+    Keyword("ref.extern") => {
+      self.advance()
+      match self.current.token {
+        Number(n) => {
+          self.advance()
+          RefExtern(parse_wast_int(n))
+        }
+        _ => raise WatError::UnexpectedToken("expected number", self.loc())
+      }
+    }
+    Keyword("ref.func") => {
+      self.advance()
+      RefFunc
+    }
+    _ =>
+      raise WatError::UnexpectedToken("expected const instruction", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_wast_i32(self : Parser) -> Int raise WatError {
+  match self.current.token {
+    Number(s) => {
+      self.advance()
+      parse_wast_int(s)
+    }
+    _ => raise WatError::UnexpectedToken("expected number", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_wast_i64(self : Parser) -> Int64 raise WatError {
+  match self.current.token {
+    Number(s) => {
+      self.advance()
+      parse_wast_int64(s)
+    }
+    _ => raise WatError::UnexpectedToken("expected number", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_wast_f32(self : Parser) -> Float raise WatError {
+  match self.current.token {
+    Number(s) => {
+      self.advance()
+      parse_wast_float32(s)
+    }
+    Keyword(k) =>
+      if k == "nan" ||
+        k == "inf" ||
+        k == "-nan" ||
+        k == "+nan" ||
+        k == "-inf" ||
+        k == "+inf" ||
+        k.has_prefix("nan:") ||
+        k.has_prefix("-nan:") ||
+        k.has_prefix("+nan:") {
+        self.advance()
+        parse_wast_float32(k)
+      } else {
+        raise WatError::UnexpectedToken("expected number", self.loc())
+      }
+    _ => raise WatError::UnexpectedToken("expected number", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_wast_f64(self : Parser) -> Double raise WatError {
+  match self.current.token {
+    Number(s) => {
+      self.advance()
+      parse_wast_float64(s)
+    }
+    Keyword(k) =>
+      if k == "nan" ||
+        k == "inf" ||
+        k == "-nan" ||
+        k == "+nan" ||
+        k == "-inf" ||
+        k == "+inf" ||
+        k.has_prefix("nan:") ||
+        k.has_prefix("-nan:") ||
+        k.has_prefix("+nan:") {
+        self.advance()
+        parse_wast_float64(k)
+      } else {
+        raise WatError::UnexpectedToken("expected number", self.loc())
+      }
+    _ => raise WatError::UnexpectedToken("expected number", self.loc())
+  }
+}
+
+///|
+fn parse_wast_int(s : String) -> Int raise WatError {
+  if s.length() == 0 {
+    raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+  }
+  let mut start = 0
+  let mut negative = false
+  if s.code_unit_at(0) == '-' {
+    negative = true
+    start = 1
+  } else if s.code_unit_at(0) == '+' {
+    start = 1
+  }
+  if start + 1 < s.length() &&
+    s.code_unit_at(start) == '0' &&
+    (s.code_unit_at(start + 1) == 'x' || s.code_unit_at(start + 1) == 'X') {
+    let hex_val = parse_wast_hex_int(s, start + 2)
+    if negative {
+      -hex_val
+    } else {
+      hex_val
+    }
+  } else {
+    let mut result = 0
+    for i in start..<s.length() {
+      let c = s.code_unit_at(i).unsafe_to_char()
+      if c == '_' {
+        continue
+      }
+      if c < '0' || c > '9' {
+        raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+      }
+      result = result * 10 + (c.to_int() - '0'.to_int())
+    }
+    if negative {
+      -result
+    } else {
+      result
+    }
+  }
+}
+
+///|
+fn parse_wast_hex_int(s : String, start : Int) -> Int raise WatError {
+  let mut result = 0
+  for i in start..<s.length() {
+    let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue
+    }
+    let digit = if c >= '0' && c <= '9' {
+      c.to_int() - '0'.to_int()
+    } else if c >= 'a' && c <= 'f' {
+      c.to_int() - 'a'.to_int() + 10
+    } else if c >= 'A' && c <= 'F' {
+      c.to_int() - 'A'.to_int() + 10
+    } else {
+      raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+    }
+    result = result * 16 + digit
+  }
+  result
+}
+
+///|
+fn parse_wast_int64(s : String) -> Int64 raise WatError {
+  if s.length() == 0 {
+    raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+  }
+  let mut start = 0
+  let mut negative = false
+  if s.code_unit_at(0) == '-' {
+    negative = true
+    start = 1
+  } else if s.code_unit_at(0) == '+' {
+    start = 1
+  }
+  if start + 1 < s.length() &&
+    s.code_unit_at(start) == '0' &&
+    (s.code_unit_at(start + 1) == 'x' || s.code_unit_at(start + 1) == 'X') {
+    let hex_val = parse_wast_hex_int64(s, start + 2)
+    if negative {
+      -hex_val
+    } else {
+      hex_val
+    }
+  } else {
+    let mut result = 0L
+    for i in start..<s.length() {
+      let c = s.code_unit_at(i).unsafe_to_char()
+      if c == '_' {
+        continue
+      }
+      if c < '0' || c > '9' {
+        raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+      }
+      result = result * 10L + (c.to_int() - '0'.to_int()).to_int64()
+    }
+    if negative {
+      -result
+    } else {
+      result
+    }
+  }
+}
+
+///|
+fn parse_wast_hex_int64(s : String, start : Int) -> Int64 raise WatError {
+  let mut result = 0L
+  for i in start..<s.length() {
+    let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue
+    }
+    let digit = if c >= '0' && c <= '9' {
+      c.to_int() - '0'.to_int()
+    } else if c >= 'a' && c <= 'f' {
+      c.to_int() - 'a'.to_int() + 10
+    } else if c >= 'A' && c <= 'F' {
+      c.to_int() - 'A'.to_int() + 10
+    } else {
+      raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+    }
+    result = result * 16L + digit.to_int64()
+  }
+  result
+}
+
+///|
+fn parse_wast_float32(s : String) -> Float raise WatError {
+  if s == "inf" || s == "+inf" {
+    return @float.infinity
+  }
+  if s == "-inf" {
+    return @float.neg_infinity
+  }
+  if s == "nan" || s == "+nan" || s == "-nan" {
+    return @float.not_a_number
+  }
+  if s.has_prefix("nan:") || s.has_prefix("+nan:") || s.has_prefix("-nan:") {
+    return @float.not_a_number
+  }
+  let is_hex = (
+      s.length() > 2 &&
+      s.code_unit_at(0) == '0' &&
+      (s.code_unit_at(1) == 'x' || s.code_unit_at(1) == 'X')
+    ) ||
+    (
+      s.length() > 3 &&
+      (s.code_unit_at(0) == '+' || s.code_unit_at(0) == '-') &&
+      s.code_unit_at(1) == '0' &&
+      (s.code_unit_at(2) == 'x' || s.code_unit_at(2) == 'X')
+    )
+  if is_hex {
+    parse_wast_hex_float64(s) |> Float::from_double
+  } else {
+    let d = @strconv.parse_double(s) catch {
+      _ => raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+    }
+    Float::from_double(d)
+  }
+}
+
+///|
+fn parse_wast_float64(s : String) -> Double raise WatError {
+  if s == "inf" || s == "+inf" {
+    return @double.infinity
+  }
+  if s == "-inf" {
+    return @double.neg_infinity
+  }
+  if s == "nan" || s == "+nan" || s == "-nan" {
+    return @double.not_a_number
+  }
+  if s.has_prefix("nan:") || s.has_prefix("+nan:") || s.has_prefix("-nan:") {
+    return @double.not_a_number
+  }
+  let is_hex = (
+      s.length() > 2 &&
+      s.code_unit_at(0) == '0' &&
+      (s.code_unit_at(1) == 'x' || s.code_unit_at(1) == 'X')
+    ) ||
+    (
+      s.length() > 3 &&
+      (s.code_unit_at(0) == '+' || s.code_unit_at(0) == '-') &&
+      s.code_unit_at(1) == '0' &&
+      (s.code_unit_at(2) == 'x' || s.code_unit_at(2) == 'X')
+    )
+  if is_hex {
+    parse_wast_hex_float64(s)
+  } else {
+    @strconv.parse_double(s) catch {
+      _ => raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+    }
+  }
+}
+
+///|
+fn parse_wast_hex_float64(s : String) -> Double raise WatError {
+  let mut start = 0
+  let mut negative = false
+  if s.code_unit_at(0) == '-' {
+    negative = true
+    start = 1
+  } else if s.code_unit_at(0) == '+' {
+    start = 1
+  }
+  start = start + 2 // Skip "0x"
+  let mut mantissa = 0.0
+  let mut frac_scale = 1.0
+  let mut in_frac = false
+  let mut exp_start = -1
+  for i in start..<s.length() {
+    let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue
+    }
+    if c == '.' {
+      in_frac = true
+      continue
+    }
+    if c == 'p' || c == 'P' {
+      exp_start = i + 1
+      break
+    }
+    let digit = if c >= '0' && c <= '9' {
+      c.to_int() - '0'.to_int()
+    } else if c >= 'a' && c <= 'f' {
+      c.to_int() - 'a'.to_int() + 10
+    } else if c >= 'A' && c <= 'F' {
+      c.to_int() - 'A'.to_int() + 10
+    } else {
+      raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+    }
+    if in_frac {
+      frac_scale = frac_scale / 16.0
+      mantissa = mantissa + digit.to_double() * frac_scale
+    } else {
+      mantissa = mantissa * 16.0 + digit.to_double()
+    }
+  }
+  let mut exp = 0
+  let mut exp_negative = false
+  if exp_start >= 0 {
+    if exp_start < s.length() && s.code_unit_at(exp_start) == '-' {
+      exp_negative = true
+      exp_start = exp_start + 1
+    } else if exp_start < s.length() && s.code_unit_at(exp_start) == '+' {
+      exp_start = exp_start + 1
+    }
+    for i in exp_start..<s.length() {
+      let c = s.code_unit_at(i).unsafe_to_char()
+      if c == '_' {
+        continue
+      }
+      if c < '0' || c > '9' {
+        raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+      }
+      exp = exp * 10 + (c.to_int() - '0'.to_int())
+    }
+    if exp_negative {
+      exp = -exp
+    }
+  }
+  let mut result = mantissa
+  if exp > 0 {
+    for _ in 0..<exp {
+      result = result * 2.0
+    }
+  } else if exp < 0 {
+    for _ in 0..<-exp {
+      result = result / 2.0
+    }
+  }
+  if negative {
+    -result
+  } else {
+    result
   }
 }

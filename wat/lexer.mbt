@@ -61,6 +61,7 @@ priv struct Lexer {
   mut column : Int
   mut token_start_line : Int
   mut token_start_column : Int
+  mut token_start_pos : Int
 }
 
 ///|
@@ -72,6 +73,7 @@ fn Lexer::new(input : String) -> Lexer {
     column: 1,
     token_start_line: 1,
     token_start_column: 1,
+    token_start_pos: 0,
   }
 }
 
@@ -356,46 +358,252 @@ fn Lexer::read_id_or_keyword(self : Lexer) -> String {
 
 ///|
 fn Lexer::read_string(self : Lexer) -> String raise WatError {
-  let buf = StringBuilder::new()
+  // Accumulate raw bytes since hex escapes like \ef produce raw bytes
+  // that may form multi-byte UTF-8 sequences
+  let bytes : Array[Byte] = []
   let start_loc = self.current_loc()
   // Skip opening quote
   self.advance_pos()
   while !self.is_eof() {
-    match self.next_char() {
-      Some('"') => return buf.to_string()
-      Some('\\') =>
+    match self.peek_char() {
+      Some('"') => {
+        self.advance_pos()
+        // Convert accumulated bytes to UTF-8 string
+        return bytes_to_string(bytes)
+      }
+      Some('\\') => {
+        self.advance_pos()
         match self.next_char() {
-          Some('n') => buf.write_char('\n')
-          Some('t') => buf.write_char('\t')
-          Some('r') => buf.write_char('\r')
-          Some('"') => buf.write_char('"')
-          Some('\\') => buf.write_char('\\')
+          Some('n') => bytes.push(b'\n')
+          Some('t') => bytes.push(b'\t')
+          Some('r') => bytes.push(b'\r')
+          Some('"') => bytes.push(b'"')
+          Some('\\') => bytes.push(b'\\')
+          Some('\'') => bytes.push(b'\'')
+          Some('u') =>
+            // Unicode escape \u{xxxx}
+            match self.next_char() {
+              Some('{') => {
+                let hex_buf = StringBuilder::new()
+                while !self.is_eof() {
+                  match self.peek_char() {
+                    Some('}') => {
+                      self.advance_pos()
+                      break
+                    }
+                    Some(c) =>
+                      if is_hex_digit(c) {
+                        hex_buf.write_char(c)
+                        self.advance_pos()
+                      } else {
+                        raise WatError::ParseError(
+                          "Invalid Unicode escape: expected hex digit or '}'",
+                          self.current_loc(),
+                        )
+                      }
+                    None => raise WatError::UnexpectedEof(self.current_loc())
+                  }
+                }
+                let hex = hex_buf.to_string()
+                if hex.is_empty() {
+                  raise WatError::ParseError("Empty Unicode escape", start_loc)
+                }
+                match parse_hex_codepoint(hex) {
+                  Some(cp) => write_codepoint_bytes(bytes, cp)
+                  None =>
+                    raise WatError::ParseError(
+                      "Invalid Unicode escape: \\u{\{hex}}",
+                      start_loc,
+                    )
+                }
+              }
+              _ =>
+                raise WatError::ParseError(
+                  "Invalid Unicode escape: expected '{'",
+                  self.current_loc(),
+                )
+            }
           Some(c) =>
-            // Hex escape \xx
-            if (c >= '0' && c <= '9') ||
-              (c >= 'a' && c <= 'f') ||
-              (c >= 'A' && c <= 'F') {
+            // Hex escape \xx - produces a raw byte
+            if is_hex_digit(c) {
               match self.next_char() {
                 Some(c2) => {
                   let hex = String::make(1, c) + String::make(1, c2)
                   match parse_hex_byte(hex) {
-                    Some(b) => buf.write_char(b.unsafe_to_char())
+                    Some(b) => bytes.push(b.to_byte())
                     None =>
-                      raise ParseError("Invalid hex escape: \{hex}", start_loc)
+                      raise WatError::ParseError(
+                        "Invalid hex escape: \{hex}",
+                        start_loc,
+                      )
                   }
                 }
-                None => raise UnexpectedEof(self.current_loc())
+                None => raise WatError::UnexpectedEof(self.current_loc())
               }
             } else {
-              buf.write_char(c)
+              // Unknown escape - just output the character
+              write_char_bytes(bytes, c)
             }
-          None => raise UnexpectedEof(self.current_loc())
+          None => raise WatError::UnexpectedEof(self.current_loc())
         }
-      Some(c) => buf.write_char(c)
-      None => raise UnexpectedEof(self.current_loc())
+      }
+      Some(_) =>
+        // Regular character - read it and encode as UTF-8 bytes
+        match self.next_char() {
+          Some(c) => write_char_bytes(bytes, c)
+          None => raise WatError::UnexpectedEof(self.current_loc())
+        }
+      None => raise WatError::UnexpectedEof(self.current_loc())
     }
   }
-  raise UnexpectedEof(self.current_loc())
+  raise WatError::UnexpectedEof(self.current_loc())
+}
+
+///|
+/// Write a character's UTF-8 encoding to a byte array
+fn write_char_bytes(bytes : Array[Byte], c : Char) -> Unit {
+  let cp = c.to_int()
+  if cp < 0x80 {
+    bytes.push(cp.to_byte())
+  } else if cp < 0x800 {
+    bytes.push((0xC0 | (cp >> 6)).to_byte())
+    bytes.push((0x80 | (cp & 0x3F)).to_byte())
+  } else if cp < 0x10000 {
+    bytes.push((0xE0 | (cp >> 12)).to_byte())
+    bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
+    bytes.push((0x80 | (cp & 0x3F)).to_byte())
+  } else {
+    bytes.push((0xF0 | (cp >> 18)).to_byte())
+    bytes.push((0x80 | ((cp >> 12) & 0x3F)).to_byte())
+    bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
+    bytes.push((0x80 | (cp & 0x3F)).to_byte())
+  }
+}
+
+///|
+/// Write a codepoint's UTF-8 encoding to a byte array
+fn write_codepoint_bytes(bytes : Array[Byte], cp : Int) -> Unit {
+  if cp < 0x80 {
+    bytes.push(cp.to_byte())
+  } else if cp < 0x800 {
+    bytes.push((0xC0 | (cp >> 6)).to_byte())
+    bytes.push((0x80 | (cp & 0x3F)).to_byte())
+  } else if cp < 0x10000 {
+    bytes.push((0xE0 | (cp >> 12)).to_byte())
+    bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
+    bytes.push((0x80 | (cp & 0x3F)).to_byte())
+  } else {
+    bytes.push((0xF0 | (cp >> 18)).to_byte())
+    bytes.push((0x80 | ((cp >> 12) & 0x3F)).to_byte())
+    bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
+    bytes.push((0x80 | (cp & 0x3F)).to_byte())
+  }
+}
+
+///|
+/// Convert a byte array to a UTF-8 string
+fn bytes_to_string(bytes : Array[Byte]) -> String {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < bytes.length() {
+    let b = bytes[i].to_int()
+    if b < 0x80 {
+      // ASCII
+      buf.write_char(b.unsafe_to_char())
+      i = i + 1
+    } else if b < 0xC0 {
+      // Invalid leading byte, treat as raw byte (Latin-1)
+      buf.write_char(b.unsafe_to_char())
+      i = i + 1
+    } else if b < 0xE0 {
+      // 2-byte sequence
+      if i + 1 < bytes.length() {
+        let b2 = bytes[i + 1].to_int()
+        let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
+        if is_valid_codepoint(cp) {
+          buf.write_char(cp.unsafe_to_char())
+        } else {
+          // Invalid codepoint, output bytes as Latin-1
+          buf.write_char(b.unsafe_to_char())
+          buf.write_char(b2.unsafe_to_char())
+        }
+        i = i + 2
+      } else {
+        buf.write_char(b.unsafe_to_char())
+        i = i + 1
+      }
+    } else if b < 0xF0 {
+      // 3-byte sequence
+      if i + 2 < bytes.length() {
+        let b2 = bytes[i + 1].to_int()
+        let b3 = bytes[i + 2].to_int()
+        let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
+        if is_valid_codepoint(cp) {
+          buf.write_char(cp.unsafe_to_char())
+        } else {
+          // Invalid codepoint, output bytes as Latin-1
+          buf.write_char(b.unsafe_to_char())
+          buf.write_char(b2.unsafe_to_char())
+          buf.write_char(b3.unsafe_to_char())
+        }
+        i = i + 3
+      } else {
+        buf.write_char(b.unsafe_to_char())
+        i = i + 1
+      }
+      // 4-byte sequence
+    } else if i + 3 < bytes.length() {
+      let b2 = bytes[i + 1].to_int()
+      let b3 = bytes[i + 2].to_int()
+      let b4 = bytes[i + 3].to_int()
+      let cp = ((b & 0x07) << 18) |
+        ((b2 & 0x3F) << 12) |
+        ((b3 & 0x3F) << 6) |
+        (b4 & 0x3F)
+      if is_valid_codepoint(cp) {
+        buf.write_char(cp.unsafe_to_char())
+      } else {
+        // Invalid codepoint, output bytes as Latin-1
+        buf.write_char(b.unsafe_to_char())
+        buf.write_char(b2.unsafe_to_char())
+        buf.write_char(b3.unsafe_to_char())
+        buf.write_char(b4.unsafe_to_char())
+      }
+      i = i + 4
+    } else {
+      buf.write_char(b.unsafe_to_char())
+      i = i + 1
+    }
+  }
+  buf.to_string()
+}
+
+///|
+/// Check if a codepoint is valid Unicode (not surrogate, not > U+10FFFF)
+fn is_valid_codepoint(cp : Int) -> Bool {
+  cp <= 0x10FFFF && (cp < 0xD800 || cp > 0xDFFF)
+}
+
+///|
+fn is_hex_digit(c : Char) -> Bool {
+  (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+///|
+fn parse_hex_codepoint(s : String) -> Int? {
+  let mut value = 0
+  for i in 0..<s.length() {
+    let c = s.code_unit_at(i).unsafe_to_char()
+    match hex_digit_value(c) {
+      Some(digit) => value = value * 16 + digit
+      None => return None
+    }
+  }
+  // Check valid Unicode codepoint range
+  if value > 0x10FFFF {
+    return None
+  }
+  Some(value)
 }
 
 ///|
@@ -435,8 +643,28 @@ fn Lexer::check_nan_or_inf(self : Lexer) -> Bool {
   let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
   let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
   let c3 = self.input.code_unit_at(self.pos + 2).unsafe_to_char()
-  // Check for "nan" or "inf"
-  (c1 == 'n' && c2 == 'a' && c3 == 'n') || (c1 == 'i' && c2 == 'n' && c3 == 'f')
+  // Check for "inf" - always treat as number
+  if c1 == 'i' && c2 == 'n' && c3 == 'f' {
+    return true
+  }
+  // Check for "nan"
+  if c1 == 'n' && c2 == 'a' && c3 == 'n' {
+    // Check if followed by :canonical or :arithmetic - those should be keywords
+    if self.pos + 13 <= self.input.length() {
+      let rest13 = extract_substring(self.input, self.pos, self.pos + 13)
+      if rest13 == "nan:canonical" {
+        return false // Let it be parsed as a keyword
+      }
+    }
+    if self.pos + 14 <= self.input.length() {
+      let rest14 = extract_substring(self.input, self.pos, self.pos + 14)
+      if rest14 == "nan:arithmetic" {
+        return false // Let it be parsed as a keyword
+      }
+    }
+    return true
+  }
+  false
 }
 
 ///|
@@ -539,6 +767,7 @@ fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
   let start_column = self.column
   self.token_start_line = start_line
   self.token_start_column = start_column
+  self.token_start_pos = start_pos
   if self.is_eof() {
     return {
       token: Eof,
@@ -562,8 +791,14 @@ fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
     }
     Some('$') => {
       self.advance_pos()
-      let name = self.read_id_or_keyword()
-      Id(name)
+      // Check for string identifier like $"foo"
+      if self.peek_char() == Some('"') {
+        let name = self.read_string()
+        Id(name)
+      } else {
+        let name = self.read_id_or_keyword()
+        Id(name)
+      }
     }
     Some('"') => {
       let s = self.read_string()
@@ -582,13 +817,16 @@ fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
           let kw = self.read_id_or_keyword()
           Keyword(kw)
         } else {
-          raise UnexpectedToken(String::make(1, c), self.current_loc())
+          raise WatError::UnexpectedToken(
+            String::make(1, c),
+            self.current_loc(),
+          )
         }
       } else if is_idchar(c) {
         let kw = self.read_id_or_keyword()
         Keyword(kw)
       } else {
-        raise UnexpectedToken(String::make(1, c), self.current_loc())
+        raise WatError::UnexpectedToken(String::make(1, c), self.current_loc())
       }
     None => Eof
   }
