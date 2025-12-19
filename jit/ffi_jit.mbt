@@ -581,7 +581,13 @@ fn value_type_to_code(ty : @types.ValueType) -> Int {
     | RefFunc
     | RefExtern
     | RefFuncTyped(_)
-    | RefNullFuncTyped(_) => 1
+    | RefNullFuncTyped(_)
+    | AnyRef
+    | ExnRef
+    | NullRef
+    | NullFuncRef
+    | NullExnRef
+    | NullExternRef => 1
     V128 => abort("V128 not supported in JIT")
   }
 }

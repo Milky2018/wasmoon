@@ -1609,7 +1609,7 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
       if is_nullable {
         self.advance()
       }
-      // Parse heap type: func, extern, or $typeidx
+      // Parse heap type: func, extern, any, exn, none, nofunc, noexn, noextern, or $typeidx
       match self.current.token {
         Keyword("func") => {
           self.advance()
@@ -1628,6 +1628,36 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           } else {
             @types.ValueType::RefExtern
           }
+        }
+        Keyword("any") => {
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::AnyRef // any is always nullable in this context
+        }
+        Keyword("exn") => {
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::ExnRef // exn is always nullable in this context
+        }
+        Keyword("none") => {
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::NullRef // bottom type for any
+        }
+        Keyword("nofunc") => {
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::NullFuncRef // bottom type for func
+        }
+        Keyword("noexn") => {
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::NullExnRef // bottom type for exn
+        }
+        Keyword("noextern") => {
+          self.advance()
+          self.expect_rparen()
+          @types.ValueType::NullExternRef // bottom type for extern
         }
         Id(name) => {
           // Typed function reference like (ref $t)
@@ -1675,6 +1705,12 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         "v128" => V128
         "funcref" => FuncRef
         "externref" => ExternRef
+        "anyref" => AnyRef
+        "exnref" => ExnRef
+        "nullref" => NullRef
+        "nullfuncref" => NullFuncRef
+        "nullexnref" => NullExnRef
+        "nullexternref" => NullExternRef
         _ =>
           raise WatError::UnexpectedToken(
             "expected value type, got '\{kw}'",
@@ -2855,6 +2891,7 @@ fn Parser::parse_plain_instruction(
     "drop" => @types.Instruction::Drop
     "select" => {
       // select can have optional (result type) annotations
+      let result_types : Array[@types.ValueType] = []
       while self.current.token == LParen {
         let saved = self.lexer.pos
         let saved_line = self.lexer.line
@@ -2864,19 +2901,12 @@ fn Parser::parse_plain_instruction(
         self.advance()
         match self.current.token {
           Keyword("result") => {
-            // Skip result type annotation, tracking nested parentheses
-            let mut depth = 1 // We're inside (result ...)
-            while depth > 0 {
-              self.advance()
-              if self.current.token is LParen {
-                depth += 1
-              } else if self.current.token is RParen {
-                depth -= 1
-              } else if self.current.token is Eof {
-                break
-              }
+            self.advance() // skip "result"
+            // Parse result types until we hit ')'
+            while self.current.token != RParen {
+              result_types.push(self.parse_value_type())
             }
-            self.advance() // Move past the closing RParen
+            self.expect_rparen()
           }
           _ => {
             // Not a type annotation, restore state
@@ -2890,7 +2920,11 @@ fn Parser::parse_plain_instruction(
           }
         }
       }
-      @types.Instruction::Select
+      if result_types.is_empty() {
+        @types.Instruction::Select
+      } else {
+        @types.Instruction::SelectTyped(result_types)
+      }
     }
 
     // Reference types
@@ -3474,6 +3508,30 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       self.advance()
       @types.ValueType::ExternRef
     }
+    Keyword("any") | Keyword("anyref") => {
+      self.advance()
+      @types.ValueType::AnyRef
+    }
+    Keyword("exn") | Keyword("exnref") => {
+      self.advance()
+      @types.ValueType::ExnRef
+    }
+    Keyword("none") | Keyword("nullref") => {
+      self.advance()
+      @types.ValueType::NullRef
+    }
+    Keyword("nofunc") | Keyword("nullfuncref") => {
+      self.advance()
+      @types.ValueType::NullFuncRef
+    }
+    Keyword("noexn") | Keyword("nullexnref") => {
+      self.advance()
+      @types.ValueType::NullExnRef
+    }
+    Keyword("noextern") | Keyword("nullexternref") => {
+      self.advance()
+      @types.ValueType::NullExternRef
+    }
     Id(_) => {
       // Type index like $t - treat as FuncRef for now
       self.advance()
@@ -3481,7 +3539,7 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
     }
     _ =>
       raise WatError::UnexpectedToken(
-        "expected reference type (func, extern, funcref, externref)",
+        "expected reference type (func, extern, any, exn, none, nofunc, noexn, noextern)",
         self.loc(),
       )
   }

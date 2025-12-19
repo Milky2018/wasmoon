@@ -468,7 +468,11 @@ fn sync_jit_globals_to_store(
         F32 =>
           @types.Value::F32(Float::reinterpret_from_int(raw_value.to_int()))
         F64 => @types.Value::F64(raw_value.reinterpret_as_double())
-        FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
+        FuncRef
+        | RefFunc
+        | RefFuncTyped(_)
+        | RefNullFuncTyped(_)
+        | NullFuncRef =>
           if raw_value == -1L {
             @types.Value::Null
           } else {
@@ -481,12 +485,15 @@ fn sync_jit_globals_to_store(
               @types.Value::Null
             }
           }
-        ExternRef | RefExtern =>
+        ExternRef | RefExtern | NullExternRef =>
           if raw_value == -1L {
             @types.Value::Null
           } else {
             @types.Value::ExternRef(raw_value.to_int())
           }
+        // GC reference types - treat as null for now
+        AnyRef | NullRef => @types.Value::Null
+        ExnRef | NullExnRef => @types.Value::Null
         V128 => abort("V128 not supported in JIT global sync")
       }
       // We already checked mutability, so set should succeed
@@ -1091,18 +1098,20 @@ fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
     F32 => @types.Value::F32(@jit.FromInt64::from_int64_bits(v))
     F64 => @types.Value::F64(@jit.FromInt64::from_int64_bits(v))
     // Reference types: -1L is null sentinel, otherwise index
-    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       if v == -1L {
         @types.Value::Null
       } else {
         @types.Value::FuncRef(v.to_int())
       }
-    ExternRef | RefExtern =>
+    ExternRef | RefExtern | NullExternRef =>
       if v == -1L {
         @types.Value::Null
       } else {
         @types.Value::ExternRef(v.to_int())
       }
+    // GC reference types - treat as null for now
+    AnyRef | NullRef | ExnRef | NullExnRef => @types.Value::Null
     V128 => abort("V128 not supported in JIT")
   }
 }

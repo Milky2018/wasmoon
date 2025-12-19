@@ -407,6 +407,7 @@ fn ExecContext::exec_instr(
     | BrTable(_, _)
     | Unreachable
     | Select
+    | SelectTyped(_)
     | Nop
     | Return => self.exec_control(instr)
 
