@@ -39,7 +39,11 @@ pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
     RefFuncTyped(_) | RefNullFuncTyped(_) => Type::I64
     RefFunc => Type::I64
     RefExtern => Type::I64
-    _ => Type::I32 // Fallback for other types
+    // New GC reference types - all use 64-bit representation
+    NullFuncRef => Type::FuncRef
+    NullExternRef => Type::ExternRef
+    AnyRef | NullRef | ExnRef | NullExnRef => Type::FuncRef
+    _ => Type::I32 // Fallback for V128 or future types
   }
 }
 
