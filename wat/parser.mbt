@@ -5391,7 +5391,7 @@ fn Parser::parse_wast_f32(self : Parser) -> Float raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
-      parse_wast_float32(s)
+      parse_float32(s)
     }
     Keyword(k) =>
       if k == "nan" ||
@@ -5404,7 +5404,7 @@ fn Parser::parse_wast_f32(self : Parser) -> Float raise WatError {
         k.has_prefix("-nan:") ||
         k.has_prefix("+nan:") {
         self.advance()
-        parse_wast_float32(k)
+        parse_float32(k)
       } else {
         raise WatError::UnexpectedToken("expected number", self.loc())
       }
@@ -5417,7 +5417,7 @@ fn Parser::parse_wast_f64(self : Parser) -> Double raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
-      parse_wast_float64(s)
+      parse_float64(s)
     }
     Keyword(k) =>
       if k == "nan" ||
@@ -5430,7 +5430,7 @@ fn Parser::parse_wast_f64(self : Parser) -> Double raise WatError {
         k.has_prefix("-nan:") ||
         k.has_prefix("+nan:") {
         self.advance()
-        parse_wast_float64(k)
+        parse_float64(k)
       } else {
         raise WatError::UnexpectedToken("expected number", self.loc())
       }
@@ -5564,157 +5564,4 @@ fn parse_wast_hex_int64(s : String, start : Int) -> Int64 raise WatError {
     result = result * 16L + digit.to_int64()
   }
   result
-}
-
-///|
-fn parse_wast_float32(s : String) -> Float raise WatError {
-  if s == "inf" || s == "+inf" {
-    return @float.infinity
-  }
-  if s == "-inf" {
-    return @float.neg_infinity
-  }
-  if s == "nan" || s == "+nan" || s == "-nan" {
-    return @float.not_a_number
-  }
-  if s.has_prefix("nan:") || s.has_prefix("+nan:") || s.has_prefix("-nan:") {
-    return @float.not_a_number
-  }
-  let is_hex = (
-      s.length() > 2 &&
-      s.code_unit_at(0) == '0' &&
-      (s.code_unit_at(1) == 'x' || s.code_unit_at(1) == 'X')
-    ) ||
-    (
-      s.length() > 3 &&
-      (s.code_unit_at(0) == '+' || s.code_unit_at(0) == '-') &&
-      s.code_unit_at(1) == '0' &&
-      (s.code_unit_at(2) == 'x' || s.code_unit_at(2) == 'X')
-    )
-  if is_hex {
-    parse_wast_hex_float64(s) |> Float::from_double
-  } else {
-    let d = @strconv.parse_double(s) catch {
-      _ => raise WatError::InvalidNumber(s, { line: 0, column: 0 })
-    }
-    Float::from_double(d)
-  }
-}
-
-///|
-fn parse_wast_float64(s : String) -> Double raise WatError {
-  if s == "inf" || s == "+inf" {
-    return @double.infinity
-  }
-  if s == "-inf" {
-    return @double.neg_infinity
-  }
-  if s == "nan" || s == "+nan" || s == "-nan" {
-    return @double.not_a_number
-  }
-  if s.has_prefix("nan:") || s.has_prefix("+nan:") || s.has_prefix("-nan:") {
-    return @double.not_a_number
-  }
-  let is_hex = (
-      s.length() > 2 &&
-      s.code_unit_at(0) == '0' &&
-      (s.code_unit_at(1) == 'x' || s.code_unit_at(1) == 'X')
-    ) ||
-    (
-      s.length() > 3 &&
-      (s.code_unit_at(0) == '+' || s.code_unit_at(0) == '-') &&
-      s.code_unit_at(1) == '0' &&
-      (s.code_unit_at(2) == 'x' || s.code_unit_at(2) == 'X')
-    )
-  if is_hex {
-    parse_wast_hex_float64(s)
-  } else {
-    @strconv.parse_double(s) catch {
-      _ => raise WatError::InvalidNumber(s, { line: 0, column: 0 })
-    }
-  }
-}
-
-///|
-fn parse_wast_hex_float64(s : String) -> Double raise WatError {
-  let mut start = 0
-  let mut negative = false
-  if s.code_unit_at(0) == '-' {
-    negative = true
-    start = 1
-  } else if s.code_unit_at(0) == '+' {
-    start = 1
-  }
-  start = start + 2 // Skip "0x"
-  let mut mantissa = 0.0
-  let mut frac_scale = 1.0
-  let mut in_frac = false
-  let mut exp_start = -1
-  for i in start..<s.length() {
-    let c = s.code_unit_at(i).unsafe_to_char()
-    if c == '_' {
-      continue
-    }
-    if c == '.' {
-      in_frac = true
-      continue
-    }
-    if c == 'p' || c == 'P' {
-      exp_start = i + 1
-      break
-    }
-    let digit = if c >= '0' && c <= '9' {
-      c.to_int() - '0'.to_int()
-    } else if c >= 'a' && c <= 'f' {
-      c.to_int() - 'a'.to_int() + 10
-    } else if c >= 'A' && c <= 'F' {
-      c.to_int() - 'A'.to_int() + 10
-    } else {
-      raise WatError::InvalidNumber(s, { line: 0, column: 0 })
-    }
-    if in_frac {
-      frac_scale = frac_scale / 16.0
-      mantissa = mantissa + digit.to_double() * frac_scale
-    } else {
-      mantissa = mantissa * 16.0 + digit.to_double()
-    }
-  }
-  let mut exp = 0
-  let mut exp_negative = false
-  if exp_start >= 0 {
-    if exp_start < s.length() && s.code_unit_at(exp_start) == '-' {
-      exp_negative = true
-      exp_start = exp_start + 1
-    } else if exp_start < s.length() && s.code_unit_at(exp_start) == '+' {
-      exp_start = exp_start + 1
-    }
-    for i in exp_start..<s.length() {
-      let c = s.code_unit_at(i).unsafe_to_char()
-      if c == '_' {
-        continue
-      }
-      if c < '0' || c > '9' {
-        raise WatError::InvalidNumber(s, { line: 0, column: 0 })
-      }
-      exp = exp * 10 + (c.to_int() - '0'.to_int())
-    }
-    if exp_negative {
-      exp = -exp
-    }
-  }
-  let mut result = mantissa
-  if exp > 0 {
-    for _ in 0..<exp {
-      result = result * 2.0
-    }
-  } else if exp < 0 {
-    for _ in 0..<-exp {
-      result = result / 2.0
-    }
-  }
-  if negative {
-    -result
-  } else {
-    result
-  }
 }
