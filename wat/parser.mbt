@@ -31,7 +31,7 @@ priv enum MemoryDefResult {
 /// WAT Parser
 priv struct Parser {
   lexer : Lexer
-  mut current : Token
+  mut current : LocatedToken
   // Name resolution maps
   func_names : Map[String, Int]
   type_names : Map[String, Int]
@@ -67,7 +67,7 @@ fn Parser::new(input : String) -> Parser raise WatError {
 ///|
 /// Get the current token's source location
 fn Parser::loc(self : Parser) -> SourceLoc {
-  self.lexer.current_loc()
+  self.current.to_loc()
 }
 
 ///|
@@ -106,8 +106,8 @@ fn Parser::advance(self : Parser) -> Unit raise WatError {
 /// Assumes we're currently inside a parenthesized expression
 fn Parser::skip_to_matching_rparen(self : Parser) -> Unit raise WatError {
   let mut depth = 1
-  while depth > 0 && self.current != Eof {
-    match self.current {
+  while depth > 0 && self.current.token != Eof {
+    match self.current.token {
       LParen => {
         depth = depth + 1
         self.advance()
@@ -121,14 +121,14 @@ fn Parser::skip_to_matching_rparen(self : Parser) -> Unit raise WatError {
       _ => self.advance()
     }
   }
-  if self.current == RParen {
+  if self.current.token == RParen {
     self.advance()
   }
 }
 
 ///|
 fn Parser::expect_lparen(self : Parser) -> Unit raise WatError {
-  match self.current {
+  match self.current.token {
     LParen => self.advance()
     _ => raise UnexpectedToken("expected '(', got \{self.current}", self.loc())
   }
@@ -136,7 +136,7 @@ fn Parser::expect_lparen(self : Parser) -> Unit raise WatError {
 
 ///|
 fn Parser::expect_rparen(self : Parser) -> Unit raise WatError {
-  match self.current {
+  match self.current.token {
     RParen => self.advance()
     _ => raise UnexpectedToken("expected ')', got \{self.current}", self.loc())
   }
@@ -144,7 +144,7 @@ fn Parser::expect_rparen(self : Parser) -> Unit raise WatError {
 
 ///|
 fn Parser::expect_keyword(self : Parser, kw : String) -> Unit raise WatError {
-  match self.current {
+  match self.current.token {
     Keyword(k) =>
       if k == kw {
         self.advance()
@@ -159,14 +159,14 @@ fn Parser::expect_keyword(self : Parser, kw : String) -> Unit raise WatError {
 ///|
 /// Skip an optional identifier (e.g., label after 'end' or 'else' in flat form)
 fn Parser::skip_optional_id(self : Parser) -> Unit raise WatError {
-  if self.current is Id(_) {
+  if self.current.token is Id(_) {
     self.advance()
   }
 }
 
 ///|
 fn Parser::parse_u32(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_u32(s)
@@ -178,7 +178,7 @@ fn Parser::parse_u32(self : Parser) -> Int raise WatError {
 
 ///|
 fn Parser::parse_i32(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -190,7 +190,7 @@ fn Parser::parse_i32(self : Parser) -> Int raise WatError {
 
 ///|
 fn Parser::parse_i64(self : Parser) -> Int64 raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int64(s)
@@ -202,7 +202,7 @@ fn Parser::parse_i64(self : Parser) -> Int64 raise WatError {
 
 ///|
 fn Parser::parse_f32(self : Parser) -> Float raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_float32(s)
@@ -214,7 +214,7 @@ fn Parser::parse_f32(self : Parser) -> Float raise WatError {
 
 ///|
 fn Parser::parse_f64(self : Parser) -> Double raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_float64(s)
@@ -1570,18 +1570,18 @@ fn parse_hex_float64(s : String) -> Double raise WatError {
 
 ///|
 fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
-  match self.current {
+  match self.current.token {
     LParen => {
       // Handle (ref ...) types
       self.advance()
       self.expect_keyword("ref")
       // Check for nullable: (ref null ...) vs non-null: (ref ...)
-      let is_nullable = self.current == Keyword("null")
+      let is_nullable = self.current.token == Keyword("null")
       if is_nullable {
         self.advance()
       }
       // Parse heap type: func, extern, or $typeidx
-      match self.current {
+      match self.current.token {
         Keyword("func") => {
           self.advance()
           self.expect_rparen()
@@ -1693,6 +1693,17 @@ fn count_global_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
+fn count_memory_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    if imp.desc is @types.ImportDesc::Memory(_) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
 /// Parse a WAT module from string
 pub fn parse(input : String) -> @types.Module raise WatError {
   let parser = Parser::new(input)
@@ -1705,7 +1716,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   self.expect_keyword("module")
 
   // Optional module name
-  if self.current is Id(_) {
+  if self.current.token is Id(_) {
     self.advance()
   }
   let mod_ = @types.Module::new()
@@ -1725,15 +1736,15 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   let mut global_idx = 0
   let mut memory_idx = 0
   let mut table_idx = 0
-  while self.current != RParen && self.current != Eof {
-    match self.current {
+  while self.current.token != RParen && self.current.token != Eof {
+    match self.current.token {
       LParen => {
         self.advance()
-        match self.current {
+        match self.current.token {
           Keyword("type") => {
             self.advance()
             // Check for type name
-            if self.current is Id(name) {
+            if self.current.token is Id(name) {
               self.type_names.set(name, type_idx)
               self.advance()
             }
@@ -1744,20 +1755,20 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("import") => {
             self.advance()
             // Skip module name and import name
-            if self.current is String_(_) {
+            if self.current.token is String_(_) {
               self.advance()
             }
-            if self.current is String_(_) {
+            if self.current.token is String_(_) {
               self.advance()
             }
             // Check import kind
-            if self.current == LParen {
+            if self.current.token == LParen {
               self.advance()
-              match self.current {
+              match self.current.token {
                 Keyword("func") => {
                   self.advance()
                   // Check for function name
-                  if self.current is Id(name) {
+                  if self.current.token is Id(name) {
                     self.func_names.set(name, func_idx)
                     self.advance()
                   }
@@ -1767,7 +1778,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 Keyword("global") => {
                   self.advance()
                   // Check for global name
-                  if self.current is Id(name) {
+                  if self.current.token is Id(name) {
                     self.global_names.set(name, global_idx)
                     self.advance()
                   }
@@ -1777,7 +1788,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 Keyword("memory") => {
                   self.advance()
                   // Check for memory name
-                  if self.current is Id(name) {
+                  if self.current.token is Id(name) {
                     self.memory_names.set(name, memory_idx)
                     self.advance()
                   }
@@ -1787,7 +1798,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 Keyword("table") => {
                   self.advance()
                   // Check for table name
-                  if self.current is Id(name) {
+                  if self.current.token is Id(name) {
                     self.table_names.set(name, table_idx)
                     self.advance()
                   }
@@ -1803,7 +1814,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("func") => {
             self.advance()
             // Check for function name
-            if self.current is Id(name) {
+            if self.current.token is Id(name) {
               self.func_names.set(name, func_idx)
             }
             func_idx = func_idx + 1
@@ -1813,7 +1824,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("global") => {
             self.advance()
             // Check for global name
-            if self.current is Id(name) {
+            if self.current.token is Id(name) {
               self.global_names.set(name, global_idx)
             }
             global_idx = global_idx + 1
@@ -1823,7 +1834,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("memory") => {
             self.advance()
             // Check for memory name
-            if self.current is Id(name) {
+            if self.current.token is Id(name) {
               self.memory_names.set(name, memory_idx)
             }
             memory_idx = memory_idx + 1
@@ -1833,7 +1844,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("table") => {
             self.advance()
             // Check for table name
-            if self.current is Id(name) {
+            if self.current.token is Id(name) {
               self.table_names.set(name, table_idx)
             }
             table_idx = table_idx + 1
@@ -1857,11 +1868,11 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
 
   // Intermediate pass: parse ONLY explicit type definitions first
   // This ensures all explicit types are available before functions create implicit types
-  while self.current != RParen && self.current != Eof {
-    match self.current {
+  while self.current.token != RParen && self.current.token != Eof {
+    match self.current.token {
       LParen => {
         self.advance()
-        match self.current {
+        match self.current.token {
           Keyword("type") => {
             let type_idx = mod_.types.length()
             let ft = self.parse_type_def(type_idx)
@@ -1887,11 +1898,11 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   self.current = saved_current
 
   // Main pass: parse everything except types (already parsed)
-  while self.current != RParen && self.current != Eof {
-    match self.current {
+  while self.current.token != RParen && self.current.token != Eof {
+    match self.current.token {
       LParen => {
         self.advance()
-        match self.current {
+        match self.current.token {
           Keyword("type") =>
             // Already parsed in intermediate pass, skip
             self.skip_to_matching_rparen()
@@ -2065,7 +2076,7 @@ fn Parser::parse_type_def(
 ) -> @types.FuncType raise WatError {
   self.advance() // skip "type"
   // Optional type name
-  if self.current is Id(name) {
+  if self.current.token is Id(name) {
     self.advance()
     self.type_names.set(name, type_idx)
   }
@@ -2083,25 +2094,25 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
   let results : Array[@types.ValueType] = []
 
   // Parse params
-  while self.current == LParen {
+  while self.current.token == LParen {
     let saved_pos = self.lexer.pos
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("param") => {
         self.advance()
         // Optional name
-        if self.current is Id(_) {
+        if self.current.token is Id(_) {
           self.advance()
         }
         // Parse types until )
-        while self.current != RParen {
+        while self.current.token != RParen {
           params.push(self.parse_value_type())
         }
         self.expect_rparen()
       }
       Keyword("result") => {
         self.advance()
-        while self.current != RParen {
+        while self.current.token != RParen {
           results.push(self.parse_value_type())
         }
         self.expect_rparen()
@@ -2109,7 +2120,7 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
       _ => {
         // Not param/result, restore and break
         self.lexer.pos = saved_pos
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
         break
       }
     }
@@ -2127,7 +2138,7 @@ fn Parser::parse_func_def(
   let mut func_name : String? = None
 
   // Optional function name
-  if self.current is Id(name) {
+  if self.current.token is Id(name) {
     func_name = Some(name)
     self.advance()
   }
@@ -2135,27 +2146,39 @@ fn Parser::parse_func_def(
   // Clear local names for this function
   self.local_names.clear()
 
-  // Check for inline import: (func $f (import "mod" "name") ...)
-  // This must be checked before export because import comes first
-  if self.current == LParen {
+  // Check for inline exports and imports (exports can come before or after import)
+  // Pattern: (func $name (export "e1") (export "e2") (import "mod" "name") ...)
+  // or:      (func $name (import "mod" "name") (export "e1") ...)
+  while self.current.token == LParen {
     let saved = self.lexer.pos
     let saved_line = self.lexer.line
     let saved_column = self.lexer.column
     let saved_token_start_line = self.lexer.token_start_line
     let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-    match self.current {
+    match self.current.token {
+      Keyword("export") => {
+        self.advance()
+        match self.current.token {
+          String_(s) => {
+            export_names.push(s)
+            self.advance()
+          }
+          _ => raise UnexpectedToken("expected export name", self.loc())
+        }
+        self.expect_rparen()
+      }
       Keyword("import") => {
         self.advance()
         // Parse module name and import name
-        let mod_name = match self.current {
+        let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
-        let import_name = match self.current {
+        let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
@@ -2164,14 +2187,14 @@ fn Parser::parse_func_def(
         }
         self.expect_rparen() // close import
 
-        // Check for inline exports after import (can have multiple)
-        while self.current == LParen {
+        // Check for more inline exports after import
+        while self.current.token == LParen {
           let saved2 = self.lexer.pos
           self.advance()
-          match self.current {
+          match self.current.token {
             Keyword("export") => {
               self.advance()
-              match self.current {
+              match self.current.token {
                 String_(s) => {
                   export_names.push(s)
                   self.advance()
@@ -2182,7 +2205,7 @@ fn Parser::parse_func_def(
             }
             _ => {
               self.lexer.pos = saved2
-              self.current = LParen
+              self.current = LocatedToken::synthetic(LParen)
               break
             }
           }
@@ -2192,10 +2215,10 @@ fn Parser::parse_func_def(
         let mut type_idx = -1
         let inline_params : Array[@types.ValueType] = []
         let inline_results : Array[@types.ValueType] = []
-        while self.current == LParen {
+        while self.current.token == LParen {
           let saved2 = self.lexer.pos
           self.advance()
-          match self.current {
+          match self.current.token {
             Keyword("type") => {
               self.advance()
               type_idx = self.parse_type_idx()
@@ -2204,25 +2227,25 @@ fn Parser::parse_func_def(
             Keyword("param") => {
               self.advance()
               // Optional name
-              if self.current is Id(name) {
+              if self.current.token is Id(name) {
                 self.local_names.set(name, inline_params.length())
                 self.advance()
               }
-              while self.current != RParen {
+              while self.current.token != RParen {
                 inline_params.push(self.parse_value_type())
               }
               self.expect_rparen()
             }
             Keyword("result") => {
               self.advance()
-              while self.current != RParen {
+              while self.current.token != RParen {
                 inline_results.push(self.parse_value_type())
               }
               self.expect_rparen()
             }
             _ => {
               self.lexer.pos = saved2
-              self.current = LParen
+              self.current = LocatedToken::synthetic(LParen)
               break
             }
           }
@@ -2283,13 +2306,14 @@ fn Parser::parse_func_def(
         return FuncDefResult::InlineImport(imp, export_names)
       }
       _ => {
-        // Not an inline import, restore state
+        // Not export or import, restore state and break
         self.lexer.pos = saved
         self.lexer.line = saved_line
         self.lexer.column = saved_column
         self.lexer.token_start_line = saved_token_start_line
         self.lexer.token_start_column = saved_token_start_column
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
+        break
       }
     }
   }
@@ -2301,40 +2325,16 @@ fn Parser::parse_func_def(
     self.func_names.set(name, func_idx)
   }
 
-  // Check for inline exports (can have multiple)
-  while self.current == LParen {
-    let saved = self.lexer.pos
-    self.advance()
-    match self.current {
-      Keyword("export") => {
-        self.advance()
-        match self.current {
-          String_(s) => {
-            export_names.push(s)
-            self.advance()
-          }
-          _ => raise UnexpectedToken("expected export name", self.loc())
-        }
-        self.expect_rparen()
-      }
-      _ => {
-        self.lexer.pos = saved
-        self.current = LParen
-        break
-      }
-    }
-  }
-
   // Parse type reference or inline type
   let mut type_idx = -1
   let inline_params : Array[@types.ValueType] = []
   let inline_results : Array[@types.ValueType] = []
 
   // Parse (type $idx) or inline params/results
-  while self.current == LParen {
+  while self.current.token == LParen {
     let saved = self.lexer.pos
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("type") => {
         self.advance()
         type_idx = self.parse_type_idx()
@@ -2343,28 +2343,28 @@ fn Parser::parse_func_def(
       Keyword("param") => {
         self.advance()
         // Optional name
-        match self.current {
+        match self.current.token {
           Id(name) => {
             self.local_names.set(name, inline_params.length())
             self.advance()
           }
           _ => ()
         }
-        while self.current != RParen {
+        while self.current.token != RParen {
           inline_params.push(self.parse_value_type())
         }
         self.expect_rparen()
       }
       Keyword("result") => {
         self.advance()
-        while self.current != RParen {
+        while self.current.token != RParen {
           inline_results.push(self.parse_value_type())
         }
         self.expect_rparen()
       }
       _ => {
         self.lexer.pos = saved
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
         break
       }
     }
@@ -2420,26 +2420,26 @@ fn Parser::parse_func_def(
 
   // Parse locals
   let locals : Array[@types.ValueType] = []
-  while self.current == LParen {
+  while self.current.token == LParen {
     let saved = self.lexer.pos
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("local") => {
         self.advance()
         // Optional name
-        if self.current is Id(name) {
+        if self.current.token is Id(name) {
           let local_idx = param_count + locals.length()
           self.local_names.set(name, local_idx)
           self.advance()
         }
-        while self.current != RParen {
+        while self.current.token != RParen {
           locals.push(self.parse_value_type())
         }
         self.expect_rparen()
       }
       _ => {
         self.lexer.pos = saved
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
         break
       }
     }
@@ -2456,8 +2456,8 @@ fn Parser::parse_instructions(
   self : Parser,
 ) -> Array[@types.Instruction] raise WatError {
   let instrs : Array[@types.Instruction] = []
-  while self.current != RParen && self.current != Eof {
-    match self.current {
+  while self.current.token != RParen && self.current.token != Eof {
+    match self.current.token {
       LParen => {
         // Folded instruction - may produce multiple instructions
         self.advance()
@@ -2486,13 +2486,13 @@ fn Parser::parse_instructions(
 fn Parser::parse_folded_instructions(
   self : Parser,
 ) -> Array[@types.Instruction] raise WatError {
-  match self.current {
+  match self.current.token {
     Keyword(kw) => {
       // Special handling for "block" in folded form
       if kw == "block" {
         self.advance() // skip "block"
         // Optional label name
-        let label : String? = match self.current {
+        let label : String? = match self.current.token {
           Id(name) => {
             self.advance()
             Some(name)
@@ -2510,7 +2510,7 @@ fn Parser::parse_folded_instructions(
       if kw == "loop" {
         self.advance() // skip "loop"
         // Optional label name
-        let label : String? = match self.current {
+        let label : String? = match self.current.token {
           Id(name) => {
             self.advance()
             Some(name)
@@ -2528,7 +2528,7 @@ fn Parser::parse_folded_instructions(
       if kw == "if" {
         self.advance() // skip "if"
         // Optional label name
-        let label : String? = match self.current {
+        let label : String? = match self.current.token {
           Id(name) => {
             self.advance()
             Some(name)
@@ -2538,21 +2538,21 @@ fn Parser::parse_folded_instructions(
         let bt = self.parse_block_type()
         let result : Array[@types.Instruction] = []
         // In folded form, condition operands come first as nested S-expressions
-        while self.current == LParen {
+        while self.current.token == LParen {
           // Peek ahead to see if this is (then ...) or (else ...)
           let saved = self.lexer.pos
           self.advance()
-          match self.current {
+          match self.current.token {
             Keyword("then") | Keyword("else") => {
               // Restore and break to handle then/else
               self.lexer.pos = saved
-              self.current = LParen
+              self.current = LocatedToken::synthetic(LParen)
               break
             }
             _ => {
               // Restore to parse as folded operand (condition)
               self.lexer.pos = saved
-              self.current = LParen
+              self.current = LocatedToken::synthetic(LParen)
               self.advance()
               for instr in self.parse_folded_instructions() {
                 result.push(instr)
@@ -2564,9 +2564,9 @@ fn Parser::parse_folded_instructions(
         let mut then_body : Array[@types.Instruction] = []
         let mut else_body : Array[@types.Instruction] = []
         self.push_label(label)
-        if self.current == LParen {
+        if self.current.token == LParen {
           self.advance()
-          match self.current {
+          match self.current.token {
             Keyword("then") => {
               self.advance()
               then_body = self.parse_instructions()
@@ -2576,10 +2576,10 @@ fn Parser::parse_folded_instructions(
               raise UnexpectedToken("expected 'then' in folded if", self.loc())
           }
         }
-        if self.current == LParen {
+        if self.current.token == LParen {
           let saved = self.lexer.pos
           self.advance()
-          match self.current {
+          match self.current.token {
             Keyword("else") => {
               self.advance()
               else_body = self.parse_instructions()
@@ -2587,7 +2587,7 @@ fn Parser::parse_folded_instructions(
             }
             _ => {
               self.lexer.pos = saved
-              self.current = LParen
+              self.current = LocatedToken::synthetic(LParen)
             }
           }
         }
@@ -2604,7 +2604,7 @@ fn Parser::parse_folded_instructions(
         _ => {
           // Parse nested folded instructions (operands)
           let result : Array[@types.Instruction] = []
-          while self.current == LParen {
+          while self.current.token == LParen {
             self.advance()
             for i in self.parse_folded_instructions() {
               result.push(i)
@@ -2632,7 +2632,7 @@ fn Parser::parse_plain_instruction(
     "nop" => @types.Instruction::Nop
     "block" => {
       // Optional label name
-      let label : String? = match self.current {
+      let label : String? = match self.current.token {
         Id(name) => {
           self.advance()
           Some(name)
@@ -2650,7 +2650,7 @@ fn Parser::parse_plain_instruction(
     }
     "loop" => {
       // Optional label name
-      let label : String? = match self.current {
+      let label : String? = match self.current.token {
         Id(name) => {
           self.advance()
           Some(name)
@@ -2668,7 +2668,7 @@ fn Parser::parse_plain_instruction(
     }
     "if" => {
       // Optional label name
-      let label : String? = match self.current {
+      let label : String? = match self.current.token {
         Id(name) => {
           self.advance()
           Some(name)
@@ -2679,7 +2679,7 @@ fn Parser::parse_plain_instruction(
       // Flat form: if (result type) ... else ... end
       self.push_label(label)
       let then_body = self.parse_instructions()
-      let else_body : Array[@types.Instruction] = if self.current ==
+      let else_body : Array[@types.Instruction] = if self.current.token ==
         Keyword("else") {
         self.advance()
         // Skip optional label after 'else' (e.g., "else $label")
@@ -2698,8 +2698,8 @@ fn Parser::parse_plain_instruction(
     "br_if" => @types.Instruction::BrIf(self.parse_label_idx())
     "br_table" => {
       let labels : Array[Int] = []
-      while self.current != RParen && self.current != Eof {
-        match self.current {
+      while self.current.token != RParen && self.current.token != Eof {
+        match self.current.token {
           Number(_) | Id(_) => labels.push(self.parse_label_idx())
           _ => break
         }
@@ -2729,7 +2729,7 @@ fn Parser::parse_plain_instruction(
       let inline_results : Array[@types.ValueType] = []
 
       // Check for optional table index/name before the type
-      match self.current {
+      match self.current.token {
         Id(name) =>
           match self.table_names.get(name) {
             Some(idx) => {
@@ -2743,14 +2743,14 @@ fn Parser::parse_plain_instruction(
       }
 
       // Parse optional type/param/result annotations
-      while self.current == LParen {
+      while self.current.token == LParen {
         let saved = self.lexer.pos
         let saved_line = self.lexer.line
         let saved_column = self.lexer.column
         let saved_token_start_line = self.lexer.token_start_line
         let saved_token_start_column = self.lexer.token_start_column
         self.advance()
-        match self.current {
+        match self.current.token {
           Keyword("type") => {
             self.advance()
             let idx = self.parse_type_idx()
@@ -2765,10 +2765,10 @@ fn Parser::parse_plain_instruction(
             // Parse inline param types
             self.advance()
             // Skip optional name
-            if self.current is Id(_) {
+            if self.current.token is Id(_) {
               self.advance()
             }
-            while self.current != RParen {
+            while self.current.token != RParen {
               inline_params.push(self.parse_value_type())
             }
             self.expect_rparen()
@@ -2776,7 +2776,7 @@ fn Parser::parse_plain_instruction(
           Keyword("result") => {
             // Parse inline result types
             self.advance()
-            while self.current != RParen {
+            while self.current.token != RParen {
               inline_results.push(self.parse_value_type())
             }
             self.expect_rparen()
@@ -2788,7 +2788,7 @@ fn Parser::parse_plain_instruction(
             self.lexer.column = saved_column
             self.lexer.token_start_line = saved_token_start_line
             self.lexer.token_start_column = saved_token_start_column
-            self.current = LParen
+            self.current = LocatedToken::synthetic(LParen)
             break
           }
         }
@@ -2806,24 +2806,24 @@ fn Parser::parse_plain_instruction(
     "drop" => @types.Instruction::Drop
     "select" => {
       // select can have optional (result type) annotations
-      while self.current == LParen {
+      while self.current.token == LParen {
         let saved = self.lexer.pos
         let saved_line = self.lexer.line
         let saved_column = self.lexer.column
         let saved_token_start_line = self.lexer.token_start_line
         let saved_token_start_column = self.lexer.token_start_column
         self.advance()
-        match self.current {
+        match self.current.token {
           Keyword("result") => {
             // Skip result type annotation, tracking nested parentheses
             let mut depth = 1 // We're inside (result ...)
             while depth > 0 {
               self.advance()
-              if self.current is LParen {
+              if self.current.token is LParen {
                 depth += 1
-              } else if self.current is RParen {
+              } else if self.current.token is RParen {
                 depth -= 1
-              } else if self.current is Eof {
+              } else if self.current.token is Eof {
                 break
               }
             }
@@ -2836,7 +2836,7 @@ fn Parser::parse_plain_instruction(
             self.lexer.column = saved_column
             self.lexer.token_start_line = saved_token_start_line
             self.lexer.token_start_column = saved_token_start_column
-            self.current = LParen
+            self.current = LocatedToken::synthetic(LParen)
             break
           }
         }
@@ -2875,7 +2875,7 @@ fn Parser::parse_plain_instruction(
     }
     "table.init" => {
       // table.init can have forms: (table.init $elem) or (table.init $table $elem)
-      let first = match self.current {
+      let first = match self.current.token {
         Number(s) => {
           self.advance()
           parse_int(s)
@@ -2895,10 +2895,10 @@ fn Parser::parse_plain_instruction(
           }
         _ => 0
       }
-      match self.current {
+      match self.current.token {
         Number(_) | Id(_) => {
           // Two arguments: first was table index, second is elem index
-          let elem_idx = match self.current {
+          let elem_idx = match self.current.token {
             Number(s) => {
               self.advance()
               parse_int(s)
@@ -3140,7 +3140,7 @@ fn parse_mem_arg(
   let mut align = 0
   // Parse optional offset=N and align=N
   while true {
-    match parser.current {
+    match parser.current.token {
       Keyword(s) =>
         if s.has_prefix("offset=") {
           let offset_str = StringBuilder::new()
@@ -3186,14 +3186,14 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
   let mut type_idx : Int? = None
 
   // Parse optional (type $idx) and/or (param ...) (result ...)
-  while self.current == LParen {
+  while self.current.token == LParen {
     let saved = self.lexer.pos
     let saved_line = self.lexer.line
     let saved_column = self.lexer.column
     let saved_token_start_line = self.lexer.token_start_line
     let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("type") => {
         // (type $idx) - explicit type reference
         self.advance()
@@ -3204,17 +3204,17 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
       Keyword("param") => {
         self.advance()
         // Skip optional name
-        if self.current is Id(_) {
+        if self.current.token is Id(_) {
           self.advance()
         }
-        while self.current != RParen {
+        while self.current.token != RParen {
           params.push(self.parse_value_type())
         }
         self.expect_rparen()
       }
       Keyword("result") => {
         self.advance()
-        while self.current != RParen {
+        while self.current.token != RParen {
           results.push(self.parse_value_type())
         }
         self.expect_rparen()
@@ -3226,7 +3226,7 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
         self.lexer.column = saved_column
         self.lexer.token_start_line = saved_token_start_line
         self.lexer.token_start_column = saved_token_start_column
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
         break
       }
     }
@@ -3290,7 +3290,7 @@ fn Parser::find_or_create_func_type(
 
 ///|
 fn Parser::parse_type_idx(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -3309,7 +3309,7 @@ fn Parser::parse_type_idx(self : Parser) -> Int raise WatError {
 
 ///|
 fn Parser::parse_func_idx(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -3328,7 +3328,7 @@ fn Parser::parse_func_idx(self : Parser) -> Int raise WatError {
 
 ///|
 fn Parser::parse_local_idx(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -3347,7 +3347,7 @@ fn Parser::parse_local_idx(self : Parser) -> Int raise WatError {
 
 ///|
 fn Parser::parse_global_idx(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -3366,7 +3366,7 @@ fn Parser::parse_global_idx(self : Parser) -> Int raise WatError {
 
 ///|
 fn Parser::parse_table_idx(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -3387,7 +3387,7 @@ fn Parser::parse_table_idx(self : Parser) -> Int raise WatError {
 
 ///|
 fn Parser::parse_data_idx(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -3398,7 +3398,7 @@ fn Parser::parse_data_idx(self : Parser) -> Int raise WatError {
 
 ///|
 fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -3410,7 +3410,7 @@ fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
 ///|
 /// Parse a reference type for ref.null instruction
 fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
-  match self.current {
+  match self.current.token {
     Keyword("func") | Keyword("funcref") => {
       self.advance()
       @types.ValueType::FuncRef
@@ -3434,7 +3434,7 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
 
 ///|
 fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
-  match self.current {
+  match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
@@ -3457,31 +3457,31 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   let export_names : Array[String] = []
 
   // Optional name
-  if self.current is Id(name) {
+  if self.current.token is Id(name) {
     self.memory_names.set(name, 0)
     self.advance()
   }
 
   // Check for inline import: (memory (import "mod" "name") MIN [MAX])
-  if self.current == LParen {
+  if self.current.token == LParen {
     let saved = self.lexer.pos
     let saved_line = self.lexer.line
     let saved_column = self.lexer.column
     let saved_token_start_line = self.lexer.token_start_line
     let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("import") => {
         self.advance()
         // Parse module name and import name
-        let mod_name = match self.current {
+        let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
-        let import_name = match self.current {
+        let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
@@ -3491,13 +3491,13 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         self.expect_rparen() // close import
 
         // Check for inline exports after import (can have multiple)
-        while self.current == LParen {
+        while self.current.token == LParen {
           let saved2 = self.lexer.pos
           self.advance()
-          match self.current {
+          match self.current.token {
             Keyword("export") => {
               self.advance()
-              match self.current {
+              match self.current.token {
                 String_(s) => {
                   export_names.push(s)
                   self.advance()
@@ -3508,7 +3508,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
             }
             _ => {
               self.lexer.pos = saved2
-              self.current = LParen
+              self.current = LocatedToken::synthetic(LParen)
               break
             }
           }
@@ -3516,7 +3516,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
 
         // Parse limits
         let min = self.parse_u32()
-        let max = match self.current {
+        let max = match self.current.token {
           Number(_) => Some(self.parse_u32())
           _ => None
         }
@@ -3530,10 +3530,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
       }
       Keyword("export") => {
         export_names.push(
-          match self.current {
+          match self.current.token {
             _ => {
               self.advance()
-              match self.current {
+              match self.current.token {
                 String_(s) => {
                   self.advance()
                   s
@@ -3545,17 +3545,17 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         )
         self.expect_rparen()
         // Check for more exports or import
-        while self.current == LParen {
+        while self.current.token == LParen {
           let saved2 = self.lexer.pos
           let saved2_line = self.lexer.line
           let saved2_column = self.lexer.column
           let saved2_token_start_line = self.lexer.token_start_line
           let saved2_token_start_column = self.lexer.token_start_column
           self.advance()
-          match self.current {
+          match self.current.token {
             Keyword("export") => {
               self.advance()
-              match self.current {
+              match self.current.token {
                 String_(s) => {
                   export_names.push(s)
                   self.advance()
@@ -3567,14 +3567,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
             Keyword("import") => {
               // Handle (memory (export ...) (import "mod" "name") limits) syntax
               self.advance()
-              let mod_name = match self.current {
+              let mod_name = match self.current.token {
                 String_(s) => {
                   self.advance()
                   s
                 }
                 _ => raise UnexpectedToken("expected module name", self.loc())
               }
-              let import_name = match self.current {
+              let import_name = match self.current.token {
                 String_(s) => {
                   self.advance()
                   s
@@ -3584,7 +3584,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               self.expect_rparen() // close import
               // Parse limits
               let min = self.parse_u32()
-              let max = match self.current {
+              let max = match self.current.token {
                 Number(_) => Some(self.parse_u32())
                 _ => None
               }
@@ -3602,7 +3602,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               self.lexer.column = saved2_column
               self.lexer.token_start_line = saved2_token_start_line
               self.lexer.token_start_column = saved2_token_start_column
-              self.current = LParen
+              self.current = LocatedToken::synthetic(LParen)
               break
             }
           }
@@ -3613,8 +3613,8 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         // The memory size is automatically calculated from the data size
         self.advance() // skip "data"
         let init_bytes : Array[Byte] = []
-        while self.current is String_(_) {
-          if self.current is String_(s) {
+        while self.current.token is String_(_) {
+          if self.current.token is String_(s) {
             for i in 0..<s.length() {
               init_bytes.push(s.code_unit_at(i).to_byte())
             }
@@ -3641,14 +3641,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         self.lexer.column = saved_column
         self.lexer.token_start_line = saved_token_start_line
         self.lexer.token_start_column = saved_token_start_column
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
       }
     }
   }
 
   // Parse limits
   let min = self.parse_u32()
-  let max = match self.current {
+  let max = match self.current.token {
     Number(_) => Some(self.parse_u32())
     _ => None
   }
@@ -3662,30 +3662,30 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   let export_names : Array[String] = []
 
   // Optional name - skip it (already registered in first pass)
-  if self.current is Id(_) {
+  if self.current.token is Id(_) {
     self.advance()
   }
 
   // Check for inline import: (global $x (import "mod" "name") i32)
-  if self.current == LParen {
+  if self.current.token == LParen {
     let saved = self.lexer.pos
     let saved_line = self.lexer.line
     let saved_column = self.lexer.column
     let saved_token_start_line = self.lexer.token_start_line
     let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("import") => {
         self.advance()
         // Parse module name and import name
-        let mod_name = match self.current {
+        let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
-        let import_name = match self.current {
+        let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
@@ -3695,13 +3695,13 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         self.expect_rparen() // close import
 
         // Check for inline exports after import (can have multiple)
-        while self.current == LParen {
+        while self.current.token == LParen {
           let saved2 = self.lexer.pos
           self.advance()
-          match self.current {
+          match self.current.token {
             Keyword("export") => {
               self.advance()
-              match self.current {
+              match self.current.token {
                 String_(s) => {
                   export_names.push(s)
                   self.advance()
@@ -3712,21 +3712,21 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             }
             _ => {
               self.lexer.pos = saved2
-              self.current = LParen
+              self.current = LocatedToken::synthetic(LParen)
               break
             }
           }
         }
 
         // Parse global type (mut i32) or i32 or (ref ...)
-        let (value_type, mutable) = if self.current == LParen {
+        let (value_type, mutable) = if self.current.token == LParen {
           let saved3 = self.lexer.pos
           let saved3_line = self.lexer.line
           let saved3_column = self.lexer.column
           let saved3_token_start_line = self.lexer.token_start_line
           let saved3_token_start_column = self.lexer.token_start_column
           self.advance()
-          if self.current == Keyword("mut") {
+          if self.current.token == Keyword("mut") {
             self.advance()
             let vt = self.parse_value_type()
             self.expect_rparen()
@@ -3738,7 +3738,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             self.lexer.column = saved3_column
             self.lexer.token_start_line = saved3_token_start_line
             self.lexer.token_start_column = saved3_token_start_column
-            self.current = LParen
+            self.current = LocatedToken::synthetic(LParen)
             (self.parse_value_type(), false)
           }
         } else {
@@ -3761,21 +3761,22 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         self.lexer.column = saved_column
         self.lexer.token_start_line = saved_token_start_line
         self.lexer.token_start_column = saved_token_start_column
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
       }
     }
   }
 
   // Note: global name is already registered in first pass, no need to set again
 
-  // Check for inline exports (can have multiple)
-  while self.current == LParen {
+  // Check for inline exports and imports (can have multiple exports, at most one import)
+  // Exports can come before or after import
+  while self.current.token == LParen {
     let saved = self.lexer.pos
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("export") => {
         self.advance()
-        match self.current {
+        match self.current.token {
           String_(s) => {
             export_names.push(s)
             self.advance()
@@ -3784,23 +3785,99 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         }
         self.expect_rparen()
       }
+      Keyword("import") => {
+        // Inline import after exports
+        self.advance()
+        let mod_name = match self.current.token {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected module name", self.loc())
+        }
+        let import_name = match self.current.token {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ => raise UnexpectedToken("expected import name", self.loc())
+        }
+        self.expect_rparen() // close import
+
+        // Continue checking for more exports after import
+        while self.current.token == LParen {
+          let saved2 = self.lexer.pos
+          self.advance()
+          match self.current.token {
+            Keyword("export") => {
+              self.advance()
+              match self.current.token {
+                String_(s) => {
+                  export_names.push(s)
+                  self.advance()
+                }
+                _ => raise UnexpectedToken("expected export name", self.loc())
+              }
+              self.expect_rparen()
+            }
+            _ => {
+              self.lexer.pos = saved2
+              self.current = LocatedToken::synthetic(LParen)
+              break
+            }
+          }
+        }
+
+        // Parse global type
+        let (value_type, mutable) = if self.current.token == LParen {
+          let saved3 = self.lexer.pos
+          let saved3_line = self.lexer.line
+          let saved3_column = self.lexer.column
+          let saved3_token_start_line = self.lexer.token_start_line
+          let saved3_token_start_column = self.lexer.token_start_column
+          self.advance()
+          if self.current.token == Keyword("mut") {
+            self.advance()
+            let vt = self.parse_value_type()
+            self.expect_rparen()
+            (vt, true)
+          } else {
+            self.lexer.pos = saved3
+            self.lexer.line = saved3_line
+            self.lexer.column = saved3_column
+            self.lexer.token_start_line = saved3_token_start_line
+            self.lexer.token_start_column = saved3_token_start_column
+            self.current = LocatedToken::synthetic(LParen)
+            (self.parse_value_type(), false)
+          }
+        } else {
+          (self.parse_value_type(), false)
+        }
+        self.expect_rparen() // close global
+        let imp : @types.Import = {
+          mod_name,
+          name: import_name,
+          desc: @types.ImportDesc::Global({ value_type, mutable }),
+        }
+        return GlobalDefResult::GlobalImport(imp, export_names)
+      }
       _ => {
         self.lexer.pos = saved
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
         break
       }
     }
   }
 
   // Parse global type (mut i32) or i32 or (ref ...)
-  let (value_type, mutable) = if self.current == LParen {
+  let (value_type, mutable) = if self.current.token == LParen {
     let saved = self.lexer.pos
     let saved_line = self.lexer.line
     let saved_column = self.lexer.column
     let saved_token_start_line = self.lexer.token_start_line
     let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-    if self.current == Keyword("mut") {
+    if self.current.token == Keyword("mut") {
       self.advance()
       let vt = self.parse_value_type()
       self.expect_rparen()
@@ -3812,7 +3889,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
       self.lexer.column = saved_column
       self.lexer.token_start_line = saved_token_start_line
       self.lexer.token_start_column = saved_token_start_column
-      self.current = LParen
+      self.current = LocatedToken::synthetic(LParen)
       (self.parse_value_type(), false)
     }
   } else {
@@ -3839,20 +3916,20 @@ fn Parser::parse_table_def(
   let mut table_name : String? = None
 
   // Optional name
-  if self.current is Id(name) {
+  if self.current.token is Id(name) {
     table_name = Some(name)
     // Don't set table_names here; caller will set with correct index
     self.advance()
   }
 
   // Check for inline export
-  if self.current == LParen {
+  if self.current.token == LParen {
     let saved = self.lexer.pos
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("export") => {
         self.advance()
-        match self.current {
+        match self.current.token {
           String_(s) => {
             export_name = Some(s)
             self.advance()
@@ -3863,31 +3940,31 @@ fn Parser::parse_table_def(
       }
       _ => {
         self.lexer.pos = saved
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
       }
     }
   }
 
   // Check for inline import: (table (import "mod" "name") MIN [MAX] elemtype)
-  if self.current == LParen {
+  if self.current.token == LParen {
     let saved = self.lexer.pos
     let saved_line = self.lexer.line
     let saved_column = self.lexer.column
     let saved_token_start_line = self.lexer.token_start_line
     let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("import") => {
         self.advance()
         // Parse module name and import name
-        let mod_name = match self.current {
+        let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
-        let import_name = match self.current {
+        let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
@@ -3898,7 +3975,7 @@ fn Parser::parse_table_def(
 
         // Parse limits
         let min = self.parse_u32()
-        let max = match self.current {
+        let max = match self.current.token {
           Number(_) => Some(self.parse_u32())
           _ => None
         }
@@ -3928,7 +4005,7 @@ fn Parser::parse_table_def(
         self.lexer.column = saved_column
         self.lexer.token_start_line = saved_token_start_line
         self.lexer.token_start_column = saved_token_start_column
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
       }
     }
   }
@@ -3936,7 +4013,7 @@ fn Parser::parse_table_def(
   // Check for inline elem syntax: (table elemtype (elem ...))
   // In this syntax, the element type comes first, followed by inline elem
   // Element type can be a keyword (funcref, externref) or a reference type (ref null $t)
-  match self.current {
+  match self.current.token {
     Keyword("funcref")
     | Keyword("func")
     | Keyword("externref")
@@ -3945,20 +4022,20 @@ fn Parser::parse_table_def(
       // Could be inline elem syntax or reference type followed by inline elem
       let elem_type = self.parse_value_type()
       // Check if followed by inline elem
-      if self.current == LParen {
+      if self.current.token == LParen {
         let saved = self.lexer.pos
         let saved_line = self.lexer.line
         let saved_column = self.lexer.column
         let saved_token_start_line = self.lexer.token_start_line
         let saved_token_start_column = self.lexer.token_start_column
         self.advance()
-        match self.current {
+        match self.current.token {
           Keyword("elem") => {
             self.advance()
             // Parse element init expressions (can be indices or expressions)
             let init : Array[Array[@types.Instruction]] = []
-            while self.current != RParen {
-              match self.current {
+            while self.current.token != RParen {
+              match self.current.token {
                 Id(name) =>
                   // Named function reference like $f
                   match self.func_names.get(name) {
@@ -3978,7 +4055,7 @@ fn Parser::parse_table_def(
                 LParen => {
                   // Expression like (ref.func $f) or (ref.null func)
                   self.advance()
-                  match self.current {
+                  match self.current.token {
                     Keyword("ref.func") => {
                       self.advance()
                       let idx = self.parse_func_idx()
@@ -4036,7 +4113,7 @@ fn Parser::parse_table_def(
             self.lexer.column = saved_column
             self.lexer.token_start_line = saved_token_start_line
             self.lexer.token_start_column = saved_token_start_column
-            self.current = LParen
+            self.current = LocatedToken::synthetic(LParen)
             raise UnexpectedToken("expected elem in inline table", self.loc())
           }
         }
@@ -4055,17 +4132,18 @@ fn Parser::parse_table_def(
     _ => {
       // Standard syntax: (table MIN [MAX] elemtype [init_expr])
       let min = self.parse_u32()
-      let max = match self.current {
+      let max = match self.current.token {
         Number(_) => Some(self.parse_u32())
         _ => None
       }
       let elem_type = self.parse_value_type()
       // Check for optional default init expression (ref.func $f) or (ref.null func) or (global.get $g)
-      let table_init : Array[@types.Instruction]? = if self.current == LParen {
+      let table_init : Array[@types.Instruction]? = if self.current.token ==
+        LParen {
         // Parse the init expression - validate global.get references
         // Table init expressions can only reference imported globals, not module-defined globals
         self.advance()
-        match self.current {
+        match self.current.token {
           Keyword("ref.func") => {
             self.advance()
             let idx = self.parse_func_idx()
@@ -4121,7 +4199,7 @@ fn Parser::parse_export_def(
   mod_ : @types.Module,
 ) -> @types.Export raise WatError {
   self.advance() // skip "export"
-  let name = match self.current {
+  let name = match self.current.token {
     String_(s) => {
       self.advance()
       s
@@ -4129,7 +4207,7 @@ fn Parser::parse_export_def(
     _ => raise UnexpectedToken("expected export name", self.loc())
   }
   self.expect_lparen()
-  let desc = match self.current {
+  let desc = match self.current.token {
     Keyword("func") => {
       self.advance()
       let idx = self.parse_func_idx()
@@ -4137,7 +4215,7 @@ fn Parser::parse_export_def(
     }
     Keyword("memory") => {
       self.advance()
-      let idx = match self.current {
+      let idx = match self.current.token {
         Number(_) => self.parse_u32()
         Id(name) =>
           match self.memory_names.get(name) {
@@ -4153,7 +4231,7 @@ fn Parser::parse_export_def(
     }
     Keyword("table") => {
       self.advance()
-      let idx = match self.current {
+      let idx = match self.current.token {
         Number(_) => self.parse_u32()
         Id(name) =>
           match self.table_names.get(name) {
@@ -4186,14 +4264,14 @@ fn Parser::parse_import_def(
   mod_ : @types.Module,
 ) -> @types.Import raise WatError {
   self.advance() // skip "import"
-  let mod_name = match self.current {
+  let mod_name = match self.current.token {
     String_(s) => {
       self.advance()
       s
     }
     _ => raise UnexpectedToken("expected module name", self.loc())
   }
-  let name = match self.current {
+  let name = match self.current.token {
     String_(s) => {
       self.advance()
       s
@@ -4201,11 +4279,11 @@ fn Parser::parse_import_def(
     _ => raise UnexpectedToken("expected import name", self.loc())
   }
   self.expect_lparen()
-  let desc = match self.current {
+  let desc = match self.current.token {
     Keyword("func") => {
       self.advance()
       // Optional func name - imported function index is count of function imports so far
-      match self.current {
+      match self.current.token {
         Id(fname) => {
           self.func_names.set(fname, count_func_imports(mod_.imports))
           self.advance()
@@ -4213,10 +4291,10 @@ fn Parser::parse_import_def(
         _ => ()
       }
       // Parse type - either (type $idx) or inline (param ...) (result ...)
-      let type_idx = if self.current == LParen {
+      let type_idx = if self.current.token == LParen {
         let saved_pos = self.lexer.pos
         self.advance()
-        if self.current == Keyword("type") {
+        if self.current.token == Keyword("type") {
           // (type $idx) syntax
           self.advance()
           let idx = self.parse_type_idx()
@@ -4225,7 +4303,7 @@ fn Parser::parse_import_def(
         } else {
           // Inline signature - restore position and parse func type
           self.lexer.pos = saved_pos
-          self.current = LParen
+          self.current = LocatedToken::synthetic(LParen)
           let func_type = self.parse_func_type()
           // Add this type to the module and get its index
           let idx = mod_.types.length()
@@ -4243,8 +4321,13 @@ fn Parser::parse_import_def(
     }
     Keyword("memory") => {
       self.advance()
+      // Optional memory name
+      if self.current.token is Id(mname) {
+        self.memory_names.set(mname, count_memory_imports(mod_.imports))
+        self.advance()
+      }
       let min = self.parse_u32()
-      let max = match self.current {
+      let max = match self.current.token {
         Number(_) => Some(self.parse_u32())
         _ => None
       }
@@ -4253,13 +4336,13 @@ fn Parser::parse_import_def(
     Keyword("table") => {
       self.advance()
       // Optional table name
-      if self.current is Id(tname) {
+      if self.current.token is Id(tname) {
         // Register table name - table index is count of table imports so far
         self.table_names.set(tname, count_table_imports(mod_.imports))
         self.advance()
       }
       let min = self.parse_u32()
-      let max = match self.current {
+      let max = match self.current.token {
         Number(_) => Some(self.parse_u32())
         _ => None
       }
@@ -4268,14 +4351,19 @@ fn Parser::parse_import_def(
     }
     Keyword("global") => {
       self.advance()
-      let (value_type, mutable) = if self.current == LParen {
+      // Optional global name
+      if self.current.token is Id(gname) {
+        self.global_names.set(gname, count_global_imports(mod_.imports))
+        self.advance()
+      }
+      let (value_type, mutable) = if self.current.token == LParen {
         let saved_pos = self.lexer.pos
         let saved_line = self.lexer.line
         let saved_column = self.lexer.column
         let saved_token_start_line = self.lexer.token_start_line
         let saved_token_start_column = self.lexer.token_start_column
         self.advance()
-        if self.current == Keyword("mut") {
+        if self.current.token == Keyword("mut") {
           self.advance()
           let vt = self.parse_value_type()
           self.expect_rparen()
@@ -4287,7 +4375,7 @@ fn Parser::parse_import_def(
           self.lexer.column = saved_column
           self.lexer.token_start_line = saved_token_start_line
           self.lexer.token_start_column = saved_token_start_column
-          self.current = LParen
+          self.current = LocatedToken::synthetic(LParen)
           (self.parse_value_type(), false)
         }
       } else {
@@ -4313,7 +4401,7 @@ fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
   self.advance() // skip "data"
 
   // Check for optional data id
-  if self.current is Id(_) {
+  if self.current.token is Id(_) {
     self.advance()
   }
 
@@ -4323,18 +4411,18 @@ fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
   let mut is_passive = true
 
   // Check what comes next
-  if self.current == LParen {
+  if self.current.token == LParen {
     let saved = self.lexer.pos
     let saved_line = self.lexer.line
     let saved_column = self.lexer.column
     let saved_token_start_line = self.lexer.token_start_line
     let saved_token_start_column = self.lexer.token_start_column
     self.advance()
-    match self.current {
+    match self.current.token {
       Keyword("memory") => {
         is_passive = false
         self.advance()
-        memory_idx = match self.current {
+        memory_idx = match self.current.token {
           Number(_) => self.parse_u32()
           Id(name) =>
             match self.memory_names.get(name) {
@@ -4349,7 +4437,7 @@ fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
         self.expect_rparen()
         // Now expect offset - can be (offset ...) or direct (i32.const ...)
         self.expect_lparen()
-        if self.current == Keyword("offset") {
+        if self.current.token == Keyword("offset") {
           self.advance()
           offset = self.parse_instructions()
           self.expect_rparen()
@@ -4378,15 +4466,15 @@ fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
         self.lexer.column = saved_column
         self.lexer.token_start_line = saved_token_start_line
         self.lexer.token_start_column = saved_token_start_column
-        self.current = LParen
+        self.current = LocatedToken::synthetic(LParen)
       }
     }
   }
 
   // Parse string literals for init data (can have multiple or none)
   let init_bytes : Array[Byte] = []
-  while self.current is String_(_) {
-    if self.current is String_(s) {
+  while self.current.token is String_(_) {
+    if self.current.token is String_(s) {
       for i in 0..<s.length() {
         init_bytes.push(s.code_unit_at(i).to_byte())
       }
@@ -4408,12 +4496,12 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
   self.advance() // skip "elem"
 
   // Check for optional elem id
-  if self.current is Id(_) {
+  if self.current.token is Id(_) {
     self.advance()
   }
 
   // Check for declarative element segment: (elem declare ...)
-  if self.current == Keyword("declare") {
+  if self.current.token == Keyword("declare") {
     self.advance() // skip "declare"
     return self.parse_elem_items_and_finish(@types.ElemMode::Declarative)
   }
@@ -4421,7 +4509,7 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
   // Check what comes next to determine if this is passive or active
   // Passive: starts with reftype (funcref, externref, func, (ref ...))
   // Active: starts with ( for table/offset/i32.const
-  match self.current {
+  match self.current.token {
     Keyword("funcref")
     | Keyword("externref")
     | Keyword("func")
@@ -4436,7 +4524,7 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
       let saved_token_start_line = self.lexer.token_start_line
       let saved_token_start_column = self.lexer.token_start_column
       self.advance()
-      match self.current {
+      match self.current.token {
         Keyword("ref") => {
           // Passive segment with (ref null func) type
           self.lexer.pos = saved
@@ -4444,13 +4532,13 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
           self.lexer.column = saved_column
           self.lexer.token_start_line = saved_token_start_line
           self.lexer.token_start_column = saved_token_start_column
-          self.current = LParen
+          self.current = LocatedToken::synthetic(LParen)
           self.parse_elem_items_and_finish(@types.ElemMode::Passive)
         }
         Keyword("table") => {
           // Active with explicit table
           self.advance()
-          let table_idx = match self.current {
+          let table_idx = match self.current.token {
             Number(_) => self.parse_u32()
             Id(name) =>
               match self.table_names.get(name) {
@@ -4465,7 +4553,7 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
           self.expect_rparen()
           // Now expect offset expression
           self.expect_lparen()
-          let offset = if self.current is Keyword("offset") {
+          let offset = if self.current.token is Keyword("offset") {
             self.advance()
             let o = self.parse_instructions()
             self.expect_rparen()
@@ -4521,8 +4609,8 @@ fn Parser::parse_elem_items_and_finish(
   let init : Array[Array[@types.Instruction]] = []
   if use_func_indices {
     // Parse function indices directly: $f $g or 0 1 2
-    while self.current != RParen && self.current != Eof {
-      match self.current {
+    while self.current.token != RParen && self.current.token != Eof {
+      match self.current.token {
         Number(_) | Id(_) => {
           let idx = self.parse_func_idx()
           init.push([@types.Instruction::RefFunc(idx)])
@@ -4532,9 +4620,9 @@ fn Parser::parse_elem_items_and_finish(
     }
   } else {
     // Parse init expressions: (ref.func $f), (ref.null func), (item ...), or general expressions
-    while self.current == LParen {
+    while self.current.token == LParen {
       self.advance()
-      match self.current {
+      match self.current.token {
         Keyword("item") => {
           // (item <expr>)
           self.advance()
@@ -4575,7 +4663,7 @@ fn Parser::parse_elem_items_and_finish(
 fn Parser::parse_elem_type(
   self : Parser,
 ) -> (@types.ValueType, Bool) raise WatError {
-  match self.current {
+  match self.current.token {
     Keyword("funcref") => {
       self.advance()
       (@types.ValueType::FuncRef, false)
