@@ -381,13 +381,96 @@ fn Parser::read_f64(self : Parser) -> Double raise ParserError {
 }
 
 ///|
-/// Read a UTF-8 string
+/// Read a UTF-8 string with validation
 fn Parser::read_string(self : Parser) -> String raise ParserError {
   let len = self.read_u32()
   let bytes = self.read_bytes(len)
-  // Convert bytes to string (WASM identifiers are typically ASCII)
-  // For UTF-8, we use a simple byte-by-byte conversion that works for ASCII
-  String::from_iter(bytes.iter().map(fn(b) { b.to_char() }))
+  // Validate and decode UTF-8
+  decode_utf8_validated(bytes)
+}
+
+///|
+/// Decode bytes as UTF-8 with validation, raising error on invalid sequences
+fn decode_utf8_validated(bytes : Bytes) -> String raise ParserError {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < bytes.length() {
+    let b = bytes[i].to_int()
+    if b < 0x80 {
+      // ASCII byte
+      buf.write_char(b.unsafe_to_char())
+      i = i + 1
+    } else if b < 0xC0 {
+      // Continuation byte without prefix - invalid
+      raise ParseError("malformed UTF-8 encoding")
+    } else if b < 0xE0 {
+      // 2-byte sequence
+      if i + 1 >= bytes.length() {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      let b2 = bytes[i + 1].to_int()
+      if (b2 & 0xC0) != 0x80 {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
+      // Check for overlong encoding
+      if cp < 0x80 {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      buf.write_char(cp.unsafe_to_char())
+      i = i + 2
+    } else if b < 0xF0 {
+      // 3-byte sequence
+      if i + 2 >= bytes.length() {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      let b2 = bytes[i + 1].to_int()
+      let b3 = bytes[i + 2].to_int()
+      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
+      // Check for overlong encoding
+      if cp < 0x800 {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      // Check for surrogates (invalid in UTF-8)
+      if cp >= 0xD800 && cp <= 0xDFFF {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      buf.write_char(cp.unsafe_to_char())
+      i = i + 3
+    } else if b < 0xF8 {
+      // 4-byte sequence
+      if i + 3 >= bytes.length() {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      let b2 = bytes[i + 1].to_int()
+      let b3 = bytes[i + 2].to_int()
+      let b4 = bytes[i + 3].to_int()
+      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 || (b4 & 0xC0) != 0x80 {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      let cp = ((b & 0x07) << 18) |
+        ((b2 & 0x3F) << 12) |
+        ((b3 & 0x3F) << 6) |
+        (b4 & 0x3F)
+      // Check for overlong encoding
+      if cp < 0x10000 {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      // Check for out of range (> U+10FFFF)
+      if cp > 0x10FFFF {
+        raise ParseError("malformed UTF-8 encoding")
+      }
+      buf.write_char(cp.unsafe_to_char())
+      i = i + 4
+    } else {
+      // Invalid leading byte (0xF8-0xFF)
+      raise ParseError("malformed UTF-8 encoding")
+    }
+  }
+  buf.to_string()
 }
 
 // ============================================================
@@ -1212,17 +1295,14 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         }
       }
       0 => {
-        // Custom section - parse name to validate, then skip rest
+        // Custom section - parse and validate name, then skip rest
         // Custom section must have at least a name (which requires at least 1 byte for length)
         if section_size == 0 {
           raise UnexpectedEnd
         }
-        let name_len = parser.read_u32()
-        // Check that name doesn't exceed section bounds
-        if parser.pos + name_len > section_end {
-          raise UnexpectedEnd
-        }
-        // Skip past the name bytes and any remaining custom section content
+        // Read and validate the custom section name as UTF-8
+        let _ = parser.read_string()
+        // Skip any remaining custom section content
         parser.pos = section_end
       }
       12 =>
