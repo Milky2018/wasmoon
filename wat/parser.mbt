@@ -2886,6 +2886,88 @@ fn Parser::parse_plain_instruction(
       }
       @types.Instruction::CallIndirect(final_type_idx, table_idx)
     }
+    "return_call" => @types.Instruction::ReturnCall(self.parse_func_idx())
+    "return_call_ref" => {
+      // return_call_ref $type - tail calls a function reference with the given type
+      let type_idx = self.parse_type_idx()
+      @types.Instruction::ReturnCallRef(type_idx)
+    }
+    "return_call_indirect" => {
+      // return_call_indirect follows the same parsing as call_indirect
+      let mut table_idx = 0
+      let mut type_idx : Int? = None
+      let inline_params : Array[@types.ValueType] = []
+      let inline_results : Array[@types.ValueType] = []
+
+      // Check for optional table index/name before the type
+      match self.current.token {
+        Id(name) =>
+          match self.table_names.get(name) {
+            Some(idx) => {
+              table_idx = idx
+              self.advance()
+            }
+            None => () // Not a table name, might be something else
+          }
+        Number(_) => table_idx = self.parse_u32()
+        _ => ()
+      }
+
+      // Parse optional type/param/result annotations
+      while self.current.token == LParen {
+        let saved = self.lexer.pos
+        let saved_line = self.lexer.line
+        let saved_column = self.lexer.column
+        let saved_token_start_line = self.lexer.token_start_line
+        let saved_token_start_column = self.lexer.token_start_column
+        self.advance()
+        match self.current.token {
+          Keyword("type") => {
+            self.advance()
+            let idx = self.parse_type_idx()
+            // Validate type index is in range (0xffffffff becomes -1 after parsing)
+            if idx < 0 || idx >= self.types.length() {
+              raise WatError::ParseError("unknown type", self.loc())
+            }
+            type_idx = Some(idx)
+            self.expect_rparen()
+          }
+          Keyword("param") => {
+            self.advance() // skip "param"
+            // Parse parameter types until we hit ')'
+            while self.current.token != RParen {
+              inline_params.push(self.parse_value_type())
+            }
+            self.expect_rparen()
+          }
+          Keyword("result") => {
+            self.advance() // skip "result"
+            // Parse result types until we hit ')'
+            while self.current.token != RParen {
+              inline_results.push(self.parse_value_type())
+            }
+            self.expect_rparen()
+          }
+          _ => {
+            // Not a type annotation, restore state (this is an operand)
+            self.lexer.pos = saved
+            self.lexer.line = saved_line
+            self.lexer.column = saved_column
+            self.lexer.token_start_line = saved_token_start_line
+            self.lexer.token_start_column = saved_token_start_column
+            self.current = LocatedToken::synthetic(LParen)
+            break
+          }
+        }
+      }
+      let final_type_idx = match type_idx {
+        Some(idx) => idx
+        None =>
+          // No explicit (type $t), find or create type from inline annotations
+          self.find_or_create_func_type(inline_params, inline_results)
+      }
+      @types.Instruction::ReturnCallIndirect(final_type_idx, table_idx)
+    }
 
     // Parametric
     "drop" => @types.Instruction::Drop

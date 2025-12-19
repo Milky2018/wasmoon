@@ -408,6 +408,13 @@ fn lower_inst(
     @ir.Opcode::CallIndirect(type_idx, table_idx) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx)
     @ir.Opcode::CallRef(type_idx) => lower_call_ref(ctx, inst, block, type_idx)
+    // Tail calls - lowered the same way as regular calls
+    // The IR translator already emitted a Return after these
+    @ir.Opcode::ReturnCall(func_idx) => lower_call(ctx, inst, block, func_idx)
+    @ir.Opcode::ReturnCallIndirect(type_idx, table_idx) =>
+      lower_call_indirect(ctx, inst, block, type_idx, table_idx)
+    @ir.Opcode::ReturnCallRef(type_idx) =>
+      lower_call_ref(ctx, inst, block, type_idx)
 
     // Raw pointer operations (for trampolines)
     @ir.Opcode::LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)

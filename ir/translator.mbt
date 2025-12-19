@@ -813,6 +813,10 @@ fn Translator::translate_instruction(
     CallIndirect(type_idx, table_idx) =>
       self.translate_call_indirect(type_idx, table_idx)
     CallRef(type_idx) => self.translate_call_ref(type_idx)
+    ReturnCall(func_idx) => self.translate_return_call(func_idx)
+    ReturnCallIndirect(type_idx, table_idx) =>
+      self.translate_return_call_indirect(type_idx, table_idx)
+    ReturnCallRef(type_idx) => self.translate_return_call_ref(type_idx)
 
     // Memory management
     MemoryGrow => {
@@ -1874,5 +1878,125 @@ fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
     for v in results {
       self.push(v)
     }
+  }
+}
+
+///|
+/// Translate a tail call
+fn Translator::translate_return_call(self : Translator, func_idx : Int) -> Unit {
+  // Get function type
+  let type_idx = if func_idx < self.num_imports {
+    // Look up import function type
+    if func_idx < self.import_func_type_indices.length() {
+      self.import_func_type_indices[func_idx]
+    } else {
+      0 // Fallback
+    }
+  } else {
+    let local_idx = func_idx - self.num_imports
+    if local_idx < self.func_type_indices.length() {
+      self.func_type_indices[local_idx]
+    } else {
+      0
+    }
+  }
+  if type_idx < self.func_types.length() {
+    let func_type = self.func_types[type_idx]
+    // Pop arguments
+    let args : Array[Value] = []
+    for _ in 0..<func_type.params.length() {
+      args.push(self.pop())
+    }
+    args.rev_in_place()
+    // Get result types
+    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+    // Emit call with multi-value support
+    let results = self.builder.call_multi(func_idx, result_types, args)
+    // Return the results immediately (tail call)
+    self.builder.return_(results)
+  }
+}
+
+///|
+/// Translate a tail call indirect
+fn Translator::translate_return_call_indirect(
+  self : Translator,
+  type_idx : Int,
+  table_idx : Int,
+) -> Unit {
+  if type_idx < self.func_types.length() {
+    let func_type = self.func_types[type_idx]
+    // Compute structural type hash for type checking at runtime
+    let type_hash = func_type.structural_hash()
+    // Pop callee (element index within the table)
+    let elem_idx = self.pop()
+
+    // Pop arguments
+    let args : Array[Value] = []
+    for _ in 0..<func_type.params.length() {
+      args.push(self.pop())
+    }
+    args.rev_in_place()
+
+    // Get result types
+    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+
+    // Emit indirect call with multi-value support
+    // Use type_hash (not type_idx) for structural type checking
+    let results = self.builder.call_indirect_multi(
+      type_hash, table_idx, result_types, elem_idx, args,
+    )
+
+    // Return the results immediately (tail call)
+    self.builder.return_(results)
+  }
+}
+
+///|
+/// Translate a tail call through function reference
+fn Translator::translate_return_call_ref(
+  self : Translator,
+  type_idx : Int,
+) -> Unit {
+  if type_idx < self.func_types.length() {
+    let func_type = self.func_types[type_idx]
+    // Pop the function reference (which is a function index stored as I64)
+    let func_ref = self.pop()
+
+    // Null check: if func_ref == -1, trap
+    let null_sentinel = self.builder.iconst(Type::I64, -1L)
+    let is_null = self.builder.icmp_eq(func_ref, null_sentinel)
+
+    // Create trap block and continuation block
+    let trap_block = self.builder.create_block()
+    let continue_block = self.builder.create_block()
+
+    // Branch: if is_null goto trap_block else continue_block
+    self.builder.brnz(is_null, trap_block, continue_block)
+
+    // Trap block: emit trap for null reference
+    self.builder.switch_to_block(trap_block)
+    self.builder.trap("null function reference")
+
+    // Continue block: proceed with call
+    self.builder.switch_to_block(continue_block)
+
+    // Pop arguments
+    let args : Array[Value] = []
+    for _ in 0..<func_type.params.length() {
+      args.push(self.pop())
+    }
+    args.rev_in_place()
+
+    // Get result types
+    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+
+    // Emit call_ref instruction
+    let results = self.builder.call_ref_multi(
+      type_idx, result_types, func_ref, args,
+    )
+
+    // Return the results immediately (tail call)
+    self.builder.return_(results)
   }
 }

@@ -242,6 +242,9 @@ pub enum Opcode {
   Call(Int) // Direct call (function index)
   CallIndirect(Int, Int) // Indirect call (type index, table index)
   CallRef(Int) // Call through function reference (type index)
+  ReturnCall(Int) // Tail call (function index)
+  ReturnCallIndirect(Int, Int) // Tail call indirect (type index, table index)
+  ReturnCallRef(Int) // Tail call through function reference (type index)
 
   // Raw pointer operations (for trampolines, no bounds checking)
   // These follow Cranelift's approach for host code generation

@@ -473,6 +473,24 @@ fn write_instruction_simple(
       buf.write_string("call_ref ")
       buf.write_string(type_idx.to_string())
     }
+    ReturnCall(idx) => {
+      buf.write_string("return_call ")
+      buf.write_string(idx.to_string())
+    }
+    ReturnCallIndirect(type_idx, table_idx) => {
+      buf.write_string("return_call_indirect (type ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(")")
+      if table_idx != 0 {
+        buf.write_string(" (table ")
+        buf.write_string(table_idx.to_string())
+        buf.write_string(")")
+      }
+    }
+    ReturnCallRef(type_idx) => {
+      buf.write_string("return_call_ref ")
+      buf.write_string(type_idx.to_string())
+    }
 
     // Parametric instructions
     Drop => buf.write_string("drop")

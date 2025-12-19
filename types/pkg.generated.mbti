@@ -115,6 +115,9 @@ pub(all) enum Instruction {
   Call(Int)
   CallIndirect(Int, Int)
   CallRef(Int)
+  ReturnCall(Int)
+  ReturnCallIndirect(Int, Int)
+  ReturnCallRef(Int)
   Drop
   Select
   SelectTyped(Array[ValueType])

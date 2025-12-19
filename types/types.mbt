@@ -62,6 +62,9 @@ pub(all) enum Instruction {
   Call(Int) // function index
   CallIndirect(Int, Int) // type index, table index
   CallRef(Int) // type index (WasmGC)
+  ReturnCall(Int) // function index (tail call)
+  ReturnCallIndirect(Int, Int) // type index, table index (tail call)
+  ReturnCallRef(Int) // type index (tail call, WasmGC)
 
   // Parametric instructions
   Drop

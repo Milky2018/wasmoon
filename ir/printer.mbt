@@ -183,6 +183,10 @@ fn format_opcode(
     CallIndirect(type_idx, table_idx) =>
       "call_indirect type=\{type_idx} table=\{table_idx}(\{ops})"
     CallRef(type_idx) => "call_ref type=\{type_idx}(\{ops})"
+    ReturnCall(idx) => "return_call \{idx}(\{ops})"
+    ReturnCallIndirect(type_idx, table_idx) =>
+      "return_call_indirect type=\{type_idx} table=\{table_idx}(\{ops})"
+    ReturnCallRef(type_idx) => "return_call_ref type=\{type_idx}(\{ops})"
 
     // Raw pointer operations (for trampolines)
     LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
