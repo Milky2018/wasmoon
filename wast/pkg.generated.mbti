@@ -2,76 +2,28 @@
 package "Milky2018/wasmoon/wast"
 
 import(
-  "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/wat"
 )
 
 // Values
-pub fn parse(String) -> WastScript raise WastError
+pub fn parse(String) -> @wat.WastScript raise @wat.WatError
 
 // Errors
-pub(all) suberror WastError {
-  UnexpectedToken(String)
-  UnexpectedEof
-  InvalidNumber(String)
-  InvalidInstruction(String)
-  ParseError(String)
-  WatError(@wat.WatError, Int)
-}
-pub impl Show for WastError
 
 // Types and methods
-pub enum WastAction {
-  Invoke(String?, String, Array[WastValue])
-  Get(String?, String)
-}
-pub impl Show for WastAction
-
-pub enum WastCommand {
-  Module(@types.Module, String?)
-  ModuleDefinition(@types.Module, String?)
-  ModuleQuote(Array[String])
-  ModuleBinaryFailed(String)
-  AssertReturn(WastAction, Array[WastValue])
-  AssertTrap(WastAction, String)
-  AssertModuleTrap(WastModuleSource, String)
-  AssertExhaustion(WastAction, String)
-  AssertInvalid(WastModuleSource, String)
-  AssertMalformed(WastModuleSource, String)
-  AssertUnlinkable(WastModuleSource, String)
-  Register(String, String?)
-  Action(WastAction)
-}
-pub impl Show for WastCommand
-
-pub enum WastModuleSource {
-  Binary(Bytes)
-  Quote(Array[String])
-  Inline(@types.Module)
-  FailedToParse(String)
-}
-pub impl Show for WastModuleSource
-
-pub struct WastScript {
-  commands : Array[(WastCommand, Int)]
-}
-
-pub enum WastValue {
-  I32(Int)
-  I64(Int64)
-  F32(Float)
-  F64(Double)
-  F32CanonicalNan
-  F32ArithmeticNan
-  F64CanonicalNan
-  F64ArithmeticNan
-  RefNull(String)
-  RefExtern(Int)
-  RefFunc
-}
-pub impl Show for WastValue
 
 // Type aliases
+pub using @wat {type WastAction}
+
+pub using @wat {type WastCommand}
+
+pub using @wat {type WastModuleSource}
+
+pub using @wat {type WastScript}
+
+pub using @wat {type WastValue}
+
+pub using @wat {type WatError}
 
 // Traits
 
