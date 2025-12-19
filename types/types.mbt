@@ -20,6 +20,14 @@ pub(all) enum ValueType {
   // Typed function references
   RefFuncTyped(Int) // non-null typed function reference (ref $t)
   RefNullFuncTyped(Int) // nullable typed function reference (ref null $t)
+  // GC reference types
+  AnyRef // nullable any reference (ref null any)
+  ExnRef // nullable exception reference (ref null exn)
+  // Bottom reference types
+  NullRef // bottom type (ref null none) - subtype of all nullable refs
+  NullFuncRef // bottom type for func (ref null nofunc)
+  NullExnRef // bottom type for exn (ref null noexn)
+  NullExternRef // bottom type for extern (ref null noextern)
 } derive(Eq, Show)
 
 ///|
@@ -58,6 +66,7 @@ pub(all) enum Instruction {
   // Parametric instructions
   Drop
   Select
+  SelectTyped(Array[ValueType]) // select with explicit result type
 
   // Variable instructions
   LocalGet(Int)
@@ -331,6 +340,12 @@ fn ValueType::type_code(self : ValueType) -> Int {
     RefExtern => 8
     RefFuncTyped(idx) => 100 + idx
     RefNullFuncTyped(idx) => 200 + idx
+    AnyRef => 9
+    ExnRef => 10
+    NullRef => 11
+    NullFuncRef => 12
+    NullExnRef => 13
+    NullExternRef => 14
   }
 }
 

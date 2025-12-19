@@ -25,6 +25,7 @@ pub(all) suberror ValidationError {
   UnknownExport(String) // Export references unknown entity
   UninitializedLocal(Int) // Non-nullable ref local read before initialization
   InvalidStartFunction(String) // Start function has invalid signature
+  UndeclaredFunctionReference(Int) // ref.func used on function not declared in elem/global
   // Error with location context
   WithContext(ValidationErrorContext)
 } derive(Show)
@@ -70,6 +71,7 @@ pub fn ValidationErrorContext::from_error(
     UnknownExport(m) => m
     UninitializedLocal(_) => "uninitialized local"
     InvalidStartFunction(m) => m
+    UndeclaredFunctionReference(_) => "undeclared function reference"
     WithContext(ctx) => ctx.error_msg
   }
   { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
@@ -162,6 +164,20 @@ priv struct ValidationContext {
   labels : Array[LabelInfo] // label stack for control flow
   returns : Array[@types.ValueType] // current function's return types
   local_init : Array[Bool] // tracks which locals have been initialized (for non-nullable refs)
+  declared_funcs : @hashset.HashSet[Int] // functions declared in elem/global (for ref.func validation)
+}
+
+///|
+/// Collect function indices referenced by ref.func in an instruction sequence
+fn collect_declared_funcs(
+  instrs : Array[@types.Instruction],
+  declared : @hashset.HashSet[Int],
+) -> Unit {
+  for instr in instrs {
+    if instr is RefFunc(func_idx) {
+      declared.add(func_idx)
+    }
+  }
 }
 
 ///|
@@ -211,6 +227,19 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   for elem in mod.elems {
     elems.push(elem.type_)
   }
+
+  // Collect declared functions from elem segments and global inits
+  let declared_funcs : @hashset.HashSet[Int] = @hashset.new()
+  // Functions referenced in element segments
+  for elem in mod.elems {
+    for init in elem.init {
+      collect_declared_funcs(init, declared_funcs)
+    }
+  }
+  // Functions referenced in global initializers
+  for global in mod.globals {
+    collect_declared_funcs(global.init, declared_funcs)
+  }
   {
     types: mod.types,
     funcs,
@@ -222,6 +251,7 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
     labels: [],
     returns: [],
     local_init: [],
+    declared_funcs,
   }
 }
 
@@ -245,6 +275,18 @@ fn is_ref_type(ty : @types.ValueType) -> Bool {
     | RefFuncTyped(_)
     | RefNullFuncTyped(_) => true
     _ => false
+  }
+}
+
+///|
+/// Validate that any type indices in a value type are valid
+fn validate_value_type(
+  ty : @types.ValueType,
+  num_types : Int,
+) -> Unit raise ValidationError {
+  if ty is (RefFuncTyped(idx) | RefNullFuncTyped(idx)) &&
+    (idx < 0 || idx >= num_types) {
+    raise InvalidTypeIndex(idx)
   }
 }
 
@@ -480,13 +522,39 @@ fn is_const_expr_type_compatible(
 /// Validate a complete module
 pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   let ctx = ValidationContext::new(mod)
+  let num_types = ctx.types.length()
 
   // Validate that all function type indices are valid
   for i, type_idx in ctx.funcs {
-    if type_idx < 0 || type_idx >= ctx.types.length() {
+    if type_idx < 0 || type_idx >= num_types {
       raise InvalidTypeIndex(type_idx)
     }
     ignore(i)
+  }
+
+  // Validate type indices in function types (parameters and results)
+  for func_type in mod.types {
+    for param_type in func_type.params {
+      validate_value_type(param_type, num_types)
+    }
+    for result_type in func_type.results {
+      validate_value_type(result_type, num_types)
+    }
+  }
+
+  // Validate type indices in global types
+  for global in mod.globals {
+    validate_value_type(global.type_.value_type, num_types)
+  }
+
+  // Validate type indices in table element types
+  for table in mod.tables {
+    validate_value_type(table.type_.elem_type, num_types)
+  }
+
+  // Validate type indices in elem segment types
+  for elem in mod.elems {
+    validate_value_type(elem.type_, num_types)
   }
 
   // Check for multiple memories (not allowed in MVP)
@@ -755,6 +823,13 @@ fn validate_function_with_offset(
   code : @types.FunctionCode,
   func_idx : Int,
 ) -> Unit raise ValidationError {
+  let num_types = ctx.types.length()
+
+  // Validate type indices in local types
+  for local_type in code.locals {
+    validate_value_type(local_type, num_types)
+  }
+
   // Set up locals: params + declared locals
   let locals : Array[@types.ValueType] = []
   let local_init : Array[Bool] = []
@@ -782,6 +857,7 @@ fn validate_function_with_offset(
     labels: [],
     returns: func_type.results,
     local_init,
+    declared_funcs: ctx.declared_funcs,
   }
   let stack = OperandStack::new()
 
@@ -932,6 +1008,13 @@ fn validate_function(
   func_type : @types.FuncType,
   code : @types.FunctionCode,
 ) -> Unit raise ValidationError {
+  let num_types = ctx.types.length()
+
+  // Validate type indices in local types
+  for local_type in code.locals {
+    validate_value_type(local_type, num_types)
+  }
+
   // Set up locals: params + declared locals
   let locals : Array[@types.ValueType] = []
   let local_init : Array[Bool] = []
@@ -959,6 +1042,7 @@ fn validate_function(
     labels: [],
     returns: func_type.results,
     local_init,
+    declared_funcs: ctx.declared_funcs,
   }
   let stack = OperandStack::new()
 
@@ -1586,6 +1670,10 @@ fn validate_instr(
       if func_idx >= ctx.funcs.length() {
         raise InvalidFunctionIndex(func_idx)
       }
+      // Check that function is declared (referenced in elem segment or global init)
+      if !ctx.declared_funcs.contains(func_idx) {
+        raise UndeclaredFunctionReference(func_idx)
+      }
       // ref.func produces (ref $t) where $t is the function's type index
       let type_idx = ctx.funcs[func_idx]
       stack.push(@types.ValueType::RefFuncTyped(type_idx))
@@ -1640,6 +1728,23 @@ fn validate_instr(
         )
       }
       stack.push(t1)
+    }
+    SelectTyped(types) => {
+      // Validate type indices
+      let num_types = ctx.types.length()
+      for ty in types {
+        validate_value_type(ty, num_types)
+      }
+      stack.pop(@types.ValueType::I32) // condition
+      // Pop operands matching result types in reverse
+      for i = types.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(types[i])
+        stack.pop(types[i])
+      }
+      // Push results
+      for ty in types {
+        stack.push(ty)
+      }
     }
 
     // Function calls
@@ -1899,17 +2004,30 @@ fn validate_instr(
 fn get_block_results(
   ctx : ValidationContext,
   bt : @types.BlockType,
-) -> Array[@types.ValueType] {
+) -> Array[@types.ValueType] raise ValidationError {
   match bt {
     Empty => []
-    Value(t) => [t]
-    MultiValue(types) => types
-    InlineType(_, results) => results
+    Value(t) => {
+      validate_value_type(t, ctx.types.length())
+      [t]
+    }
+    MultiValue(types) => {
+      for t in types {
+        validate_value_type(t, ctx.types.length())
+      }
+      types
+    }
+    InlineType(_, results) => {
+      for t in results {
+        validate_value_type(t, ctx.types.length())
+      }
+      results
+    }
     TypeIndex(idx) =>
       if idx < ctx.types.length() {
         ctx.types[idx].results
       } else {
-        []
+        raise InvalidTypeIndex(idx)
       }
   }
 }
@@ -1918,17 +2036,22 @@ fn get_block_results(
 fn get_block_params(
   ctx : ValidationContext,
   bt : @types.BlockType,
-) -> Array[@types.ValueType] {
+) -> Array[@types.ValueType] raise ValidationError {
   match bt {
     Empty => []
     Value(_) => [] // Single value blocks have no params
     MultiValue(_) => [] // MultiValue blocks have no params (result-only)
-    InlineType(params, _) => params
+    InlineType(params, _) => {
+      for t in params {
+        validate_value_type(t, ctx.types.length())
+      }
+      params
+    }
     TypeIndex(idx) =>
       if idx < ctx.types.length() {
         ctx.types[idx].params
       } else {
-        []
+        raise InvalidTypeIndex(idx)
       }
   }
 }
@@ -1940,7 +2063,7 @@ fn get_block_params(
 fn get_label_types(
   ctx : ValidationContext,
   label : LabelInfo,
-) -> Array[@types.ValueType] {
+) -> Array[@types.ValueType] raise ValidationError {
   match label.kind {
     BlockLabel => get_block_results(ctx, label.block_type)
     LoopLabel => get_block_params(ctx, label.block_type)

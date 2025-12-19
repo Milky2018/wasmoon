@@ -580,18 +580,25 @@ fn run_with_jit(
                       @types.Value::F32(Float::from_double(f64_val))
                     }
                     F64 => @types.Value::F64(r.reinterpret_as_double())
-                    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
+                    FuncRef
+                    | RefFunc
+                    | RefFuncTyped(_)
+                    | RefNullFuncTyped(_)
+                    | NullFuncRef =>
                       if r == -1L {
                         @types.Value::Null
                       } else {
                         @types.Value::FuncRef(r.to_int())
                       }
-                    ExternRef | RefExtern =>
+                    ExternRef | RefExtern | NullExternRef =>
                       if r == -1L {
                         @types.Value::Null
                       } else {
                         @types.Value::ExternRef(r.to_int())
                       }
+                    // GC reference types - treat as null for now
+                    AnyRef | NullRef => @types.Value::Null
+                    ExnRef | NullExnRef => @types.Value::Null
                     V128 => @types.Value::I64(r) // Placeholder for V128
                   }
                   values.push(v)

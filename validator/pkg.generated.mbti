@@ -36,6 +36,7 @@ pub(all) suberror ValidationError {
   UnknownExport(String)
   UninitializedLocal(Int)
   InvalidStartFunction(String)
+  UndeclaredFunctionReference(Int)
   WithContext(ValidationErrorContext)
 }
 pub impl Show for ValidationError

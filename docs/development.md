@@ -115,8 +115,8 @@ Use `compare_jit_interp()` for JIT regression tests:
 test "jit_regression" {
   compare_jit_interp(
     #|(module
-      (func (export "test") (result i32)
-        i32.const 42))
+    #|(func (export "test") (result i32)
+    #|  i32.const 42))
   )
 }
 ```

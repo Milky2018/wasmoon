@@ -117,6 +117,7 @@ pub(all) enum Instruction {
   CallRef(Int)
   Drop
   Select
+  SelectTyped(Array[ValueType])
   LocalGet(Int)
   LocalSet(Int)
   LocalTee(Int)
@@ -376,6 +377,12 @@ pub(all) enum ValueType {
   RefExtern
   RefFuncTyped(Int)
   RefNullFuncTyped(Int)
+  AnyRef
+  ExnRef
+  NullRef
+  NullFuncRef
+  NullExnRef
+  NullExternRef
 }
 pub impl Eq for ValueType
 pub impl Show for ValueType

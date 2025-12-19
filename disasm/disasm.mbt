@@ -209,6 +209,12 @@ fn write_value_type(buf : StringBuilder, vt : @types.ValueType) -> Unit {
     RefExtern => buf.write_string("(ref extern)")
     RefFuncTyped(idx) => buf.write_string("(ref \{idx})")
     RefNullFuncTyped(idx) => buf.write_string("(ref null \{idx})")
+    AnyRef => buf.write_string("anyref")
+    ExnRef => buf.write_string("exnref")
+    NullRef => buf.write_string("nullref")
+    NullFuncRef => buf.write_string("nullfuncref")
+    NullExnRef => buf.write_string("nullexnref")
+    NullExternRef => buf.write_string("nullexternref")
   }
 }
 
@@ -471,6 +477,14 @@ fn write_instruction_simple(
     // Parametric instructions
     Drop => buf.write_string("drop")
     Select => buf.write_string("select")
+    SelectTyped(types) => {
+      buf.write_string("select")
+      for ty in types {
+        buf.write_string(" (result ")
+        write_value_type(buf, ty)
+        buf.write_string(")")
+      }
+    }
 
     // Variable instructions
     LocalGet(idx) => {

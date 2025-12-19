@@ -179,7 +179,7 @@ fn ExecContext::exec_control(
     // Unreachable trap
     Unreachable => raise @runtime.RuntimeError::Unreachable
     // Select: ternary operator
-    Select => {
+    Select | SelectTyped(_) => {
       let cond = self.stack.pop_i32()
       let val2 = self.stack.pop()
       let val1 = self.stack.pop()

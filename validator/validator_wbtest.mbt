@@ -1281,7 +1281,14 @@ test "regression: initialized non-nullable local should pass" {
     globals: [],
     exports: [],
     start: None,
-    elems: [],
+    elems: [
+      // Need to declare function 0 for ref.func usage
+      {
+        type_: @types.ValueType::FuncRef,
+        init: [[RefFunc(0)]],
+        mode: Declarative,
+      },
+    ],
     codes: [
       {
         locals: [@types.ValueType::FuncRef], // nullable ref local
