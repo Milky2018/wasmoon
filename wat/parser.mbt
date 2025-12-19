@@ -2724,7 +2724,7 @@ fn Parser::parse_plain_instruction(
       // (call_indirect (param ...) (result ...) ...)
       // (call_indirect ...)  - empty type
       let mut table_idx = 0
-      let mut type_idx = -1
+      let mut type_idx : Int? = None
       let inline_params : Array[@types.ValueType] = []
       let inline_results : Array[@types.ValueType] = []
 
@@ -2753,7 +2753,12 @@ fn Parser::parse_plain_instruction(
         match self.current {
           Keyword("type") => {
             self.advance()
-            type_idx = self.parse_type_idx()
+            let idx = self.parse_type_idx()
+            // Validate type index is in range (0xffffffff becomes -1 after parsing)
+            if idx < 0 || idx >= self.types.length() {
+              raise ParseError("unknown type", self.loc())
+            }
+            type_idx = Some(idx)
             self.expect_rparen()
           }
           Keyword("param") => {
@@ -2788,11 +2793,13 @@ fn Parser::parse_plain_instruction(
           }
         }
       }
-      if type_idx < 0 {
-        // No explicit (type $t), need to find or create type from inline annotations
-        type_idx = self.find_or_create_func_type(inline_params, inline_results)
+      let final_type_idx = match type_idx {
+        Some(idx) => idx
+        None =>
+          // No explicit (type $t), find or create type from inline annotations
+          self.find_or_create_func_type(inline_params, inline_results)
       }
-      @types.Instruction::CallIndirect(type_idx, table_idx)
+      @types.Instruction::CallIndirect(final_type_idx, table_idx)
     }
 
     // Parametric
