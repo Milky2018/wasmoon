@@ -349,7 +349,7 @@ test "numeric conversion: i32.reinterpret_f32" {
     datas: [],
   }
   let (store, instance) = instantiate_module(mod)
-  // 1.0f32 的 IEEE 754 表示是 0x3F800000 = 1065353216
+  // 1.0f32 IEEE 754 representation is 0x3F800000 = 1065353216
   let args = [@types.Value::F32(1.0)]
   let results = call_exported_func(store, instance, "reinterpret", args)
   match results[0] {
@@ -382,7 +382,7 @@ test "saturating truncation: i32.trunc_sat_f32_s overflow" {
     datas: [],
   }
   let (store, instance) = instantiate_module(mod)
-  // 超出 i32 最大值，应该饱和到 2147483647
+  // Exceeds i32 max, should saturate to 2147483647
   let args = [@types.Value::F32(3000000000.0)]
   let results = call_exported_func(store, instance, "trunc_sat", args)
   match results[0] {
@@ -415,7 +415,7 @@ test "saturating truncation: i32.trunc_sat_f64_u negative" {
     datas: [],
   }
   let (store, instance) = instantiate_module(mod)
-  // 负数对于无符号饱和截断应该返回 0
+  // Negative values for unsigned saturating truncation should return 0
   let args = [@types.Value::F64(-100.0)]
   let results = call_exported_func(store, instance, "trunc_sat_u", args)
   match results[0] {
