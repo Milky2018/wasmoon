@@ -52,7 +52,7 @@ pub fn ValidationErrorContext::from_error(
     StackUnderflow(m) => "stack underflow: \{m}"
     StackHeightMismatch(m) => "stack height mismatch: \{m}"
     InvalidFunctionIndex(idx) => "invalid function index: \{idx}"
-    InvalidTypeIndex(idx) => "invalid type index: \{idx}"
+    InvalidTypeIndex(idx) => "unknown type: \{idx}"
     InvalidLocalIndex(idx) => "invalid local index: \{idx}"
     InvalidGlobalIndex(idx) => "invalid global index: \{idx}"
     InvalidTableIndex(idx) => "invalid table index: \{idx}"
@@ -429,7 +429,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
 
   // Validate that all function type indices are valid
   for i, type_idx in ctx.funcs {
-    if type_idx >= ctx.types.length() {
+    if type_idx < 0 || type_idx >= ctx.types.length() {
       raise InvalidTypeIndex(type_idx)
     }
     ignore(i)
@@ -554,7 +554,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   for i, code in mod.codes {
     let func_idx = num_imports + i
     let type_idx = ctx.funcs[func_idx]
-    if type_idx >= ctx.types.length() {
+    if type_idx < 0 || type_idx >= ctx.types.length() {
       raise InvalidTypeIndex(type_idx)
     }
     let func_type = ctx.types[type_idx]
@@ -571,7 +571,7 @@ pub fn validate_module_with_context(
 
   // Validate that all function type indices are valid
   for i, type_idx in ctx.funcs {
-    if type_idx >= ctx.types.length() {
+    if type_idx < 0 || type_idx >= ctx.types.length() {
       raise WithContext(
         ValidationErrorContext::from_error(InvalidTypeIndex(type_idx)),
       )
@@ -676,7 +676,7 @@ pub fn validate_module_with_context(
   for i, code in mod.codes {
     let func_idx = num_imports + i
     let type_idx = ctx.funcs[func_idx]
-    if type_idx >= ctx.types.length() {
+    if type_idx < 0 || type_idx >= ctx.types.length() {
       raise WithContext(
         ValidationErrorContext::from_error(InvalidTypeIndex(type_idx)).with_func_idx(
           func_idx,
@@ -1590,7 +1590,7 @@ fn validate_instr(
       }
     }
     CallIndirect(type_idx, table_idx) => {
-      if table_idx >= ctx.tables.length() {
+      if table_idx < 0 || table_idx >= ctx.tables.length() {
         raise InvalidTableIndex(table_idx)
       }
       // call_indirect requires a funcref table
@@ -1600,7 +1600,7 @@ fn validate_instr(
           "call_indirect requires funcref table, got \{table_type.elem_type}",
         )
       }
-      if type_idx >= ctx.types.length() {
+      if type_idx < 0 || type_idx >= ctx.types.length() {
         raise InvalidTypeIndex(type_idx)
       }
       stack.pop(@types.ValueType::I32) // table index
@@ -1615,7 +1615,7 @@ fn validate_instr(
       }
     }
     CallRef(type_idx) => {
-      if type_idx >= ctx.types.length() {
+      if type_idx < 0 || type_idx >= ctx.types.length() {
         raise InvalidTypeIndex(type_idx)
       }
       let func_type = ctx.types[type_idx]
