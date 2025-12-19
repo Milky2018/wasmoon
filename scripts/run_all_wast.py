@@ -109,8 +109,8 @@ def print_summary(results: dict) -> None:
 
 
 def main() -> None:
-    test_dir = Path("testsuite/data")
-    wast_files = sorted(test_dir.glob("*.wast"))
+    test_dir = Path("spec")
+    wast_files = sorted(test_dir.glob("**/*.wast"))
 
     print(f"Found {len(wast_files)} .wast test files")
 
