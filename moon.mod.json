@@ -6,7 +6,7 @@
     "TheWaWaR/clap": "0.2.6"
   },
   "readme": "README.mbt.md",
-  "repository": "",
+  "repository": "https://github.com/Milky2018/wasmoon.git",
   "license": "Apache-2.0",
   "keywords": [
     "wasm",

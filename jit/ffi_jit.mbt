@@ -2,6 +2,9 @@
 /// JIT runtime FFI for executable memory management and code execution
 /// Uses @jit_ffi package for C function declarations
 
+///|
+pub using @jit_ffi {c_jit_write_i64, c_jit_read_i64}
+
 // ============ Trap Handling ============
 
 ///|
@@ -226,9 +229,6 @@ pub fn alloc_memory(size : Int64) -> Int64 {
 pub fn free_memory(mem_ptr : Int64) -> Unit {
   @jit_ffi.c_jit_free_memory(mem_ptr)
 }
-
-///|
-pub using @jit_ffi {c_jit_write_i64, c_jit_read_i64}
 
 ///|
 /// Initialize memory with data at offset
