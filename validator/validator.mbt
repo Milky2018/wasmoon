@@ -291,7 +291,10 @@ fn OperandStack::pop(
 ///|
 /// Check if actual type is a subtype of expected type
 /// Handles reference type subtyping for GC proposal
-fn is_type_subtype(actual : @types.ValueType, expected : @types.ValueType) -> Bool {
+fn is_type_subtype(
+  actual : @types.ValueType,
+  expected : @types.ValueType,
+) -> Bool {
   if actual == expected {
     return true
   }
