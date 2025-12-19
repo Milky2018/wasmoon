@@ -805,11 +805,14 @@ fn Translator::translate_instruction(
     Br(depth) => self.translate_br(depth)
     BrIf(depth) => self.translate_br_if(depth)
     BrTable(labels, default_) => self.translate_br_table(labels, default_)
+    BrOnNull(depth) => self.translate_br_on_null(depth)
+    BrOnNonNull(depth) => self.translate_br_on_non_null(depth)
 
     // Function calls
     Call(func_idx) => self.translate_call(func_idx)
     CallIndirect(type_idx, table_idx) =>
       self.translate_call_indirect(type_idx, table_idx)
+    CallRef(type_idx) => self.translate_call_ref(type_idx)
 
     // Memory management
     MemoryGrow => {
@@ -855,6 +858,28 @@ fn Translator::translate_instruction(
       // The actual function pointer will be looked up at runtime
       let result = self.builder.iconst(Type::I64, func_idx.to_int64())
       self.push(result)
+    }
+    RefAsNonNull => {
+      // ref.as_non_null: convert nullable ref to non-null ref
+      // Pop the reference, check if null, trap if so, otherwise push back
+      let ref_val = self.pop()
+      let null_sentinel = self.builder.iconst(Type::I64, -1L)
+      let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
+
+      // Create trap block and continuation block
+      let trap_block = self.builder.create_block()
+      let continue_block = self.builder.create_block()
+
+      // Branch: if is_null goto trap_block else continue_block
+      self.builder.brnz(is_null, trap_block, continue_block)
+
+      // Trap block: emit trap for null reference
+      self.builder.switch_to_block(trap_block)
+      self.builder.trap("null function reference")
+
+      // Continue block: push the non-null ref back on stack
+      self.builder.switch_to_block(continue_block)
+      self.push(ref_val)
     }
     TableGet(table_idx) => {
       // Get element from table
@@ -1498,6 +1523,141 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
 }
 
 ///|
+/// Translate a br_on_null instruction
+/// br_on_null: pop ref, branch if null, otherwise push non-null ref and continue
+fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
+  let ref_val = self.pop()
+  let idx = self.block_stack.length() - 1 - depth
+
+  // Check if reference is null (compare with -1)
+  let null_sentinel = self.builder.iconst(Type::I64, -1L)
+  let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
+
+  // For br_on_null, we need a fallthrough block and a taken block (critical edge split)
+  let fallthrough = self.builder.create_block()
+  let taken = self.builder.create_block()
+  if idx >= 0 && idx < self.block_stack.length() {
+    let frame = self.block_stack[idx]
+
+    // Collect values that would be passed on branch (not including the ref since it's null)
+    let args : Array[Value] = []
+    for i in 0..<frame.result_types.length() {
+      args.push(
+        self.value_stack[self.value_stack.length() -
+        frame.result_types.length() +
+        i],
+      )
+    }
+
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
+
+    // Branch: if null, go to taken block; otherwise fall through
+    self.builder.brnz(is_null, taken, fallthrough)
+
+    // Critical edge split: taken block jumps to target with args
+    self.builder.switch_to_block(taken)
+    self.builder.jump(frame.block, args)
+
+    // Continue with fallthrough - push the non-null ref back on stack
+    self.builder.switch_to_block(fallthrough)
+    self.push(ref_val)
+  } else if idx == -1 {
+    // Jump to function level (early return)
+    let ret_cont = self.get_or_create_return_continuation()
+    let args : Array[Value] = []
+    for i in 0..<self.func_result_types.length() {
+      args.push(
+        self.value_stack[self.value_stack.length() -
+        self.func_result_types.length() +
+        i],
+      )
+    }
+    for loc in self.locals {
+      args.push(loc)
+    }
+    self.builder.brnz(is_null, taken, fallthrough)
+    self.builder.switch_to_block(taken)
+    self.builder.jump(ret_cont, args)
+    self.builder.switch_to_block(fallthrough)
+    self.push(ref_val)
+  }
+}
+
+///|
+/// Translate a br_on_non_null instruction
+/// br_on_non_null: pop ref, branch with ref if non-null, otherwise continue
+fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit {
+  let ref_val = self.pop()
+  let idx = self.block_stack.length() - 1 - depth
+
+  // Check if reference is null (compare with -1)
+  let null_sentinel = self.builder.iconst(Type::I64, -1L)
+  let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
+
+  // For br_on_non_null, we need a fallthrough block and a taken block
+  let fallthrough = self.builder.create_block()
+  let taken = self.builder.create_block()
+  if idx >= 0 && idx < self.block_stack.length() {
+    let frame = self.block_stack[idx]
+
+    // Collect values that would be passed on branch
+    // For br_on_non_null, we need to collect args BEFORE the ref was popped
+    // The block expects result_types.length() values, and the ref is one of them
+    // Since we already popped ref_val, we need to include it manually
+    let args : Array[Value] = []
+    // If the block expects N results, and the ref is one of them (the last one),
+    // we need N-1 values from the stack plus the ref
+    let stack_values_needed = frame.result_types.length() - 1
+    for i in 0..<stack_values_needed {
+      args.push(
+        self.value_stack[self.value_stack.length() - stack_values_needed + i],
+      )
+    }
+    // Add the ref as the last value (the non-null ref being passed)
+    args.push(ref_val)
+
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
+
+    // Branch: if NOT null (is_null == false), go to taken block; otherwise fall through
+    // Since is_null is 1 if null, 0 if non-null, we branch to fallthrough if null
+    self.builder.brnz(is_null, fallthrough, taken)
+
+    // Critical edge split: taken block jumps to target with args
+    self.builder.switch_to_block(taken)
+    self.builder.jump(frame.block, args)
+
+    // Continue with fallthrough - reference is consumed (null), nothing pushed
+    self.builder.switch_to_block(fallthrough)
+  } else if idx == -1 {
+    // Jump to function level (early return)
+    let ret_cont = self.get_or_create_return_continuation()
+
+    // Similar adjustment for function-level return
+    let args : Array[Value] = []
+    let stack_values_needed = self.func_result_types.length() - 1
+    for i in 0..<stack_values_needed {
+      args.push(
+        self.value_stack[self.value_stack.length() - stack_values_needed + i],
+      )
+    }
+    args.push(ref_val)
+    for loc in self.locals {
+      args.push(loc)
+    }
+    self.builder.brnz(is_null, fallthrough, taken)
+    self.builder.switch_to_block(taken)
+    self.builder.jump(ret_cont, args)
+    self.builder.switch_to_block(fallthrough)
+  }
+}
+
+///|
 /// Translate a br_table instruction
 /// Uses critical edge splitting to pass block arguments properly
 fn Translator::translate_br_table(
@@ -1662,6 +1822,54 @@ fn Translator::translate_call_indirect(
     let results = self.builder.call_indirect_multi(
       type_hash, table_idx, result_types, elem_idx, args,
     )
+    // Push all results onto the stack
+    for v in results {
+      self.push(v)
+    }
+  }
+}
+
+///|
+/// Translate a call through function reference
+fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
+  if type_idx < self.func_types.length() {
+    let func_type = self.func_types[type_idx]
+    // Pop the function reference (which is a function index stored as I64)
+    let func_ref = self.pop()
+
+    // Null check: if func_ref == -1, trap
+    let null_sentinel = self.builder.iconst(Type::I64, -1L)
+    let is_null = self.builder.icmp_eq(func_ref, null_sentinel)
+
+    // Create trap block and continuation block
+    let trap_block = self.builder.create_block()
+    let continue_block = self.builder.create_block()
+
+    // Branch: if is_null goto trap_block else continue_block
+    self.builder.brnz(is_null, trap_block, continue_block)
+
+    // Trap block: emit trap for null reference
+    self.builder.switch_to_block(trap_block)
+    self.builder.trap("null function reference")
+
+    // Continue block: proceed with call
+    self.builder.switch_to_block(continue_block)
+
+    // Pop arguments
+    let args : Array[Value] = []
+    for _ in 0..<func_type.params.length() {
+      args.push(self.pop())
+    }
+    args.rev_in_place()
+
+    // Get result types
+    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+
+    // Emit call_ref instruction
+    let results = self.builder.call_ref_multi(
+      type_idx, result_types, func_ref, args,
+    )
+
     // Push all results onto the stack
     for v in results {
       self.push(v)

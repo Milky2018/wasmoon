@@ -210,10 +210,9 @@ fn ExecContext::exec_instr(
         _ => self.stack.push(value)
       }
     }
-    BrOnNull(_) =>
-      // br_on_null is a control instruction, handled in exec_control
-      // But since it requires special branch handling, trap for now
-      raise @runtime.RuntimeError::Unreachable
+    BrOnNull(_) | BrOnNonNull(_) =>
+      // br_on_null and br_on_non_null are control instructions
+      self.exec_control(instr)
 
     // i32 numeric operations
     I32Add
@@ -415,10 +414,7 @@ fn ExecContext::exec_instr(
     Call(func_idx) => self.exec_call(func_idx)
     CallIndirect(type_idx, table_idx) =>
       self.exec_call_indirect(type_idx, table_idx)
-    CallRef(_) =>
-      // call_ref is a WasmGC instruction that requires GC runtime support
-      // Currently not implemented - will trap if reached
-      raise @runtime.RuntimeError::Unreachable
+    CallRef(type_idx) => self.exec_call_ref(type_idx)
   }
 }
 

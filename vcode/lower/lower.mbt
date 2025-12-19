@@ -407,6 +407,7 @@ fn lower_inst(
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
     @ir.Opcode::CallIndirect(type_idx, table_idx) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx)
+    @ir.Opcode::CallRef(type_idx) => lower_call_ref(ctx, inst, block, type_idx)
 
     // Raw pointer operations (for trampolines)
     @ir.Opcode::LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
@@ -2604,6 +2605,84 @@ fn lower_call_indirect(
   }
   // Add clobbers for all caller-saved registers
   // This tells the register allocator that these registers are destroyed by the call
+  add_call_clobbers(call_inst)
+  // Uses: function pointer first, then arguments
+  call_inst.add_use(Virtual(func_ptr_vreg))
+  for arg_vreg in arg_vregs {
+    call_inst.add_use(Virtual(arg_vreg))
+  }
+  block.add_inst(call_inst)
+}
+
+///|
+/// Lower call_ref instruction
+/// call_ref calls through a function reference (function index on stack)
+/// The null check is already done in IR, so we just need to:
+/// 1. Load func_table from vmctx
+/// 2. Calculate address = func_table + func_ref * 8
+/// 3. Load function pointer
+/// 4. Call through the function pointer
+fn lower_call_ref(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  _type_idx : Int,
+) -> Unit {
+  // First operand is the function reference (function index as I64)
+  if inst.operands.length() == 0 {
+    return
+  }
+  let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Arguments are all operands except the first one
+  let arg_vregs : Array[@abi.VReg] = []
+  for i in 1..<inst.operands.length() {
+    arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
+  }
+  let num_args = arg_vregs.length()
+
+  // Get all results (primary result + extra_results)
+  let all_results = inst.all_results()
+  let num_results = all_results.length()
+
+  // Load func_table from vmctx on-demand
+  let func_table = emit_load_func_table(ctx, block)
+
+  // Step 1: Calculate offset = func_ref * 8 (each function pointer is 8 bytes)
+  let const_8_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_8 = @instr.VCodeInst::new(LoadConst(8L))
+  load_8.add_def({ reg: Virtual(const_8_vreg) })
+  block.add_inst(load_8)
+  let offset_vreg = ctx.vcode_func.new_vreg(Int)
+  let mul_inst = @instr.VCodeInst::new(Mul(true))
+  mul_inst.add_def({ reg: Virtual(offset_vreg) })
+  mul_inst.add_use(Virtual(func_ref_vreg))
+  mul_inst.add_use(Virtual(const_8_vreg))
+  block.add_inst(mul_inst)
+
+  // Step 2: Calculate address = func_table + offset
+  let addr_vreg = ctx.vcode_func.new_vreg(Int)
+  let add_inst = @instr.VCodeInst::new(Add(true))
+  add_inst.add_def({ reg: Virtual(addr_vreg) })
+  add_inst.add_use(Virtual(func_table))
+  add_inst.add_use(Virtual(offset_vreg))
+  block.add_inst(add_inst)
+
+  // Step 3: Load function pointer from address
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_inst = @instr.VCodeInst::new(Load(I64, 0))
+  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_inst.add_use(Virtual(addr_vreg))
+  block.add_inst(load_inst)
+
+  // Step 4: Emit CallIndirect instruction
+  let call_inst = @instr.VCodeInst::new(CallIndirect(num_args, num_results))
+  // Define all results
+  for result in all_results {
+    let dst = ctx.get_vreg(result)
+    call_inst.add_def({ reg: Virtual(dst) })
+  }
+  // Add clobbers for all caller-saved registers
   add_call_clobbers(call_inst)
   // Uses: function pointer first, then arguments
   call_inst.add_use(Virtual(func_ptr_vreg))

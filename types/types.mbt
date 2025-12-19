@@ -113,6 +113,7 @@ pub(all) enum Instruction {
   RefFunc(Int) // ref.func: push reference to function by index
   RefAsNonNull // ref.as_non_null: convert nullable ref to non-null ref
   BrOnNull(Int) // br_on_null: branch if reference is null
+  BrOnNonNull(Int) // br_on_non_null: branch if reference is non-null
 
   // Numeric instructions - Constants
   I32Const(Int)

@@ -109,7 +109,7 @@ fn has_side_effects(inst : Inst) -> Bool {
     | Load32S(_)
     | Load32U(_) => true
     // Calls may have side effects
-    Call(_) | CallIndirect(_) => true
+    Call(_) | CallIndirect(_) | CallRef(_) => true
     // Memory operations that modify global state
     MemoryGrow(_) | MemoryFill | MemoryCopy => true
     // Table operations that modify global state

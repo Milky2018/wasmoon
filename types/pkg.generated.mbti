@@ -164,6 +164,7 @@ pub(all) enum Instruction {
   RefFunc(Int)
   RefAsNonNull
   BrOnNull(Int)
+  BrOnNonNull(Int)
   I32Const(Int)
   I64Const(Int64)
   F32Const(Float)

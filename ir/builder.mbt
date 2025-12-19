@@ -875,6 +875,36 @@ pub fn IRBuilder::call_indirect_multi(
   results
 }
 
+///|
+/// Call through function reference with multiple return values
+pub fn IRBuilder::call_ref_multi(
+  self : IRBuilder,
+  type_idx : Int,
+  result_types : Array[Type],
+  func_ref : Value,
+  args : Array[Value],
+) -> Array[Value] {
+  let all_args : Array[Value] = [func_ref]
+  for arg in args {
+    all_args.push(arg)
+  }
+  if result_types.length() == 0 {
+    self.emit_void_inst(Opcode::CallRef(type_idx), all_args)
+    return []
+  }
+  // Create result values for each return type
+  let results : Array[Value] = []
+  for ty in result_types {
+    results.push(self.func.new_value(ty))
+  }
+  // Create instruction with multiple results
+  let inst = Inst::new_multi(results, Opcode::CallRef(type_idx), all_args)
+  if self.current_block is Some(block) {
+    block.add_inst(inst)
+  }
+  results
+}
+
 // ============ Terminators ============
 
 ///|

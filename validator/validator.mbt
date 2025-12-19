@@ -1547,6 +1547,16 @@ fn validate_instr(
       // If not null, the non-null reference remains on stack
       stack.push(@types.ValueType::RefFunc)
     }
+    BrOnNonNull(label_idx) => {
+      // br_on_non_null: pops a ref, branches with ref if non-null, otherwise continues
+      if label_idx >= ctx.labels.length() {
+        raise InvalidLabelIndex(label_idx)
+      }
+      // Pop the reference - in unreachable context this may be polymorphic
+      stack.pop_any() |> ignore
+      // If null, fall through with nothing on stack (ref is consumed)
+      // If non-null, branch to target with the ref
+    }
 
     // Control flow
     Nop => ()
