@@ -512,11 +512,13 @@ test "regression: select with nested ref type in result annotation" {
   let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
   // Should have parsed successfully with 2 functions
   inspect(mod.funcs.length(), content="2")
-  // The exported function should have the select instruction
+  // The exported function should have the typed select instruction
   let code = mod.codes[1]
-  // Body should contain: RefFunc, RefNull, LocalGet, Select
+  // Body should contain: RefFunc, RefNull, LocalGet, SelectTyped
   inspect(code.body.length(), content="4")
-  inspect(code.body[3], content="Select")
+  // With result type annotation, should use SelectTyped not Select
+  // (ref null func) is FuncRef, not RefNullFuncTyped - it's the abstract type
+  inspect(code.body[3], content="SelectTyped([FuncRef])")
 }
 
 ///|

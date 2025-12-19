@@ -186,10 +186,18 @@ fn ExecContext::exec_instr(
     // Reference type instructions
     RefNull(ref_type) =>
       match ref_type {
-        FuncRef | ExternRef | AnyRef | ExnRef | NullRef | NullFuncRef | NullExnRef
-        | NullExternRef | RefFunc | RefExtern | RefFuncTyped(_)
-        | RefNullFuncTyped(_) =>
-          self.stack.push(Null)
+        FuncRef
+        | ExternRef
+        | AnyRef
+        | ExnRef
+        | NullRef
+        | NullFuncRef
+        | NullExnRef
+        | NullExternRef
+        | RefFunc
+        | RefExtern
+        | RefFuncTyped(_)
+        | RefNullFuncTyped(_) => self.stack.push(Null)
         _ => raise @runtime.RuntimeError::TypeMismatch
       }
     RefIsNull => {
