@@ -459,6 +459,185 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
 }
 
 ///|
+/// Read a string used as identifier name - hex escapes are decoded as UTF-8
+fn Lexer::read_id_string(self : Lexer) -> String raise WatError {
+  // Accumulate bytes, then decode as UTF-8
+  // This ensures $"\ef\98\9a" matches $"" (emoji)
+  let bytes : Array[Int] = []
+  let start_loc = self.current_loc()
+  // Skip opening quote
+  self.advance_pos()
+  while !self.is_eof() {
+    match self.peek_char() {
+      Some('"') => {
+        self.advance_pos()
+        return decode_utf8_bytes(bytes)
+      }
+      Some('\\') => {
+        self.advance_pos()
+        match self.next_char() {
+          Some('n') => bytes.push(0x0A)
+          Some('t') => bytes.push(0x09)
+          Some('r') => bytes.push(0x0D)
+          Some('"') => bytes.push(0x22)
+          Some('\\') => bytes.push(0x5C)
+          Some('\'') => bytes.push(0x27)
+          Some('u') =>
+            // Unicode escape \u{xxxx} - encode as UTF-8 bytes
+            match self.next_char() {
+              Some('{') => {
+                let hex_buf = StringBuilder::new()
+                while !self.is_eof() {
+                  match self.peek_char() {
+                    Some('}') => {
+                      self.advance_pos()
+                      break
+                    }
+                    Some(c) =>
+                      if is_hex_digit(c) {
+                        hex_buf.write_char(c)
+                        self.advance_pos()
+                      } else {
+                        raise WatError::ParseError(
+                          "Invalid Unicode escape: expected hex digit or '}'",
+                          self.current_loc(),
+                        )
+                      }
+                    None => raise WatError::UnexpectedEof(self.current_loc())
+                  }
+                }
+                let hex = hex_buf.to_string()
+                if hex.is_empty() {
+                  raise WatError::ParseError("Empty Unicode escape", start_loc)
+                }
+                match parse_hex_codepoint(hex) {
+                  Some(cp) => encode_utf8_codepoint(bytes, cp)
+                  None =>
+                    raise WatError::ParseError(
+                      "Invalid Unicode escape: \\u{\{hex}}",
+                      start_loc,
+                    )
+                }
+              }
+              _ =>
+                raise WatError::ParseError(
+                  "Invalid Unicode escape: expected '{'",
+                  self.current_loc(),
+                )
+            }
+          Some(c) =>
+            // Hex escape \xx - produces a raw byte
+            if is_hex_digit(c) {
+              match self.next_char() {
+                Some(c2) => {
+                  let hex = String::make(1, c) + String::make(1, c2)
+                  match parse_hex_byte(hex) {
+                    Some(b) => bytes.push(b)
+                    None =>
+                      raise WatError::ParseError(
+                        "Invalid hex escape: \{hex}",
+                        start_loc,
+                      )
+                  }
+                }
+                None => raise WatError::UnexpectedEof(self.current_loc())
+              }
+            } else {
+              // Unknown escape - encode as UTF-8
+              encode_utf8_codepoint(bytes, c.to_int())
+            }
+          None => raise WatError::UnexpectedEof(self.current_loc())
+        }
+      }
+      Some(_) =>
+        // Regular character - encode as UTF-8
+        match self.next_char() {
+          Some(c) => encode_utf8_codepoint(bytes, c.to_int())
+          None => raise WatError::UnexpectedEof(self.current_loc())
+        }
+      None => raise WatError::UnexpectedEof(self.current_loc())
+    }
+  }
+  raise WatError::UnexpectedEof(self.current_loc())
+}
+
+///|
+/// Encode a Unicode codepoint as UTF-8 bytes
+fn encode_utf8_codepoint(bytes : Array[Int], cp : Int) -> Unit {
+  if cp < 0x80 {
+    bytes.push(cp)
+  } else if cp < 0x800 {
+    bytes.push(0xC0 | (cp >> 6))
+    bytes.push(0x80 | (cp & 0x3F))
+  } else if cp < 0x10000 {
+    bytes.push(0xE0 | (cp >> 12))
+    bytes.push(0x80 | ((cp >> 6) & 0x3F))
+    bytes.push(0x80 | (cp & 0x3F))
+  } else {
+    bytes.push(0xF0 | (cp >> 18))
+    bytes.push(0x80 | ((cp >> 12) & 0x3F))
+    bytes.push(0x80 | ((cp >> 6) & 0x3F))
+    bytes.push(0x80 | (cp & 0x3F))
+  }
+}
+
+///|
+/// Decode UTF-8 bytes to a string
+fn decode_utf8_bytes(bytes : Array[Int]) -> String {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < bytes.length() {
+    let b = bytes[i]
+    if b < 0x80 {
+      buf.write_char(b.unsafe_to_char())
+      i = i + 1
+    } else if b < 0xC0 {
+      // Invalid leading byte, treat as raw
+      buf.write_char(b.unsafe_to_char())
+      i = i + 1
+    } else if b < 0xE0 {
+      // 2-byte sequence
+      if i + 1 < bytes.length() {
+        let b2 = bytes[i + 1]
+        let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
+        buf.write_char(cp.unsafe_to_char())
+        i = i + 2
+      } else {
+        buf.write_char(b.unsafe_to_char())
+        i = i + 1
+      }
+    } else if b < 0xF0 {
+      // 3-byte sequence
+      if i + 2 < bytes.length() {
+        let b2 = bytes[i + 1]
+        let b3 = bytes[i + 2]
+        let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
+        buf.write_char(cp.unsafe_to_char())
+        i = i + 3
+      } else {
+        buf.write_char(b.unsafe_to_char())
+        i = i + 1
+      }
+      // 4-byte sequence
+    } else if i + 3 < bytes.length() {
+      let b2 = bytes[i + 1]
+      let b3 = bytes[i + 2]
+      let b4 = bytes[i + 3]
+      let cp = ((b & 0x07) << 18) |
+        ((b2 & 0x3F) << 12) |
+        ((b3 & 0x3F) << 6) |
+        (b4 & 0x3F)
+      buf.write_char(cp.unsafe_to_char())
+      i = i + 4
+    } else {
+      buf.write_char(b.unsafe_to_char())
+      i = i + 1
+    }
+  }
+  buf.to_string()
+}
+
+///|
 fn is_hex_digit(c : Char) -> Bool {
   (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
@@ -667,7 +846,7 @@ fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
       self.advance_pos()
       // Check for string identifier like $"foo"
       if self.peek_char() == Some('"') {
-        let name = self.read_string()
+        let name = self.read_id_string()
         Id(name)
       } else {
         let name = self.read_id_or_keyword()
