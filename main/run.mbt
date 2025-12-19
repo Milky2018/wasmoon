@@ -209,14 +209,9 @@ fn run_wasm(
         println(result_strs.join(" "))
       }
     }
-  } else {
     // No exported function found, check if there's a start function
-    match invoke {
-      Some(name) => println("Error: function '\{name}' not found")
-      None =>
-        // Module was already initialized with start function if present
-        ()
-    }
+  } else if invoke is Some(name) {
+    println("Error: function '\{name}' not found")
   }
 }
 

@@ -290,11 +290,10 @@ fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
 fn has_unsupported_elem_init(mod_ : @types.Module) -> Bool {
   for elem in mod_.elems {
     for init_expr in elem.init {
-      match init_expr {
-        // GlobalGet in elem init is not supported by JIT
-        // because it may reference imported funcref globals (cross-module)
-        [GlobalGet(_)] => return true
-        _ => ()
+      // GlobalGet in elem init is not supported by JIT
+      // because it may reference imported funcref globals (cross-module)
+      if init_expr is [GlobalGet(_)] {
+        return true
       }
     }
   }
@@ -353,9 +352,8 @@ fn has_cross_module_imports(mod_ : @types.Module) -> Bool {
 /// These might be imported by other modules, and JIT can't share the backing storage
 fn exports_shared_resources(mod_ : @types.Module) -> Bool {
   for exp in mod_.exports {
-    match exp.desc {
-      Memory(_) | Table(_) => return true
-      _ => ()
+    if exp.desc is (Memory(_) | Table(_)) {
+      return true
     }
   }
   false
