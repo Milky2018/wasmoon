@@ -223,6 +223,8 @@ pub enum Opcode {
   // Table operations (for reference types)
   TableGet(Int) // Get element from table (table index)
   TableSet(Int) // Set element in table (table index)
+  TableSize(Int) // Get current size of table (table index)
+  TableGrow(Int) // Grow table, returns previous size or -1 (table index)
 
   // Global operations
   GlobalGet(Int) // Get global variable value (global index)

@@ -54,6 +54,10 @@ pub const VMCTX_TABLES_OFFSET : Int = 48
 /// Offset of table_count in VMContext
 pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
 
+///|
+/// Offset of table_sizes array in VMContext
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
+
 // ============ Reserved Registers ============
 
 ///|

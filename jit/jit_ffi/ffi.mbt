@@ -91,6 +91,11 @@ pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory
 pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
 
 ///|
+/// Get table_grow function pointer for JIT
+/// Signature: table_grow(table_idx: i32, delta: i64, init_value: i64) -> i32
+pub extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_grow_ptr"
+
+///|
 /// Get current memory base from v2 context (for proper cleanup after memory.grow)
 pub extern "c" fn c_jit_get_current_memory_base() -> Int64 = "wasmoon_jit_get_memory_base"
 
@@ -152,11 +157,15 @@ pub extern "c" fn c_jit_ctx_use_shared_table(
 ///|
 /// Configure JIT context with multiple indirect tables (for multi-table support)
 /// table_ptrs: FixedArray of Int64 (table pointers from Store.jit_tables)
+/// table_sizes: FixedArray of Int (table sizes for bounds checking)
+/// table_max_sizes: FixedArray of Int (max sizes, -1 = unlimited)
 /// table_count: Number of tables
-#borrow(table_ptrs)
+#borrow(table_ptrs, table_sizes, table_max_sizes)
 pub extern "c" fn c_jit_ctx_set_table_pointers(
   ctx_ptr : Int64,
   table_ptrs : FixedArray[Int64],
+  table_sizes : FixedArray[Int],
+  table_max_sizes : FixedArray[Int],
   table_count : Int,
 ) -> Unit = "wasmoon_jit_ctx_set_table_pointers"
 

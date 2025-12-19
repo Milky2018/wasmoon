@@ -171,6 +171,8 @@ fn format_opcode(
     // Table operations
     TableGet(idx) => "table_get \{idx} \{ops}"
     TableSet(idx) => "table_set \{idx} \{ops}"
+    TableSize(idx) => "table_size \{idx}"
+    TableGrow(idx) => "table_grow \{idx} \{ops}"
 
     // Global operations
     GlobalGet(idx) => "global_get \{idx}"

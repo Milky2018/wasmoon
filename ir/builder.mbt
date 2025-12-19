@@ -714,6 +714,24 @@ pub fn IRBuilder::table_set(
 }
 
 ///|
+/// Get current size of table (number of elements)
+pub fn IRBuilder::table_size(self : IRBuilder, table_idx : Int) -> Value {
+  self.emit_inst(Type::I32, Opcode::TableSize(table_idx), [])
+}
+
+///|
+/// Grow table by delta elements, initializing new elements with init_value
+/// Returns previous size (as i32), or -1 if grow failed
+pub fn IRBuilder::table_grow(
+  self : IRBuilder,
+  table_idx : Int,
+  delta : Value,
+  init_value : Value,
+) -> Value {
+  self.emit_inst(Type::I32, Opcode::TableGrow(table_idx), [delta, init_value])
+}
+
+///|
 /// Get global variable value
 pub fn IRBuilder::global_get(
   self : IRBuilder,

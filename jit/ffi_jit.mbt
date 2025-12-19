@@ -183,17 +183,29 @@ fn JITContext::set_table_pointers(
   if jit_tables.is_empty() {
     return
   }
-  // Convert Array[JITTable?] to FixedArray[Int64] of table pointers
+  // Convert Array[JITTable?] to FixedArray[Int64] of table pointers, sizes, and max sizes
   let table_ptrs = FixedArray::make(jit_tables.length(), 0L)
+  let table_sizes = FixedArray::make(jit_tables.length(), 0)
+  let table_max_sizes = FixedArray::make(jit_tables.length(), -1) // -1 = unlimited
   for i, jit_table_opt in jit_tables {
     match jit_table_opt {
-      Some(jit_table) => table_ptrs[i] = jit_table.table_ptr
-      None => table_ptrs[i] = 0L // Null table pointer
+      Some(jit_table) => {
+        table_ptrs[i] = jit_table.table_ptr
+        table_sizes[i] = jit_table.size
+        table_max_sizes[i] = jit_table.max.unwrap_or(-1) // -1 = unlimited
+      }
+      None => {
+        table_ptrs[i] = 0L // Null table pointer
+        table_sizes[i] = 0
+        table_max_sizes[i] = -1
+      }
     }
   }
   @jit_ffi.c_jit_ctx_set_table_pointers(
     self.ptr(),
     table_ptrs,
+    table_sizes,
+    table_max_sizes,
     jit_tables.length(),
   )
 }
@@ -254,11 +266,15 @@ struct JITTable {
 
 ///|
 /// Create a new shared JIT table
+/// Note: size 0 is valid (empty table that can grow later)
 pub fn JITTable::new(size : Int, max : Int?) -> JITTable? {
-  if size <= 0 {
+  if size < 0 {
     return None
   }
-  let table_ptr = @jit_ffi.c_jit_alloc_shared_indirect_table(size)
+  // For size 0, allocate with capacity 1 to avoid null pointer issues
+  // The actual size is tracked separately
+  let alloc_size = if size == 0 { 1 } else { size }
+  let table_ptr = @jit_ffi.c_jit_alloc_shared_indirect_table(alloc_size)
   if table_ptr == 0L {
     return None
   }

@@ -308,6 +308,18 @@ fn validate_instruction(
           "TableSet expects 2 operands (elem_idx, value), got \{inst.operands.length()}",
         )
       }
+    TableSize(_) =>
+      if inst.operands.length() != 0 {
+        result.add_error(
+          "TableSize expects 0 operands, got \{inst.operands.length()}",
+        )
+      }
+    TableGrow(_) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "TableGrow expects 2 operands (delta, init_value), got \{inst.operands.length()}",
+        )
+      }
 
     // Global operations
     GlobalGet(_) =>

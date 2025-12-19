@@ -50,6 +50,8 @@ pub const VMCTX_TABLES_OFFSET : Int = 48
 
 pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
 
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
+
 pub fn aapcs64_arg_fprs() -> Array[PReg]
 
 pub fn aapcs64_arg_gprs() -> Array[PReg]

@@ -200,7 +200,9 @@ pub fn IRBuilder::store8(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
 pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
 pub fn IRBuilder::table_get(Self, Int, Value) -> Value
+pub fn IRBuilder::table_grow(Self, Int, Value, Value) -> Value
 pub fn IRBuilder::table_set(Self, Int, Value, Value) -> Unit
+pub fn IRBuilder::table_size(Self, Int) -> Value
 pub fn IRBuilder::trap(Self, String) -> Unit
 pub fn IRBuilder::udiv(Self, Value, Value) -> Value
 pub fn IRBuilder::uextend(Self, Type, Value) -> Value
@@ -310,6 +312,8 @@ pub enum Opcode {
   Copy
   TableGet(Int)
   TableSet(Int)
+  TableSize(Int)
+  TableGrow(Int)
   GlobalGet(Int)
   GlobalSet(Int)
   Call(Int)
