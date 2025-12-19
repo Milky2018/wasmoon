@@ -281,10 +281,35 @@ fn OperandStack::pop(
   let actual = self.stack.pop()
   match actual {
     Some(a) =>
-      if a != expected {
+      if !is_type_subtype(a, expected) {
         raise TypeMismatch("Expected \{expected}, got \{a}")
       }
     None => raise StackUnderflow("Expected \{expected}, but stack is empty")
+  }
+}
+
+///|
+/// Check if actual type is a subtype of expected type
+/// Handles reference type subtyping for GC proposal
+fn is_type_subtype(
+  actual : @types.ValueType,
+  expected : @types.ValueType,
+) -> Bool {
+  if actual == expected {
+    return true
+  }
+  match (actual, expected) {
+    // RefFuncTyped(t) <: RefNullFuncTyped(t)
+    (RefFuncTyped(t1), RefNullFuncTyped(t2)) => t1 == t2
+    // RefFuncTyped(t) <: FuncRef (nullable abstract)
+    (RefFuncTyped(_), FuncRef) => true
+    // RefNullFuncTyped(t) <: FuncRef
+    (RefNullFuncTyped(_), FuncRef) => true
+    // RefFunc (non-null abstract) <: FuncRef (nullable abstract)
+    (RefFunc, FuncRef) => true
+    // RefExtern <: ExternRef
+    (RefExtern, ExternRef) => true
+    _ => false
   }
 }
 
@@ -364,7 +389,9 @@ fn validate_const_expr(
         if func_idx >= funcs.length() {
           raise InvalidFunctionIndex(func_idx)
         }
-        type_stack.push(@types.ValueType::FuncRef)
+        // ref.func produces (ref $t) where $t is the function's type index
+        let type_idx = funcs[func_idx]
+        type_stack.push(@types.ValueType::RefFuncTyped(type_idx))
       }
       GlobalGet(idx) => {
         if idx >= globals.length() {
@@ -413,12 +440,39 @@ fn validate_const_expr(
     )
   }
 
-  // Check the result type matches expected
+  // Check the result type matches expected (with subtyping for references)
   let result_type = type_stack[0]
-  if result_type != expected_type {
+  if !is_const_expr_type_compatible(result_type, expected_type) {
     raise TypeMismatch(
       "constant expression: expected \{expected_type}, got \{result_type}",
     )
+  }
+}
+
+///|
+/// Check if a result type is compatible with an expected type in constant expressions
+/// Handles reference type subtyping:
+/// - RefFuncTyped(t) <: RefNullFuncTyped(t) <: FuncRef
+/// - RefFuncTyped(t) <: FuncRef
+fn is_const_expr_type_compatible(
+  result : @types.ValueType,
+  expected : @types.ValueType,
+) -> Bool {
+  if result == expected {
+    return true
+  }
+  match (result, expected) {
+    // RefFuncTyped(t) is subtype of RefNullFuncTyped(t)
+    (RefFuncTyped(t1), RefNullFuncTyped(t2)) => t1 == t2
+    // RefFuncTyped(t) is subtype of FuncRef (nullable abstract)
+    (RefFuncTyped(_), FuncRef) => true
+    // RefNullFuncTyped(t) is subtype of FuncRef
+    (RefNullFuncTyped(_), FuncRef) => true
+    // RefFunc is subtype of FuncRef
+    (RefFunc, FuncRef) => true
+    // RefExtern is subtype of ExternRef
+    (RefExtern, ExternRef) => true
+    _ => false
   }
 }
 
@@ -468,8 +522,13 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     for j in 0..<i {
       available_globals.push(mod.globals[j].type_)
     }
-    // Validate init expression
-    validate_const_expr(available_globals, global.init, global.type_.value_type)
+    // Validate init expression (pass funcs to allow ref.func in global init)
+    validate_const_expr(
+      available_globals,
+      global.init,
+      global.type_.value_type,
+      funcs=ctx.funcs,
+    )
   }
 
   // Validate data segments reference valid memory and have valid offset expressions
@@ -1527,7 +1586,9 @@ fn validate_instr(
       if func_idx >= ctx.funcs.length() {
         raise InvalidFunctionIndex(func_idx)
       }
-      stack.push(@types.ValueType::FuncRef)
+      // ref.func produces (ref $t) where $t is the function's type index
+      let type_idx = ctx.funcs[func_idx]
+      stack.push(@types.ValueType::RefFuncTyped(type_idx))
     }
     RefAsNonNull => {
       // ref.as_non_null: pops nullable ref, pushes non-null ref
@@ -1546,6 +1607,16 @@ fn validate_instr(
       stack.pop_any() |> ignore
       // If not null, the non-null reference remains on stack
       stack.push(@types.ValueType::RefFunc)
+    }
+    BrOnNonNull(label_idx) => {
+      // br_on_non_null: pops a ref, branches with ref if non-null, otherwise continues
+      if label_idx >= ctx.labels.length() {
+        raise InvalidLabelIndex(label_idx)
+      }
+      // Pop the reference - in unreachable context this may be polymorphic
+      stack.pop_any() |> ignore
+      // If null, fall through with nothing on stack (ref is consumed)
+      // If non-null, branch to target with the ref
     }
 
     // Control flow

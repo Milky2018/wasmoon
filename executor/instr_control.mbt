@@ -126,6 +126,44 @@ fn ExecContext::exec_control(
         raise BranchWith(depth, values)
       }
     }
+    // Branch if null
+    BrOnNull(depth) => {
+      let ref_val = self.stack.pop()
+      match ref_val {
+        Null => {
+          // Reference is null, branch
+          let arity = self.get_branch_arity(depth)
+          let values = self.stack.pop_n(arity)
+          raise BranchWith(depth, values)
+        }
+        _ =>
+          // Reference is not null, push it back and continue
+          self.stack.push(ref_val)
+      }
+    }
+    // Branch if non-null
+    BrOnNonNull(depth) => {
+      let ref_val = self.stack.pop()
+      match ref_val {
+        Null =>
+          // Reference is null, continue without pushing anything
+          ()
+        _ => {
+          // Reference is not null, branch with the reference included
+          // The target block expects arity values, the ref is the last one
+          let arity = self.get_branch_arity(depth)
+          // Pop arity-1 values from stack (ref is already popped and will be added)
+          let stack_values = if arity > 1 {
+            self.stack.pop_n(arity - 1)
+          } else {
+            []
+          }
+          // Branch values = stack_values + ref
+          stack_values.push(ref_val)
+          raise BranchWith(depth, stack_values)
+        }
+      }
+    }
     // Table-driven branch
     BrTable(labels, default) => {
       let idx = self.stack.pop_i32()

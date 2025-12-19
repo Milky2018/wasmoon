@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run all .wast tests and report results for both JIT and interpreter modes."""
 
+import argparse
 import subprocess
 from pathlib import Path
 
@@ -109,8 +110,21 @@ def print_summary(results: dict) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run .wast tests for wasmoon")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run all .wast files including subdirectories (default: only spec/*.wast)",
+    )
+    args = parser.parse_args()
+
     test_dir = Path("spec")
-    wast_files = sorted(test_dir.glob("**/*.wast"))
+    if args.all:
+        # Recursive: include all subdirectories
+        wast_files = sorted(test_dir.glob("**/*.wast"))
+    else:
+        # Non-recursive: only direct children of spec/
+        wast_files = sorted(test_dir.glob("*.wast"))
 
     print(f"Found {len(wast_files)} .wast test files")
 

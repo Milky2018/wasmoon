@@ -35,7 +35,11 @@ pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
     F64 => Type::F64
     FuncRef => Type::FuncRef
     ExternRef => Type::ExternRef
-    _ => Type::I32 // Fallback
+    // Typed function references are represented as I64 (function index)
+    RefFuncTyped(_) | RefNullFuncTyped(_) => Type::I64
+    RefFunc => Type::I64
+    RefExtern => Type::I64
+    _ => Type::I32 // Fallback for other types
   }
 }
 
@@ -233,6 +237,7 @@ pub enum Opcode {
   // Function calls
   Call(Int) // Direct call (function index)
   CallIndirect(Int, Int) // Indirect call (type index, table index)
+  CallRef(Int) // Call through function reference (type index)
 
   // Raw pointer operations (for trampolines, no bounds checking)
   // These follow Cranelift's approach for host code generation

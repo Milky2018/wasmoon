@@ -2854,6 +2854,7 @@ fn Parser::parse_plain_instruction(
     "ref.func" => @types.Instruction::RefFunc(self.parse_func_idx())
     "ref.as_non_null" => @types.Instruction::RefAsNonNull
     "br_on_null" => @types.Instruction::BrOnNull(self.parse_label_idx())
+    "br_on_non_null" => @types.Instruction::BrOnNonNull(self.parse_label_idx())
 
     // Variable
     "local.get" => @types.Instruction::LocalGet(self.parse_local_idx())

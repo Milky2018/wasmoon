@@ -603,6 +603,10 @@ fn write_instruction_simple(
       buf.write_string("br_on_null ")
       buf.write_string(idx.to_string())
     }
+    BrOnNonNull(idx) => {
+      buf.write_string("br_on_non_null ")
+      buf.write_string(idx.to_string())
+    }
 
     // Constants
     I32Const(v) => {

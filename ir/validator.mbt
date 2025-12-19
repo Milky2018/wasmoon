@@ -336,7 +336,7 @@ fn validate_instruction(
       }
 
     // Calls can have any number of operands
-    Call(_) | CallIndirect(_) | CallPtr(_, _) => ()
+    Call(_) | CallIndirect(_) | CallRef(_) | CallPtr(_, _) => ()
 
     // Raw pointer operations (for trampolines)
     LoadPtr(_) =>

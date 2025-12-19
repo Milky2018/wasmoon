@@ -75,6 +75,45 @@ fn ExecContext::exec_call_indirect(
 }
 
 ///|
+/// Execute call_ref instruction: call function through typed reference
+fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise {
+  // Pop the function reference from the stack
+  let func_ref = self.stack.pop()
+
+  // The function reference should be a FuncRef value, or Null
+  let store_addr = match func_ref {
+    FuncRef(addr) => addr
+    Null => raise @runtime.RuntimeError::Unreachable // Null function reference traps
+    _ => raise @runtime.IndirectCallTypeMismatch
+  }
+
+  // Get the expected type
+  let expected_type = self.instance.types[type_idx]
+
+  // Get the actual function type and verify it matches
+  let actual_type = self.store.get_func_type(store_addr)
+  if expected_type != actual_type {
+    raise @runtime.IndirectCallTypeMismatch
+  }
+
+  // Pop arguments from stack in reverse order
+  let num_params = expected_type.params.length()
+  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = self.stack.pop()
+  }
+
+  // Get the function instance and execute
+  let func_inst = self.store.get_func_inst(store_addr)
+  self.call_func_inst_with_context(
+    store_addr,
+    func_inst,
+    args,
+    expected_type.results.length(),
+  )
+}
+
+///|
 /// Call a function instance with proper context switching for cross-module calls
 fn ExecContext::call_func_inst_with_context(
   self : ExecContext,
