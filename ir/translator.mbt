@@ -868,6 +868,19 @@ fn Translator::translate_instruction(
       let elem_idx = self.pop()
       self.builder.table_set(table_idx, elem_idx, value)
     }
+    TableSize(table_idx) => {
+      // Get current size of table
+      let result = self.builder.table_size(table_idx)
+      self.push(result)
+    }
+    TableGrow(table_idx) => {
+      // Grow table by delta elements
+      // Stack: [init_value, delta] -> [result]
+      let delta = self.pop()
+      let init_value = self.pop()
+      let result = self.builder.table_grow(table_idx, delta, init_value)
+      self.push(result)
+    }
     GlobalGet(idx) => {
       // Get global variable value
       let global_type = self.global_types[idx]

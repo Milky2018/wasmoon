@@ -191,6 +191,7 @@ pub(all) enum VCodeOpcode {
   Rbit(Bool)
   Nop
   TrapIfUgt(Int)
+  TrapIfUge(Int)
   FpuCmp(Bool)
   TrapIf(Cond, Int)
   TrapIfZero(Bool, Int)
@@ -218,6 +219,7 @@ pub(all) enum VCodeOpcode {
   MemoryCopy
   TableGet(Int)
   TableSet(Int)
+  TableGrow(Int)
   GlobalGet(Int)
   GlobalSet(Int)
   LoadPtr(MemType, Int)

@@ -174,6 +174,10 @@ pub(all) enum VCodeOpcode {
   // TrapIfUgt(trap_code): CMP rn, rm; B.LS skip; BRK #trap_code
   // Uses: [lhs, rhs], traps if lhs > rhs (unsigned)
   TrapIfUgt(Int)
+  // Trap if first operand is unsigned greater than or equal to second operand
+  // TrapIfUge(trap_code): CMP rn, rm; B.LO skip; BRK #trap_code
+  // Uses: [lhs, rhs], traps if lhs >= rhs (unsigned)
+  TrapIfUge(Int)
 
   // Floating-point compare (sets NZCV flags, no result value)
   // FpuCmp(is_f32): FCMP Sn, Sm or FCMP Dn, Dm
@@ -276,6 +280,9 @@ pub(all) enum VCodeOpcode {
   // TableSet(table_idx): store to indirect table at index
   // Uses: [elem_idx, value], Defs: []
   TableSet(Int)
+  // TableGrow(table_idx): grow table, returns previous size or -1
+  // Uses: [delta, init_value], Defs: [result]
+  TableGrow(Int)
   // Global operations
   // GlobalGet(global_idx): load global variable value
   // Uses: [], Defs: [result]
@@ -376,6 +383,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Rbit(is_64) => if is_64 { "rbit" } else { "rbit32" }
     Nop => "nop"
     TrapIfUgt(trap_code) => "trap_if_ugt #\{trap_code}"
+    TrapIfUge(trap_code) => "trap_if_uge #\{trap_code}"
     FpuCmp(is_f32) => if is_f32 { "fcmp.s" } else { "fcmp.d" }
     TrapIf(cond, trap_code) => "trap_if.\{cond} #\{trap_code}"
     TrapIfZero(is_64, trap_code) =>
@@ -431,6 +439,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     MemoryCopy => "memory_copy"
     TableGet(table_idx) => "table_get \{table_idx}"
     TableSet(table_idx) => "table_set \{table_idx}"
+    TableGrow(table_idx) => "table_grow \{table_idx}"
     GlobalGet(global_idx) => "global_get \{global_idx}"
     GlobalSet(global_idx) => "global_set \{global_idx}"
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
@@ -793,6 +802,8 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
     CallIndirect(_, _) | CallPtr(_, _) => Regular
     // Memory operations that call C runtime functions
     MemoryGrow(_) | MemorySize | MemoryFill | MemoryCopy => Regular
+    // Table operations that call C runtime functions
+    TableGrow(_) => Regular
     // Everything else is not a call
     _ => None
   }

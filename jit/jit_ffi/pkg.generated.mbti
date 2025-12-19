@@ -36,7 +36,7 @@ pub fn c_jit_ctx_set_indirect(Int64, Int, Int, Int) -> Unit
 
 pub fn c_jit_ctx_set_memory(Int64, Int64, Int64) -> Unit
 
-pub fn c_jit_ctx_set_table_pointers(Int64, FixedArray[Int64], Int) -> Unit
+pub fn c_jit_ctx_set_table_pointers(Int64, FixedArray[Int64], FixedArray[Int], FixedArray[Int], Int) -> Unit
 
 pub fn c_jit_ctx_use_shared_table(Int64, Int64, Int) -> Unit
 
@@ -97,6 +97,8 @@ pub fn c_jit_get_spectest_print_i32_ptr() -> Int64
 pub fn c_jit_get_spectest_print_i64_ptr() -> Int64
 
 pub fn c_jit_get_spectest_print_ptr() -> Int64
+
+pub fn c_jit_get_table_grow_ptr() -> Int64
 
 pub fn c_jit_get_trap_code() -> Int
 

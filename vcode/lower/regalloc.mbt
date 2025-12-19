@@ -1576,6 +1576,8 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     CallIndirect(_, _) | CallPtr(_, _) => true
     // Memory operations have side effects (modify memory or global state)
     MemoryGrow(_) | MemoryFill | MemoryCopy => true
+    // Table operations have side effects (modify table state)
+    TableGrow(_) => true
     // Everything else is pure computation
     _ => false
   }

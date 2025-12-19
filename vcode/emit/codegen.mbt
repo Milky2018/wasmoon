@@ -883,6 +883,20 @@ fn MachineCode::emit_instruction(
       // BRK #trap_code
       self.emit_brk(trap_code)
     }
+    TrapIfUge(trap_code) => {
+      // Trap if lhs >= rhs (unsigned comparison)
+      // Uses: [lhs, rhs]
+      // Emits: CMP lhs, rhs; B.LO skip; BRK #trap_code
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      // CMP lhs, rhs
+      self.emit_cmp_reg(lhs, rhs)
+      // B.LO +8 (skip BRK if lhs < rhs)
+      // LO condition code = 3
+      self.emit_b_cond_offset(3, 8)
+      // BRK #trap_code
+      self.emit_brk(trap_code)
+    }
     FpuCmp(is_f32) => {
       // Floating-point compare (sets NZCV flags)
       // Uses: [lhs, rhs], Defs: []
@@ -1611,6 +1625,34 @@ fn MachineCode::emit_instruction(
       self.emit_add_shifted(16, 17, elem_idx_reg, @instr.ShiftType::Lsl, 4)
       // STR value, [X16]
       self.emit_str_imm(value_reg, 16, 0)
+    }
+    TableGrow(table_idx) => {
+      // Grow table by delta elements (Cranelift-style runtime call)
+      // Uses: [delta, init_value], Defs: [result]
+      // Calls: wasmoon_jit_table_grow(table_idx: i32, delta: i64, init_value: i64) -> i32
+      let delta_reg = reg_num(inst.uses[0])
+      let init_value_reg = reg_num(inst.uses[1])
+      let result_reg = wreg_num(inst.defs[0])
+
+      // Set up arguments:
+      // X0 = table_idx (immediate)
+      // X1 = delta (from uses[0])
+      // X2 = init_value (from uses[1])
+      self.emit_movz(0, table_idx & 0xFFFF, 0) // MOV W0, #table_idx
+      self.emit_mov_reg(1, delta_reg) // MOV X1, delta
+      self.emit_mov_reg(2, init_value_reg) // MOV X2, init_value
+
+      // Load table_grow function pointer into X16
+      let grow_ptr = @jit_ffi.c_jit_get_table_grow_ptr()
+      self.emit_load_imm64(16, grow_ptr)
+
+      // Call the function
+      self.emit_blr(16)
+
+      // Move result from X0 to destination
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0) // MOV result, X0
+      }
     }
     GlobalGet(global_idx) => {
       // Load global variable value

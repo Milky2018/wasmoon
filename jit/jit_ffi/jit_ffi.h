@@ -37,6 +37,8 @@ typedef struct {
     void ***tables;           // +48: Array of table pointers (for table_idx != 0)
     int table_count;          // +56: Number of tables
     int func_count;           // +60: Number of entries in func_table
+    size_t *table_sizes;      // +64: Array of table current sizes for all tables
+    size_t *table_max_sizes;  // +72: Array of table max sizes (-1 = unlimited)
 
     // Additional fields (not accessed by JIT code directly)
     int owns_indirect_table;  // Whether this context owns table0_base (should free it)

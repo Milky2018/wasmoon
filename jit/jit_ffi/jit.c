@@ -149,6 +149,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         // Map BRK immediate to trap code
         switch (brk_imm) {
             case 0: trap_code = 3; break;   // unreachable
+            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
             case 2: trap_code = 4; break;   // indirect call type mismatch
             case 3: trap_code = 5; break;   // invalid conversion to integer
             case 4: trap_code = 6; break;   // integer divide by zero
@@ -164,6 +165,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 
         switch (brk_imm) {
             case 0: trap_code = 3; break;   // unreachable
+            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
             case 2: trap_code = 4; break;   // indirect call type mismatch
             case 3: trap_code = 5; break;   // invalid conversion to integer
             case 4: trap_code = 6; break;   // integer divide by zero
@@ -270,6 +272,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
     ctx->tables = NULL;           // Array of table pointers (for table_idx != 0)
     ctx->table_count = 0;
     ctx->func_count = func_count;
+    ctx->table_sizes = NULL;      // Array of table sizes
+    ctx->table_max_sizes = NULL;  // Array of table max sizes
 
     // Additional fields (not accessed by JIT code directly)
     ctx->owns_indirect_table = 0; // Default: does not own table0_base
@@ -371,6 +375,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
     if (ctx) {
         if (ctx->func_table) free(ctx->func_table);
         if (ctx->tables) free(ctx->tables);
+        if (ctx->table_sizes) free(ctx->table_sizes);
+        if (ctx->table_max_sizes) free(ctx->table_max_sizes);
         // Only free table0_base if we own it (allocated via alloc_indirect_table)
         // Borrowed tables (from set_table_pointers) are managed by JITTable's GC
         if (ctx->table0_base && ctx->owns_indirect_table) free(ctx->table0_base);
@@ -458,6 +464,74 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
     }
 }
 
+// Grow a table by delta elements, initializing new elements with init_value
+// Returns previous size on success, or -1 on failure
+// Following Cranelift's table_grow_func_ref pattern
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow(
+    int32_t table_idx,
+    int64_t delta,
+    int64_t init_value
+) {
+    jit_context_t *ctx = g_jit_context;
+    if (!ctx || table_idx < 0 || delta < 0) return -1;
+    if (table_idx >= ctx->table_count) return -1;
+    if (!ctx->tables || !ctx->table_sizes) return -1;
+
+    size_t old_size = ctx->table_sizes[table_idx];
+    size_t new_size = old_size + (size_t)delta;
+
+    // Check for overflow
+    if (new_size < old_size) return -1;
+
+    // Check against max size limit (following Cranelift pattern)
+    if (ctx->table_max_sizes) {
+        size_t max_size = ctx->table_max_sizes[table_idx];
+        if (new_size > max_size) return -1;
+    }
+
+    // Get the old table pointer
+    void **old_table = ctx->tables[table_idx];
+
+    // Allocate new table (2 slots per entry: func_ptr and type_idx)
+    void **new_table = (void **)calloc(new_size * 2, sizeof(void *));
+    if (!new_table) return -1;
+
+    // Copy existing elements
+    if (old_table && old_size > 0) {
+        memcpy(new_table, old_table, old_size * 2 * sizeof(void *));
+    }
+
+    // Initialize new elements with init_value
+    // For funcref: init_value is the function pointer (or -1 for null)
+    // type_idx is set to -1 (unknown) for grown elements
+    for (size_t i = old_size; i < new_size; i++) {
+        new_table[i * 2] = (void *)init_value;      // func_ptr
+        new_table[i * 2 + 1] = (void*)(intptr_t)(-1); // type_idx (unknown)
+    }
+
+    // Update the tables array
+    ctx->tables[table_idx] = new_table;
+    ctx->table_sizes[table_idx] = new_size;
+
+    // Update table0 fast path if this is table 0
+    if (table_idx == 0) {
+        ctx->table0_base = new_table;
+        ctx->table0_elements = new_size;
+    }
+
+    // Free old table
+    if (old_table) {
+        free(old_table);
+    }
+
+    return (int32_t)old_size;
+}
+
+// Get table_grow function pointer for JIT
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr(void) {
+    return (int64_t)wasmoon_jit_table_grow;
+}
+
 // Configure a JIT context to use a shared indirect table instead of allocating its own
 // This allows multiple modules to share the same table
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
@@ -477,11 +551,15 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_
 
 // Configure JIT context with multiple indirect tables (for multi-table support)
 // table_ptrs: Array of Int64 (table pointers from Store.jit_tables)
+// table_sizes: Array of Int (table sizes for bounds checking)
+// table_max_sizes: Array of Int (max sizes, -1 = unlimited)
 // table_count: Number of tables
 // This enables proper multi-table support where each call_indirect can specify which table to use
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     int64_t ctx_ptr,
     int64_t* table_ptrs,
+    int32_t* table_sizes,
+    int32_t* table_max_sizes,
     int table_count
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
@@ -491,19 +569,55 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     if (ctx->tables) {
         free(ctx->tables);
         ctx->tables = NULL;
-        ctx->table_count = 0;
     }
+    // Free existing table_sizes array if any
+    if (ctx->table_sizes) {
+        free(ctx->table_sizes);
+        ctx->table_sizes = NULL;
+    }
+    // Free existing table_max_sizes array if any
+    if (ctx->table_max_sizes) {
+        free(ctx->table_max_sizes);
+        ctx->table_max_sizes = NULL;
+    }
+    ctx->table_count = 0;
 
     // Allocate array to hold table pointers
     ctx->tables = (void ***)calloc(table_count, sizeof(void **));
     if (!ctx->tables) {
-        ctx->table_count = 0;
         return;
     }
 
-    // Copy table pointers (note: tables themselves are owned by Store, we just hold pointers)
+    // Allocate array to hold table sizes
+    ctx->table_sizes = (size_t *)calloc(table_count, sizeof(size_t));
+    if (!ctx->table_sizes) {
+        free(ctx->tables);
+        ctx->tables = NULL;
+        return;
+    }
+
+    // Allocate array to hold table max sizes
+    ctx->table_max_sizes = (size_t *)calloc(table_count, sizeof(size_t));
+    if (!ctx->table_max_sizes) {
+        free(ctx->tables);
+        free(ctx->table_sizes);
+        ctx->tables = NULL;
+        ctx->table_sizes = NULL;
+        return;
+    }
+
+    // Copy table pointers, sizes, and max sizes
     for (int i = 0; i < table_count; i++) {
         ctx->tables[i] = (void **)table_ptrs[i];
+        if (table_sizes) {
+            ctx->table_sizes[i] = (size_t)table_sizes[i];
+        }
+        if (table_max_sizes) {
+            // -1 means unlimited, store as SIZE_MAX
+            ctx->table_max_sizes[i] = (table_max_sizes[i] < 0) ? SIZE_MAX : (size_t)table_max_sizes[i];
+        } else {
+            ctx->table_max_sizes[i] = SIZE_MAX;  // Default: unlimited
+        }
     }
     ctx->table_count = table_count;
 
@@ -512,6 +626,10 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     if (table_count > 0 && table_ptrs[0] != 0) {
         ctx->table0_base = (void **)table_ptrs[0];
         ctx->owns_indirect_table = 0;  // Borrowed from JITTable, not owned
+        // Set table0_elements for bounds checking
+        if (table_sizes) {
+            ctx->table0_elements = table_sizes[0];
+        }
     }
 }
 
