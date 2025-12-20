@@ -60,12 +60,12 @@ pub fn VCodeInst::add_def_fixed(
 ///|
 fn VCodeInst::to_string(self : VCodeInst) -> String {
   let mut result = ""
-  // Print definitions (skip clobbers for CallIndirect)
-  let defs_to_print = if self.opcode is CallIndirect(_, num_results) {
-    // Only print result registers, not clobbers
-    self.defs.iter().take(num_results).collect()
-  } else {
-    self.defs
+  // Print definitions (skip clobbers for CallIndirect and ReturnCallIndirect)
+  let defs_to_print = match self.opcode {
+    CallIndirect(_, num_results) | ReturnCallIndirect(_, num_results) =>
+      // Only print result registers, not clobbers
+      self.defs.iter().take(num_results).collect()
+    _ => self.defs
   }
   if defs_to_print.length() > 0 {
     for i, def in defs_to_print {
@@ -78,9 +78,10 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
   }
   // Print opcode
   result = result + self.opcode.to_string()
-  // Print uses (simplified for CallIndirect)
-  if self.opcode is CallIndirect(_, _) {
-    // For call_indirect, only print the function pointer (first use)
+  // Print uses (simplified for CallIndirect and ReturnCallIndirect)
+  if self.opcode is CallIndirect(_, _) ||
+    self.opcode is ReturnCallIndirect(_, _) {
+    // For call_indirect/return_call_indirect, only print the function pointer (first use)
     if self.uses.length() > 0 {
       result = result + " " + self.uses[0].to_string()
     }
@@ -244,6 +245,11 @@ pub(all) enum VCodeOpcode {
   // Defs: [result0, result1, ...] (multiple results supported)
   // Parameters: num_args, num_results
   CallIndirect(Int, Int)
+  // ReturnCallIndirect: tail call through a function pointer
+  // Uses: [func_ptr, arg0, arg1, ...]
+  // Parameters: num_args, num_results
+  // This is a terminator - it does not return to the caller
+  ReturnCallIndirect(Int, Int)
   // TypeCheckIndirect: check if actual_type == expected_type, trap if not
   // Uses: [actual_type_vreg], Parameters: expected_type (immediate)
   // Emits: CMP actual, expected; B.EQ +8; BRK #2 (type mismatch trap)
@@ -423,6 +429,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Mneg => "mneg"
     CallIndirect(num_args, num_results) =>
       "call_indirect(\{num_args}) -> \{num_results} results"
+    ReturnCallIndirect(num_args, num_results) =>
+      "return_call_indirect(\{num_args}) -> \{num_results} results"
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
@@ -800,6 +808,8 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
   match self {
     // Direct and indirect function calls
     CallIndirect(_, _) | CallPtr(_, _) => Regular
+    // Tail calls that don't return to caller
+    ReturnCallIndirect(_, _) => TailCall
     // Memory operations that call C runtime functions
     MemoryGrow(_) | MemorySize | MemoryFill | MemoryCopy => Regular
     // Table operations that call C runtime functions

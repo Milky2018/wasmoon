@@ -426,19 +426,13 @@ fn ExecContext::exec_instr(
     CallIndirect(type_idx, table_idx) =>
       self.exec_call_indirect(type_idx, table_idx)
     CallRef(type_idx) => self.exec_call_ref(type_idx)
-    // Tail call operations - execute call then return
-    ReturnCall(func_idx) => {
-      self.exec_call(func_idx)
-      self.exec_control(Return)
-    }
-    ReturnCallIndirect(type_idx, table_idx) => {
-      self.exec_call_indirect(type_idx, table_idx)
-      self.exec_control(Return)
-    }
-    ReturnCallRef(type_idx) => {
-      self.exec_call_ref(type_idx)
-      self.exec_control(Return)
-    }
+
+    // Tail call operations - replace current frame instead of pushing new one
+    // This enables true tail call optimization (constant call depth)
+    ReturnCall(func_idx) => self.exec_tail_call(func_idx)
+    ReturnCallIndirect(type_idx, table_idx) =>
+      self.exec_tail_call_indirect(type_idx, table_idx)
+    ReturnCallRef(type_idx) => self.exec_tail_call_ref(type_idx)
   }
 }
 

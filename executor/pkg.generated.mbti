@@ -22,8 +22,20 @@ pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runti
 // Errors
 
 // Types and methods
+pub enum ControlFlow {
+  Continue
+  Return(Array[@types.Value])
+  Branch(Int, Array[@types.Value])
+  TailCall(Int, @runtime.FuncInst, Array[@types.Value], Int)
+  Trap(@runtime.RuntimeError)
+}
+pub impl Show for ControlFlow
+
 type ExecContext
 pub fn ExecContext::call_func(Self, Int, Array[@types.Value]) -> Array[@types.Value] raise
+pub fn ExecContext::exec_tail_call(Self, Int) -> Unit raise
+pub fn ExecContext::exec_tail_call_indirect(Self, Int, Int) -> Unit raise
+pub fn ExecContext::exec_tail_call_ref(Self, Int) -> Unit raise
 pub impl Show for ExecContext
 
 // Type aliases

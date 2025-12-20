@@ -1908,12 +1908,11 @@ fn Translator::translate_return_call(self : Translator, func_idx : Int) -> Unit 
       args.push(self.pop())
     }
     args.rev_in_place()
-    // Get result types
-    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
-    // Emit call with multi-value support
-    let results = self.builder.call_multi(func_idx, result_types, args)
-    // Return the results immediately (tail call)
-    self.builder.return_(results)
+    // Emit return_call instruction (tail call - does not return to caller)
+    // Following Cranelift: emit a single ReturnCall IR instruction, not call + return
+    self.builder.return_call_multi(func_idx, args)
+    // Mark as unreachable since this is a terminator (does not return to this function)
+    self.is_unreachable = true
   }
 }
 
@@ -1938,17 +1937,13 @@ fn Translator::translate_return_call_indirect(
     }
     args.rev_in_place()
 
-    // Get result types
-    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
-
-    // Emit indirect call with multi-value support
-    // Use type_hash (not type_idx) for structural type checking
-    let results = self.builder.call_indirect_multi(
-      type_hash, table_idx, result_types, elem_idx, args,
+    // Emit return_call_indirect instruction (tail call - does not return to caller)
+    // Following Cranelift: emit a single ReturnCallIndirect IR instruction, not call + return
+    self.builder.return_call_indirect_multi(
+      type_hash, table_idx, elem_idx, args,
     )
-
-    // Return the results immediately (tail call)
-    self.builder.return_(results)
+    // Mark as unreachable since this is a terminator (does not return to this function)
+    self.is_unreachable = true
   }
 }
 
@@ -1988,15 +1983,10 @@ fn Translator::translate_return_call_ref(
     }
     args.rev_in_place()
 
-    // Get result types
-    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
-
-    // Emit call_ref instruction
-    let results = self.builder.call_ref_multi(
-      type_idx, result_types, func_ref, args,
-    )
-
-    // Return the results immediately (tail call)
-    self.builder.return_(results)
+    // Emit return_call_ref instruction (tail call - does not return to caller)
+    // Following Cranelift: emit a single ReturnCallRef IR instruction, not call + return
+    self.builder.return_call_ref_multi(type_idx, func_ref, args)
+    // Mark as unreachable since this is a terminator (does not return to this function)
+    self.is_unreachable = true
   }
 }

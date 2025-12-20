@@ -408,13 +408,13 @@ fn lower_inst(
     @ir.Opcode::CallIndirect(type_idx, table_idx) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx)
     @ir.Opcode::CallRef(type_idx) => lower_call_ref(ctx, inst, block, type_idx)
-    // Tail calls - lowered the same way as regular calls
-    // The IR translator already emitted a Return after these
-    @ir.Opcode::ReturnCall(func_idx) => lower_call(ctx, inst, block, func_idx)
+    // Tail calls - use dedicated lowering functions with Cranelift-style parameter handling
+    @ir.Opcode::ReturnCall(func_idx) =>
+      lower_return_call(ctx, inst, block, func_idx)
     @ir.Opcode::ReturnCallIndirect(type_idx, table_idx) =>
-      lower_call_indirect(ctx, inst, block, type_idx, table_idx)
+      lower_return_call_indirect(ctx, inst, block, type_idx, table_idx)
     @ir.Opcode::ReturnCallRef(type_idx) =>
-      lower_call_ref(ctx, inst, block, type_idx)
+      lower_return_call_ref(ctx, inst, block, type_idx)
 
     // Raw pointer operations (for trampolines)
     @ir.Opcode::LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
@@ -3040,4 +3040,401 @@ fn lower_call_ptr(
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
   // No AdjustSP needed - outgoing args space is pre-allocated in prologue
+}
+
+// ============ Tail Call Lowering (Cranelift-style) ============
+
+///|
+/// Lower direct return_call (tail call optimization)
+/// Following Cranelift: parameters are handled in lowering phase
+/// - Overflow args: StoreToStack instructions
+/// - Register args: Fixed register constraints via add_use_fixed
+/// - ReturnCallIndirect instruction only contains func_ptr use
+fn lower_return_call(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  func_idx : Int,
+) -> Unit {
+  // Load func_table and get function pointer
+  let func_table = emit_load_func_table(ctx, block)
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let offset = func_idx * 8
+  let load_inst = @instr.VCodeInst::new(Load(I64, offset))
+  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_inst.add_use(Virtual(func_table))
+  block.add_inst(load_inst)
+
+  // Get vmctx (X19 is always vmctx)
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+
+  // Classify user arguments by type
+  let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  for operand in inst.operands {
+    let vreg = ctx.get_vreg_for_use(operand, block)
+    match vreg.class {
+      @abi.Int => int_args.push((vreg, @abi.Int))
+      @abi.Float32 => float_args.push((vreg, @abi.Float32))
+      @abi.Float64 => float_args.push((vreg, @abi.Float64))
+    }
+  }
+
+  // Calculate overflow args count (user args, not including vmctx)
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6 (X2-X7)
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
+  let int_overflow = if int_args.length() > max_int_reg_args {
+    int_args.length() - max_int_reg_args
+  } else {
+    0
+  }
+
+  // Generate StoreToStack instructions for overflow arguments
+  for i in max_int_reg_args..<int_args.length() {
+    let (vreg, _) = int_args[i]
+    let stack_idx = i - max_int_reg_args
+    let offset = stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+  for i in max_float_reg_args..<float_args.length() {
+    let (vreg, _) = float_args[i]
+    let stack_idx = i - max_float_reg_args
+    let offset = int_overflow * 8 + stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+
+  // Create ReturnCallIndirect instruction with fixed register constraints
+  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
+
+  // func_ptr constrained to X17
+  call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
+    index: 17,
+    class: @abi.Int,
+  })
+
+  // vmctx constrained to X0 and X1 (callee_vmctx = caller_vmctx = X19)
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
+    index: 0,
+    class: @abi.Int,
+  })
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
+    index: 1,
+    class: @abi.Int,
+  })
+
+  // Register int args: X2-X7
+  let int_reg_count = if int_args.length() < max_int_reg_args {
+    int_args.length()
+  } else {
+    max_int_reg_args
+  }
+  for i in 0..<int_reg_count {
+    let (vreg, _) = int_args[i]
+    let preg_idx = 2 + i // X2, X3, X4, X5, X6, X7
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: preg_idx,
+      class: @abi.Int,
+    })
+  }
+
+  // Register float args: V0-V7
+  let float_reg_count = if float_args.length() < max_float_reg_args {
+    float_args.length()
+  } else {
+    max_float_reg_args
+  }
+  for i in 0..<float_reg_count {
+    let (vreg, class) = float_args[i]
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+  }
+
+  // No result defs for tail call (doesn't return to this function)
+  // Add clobbers for caller-saved registers
+  add_call_clobbers(call_inst)
+  block.add_inst(call_inst)
+}
+
+///|
+/// Lower return_call_indirect (indirect tail call)
+/// Following Cranelift: parameters handled in lowering via StoreToStack and add_use_fixed
+fn lower_return_call_indirect(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  table_idx : Int,
+) -> Unit {
+  // Get element index and load function pointer (similar to lower_call_indirect)
+  guard inst.operands.length() > 0 else { return }
+  let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Load table pointer
+  let table_ptr_vreg : @abi.VReg = if table_idx == 0 {
+    emit_load_table0_base(ctx, block)
+  } else {
+    let indirect_tables_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_array_inst = @instr.VCodeInst::new(
+      Load(I64, @abi.VMCTX_TABLES_OFFSET),
+    )
+    load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
+    load_array_inst.add_use(Physical({ index: 19, class: Int }))
+    block.add_inst(load_array_inst)
+    let table_offset = table_idx * 8
+    let ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_table_inst = @instr.VCodeInst::new(Load(I64, table_offset))
+    load_table_inst.add_def({ reg: Virtual(ptr_vreg) })
+    load_table_inst.add_use(Virtual(indirect_tables_vreg))
+    block.add_inst(load_table_inst)
+    ptr_vreg
+  }
+
+  // Calculate offset and load function pointer
+  let offset_vreg = ctx.vcode_func.new_vreg(Int)
+  let const_16_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_16 = @instr.VCodeInst::new(LoadConst(16L))
+  load_16.add_def({ reg: Virtual(const_16_vreg) })
+  block.add_inst(load_16)
+  let mul_inst = @instr.VCodeInst::new(Mul(true))
+  mul_inst.add_def({ reg: Virtual(offset_vreg) })
+  mul_inst.add_use(Virtual(elem_idx_vreg))
+  mul_inst.add_use(Virtual(const_16_vreg))
+  block.add_inst(mul_inst)
+  let addr_vreg = ctx.vcode_func.new_vreg(Int)
+  let add_inst = @instr.VCodeInst::new(Add(true))
+  add_inst.add_def({ reg: Virtual(addr_vreg) })
+  add_inst.add_use(Virtual(table_ptr_vreg))
+  add_inst.add_use(Virtual(offset_vreg))
+  block.add_inst(add_inst)
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_func_inst = @instr.VCodeInst::new(Load(I64, 0))
+  load_func_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_func_inst.add_use(Virtual(addr_vreg))
+  block.add_inst(load_func_inst)
+  let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_type_inst = @instr.VCodeInst::new(Load(I64, 8))
+  load_type_inst.add_def({ reg: Virtual(actual_type_vreg) })
+  load_type_inst.add_use(Virtual(addr_vreg))
+  block.add_inst(load_type_inst)
+  let type_check_inst = @instr.VCodeInst::new(TypeCheckIndirect(type_idx))
+  type_check_inst.add_use(Virtual(actual_type_vreg))
+  block.add_inst(type_check_inst)
+
+  // Get vmctx
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+
+  // Classify user arguments (skip first operand which is elem_idx)
+  let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  for i in 1..<inst.operands.length() {
+    let vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+    match vreg.class {
+      @abi.Int => int_args.push((vreg, @abi.Int))
+      @abi.Float32 => float_args.push((vreg, @abi.Float32))
+      @abi.Float64 => float_args.push((vreg, @abi.Float64))
+    }
+  }
+
+  // Calculate overflow
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
+  let int_overflow = if int_args.length() > max_int_reg_args {
+    int_args.length() - max_int_reg_args
+  } else {
+    0
+  }
+
+  // Generate StoreToStack for overflow arguments
+  for i in max_int_reg_args..<int_args.length() {
+    let (vreg, _) = int_args[i]
+    let stack_idx = i - max_int_reg_args
+    let offset = stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+  for i in max_float_reg_args..<float_args.length() {
+    let (vreg, _) = float_args[i]
+    let stack_idx = i - max_float_reg_args
+    let offset = int_overflow * 8 + stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+
+  // Create ReturnCallIndirect with fixed constraints
+  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
+
+  // func_ptr -> X17
+  call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
+    index: 17,
+    class: @abi.Int,
+  })
+
+  // vmctx -> X0, X1
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
+    index: 0,
+    class: @abi.Int,
+  })
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
+    index: 1,
+    class: @abi.Int,
+  })
+
+  // Register int args: X2-X7
+  let int_reg_count = if int_args.length() < max_int_reg_args {
+    int_args.length()
+  } else {
+    max_int_reg_args
+  }
+  for i in 0..<int_reg_count {
+    let (vreg, _) = int_args[i]
+    let preg_idx = 2 + i
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: preg_idx,
+      class: @abi.Int,
+    })
+  }
+
+  // Register float args: V0-V7
+  let float_reg_count = if float_args.length() < max_float_reg_args {
+    float_args.length()
+  } else {
+    max_float_reg_args
+  }
+  for i in 0..<float_reg_count {
+    let (vreg, class) = float_args[i]
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+  }
+  add_call_clobbers(call_inst)
+  block.add_inst(call_inst)
+}
+
+///|
+/// Lower return_call_ref (tail call through function reference)
+/// Following Cranelift: parameters handled in lowering
+fn lower_return_call_ref(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  _type_idx : Int,
+) -> Unit {
+  guard inst.operands.length() > 0 else { return }
+  let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Load func_table and calculate function pointer
+  let func_table = emit_load_func_table(ctx, block)
+  let const_8_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_8 = @instr.VCodeInst::new(LoadConst(8L))
+  load_8.add_def({ reg: Virtual(const_8_vreg) })
+  block.add_inst(load_8)
+  let offset_vreg = ctx.vcode_func.new_vreg(Int)
+  let mul_inst = @instr.VCodeInst::new(Mul(true))
+  mul_inst.add_def({ reg: Virtual(offset_vreg) })
+  mul_inst.add_use(Virtual(func_ref_vreg))
+  mul_inst.add_use(Virtual(const_8_vreg))
+  block.add_inst(mul_inst)
+  let addr_vreg = ctx.vcode_func.new_vreg(Int)
+  let add_inst = @instr.VCodeInst::new(Add(true))
+  add_inst.add_def({ reg: Virtual(addr_vreg) })
+  add_inst.add_use(Virtual(func_table))
+  add_inst.add_use(Virtual(offset_vreg))
+  block.add_inst(add_inst)
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_inst = @instr.VCodeInst::new(Load(I64, 0))
+  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_inst.add_use(Virtual(addr_vreg))
+  block.add_inst(load_inst)
+
+  // Get vmctx
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+
+  // Classify user arguments (skip first operand which is func_ref)
+  let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  for i in 1..<inst.operands.length() {
+    let vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+    match vreg.class {
+      @abi.Int => int_args.push((vreg, @abi.Int))
+      @abi.Float32 => float_args.push((vreg, @abi.Float32))
+      @abi.Float64 => float_args.push((vreg, @abi.Float64))
+    }
+  }
+
+  // Calculate overflow
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
+  let int_overflow = if int_args.length() > max_int_reg_args {
+    int_args.length() - max_int_reg_args
+  } else {
+    0
+  }
+
+  // Generate StoreToStack for overflow arguments
+  for i in max_int_reg_args..<int_args.length() {
+    let (vreg, _) = int_args[i]
+    let stack_idx = i - max_int_reg_args
+    let offset = stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+  for i in max_float_reg_args..<float_args.length() {
+    let (vreg, _) = float_args[i]
+    let stack_idx = i - max_float_reg_args
+    let offset = int_overflow * 8 + stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+
+  // Create ReturnCallIndirect with fixed constraints
+  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
+
+  // func_ptr -> X17
+  call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
+    index: 17,
+    class: @abi.Int,
+  })
+
+  // vmctx -> X0, X1
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
+    index: 0,
+    class: @abi.Int,
+  })
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
+    index: 1,
+    class: @abi.Int,
+  })
+
+  // Register int args: X2-X7
+  let int_reg_count = if int_args.length() < max_int_reg_args {
+    int_args.length()
+  } else {
+    max_int_reg_args
+  }
+  for i in 0..<int_reg_count {
+    let (vreg, _) = int_args[i]
+    let preg_idx = 2 + i
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: preg_idx,
+      class: @abi.Int,
+    })
+  }
+
+  // Register float args: V0-V7
+  let float_reg_count = if float_args.length() < max_float_reg_args {
+    float_args.length()
+  } else {
+    max_float_reg_args
+  }
+  for i in 0..<float_reg_count {
+    let (vreg, class) = float_args[i]
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+  }
+  add_call_clobbers(call_inst)
+  block.add_inst(call_inst)
 }

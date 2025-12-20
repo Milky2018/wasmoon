@@ -186,7 +186,7 @@ fn ExecContext::exec_control(
       self.stack.push(if cond != 0 { val1 } else { val2 })
     }
     Nop => ()
-    Return => raise Return
+    Return => raise ControlSignal::Return
     _ => raise @runtime.RuntimeError::Unreachable
   }
 }

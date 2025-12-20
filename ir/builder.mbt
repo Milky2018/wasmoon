@@ -815,6 +815,50 @@ pub fn IRBuilder::call_multi(
 }
 
 ///|
+/// Tail call with multiple return values
+/// Emits a return_call instruction (does not return to caller)
+pub fn IRBuilder::return_call_multi(
+  self : IRBuilder,
+  func_idx : Int,
+  args : Array[Value],
+) -> Unit {
+  self.emit_void_inst(Opcode::ReturnCall(func_idx), args)
+}
+
+///|
+/// Tail call indirect with multiple return values
+/// Emits a return_call_indirect instruction (does not return to caller)
+pub fn IRBuilder::return_call_indirect_multi(
+  self : IRBuilder,
+  type_idx : Int,
+  table_idx : Int,
+  callee : Value,
+  args : Array[Value],
+) -> Unit {
+  let all_args : Array[Value] = [callee]
+  for arg in args {
+    all_args.push(arg)
+  }
+  self.emit_void_inst(Opcode::ReturnCallIndirect(type_idx, table_idx), all_args)
+}
+
+///|
+/// Tail call through function reference
+/// Emits a return_call_ref instruction (does not return to caller)
+pub fn IRBuilder::return_call_ref_multi(
+  self : IRBuilder,
+  type_idx : Int,
+  func_ref : Value,
+  args : Array[Value],
+) -> Unit {
+  let all_args : Array[Value] = [func_ref]
+  for arg in args {
+    all_args.push(arg)
+  }
+  self.emit_void_inst(Opcode::ReturnCallRef(type_idx), all_args)
+}
+
+///|
 /// Indirect function call (single return value)
 pub fn IRBuilder::call_indirect(
   self : IRBuilder,
