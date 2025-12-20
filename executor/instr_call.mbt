@@ -148,6 +148,7 @@ fn ExecContext::call_func_inst_with_context(
 
 ///|
 /// Call a WASM function with a specific module instance context
+/// Uses a loop to handle tail calls without growing the native stack (wasmtime style)
 fn ExecContext::call_wasm_func_with_instance(
   self : ExecContext,
   target_instance : @runtime.ModuleInstance,
@@ -155,42 +156,88 @@ fn ExecContext::call_wasm_func_with_instance(
   args : Array[@types.Value],
   num_results : Int,
 ) -> Unit raise {
-  // Create locals array: params + local variables
-  let locals : Array[@types.Value] = []
-
-  // Add parameters first
-  for arg in args {
-    locals.push(arg)
-  }
-
-  // Add local variables (initialized to default values)
-  for local_type in func.locals {
-    locals.push(
-      match local_type {
-        I32 => I32(0)
-        I64 => I64(0L)
-        F32 => F32(0.0)
-        F64 => F64(0.0)
-        FuncRef => Null
-        ExternRef => Null
-        _ => Null
-      },
-    )
-  }
-
-  // Save current instance and switch to target instance
+  // Save the current instance for restoration
   let saved_instance = self.instance
-  self.instance = target_instance
 
-  // Create and push frame
-  let frame = @runtime.Frame::new(-1, locals, num_results)
-  self.push_frame(frame)
+  // Tail call loop - wasmtime style
+  // Instead of recursively calling the target, we loop here
+  let mut current_instance = target_instance
+  let mut current_func = func
+  let mut current_args = args
+  let mut should_continue = true
+  while should_continue {
+    // Set the context to the target function's module
+    self.instance = current_instance
 
-  // Execute function body
-  self.exec_expr(func.body)
+    // Create locals array: params + local variables
+    let locals : Array[@types.Value] = []
 
-  // Pop frame
-  self.pop_frame()
+    // Add parameters first
+    for arg in current_args {
+      locals.push(arg)
+    }
+
+    // Add local variables (initialized to default values)
+    for local_type in current_func.locals {
+      locals.push(
+        match local_type {
+          I32 => I32(0)
+          I64 => I64(0L)
+          F32 => F32(0.0)
+          F64 => F64(0.0)
+          FuncRef => Null
+          ExternRef => Null
+          _ => Null
+        },
+      )
+    }
+
+    // Create and push frame
+    let frame = @runtime.Frame::new(-1, locals, num_results)
+    self.push_frame(frame)
+
+    // Execute function body, catching TailCall to loop instead of recurse
+    try {
+      self.exec_expr(current_func.body)
+      // Normal return: pop frame and exit loop
+      self.pop_frame()
+      should_continue = false
+    } catch {
+      ControlSignal::TailCall(store_addr, func_inst, tail_args, _) => {
+        // Tail call detected! Pop current frame and loop with new target
+        self.pop_frame()
+
+        // Get the new target function
+        match func_inst {
+          WasmFunc(code) => {
+            // Get the owner instance for the target function
+            match self.store.get_func_owner(store_addr) {
+              Some(owner) => current_instance = owner
+              None => current_instance = saved_instance
+            }
+            current_func = code
+            current_args = tail_args
+            // Continue loop
+            should_continue = true
+          }
+          HostFunc(host_fn) => {
+            // Host function - call directly and exit
+            let results = host_fn(tail_args)
+            for result in results {
+              self.stack.push(result)
+            }
+            should_continue = false
+          }
+        }
+      }
+      e => {
+        // Other exceptions: pop frame then propagate
+        self.pop_frame()
+        self.instance = saved_instance
+        raise e
+      }
+    }
+  }
 
   // Restore original instance
   self.instance = saved_instance
@@ -198,42 +245,144 @@ fn ExecContext::call_wasm_func_with_instance(
 
 ///|
 /// Call a WASM function
+/// Also uses a loop to handle tail calls
 fn ExecContext::call_wasm_func(
   self : ExecContext,
   func : @types.FunctionCode,
   args : Array[@types.Value],
   num_results : Int,
 ) -> Unit raise {
-  // Create locals array: params + local variables
-  let locals : Array[@types.Value] = []
+  // Call with instance loop to handle tail calls
+  self.call_wasm_func_with_instance(self.instance, func, args, num_results)
+}
 
-  // Add parameters first
-  for arg in args {
-    locals.push(arg)
+// ============ Tail Call Operations ============
+// Tail calls replace the current frame instead of pushing a new one
+// This keeps call depth constant, enabling deep recursion
+
+///|
+/// Execute a direct tail call (return_call)
+/// Wasmtime style: raise TailCall signal instead of recursively calling
+pub fn ExecContext::exec_tail_call(
+  self : ExecContext,
+  func_idx : Int,
+) -> Unit raise {
+  // Get function address and type from current module
+  let store_addr = self.instance.func_addrs[func_idx]
+  let type_idx = self.instance.func_type_indices[func_idx]
+  let func_type = self.instance.types[type_idx]
+
+  // Pop arguments from stack into array (in reverse order)
+  let num_params = func_type.params.length()
+  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = self.stack.pop()
   }
 
-  // Add local variables (initialized to default values)
-  for local_type in func.locals {
-    locals.push(
-      match local_type {
-        I32 => I32(0)
-        I64 => I64(0L)
-        F32 => F32(0.0)
-        F64 => F64(0.0)
-        FuncRef => Null
-        ExternRef => Null
-        _ => Null
-      },
-    )
+  // Get function instance
+  let func_inst = self.store.get_func_inst(store_addr)
+
+  // Raise TailCall signal - the loop in call_wasm_func_with_instance will handle it
+  raise ControlSignal::TailCall(
+    store_addr,
+    func_inst,
+    args,
+    func_type.results.length(),
+  )
+}
+
+///|
+/// Execute an indirect tail call (return_call_indirect)
+/// Includes type checking like call_indirect
+pub fn ExecContext::exec_tail_call_indirect(
+  self : ExecContext,
+  type_idx : Int,
+  table_idx : Int,
+) -> Unit raise {
+  // Pop the function reference index from stack
+  let func_ref_idx_value = self.stack.pop()
+  let func_ref_idx = match func_ref_idx_value {
+    I32(i) => i
+    _ => raise @runtime.IndirectCallTypeMismatch
   }
 
-  // Create and push frame (use -1 as func_idx since we don't track it here)
-  let frame = @runtime.Frame::new(-1, locals, num_results)
-  self.push_frame(frame)
+  // Get table and element
+  let table_addr = self.instance.table_addrs[table_idx]
+  let table = self.store.get_table(table_addr)
+  let elem = table.get(func_ref_idx)
 
-  // Execute function body
-  self.exec_expr(func.body)
+  // The element should be a function reference
+  let store_addr = match elem {
+    FuncRef(idx) => idx
+    Null => raise @runtime.UninitializedElement
+    _ => raise @runtime.IndirectCallTypeMismatch
+  }
 
-  // Pop frame
-  self.pop_frame()
+  // Get the expected type and actual type, then verify they match
+  let expected_type = self.instance.types[type_idx]
+  let actual_type = self.store.get_func_type(store_addr)
+  if expected_type != actual_type {
+    raise @runtime.IndirectCallTypeMismatch
+  }
+
+  // Pop arguments from stack
+  let num_params = expected_type.params.length()
+  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = self.stack.pop()
+  }
+
+  // Get the function instance
+  let func_inst = self.store.get_func_inst(store_addr)
+
+  // Raise TailCall signal - the loop will handle it
+  raise ControlSignal::TailCall(
+    store_addr,
+    func_inst,
+    args,
+    expected_type.results.length(),
+  )
+}
+
+///|
+/// Execute a reference tail call (return_call_ref)
+/// Takes a function reference from the stack and tail-calls it
+pub fn ExecContext::exec_tail_call_ref(
+  self : ExecContext,
+  type_idx : Int,
+) -> Unit raise {
+  // Pop the function reference from stack
+  let func_ref = self.stack.pop()
+
+  // The function reference should be a FuncRef value, or Null
+  let store_addr = match func_ref {
+    FuncRef(addr) => addr
+    Null => raise @runtime.RuntimeError::Unreachable
+    _ => raise @runtime.IndirectCallTypeMismatch
+  }
+
+  // Get the expected type and actual type, then verify they match
+  let expected_type = self.instance.types[type_idx]
+  let actual_type = self.store.get_func_type(store_addr)
+  if expected_type != actual_type {
+    raise @runtime.IndirectCallTypeMismatch
+  }
+
+  // Pop arguments from stack
+  let num_params = expected_type.params.length()
+  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = self.stack.pop()
+  }
+
+  // Get the function instance
+  let func_inst = self.store.get_func_inst(store_addr)
+
+  // Raise TailCall signal - the loop will handle it
+  raise ControlSignal::TailCall(
+    store_addr,
+    func_inst,
+    args,
+    expected_type.results.length(),
+  )
 }

@@ -1414,6 +1414,26 @@ fn MachineCode::emit_instruction(
       }
       // Stack already restored after blr, no need to restore again
     }
+    ReturnCallIndirect(_num_args, _num_results) => {
+      // Tail call optimization following Cranelift's design
+      // Parameters are already set up by lowering phase via:
+      // - StoreToStack for overflow arguments
+      // - add_use_fixed constraints for register arguments (X17=func_ptr, X0/X1=vmctx, X2-X7/V0-V7=args)
+      // Emit only needs to:
+      // 1. Restore callee-saved registers (epilogue)
+      // 2. BR to function pointer (doesn't save return address, callee returns to our caller)
+
+      // Epilogue - restore callee-saved registers and frame pointer
+      // Following Cranelift's emit_return_call_common_sequence
+      self.emit_epilogue(stack_frame)
+
+      // BR (not BLR) - jump to function without saving return address
+      // func_ptr is guaranteed to be in X17 by add_use_fixed constraint in lowering
+      // This is the KEY tail call semantic: callee returns directly to our caller
+      self.emit_br(17)
+
+      // Note: No code after BR - control never returns here
+    }
     TypeCheckIndirect(expected_type) => {
       // Check if actual_type == expected_type, trap if not
       // Uses: [actual_type_vreg]

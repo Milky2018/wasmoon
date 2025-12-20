@@ -1261,10 +1261,11 @@ pub fn apply_allocation(
       // Track which scratch registers are used for each spilled vreg
       let spill_regs : Map[Int, @abi.PReg] = {}
 
-      // Check if this is a CallIndirect instruction - needs special handling
-      let is_call_indirect = inst.opcode is CallIndirect(_, _)
+      // Check if this is a CallIndirect or ReturnCallIndirect instruction - needs special handling
+      let is_call_indirect = inst.opcode is CallIndirect(_, _) ||
+        inst.opcode is ReturnCallIndirect(_, _)
 
-      // For CallIndirect with many spilled args, we use a special strategy:
+      // For CallIndirect/ReturnCallIndirect with many spilled args, we use a special strategy:
       // - func_ptr (uses[0]): reload to X18
       // - register args (uses[1-8]): if spilled, reload to X16/X17 (max 2)
       // - stack args (uses[9+]): if spilled, use spilled register encoding (emit handles them)
@@ -1568,7 +1569,7 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     // Type check can trap
     TypeCheckIndirect(_) => true
     // Function calls have side effects
-    CallIndirect(_, _) | CallPtr(_, _) => true
+    CallIndirect(_, _) | ReturnCallIndirect(_, _) | CallPtr(_, _) => true
     // Memory operations have side effects (modify memory or global state)
     MemoryGrow(_) | MemoryFill | MemoryCopy => true
     // Table operations have side effects (modify table state)

@@ -183,6 +183,9 @@ pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::popcnt(Self, Value) -> Value
 pub fn IRBuilder::print(Self) -> String
 pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
+pub fn IRBuilder::return_call_indirect_multi(Self, Int, Int, Value, Array[Value]) -> Unit
+pub fn IRBuilder::return_call_multi(Self, Int, Array[Value]) -> Unit
+pub fn IRBuilder::return_call_ref_multi(Self, Int, Value, Array[Value]) -> Unit
 pub fn IRBuilder::rotl(Self, Value, Value) -> Value
 pub fn IRBuilder::rotr(Self, Value, Value) -> Value
 pub fn IRBuilder::sdiv(Self, Value, Value) -> Value
