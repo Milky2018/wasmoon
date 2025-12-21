@@ -14,6 +14,7 @@ pub(all) suberror ValidationError {
   InvalidMemoryIndex(Int)
   InvalidLabelIndex(Int)
   InvalidElemIndex(Int)
+  UnknownTag(Int) // Unknown tag index
   UnreachableCode
   MultipleMemories // More than one memory is not allowed in MVP
   MultipleTables // More than one table is not allowed in MVP
@@ -60,6 +61,7 @@ pub fn ValidationErrorContext::from_error(
     InvalidMemoryIndex(idx) => "invalid memory index: \{idx}"
     InvalidLabelIndex(idx) => "invalid label index: \{idx}"
     InvalidElemIndex(idx) => "invalid element index: \{idx}"
+    UnknownTag(idx) => "unknown tag \{idx}"
     UnreachableCode => "unreachable code"
     MultipleMemories => "multiple memories not allowed in MVP"
     MultipleTables => "multiple tables not allowed in MVP"
@@ -159,6 +161,7 @@ priv struct ValidationContext {
   tables : Array[@types.TableType]
   mems : Array[@types.MemoryType]
   globals : Array[@types.GlobalType]
+  tags : Array[@types.FuncType] // tag types (params only, results always empty)
   elems : Array[@types.ValueType] // element segment types
   locals : Array[@types.ValueType] // current function's locals
   labels : Array[LabelInfo] // label stack for control flow
@@ -227,6 +230,16 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   for elem in mod.elems {
     elems.push(elem.type_)
   }
+  // Collect tags (imports + defined tags)
+  let tags : Array[@types.FuncType] = []
+  for imp in mod.imports {
+    if imp.desc is Tag(type_idx) {
+      tags.push(mod.types[type_idx])
+    }
+  }
+  for tag in mod.tags {
+    tags.push(mod.types[tag.type_idx])
+  }
 
   // Collect declared functions from elem segments and global inits
   let declared_funcs : @hashset.HashSet[Int] = @hashset.new()
@@ -246,6 +259,7 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
     tables,
     mems,
     globals,
+    tags,
     elems,
     locals: [],
     labels: [],
@@ -658,6 +672,14 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
         if idx >= ctx.mems.length() {
           raise UnknownExport("unknown memory \{idx}")
         }
+      Tag(idx) => {
+        // Validate tag index - count imported tags plus defined tags
+        let num_imported_tags = count_tag_imports(mod.imports)
+        let total_tags = num_imported_tags + mod.tags.length()
+        if idx >= total_tags {
+          raise UnknownExport("unknown tag \{idx}")
+        }
+      }
     }
   }
 
@@ -852,6 +874,7 @@ fn validate_function_with_offset(
     tables: ctx.tables,
     mems: ctx.mems,
     globals: ctx.globals,
+    tags: ctx.tags,
     elems: ctx.elems,
     locals,
     labels: [],
@@ -1002,6 +1025,17 @@ fn count_global_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
+fn count_tag_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    if imp.desc is Tag(_) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
 /// Validate a function body
 fn validate_function(
   ctx : ValidationContext,
@@ -1037,6 +1071,7 @@ fn validate_function(
     tables: ctx.tables,
     mems: ctx.mems,
     globals: ctx.globals,
+    tags: ctx.tags,
     elems: ctx.elems,
     locals,
     labels: [],
@@ -2079,6 +2114,50 @@ fn validate_instr(
         stack.pop(ctx.returns[i])
       }
       stack.set_polymorphic()
+    }
+
+    // Exception handling instructions
+    Throw(tag_idx) => {
+      // Validate tag index is valid
+      if tag_idx < 0 || tag_idx >= ctx.tags.length() {
+        raise UnknownTag(tag_idx)
+      }
+      // Get the tag type and pop its parameters from the stack
+      let tag_type = ctx.tags[tag_idx]
+      for i = tag_type.params.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(tag_type.params[i])
+      }
+      // throw never returns, so set polymorphic
+      stack.set_polymorphic()
+    }
+    ThrowRef => {
+      // throw_ref pops an exnref and throws it
+      stack.pop(@types.ValueType::ExnRef)
+      stack.set_polymorphic()
+    }
+    TryTable(bt, handlers, body) => {
+      // TODO: Full validation of try_table when exception handling is complete
+      // For now, validate as a regular block
+      ignore(handlers)
+      let results = get_block_results(ctx, bt)
+      let params = get_block_params(ctx, bt)
+      // Pop params
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(params[i])
+      }
+      // Add label for the block
+      let label = { kind: BlockLabel, block_type: bt }
+      ctx.labels.push(label)
+      // Validate body
+      for instr in body {
+        validate_instr(ctx, stack, instr)
+      }
+      // Remove label
+      ctx.labels.pop() |> ignore
+      // Push results
+      for result in results {
+        stack.push(result)
+      }
     }
   }
 }

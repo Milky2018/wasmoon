@@ -229,6 +229,7 @@ fn create_spectest_module(store : @runtime.Store) -> @runtime.ModuleInstance {
     global_addrs: [
       global_i32_addr, global_i64_addr, global_f32_addr, global_f64_addr,
     ],
+    tag_addrs: [],
     exports,
     elem_segments: [],
     data_segments: [],
@@ -261,6 +262,10 @@ fn WastContext::build_imports(self : WastContext) -> @runtime.Imports {
         Global(global_idx) => {
           let addr = instance.global_addrs[global_idx]
           imports.add_global(mod_name, exp.name, addr)
+        }
+        Tag(tag_idx) => {
+          let addr = instance.tag_addrs[tag_idx]
+          imports.add_tag(mod_name, exp.name, addr)
         }
       }
     }
@@ -816,6 +821,21 @@ fn run_wast_command(
         result.failed = result.failed + 1
         result.failures.push(
           "line \{line}: assert_trap failed: expected '\{expected_msg}'",
+        )
+      }
+    }
+    AssertException(action) => {
+      // Invoke the action and expect an exception to be thrown
+      let action_desc = format_action(action)
+      if (try? invoke_action(ctx, action)) is Err(_) {
+        result.passed = result.passed + 1
+        if show_success {
+          println("line \{line}: assert_exception \{action_desc}: PASSED")
+        }
+      } else {
+        result.failed = result.failed + 1
+        result.failures.push(
+          "line \{line}: assert_exception \{action_desc}: expected exception but none thrown",
         )
       }
     }

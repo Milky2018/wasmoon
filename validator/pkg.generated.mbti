@@ -25,6 +25,7 @@ pub(all) suberror ValidationError {
   InvalidMemoryIndex(Int)
   InvalidLabelIndex(Int)
   InvalidElemIndex(Int)
+  UnknownTag(Int)
   UnreachableCode
   MultipleMemories
   MultipleTables

@@ -7,6 +7,7 @@ pub(all) struct ModuleInstance {
   table_addrs : Array[Int] // indices into table store
   mem_addrs : Array[Int] // indices into memory store
   global_addrs : Array[Int] // indices into global store
+  tag_addrs : Array[Int] // indices into tag store
   exports : Array[@types.Export]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
@@ -23,6 +24,7 @@ pub fn ModuleInstance::new() -> ModuleInstance {
     table_addrs: [],
     mem_addrs: [],
     global_addrs: [],
+    tag_addrs: [],
     exports: [],
     elem_segments: [],
     data_segments: [],

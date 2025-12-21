@@ -25,6 +25,7 @@ fn create_i32_add_module() -> @types.Module {
     elems: [],
     codes: [add_func],
     datas: [],
+    tags: [],
   }
 }
 
@@ -126,6 +127,7 @@ fn create_i32_arithmetic_module() -> @types.Module {
       add_func, sub_func, mul_func, div_s_func, div_u_func, rem_s_func, rem_u_func,
     ],
     datas: [],
+    tags: [],
   }
 }
 
@@ -362,6 +364,7 @@ fn create_i32_bitwise_module() -> @types.Module {
       and_func, or_func, xor_func, shl_func, shr_s_func, shr_u_func, rotl_func, rotr_func,
     ],
     datas: [],
+    tags: [],
   }
 }
 
@@ -529,6 +532,7 @@ fn create_i32_cmp_module() -> @types.Module {
       eq_func, ne_func, lt_s_func, lt_u_func, le_s_func, gt_s_func, ge_u_func, eqz_func,
     ],
     datas: [],
+    tags: [],
   }
 }
 
@@ -642,6 +646,7 @@ fn create_i32_unary_module() -> @types.Module {
     elems: [],
     codes: [clz_func, ctz_func, popcnt_func, extend8_s_func, extend16_s_func],
     datas: [],
+    tags: [],
   }
 }
 
@@ -802,6 +807,7 @@ fn create_i32_rotate_module() -> @types.Module {
     elems: [],
     codes: [rotl_func, rotr_func],
     datas: [],
+    tags: [],
   }
 }
 

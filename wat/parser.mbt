@@ -28,6 +28,15 @@ priv enum MemoryDefResult {
 }
 
 ///|
+/// Result of parsing a tag definition - can be a regular tag or an inline import
+priv enum TagDefResult {
+  /// Regular tag definition: (tag_type, export_names)
+  TagDef(@types.TagType, Array[String])
+  /// Inline import: the import definition
+  TagImport(@types.Import, Array[String]) // import, optional export names
+}
+
+///|
 /// WAT Parser
 priv struct Parser {
   lexer : Lexer
@@ -39,6 +48,7 @@ priv struct Parser {
   global_names : Map[String, Int]
   memory_names : Map[String, Int]
   table_names : Map[String, Int]
+  tag_names : Map[String, Int]
   // Label stack for block/loop/if - stores (name, depth) pairs
   // depth is the index from the innermost block (0 = current block)
   label_stack : Array[String?]
@@ -59,6 +69,7 @@ fn Parser::new(input : String) -> Parser raise WatError {
     global_names: {},
     memory_names: {},
     table_names: {},
+    tag_names: {},
     label_stack: [],
     types: [],
   }
@@ -1772,6 +1783,17 @@ fn count_memory_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
+fn count_tag_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for imp in imports {
+    if imp.desc is @types.ImportDesc::Tag(_) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
 /// Parse a WAT module from string
 pub fn parse(input : String) -> @types.Module raise WatError {
   let parser = Parser::new(input)
@@ -1804,6 +1826,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   let mut global_idx = 0
   let mut memory_idx = 0
   let mut table_idx = 0
+  let mut tag_idx = 0
   while self.current.token != RParen && self.current.token != Eof {
     match self.current.token {
       LParen => {
@@ -1873,6 +1896,16 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   table_idx = table_idx + 1
                   self.skip_to_matching_rparen()
                 }
+                Keyword("tag") => {
+                  self.advance()
+                  // Check for tag name
+                  if self.current.token is Id(name) {
+                    self.tag_names.set(name, tag_idx)
+                    self.advance()
+                  }
+                  tag_idx = tag_idx + 1
+                  self.skip_to_matching_rparen()
+                }
                 _ => self.skip_to_matching_rparen()
               }
             }
@@ -1917,6 +1950,16 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             }
             table_idx = table_idx + 1
             // Skip to end of table
+            self.skip_to_matching_rparen()
+          }
+          Keyword("tag") => {
+            self.advance()
+            // Check for tag name
+            if self.current.token is Id(name) {
+              self.tag_names.set(name, tag_idx)
+            }
+            tag_idx = tag_idx + 1
+            // Skip to end of tag
             self.skip_to_matching_rparen()
           }
           _ => self.skip_to_matching_rparen()
@@ -2125,6 +2168,30 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             let elem = self.parse_elem_def()
             mod_.elems.push(elem)
           }
+          Keyword("tag") =>
+            match self.parse_tag_def(mod_) {
+              TagDef(tag, export_names) => {
+                let tag_idx = count_tag_imports(mod_.imports) +
+                  mod_.tags.length()
+                mod_.tags.push(tag)
+                for name in export_names {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Tag(tag_idx),
+                  })
+                }
+              }
+              TagImport(imp, export_names) => {
+                let tag_idx = count_tag_imports(mod_.imports)
+                mod_.imports.push(imp)
+                for name in export_names {
+                  mod_.exports.push({
+                    name,
+                    desc: @types.ExportDesc::Tag(tag_idx),
+                  })
+                }
+              }
+            }
           Keyword(kw) =>
             raise WatError::UnexpectedToken(
               "unexpected module field: \{kw}",
@@ -2678,11 +2745,69 @@ fn Parser::parse_folded_instructions(
         result.push(@types.Instruction::If(bt, then_body, else_body))
         return result
       }
+      // Special handling for "try_table" in folded form
+      if kw == "try_table" {
+        self.advance() // skip "try_table"
+        // Optional label name
+        let label : String? = match self.current.token {
+          Id(name) => {
+            self.advance()
+            Some(name)
+          }
+          _ => None
+        }
+        let bt = self.parse_block_type()
+        let handlers : Array[@types.CatchHandler] = []
+        // Parse catch handlers until we hit an instruction or )
+        while self.current.token == LParen {
+          let saved_pos = self.lexer.pos
+          self.advance() // skip (
+          match self.current.token {
+            Keyword("catch") => {
+              self.advance() // skip "catch"
+              let tag_idx = self.parse_tag_idx()
+              let label_idx = self.parse_label_idx()
+              handlers.push(@types.CatchHandler::Catch(tag_idx, label_idx))
+              self.expect_rparen()
+            }
+            Keyword("catch_ref") => {
+              self.advance() // skip "catch_ref"
+              let tag_idx = self.parse_tag_idx()
+              let label_idx = self.parse_label_idx()
+              handlers.push(@types.CatchHandler::CatchRef(tag_idx, label_idx))
+              self.expect_rparen()
+            }
+            Keyword("catch_all") => {
+              self.advance() // skip "catch_all"
+              let label_idx = self.parse_label_idx()
+              handlers.push(@types.CatchHandler::CatchAll(label_idx))
+              self.expect_rparen()
+            }
+            Keyword("catch_all_ref") => {
+              self.advance() // skip "catch_all_ref"
+              let label_idx = self.parse_label_idx()
+              handlers.push(@types.CatchHandler::CatchAllRef(label_idx))
+              self.expect_rparen()
+            }
+            _ => {
+              // Not a catch handler, restore and break
+              self.lexer.pos = saved_pos
+              self.current = LocatedToken::synthetic(LParen)
+              break
+            }
+          }
+        }
+        self.push_label(label)
+        let body = self.parse_instructions()
+        self.pop_label()
+        self.expect_rparen() // close try_table in folded form (no 'end' keyword)
+        return [@types.Instruction::TryTable(bt, handlers, body)]
+      }
       let instr = self.parse_plain_instruction(kw)
       // For control instructions, we've already handled them
       // For other instructions, parse folded operands
       match instr {
-        Block(_, _) | Loop(_, _) | If(_, _, _) => [instr]
+        Block(_, _) | Loop(_, _) | If(_, _, _) | TryTable(_, _, _) => [instr]
         _ => {
           // Parse nested folded instructions (operands)
           let result : Array[@types.Instruction] = []
@@ -2796,6 +2921,58 @@ fn Parser::parse_plain_instruction(
       @types.Instruction::BrTable(labels, default_label)
     }
     "return" => @types.Instruction::Return
+    // Exception handling instructions
+    "throw" => @types.Instruction::Throw(self.parse_tag_idx())
+    "throw_ref" => @types.Instruction::ThrowRef
+    "try_table" => {
+      // try_table has a block type followed by catch handlers and a body
+      // (try_table (result i32) (catch $tag $label) ... instructions end)
+      let bt = self.parse_block_type()
+      let handlers : Array[@types.CatchHandler] = []
+      // Parse catch handlers until we hit an instruction or end
+      while self.current.token == LParen {
+        let saved_pos = self.lexer.pos
+        self.advance() // skip (
+        match self.current.token {
+          Keyword("catch") => {
+            self.advance() // skip "catch"
+            let tag_idx = self.parse_tag_idx()
+            let label_idx = self.parse_label_idx()
+            handlers.push(@types.CatchHandler::Catch(tag_idx, label_idx))
+            self.expect_rparen()
+          }
+          Keyword("catch_ref") => {
+            self.advance() // skip "catch_ref"
+            let tag_idx = self.parse_tag_idx()
+            let label_idx = self.parse_label_idx()
+            handlers.push(@types.CatchHandler::CatchRef(tag_idx, label_idx))
+            self.expect_rparen()
+          }
+          Keyword("catch_all") => {
+            self.advance() // skip "catch_all"
+            let label_idx = self.parse_label_idx()
+            handlers.push(@types.CatchHandler::CatchAll(label_idx))
+            self.expect_rparen()
+          }
+          Keyword("catch_all_ref") => {
+            self.advance() // skip "catch_all_ref"
+            let label_idx = self.parse_label_idx()
+            handlers.push(@types.CatchHandler::CatchAllRef(label_idx))
+            self.expect_rparen()
+          }
+          _ => {
+            // Not a catch handler, restore and break
+            self.lexer.pos = saved_pos
+            self.current = LocatedToken::synthetic(LParen)
+            break
+          }
+        }
+      }
+      let body = self.parse_instructions()
+      self.expect_keyword("end")
+      self.skip_optional_id()
+      @types.Instruction::TryTable(bt, handlers, body)
+    }
     "call" => @types.Instruction::Call(self.parse_func_idx())
     "call_ref" => {
       // call_ref $type - calls a function reference with the given type
@@ -4489,6 +4666,11 @@ fn Parser::parse_export_def(
       let idx = self.parse_global_idx()
       @types.ExportDesc::Global(idx)
     }
+    Keyword("tag") => {
+      self.advance()
+      let idx = self.parse_tag_idx()
+      @types.ExportDesc::Tag(idx)
+    }
     _ => raise WatError::UnexpectedToken("expected export kind", self.loc())
   }
   ignore(mod_)
@@ -4621,6 +4803,57 @@ fn Parser::parse_import_def(
         (self.parse_value_type(), false)
       }
       @types.ImportDesc::Global({ value_type, mutable })
+    }
+    Keyword("tag") => {
+      self.advance()
+      // Optional tag name
+      if self.current.token is Id(tname) {
+        self.tag_names.set(tname, count_tag_imports(mod_.imports))
+        self.advance()
+      }
+      // Parse type - either (type $idx) or inline (param ...)
+      let type_idx = if self.current.token == LParen {
+        let saved_pos = self.lexer.pos
+        let saved_line = self.lexer.line
+        let saved_column = self.lexer.column
+        let saved_token_start_line = self.lexer.token_start_line
+        let saved_token_start_column = self.lexer.token_start_column
+        self.advance()
+        if self.current.token == Keyword("type") {
+          // (type $idx) syntax
+          self.advance()
+          let idx = self.parse_type_idx()
+          self.expect_rparen()
+          idx
+        } else {
+          // Inline signature - restore position and parse func type
+          self.lexer.pos = saved_pos
+          self.lexer.line = saved_line
+          self.lexer.column = saved_column
+          self.lexer.token_start_line = saved_token_start_line
+          self.lexer.token_start_column = saved_token_start_column
+          self.current = LocatedToken::synthetic(LParen)
+          let func_type = self.parse_func_type()
+          // Tags must have no results
+          if func_type.results.length() > 0 {
+            raise WatError::UnexpectedToken(
+              "tags cannot have results",
+              self.loc(),
+            )
+          }
+          // Add this type to the module and get its index
+          let idx = mod_.types.length()
+          mod_.types.push(func_type)
+          idx
+        }
+      } else {
+        // No type specified, use empty signature
+        let func_type : @types.FuncType = { params: [], results: [] }
+        let idx = mod_.types.length()
+        mod_.types.push(func_type)
+        idx
+      }
+      @types.ImportDesc::Tag(type_idx)
     }
     _ => raise WatError::UnexpectedToken("expected import kind", self.loc())
   }
@@ -4941,6 +5174,164 @@ fn Parser::parse_elem_type(
   }
 }
 
+///|
+/// Parse a tag definition
+/// Syntax:
+/// - (tag (type $idx))
+/// - (tag (param i32))
+/// - (tag $name (type $idx))
+/// - (tag (export "name") (type $idx))
+/// - (tag (import "mod" "name") (param i32))
+fn Parser::parse_tag_def(
+  self : Parser,
+  mod_ : @types.Module,
+) -> TagDefResult raise WatError {
+  self.advance() // skip "tag"
+  let export_names : Array[String] = []
+
+  // Optional tag name
+  if self.current.token is Id(name) {
+    self.tag_names.set(
+      name,
+      count_tag_imports(mod_.imports) + mod_.tags.length(),
+    )
+    self.advance()
+  }
+
+  // Check for inline export or import
+  while self.current.token == LParen {
+    let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
+    self.advance()
+    match self.current.token {
+      Keyword("export") => {
+        self.advance()
+        match self.current.token {
+          String_(s) => {
+            export_names.push(s)
+            self.advance()
+          }
+          _ =>
+            raise WatError::UnexpectedToken("expected export name", self.loc())
+        }
+        self.expect_rparen()
+      }
+      Keyword("import") => {
+        self.advance()
+        // Parse module name and import name
+        let mod_name = match self.current.token {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ =>
+            raise WatError::UnexpectedToken("expected module name", self.loc())
+        }
+        let import_name = match self.current.token {
+          String_(s) => {
+            self.advance()
+            s
+          }
+          _ =>
+            raise WatError::UnexpectedToken("expected import name", self.loc())
+        }
+        self.expect_rparen() // close import
+
+        // Parse type after import
+        let type_idx = self.parse_tag_type_spec(mod_)
+        self.expect_rparen() // close tag
+        let imp : @types.Import = {
+          mod_name,
+          name: import_name,
+          desc: @types.ImportDesc::Tag(type_idx),
+        }
+        return TagImport(imp, export_names)
+      }
+      _ => {
+        // Not export/import, restore and continue to parse type
+        self.lexer.pos = saved
+        self.lexer.line = saved_line
+        self.lexer.column = saved_column
+        self.lexer.token_start_line = saved_token_start_line
+        self.lexer.token_start_column = saved_token_start_column
+        self.current = LocatedToken::synthetic(LParen)
+        break
+      }
+    }
+  }
+
+  // Parse type - either (type $idx) or inline (param ...)
+  let type_idx = self.parse_tag_type_spec(mod_)
+  self.expect_rparen() // close tag
+  TagDef(@types.TagType::{ type_idx, }, export_names)
+}
+
+///|
+/// Parse tag type specification - (type $idx) or (param ...)
+fn Parser::parse_tag_type_spec(
+  self : Parser,
+  mod_ : @types.Module,
+) -> Int raise WatError {
+  if self.current.token == LParen {
+    let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
+    self.advance()
+    if self.current.token == Keyword("type") {
+      // (type $idx) syntax
+      self.advance()
+      let idx = self.parse_type_idx()
+      self.expect_rparen()
+      idx
+    } else {
+      // Inline signature - restore position and parse func type
+      self.lexer.pos = saved
+      self.lexer.line = saved_line
+      self.lexer.column = saved_column
+      self.lexer.token_start_line = saved_token_start_line
+      self.lexer.token_start_column = saved_token_start_column
+      self.current = LocatedToken::synthetic(LParen)
+      let func_type = self.parse_func_type()
+      // Tags must have no results
+      if func_type.results.length() > 0 {
+        raise WatError::UnexpectedToken("tags cannot have results", self.loc())
+      }
+      // Add this type to the module and get its index
+      let idx = mod_.types.length()
+      mod_.types.push(func_type)
+      idx
+    }
+  } else {
+    // No type specified, use empty signature
+    let func_type : @types.FuncType = { params: [], results: [] }
+    let idx = mod_.types.length()
+    mod_.types.push(func_type)
+    idx
+  }
+}
+
+///|
+/// Parse a tag index (number or $name)
+fn Parser::parse_tag_idx(self : Parser) -> Int raise WatError {
+  match self.current.token {
+    Number(_) => self.parse_u32()
+    Id(name) =>
+      match self.tag_names.get(name) {
+        Some(idx) => {
+          self.advance()
+          idx
+        }
+        None => raise WatError::UndefinedIdentifier("tag $\{name}", self.loc())
+      }
+    _ => raise WatError::UnexpectedToken("expected tag index", self.loc())
+  }
+}
+
 // ============================================================================
 // WAST (WebAssembly Test Script) Parsing
 // ============================================================================
@@ -4954,6 +5345,7 @@ pub enum WastCommand {
   ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])
   AssertTrap(WastAction, String)
+  AssertException(WastAction) // Exception should be thrown
   AssertModuleTrap(WastModuleSource, String)
   AssertExhaustion(WastAction, String)
   AssertInvalid(WastModuleSource, String)
@@ -5021,6 +5413,7 @@ fn Parser::parse_wast_command(self : Parser) -> WastCommand raise WatError {
     Keyword("module") => self.parse_wast_module_command()
     Keyword("assert_return") => self.parse_wast_assert_return()
     Keyword("assert_trap") => self.parse_wast_assert_trap()
+    Keyword("assert_exception") => self.parse_wast_assert_exception()
     Keyword("assert_exhaustion") => self.parse_wast_assert_exhaustion()
     Keyword("assert_invalid") => self.parse_wast_assert_invalid()
     Keyword("assert_malformed") => self.parse_wast_assert_malformed()
@@ -5303,6 +5696,18 @@ fn Parser::parse_wast_assert_trap(self : Parser) -> WastCommand raise WatError {
       AssertTrap(action, msg)
     }
   }
+}
+
+///|
+fn Parser::parse_wast_assert_exception(
+  self : Parser,
+) -> WastCommand raise WatError {
+  self.advance() // consume 'assert_exception'
+  self.expect_lparen()
+  let action = self.parse_wast_action()
+  self.expect_rparen()
+  self.expect_rparen()
+  AssertException(action)
 }
 
 ///|

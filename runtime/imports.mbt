@@ -22,6 +22,7 @@ pub(all) enum ExternVal {
   Table(Int) // table address in store
   Memory(Int) // memory address in store
   Global(Int) // global address in store
+  Tag(Int) // tag address in store (type index)
 }
 
 ///|
@@ -73,6 +74,16 @@ pub fn Imports::add_global(
   global_addr : Int,
 ) -> Unit {
   self.entries.push((mod_name, name, ExternVal::Global(global_addr)))
+}
+
+///|
+pub fn Imports::add_tag(
+  self : Imports,
+  mod_name : String,
+  name : String,
+  tag_addr : Int,
+) -> Unit {
+  self.entries.push((mod_name, name, ExternVal::Tag(tag_addr)))
 }
 
 ///|

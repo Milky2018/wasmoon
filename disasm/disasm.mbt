@@ -263,6 +263,11 @@ fn write_import_desc(buf : StringBuilder, desc : @types.ImportDesc) -> Unit {
       write_global_type(buf, global_type)
       buf.write_string(")")
     }
+    Tag(type_idx) => {
+      buf.write_string("(tag (type ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string("))")
+    }
   }
 }
 
@@ -286,6 +291,11 @@ fn write_export_desc(buf : StringBuilder, desc : @types.ExportDesc) -> Unit {
     }
     Global(idx) => {
       buf.write_string("(global ")
+      buf.write_string(idx.to_string())
+      buf.write_string(")")
+    }
+    Tag(idx) => {
+      buf.write_string("(tag ")
       buf.write_string(idx.to_string())
       buf.write_string(")")
     }
@@ -805,6 +815,14 @@ fn write_instruction_simple(
     I64TruncSatF32U => buf.write_string("i64.trunc_sat_f32_u")
     I64TruncSatF64S => buf.write_string("i64.trunc_sat_f64_s")
     I64TruncSatF64U => buf.write_string("i64.trunc_sat_f64_u")
+
+    // Exception handling instructions
+    Throw(tag_idx) => {
+      buf.write_string("throw ")
+      buf.write_string(tag_idx.to_string())
+    }
+    ThrowRef => buf.write_string("throw_ref")
+    TryTable(_, _, _) => buf.write_string(";; try_table")
 
     // Nested blocks - should be handled by write_instruction
     Block(_, _) | Loop(_, _) | If(_, _, _) =>

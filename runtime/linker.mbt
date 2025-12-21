@@ -59,6 +59,10 @@ pub fn Linker::build_imports(self : Linker) -> Imports {
           let global_addr = instance.global_addrs[idx]
           imports.add_global(mod_name, exp.name, global_addr)
         }
+        Tag(idx) => {
+          let tag_addr = instance.tag_addrs[idx]
+          imports.add_tag(mod_name, exp.name, tag_addr)
+        }
       }
     }
   }
@@ -114,6 +118,7 @@ pub fn Linker::add_host_func(
       table_addrs: [],
       mem_addrs: [],
       global_addrs: [],
+      tag_addrs: [],
       exports: [],
       elem_segments: [],
       data_segments: [],
@@ -159,6 +164,7 @@ pub fn Linker::add_memory(
       table_addrs: [],
       mem_addrs: [],
       global_addrs: [],
+      tag_addrs: [],
       exports: [],
       elem_segments: [],
       data_segments: [],
@@ -204,6 +210,7 @@ pub fn Linker::add_table(
       table_addrs: [],
       mem_addrs: [],
       global_addrs: [],
+      tag_addrs: [],
       exports: [],
       elem_segments: [],
       data_segments: [],
@@ -249,6 +256,7 @@ pub fn Linker::add_global(
       table_addrs: [],
       mem_addrs: [],
       global_addrs: [],
+      tag_addrs: [],
       exports: [],
       elem_segments: [],
       data_segments: [],

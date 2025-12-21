@@ -15,6 +15,7 @@ pub(all) suberror RuntimeError {
   CallStackExhausted
   UnknownImport // Import not found during instantiation
   LinkError // Import type mismatch during linking
+  NullReference // Null exception reference (null exnref thrown)
 } derive(Show)
 
 ///|
@@ -97,6 +98,7 @@ pub fn RuntimeErrorContext::format(self : RuntimeErrorContext) -> String {
     CallStackExhausted => "call stack exhausted: too many nested function calls"
     UnknownImport => "unknown import: required import not provided"
     LinkError => "incompatible import type"
+    NullReference => "null reference: attempted to use null exception reference"
   }
   result.write_string("runtime error: ")
   result.write_string(error_msg)

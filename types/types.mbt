@@ -39,6 +39,7 @@ pub(all) enum Value {
   F64(Double)
   FuncRef(Int) // function index
   ExternRef(Int) // external reference
+  ExnRef(Int) // exception reference (index into exception store)
   Null
 } derive(Eq, Show)
 
@@ -65,6 +66,11 @@ pub(all) enum Instruction {
   ReturnCall(Int) // function index (tail call)
   ReturnCallIndirect(Int, Int) // type index, table index (tail call)
   ReturnCallRef(Int) // type index (tail call, WasmGC)
+
+  // Exception handling instructions
+  Throw(Int) // tag index - throw exception with tag
+  ThrowRef // throw exception from exnref on stack
+  TryTable(BlockType, Array[CatchHandler], Array[Instruction]) // block type, handlers, body
 
   // Parametric instructions
   Drop
@@ -294,6 +300,15 @@ pub(all) enum BlockType {
   TypeIndex(Int)
 } derive(Eq, Show)
 
+///|
+/// Catch handler for try_table instruction
+pub(all) enum CatchHandler {
+  Catch(Int, Int) // (tag_idx, label_idx) - catch specific tag
+  CatchRef(Int, Int) // (tag_idx, label_idx) - catch specific tag with exnref
+  CatchAll(Int) // (label_idx) - catch any exception
+  CatchAllRef(Int) // (label_idx) - catch any exception with exnref
+} derive(Eq, Show)
+
 // ============================================================
 // Module Structures
 // ============================================================
@@ -387,12 +402,20 @@ pub(all) struct GlobalType {
 } derive(Eq, Show)
 
 ///|
+/// Tag type (for exception handling)
+/// Tags define the signature of exceptions - they can only have parameters, not results
+pub(all) struct TagType {
+  type_idx : Int // Index into the types array (must be a function type with no results)
+} derive(Eq, Show)
+
+///|
 /// Import descriptor
 pub(all) enum ImportDesc {
   Func(Int) // type index
   Table(TableType)
   Memory(MemoryType)
   Global(GlobalType)
+  Tag(Int) // type index for exception tag
 } derive(Eq, Show)
 
 ///|
@@ -410,6 +433,7 @@ pub(all) enum ExportDesc {
   Table(Int) // table index
   Memory(Int) // memory index
   Global(Int) // global index
+  Tag(Int) // tag index
 } derive(Eq, Show)
 
 ///|
@@ -474,6 +498,7 @@ pub(all) struct Module {
   elems : Array[Element]
   codes : Array[FunctionCode]
   datas : Array[Data]
+  tags : Array[TagType] // exception tags
 } derive(Show)
 
 ///|
@@ -491,6 +516,7 @@ pub fn Module::new() -> Module {
     elems: [],
     codes: [],
     datas: [],
+    tags: [],
   }
 }
 

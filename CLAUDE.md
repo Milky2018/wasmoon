@@ -1,39 +1,62 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-A MoonBit implementation of a WebAssembly runtime with JIT compilation (wasmoon).
+Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support for AArch64. It features a WAT/WASM parser, validator, interpreter, and an SSA-based JIT compiler.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         wasmoon CLI                             │
+├─────────────────────────────────────────────────────────────────┤
+│  WAT Parser    │  WAST Parser   │  Binary Parser (cwasm)        │
+├─────────────────────────────────────────────────────────────────┤
+│                      Validator                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                       Runtime                                   │
+├────────────────────────┬────────────────────────────────────────┤
+│      Interpreter       │              JIT Compiler              │
+│      (executor)        │  IR → VCode → Machine Code             │
+└────────────────────────┴────────────────────────────────────────┘
+```
+
+**Key packages:**
+- `wat/`, `wast/`, `cwasm/` - Parsers for WAT, WAST, and binary formats
+- `validator/` - WebAssembly module validation
+- `runtime/` - Runtime structures (Module, Instance, Store, Memory, Table, Global)
+- `executor/` - Stack-based interpreter
+- `ir/` - SSA-based intermediate representation
+- `vcode/` - Virtual code generation, lowering (`vcode/lower/`), and register allocation
+- `jit/` - AArch64 machine code emission and FFI
 
 ## Development Commands
 
 - `moon check` - Lint and type-check (runs in pre-commit hook)
 - `moon test` - Run all tests
+- `moon test -p <package> -f <file>` - Run specific tests
 - `moon fmt` - Format code
 - `moon info` - Update `.mbti` interface files
 - `moon info && moon fmt` - Standard workflow before committing
 
-## Project Structure
+## Building and Running
 
-- Each directory is a MoonBit package with `moon.pkg.json`
-- Test files: `*_test.mbt` (blackbox), `*_wbtest.mbt` (whitebox)
-- `.mbti` files - Generated interfaces (check diffs to verify API changes)
-- Code organized in **block style** separated by `///|`
+```bash
+moon build && ./install.sh    # Build and install wasmoon binary
+./wasmoon test <file.wast>    # Run WAST tests
+./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
+./wasmoon explore <file.wat> --stage ir vcode mc  # View compilation stages
+python3 scripts/run_all_wast.py  # Run all WAST tests
+```
 
 ## Testing
 
-- Prefer `inspect` for tests, use `moon test --update` to update snapshots
-- `moon test -p <package> -f <file>` runs specific tests
+- Prefer `inspect` for tests; run `moon test --update` to update snapshots
 - Never batch use `--update`. Treat snapshot errors seriously
 - Don't use `println` in tests. Use `inspect(expr)` and update snapshots, then read the file
-
-## Building and Running
-
-- After `moon build`, run `./install.sh` to use the `./wasmoon` binary
-- `./wasmoon test <wast_file>` - Run WAST tests
-- `./wasmoon explore <wat_file> --stage vcode mc` - View compilation output
-- Run all WAST tests: `python3 scripts/run_all_wast.py`
+- Use `compare_jit_interp(wat_string)` in `testsuite/` for JIT regression tests
 
 ## Debugging
 
@@ -43,6 +66,13 @@ lldb -- ./wasmoon test path/to/test.wast
 (lldb) run
 (lldb) bt  # stack trace after crash
 ```
+
+## Project Structure
+
+- Each directory is a MoonBit package with `moon.pkg.json`
+- Test files: `*_test.mbt` (blackbox), `*_wbtest.mbt` (whitebox)
+- `.mbti` files - Generated interfaces (check diffs to verify API changes)
+- Code organized in **block style** separated by `///|`
 
 ## Git Conventions
 

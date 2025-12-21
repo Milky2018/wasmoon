@@ -278,6 +278,7 @@ fn format_value(v : @types.Value) -> String {
     Null => "null"
     FuncRef(idx) => "funcref(\{idx})"
     ExternRef(idx) => "externref(\{idx})"
+    ExnRef(idx) => "exnref(\{idx})"
   }
 }
 
@@ -476,6 +477,7 @@ fn init_jit_globals(
       FuncRef(store_addr) =>
         store_addr_to_module_func_idx(store_addr, instance).to_int64()
       ExternRef(idx) => idx.to_int64()
+      ExnRef(idx) => idx.to_int64()
       Null => -1L // null sentinel
     }
     // Write value at offset i * 16
@@ -548,6 +550,7 @@ fn run_with_jit(
                   F64(n) => n.reinterpret_as_int64()
                   FuncRef(idx) => idx.to_int64()
                   ExternRef(idx) => idx.to_int64()
+                  ExnRef(idx) => idx.to_int64()
                   Null => -1L // Sentinel value for null reference
                 }
                 i64_args.push(v)

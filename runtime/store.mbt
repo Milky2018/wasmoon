@@ -1,4 +1,11 @@
 ///|
+/// Exception instance - represents a caught exception
+pub(all) struct ExnInstance {
+  tag_addr : Int // Which tag was thrown
+  values : Array[@types.Value] // Exception values
+} derive(Show)
+
+///|
 /// The store contains all global runtime state
 pub struct Store {
   funcs : Array[FuncInst]
@@ -6,6 +13,8 @@ pub struct Store {
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
+  tags : Array[@types.FuncType] // Tag types (params only, no results)
+  exns : Array[ExnInstance] // Exception instances for exnref
   // Maps function address to its owning module instance address
   // Used for cross-module call context switching
   func_owners : Array[Int] // -1 means host function or not yet registered
@@ -24,6 +33,8 @@ pub fn Store::new() -> Store {
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
+    exns: [],
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -92,6 +103,49 @@ pub fn Store::alloc_global(self : Store, global : GlobalInstance) -> Int {
   let idx = self.globals.length()
   self.globals.push(global)
   idx
+}
+
+///|
+/// Allocate a tag with its type (params from FuncType, results ignored)
+pub fn Store::alloc_tag(self : Store, tag_type : @types.FuncType) -> Int {
+  let idx = self.tags.length()
+  self.tags.push(tag_type)
+  idx
+}
+
+///|
+pub fn Store::get_tag_type(
+  self : Store,
+  idx : Int,
+) -> @types.FuncType raise RuntimeError {
+  if idx < 0 || idx >= self.tags.length() {
+    raise UndefinedElement
+  }
+  self.tags[idx]
+}
+
+///|
+/// Allocate an exception instance and return its index
+pub fn Store::alloc_exn(
+  self : Store,
+  tag_addr : Int,
+  values : Array[@types.Value],
+) -> Int {
+  let idx = self.exns.length()
+  self.exns.push({ tag_addr, values })
+  idx
+}
+
+///|
+/// Get an exception instance by index
+pub fn Store::get_exn(
+  self : Store,
+  idx : Int,
+) -> ExnInstance raise RuntimeError {
+  if idx < 0 || idx >= self.exns.length() {
+    raise UndefinedElement
+  }
+  self.exns[idx]
 }
 
 ///|
