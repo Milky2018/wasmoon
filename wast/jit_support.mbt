@@ -81,9 +81,9 @@ fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool 
 /// JIT can't properly share state with interpreter for cross-module globals/memory/tables
 pub fn has_cross_module_imports(mod_ : @types.Module) -> Bool {
   for imp in mod_.imports {
-    // spectest and wasi_snapshot_preview1 are handled by JIT trampolines
+    // JIT-supported modules are handled by trampolines
     // Other modules are user modules that need state sharing
-    if imp.mod_name != "spectest" && imp.mod_name != "wasi_snapshot_preview1" {
+    if not(@jit.is_jit_supported_module(imp.mod_name)) {
       // User module import - check if it's a global/memory/table
       if imp.desc is (Global(_) | Memory(_) | Table(_)) {
         return true

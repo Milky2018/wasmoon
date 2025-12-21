@@ -72,6 +72,8 @@ pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
 pub fn has_import_trampoline(String, String) -> Bool
 
+pub fn is_jit_supported_module(String) -> Bool
+
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 // Errors
