@@ -323,16 +323,20 @@ fn Parser::read_u32(self : Parser) -> Int raise ParserError {
 }
 
 ///|
-/// Read memory argument (align, offset) with validation
+/// Read memory argument (memidx, align, offset) with validation
+/// Multi-memory: if bit 6 of flags is set, memory index follows
 /// Alignment values >= 32 are reserved and should be rejected as malformed
-fn Parser::read_memarg(self : Parser) -> (Int, Int) raise ParserError {
-  let align = self.read_leb128_u32()
+fn Parser::read_memarg(self : Parser) -> (Int, Int, Int) raise ParserError {
+  let flags = self.read_leb128_u32()
+  // Multi-memory proposal: if bit 6 is set, memory index follows
+  let memidx = if (flags & 0x40) != 0 { self.read_leb128_u32() } else { 0 }
+  let align = flags & 0x3F // Lower 6 bits are alignment
   // WebAssembly spec: alignment values >= 32 are reserved
   if align >= 32 {
     raise MalformedMemopFlags
   }
   let offset = self.read_leb128_u32()
-  (align, offset)
+  (memidx, align, offset)
 }
 
 ///|
@@ -862,105 +866,105 @@ fn Parser::read_instruction(
     0x24 => GlobalSet(self.read_u32())
     // Memory instructions (with alignment validation)
     0x28 => {
-      let (align, offset) = self.read_memarg()
-      I32Load(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I32Load(memidx, align, offset)
     }
     0x29 => {
-      let (align, offset) = self.read_memarg()
-      I64Load(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Load(memidx, align, offset)
     }
     0x2A => {
-      let (align, offset) = self.read_memarg()
-      F32Load(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      F32Load(memidx, align, offset)
     }
     0x2B => {
-      let (align, offset) = self.read_memarg()
-      F64Load(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      F64Load(memidx, align, offset)
     }
     0x2C => {
-      let (align, offset) = self.read_memarg()
-      I32Load8S(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I32Load8S(memidx, align, offset)
     }
     0x2D => {
-      let (align, offset) = self.read_memarg()
-      I32Load8U(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I32Load8U(memidx, align, offset)
     }
     0x2E => {
-      let (align, offset) = self.read_memarg()
-      I32Load16S(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I32Load16S(memidx, align, offset)
     }
     0x2F => {
-      let (align, offset) = self.read_memarg()
-      I32Load16U(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I32Load16U(memidx, align, offset)
     }
     0x30 => {
-      let (align, offset) = self.read_memarg()
-      I64Load8S(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Load8S(memidx, align, offset)
     }
     0x31 => {
-      let (align, offset) = self.read_memarg()
-      I64Load8U(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Load8U(memidx, align, offset)
     }
     0x32 => {
-      let (align, offset) = self.read_memarg()
-      I64Load16S(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Load16S(memidx, align, offset)
     }
     0x33 => {
-      let (align, offset) = self.read_memarg()
-      I64Load16U(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Load16U(memidx, align, offset)
     }
     0x34 => {
-      let (align, offset) = self.read_memarg()
-      I64Load32S(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Load32S(memidx, align, offset)
     }
     0x35 => {
-      let (align, offset) = self.read_memarg()
-      I64Load32U(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Load32U(memidx, align, offset)
     }
     // Memory store instructions (with alignment validation)
     0x36 => {
-      let (align, offset) = self.read_memarg()
-      I32Store(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I32Store(memidx, align, offset)
     }
     0x37 => {
-      let (align, offset) = self.read_memarg()
-      I64Store(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Store(memidx, align, offset)
     }
     0x38 => {
-      let (align, offset) = self.read_memarg()
-      F32Store(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      F32Store(memidx, align, offset)
     }
     0x39 => {
-      let (align, offset) = self.read_memarg()
-      F64Store(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      F64Store(memidx, align, offset)
     }
     0x3A => {
-      let (align, offset) = self.read_memarg()
-      I32Store8(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I32Store8(memidx, align, offset)
     }
     0x3B => {
-      let (align, offset) = self.read_memarg()
-      I32Store16(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I32Store16(memidx, align, offset)
     }
     0x3C => {
-      let (align, offset) = self.read_memarg()
-      I64Store8(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Store8(memidx, align, offset)
     }
     0x3D => {
-      let (align, offset) = self.read_memarg()
-      I64Store16(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Store16(memidx, align, offset)
     }
     0x3E => {
-      let (align, offset) = self.read_memarg()
-      I64Store32(align, offset)
+      let (memidx, align, offset) = self.read_memarg()
+      I64Store32(memidx, align, offset)
     }
     0x3F => {
-      self.read_byte() |> ignore // reserved byte
-      MemorySize
+      let memidx = self.read_leb128_u32() // memory index (0 for single-memory)
+      MemorySize(memidx)
     }
     0x40 => {
-      self.read_byte() |> ignore // reserved byte
-      MemoryGrow
+      let memidx = self.read_leb128_u32() // memory index (0 for single-memory)
+      MemoryGrow(memidx)
     }
     // Numeric constant instructions
     0x41 => I32Const(self.read_i32())
@@ -1135,10 +1139,10 @@ fn Parser::read_instruction(
         7 => I64TruncSatF64U
         // Bulk memory operations
         8 => {
-          // memory.init: data_idx, memory_idx (memory_idx must be 0)
+          // memory.init: data_idx, memory_idx
           let data_idx = self.read_u32()
-          self.read_byte() |> ignore // memory index, must be 0
-          MemoryInit(data_idx)
+          let memidx = self.read_leb128_u32()
+          MemoryInit(memidx, data_idx)
         }
         9 => {
           // data.drop: data_idx
@@ -1146,15 +1150,15 @@ fn Parser::read_instruction(
           DataDrop(data_idx)
         }
         10 => {
-          // memory.copy: dest_mem, src_mem (both must be 0)
-          self.read_byte() |> ignore // dest memory index
-          self.read_byte() |> ignore // src memory index
-          MemoryCopy
+          // memory.copy: dest_mem, src_mem
+          let dst = self.read_leb128_u32()
+          let src = self.read_leb128_u32()
+          MemoryCopy(dst, src)
         }
         11 => {
-          // memory.fill: memory_idx (must be 0)
-          self.read_byte() |> ignore // memory index
-          MemoryFill
+          // memory.fill: memory_idx
+          let memidx = self.read_leb128_u32()
+          MemoryFill(memidx)
         }
         13 => {
           // elem.drop: elem_idx

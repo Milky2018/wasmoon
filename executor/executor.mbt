@@ -373,39 +373,39 @@ fn ExecContext::exec_instr(
     | I64TruncSatF64U => self.exec_trunc_sat(instr)
 
     // Memory load operations
-    I32Load(_, _)
-    | I64Load(_, _)
-    | F32Load(_, _)
-    | F64Load(_, _)
-    | I32Load8S(_, _)
-    | I32Load8U(_, _)
-    | I32Load16S(_, _)
-    | I32Load16U(_, _)
-    | I64Load8S(_, _)
-    | I64Load8U(_, _)
-    | I64Load16S(_, _)
-    | I64Load16U(_, _)
-    | I64Load32S(_, _)
-    | I64Load32U(_, _) => self.exec_memory_load(instr)
+    I32Load(_, _, _)
+    | I64Load(_, _, _)
+    | F32Load(_, _, _)
+    | F64Load(_, _, _)
+    | I32Load8S(_, _, _)
+    | I32Load8U(_, _, _)
+    | I32Load16S(_, _, _)
+    | I32Load16U(_, _, _)
+    | I64Load8S(_, _, _)
+    | I64Load8U(_, _, _)
+    | I64Load16S(_, _, _)
+    | I64Load16U(_, _, _)
+    | I64Load32S(_, _, _)
+    | I64Load32U(_, _, _) => self.exec_memory_load(instr)
 
     // Memory store operations
-    I32Store(_, _)
-    | I64Store(_, _)
-    | F32Store(_, _)
-    | F64Store(_, _)
-    | I32Store8(_, _)
-    | I32Store16(_, _)
-    | I64Store8(_, _)
-    | I64Store16(_, _)
-    | I64Store32(_, _) => self.exec_memory_store(instr)
+    I32Store(_, _, _)
+    | I64Store(_, _, _)
+    | F32Store(_, _, _)
+    | F64Store(_, _, _)
+    | I32Store8(_, _, _)
+    | I32Store16(_, _, _)
+    | I64Store8(_, _, _)
+    | I64Store16(_, _, _)
+    | I64Store32(_, _, _) => self.exec_memory_store(instr)
 
     // Memory size/grow and bulk operations
-    MemorySize
-    | MemoryGrow
-    | MemoryInit(_)
+    MemorySize(_)
+    | MemoryGrow(_)
+    | MemoryInit(_, _)
     | DataDrop(_)
-    | MemoryCopy
-    | MemoryFill
+    | MemoryCopy(_, _)
+    | MemoryFill(_)
     | ElemDrop(_) => self.exec_memory_misc(instr)
 
     // Control flow operations

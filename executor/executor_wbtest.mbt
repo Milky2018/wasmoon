@@ -444,9 +444,9 @@ test "memory: i32.store and i32.load" {
     body: [
       I32Const(0), // address
       I32Const(42), // value
-      I32Store(2, 0), // align=2, offset=0
+      I32Store(0, 2, 0), // align=2, offset=0
       I32Const(0), // address
-      I32Load(2, 0),
+      I32Load(0, 2, 0),
     ],
   } // align=2, offset=0
   let func_type : @types.FuncType = {
@@ -482,9 +482,9 @@ test "memory: i64.store and i64.load" {
     body: [
       I32Const(0), // address
       I64Const(1234567890123L), // value
-      I64Store(3, 0), // align=3, offset=0
+      I64Store(0, 3, 0), // align=3, offset=0
       I32Const(0), // address
-      I64Load(3, 0),
+      I64Load(0, 3, 0),
     ],
   } // load
   let func_type : @types.FuncType = {
@@ -520,9 +520,9 @@ test "memory: f32.store and f32.load" {
     body: [
       I32Const(0), // address
       F32Const(3.14), // value
-      F32Store(2, 0), // store
+      F32Store(0, 2, 0), // store
       I32Const(0), // address
-      F32Load(2, 0),
+      F32Load(0, 2, 0),
     ],
   } // load
   let func_type : @types.FuncType = {
@@ -563,9 +563,9 @@ test "memory: load with offset" {
     body: [
       I32Const(8), // address
       I32Const(100), // value
-      I32Store(2, 0), // store at address 8
+      I32Store(0, 2, 0), // store at address 8
       I32Const(0), // base address
-      I32Load(2, 8),
+      I32Load(0, 2, 8),
     ],
   } // load from 0 + offset 8 = 8
   let func_type : @types.FuncType = {
@@ -603,9 +603,9 @@ test "memory: i32.load8_s sign extension" {
     body: [
       I32Const(0), // address
       I32Const(255), // value (0xFF)
-      I32Store8(0, 0), // store as byte
+      I32Store8(0, 0, 0), // store as byte
       I32Const(0), // address
-      I32Load8S(0, 0),
+      I32Load8S(0, 0, 0),
     ],
   } // load as signed byte
   let func_type : @types.FuncType = {
@@ -643,9 +643,9 @@ test "memory: i32.load8_u zero extension" {
     body: [
       I32Const(0), // address
       I32Const(255), // value (0xFF)
-      I32Store8(0, 0), // store as byte
+      I32Store8(0, 0, 0), // store as byte
       I32Const(0), // address
-      I32Load8U(0, 0),
+      I32Load8U(0, 0, 0),
     ],
   } // load as unsigned byte
   let func_type : @types.FuncType = {
@@ -680,12 +680,12 @@ test "memory: memory.size and memory.grow" {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      MemorySize, // get current size (1)
+      MemorySize(0), // get current size (1)
       Drop, // discard
       I32Const(2), // delta
-      MemoryGrow, // grow by 2, returns old size (1)
+      MemoryGrow(0), // grow by 2, returns old size (1)
       Drop, // discard old size
-      MemorySize,
+      MemorySize(0),
     ],
   } // get new size (3)
   let func_type : @types.FuncType = {
@@ -1294,7 +1294,7 @@ test "memory import: shared memory between modules" {
   // Function: read value at address 0
   let read_func : @types.FunctionCode = {
     locals: [],
-    body: [I32Const(0), I32Load(2, 0)], // load from address 0
+    body: [I32Const(0), I32Load(0, 2, 0)], // load from address 0
   }
   let func_type : @types.FuncType = {
     params: [],
@@ -1345,7 +1345,7 @@ test "memory import: write to imported memory" {
   // Function: write value 42 at address 100
   let write_func : @types.FunctionCode = {
     locals: [],
-    body: [I32Const(100), I32Const(42), I32Store(2, 0)],
+    body: [I32Const(100), I32Const(42), I32Store(0, 2, 0)],
   }
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
@@ -1892,7 +1892,7 @@ test "module initialization: data segment" {
   // Module with a data segment that initializes memory
   let read_func : @types.FunctionCode = {
     locals: [],
-    body: [I32Const(0), I32Load(2, 0)], // load i32 from address 0
+    body: [I32Const(0), I32Load(0, 2, 0)], // load i32 from address 0
   }
   let func_type : @types.FuncType = {
     params: [],
@@ -1930,7 +1930,7 @@ test "module initialization: data segment with offset" {
   // Module with a data segment at non-zero offset
   let read_func : @types.FunctionCode = {
     locals: [],
-    body: [I32Const(100), I32Load(2, 0)], // load from address 100
+    body: [I32Const(100), I32Load(0, 2, 0)], // load from address 100
   }
   let func_type : @types.FuncType = {
     params: [],
@@ -2034,9 +2034,9 @@ test "bulk memory: memory.fill" {
       I32Const(0), // dest
       I32Const(0x42), // value
       I32Const(4), // len
-      MemoryFill, // fill
+      MemoryFill(0), // fill
       I32Const(0),
-      I32Load(2, 0),
+      I32Load(0, 2, 0),
     ],
   } // read back
   let func_type : @types.FuncType = {
@@ -2074,13 +2074,13 @@ test "bulk memory: memory.copy non-overlapping" {
     body: [
       I32Const(0),
       I32Const(0x12345678),
-      I32Store(2, 0), // store at address 0
+      I32Store(0, 2, 0), // store at address 0
       I32Const(100), // dest
       I32Const(0), // src
       I32Const(4), // len
-      MemoryCopy, // copy
+      MemoryCopy(0, 0), // copy
       I32Const(100),
-      I32Load(2, 0),
+      I32Load(0, 2, 0),
     ],
   } // read from dest
   let func_type : @types.FuncType = {
@@ -2119,16 +2119,16 @@ test "bulk memory: memory.copy overlapping backward" {
       // Store [0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00] at address 0
       I32Const(0),
       I32Const(0x04030201),
-      I32Store(2, 0),
+      I32Store(0, 2, 0),
       // Copy from 0 to 2, length 4
       // Expected: [0x01, 0x02, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00]
       I32Const(2), // dest
       I32Const(0), // src
       I32Const(4), // len
-      MemoryCopy,
+      MemoryCopy(0, 0),
       // Read from address 2
       I32Const(2),
-      I32Load(2, 0),
+      I32Load(0, 2, 0),
     ],
   }
   let func_type : @types.FuncType = {
@@ -2167,9 +2167,9 @@ test "bulk memory: memory.init from data segment" {
       I32Const(100), // dest in memory
       I32Const(0), // src offset in data segment
       I32Const(4), // len
-      MemoryInit(0), // init from data segment 0
+      MemoryInit(0, 0), // init from data segment 0
       I32Const(100),
-      I32Load(2, 0),
+      I32Load(0, 2, 0),
     ],
   }
   let func_type : @types.FuncType = {
@@ -2211,9 +2211,9 @@ test "bulk memory: memory.init with offset" {
       I32Const(0), // dest in memory
       I32Const(2), // src offset in data segment (skip first 2 bytes)
       I32Const(2), // len (copy last 2 bytes)
-      MemoryInit(0),
+      MemoryInit(0, 0),
       I32Const(0),
-      I32Load16U(1, 0),
+      I32Load16U(0, 1, 0),
     ],
   } // load 16-bit unsigned
   let func_type : @types.FuncType = {
@@ -2260,7 +2260,7 @@ test "bulk memory: data.drop" {
       I32Const(0), // dest
       I32Const(0), // src offset
       I32Const(0), // len = 0 (should work even after drop)
-      MemoryInit(0),
+      MemoryInit(0, 0),
       I32Const(1),
     ],
   } // return 1 for success
@@ -2270,7 +2270,7 @@ test "bulk memory: data.drop" {
       I32Const(0), // dest
       I32Const(0), // src offset
       I32Const(1), // len = 1 (should fail after drop)
-      MemoryInit(0),
+      MemoryInit(0, 0),
       I32Const(1),
     ],
   }
@@ -2997,7 +2997,7 @@ test "module linking: import memory from another module" {
   // Module A: exports memory, has a function to store value
   let store_func : @types.FunctionCode = {
     locals: [],
-    body: [I32Const(0), I32Const(12345), I32Store(0, 0)],
+    body: [I32Const(0), I32Const(12345), I32Store(0, 0, 0)],
   } // mem[0] = 12345
   let void_type : @types.FuncType = { params: [], results: [] }
   let mod_a : @types.Module = {
@@ -3026,7 +3026,7 @@ test "module linking: import memory from another module" {
   // Module B: imports memory from mod_a, reads from it
   let read_func : @types.FunctionCode = {
     locals: [],
-    body: [I32Const(0), I32Load(0, 0)],
+    body: [I32Const(0), I32Load(0, 0, 0)],
   } // return mem[0]
   let i32_type : @types.FuncType = {
     params: [],

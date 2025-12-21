@@ -74,6 +74,8 @@ priv struct WastContext {
   store : @runtime.Store
   mut current_module : @runtime.ModuleInstance?
   named_modules : Map[String, @runtime.ModuleInstance]
+  // Module definitions for (module instance ...) command
+  module_definitions : Map[String, @types.Module]
   // Registered modules for imports (module_name -> exports)
   registered_modules : Map[String, @runtime.ModuleInstance]
   // JIT support
@@ -94,6 +96,7 @@ fn WastContext::new(use_jit : Bool) -> WastContext {
     store,
     current_module: None,
     named_modules: Map::new(),
+    module_definitions: Map::new(),
     registered_modules,
     jit_modules: Map::new(),
     current_jit: None,
@@ -788,8 +791,8 @@ fn run_wast_command(
       )
     }
     ModuleDefinition(mod_, name) => {
-      // Module definition - only validates, does not instantiate
-      // Used for testing large memory declarations that can't actually be allocated
+      // Module definition - validates and stores for later instantiation
+      // Used with (module instance ...) to create multiple instances
       @validator.validate_module(mod_) catch {
         e => {
           result.failed = result.failed + 1
@@ -799,13 +802,55 @@ fn run_wast_command(
           return
         }
       }
-      // Update the named module map if name is provided, but don't set as current
-      // since this module is not instantiated
-      if name is Some(_) {
-        // Skip - can't add to named_modules without instance
-        ()
+      // Store the module definition for later instantiation via (module instance ...)
+      if name is Some(n) {
+        ctx.module_definitions.set(n, mod_)
       }
       result.passed = result.passed + 1
+    }
+    ModuleInstance(instance_name, def_name) => {
+      // Instantiate a previously defined module
+      guard ctx.module_definitions.get(def_name) is Some(mod_) else {
+        result.failed = result.failed + 1
+        result.failures.push(
+          "line \{line}: module definition '\{def_name}' not found",
+        )
+        return
+      }
+      // Build imports from registered modules
+      let imports = ctx.build_imports()
+      // Instantiate the module with imports using shared store
+      let instance = @executor.instantiate_module_with_imports(
+        ctx.store,
+        mod_,
+        imports,
+      ) catch {
+        e => {
+          result.skipped = result.skipped + 1
+          result.failures.push(
+            "line \{line}: skipped (module instance failed: \{e})",
+          )
+          return
+        }
+      }
+      ctx.current_module = Some(instance)
+      if instance_name is Some(n) {
+        ctx.named_modules.set(n, instance)
+      }
+      // Try to compile JIT version (only if JIT is enabled)
+      if ctx.use_jit {
+        match try_compile_jit(mod_, instance, ctx.store) {
+          Some(jit_ctx) => {
+            ctx.current_jit = Some(jit_ctx)
+            if instance_name is Some(n) {
+              ctx.jit_modules.set(n, jit_ctx)
+            }
+          }
+          None => ctx.current_jit = None
+        }
+      } else {
+        ctx.current_jit = None
+      }
     }
     AssertReturn(action, expected) =>
       match run_assert_return(ctx, action, expected) {

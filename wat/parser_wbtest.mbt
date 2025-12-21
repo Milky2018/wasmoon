@@ -966,3 +966,26 @@ test "parse WAST: assert commands are not inline modules" {
     fail("Expected AssertReturn command")
   }
 }
+
+///|
+test "parse WAST: module definition and instance" {
+  // Test module definition followed by module instance
+  let wast =
+    #|(module definition $M
+    #|  (global (export "g") (mut i32) (i32.const 0))
+    #|)
+    #|(module instance $I1 $M)
+    #|(module instance $I2 $M)
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="3")
+  guard script.commands[0].0 is ModuleDefinition(mod_, Some("M")) else {
+    fail("Expected ModuleDefinition command with name M")
+  }
+  inspect(mod_.globals.length(), content="1")
+  guard script.commands[1].0 is ModuleInstance(Some("I1"), "M") else {
+    fail("Expected ModuleInstance I1 from M")
+  }
+  guard script.commands[2].0 is ModuleInstance(Some("I2"), "M") else {
+    fail("Expected ModuleInstance I2 from M")
+  }
+}
