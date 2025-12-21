@@ -794,3 +794,175 @@ test "parse WAT: annotations around instructions" {
   inspect(code.body[0], content="I32Const(42)")
   inspect(code.body[1], content="Drop")
 }
+
+// ============================================================================
+// Inline module parsing tests (WAST format without explicit module wrapper)
+// ============================================================================
+
+///|
+test "is_module_field_keyword: recognizes all module field keywords" {
+  // All module field keywords should be recognized
+  inspect(is_module_field_keyword("type"), content="true")
+  inspect(is_module_field_keyword("import"), content="true")
+  inspect(is_module_field_keyword("func"), content="true")
+  inspect(is_module_field_keyword("table"), content="true")
+  inspect(is_module_field_keyword("memory"), content="true")
+  inspect(is_module_field_keyword("global"), content="true")
+  inspect(is_module_field_keyword("export"), content="true")
+  inspect(is_module_field_keyword("start"), content="true")
+  inspect(is_module_field_keyword("elem"), content="true")
+  inspect(is_module_field_keyword("data"), content="true")
+  inspect(is_module_field_keyword("tag"), content="true")
+  // Non-module keywords should not be recognized
+  inspect(is_module_field_keyword("module"), content="false")
+  inspect(is_module_field_keyword("assert_return"), content="false")
+  inspect(is_module_field_keyword("invoke"), content="false")
+  inspect(is_module_field_keyword("i32"), content="false")
+}
+
+///|
+test "parse WAST inline module: simple func" {
+  // Inline module with just a function
+  let wast = "(func)"
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="1")
+  guard script.commands[0].0 is Module(mod_, _) else {
+    fail("Expected Module command")
+  }
+  inspect(mod_.funcs.length(), content="1")
+}
+
+///|
+test "parse WAST inline module: func and memory" {
+  // Inline module matching spec/inline-module.wast
+  let wast = "(func) (memory 0) (func (export \"f\"))"
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="1")
+  guard script.commands[0].0 is Module(mod_, _) else {
+    fail("Expected Module command")
+  }
+  inspect(mod_.funcs.length(), content="2")
+  inspect(mod_.memories.length(), content="1")
+  inspect(mod_.exports.length(), content="1")
+  inspect(mod_.exports[0].name, content="f")
+}
+
+///|
+test "parse WAST inline module: multiple fields" {
+  // Inline module with various field types
+  let wast =
+    #|(type $t (func (param i32) (result i32)))
+    #|(global $g i32 (i32.const 42))
+    #|(memory 1)
+    #|(table 1 funcref)
+    #|(func $add (type $t) (local.get 0))
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="1")
+  guard script.commands[0].0 is Module(mod_, _) else {
+    fail("Expected Module command")
+  }
+  inspect(mod_.types.length(), content="1")
+  inspect(mod_.globals.length(), content="1")
+  inspect(mod_.memories.length(), content="1")
+  inspect(mod_.tables.length(), content="1")
+  inspect(mod_.funcs.length(), content="1")
+}
+
+///|
+test "parse WAST inline module: with exports" {
+  // Inline module with multiple exports
+  let wast =
+    #|(memory (export "mem") 1)
+    #|(global (export "g") i32 (i32.const 100))
+    #|(func (export "run") (result i32) (i32.const 42))
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="1")
+  guard script.commands[0].0 is Module(mod_, _) else {
+    fail("Expected Module command")
+  }
+  inspect(mod_.exports.length(), content="3")
+  inspect(mod_.exports[0].name, content="mem")
+  inspect(mod_.exports[1].name, content="g")
+  inspect(mod_.exports[2].name, content="run")
+}
+
+///|
+test "parse WAST inline module: with imports" {
+  // Inline module with imports
+  let wast =
+    #|(import "env" "memory" (memory 1))
+    #|(import "env" "log" (func (param i32)))
+    #|(func (export "test") (call 0 (i32.const 42)))
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="1")
+  guard script.commands[0].0 is Module(mod_, _) else {
+    fail("Expected Module command")
+  }
+  inspect(mod_.imports.length(), content="2")
+  inspect(mod_.imports[0].mod_name, content="env")
+  inspect(mod_.imports[0].name, content="memory")
+  inspect(mod_.imports[1].mod_name, content="env")
+  inspect(mod_.imports[1].name, content="log")
+  inspect(mod_.funcs.length(), content="1")
+}
+
+///|
+test "parse WAST inline module: data and elem segments" {
+  // Inline module with data and elem segments
+  let wast =
+    #|(memory 1)
+    #|(table 1 funcref)
+    #|(func $f)
+    #|(data (i32.const 0) "hello")
+    #|(elem (i32.const 0) $f)
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="1")
+  guard script.commands[0].0 is Module(mod_, _) else {
+    fail("Expected Module command")
+  }
+  inspect(mod_.datas.length(), content="1")
+  inspect(mod_.elems.length(), content="1")
+}
+
+///|
+test "parse WAST inline module: start function" {
+  // Inline module with start function
+  let wast =
+    #|(func $init)
+    #|(start $init)
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="1")
+  guard script.commands[0].0 is Module(mod_, _) else {
+    fail("Expected Module command")
+  }
+  inspect(mod_.funcs.length(), content="1")
+  inspect(mod_.start, content="Some(0)")
+}
+
+///|
+test "parse WAST: explicit module is not inline" {
+  // Explicit (module ...) should not be treated as inline
+  let wast = "(module (func))"
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="1")
+  guard script.commands[0].0 is Module(mod_, _) else {
+    fail("Expected Module command")
+  }
+  inspect(mod_.funcs.length(), content="1")
+}
+
+///|
+test "parse WAST: assert commands are not inline modules" {
+  // WAST commands should not be treated as inline modules
+  let wast =
+    #|(module (func (export "f") (result i32) (i32.const 42)))
+    #|(assert_return (invoke "f") (i32.const 42))
+  let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
+  inspect(script.commands.length(), content="2")
+  guard script.commands[0].0 is Module(_, _) else {
+    fail("Expected Module command")
+  }
+  guard script.commands[1].0 is AssertReturn(_, _) else {
+    fail("Expected AssertReturn command")
+  }
+}
