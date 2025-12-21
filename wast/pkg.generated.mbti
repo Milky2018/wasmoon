@@ -2,15 +2,87 @@
 package "Milky2018/wasmoon/wast"
 
 import(
+  "Milky2018/wasmoon/jit"
+  "Milky2018/wasmoon/runtime"
+  "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/wat"
 )
 
 // Values
+pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], Array[@types.ValueType])]
+
+pub fn count_func_imports(Array[@types.Import]) -> Int
+
+pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance
+
+pub fn eval_elem_offset_expr(Array[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int
+
+pub fn exports_shared_resources(@types.Module) -> Bool
+
+pub fn has_cross_module_imports(@types.Module) -> Bool
+
+pub fn has_unsupported_instructions(@types.Module) -> Bool
+
+pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+
+pub fn invoke_action(WastContext, @wat.WastAction) -> Array[@types.Value] raise WastRunnerError
+
 pub fn parse(String) -> @wat.WastScript raise @wat.WatError
 
+pub fn run_wast_command(WastContext, @wat.WastCommand, Int, WastResult, String, Bool) -> Unit
+
+pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, jit_compiler? : JITCompiler?) -> WastResult
+
+pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
+
+pub fn values_match(@types.Value, @wat.WastValue) -> Bool
+
+pub fn wast_value_to_runtime(@wat.WastValue) -> @types.Value
+
 // Errors
+pub(all) suberror WastRunnerError {
+  ModuleNotFound(String)
+  NoCurrentModule
+  RuntimeError(String)
+}
+pub impl Show for WastRunnerError
 
 // Types and methods
+pub struct JITCompiler {
+  compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> JITModuleContext?
+}
+pub fn JITCompiler::new((@types.Module, @runtime.ModuleInstance, @runtime.Store) -> JITModuleContext?) -> Self
+
+pub struct JITModuleContext {
+  jit_module : @jit.JITModule
+  globals_ptr : Int64
+  global_addrs : Array[Int]
+  func_addrs : Array[Int]
+}
+pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int]) -> Self
+
+pub struct WastContext {
+  store : @runtime.Store
+  mut current_module : @runtime.ModuleInstance?
+  named_modules : Map[String, @runtime.ModuleInstance]
+  module_definitions : Map[String, @types.Module]
+  registered_modules : Map[String, @runtime.ModuleInstance]
+  jit_modules : Map[String, JITModuleContext]
+  mut current_jit : JITModuleContext?
+  use_jit : Bool
+  jit_compiler : JITCompiler?
+}
+pub fn WastContext::build_imports(Self) -> @runtime.Imports
+pub fn WastContext::get_store(Self) -> @runtime.Store
+pub fn WastContext::new(Bool, jit_compiler? : JITCompiler?) -> Self
+
+pub struct WastResult {
+  mut passed : Int
+  mut failed : Int
+  mut skipped : Int
+  failures : Array[String]
+}
+pub fn WastResult::new() -> Self
 
 // Type aliases
 pub using @wat {type WastAction}

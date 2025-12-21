@@ -6,9 +6,6 @@ priv suberror CliError {
   FuncArgNumError(Int, Int)
   ArgTypeError(@types.ValueType, String)
   UnsupportedArgTypeError(@types.ValueType, String)
-  ModuleNotFound(String)
-  NoCurrentModule
-  RuntimeError(String)
 }
 
 ///|
@@ -22,9 +19,6 @@ impl Show for CliError with output(self, logger) {
     ArgTypeError(ty, arg) => "invalid \{ty} value: \{arg}"
     UnsupportedArgTypeError(ty, arg) =>
       "unsupported argument type \{ty}: \{arg}"
-    ModuleNotFound(name) => "module \{name} not found"
-    NoCurrentModule => "no current module"
-    RuntimeError(e) => "runtime error: \{e}"
   }
   logger.write_string(msg)
 }
