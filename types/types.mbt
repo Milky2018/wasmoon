@@ -93,36 +93,36 @@ pub(all) enum Instruction {
   TableCopy(Int, Int) // dest table index, src table index
   TableInit(Int, Int) // table index, elem index
 
-  // Memory instructions
-  I32Load(Int, Int) // align, offset
-  I64Load(Int, Int)
-  F32Load(Int, Int)
-  F64Load(Int, Int)
-  I32Load8S(Int, Int)
-  I32Load8U(Int, Int)
-  I32Load16S(Int, Int)
-  I32Load16U(Int, Int)
-  I64Load8S(Int, Int)
-  I64Load8U(Int, Int)
-  I64Load16S(Int, Int)
-  I64Load16U(Int, Int)
-  I64Load32S(Int, Int)
-  I64Load32U(Int, Int)
-  I32Store(Int, Int)
-  I64Store(Int, Int)
-  F32Store(Int, Int)
-  F64Store(Int, Int)
-  I32Store8(Int, Int)
-  I32Store16(Int, Int)
-  I64Store8(Int, Int)
-  I64Store16(Int, Int)
-  I64Store32(Int, Int)
-  MemorySize
-  MemoryGrow
-  MemoryInit(Int) // data segment index
+  // Memory instructions - (memidx, align, offset)
+  I32Load(Int, Int, Int) // memidx, align, offset
+  I64Load(Int, Int, Int)
+  F32Load(Int, Int, Int)
+  F64Load(Int, Int, Int)
+  I32Load8S(Int, Int, Int)
+  I32Load8U(Int, Int, Int)
+  I32Load16S(Int, Int, Int)
+  I32Load16U(Int, Int, Int)
+  I64Load8S(Int, Int, Int)
+  I64Load8U(Int, Int, Int)
+  I64Load16S(Int, Int, Int)
+  I64Load16U(Int, Int, Int)
+  I64Load32S(Int, Int, Int)
+  I64Load32U(Int, Int, Int)
+  I32Store(Int, Int, Int)
+  I64Store(Int, Int, Int)
+  F32Store(Int, Int, Int)
+  F64Store(Int, Int, Int)
+  I32Store8(Int, Int, Int)
+  I32Store16(Int, Int, Int)
+  I64Store8(Int, Int, Int)
+  I64Store16(Int, Int, Int)
+  I64Store32(Int, Int, Int)
+  MemorySize(Int) // memidx
+  MemoryGrow(Int) // memidx
+  MemoryInit(Int, Int) // memidx, data segment index
   DataDrop(Int) // data segment index
-  MemoryCopy
-  MemoryFill
+  MemoryCopy(Int, Int) // dest memidx, src memidx
+  MemoryFill(Int) // memidx
   ElemDrop(Int) // element segment index
 
   // Reference type instructions

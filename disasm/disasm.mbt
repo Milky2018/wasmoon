@@ -571,60 +571,91 @@ fn write_instruction_simple(
     }
 
     // Memory load instructions
-    I32Load(align, offset) => write_mem_instr(buf, "i32.load", align, offset)
-    I64Load(align, offset) => write_mem_instr(buf, "i64.load", align, offset)
-    F32Load(align, offset) => write_mem_instr(buf, "f32.load", align, offset)
-    F64Load(align, offset) => write_mem_instr(buf, "f64.load", align, offset)
-    I32Load8S(align, offset) =>
-      write_mem_instr(buf, "i32.load8_s", align, offset)
-    I32Load8U(align, offset) =>
-      write_mem_instr(buf, "i32.load8_u", align, offset)
-    I32Load16S(align, offset) =>
-      write_mem_instr(buf, "i32.load16_s", align, offset)
-    I32Load16U(align, offset) =>
-      write_mem_instr(buf, "i32.load16_u", align, offset)
-    I64Load8S(align, offset) =>
-      write_mem_instr(buf, "i64.load8_s", align, offset)
-    I64Load8U(align, offset) =>
-      write_mem_instr(buf, "i64.load8_u", align, offset)
-    I64Load16S(align, offset) =>
-      write_mem_instr(buf, "i64.load16_s", align, offset)
-    I64Load16U(align, offset) =>
-      write_mem_instr(buf, "i64.load16_u", align, offset)
-    I64Load32S(align, offset) =>
-      write_mem_instr(buf, "i64.load32_s", align, offset)
-    I64Load32U(align, offset) =>
-      write_mem_instr(buf, "i64.load32_u", align, offset)
+    I32Load(memidx, align, offset) =>
+      write_mem_instr(buf, "i32.load", memidx, align, offset)
+    I64Load(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.load", memidx, align, offset)
+    F32Load(memidx, align, offset) =>
+      write_mem_instr(buf, "f32.load", memidx, align, offset)
+    F64Load(memidx, align, offset) =>
+      write_mem_instr(buf, "f64.load", memidx, align, offset)
+    I32Load8S(memidx, align, offset) =>
+      write_mem_instr(buf, "i32.load8_s", memidx, align, offset)
+    I32Load8U(memidx, align, offset) =>
+      write_mem_instr(buf, "i32.load8_u", memidx, align, offset)
+    I32Load16S(memidx, align, offset) =>
+      write_mem_instr(buf, "i32.load16_s", memidx, align, offset)
+    I32Load16U(memidx, align, offset) =>
+      write_mem_instr(buf, "i32.load16_u", memidx, align, offset)
+    I64Load8S(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.load8_s", memidx, align, offset)
+    I64Load8U(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.load8_u", memidx, align, offset)
+    I64Load16S(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.load16_s", memidx, align, offset)
+    I64Load16U(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.load16_u", memidx, align, offset)
+    I64Load32S(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.load32_s", memidx, align, offset)
+    I64Load32U(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.load32_u", memidx, align, offset)
 
     // Memory store instructions
-    I32Store(align, offset) => write_mem_instr(buf, "i32.store", align, offset)
-    I64Store(align, offset) => write_mem_instr(buf, "i64.store", align, offset)
-    F32Store(align, offset) => write_mem_instr(buf, "f32.store", align, offset)
-    F64Store(align, offset) => write_mem_instr(buf, "f64.store", align, offset)
-    I32Store8(align, offset) =>
-      write_mem_instr(buf, "i32.store8", align, offset)
-    I32Store16(align, offset) =>
-      write_mem_instr(buf, "i32.store16", align, offset)
-    I64Store8(align, offset) =>
-      write_mem_instr(buf, "i64.store8", align, offset)
-    I64Store16(align, offset) =>
-      write_mem_instr(buf, "i64.store16", align, offset)
-    I64Store32(align, offset) =>
-      write_mem_instr(buf, "i64.store32", align, offset)
+    I32Store(memidx, align, offset) =>
+      write_mem_instr(buf, "i32.store", memidx, align, offset)
+    I64Store(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.store", memidx, align, offset)
+    F32Store(memidx, align, offset) =>
+      write_mem_instr(buf, "f32.store", memidx, align, offset)
+    F64Store(memidx, align, offset) =>
+      write_mem_instr(buf, "f64.store", memidx, align, offset)
+    I32Store8(memidx, align, offset) =>
+      write_mem_instr(buf, "i32.store8", memidx, align, offset)
+    I32Store16(memidx, align, offset) =>
+      write_mem_instr(buf, "i32.store16", memidx, align, offset)
+    I64Store8(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.store8", memidx, align, offset)
+    I64Store16(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.store16", memidx, align, offset)
+    I64Store32(memidx, align, offset) =>
+      write_mem_instr(buf, "i64.store32", memidx, align, offset)
 
     // Memory misc
-    MemorySize => buf.write_string("memory.size")
-    MemoryGrow => buf.write_string("memory.grow")
-    MemoryInit(idx) => {
-      buf.write_string("memory.init ")
-      buf.write_string(idx.to_string())
+    MemorySize(memidx) => {
+      buf.write_string("memory.size")
+      if memidx != 0 {
+        buf.write_string(" \{memidx}")
+      }
+    }
+    MemoryGrow(memidx) => {
+      buf.write_string("memory.grow")
+      if memidx != 0 {
+        buf.write_string(" \{memidx}")
+      }
+    }
+    MemoryInit(memidx, dataidx) => {
+      buf.write_string("memory.init")
+      if memidx != 0 {
+        buf.write_string(" \{memidx}")
+      }
+      buf.write_string(" \{dataidx}")
     }
     DataDrop(idx) => {
       buf.write_string("data.drop ")
       buf.write_string(idx.to_string())
     }
-    MemoryCopy => buf.write_string("memory.copy")
-    MemoryFill => buf.write_string("memory.fill")
+    MemoryCopy(dst, src) => {
+      buf.write_string("memory.copy")
+      if dst != 0 || src != 0 {
+        buf.write_string(" \{dst} \{src}")
+      }
+    }
+    MemoryFill(memidx) => {
+      buf.write_string("memory.fill")
+      if memidx != 0 {
+        buf.write_string(" \{memidx}")
+      }
+    }
     ElemDrop(idx) => {
       buf.write_string("elem.drop ")
       buf.write_string(idx.to_string())
@@ -834,10 +865,15 @@ fn write_instruction_simple(
 fn write_mem_instr(
   buf : StringBuilder,
   name : String,
+  memidx : Int,
   align : Int,
   offset : Int,
 ) -> Unit {
   buf.write_string(name)
+  if memidx != 0 {
+    buf.write_string(" ")
+    buf.write_string(memidx.to_string())
+  }
   if offset != 0 {
     buf.write_string(" offset=")
     buf.write_string(offset.to_string())

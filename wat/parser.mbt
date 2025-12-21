@@ -108,6 +108,36 @@ fn Parser::resolve_label(self : Parser, name : String) -> Int? {
 }
 
 ///|
+/// Resolve a named memory to its index
+fn Parser::resolve_memory(self : Parser, name : String) -> Int raise WatError {
+  match self.memory_names.get(name) {
+    Some(idx) => idx
+    None => raise WatError::UndefinedIdentifier("memory $\{name}", self.loc())
+  }
+}
+
+///|
+/// Parse an optional memory index (Id or Number), defaults to 0
+fn Parser::parse_optional_memidx(self : Parser) -> Int raise WatError {
+  match self.current.token {
+    Id(name) => {
+      let idx = self.resolve_memory(name)
+      self.advance()
+      idx
+    }
+    Number(s) =>
+      // Only parse as memidx if it's a plain number (not offset=N or align=N)
+      if !s.has_prefix("offset=") && !s.has_prefix("align=") {
+        self.advance()
+        parse_int(s)
+      } else {
+        0 // Default to memory 0
+      }
+    _ => 0 // Default to memory 0
+  }
+}
+
+///|
 fn Parser::advance(self : Parser) -> Unit raise WatError {
   self.current = self.lexer.next_token()
 }
@@ -3262,56 +3292,85 @@ fn Parser::parse_plain_instruction(
 
     // Memory
     "i32.load" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I32Load(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Load(m, a, o) })
     "i64.load" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Load(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Load(m, a, o) })
     "f32.load" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::F32Load(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::F32Load(m, a, o) })
     "f64.load" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::F64Load(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::F64Load(m, a, o) })
     "i32.load8_s" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I32Load8S(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Load8S(m, a, o) })
     "i32.load8_u" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I32Load8U(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Load8U(m, a, o) })
     "i32.load16_s" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I32Load16S(a, o) })
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I32Load16S(m, a, o)
+      })
     "i32.load16_u" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I32Load16U(a, o) })
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I32Load16U(m, a, o)
+      })
     "i64.load8_s" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Load8S(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Load8S(m, a, o) })
     "i64.load8_u" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Load8U(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Load8U(m, a, o) })
     "i64.load16_s" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Load16S(a, o) })
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I64Load16S(m, a, o)
+      })
     "i64.load16_u" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Load16U(a, o) })
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I64Load16U(m, a, o)
+      })
     "i64.load32_s" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Load32S(a, o) })
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I64Load32S(m, a, o)
+      })
     "i64.load32_u" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Load32U(a, o) })
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I64Load32U(m, a, o)
+      })
     "i32.store" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I32Store(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Store(m, a, o) })
     "i64.store" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Store(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Store(m, a, o) })
     "f32.store" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::F32Store(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::F32Store(m, a, o) })
     "f64.store" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::F64Store(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::F64Store(m, a, o) })
     "i32.store8" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I32Store8(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Store8(m, a, o) })
     "i32.store16" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I32Store16(a, o) })
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I32Store16(m, a, o)
+      })
     "i64.store8" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Store8(a, o) })
+      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Store8(m, a, o) })
     "i64.store16" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Store16(a, o) })
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I64Store16(m, a, o)
+      })
     "i64.store32" =>
-      parse_mem_arg(self, fn(a, o) { @types.Instruction::I64Store32(a, o) })
-    "memory.size" => @types.Instruction::MemorySize
-    "memory.grow" => @types.Instruction::MemoryGrow
-    "memory.init" => @types.Instruction::MemoryInit(self.parse_data_idx())
-    "memory.copy" => @types.Instruction::MemoryCopy
-    "memory.fill" => @types.Instruction::MemoryFill
+      parse_mem_arg(self, fn(m, a, o) {
+        @types.Instruction::I64Store32(m, a, o)
+      })
+    "memory.size" =>
+      @types.Instruction::MemorySize(self.parse_optional_memidx())
+    "memory.grow" =>
+      @types.Instruction::MemoryGrow(self.parse_optional_memidx())
+    "memory.init" => {
+      let memidx = self.parse_optional_memidx()
+      let dataidx = self.parse_data_idx()
+      @types.Instruction::MemoryInit(memidx, dataidx)
+    }
+    "memory.copy" => {
+      let dst = self.parse_optional_memidx()
+      let src = self.parse_optional_memidx()
+      @types.Instruction::MemoryCopy(dst, src)
+    }
+    "memory.fill" =>
+      @types.Instruction::MemoryFill(self.parse_optional_memidx())
     "data.drop" => @types.Instruction::DataDrop(self.parse_data_idx())
     "elem.drop" => @types.Instruction::ElemDrop(self.parse_elem_idx())
 
@@ -3477,10 +3536,46 @@ fn Parser::parse_plain_instruction(
 ///|
 fn parse_mem_arg(
   parser : Parser,
-  instr : (Int, Int) -> @types.Instruction,
+  instr : (Int, Int, Int) -> @types.Instruction,
 ) -> @types.Instruction raise WatError {
+  let mut memidx = 0
   let mut offset = 0
   let mut align = 0
+  // Multi-memory: Parse optional memory index (e.g., $mem1 or 0)
+  match parser.current.token {
+    Id(name) => {
+      // Memory name like $mem1 - resolve to index
+      memidx = parser.resolve_memory(name)
+      parser.advance()
+    }
+    Number(s) =>
+      // Could be memory index or offset without = prefix
+      // Check if it looks like a plain number (no = prefix) and next token is offset= or align=
+      if !s.has_prefix("offset=") && !s.has_prefix("align=") {
+        // Check if there's a following offset= or align= keyword
+        // If so, this is a memory index; otherwise it's not a memory argument
+        let saved_pos = parser.lexer.pos
+        let saved_line = parser.lexer.line
+        let saved_column = parser.lexer.column
+        let saved_token = parser.current
+        parser.advance()
+        let is_memidx = match parser.current.token {
+          Keyword(k) => k.has_prefix("offset=") || k.has_prefix("align=")
+          RParen => true // Could be memory index followed by closing paren
+          _ => false
+        }
+        if is_memidx {
+          memidx = parse_int(s)
+        } else {
+          // Restore position - this wasn't a memory index
+          parser.lexer.pos = saved_pos
+          parser.lexer.line = saved_line
+          parser.lexer.column = saved_column
+          parser.current = saved_token
+        }
+      }
+    _ => ()
+  }
   // Parse optional offset=N and align=N
   while true {
     match parser.current.token {
@@ -3508,7 +3603,7 @@ fn parse_mem_arg(
       _ => break
     }
   }
-  instr(align, offset)
+  instr(memidx, align, offset)
 }
 
 ///|
@@ -5341,6 +5436,7 @@ fn Parser::parse_tag_idx(self : Parser) -> Int raise WatError {
 pub enum WastCommand {
   Module(@types.Module, String?)
   ModuleDefinition(@types.Module, String?)
+  ModuleInstance(String?, String) // (instance_name, definition_name)
   ModuleQuote(Array[String])
   ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])
@@ -5916,6 +6012,25 @@ fn Parser::parse_wast_module_command(
           ModuleDefinition(mod_, final_name)
         }
       }
+    }
+    Keyword("instance") => {
+      // (module instance $instance_name $definition_name)
+      self.advance() // consume 'instance'
+      let instance_name = self.parse_wast_optional_id()
+      // The definition name is required - parse as identifier
+      let def_name = match self.current.token {
+        Id(s) => {
+          self.advance()
+          s
+        }
+        _ =>
+          raise WatError::UnexpectedToken(
+            "expected module definition name",
+            self.loc(),
+          )
+      }
+      self.expect_rparen()
+      ModuleInstance(instance_name, def_name)
     }
     _ => {
       let module_text = self.collect_wast_module_text()

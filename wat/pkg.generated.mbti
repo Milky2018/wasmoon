@@ -40,6 +40,7 @@ pub impl Show for WastAction
 pub enum WastCommand {
   Module(@types.Module, String?)
   ModuleDefinition(@types.Module, String?)
+  ModuleInstance(String?, String)
   ModuleQuote(Array[String])
   ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])

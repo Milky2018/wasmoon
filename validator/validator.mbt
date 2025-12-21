@@ -1383,11 +1383,11 @@ fn validate_instr(
       stack.push(@types.ValueType::F64)
     }
 
-    // Memory operations - all require memory index 0 to exist
+    // Memory operations - validate memory index exists
     // Natural alignment: 8-bit=0, 16-bit=1, 32-bit=2, 64-bit=3
-    I32Load(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I32Load(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 2 {
         raise InvalidAlignment(
@@ -1397,9 +1397,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I32)
     }
-    I32Load8S(align, _) | I32Load8U(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I32Load8S(memidx, align, _) | I32Load8U(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 0 {
         raise InvalidAlignment(
@@ -1409,9 +1409,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I32)
     }
-    I32Load16S(align, _) | I32Load16U(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I32Load16S(memidx, align, _) | I32Load16U(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 1 {
         raise InvalidAlignment(
@@ -1421,9 +1421,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I32)
     }
-    I64Load(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I64Load(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 3 {
         raise InvalidAlignment(
@@ -1433,9 +1433,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I64)
     }
-    I64Load8S(align, _) | I64Load8U(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I64Load8S(memidx, align, _) | I64Load8U(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 0 {
         raise InvalidAlignment(
@@ -1445,9 +1445,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I64)
     }
-    I64Load16S(align, _) | I64Load16U(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I64Load16S(memidx, align, _) | I64Load16U(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 1 {
         raise InvalidAlignment(
@@ -1457,9 +1457,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I64)
     }
-    I64Load32S(align, _) | I64Load32U(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I64Load32S(memidx, align, _) | I64Load32U(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 2 {
         raise InvalidAlignment(
@@ -1469,9 +1469,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::I64)
     }
-    F32Load(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    F32Load(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 2 {
         raise InvalidAlignment(
@@ -1481,9 +1481,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::F32)
     }
-    F64Load(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    F64Load(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 3 {
         raise InvalidAlignment(
@@ -1493,9 +1493,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // address
       stack.push(@types.ValueType::F64)
     }
-    I32Store(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I32Store(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 2 {
         raise InvalidAlignment(
@@ -1505,9 +1505,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    I32Store8(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I32Store8(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 0 {
         raise InvalidAlignment(
@@ -1517,9 +1517,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    I32Store16(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I32Store16(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 1 {
         raise InvalidAlignment(
@@ -1529,9 +1529,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    I64Store(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I64Store(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 3 {
         raise InvalidAlignment(
@@ -1541,9 +1541,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I64) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    I64Store8(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I64Store8(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 0 {
         raise InvalidAlignment(
@@ -1553,9 +1553,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I64) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    I64Store16(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I64Store16(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 1 {
         raise InvalidAlignment(
@@ -1565,9 +1565,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I64) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    I64Store32(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    I64Store32(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 2 {
         raise InvalidAlignment(
@@ -1577,9 +1577,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::I64) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    F32Store(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    F32Store(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 2 {
         raise InvalidAlignment(
@@ -1589,9 +1589,9 @@ fn validate_instr(
       stack.pop(@types.ValueType::F32) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    F64Store(align, _) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    F64Store(memidx, align, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       if align > 3 {
         raise InvalidAlignment(
@@ -1601,35 +1601,38 @@ fn validate_instr(
       stack.pop(@types.ValueType::F64) // value
       stack.pop(@types.ValueType::I32) // address
     }
-    MemorySize | MemoryGrow => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    MemorySize(memidx) | MemoryGrow(memidx) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
-      if instr == @types.Instruction::MemoryGrow {
+      if instr is MemoryGrow(_) {
         stack.pop(@types.ValueType::I32) // delta
       }
       stack.push(@types.ValueType::I32)
     }
-    MemoryInit(_) => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    MemoryInit(memidx, _) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
     }
     DataDrop(_) => ()
-    MemoryCopy => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    MemoryCopy(dst, src) => {
+      if dst >= ctx.mems.length() {
+        raise InvalidMemoryIndex(dst)
+      }
+      if src >= ctx.mems.length() {
+        raise InvalidMemoryIndex(src)
       }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
     }
-    MemoryFill => {
-      if ctx.mems.length() == 0 {
-        raise InvalidMemoryIndex(0)
+    MemoryFill(memidx) => {
+      if memidx >= ctx.mems.length() {
+        raise InvalidMemoryIndex(memidx)
       }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // val
