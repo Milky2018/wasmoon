@@ -5398,12 +5398,438 @@ pub struct WastScript {
 pub fn parse_wast(input : String) -> WastScript raise WatError {
   let parser = Parser::new(input)
   let commands : Array[(WastCommand, Int)] = []
-  while parser.current.token != Eof {
+
+  // Check for inline module (module fields without explicit (module ...) wrapper)
+  // WebAssembly spec allows this shorthand where (func) (memory 0) is equivalent to (module (func) (memory 0))
+  if parser.is_inline_module() {
+    // Parse as inline module - wrap in implicit module
     let line = parser.lexer.line
-    let cmd = parser.parse_wast_command()
-    commands.push((cmd, line))
+    let mod_ = parser.parse_inline_module()
+    commands.push((Module(mod_, None), line))
+  } else {
+    // Parse normal WAST commands
+    while parser.current.token != Eof {
+      let line = parser.lexer.line
+      let cmd = parser.parse_wast_command()
+      commands.push((cmd, line))
+    }
   }
   WastScript::{ commands, }
+}
+
+///|
+/// Check if the input is an inline module (module fields without explicit module wrapper)
+fn Parser::is_inline_module(self : Parser) -> Bool {
+  // An inline module starts with ( followed by a module field keyword
+  if self.current.token != LParen {
+    return false
+  }
+  // Peek at the next token by temporarily advancing
+  // Save lexer state
+  let saved_pos = self.lexer.pos
+  let saved_line = self.lexer.line
+  let saved_column = self.lexer.column
+  let saved_token_start_line = self.lexer.token_start_line
+  let saved_token_start_column = self.lexer.token_start_column
+  let saved_current = self.current
+
+  // Advance and check - ignore any errors during peeking
+  let is_inline = try {
+    self.advance() // consume '('
+    match self.current.token {
+      Keyword(k) => is_module_field_keyword(k)
+      _ => false
+    }
+  } catch {
+    _ => false
+  }
+
+  // Restore state
+  self.lexer.pos = saved_pos
+  self.lexer.line = saved_line
+  self.lexer.column = saved_column
+  self.lexer.token_start_line = saved_token_start_line
+  self.lexer.token_start_column = saved_token_start_column
+  self.current = saved_current
+  is_inline
+}
+
+///|
+/// Check if a keyword is a module field keyword
+fn is_module_field_keyword(k : String) -> Bool {
+  k == "type" ||
+  k == "import" ||
+  k == "func" ||
+  k == "table" ||
+  k == "memory" ||
+  k == "global" ||
+  k == "export" ||
+  k == "start" ||
+  k == "elem" ||
+  k == "data" ||
+  k == "tag"
+}
+
+///|
+/// Parse an inline module (module fields without explicit module wrapper)
+fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
+  let mod_ = @types.Module::new()
+
+  // First pass: collect all names (to support forward references)
+  let saved_pos = self.lexer.pos
+  let saved_line = self.lexer.line
+  let saved_column = self.lexer.column
+  let saved_token_start_line = self.lexer.token_start_line
+  let saved_token_start_column = self.lexer.token_start_column
+  let saved_current = self.current
+
+  // Scan for definitions to collect names
+  let mut func_idx = 0
+  let mut type_idx = 0
+  let mut global_idx = 0
+  let mut memory_idx = 0
+  let mut table_idx = 0
+  let mut tag_idx = 0
+  while self.current.token != Eof {
+    match self.current.token {
+      LParen => {
+        self.advance()
+        match self.current.token {
+          Keyword("type") => {
+            self.advance()
+            if self.current.token is Id(name) {
+              self.type_names.set(name, type_idx)
+              self.advance()
+            }
+            type_idx = type_idx + 1
+            self.skip_to_matching_rparen()
+          }
+          Keyword("import") => {
+            self.advance()
+            // Skip module and name strings
+            if self.current.token is String_(_) {
+              self.advance()
+            }
+            if self.current.token is String_(_) {
+              self.advance()
+            }
+            // Check for import kind and name
+            if self.current.token == LParen {
+              self.advance()
+              match self.current.token {
+                Keyword("func") => {
+                  self.advance()
+                  if self.current.token is Id(name) {
+                    self.func_names.set(name, func_idx)
+                    self.advance()
+                  }
+                  func_idx = func_idx + 1
+                }
+                Keyword("global") => {
+                  self.advance()
+                  if self.current.token is Id(name) {
+                    self.global_names.set(name, global_idx)
+                    self.advance()
+                  }
+                  global_idx = global_idx + 1
+                }
+                Keyword("memory") => {
+                  self.advance()
+                  if self.current.token is Id(name) {
+                    self.memory_names.set(name, memory_idx)
+                    self.advance()
+                  }
+                  memory_idx = memory_idx + 1
+                }
+                Keyword("table") => {
+                  self.advance()
+                  if self.current.token is Id(name) {
+                    self.table_names.set(name, table_idx)
+                    self.advance()
+                  }
+                  table_idx = table_idx + 1
+                }
+                Keyword("tag") => {
+                  self.advance()
+                  if self.current.token is Id(name) {
+                    self.tag_names.set(name, tag_idx)
+                    self.advance()
+                  }
+                  tag_idx = tag_idx + 1
+                }
+                _ => ()
+              }
+            }
+            self.skip_to_matching_rparen()
+          }
+          Keyword("func") => {
+            self.advance()
+            if self.current.token is Id(name) {
+              self.func_names.set(name, func_idx)
+              self.advance()
+            }
+            func_idx = func_idx + 1
+            self.skip_to_matching_rparen()
+          }
+          Keyword("global") => {
+            self.advance()
+            if self.current.token is Id(name) {
+              self.global_names.set(name, global_idx)
+              self.advance()
+            }
+            global_idx = global_idx + 1
+            self.skip_to_matching_rparen()
+          }
+          Keyword("memory") => {
+            self.advance()
+            if self.current.token is Id(name) {
+              self.memory_names.set(name, memory_idx)
+              self.advance()
+            }
+            memory_idx = memory_idx + 1
+            self.skip_to_matching_rparen()
+          }
+          Keyword("table") => {
+            self.advance()
+            if self.current.token is Id(name) {
+              self.table_names.set(name, table_idx)
+              self.advance()
+            }
+            table_idx = table_idx + 1
+            self.skip_to_matching_rparen()
+          }
+          Keyword("tag") => {
+            self.advance()
+            if self.current.token is Id(name) {
+              self.tag_names.set(name, tag_idx)
+              self.advance()
+            }
+            tag_idx = tag_idx + 1
+            self.skip_to_matching_rparen()
+          }
+          _ => self.skip_to_matching_rparen()
+        }
+      }
+      _ => self.advance()
+    }
+  }
+
+  // Restore state for second pass
+  self.lexer.pos = saved_pos
+  self.lexer.line = saved_line
+  self.lexer.column = saved_column
+  self.lexer.token_start_line = saved_token_start_line
+  self.lexer.token_start_column = saved_token_start_column
+  self.current = saved_current
+
+  // Intermediate pass: parse types first (needed for forward references)
+  let saved_pos2 = self.lexer.pos
+  let saved_line2 = self.lexer.line
+  let saved_column2 = self.lexer.column
+  let saved_token_start_line2 = self.lexer.token_start_line
+  let saved_token_start_column2 = self.lexer.token_start_column
+  let saved_current2 = self.current
+  let mut curr_type_idx = 0
+  while self.current.token != Eof {
+    match self.current.token {
+      LParen => {
+        self.advance()
+        if self.current.token is Keyword("type") {
+          self.advance()
+          let func_type = self.parse_type_def(curr_type_idx)
+          mod_.types.push(func_type)
+          curr_type_idx = curr_type_idx + 1
+        } else {
+          self.skip_to_matching_rparen()
+        }
+      }
+      _ => self.advance()
+    }
+  }
+
+  // Restore state for main pass
+  self.lexer.pos = saved_pos2
+  self.lexer.line = saved_line2
+  self.lexer.column = saved_column2
+  self.lexer.token_start_line = saved_token_start_line2
+  self.lexer.token_start_column = saved_token_start_column2
+  self.current = saved_current2
+
+  // Main pass: parse all module fields
+  while self.current.token != Eof {
+    match self.current.token {
+      LParen => {
+        self.advance()
+        self.parse_module_field_inner(mod_)
+      }
+      _ => raise WatError::UnexpectedToken("expected '(' in module", self.loc())
+    }
+  }
+  mod_
+}
+
+///|
+/// Parse a single module field (after the opening '(' has been consumed)
+/// This is shared between parse_module and parse_inline_module
+fn Parser::parse_module_field_inner(
+  self : Parser,
+  mod_ : @types.Module,
+) -> Unit raise WatError {
+  match self.current.token {
+    Keyword("type") =>
+      // Already parsed in intermediate pass, skip
+      self.skip_to_matching_rparen()
+    Keyword("func") =>
+      match self.parse_func_def(mod_) {
+        FuncDef(type_idx, code, export_names) => {
+          let func_idx = count_func_imports(mod_.imports) + mod_.funcs.length()
+          mod_.funcs.push(type_idx)
+          mod_.codes.push(code)
+          for name in export_names {
+            mod_.exports.push({ name, desc: @types.ExportDesc::Func(func_idx) })
+          }
+        }
+        InlineImport(imp, export_names) => {
+          let func_idx = count_func_imports(mod_.imports)
+          mod_.imports.push(imp)
+          for name in export_names {
+            mod_.exports.push({ name, desc: @types.ExportDesc::Func(func_idx) })
+          }
+        }
+      }
+    Keyword("memory") =>
+      match self.parse_memory_def() {
+        MemoryDef(mem, export_names) => {
+          let mem_idx = mod_.memories.length()
+          mod_.memories.push(mem)
+          for name in export_names {
+            mod_.exports.push({ name, desc: @types.ExportDesc::Memory(mem_idx) })
+          }
+        }
+        MemoryImport(imp, export_names) => {
+          let mut memory_import_count = 0
+          for existing in mod_.imports {
+            if existing.desc is @types.ImportDesc::Memory(_) {
+              memory_import_count += 1
+            }
+          }
+          mod_.imports.push(imp)
+          for name in export_names {
+            mod_.exports.push({
+              name,
+              desc: @types.ExportDesc::Memory(memory_import_count),
+            })
+          }
+        }
+        MemoryWithData(mem, export_names, data_bytes) => {
+          let mem_idx = mod_.memories.length()
+          mod_.memories.push(mem)
+          for name in export_names {
+            mod_.exports.push({ name, desc: @types.ExportDesc::Memory(mem_idx) })
+          }
+          mod_.datas.push({
+            memory_idx: mem_idx,
+            offset: [@types.Instruction::I32Const(0)],
+            init: data_bytes,
+          })
+        }
+      }
+    Keyword("global") =>
+      match self.parse_global_def() {
+        GlobalDef(global, export_names) => {
+          let mut num_global_imports = 0
+          for existing in mod_.imports {
+            if existing.desc is @types.ImportDesc::Global(_) {
+              num_global_imports += 1
+            }
+          }
+          let global_idx = num_global_imports + mod_.globals.length()
+          mod_.globals.push(global)
+          for name in export_names {
+            mod_.exports.push({
+              name,
+              desc: @types.ExportDesc::Global(global_idx),
+            })
+          }
+        }
+        GlobalImport(imp, export_names) => {
+          let mut global_import_count = 0
+          for existing in mod_.imports {
+            if existing.desc is @types.ImportDesc::Global(_) {
+              global_import_count += 1
+            }
+          }
+          mod_.imports.push(imp)
+          for name in export_names {
+            mod_.exports.push({
+              name,
+              desc: @types.ExportDesc::Global(global_import_count),
+            })
+          }
+        }
+      }
+    Keyword("export") => {
+      let exp = self.parse_export_def(mod_)
+      mod_.exports.push(exp)
+    }
+    Keyword("import") => {
+      let imp = self.parse_import_def(mod_)
+      mod_.imports.push(imp)
+    }
+    Keyword("table") => {
+      let (table, export_name, inline_elem, tbl_name) = self.parse_table_def(
+        mod_,
+      )
+      let table_idx = mod_.tables.length()
+      mod_.tables.push(table)
+      if tbl_name is Some(name) {
+        self.table_names.set(name, table_idx)
+      }
+      if export_name is Some(name) {
+        mod_.exports.push({ name, desc: @types.ExportDesc::Table(table_idx) })
+      }
+      if inline_elem is Some(elem) {
+        mod_.elems.push(elem)
+      }
+    }
+    Keyword("start") => {
+      self.advance()
+      let func_idx = self.parse_func_idx()
+      mod_.start = Some(func_idx)
+      self.expect_rparen()
+    }
+    Keyword("data") => {
+      let data = self.parse_data_def()
+      mod_.datas.push(data)
+    }
+    Keyword("elem") => {
+      let elem = self.parse_elem_def()
+      mod_.elems.push(elem)
+    }
+    Keyword("tag") =>
+      match self.parse_tag_def(mod_) {
+        TagDef(tag, export_names) => {
+          let tag_idx = count_tag_imports(mod_.imports) + mod_.tags.length()
+          mod_.tags.push(tag)
+          for name in export_names {
+            mod_.exports.push({ name, desc: @types.ExportDesc::Tag(tag_idx) })
+          }
+        }
+        TagImport(imp, export_names) => {
+          let tag_idx = count_tag_imports(mod_.imports)
+          mod_.imports.push(imp)
+          for name in export_names {
+            mod_.exports.push({ name, desc: @types.ExportDesc::Tag(tag_idx) })
+          }
+        }
+      }
+    Keyword(kw) =>
+      raise WatError::UnexpectedToken(
+        "unexpected module field: \{kw}",
+        self.loc(),
+      )
+    _ => raise WatError::UnexpectedToken("expected module field", self.loc())
+  }
 }
 
 ///|
