@@ -797,6 +797,46 @@ fn Parser::read_instruction(
         If(bt, then_body, [])
       }
     }
+    // Exception handling instructions
+    0x08 => Throw(self.read_u32()) // throw tag_idx
+    0x0A => ThrowRef // throw_ref
+    0x1F => {
+      // try_table: blocktype, catch_handlers*, body
+      let bt = self.read_block_type()
+      let handler_count = self.read_u32()
+      let handlers : Array[@types.CatchHandler] = []
+      for _ in 0..<handler_count {
+        let catch_kind = self.read_byte()
+        let handler = match catch_kind {
+          0x00 => {
+            // catch: tag_idx, label_idx
+            let tag_idx = self.read_u32()
+            let label_idx = self.read_u32()
+            @types.CatchHandler::Catch(tag_idx, label_idx)
+          }
+          0x01 => {
+            // catch_ref: tag_idx, label_idx
+            let tag_idx = self.read_u32()
+            let label_idx = self.read_u32()
+            @types.CatchHandler::CatchRef(tag_idx, label_idx)
+          }
+          0x02 => {
+            // catch_all: label_idx
+            let label_idx = self.read_u32()
+            @types.CatchHandler::CatchAll(label_idx)
+          }
+          0x03 => {
+            // catch_all_ref: label_idx
+            let label_idx = self.read_u32()
+            @types.CatchHandler::CatchAllRef(label_idx)
+          }
+          _ => raise ParseError("invalid catch handler kind: \{catch_kind}")
+        }
+        handlers.push(handler)
+      }
+      let body = self.read_expr()
+      TryTable(bt, handlers, body)
+    }
     0x0C => Br(self.read_u32())
     0x0D => BrIf(self.read_u32())
     0x0E => {
@@ -1194,6 +1234,11 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             0x01 => @types.ImportDesc::Table(parser.read_table_type())
             0x02 => @types.ImportDesc::Memory(parser.read_memory_type())
             0x03 => @types.ImportDesc::Global(parser.read_global_type())
+            0x04 => {
+              // Tag import: attribute (should be 0 for exception) + type_idx
+              let _ = parser.read_byte() // attribute, always 0 for exceptions
+              @types.ImportDesc::Tag(parser.read_u32())
+            }
             _ => raise InvalidImportKind(kind)
           }
           mod.imports.push({ mod_name, name, desc })
@@ -1240,6 +1285,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             0x01 => @types.ExportDesc::Table(parser.read_u32())
             0x02 => @types.ExportDesc::Memory(parser.read_u32())
             0x03 => @types.ExportDesc::Global(parser.read_u32())
+            0x04 => @types.ExportDesc::Tag(parser.read_u32())
             _ => raise InvalidExportKind(kind)
           }
           mod.exports.push({ name, desc })
@@ -1308,9 +1354,15 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
       12 =>
         // Data count section (bulk memory)
         data_count = Some(parser.read_u32())
-      13 =>
-        // Tag section (exception handling) - skip for now
-        parser.pos = section_end
+      13 => {
+        // Tag section (exception handling)
+        let count = parser.read_u32()
+        for _ in 0..<count {
+          let _ = parser.read_byte() // attribute, always 0 for exceptions
+          let type_idx = parser.read_u32()
+          mod.tags.push(@types.TagType::{ type_idx, })
+        }
+      }
       _ =>
         // Invalid section id (valid range is 0-13)
         raise MalformedSectionId(section_id)

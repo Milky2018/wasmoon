@@ -26,6 +26,7 @@ test "execute simple add function" {
     elems: [],
     codes: [add_func],
     datas: [],
+    tags: [],
   }
 
   // Instantiate and call
@@ -70,6 +71,7 @@ test "execute function with local variables" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::I32(3), @types.Value::I32(4)]
@@ -103,6 +105,7 @@ test "execute i64 addition" {
     elems: [],
     codes: [i64_add_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let args = [
@@ -145,6 +148,7 @@ test "execute f32 arithmetic" {
     elems: [],
     codes: [f32_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::F32(3.5), @types.Value::F32(4.0)]
@@ -184,6 +188,7 @@ test "execute f64 arithmetic" {
     elems: [],
     codes: [f64_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::F64(10.0), @types.Value::F64(6.0)]
@@ -217,6 +222,7 @@ test "execute i64 comparison" {
     elems: [],
     codes: [i64_cmp_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::I64(100L), @types.Value::I64(200L)]
@@ -249,6 +255,7 @@ test "numeric conversion: i32.wrap_i64" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // 0x0000000100000005 -> 0x00000005 = 5
@@ -282,6 +289,7 @@ test "numeric conversion: i64.extend_i32_s" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // -1 (i32) -> -1 (i64)
@@ -315,6 +323,7 @@ test "numeric conversion: f64.convert_i32_s" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::I32(-42)]
@@ -347,6 +356,7 @@ test "numeric conversion: i32.reinterpret_f32" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // 1.0f32 IEEE 754 representation is 0x3F800000 = 1065353216
@@ -380,6 +390,7 @@ test "saturating truncation: i32.trunc_sat_f32_s overflow" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // Exceeds i32 max, should saturate to 2147483647
@@ -413,6 +424,7 @@ test "saturating truncation: i32.trunc_sat_f64_u negative" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // Negative values for unsigned saturating truncation should return 0
@@ -453,6 +465,7 @@ test "memory: i32.store and i32.load" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -490,6 +503,7 @@ test "memory: i64.store and i64.load" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -527,6 +541,7 @@ test "memory: f32.store and f32.load" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -569,6 +584,7 @@ test "memory: load with offset" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -608,6 +624,7 @@ test "memory: i32.load8_s sign extension" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -647,6 +664,7 @@ test "memory: i32.load8_u zero extension" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -686,6 +704,7 @@ test "memory: memory.size and memory.grow" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -719,6 +738,7 @@ test "control flow: simple block" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -757,6 +777,7 @@ test "control flow: br exits block" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -804,6 +825,7 @@ test "control flow: br_if conditional" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // Test with condition true (1) - should return 100
@@ -873,6 +895,7 @@ test "control flow: loop with br" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -911,6 +934,7 @@ test "control flow: if-else" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // Test with true (1)
@@ -960,6 +984,7 @@ test "control flow: nested blocks with br" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -997,6 +1022,7 @@ test "control flow: select" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // select(10, 20, 1) -> 10 (condition true)
@@ -1054,6 +1080,7 @@ test "function call: call instruction" {
     elems: [],
     codes: [add_func, main_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "main", [])
@@ -1097,6 +1124,7 @@ test "function call: nested calls" {
     elems: [],
     codes: [double_func, add_one_func, main_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "main", [I32(5)])
@@ -1170,6 +1198,7 @@ test "function call: call_indirect" {
       add_func, sub_func, apply_func,
     ],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1233,6 +1262,7 @@ test "host function: simple call" {
     elems: [],
     codes: [main_func],
     datas: [],
+    tags: [],
   }
 
   // Set up imports
@@ -1288,6 +1318,7 @@ test "memory import: shared memory between modules" {
     elems: [],
     codes: [read_func],
     datas: [],
+    tags: [],
   }
 
   // Set up imports
@@ -1335,6 +1366,7 @@ test "memory import: write to imported memory" {
     elems: [],
     codes: [write_func],
     datas: [],
+    tags: [],
   }
   let imports = @runtime.Imports::new()
   imports.add_memory("env", "mem", mem_addr)
@@ -1372,6 +1404,7 @@ test "import validation: missing import raises error" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
 
   // Empty imports - should fail
@@ -1459,6 +1492,7 @@ test "table import: call_indirect with imported table" {
     elems: [],
     codes: [apply_func],
     datas: [],
+    tags: [],
   }
   let imports = @runtime.Imports::new()
   imports.add_table("env", "table", table_addr)
@@ -1521,6 +1555,7 @@ test "global variables: global.get and global.set" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1562,6 +1597,7 @@ test "global variables: multiple globals" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1595,6 +1631,7 @@ test "global variables: i64 global" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1638,6 +1675,7 @@ test "global import: imported global" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let imports = @runtime.Imports::new()
   imports.add_global("env", "g", global_addr)
@@ -1677,6 +1715,7 @@ test "table operations: table.size" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1835,6 +1874,7 @@ test "module initialization: start function execution" {
     elems: [],
     codes: [init_func, get_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1873,6 +1913,7 @@ test "module initialization: data segment" {
     elems: [],
     codes: [read_func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1909,6 +1950,7 @@ test "module initialization: data segment with offset" {
     elems: [],
     codes: [read_func],
     datas: [{ memory_idx: 0, offset: [I32Const(100)], init: data_bytes }],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1964,6 +2006,7 @@ test "module initialization: element segment" {
     ],
     codes: [func0, func1, call_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2012,6 +2055,7 @@ test "bulk memory: memory.fill" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2055,6 +2099,7 @@ test "bulk memory: memory.copy non-overlapping" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2102,6 +2147,7 @@ test "bulk memory: memory.copy overlapping backward" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2144,6 +2190,7 @@ test "bulk memory: memory.init from data segment" {
     elems: [],
     codes: [func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2187,6 +2234,7 @@ test "bulk memory: memory.init with offset" {
     elems: [],
     codes: [func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2248,6 +2296,7 @@ test "bulk memory: data.drop" {
     elems: [],
     codes: [drop_func, init_zero_func, init_nonzero_func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2313,6 +2362,7 @@ test "bulk memory: elem.drop" {
     ], // elem segment with func 1
     codes: [drop_func, dummy_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2349,6 +2399,7 @@ test "bulk memory: data.drop is idempotent" {
     elems: [],
     codes: [drop_func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2382,6 +2433,7 @@ test "reference types: ref.null funcref" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2414,6 +2466,7 @@ test "reference types: ref.null externref" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2448,6 +2501,7 @@ test "reference types: ref.func" {
     elems: [],
     codes: [func0, func1],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2497,6 +2551,7 @@ test "reference types: ref.is_null with non-null value" {
     ], // table[0] = func 0
     codes: [dummy_func, check_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2548,6 +2603,7 @@ test "reference types: ref.func used with table.set" {
     elems: [],
     codes: [target_func, test_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2580,6 +2636,7 @@ test "multi-value: function returning two values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2621,6 +2678,7 @@ test "multi-value: function returning three values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2656,6 +2714,7 @@ test "multi-value: function returning no values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2694,6 +2753,7 @@ test "multi-value: call function with multi-value return" {
     elems: [],
     codes: [swap_func, test_func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2736,6 +2796,7 @@ test "multi-value: block returning two values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2780,6 +2841,7 @@ test "multi-value: if returning two values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
 
@@ -2823,6 +2885,7 @@ test "multi-value: block with single Value type" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2855,6 +2918,7 @@ test "multi-value: empty block" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2888,6 +2952,7 @@ test "module linking: basic import from another module" {
     elems: [],
     codes: [func_a],
     datas: [],
+    tags: [],
   }
 
   // Instantiate module A
@@ -2911,6 +2976,7 @@ test "module linking: basic import from another module" {
     elems: [],
     codes: [func_b],
     datas: [],
+    tags: [],
   }
   let instance_b = instantiate_with_linker(linker, "mod_b", mod_b) catch {
     _ => fail("Failed to instantiate mod_b")
@@ -2949,6 +3015,7 @@ test "module linking: import memory from another module" {
     elems: [],
     codes: [store_func],
     datas: [],
+    tags: [],
   }
   let instance_a = instantiate_with_linker(linker, "mod_a", mod_a) catch {
     _ => fail("Failed to instantiate mod_a")
@@ -2983,6 +3050,7 @@ test "module linking: import memory from another module" {
     elems: [],
     codes: [read_func],
     datas: [],
+    tags: [],
   }
   let instance_b = instantiate_with_linker(linker, "mod_b", mod_b) catch {
     _ => fail("Failed to instantiate mod_b")
@@ -3022,6 +3090,7 @@ test "module linking: three modules chain" {
     elems: [],
     codes: [add_func],
     datas: [],
+    tags: [],
   }
   (instantiate_with_linker(linker, "math", mod_a) catch {
     _ => fail("Failed to instantiate math")
@@ -3050,6 +3119,7 @@ test "module linking: three modules chain" {
     elems: [],
     codes: [double_func],
     datas: [],
+    tags: [],
   }
   (instantiate_with_linker(linker, "utils", mod_b) catch {
     _ => fail("Failed to instantiate utils")
@@ -3075,6 +3145,7 @@ test "module linking: three modules chain" {
     elems: [],
     codes: [quad_func],
     datas: [],
+    tags: [],
   }
   let instance_c = instantiate_with_linker(linker, "app", mod_c) catch {
     _ => fail("Failed to instantiate app")
@@ -3125,6 +3196,7 @@ test "call_indirect with imports path" {
     ],
     codes: [func_code, test_code],
     datas: [],
+    tags: [],
   }
 
   // Use instantiate_module_with_imports (same path as run.mbt)
@@ -3188,6 +3260,7 @@ test "call_indirect with multiple funcs and explicit type" {
     ],
     codes: [dummy_func, test1_func, func_code, test_code],
     datas: [],
+    tags: [],
   }
   let store = @runtime.Store::new()
   let imports = @runtime.Imports::new()
@@ -3253,6 +3326,7 @@ test "call_indirect type index bug reproduction" {
     ],
     codes: [dummy_func, func_code, test_code],
     datas: [],
+    tags: [],
   }
   let store = @runtime.Store::new()
   let imports = @runtime.Imports::new()
@@ -3293,6 +3367,7 @@ test "i32.trunc_f64_u: value in (-1, 0) truncates to 0" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // -0.9 should truncate to 0
@@ -3325,6 +3400,7 @@ test "i32.trunc_f32_u: value in (-1, 0) truncates to 0" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // -0.5f should truncate to 0
@@ -3358,6 +3434,7 @@ test "i64.trunc_f64_u: large value near 2^64" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // 2^63 = 9223372036854775808.0 should convert correctly
@@ -3392,6 +3469,7 @@ test "i64.trunc_sat_f64_u: large value saturates correctly" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // Value >= 2^64 should saturate to u64::MAX (-1 as i64)
@@ -3425,6 +3503,7 @@ test "i64.trunc_sat_f64_u: value in range converts correctly" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // 2^63 should convert to -9223372036854775808 (as signed)
@@ -3458,6 +3537,7 @@ test "i32.trunc_f64_s: boundary near INT32_MIN" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   // -2147483648.0 is exactly INT32_MIN, should work

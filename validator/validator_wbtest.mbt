@@ -20,6 +20,7 @@ test "validator: valid simple function" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   // Should not raise
   validate_module(mod)
@@ -47,6 +48,7 @@ test "validator: valid function with params" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod)
 }
@@ -73,6 +75,7 @@ test "validator: type mismatch - wrong operand type" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   inspect(
     try? validate_module(mod),
@@ -101,6 +104,7 @@ test "validator: stack underflow" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   inspect(
     try? validate_module(mod),
@@ -126,6 +130,7 @@ test "validator: invalid local index" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(InvalidLocalIndex(5))")
 }
@@ -152,6 +157,7 @@ test "validator: valid function call" {
     elems: [],
     codes: [func0, func1],
     datas: [],
+    tags: [],
   }
   validate_module(mod)
 }
@@ -182,6 +188,7 @@ test "validator: valid global operations" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod)
 }
@@ -209,6 +216,7 @@ test "validator: stack height - function returns too many values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   inspect(
     try? validate_module(mod),
@@ -238,6 +246,7 @@ test "validator: stack height - function returns too few values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   inspect(
     (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
@@ -278,6 +287,7 @@ test "validator: stack height - block returns correct values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod) // Should pass
 }
@@ -310,6 +320,7 @@ test "validator: stack height - block leaves wrong number of values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   inspect(
     (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
@@ -346,6 +357,7 @@ test "validator: stack height - if branches must match" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod) // Should pass
 }
@@ -367,6 +379,7 @@ test "validator: stack height - void function with leftover values" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   inspect(
     (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
@@ -402,6 +415,7 @@ test "validator: control flow - valid br in block" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod) // Should pass
 }
@@ -423,6 +437,7 @@ test "validator: control flow - invalid label index" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   inspect(
     (try? validate_module(mod)) is Err(InvalidLabelIndex(0)),
@@ -461,6 +476,7 @@ test "validator: control flow - nested blocks with br" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod) // Should pass
 }
@@ -495,6 +511,7 @@ test "validator: control flow - br_if with correct type" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod) // Should pass
 }
@@ -525,6 +542,7 @@ test "validator: control flow - loop with br back to start" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod) // Should pass
 }
@@ -551,6 +569,7 @@ test "validator: control flow - return in nested block" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod) // Should pass
 }
@@ -583,6 +602,7 @@ test "validator: control flow - br_table basic" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   validate_module(mod) // Should pass
 }
@@ -645,6 +665,7 @@ test "validator: validate_module_with_context provides location on error" {
     elems: [],
     codes: [func],
     datas: [],
+    tags: [],
   }
   let result = try? validate_module_with_context(mod)
   // Should fail with context
@@ -679,6 +700,7 @@ test "validator: validate_module_with_context reports correct function index" {
     elems: [],
     codes: [func0, func1],
     datas: [],
+    tags: [],
   }
   let result = try? validate_module_with_context(mod)
   match result {
@@ -736,6 +758,7 @@ test "validator: data segment with i64 offset should fail" {
     elems: [],
     codes: [],
     datas: [{ memory_idx: 0, offset: [I64Const(0L)], init: b"" }],
+    tags: [],
   }
   inspect(
     try? validate_module(mod),
@@ -762,6 +785,7 @@ test "validator: data segment with ref.null offset should fail" {
     datas: [
       { memory_idx: 0, offset: [RefNull(@types.ValueType::FuncRef)], init: b"" },
     ],
+    tags: [],
   }
   inspect(
     try? validate_module(mod),
@@ -786,6 +810,7 @@ test "validator: data segment with empty offset should fail" {
     elems: [],
     codes: [],
     datas: [{ memory_idx: 0, offset: [], init: b"" }],
+    tags: [],
   }
   inspect(
     try? validate_module(mod),
@@ -810,6 +835,7 @@ test "validator: data segment with non-constant instruction should fail" {
     elems: [],
     codes: [],
     datas: [{ memory_idx: 0, offset: [I32Ctz], init: b"" }],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
 }
@@ -829,6 +855,7 @@ test "validator: data segment with nop offset should fail" {
     elems: [],
     codes: [],
     datas: [{ memory_idx: 0, offset: [Nop], init: b"" }],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
 }
@@ -848,6 +875,7 @@ test "validator: data segment with unknown global should fail" {
     elems: [],
     codes: [],
     datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"" }],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(InvalidGlobalIndex(0))")
 }
@@ -872,6 +900,7 @@ test "validator: data segment with mutable global offset should fail" {
     elems: [],
     codes: [],
     datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"" }],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(MutableGlobalInConstExpr)")
 }
@@ -891,6 +920,7 @@ test "validator: data segment with valid i32 const offset should pass" {
     elems: [],
     codes: [],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: b"hello" }],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Ok(())")
 }
@@ -915,6 +945,7 @@ test "validator: data segment with immutable global offset should pass" {
     elems: [],
     codes: [],
     datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"hello" }],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Ok(())")
 }
@@ -952,6 +983,7 @@ test "validator: elem segment with i64 offset should fail" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   inspect(
     try? validate_module(mod),
@@ -986,6 +1018,7 @@ test "validator: elem segment with non-constant instruction should fail" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
 }
@@ -1019,6 +1052,7 @@ test "validator: elem segment with unknown global should fail" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(InvalidGlobalIndex(0))")
 }
@@ -1057,6 +1091,7 @@ test "validator: elem segment with mutable global offset should fail" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(MutableGlobalInConstExpr)")
 }
@@ -1082,6 +1117,7 @@ test "validator: elem segment with invalid table index should fail" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(InvalidTableIndex(0))")
 }
@@ -1115,6 +1151,7 @@ test "validator: elem segment type mismatch with table should fail" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
 }
@@ -1147,6 +1184,7 @@ test "validator: elem segment with valid i32 const offset should pass" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Ok(())")
 }
@@ -1180,6 +1218,7 @@ test "validator: elem init with wrong type should fail" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
 }
@@ -1214,6 +1253,7 @@ test "validator: elem with unknown function should fail" {
     ],
     codes: [],
     datas: [],
+    tags: [],
   }
   // Should fail with "unknown function" error
   inspect((try? validate_module(mod)) is Err(_), content="true")
@@ -1239,6 +1279,7 @@ test "regression: invalid type index should fail" {
     elems: [],
     codes: [{ locals: [], body: [] }],
     datas: [],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(2))")
 }
@@ -1264,6 +1305,7 @@ test "regression: uninitialized non-nullable local should fail" {
       },
     ],
     datas: [],
+    tags: [],
   } // reading uninitialized local
   inspect(try? validate_module(mod), content="Err(UninitializedLocal(0))")
 }
@@ -1301,6 +1343,7 @@ test "regression: initialized non-nullable local should pass" {
       },
     ],
     datas: [],
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Ok(())")
 }
@@ -1326,6 +1369,7 @@ test "regression: nullable ref local reading without initialization should pass"
       },
     ],
     datas: [],
+    tags: [],
   } // reading uninitialized nullable local is OK
   inspect(try? validate_module(mod), content="Ok(())")
 }
@@ -1345,6 +1389,7 @@ test "regression: param with non-nullable ref type should be initialized" {
     elems: [],
     codes: [{ locals: [], body: [LocalGet(0), Drop] }],
     datas: [], // param 0 is always initialized
+    tags: [],
   }
   inspect(try? validate_module(mod), content="Ok(())")
 }

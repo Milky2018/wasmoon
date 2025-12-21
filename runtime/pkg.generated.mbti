@@ -26,6 +26,7 @@ pub(all) suberror RuntimeError {
   CallStackExhausted
   UnknownImport
   LinkError
+  NullReference
 }
 pub impl Show for RuntimeError
 
@@ -35,11 +36,18 @@ pub(all) struct CallStackEntry {
   func_name : String?
 }
 
+pub(all) struct ExnInstance {
+  tag_addr : Int
+  values : Array[@types.Value]
+}
+pub impl Show for ExnInstance
+
 pub(all) enum ExternVal {
   Func(Int)
   Table(Int)
   Memory(Int)
   Global(Int)
+  Tag(Int)
 }
 
 type Frame
@@ -69,6 +77,7 @@ pub fn Imports::add_func(Self, String, String, Int) -> Unit
 pub fn Imports::add_global(Self, String, String, Int) -> Unit
 pub fn Imports::add_memory(Self, String, String, Int) -> Unit
 pub fn Imports::add_table(Self, String, String, Int) -> Unit
+pub fn Imports::add_tag(Self, String, String, Int) -> Unit
 pub fn Imports::new() -> Self
 pub fn Imports::resolve(Self, String, String) -> ExternVal?
 
@@ -135,6 +144,7 @@ pub(all) struct ModuleInstance {
   table_addrs : Array[Int]
   mem_addrs : Array[Int]
   global_addrs : Array[Int]
+  tag_addrs : Array[Int]
   exports : Array[@types.Export]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
@@ -177,15 +187,20 @@ pub struct Store {
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
+  tags : Array[@types.FuncType]
+  exns : Array[ExnInstance]
   func_owners : Array[Int]
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
 }
+pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType) -> Int
 pub fn Store::alloc_global(Self, GlobalInstance) -> Int
 pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Int
 pub fn Store::alloc_mem(Self, Memory) -> Int
 pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int
+pub fn Store::alloc_tag(Self, @types.FuncType) -> Int
+pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 pub fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
 pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
@@ -195,6 +210,7 @@ pub fn Store::get_jit_table(Self, Int) -> @jit.JITTable?
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory
 pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
+pub fn Store::get_tag_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::new() -> Self
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
 pub impl Show for Store

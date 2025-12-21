@@ -433,6 +433,99 @@ fn ExecContext::exec_instr(
     ReturnCallIndirect(type_idx, table_idx) =>
       self.exec_tail_call_indirect(type_idx, table_idx)
     ReturnCallRef(type_idx) => self.exec_tail_call_ref(type_idx)
+
+    // Exception handling instructions
+    Throw(tag_idx) => {
+      // Get the tag type to know how many values to pop
+      let tag_addr = self.instance.tag_addrs[tag_idx]
+      let tag_type = self.store.get_tag_type(tag_addr)
+      // Pop exception values from stack (in reverse order, then reverse back)
+      let values : Array[@types.Value] = []
+      for _ in 0..<tag_type.params.length() {
+        values.push(self.stack.pop())
+      }
+      values.rev_in_place()
+      // Raise the exception
+      raise ThrowException(tag_addr, values)
+    }
+    ThrowRef => {
+      // throw_ref throws an exception reference from the stack
+      let exnref = self.stack.pop()
+      match exnref {
+        ExnRef(exn_addr) => {
+          let exn = self.store.get_exn(exn_addr)
+          raise ThrowException(exn.tag_addr, exn.values)
+        }
+        Null => raise @runtime.RuntimeError::NullReference
+        _ => raise @runtime.RuntimeError::TypeMismatch
+      }
+    }
+    TryTable(bt, handlers, body) => {
+      let arity = self.block_arity(bt)
+      let stack_height = self.stack.size()
+      self.push_label(false, arity)
+      let result = try? self.exec_block(body)
+      self.pop_label()
+      match result {
+        Ok(_) => ()
+        Err(ThrowException(tag_addr, values)) => {
+          // Find a matching handler
+          for handler in handlers {
+            match handler {
+              Catch(handler_tag_idx, label_idx) => {
+                let handler_tag_addr = self.instance.tag_addrs[handler_tag_idx]
+                if handler_tag_addr == tag_addr {
+                  // Match! Push exception values and branch
+                  self.restore_stack_to(stack_height)
+                  for v in values {
+                    self.stack.push(v)
+                  }
+                  raise BranchWith(label_idx, values)
+                }
+              }
+              CatchRef(handler_tag_idx, label_idx) => {
+                let handler_tag_addr = self.instance.tag_addrs[handler_tag_idx]
+                if handler_tag_addr == tag_addr {
+                  // Match! Push exception values and exnref, then branch
+                  let exn_addr = self.store.alloc_exn(tag_addr, values)
+                  self.restore_stack_to(stack_height)
+                  for v in values {
+                    self.stack.push(v)
+                  }
+                  self.stack.push(@types.Value::ExnRef(exn_addr))
+                  let branch_values = values.copy()
+                  branch_values.push(@types.Value::ExnRef(exn_addr))
+                  raise BranchWith(label_idx, branch_values)
+                }
+              }
+              CatchAll(label_idx) => {
+                // Matches any exception
+                self.restore_stack_to(stack_height)
+                raise BranchWith(label_idx, [])
+              }
+              CatchAllRef(label_idx) => {
+                // Matches any exception and pushes exnref
+                let exn_addr = self.store.alloc_exn(tag_addr, values)
+                self.restore_stack_to(stack_height)
+                self.stack.push(@types.Value::ExnRef(exn_addr))
+                raise BranchWith(label_idx, [@types.Value::ExnRef(exn_addr)])
+              }
+            }
+          }
+          // No handler matched, re-raise the exception
+          raise ThrowException(tag_addr, values)
+        }
+        Err(BranchWith(0, values)) => {
+          // Normal branch to end of try_table
+          self.restore_stack_to(stack_height)
+          for v in values {
+            self.stack.push(v)
+          }
+        }
+        Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
+        Err(e) => raise e
+      }
+    }
   }
 }
 
@@ -535,6 +628,14 @@ pub fn instantiate_module(
     global_instances.push(global_inst)
   }
 
+  // Allocate tags
+  let tag_addrs : Array[Int] = []
+  for tag in mod.tags {
+    let tag_type = mod.types[tag.type_idx]
+    let addr = store.alloc_tag(tag_type)
+    tag_addrs.push(addr)
+  }
+
   // func_addrs: indices into store.funcs
   // func_type_indices: type index for each function (from mod.funcs)
   // Initialize dropped arrays with false values
@@ -553,6 +654,7 @@ pub fn instantiate_module(
     table_addrs,
     mem_addrs,
     global_addrs,
+    tag_addrs,
     exports: mod.exports,
     elem_segments: mod.elems,
     data_segments: mod.datas,
@@ -844,6 +946,7 @@ pub fn instantiate_module_with_imports(
   let mem_addrs : Array[Int] = []
   let table_addrs : Array[Int] = []
   let global_addrs : Array[Int] = []
+  let tag_addrs : Array[Int] = []
 
   // Import functions and memories first (they come before module definitions in the index space)
   for imp in mod.imports {
@@ -951,6 +1054,20 @@ pub fn instantiate_module_with_imports(
           }
           _ => raise @runtime.UnknownImport
         }
+      Tag(expected_type_idx) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Tag(addr)) => {
+            // Check that imported tag type matches expected type
+            let expected_type = mod.types[expected_type_idx]
+            let actual_type = store.get_tag_type(addr)
+            // Tag types match if their params match (tags have no results)
+            if expected_type.params != actual_type.params {
+              raise @runtime.LinkError
+            }
+            tag_addrs.push(addr)
+          }
+          _ => raise @runtime.UnknownImport
+        }
     }
   }
 
@@ -1016,6 +1133,14 @@ pub fn instantiate_module_with_imports(
     global_addrs.push(addr)
     global_instances.push(global_inst)
   }
+
+  // Allocate tags (after imported tags)
+  for tag in mod.tags {
+    let tag_type = mod.types[tag.type_idx]
+    let addr = store.alloc_tag(tag_type)
+    tag_addrs.push(addr)
+  }
+
   // Initialize dropped arrays with false values
   let dropped_elems : Array[Bool] = []
   for _ in 0..<mod.elems.length() {
@@ -1074,6 +1199,7 @@ pub fn instantiate_module_with_imports(
     table_addrs,
     mem_addrs,
     global_addrs,
+    tag_addrs,
     exports: mod.exports,
     elem_segments: mod.elems,
     data_segments: mod.datas,

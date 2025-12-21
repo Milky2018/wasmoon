@@ -65,6 +65,7 @@ fn value_to_jit_arg(value : @types.Value) -> Int64 {
     F64(d) => d.reinterpret_as_int64()
     FuncRef(idx) => idx.to_int64()
     ExternRef(idx) => idx.to_int64()
+    ExnRef(idx) => idx.to_int64()
     Null => -1L // null sentinel
   }
 }

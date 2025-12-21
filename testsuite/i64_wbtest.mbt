@@ -58,6 +58,7 @@ fn create_i64_arithmetic_module() -> @types.Module {
       add_func, sub_func, mul_func, div_s_func, div_u_func, rem_s_func, rem_u_func,
     ],
     datas: [],
+    tags: [],
   }
 }
 
@@ -290,6 +291,7 @@ fn create_i64_bitwise_module() -> @types.Module {
       and_func, or_func, xor_func, shl_func, shr_s_func, shr_u_func, rotl_func, rotr_func,
     ],
     datas: [],
+    tags: [],
   }
 }
 
@@ -429,6 +431,7 @@ fn create_i64_unary_module() -> @types.Module {
       clz_func, ctz_func, popcnt_func, extend8_s_func, extend16_s_func, extend32_s_func,
     ],
     datas: [],
+    tags: [],
   }
 }
 

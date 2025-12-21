@@ -16,6 +16,15 @@ pub(all) enum BlockType {
 pub impl Eq for BlockType
 pub impl Show for BlockType
 
+pub(all) enum CatchHandler {
+  Catch(Int, Int)
+  CatchRef(Int, Int)
+  CatchAll(Int)
+  CatchAllRef(Int)
+}
+pub impl Eq for CatchHandler
+pub impl Show for CatchHandler
+
 pub(all) struct Data {
   memory_idx : Int
   offset : Array[Instruction]
@@ -52,6 +61,7 @@ pub(all) enum ExportDesc {
   Table(Int)
   Memory(Int)
   Global(Int)
+  Tag(Int)
 }
 pub impl Eq for ExportDesc
 pub impl Show for ExportDesc
@@ -98,6 +108,7 @@ pub(all) enum ImportDesc {
   Table(TableType)
   Memory(MemoryType)
   Global(GlobalType)
+  Tag(Int)
 }
 pub impl Eq for ImportDesc
 pub impl Show for ImportDesc
@@ -118,6 +129,9 @@ pub(all) enum Instruction {
   ReturnCall(Int)
   ReturnCallIndirect(Int, Int)
   ReturnCallRef(Int)
+  Throw(Int)
+  ThrowRef
+  TryTable(BlockType, Array[CatchHandler], Array[Instruction])
   Drop
   Select
   SelectTyped(Array[ValueType])
@@ -338,6 +352,7 @@ pub(all) struct Module {
   elems : Array[Element]
   codes : Array[FunctionCode]
   datas : Array[Data]
+  tags : Array[TagType]
 }
 pub fn Module::new() -> Self
 pub impl Show for Module
@@ -356,6 +371,12 @@ pub(all) struct TableType {
 pub impl Eq for TableType
 pub impl Show for TableType
 
+pub(all) struct TagType {
+  type_idx : Int
+}
+pub impl Eq for TagType
+pub impl Show for TagType
+
 pub(all) enum Value {
   I32(Int)
   I64(Int64)
@@ -363,6 +384,7 @@ pub(all) enum Value {
   F64(Double)
   FuncRef(Int)
   ExternRef(Int)
+  ExnRef(Int)
   Null
 }
 pub impl Eq for Value
