@@ -504,14 +504,20 @@ fn run_with_jit(
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
   let actual_memory_max : Int? = if instance.mem_addrs.length() > 0 {
-    let mem = store.get_mem(instance.mem_addrs[0]) catch { _ => abort("Memory not found") }
+    let mem = store.get_mem(instance.mem_addrs[0]) catch {
+      _ => abort("Memory not found")
+    }
     let (_, max) = mem.get_limits()
     max
   } else {
     None
   }
   // Compile module to precompiled format in memory
-  let precompiled = compile_module_to_jit(mod_, debug_config, actual_memory_max~)
+  let precompiled = compile_module_to_jit(
+    mod_,
+    debug_config,
+    actual_memory_max~,
+  )
   match precompiled {
     None => {
       println("Error: JIT compilation failed")
@@ -636,7 +642,7 @@ fn run_with_jit(
 fn compile_module_to_jit(
   mod_ : @types.Module,
   debug_config : DebugConfig,
-  actual_memory_max~ : Int? = None,
+  actual_memory_max? : Int? = None,
 ) -> @cwasm.PrecompiledModule? {
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
   let num_imports = count_func_imports(mod_.imports)
