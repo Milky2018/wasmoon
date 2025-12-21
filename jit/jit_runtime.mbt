@@ -208,6 +208,13 @@ pub fn has_import_trampoline(module_name : String, field_name : String) -> Bool 
 }
 
 ///|
+/// Check if a module is known to JIT (has trampoline support)
+/// JIT can handle imports from these modules without interpreter state sharing
+pub fn is_jit_supported_module(module_name : String) -> Bool {
+  module_name == "spectest" || module_name == "wasi_snapshot_preview1"
+}
+
+///|
 /// Get a function by index
 pub fn JITModule::get_func(self : JITModule, func_idx : Int) -> JITFunction? {
   self.functions.get(func_idx)
