@@ -1768,6 +1768,10 @@ fn validate_instr(
       stack.push(t1)
     }
     SelectTyped(types) => {
+      // Select must have exactly one result type
+      if types.length() != 1 {
+        raise TypeMismatch("invalid result arity")
+      }
       // Validate type indices
       let num_types = ctx.types.length()
       for ty in types {

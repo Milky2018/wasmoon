@@ -361,6 +361,14 @@ fn Translator::translate_instruction(
       let result = self.builder.select(c, val1, val2)
       self.push(result)
     }
+    SelectTyped(_) => {
+      // Same as Select - type annotation is for validation only
+      let c = self.pop() // condition
+      let val2 = self.pop() // false value
+      let val1 = self.pop() // true value
+      let result = self.builder.select(c, val1, val2)
+      self.push(result)
+    }
 
     // i32 arithmetic
     I32Add => self.translate_binary_i32(fn(b, a, v) { b.iadd(a, v) })
