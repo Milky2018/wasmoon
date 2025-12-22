@@ -41,6 +41,18 @@ pub fn JITModule::load(
   precompiled : @cwasm.PrecompiledModule,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
 ) -> JITModule? {
+  JITModule::load_with_imports(precompiled, func_signatures, {})
+}
+
+///|
+/// Load a precompiled module with external import resolution
+/// func_signatures: Array of (param_types, result_types) for each func_idx
+/// external_imports: Map from (module_name, func_name) to function pointer
+pub fn JITModule::load_with_imports(
+  precompiled : @cwasm.PrecompiledModule,
+  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
+  external_imports : Map[String, Map[String, Int64]],
+) -> JITModule? {
   let jit_module = JITModule::new()
   let num_imports = precompiled.imports.length()
 
@@ -54,7 +66,15 @@ pub fn JITModule::load(
     Some(ctx) => {
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {
-        let func_ptr = get_import_trampoline(imp.module_name, imp.func_name)
+        // First check external imports
+        let func_ptr = match external_imports.get(imp.module_name) {
+          Some(mod_exports) =>
+            match mod_exports.get(imp.func_name) {
+              Some(ptr) => ptr
+              None => get_import_trampoline(imp.module_name, imp.func_name)
+            }
+          None => get_import_trampoline(imp.module_name, imp.func_name)
+        }
         ctx.set_func(i, func_ptr)
       }
 
@@ -241,6 +261,33 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
     Some(f) => f.exec_code.ptr()
     None => 0L
   }
+}
+
+///|
+/// Get function pointer by name
+/// Returns the executable code pointer for the function, or 0 if not found
+pub fn JITModule::get_func_ptr_by_name(
+  self : JITModule,
+  name : String,
+) -> Int64 {
+  match self.get_func_by_name(name) {
+    Some(f) => f.exec_code.ptr()
+    None => 0L
+  }
+}
+
+///|
+/// Export all function pointers as a map from name to function pointer
+/// Used for cross-module imports
+pub fn JITModule::export_functions(self : JITModule) -> Map[String, Int64] {
+  let exports : Map[String, Int64] = {}
+  for name, _idx in self.by_name {
+    let ptr = self.get_func_ptr_by_name(name)
+    if ptr != 0L {
+      exports.set(name, ptr)
+    }
+  }
+  exports
 }
 
 ///|

@@ -374,8 +374,10 @@ pub(all) struct Translator {
   global_types : Array[@types.GlobalType]
   num_wasm_params : Int
   canonical_type_indices : Array[Int]
+  func_base : Int
+  import_remap : Array[Int]
 }
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int]) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {
