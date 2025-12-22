@@ -59,6 +59,11 @@ pub fn Store::alloc_func(
   idx
 }
 
+// Special constant to mark host functions - must never be changed
+
+///|
+const HOST_FUNC_OWNER : Int = -2
+
 ///|
 /// Allocate a host function with its type
 pub fn Store::alloc_host_func(
@@ -71,7 +76,7 @@ pub fn Store::alloc_host_func(
   self.funcs.push(FuncInst::HostFunc(func))
   self.func_types.push(func_type)
   self.func_type_indices.push(type_idx)
-  self.func_owners.push(-1) // Host functions don't have an owner
+  self.func_owners.push(HOST_FUNC_OWNER) // Host functions use special marker
   idx
 }
 
@@ -276,11 +281,12 @@ pub fn Store::register_instance(self : Store, instance : ModuleInstance) -> Int 
   instance.store_idx = instance_idx
   self.instances.push(instance)
   // Set ownership only for functions that don't have an owner yet
-  // Imported functions will already have their owner set
+  // -1 means unowned WASM function, -2 means host function (never set owner)
+  // Imported functions will already have their owner set (>= 0)
   for func_addr in instance.func_addrs {
     if func_addr >= 0 && func_addr < self.func_owners.length() {
-      // Only set if not already owned (-1 means unowned)
-      if self.func_owners[func_addr] < 0 {
+      // Only set if not already owned (-1 means unowned, -2 means host func)
+      if self.func_owners[func_addr] == -1 {
         self.func_owners[func_addr] = instance_idx
       }
     }
