@@ -337,7 +337,7 @@ test "all comparison kinds" {
   builder.cmp(Ugt, p0, p1) |> ignore
   let result = builder.cmp(Uge, p0, p1)
   builder.return_([result])
-  inspect(builder.get_function().blocks[0].insts.length(), content="9")
+  inspect(builder.get_function().get_blocks()[0].insts.length(), content="9")
 }
 
 ///|
@@ -355,7 +355,7 @@ test "float comparison kinds" {
   builder.fcmp(Gt, p0, p1) |> ignore
   let result = builder.fcmp(Ge, p0, p1)
   builder.return_([result])
-  inspect(builder.get_function().blocks[0].insts.length(), content="6")
+  inspect(builder.get_function().get_blocks()[0].insts.length(), content="6")
 }
 
 ///|
@@ -373,11 +373,11 @@ test "jump and trap" {
   builder.switch_to_block(trap_block)
   builder.trap("unreachable")
   let func = builder.get_function()
-  match func.blocks[0].terminator {
+  match func.get_blocks()[0].terminator {
     Some(Jump(1)) => ()
     _ => panic()
   }
-  match func.blocks[2].terminator {
+  match func.get_blocks()[2].terminator {
     Some(Trap("unreachable")) => ()
     _ => panic()
   }

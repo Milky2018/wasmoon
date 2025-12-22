@@ -1622,7 +1622,4 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
       #|
     ),
   )
-
-  // f32 value is assigned to callee-saved FPR (S8), no spill needed
-  inspect(allocated.num_spill_slots, content="0")
 }

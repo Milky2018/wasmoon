@@ -220,7 +220,7 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
     }
   }
   // Store int overflow count for emit to calculate correct offsets
-  ctx.vcode_func.int_stack_params = int_stack_count
+  ctx.vcode_func.set_int_stack_params(int_stack_count)
 
   // Phase 3: Lower result types
   for ty in ir_func.results {
@@ -2939,9 +2939,7 @@ fn lower_call_ptr(
 
   // Update max_outgoing_args_size (Cranelift-style: pre-allocate in prologue)
   // This ensures SP doesn't move during call sequences, avoiding spill slot issues
-  if aligned_stack_space > ctx.vcode_func.max_outgoing_args_size {
-    ctx.vcode_func.max_outgoing_args_size = aligned_stack_space
-  }
+  ctx.vcode_func.update_max_outgoing_args_size(aligned_stack_space)
 
   // Step 1: Store overflow int args to stack (space is pre-allocated in prologue)
   for i in max_int_reg_args..<int_args.length() {
