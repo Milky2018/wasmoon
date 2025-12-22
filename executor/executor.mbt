@@ -1,6 +1,31 @@
 // Wasmoon Executor - Main instruction dispatch and module execution
 
 ///|
+/// Get rec group info (position, size) for a type at given index.
+/// Returns (position_in_group, group_size) tuple.
+fn get_rec_group_info(
+  type_rec_groups : Array[Int],
+  type_idx : Int,
+) -> (Int, Int) {
+  if type_idx < 0 || type_idx >= type_rec_groups.length() {
+    return (0, 1) // Default to singleton rec group
+  }
+  let rec_id = type_rec_groups[type_idx]
+  // Count group size and find position
+  let mut size = 0
+  let mut position = 0
+  for i, id in type_rec_groups {
+    if id == rec_id {
+      if i < type_idx {
+        position = position + 1
+      }
+      size = size + 1
+    }
+  }
+  (position, size)
+}
+
+///|
 /// Check if subtype is a subtype of supertype for value types.
 /// This implements WebAssembly reference type subtyping:
 /// - RefFunc <: FuncRef (ref func <: ref null func)
@@ -647,8 +672,16 @@ pub fn instantiate_module(
   for _ in 0..<mod.datas.length() {
     dropped_datas.push(false)
   }
+  // Compute canonical type indices for structural equivalence
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod.types,
+    type_rec_groups=mod.type_rec_groups,
+  )
   let instance : @runtime.ModuleInstance = {
     types: mod.types,
+    type_rec_groups: mod.type_rec_groups,
+    canonical_type_indices,
+    store_idx: -1,
     func_addrs,
     func_type_indices: mod.funcs,
     table_addrs,
@@ -940,6 +973,12 @@ pub fn instantiate_module_with_imports(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  // Compute canonical type indices early (needed for import type checking)
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod.types,
+    type_rec_groups=mod.type_rec_groups,
+  )
+
   // Process imports first
   let func_addrs : Array[Int] = []
   let func_type_indices : Array[Int] = []
@@ -954,18 +993,20 @@ pub fn instantiate_module_with_imports(
       Func(type_idx) =>
         match imports.resolve(imp.mod_name, imp.name) {
           Some(Func(addr)) => {
-            // Check that imported function type matches expected type (using structural comparison)
+            // Check that imported function type matches expected type
+            // This requires both structural equality AND matching rec group structure
             let expected_type = mod.types[type_idx]
             let actual_type = store.get_func_type(addr)
             let actual_type_idx = store.get_func_type_idx(addr)
 
-            // Get the owner module's types array for cross-module comparison
-            let owner_types = match store.get_func_owner(addr) {
-              Some(owner) => owner.types
-              None => mod.types // Fallback to current module's types (for host functions)
+            // Get the owner module for cross-module comparison
+            let owner = store.get_func_owner(addr)
+            let owner_types = match owner {
+              Some(o) => o.types
+              None => mod.types // Fallback for host functions
             }
 
-            // Use cross-module structural comparison
+            // First check structural equality
             let visited : Map[(Int, Int), Bool] = {}
             if not(
                 func_types_cross_module_equal(
@@ -978,6 +1019,19 @@ pub fn instantiate_module_with_imports(
                   visited,
                 ),
               ) {
+              raise @runtime.LinkError
+            }
+
+            // Then check rec group structure (position and size must match)
+            let expected_rec_info = get_rec_group_info(
+              mod.type_rec_groups,
+              type_idx,
+            )
+            let actual_rec_info = match owner {
+              Some(o) => get_rec_group_info(o.type_rec_groups, actual_type_idx)
+              None => (0, 1) // Host functions are in singleton rec groups
+            }
+            if expected_rec_info != actual_rec_info {
               raise @runtime.LinkError
             }
             func_addrs.push(addr)
@@ -1212,8 +1266,12 @@ pub fn instantiate_module_with_imports(
       dropped_elems[elem_idx] = true
     }
   }
+  // canonical_type_indices was computed at the start of the function (for import type checking)
   let instance : @runtime.ModuleInstance = {
     types: mod.types,
+    type_rec_groups: mod.type_rec_groups,
+    canonical_type_indices,
+    store_idx: -1,
     func_addrs,
     func_type_indices,
     table_addrs,
@@ -1228,6 +1286,7 @@ pub fn instantiate_module_with_imports(
   }
 
   // Register instance with store for cross-module call resolution
+  // This also sets the store_idx field
   store.register_instance(instance) |> ignore
 
   // Execute start function if present

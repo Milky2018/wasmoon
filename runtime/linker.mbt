@@ -113,6 +113,9 @@ pub fn Linker::add_host_func(
     // Create new synthetic module
     let instance : ModuleInstance = {
       types: [],
+      type_rec_groups: [],
+      canonical_type_indices: [],
+      store_idx: -1,
       func_addrs: [],
       func_type_indices: [],
       table_addrs: [],
@@ -159,6 +162,9 @@ pub fn Linker::add_memory(
     }
     let instance : ModuleInstance = {
       types: [],
+      type_rec_groups: [],
+      canonical_type_indices: [],
+      store_idx: -1,
       func_addrs: [],
       func_type_indices: [],
       table_addrs: [],
@@ -205,6 +211,9 @@ pub fn Linker::add_table(
     }
     let instance : ModuleInstance = {
       types: [],
+      type_rec_groups: [],
+      canonical_type_indices: [],
+      store_idx: -1,
       func_addrs: [],
       func_type_indices: [],
       table_addrs: [],
@@ -251,6 +260,9 @@ pub fn Linker::add_global(
     }
     let instance : ModuleInstance = {
       types: [],
+      type_rec_groups: [],
+      canonical_type_indices: [],
+      store_idx: -1,
       func_addrs: [],
       func_type_indices: [],
       table_addrs: [],

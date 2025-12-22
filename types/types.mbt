@@ -474,7 +474,6 @@ pub fn compute_canonical_type_indices(
       rec_group_info.push((i, 0, 1))
     }
   }
-
   for i in 0..<n {
     // Find the first type j < i that is structurally equivalent to type i
     let mut found = false

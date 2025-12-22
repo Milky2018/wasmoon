@@ -54,6 +54,8 @@ priv struct Parser {
   label_stack : Array[String?]
   // Reference to module types for inline type resolution in call_indirect
   mut types : Array[@types.FuncType]
+  // Reference to module type_rec_groups for implicit type matching
+  mut type_rec_groups : Array[Int]
 }
 
 ///|
@@ -72,6 +74,7 @@ fn Parser::new(input : String) -> Parser raise WatError {
     tag_names: {},
     label_stack: [],
     types: [],
+    type_rec_groups: [],
   }
 }
 
@@ -79,6 +82,23 @@ fn Parser::new(input : String) -> Parser raise WatError {
 /// Get the current token's source location
 fn Parser::loc(self : Parser) -> SourceLoc {
   self.current.to_loc()
+}
+
+///|
+/// Check if a type at given index is in a singleton rec group.
+/// Implicit function types should only match singleton rec groups.
+fn is_singleton_rec_group(type_rec_groups : Array[Int], type_idx : Int) -> Bool {
+  if type_idx < 0 || type_idx >= type_rec_groups.length() {
+    return true // No rec group info, assume singleton
+  }
+  let rec_id = type_rec_groups[type_idx]
+  let mut rec_size = 0
+  for id in type_rec_groups {
+    if id == rec_id {
+      rec_size = rec_size + 1
+    }
+  }
+  rec_size == 1
 }
 
 ///|
@@ -2079,6 +2099,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
 
   // Share types array with parser for inline type resolution in call_indirect
   self.types = mod_.types
+  self.type_rec_groups = mod_.type_rec_groups
 
   // Restore lexer state for main parsing pass
   self.lexer.pos = saved_pos
@@ -2595,7 +2616,8 @@ fn Parser::parse_func_def(
                   }
                 }
               }
-              if match_ {
+              // Implicit types should only match singleton rec groups
+              if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
                 found = i
                 break
               }
@@ -2716,7 +2738,8 @@ fn Parser::parse_func_def(
             }
           }
         }
-        if match_ {
+        // Implicit types should only match singleton rec groups
+        if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
           found = i
           break
         }
@@ -3860,7 +3883,8 @@ fn Parser::find_or_create_func_type(
           }
         }
       }
-      if match_ {
+      // Implicit types should only match singleton rec groups
+      if match_ && is_singleton_rec_group(self.type_rec_groups, i) {
         return i
       }
     }
@@ -3869,6 +3893,8 @@ fn Parser::find_or_create_func_type(
   let new_type = @types.FuncType::{ params, results }
   let idx = self.types.length()
   self.types.push(new_type)
+  // Implicit type is its own rec group
+  self.type_rec_groups.push(idx)
   idx
 }
 

@@ -188,6 +188,26 @@ pub fn Store::get_func_type_idx(self : Store, idx : Int) -> Int {
 }
 
 ///|
+/// Get canonical type index for a function by store address
+/// Returns the canonical type index from the function's owning module
+/// Returns -1 if the function or owner is not found
+pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int {
+  if func_addr < 0 || func_addr >= self.func_owners.length() {
+    return -1
+  }
+  let owner_idx = self.func_owners[func_addr]
+  if owner_idx < 0 || owner_idx >= self.instances.length() {
+    return -1
+  }
+  let instance = self.instances[owner_idx]
+  let type_idx = self.func_type_indices[func_addr]
+  if type_idx < 0 || type_idx >= instance.canonical_type_indices.length() {
+    return -1
+  }
+  instance.canonical_type_indices[type_idx]
+}
+
+///|
 /// Get WASM function code (for backward compatibility)
 pub fn Store::get_func(
   self : Store,
@@ -253,6 +273,7 @@ pub fn Store::get_global(
 /// (imported functions already belong to their original module)
 pub fn Store::register_instance(self : Store, instance : ModuleInstance) -> Int {
   let instance_idx = self.instances.length()
+  instance.store_idx = instance_idx
   self.instances.push(instance)
   // Set ownership only for functions that don't have an owner yet
   // Imported functions will already have their owner set
@@ -278,4 +299,14 @@ pub fn Store::get_func_owner(self : Store, func_addr : Int) -> ModuleInstance? {
     return None
   }
   Some(self.instances[owner_idx])
+}
+
+///|
+/// Get the owning module instance index for a function address
+/// Returns -1 if no owner (host function or invalid address)
+pub fn Store::get_func_owner_idx(self : Store, func_addr : Int) -> Int {
+  if func_addr < 0 || func_addr >= self.func_owners.length() {
+    return -1
+  }
+  self.func_owners[func_addr]
 }

@@ -299,23 +299,79 @@ fn ExecContext::exec_call_indirect(
   // Get the expected type
   let expected_type = self.instance.types[type_idx]
 
-  // Get the actual function type and verify it matches (using recursive structural comparison)
-  let actual_type = self.store.get_func_type(store_addr)
-  let actual_type_idx = self.store.get_func_type_idx(store_addr)
+  // Type checking: need to handle same-module vs cross-module cases differently
+  // Canonical type indices are per-module and can only be compared within same module
+  let owner_idx = self.store.get_func_owner_idx(store_addr)
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
+  if same_module {
+    // Same module: use canonical type indices for proper rec group handling
+    let expected_canonical = if type_idx >= 0 &&
+      type_idx < self.instance.canonical_type_indices.length() {
+      self.instance.canonical_type_indices[type_idx]
+    } else {
+      -1
+    }
+    let actual_canonical = self.store.get_func_canonical_type_idx(store_addr)
+    if expected_canonical >= 0 && actual_canonical >= 0 {
+      if expected_canonical != actual_canonical {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    } else {
+      // No canonical info, fall back to structural comparison
+      let actual_type = self.store.get_func_type(store_addr)
+      let actual_type_idx = self.store.get_func_type_idx(store_addr)
+      let visited : Map[(Int, Int), Bool] = {}
+      if not(
+          func_types_structurally_equal(
+            self.instance.types,
+            expected_type,
+            actual_type,
+            type_idx,
+            actual_type_idx,
+            visited,
+          ),
+        ) {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    }
+  } else {
+    // Cross-module call: need structural comparison + rec group info comparison
+    let owner = self.store.get_func_owner(store_addr)
+    let actual_type = self.store.get_func_type(store_addr)
+    let actual_type_idx = self.store.get_func_type_idx(store_addr)
 
-  // Use recursive structural equivalence for proper type checking
-  let visited : Map[(Int, Int), Bool] = {}
-  if not(
-      func_types_structurally_equal(
-        self.instance.types,
-        expected_type,
-        actual_type,
-        type_idx,
-        actual_type_idx,
-        visited,
-      ),
-    ) {
-    raise @runtime.IndirectCallTypeMismatch
+    // First check structural equality
+    let visited : Map[(Int, Int), Bool] = {}
+    let owner_types = match owner {
+      Some(o) => o.types
+      None => self.instance.types
+    }
+    if not(
+        func_types_cross_module_equal(
+          self.instance.types,
+          owner_types,
+          expected_type,
+          actual_type,
+          type_idx,
+          actual_type_idx,
+          visited,
+        ),
+      ) {
+      raise @runtime.IndirectCallTypeMismatch
+    }
+
+    // Then check rec group info (position and size must match)
+    let expected_rec_info = get_rec_group_info(
+      self.instance.type_rec_groups,
+      type_idx,
+    )
+    let actual_rec_info = match owner {
+      Some(o) => get_rec_group_info(o.type_rec_groups, actual_type_idx)
+      None => (0, 1) // Host functions are in singleton rec groups
+    }
+    if expected_rec_info != actual_rec_info {
+      raise @runtime.IndirectCallTypeMismatch
+    }
   }
 
   // Pop arguments from stack in reverse order
