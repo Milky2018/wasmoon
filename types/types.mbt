@@ -446,17 +446,50 @@ fn ValueType::structurally_equal(
 /// Structurally equivalent types will be assigned the same canonical index.
 /// The canonical index for type i is the smallest index j such that
 /// types[i] is structurally equivalent to types[j].
-pub fn compute_canonical_type_indices(types : Array[FuncType]) -> Array[Int] {
+pub fn compute_canonical_type_indices(
+  types : Array[FuncType],
+  type_rec_groups? : Array[Int] = [],
+) -> Array[Int] {
   let n = types.length()
   let canonical : Array[Int] = Array::make(n, -1)
+
+  // Build rec group info: for each type, (rec_group_id, position_in_group, group_size)
+  let rec_group_info : Array[(Int, Int, Int)] = []
+  if type_rec_groups.length() == n {
+    // Count sizes of each rec group
+    let group_sizes : Map[Int, Int] = {}
+    for rec_id in type_rec_groups {
+      group_sizes[rec_id] = group_sizes.get(rec_id).unwrap_or(0) + 1
+    }
+    // Build info for each type
+    let group_positions : Map[Int, Int] = {}
+    for rec_id in type_rec_groups {
+      let pos = group_positions.get(rec_id).unwrap_or(0)
+      group_positions[rec_id] = pos + 1
+      rec_group_info.push((rec_id, pos, group_sizes.get(rec_id).unwrap_or(1)))
+    }
+  } else {
+    // No rec group info - each type is its own singleton rec group
+    for i in 0..<n {
+      rec_group_info.push((i, 0, 1))
+    }
+  }
+
   for i in 0..<n {
     // Find the first type j < i that is structurally equivalent to type i
     let mut found = false
+    let (_, pos_i, size_i) = rec_group_info[i]
     for j in 0..<i {
-      if func_types_structurally_equal(types, i, j) {
-        canonical[i] = canonical[j]
-        found = true
-        break
+      let (_, pos_j, size_j) = rec_group_info[j]
+      // Types can only be equivalent if:
+      // 1. They are at the same position within their rec groups
+      // 2. Their rec groups have the same size
+      if pos_i == pos_j && size_i == size_j {
+        if func_types_structurally_equal(types, i, j) {
+          canonical[i] = canonical[j]
+          found = true
+          break
+        }
       }
     }
     // If no equivalent type found, use own index as canonical
