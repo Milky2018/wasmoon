@@ -9,6 +9,7 @@ description: MoonBit language reference and coding conventions. Use when writing
 @reference/error-handling.md
 @reference/ffi.md
 @reference/async-experimental.md
+@reference/package.md
 
 ## Common Pitfalls
 
