@@ -594,13 +594,8 @@ fn run_with_jit(
                       @types.Value::I32(@types.FromInt64::from_int64_bits(r))
                     I64 =>
                       @types.Value::I64(@types.FromInt64::from_int64_bits(r))
-                    F32 => {
-                      // r contains bits of f64, convert to f32
-                      let f64_val : Double = @types.FromInt64::from_int64_bits(
-                        r,
-                      )
-                      @types.Value::F32(Float::from_double(f64_val))
-                    }
+                    F32 =>
+                      @types.Value::F32(@types.FromInt64::from_int64_bits(r))
                     F64 =>
                       @types.Value::F64(@types.FromInt64::from_int64_bits(r))
                     FuncRef
