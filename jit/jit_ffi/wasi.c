@@ -554,51 +554,53 @@ static int64_t wasi_fd_prestat_get(int64_t fd, int64_t prestat_ptr) {
     return 8; // ERRNO_BADF - no preopened directories
 }
 
-// Get v2 trampoline pointers
+// Get trampoline pointers for JIT v3 ABI
+// The JIT uses X0=callee_vmctx, X1=caller_vmctx, X2-X7=user params
+// So we use the _impl versions that have dummy func_table/mem_base params
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) {
-    return (int64_t)wasi_fd_write;
+    return (int64_t)wasi_fd_write_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) {
-    return (int64_t)wasi_proc_exit;
+    return (int64_t)wasi_proc_exit_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_ptr(void) {
-    return (int64_t)wasi_fd_read;
+    return (int64_t)wasi_fd_read_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_ptr(void) {
-    return (int64_t)wasi_args_sizes_get;
+    return (int64_t)wasi_args_sizes_get_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_ptr(void) {
-    return (int64_t)wasi_args_get;
+    return (int64_t)wasi_args_get_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_ptr(void) {
-    return (int64_t)wasi_environ_sizes_get;
+    return (int64_t)wasi_environ_sizes_get_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_ptr(void) {
-    return (int64_t)wasi_environ_get;
+    return (int64_t)wasi_environ_get_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_ptr(void) {
-    return (int64_t)wasi_clock_time_get;
+    return (int64_t)wasi_clock_time_get_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_ptr(void) {
-    return (int64_t)wasi_random_get;
+    return (int64_t)wasi_random_get_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_ptr(void) {
-    return (int64_t)wasi_fd_close;
+    return (int64_t)wasi_fd_close_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_ptr(void) {
-    return (int64_t)wasi_fd_fdstat_get;
+    return (int64_t)wasi_fd_fdstat_get_impl;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_ptr(void) {
-    return (int64_t)wasi_fd_prestat_get;
+    return (int64_t)wasi_fd_prestat_get_impl;
 }
