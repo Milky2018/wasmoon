@@ -1,31 +1,6 @@
 // Wasmoon Executor - Main instruction dispatch and module execution
 
 ///|
-/// Get rec group info (position, size) for a type at given index.
-/// Returns (position_in_group, group_size) tuple.
-fn get_rec_group_info(
-  type_rec_groups : Array[Int],
-  type_idx : Int,
-) -> (Int, Int) {
-  if type_idx < 0 || type_idx >= type_rec_groups.length() {
-    return (0, 1) // Default to singleton rec group
-  }
-  let rec_id = type_rec_groups[type_idx]
-  // Count group size and find position
-  let mut size = 0
-  let mut position = 0
-  for i, id in type_rec_groups {
-    if id == rec_id {
-      if i < type_idx {
-        position = position + 1
-      }
-      size = size + 1
-    }
-  }
-  (position, size)
-}
-
-///|
 /// Check if subtype is a subtype of supertype for value types.
 /// This implements WebAssembly reference type subtyping:
 /// - RefFunc <: FuncRef (ref func <: ref null func)
@@ -994,45 +969,39 @@ pub fn instantiate_module_with_imports(
         match imports.resolve(imp.mod_name, imp.name) {
           Some(Func(addr)) => {
             // Check that imported function type matches expected type
-            // This requires both structural equality AND matching rec group structure
+            let owner = store.get_func_owner(addr)
             let expected_type = mod.types[type_idx]
             let actual_type = store.get_func_type(addr)
-            let actual_type_idx = store.get_func_type_idx(addr)
-
-            // Get the owner module for cross-module comparison
-            let owner = store.get_func_owner(addr)
-            let owner_types = match owner {
-              Some(o) => o.types
-              None => mod.types // Fallback for host functions
-            }
-
-            // First check structural equality
-            let visited : Map[(Int, Int), Bool] = {}
-            if not(
-                func_types_cross_module_equal(
+            match owner {
+              Some(o) => {
+                // Cross-module function: use type equivalence with rec groups
+                let actual_type_idx = store.get_func_type_idx(addr)
+                let ctx = @types.TypeEquivalenceContext::cross_module(
                   mod.types,
-                  owner_types,
-                  expected_type,
-                  actual_type,
+                  o.types,
+                  rec_groups1=mod.type_rec_groups,
+                  rec_groups2=o.type_rec_groups,
+                )
+                if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+                  raise @runtime.LinkError
+                }
+              }
+              None => {
+                // Host function: direct type comparison (no rec groups)
+                // Host functions are always considered singleton rec groups
+                let expected_rec_info = @types.get_rec_group_info(
+                  mod.type_rec_groups,
                   type_idx,
-                  actual_type_idx,
-                  visited,
-                ),
-              ) {
-              raise @runtime.LinkError
-            }
-
-            // Then check rec group structure (position and size must match)
-            let expected_rec_info = get_rec_group_info(
-              mod.type_rec_groups,
-              type_idx,
-            )
-            let actual_rec_info = match owner {
-              Some(o) => get_rec_group_info(o.type_rec_groups, actual_type_idx)
-              None => (0, 1) // Host functions are in singleton rec groups
-            }
-            if expected_rec_info != actual_rec_info {
-              raise @runtime.LinkError
+                )
+                // Host functions must be imported by singleton rec group types
+                if expected_rec_info != (0, 1) {
+                  raise @runtime.LinkError
+                }
+                // Compare types structurally
+                if not(@types.func_types_equal(expected_type, actual_type)) {
+                  raise @runtime.LinkError
+                }
+              }
             }
             func_addrs.push(addr)
             func_type_indices.push(type_idx)

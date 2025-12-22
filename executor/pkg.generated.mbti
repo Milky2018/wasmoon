@@ -9,8 +9,6 @@ import(
 // Values
 pub fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
-pub fn func_types_cross_module_equal(Array[@types.FuncType], Array[@types.FuncType], @types.FuncType, @types.FuncType, Int, Int, Map[(Int, Int), Bool]) -> Bool
-
 pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
 
 pub fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance)
