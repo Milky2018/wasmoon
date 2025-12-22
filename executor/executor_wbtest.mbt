@@ -66,12 +66,10 @@ test "execute simple add function" {
 
   // Instantiate and call
   let (store, instance) = instantiate_module(mod)
-  let results = call_exported_func(
-    store,
-    instance,
-    "add",
-    [@types.Value::I32(5), @types.Value::I32(10)],
-  )
+  let results = call_exported_func(store, instance, "add", [
+    @types.Value::I32(5),
+    @types.Value::I32(10),
+  ])
   match results[0] {
     I32(n) => inspect(n, content="15")
     _ => fail("Expected I32 result")
@@ -99,12 +97,10 @@ test "execute function with local variables" {
   }
   let mod = make_simple_module(func_type, code, "double_sum")
   let (store, instance) = instantiate_module(mod)
-  let results = call_exported_func(
-    store,
-    instance,
-    "double_sum",
-    [@types.Value::I32(3), @types.Value::I32(4)],
-  )
+  let results = call_exported_func(store, instance, "double_sum", [
+    @types.Value::I32(3),
+    @types.Value::I32(4),
+  ])
   match results[0] {
     I32(n) => inspect(n, content="14") // (3 + 4) * 2 = 14
     _ => fail("Expected I32 result")

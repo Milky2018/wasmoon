@@ -478,10 +478,7 @@ fn func_types_structurally_equal(
   if idx1 == idx2 {
     return true
   }
-  if idx1 < 0 ||
-    idx1 >= types.length() ||
-    idx2 < 0 ||
-    idx2 >= types.length() {
+  if idx1 < 0 || idx1 >= types.length() || idx2 < 0 || idx2 >= types.length() {
     return false
   }
   let t1 = types[idx1]
@@ -600,10 +597,7 @@ fn type_refs_structurally_equal(
       return true
     }
     // Compare the referenced types structurally
-    if ref1 >= 0 &&
-      ref1 < types.length() &&
-      ref2 >= 0 &&
-      ref2 < types.length() {
+    if ref1 >= 0 && ref1 < types.length() && ref2 >= 0 && ref2 < types.length() {
       let t1 = types[ref1]
       let t2 = types[ref2]
       return func_types_structurally_equal_rec(

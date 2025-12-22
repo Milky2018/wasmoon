@@ -170,7 +170,7 @@ fn run_jit(
     // Compile ALL functions in the module (not just the target function)
     // This is necessary because the target function may call other functions
     let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
-    let num_imports = count_func_imports(mod_.imports)
+    let num_imports = @wast.count_func_imports(mod_.imports)
 
     // Build import function type indices
     let import_func_type_indices : Array[Int] = []
@@ -235,8 +235,8 @@ fn run_jit(
       )
     }
 
-    // Build func_signatures for JIT module
-    let func_signatures = build_func_signatures(mod_, num_imports)
+    // Build func_signatures for JIT module (use shared function)
+    let func_signatures = @wast.build_func_signatures(mod_)
 
     // Load JIT module with all functions
     guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
@@ -271,18 +271,6 @@ fn run_jit(
 }
 
 ///|
-/// Count function imports in imports array
-fn count_func_imports(imports : Array[@types.Import]) -> Int {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Func(_) {
-      count += 1
-    }
-  }
-  count
-}
-
-///|
 /// Get function name from exports or generate default name
 fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
   for exp in mod_.exports {
@@ -291,46 +279,6 @@ fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
     }
   }
   "func_\{func_idx}"
-}
-
-///|
-/// Build func_signatures array for JIT module loading
-fn build_func_signatures(
-  mod_ : @types.Module,
-  num_imports : Int,
-) -> Array[(Array[@types.ValueType], Array[@types.ValueType])] {
-  let total_funcs = num_imports + mod_.funcs.length()
-  let signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])] = []
-
-  // Pre-fill with empty signatures
-  for _ in 0..<total_funcs {
-    signatures.push(([], []))
-  }
-
-  // Fill in signatures for import functions
-  let mut func_count = 0
-  for imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      if type_idx < mod_.types.length() {
-        let func_type = mod_.types[type_idx]
-        signatures[func_count] = (
-          func_type.params.copy(),
-          func_type.results.copy(),
-        )
-      }
-      func_count = func_count + 1
-    }
-  }
-
-  // Fill in signatures for local functions
-  for i, type_idx in mod_.funcs {
-    let func_idx = num_imports + i
-    if type_idx < mod_.types.length() {
-      let func_type = mod_.types[type_idx]
-      signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
-    }
-  }
-  signatures
 }
 
 ///|
@@ -388,25 +336,29 @@ fn init_elem_segments(
     return // No tables, nothing to do
   }
 
-  // Build function index to type hash mapping
-  let func_type_hashes : Array[Int] = []
+  // Compute canonical type indices for structural type equivalence
+  // Structurally equivalent types will have the same canonical index
+  let canonical_types = @types.compute_canonical_type_indices(mod_.types)
+
+  // Build function index to canonical type index mapping
+  let func_canonical_types : Array[Int] = []
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
-      let type_hash = if type_idx < mod_.types.length() {
-        mod_.types[type_idx].structural_hash()
+      let canonical_idx = if type_idx < canonical_types.length() {
+        canonical_types[type_idx]
       } else {
         0
       }
-      func_type_hashes.push(type_hash)
+      func_canonical_types.push(canonical_idx)
     }
   }
   for type_idx in mod_.funcs {
-    let type_hash = if type_idx < mod_.types.length() {
-      mod_.types[type_idx].structural_hash()
+    let canonical_idx = if type_idx < canonical_types.length() {
+      canonical_types[type_idx]
     } else {
       0
     }
-    func_type_hashes.push(type_hash)
+    func_canonical_types.push(canonical_idx)
   }
 
   // Create a JIT table for each WebAssembly table
@@ -435,15 +387,15 @@ fn init_elem_segments(
             [RefNull(_)] => -1 // Use -1 to represent null reference
             _ => continue
           }
-          let type_hash = if func_idx >= 0 &&
-            func_idx < func_type_hashes.length() {
-            func_type_hashes[func_idx]
+          let canonical_type_idx = if func_idx >= 0 &&
+            func_idx < func_canonical_types.length() {
+            func_canonical_types[func_idx]
           } else {
             0
           }
           // Element index within this specific table
           let elem_idx = offset + i
-          elem_init.push((table_idx, elem_idx, func_idx, type_hash))
+          elem_init.push((table_idx, elem_idx, func_idx, canonical_type_idx))
         }
       }
     }

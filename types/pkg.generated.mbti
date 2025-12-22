@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/types"
 
 // Values
+pub fn compute_canonical_type_indices(Array[FuncType]) -> Array[Int]
 
 // Errors
 
@@ -343,6 +344,7 @@ pub impl Show for MemoryType
 
 pub(all) struct Module {
   types : Array[FuncType]
+  type_rec_groups : Array[Int]
   imports : Array[Import]
   funcs : Array[Int]
   tables : Array[Table]
