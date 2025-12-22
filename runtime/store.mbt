@@ -10,6 +10,7 @@ pub(all) struct ExnInstance {
 pub struct Store {
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType] // Type of each function
+  func_type_indices : Array[Int] // Original type index for structural comparison
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
@@ -30,6 +31,7 @@ pub fn Store::new() -> Store {
   {
     funcs: [],
     func_types: [],
+    func_type_indices: [],
     tables: [],
     mems: [],
     globals: [],
@@ -47,10 +49,12 @@ pub fn Store::alloc_func(
   self : Store,
   func : @types.FunctionCode,
   func_type? : @types.FuncType = { params: [], results: [] },
+  type_idx? : Int = -1,
 ) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(FuncInst::WasmFunc(func))
   self.func_types.push(func_type)
+  self.func_type_indices.push(type_idx)
   self.func_owners.push(-1) // Owner not yet known
   idx
 }
@@ -61,10 +65,12 @@ pub fn Store::alloc_host_func(
   self : Store,
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
   func_type? : @types.FuncType = { params: [], results: [] },
+  type_idx? : Int = -1,
 ) -> Int {
   let idx = self.funcs.length()
   self.funcs.push(FuncInst::HostFunc(func))
   self.func_types.push(func_type)
+  self.func_type_indices.push(type_idx)
   self.func_owners.push(-1) // Host functions don't have an owner
   idx
 }
@@ -169,6 +175,16 @@ pub fn Store::get_func_type(
     raise UndefinedElement
   }
   self.func_types[idx]
+}
+
+///|
+/// Get function type index by store address (for structural comparison)
+pub fn Store::get_func_type_idx(self : Store, idx : Int) -> Int {
+  if idx < 0 || idx >= self.func_type_indices.length() {
+    -1
+  } else {
+    self.func_type_indices[idx]
+  }
 }
 
 ///|

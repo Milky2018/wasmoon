@@ -71,6 +71,7 @@ pub(all) struct FuncType {
   results : Array[ValueType]
 }
 pub fn FuncType::structural_hash(Self) -> Int
+pub fn FuncType::structurally_equal(Self, Self, Int, Int) -> Bool
 pub impl Eq for FuncType
 pub impl Show for FuncType
 

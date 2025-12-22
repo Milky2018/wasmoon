@@ -1,38 +1,77 @@
 // Executor Tests
 
 ///|
-test "execute simple add function" {
-  // Create a simple module that adds two i32 values
-  // Function signature: (i32, i32) -> i32
-  // Function body: local.get 0, local.get 1, i32.add
-
-  let add_func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), LocalGet(1), I32Add],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
+/// Helper function to create a simple module with one function type and one function.
+/// This reduces boilerplate in tests that don't need tables, memories, globals, etc.
+fn make_simple_module(
+  func_type : @types.FuncType,
+  code : @types.FunctionCode,
+  export_name : String,
+) -> @types.Module {
+  {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "add", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: export_name, desc: @types.ExportDesc::Func(0) }],
     start: None,
     elems: [],
-    codes: [add_func],
+    codes: [code],
     datas: [],
     tags: [],
   }
+}
+
+///|
+/// Helper function to create a module with multiple function types and functions.
+fn make_module_with_funcs(
+  types : Array[@types.FuncType],
+  codes : Array[@types.FunctionCode],
+  funcs : Array[Int],
+  exports : Array[@types.Export],
+) -> @types.Module {
+  let type_rec_groups = Array::makei(types.length(), fn(i) { i })
+  {
+    types,
+    type_rec_groups,
+    imports: [],
+    funcs,
+    tables: [],
+    memories: [],
+    globals: [],
+    exports,
+    start: None,
+    elems: [],
+    codes,
+    datas: [],
+    tags: [],
+  }
+}
+
+///|
+test "execute simple add function" {
+  // Create a simple module that adds two i32 values
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let code : @types.FunctionCode = {
+    locals: [],
+    body: [LocalGet(0), LocalGet(1), I32Add],
+  }
+  let mod = make_simple_module(func_type, code, "add")
 
   // Instantiate and call
   let (store, instance) = instantiate_module(mod)
-  let args = [@types.Value::I32(5), @types.Value::I32(10)]
-  let results = call_exported_func(store, instance, "add", args)
+  let results = call_exported_func(
+    store,
+    instance,
+    "add",
+    [@types.Value::I32(5), @types.Value::I32(10)],
+  )
   match results[0] {
     I32(n) => inspect(n, content="15")
     _ => fail("Expected I32 result")
@@ -42,8 +81,11 @@ test "execute simple add function" {
 ///|
 test "execute function with local variables" {
   // Function: (a, b) => { let tmp = a + b; return tmp * 2 }
-
-  let func : @types.FunctionCode = {
+  let func_type : @types.FuncType = {
+    params: [@types.ValueType::I32, @types.ValueType::I32],
+    results: [@types.ValueType::I32],
+  }
+  let code : @types.FunctionCode = {
     locals: [@types.ValueType::I32], // one local variable
     body: [
       LocalGet(0), // get a
@@ -55,27 +97,14 @@ test "execute function with local variables" {
       I32Mul, // tmp * 2
     ],
   }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [func_type],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "double_sum", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = make_simple_module(func_type, code, "double_sum")
   let (store, instance) = instantiate_module(mod)
-  let args = [@types.Value::I32(3), @types.Value::I32(4)]
-  let results = call_exported_func(store, instance, "double_sum", args)
+  let results = call_exported_func(
+    store,
+    instance,
+    "double_sum",
+    [@types.Value::I32(3), @types.Value::I32(4)],
+  )
   match results[0] {
     I32(n) => inspect(n, content="14") // (3 + 4) * 2 = 14
     _ => fail("Expected I32 result")
@@ -95,6 +124,7 @@ test "execute i64 addition" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -138,6 +168,7 @@ test "execute f32 arithmetic" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -178,6 +209,7 @@ test "execute f64 arithmetic" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -212,6 +244,7 @@ test "execute i64 comparison" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -245,6 +278,7 @@ test "numeric conversion: i32.wrap_i64" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -279,6 +313,7 @@ test "numeric conversion: i64.extend_i32_s" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -313,6 +348,7 @@ test "numeric conversion: f64.convert_i32_s" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -346,6 +382,7 @@ test "numeric conversion: i32.reinterpret_f32" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -380,6 +417,7 @@ test "saturating truncation: i32.trunc_sat_f32_s overflow" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -414,6 +452,7 @@ test "saturating truncation: i32.trunc_sat_f64_u negative" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -455,6 +494,7 @@ test "memory: i32.store and i32.load" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -493,6 +533,7 @@ test "memory: i64.store and i64.load" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -531,6 +572,7 @@ test "memory: f32.store and f32.load" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -574,6 +616,7 @@ test "memory: load with offset" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -614,6 +657,7 @@ test "memory: i32.load8_s sign extension" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -654,6 +698,7 @@ test "memory: i32.load8_u zero extension" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -694,6 +739,7 @@ test "memory: memory.size and memory.grow" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -728,6 +774,7 @@ test "control flow: simple block" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -767,6 +814,7 @@ test "control flow: br exits block" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -815,6 +863,7 @@ test "control flow: br_if conditional" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -885,6 +934,7 @@ test "control flow: loop with br" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -924,6 +974,7 @@ test "control flow: if-else" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -974,6 +1025,7 @@ test "control flow: nested blocks with br" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1012,6 +1064,7 @@ test "control flow: select" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1070,6 +1123,7 @@ test "function call: call instruction" {
   }
   let mod : @types.Module = {
     types: [add_type, main_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0, 1], // func 0 has type 0, func 1 has type 1
     tables: [],
@@ -1114,6 +1168,7 @@ test "function call: nested calls" {
   }
   let mod : @types.Module = {
     types: [unary_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0, 0], // all functions have type 0
     tables: [],
@@ -1172,6 +1227,7 @@ test "function call: call_indirect" {
   }
   let mod : @types.Module = {
     types: [binary_type, apply_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0, 0, 1], // add and sub have type 0, apply has type 1
     tables: [
@@ -1252,6 +1308,7 @@ test "host function: simple call" {
   }
   let mod : @types.Module = {
     types: [unary_type],
+    type_rec_groups: [0],
     imports: [{ mod_name: "env", name: "double", desc: Func(0) }],
     funcs: [0], // main has type 0
     tables: [],
@@ -1302,6 +1359,7 @@ test "memory import: shared memory between modules" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [
       {
         mod_name: "env",
@@ -1350,6 +1408,7 @@ test "memory import: write to imported memory" {
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [
       {
         mod_name: "env",
@@ -1394,6 +1453,7 @@ test "import validation: missing import raises error" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [{ mod_name: "env", name: "missing_func", desc: Func(0) }],
     funcs: [0],
     tables: [],
@@ -1473,6 +1533,7 @@ test "table import: call_indirect with imported table" {
   }
   let mod : @types.Module = {
     types: [binary_type, apply_type],
+    type_rec_groups: [0, 1],
     imports: [
       {
         mod_name: "env",
@@ -1545,6 +1606,7 @@ test "global variables: global.get and global.set" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1587,6 +1649,7 @@ test "global variables: multiple globals" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1621,6 +1684,7 @@ test "global variables: i64 global" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1659,6 +1723,7 @@ test "global import: imported global" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [
       {
         mod_name: "env",
@@ -1697,6 +1762,7 @@ test "table operations: table.size" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [
@@ -1864,6 +1930,7 @@ test "module initialization: start function execution" {
   }
   let mod : @types.Module = {
     types: [init_type, get_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0, 1],
     tables: [],
@@ -1903,6 +1970,7 @@ test "module initialization: data segment" {
   let data_bytes = Bytes::from_array([b'\x2A', b'\x00', b'\x00', b'\x00'])
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1940,6 +2008,7 @@ test "module initialization: data segment with offset" {
   let data_bytes = Bytes::from_array([b'\x78', b'\x56', b'\x34', b'\x12'])
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1982,6 +2051,7 @@ test "module initialization: element segment" {
   }
   let mod : @types.Module = {
     types: [ret_type, call_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0, 0, 1], // func0, func1 have type 0; call_func has type 1
     tables: [
@@ -2045,6 +2115,7 @@ test "bulk memory: memory.fill" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2089,6 +2160,7 @@ test "bulk memory: memory.copy non-overlapping" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2137,6 +2209,7 @@ test "bulk memory: memory.copy overlapping backward" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2180,6 +2253,7 @@ test "bulk memory: memory.init from data segment" {
   let data_bytes = Bytes::from_array([b'\xEF', b'\xBE', b'\xAD', b'\xDE'])
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2224,6 +2298,7 @@ test "bulk memory: memory.init with offset" {
   let data_bytes = Bytes::from_array([b'\x11', b'\x22', b'\x33', b'\x44'])
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2282,6 +2357,7 @@ test "bulk memory: data.drop" {
   let data_bytes = Bytes::from_array([b'\x42'])
   let mod : @types.Module = {
     types: [void_type, i32_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0, 1, 1], // drop has type 0, init funcs have type 1
     tables: [],
@@ -2338,6 +2414,7 @@ test "bulk memory: elem.drop" {
   }
   let mod : @types.Module = {
     types: [void_type, i32_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0, 1], // drop has type 0, dummy has type 1
     tables: [
@@ -2389,6 +2466,7 @@ test "bulk memory: data.drop is idempotent" {
   let data_bytes = Bytes::from_array([b'\x42'])
   let mod : @types.Module = {
     types: [void_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2423,6 +2501,7 @@ test "reference types: ref.null funcref" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2456,6 +2535,7 @@ test "reference types: ref.null externref" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2491,6 +2571,7 @@ test "reference types: ref.func" {
   }
   let mod : @types.Module = {
     types: [i32_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0], // both have type 0
     tables: [],
@@ -2527,6 +2608,7 @@ test "reference types: ref.is_null with non-null value" {
   }
   let mod : @types.Module = {
     types: [i32_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0],
     tables: [
@@ -2585,6 +2667,7 @@ test "reference types: ref.func used with table.set" {
   }
   let mod : @types.Module = {
     types: [i32_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0],
     tables: [
@@ -2626,6 +2709,7 @@ test "multi-value: function returning two values" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2668,6 +2752,7 @@ test "multi-value: function returning three values" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2704,6 +2789,7 @@ test "multi-value: function returning no values" {
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2743,6 +2829,7 @@ test "multi-value: call function with multi-value return" {
   }
   let mod : @types.Module = {
     types: [swap_type, test_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0, 1],
     tables: [],
@@ -2786,6 +2873,7 @@ test "multi-value: block returning two values" {
   }
   let mod : @types.Module = {
     types: [block_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -2831,6 +2919,7 @@ test "multi-value: if returning two values" {
   }
   let mod : @types.Module = {
     types: [block_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -2875,6 +2964,7 @@ test "multi-value: block with single Value type" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2908,6 +2998,7 @@ test "multi-value: empty block" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2942,6 +3033,7 @@ test "module linking: basic import from another module" {
   }
   let mod_a : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -2964,6 +3056,7 @@ test "module linking: basic import from another module" {
   let func_b : @types.FunctionCode = { locals: [], body: [Call(0)] } // Call imported function
   let mod_b : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [
       { mod_name: "mod_a", name: "get_value", desc: @types.ImportDesc::Func(0) },
     ],
@@ -3002,6 +3095,7 @@ test "module linking: import memory from another module" {
   let void_type : @types.FuncType = { params: [], results: [] }
   let mod_a : @types.Module = {
     types: [void_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -3034,6 +3128,7 @@ test "module linking: import memory from another module" {
   }
   let mod_b : @types.Module = {
     types: [i32_type],
+    type_rec_groups: [0],
     imports: [
       {
         mod_name: "mod_a",
@@ -3080,6 +3175,7 @@ test "module linking: three modules chain" {
   }
   let mod_a : @types.Module = {
     types: [add_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -3107,6 +3203,7 @@ test "module linking: three modules chain" {
   }
   let mod_b : @types.Module = {
     types: [add_type, unary_type],
+    type_rec_groups: [0, 1],
     imports: [
       { mod_name: "math", name: "add", desc: @types.ImportDesc::Func(0) },
     ],
@@ -3133,6 +3230,7 @@ test "module linking: three modules chain" {
   } // double(double(x))
   let mod_c : @types.Module = {
     types: [unary_type],
+    type_rec_groups: [0],
     imports: [
       { mod_name: "utils", name: "double", desc: @types.ImportDesc::Func(0) },
     ],
@@ -3172,6 +3270,7 @@ test "call_indirect with imports path" {
   }
   let mod : @types.Module = {
     types: [type_],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0], // Both functions have type 0
     tables: [
@@ -3235,6 +3334,7 @@ test "call_indirect with multiple funcs and explicit type" {
   }
   let mod : @types.Module = {
     types: [type_empty, type_result_i32, type_binary, type_binary],
+    type_rec_groups: [0, 1, 2, 3],
     imports: [],
     funcs: [0, 1, 2, 1], // dummy=0, test1=1, func=2, test=1
     tables: [
@@ -3301,6 +3401,7 @@ test "call_indirect type index bug reproduction" {
   }
   let mod : @types.Module = {
     types: [type0, type1, type2, type3],
+    type_rec_groups: [0, 1, 2, 3],
     imports: [],
     funcs: [0, 1, 3], // dummy=type0, $func=type1, test=type3
     tables: [
@@ -3357,6 +3458,7 @@ test "i32.trunc_f64_u: value in (-1, 0) truncates to 0" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -3390,6 +3492,7 @@ test "i32.trunc_f32_u: value in (-1, 0) truncates to 0" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -3424,6 +3527,7 @@ test "i64.trunc_f64_u: large value near 2^64" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -3459,6 +3563,7 @@ test "i64.trunc_sat_f64_u: large value saturates correctly" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -3493,6 +3598,7 @@ test "i64.trunc_sat_f64_u: value in range converts correctly" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -3527,6 +3633,7 @@ test "i32.trunc_f64_s: boundary near INT32_MIN" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],

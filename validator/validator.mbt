@@ -15,6 +15,7 @@ pub(all) suberror ValidationError {
   InvalidLabelIndex(Int)
   InvalidElemIndex(Int)
   UnknownTag(Int) // Unknown tag index
+  UnknownType(Int) // Forward type reference outside rec group
   UnreachableCode
   MultipleMemories // More than one memory is not allowed in MVP
   MultipleTables // More than one table is not allowed in MVP
@@ -62,6 +63,7 @@ pub fn ValidationErrorContext::from_error(
     InvalidLabelIndex(idx) => "invalid label index: \{idx}"
     InvalidElemIndex(idx) => "invalid element index: \{idx}"
     UnknownTag(idx) => "unknown tag \{idx}"
+    UnknownType(_) => "unknown type"
     UnreachableCode => "unreachable code"
     MultipleMemories => "multiple memories not allowed in MVP"
     MultipleTables => "multiple tables not allowed in MVP"
@@ -301,6 +303,34 @@ fn validate_value_type(
   if ty is (RefFuncTyped(idx) | RefNullFuncTyped(idx)) &&
     (idx < 0 || idx >= num_types) {
     raise InvalidTypeIndex(idx)
+  }
+}
+
+///|
+/// Validate that forward type references are only allowed within rec groups.
+/// For a type at index `type_idx`, any reference to a type with higher index
+/// must be in the same rec group.
+fn validate_type_forward_refs(
+  ty : @types.ValueType,
+  type_idx : Int,
+  type_rec_groups : Array[Int],
+) -> Unit raise ValidationError {
+  match ty {
+    RefFuncTyped(ref_idx) | RefNullFuncTyped(ref_idx) =>
+      // Forward reference: ref_idx > type_idx
+      if ref_idx > type_idx {
+        // Must be in the same rec group
+        if type_idx < type_rec_groups.length() &&
+          ref_idx < type_rec_groups.length() {
+          if type_rec_groups[type_idx] != type_rec_groups[ref_idx] {
+            raise UnknownType(ref_idx)
+          }
+        } else {
+          // Type index out of bounds - this is an unknown type
+          raise UnknownType(ref_idx)
+        }
+      }
+    _ => ()
   }
 }
 
@@ -553,6 +583,16 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     }
     for result_type in func_type.results {
       validate_value_type(result_type, num_types)
+    }
+  }
+
+  // Validate forward type references are only within rec groups
+  for type_idx, func_type in mod.types {
+    for param_type in func_type.params {
+      validate_type_forward_refs(param_type, type_idx, mod.type_rec_groups)
+    }
+    for result_type in func_type.results {
+      validate_type_forward_refs(result_type, type_idx, mod.type_rec_groups)
     }
   }
 

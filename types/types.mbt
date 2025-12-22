@@ -368,6 +368,255 @@ fn ValueType::type_code(self : ValueType) -> Int {
 }
 
 ///|
+/// Check if two FuncTypes are structurally equivalent.
+/// This handles recursive types by comparing the structure rather than indices.
+/// type1_idx and type2_idx are the indices of the types being compared.
+pub fn FuncType::structurally_equal(
+  self : FuncType,
+  other : FuncType,
+  self_idx : Int,
+  other_idx : Int,
+) -> Bool {
+  // Check param count
+  if self.params.length() != other.params.length() {
+    return false
+  }
+  // Check result count
+  if self.results.length() != other.results.length() {
+    return false
+  }
+  // Check each param
+  for i, p1 in self.params {
+    let p2 = other.params[i]
+    if not(p1.structurally_equal(p2, self_idx, other_idx)) {
+      return false
+    }
+  }
+  // Check each result
+  for i, r1 in self.results {
+    let r2 = other.results[i]
+    if not(r1.structurally_equal(r2, self_idx, other_idx)) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if two ValueTypes are structurally equivalent.
+/// self_idx and other_idx are the indices of the containing types being compared.
+fn ValueType::structurally_equal(
+  self : ValueType,
+  other : ValueType,
+  self_idx : Int,
+  other_idx : Int,
+) -> Bool {
+  match (self, other) {
+    // Basic types must match exactly
+    (I32, I32)
+    | (I64, I64)
+    | (F32, F32)
+    | (F64, F64)
+    | (V128, V128)
+    | (FuncRef, FuncRef)
+    | (ExternRef, ExternRef)
+    | (RefFunc, RefFunc)
+    | (RefExtern, RefExtern)
+    | (AnyRef, AnyRef)
+    | (ExnRef, ExnRef)
+    | (NullRef, NullRef)
+    | (NullFuncRef, NullFuncRef)
+    | (NullExnRef, NullExnRef)
+    | (NullExternRef, NullExternRef) => true
+    // Typed function references: check if both are self-references or same external ref
+    (RefFuncTyped(idx1), RefFuncTyped(idx2)) =>
+      // Both self-references, or both reference the same external type
+      (idx1 == self_idx && idx2 == other_idx) ||
+      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
+    (RefNullFuncTyped(idx1), RefNullFuncTyped(idx2)) =>
+      // Both self-references, or both reference the same external type
+      (idx1 == self_idx && idx2 == other_idx) ||
+      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
+    _ => false
+  }
+}
+
+///|
+/// Compute canonical type indices for a module's types.
+/// Structurally equivalent types will be assigned the same canonical index.
+/// The canonical index for type i is the smallest index j such that
+/// types[i] is structurally equivalent to types[j].
+pub fn compute_canonical_type_indices(types : Array[FuncType]) -> Array[Int] {
+  let n = types.length()
+  let canonical : Array[Int] = Array::make(n, -1)
+  for i in 0..<n {
+    // Find the first type j < i that is structurally equivalent to type i
+    let mut found = false
+    for j in 0..<i {
+      if func_types_structurally_equal(types, i, j) {
+        canonical[i] = canonical[j]
+        found = true
+        break
+      }
+    }
+    // If no equivalent type found, use own index as canonical
+    if not(found) {
+      canonical[i] = i
+    }
+  }
+  canonical
+}
+
+///|
+/// Check if two types at given indices are structurally equal.
+/// Uses memoization to handle recursive types.
+fn func_types_structurally_equal(
+  types : Array[FuncType],
+  idx1 : Int,
+  idx2 : Int,
+) -> Bool {
+  if idx1 == idx2 {
+    return true
+  }
+  if idx1 < 0 ||
+    idx1 >= types.length() ||
+    idx2 < 0 ||
+    idx2 >= types.length() {
+    return false
+  }
+  let t1 = types[idx1]
+  let t2 = types[idx2]
+  // Check param/result counts first
+  if t1.params.length() != t2.params.length() ||
+    t1.results.length() != t2.results.length() {
+    return false
+  }
+  // Use visited map for cycle detection
+  let visited : Map[(Int, Int), Bool] = {}
+  func_types_structurally_equal_rec(types, t1, t2, idx1, idx2, visited)
+}
+
+///|
+/// Recursive helper for structural type comparison with cycle detection.
+fn func_types_structurally_equal_rec(
+  types : Array[FuncType],
+  t1 : FuncType,
+  t2 : FuncType,
+  idx1 : Int,
+  idx2 : Int,
+  visited : Map[(Int, Int), Bool],
+) -> Bool {
+  // Normalize key to avoid (a,b) vs (b,a) issues
+  let key = if idx1 <= idx2 { (idx1, idx2) } else { (idx2, idx1) }
+  // Check if already comparing these types (cycle detection)
+  match visited.get(key) {
+    Some(result) => return result
+    None => ()
+  }
+  // Assume equal to break cycles, will update if found different
+  visited[key] = true
+  // Check param/result counts
+  if t1.params.length() != t2.params.length() ||
+    t1.results.length() != t2.results.length() {
+    visited[key] = false
+    return false
+  }
+  // Check each param
+  for i, p1 in t1.params {
+    let p2 = t2.params[i]
+    if not(value_types_structurally_equal(types, p1, p2, idx1, idx2, visited)) {
+      visited[key] = false
+      return false
+    }
+  }
+  // Check each result
+  for i, r1 in t1.results {
+    let r2 = t2.results[i]
+    if not(value_types_structurally_equal(types, r1, r2, idx1, idx2, visited)) {
+      visited[key] = false
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if two value types are structurally equivalent.
+fn value_types_structurally_equal(
+  types : Array[FuncType],
+  v1 : ValueType,
+  v2 : ValueType,
+  self_idx : Int,
+  other_idx : Int,
+  visited : Map[(Int, Int), Bool],
+) -> Bool {
+  match (v1, v2) {
+    // Basic types must match exactly
+    (I32, I32)
+    | (I64, I64)
+    | (F32, F32)
+    | (F64, F64)
+    | (V128, V128)
+    | (FuncRef, FuncRef)
+    | (ExternRef, ExternRef)
+    | (RefFunc, RefFunc)
+    | (RefExtern, RefExtern)
+    | (AnyRef, AnyRef)
+    | (ExnRef, ExnRef)
+    | (NullRef, NullRef)
+    | (NullFuncRef, NullFuncRef)
+    | (NullExnRef, NullExnRef)
+    | (NullExternRef, NullExternRef) => true
+    // Typed function references
+    (RefFuncTyped(ref1), RefFuncTyped(ref2)) =>
+      type_refs_structurally_equal(
+        types, ref1, ref2, self_idx, other_idx, visited,
+      )
+    (RefNullFuncTyped(ref1), RefNullFuncTyped(ref2)) =>
+      type_refs_structurally_equal(
+        types, ref1, ref2, self_idx, other_idx, visited,
+      )
+    _ => false
+  }
+}
+
+///|
+/// Check if two type references are structurally equal.
+fn type_refs_structurally_equal(
+  types : Array[FuncType],
+  ref1 : Int,
+  ref2 : Int,
+  self_idx : Int,
+  other_idx : Int,
+  visited : Map[(Int, Int), Bool],
+) -> Bool {
+  // Self-references are structurally equal
+  if ref1 == self_idx && ref2 == other_idx {
+    return true
+  }
+  // Non-self-references: recursively compare the referenced types
+  if ref1 != self_idx && ref2 != other_idx {
+    if ref1 == ref2 {
+      return true
+    }
+    // Compare the referenced types structurally
+    if ref1 >= 0 &&
+      ref1 < types.length() &&
+      ref2 >= 0 &&
+      ref2 < types.length() {
+      let t1 = types[ref1]
+      let t2 = types[ref2]
+      return func_types_structurally_equal_rec(
+        types, t1, t2, ref1, ref2, visited,
+      )
+    }
+    return false
+  }
+  // One is self-reference, other is not
+  false
+}
+
+///|
 /// Limits for memory and tables
 pub(all) struct Limits {
   min : Int
@@ -488,6 +737,10 @@ pub(all) struct Data {
 /// WebAssembly module
 pub(all) struct Module {
   types : Array[FuncType]
+  /// For each type, stores the rec group ID it belongs to.
+  /// Types in the same rec group have the same ID.
+  /// Used to validate that forward type references are only within rec groups.
+  type_rec_groups : Array[Int]
   imports : Array[Import]
   funcs : Array[Int] // type indices for functions
   tables : Array[Table]
@@ -506,6 +759,7 @@ pub(all) struct Module {
 pub fn Module::new() -> Module {
   {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],

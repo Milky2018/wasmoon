@@ -15,6 +15,7 @@ fn create_i32_add_module() -> @types.Module {
   }
   {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -107,6 +108,7 @@ fn create_i32_arithmetic_module() -> @types.Module {
   }
   {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0, 0, 0, 0, 0, 0],
     tables: [],
@@ -343,6 +345,7 @@ fn create_i32_bitwise_module() -> @types.Module {
   }
   {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0, 0, 0, 0, 0, 0, 0],
     tables: [],
@@ -511,6 +514,7 @@ fn create_i32_cmp_module() -> @types.Module {
   }
   {
     types: [binary_type, unary_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0, 0, 0, 0, 0, 0, 0, 1],
     tables: [],
@@ -630,6 +634,7 @@ fn create_i32_unary_module() -> @types.Module {
   }
   {
     types: [unary_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0, 0, 0, 0],
     tables: [],
@@ -794,6 +799,7 @@ fn create_i32_rotate_module() -> @types.Module {
   }
   {
     types: [binary_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0],
     tables: [],

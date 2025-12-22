@@ -38,6 +38,7 @@ fn create_i64_arithmetic_module() -> @types.Module {
   }
   {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0, 0, 0, 0, 0, 0],
     tables: [],
@@ -270,6 +271,7 @@ fn create_i64_bitwise_module() -> @types.Module {
   }
   {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0, 0, 0, 0, 0, 0, 0],
     tables: [],
@@ -412,6 +414,7 @@ fn create_i64_unary_module() -> @types.Module {
   }
   {
     types: [unary_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0, 0, 0, 0, 0],
     tables: [],

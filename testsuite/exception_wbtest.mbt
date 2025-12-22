@@ -14,6 +14,7 @@ fn create_throw_module() -> @types.Module {
   let throw_func : @types.FunctionCode = { locals: [], body: [Throw(0)] }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -72,6 +73,7 @@ fn create_catch_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -131,6 +133,7 @@ fn create_throw_param_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -201,6 +204,7 @@ fn create_catch_all_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -267,6 +271,7 @@ fn create_catch_ref_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -349,6 +354,7 @@ fn create_catch_all_ref_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -442,6 +448,7 @@ fn create_throw_ref_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -535,6 +542,7 @@ fn create_multi_tag_module() -> @types.Module {
   }
   {
     types: [tag0_type, tag1_type, func_type],
+    type_rec_groups: [0, 1, 2],
     imports: [],
     funcs: [2],
     tables: [],
@@ -621,6 +629,7 @@ fn create_propagate_module() -> @types.Module {
   }
   {
     types: [tag0_type, tag1_type, func_type],
+    type_rec_groups: [0, 1, 2],
     imports: [],
     funcs: [2],
     tables: [],
@@ -694,6 +703,7 @@ fn create_multi_value_exception_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -772,6 +782,7 @@ fn create_no_exception_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -828,6 +839,7 @@ fn create_uncaught_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -888,6 +900,7 @@ fn create_f32_exception_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -953,6 +966,7 @@ fn create_i64_exception_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -1030,6 +1044,7 @@ fn create_f64_exception_module() -> @types.Module {
   }
   {
     types: [tag_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],

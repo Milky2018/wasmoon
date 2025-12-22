@@ -1223,7 +1223,10 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         // Type section
         let count = parser.read_u32()
         for _ in 0..<count {
+          let type_idx = mod.types.length()
           mod.types.push(parser.read_func_type())
+          // Each type is its own rec group (binary rec groups not yet supported)
+          mod.type_rec_groups.push(type_idx)
         }
       }
       2 => {
