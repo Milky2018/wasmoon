@@ -89,8 +89,9 @@ pub fn Linker::add_host_func(
   mod_name : String,
   name : String,
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
+  func_type? : @types.FuncType = { params: [], results: [] },
 ) -> Unit {
-  let func_addr = self.store.alloc_host_func(func)
+  let func_addr = self.store.alloc_host_func(func, func_type~)
   // Create a minimal instance to hold this function
   // We need to add it to an existing module or create a synthetic one
   // For simplicity, we add directly to the imports when building
