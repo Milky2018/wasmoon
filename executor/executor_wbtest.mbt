@@ -26,32 +26,6 @@ fn make_simple_module(
 }
 
 ///|
-/// Helper function to create a module with multiple function types and functions.
-fn make_module_with_funcs(
-  types : Array[@types.FuncType],
-  codes : Array[@types.FunctionCode],
-  funcs : Array[Int],
-  exports : Array[@types.Export],
-) -> @types.Module {
-  let type_rec_groups = Array::makei(types.length(), fn(i) { i })
-  {
-    types,
-    type_rec_groups,
-    imports: [],
-    funcs,
-    tables: [],
-    memories: [],
-    globals: [],
-    exports,
-    start: None,
-    elems: [],
-    codes,
-    datas: [],
-    tags: [],
-  }
-}
-
-///|
 test "execute simple add function" {
   // Create a simple module that adds two i32 values
   let func_type : @types.FuncType = {
