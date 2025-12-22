@@ -23,24 +23,28 @@ moon add Milky2018/wasmoon
 
 ## Quick Start
 
-```moonbit test 
+```mbt check
 ///|
-// Define a module using WAT (WebAssembly Text Format)
-let wat =
-  #|(module
-  #|  (func (export "add") (param i32 i32) (result i32)
-  #|    local.get 0
-  #|    local.get 1
-  #|    i32.add))
-let mod = @wat.parse(wat)
+test {
 
-// Instantiate and execute
-let (store, instance) = @executor.instantiate_module(mod)
-let result = @executor.call_exported_func(store, instance, "add", [
-  @types.Value::I32(5),
-  @types.Value::I32(3),
-])
-inspect(result, content="[I32(8)]")
+  ///|
+  // Define a module using WAT (WebAssembly Text Format)
+  let wat =
+    #|(module
+    #|  (func (export "add") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.add))
+  let mod = @wat.parse(wat)
+
+  // Instantiate and execute
+  let (store, instance) = @executor.instantiate_module(mod)
+  let result = @executor.call_exported_func(store, instance, "add", [
+    @types.Value::I32(5),
+    @types.Value::I32(3),
+  ])
+  inspect(result, content="[I32(8)]")
+}
 ```
 
 ## License
