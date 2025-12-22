@@ -6,6 +6,14 @@ pub(all) struct ExnInstance {
 } derive(Show)
 
 ///|
+/// Represents the ownership status of a function in the store
+pub(all) enum FuncOwner {
+  HostFunc // Host function - never has an owner module
+  Unowned // WASM function not yet assigned to a module
+  Module(Int) // WASM function owned by module at given index
+} derive(Show, Eq)
+
+///|
 /// The store contains all global runtime state
 pub struct Store {
   funcs : Array[FuncInst]
@@ -16,9 +24,9 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType] // Tag types (params only, no results)
   exns : Array[ExnInstance] // Exception instances for exnref
-  // Maps function address to its owning module instance address
+  // Maps function address to its owning module instance
   // Used for cross-module call context switching
-  func_owners : Array[Int] // -1 means host function or not yet registered
+  func_owners : Array[FuncOwner]
   // Registered module instances by their address/index
   instances : Array[ModuleInstance]
   // JIT tables corresponding to runtime tables (for cross-module sharing)
@@ -55,7 +63,7 @@ pub fn Store::alloc_func(
   self.funcs.push(FuncInst::WasmFunc(func))
   self.func_types.push(func_type)
   self.func_type_indices.push(type_idx)
-  self.func_owners.push(-1) // Owner not yet known
+  self.func_owners.push(FuncOwner::Unowned)
   idx
 }
 
@@ -71,7 +79,7 @@ pub fn Store::alloc_host_func(
   self.funcs.push(FuncInst::HostFunc(func))
   self.func_types.push(func_type)
   self.func_type_indices.push(type_idx)
-  self.func_owners.push(-1) // Host functions don't have an owner
+  self.func_owners.push(FuncOwner::HostFunc)
   idx
 }
 
@@ -188,6 +196,29 @@ pub fn Store::get_func_type_idx(self : Store, idx : Int) -> Int {
 }
 
 ///|
+/// Get canonical type index for a function by store address
+/// Returns the canonical type index from the function's owning module
+/// Returns -1 if the function or owner is not found
+pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int {
+  if func_addr < 0 || func_addr >= self.func_owners.length() {
+    return -1
+  }
+  let owner_idx = match self.func_owners[func_addr] {
+    Module(idx) => idx
+    _ => return -1
+  }
+  if owner_idx >= self.instances.length() {
+    return -1
+  }
+  let instance = self.instances[owner_idx]
+  let type_idx = self.func_type_indices[func_addr]
+  if type_idx < 0 || type_idx >= instance.canonical_type_indices.length() {
+    return -1
+  }
+  instance.canonical_type_indices[type_idx]
+}
+
+///|
 /// Get WASM function code (for backward compatibility)
 pub fn Store::get_func(
   self : Store,
@@ -253,14 +284,14 @@ pub fn Store::get_global(
 /// (imported functions already belong to their original module)
 pub fn Store::register_instance(self : Store, instance : ModuleInstance) -> Int {
   let instance_idx = self.instances.length()
+  instance.store_idx = instance_idx
   self.instances.push(instance)
-  // Set ownership only for functions that don't have an owner yet
-  // Imported functions will already have their owner set
+  // Set ownership only for unowned WASM functions
+  // HostFunc and already-owned functions are not changed
   for func_addr in instance.func_addrs {
     if func_addr >= 0 && func_addr < self.func_owners.length() {
-      // Only set if not already owned (-1 means unowned)
-      if self.func_owners[func_addr] < 0 {
-        self.func_owners[func_addr] = instance_idx
+      if self.func_owners[func_addr] == FuncOwner::Unowned {
+        self.func_owners[func_addr] = FuncOwner::Module(instance_idx)
       }
     }
   }
@@ -273,9 +304,26 @@ pub fn Store::get_func_owner(self : Store, func_addr : Int) -> ModuleInstance? {
   if func_addr < 0 || func_addr >= self.func_owners.length() {
     return None
   }
-  let owner_idx = self.func_owners[func_addr]
-  if owner_idx < 0 || owner_idx >= self.instances.length() {
-    return None
+  match self.func_owners[func_addr] {
+    Module(idx) =>
+      if idx < self.instances.length() {
+        Some(self.instances[idx])
+      } else {
+        None
+      }
+    _ => None
   }
-  Some(self.instances[owner_idx])
+}
+
+///|
+/// Get the owning module instance index for a function address
+/// Returns -1 if no owner (host function or unowned)
+pub fn Store::get_func_owner_idx(self : Store, func_addr : Int) -> Int {
+  if func_addr < 0 || func_addr >= self.func_owners.length() {
+    return -1
+  }
+  match self.func_owners[func_addr] {
+    Module(idx) => idx
+    _ => -1
+  }
 }

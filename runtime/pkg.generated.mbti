@@ -63,6 +63,14 @@ pub(all) enum FuncInst {
 }
 pub impl Show for FuncInst
 
+pub(all) enum FuncOwner {
+  HostFunc
+  Unowned
+  Module(Int)
+}
+pub impl Eq for FuncOwner
+pub impl Show for FuncOwner
+
 type GlobalInstance
 pub fn GlobalInstance::get(Self) -> @types.Value
 pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
@@ -139,6 +147,9 @@ pub impl Show for Memory
 
 pub(all) struct ModuleInstance {
   types : Array[@types.FuncType]
+  type_rec_groups : Array[Int]
+  canonical_type_indices : Array[Int]
+  mut store_idx : Int
   func_addrs : Array[Int]
   func_type_indices : Array[Int]
   table_addrs : Array[Int]
@@ -190,7 +201,7 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType]
   exns : Array[ExnInstance]
-  func_owners : Array[Int]
+  func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
 }
@@ -203,8 +214,10 @@ pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int
 pub fn Store::alloc_tag(Self, @types.FuncType) -> Int
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
+pub fn Store::get_func_canonical_type_idx(Self, Int) -> Int
 pub fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
 pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
+pub fn Store::get_func_owner_idx(Self, Int) -> Int
 pub fn Store::get_func_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_func_type_idx(Self, Int) -> Int
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError

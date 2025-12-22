@@ -2,6 +2,9 @@
 /// Runtime instance of a WebAssembly module
 pub(all) struct ModuleInstance {
   types : Array[@types.FuncType]
+  type_rec_groups : Array[Int] // rec group IDs for each type
+  canonical_type_indices : Array[Int] // canonical indices for structural equivalence
+  mut store_idx : Int // index in the store's instances array, -1 if not registered
   func_addrs : Array[Int] // addresses into function store
   func_type_indices : Array[Int] // type indices for each function
   table_addrs : Array[Int] // indices into table store
@@ -19,6 +22,9 @@ pub(all) struct ModuleInstance {
 pub fn ModuleInstance::new() -> ModuleInstance {
   {
     types: [],
+    type_rec_groups: [],
+    canonical_type_indices: [],
+    store_idx: -1,
     func_addrs: [],
     func_type_indices: [],
     table_addrs: [],

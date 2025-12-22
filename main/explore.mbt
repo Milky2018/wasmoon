@@ -145,6 +145,7 @@ fn run_explore(
       memory_max~,
       tables=mod_.tables,
       global_types~,
+      type_rec_groups=mod_.type_rec_groups,
     )
     let ir_func = translator.translate(code.body)
     let ir_text = ir_func.print()

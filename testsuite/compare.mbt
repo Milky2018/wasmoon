@@ -212,6 +212,7 @@ fn run_jit(
         import_func_type_indices,
         memory_max~,
         tables=mod_.tables,
+        type_rec_groups=mod_.type_rec_groups,
       )
       let ir_func = translator.translate(code.body)
 
@@ -338,7 +339,10 @@ fn init_elem_segments(
 
   // Compute canonical type indices for structural type equivalence
   // Structurally equivalent types will have the same canonical index
-  let canonical_types = @types.compute_canonical_type_indices(mod_.types)
+  let canonical_types = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
 
   // Build function index to canonical type index mapping
   let func_canonical_types : Array[Int] = []

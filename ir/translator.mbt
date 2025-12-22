@@ -79,6 +79,7 @@ pub fn Translator::new(
   memory_max? : Int? = None,
   tables? : Array[@types.Table] = [],
   global_types? : Array[@types.GlobalType] = [],
+  type_rec_groups? : Array[Int] = [],
 ) -> Translator {
   let builder = IRBuilder::new(name)
   // Following Cranelift: add vmctx as explicit params
@@ -125,7 +126,10 @@ pub fn Translator::new(
   }
   // Compute canonical type indices for structural type equivalence
   // Structurally equivalent types will map to the same canonical index
-  let canonical_type_indices = @types.compute_canonical_type_indices(func_types)
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    func_types,
+    type_rec_groups~,
+  )
   {
     builder,
     value_stack: [],

@@ -94,6 +94,7 @@ fn run_compile(
       memory_max~,
       tables=mod_.tables,
       global_types~,
+      type_rec_groups=mod_.type_rec_groups,
     )
     let ir_func = translator.translate(code.body)
 

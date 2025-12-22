@@ -1,254 +1,6 @@
 // Function Call Instructions - call and call_indirect
 
 ///|
-/// Check if two function types are structurally equivalent
-/// Uses recursive comparison for typed references within the same module
-fn func_types_structurally_equal(
-  types : Array[@types.FuncType],
-  t1 : @types.FuncType,
-  t2 : @types.FuncType,
-  idx1 : Int,
-  idx2 : Int,
-  visited : Map[(Int, Int), Bool],
-) -> Bool {
-  // Check param counts
-  if t1.params.length() != t2.params.length() {
-    return false
-  }
-  // Check result counts
-  if t1.results.length() != t2.results.length() {
-    return false
-  }
-  // Compare each param
-  for i = 0; i < t1.params.length(); i = i + 1 {
-    if not(
-        value_types_structurally_equal(
-          types,
-          t1.params[i],
-          t2.params[i],
-          idx1,
-          idx2,
-          visited,
-        ),
-      ) {
-      return false
-    }
-  }
-  // Compare each result
-  for i = 0; i < t1.results.length(); i = i + 1 {
-    if not(
-        value_types_structurally_equal(
-          types,
-          t1.results[i],
-          t2.results[i],
-          idx1,
-          idx2,
-          visited,
-        ),
-      ) {
-      return false
-    }
-  }
-  true
-}
-
-///|
-/// Check if two value types are structurally equivalent
-fn value_types_structurally_equal(
-  types : Array[@types.FuncType],
-  v1 : @types.ValueType,
-  v2 : @types.ValueType,
-  self_idx : Int,
-  other_idx : Int,
-  visited : Map[(Int, Int), Bool],
-) -> Bool {
-  match (v1, v2) {
-    // Basic types must match exactly
-    (I32, I32) | (I64, I64) | (F32, F32) | (F64, F64) => true
-    (V128, V128) => true
-    (FuncRef, FuncRef) | (ExternRef, ExternRef) => true
-    (RefFunc, RefFunc) | (RefExtern, RefExtern) => true
-    (NullRef, NullRef) | (NullExternRef, NullExternRef) => true
-    (NullFuncRef, NullFuncRef) | (NullExnRef, NullExnRef) => true
-    (AnyRef, AnyRef) | (ExnRef, ExnRef) => true
-    // Typed function references - need recursive comparison
-    (RefFuncTyped(i1), RefFuncTyped(i2))
-    | (RefNullFuncTyped(i1), RefNullFuncTyped(i2)) => {
-      // Case 1: Both are self-references
-      if i1 == self_idx && i2 == other_idx {
-        return true
-      }
-      // Case 2: Neither is a self-reference, compare the referenced types recursively
-      if i1 != self_idx && i2 != other_idx {
-        return type_indices_structurally_equal(types, i1, i2, visited)
-      }
-      // Case 3: One is self-reference, other is not - not equal
-      false
-    }
-    _ => false
-  }
-}
-
-///|
-/// Check if two type indices refer to structurally equivalent types
-fn type_indices_structurally_equal(
-  types : Array[@types.FuncType],
-  i1 : Int,
-  i2 : Int,
-  visited : Map[(Int, Int), Bool],
-) -> Bool {
-  // Same index means same type
-  if i1 == i2 {
-    return true
-  }
-  // Check if we've already determined this pair
-  let key = if i1 < i2 { (i1, i2) } else { (i2, i1) }
-  match visited.get(key) {
-    Some(result) => return result
-    None => ()
-  }
-  // Mark as being visited (assume equal to handle cycles)
-  visited.set(key, true)
-  // Bounds check
-  if i1 < 0 || i1 >= types.length() || i2 < 0 || i2 >= types.length() {
-    visited.set(key, false)
-    return false
-  }
-  // Recursively compare the types
-  // IMPORTANT: Pass i1 and i2 as the self/other indices for detecting self-references
-  let t1 = types[i1]
-  let t2 = types[i2]
-  let result = func_types_structurally_equal(types, t1, t2, i1, i2, visited)
-  visited.set(key, result)
-  result
-}
-
-///|
-/// Check if two function types are structurally equivalent across modules
-/// Uses two separate type arrays for resolving references
-pub fn func_types_cross_module_equal(
-  types1 : Array[@types.FuncType],
-  types2 : Array[@types.FuncType],
-  t1 : @types.FuncType,
-  t2 : @types.FuncType,
-  idx1 : Int,
-  idx2 : Int,
-  visited : Map[(Int, Int), Bool],
-) -> Bool {
-  // Check param counts
-  if t1.params.length() != t2.params.length() {
-    return false
-  }
-  // Check result counts
-  if t1.results.length() != t2.results.length() {
-    return false
-  }
-  // Compare each param
-  for i = 0; i < t1.params.length(); i = i + 1 {
-    if not(
-        value_types_cross_module_equal(
-          types1,
-          types2,
-          t1.params[i],
-          t2.params[i],
-          idx1,
-          idx2,
-          visited,
-        ),
-      ) {
-      return false
-    }
-  }
-  // Compare each result
-  for i = 0; i < t1.results.length(); i = i + 1 {
-    if not(
-        value_types_cross_module_equal(
-          types1,
-          types2,
-          t1.results[i],
-          t2.results[i],
-          idx1,
-          idx2,
-          visited,
-        ),
-      ) {
-      return false
-    }
-  }
-  true
-}
-
-///|
-/// Check if two value types are structurally equivalent across modules
-fn value_types_cross_module_equal(
-  types1 : Array[@types.FuncType],
-  types2 : Array[@types.FuncType],
-  v1 : @types.ValueType,
-  v2 : @types.ValueType,
-  self_idx : Int,
-  other_idx : Int,
-  visited : Map[(Int, Int), Bool],
-) -> Bool {
-  match (v1, v2) {
-    // Basic types must match exactly
-    (I32, I32) | (I64, I64) | (F32, F32) | (F64, F64) => true
-    (V128, V128) => true
-    (FuncRef, FuncRef) | (ExternRef, ExternRef) => true
-    (RefFunc, RefFunc) | (RefExtern, RefExtern) => true
-    (NullRef, NullRef) | (NullExternRef, NullExternRef) => true
-    (NullFuncRef, NullFuncRef) | (NullExnRef, NullExnRef) => true
-    (AnyRef, AnyRef) | (ExnRef, ExnRef) => true
-    // Typed function references - need recursive cross-module comparison
-    (RefFuncTyped(i1), RefFuncTyped(i2))
-    | (RefNullFuncTyped(i1), RefNullFuncTyped(i2)) => {
-      // Case 1: Both are self-references
-      if i1 == self_idx && i2 == other_idx {
-        return true
-      }
-      // Case 2: Neither is a self-reference, compare the referenced types across modules
-      if i1 != self_idx && i2 != other_idx {
-        return type_indices_cross_module_equal(types1, types2, i1, i2, visited)
-      }
-      // Case 3: One is self-reference, other is not - not equal
-      false
-    }
-    _ => false
-  }
-}
-
-///|
-/// Check if type indices from different modules are structurally equivalent
-fn type_indices_cross_module_equal(
-  types1 : Array[@types.FuncType],
-  types2 : Array[@types.FuncType],
-  i1 : Int,
-  i2 : Int,
-  visited : Map[(Int, Int), Bool],
-) -> Bool {
-  // Check if we've already determined this pair
-  let key = (i1, i2)
-  match visited.get(key) {
-    Some(result) => return result
-    None => ()
-  }
-  // Mark as being visited (assume equal to handle cycles)
-  visited.set(key, true)
-  // Bounds check
-  if i1 < 0 || i1 >= types1.length() || i2 < 0 || i2 >= types2.length() {
-    visited.set(key, false)
-    return false
-  }
-  // Recursively compare the types from different modules
-  let t1 = types1[i1]
-  let t2 = types2[i2]
-  let result = func_types_cross_module_equal(
-    types1, types2, t1, t2, i1, i2, visited,
-  )
-  visited.set(key, result)
-  result
-}
-
-///|
 /// Execute call instruction: direct function call
 fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
   // Get the function type from the module instance
@@ -299,23 +51,58 @@ fn ExecContext::exec_call_indirect(
   // Get the expected type
   let expected_type = self.instance.types[type_idx]
 
-  // Get the actual function type and verify it matches (using recursive structural comparison)
-  let actual_type = self.store.get_func_type(store_addr)
+  // Type checking using unified type equivalence API
+  let owner_idx = self.store.get_func_owner_idx(store_addr)
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
-
-  // Use recursive structural equivalence for proper type checking
-  let visited : Map[(Int, Int), Bool] = {}
-  if not(
-      func_types_structurally_equal(
+  if same_module {
+    // Same module: use canonical type indices for proper rec group handling
+    let expected_canonical = if type_idx >= 0 &&
+      type_idx < self.instance.canonical_type_indices.length() {
+      self.instance.canonical_type_indices[type_idx]
+    } else {
+      -1
+    }
+    let actual_canonical = self.store.get_func_canonical_type_idx(store_addr)
+    if expected_canonical >= 0 && actual_canonical >= 0 {
+      if expected_canonical != actual_canonical {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    } else {
+      // No canonical info, fall back to structural comparison
+      let ctx = @types.TypeEquivalenceContext::same_module(
         self.instance.types,
-        expected_type,
-        actual_type,
-        type_idx,
-        actual_type_idx,
-        visited,
-      ),
-    ) {
-    raise @runtime.IndirectCallTypeMismatch
+        type_rec_groups=self.instance.type_rec_groups,
+      )
+      if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    }
+  } else {
+    // Cross-module or ownerless function call
+    let owner = self.store.get_func_owner(store_addr)
+    match owner {
+      Some(o) => {
+        // Cross-module call: use cross-module type equivalence
+        let ctx = @types.TypeEquivalenceContext::cross_module(
+          self.instance.types,
+          o.types,
+          rec_groups1=self.instance.type_rec_groups,
+          rec_groups2=o.type_rec_groups,
+        )
+        if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+          raise @runtime.IndirectCallTypeMismatch
+        }
+      }
+      None => {
+        // Ownerless function (host function or directly allocated):
+        // Use direct type comparison
+        let actual_type = self.store.get_func_type(store_addr)
+        if not(@types.func_types_equal(expected_type, actual_type)) {
+          raise @runtime.IndirectCallTypeMismatch
+        }
+      }
+    }
   }
 
   // Pop arguments from stack in reverse order
@@ -351,21 +138,29 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
   // Get the expected type
   let expected_type = self.instance.types[type_idx]
 
-  // Get the actual function type and verify it matches (using recursive structural comparison)
-  let actual_type = self.store.get_func_type(store_addr)
+  // Verify type matches using type equivalence
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
-  let visited : Map[(Int, Int), Bool] = {}
-  if not(
-      func_types_structurally_equal(
+  let owner = self.store.get_func_owner(store_addr)
+  match owner {
+    Some(o) => {
+      // Cross-module call: use cross-module type equivalence
+      let ctx = @types.TypeEquivalenceContext::cross_module(
         self.instance.types,
-        expected_type,
-        actual_type,
-        type_idx,
-        actual_type_idx,
-        visited,
-      ),
-    ) {
-    raise @runtime.IndirectCallTypeMismatch
+        o.types,
+        rec_groups1=self.instance.type_rec_groups,
+        rec_groups2=o.type_rec_groups,
+      )
+      if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    }
+    None => {
+      // Ownerless function: use direct type comparison
+      let actual_type = self.store.get_func_type(store_addr)
+      if not(@types.func_types_equal(expected_type, actual_type)) {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    }
   }
 
   // Pop arguments from stack in reverse order
@@ -590,22 +385,30 @@ pub fn ExecContext::exec_tail_call_indirect(
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 
-  // Get the expected type and actual type, then verify they match (using recursive structural comparison)
+  // Get the expected type and verify type matches
   let expected_type = self.instance.types[type_idx]
-  let actual_type = self.store.get_func_type(store_addr)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
-  let visited : Map[(Int, Int), Bool] = {}
-  if not(
-      func_types_structurally_equal(
+  let owner = self.store.get_func_owner(store_addr)
+  match owner {
+    Some(o) => {
+      // Cross-module call: use cross-module type equivalence
+      let ctx = @types.TypeEquivalenceContext::cross_module(
         self.instance.types,
-        expected_type,
-        actual_type,
-        type_idx,
-        actual_type_idx,
-        visited,
-      ),
-    ) {
-    raise @runtime.IndirectCallTypeMismatch
+        o.types,
+        rec_groups1=self.instance.type_rec_groups,
+        rec_groups2=o.type_rec_groups,
+      )
+      if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    }
+    None => {
+      // Ownerless function: use direct type comparison
+      let actual_type = self.store.get_func_type(store_addr)
+      if not(@types.func_types_equal(expected_type, actual_type)) {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    }
   }
 
   // Pop arguments from stack
@@ -644,22 +447,30 @@ pub fn ExecContext::exec_tail_call_ref(
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 
-  // Get the expected type and actual type, then verify they match (using recursive structural comparison)
+  // Get the expected type and verify type matches
   let expected_type = self.instance.types[type_idx]
-  let actual_type = self.store.get_func_type(store_addr)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
-  let visited : Map[(Int, Int), Bool] = {}
-  if not(
-      func_types_structurally_equal(
+  let owner = self.store.get_func_owner(store_addr)
+  match owner {
+    Some(o) => {
+      // Cross-module call: use cross-module type equivalence
+      let ctx = @types.TypeEquivalenceContext::cross_module(
         self.instance.types,
-        expected_type,
-        actual_type,
-        type_idx,
-        actual_type_idx,
-        visited,
-      ),
-    ) {
-    raise @runtime.IndirectCallTypeMismatch
+        o.types,
+        rec_groups1=self.instance.type_rec_groups,
+        rec_groups2=o.type_rec_groups,
+      )
+      if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    }
+    None => {
+      // Ownerless function: use direct type comparison
+      let actual_type = self.store.get_func_type(store_addr)
+      if not(@types.func_types_equal(expected_type, actual_type)) {
+        raise @runtime.IndirectCallTypeMismatch
+      }
+    }
   }
 
   // Pop arguments from stack

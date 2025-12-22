@@ -132,9 +132,6 @@ fix: <brief description>
 - Solution: <what was changed>
 - Test: <test that verifies the fix>
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -153,7 +150,6 @@ gh pr create --title "fix: <brief description>" --body "$(cat <<'EOF'
 - [ ] All existing tests pass
 - [ ] Manual verification of fix
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
 ```

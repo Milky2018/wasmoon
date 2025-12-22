@@ -120,6 +120,9 @@ pub fn create_spectest_module(
   ]
   @runtime.ModuleInstance::{
     types: [],
+    type_rec_groups: [],
+    canonical_type_indices: [],
+    store_idx: -1,
     func_addrs: [
       print_i32_addr, print_i64_addr, print_f32_addr, print_f64_addr, print_i32_f32_addr,
       print_f64_f64_addr, print_addr,
