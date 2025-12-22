@@ -40,6 +40,9 @@ pub(all) struct Translator {
   // Number of wasm function parameters (excludes vmctx params)
   // Used to distinguish params from locals in self.locals array
   num_wasm_params : Int
+  // Canonical type indices for structural type equivalence
+  // Structurally equivalent types map to the same canonical index
+  canonical_type_indices : Array[Int]
 }
 
 ///|
@@ -120,6 +123,9 @@ pub fn Translator::new(
     table_sizes.push(size)
     offset = offset + size
   }
+  // Compute canonical type indices for structural type equivalence
+  // Structurally equivalent types will map to the same canonical index
+  let canonical_type_indices = @types.compute_canonical_type_indices(func_types)
   {
     builder,
     value_stack: [],
@@ -137,6 +143,7 @@ pub fn Translator::new(
     table_sizes,
     global_types,
     num_wasm_params: func_type.params.length(),
+    canonical_type_indices,
   }
 }
 
@@ -1792,8 +1799,9 @@ fn Translator::translate_call_indirect(
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
-    // Compute structural type hash for type checking at runtime
-    let type_hash = func_type.structural_hash()
+    // Get canonical type index for structural type equivalence
+    // Structurally equivalent types will have the same canonical index
+    let canonical_idx = self.canonical_type_indices[type_idx]
     // Pop callee (element index within the table)
     let elem_idx = self.pop()
 
@@ -1829,10 +1837,10 @@ fn Translator::translate_call_indirect(
     args.rev_in_place()
     // Get result types
     let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
-    // Emit call_indirect with type hash (not type index) for structural equivalence
+    // Emit call_indirect with canonical type index for structural equivalence
     // Pass elem_idx directly (table_idx tells lowering which table to use)
     let results = self.builder.call_indirect_multi(
-      type_hash, table_idx, result_types, elem_idx, args,
+      canonical_idx, table_idx, result_types, elem_idx, args,
     )
     // Push all results onto the stack
     for v in results {
@@ -1933,8 +1941,9 @@ fn Translator::translate_return_call_indirect(
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
-    // Compute structural type hash for type checking at runtime
-    let type_hash = func_type.structural_hash()
+    // Get canonical type index for structural type equivalence
+    // Structurally equivalent types will have the same canonical index
+    let canonical_idx = self.canonical_type_indices[type_idx]
     // Pop callee (element index within the table)
     let elem_idx = self.pop()
 
@@ -1948,7 +1957,7 @@ fn Translator::translate_return_call_indirect(
     // Emit return_call_indirect instruction (tail call - does not return to caller)
     // Following Cranelift: emit a single ReturnCallIndirect IR instruction, not call + return
     self.builder.return_call_indirect_multi(
-      type_hash, table_idx, elem_idx, args,
+      canonical_idx, table_idx, elem_idx, args,
     )
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true

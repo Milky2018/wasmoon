@@ -326,8 +326,15 @@ fn Parser::read_u32(self : Parser) -> Int raise ParserError {
 /// Read memory argument (memidx, align, offset) with validation
 /// Multi-memory: if bit 6 of flags is set, memory index follows
 /// Alignment values >= 32 are reserved and should be rejected as malformed
+/// The flags byte must not have continuation bit set (must fit in single byte)
 fn Parser::read_memarg(self : Parser) -> (Int, Int, Int) raise ParserError {
-  let flags = self.read_leb128_u32()
+  // Read first byte directly - must not have continuation bit (0x80) set
+  let flags_byte = self.read_byte()
+  if (flags_byte & 0x80) != 0 {
+    // Continuation bit is set - malformed memop flags
+    raise MalformedMemopFlags
+  }
+  let flags = flags_byte
   // Multi-memory proposal: if bit 6 is set, memory index follows
   let memidx = if (flags & 0x40) != 0 { self.read_leb128_u32() } else { 0 }
   let align = flags & 0x3F // Lower 6 bits are alignment
@@ -1223,7 +1230,10 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         // Type section
         let count = parser.read_u32()
         for _ in 0..<count {
+          let type_idx = mod.types.length()
           mod.types.push(parser.read_func_type())
+          // Each type is its own rec group (binary rec groups not yet supported)
+          mod.type_rec_groups.push(type_idx)
         }
       }
       2 => {

@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/types"
 
 // Values
+pub fn compute_canonical_type_indices(Array[FuncType]) -> Array[Int]
 
 // Errors
 
@@ -71,6 +72,7 @@ pub(all) struct FuncType {
   results : Array[ValueType]
 }
 pub fn FuncType::structural_hash(Self) -> Int
+pub fn FuncType::structurally_equal(Self, Self, Int, Int) -> Bool
 pub impl Eq for FuncType
 pub impl Show for FuncType
 
@@ -342,6 +344,7 @@ pub impl Show for MemoryType
 
 pub(all) struct Module {
   types : Array[FuncType]
+  type_rec_groups : Array[Int]
   imports : Array[Import]
   funcs : Array[Int]
   tables : Array[Table]

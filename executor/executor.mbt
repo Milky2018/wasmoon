@@ -577,7 +577,7 @@ pub fn instantiate_module(
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
     let func_type = mod.types[type_idx]
-    let addr = store.alloc_func(code, func_type~)
+    let addr = store.alloc_func(code, func_type~, type_idx~)
     func_addrs.push(addr)
   }
 
@@ -954,10 +954,30 @@ pub fn instantiate_module_with_imports(
       Func(type_idx) =>
         match imports.resolve(imp.mod_name, imp.name) {
           Some(Func(addr)) => {
-            // Check that imported function type matches expected type
+            // Check that imported function type matches expected type (using structural comparison)
             let expected_type = mod.types[type_idx]
             let actual_type = store.get_func_type(addr)
-            if expected_type != actual_type {
+            let actual_type_idx = store.get_func_type_idx(addr)
+
+            // Get the owner module's types array for cross-module comparison
+            let owner_types = match store.get_func_owner(addr) {
+              Some(owner) => owner.types
+              None => mod.types // Fallback to current module's types (for host functions)
+            }
+
+            // Use cross-module structural comparison
+            let visited : Map[(Int, Int), Bool] = {}
+            if not(
+                func_types_cross_module_equal(
+                  mod.types,
+                  owner_types,
+                  expected_type,
+                  actual_type,
+                  type_idx,
+                  actual_type_idx,
+                  visited,
+                ),
+              ) {
               raise @runtime.LinkError
             }
             func_addrs.push(addr)
@@ -1075,7 +1095,7 @@ pub fn instantiate_module_with_imports(
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
     let func_type = mod.types[type_idx]
-    let addr = store.alloc_func(code, func_type~)
+    let addr = store.alloc_func(code, func_type~, type_idx~)
     func_addrs.push(addr)
     func_type_indices.push(type_idx)
   }

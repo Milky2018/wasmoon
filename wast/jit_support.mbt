@@ -230,25 +230,29 @@ pub fn init_elem_segments(
     globals.push(global)
   }
 
-  // Build function index to type hash mapping
-  let func_type_hashes : Array[Int] = []
+  // Compute canonical type indices for structural type equivalence
+  // Structurally equivalent types will have the same canonical index
+  let canonical_types = @types.compute_canonical_type_indices(mod_.types)
+
+  // Build function index to canonical type index mapping
+  let func_canonical_types : Array[Int] = []
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
-      let type_hash = if type_idx < mod_.types.length() {
-        mod_.types[type_idx].structural_hash()
+      let canonical_idx = if type_idx < canonical_types.length() {
+        canonical_types[type_idx]
       } else {
         0
       }
-      func_type_hashes.push(type_hash)
+      func_canonical_types.push(canonical_idx)
     }
   }
   for type_idx in mod_.funcs {
-    let type_hash = if type_idx < mod_.types.length() {
-      mod_.types[type_idx].structural_hash()
+    let canonical_idx = if type_idx < canonical_types.length() {
+      canonical_types[type_idx]
     } else {
       0
     }
-    func_type_hashes.push(type_hash)
+    func_canonical_types.push(canonical_idx)
   }
 
   // Get shared JIT tables from Store (one per runtime table)
@@ -258,7 +262,7 @@ pub fn init_elem_segments(
     jit_tables.push(jit_table)
   }
 
-  // Initialize elements: (table_idx, elem_idx, func_idx, type_hash)
+  // Initialize elements: (table_idx, elem_idx, func_idx, canonical_type_idx)
   let elem_init : Array[(Int, Int, Int, Int)] = []
   for elem in mod_.elems {
     if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
@@ -270,14 +274,15 @@ pub fn init_elem_segments(
           [RefNull(_)] => -1 // Use -1 to represent null reference
           _ => continue
         }
-        let type_hash = if func_idx >= 0 && func_idx < func_type_hashes.length() {
-          func_type_hashes[func_idx]
+        let canonical_type_idx = if func_idx >= 0 &&
+          func_idx < func_canonical_types.length() {
+          func_canonical_types[func_idx]
         } else {
           0
         }
         // No flattening: use actual table_idx and elem_idx
         let elem_idx = offset + i
-        elem_init.push((table_idx, elem_idx, func_idx, type_hash))
+        elem_init.push((table_idx, elem_idx, func_idx, canonical_type_idx))
       }
     }
   }

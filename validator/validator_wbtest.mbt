@@ -10,6 +10,7 @@ test "validator: valid simple function" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -38,6 +39,7 @@ test "validator: valid function with params" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -65,6 +67,7 @@ test "validator: type mismatch - wrong operand type" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -94,6 +97,7 @@ test "validator: stack underflow" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -120,6 +124,7 @@ test "validator: invalid local index" {
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -147,6 +152,7 @@ test "validator: valid function call" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0],
     tables: [],
@@ -178,6 +184,7 @@ test "validator: valid global operations" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -206,6 +213,7 @@ test "validator: stack height - function returns too many values" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -236,6 +244,7 @@ test "validator: stack height - function returns too few values" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -277,6 +286,7 @@ test "validator: stack height - block returns correct values" {
   }
   let mod : @types.Module = {
     types: [block_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -310,6 +320,7 @@ test "validator: stack height - block leaves wrong number of values" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -347,6 +358,7 @@ test "validator: stack height - if branches must match" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -369,6 +381,7 @@ test "validator: stack height - void function with leftover values" {
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -405,6 +418,7 @@ test "validator: control flow - valid br in block" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -427,6 +441,7 @@ test "validator: control flow - invalid label index" {
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -466,6 +481,7 @@ test "validator: control flow - nested blocks with br" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -501,6 +517,7 @@ test "validator: control flow - br_if with correct type" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -532,6 +549,7 @@ test "validator: control flow - loop with br back to start" {
   }
   let mod : @types.Module = {
     types: [loop_type, func_type],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
     tables: [],
@@ -559,6 +577,7 @@ test "validator: control flow - return in nested block" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -592,6 +611,7 @@ test "validator: control flow - br_table basic" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -655,6 +675,7 @@ test "validator: validate_module_with_context provides location on error" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -690,6 +711,7 @@ test "validator: validate_module_with_context reports correct function index" {
   }
   let mod : @types.Module = {
     types: [func_type],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0, 0],
     tables: [],
@@ -748,6 +770,7 @@ test "validator: data segment with i64 offset should fail" {
   // data.wast line 414: (data (i64.const 0)) - type mismatch
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -773,6 +796,7 @@ test "validator: data segment with ref.null offset should fail" {
   // data.wast line 422: (data (ref.null func)) - type mismatch
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -800,6 +824,7 @@ test "validator: data segment with empty offset should fail" {
   // data.wast line 430: (data (offset)) - type mismatch (empty expression)
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -825,6 +850,7 @@ test "validator: data segment with non-constant instruction should fail" {
   // data.wast line 464: (data (i32.ctz (i32.const 0))) - constant expression required
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -845,6 +871,7 @@ test "validator: data segment with nop offset should fail" {
   // data.wast line 472: (data (nop)) - constant expression required
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -865,6 +892,7 @@ test "validator: data segment with unknown global should fail" {
   // data.wast line 505: (data (global.get 0)) with no globals - unknown global 0
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -885,6 +913,7 @@ test "validator: data segment with mutable global offset should fail" {
   // data.wast line 522: global must be immutable for constant expression
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -910,6 +939,7 @@ test "validator: data segment with valid i32 const offset should pass" {
   // Valid data segment with i32.const offset
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -930,6 +960,7 @@ test "validator: data segment with immutable global offset should pass" {
   // Valid data segment with immutable global.get offset
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -959,6 +990,7 @@ test "validator: elem segment with i64 offset should fail" {
   // elem.wast line 732: (elem (i64.const 0)) - type mismatch
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [
@@ -998,6 +1030,7 @@ test "validator: elem segment with non-constant instruction should fail" {
   // elem.wast line 783: (elem (i32.ctz (i32.const 0))) - constant expression required
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [
@@ -1028,6 +1061,7 @@ test "validator: elem segment with unknown global should fail" {
   // elem.wast line 824: (elem (global.get 0)) with no globals
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [
@@ -1062,6 +1096,7 @@ test "validator: elem segment with mutable global offset should fail" {
   // elem.wast line 841: global must be immutable for constant expression
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [
@@ -1101,6 +1136,7 @@ test "validator: elem segment with invalid table index should fail" {
   // elem.wast line 721: (elem (i32.const 0) $f) with no table
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [],
@@ -1127,6 +1163,7 @@ test "validator: elem segment type mismatch with table should fail" {
   // elem.wast line 978: funcref elem on externref table
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [
@@ -1160,6 +1197,7 @@ test "validator: elem segment type mismatch with table should fail" {
 test "validator: elem segment with valid i32 const offset should pass" {
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [
@@ -1194,6 +1232,7 @@ test "validator: elem init with wrong type should fail" {
   // elem.wast line 853: (elem funcref (ref.null extern)) - type mismatch
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [
@@ -1229,6 +1268,7 @@ test "validator: elem with unknown function should fail" {
   // elem segment references function index 0, but no functions are defined
   let mod : @types.Module = {
     types: [],
+    type_rec_groups: [],
     imports: [],
     funcs: [],
     tables: [
@@ -1269,6 +1309,7 @@ test "regression: invalid type index should fail" {
   // When a function references a type that doesn't exist, validation should fail
   let mod : @types.Module = {
     types: [{ params: [], results: [] }], // only type 0 exists
+    type_rec_groups: [0, 1, 2],
     imports: [],
     funcs: [2], // references type 2, which doesn't exist
     tables: [],
@@ -1290,6 +1331,7 @@ test "regression: uninitialized non-nullable local should fail" {
   // Non-nullable reference locals must be initialized before use
   let mod : @types.Module = {
     types: [{ params: [], results: [] }],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1316,6 +1358,7 @@ test "regression: initialized non-nullable local should pass" {
   // Use FuncRef (nullable) as local type since RefFunc(idx) instruction pushes FuncRef
   let mod : @types.Module = {
     types: [{ params: [], results: [] }],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1354,6 +1397,7 @@ test "regression: nullable ref local reading without initialization should pass"
   // so reading without explicit initialization is valid
   let mod : @types.Module = {
     types: [{ params: [], results: [] }],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1379,6 +1423,7 @@ test "regression: param with non-nullable ref type should be initialized" {
   // Function parameters are always initialized by the caller
   let mod : @types.Module = {
     types: [{ params: [@types.ValueType::RefFunc], results: [] }],
+    type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
     tables: [],

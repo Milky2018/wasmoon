@@ -162,9 +162,6 @@ fn Parser::skip_to_matching_rparen(self : Parser) -> Unit raise WatError {
       _ => self.advance()
     }
   }
-  if self.current.token == RParen {
-    self.advance()
-  }
 }
 
 ///|
@@ -1704,7 +1701,11 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           // Typed function reference like (ref $t)
           let type_idx = match self.type_names.get(name) {
             Some(idx) => idx
-            None => 0 // Default to 0 if not found (forward reference)
+            None =>
+              raise WatError::UnexpectedToken(
+                "unknown type \{name}",
+                self.loc(),
+              )
           }
           self.advance()
           self.expect_rparen()
@@ -1850,7 +1851,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   let saved_token_start_column = self.lexer.token_start_column
   let saved_current = self.current
 
-  // Scan for definitions to collect names
+  // Scan for definitions to collect names (to support forward references for non-type fields)
   let mut func_idx = 0
   let mut type_idx = 0
   let mut global_idx = 0
@@ -1864,14 +1865,33 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
         match self.current.token {
           Keyword("type") => {
             self.advance()
-            // Check for type name
+            // Register type name if present
             if self.current.token is Id(name) {
               self.type_names.set(name, type_idx)
               self.advance()
             }
             type_idx = type_idx + 1
-            // Skip to end of type
+            // Skip to end of type and advance past closing paren
             self.skip_to_matching_rparen()
+            self.advance() // Move past the closing )
+          }
+          Keyword("rec") => {
+            // Register types in rec group
+            self.advance()
+            while self.current.token == LParen {
+              self.advance()
+              if self.current.token == Keyword("type") {
+                self.advance()
+                if self.current.token is Id(name) {
+                  self.type_names.set(name, type_idx)
+                  self.advance()
+                }
+                type_idx = type_idx + 1
+              }
+              self.skip_to_matching_rparen()
+              self.advance() // Move past the closing )
+            }
+            self.advance() // Move past the rec closing )
           }
           Keyword("import") => {
             self.advance()
@@ -1895,6 +1915,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   }
                   func_idx = func_idx + 1
                   self.skip_to_matching_rparen()
+                  self.advance() // Move past inner )
                 }
                 Keyword("global") => {
                   self.advance()
@@ -1905,6 +1926,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   }
                   global_idx = global_idx + 1
                   self.skip_to_matching_rparen()
+                  self.advance() // Move past inner )
                 }
                 Keyword("memory") => {
                   self.advance()
@@ -1915,6 +1937,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   }
                   memory_idx = memory_idx + 1
                   self.skip_to_matching_rparen()
+                  self.advance() // Move past inner )
                 }
                 Keyword("table") => {
                   self.advance()
@@ -1925,6 +1948,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   }
                   table_idx = table_idx + 1
                   self.skip_to_matching_rparen()
+                  self.advance() // Move past inner )
                 }
                 Keyword("tag") => {
                   self.advance()
@@ -1935,64 +1959,82 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   }
                   tag_idx = tag_idx + 1
                   self.skip_to_matching_rparen()
+                  self.advance() // Move past inner )
                 }
-                _ => self.skip_to_matching_rparen()
+                _ => {
+                  self.skip_to_matching_rparen()
+                  self.advance() // Move past inner )
+                }
               }
             }
             // Skip to end of import (the outer rparen)
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("func") => {
             self.advance()
             // Check for function name
             if self.current.token is Id(name) {
               self.func_names.set(name, func_idx)
+              self.advance()
             }
             func_idx = func_idx + 1
             // Skip to end of func
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("global") => {
             self.advance()
             // Check for global name
             if self.current.token is Id(name) {
               self.global_names.set(name, global_idx)
+              self.advance()
             }
             global_idx = global_idx + 1
             // Skip to end of global
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("memory") => {
             self.advance()
             // Check for memory name
             if self.current.token is Id(name) {
               self.memory_names.set(name, memory_idx)
+              self.advance()
             }
             memory_idx = memory_idx + 1
             // Skip to end of memory
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("table") => {
             self.advance()
             // Check for table name
             if self.current.token is Id(name) {
               self.table_names.set(name, table_idx)
+              self.advance()
             }
             table_idx = table_idx + 1
             // Skip to end of table
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("tag") => {
             self.advance()
             // Check for tag name
             if self.current.token is Id(name) {
               self.tag_names.set(name, tag_idx)
+              self.advance()
             }
             tag_idx = tag_idx + 1
             // Skip to end of tag
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
-          _ => self.skip_to_matching_rparen()
+          _ => {
+            self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
+          }
         }
       }
       _ => self.advance()
@@ -2019,8 +2061,16 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             let ft = self.parse_type_def(type_idx)
             self.type_names.set("\{type_idx}", type_idx)
             mod_.types.push(ft)
+            // Standalone type is its own rec group
+            mod_.type_rec_groups.push(type_idx)
           }
-          _ => self.skip_to_matching_rparen()
+          Keyword("rec") =>
+            // Parse recursive type group
+            self.parse_rec_group(mod_)
+          _ => {
+            self.skip_to_matching_rparen()
+            self.advance() // Move past )
+          }
         }
       }
       _ => self.advance()
@@ -2044,9 +2094,16 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
       LParen => {
         self.advance()
         match self.current.token {
-          Keyword("type") =>
+          Keyword("type") => {
             // Already parsed in intermediate pass, skip
             self.skip_to_matching_rparen()
+            self.advance() // Move past )
+          }
+          Keyword("rec") => {
+            // Already parsed in intermediate pass, skip
+            self.skip_to_matching_rparen()
+            self.advance() // Move past )
+          }
           Keyword("func") =>
             match self.parse_func_def(mod_) {
               FuncDef(type_idx, code, export_names) => {
@@ -2258,6 +2315,70 @@ fn Parser::parse_type_def(
 }
 
 ///|
+/// Parse a recursive type group: (rec (type ...) (type ...) ...)
+/// Recursive groups allow types to reference each other (forward references)
+fn Parser::parse_rec_group(
+  self : Parser,
+  mod_ : @types.Module,
+) -> Unit raise WatError {
+  self.advance() // skip "rec"
+
+  // First pass: pre-register all type names so forward references work
+  // Save lexer state
+  let saved_pos = self.lexer.pos
+  let saved_line = self.lexer.line
+  let saved_column = self.lexer.column
+  let saved_token_start_line = self.lexer.token_start_line
+  let saved_token_start_column = self.lexer.token_start_column
+  let saved_current = self.current
+
+  // Scan through all type definitions in this rec group to register names
+  let start_type_idx = mod_.types.length()
+  let mut type_count = 0
+  while self.current.token == LParen {
+    self.advance()
+    if self.current.token == Keyword("type") {
+      self.advance() // skip "type"
+      // Check for type name
+      if self.current.token is Id(name) {
+        let type_idx = start_type_idx + type_count
+        self.type_names.set(name, type_idx)
+        // Also register numeric index
+        self.type_names.set("\{type_idx}", type_idx)
+      }
+      type_count = type_count + 1
+    }
+    self.skip_to_matching_rparen()
+  }
+
+  // Restore lexer state for second pass
+  self.lexer.pos = saved_pos
+  self.lexer.line = saved_line
+  self.lexer.column = saved_column
+  self.lexer.token_start_line = saved_token_start_line
+  self.lexer.token_start_column = saved_token_start_column
+  self.current = saved_current
+
+  // Second pass: actually parse all type definitions
+  // All types in this rec group get the same rec group ID (the start index)
+  let rec_group_id = start_type_idx
+  while self.current.token == LParen {
+    self.advance()
+    if self.current.token == Keyword("type") {
+      let type_idx = mod_.types.length()
+      let ft = self.parse_type_def(type_idx)
+      // Name was already registered in first pass, just register numeric index
+      self.type_names.set("\{type_idx}", type_idx)
+      mod_.types.push(ft)
+      mod_.type_rec_groups.push(rec_group_id)
+    } else {
+      self.skip_to_matching_rparen()
+    }
+  }
+  self.expect_rparen() // close rec
+}
+
+///|
 fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
   let params : Array[@types.ValueType] = []
   let results : Array[@types.ValueType] = []
@@ -2464,6 +2585,8 @@ fn Parser::parse_func_def(
           } else {
             type_idx = mod_.types.length()
             mod_.types.push(ft)
+            // Implicit type is its own rec group
+            mod_.type_rec_groups.push(type_idx)
           }
         }
         self.expect_rparen() // close func
@@ -2583,6 +2706,8 @@ fn Parser::parse_func_def(
     } else {
       type_idx = mod_.types.length()
       mod_.types.push(ft)
+      // Implicit type is its own rec group
+      mod_.type_rec_groups.push(type_idx)
     }
   }
 
@@ -4824,6 +4949,8 @@ fn Parser::parse_import_def(
           // Add this type to the module and get its index
           let idx = mod_.types.length()
           mod_.types.push(func_type)
+          // Implicit type is its own rec group
+          mod_.type_rec_groups.push(idx)
           idx
         }
       } else {
@@ -4831,6 +4958,8 @@ fn Parser::parse_import_def(
         let func_type : @types.FuncType = { params: [], results: [] }
         let idx = mod_.types.length()
         mod_.types.push(func_type)
+        // Implicit type is its own rec group
+        mod_.type_rec_groups.push(idx)
         idx
       }
       @types.ImportDesc::Func(type_idx)
@@ -4939,6 +5068,8 @@ fn Parser::parse_import_def(
           // Add this type to the module and get its index
           let idx = mod_.types.length()
           mod_.types.push(func_type)
+          // Implicit type is its own rec group
+          mod_.type_rec_groups.push(idx)
           idx
         }
       } else {
@@ -4946,6 +5077,8 @@ fn Parser::parse_import_def(
         let func_type : @types.FuncType = { params: [], results: [] }
         let idx = mod_.types.length()
         mod_.types.push(func_type)
+        // Implicit type is its own rec group
+        mod_.type_rec_groups.push(idx)
         idx
       }
       @types.ImportDesc::Tag(type_idx)
@@ -5399,6 +5532,8 @@ fn Parser::parse_tag_type_spec(
       // Add this type to the module and get its index
       let idx = mod_.types.length()
       mod_.types.push(func_type)
+      // Implicit type is its own rec group
+      mod_.type_rec_groups.push(idx)
       idx
     }
   } else {
@@ -5406,6 +5541,8 @@ fn Parser::parse_tag_type_spec(
     let func_type : @types.FuncType = { params: [], results: [] }
     let idx = mod_.types.length()
     mod_.types.push(func_type)
+    // Implicit type is its own rec group
+    mod_.type_rec_groups.push(idx)
     idx
   }
 }
@@ -5579,7 +5716,7 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
   let saved_token_start_column = self.lexer.token_start_column
   let saved_current = self.current
 
-  // Scan for definitions to collect names
+  // Scan for definitions to collect names (to support forward references for non-type fields)
   let mut func_idx = 0
   let mut type_idx = 0
   let mut global_idx = 0
@@ -5593,12 +5730,32 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
         match self.current.token {
           Keyword("type") => {
             self.advance()
+            // Register type name if present
             if self.current.token is Id(name) {
               self.type_names.set(name, type_idx)
               self.advance()
             }
             type_idx = type_idx + 1
             self.skip_to_matching_rparen()
+            self.advance() // Move past the closing )
+          }
+          Keyword("rec") => {
+            // Register types in rec group
+            self.advance()
+            while self.current.token == LParen {
+              self.advance()
+              if self.current.token == Keyword("type") {
+                self.advance()
+                if self.current.token is Id(name) {
+                  self.type_names.set(name, type_idx)
+                  self.advance()
+                }
+                type_idx = type_idx + 1
+              }
+              self.skip_to_matching_rparen()
+              self.advance() // Move past the closing )
+            }
+            self.advance() // Move past the rec closing )
           }
           Keyword("import") => {
             self.advance()
@@ -5657,6 +5814,7 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
               }
             }
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("func") => {
             self.advance()
@@ -5666,6 +5824,7 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
             }
             func_idx = func_idx + 1
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("global") => {
             self.advance()
@@ -5675,6 +5834,7 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
             }
             global_idx = global_idx + 1
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("memory") => {
             self.advance()
@@ -5684,6 +5844,7 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
             }
             memory_idx = memory_idx + 1
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("table") => {
             self.advance()
@@ -5693,6 +5854,7 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
             }
             table_idx = table_idx + 1
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
           Keyword("tag") => {
             self.advance()
@@ -5702,8 +5864,12 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
             }
             tag_idx = tag_idx + 1
             self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
           }
-          _ => self.skip_to_matching_rparen()
+          _ => {
+            self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
+          }
         }
       }
       _ => self.advance()
@@ -5734,7 +5900,12 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
           self.advance()
           let func_type = self.parse_type_def(curr_type_idx)
           mod_.types.push(func_type)
+          // Standalone type is its own rec group
+          mod_.type_rec_groups.push(curr_type_idx)
           curr_type_idx = curr_type_idx + 1
+        } else if self.current.token is Keyword("rec") {
+          self.parse_rec_group(mod_)
+          curr_type_idx = mod_.types.length()
         } else {
           self.skip_to_matching_rparen()
         }
@@ -5772,9 +5943,16 @@ fn Parser::parse_module_field_inner(
   mod_ : @types.Module,
 ) -> Unit raise WatError {
   match self.current.token {
-    Keyword("type") =>
+    Keyword("type") => {
       // Already parsed in intermediate pass, skip
       self.skip_to_matching_rparen()
+      self.advance() // Move past )
+    }
+    Keyword("rec") => {
+      // Already parsed in intermediate pass, skip
+      self.skip_to_matching_rparen()
+      self.advance() // Move past )
+    }
     Keyword("func") =>
       match self.parse_func_def(mod_) {
         FuncDef(type_idx, code, export_names) => {
