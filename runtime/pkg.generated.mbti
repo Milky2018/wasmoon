@@ -94,7 +94,7 @@ pub(all) struct Linker {
   modules : Array[(String, ModuleInstance)]
 }
 pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit
-pub fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError) -> Unit
+pub fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit
 pub fn Linker::add_memory(Self, String, String, Memory) -> Unit
 pub fn Linker::add_table(Self, String, String, Table) -> Unit
 pub fn Linker::build_imports(Self) -> Imports
