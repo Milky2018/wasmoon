@@ -127,11 +127,10 @@ pub fn sync_jit_globals_to_store(
       // Note: For FuncRef, JIT stores module function index, we need to convert
       // it back to store address for the interpreter
       let new_value : @types.Value = match global_inst.get_type().value_type {
-        I32 => @types.Value::I32(raw_value.to_int())
-        I64 => @types.Value::I64(raw_value)
-        F32 =>
-          @types.Value::F32(Float::reinterpret_from_int(raw_value.to_int()))
-        F64 => @types.Value::F64(raw_value.reinterpret_as_double())
+        I32 => @types.Value::I32(@types.FromInt64::from_int64_bits(raw_value))
+        I64 => @types.Value::I64(@types.FromInt64::from_int64_bits(raw_value))
+        F32 => @types.Value::F32(@types.FromInt64::from_int64_bits(raw_value))
+        F64 => @types.Value::F64(@types.FromInt64::from_int64_bits(raw_value))
         FuncRef
         | RefFunc
         | RefFuncTyped(_)

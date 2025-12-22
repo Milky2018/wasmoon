@@ -74,35 +74,6 @@ pub fn get_current_memory_base() -> Int64 {
   @jit_ffi.c_jit_get_current_memory_base()
 }
 
-// ============ JIT Argument Trait ============
-
-///|
-/// Trait for types that can be passed as JIT function arguments
-/// All types are converted to Int64 bit patterns for the C FFI
-pub(open) trait JITArg {
-  to_jit_arg(Self) -> Int64
-}
-
-///|
-pub impl JITArg for Int64 with to_jit_arg(self) {
-  self
-}
-
-///|
-pub impl JITArg for Int with to_jit_arg(self) {
-  self.to_int64()
-}
-
-///|
-pub impl JITArg for Float with to_jit_arg(self) {
-  self.reinterpret_as_int().to_int64()
-}
-
-///|
-pub impl JITArg for Double with to_jit_arg(self) {
-  self.reinterpret_as_int64()
-}
-
 // ============ JIT Context Wrapper ============
 
 ///|
