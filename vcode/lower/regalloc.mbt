@@ -1155,11 +1155,8 @@ pub fn apply_allocation(
   func : VCodeFunction,
   alloc : RegAllocResult,
 ) -> VCodeFunction {
-  let new_func = VCodeFunction::new(func.name)
-  new_func.next_vreg_id = func.next_vreg_id
-  new_func.num_spill_slots = alloc.num_spill_slots
-  new_func.int_stack_params = func.int_stack_params
-  new_func.max_outgoing_args_size = func.max_outgoing_args_size
+  let new_func = func.clone_base()
+  new_func.set_num_spill_slots(alloc.num_spill_slots)
 
   // Convert function parameters
   // Following Cranelift: all params use X0-X7 (int) or V0-V7 (float)

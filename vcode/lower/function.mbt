@@ -2,7 +2,7 @@
 
 ///|
 /// VCode function - a complete function in VCode form
-pub(all) struct VCodeFunction {
+struct VCodeFunction {
   name : String
   params : Array[@abi.VReg] // Function parameters
   results : Array[@abi.RegClass] // Result types (for return value allocation)
@@ -21,6 +21,45 @@ pub(all) struct VCodeFunction {
 }
 
 ///|
+pub fn VCodeFunction::get_max_outgoing_args_size(self : VCodeFunction) -> Int {
+  self.max_outgoing_args_size
+}
+
+///|
+pub fn VCodeFunction::get_num_spill_slots(self : VCodeFunction) -> Int {
+  self.num_spill_slots
+}
+
+///|
+pub fn VCodeFunction::get_name(self : VCodeFunction) -> String {
+  self.name
+}
+
+///|
+pub fn VCodeFunction::get_params(self : VCodeFunction) -> Array[@abi.VReg] {
+  self.params
+}
+
+///|
+pub fn VCodeFunction::get_blocks(
+  self : VCodeFunction,
+) -> Array[@block.VCodeBlock] {
+  self.blocks
+}
+
+///|
+pub fn VCodeFunction::get_param_pregs(
+  self : VCodeFunction,
+) -> Array[@abi.PReg?] {
+  self.param_pregs
+}
+
+///|
+pub fn VCodeFunction::get_result_types(self : VCodeFunction) -> Array[@ir.Type] {
+  self.result_types
+}
+
+///|
 pub fn VCodeFunction::new(name : String) -> VCodeFunction {
   {
     name,
@@ -34,6 +73,73 @@ pub fn VCodeFunction::new(name : String) -> VCodeFunction {
     int_stack_params: 0,
     max_outgoing_args_size: 0,
   }
+}
+
+///|
+/// Clone the base structure of a function for regalloc transformations.
+/// Copies: name, next_vreg_id, int_stack_params, max_outgoing_args_size
+/// Empty: params, results, result_types, blocks, param_pregs
+/// Zero: num_spill_slots
+pub fn VCodeFunction::clone_base(self : VCodeFunction) -> VCodeFunction {
+  {
+    name: self.name,
+    params: [],
+    results: [],
+    result_types: [],
+    blocks: [],
+    next_vreg_id: self.next_vreg_id,
+    num_spill_slots: 0,
+    param_pregs: [],
+    int_stack_params: self.int_stack_params,
+    max_outgoing_args_size: self.max_outgoing_args_size,
+  }
+}
+
+///|
+/// Set the number of spill slots (called by register allocator)
+pub fn VCodeFunction::set_num_spill_slots(
+  self : VCodeFunction,
+  n : Int,
+) -> Unit {
+  self.num_spill_slots = n
+}
+
+///|
+/// Add a parameter physical register mapping (called by register allocator)
+pub fn VCodeFunction::add_param_preg(
+  self : VCodeFunction,
+  preg : @abi.PReg?,
+) -> Unit {
+  self.param_pregs.push(preg)
+}
+
+///|
+/// Set the number of integer stack parameters (called during lowering)
+pub fn VCodeFunction::set_int_stack_params(
+  self : VCodeFunction,
+  n : Int,
+) -> Unit {
+  self.int_stack_params = n
+}
+
+///|
+/// Update max outgoing args size if the new size is larger (called during lowering)
+pub fn VCodeFunction::update_max_outgoing_args_size(
+  self : VCodeFunction,
+  size : Int,
+) -> Unit {
+  if size > self.max_outgoing_args_size {
+    self.max_outgoing_args_size = size
+  }
+}
+
+///|
+/// Push a parameter vreg directly (used during regalloc reconstruction)
+pub fn VCodeFunction::push_param(
+  self : VCodeFunction,
+  vreg : @abi.VReg,
+) -> Unit {
+  self.params.push(vreg)
 }
 
 ///|

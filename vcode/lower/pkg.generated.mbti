@@ -274,27 +274,29 @@ pub(all) struct UseDefInfo {
   use_points : Array[ProgPoint]
 }
 
-pub(all) struct VCodeFunction {
-  name : String
-  params : Array[@abi.VReg]
-  results : Array[@abi.RegClass]
-  result_types : Array[@ir.Type]
-  blocks : Array[@block.VCodeBlock]
-  mut next_vreg_id : Int
-  mut num_spill_slots : Int
-  param_pregs : Array[@abi.PReg?]
-  mut int_stack_params : Int
-  mut max_outgoing_args_size : Int
-}
+type VCodeFunction
 pub fn VCodeFunction::add_param(Self, @abi.RegClass) -> @abi.VReg
+pub fn VCodeFunction::add_param_preg(Self, @abi.PReg?) -> Unit
 pub fn VCodeFunction::add_result(Self, @abi.RegClass) -> Unit
 pub fn VCodeFunction::add_result_type(Self, @ir.Type) -> Unit
 pub fn VCodeFunction::calls_multi_value_function(Self) -> Bool
+pub fn VCodeFunction::clone_base(Self) -> Self
+pub fn VCodeFunction::get_blocks(Self) -> Array[@block.VCodeBlock]
+pub fn VCodeFunction::get_max_outgoing_args_size(Self) -> Int
+pub fn VCodeFunction::get_name(Self) -> String
+pub fn VCodeFunction::get_num_spill_slots(Self) -> Int
+pub fn VCodeFunction::get_param_pregs(Self) -> Array[@abi.PReg?]
+pub fn VCodeFunction::get_params(Self) -> Array[@abi.VReg]
+pub fn VCodeFunction::get_result_types(Self) -> Array[@ir.Type]
 pub fn VCodeFunction::needs_extra_results_ptr(Self) -> Bool
 pub fn VCodeFunction::new(String) -> Self
 pub fn VCodeFunction::new_block(Self) -> @block.VCodeBlock
 pub fn VCodeFunction::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn VCodeFunction::print(Self) -> String
+pub fn VCodeFunction::push_param(Self, @abi.VReg) -> Unit
+pub fn VCodeFunction::set_int_stack_params(Self, Int) -> Unit
+pub fn VCodeFunction::set_num_spill_slots(Self, Int) -> Unit
+pub fn VCodeFunction::update_max_outgoing_args_size(Self, Int) -> Unit
 pub impl Show for VCodeFunction
 
 // Type aliases

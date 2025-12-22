@@ -4,11 +4,11 @@
 /// Dump VCode function for analysis (prints to stdout)
 pub fn dump_vcode(func : @lower.VCodeFunction, tag : String) -> Unit {
   println("=== VCode Dump: \{tag} ===")
-  println("Function: \{func.name}")
-  println("Params: \{func.params.length()}")
-  println("Blocks: \{func.blocks.length()}")
+  println("Function: \{func.get_name()}")
+  println("Params: \{func.get_params().length()}")
+  println("Blocks: \{func.get_blocks().length()}")
   println("")
-  for block in func.blocks {
+  for block in func.get_blocks() {
     println("Block \{block.id}:")
     let mut params_str = "  Params: ["
     for i, param in block.params {

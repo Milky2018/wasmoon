@@ -12,12 +12,12 @@ fn collect_used_callee_saved(
 
   // Check param_pregs: parameters that cross calls are moved to callee-saved registers
   // These are defined in the prologue via `mov xN, x(3+i)`
-  for preg in func.param_pregs {
+  for preg in func.get_param_pregs() {
     if preg is Some(p) && is_callee_saved_alloc(p.index) {
       used.add(p.index)
     }
   }
-  for block in func.blocks {
+  for block in func.get_blocks() {
     for inst in block.insts {
       // Check if this instruction is a function call
       // Following Cranelift's design: use call_type() to determine if an instruction
@@ -55,14 +55,14 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
   // Check param_pregs: float parameters that cross calls are moved to callee-saved FPRs
   // These are defined in the prologue via `fmov sN, wM` or `fmov dN, xM`
-  for preg in func.param_pregs {
+  for preg in func.get_param_pregs() {
     if preg is Some(p) &&
       (p.class is Float32 || p.class is Float64) &&
       is_callee_saved_fpr(p.index) {
       used.add(p.index)
     }
   }
-  for block in func.blocks {
+  for block in func.get_blocks() {
     for inst in block.insts {
       for def in inst.defs {
         if def.reg is Physical(preg) &&
@@ -290,26 +290,30 @@ pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
   // has_calls is true if function needs SRET, calls multi-value functions, or has outgoing args
   let has_calls = needs_sret ||
     calls_multi_value ||
-    func.max_outgoing_args_size > 0
+    func.get_max_outgoing_args_size() > 0
   let stack_frame = JITStackFrame::build(
     clobbered,
     clobbered_fprs,
-    func.num_spill_slots,
+    func.get_num_spill_slots(),
     has_calls~,
-    outgoing_args_size=func.max_outgoing_args_size,
+    outgoing_args_size=func.get_max_outgoing_args_size(),
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
-  mc.emit_prologue(stack_frame, func.params, func.param_pregs)
+  mc.emit_prologue(stack_frame, func.get_params(), func.get_param_pregs())
 
   // Emit function body
-  for block in func.blocks {
+  for block in func.get_blocks() {
     mc.define_label(block.id)
     for inst in block.insts {
       mc.emit_instruction(inst, stack_frame)
     }
     if block.terminator is Some(term) {
-      mc.emit_terminator_with_epilogue(term, stack_frame, func.result_types)
+      mc.emit_terminator_with_epilogue(
+        term,
+        stack_frame,
+        func.get_result_types(),
+      )
     }
   }
   mc.resolve_fixups()
