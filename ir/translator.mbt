@@ -43,6 +43,12 @@ pub(all) struct Translator {
   // Canonical type indices for structural type equivalence
   // Structurally equivalent types map to the same canonical index
   canonical_type_indices : Array[Int]
+  // Cross-module support: base index for this module's functions
+  // All function indices are offset by this value (default 0)
+  func_base : Int
+  // Cross-module support: maps local import indices to global indices
+  // If empty, uses local indices directly
+  import_remap : Array[Int]
 }
 
 ///|
@@ -80,6 +86,8 @@ pub fn Translator::new(
   tables? : Array[@types.Table] = [],
   global_types? : Array[@types.GlobalType] = [],
   type_rec_groups? : Array[Int] = [],
+  func_base? : Int = 0,
+  import_remap? : Array[Int] = [],
 ) -> Translator {
   let builder = IRBuilder::new(name)
   // Following Cranelift: add vmctx as explicit params
@@ -148,6 +156,8 @@ pub fn Translator::new(
     global_types,
     num_wasm_params: func_type.params.length(),
     canonical_type_indices,
+    func_base,
+    import_remap,
   }
 }
 
@@ -1757,6 +1767,24 @@ fn Translator::translate_br_table(
 }
 
 ///|
+/// Remap a local function index to global function index for cross-module calls
+/// - For imports: use import_remap if available
+/// - For local functions: add func_base
+fn Translator::remap_func_idx(self : Translator, func_idx : Int) -> Int {
+  if func_idx < self.num_imports {
+    // Import function - use remap if available
+    if self.import_remap.length() > 0 && func_idx < self.import_remap.length() {
+      self.import_remap[func_idx]
+    } else {
+      func_idx
+    }
+  } else {
+    // Local function - add base offset
+    self.func_base + func_idx
+  }
+}
+
+///|
 /// Translate a direct call
 fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
   // Get function type
@@ -1785,8 +1813,10 @@ fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
     args.rev_in_place()
     // Get result types
     let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+    // Remap function index for cross-module calls
+    let global_func_idx = self.remap_func_idx(func_idx)
     // Emit call with multi-value support
-    let results = self.builder.call_multi(func_idx, result_types, args)
+    let results = self.builder.call_multi(global_func_idx, result_types, args)
     // Push all results onto the stack
     for v in results {
       self.push(v)
@@ -1928,9 +1958,11 @@ fn Translator::translate_return_call(self : Translator, func_idx : Int) -> Unit 
       args.push(self.pop())
     }
     args.rev_in_place()
+    // Remap function index for cross-module calls
+    let global_func_idx = self.remap_func_idx(func_idx)
     // Emit return_call instruction (tail call - does not return to caller)
     // Following Cranelift: emit a single ReturnCall IR instruction, not call + return
-    self.builder.return_call_multi(func_idx, args)
+    self.builder.return_call_multi(global_func_idx, args)
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
   }

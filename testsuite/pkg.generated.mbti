@@ -10,6 +10,8 @@ import(
 // Values
 pub fn compare_jit_interp(String, String, Array[@types.Value]) -> CompareResult
 
+pub fn jit_results_to_values(Array[Int64], Array[@types.ValueType]) -> Array[@types.Value]
+
 pub fn parse_json_test_file(String) -> ParsedTestFile raise TestRunnerError
 
 pub fn parse_test_value(TestValue) -> @types.Value
@@ -18,11 +20,17 @@ pub fn run_assert_return(TestContext, String?, String, Array[TestValue], Array[T
 
 pub fn run_assert_trap(TestContext, String?, String, Array[TestValue], String) -> Bool
 
+pub fn run_jit(@types.Module, String, Int, Array[@types.Value], Array[@types.ValueType]) -> Result[Array[@types.Value], String]
+
 pub fn run_json_tests(String, String, (String) -> Bytes raise) -> TestResult raise TestRunnerError
 
 pub fn run_test_command(TestContext, TestCommand, TestResult, String, (String) -> Bytes raise) -> Unit raise TestRunnerError
 
 pub fn run_test_command_with_line(TestContext, TestCommandWithLine, TestResult, String, (String) -> Bytes raise) -> Unit raise TestRunnerError
+
+pub fn value_to_jit_arg(@types.Value) -> Int64
+
+pub fn values_array_equal(Array[@types.Value], Array[@types.Value]) -> Bool
 
 pub fn values_equal(@types.Value, @types.Value) -> Bool
 

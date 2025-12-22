@@ -265,13 +265,16 @@ pub struct JITFunction {
 type JITModule
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
+pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
 pub fn JITModule::get_func_ptr(Self, Int) -> Int64
+pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int, Int)]) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])]) -> Self?
+pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]]) -> Self?
 pub fn JITModule::new() -> Self
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit

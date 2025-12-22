@@ -21,7 +21,7 @@ pub impl Show for CompareResult with output(self, logger) {
 
 ///|
 /// Convert JIT Int64 results to @types.Value using result_types
-fn jit_results_to_values(
+pub fn jit_results_to_values(
   results : Array[Int64],
   result_types : Array[@types.ValueType],
 ) -> Array[@types.Value] {
@@ -57,7 +57,7 @@ fn jit_results_to_values(
 
 ///|
 /// Convert @types.Value to Int64 for JIT call
-fn value_to_jit_arg(value : @types.Value) -> Int64 {
+pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
   match value {
     I32(n) => @types.ToInt64::to_int64_bits(n)
     I64(n) => @types.ToInt64::to_int64_bits(n)
@@ -72,7 +72,10 @@ fn value_to_jit_arg(value : @types.Value) -> Int64 {
 
 ///|
 /// Compare two Value arrays for equality
-fn values_array_equal(a : Array[@types.Value], b : Array[@types.Value]) -> Bool {
+pub fn values_array_equal(
+  a : Array[@types.Value],
+  b : Array[@types.Value],
+) -> Bool {
   if a.length() != b.length() {
     return false
   }
@@ -158,7 +161,7 @@ fn run_interp(
 }
 
 ///|
-fn run_jit(
+pub fn run_jit(
   mod_ : @types.Module,
   func_name : String,
   func_idx : Int,
