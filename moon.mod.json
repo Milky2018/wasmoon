@@ -2,7 +2,7 @@
   "name": "Milky2018/wasmoon",
   "version": "0.1.0",
   "deps": {
-    "moonbitlang/x": "0.4.37",
+    "moonbitlang/x": "0.4.38",
     "TheWaWaR/clap": "0.2.6"
   },
   "readme": "README.mbt.md",
