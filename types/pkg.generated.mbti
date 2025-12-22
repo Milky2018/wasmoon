@@ -434,4 +434,19 @@ pub impl Show for ValueType
 // Type aliases
 
 // Traits
+pub trait FromInt64 {
+  from_int64_bits(Int64) -> Self
+}
+pub impl FromInt64 for Int
+pub impl FromInt64 for Int64
+pub impl FromInt64 for Float
+pub impl FromInt64 for Double
+
+pub trait ToInt64 {
+  to_int64_bits(Self) -> Int64
+}
+pub impl ToInt64 for Int
+pub impl ToInt64 for Int64
+pub impl ToInt64 for Float
+pub impl ToInt64 for Double
 

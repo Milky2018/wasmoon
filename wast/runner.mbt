@@ -554,14 +554,14 @@ pub fn invoke_action(
               let i64_args : Array[Int64] = []
               for arg in args {
                 let v = match arg {
-                  I32(n) => n.to_int64()
-                  I64(n) => n
-                  F32(n) => n.reinterpret_as_int().to_int64()
-                  F64(n) => n.reinterpret_as_int64()
+                  I32(n) => @types.ToInt64::to_int64_bits(n)
+                  I64(n) => @types.ToInt64::to_int64_bits(n)
+                  F32(n) => @types.ToInt64::to_int64_bits(n)
+                  F64(n) => @types.ToInt64::to_int64_bits(n)
                   F32CanonicalNan | F32ArithmeticNan =>
-                    @float.not_a_number.reinterpret_as_int().to_int64()
+                    @types.ToInt64::to_int64_bits(@float.not_a_number)
                   F64CanonicalNan | F64ArithmeticNan =>
-                    @double.not_a_number.reinterpret_as_int64()
+                    @types.ToInt64::to_int64_bits(@double.not_a_number)
                   RefNull(_) => -1L // null sentinel
                   RefExtern(n) => n.to_int64()
                   RefFunc => 0L // func ref (placeholder)
@@ -642,10 +642,10 @@ pub fn invoke_action(
 /// Convert JIT result (Int64) to Value based on the given return type
 fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
   match ty {
-    I32 => @types.Value::I32(@jit.FromInt64::from_int64_bits(v))
-    I64 => @types.Value::I64(@jit.FromInt64::from_int64_bits(v))
-    F32 => @types.Value::F32(@jit.FromInt64::from_int64_bits(v))
-    F64 => @types.Value::F64(@jit.FromInt64::from_int64_bits(v))
+    I32 => @types.Value::I32(@types.FromInt64::from_int64_bits(v))
+    I64 => @types.Value::I64(@types.FromInt64::from_int64_bits(v))
+    F32 => @types.Value::F32(@types.FromInt64::from_int64_bits(v))
+    F64 => @types.Value::F64(@types.FromInt64::from_int64_bits(v))
     // Reference types: -1L is null sentinel, otherwise index
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       if v == -1L {

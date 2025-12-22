@@ -29,10 +29,10 @@ fn jit_results_to_values(
   for i, ty in result_types {
     let raw = results[i]
     let value : @types.Value = match ty {
-      I32 => I32(@jit.FromInt64::from_int64_bits(raw))
-      I64 => I64(@jit.FromInt64::from_int64_bits(raw))
-      F32 => F32(@jit.FromInt64::from_int64_bits(raw))
-      F64 => F64(@jit.FromInt64::from_int64_bits(raw))
+      I32 => I32(@types.FromInt64::from_int64_bits(raw))
+      I64 => I64(@types.FromInt64::from_int64_bits(raw))
+      F32 => F32(@types.FromInt64::from_int64_bits(raw))
+      F64 => F64(@types.FromInt64::from_int64_bits(raw))
       // Reference types: -1L is null sentinel
       FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
         if raw == -1L {
@@ -59,10 +59,10 @@ fn jit_results_to_values(
 /// Convert @types.Value to Int64 for JIT call
 fn value_to_jit_arg(value : @types.Value) -> Int64 {
   match value {
-    I32(n) => n.to_int64()
-    I64(n) => n
-    F32(f) => f.reinterpret_as_int().to_int64()
-    F64(d) => d.reinterpret_as_int64()
+    I32(n) => @types.ToInt64::to_int64_bits(n)
+    I64(n) => @types.ToInt64::to_int64_bits(n)
+    F32(f) => @types.ToInt64::to_int64_bits(f)
+    F64(d) => @types.ToInt64::to_int64_bits(d)
     FuncRef(idx) => idx.to_int64()
     ExternRef(idx) => idx.to_int64()
     ExnRef(idx) => idx.to_int64()

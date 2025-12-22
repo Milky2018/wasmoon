@@ -303,8 +303,8 @@ pub impl Show for Profiler
 pub(all) struct Single[A](A)
 #deprecated
 pub fn[A] Single::inner(Self[A]) -> A
-pub impl[A : ToInt64] DynamicArgs for Single[A]
-pub impl[A : FromInt64] DynamicReturn for Single[A]
+pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
+pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
 
 pub(all) struct SourceLocation {
   func_idx : Int
@@ -376,39 +376,15 @@ pub trait DynamicArgs {
   to_int64_array(Self) -> Array[Int64]
 }
 pub impl DynamicArgs for Unit
-pub impl[A : ToInt64, B : ToInt64] DynamicArgs for (A, B)
-pub impl[A : ToInt64, B : ToInt64, C : ToInt64] DynamicArgs for (A, B, C)
-pub impl[A : ToInt64, B : ToInt64, C : ToInt64, D : ToInt64] DynamicArgs for (A, B, C, D)
+pub impl[A : @types.ToInt64, B : @types.ToInt64] DynamicArgs for (A, B)
+pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64] DynamicArgs for (A, B, C)
+pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64, D : @types.ToInt64] DynamicArgs for (A, B, C, D)
 
 pub trait DynamicReturn {
   from_int64_array(Array[Int64]) -> Self
 }
 pub impl DynamicReturn for Unit
-pub impl[A : FromInt64, B : FromInt64] DynamicReturn for (A, B)
-pub impl[A : FromInt64, B : FromInt64, C : FromInt64] DynamicReturn for (A, B, C)
-pub impl[A : FromInt64, B : FromInt64, C : FromInt64, D : FromInt64] DynamicReturn for (A, B, C, D)
-
-pub trait FromInt64 {
-  from_int64_bits(Int64) -> Self
-}
-pub impl FromInt64 for Int
-pub impl FromInt64 for Int64
-pub impl FromInt64 for Float
-pub impl FromInt64 for Double
-
-pub(open) trait JITArg {
-  to_jit_arg(Self) -> Int64
-}
-pub impl JITArg for Int
-pub impl JITArg for Int64
-pub impl JITArg for Float
-pub impl JITArg for Double
-
-pub trait ToInt64 {
-  to_int64_bits(Self) -> Int64
-}
-pub impl ToInt64 for Int
-pub impl ToInt64 for Int64
-pub impl ToInt64 for Float
-pub impl ToInt64 for Double
+pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B)
+pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64] DynamicReturn for (A, B, C)
+pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64, D : @types.FromInt64] DynamicReturn for (A, B, C, D)
 

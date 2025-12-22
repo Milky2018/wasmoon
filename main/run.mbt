@@ -470,10 +470,10 @@ fn init_jit_globals(
     // For FuncRef, we need to convert store address to module function index
     // because JIT func_table is indexed by module function index
     let raw_value = match value {
-      I32(n) => n.to_int64()
-      I64(n) => n
-      F32(f) => f.reinterpret_as_int().to_int64()
-      F64(d) => d.reinterpret_as_int64()
+      I32(n) => @types.ToInt64::to_int64_bits(n)
+      I64(n) => @types.ToInt64::to_int64_bits(n)
+      F32(f) => @types.ToInt64::to_int64_bits(f)
+      F64(d) => @types.ToInt64::to_int64_bits(d)
       FuncRef(store_addr) =>
         store_addr_to_module_func_idx(store_addr, instance).to_int64()
       ExternRef(idx) => idx.to_int64()
@@ -559,10 +559,10 @@ fn run_with_jit(
               let i64_args : Array[Int64] = []
               for arg in args {
                 let v = match arg {
-                  I32(n) => n.to_int64()
-                  I64(n) => n
-                  F32(n) => n.reinterpret_as_int().to_int64()
-                  F64(n) => n.reinterpret_as_int64()
+                  I32(n) => @types.ToInt64::to_int64_bits(n)
+                  I64(n) => @types.ToInt64::to_int64_bits(n)
+                  F32(n) => @types.ToInt64::to_int64_bits(n)
+                  F64(n) => @types.ToInt64::to_int64_bits(n)
                   FuncRef(idx) => idx.to_int64()
                   ExternRef(idx) => idx.to_int64()
                   ExnRef(idx) => idx.to_int64()
@@ -590,14 +590,19 @@ fn run_with_jit(
                     )
                   }
                   let v = match f.result_types[i] {
-                    I32 => @types.Value::I32(r.to_int())
-                    I64 => @types.Value::I64(r)
+                    I32 =>
+                      @types.Value::I32(@types.FromInt64::from_int64_bits(r))
+                    I64 =>
+                      @types.Value::I64(@types.FromInt64::from_int64_bits(r))
                     F32 => {
                       // r contains bits of f64, convert to f32
-                      let f64_val = r.reinterpret_as_double()
+                      let f64_val : Double = @types.FromInt64::from_int64_bits(
+                        r,
+                      )
                       @types.Value::F32(Float::from_double(f64_val))
                     }
-                    F64 => @types.Value::F64(r.reinterpret_as_double())
+                    F64 =>
+                      @types.Value::F64(@types.FromInt64::from_int64_bits(r))
                     FuncRef
                     | RefFunc
                     | RefFuncTyped(_)
