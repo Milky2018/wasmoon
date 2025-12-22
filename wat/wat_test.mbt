@@ -263,11 +263,17 @@ test "format_wat_error shows source context" {
     column: 5,
   })
   let formatted = format_wat_error(err, source)
-  // Check that it contains the error message
-  assert_true(formatted.contains("invalid instruction"))
-  // Check that it shows line/column info
-  assert_true(formatted.contains("line 3"))
-  assert_true(formatted.contains("column 5"))
+  inspect(
+    formatted,
+    content=(
+      #|error: invalid instruction: invalid.instruction
+      #|  --> line 3, column 5
+      #|   |
+      #| 3 |     invalid.instruction
+      #|   |     ^
+      #|
+    ),
+  )
 }
 
 ///|
@@ -551,4 +557,54 @@ test "f32 simple integer constant - regression" {
     }
     _ => panic()
   }
+}
+
+///|
+test "type-rec parsing with struct" {
+  let wat =
+    #|(module
+    #|  (rec (type $ft (func)) (type (struct)))
+    #|  (func $f (type $ft))
+    #|  (global (ref $ft) (ref.func $f))
+    #|)
+  let mod_ = try! parse(wat)
+  // Should parse successfully:
+  // - Type 0 ($ft): func type () -> ()
+  // - Type 1: struct placeholder () -> ()
+  // Both in same rec group (id=0)
+  inspect(mod_.types.length(), content="2")
+  inspect(mod_.type_rec_groups, content="[0, 0]")
+  inspect(mod_.funcs.length(), content="1")
+  inspect(mod_.globals.length(), content="1")
+}
+
+///|
+test "parse two simple rec groups" {
+  let wat =
+    #|(module
+    #|  (rec (type $f1 (func)))
+    #|  (rec (type $f2 (func)))
+    #|)
+  let mod_ = try! parse(wat)
+  // Should have 2 types: $f1 at 0, $f2 at 1
+  inspect(mod_.types.length(), content="2")
+  inspect(mod_.type_rec_groups, content="[0, 1]")
+}
+
+///|
+test "parse multiple rec groups with struct" {
+  let wat =
+    #|(module
+    #|  (rec (type $f1 (func)) (type (struct)))
+    #|  (rec (type $f2 (func)) (type (struct)))
+    #|  (func $f (type $f2))
+    #|)
+  let mod_ = try! parse(wat)
+  // Should have 4 types total:
+  // - rec group 0: $f1 (func), struct placeholder
+  // - rec group 2: $f2 (func), struct placeholder
+  inspect(mod_.types.length(), content="4")
+  inspect(mod_.type_rec_groups, content="[0, 0, 2, 2]")
+  // Function $f should have type $f2 = index 2
+  inspect(mod_.funcs, content="[2]")
 }

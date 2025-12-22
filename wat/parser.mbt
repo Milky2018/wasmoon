@@ -2307,11 +2307,30 @@ fn Parser::parse_type_def(
     self.type_names.set(name, type_idx)
   }
   self.expect_lparen()
-  self.expect_keyword("func")
-  let ft = self.parse_func_type()
-  self.expect_rparen() // close func
-  self.expect_rparen() // close type
-  ft
+  // Handle different type definition kinds: func, struct, array
+  match self.current.token {
+    Keyword("func") => {
+      self.advance() // skip "func"
+      let ft = self.parse_func_type()
+      self.expect_rparen() // close func
+      self.expect_rparen() // close type
+      ft
+    }
+    Keyword("struct") | Keyword("array") => {
+      // GC proposal types - skip content and use placeholder
+      // This allows parsing GC modules even if we don't execute them
+      self.skip_to_matching_rparen()
+      self.expect_rparen() // close struct/array
+      self.expect_rparen() // close type
+      // Return placeholder empty function type
+      { params: [], results: [] }
+    }
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected 'func', 'struct', or 'array', got '\{self.current.token}'",
+        self.loc(),
+      )
+  }
 }
 
 ///|
@@ -2349,6 +2368,7 @@ fn Parser::parse_rec_group(
       type_count = type_count + 1
     }
     self.skip_to_matching_rparen()
+    self.advance() // Move past the closing )
   }
 
   // Restore lexer state for second pass
@@ -2373,6 +2393,7 @@ fn Parser::parse_rec_group(
       mod_.type_rec_groups.push(rec_group_id)
     } else {
       self.skip_to_matching_rparen()
+      self.advance() // Move past the closing )
     }
   }
   self.expect_rparen() // close rec
