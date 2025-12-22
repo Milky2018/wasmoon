@@ -63,6 +63,14 @@ pub(all) enum FuncInst {
 }
 pub impl Show for FuncInst
 
+pub(all) enum FuncOwner {
+  HostFunc
+  Unowned
+  Module(Int)
+}
+pub impl Eq for FuncOwner
+pub impl Show for FuncOwner
+
 type GlobalInstance
 pub fn GlobalInstance::get(Self) -> @types.Value
 pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
@@ -193,7 +201,7 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType]
   exns : Array[ExnInstance]
-  func_owners : Array[Int]
+  func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
 }
