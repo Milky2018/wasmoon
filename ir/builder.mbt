@@ -1091,3 +1091,246 @@ pub fn IRBuilder::call_ptr(
   }
   results
 }
+
+// ============ GC Operations ============
+
+///|
+/// Allocate a new struct with given field values
+pub fn IRBuilder::struct_new(
+  self : IRBuilder,
+  type_idx : Int,
+  fields : Array[Value],
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::StructNew(type_idx), fields)
+}
+
+///|
+/// Allocate a new struct with default values
+pub fn IRBuilder::struct_new_default(self : IRBuilder, type_idx : Int) -> Value {
+  self.emit_inst(Type::I64, Opcode::StructNewDefault(type_idx), [])
+}
+
+///|
+/// Get a field from a struct
+pub fn IRBuilder::struct_get(
+  self : IRBuilder,
+  type_idx : Int,
+  field_idx : Int,
+  struct_ref : Value,
+) -> Value {
+  // Result type depends on field type, but we use I64 as a generic reference
+  self.emit_inst(Type::I64, Opcode::StructGet(type_idx, field_idx), [struct_ref])
+}
+
+///|
+/// Get a field from a struct (signed extension)
+pub fn IRBuilder::struct_get_s(
+  self : IRBuilder,
+  type_idx : Int,
+  field_idx : Int,
+  struct_ref : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::StructGetS(type_idx, field_idx), [
+    struct_ref,
+  ])
+}
+
+///|
+/// Get a field from a struct (unsigned extension)
+pub fn IRBuilder::struct_get_u(
+  self : IRBuilder,
+  type_idx : Int,
+  field_idx : Int,
+  struct_ref : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::StructGetU(type_idx, field_idx), [
+    struct_ref,
+  ])
+}
+
+///|
+/// Set a field in a struct
+pub fn IRBuilder::struct_set(
+  self : IRBuilder,
+  type_idx : Int,
+  field_idx : Int,
+  struct_ref : Value,
+  value : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::StructSet(type_idx, field_idx), [
+    struct_ref, value,
+  ])
+}
+
+///|
+/// Allocate a new array with init value and length
+pub fn IRBuilder::array_new(
+  self : IRBuilder,
+  type_idx : Int,
+  init_value : Value,
+  length : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ArrayNew(type_idx), [init_value, length])
+}
+
+///|
+/// Allocate a new array with default values
+pub fn IRBuilder::array_new_default(
+  self : IRBuilder,
+  type_idx : Int,
+  length : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ArrayNewDefault(type_idx), [length])
+}
+
+///|
+/// Allocate a fixed-size array with given elements
+pub fn IRBuilder::array_new_fixed(
+  self : IRBuilder,
+  type_idx : Int,
+  count : Int,
+  elements : Array[Value],
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ArrayNewFixed(type_idx, count), elements)
+}
+
+///|
+/// Get an element from an array
+pub fn IRBuilder::array_get(
+  self : IRBuilder,
+  type_idx : Int,
+  array_ref : Value,
+  index : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ArrayGet(type_idx), [array_ref, index])
+}
+
+///|
+/// Get an element from an array (signed extension)
+pub fn IRBuilder::array_get_s(
+  self : IRBuilder,
+  type_idx : Int,
+  array_ref : Value,
+  index : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ArrayGetS(type_idx), [array_ref, index])
+}
+
+///|
+/// Get an element from an array (unsigned extension)
+pub fn IRBuilder::array_get_u(
+  self : IRBuilder,
+  type_idx : Int,
+  array_ref : Value,
+  index : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ArrayGetU(type_idx), [array_ref, index])
+}
+
+///|
+/// Set an element in an array
+pub fn IRBuilder::array_set(
+  self : IRBuilder,
+  type_idx : Int,
+  array_ref : Value,
+  index : Value,
+  value : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::ArraySet(type_idx), [array_ref, index, value])
+}
+
+///|
+/// Get array length
+pub fn IRBuilder::array_len(self : IRBuilder, array_ref : Value) -> Value {
+  self.emit_inst(Type::I32, Opcode::ArrayLen, [array_ref])
+}
+
+///|
+/// Fill array elements with a value
+pub fn IRBuilder::array_fill(
+  self : IRBuilder,
+  type_idx : Int,
+  array_ref : Value,
+  offset : Value,
+  value : Value,
+  count : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::ArrayFill(type_idx), [
+    array_ref, offset, value, count,
+  ])
+}
+
+///|
+/// Copy elements between arrays
+pub fn IRBuilder::array_copy(
+  self : IRBuilder,
+  dst_type_idx : Int,
+  src_type_idx : Int,
+  dst : Value,
+  dst_offset : Value,
+  src : Value,
+  src_offset : Value,
+  count : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::ArrayCopy(dst_type_idx, src_type_idx), [
+    dst, dst_offset, src, src_offset, count,
+  ])
+}
+
+///|
+/// Create i31 reference from i32
+pub fn IRBuilder::i31_new(self : IRBuilder, value : Value) -> Value {
+  self.emit_inst(Type::I64, Opcode::I31New, [value])
+}
+
+///|
+/// Get signed i32 from i31 reference
+pub fn IRBuilder::i31_get_s(self : IRBuilder, i31_ref : Value) -> Value {
+  self.emit_inst(Type::I32, Opcode::I31GetS, [i31_ref])
+}
+
+///|
+/// Get unsigned i32 from i31 reference
+pub fn IRBuilder::i31_get_u(self : IRBuilder, i31_ref : Value) -> Value {
+  self.emit_inst(Type::I32, Opcode::I31GetU, [i31_ref])
+}
+
+///|
+/// Test if reference is of type (returns i32 0 or 1)
+pub fn IRBuilder::ref_test(
+  self : IRBuilder,
+  type_idx : Int,
+  nullable : Bool,
+  ref_val : Value,
+) -> Value {
+  self.emit_inst(Type::I32, Opcode::RefTest(type_idx, nullable), [ref_val])
+}
+
+///|
+/// Cast reference to type (traps on failure)
+pub fn IRBuilder::ref_cast(
+  self : IRBuilder,
+  type_idx : Int,
+  nullable : Bool,
+  ref_val : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::RefCast(type_idx, nullable), [ref_val])
+}
+
+///|
+/// Convert externref to anyref
+pub fn IRBuilder::any_convert_extern(
+  self : IRBuilder,
+  extern_ref : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::AnyConvertExtern, [extern_ref])
+}
+
+///|
+/// Convert anyref to externref
+pub fn IRBuilder::extern_convert_any(
+  self : IRBuilder,
+  any_ref : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ExternConvertAny, [any_ref])
+}

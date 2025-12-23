@@ -23,12 +23,122 @@ pub(all) enum ValueType {
   // GC reference types
   AnyRef // nullable any reference (ref null any)
   ExnRef // nullable exception reference (ref null exn)
+  // GC struct/array references
+  RefStruct(Int) // non-null typed struct reference (ref $t)
+  RefNullStruct(Int) // nullable typed struct reference (ref null $t)
+  RefArray(Int) // non-null typed array reference (ref $t)
+  RefNullArray(Int) // nullable typed array reference (ref null $t)
+  // GC abstract heap types
+  RefAny // non-null any reference (ref any)
+  RefEq // non-null eq reference (ref eq) - comparable
+  RefNullEq // nullable eq reference (ref null eq)
+  RefI31 // non-null i31 reference (ref i31)
+  RefNullI31 // nullable i31 reference (ref null i31)
+  RefNone // non-null none (ref none) - bottom type
   // Bottom reference types
   NullRef // bottom type (ref null none) - subtype of all nullable refs
   NullFuncRef // bottom type for func (ref null nofunc)
   NullExnRef // bottom type for exn (ref null noexn)
   NullExternRef // bottom type for extern (ref null noextern)
 } derive(Eq, Show)
+
+// ============================================================
+// GC Types (WebAssembly GC Proposal)
+// ============================================================
+
+///|
+/// Packed storage types for struct/array fields
+pub(all) enum PackedType {
+  I8
+  I16
+} derive(Eq, Show)
+
+///|
+/// Storage type for struct/array fields
+pub(all) enum StorageType {
+  Val(ValueType) // unpacked value type
+  Packed(PackedType) // packed i8 or i16
+} derive(Eq, Show)
+
+///|
+/// Field type with mutability
+pub(all) struct FieldType {
+  storage_type : StorageType
+  mutable : Bool
+} derive(Eq, Show)
+
+///|
+/// Struct type definition
+pub(all) struct StructType {
+  fields : Array[FieldType]
+} derive(Eq, Show)
+
+///|
+/// Array type definition
+pub(all) struct ArrayType {
+  element : FieldType
+} derive(Eq, Show)
+
+///|
+/// Composite type (func, struct, or array)
+pub(all) enum CompositeType {
+  Func(FuncType)
+  Struct(StructType)
+  Array(ArrayType)
+} derive(Eq, Show)
+
+///|
+/// Subtype definition with optional supertype
+pub(all) struct SubType {
+  final_ : Bool // true if type cannot be subtyped further
+  supertypes : Array[Int] // indices of supertypes (0 or 1 for MVP)
+  composite : CompositeType
+} derive(Eq, Show)
+
+///|
+/// Create a simple subtype without inheritance
+pub fn SubType::simple(composite : CompositeType) -> SubType {
+  { final_: true, supertypes: [], composite }
+}
+
+///|
+/// Create a subtype from a function type
+pub fn SubType::from_func(func_type : FuncType) -> SubType {
+  SubType::simple(CompositeType::Func(func_type))
+}
+
+///|
+/// Create a subtype from params and results (convenience function)
+pub fn SubType::func(
+  params : Array[ValueType],
+  results : Array[ValueType],
+) -> SubType {
+  SubType::from_func({ params, results })
+}
+
+///|
+/// Convert an array of FuncType to an array of SubType
+pub fn func_types_to_subtypes(func_types : Array[FuncType]) -> Array[SubType] {
+  let result : Array[SubType] = []
+  for ft in func_types {
+    result.push(SubType::from_func(ft))
+  }
+  result
+}
+
+///|
+/// Extract FuncTypes from an array of SubType (for backwards compatibility)
+/// Non-function types are replaced with empty function types
+pub fn extract_func_types(subtypes : Array[SubType]) -> Array[FuncType] {
+  let result : Array[FuncType] = []
+  for subtype in subtypes {
+    match subtype.composite {
+      Func(ft) => result.push(ft)
+      _ => result.push({ params: [], results: [] }) // placeholder
+    }
+  }
+  result
+}
 
 ///|
 /// Runtime values
@@ -40,6 +150,10 @@ pub(all) enum Value {
   FuncRef(Int) // function index
   ExternRef(Int) // external reference
   ExnRef(Int) // exception reference (index into exception store)
+  // GC values
+  StructRef(Int) // struct reference (index into GC heap)
+  ArrayRef(Int) // array reference (index into GC heap)
+  I31(Int) // i31ref value (31-bit integer, stored directly)
   Null
 } derive(Eq, Show)
 
@@ -288,6 +402,47 @@ pub(all) enum Instruction {
   I64TruncSatF32U
   I64TruncSatF64S
   I64TruncSatF64U
+
+  // GC instructions - struct operations
+  StructNew(Int) // type index
+  StructNewDefault(Int) // type index
+  StructGet(Int, Int) // type index, field index
+  StructGetS(Int, Int) // type index, field index (signed packed)
+  StructGetU(Int, Int) // type index, field index (unsigned packed)
+  StructSet(Int, Int) // type index, field index
+
+  // GC instructions - array operations
+  ArrayNew(Int) // type index
+  ArrayNewDefault(Int) // type index
+  ArrayNewFixed(Int, Int) // type index, length
+  ArrayNewData(Int, Int) // type index, data index
+  ArrayNewElem(Int, Int) // type index, elem index
+  ArrayGet(Int) // type index
+  ArrayGetS(Int) // type index (signed packed)
+  ArrayGetU(Int) // type index (unsigned packed)
+  ArraySet(Int) // type index
+  ArrayLen // get array length
+  ArrayFill(Int) // type index
+  ArrayCopy(Int, Int) // dest type index, src type index
+  ArrayInitData(Int, Int) // type index, data index
+  ArrayInitElem(Int, Int) // type index, elem index
+
+  // GC instructions - reference casting
+  RefTest(ValueType) // test if ref matches type
+  RefTestNull(ValueType) // test if ref matches nullable type
+  RefCast(ValueType) // cast ref to type (trap if fails)
+  RefCastNull(ValueType) // cast ref to nullable type (trap if fails)
+  BrOnCast(Int, ValueType, ValueType) // label, from type, to type
+  BrOnCastFail(Int, ValueType, ValueType) // label, from type, to type
+
+  // GC instructions - i31
+  RefI31 // create i31ref from i32
+  I31GetS // get signed i32 from i31ref
+  I31GetU // get unsigned i32 from i31ref
+
+  // GC instructions - type conversion
+  AnyConvertExtern // convert externref to anyref
+  ExternConvertAny // convert anyref to externref
 } derive(Eq, Show)
 
 ///|
@@ -364,6 +519,17 @@ fn ValueType::type_code(self : ValueType) -> Int {
     NullFuncRef => 12
     NullExnRef => 13
     NullExternRef => 14
+    // GC types
+    RefStruct(idx) => 300 + idx
+    RefNullStruct(idx) => 400 + idx
+    RefArray(idx) => 500 + idx
+    RefNullArray(idx) => 600 + idx
+    RefAny => 15
+    RefEq => 16
+    RefNullEq => 17
+    RefI31 => 18
+    RefNullI31 => 19
+    RefNone => 20
   }
 }
 
@@ -427,7 +593,13 @@ fn ValueType::structurally_equal(
     | (NullRef, NullRef)
     | (NullFuncRef, NullFuncRef)
     | (NullExnRef, NullExnRef)
-    | (NullExternRef, NullExternRef) => true
+    | (NullExternRef, NullExternRef)
+    | (RefAny, RefAny)
+    | (RefEq, RefEq)
+    | (RefNullEq, RefNullEq)
+    | (RefI31, RefI31)
+    | (RefNullI31, RefNullI31)
+    | (RefNone, RefNone) => true
     // Typed function references: check if both are self-references or same external ref
     (RefFuncTyped(idx1), RefFuncTyped(idx2)) =>
       // Both self-references, or both reference the same external type
@@ -435,6 +607,20 @@ fn ValueType::structurally_equal(
       (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
     (RefNullFuncTyped(idx1), RefNullFuncTyped(idx2)) =>
       // Both self-references, or both reference the same external type
+      (idx1 == self_idx && idx2 == other_idx) ||
+      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
+    // Typed struct references
+    (RefStruct(idx1), RefStruct(idx2)) =>
+      (idx1 == self_idx && idx2 == other_idx) ||
+      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
+    (RefNullStruct(idx1), RefNullStruct(idx2)) =>
+      (idx1 == self_idx && idx2 == other_idx) ||
+      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
+    // Typed array references
+    (RefArray(idx1), RefArray(idx2)) =>
+      (idx1 == self_idx && idx2 == other_idx) ||
+      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
+    (RefNullArray(idx1), RefNullArray(idx2)) =>
       (idx1 == self_idx && idx2 == other_idx) ||
       (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
     _ => false
@@ -561,7 +747,7 @@ pub(all) struct Data {
 ///|
 /// WebAssembly module
 pub(all) struct Module {
-  types : Array[FuncType]
+  types : Array[SubType] // GC: now stores SubType instead of FuncType
   /// For each type, stores the rec group ID it belongs to.
   /// Types in the same rec group have the same ID.
   /// Used to validate that forward type references are only within rec groups.
@@ -578,6 +764,63 @@ pub(all) struct Module {
   datas : Array[Data]
   tags : Array[TagType] // exception tags
 } derive(Show)
+
+///|
+/// Get the function type at the given index.
+/// Panics if the type is not a function type.
+pub fn Module::get_func_type(self : Module, idx : Int) -> FuncType {
+  match self.types[idx].composite {
+    Func(ft) => ft
+    _ => abort("Type at index \{idx} is not a function type")
+  }
+}
+
+///|
+/// Get the struct type at the given index.
+/// Panics if the type is not a struct type.
+pub fn Module::get_struct_type(self : Module, idx : Int) -> StructType {
+  match self.types[idx].composite {
+    Struct(st) => st
+    _ => abort("Type at index \{idx} is not a struct type")
+  }
+}
+
+///|
+/// Get the array type at the given index.
+/// Panics if the type is not an array type.
+pub fn Module::get_array_type(self : Module, idx : Int) -> ArrayType {
+  match self.types[idx].composite {
+    Array(at) => at
+    _ => abort("Type at index \{idx} is not an array type")
+  }
+}
+
+///|
+/// Check if the type at the given index is a function type.
+pub fn Module::is_func_type(self : Module, idx : Int) -> Bool {
+  match self.types[idx].composite {
+    Func(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Check if the type at the given index is a struct type.
+pub fn Module::is_struct_type(self : Module, idx : Int) -> Bool {
+  match self.types[idx].composite {
+    Struct(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Check if the type at the given index is an array type.
+pub fn Module::is_array_type(self : Module, idx : Int) -> Bool {
+  match self.types[idx].composite {
+    Array(_) => true
+    _ => false
+  }
+}
 
 ///|
 /// Create an empty module

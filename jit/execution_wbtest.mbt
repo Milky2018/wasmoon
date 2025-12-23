@@ -255,7 +255,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
   }
   let func_code = wasm_module.codes[0]
   let func_type_idx = wasm_module.funcs[0]
-  let func_type = wasm_module.types[func_type_idx]
+  let func_type = wasm_module.get_func_type(func_type_idx)
 
   // Get locals from the function code
   let locals : Array[@types.ValueType] = []
@@ -268,7 +268,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
     "test",
     func_type,
     locals,
-    wasm_module.types,
+    @types.extract_func_types(wasm_module.types),
     wasm_module.funcs.mapi(fn(i, _) { wasm_module.funcs[i] }),
     0, // num_imports
     [], // import_func_type_indices

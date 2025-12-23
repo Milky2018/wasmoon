@@ -158,7 +158,7 @@ priv enum LabelKind {
 ///|
 /// Validation context for a module
 priv struct ValidationContext {
-  types : Array[@types.FuncType]
+  types : Array[@types.SubType] // GC: now stores SubType
   funcs : Array[Int] // type indices
   tables : Array[@types.TableType]
   mems : Array[@types.MemoryType]
@@ -170,6 +170,84 @@ priv struct ValidationContext {
   returns : Array[@types.ValueType] // current function's return types
   local_init : Array[Bool] // tracks which locals have been initialized (for non-nullable refs)
   declared_funcs : @hashset.HashSet[Int] // functions declared in elem/global (for ref.func validation)
+}
+
+///|
+/// Helper to get FuncType from types array at given index
+fn ValidationContext::get_func_type(
+  self : ValidationContext,
+  idx : Int,
+) -> @types.FuncType {
+  match self.types[idx].composite {
+    Func(ft) => ft
+    _ => abort("Type at index \{idx} is not a function type")
+  }
+}
+
+///|
+/// Helper to get StructType from types array at given index
+fn ValidationContext::get_struct_type(
+  self : ValidationContext,
+  idx : Int,
+) -> @types.StructType {
+  match self.types[idx].composite {
+    Struct(st) => st
+    _ => abort("Type at index \{idx} is not a struct type")
+  }
+}
+
+///|
+/// Helper to get ArrayType from types array at given index
+fn ValidationContext::get_array_type(
+  self : ValidationContext,
+  idx : Int,
+) -> @types.ArrayType {
+  match self.types[idx].composite {
+    Array(at) => at
+    _ => abort("Type at index \{idx} is not an array type")
+  }
+}
+
+///|
+/// Convert StorageType to ValueType for validation
+fn storage_type_to_value_type(
+  storage_type : @types.StorageType,
+) -> @types.ValueType {
+  match storage_type {
+    Val(vt) => vt
+    Packed(_) => @types.ValueType::I32 // Packed types are accessed as i32
+  }
+}
+
+///|
+/// Collect all value types referenced in a SubType (for validation)
+fn collect_value_types_from_subtype(
+  subtype : @types.SubType,
+) -> Array[@types.ValueType] {
+  let result : Array[@types.ValueType] = []
+  match subtype.composite {
+    Func(ft) => {
+      for p in ft.params {
+        result.push(p)
+      }
+      for r in ft.results {
+        result.push(r)
+      }
+    }
+    Struct(st) =>
+      for field in st.fields {
+        match field.storage_type {
+          Val(vt) => result.push(vt)
+          Packed(_) => () // i8/i16 don't contain type indices
+        }
+      }
+    Array(at) =>
+      match at.element.storage_type {
+        Val(vt) => result.push(vt)
+        Packed(_) => ()
+      }
+  }
+  result
 }
 
 ///|
@@ -236,11 +314,11 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   let tags : Array[@types.FuncType] = []
   for imp in mod.imports {
     if imp.desc is Tag(type_idx) {
-      tags.push(mod.types[type_idx])
+      tags.push(mod.get_func_type(type_idx))
     }
   }
   for tag in mod.tags {
-    tags.push(mod.types[tag.type_idx])
+    tags.push(mod.get_func_type(tag.type_idx))
   }
 
   // Collect declared functions from elem segments and global inits
@@ -300,9 +378,14 @@ fn validate_value_type(
   ty : @types.ValueType,
   num_types : Int,
 ) -> Unit raise ValidationError {
-  if ty is (RefFuncTyped(idx) | RefNullFuncTyped(idx)) &&
-    (idx < 0 || idx >= num_types) {
-    raise InvalidTypeIndex(idx)
+  let idx : Int? = match ty {
+    RefFuncTyped(i) | RefNullFuncTyped(i) => Some(i)
+    RefStruct(i) | RefNullStruct(i) => Some(i)
+    RefArray(i) | RefNullArray(i) => Some(i)
+    _ => None
+  }
+  if idx is Some(i) && (i < 0 || i >= num_types) {
+    raise InvalidTypeIndex(i)
   }
 }
 
@@ -315,22 +398,24 @@ fn validate_type_forward_refs(
   type_idx : Int,
   type_rec_groups : Array[Int],
 ) -> Unit raise ValidationError {
-  match ty {
-    RefFuncTyped(ref_idx) | RefNullFuncTyped(ref_idx) =>
-      // Forward reference: ref_idx > type_idx
-      if ref_idx > type_idx {
-        // Must be in the same rec group
-        if type_idx < type_rec_groups.length() &&
-          ref_idx < type_rec_groups.length() {
-          if type_rec_groups[type_idx] != type_rec_groups[ref_idx] {
-            raise UnknownType(ref_idx)
-          }
-        } else {
-          // Type index out of bounds - this is an unknown type
-          raise UnknownType(ref_idx)
-        }
+  let ref_idx : Int? = match ty {
+    RefFuncTyped(i) | RefNullFuncTyped(i) => Some(i)
+    RefStruct(i) | RefNullStruct(i) => Some(i)
+    RefArray(i) | RefNullArray(i) => Some(i)
+    _ => None
+  }
+  guard ref_idx is Some(ref_idx) else { return }
+  // Forward reference: ref_idx > type_idx
+  if ref_idx > type_idx {
+    // Must be in the same rec group
+    if type_idx < type_rec_groups.length() && ref_idx < type_rec_groups.length() {
+      if type_rec_groups[type_idx] != type_rec_groups[ref_idx] {
+        raise UnknownType(ref_idx)
       }
-    _ => ()
+    } else {
+      // Type index out of bounds - this is an unknown type
+      raise UnknownType(ref_idx)
+    }
   }
 }
 
@@ -577,22 +662,16 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   }
 
   // Validate type indices in function types (parameters and results)
-  for func_type in mod.types {
-    for param_type in func_type.params {
-      validate_value_type(param_type, num_types)
-    }
-    for result_type in func_type.results {
-      validate_value_type(result_type, num_types)
+  for subtype in mod.types {
+    for vt in collect_value_types_from_subtype(subtype) {
+      validate_value_type(vt, num_types)
     }
   }
 
   // Validate forward type references are only within rec groups
-  for type_idx, func_type in mod.types {
-    for param_type in func_type.params {
-      validate_type_forward_refs(param_type, type_idx, mod.type_rec_groups)
-    }
-    for result_type in func_type.results {
-      validate_type_forward_refs(result_type, type_idx, mod.type_rec_groups)
+  for type_idx, subtype in mod.types {
+    for vt in collect_value_types_from_subtype(subtype) {
+      validate_type_forward_refs(vt, type_idx, mod.type_rec_groups)
     }
   }
 
@@ -731,7 +810,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     }
     // Get the function type
     let type_idx = ctx.funcs[start_idx]
-    let func_type = ctx.types[type_idx]
+    let func_type = ctx.get_func_type(type_idx)
     // Start function must have type [] -> [] (no params, no results)
     if func_type.params.length() != 0 || func_type.results.length() != 0 {
       raise InvalidStartFunction("start function")
@@ -746,7 +825,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     if type_idx < 0 || type_idx >= ctx.types.length() {
       raise InvalidTypeIndex(type_idx)
     }
-    let func_type = ctx.types[type_idx]
+    let func_type = ctx.get_func_type(type_idx)
     validate_function(ctx, func_type, code)
   }
 }
@@ -849,7 +928,7 @@ pub fn validate_module_with_context(
     }
     // Get the function type
     let type_idx = ctx.funcs[start_idx]
-    let func_type = ctx.types[type_idx]
+    let func_type = ctx.get_func_type(type_idx)
     // Start function must have type [] -> [] (no params, no results)
     if func_type.params.length() != 0 || func_type.results.length() != 0 {
       raise WithContext(
@@ -872,7 +951,7 @@ pub fn validate_module_with_context(
         ),
       )
     }
-    let func_type = ctx.types[type_idx]
+    let func_type = ctx.get_func_type(type_idx)
     validate_function_with_offset(ctx, func_type, code, func_idx)
   }
 }
@@ -1835,7 +1914,7 @@ fn validate_instr(
         raise InvalidFunctionIndex(func_idx)
       }
       let type_idx = ctx.funcs[func_idx]
-      let func_type = ctx.types[type_idx]
+      let func_type = ctx.get_func_type(type_idx)
       // Pop parameters in reverse order
       let num_params = func_type.params.length()
       for offset in 0..<num_params {
@@ -1862,7 +1941,7 @@ fn validate_instr(
         raise InvalidTypeIndex(type_idx)
       }
       stack.pop(@types.ValueType::I32) // table index
-      let func_type = ctx.types[type_idx]
+      let func_type = ctx.get_func_type(type_idx)
       let num_ci_params = func_type.params.length()
       for offset in 0..<num_ci_params {
         let i = num_ci_params - 1 - offset
@@ -1876,7 +1955,7 @@ fn validate_instr(
       if type_idx < 0 || type_idx >= ctx.types.length() {
         raise InvalidTypeIndex(type_idx)
       }
-      let func_type = ctx.types[type_idx]
+      let func_type = ctx.get_func_type(type_idx)
       // Pop the function reference (ref null $t)
       // In unreachable context, this may be a polymorphic type
       stack.pop(@types.ValueType::RefNullFuncTyped(type_idx))
@@ -1896,7 +1975,7 @@ fn validate_instr(
         raise InvalidFunctionIndex(func_idx)
       }
       let type_idx = ctx.funcs[func_idx]
-      let func_type = ctx.types[type_idx]
+      let func_type = ctx.get_func_type(type_idx)
       // Pop parameters in reverse order
       let num_params = func_type.params.length()
       for offset in 0..<num_params {
@@ -1931,7 +2010,7 @@ fn validate_instr(
         raise InvalidTypeIndex(type_idx)
       }
       stack.pop(@types.ValueType::I32) // table index
-      let func_type = ctx.types[type_idx]
+      let func_type = ctx.get_func_type(type_idx)
       let num_params = func_type.params.length()
       for offset in 0..<num_params {
         let i = num_params - 1 - offset
@@ -1953,7 +2032,7 @@ fn validate_instr(
       if type_idx < 0 || type_idx >= ctx.types.length() {
         raise InvalidTypeIndex(type_idx)
       }
-      let func_type = ctx.types[type_idx]
+      let func_type = ctx.get_func_type(type_idx)
       // Pop the function reference (ref null $t)
       stack.pop(@types.ValueType::RefNullFuncTyped(type_idx))
       // Pop parameters in reverse order
@@ -2206,6 +2285,163 @@ fn validate_instr(
         stack.push(result)
       }
     }
+
+    // GC instructions - struct operations
+    StructNew(type_idx) => {
+      // Pop field values, push struct ref
+      let struct_type = ctx.get_struct_type(type_idx)
+      for i = struct_type.fields.length() - 1; i >= 0; i = i - 1 {
+        stack.pop(
+          storage_type_to_value_type(struct_type.fields[i].storage_type),
+        )
+      }
+      stack.push(@types.ValueType::RefStruct(type_idx))
+    }
+    StructNewDefault(type_idx) => {
+      // Just push struct ref (default values are implicit)
+      ignore(ctx.get_struct_type(type_idx))
+      stack.push(@types.ValueType::RefStruct(type_idx))
+    }
+    StructGet(type_idx, field_idx)
+    | StructGetS(type_idx, field_idx)
+    | StructGetU(type_idx, field_idx) => {
+      // Pop struct ref, push field value
+      stack.pop(@types.ValueType::RefNullStruct(type_idx))
+      let struct_type = ctx.get_struct_type(type_idx)
+      let field_type = struct_type.fields[field_idx].storage_type
+      stack.push(storage_type_to_value_type(field_type))
+    }
+    StructSet(type_idx, field_idx) => {
+      // Pop value, pop struct ref
+      let struct_type = ctx.get_struct_type(type_idx)
+      let field_type = struct_type.fields[field_idx].storage_type
+      stack.pop(storage_type_to_value_type(field_type))
+      stack.pop(@types.ValueType::RefNullStruct(type_idx))
+    }
+
+    // GC instructions - array operations
+    ArrayNew(type_idx) => {
+      // Pop length (i32), pop init value, push array ref
+      ignore(ctx.get_array_type(type_idx))
+      stack.pop(@types.ValueType::I32)
+      let array_type = ctx.get_array_type(type_idx)
+      stack.pop(storage_type_to_value_type(array_type.element.storage_type))
+      stack.push(@types.ValueType::RefArray(type_idx))
+    }
+    ArrayNewDefault(type_idx) => {
+      // Pop length (i32), push array ref
+      ignore(ctx.get_array_type(type_idx))
+      stack.pop(@types.ValueType::I32)
+      stack.push(@types.ValueType::RefArray(type_idx))
+    }
+    ArrayNewFixed(type_idx, len) => {
+      // Pop len elements, push array ref
+      let array_type = ctx.get_array_type(type_idx)
+      let elem_type = storage_type_to_value_type(
+        array_type.element.storage_type,
+      )
+      for _ in 0..<len {
+        stack.pop(elem_type)
+      }
+      stack.push(@types.ValueType::RefArray(type_idx))
+    }
+    ArrayNewData(type_idx, _) | ArrayNewElem(type_idx, _) => {
+      // Pop size (i32), pop offset (i32), push array ref
+      ignore(ctx.get_array_type(type_idx))
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::I32)
+      stack.push(@types.ValueType::RefArray(type_idx))
+    }
+    ArrayGet(type_idx) | ArrayGetS(type_idx) | ArrayGetU(type_idx) => {
+      // Pop index (i32), pop array ref, push element
+      let array_type = ctx.get_array_type(type_idx)
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::RefNullArray(type_idx))
+      stack.push(storage_type_to_value_type(array_type.element.storage_type))
+    }
+    ArraySet(type_idx) => {
+      // Pop value, pop index (i32), pop array ref
+      let array_type = ctx.get_array_type(type_idx)
+      stack.pop(storage_type_to_value_type(array_type.element.storage_type))
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::RefNullArray(type_idx))
+    }
+    ArrayLen => {
+      // Pop array ref (any array type), push i32
+      // For now, accept any ref type and push i32
+      ignore(stack.pop_any())
+      stack.push(@types.ValueType::I32)
+    }
+    ArrayFill(type_idx) => {
+      // Pop n (i32), pop value, pop offset (i32), pop array ref
+      let array_type = ctx.get_array_type(type_idx)
+      stack.pop(@types.ValueType::I32)
+      stack.pop(storage_type_to_value_type(array_type.element.storage_type))
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::RefNullArray(type_idx))
+    }
+    ArrayCopy(dst_type, src_type) => {
+      // Pop n (i32), pop src_offset (i32), pop src, pop dst_offset (i32), pop dst
+      ignore(ctx.get_array_type(dst_type))
+      ignore(ctx.get_array_type(src_type))
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::RefNullArray(src_type))
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::RefNullArray(dst_type))
+    }
+    ArrayInitData(type_idx, _) | ArrayInitElem(type_idx, _) => {
+      // Pop n (i32), pop src_offset (i32), pop dst_offset (i32), pop array ref
+      ignore(ctx.get_array_type(type_idx))
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::RefNullArray(type_idx))
+    }
+
+    // GC instructions - reference casting (simplified validation)
+    RefTest(_) | RefTestNull(_) => {
+      // Pop ref, push i32
+      ignore(stack.pop_any())
+      stack.push(@types.ValueType::I32)
+    }
+    RefCast(target_type) => {
+      // Pop ref, push target type
+      ignore(stack.pop_any())
+      stack.push(target_type)
+    }
+    RefCastNull(target_type) => {
+      // Pop ref, push nullable target type
+      ignore(stack.pop_any())
+      stack.push(target_type)
+    }
+    BrOnCast(_, _, _) | BrOnCastFail(_, _, _) =>
+      // TODO: implement proper br_on_cast validation
+      ()
+
+    // GC instructions - i31
+    RefI31 => {
+      // Pop i32, push i31ref
+      stack.pop(@types.ValueType::I32)
+      stack.push(@types.ValueType::RefI31)
+    }
+    I31GetS | I31GetU => {
+      // Pop i31ref, push i32
+      stack.pop(@types.ValueType::RefNullI31)
+      stack.push(@types.ValueType::I32)
+    }
+
+    // GC instructions - type conversion
+    AnyConvertExtern => {
+      // Pop externref, push anyref
+      stack.pop(@types.ValueType::ExternRef)
+      stack.push(@types.ValueType::RefAny)
+    }
+    ExternConvertAny => {
+      // Pop anyref, push externref
+      stack.pop(@types.ValueType::RefAny)
+      stack.push(@types.ValueType::ExternRef)
+    }
   }
 }
 
@@ -2234,7 +2470,7 @@ fn get_block_results(
     }
     TypeIndex(idx) =>
       if idx < ctx.types.length() {
-        ctx.types[idx].results
+        ctx.get_func_type(idx).results
       } else {
         raise InvalidTypeIndex(idx)
       }
@@ -2258,7 +2494,7 @@ fn get_block_params(
     }
     TypeIndex(idx) =>
       if idx < ctx.types.length() {
-        ctx.types[idx].params
+        ctx.get_func_type(idx).params
       } else {
         raise InvalidTypeIndex(idx)
       }

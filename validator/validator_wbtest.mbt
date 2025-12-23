@@ -9,7 +9,7 @@ test "validator: valid simple function" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -38,7 +38,7 @@ test "validator: valid function with params" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -66,7 +66,7 @@ test "validator: type mismatch - wrong operand type" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -96,7 +96,7 @@ test "validator: stack underflow" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -123,7 +123,7 @@ test "validator: invalid local index" {
   let func : @types.FunctionCode = { locals: [], body: [LocalGet(5)] } // no local at index 5
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -151,7 +151,7 @@ test "validator: valid function call" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0, 0],
@@ -183,7 +183,7 @@ test "validator: valid global operations" {
     mutable: true,
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -212,7 +212,7 @@ test "validator: stack height - function returns too many values" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -243,7 +243,7 @@ test "validator: stack height - function returns too few values" {
     results: [@types.ValueType::I32, @types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -285,7 +285,10 @@ test "validator: stack height - block returns correct values" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [block_type, func_type],
+    types: [
+      @types.SubType::from_func(block_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -319,7 +322,7 @@ test "validator: stack height - block leaves wrong number of values" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -357,7 +360,7 @@ test "validator: stack height - if branches must match" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -380,7 +383,7 @@ test "validator: stack height - void function with leftover values" {
   let func : @types.FunctionCode = { locals: [], body: [I32Const(1)] } // leaves 1 value, but should be 0
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -417,7 +420,7 @@ test "validator: control flow - valid br in block" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -440,7 +443,7 @@ test "validator: control flow - invalid label index" {
   let func : @types.FunctionCode = { locals: [], body: [Br(0)] }
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -480,7 +483,7 @@ test "validator: control flow - nested blocks with br" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -516,7 +519,7 @@ test "validator: control flow - br_if with correct type" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -548,7 +551,10 @@ test "validator: control flow - loop with br back to start" {
     ],
   }
   let mod : @types.Module = {
-    types: [loop_type, func_type],
+    types: [
+      @types.SubType::from_func(loop_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -576,7 +582,7 @@ test "validator: control flow - return in nested block" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -610,7 +616,7 @@ test "validator: control flow - br_table basic" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -674,7 +680,7 @@ test "validator: validate_module_with_context provides location on error" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
@@ -710,7 +716,7 @@ test "validator: validate_module_with_context reports correct function index" {
     results: [@types.ValueType::I32],
   }
   let mod : @types.Module = {
-    types: [func_type],
+    types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
     imports: [],
     funcs: [0, 0],
@@ -1308,7 +1314,7 @@ test "regression: invalid type index should fail" {
   // func.wast line 435: (func (type 2)) - unknown type
   // When a function references a type that doesn't exist, validation should fail
   let mod : @types.Module = {
-    types: [{ params: [], results: [] }], // only type 0 exists
+    types: [@types.SubType::func([], [])], // only type 0 exists
     type_rec_groups: [0, 1, 2],
     imports: [],
     funcs: [2], // references type 2, which doesn't exist
@@ -1330,7 +1336,7 @@ test "regression: uninitialized non-nullable local should fail" {
   // func.wast line 659: (func (local $x (ref $t)) (drop (local.get $x)))
   // Non-nullable reference locals must be initialized before use
   let mod : @types.Module = {
-    types: [{ params: [], results: [] }],
+    types: [@types.SubType::func([], [])],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
@@ -1357,7 +1363,7 @@ test "regression: initialized non-nullable local should pass" {
   // After setting a non-nullable local, reading it should be valid
   // Use FuncRef (nullable) as local type since RefFunc(idx) instruction pushes FuncRef
   let mod : @types.Module = {
-    types: [{ params: [], results: [] }],
+    types: [@types.SubType::func([], [])],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
@@ -1396,7 +1402,7 @@ test "regression: nullable ref local reading without initialization should pass"
   // Nullable reference types (FuncRef) have a default value (null),
   // so reading without explicit initialization is valid
   let mod : @types.Module = {
-    types: [{ params: [], results: [] }],
+    types: [@types.SubType::func([], [])],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
@@ -1422,7 +1428,7 @@ test "regression: nullable ref local reading without initialization should pass"
 test "regression: param with non-nullable ref type should be initialized" {
   // Function parameters are always initialized by the caller
   let mod : @types.Module = {
-    types: [{ params: [@types.ValueType::RefFunc], results: [] }],
+    types: [@types.SubType::func([@types.ValueType::RefFunc], [])],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
@@ -1434,6 +1440,197 @@ test "regression: param with non-nullable ref type should be initialized" {
     elems: [],
     codes: [{ locals: [], body: [LocalGet(0), Drop] }],
     datas: [], // param 0 is always initialized
+    tags: [],
+  }
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+// ============================================================
+// GC Type Validation Tests
+// ============================================================
+
+///|
+/// Helper: create a simple module with only types for validation testing
+fn module_with_types(
+  types : Array[@types.SubType],
+  rec_groups : Array[Int],
+) -> @types.Module {
+  {
+    types,
+    type_rec_groups: rec_groups,
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [],
+    tags: [],
+  }
+}
+
+///|
+/// Helper: create a FieldType
+fn field(
+  storage : @types.StorageType,
+  mutable? : Bool = false,
+) -> @types.FieldType {
+  { storage_type: storage, mutable }
+}
+
+///|
+/// Helper: create a SubType wrapping a struct
+fn struct_subtype(fields : Array[@types.FieldType]) -> @types.SubType {
+  {
+    final_: true,
+    supertypes: [],
+    composite: @types.CompositeType::Struct({ fields, }),
+  }
+}
+
+///|
+/// Helper: create a SubType wrapping an array
+fn array_subtype(element : @types.FieldType) -> @types.SubType {
+  {
+    final_: true,
+    supertypes: [],
+    composite: @types.CompositeType::Array({ element, }),
+  }
+}
+
+///|
+test "validator: module with struct type should pass" {
+  let mod = module_with_types(
+    [
+      struct_subtype([
+        field(@types.StorageType::Val(I32)),
+        field(@types.StorageType::Val(F64), mutable=true),
+      ]),
+    ],
+    [0],
+  )
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "validator: module with array type should pass" {
+  let mod = module_with_types(
+    [array_subtype(field(@types.StorageType::Val(I32), mutable=true))],
+    [0],
+  )
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "validator: struct with packed field types should pass" {
+  let mod = module_with_types(
+    [
+      struct_subtype([
+        field(@types.StorageType::Packed(I8), mutable=true),
+        field(@types.StorageType::Packed(I16), mutable=true),
+      ]),
+    ],
+    [0],
+  )
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "validator: struct with ref field referencing valid type should pass" {
+  let mod = module_with_types(
+    [
+      @types.SubType::func([], [I32]),
+      struct_subtype([field(@types.StorageType::Val(RefNullFuncTyped(0)))]),
+    ],
+    [0, 1],
+  )
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "validator: struct with ref field referencing invalid type should fail" {
+  let mod = module_with_types(
+    [struct_subtype([field(@types.StorageType::Val(RefNullFuncTyped(99)))])],
+    [0],
+  )
+  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(99))")
+}
+
+///|
+test "validator: forward ref within rec group should pass" {
+  // Type 0 references type 1 (forward reference within same rec group)
+  let mod = module_with_types(
+    [
+      struct_subtype([field(@types.StorageType::Val(RefNullStruct(1)))]),
+      struct_subtype([field(@types.StorageType::Val(RefNullStruct(0)))]),
+    ],
+    [0, 0], // Same rec group
+  )
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "validator: forward ref outside rec group should fail" {
+  // Type 0 references type 1, but they're in different rec groups
+  let mod = module_with_types(
+    [
+      struct_subtype([field(@types.StorageType::Val(RefNullStruct(1)))]),
+      struct_subtype([field(@types.StorageType::Val(I32))]),
+    ],
+    [0, 1], // Different rec groups
+  )
+  inspect(try? validate_module(mod), content="Err(UnknownType(1))")
+}
+
+///|
+test "validator: array with ref element referencing valid type should pass" {
+  let mod = module_with_types(
+    [
+      struct_subtype([field(@types.StorageType::Val(I32))]),
+      array_subtype(
+        field(@types.StorageType::Val(RefNullStruct(0)), mutable=true),
+      ),
+    ],
+    [0, 1],
+  )
+  inspect(try? validate_module(mod), content="Ok(())")
+}
+
+///|
+test "validator: array with ref element referencing invalid type should fail" {
+  let mod = module_with_types(
+    [
+      array_subtype(
+        field(@types.StorageType::Val(RefNullArray(50)), mutable=true),
+      ),
+    ],
+    [0],
+  )
+  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(50))")
+}
+
+///|
+test "validator: mixed func, struct, array types should pass" {
+  let mod : @types.Module = {
+    types: [
+      @types.SubType::func([I32], [I32]),
+      struct_subtype([field(@types.StorageType::Val(I64), mutable=true)]),
+      array_subtype(field(@types.StorageType::Val(F32))),
+    ],
+    type_rec_groups: [0, 1, 2],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [{ locals: [], body: [LocalGet(0)] }],
+    datas: [],
     tags: [],
   }
   inspect(try? validate_module(mod), content="Ok(())")

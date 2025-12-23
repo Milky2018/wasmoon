@@ -279,6 +279,9 @@ fn format_value(v : @types.Value) -> String {
     FuncRef(idx) => "funcref(\{idx})"
     ExternRef(idx) => "externref(\{idx})"
     ExnRef(idx) => "exnref(\{idx})"
+    ArrayRef(idx) => "arrayref(\{idx})"
+    StructRef(idx) => "structref(\{idx})"
+    I31(n) => "i31(\{n})"
   }
 }
 
@@ -377,7 +380,7 @@ fn find_exported_func_type(
         }
       }
       if type_idx is Some(tidx) && tidx < mod_.types.length() {
-        return Some(mod_.types[tidx])
+        return Some(mod_.get_func_type(tidx))
       }
     }
   }
@@ -478,6 +481,9 @@ fn init_jit_globals(
         store_addr_to_module_func_idx(store_addr, instance).to_int64()
       ExternRef(idx) => idx.to_int64()
       ExnRef(idx) => idx.to_int64()
+      ArrayRef(idx) => idx.to_int64()
+      StructRef(idx) => idx.to_int64()
+      I31(n) => n.to_int64()
       Null => -1L // null sentinel
     }
     // Write value at offset i * 16
@@ -566,6 +572,9 @@ fn run_with_jit(
                   FuncRef(idx) => idx.to_int64()
                   ExternRef(idx) => idx.to_int64()
                   ExnRef(idx) => idx.to_int64()
+                  ArrayRef(idx) => idx.to_int64()
+                  StructRef(idx) => idx.to_int64()
+                  I31(n) => n.to_int64()
                   Null => -1L // Sentinel value for null reference
                 }
                 i64_args.push(v)
@@ -618,6 +627,12 @@ fn run_with_jit(
                     AnyRef | NullRef => @types.Value::Null
                     ExnRef | NullExnRef => @types.Value::Null
                     V128 => @types.Value::I64(r) // Placeholder for V128
+                    // New GC reference types
+                    RefStruct(_) | RefNullStruct(_) => @types.Value::Null
+                    RefArray(_) | RefNullArray(_) => @types.Value::Null
+                    RefAny | RefEq | RefNullEq => @types.Value::Null
+                    RefI31 | RefNullI31 => @types.Value::Null
+                    RefNone => @types.Value::Null
                   }
                   values.push(v)
                 }
@@ -651,7 +666,7 @@ fn compile_module_to_jit(
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
       import_func_type_indices.push(type_idx)
-      let func_type = mod_.types[type_idx]
+      let func_type = mod_.get_func_type(type_idx)
       precompiled.add_import(
         imp.mod_name,
         imp.name,
@@ -685,14 +700,14 @@ fn compile_module_to_jit(
   for i, code in mod_.codes {
     let func_idx = num_imports + i
     let type_idx = mod_.funcs[i]
-    let func_type = mod_.types[type_idx]
+    let func_type = mod_.get_func_type(type_idx)
     let func_name = get_func_name(mod_, func_idx)
     // Stage 1: Translate WASM to IR
     let translator = @ir.Translator::new(
       func_name,
       func_type,
       code.locals,
-      mod_.types,
+      @types.extract_func_types(mod_.types),
       mod_.funcs,
       num_imports,
       import_func_type_indices,
@@ -790,7 +805,7 @@ fn build_jit_func_signatures(
   // Fill in signatures for import functions
   for i, imp in mod_.imports {
     if imp.desc is Func(type_idx) && type_idx < mod_.types.length() {
-      let func_type = mod_.types[type_idx]
+      let func_type = mod_.get_func_type(type_idx)
       signatures[i] = (func_type.params.copy(), func_type.results.copy())
     }
   }
@@ -798,7 +813,7 @@ fn build_jit_func_signatures(
   for i, type_idx in mod_.funcs {
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
-      let func_type = mod_.types[type_idx]
+      let func_type = mod_.get_func_type(type_idx)
       signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
     }
   }

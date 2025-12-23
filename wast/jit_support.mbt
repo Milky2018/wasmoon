@@ -157,6 +157,11 @@ pub fn sync_jit_globals_to_store(
         // GC reference types - treat as null for now
         AnyRef | NullRef => @types.Value::Null
         ExnRef | NullExnRef => @types.Value::Null
+        RefStruct(_) | RefNullStruct(_) => @types.Value::Null
+        RefArray(_) | RefNullArray(_) => @types.Value::Null
+        RefAny | RefEq | RefNullEq => @types.Value::Null
+        RefI31 | RefNullI31 => @types.Value::Null
+        RefNone => @types.Value::Null
         V128 => abort("V128 not supported in JIT global sync")
       }
       // We already checked mutability, so set should succeed
@@ -309,7 +314,7 @@ pub fn build_func_signatures(
   // Fill in signatures for import functions
   for i, imp in mod_.imports {
     if imp.desc is Func(type_idx) && type_idx < mod_.types.length() {
-      let func_type = mod_.types[type_idx]
+      let func_type = mod_.get_func_type(type_idx)
       signatures[i] = (func_type.params.copy(), func_type.results.copy())
     }
   }
@@ -317,7 +322,7 @@ pub fn build_func_signatures(
   for i, type_idx in mod_.funcs {
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
-      let func_type = mod_.types[type_idx]
+      let func_type = mod_.get_func_type(type_idx)
       signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
     }
   }

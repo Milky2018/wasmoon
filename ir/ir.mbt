@@ -39,10 +39,16 @@ pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
     RefFuncTyped(_) | RefNullFuncTyped(_) => Type::I64
     RefFunc => Type::I64
     RefExtern => Type::I64
-    // New GC reference types - all use 64-bit representation
+    // GC reference types - all use 64-bit representation (heap index)
     NullFuncRef => Type::FuncRef
     NullExternRef => Type::ExternRef
-    AnyRef | NullRef | ExnRef | NullExnRef => Type::FuncRef
+    AnyRef | NullRef | ExnRef | NullExnRef => Type::I64
+    // Struct and array references - use I64 (heap index)
+    RefStruct(_) | RefNullStruct(_) | RefArray(_) | RefNullArray(_) => Type::I64
+    // i31 references - use I64 (tagged small integer)
+    RefI31 | RefNullI31 => Type::I64
+    // Eq and any abstract types
+    RefEq | RefNullEq | RefAny => Type::I64
     _ => Type::I32 // Fallback for V128 or future types
   }
 }
@@ -255,6 +261,39 @@ pub enum Opcode {
   // CallPtr(num_args, num_results) - call via function pointer
   // operand 0 = function pointer, operands 1..n = vmctx + args
   CallPtr(Int, Int)
+
+  // GC operations - struct
+  StructNew(Int) // Allocate struct (type index) - operands are field values
+  StructNewDefault(Int) // Allocate struct with default values (type index)
+  StructGet(Int, Int) // Get struct field (type index, field index) - operand is structref
+  StructGetS(Int, Int) // Get struct field signed-extended (type index, field index)
+  StructGetU(Int, Int) // Get struct field zero-extended (type index, field index)
+  StructSet(Int, Int) // Set struct field (type index, field index) - operands: structref, value
+
+  // GC operations - array
+  ArrayNew(Int) // Allocate array (type index) - operands: init_value, length
+  ArrayNewDefault(Int) // Allocate array with default values (type index) - operand: length
+  ArrayNewFixed(Int, Int) // Allocate fixed-size array (type index, length) - operands are element values
+  ArrayGet(Int) // Get array element (type index) - operands: arrayref, index
+  ArrayGetS(Int) // Get array element signed-extended (type index)
+  ArrayGetU(Int) // Get array element zero-extended (type index)
+  ArraySet(Int) // Set array element (type index) - operands: arrayref, index, value
+  ArrayLen // Get array length - operand: arrayref
+  ArrayFill(Int) // Fill array (type index) - operands: arrayref, offset, value, count
+  ArrayCopy(Int, Int) // Copy array (dst_type_idx, src_type_idx) - operands: dst, dst_offset, src, src_offset, count
+
+  // GC operations - i31
+  I31New // Create i31 reference - operand: i32 value
+  I31GetS // Get i31 value sign-extended - operand: i31ref
+  I31GetU // Get i31 value zero-extended - operand: i31ref
+
+  // GC operations - type checking/casting
+  RefTest(Int, Bool) // Test if reference is of type (type index, nullable) - operand: ref
+  RefCast(Int, Bool) // Cast reference to type (type index, nullable) - operand: ref
+
+  // GC operations - type conversions
+  AnyConvertExtern // Convert externref to anyref - operand: externref
+  ExternConvertAny // Convert anyref to externref - operand: anyref
 } derive(Show)
 
 ///|

@@ -230,7 +230,7 @@ fn run_cross_module_jit(
       let local_func_idx = num_imports + i
       let global_idx = base + local_func_idx
       let type_idx = mod_.funcs[i]
-      let func_type = mod_.types[type_idx]
+      let func_type = mod_.get_func_type(type_idx)
       let f_name = get_exported_func_name(mod_, local_func_idx)
 
       // For cross-module calls, remap import indices to global indices
@@ -257,7 +257,7 @@ fn run_cross_module_jit(
         f_name,
         func_type,
         code.locals,
-        mod_.types,
+        @types.extract_func_types(mod_.types),
         mod_.funcs,
         num_imports,
         import_func_type_indices,

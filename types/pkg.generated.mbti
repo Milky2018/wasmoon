@@ -2,15 +2,25 @@
 package "Milky2018/wasmoon/types"
 
 // Values
-pub fn compute_canonical_type_indices(Array[FuncType], type_rec_groups? : Array[Int]) -> Array[Int]
+pub fn compute_canonical_type_indices(Array[SubType], type_rec_groups? : Array[Int]) -> Array[Int]
+
+pub fn extract_func_types(Array[SubType]) -> Array[FuncType]
 
 pub fn func_types_equal(FuncType, FuncType) -> Bool
+
+pub fn func_types_to_subtypes(Array[FuncType]) -> Array[SubType]
 
 pub fn get_rec_group_info(Array[Int], Int) -> (Int, Int)
 
 // Errors
 
 // Types and methods
+pub(all) struct ArrayType {
+  element : FieldType
+}
+pub impl Eq for ArrayType
+pub impl Show for ArrayType
+
 pub(all) enum BlockType {
   Empty
   Value(ValueType)
@@ -29,6 +39,14 @@ pub(all) enum CatchHandler {
 }
 pub impl Eq for CatchHandler
 pub impl Show for CatchHandler
+
+pub(all) enum CompositeType {
+  Func(FuncType)
+  Struct(StructType)
+  Array(ArrayType)
+}
+pub impl Eq for CompositeType
+pub impl Show for CompositeType
 
 pub(all) struct Data {
   memory_idx : Int
@@ -70,6 +88,13 @@ pub(all) enum ExportDesc {
 }
 pub impl Eq for ExportDesc
 pub impl Show for ExportDesc
+
+pub(all) struct FieldType {
+  storage_type : StorageType
+  mutable : Bool
+}
+pub impl Eq for FieldType
+pub impl Show for FieldType
 
 pub(all) struct FuncType {
   params : Array[ValueType]
@@ -329,6 +354,37 @@ pub(all) enum Instruction {
   I64TruncSatF32U
   I64TruncSatF64S
   I64TruncSatF64U
+  StructNew(Int)
+  StructNewDefault(Int)
+  StructGet(Int, Int)
+  StructGetS(Int, Int)
+  StructGetU(Int, Int)
+  StructSet(Int, Int)
+  ArrayNew(Int)
+  ArrayNewDefault(Int)
+  ArrayNewFixed(Int, Int)
+  ArrayNewData(Int, Int)
+  ArrayNewElem(Int, Int)
+  ArrayGet(Int)
+  ArrayGetS(Int)
+  ArrayGetU(Int)
+  ArraySet(Int)
+  ArrayLen
+  ArrayFill(Int)
+  ArrayCopy(Int, Int)
+  ArrayInitData(Int, Int)
+  ArrayInitElem(Int, Int)
+  RefTest(ValueType)
+  RefTestNull(ValueType)
+  RefCast(ValueType)
+  RefCastNull(ValueType)
+  BrOnCast(Int, ValueType, ValueType)
+  BrOnCastFail(Int, ValueType, ValueType)
+  RefI31
+  I31GetS
+  I31GetU
+  AnyConvertExtern
+  ExternConvertAny
 }
 pub impl Eq for Instruction
 pub impl Show for Instruction
@@ -347,7 +403,7 @@ pub impl Eq for MemoryType
 pub impl Show for MemoryType
 
 pub(all) struct Module {
-  types : Array[FuncType]
+  types : Array[SubType]
   type_rec_groups : Array[Int]
   imports : Array[Import]
   funcs : Array[Int]
@@ -361,8 +417,45 @@ pub(all) struct Module {
   datas : Array[Data]
   tags : Array[TagType]
 }
+pub fn Module::get_array_type(Self, Int) -> ArrayType
+pub fn Module::get_func_type(Self, Int) -> FuncType
+pub fn Module::get_struct_type(Self, Int) -> StructType
+pub fn Module::is_array_type(Self, Int) -> Bool
+pub fn Module::is_func_type(Self, Int) -> Bool
+pub fn Module::is_struct_type(Self, Int) -> Bool
 pub fn Module::new() -> Self
 pub impl Show for Module
+
+pub(all) enum PackedType {
+  I8
+  I16
+}
+pub impl Eq for PackedType
+pub impl Show for PackedType
+
+pub(all) enum StorageType {
+  Val(ValueType)
+  Packed(PackedType)
+}
+pub impl Eq for StorageType
+pub impl Show for StorageType
+
+pub(all) struct StructType {
+  fields : Array[FieldType]
+}
+pub impl Eq for StructType
+pub impl Show for StructType
+
+pub(all) struct SubType {
+  final_ : Bool
+  supertypes : Array[Int]
+  composite : CompositeType
+}
+pub fn SubType::from_func(FuncType) -> Self
+pub fn SubType::func(Array[ValueType], Array[ValueType]) -> Self
+pub fn SubType::simple(CompositeType) -> Self
+pub impl Eq for SubType
+pub impl Show for SubType
 
 pub(all) struct Table {
   type_ : TableType
@@ -404,6 +497,9 @@ pub(all) enum Value {
   FuncRef(Int)
   ExternRef(Int)
   ExnRef(Int)
+  StructRef(Int)
+  ArrayRef(Int)
+  I31(Int)
   Null
 }
 pub impl Eq for Value
@@ -423,6 +519,16 @@ pub(all) enum ValueType {
   RefNullFuncTyped(Int)
   AnyRef
   ExnRef
+  RefStruct(Int)
+  RefNullStruct(Int)
+  RefArray(Int)
+  RefNullArray(Int)
+  RefAny
+  RefEq
+  RefNullEq
+  RefI31
+  RefNullI31
+  RefNone
   NullRef
   NullFuncRef
   NullExnRef

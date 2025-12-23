@@ -102,6 +102,17 @@ pub(all) struct IRBuilder {
 pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
 pub fn IRBuilder::add_param(Self, Type) -> Value
 pub fn IRBuilder::add_result(Self, Type) -> Unit
+pub fn IRBuilder::any_convert_extern(Self, Value) -> Value
+pub fn IRBuilder::array_copy(Self, Int, Int, Value, Value, Value, Value, Value) -> Unit
+pub fn IRBuilder::array_fill(Self, Int, Value, Value, Value, Value) -> Unit
+pub fn IRBuilder::array_get(Self, Int, Value, Value) -> Value
+pub fn IRBuilder::array_get_s(Self, Int, Value, Value) -> Value
+pub fn IRBuilder::array_get_u(Self, Int, Value, Value) -> Value
+pub fn IRBuilder::array_len(Self, Value) -> Value
+pub fn IRBuilder::array_new(Self, Int, Value, Value) -> Value
+pub fn IRBuilder::array_new_default(Self, Int, Value) -> Value
+pub fn IRBuilder::array_new_fixed(Self, Int, Int, Array[Value]) -> Value
+pub fn IRBuilder::array_set(Self, Int, Value, Value, Value) -> Unit
 pub fn IRBuilder::band(Self, Value, Value) -> Value
 pub fn IRBuilder::bitcast(Self, Type, Value) -> Value
 pub fn IRBuilder::bnot(Self, Value) -> Value
@@ -121,6 +132,7 @@ pub fn IRBuilder::copy(Self, Value) -> Value
 pub fn IRBuilder::create_block(Self) -> Block
 pub fn IRBuilder::ctz(Self, Value) -> Value
 pub fn IRBuilder::current_block(Self) -> Block?
+pub fn IRBuilder::extern_convert_any(Self, Value) -> Value
 pub fn IRBuilder::fabs(Self, Value) -> Value
 pub fn IRBuilder::fadd(Self, Value, Value) -> Value
 pub fn IRBuilder::fceil(Self, Value) -> Value
@@ -147,6 +159,9 @@ pub fn IRBuilder::ftrunc(Self, Value) -> Value
 pub fn IRBuilder::get_function(Self) -> Function
 pub fn IRBuilder::global_get(Self, Int, Type) -> Value
 pub fn IRBuilder::global_set(Self, Int, Value) -> Unit
+pub fn IRBuilder::i31_get_s(Self, Value) -> Value
+pub fn IRBuilder::i31_get_u(Self, Value) -> Value
+pub fn IRBuilder::i31_new(Self, Value) -> Value
 pub fn IRBuilder::iadd(Self, Value, Value) -> Value
 pub fn IRBuilder::icmp(Self, IntCC, Value, Value) -> Value
 pub fn IRBuilder::icmp_eq(Self, Value, Value) -> Value
@@ -182,6 +197,8 @@ pub fn IRBuilder::memory_size(Self) -> Value
 pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::popcnt(Self, Value) -> Value
 pub fn IRBuilder::print(Self) -> String
+pub fn IRBuilder::ref_cast(Self, Int, Bool, Value) -> Value
+pub fn IRBuilder::ref_test(Self, Int, Bool, Value) -> Value
 pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
 pub fn IRBuilder::return_call_indirect_multi(Self, Int, Int, Value, Array[Value]) -> Unit
 pub fn IRBuilder::return_call_multi(Self, Int, Array[Value]) -> Unit
@@ -202,6 +219,12 @@ pub fn IRBuilder::store16(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store32(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store8(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
+pub fn IRBuilder::struct_get(Self, Int, Int, Value) -> Value
+pub fn IRBuilder::struct_get_s(Self, Int, Int, Value) -> Value
+pub fn IRBuilder::struct_get_u(Self, Int, Int, Value) -> Value
+pub fn IRBuilder::struct_new(Self, Int, Array[Value]) -> Value
+pub fn IRBuilder::struct_new_default(Self, Int) -> Value
+pub fn IRBuilder::struct_set(Self, Int, Int, Value, Value) -> Unit
 pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
 pub fn IRBuilder::table_get(Self, Int, Value) -> Value
 pub fn IRBuilder::table_grow(Self, Int, Value, Value) -> Value
@@ -329,6 +352,29 @@ pub enum Opcode {
   LoadPtr(Type)
   StorePtr(Type)
   CallPtr(Int, Int)
+  StructNew(Int)
+  StructNewDefault(Int)
+  StructGet(Int, Int)
+  StructGetS(Int, Int)
+  StructGetU(Int, Int)
+  StructSet(Int, Int)
+  ArrayNew(Int)
+  ArrayNewDefault(Int)
+  ArrayNewFixed(Int, Int)
+  ArrayGet(Int)
+  ArrayGetS(Int)
+  ArrayGetU(Int)
+  ArraySet(Int)
+  ArrayLen
+  ArrayFill(Int)
+  ArrayCopy(Int, Int)
+  I31New
+  I31GetS
+  I31GetU
+  RefTest(Int, Bool)
+  RefCast(Int, Bool)
+  AnyConvertExtern
+  ExternConvertAny
 }
 pub impl Show for Opcode
 
@@ -376,8 +422,9 @@ pub(all) struct Translator {
   canonical_type_indices : Array[Int]
   func_base : Int
   import_remap : Array[Int]
+  module_types : Array[@types.SubType]
 }
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int]) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {

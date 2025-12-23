@@ -49,11 +49,13 @@ priv struct Parser {
   memory_names : Map[String, Int]
   table_names : Map[String, Int]
   tag_names : Map[String, Int]
+  data_names : Map[String, Int]
+  elem_names : Map[String, Int]
   // Label stack for block/loop/if - stores (name, depth) pairs
   // depth is the index from the innermost block (0 = current block)
   label_stack : Array[String?]
   // Reference to module types for inline type resolution in call_indirect
-  mut types : Array[@types.FuncType]
+  mut types : Array[@types.SubType]
   // Reference to module type_rec_groups for implicit type matching
   mut type_rec_groups : Array[Int]
 }
@@ -72,6 +74,8 @@ fn Parser::new(input : String) -> Parser raise WatError {
     memory_names: {},
     table_names: {},
     tag_names: {},
+    data_names: {},
+    elem_names: {},
     label_stack: [],
     types: [],
     type_rec_groups: [],
@@ -1717,6 +1721,43 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           self.expect_rparen()
           @types.ValueType::NullExternRef // bottom type for extern
         }
+        // GC abstract heap types
+        Keyword("struct") => {
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            @types.ValueType::RefNullStruct(-1) // -1 means abstract struct type
+          } else {
+            @types.ValueType::RefStruct(-1)
+          }
+        }
+        Keyword("array") => {
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            @types.ValueType::RefNullArray(-1) // -1 means abstract array type
+          } else {
+            @types.ValueType::RefArray(-1)
+          }
+        }
+        Keyword("i31") => {
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            @types.ValueType::RefNullI31
+          } else {
+            @types.ValueType::RefI31
+          }
+        }
+        Keyword("eq") => {
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            @types.ValueType::RefNullEq
+          } else {
+            @types.ValueType::RefEq
+          }
+        }
         Id(name) => {
           // Typed function reference like (ref $t)
           let type_idx = match self.type_names.get(name) {
@@ -1773,6 +1814,11 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         "nullfuncref" => NullFuncRef
         "nullexnref" => NullExnRef
         "nullexternref" => NullExternRef
+        // GC reference type shorthands
+        "eqref" => RefNullEq
+        "i31ref" => RefNullI31
+        "structref" => RefNullStruct(-1) // -1 means abstract struct type
+        "arrayref" => RefNullArray(-1) // -1 means abstract array type
         _ =>
           raise WatError::UnexpectedToken(
             "expected value type, got '\{kw}'",
@@ -2078,9 +2124,9 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
         match self.current.token {
           Keyword("type") => {
             let type_idx = mod_.types.length()
-            let ft = self.parse_type_def(type_idx)
+            let subtype = self.parse_type_def(type_idx)
             self.type_names.set("\{type_idx}", type_idx)
-            mod_.types.push(ft)
+            mod_.types.push(subtype)
             // Standalone type is its own rec group
             mod_.type_rec_groups.push(type_idx)
           }
@@ -2269,11 +2315,13 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.expect_rparen()
           }
           Keyword("data") => {
-            let data = self.parse_data_def()
+            let data_idx = mod_.datas.length()
+            let data = self.parse_data_def(data_idx~)
             mod_.datas.push(data)
           }
           Keyword("elem") => {
-            let elem = self.parse_elem_def()
+            let elem_idx = mod_.elems.length()
+            let elem = self.parse_elem_def(elem_idx~)
             mod_.elems.push(elem)
           }
           Keyword("tag") =>
@@ -2320,7 +2368,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
 fn Parser::parse_type_def(
   self : Parser,
   type_idx : Int,
-) -> @types.FuncType raise WatError {
+) -> @types.SubType raise WatError {
   self.advance() // skip "type"
   // Optional type name
   if self.current.token is Id(name) {
@@ -2335,16 +2383,21 @@ fn Parser::parse_type_def(
       let ft = self.parse_func_type()
       self.expect_rparen() // close func
       self.expect_rparen() // close type
-      ft
+      @types.SubType::from_func(ft)
     }
-    Keyword("struct") | Keyword("array") => {
-      // GC proposal types - skip content and use placeholder
-      // This allows parsing GC modules even if we don't execute them
-      self.skip_to_matching_rparen()
-      self.expect_rparen() // close struct/array
+    Keyword("struct") => {
+      self.advance() // skip "struct"
+      let st = self.parse_struct_type()
+      self.expect_rparen() // close struct
       self.expect_rparen() // close type
-      // Return placeholder empty function type
-      { params: [], results: [] }
+      @types.SubType::simple(@types.CompositeType::Struct(st))
+    }
+    Keyword("array") => {
+      self.advance() // skip "array"
+      let at = self.parse_array_type()
+      self.expect_rparen() // close array
+      self.expect_rparen() // close type
+      @types.SubType::simple(@types.CompositeType::Array(at))
     }
     _ =>
       raise WatError::UnexpectedToken(
@@ -2352,6 +2405,227 @@ fn Parser::parse_type_def(
         self.loc(),
       )
   }
+}
+
+///|
+/// Parse a storage type: i8, i16, or a value type
+fn Parser::parse_storage_type(
+  self : Parser,
+) -> @types.StorageType raise WatError {
+  match self.current.token {
+    Keyword("i8") => {
+      self.advance()
+      @types.StorageType::Packed(@types.PackedType::I8)
+    }
+    Keyword("i16") => {
+      self.advance()
+      @types.StorageType::Packed(@types.PackedType::I16)
+    }
+    _ => @types.StorageType::Val(self.parse_value_type())
+  }
+}
+
+///|
+/// Parse a field type: (field [name] [mut] <storage_type>) or just <storage_type>
+fn Parser::parse_field_type(self : Parser) -> @types.FieldType raise WatError {
+  // Check if this is a full field definition with (field ...)
+  if self.current.token == LParen {
+    self.advance()
+    if self.current.token == Keyword("field") {
+      self.advance() // skip "field"
+      // Optional field name
+      if self.current.token is Id(_) {
+        self.advance()
+      }
+      // Check for mutability
+      let mutable = if self.current.token == LParen {
+        self.advance()
+        if self.current.token == Keyword("mut") {
+          self.advance()
+          let storage_type = self.parse_storage_type()
+          self.expect_rparen() // close mut
+          self.expect_rparen() // close field
+          return { storage_type, mutable: true }
+        } else {
+          // Not mut, restore lparen context and parse as storage type
+          // This handles (field (ref $t)) case
+          let storage_type = self.parse_storage_type_after_lparen()
+          self.expect_rparen() // close field
+          return { storage_type, mutable: false }
+        }
+      } else {
+        false
+      }
+      let storage_type = self.parse_storage_type()
+      self.expect_rparen() // close field
+      { storage_type, mutable }
+    } else if self.current.token == Keyword("mut") {
+      // Shorthand: (mut <storage_type>)
+      self.advance()
+      let storage_type = self.parse_storage_type()
+      self.expect_rparen()
+      { storage_type, mutable: true }
+    } else {
+      // It's a storage type starting with lparen, like (ref ...)
+      let storage_type = self.parse_storage_type_after_lparen()
+      { storage_type, mutable: false }
+    }
+  } else {
+    // Just a storage type
+    let storage_type = self.parse_storage_type()
+    { storage_type, mutable: false }
+  }
+}
+
+///|
+/// Parse storage type after we've already consumed the lparen
+fn Parser::parse_storage_type_after_lparen(
+  self : Parser,
+) -> @types.StorageType raise WatError {
+  // We've already consumed the lparen, now parse (ref ...) style type
+  self.expect_keyword("ref")
+  let is_nullable = self.current.token == Keyword("null")
+  if is_nullable {
+    self.advance()
+  }
+  let heap_type = self.parse_heap_type(is_nullable)
+  self.expect_rparen()
+  @types.StorageType::Val(heap_type)
+}
+
+///|
+/// Parse a heap type and return the corresponding ValueType
+fn Parser::parse_heap_type(
+  self : Parser,
+  is_nullable : Bool,
+) -> @types.ValueType raise WatError {
+  match self.current.token {
+    Keyword("func") => {
+      self.advance()
+      if is_nullable {
+        @types.ValueType::FuncRef
+      } else {
+        @types.ValueType::RefFunc
+      }
+    }
+    Keyword("extern") => {
+      self.advance()
+      if is_nullable {
+        @types.ValueType::ExternRef
+      } else {
+        @types.ValueType::RefExtern
+      }
+    }
+    Keyword("any") => {
+      self.advance()
+      if is_nullable {
+        @types.ValueType::AnyRef
+      } else {
+        @types.ValueType::RefAny
+      }
+    }
+    Keyword("eq") => {
+      self.advance()
+      if is_nullable {
+        @types.ValueType::RefNullEq
+      } else {
+        @types.ValueType::RefEq
+      }
+    }
+    Keyword("i31") => {
+      self.advance()
+      if is_nullable {
+        @types.ValueType::RefNullI31
+      } else {
+        @types.ValueType::RefI31
+      }
+    }
+    Keyword("struct") => {
+      self.advance()
+      // Abstract struct type (not a specific struct)
+      if is_nullable {
+        @types.ValueType::AnyRef // TODO: add RefNullStruct abstract?
+      } else {
+        @types.ValueType::RefAny
+      }
+    }
+    Keyword("array") => {
+      self.advance()
+      // Abstract array type (not a specific array)
+      if is_nullable {
+        @types.ValueType::AnyRef // TODO: add RefNullArray abstract?
+      } else {
+        @types.ValueType::RefAny
+      }
+    }
+    Keyword("exn") => {
+      self.advance()
+      @types.ValueType::ExnRef
+    }
+    Keyword("none") => {
+      self.advance()
+      @types.ValueType::RefNone
+    }
+    Keyword("nofunc") => {
+      self.advance()
+      @types.ValueType::NullFuncRef
+    }
+    Keyword("noexn") => {
+      self.advance()
+      @types.ValueType::NullExnRef
+    }
+    Keyword("noextern") => {
+      self.advance()
+      @types.ValueType::NullExternRef
+    }
+    Id(name) => {
+      let type_idx = match self.type_names.get(name) {
+        Some(idx) => idx
+        None =>
+          raise WatError::UnexpectedToken("unknown type \{name}", self.loc())
+      }
+      self.advance()
+      // Need to determine if this is a func, struct, or array type
+      // For now, use generic typed reference
+      if is_nullable {
+        @types.ValueType::RefNullFuncTyped(type_idx)
+      } else {
+        @types.ValueType::RefFuncTyped(type_idx)
+      }
+    }
+    Number(s) => {
+      let type_idx = parse_int(s)
+      self.advance()
+      if is_nullable {
+        @types.ValueType::RefNullFuncTyped(type_idx)
+      } else {
+        @types.ValueType::RefFuncTyped(type_idx)
+      }
+    }
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected heap type, got \{self.current.token}",
+        self.loc(),
+      )
+  }
+}
+
+///|
+/// Parse struct type: (field ...) (field ...) ...
+fn Parser::parse_struct_type(self : Parser) -> @types.StructType raise WatError {
+  let fields : Array[@types.FieldType] = []
+  // Parse fields until we hit RParen (end of struct)
+  while self.current.token != RParen {
+    fields.push(self.parse_field_type())
+  }
+  { fields, }
+}
+
+///|
+/// Parse array type: [mut] <storage_type> or (field [mut] <storage_type>)
+fn Parser::parse_array_type(self : Parser) -> @types.ArrayType raise WatError {
+  let element = self.parse_field_type()
+  { element, }
 }
 
 ///|
@@ -2407,10 +2681,10 @@ fn Parser::parse_rec_group(
     self.advance()
     if self.current.token == Keyword("type") {
       let type_idx = mod_.types.length()
-      let ft = self.parse_type_def(type_idx)
+      let subtype = self.parse_type_def(type_idx)
       // Name was already registered in first pass, just register numeric index
       self.type_names.set("\{type_idx}", type_idx)
-      mod_.types.push(ft)
+      mod_.types.push(subtype)
       mod_.type_rec_groups.push(rec_group_id)
     } else {
       self.skip_to_matching_rparen()
@@ -2598,36 +2872,41 @@ fn Parser::parse_func_def(
           }
           // Check if this type already exists
           let mut found = -1
-          for i, t in mod_.types {
-            if t.params.length() == ft.params.length() &&
-              t.results.length() == ft.results.length() {
-              let mut match_ = true
-              for j, p in t.params {
-                if p != ft.params[j] {
-                  match_ = false
-                  break
-                }
-              }
-              if match_ {
-                for j, r in t.results {
-                  if r != ft.results[j] {
-                    match_ = false
+          for i, subtype in mod_.types {
+            // Only match against function types
+            match subtype.composite {
+              Func(t) =>
+                if t.params.length() == ft.params.length() &&
+                  t.results.length() == ft.results.length() {
+                  let mut match_ = true
+                  for j, p in t.params {
+                    if p != ft.params[j] {
+                      match_ = false
+                      break
+                    }
+                  }
+                  if match_ {
+                    for j, r in t.results {
+                      if r != ft.results[j] {
+                        match_ = false
+                        break
+                      }
+                    }
+                  }
+                  // Implicit types should only match singleton rec groups
+                  if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
+                    found = i
                     break
                   }
                 }
-              }
-              // Implicit types should only match singleton rec groups
-              if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
-                found = i
-                break
-              }
+              _ => ()
             }
           }
           if found >= 0 {
             type_idx = found
           } else {
             type_idx = mod_.types.length()
-            mod_.types.push(ft)
+            mod_.types.push(@types.SubType::from_func(ft))
             // Implicit type is its own rec group
             mod_.type_rec_groups.push(type_idx)
           }
@@ -2720,36 +2999,41 @@ fn Parser::parse_func_def(
     }
     // Check if this type already exists
     let mut found = -1
-    for i, t in mod_.types {
-      if t.params.length() == ft.params.length() &&
-        t.results.length() == ft.results.length() {
-        let mut match_ = true
-        for j, p in t.params {
-          if p != ft.params[j] {
-            match_ = false
-            break
-          }
-        }
-        if match_ {
-          for j, r in t.results {
-            if r != ft.results[j] {
-              match_ = false
+    for i, subtype in mod_.types {
+      // Only match against function types
+      match subtype.composite {
+        Func(t) =>
+          if t.params.length() == ft.params.length() &&
+            t.results.length() == ft.results.length() {
+            let mut match_ = true
+            for j, p in t.params {
+              if p != ft.params[j] {
+                match_ = false
+                break
+              }
+            }
+            if match_ {
+              for j, r in t.results {
+                if r != ft.results[j] {
+                  match_ = false
+                  break
+                }
+              }
+            }
+            // Implicit types should only match singleton rec groups
+            if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
+              found = i
               break
             }
           }
-        }
-        // Implicit types should only match singleton rec groups
-        if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
-          found = i
-          break
-        }
+        _ => ()
       }
     }
     if found >= 0 {
       type_idx = found
     } else {
       type_idx = mod_.types.length()
-      mod_.types.push(ft)
+      mod_.types.push(@types.SubType::from_func(ft))
       // Implicit type is its own rec group
       mod_.type_rec_groups.push(type_idx)
     }
@@ -2758,7 +3042,7 @@ fn Parser::parse_func_def(
   // Calculate actual param count - if type_idx was used, get params from type
   // Otherwise use inline_params
   let param_count = if type_idx >= 0 && type_idx < mod_.types.length() {
-    mod_.types[type_idx].params.length()
+    mod_.get_func_type(type_idx).params.length()
   } else {
     inline_params.length()
   }
@@ -3429,11 +3713,19 @@ fn Parser::parse_plain_instruction(
               self.advance()
               idx
             }
-            None => {
-              // Not a table name, treat as elem index
-              self.advance()
-              0 // Assume it's elem 0 for named elems (we don't track elem names)
-            }
+            None =>
+              // Not a table name, try elem name
+              match self.elem_names.get(name) {
+                Some(idx) => {
+                  self.advance()
+                  idx
+                }
+                None =>
+                  raise WatError::UndefinedIdentifier(
+                    "table or elem $\{name}",
+                    self.loc(),
+                  )
+              }
           }
         _ => 0
       }
@@ -3445,10 +3737,18 @@ fn Parser::parse_plain_instruction(
               self.advance()
               parse_int(s)
             }
-            Id(_) => {
-              self.advance()
-              0 // Named elem, default to 0
-            }
+            Id(name) =>
+              match self.elem_names.get(name) {
+                Some(idx) => {
+                  self.advance()
+                  idx
+                }
+                None =>
+                  raise WatError::UndefinedIdentifier(
+                    "elem $\{name}",
+                    self.loc(),
+                  )
+              }
             _ => 0
           }
           @types.Instruction::TableInit(first, elem_idx)
@@ -3698,6 +3998,103 @@ fn Parser::parse_plain_instruction(
     "i64.trunc_sat_f32_u" => @types.Instruction::I64TruncSatF32U
     "i64.trunc_sat_f64_s" => @types.Instruction::I64TruncSatF64S
     "i64.trunc_sat_f64_u" => @types.Instruction::I64TruncSatF64U
+
+    // GC instructions - struct operations
+    "struct.new" => @types.Instruction::StructNew(self.parse_type_idx())
+    "struct.new_default" =>
+      @types.Instruction::StructNewDefault(self.parse_type_idx())
+    "struct.get" => {
+      let type_idx = self.parse_type_idx()
+      let field_idx = self.parse_u32()
+      @types.Instruction::StructGet(type_idx, field_idx)
+    }
+    "struct.get_s" => {
+      let type_idx = self.parse_type_idx()
+      let field_idx = self.parse_u32()
+      @types.Instruction::StructGetS(type_idx, field_idx)
+    }
+    "struct.get_u" => {
+      let type_idx = self.parse_type_idx()
+      let field_idx = self.parse_u32()
+      @types.Instruction::StructGetU(type_idx, field_idx)
+    }
+    "struct.set" => {
+      let type_idx = self.parse_type_idx()
+      let field_idx = self.parse_u32()
+      @types.Instruction::StructSet(type_idx, field_idx)
+    }
+
+    // GC instructions - array operations
+    "array.new" => @types.Instruction::ArrayNew(self.parse_type_idx())
+    "array.new_default" =>
+      @types.Instruction::ArrayNewDefault(self.parse_type_idx())
+    "array.new_fixed" => {
+      let type_idx = self.parse_type_idx()
+      let len = self.parse_u32()
+      @types.Instruction::ArrayNewFixed(type_idx, len)
+    }
+    "array.get" => @types.Instruction::ArrayGet(self.parse_type_idx())
+    "array.get_s" => @types.Instruction::ArrayGetS(self.parse_type_idx())
+    "array.get_u" => @types.Instruction::ArrayGetU(self.parse_type_idx())
+    "array.set" => @types.Instruction::ArraySet(self.parse_type_idx())
+    "array.len" => @types.Instruction::ArrayLen
+    "array.fill" => @types.Instruction::ArrayFill(self.parse_type_idx())
+    "array.copy" => {
+      let dst_type_idx = self.parse_type_idx()
+      let src_type_idx = self.parse_type_idx()
+      @types.Instruction::ArrayCopy(dst_type_idx, src_type_idx)
+    }
+    "array.new_data" => {
+      let type_idx = self.parse_type_idx()
+      let data_idx = self.parse_data_idx()
+      @types.Instruction::ArrayNewData(type_idx, data_idx)
+    }
+    "array.new_elem" => {
+      let type_idx = self.parse_type_idx()
+      let elem_idx = self.parse_elem_idx()
+      @types.Instruction::ArrayNewElem(type_idx, elem_idx)
+    }
+    "array.init_data" => {
+      let type_idx = self.parse_type_idx()
+      let data_idx = self.parse_data_idx()
+      @types.Instruction::ArrayInitData(type_idx, data_idx)
+    }
+    "array.init_elem" => {
+      let type_idx = self.parse_type_idx()
+      let elem_idx = self.parse_elem_idx()
+      @types.Instruction::ArrayInitElem(type_idx, elem_idx)
+    }
+
+    // GC instructions - i31
+    "ref.i31" => @types.Instruction::RefI31
+    "i31.get_s" => @types.Instruction::I31GetS
+    "i31.get_u" => @types.Instruction::I31GetU
+
+    // GC instructions - type conversion
+    "any.convert_extern" => @types.Instruction::AnyConvertExtern
+    "extern.convert_any" => @types.Instruction::ExternConvertAny
+
+    // GC instructions - type testing and casting
+    "ref.test" => {
+      // ref.test <heaptype> or ref.test (ref <heaptype>)
+      let vt = self.parse_value_type()
+      @types.Instruction::RefTest(vt)
+    }
+    "ref.test_null" => {
+      // ref.test_null <heaptype> - test for nullable type
+      let vt = self.parse_value_type()
+      @types.Instruction::RefTestNull(vt)
+    }
+    "ref.cast" => {
+      // ref.cast <heaptype> or ref.cast (ref <heaptype>)
+      let vt = self.parse_value_type()
+      @types.Instruction::RefCast(vt)
+    }
+    "ref.cast_null" => {
+      // ref.cast_null <heaptype> - cast to nullable type
+      let vt = self.parse_value_type()
+      @types.Instruction::RefCastNull(vt)
+    }
     _ => raise WatError::InvalidInstruction(kw, self.loc())
   }
 }
@@ -3865,34 +4262,39 @@ fn Parser::find_or_create_func_type(
   results : Array[@types.ValueType],
 ) -> Int {
   // Search existing types for a match
-  for i, ft in self.types {
-    if ft.params.length() == params.length() &&
-      ft.results.length() == results.length() {
-      let mut match_ = true
-      for j in 0..<params.length() {
-        if params[j] != ft.params[j] {
-          match_ = false
-          break
-        }
-      }
-      if match_ {
-        for j in 0..<results.length() {
-          if results[j] != ft.results[j] {
-            match_ = false
-            break
+  for i, subtype in self.types {
+    // Only match against function types
+    match subtype.composite {
+      Func(ft) =>
+        if ft.params.length() == params.length() &&
+          ft.results.length() == results.length() {
+          let mut match_ = true
+          for j in 0..<params.length() {
+            if params[j] != ft.params[j] {
+              match_ = false
+              break
+            }
+          }
+          if match_ {
+            for j in 0..<results.length() {
+              if results[j] != ft.results[j] {
+                match_ = false
+                break
+              }
+            }
+          }
+          // Implicit types should only match singleton rec groups
+          if match_ && is_singleton_rec_group(self.type_rec_groups, i) {
+            return i
           }
         }
-      }
-      // Implicit types should only match singleton rec groups
-      if match_ && is_singleton_rec_group(self.type_rec_groups, i) {
-        return i
-      }
+      _ => ()
     }
   }
   // No match found, create a new type
   let new_type = @types.FuncType::{ params, results }
   let idx = self.types.length()
-  self.types.push(new_type)
+  self.types.push(@types.SubType::from_func(new_type))
   // Implicit type is its own rec group
   self.type_rec_groups.push(idx)
   idx
@@ -4005,6 +4407,14 @@ fn Parser::parse_data_idx(self : Parser) -> Int raise WatError {
       self.advance()
       parse_int(s)
     }
+    Id(name) =>
+      match self.data_names.get(name) {
+        Some(idx) => {
+          self.advance()
+          idx
+        }
+        None => raise WatError::UndefinedIdentifier("data $\{name}", self.loc())
+      }
     _ =>
       raise WatError::UnexpectedToken("expected data segment index", self.loc())
   }
@@ -4017,6 +4427,14 @@ fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
       self.advance()
       parse_int(s)
     }
+    Id(name) =>
+      match self.elem_names.get(name) {
+        Some(idx) => {
+          self.advance()
+          idx
+        }
+        None => raise WatError::UndefinedIdentifier("elem $\{name}", self.loc())
+      }
     _ =>
       raise WatError::UnexpectedToken("expected elem segment index", self.loc())
   }
@@ -4058,6 +4476,23 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       self.advance()
       @types.ValueType::NullExternRef
     }
+    // GC heap types
+    Keyword("i31") | Keyword("i31ref") => {
+      self.advance()
+      @types.ValueType::RefNullI31
+    }
+    Keyword("struct") | Keyword("structref") => {
+      self.advance()
+      @types.ValueType::RefNullStruct(-1)
+    }
+    Keyword("array") | Keyword("arrayref") => {
+      self.advance()
+      @types.ValueType::RefNullArray(-1)
+    }
+    Keyword("eq") | Keyword("eqref") => {
+      self.advance()
+      @types.ValueType::RefNullEq
+    }
     Id(_) => {
       // Type index like $t - treat as FuncRef for now
       self.advance()
@@ -4065,7 +4500,7 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
     }
     _ =>
       raise WatError::UnexpectedToken(
-        "expected reference type (func, extern, any, exn, none, nofunc, noexn, noextern)",
+        "expected reference type (func, extern, any, exn, none, nofunc, noexn, noextern, i31, struct, array, eq)",
         self.loc(),
       )
   }
@@ -4690,12 +5125,17 @@ fn Parser::parse_table_def(
 
   // Check for inline elem syntax: (table elemtype (elem ...))
   // In this syntax, the element type comes first, followed by inline elem
-  // Element type can be a keyword (funcref, externref) or a reference type (ref null $t)
+  // Element type can be a keyword (funcref, externref, i31ref, etc.) or a reference type (ref null $t)
   match self.current.token {
     Keyword("funcref")
     | Keyword("func")
     | Keyword("externref")
     | Keyword("extern")
+    | Keyword("i31ref")
+    | Keyword("eqref")
+    | Keyword("structref")
+    | Keyword("arrayref")
+    | Keyword("anyref")
     | LParen => {
       // Could be inline elem syntax or reference type followed by inline elem
       let elem_type = self.parse_value_type()
@@ -4853,10 +5293,9 @@ fn Parser::parse_table_def(
             Some([@types.Instruction::GlobalGet(global_idx)])
           }
           _ => {
-            // General expression - parse it as instructions
-            // Let the validator catch type mismatches
-            let expr = self.parse_instructions()
-            self.expect_rparen()
+            // General expression - parse it as a folded instruction
+            // We already consumed the opening (, so parse_folded_instructions handles the rest
+            let expr = self.parse_folded_instructions()
             Some(expr)
           }
         }
@@ -4995,7 +5434,7 @@ fn Parser::parse_import_def(
           let func_type = self.parse_func_type()
           // Add this type to the module and get its index
           let idx = mod_.types.length()
-          mod_.types.push(func_type)
+          mod_.types.push(@types.SubType::from_func(func_type))
           // Implicit type is its own rec group
           mod_.type_rec_groups.push(idx)
           idx
@@ -5004,7 +5443,7 @@ fn Parser::parse_import_def(
         // No type specified, use empty signature
         let func_type : @types.FuncType = { params: [], results: [] }
         let idx = mod_.types.length()
-        mod_.types.push(func_type)
+        mod_.types.push(@types.SubType::from_func(func_type))
         // Implicit type is its own rec group
         mod_.type_rec_groups.push(idx)
         idx
@@ -5114,7 +5553,7 @@ fn Parser::parse_import_def(
           }
           // Add this type to the module and get its index
           let idx = mod_.types.length()
-          mod_.types.push(func_type)
+          mod_.types.push(@types.SubType::from_func(func_type))
           // Implicit type is its own rec group
           mod_.type_rec_groups.push(idx)
           idx
@@ -5123,7 +5562,7 @@ fn Parser::parse_import_def(
         // No type specified, use empty signature
         let func_type : @types.FuncType = { params: [], results: [] }
         let idx = mod_.types.length()
-        mod_.types.push(func_type)
+        mod_.types.push(@types.SubType::from_func(func_type))
         // Implicit type is its own rec group
         mod_.type_rec_groups.push(idx)
         idx
@@ -5144,11 +5583,17 @@ fn Parser::parse_import_def(
 /// - (data (memory <idx>) (offset ...) "<string>"...)  - active with memory
 /// - (data)  - passive, empty
 /// - (data "<string>"...)  - passive with init
-fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
+fn Parser::parse_data_def(
+  self : Parser,
+  data_idx? : Int = -1,
+) -> @types.Data raise WatError {
   self.advance() // skip "data"
 
   // Check for optional data id
-  if self.current.token is Id(_) {
+  if self.current.token is Id(name) {
+    if data_idx >= 0 {
+      self.data_names.set(name, data_idx)
+    }
     self.advance()
   }
 
@@ -5239,11 +5684,17 @@ fn Parser::parse_data_def(self : Parser) -> @types.Data raise WatError {
 /// - Passive: (elem funcref ...) or (elem func $f $g)
 /// - Active: (elem (table $t) (offset ...) ...) or (elem (i32.const 0) $f $g)
 /// - Declarative: (elem declare func $f $g)
-fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
+fn Parser::parse_elem_def(
+  self : Parser,
+  elem_idx? : Int = -1,
+) -> @types.Element raise WatError {
   self.advance() // skip "elem"
 
   // Check for optional elem id
-  if self.current.token is Id(_) {
+  if self.current.token is Id(name) {
+    if elem_idx >= 0 {
+      self.elem_names.set(name, elem_idx)
+    }
     self.advance()
   }
 
@@ -5254,13 +5705,18 @@ fn Parser::parse_elem_def(self : Parser) -> @types.Element raise WatError {
   }
 
   // Check what comes next to determine if this is passive or active
-  // Passive: starts with reftype (funcref, externref, func, (ref ...))
+  // Passive: starts with reftype (funcref, externref, func, (ref ...), i31ref, etc.)
   // Active: starts with ( for table/offset/i32.const
   match self.current.token {
     Keyword("funcref")
     | Keyword("externref")
     | Keyword("func")
-    | Keyword("extern") =>
+    | Keyword("extern")
+    | Keyword("i31ref")
+    | Keyword("eqref")
+    | Keyword("structref")
+    | Keyword("arrayref")
+    | Keyword("anyref") =>
       // Passive element segment
       self.parse_elem_items_and_finish(@types.ElemMode::Passive)
     LParen => {
@@ -5400,9 +5856,9 @@ fn Parser::parse_elem_items_and_finish(
           init.push([@types.Instruction::RefNull(ref_type)])
         }
         _ => {
-          // General expression like (global.get 0)
-          let expr = self.parse_instructions()
-          self.expect_rparen()
+          // General expression like (array.new $bvec ...)
+          // We already consumed the opening (, so parse as folded instruction
+          let expr = self.parse_folded_instructions()
           init.push(expr)
         }
       }
@@ -5434,6 +5890,27 @@ fn Parser::parse_elem_type(
     Keyword("extern") => {
       self.advance()
       (@types.ValueType::ExternRef, true) // use indices
+    }
+    // GC reference type shorthands
+    Keyword("i31ref") => {
+      self.advance()
+      (@types.ValueType::RefNullI31, false)
+    }
+    Keyword("eqref") => {
+      self.advance()
+      (@types.ValueType::RefNullEq, false)
+    }
+    Keyword("structref") => {
+      self.advance()
+      (@types.ValueType::RefNullStruct(-1), false)
+    }
+    Keyword("arrayref") => {
+      self.advance()
+      (@types.ValueType::RefNullArray(-1), false)
+    }
+    Keyword("anyref") => {
+      self.advance()
+      (@types.ValueType::AnyRef, false)
     }
     LParen => {
       // (ref null func) or similar
@@ -5578,7 +6055,7 @@ fn Parser::parse_tag_type_spec(
       }
       // Add this type to the module and get its index
       let idx = mod_.types.length()
-      mod_.types.push(func_type)
+      mod_.types.push(@types.SubType::from_func(func_type))
       // Implicit type is its own rec group
       mod_.type_rec_groups.push(idx)
       idx
@@ -5587,7 +6064,7 @@ fn Parser::parse_tag_type_spec(
     // No type specified, use empty signature
     let func_type : @types.FuncType = { params: [], results: [] }
     let idx = mod_.types.length()
-    mod_.types.push(func_type)
+    mod_.types.push(@types.SubType::from_func(func_type))
     // Implicit type is its own rec group
     mod_.type_rec_groups.push(idx)
     idx
@@ -5665,6 +6142,12 @@ pub enum WastValue {
   RefNull(String)
   RefExtern(Int)
   RefFunc
+  // GC reference types
+  RefArray // (ref.array) - any array reference
+  RefStruct // (ref.struct) - any struct reference
+  RefEq // (ref.eq) - any eq reference
+  RefI31 // (ref.i31) - any i31 reference
+  RefAny // (ref.any) - any reference
 } derive(Show)
 
 ///|
@@ -5945,8 +6428,8 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
         self.advance()
         if self.current.token is Keyword("type") {
           self.advance()
-          let func_type = self.parse_type_def(curr_type_idx)
-          mod_.types.push(func_type)
+          let subtype = self.parse_type_def(curr_type_idx)
+          mod_.types.push(subtype)
           // Standalone type is its own rec group
           mod_.type_rec_groups.push(curr_type_idx)
           curr_type_idx = curr_type_idx + 1
@@ -6120,11 +6603,13 @@ fn Parser::parse_module_field_inner(
       self.expect_rparen()
     }
     Keyword("data") => {
-      let data = self.parse_data_def()
+      let data_idx = mod_.datas.length()
+      let data = self.parse_data_def(data_idx~)
       mod_.datas.push(data)
     }
     Keyword("elem") => {
-      let elem = self.parse_elem_def()
+      let elem_idx = mod_.elems.length()
+      let elem = self.parse_elem_def(elem_idx~)
       mod_.elems.push(elem)
     }
     Keyword("tag") =>
@@ -6669,6 +7154,27 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
     Keyword("ref.func") => {
       self.advance()
       RefFunc
+    }
+    // GC reference types
+    Keyword("ref.array") => {
+      self.advance()
+      RefArray
+    }
+    Keyword("ref.struct") => {
+      self.advance()
+      RefStruct
+    }
+    Keyword("ref.eq") => {
+      self.advance()
+      RefEq
+    }
+    Keyword("ref.i31") => {
+      self.advance()
+      RefI31
+    }
+    Keyword("ref.any") => {
+      self.advance()
+      RefAny
     }
     _ =>
       raise WatError::UnexpectedToken("expected const instruction", self.loc())

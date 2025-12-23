@@ -140,7 +140,7 @@ test "compute_canonical_type_indices: basic" {
   let t2 : FuncType = { params: [I64], results: [] }
   let t3 : FuncType = { params: [I32], results: [] } // same as t1
   let types : Array[FuncType] = [t1, t2, t3]
-  let canonical = compute_canonical_type_indices(types)
+  let canonical = compute_canonical_type_indices(func_types_to_subtypes(types))
   inspect(canonical[0], content="0")
   inspect(canonical[1], content="1")
   inspect(canonical[2], content="0") // maps to t1
@@ -155,7 +155,7 @@ test "compute_canonical_type_indices: with rec groups" {
   // t1 and t2 are in same rec group, t3 is separate
   let rec_groups : Array[Int] = [0, 0, 1]
   let canonical = compute_canonical_type_indices(
-    types,
+    func_types_to_subtypes(types),
     type_rec_groups=rec_groups,
   )
   // t1 is at pos=0, size=2 - unique

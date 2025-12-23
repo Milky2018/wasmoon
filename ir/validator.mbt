@@ -357,6 +357,102 @@ fn validate_instruction(
           "StorePtr expects at least 2 operands (base, value), got \{inst.operands.length()}",
         )
       }
+
+    // GC operations - struct
+    StructNew(_) => () // Can have any number of operands (field values)
+    StructNewDefault(_) =>
+      if inst.operands.length() != 0 {
+        result.add_error(
+          "StructNewDefault expects 0 operands, got \{inst.operands.length()}",
+        )
+      }
+    StructGet(_, _) | StructGetS(_, _) | StructGetU(_, _) =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "StructGet expects 1 operand (structref), got \{inst.operands.length()}",
+        )
+      }
+    StructSet(_, _) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "StructSet expects 2 operands (structref, value), got \{inst.operands.length()}",
+        )
+      }
+
+    // GC operations - array
+    ArrayNew(_) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "ArrayNew expects 2 operands (init_value, length), got \{inst.operands.length()}",
+        )
+      }
+    ArrayNewDefault(_) =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "ArrayNewDefault expects 1 operand (length), got \{inst.operands.length()}",
+        )
+      }
+    ArrayNewFixed(_, _) => () // Can have any number of operands (element values)
+    ArrayGet(_) | ArrayGetS(_) | ArrayGetU(_) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "ArrayGet expects 2 operands (arrayref, index), got \{inst.operands.length()}",
+        )
+      }
+    ArraySet(_) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "ArraySet expects 3 operands (arrayref, index, value), got \{inst.operands.length()}",
+        )
+      }
+    ArrayLen =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "ArrayLen expects 1 operand (arrayref), got \{inst.operands.length()}",
+        )
+      }
+    ArrayFill(_) =>
+      if inst.operands.length() != 4 {
+        result.add_error(
+          "ArrayFill expects 4 operands (arrayref, offset, value, count), got \{inst.operands.length()}",
+        )
+      }
+    ArrayCopy(_, _) =>
+      if inst.operands.length() != 5 {
+        result.add_error(
+          "ArrayCopy expects 5 operands (dst, dst_offset, src, src_offset, count), got \{inst.operands.length()}",
+        )
+      }
+
+    // GC operations - i31
+    I31New =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "I31New expects 1 operand (i32 value), got \{inst.operands.length()}",
+        )
+      }
+    I31GetS | I31GetU =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "I31Get expects 1 operand (i31ref), got \{inst.operands.length()}",
+        )
+      }
+
+    // GC operations - type checking/casting
+    RefTest(_, _) | RefCast(_, _) =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "RefTest/RefCast expects 1 operand (ref), got \{inst.operands.length()}",
+        )
+      }
+
+    // GC operations - type conversions
+    AnyConvertExtern | ExternConvertAny =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "Type conversion expects 1 operand, got \{inst.operands.length()}",
+        )
+      }
   }
 }
 

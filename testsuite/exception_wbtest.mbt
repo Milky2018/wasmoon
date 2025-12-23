@@ -13,7 +13,10 @@ fn create_throw_module() -> @types.Module {
   // Function: throw_it() { throw $e0 }
   let throw_func : @types.FunctionCode = { locals: [], body: [Throw(0)] }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -72,7 +75,10 @@ fn create_catch_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -132,7 +138,10 @@ fn create_throw_param_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -203,7 +212,10 @@ fn create_catch_all_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -270,7 +282,10 @@ fn create_catch_ref_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -353,7 +368,10 @@ fn create_catch_all_ref_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -447,7 +465,10 @@ fn create_throw_ref_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -541,7 +562,11 @@ fn create_multi_tag_module() -> @types.Module {
     ],
   }
   {
-    types: [tag0_type, tag1_type, func_type],
+    types: [
+      @types.SubType::from_func(tag0_type),
+      @types.SubType::from_func(tag1_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1, 2],
     imports: [],
     funcs: [2],
@@ -628,7 +653,11 @@ fn create_propagate_module() -> @types.Module {
     ],
   }
   {
-    types: [tag0_type, tag1_type, func_type],
+    types: [
+      @types.SubType::from_func(tag0_type),
+      @types.SubType::from_func(tag1_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1, 2],
     imports: [],
     funcs: [2],
@@ -702,7 +731,10 @@ fn create_multi_value_exception_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -781,7 +813,10 @@ fn create_no_exception_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -838,7 +873,10 @@ fn create_uncaught_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -899,7 +937,10 @@ fn create_f32_exception_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -965,7 +1006,10 @@ fn create_i64_exception_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],
@@ -1043,7 +1087,10 @@ fn create_f64_exception_module() -> @types.Module {
     ],
   }
   {
-    types: [tag_type, func_type],
+    types: [
+      @types.SubType::from_func(tag_type),
+      @types.SubType::from_func(func_type),
+    ],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [1],

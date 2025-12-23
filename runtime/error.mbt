@@ -5,6 +5,7 @@ pub(all) suberror RuntimeError {
   TypeMismatch
   OutOfBoundsMemoryAccess
   OutOfBoundsTableAccess
+  OutOfBoundsArrayAccess // GC array access out of bounds
   UndefinedElement
   UninitializedElement
   IndirectCallTypeMismatch
@@ -85,6 +86,8 @@ pub fn RuntimeErrorContext::format(self : RuntimeErrorContext) -> String {
       "out of bounds memory access: address outside memory bounds"
     OutOfBoundsTableAccess =>
       "out of bounds table access: index outside table bounds"
+    OutOfBoundsArrayAccess =>
+      "out of bounds array access: index outside array bounds"
     UndefinedElement => "undefined element: element segment or export not found"
     UninitializedElement =>
       "uninitialized element: table slot contains null reference"

@@ -421,6 +421,38 @@ fn lower_inst(
     @ir.Opcode::StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
     @ir.Opcode::CallPtr(num_args, num_results) =>
       lower_call_ptr(ctx, inst, block, num_args, num_results)
+
+    // GC operations - i31 (simple bit manipulation, implemented inline)
+    @ir.Opcode::I31New => lower_i31_new(ctx, inst, block)
+    @ir.Opcode::I31GetS => lower_i31_get_s(ctx, inst, block)
+    @ir.Opcode::I31GetU => lower_i31_get_u(ctx, inst, block)
+
+    // GC operations - type conversions (no-ops for JIT, just pass through)
+    @ir.Opcode::AnyConvertExtern | @ir.Opcode::ExternConvertAny =>
+      lower_gc_convert(ctx, inst, block)
+
+    // GC operations - struct/array (require runtime support, not yet implemented)
+    @ir.Opcode::StructNew(_)
+    | @ir.Opcode::StructNewDefault(_)
+    | @ir.Opcode::StructGet(_, _)
+    | @ir.Opcode::StructGetS(_, _)
+    | @ir.Opcode::StructGetU(_, _)
+    | @ir.Opcode::StructSet(_, _)
+    | @ir.Opcode::ArrayNew(_)
+    | @ir.Opcode::ArrayNewDefault(_)
+    | @ir.Opcode::ArrayNewFixed(_, _)
+    | @ir.Opcode::ArrayGet(_)
+    | @ir.Opcode::ArrayGetS(_)
+    | @ir.Opcode::ArrayGetU(_)
+    | @ir.Opcode::ArraySet(_)
+    | @ir.Opcode::ArrayLen
+    | @ir.Opcode::ArrayFill(_)
+    | @ir.Opcode::ArrayCopy(_, _)
+    | @ir.Opcode::RefTest(_, _)
+    | @ir.Opcode::RefCast(_, _) =>
+      abort(
+        "GC struct/array instruction lowering not yet implemented: \{inst.opcode}",
+      )
   }
 }
 
@@ -3435,4 +3467,112 @@ fn lower_return_call_ref(
   }
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
+}
+
+// ============ GC Operations ============
+
+///|
+/// Lower i31.new: Convert i32 to i31ref (just zero-extend to i64)
+fn lower_i31_new(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let src = ctx.get_vreg_for_use(inst.operands[0], block)
+  // i31ref is represented as i64, so zero-extend the i32 value
+  let vcode_inst = @instr.VCodeInst::new(Extend(Unsigned32To64))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(src))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower i31.get_s: Sign-extend 31 bits to i32
+/// Implementation: shift left 1, then arithmetic shift right 1
+fn lower_i31_get_s(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let src = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // First, truncate i64 to i32 (take lower 32 bits)
+  let tmp1 = ctx.new_vreg(@abi.Int)
+  let trunc_inst = @instr.VCodeInst::new(Truncate)
+  trunc_inst.add_def({ reg: Virtual(tmp1) })
+  trunc_inst.add_use(Virtual(src))
+  block.add_inst(trunc_inst)
+
+  // Shift left by 1 to move bit 30 to bit 31
+  let tmp2 = ctx.new_vreg(@abi.Int)
+  let shift_amount = ctx.new_vreg(@abi.Int)
+  let load_1 = @instr.VCodeInst::new(LoadConst(1L))
+  load_1.add_def({ reg: Virtual(shift_amount) })
+  block.add_inst(load_1)
+  let shl_inst = @instr.VCodeInst::new(Shl(false)) // 32-bit shift
+  shl_inst.add_def({ reg: Virtual(tmp2) })
+  shl_inst.add_use(Virtual(tmp1))
+  shl_inst.add_use(Virtual(shift_amount))
+  block.add_inst(shl_inst)
+
+  // Arithmetic shift right by 1 to sign-extend
+  let asr_inst = @instr.VCodeInst::new(AShr(false)) // 32-bit shift
+  asr_inst.add_def({ reg: Virtual(dst) })
+  asr_inst.add_use(Virtual(tmp2))
+  asr_inst.add_use(Virtual(shift_amount))
+  block.add_inst(asr_inst)
+}
+
+///|
+/// Lower i31.get_u: Zero-extend 31 bits (mask with 0x7FFFFFFF)
+fn lower_i31_get_u(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let src = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // First, truncate i64 to i32 (take lower 32 bits)
+  let tmp = ctx.new_vreg(@abi.Int)
+  let trunc_inst = @instr.VCodeInst::new(Truncate)
+  trunc_inst.add_def({ reg: Virtual(tmp) })
+  trunc_inst.add_use(Virtual(src))
+  block.add_inst(trunc_inst)
+
+  // Load mask 0x7FFFFFFF
+  let mask = ctx.new_vreg(@abi.Int)
+  let load_mask = @instr.VCodeInst::new(LoadConst(0x7FFFFFFFL))
+  load_mask.add_def({ reg: Virtual(mask) })
+  block.add_inst(load_mask)
+
+  // AND with mask
+  let and_inst = @instr.VCodeInst::new(And)
+  and_inst.add_def({ reg: Virtual(dst) })
+  and_inst.add_use(Virtual(tmp))
+  and_inst.add_use(Virtual(mask))
+  block.add_inst(and_inst)
+}
+
+///|
+/// Lower GC type conversions (any.convert_extern, extern.convert_any)
+/// These are no-ops in the JIT - just pass the reference through
+fn lower_gc_convert(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let src = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Just move the value - the representation is the same
+  let vcode_inst = @instr.VCodeInst::new(Move)
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(src))
+  block.add_inst(vcode_inst)
 }

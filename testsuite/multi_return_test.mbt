@@ -15,7 +15,7 @@ test "multi return: 3 integers" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -24,7 +24,7 @@ test "multi return: 3 integers" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],
@@ -73,7 +73,7 @@ test "multi return: 4 integers" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -82,7 +82,7 @@ test "multi return: 4 integers" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],
@@ -130,7 +130,7 @@ test "multi return: 3 floats" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -139,7 +139,7 @@ test "multi return: 3 floats" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],
@@ -183,7 +183,7 @@ test "multi return: mixed int and float" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -192,7 +192,7 @@ test "multi return: mixed int and float" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],
@@ -239,7 +239,7 @@ test "multi return: 2 integers (no extra buffer)" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -248,7 +248,7 @@ test "multi return: 2 integers (no extra buffer)" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],

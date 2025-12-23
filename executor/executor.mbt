@@ -174,6 +174,28 @@ fn ExecContext::exec_instr(
             let store_addr = self.instance.func_addrs[idx]
             @types.Value::FuncRef(store_addr)
           }
+          // GC: handle ref.i31 expressions
+          [I32Const(n), RefI31] => {
+            let i31_val = n & 0x7FFFFFFF
+            @types.Value::I31(i31_val)
+          }
+          [GlobalGet(idx), RefI31] => {
+            let globals = get_global_instances(
+              self.store,
+              self.instance.global_addrs,
+            )
+            if idx < globals.length() {
+              match globals[idx].get() {
+                I32(n) => {
+                  let i31_val = n & 0x7FFFFFFF
+                  @types.Value::I31(i31_val)
+                }
+                _ => @types.Value::Null
+              }
+            } else {
+              @types.Value::Null
+            }
+          }
           _ => @types.Value::Null
         }
         table.set(d + i, value)
@@ -526,6 +548,56 @@ fn ExecContext::exec_instr(
         Err(e) => raise e
       }
     }
+
+    // GC instructions - struct operations
+    StructNew(type_idx) => self.exec_struct_new(type_idx)
+    StructNewDefault(type_idx) => self.exec_struct_new_default(type_idx)
+    StructGet(type_idx, field_idx) => self.exec_struct_get(type_idx, field_idx)
+    StructGetS(type_idx, field_idx) =>
+      self.exec_struct_get_s(type_idx, field_idx)
+    StructGetU(type_idx, field_idx) =>
+      self.exec_struct_get_u(type_idx, field_idx)
+    StructSet(type_idx, field_idx) => self.exec_struct_set(type_idx, field_idx)
+
+    // GC instructions - array operations
+    ArrayNew(type_idx) => self.exec_array_new(type_idx)
+    ArrayNewDefault(type_idx) => self.exec_array_new_default(type_idx)
+    ArrayNewFixed(type_idx, len) => self.exec_array_new_fixed(type_idx, len)
+    ArrayNewData(type_idx, data_idx) =>
+      self.exec_array_new_data(type_idx, data_idx)
+    ArrayNewElem(type_idx, elem_idx) =>
+      self.exec_array_new_elem(type_idx, elem_idx)
+    ArrayGet(type_idx) => self.exec_array_get(type_idx)
+    ArrayGetS(type_idx) => self.exec_array_get_s(type_idx)
+    ArrayGetU(type_idx) => self.exec_array_get_u(type_idx)
+    ArraySet(type_idx) => self.exec_array_set(type_idx)
+    ArrayLen => self.exec_array_len()
+    ArrayFill(type_idx) => self.exec_array_fill(type_idx)
+    ArrayCopy(dst_type_idx, src_type_idx) =>
+      self.exec_array_copy(dst_type_idx, src_type_idx)
+    ArrayInitData(type_idx, data_idx) =>
+      self.exec_array_init_data(type_idx, data_idx)
+    ArrayInitElem(type_idx, elem_idx) =>
+      self.exec_array_init_elem(type_idx, elem_idx)
+
+    // GC instructions - reference casting
+    RefTest(target_type) => self.exec_ref_test(target_type)
+    RefTestNull(target_type) => self.exec_ref_test_null(target_type)
+    RefCast(target_type) => self.exec_ref_cast(target_type)
+    RefCastNull(target_type) => self.exec_ref_cast_null(target_type)
+    BrOnCast(label_idx, _from_type, target_type) =>
+      self.exec_br_on_cast(label_idx, target_type)
+    BrOnCastFail(label_idx, _from_type, target_type) =>
+      self.exec_br_on_cast_fail(label_idx, target_type)
+
+    // GC instructions - i31
+    RefI31 => self.exec_ref_i31()
+    I31GetS => self.exec_i31_get_s()
+    I31GetU => self.exec_i31_get_u()
+
+    // GC instructions - type conversion
+    AnyConvertExtern => self.exec_any_convert_extern()
+    ExternConvertAny => self.exec_extern_convert_any()
   }
 }
 
@@ -546,7 +618,7 @@ pub fn ExecContext::call_func(
 
   // Get the function type to determine return arity
   let type_idx = self.instance.func_type_indices[func_idx]
-  let func_type = self.instance.types[type_idx]
+  let func_type = self.instance.get_func_type(type_idx)
   let return_arity = func_type.results.length()
 
   // Use the same context-switching logic as exec_call
@@ -576,7 +648,7 @@ pub fn instantiate_module(
   let func_addrs : Array[Int] = []
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
-    let func_type = mod.types[type_idx]
+    let func_type = mod.get_func_type(type_idx)
     let addr = store.alloc_func(code, func_type~, type_idx~)
     func_addrs.push(addr)
   }
@@ -631,7 +703,7 @@ pub fn instantiate_module(
   // Allocate tags
   let tag_addrs : Array[Int] = []
   for tag in mod.tags {
-    let tag_type = mod.types[tag.type_idx]
+    let tag_type = mod.get_func_type(tag.type_idx)
     let addr = store.alloc_tag(tag_type)
     tag_addrs.push(addr)
   }
@@ -700,6 +772,19 @@ fn eval_const_expr(
       GlobalGet(idx) =>
         if idx < globals.length() {
           stack.push(globals[idx].get())
+        }
+      // GC: i31 reference creation
+      RefI31 =>
+        if stack.length() >= 1 {
+          let val = stack.pop().unwrap()
+          match val {
+            I32(n) => {
+              // i31 stores only the lower 31 bits
+              let i31_val = n & 0x7FFFFFFF
+              stack.push(I31(i31_val))
+            }
+            _ => ()
+          }
         }
       // i32 arithmetic operations
       I32Add =>
@@ -857,6 +942,25 @@ fn eval_elem_init_expr(
       } else {
         None
       }
+    // GC: handle ref.i31 expressions for i31ref element segments
+    [I32Const(n), RefI31] => {
+      // i31 stores only the lower 31 bits
+      let i31_val = n & 0x7FFFFFFF
+      Some(@types.Value::I31(i31_val))
+    }
+    [GlobalGet(idx), RefI31] =>
+      // ref.i31 with global value
+      if idx < globals.length() {
+        match globals[idx].get() {
+          I32(n) => {
+            let i31_val = n & 0x7FFFFFFF
+            Some(@types.Value::I31(i31_val))
+          }
+          _ => None
+        }
+      } else {
+        None
+      }
     _ => None
   }
 }
@@ -970,15 +1074,15 @@ pub fn instantiate_module_with_imports(
           Some(Func(addr)) => {
             // Check that imported function type matches expected type
             let owner = store.get_func_owner(addr)
-            let expected_type = mod.types[type_idx]
+            let expected_type = mod.get_func_type(type_idx)
             let actual_type = store.get_func_type(addr)
             match owner {
               Some(o) => {
                 // Cross-module function: use type equivalence with rec groups
                 let actual_type_idx = store.get_func_type_idx(addr)
                 let ctx = @types.TypeEquivalenceContext::cross_module(
-                  mod.types,
-                  o.types,
+                  @types.extract_func_types(mod.types),
+                  @types.extract_func_types(o.types),
                   rec_groups1=mod.type_rec_groups,
                   rec_groups2=o.type_rec_groups,
                 )
@@ -1101,7 +1205,7 @@ pub fn instantiate_module_with_imports(
         match imports.resolve(imp.mod_name, imp.name) {
           Some(Tag(addr)) => {
             // Check that imported tag type matches expected type
-            let expected_type = mod.types[expected_type_idx]
+            let expected_type = mod.get_func_type(expected_type_idx)
             let actual_type = store.get_tag_type(addr)
             // Tag types match if their params match (tags have no results)
             if expected_type.params != actual_type.params {
@@ -1117,7 +1221,7 @@ pub fn instantiate_module_with_imports(
   // Allocate module functions with their types
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
-    let func_type = mod.types[type_idx]
+    let func_type = mod.get_func_type(type_idx)
     let addr = store.alloc_func(code, func_type~, type_idx~)
     func_addrs.push(addr)
     func_type_indices.push(type_idx)
@@ -1179,7 +1283,7 @@ pub fn instantiate_module_with_imports(
 
   // Allocate tags (after imported tags)
   for tag in mod.tags {
-    let tag_type = mod.types[tag.type_idx]
+    let tag_type = mod.get_func_type(tag.type_idx)
     let addr = store.alloc_tag(tag_type)
     tag_addrs.push(addr)
   }

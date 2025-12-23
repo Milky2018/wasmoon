@@ -48,6 +48,12 @@ pub fn jit_results_to_values(
         }
       // GC reference types - treat as null for now
       AnyRef | NullRef | ExnRef | NullExnRef => Null
+      // New GC reference types
+      RefStruct(_) | RefNullStruct(_) => Null
+      RefArray(_) | RefNullArray(_) => Null
+      RefAny | RefEq | RefNullEq => Null
+      RefI31 | RefNullI31 => Null
+      RefNone => Null
       V128 => abort("V128 not supported in JIT")
     }
     values.push(value)
@@ -66,6 +72,9 @@ pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
     FuncRef(idx) => idx.to_int64()
     ExternRef(idx) => idx.to_int64()
     ExnRef(idx) => idx.to_int64()
+    ArrayRef(idx) => idx.to_int64()
+    StructRef(idx) => idx.to_int64()
+    I31(n) => n.to_int64()
     Null => -1L // null sentinel
   }
 }
@@ -114,7 +123,7 @@ pub fn compare_jit_interp(
 
   // Get function type
   let func_type_idx = mod_.funcs[idx]
-  let func_type = mod_.types[func_type_idx]
+  let func_type = mod_.get_func_type(func_type_idx)
   let result_types = func_type.results
 
   // Run interpreter
@@ -180,7 +189,7 @@ pub fn run_jit(
     for imp in mod_.imports {
       if imp.desc is Func(type_idx) {
         import_func_type_indices.push(type_idx)
-        let func_type = mod_.types[type_idx]
+        let func_type = mod_.get_func_type(type_idx)
         precompiled.add_import(
           imp.mod_name,
           imp.name,
@@ -201,7 +210,7 @@ pub fn run_jit(
     for i, code in mod_.codes {
       let f_idx = num_imports + i
       let type_idx = mod_.funcs[i]
-      let func_type = mod_.types[type_idx]
+      let func_type = mod_.get_func_type(type_idx)
       let f_name = get_func_name(mod_, f_idx)
 
       // Translate to IR
@@ -209,7 +218,7 @@ pub fn run_jit(
         f_name,
         func_type,
         code.locals,
-        mod_.types,
+        @types.extract_func_types(mod_.types),
         mod_.funcs,
         num_imports,
         import_func_type_indices,
@@ -456,7 +465,7 @@ test "compare_jit_interp: i32 add" {
   let mod_ = @wat.parse(source) catch { _ => abort("parse failed") }
   let func_idx = 0
   let func_type_idx = mod_.funcs[func_idx]
-  let func_type = mod_.types[func_type_idx]
+  let func_type = mod_.get_func_type(func_type_idx)
   let result_types = func_type.results
   let args = [@types.Value::I32(3), @types.Value::I32(5)]
   let jit_result = run_jit(mod_, "add", func_idx, args, result_types)

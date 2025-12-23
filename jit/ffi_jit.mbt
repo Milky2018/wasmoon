@@ -558,7 +558,18 @@ fn value_type_to_code(ty : @types.ValueType) -> Int {
     | NullRef
     | NullFuncRef
     | NullExnRef
-    | NullExternRef => 1
+    | NullExternRef
+    // GC reference types - also 64-bit
+    | RefStruct(_)
+    | RefNullStruct(_)
+    | RefArray(_)
+    | RefNullArray(_)
+    | RefAny
+    | RefEq
+    | RefNullEq
+    | RefI31
+    | RefNullI31
+    | RefNone => 1
     V128 => abort("V128 not supported in JIT")
   }
 }
