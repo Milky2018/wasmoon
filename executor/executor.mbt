@@ -692,7 +692,13 @@ pub fn instantiate_module(
   for table_def in mod.tables {
     // Evaluate table init expression if present
     let init_value : @types.Value = if table_def.init is Some(init_expr) {
-      eval_const_expr(init_expr, func_addrs~, globals=[], store=Some(store), types=mod.types)
+      eval_const_expr(
+        init_expr,
+        func_addrs~,
+        globals=[],
+        store=Some(store),
+        types=mod.types,
+      )
     } else {
       @types.Value::Null
     }

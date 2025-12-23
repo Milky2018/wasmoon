@@ -491,6 +491,7 @@ fn compute_br_on_cast_fail_diff_type(
   source
 }
 
+///|
 fn is_type_subtype(
   actual : @types.ValueType,
   expected : @types.ValueType,
@@ -506,6 +507,7 @@ fn is_type_subtype(
       _ => false
     }
   }
+
   match (actual, expected) {
     // Non-null to nullable of same base type
     (RefFuncTyped(t1), RefNullFuncTyped(t2)) => t1 == t2
@@ -542,7 +544,6 @@ fn is_type_subtype(
     (RefFuncTyped(_), FuncRef) => true
     (RefNullFuncTyped(_), FuncRef) => true
     (RefFuncTyped(_), RefFunc) => true
-
     _ => false
   }
 }
@@ -567,7 +568,8 @@ fn is_subtype_of_eqref(value_type : @types.ValueType) -> Bool {
     // anyref is a SUPERtype of eqref, not subtype
     AnyRef | RefAny => false
     // funcref and externref are not related to eqref
-    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => false
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
+      false
     ExternRef | RefExtern | NullExternRef => false
     // Other types
     _ => false
@@ -1989,10 +1991,14 @@ fn validate_instr(
       let val1 = stack.pop_any()
       // Check that both operands are subtypes of eqref
       if not(is_subtype_of_eqref(val1)) {
-        raise TypeMismatch("ref.eq operand must be subtype of eqref, got \{val1}")
+        raise TypeMismatch(
+          "ref.eq operand must be subtype of eqref, got \{val1}",
+        )
       }
       if not(is_subtype_of_eqref(val2)) {
-        raise TypeMismatch("ref.eq operand must be subtype of eqref, got \{val2}")
+        raise TypeMismatch(
+          "ref.eq operand must be subtype of eqref, got \{val2}",
+        )
       }
       stack.push(@types.ValueType::I32)
     }
@@ -2594,7 +2600,9 @@ fn validate_instr(
       }
       // Check data segment exists
       if data_idx >= ctx.data_count {
-        raise TypeMismatch("array.init_data: invalid data segment index \{data_idx}")
+        raise TypeMismatch(
+          "array.init_data: invalid data segment index \{data_idx}",
+        )
       }
       stack.pop(@types.ValueType::I32)
       stack.pop(@types.ValueType::I32)
@@ -2613,7 +2621,9 @@ fn validate_instr(
         raise InvalidElemIndex(elem_idx)
       }
       let elem_type = ctx.elems[elem_idx]
-      let array_elem_type = storage_type_to_value_type(array_type.element.storage_type)
+      let array_elem_type = storage_type_to_value_type(
+        array_type.element.storage_type,
+      )
       // Check type compatibility - elem segment type must be subtype of array element type
       if not(is_type_subtype(elem_type, array_elem_type)) {
         raise TypeMismatch(
@@ -2688,7 +2698,9 @@ fn validate_instr(
       if branch_types.length() >= 1 {
         let expected = branch_types[branch_types.length() - 1]
         // Compute diff type: if source is nullable but target is not, diff keeps nullability
-        let diff_type = compute_br_on_cast_fail_diff_type(source_type, target_type)
+        let diff_type = compute_br_on_cast_fail_diff_type(
+          source_type, target_type,
+        )
         if not(is_type_subtype(diff_type, expected)) {
           raise TypeMismatch(
             "br_on_cast_fail: diff type \{diff_type} not subtype of label type \{expected}",

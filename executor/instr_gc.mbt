@@ -91,7 +91,11 @@ fn ExecContext::exec_struct_get_s(
         }
         (I32(n), Packed(I16)) => {
           // Sign-extend 16-bit value
-          let signed = if (n & 0x8000) != 0 { n | 0xFFFF0000 } else { n & 0xFFFF }
+          let signed = if (n & 0x8000) != 0 {
+            n | 0xFFFF0000
+          } else {
+            n & 0xFFFF
+          }
           @types.Value::I32(signed)
         }
         _ => value

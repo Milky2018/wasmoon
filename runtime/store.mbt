@@ -60,7 +60,10 @@ pub fn Store::new() -> Store {
 ///|
 /// Wrap an internal GC value as an externref
 /// Returns ExternRef with negative index pointing to wrapped_externs
-pub fn Store::wrap_as_extern(self : Store, value : @types.Value) -> @types.Value {
+pub fn Store::wrap_as_extern(
+  self : Store,
+  value : @types.Value,
+) -> @types.Value {
   let idx = self.wrapped_externs.length()
   self.wrapped_externs.push(value)
   @types.Value::ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.

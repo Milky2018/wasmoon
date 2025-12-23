@@ -275,6 +275,7 @@ pub struct Store {
   tags : Array[@types.FuncType]
   exns : Array[ExnInstance]
   heap : MarkSweepHeap
+  wrapped_externs : Array[@types.Value]
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
@@ -312,6 +313,8 @@ pub fn Store::new() -> Self
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
+pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value
 pub impl Show for Store
 
 pub(all) struct StructInstance {

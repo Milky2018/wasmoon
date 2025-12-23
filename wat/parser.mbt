@@ -4638,13 +4638,11 @@ fn Parser::get_typed_ref(
           @types.ValueType::RefFuncTyped(type_idx)
         }
     }
-  } else {
     // Type not yet defined, assume func type (may need forward reference handling)
-    if is_nullable {
-      @types.ValueType::RefNullFuncTyped(type_idx)
-    } else {
-      @types.ValueType::RefFuncTyped(type_idx)
-    }
+  } else if is_nullable {
+    @types.ValueType::RefNullFuncTyped(type_idx)
+  } else {
+    @types.ValueType::RefFuncTyped(type_idx)
   }
 }
 
