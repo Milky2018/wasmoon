@@ -25,6 +25,9 @@ pub struct Store {
   tags : Array[@types.FuncType] // Tag types (params only, no results)
   exns : Array[ExnInstance] // Exception instances for exnref
   heap : MarkSweepHeap // GC heap for struct and array instances
+  // Internal values wrapped as externref via extern.convert_any
+  // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
+  wrapped_externs : Array[@types.Value]
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
   func_owners : Array[FuncOwner]
@@ -47,9 +50,45 @@ pub fn Store::new() -> Store {
     tags: [],
     exns: [],
     heap: MarkSweepHeap::new(),
+    wrapped_externs: [],
     func_owners: [],
     instances: [],
     jit_tables: [],
+  }
+}
+
+///|
+/// Wrap an internal GC value as an externref
+/// Returns ExternRef with negative index pointing to wrapped_externs
+pub fn Store::wrap_as_extern(self : Store, value : @types.Value) -> @types.Value {
+  let idx = self.wrapped_externs.length()
+  self.wrapped_externs.push(value)
+  @types.Value::ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
+}
+
+///|
+/// Unwrap an externref back to its internal value
+/// For host externrefs (positive index), returns the ExternRef unchanged
+/// For wrapped internals (negative index), returns the original value
+pub fn Store::unwrap_extern(
+  self : Store,
+  value : @types.Value,
+) -> @types.Value raise RuntimeError {
+  match value {
+    ExternRef(idx) =>
+      if idx < 0 {
+        // Wrapped internal value
+        let wrapped_idx = -1 - idx
+        if wrapped_idx >= self.wrapped_externs.length() {
+          raise UndefinedElement
+        }
+        self.wrapped_externs[wrapped_idx]
+      } else {
+        // Host externref - return as-is (it's already an internal representation)
+        value
+      }
+    Null => @types.Value::Null
+    _ => value
   }
 }
 

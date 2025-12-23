@@ -75,8 +75,32 @@ fn ExecContext::exec_struct_get_s(
   type_idx : Int,
   field_idx : Int,
 ) -> Unit raise {
-  // For now, same as struct.get - packed field extension will be handled later
-  self.exec_struct_get(type_idx, field_idx)
+  let ref_val = self.stack.pop()
+  match ref_val {
+    StructRef(ref_idx) => {
+      let value = self.store.struct_get(ref_idx, field_idx)
+      // Get the field's storage type to check if it's packed
+      let struct_type = self.instance.get_struct_type(type_idx)
+      let storage_type = struct_type.fields[field_idx].storage_type
+      // Sign-extend packed types
+      let extended_value = match (value, storage_type) {
+        (I32(n), Packed(I8)) => {
+          // Sign-extend 8-bit value
+          let signed = if (n & 0x80) != 0 { n | 0xFFFFFF00 } else { n & 0xFF }
+          @types.Value::I32(signed)
+        }
+        (I32(n), Packed(I16)) => {
+          // Sign-extend 16-bit value
+          let signed = if (n & 0x8000) != 0 { n | 0xFFFF0000 } else { n & 0xFFFF }
+          @types.Value::I32(signed)
+        }
+        _ => value
+      }
+      self.stack.push(extended_value)
+    }
+    Null => raise @runtime.RuntimeError::NullReference
+    _ => raise @runtime.RuntimeError::TypeMismatch
+  }
 }
 
 ///|
@@ -86,21 +110,48 @@ fn ExecContext::exec_struct_get_u(
   type_idx : Int,
   field_idx : Int,
 ) -> Unit raise {
-  // For now, same as struct.get - packed field extension will be handled later
-  self.exec_struct_get(type_idx, field_idx)
+  let ref_val = self.stack.pop()
+  match ref_val {
+    StructRef(ref_idx) => {
+      let value = self.store.struct_get(ref_idx, field_idx)
+      // Get the field's storage type to check if it's packed
+      let struct_type = self.instance.get_struct_type(type_idx)
+      let storage_type = struct_type.fields[field_idx].storage_type
+      // Zero-extend packed types (mask off high bits)
+      let extended_value = match (value, storage_type) {
+        (I32(n), Packed(I8)) => @types.Value::I32(n & 0xFF)
+        (I32(n), Packed(I16)) => @types.Value::I32(n & 0xFFFF)
+        _ => value
+      }
+      self.stack.push(extended_value)
+    }
+    Null => raise @runtime.RuntimeError::NullReference
+    _ => raise @runtime.RuntimeError::TypeMismatch
+  }
 }
 
 ///|
 /// struct.set: Set a field value in a struct
 fn ExecContext::exec_struct_set(
   self : ExecContext,
-  _type_idx : Int,
+  type_idx : Int,
   field_idx : Int,
 ) -> Unit raise {
   let value = self.stack.pop()
   let ref_val = self.stack.pop()
   match ref_val {
-    StructRef(ref_idx) => self.store.struct_set(ref_idx, field_idx, value)
+    StructRef(ref_idx) => {
+      // Get the field's storage type to check if it's packed
+      let struct_type = self.instance.get_struct_type(type_idx)
+      let storage_type = struct_type.fields[field_idx].storage_type
+      // Mask packed types to their bit width
+      let masked_value = match (value, storage_type) {
+        (I32(n), Packed(I8)) => @types.Value::I32(n & 0xFF)
+        (I32(n), Packed(I16)) => @types.Value::I32(n & 0xFFFF)
+        _ => value
+      }
+      self.store.struct_set(ref_idx, field_idx, masked_value)
+    }
     Null => raise @runtime.RuntimeError::NullReference
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
@@ -746,14 +797,15 @@ fn ExecContext::exec_i31_get_u(self : ExecContext) -> Unit raise {
 ///|
 /// any.convert_extern: Convert externref to anyref
 fn ExecContext::exec_any_convert_extern(self : ExecContext) -> Unit raise {
-  // In the GC proposal, extern.convert_any and any.convert_extern
-  // are identity conversions between anyref and externref.
-  // The value on the stack remains the same, just the type changes.
-  // Null stays null.
+  // Unwrap externref back to its internal representation
   let val = self.stack.pop()
   match val {
     Null => self.stack.push(@types.Value::Null)
-    ExternRef(idx) => self.stack.push(@types.Value::ExternRef(idx))
+    ExternRef(_) => {
+      // Unwrap: host externrefs stay as ExternRef, wrapped internals get unwrapped
+      let unwrapped = self.store.unwrap_extern(val)
+      self.stack.push(unwrapped)
+    }
     _ => self.stack.push(val) // Pass through other values
   }
 }
@@ -761,11 +813,19 @@ fn ExecContext::exec_any_convert_extern(self : ExecContext) -> Unit raise {
 ///|
 /// extern.convert_any: Convert anyref to externref
 fn ExecContext::exec_extern_convert_any(self : ExecContext) -> Unit raise {
-  // Identity conversion - the value stays the same
+  // Wrap internal values as externref
   let val = self.stack.pop()
   match val {
     Null => self.stack.push(@types.Value::Null)
-    _ => self.stack.push(val) // Pass through - the runtime representation doesn't change
+    ExternRef(_) =>
+      // Already an externref, pass through
+      self.stack.push(val)
+    I31(_) | StructRef(_) | ArrayRef(_) => {
+      // Wrap internal GC values as externref
+      let wrapped = self.store.wrap_as_extern(val)
+      self.stack.push(wrapped)
+    }
+    _ => self.stack.push(val) // Pass through other values
   }
 }
 
@@ -805,7 +865,7 @@ fn value_matches_type(
     (I31(_), RefAny) => true
 
     // StructRef matches struct, eq, and any types
-    (StructRef(idx), RefStruct(type_idx)) => {
+    (StructRef(idx), RefStruct(type_idx)) =>
       // type_idx == -1 means abstract struct type (any struct)
       if type_idx == -1 {
         true
@@ -813,53 +873,53 @@ fn value_matches_type(
         // Check if runtime type matches expected type
         let result = try? store.get_gc_type_idx(idx)
         match result {
-          Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
+          Ok(runtime_type_idx) =>
+            is_subtype(runtime_type_idx, type_idx, instance)
           Err(_) => false
         }
       }
-    }
-    (StructRef(idx), RefNullStruct(type_idx)) => {
+    (StructRef(idx), RefNullStruct(type_idx)) =>
       // type_idx == -1 means abstract struct type (any struct)
       if type_idx == -1 {
         true
       } else {
         let result = try? store.get_gc_type_idx(idx)
         match result {
-          Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
+          Ok(runtime_type_idx) =>
+            is_subtype(runtime_type_idx, type_idx, instance)
           Err(_) => false
         }
       }
-    }
     (StructRef(_), RefEq) => true
     (StructRef(_), RefNullEq) => true
     (StructRef(_), AnyRef) => true
     (StructRef(_), RefAny) => true
 
     // ArrayRef matches array, eq, and any types
-    (ArrayRef(idx), RefArray(type_idx)) => {
+    (ArrayRef(idx), RefArray(type_idx)) =>
       // type_idx == -1 means abstract array type (any array)
       if type_idx == -1 {
         true
       } else {
         let result = try? store.get_gc_type_idx(idx)
         match result {
-          Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
+          Ok(runtime_type_idx) =>
+            is_subtype(runtime_type_idx, type_idx, instance)
           Err(_) => false
         }
       }
-    }
-    (ArrayRef(idx), RefNullArray(type_idx)) => {
+    (ArrayRef(idx), RefNullArray(type_idx)) =>
       // type_idx == -1 means abstract array type (any array)
       if type_idx == -1 {
         true
       } else {
         let result = try? store.get_gc_type_idx(idx)
         match result {
-          Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
+          Ok(runtime_type_idx) =>
+            is_subtype(runtime_type_idx, type_idx, instance)
           Err(_) => false
         }
       }
-    }
     (ArrayRef(_), RefEq) => true
     (ArrayRef(_), RefNullEq) => true
     (ArrayRef(_), AnyRef) => true
@@ -900,16 +960,32 @@ fn value_matches_type(
 }
 
 ///|
-/// Check if type1 is a subtype of type2
+/// Check if type1 is a subtype of type2.
+/// In WebAssembly GC isorecursive typing, structurally equivalent types with
+/// equivalent supertypes are canonically equal and considered subtypes of each other.
 fn is_subtype(
   type_idx1 : Int,
   type_idx2 : Int,
   instance : @runtime.ModuleInstance,
 ) -> Bool {
+  // Direct match - same type index means same type
   if type_idx1 == type_idx2 {
     return true
   }
-  // Check supertype chain
+  // Check canonical type indices for isorecursive type equivalence.
+  // Types with the same canonical index are structurally equivalent and
+  // considered equal for subtyping purposes.
+  if type_idx1 >= 0 &&
+    type_idx1 < instance.canonical_type_indices.length() &&
+    type_idx2 >= 0 &&
+    type_idx2 < instance.canonical_type_indices.length() {
+    let canon1 = instance.canonical_type_indices[type_idx1]
+    let canon2 = instance.canonical_type_indices[type_idx2]
+    if canon1 == canon2 {
+      return true
+    }
+  }
+  // Check supertype chain - type1 is a subtype of type2 if type2 is in type1's supertype chain
   if type_idx1 >= 0 && type_idx1 < instance.types.length() {
     let subtype = instance.types[type_idx1]
     for super_idx in subtype.supertypes {
@@ -1002,10 +1078,16 @@ fn ExecContext::exec_br_on_cast(
   target_type : @types.ValueType,
 ) -> Unit raise {
   let val = self.stack.pop()
-  // br_on_cast fails (doesn't branch) on null for non-null target types
+  // For null values, branch only if target type is nullable
   if val is Null {
-    self.stack.push(val)
-    return
+    if target_type.is_nullable() {
+      // Null matches nullable type, branch
+      raise BranchWith(label_idx, [val])
+    } else {
+      // Null doesn't match non-null type, don't branch
+      self.stack.push(val)
+      return
+    }
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
   if matches {
@@ -1026,9 +1108,16 @@ fn ExecContext::exec_br_on_cast_fail(
 ) -> Unit raise {
   let val = self.stack.pop()
   // br_on_cast_fail branches if the cast fails
-  // For non-null target types, null causes a branch (cast fails)
+  // For null values, cast fails only if target type is non-null
   if val is Null {
-    raise BranchWith(label_idx, [val])
+    if target_type.is_nullable() {
+      // Null matches nullable type, cast succeeds, don't branch
+      self.stack.push(val)
+      return
+    } else {
+      // Null doesn't match non-null type, cast fails, branch
+      raise BranchWith(label_idx, [val])
+    }
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
   if not(matches) {

@@ -462,6 +462,11 @@ fn OperandStack::pop(
 ///|
 /// Check if actual type is a subtype of expected type
 /// Handles reference type subtyping for GC proposal
+/// Type hierarchy:
+///   anyref: eqref, i31ref, structref, arrayref, (ref $struct), (ref $array)
+///   eqref: i31ref, structref, arrayref, (ref $struct), (ref $array)
+///   funcref: (ref $func), (ref func)
+///   externref: (ref extern)
 fn is_type_subtype(
   actual : @types.ValueType,
   expected : @types.ValueType,
@@ -469,17 +474,78 @@ fn is_type_subtype(
   if actual == expected {
     return true
   }
+  // Helper: check if a type is a subtype of anyref (AnyRef = ref null any)
+  fn is_internal_ref(t : @types.ValueType) -> Bool {
+    match t {
+      RefAny | AnyRef | RefEq | RefNullEq | RefI31 | RefNullI31 => true
+      RefStruct(_) | RefNullStruct(_) | RefArray(_) | RefNullArray(_) => true
+      _ => false
+    }
+  }
   match (actual, expected) {
-    // RefFuncTyped(t) <: RefNullFuncTyped(t)
+    // Non-null to nullable of same base type
     (RefFuncTyped(t1), RefNullFuncTyped(t2)) => t1 == t2
-    // RefFuncTyped(t) <: FuncRef (nullable abstract)
-    (RefFuncTyped(_), FuncRef) => true
-    // RefNullFuncTyped(t) <: FuncRef
-    (RefNullFuncTyped(_), FuncRef) => true
-    // RefFunc (non-null abstract) <: FuncRef (nullable abstract)
+    (RefStruct(t1), RefNullStruct(t2)) => t1 == t2 || t2 == -1
+    (RefArray(t1), RefNullArray(t2)) => t1 == t2 || t2 == -1
+    (RefI31, RefNullI31) => true
+    (RefEq, RefNullEq) => true
+    (RefAny, AnyRef) => true
     (RefFunc, FuncRef) => true
-    // RefExtern <: ExternRef
     (RefExtern, ExternRef) => true
+
+    // Typed to abstract struct/array
+    (RefStruct(_), RefStruct(-1)) => true
+    (RefNullStruct(_), RefNullStruct(-1)) => true
+    (RefArray(_), RefArray(-1)) => true
+    (RefNullArray(_), RefNullArray(-1)) => true
+
+    // Struct/array/i31 to eqref (RefEq = ref eq, RefNullEq = ref null eq)
+    (RefStruct(_), RefEq) => true
+    (RefStruct(_), RefNullEq) => true
+    (RefNullStruct(_), RefNullEq) => true
+    (RefArray(_), RefEq) => true
+    (RefArray(_), RefNullEq) => true
+    (RefNullArray(_), RefNullEq) => true
+    (RefI31, RefEq) => true
+    (RefI31, RefNullEq) => true
+    (RefNullI31, RefNullEq) => true
+
+    // Everything internal to anyref (RefAny = ref any, AnyRef = ref null any)
+    (_, RefAny) => is_internal_ref(actual) && not(actual.is_nullable())
+    (_, AnyRef) => is_internal_ref(actual)
+
+    // RefFuncTyped to funcref hierarchy
+    (RefFuncTyped(_), FuncRef) => true
+    (RefNullFuncTyped(_), FuncRef) => true
+    (RefFuncTyped(_), RefFunc) => true
+
+    _ => false
+  }
+}
+
+///|
+/// Check if a type is a subtype of eqref.
+/// eqref hierarchy: eqref > i31ref, structref, arrayref
+/// anyref is NOT a subtype of eqref (it's a supertype)
+/// funcref and externref are NOT subtypes of eqref
+fn is_subtype_of_eqref(value_type : @types.ValueType) -> Bool {
+  match value_type {
+    // Direct eqref types
+    RefEq | RefNullEq => true
+    // i31ref is subtype of eqref
+    RefI31 | RefNullI31 => true
+    // structref is subtype of eqref
+    RefStruct(_) | RefNullStruct(_) => true
+    // arrayref is subtype of eqref
+    RefArray(_) | RefNullArray(_) => true
+    // Bottom types are subtypes of everything
+    RefNone | NullRef => true
+    // anyref is a SUPERtype of eqref, not subtype
+    AnyRef | RefAny => false
+    // funcref and externref are not related to eqref
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => false
+    ExternRef | RefExtern | NullExternRef => false
+    // Other types
     _ => false
   }
 }
@@ -1825,8 +1891,16 @@ fn validate_instr(
     }
     RefEqInstr => {
       // ref.eq: compares two references for equality
-      stack.pop_any() |> ignore // any eqref
-      stack.pop_any() |> ignore // any eqref
+      // Both operands must be subtypes of eqref
+      let val2 = stack.pop_any()
+      let val1 = stack.pop_any()
+      // Check that both operands are subtypes of eqref
+      if not(is_subtype_of_eqref(val1)) {
+        raise TypeMismatch("ref.eq operand must be subtype of eqref, got \{val1}")
+      }
+      if not(is_subtype_of_eqref(val2)) {
+        raise TypeMismatch("ref.eq operand must be subtype of eqref, got \{val2}")
+      }
       stack.push(@types.ValueType::I32)
     }
     RefFunc(func_idx) => {
@@ -2320,8 +2394,12 @@ fn validate_instr(
     StructSet(type_idx, field_idx) => {
       // Pop value, pop struct ref
       let struct_type = ctx.get_struct_type(type_idx)
-      let field_type = struct_type.fields[field_idx].storage_type
-      stack.pop(storage_type_to_value_type(field_type))
+      let field = struct_type.fields[field_idx]
+      // Check that the field is mutable
+      if not(field.mutable) {
+        raise TypeMismatch("struct.set on immutable field")
+      }
+      stack.pop(storage_type_to_value_type(field.storage_type))
       stack.pop(@types.ValueType::RefNullStruct(type_idx))
     }
 
@@ -2421,9 +2499,28 @@ fn validate_instr(
       ignore(stack.pop_any())
       stack.push(target_type)
     }
-    BrOnCast(_, _, _) | BrOnCastFail(_, _, _) =>
-      // TODO: implement proper br_on_cast validation
-      ()
+    BrOnCast(_, source_type, target_type) => {
+      // br_on_cast: Pop source, branch if cast succeeds, push source on fallthrough
+      // Validate: target_type must be a subtype of source_type (can only downcast)
+      if not(is_type_subtype(target_type, source_type)) {
+        raise TypeMismatch(
+          "br_on_cast: target type \{target_type} is not a subtype of source type \{source_type}",
+        )
+      }
+      ignore(stack.pop_any())
+      stack.push(source_type)
+    }
+    BrOnCastFail(_, source_type, target_type) => {
+      // br_on_cast_fail: Pop source, branch if cast fails, push target on fallthrough
+      // Validate: target_type must be a subtype of source_type (can only downcast)
+      if not(is_type_subtype(target_type, source_type)) {
+        raise TypeMismatch(
+          "br_on_cast_fail: target type \{target_type} is not a subtype of source type \{source_type}",
+        )
+      }
+      ignore(stack.pop_any())
+      stack.push(target_type)
+    }
 
     // GC instructions - i31
     RefI31 => {

@@ -145,16 +145,13 @@ fn Parser::resolve_memory(self : Parser, name : String) -> Int raise WatError {
 
 ///|
 /// Parse field index (numeric or by name for the given type)
-fn Parser::parse_field_idx(
-  self : Parser,
-  type_idx : Int,
-) -> Int raise WatError {
+fn Parser::parse_field_idx(self : Parser, type_idx : Int) -> Int raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
       parse_u32(s)
     }
-    Id(name) => {
+    Id(name) =>
       match self.field_names.get(type_idx) {
         Some(names) =>
           match names.get(name) {
@@ -174,7 +171,6 @@ fn Parser::parse_field_idx(
             self.loc(),
           )
       }
-    }
     _ =>
       raise WatError::UnexpectedToken(
         "expected field index or name",
@@ -1806,7 +1802,7 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           }
         }
         Id(name) => {
-          // Typed function reference like (ref $t)
+          // Typed reference like (ref $t)
           let type_idx = match self.type_names.get(name) {
             Some(idx) => idx
             None =>
@@ -1817,22 +1813,14 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           }
           self.advance()
           self.expect_rparen()
-          if is_nullable {
-            @types.ValueType::RefNullFuncTyped(type_idx)
-          } else {
-            @types.ValueType::RefFuncTyped(type_idx)
-          }
+          self.get_typed_ref(type_idx, is_nullable)
         }
         Number(s) => {
-          // Typed function reference with numeric index like (ref 0)
+          // Typed reference with numeric index like (ref 0)
           let type_idx = parse_int(s)
           self.advance()
           self.expect_rparen()
-          if is_nullable {
-            @types.ValueType::RefNullFuncTyped(type_idx)
-          } else {
-            @types.ValueType::RefFuncTyped(type_idx)
-          }
+          self.get_typed_ref(type_idx, is_nullable)
         }
         _ => {
           self.expect_rparen()
@@ -2626,18 +2614,18 @@ fn Parser::parse_heap_type(
       self.advance()
       // Abstract struct type (not a specific struct)
       if is_nullable {
-        @types.ValueType::AnyRef // TODO: add RefNullStruct abstract?
+        @types.ValueType::RefNullStruct(-1)
       } else {
-        @types.ValueType::RefAny
+        @types.ValueType::RefStruct(-1)
       }
     }
     Keyword("array") => {
       self.advance()
       // Abstract array type (not a specific array)
       if is_nullable {
-        @types.ValueType::AnyRef // TODO: add RefNullArray abstract?
+        @types.ValueType::RefNullArray(-1)
       } else {
-        @types.ValueType::RefAny
+        @types.ValueType::RefArray(-1)
       }
     }
     Keyword("exn") => {
@@ -2667,22 +2655,12 @@ fn Parser::parse_heap_type(
           raise WatError::UnexpectedToken("unknown type \{name}", self.loc())
       }
       self.advance()
-      // Need to determine if this is a func, struct, or array type
-      // For now, use generic typed reference
-      if is_nullable {
-        @types.ValueType::RefNullFuncTyped(type_idx)
-      } else {
-        @types.ValueType::RefFuncTyped(type_idx)
-      }
+      self.get_typed_ref(type_idx, is_nullable)
     }
     Number(s) => {
       let type_idx = parse_int(s)
       self.advance()
-      if is_nullable {
-        @types.ValueType::RefNullFuncTyped(type_idx)
-      } else {
-        @types.ValueType::RefFuncTyped(type_idx)
-      }
+      self.get_typed_ref(type_idx, is_nullable)
     }
     _ =>
       raise WatError::UnexpectedToken(
@@ -4632,6 +4610,45 @@ fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
+/// Get the appropriate typed reference for a type index
+fn Parser::get_typed_ref(
+  self : Parser,
+  type_idx : Int,
+  is_nullable : Bool,
+) -> @types.ValueType {
+  // Check if we have type info for this index
+  if type_idx >= 0 && type_idx < self.types.length() {
+    match self.types[type_idx].composite {
+      Struct(_) =>
+        if is_nullable {
+          @types.ValueType::RefNullStruct(type_idx)
+        } else {
+          @types.ValueType::RefStruct(type_idx)
+        }
+      Array(_) =>
+        if is_nullable {
+          @types.ValueType::RefNullArray(type_idx)
+        } else {
+          @types.ValueType::RefArray(type_idx)
+        }
+      Func(_) =>
+        if is_nullable {
+          @types.ValueType::RefNullFuncTyped(type_idx)
+        } else {
+          @types.ValueType::RefFuncTyped(type_idx)
+        }
+    }
+  } else {
+    // Type not yet defined, assume func type (may need forward reference handling)
+    if is_nullable {
+      @types.ValueType::RefNullFuncTyped(type_idx)
+    } else {
+      @types.ValueType::RefFuncTyped(type_idx)
+    }
+  }
+}
+
+///|
 /// Parse a reference type for ref.null instruction
 fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
   match self.current.token {
@@ -4648,31 +4665,59 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       let result = match self.current.token {
         Keyword("func") => {
           self.advance()
-          if is_nullable { @types.ValueType::FuncRef } else { @types.ValueType::RefFunc }
+          if is_nullable {
+            @types.ValueType::FuncRef
+          } else {
+            @types.ValueType::RefFunc
+          }
         }
         Keyword("extern") => {
           self.advance()
-          if is_nullable { @types.ValueType::ExternRef } else { @types.ValueType::RefExtern }
+          if is_nullable {
+            @types.ValueType::ExternRef
+          } else {
+            @types.ValueType::RefExtern
+          }
         }
         Keyword("any") => {
           self.advance()
-          if is_nullable { @types.ValueType::AnyRef } else { @types.ValueType::RefAny }
+          if is_nullable {
+            @types.ValueType::AnyRef
+          } else {
+            @types.ValueType::RefAny
+          }
         }
         Keyword("eq") => {
           self.advance()
-          if is_nullable { @types.ValueType::RefNullEq } else { @types.ValueType::RefEq }
+          if is_nullable {
+            @types.ValueType::RefNullEq
+          } else {
+            @types.ValueType::RefEq
+          }
         }
         Keyword("i31") => {
           self.advance()
-          if is_nullable { @types.ValueType::RefNullI31 } else { @types.ValueType::RefI31 }
+          if is_nullable {
+            @types.ValueType::RefNullI31
+          } else {
+            @types.ValueType::RefI31
+          }
         }
         Keyword("struct") => {
           self.advance()
-          if is_nullable { @types.ValueType::RefNullStruct(-1) } else { @types.ValueType::RefStruct(-1) }
+          if is_nullable {
+            @types.ValueType::RefNullStruct(-1)
+          } else {
+            @types.ValueType::RefStruct(-1)
+          }
         }
         Keyword("array") => {
           self.advance()
-          if is_nullable { @types.ValueType::RefNullArray(-1) } else { @types.ValueType::RefArray(-1) }
+          if is_nullable {
+            @types.ValueType::RefNullArray(-1)
+          } else {
+            @types.ValueType::RefArray(-1)
+          }
         }
         Keyword("none") => {
           self.advance()
@@ -4682,14 +4727,20 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
           match self.type_names.get(name) {
             Some(idx) => {
               self.advance()
-              if is_nullable { @types.ValueType::RefNullFuncTyped(idx) } else { @types.ValueType::RefFuncTyped(idx) }
+              // Check what kind of type this is
+              self.get_typed_ref(idx, is_nullable)
             }
-            None => raise WatError::UnexpectedToken("unknown type \{name}", self.loc())
+            None =>
+              raise WatError::UnexpectedToken(
+                "unknown type \{name}",
+                self.loc(),
+              )
           }
         Number(s) => {
           let idx = parse_int(s)
           self.advance()
-          if is_nullable { @types.ValueType::RefNullFuncTyped(idx) } else { @types.ValueType::RefFuncTyped(idx) }
+          // Check what kind of type this is
+          self.get_typed_ref(idx, is_nullable)
         }
         _ => raise WatError::UnexpectedToken("expected heap type", self.loc())
       }
@@ -6393,6 +6444,7 @@ pub enum WastValue {
   F64ArithmeticNan
   RefNull(String)
   RefExtern(Int)
+  RefExternAny // (ref.extern) without number - matches any non-null externref
   RefHost(Int) // (ref.host <idx>) - host reference for testing
   RefFunc
   // GC reference types
@@ -7401,7 +7453,7 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
           self.advance()
           RefExtern(parse_wast_int(n))
         }
-        _ => RefExtern(0) // no argument means any extern ref
+        _ => RefExternAny // no argument means any non-null externref
       }
     }
     Keyword("ref.host") => {

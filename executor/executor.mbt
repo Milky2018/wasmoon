@@ -692,7 +692,7 @@ pub fn instantiate_module(
   for table_def in mod.tables {
     // Evaluate table init expression if present
     let init_value : @types.Value = if table_def.init is Some(init_expr) {
-      eval_const_expr(init_expr, func_addrs~, globals=[])
+      eval_const_expr(init_expr, func_addrs~, globals=[], store=Some(store), types=mod.types)
     } else {
       @types.Value::Null
     }
@@ -711,10 +711,13 @@ pub fn instantiate_module(
   let global_instances : Array[@runtime.GlobalInstance] = []
   for global in mod.globals {
     // Evaluate init expression with access to already-initialized globals
+    // Pass store and types for GC const expr support (array.new_default, struct.new, etc.)
     let init_value = eval_const_expr(
       global.init,
       func_addrs~,
       globals=global_instances,
+      store=Some(store),
+      types=mod.types,
     )
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)
@@ -769,10 +772,13 @@ pub fn instantiate_module(
 ///|
 /// Evaluate a constant initialization expression
 /// Supports extended constant expressions with arithmetic operations
+/// and GC instructions (array.new, array.new_default, struct.new, struct.new_default)
 fn eval_const_expr(
   instrs : Array[@types.Instruction],
   func_addrs? : Array[Int] = [],
   globals? : Array[@runtime.GlobalInstance] = [],
+  store? : @runtime.Store? = None,
+  types? : Array[@types.SubType] = [],
 ) -> @types.Value {
   // Use stack-based evaluation for extended constant expressions
   let stack : Array[@types.Value] = []
@@ -806,6 +812,69 @@ fn eval_const_expr(
               stack.push(I31(i31_val))
             }
             _ => ()
+          }
+        }
+      // GC: array.new_default - create array with default values
+      ArrayNewDefault(type_idx) =>
+        if stack.length() >= 1 && store is Some(s) && type_idx < types.length() {
+          let len_val = stack.pop().unwrap()
+          if len_val is I32(len) {
+            let array_type = match types[type_idx].composite {
+              Array(at) => at
+              _ => continue
+            }
+            let default_val = default_value_for_storage_type(
+              array_type.element.storage_type,
+            )
+            let elements : Array[@types.Value] = Array::make(len, default_val)
+            let ref_idx = s.alloc_array(type_idx, elements)
+            stack.push(ArrayRef(ref_idx))
+          }
+        }
+      // GC: array.new - create array with initial value
+      ArrayNew(type_idx) =>
+        if stack.length() >= 2 && store is Some(s) {
+          let len_val = stack.pop().unwrap()
+          let init_val = stack.pop().unwrap()
+          if len_val is I32(len) {
+            let elements : Array[@types.Value] = Array::make(len, init_val)
+            let ref_idx = s.alloc_array(type_idx, elements)
+            stack.push(ArrayRef(ref_idx))
+          }
+        }
+      // GC: struct.new_default - create struct with default values
+      StructNewDefault(type_idx) =>
+        if store is Some(s) && type_idx < types.length() {
+          let struct_type = match types[type_idx].composite {
+            Struct(st) => st
+            _ => continue
+          }
+          let fields : Array[@types.Value] = []
+          for field in struct_type.fields {
+            fields.push(default_value_for_storage_type(field.storage_type))
+          }
+          let ref_idx = s.alloc_struct(type_idx, fields)
+          stack.push(StructRef(ref_idx))
+        }
+      // GC: struct.new - create struct from stack values
+      StructNew(type_idx) =>
+        if store is Some(s) && type_idx < types.length() {
+          let struct_type = match types[type_idx].composite {
+            Struct(st) => st
+            _ => continue
+          }
+          let num_fields = struct_type.fields.length()
+          if stack.length() >= num_fields {
+            // Pop fields in reverse order (last field pushed first)
+            let fields : Array[@types.Value] = Array::make(
+              num_fields,
+              @types.Value::Null,
+            )
+            for i = num_fields - 1; i >= 0; i = i - 1 {
+              fields[i] = stack.pop().unwrap()
+            }
+            let ref_idx = s.alloc_struct(type_idx, fields)
+            stack.push(StructRef(ref_idx))
           }
         }
       // i32 arithmetic operations
@@ -1277,7 +1346,13 @@ pub fn instantiate_module_with_imports(
     // Evaluate table init expression if present
     let init_value : @types.Value = match table_def.init {
       Some(init_expr) =>
-        eval_const_expr(init_expr, func_addrs~, globals=global_instances)
+        eval_const_expr(
+          init_expr,
+          func_addrs~,
+          globals=global_instances,
+          store=Some(store),
+          types=mod.types,
+        )
       None => @types.Value::Null
     }
     let table = @runtime.Table::new(
@@ -1296,6 +1371,8 @@ pub fn instantiate_module_with_imports(
       global.init,
       func_addrs~,
       globals=global_instances,
+      store=Some(store),
+      types=mod.types,
     )
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)

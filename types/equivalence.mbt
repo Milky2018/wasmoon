@@ -211,6 +211,89 @@ pub fn get_rec_group_info(
 }
 
 ///|
+/// Check if two struct types are structurally equivalent.
+/// This requires supertypes to be canonically equivalent, not just equal.
+fn gc_structs_equivalent(
+  s1 : StructType,
+  s2 : StructType,
+  supertypes1 : Array[Int],
+  supertypes2 : Array[Int],
+  canonical : Array[Int],
+) -> Bool {
+  // Must have same number of fields
+  if s1.fields.length() != s2.fields.length() {
+    return false
+  }
+  // Must have same number of supertypes
+  if supertypes1.length() != supertypes2.length() {
+    return false
+  }
+  // Supertypes must be canonically equivalent
+  for i in 0..<supertypes1.length() {
+    let c1 = if supertypes1[i] < canonical.length() {
+      canonical[supertypes1[i]]
+    } else {
+      supertypes1[i]
+    }
+    let c2 = if supertypes2[i] < canonical.length() {
+      canonical[supertypes2[i]]
+    } else {
+      supertypes2[i]
+    }
+    if c1 != c2 {
+      return false
+    }
+  }
+  // Each field must be equivalent
+  for i in 0..<s1.fields.length() {
+    let f1 = s1.fields[i]
+    let f2 = s2.fields[i]
+    // Check mutability
+    if f1.mutable != f2.mutable {
+      return false
+    }
+    // Check storage type (simplified - doesn't handle recursive refs properly)
+    if f1.storage_type != f2.storage_type {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if two array types are structurally equivalent.
+fn gc_arrays_equivalent(
+  a1 : ArrayType,
+  a2 : ArrayType,
+  supertypes1 : Array[Int],
+  supertypes2 : Array[Int],
+  canonical : Array[Int],
+) -> Bool {
+  // Must have same number of supertypes
+  if supertypes1.length() != supertypes2.length() {
+    return false
+  }
+  // Supertypes must be canonically equivalent
+  for i in 0..<supertypes1.length() {
+    let c1 = if supertypes1[i] < canonical.length() {
+      canonical[supertypes1[i]]
+    } else {
+      supertypes1[i]
+    }
+    let c2 = if supertypes2[i] < canonical.length() {
+      canonical[supertypes2[i]]
+    } else {
+      supertypes2[i]
+    }
+    if c1 != c2 {
+      return false
+    }
+  }
+  // Element types must be equivalent
+  a1.element == a2.element
+}
+
+///|
 /// Compute canonical type indices for a module's types.
 /// Structurally equivalent types (with matching rec group info) will be
 /// assigned the same canonical index.
@@ -220,13 +303,12 @@ pub fn compute_canonical_type_indices(
 ) -> Array[Int] {
   let n = types.length()
   let canonical : Array[Int] = Array::make(n, -1)
-  // Extract function types for equivalence checking (GC types not yet supported)
+  // Extract function types for equivalence checking
   let func_types : Array[FuncType] = []
   for subtype in types {
     match subtype.composite {
       Func(ft) => func_types.push(ft)
-      // For struct/array types, push a placeholder empty function type
-      // TODO: implement proper structural equivalence for GC types
+      // For struct/array types, we handle equivalence separately below
       _ => func_types.push({ params: [], results: [] })
     }
   }
@@ -238,7 +320,28 @@ pub fn compute_canonical_type_indices(
       let rec_info_j = get_rec_group_info(type_rec_groups, j)
       // Types can only be equivalent if rec group info matches
       if rec_info_i == rec_info_j {
-        if ctx.types_structurally_equal(i, j) {
+        // For GC types (struct/array), check structural equivalence directly
+        let types_equal = match (types[i].composite, types[j].composite) {
+          (Func(_), Func(_)) => ctx.types_structurally_equal(i, j)
+          (Struct(s1), Struct(s2)) =>
+            gc_structs_equivalent(
+              s1,
+              s2,
+              types[i].supertypes,
+              types[j].supertypes,
+              canonical,
+            )
+          (Array(a1), Array(a2)) =>
+            gc_arrays_equivalent(
+              a1,
+              a2,
+              types[i].supertypes,
+              types[j].supertypes,
+              canonical,
+            )
+          _ => false // Different composite types are never equivalent
+        }
+        if types_equal {
           canonical[i] = canonical[j]
           found = true
           break
