@@ -165,6 +165,7 @@ priv struct ValidationContext {
   globals : Array[@types.GlobalType]
   tags : Array[@types.FuncType] // tag types (params only, results always empty)
   elems : Array[@types.ValueType] // element segment types
+  data_count : Int // number of data segments
   locals : Array[@types.ValueType] // current function's locals
   labels : Array[LabelInfo] // label stack for control flow
   returns : Array[@types.ValueType] // current function's return types
@@ -341,6 +342,7 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
     globals,
     tags,
     elems,
+    data_count: mod.datas.length(),
     locals: [],
     labels: [],
     returns: [],
@@ -467,6 +469,28 @@ fn OperandStack::pop(
 ///   eqref: i31ref, structref, arrayref, (ref $struct), (ref $array)
 ///   funcref: (ref $func), (ref func)
 ///   externref: (ref extern)
+
+///|
+/// Compute the diff type for br_on_cast_fail.
+/// The diff type represents values that would fail the cast from source to target.
+/// Key rule: if source is nullable but target is non-nullable, null can fail the cast,
+/// so the diff type must be nullable.
+fn compute_br_on_cast_fail_diff_type(
+  source : @types.ValueType,
+  target : @types.ValueType,
+) -> @types.ValueType {
+  // If source is nullable and target is non-nullable, diff keeps source's nullability
+  // This is because null values would fail the cast to non-nullable target
+  let source_nullable = source.is_nullable()
+  let target_nullable = target.is_nullable()
+  if source_nullable && not(target_nullable) {
+    // Source is nullable, target is not -> null can fail, diff is source (nullable)
+    return source
+  }
+  // Otherwise diff type is source
+  source
+}
+
 fn is_type_subtype(
   actual : @types.ValueType,
   expected : @types.ValueType,
@@ -741,6 +765,34 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     }
   }
 
+  // Validate subtype declarations: supertypes must not be final and must have matching kind
+  for type_idx, subtype in mod.types {
+    for super_idx in subtype.supertypes {
+      if super_idx < 0 || super_idx >= num_types {
+        raise InvalidTypeIndex(super_idx)
+      }
+      let supertype = mod.types[super_idx]
+      if supertype.final_ {
+        raise TypeMismatch(
+          "sub type: type \{type_idx} cannot extend final type \{super_idx}",
+        )
+      }
+      // Validate composite type kinds match
+      let valid_kind = match (subtype.composite, supertype.composite) {
+        (Func(_), Func(_)) => true
+        (Struct(_), Struct(_)) => true
+        (Array(_), Array(_)) => true
+        _ => false
+      }
+      if not(valid_kind) {
+        raise TypeMismatch(
+          "sub type: type \{type_idx} has incompatible kind with supertype \{super_idx}",
+        )
+      }
+    }
+    ignore(type_idx)
+  }
+
   // Validate type indices in global types
   for global in mod.globals {
     validate_value_type(global.type_.value_type, num_types)
@@ -913,6 +965,45 @@ pub fn validate_module_with_context(
     ignore(i)
   }
 
+  // Validate subtype declarations: supertypes must not be final and must have matching kind
+  let num_types = ctx.types.length()
+  for type_idx, subtype in mod.types {
+    for super_idx in subtype.supertypes {
+      if super_idx < 0 || super_idx >= num_types {
+        raise WithContext(
+          ValidationErrorContext::from_error(InvalidTypeIndex(super_idx)),
+        )
+      }
+      let supertype = mod.types[super_idx]
+      if supertype.final_ {
+        raise WithContext(
+          ValidationErrorContext::from_error(
+            TypeMismatch(
+              "sub type: type \{type_idx} cannot extend final type \{super_idx}",
+            ),
+          ),
+        )
+      }
+      // Validate composite type kinds match
+      let valid_kind = match (subtype.composite, supertype.composite) {
+        (Func(_), Func(_)) => true
+        (Struct(_), Struct(_)) => true
+        (Array(_), Array(_)) => true
+        _ => false
+      }
+      if not(valid_kind) {
+        raise WithContext(
+          ValidationErrorContext::from_error(
+            TypeMismatch(
+              "sub type: type \{type_idx} has incompatible kind with supertype \{super_idx}",
+            ),
+          ),
+        )
+      }
+    }
+    ignore(type_idx)
+  }
+
   // Check for multiple memories (not allowed in MVP)
   if ctx.mems.length() > 1 {
     raise WithContext(ValidationErrorContext::from_error(MultipleMemories))
@@ -1061,6 +1152,7 @@ fn validate_function_with_offset(
     globals: ctx.globals,
     tags: ctx.tags,
     elems: ctx.elems,
+    data_count: ctx.data_count,
     locals,
     labels: [],
     returns: func_type.results,
@@ -1258,6 +1350,7 @@ fn validate_function(
     globals: ctx.globals,
     tags: ctx.tags,
     elems: ctx.elems,
+    data_count: ctx.data_count,
     locals,
     labels: [],
     returns: func_type.results,
@@ -2446,6 +2539,10 @@ fn validate_instr(
     ArraySet(type_idx) => {
       // Pop value, pop index (i32), pop array ref
       let array_type = ctx.get_array_type(type_idx)
+      // Check that the array element is mutable
+      if not(array_type.element.mutable) {
+        raise TypeMismatch("array.set on immutable array")
+      }
       stack.pop(storage_type_to_value_type(array_type.element.storage_type))
       stack.pop(@types.ValueType::I32)
       stack.pop(@types.ValueType::RefNullArray(type_idx))
@@ -2459,6 +2556,10 @@ fn validate_instr(
     ArrayFill(type_idx) => {
       // Pop n (i32), pop value, pop offset (i32), pop array ref
       let array_type = ctx.get_array_type(type_idx)
+      // Check that the array element is mutable
+      if not(array_type.element.mutable) {
+        raise TypeMismatch("array.fill on immutable array")
+      }
       stack.pop(@types.ValueType::I32)
       stack.pop(storage_type_to_value_type(array_type.element.storage_type))
       stack.pop(@types.ValueType::I32)
@@ -2466,17 +2567,59 @@ fn validate_instr(
     }
     ArrayCopy(dst_type, src_type) => {
       // Pop n (i32), pop src_offset (i32), pop src, pop dst_offset (i32), pop dst
-      ignore(ctx.get_array_type(dst_type))
-      ignore(ctx.get_array_type(src_type))
+      let dst_array = ctx.get_array_type(dst_type)
+      let src_array = ctx.get_array_type(src_type)
+      // Check that the destination array element is mutable
+      if not(dst_array.element.mutable) {
+        raise TypeMismatch("array.copy to immutable array")
+      }
+      // Check that source element type is compatible with destination element type
+      let dst_elem = dst_array.element.storage_type
+      let src_elem = src_array.element.storage_type
+      if dst_elem != src_elem {
+        raise TypeMismatch("array.copy: array types do not match")
+      }
       stack.pop(@types.ValueType::I32)
       stack.pop(@types.ValueType::I32)
       stack.pop(@types.ValueType::RefNullArray(src_type))
       stack.pop(@types.ValueType::I32)
       stack.pop(@types.ValueType::RefNullArray(dst_type))
     }
-    ArrayInitData(type_idx, _) | ArrayInitElem(type_idx, _) => {
+    ArrayInitData(type_idx, data_idx) => {
       // Pop n (i32), pop src_offset (i32), pop dst_offset (i32), pop array ref
-      ignore(ctx.get_array_type(type_idx))
+      let array_type = ctx.get_array_type(type_idx)
+      // Check that the array element is mutable
+      if not(array_type.element.mutable) {
+        raise TypeMismatch("array.init_data on immutable array")
+      }
+      // Check data segment exists
+      if data_idx >= ctx.data_count {
+        raise TypeMismatch("array.init_data: invalid data segment index \{data_idx}")
+      }
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::I32)
+      stack.pop(@types.ValueType::RefNullArray(type_idx))
+    }
+    ArrayInitElem(type_idx, elem_idx) => {
+      // Pop n (i32), pop src_offset (i32), pop dst_offset (i32), pop array ref
+      let array_type = ctx.get_array_type(type_idx)
+      // Check that the array element is mutable
+      if not(array_type.element.mutable) {
+        raise TypeMismatch("array.init_elem on immutable array")
+      }
+      // Check element segment exists and types match
+      if elem_idx >= ctx.elems.length() {
+        raise InvalidElemIndex(elem_idx)
+      }
+      let elem_type = ctx.elems[elem_idx]
+      let array_elem_type = storage_type_to_value_type(array_type.element.storage_type)
+      // Check type compatibility - elem segment type must be subtype of array element type
+      if not(is_type_subtype(elem_type, array_elem_type)) {
+        raise TypeMismatch(
+          "array.init_elem: element segment type \{elem_type} incompatible with array element type \{array_elem_type}",
+        )
+      }
       stack.pop(@types.ValueType::I32)
       stack.pop(@types.ValueType::I32)
       stack.pop(@types.ValueType::I32)
@@ -2499,24 +2642,58 @@ fn validate_instr(
       ignore(stack.pop_any())
       stack.push(target_type)
     }
-    BrOnCast(_, source_type, target_type) => {
-      // br_on_cast: Pop source, branch if cast succeeds, push source on fallthrough
+    BrOnCast(label_idx, source_type, target_type) => {
+      // br_on_cast: Pop source, branch if cast succeeds (push target to label), push diff on fallthrough
       // Validate: target_type must be a subtype of source_type (can only downcast)
       if not(is_type_subtype(target_type, source_type)) {
         raise TypeMismatch(
           "br_on_cast: target type \{target_type} is not a subtype of source type \{source_type}",
         )
       }
+      // Check that target_type is compatible with branch label
+      if label_idx >= ctx.labels.length() {
+        raise InvalidLabelIndex(label_idx)
+      }
+      let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+      let branch_types = get_label_types(ctx, label)
+      if branch_types.length() >= 1 {
+        let expected = branch_types[branch_types.length() - 1]
+        if not(is_type_subtype(target_type, expected)) {
+          raise TypeMismatch(
+            "br_on_cast: branch target type \{target_type} not subtype of label type \{expected}",
+          )
+        }
+      }
+      // Compute diff type for fallthrough (what's left when cast succeeds and branches)
+      // Simplified: use source type since we only validate the branch path
       ignore(stack.pop_any())
       stack.push(source_type)
     }
-    BrOnCastFail(_, source_type, target_type) => {
-      // br_on_cast_fail: Pop source, branch if cast fails, push target on fallthrough
+    BrOnCastFail(label_idx, source_type, target_type) => {
+      // br_on_cast_fail: Pop source, branch if cast fails (push diff to label), push target on fallthrough
       // Validate: target_type must be a subtype of source_type (can only downcast)
       if not(is_type_subtype(target_type, source_type)) {
         raise TypeMismatch(
           "br_on_cast_fail: target type \{target_type} is not a subtype of source type \{source_type}",
         )
+      }
+      // Check that diff_type is compatible with branch label
+      // Diff type: if source is nullable and target is non-nullable, diff is nullable
+      // The diff type represents values that fail the cast
+      if label_idx >= ctx.labels.length() {
+        raise InvalidLabelIndex(label_idx)
+      }
+      let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+      let branch_types = get_label_types(ctx, label)
+      if branch_types.length() >= 1 {
+        let expected = branch_types[branch_types.length() - 1]
+        // Compute diff type: if source is nullable but target is not, diff keeps nullability
+        let diff_type = compute_br_on_cast_fail_diff_type(source_type, target_type)
+        if not(is_type_subtype(diff_type, expected)) {
+          raise TypeMismatch(
+            "br_on_cast_fail: diff type \{diff_type} not subtype of label type \{expected}",
+          )
+        }
       }
       ignore(stack.pop_any())
       stack.push(target_type)
