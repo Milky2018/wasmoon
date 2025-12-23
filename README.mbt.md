@@ -11,8 +11,7 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 - **JIT Compiler**: AArch64 native code generation with SSA-based IR
 - **Interpreter**: Full WebAssembly 1.0 support as fallback
 - **WAT/WASM Parser**: Parse both text and binary formats
-- **WASI Support**: File I/O, environment variables, command-line arguments
-- **Cross-module Calls**: Import functions from other JIT-compiled modules
+- **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
 
 ## Installation
 
@@ -141,7 +140,10 @@ test "host function" {
       guard args[0] is @types.Value::I32(x) else { return [] }
       [@types.Value::I32(x * 2)]
     },
-    func_type={ params: [@types.ValueType::I32], results: [@types.ValueType::I32] },
+    func_type={
+      params: [@types.ValueType::I32],
+      results: [@types.ValueType::I32],
+    },
   )
   let wat =
     #|(module
@@ -173,15 +175,6 @@ test "host function" {
 - [ ] JIT compiler (x86-64)
 - [ ] Component Model
 - [ ] JIT optimizations (constant folding, dead code elimination, etc.)
-
-## Development
-
-```bash
-moon check          # Type check
-moon test           # Run tests
-moon fmt            # Format code
-moon info           # Update .mbti files
-```
 
 ## License
 
