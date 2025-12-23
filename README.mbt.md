@@ -2,6 +2,10 @@
 
 A WebAssembly runtime written in MoonBit with JIT compilation support.
 
+> **Warning**: This project is primarily developed with AI assistance and has not been thoroughly audited. **Do not use in production or security-sensitive environments.**
+
+> **Note**: The JIT compiler performs minimal optimization. Expect slower execution compared to production runtimes like Wasmtime or Wasmer.
+
 ## Features
 
 - **JIT Compiler**: AArch64 native code generation with SSA-based IR
@@ -15,7 +19,7 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 ### As CLI Tool
 
 ```bash
-git clone https://github.com/user/wasmoon.git
+git clone https://github.com/Milky2018/wasmoon.git
 cd wasmoon
 moon build && ./install.sh
 ```
@@ -28,30 +32,20 @@ moon add Milky2018/wasmoon
 
 ## CLI Usage
 
-### Run a WebAssembly Module
-
 ```bash
 # Run with default _start function
 wasmoon run hello.wat
 
 # Call a specific function with arguments
 wasmoon run examples/add.wat --invoke add --arg 5 --arg 3
-# Output: 8
 
 # Run with interpreter (no JIT)
 wasmoon run examples/add.wat --invoke add --arg 5 --arg 3 --no-jit
-```
 
-### Run WAST Test Scripts
-
-```bash
+# Run WAST test scripts
 wasmoon test spec/i32.wast
-```
 
-### Explore Compilation Stages
-
-```bash
-# View IR, VCode, and machine code
+# Explore compilation stages (IR, VCode, machine code)
 wasmoon explore examples/add.wat --stage ir vcode mc
 ```
 
@@ -81,28 +75,20 @@ test "basic add" {
 ### Memory Operations
 
 ```moonbit
-test "memory example" {
+test "memory" {
   let wat =
     #|(module
     #|  (memory (export "mem") 1)
     #|  (func (export "store") (param i32 i32)
-    #|    local.get 0
-    #|    local.get 1
-    #|    i32.store)
+    #|    local.get 0 local.get 1 i32.store)
     #|  (func (export "load") (param i32) (result i32)
-    #|    local.get 0
-    #|    i32.load))
+    #|    local.get 0 i32.load))
 
   let mod = @wat.parse(wat)!
   let (store, instance) = @executor.instantiate_module(mod)!
-
-  // Store value 42 at address 0
   @executor.call_exported_func(store, instance, "store", [
-    @types.Value::I32(0),
-    @types.Value::I32(42),
+    @types.Value::I32(0), @types.Value::I32(42),
   ])! |> ignore
-
-  // Load value from address 0
   let result = @executor.call_exported_func(store, instance, "load", [
     @types.Value::I32(0),
   ])!
@@ -115,62 +101,41 @@ test "memory example" {
 ```moonbit
 test "cross-module" {
   let linker = @runtime.Linker::new()
-
-  // Module A: exports add function
   let mod_a = @wat.parse(
-    #|(module
-    #|  (func (export "add") (param i32 i32) (result i32)
-    #|    local.get 0 local.get 1 i32.add))
+    #|(module (func (export "add") (param i32 i32) (result i32)
+    #|  local.get 0 local.get 1 i32.add))
   )!
   let inst_a = @executor.instantiate_with_linker(linker, "math", mod_a)!
   linker.register("math", inst_a)
 
-  // Module B: imports from Module A
   let mod_b = @wat.parse(
     #|(module
     #|  (import "math" "add" (func $add (param i32 i32) (result i32)))
-    #|  (func (export "double_add") (param i32 i32) (result i32)
-    #|    local.get 0 local.get 1 call $add
-    #|    local.get 0 local.get 1 call $add
-    #|    i32.add))
+    #|  (func (export "use_add") (param i32 i32) (result i32)
+    #|    local.get 0 local.get 1 call $add))
   )!
   let inst_b = @executor.instantiate_with_linker(linker, "main", mod_b)!
-
-  let store = linker.get_store()
-  let result = @executor.call_exported_func(store, inst_b, "double_add", [
-    @types.Value::I32(3),
-    @types.Value::I32(5),
-  ])!
-  inspect!(result, content="[I32(16)]")  // (3+5) + (3+5) = 16
+  let result = @executor.call_exported_func(
+    linker.get_store(), inst_b, "use_add",
+    [@types.Value::I32(3), @types.Value::I32(5)],
+  )!
+  inspect!(result, content="[I32(8)]")
 }
-```
-
-### WASI Example
-
-```bash
-# Hello World with WASI
-wasmoon run examples/hello_wasi.wat
-
-# Pass command-line arguments
-wasmoon run examples/args_wasi.wat -- arg1 arg2
-
-# Grant directory access
-wasmoon run program.wasm --dir ./data
 ```
 
 ## Project Status
 
-| Feature | Status |
-|---------|--------|
-| WebAssembly 1.0 | Done |
-| JIT (AArch64) | Done |
-| WASI Preview 1 | Partial |
-| Multi-value | Done |
-| Reference Types | Done |
-| Tail Calls | Done |
-| GC | In Progress |
-| Component Model | Planned |
-| JIT (x86-64) | Planned |
+- [x] WebAssembly 1.0 core specification
+- [x] JIT compiler (AArch64)
+- [x] Multi-value returns
+- [x] Reference types (funcref, externref)
+- [x] Tail calls
+- [x] Cross-module function calls
+- [ ] WASI Preview 1 (partial)
+- [ ] GC proposal (in progress)
+- [ ] JIT compiler (x86-64)
+- [ ] Component Model
+- [ ] JIT optimizations (constant folding, dead code elimination, etc.)
 
 ## Development
 
