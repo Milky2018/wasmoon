@@ -24,7 +24,7 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType] // Tag types (params only, no results)
   exns : Array[ExnInstance] // Exception instances for exnref
-  heap : GCHeap // GC heap for struct and array instances
+  heap : MarkSweepHeap // GC heap for struct and array instances
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
   func_owners : Array[FuncOwner]
@@ -46,7 +46,7 @@ pub fn Store::new() -> Store {
     globals: [],
     tags: [],
     exns: [],
-    heap: GCHeap::new(),
+    heap: MarkSweepHeap::new(),
     func_owners: [],
     instances: [],
     jit_tables: [],

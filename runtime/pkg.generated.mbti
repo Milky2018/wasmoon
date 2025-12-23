@@ -78,45 +78,6 @@ pub(all) enum FuncOwner {
 pub impl Eq for FuncOwner
 pub impl Show for FuncOwner
 
-pub struct GCHeap {
-  objects : Array[GCObject?]
-  marks : Array[Bool]
-  free_list : Array[Int]
-  mut total_live : Int
-  mut gc_threshold : Int
-  mut collections : Int
-}
-pub fn GCHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
-pub fn GCHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
-pub fn GCHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
-pub fn GCHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
-pub fn GCHeap::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
-pub fn GCHeap::array_len(Self, Int) -> Int raise RuntimeError
-pub fn GCHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-pub fn GCHeap::collect(Self, Array[@types.Value]) -> Int
-pub fn GCHeap::get(Self, Int) -> GCObject raise RuntimeError
-pub fn GCHeap::get_array(Self, Int) -> ArrayInstance raise RuntimeError
-pub fn GCHeap::get_struct(Self, Int) -> StructInstance raise RuntimeError
-pub fn GCHeap::get_threshold(Self) -> Int
-pub fn GCHeap::get_type_idx(Self, Int) -> Int raise RuntimeError
-pub fn GCHeap::is_alive(Self, Int) -> Bool
-pub fn GCHeap::is_valid(Self, Int) -> Bool
-pub fn GCHeap::length(Self) -> Int
-pub fn GCHeap::mark(Self, Int) -> Unit
-pub fn GCHeap::mark_roots(Self, Array[@types.Value]) -> Unit
-pub fn GCHeap::new() -> Self
-pub fn GCHeap::set_threshold(Self, Int) -> Unit
-pub fn GCHeap::should_collect(Self) -> Bool
-pub fn GCHeap::stats(Self) -> GCStats
-pub fn GCHeap::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
-pub fn GCHeap::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-pub fn GCHeap::sweep(Self) -> Int
-pub fn GCHeap::with_threshold(Int) -> Self
-pub impl GcHeap for GCHeap
-pub impl GcManager for GCHeap
-pub impl GcRuntime for GCHeap
-pub impl Show for GCHeap
-
 pub(all) enum GCObject {
   Struct(StructInstance)
   Array(ArrayInstance)
@@ -173,6 +134,45 @@ pub fn Linker::get_store(Self) -> Store
 pub fn Linker::new() -> Self
 pub fn Linker::register(Self, String, ModuleInstance) -> Unit
 pub fn Linker::with_store(Store) -> Self
+
+pub struct MarkSweepHeap {
+  objects : Array[GCObject?]
+  marks : Array[Bool]
+  free_list : Array[Int]
+  mut total_live : Int
+  mut gc_threshold : Int
+  mut collections : Int
+}
+pub fn MarkSweepHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
+pub fn MarkSweepHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
+pub fn MarkSweepHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn MarkSweepHeap::array_len(Self, Int) -> Int raise RuntimeError
+pub fn MarkSweepHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::collect(Self, Array[@types.Value]) -> Int
+pub fn MarkSweepHeap::get(Self, Int) -> GCObject raise RuntimeError
+pub fn MarkSweepHeap::get_array(Self, Int) -> ArrayInstance raise RuntimeError
+pub fn MarkSweepHeap::get_struct(Self, Int) -> StructInstance raise RuntimeError
+pub fn MarkSweepHeap::get_threshold(Self) -> Int
+pub fn MarkSweepHeap::get_type_idx(Self, Int) -> Int raise RuntimeError
+pub fn MarkSweepHeap::is_alive(Self, Int) -> Bool
+pub fn MarkSweepHeap::is_valid(Self, Int) -> Bool
+pub fn MarkSweepHeap::length(Self) -> Int
+pub fn MarkSweepHeap::mark(Self, Int) -> Unit
+pub fn MarkSweepHeap::mark_roots(Self, Array[@types.Value]) -> Unit
+pub fn MarkSweepHeap::new() -> Self
+pub fn MarkSweepHeap::set_threshold(Self, Int) -> Unit
+pub fn MarkSweepHeap::should_collect(Self) -> Bool
+pub fn MarkSweepHeap::stats(Self) -> GCStats
+pub fn MarkSweepHeap::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn MarkSweepHeap::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::sweep(Self) -> Int
+pub fn MarkSweepHeap::with_threshold(Int) -> Self
+pub impl GcHeap for MarkSweepHeap
+pub impl GcManager for MarkSweepHeap
+pub impl GcRuntime for MarkSweepHeap
+pub impl Show for MarkSweepHeap
 
 type Memory
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
@@ -274,7 +274,7 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType]
   exns : Array[ExnInstance]
-  heap : GCHeap
+  heap : MarkSweepHeap
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
