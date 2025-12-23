@@ -212,6 +212,7 @@ pub(all) enum Instruction {
   RefIsNull
   RefFunc(Int)
   RefAsNonNull
+  RefEqInstr
   BrOnNull(Int)
   BrOnNonNull(Int)
   I32Const(Int)
@@ -534,6 +535,7 @@ pub(all) enum ValueType {
   NullExnRef
   NullExternRef
 }
+pub fn ValueType::is_nullable(Self) -> Bool
 pub impl Eq for ValueType
 pub impl Show for ValueType
 

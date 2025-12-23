@@ -219,7 +219,16 @@ fn ExecContext::exec_instr(
         | RefFunc
         | RefExtern
         | RefFuncTyped(_)
-        | RefNullFuncTyped(_) => self.stack.push(Null)
+        | RefNullFuncTyped(_)
+        // GC reference types
+        | RefNullEq
+        | RefEq
+        | RefNullI31
+        | RefI31
+        | RefNullStruct(_)
+        | RefStruct(_)
+        | RefNullArray(_)
+        | RefArray(_) => self.stack.push(Null)
         _ => raise @runtime.RuntimeError::TypeMismatch
       }
     RefIsNull => {
@@ -241,6 +250,19 @@ fn ExecContext::exec_instr(
         Null => raise @runtime.RuntimeError::Unreachable
         _ => self.stack.push(value)
       }
+    }
+    RefEqInstr => {
+      // ref.eq: compare two references for equality
+      let v2 = self.stack.pop()
+      let v1 = self.stack.pop()
+      let equal = match (v1, v2) {
+        (Null, Null) => true
+        (I31(a), I31(b)) => a == b
+        (StructRef(a), StructRef(b)) => a == b
+        (ArrayRef(a), ArrayRef(b)) => a == b
+        _ => false
+      }
+      self.stack.push(I32(if equal { 1 } else { 0 }))
     }
     BrOnNull(_) | BrOnNonNull(_) =>
       // br_on_null and br_on_non_null are control instructions

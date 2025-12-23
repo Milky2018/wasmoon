@@ -747,6 +747,7 @@ fn write_instruction_simple(
       buf.write_string(idx.to_string())
     }
     RefAsNonNull => buf.write_string("ref.as_non_null")
+    RefEqInstr => buf.write_string("ref.eq")
     BrOnNull(idx) => {
       buf.write_string("br_on_null ")
       buf.write_string(idx.to_string())

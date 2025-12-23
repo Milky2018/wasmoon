@@ -1823,6 +1823,12 @@ fn validate_instr(
       stack.pop_any() |> ignore // any ref type
       stack.push(@types.ValueType::I32)
     }
+    RefEqInstr => {
+      // ref.eq: compares two references for equality
+      stack.pop_any() |> ignore // any eqref
+      stack.pop_any() |> ignore // any eqref
+      stack.push(@types.ValueType::I32)
+    }
     RefFunc(func_idx) => {
       if func_idx >= ctx.funcs.length() {
         raise InvalidFunctionIndex(func_idx)

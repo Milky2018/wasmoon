@@ -564,6 +564,7 @@ pub fn invoke_action(
                     @types.ToInt64::to_int64_bits(@double.not_a_number)
                   RefNull(_) => -1L // null sentinel
                   RefExtern(n) => n.to_int64()
+                  RefHost(n) => n.to_int64() // ref.host like ref.extern
                   RefFunc => 0L // func ref (placeholder)
                   // GC reference types - these shouldn't appear as args but handle them
                   RefArray | RefStruct | RefEq | RefI31 | RefAny => 0L
@@ -684,6 +685,7 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
     F64CanonicalNan | F64ArithmeticNan => @types.Value::F64(0.0 / 0.0)
     RefNull(_) => @types.Value::Null
     RefExtern(n) => @types.Value::ExternRef(n)
+    RefHost(n) => @types.Value::ExternRef(n) // ref.host is like ref.extern for testing
     RefFunc => @types.Value::FuncRef(0) // Placeholder
     // GC reference types - these are abstract type matchers, not concrete values
     RefArray | RefStruct | RefEq | RefI31 | RefAny => @types.Value::Null // Placeholder
@@ -702,6 +704,7 @@ pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
     (Null, RefNull(_)) => true
     (FuncRef(_), RefFunc) => true
     (ExternRef(a), RefExtern(e)) => a == e
+    (ExternRef(a), RefHost(e)) => a == e // ref.host is like ref.extern
     // GC reference type matching
     (ArrayRef(_), RefArray) => true
     (StructRef(_), RefStruct) => true

@@ -806,18 +806,28 @@ fn value_matches_type(
 
     // StructRef matches struct, eq, and any types
     (StructRef(idx), RefStruct(type_idx)) => {
-      // Check if runtime type matches expected type
-      let result = try? store.get_gc_type_idx(idx)
-      match result {
-        Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
-        Err(_) => false
+      // type_idx == -1 means abstract struct type (any struct)
+      if type_idx == -1 {
+        true
+      } else {
+        // Check if runtime type matches expected type
+        let result = try? store.get_gc_type_idx(idx)
+        match result {
+          Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
+          Err(_) => false
+        }
       }
     }
     (StructRef(idx), RefNullStruct(type_idx)) => {
-      let result = try? store.get_gc_type_idx(idx)
-      match result {
-        Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
-        Err(_) => false
+      // type_idx == -1 means abstract struct type (any struct)
+      if type_idx == -1 {
+        true
+      } else {
+        let result = try? store.get_gc_type_idx(idx)
+        match result {
+          Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
+          Err(_) => false
+        }
       }
     }
     (StructRef(_), RefEq) => true
@@ -827,17 +837,27 @@ fn value_matches_type(
 
     // ArrayRef matches array, eq, and any types
     (ArrayRef(idx), RefArray(type_idx)) => {
-      let result = try? store.get_gc_type_idx(idx)
-      match result {
-        Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
-        Err(_) => false
+      // type_idx == -1 means abstract array type (any array)
+      if type_idx == -1 {
+        true
+      } else {
+        let result = try? store.get_gc_type_idx(idx)
+        match result {
+          Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
+          Err(_) => false
+        }
       }
     }
     (ArrayRef(idx), RefNullArray(type_idx)) => {
-      let result = try? store.get_gc_type_idx(idx)
-      match result {
-        Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
-        Err(_) => false
+      // type_idx == -1 means abstract array type (any array)
+      if type_idx == -1 {
+        true
+      } else {
+        let result = try? store.get_gc_type_idx(idx)
+        match result {
+          Ok(runtime_type_idx) => is_subtype(runtime_type_idx, type_idx, instance)
+          Err(_) => false
+        }
       }
     }
     (ArrayRef(_), RefEq) => true
@@ -847,6 +867,7 @@ fn value_matches_type(
 
     // FuncRef matches func types
     (FuncRef(_), @types.ValueType::FuncRef) => true
+    (FuncRef(_), RefFunc) => true // non-null abstract func type
     (FuncRef(func_addr), RefFuncTyped(type_idx)) => {
       // Check if function type matches
       let func_type_idx = store.get_func_type_idx(func_addr)
@@ -857,9 +878,23 @@ fn value_matches_type(
       is_subtype(func_type_idx, type_idx, instance)
     }
 
-    // ExternRef matches externref
+    // ExternRef matches externref and anyref (when converted via any.convert_extern)
     (ExternRef(_), @types.ValueType::ExternRef) => true
     (ExternRef(_), RefExtern) => true
+    // When externref is converted to anyref via any.convert_extern, it becomes anyref
+    // and should match anyref types
+    (ExternRef(_), AnyRef) => true
+    (ExternRef(_), RefAny) => true
+
+    // When anyref values are converted to externref via extern.convert_any,
+    // they should match externref types. In our implementation, the underlying
+    // value type is preserved, so we need to match them against externref.
+    (I31(_), @types.ValueType::ExternRef) => true
+    (I31(_), RefExtern) => true
+    (StructRef(_), @types.ValueType::ExternRef) => true
+    (StructRef(_), RefExtern) => true
+    (ArrayRef(_), @types.ValueType::ExternRef) => true
+    (ArrayRef(_), RefExtern) => true
     _ => false
   }
 }
