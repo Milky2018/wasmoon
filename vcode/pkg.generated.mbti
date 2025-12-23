@@ -101,6 +101,22 @@ pub fn ExecutableRegion::remaining(Self) -> Int
 pub fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
 pub impl Show for ExecutableRegion
 
+pub(all) struct GcCompilerConfig {
+  needs_write_barriers : Bool
+  needs_read_barriers : Bool
+  needs_safepoints : Bool
+  can_inline_alloc : Bool
+  object_header_size : Int
+}
+pub impl Show for GcCompilerConfig
+
+pub(all) struct GcSafepoint {
+  code_offset : Int
+  live_refs : Array[Int]
+  metadata : Int64
+}
+pub impl Show for GcSafepoint
+
 pub(all) struct JITRuntime {
   cache : CodeCache
   memory : MemoryManager
@@ -129,6 +145,12 @@ pub fn MemoryManager::total_allocated(Self) -> Int
 pub fn MemoryManager::total_used(Self) -> Int
 pub fn MemoryManager::write_code(Self, @emit.MachineCode) -> Result[(ExecutableRegion, Int), String]
 pub impl Show for MemoryManager
+
+pub struct NoBarrierGcCompiler {
+  safepoints : Array[GcSafepoint]
+}
+pub fn NoBarrierGcCompiler::new() -> Self
+pub impl GcCompiler for NoBarrierGcCompiler
 
 pub(all) struct VCodeBuilder {
   func : @lower.VCodeFunction
@@ -172,6 +194,19 @@ pub fn VCodeBuilder::udiv(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VRe
 // Type aliases
 
 // Traits
+pub(open) trait GcCompiler {
+  config(Self) -> GcCompilerConfig
+  gen_alloc_struct(Self, @lower.VCodeFunction, Int, Array[@abi.VReg]) -> @abi.VReg
+  gen_alloc_array(Self, @lower.VCodeFunction, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
+  gen_write_barrier_pre(Self, @lower.VCodeFunction, @abi.VReg, Int, @abi.VReg, @abi.VReg) -> Unit
+  gen_write_barrier_post(Self, @lower.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
+  gen_read_barrier(Self, @lower.VCodeFunction, @abi.VReg) -> @abi.VReg
+  gen_safepoint_poll(Self, @lower.VCodeFunction) -> Unit
+  record_safepoint(Self, Int, Array[@abi.VReg]) -> Unit
+  get_safepoints(Self) -> Array[GcSafepoint]
+  clear_safepoints(Self) -> Unit
+}
+
 pub(open) trait TargetISA {
   name(Self) -> String
   gpr_count(Self) -> Int

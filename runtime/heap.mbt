@@ -394,3 +394,263 @@ pub fn GCHeap::set_threshold(self : GCHeap, threshold : Int) -> Unit {
 pub fn GCHeap::get_threshold(self : GCHeap) -> Int {
   self.gc_threshold
 }
+
+///|
+/// Check if an object reference is valid and alive
+pub fn GCHeap::is_valid(self : GCHeap, idx : Int) -> Bool {
+  self.is_alive(idx)
+}
+
+// ============================================================
+// Trait Implementations for GCHeap
+// ============================================================
+
+///|
+pub impl GcHeap for GCHeap with alloc_struct(self, type_idx, fields) -> Int {
+  GCHeap::alloc_struct(self, type_idx, fields)
+}
+
+///|
+pub impl GcHeap for GCHeap with alloc_array(self, type_idx, elements) -> Int {
+  GCHeap::alloc_array(self, type_idx, elements)
+}
+
+///|
+pub impl GcHeap for GCHeap with struct_get(self, struct_idx, field_idx) -> @types.Value {
+  GCHeap::struct_get(self, struct_idx, field_idx)
+}
+
+///|
+pub impl GcHeap for GCHeap with struct_set(self, struct_idx, field_idx, value) -> Unit {
+  GCHeap::struct_set(self, struct_idx, field_idx, value)
+}
+
+///|
+pub impl GcHeap for GCHeap with array_len(self, array_idx) -> Int {
+  GCHeap::array_len(self, array_idx)
+}
+
+///|
+pub impl GcHeap for GCHeap with array_get(self, array_idx, elem_idx) -> @types.Value {
+  GCHeap::array_get(self, array_idx, elem_idx)
+}
+
+///|
+pub impl GcHeap for GCHeap with array_set(self, array_idx, elem_idx, value) -> Unit {
+  GCHeap::array_set(self, array_idx, elem_idx, value)
+}
+
+///|
+pub impl GcHeap for GCHeap with array_fill(
+  self,
+  array_idx,
+  offset,
+  value,
+  count,
+) -> Unit {
+  GCHeap::array_fill(self, array_idx, offset, value, count)
+}
+
+///|
+pub impl GcHeap for GCHeap with array_copy(
+  self,
+  dst_idx,
+  dst_offset,
+  src_idx,
+  src_offset,
+  count,
+) -> Unit {
+  GCHeap::array_copy(self, dst_idx, dst_offset, src_idx, src_offset, count)
+}
+
+///|
+pub impl GcHeap for GCHeap with get_type_idx(self, idx) -> Int {
+  GCHeap::get_type_idx(self, idx)
+}
+
+///|
+pub impl GcHeap for GCHeap with is_valid(self, idx) -> Bool {
+  GCHeap::is_valid(self, idx)
+}
+
+// ============================================================
+// GcRuntime Trait Implementation for GCHeap
+// ============================================================
+
+///|
+pub impl GcRuntime for GCHeap with should_collect(self) -> Bool {
+  GCHeap::should_collect(self)
+}
+
+///|
+pub impl GcRuntime for GCHeap with collect(self, roots) -> Unit {
+  GCHeap::collect(self, roots) |> ignore
+}
+
+///|
+pub impl GcRuntime for GCHeap with force_collect(self, roots) -> Unit {
+  GCHeap::collect(self, roots) |> ignore
+}
+
+///|
+pub impl GcRuntime for GCHeap with write_barrier_pre(
+  _self,
+  _obj_idx,
+  _old_value,
+  _new_value,
+) -> Unit {
+  // No-op for stop-the-world mark-sweep GC
+}
+
+///|
+pub impl GcRuntime for GCHeap with write_barrier_post(
+  _self,
+  _obj_idx,
+  _new_value,
+) -> Unit {
+  // No-op for stop-the-world mark-sweep GC
+}
+
+///|
+pub impl GcRuntime for GCHeap with read_barrier(_self, idx) -> @types.Value {
+  // No-op for stop-the-world GC - just return the reference unchanged
+  @types.Value::StructRef(idx)
+}
+
+///|
+pub impl GcRuntime for GCHeap with stats(self) -> GcStats {
+  let old_stats = GCHeap::stats(self)
+  {
+    total_slots: old_stats.total_objects,
+    live_objects: old_stats.live_objects,
+    free_slots: old_stats.free_slots,
+    collections: old_stats.collections,
+    bytes_allocated: 0L, // Not tracked in this implementation
+    bytes_collected: 0L, // Not tracked in this implementation
+  }
+}
+
+///|
+pub impl GcRuntime for GCHeap with collection_count(self) -> Int {
+  self.collections
+}
+
+///|
+pub impl GcRuntime for GCHeap with set_threshold(self, threshold) -> Unit {
+  GCHeap::set_threshold(self, threshold)
+}
+
+///|
+pub impl GcRuntime for GCHeap with get_threshold(self) -> Int {
+  GCHeap::get_threshold(self)
+}
+
+// ============================================================
+// GcManager Trait Implementation for GCHeap
+// ============================================================
+
+///|
+pub impl GcManager for GCHeap with alloc_struct(self, type_idx, fields) -> Int {
+  GCHeap::alloc_struct(self, type_idx, fields)
+}
+
+///|
+pub impl GcManager for GCHeap with alloc_array(self, type_idx, elements) -> Int {
+  GCHeap::alloc_array(self, type_idx, elements)
+}
+
+///|
+pub impl GcManager for GCHeap with struct_get(self, struct_idx, field_idx) -> @types.Value {
+  GCHeap::struct_get(self, struct_idx, field_idx)
+}
+
+///|
+pub impl GcManager for GCHeap with struct_set(
+  self,
+  struct_idx,
+  field_idx,
+  value,
+) -> Unit {
+  GCHeap::struct_set(self, struct_idx, field_idx, value)
+}
+
+///|
+pub impl GcManager for GCHeap with array_len(self, array_idx) -> Int {
+  GCHeap::array_len(self, array_idx)
+}
+
+///|
+pub impl GcManager for GCHeap with array_get(self, array_idx, elem_idx) -> @types.Value {
+  GCHeap::array_get(self, array_idx, elem_idx)
+}
+
+///|
+pub impl GcManager for GCHeap with array_set(self, array_idx, elem_idx, value) -> Unit {
+  GCHeap::array_set(self, array_idx, elem_idx, value)
+}
+
+///|
+pub impl GcManager for GCHeap with array_fill(
+  self,
+  array_idx,
+  offset,
+  value,
+  count,
+) -> Unit {
+  GCHeap::array_fill(self, array_idx, offset, value, count)
+}
+
+///|
+pub impl GcManager for GCHeap with array_copy(
+  self,
+  dst_idx,
+  dst_offset,
+  src_idx,
+  src_offset,
+  count,
+) -> Unit {
+  GCHeap::array_copy(self, dst_idx, dst_offset, src_idx, src_offset, count)
+}
+
+///|
+pub impl GcManager for GCHeap with get_type_idx(self, idx) -> Int {
+  GCHeap::get_type_idx(self, idx)
+}
+
+///|
+pub impl GcManager for GCHeap with is_valid(self, idx) -> Bool {
+  GCHeap::is_valid(self, idx)
+}
+
+///|
+pub impl GcManager for GCHeap with should_collect(self) -> Bool {
+  GCHeap::should_collect(self)
+}
+
+///|
+pub impl GcManager for GCHeap with collect(self, roots) -> Unit {
+  GCHeap::collect(self, roots) |> ignore
+}
+
+///|
+pub impl GcManager for GCHeap with stats(self) -> GcStats {
+  let old_stats = GCHeap::stats(self)
+  {
+    total_slots: old_stats.total_objects,
+    live_objects: old_stats.live_objects,
+    free_slots: old_stats.free_slots,
+    collections: old_stats.collections,
+    bytes_allocated: 0L,
+    bytes_collected: 0L,
+  }
+}
+
+///|
+pub impl GcManager for GCHeap with write_barrier(
+  _self,
+  _obj_idx,
+  _old_value,
+  _new_value,
+) -> Unit {
+  // No-op for stop-the-world mark-sweep GC
+}

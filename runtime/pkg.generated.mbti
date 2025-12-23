@@ -100,6 +100,7 @@ pub fn GCHeap::get_struct(Self, Int) -> StructInstance raise RuntimeError
 pub fn GCHeap::get_threshold(Self) -> Int
 pub fn GCHeap::get_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn GCHeap::is_alive(Self, Int) -> Bool
+pub fn GCHeap::is_valid(Self, Int) -> Bool
 pub fn GCHeap::length(Self) -> Int
 pub fn GCHeap::mark(Self, Int) -> Unit
 pub fn GCHeap::mark_roots(Self, Array[@types.Value]) -> Unit
@@ -111,6 +112,9 @@ pub fn GCHeap::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn GCHeap::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub fn GCHeap::sweep(Self) -> Int
 pub fn GCHeap::with_threshold(Int) -> Self
+pub impl GcHeap for GCHeap
+pub impl GcManager for GCHeap
+pub impl GcRuntime for GCHeap
 pub impl Show for GCHeap
 
 pub(all) enum GCObject {
@@ -126,6 +130,16 @@ pub(all) struct GCStats {
   collections : Int
 }
 pub impl Show for GCStats
+
+pub(all) struct GcStats {
+  total_slots : Int
+  live_objects : Int
+  free_slots : Int
+  collections : Int
+  bytes_allocated : Int64
+  bytes_collected : Int64
+}
+pub impl Show for GcStats
 
 type GlobalInstance
 pub fn GlobalInstance::get(Self) -> @types.Value
@@ -321,4 +335,48 @@ pub impl Show for Table
 // Type aliases
 
 // Traits
+pub(open) trait GcHeap {
+  alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  alloc_array(Self, Int, Array[@types.Value]) -> Int
+  struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  array_len(Self, Int) -> Int raise RuntimeError
+  array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  get_type_idx(Self, Int) -> Int raise RuntimeError
+  is_valid(Self, Int) -> Bool
+}
+
+pub(open) trait GcManager {
+  alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  alloc_array(Self, Int, Array[@types.Value]) -> Int
+  struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  array_len(Self, Int) -> Int raise RuntimeError
+  array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  get_type_idx(Self, Int) -> Int raise RuntimeError
+  is_valid(Self, Int) -> Bool
+  should_collect(Self) -> Bool
+  collect(Self, Array[@types.Value]) -> Unit
+  stats(Self) -> GcStats
+  write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
+}
+
+pub(open) trait GcRuntime {
+  should_collect(Self) -> Bool
+  collect(Self, Array[@types.Value]) -> Unit
+  force_collect(Self, Array[@types.Value]) -> Unit
+  write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
+  write_barrier_post(Self, Int, @types.Value) -> Unit
+  read_barrier(Self, Int) -> @types.Value
+  stats(Self) -> GcStats
+  collection_count(Self) -> Int
+  set_threshold(Self, Int) -> Unit
+  get_threshold(Self) -> Int
+}
 
