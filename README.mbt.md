@@ -53,7 +53,8 @@ wasmoon explore examples/add.wat --stage ir vcode mc
 
 ### Basic Example
 
-```moonbit
+```moonbit check
+///|
 test "basic add" {
   let wat =
     #|(module
@@ -61,20 +62,20 @@ test "basic add" {
     #|    local.get 0
     #|    local.get 1
     #|    i32.add))
-
-  let mod = @wat.parse(wat)!
-  let (store, instance) = @executor.instantiate_module(mod)!
+  let mod = @wat.parse(wat)
+  let (store, instance) = @executor.instantiate_module(mod)
   let result = @executor.call_exported_func(store, instance, "add", [
     @types.Value::I32(5),
     @types.Value::I32(3),
-  ])!
-  inspect!(result, content="[I32(8)]")
+  ])
+  inspect(result, content="[I32(8)]")
 }
 ```
 
 ### Memory Operations
 
-```moonbit
+```moonbit check
+///|
 test "memory" {
   let wat =
     #|(module
@@ -83,43 +84,79 @@ test "memory" {
     #|    local.get 0 local.get 1 i32.store)
     #|  (func (export "load") (param i32) (result i32)
     #|    local.get 0 i32.load))
-
-  let mod = @wat.parse(wat)!
-  let (store, instance) = @executor.instantiate_module(mod)!
+  let mod = @wat.parse(wat)
+  let (store, instance) = @executor.instantiate_module(mod)
   @executor.call_exported_func(store, instance, "store", [
-    @types.Value::I32(0), @types.Value::I32(42),
-  ])! |> ignore
+    @types.Value::I32(0),
+    @types.Value::I32(42),
+  ])
+  |> ignore
   let result = @executor.call_exported_func(store, instance, "load", [
     @types.Value::I32(0),
-  ])!
-  inspect!(result, content="[I32(42)]")
+  ])
+  inspect(result, content="[I32(42)]")
 }
 ```
 
 ### Cross-module Imports
 
-```moonbit
+```moonbit check
+///|
 test "cross-module" {
   let linker = @runtime.Linker::new()
-  let mod_a = @wat.parse(
+  let mod_a =
     #|(module (func (export "add") (param i32 i32) (result i32)
     #|  local.get 0 local.get 1 i32.add))
-  )!
-  let inst_a = @executor.instantiate_with_linker(linker, "math", mod_a)!
+  let mod_a = @wat.parse(mod_a)
+  let inst_a = @executor.instantiate_with_linker(linker, "math", mod_a)
   linker.register("math", inst_a)
-
-  let mod_b = @wat.parse(
+  let mod_b =
     #|(module
     #|  (import "math" "add" (func $add (param i32 i32) (result i32)))
     #|  (func (export "use_add") (param i32 i32) (result i32)
     #|    local.get 0 local.get 1 call $add))
-  )!
-  let inst_b = @executor.instantiate_with_linker(linker, "main", mod_b)!
+  let mod_b = @wat.parse(mod_b)
+  let inst_b = @executor.instantiate_with_linker(linker, "main", mod_b)
   let result = @executor.call_exported_func(
-    linker.get_store(), inst_b, "use_add",
+    linker.get_store(),
+    inst_b,
+    "use_add",
     [@types.Value::I32(3), @types.Value::I32(5)],
-  )!
-  inspect!(result, content="[I32(8)]")
+  )
+  inspect(result, content="[I32(8)]")
+}
+```
+
+### Host Functions
+
+```moonbit check
+///|
+test "host function" {
+  let linker = @runtime.Linker::new()
+  // Register a host function that doubles an i32
+  linker.add_host_func(
+    "env",
+    "double",
+    fn(args) {
+      guard args[0] is @types.Value::I32(x) else { return [] }
+      [@types.Value::I32(x * 2)]
+    },
+    func_type={ params: [@types.ValueType::I32], results: [@types.ValueType::I32] },
+  )
+  let wat =
+    #|(module
+    #|  (import "env" "double" (func $double (param i32) (result i32)))
+    #|  (func (export "quadruple") (param i32) (result i32)
+    #|    local.get 0 call $double call $double))
+  let mod = @wat.parse(wat)
+  let instance = @executor.instantiate_with_linker(linker, "main", mod)
+  let result = @executor.call_exported_func(
+    linker.get_store(),
+    instance,
+    "quadruple",
+    [@types.Value::I32(5)],
+  )
+  inspect(result, content="[I32(20)]")
 }
 ```
 
