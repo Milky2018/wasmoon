@@ -193,6 +193,54 @@ fn format_opcode(
     StorePtr(ty) => "store_ptr.\{ty} \{ops}"
     CallPtr(num_args, num_results) =>
       "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
+
+    // GC operations - struct
+    StructNew(type_idx) => "struct.new \{type_idx}(\{ops})"
+    StructNewDefault(type_idx) => "struct.new_default \{type_idx}"
+    StructGet(type_idx, field_idx) =>
+      "struct.get \{type_idx} \{field_idx} \{ops}"
+    StructGetS(type_idx, field_idx) =>
+      "struct.get_s \{type_idx} \{field_idx} \{ops}"
+    StructGetU(type_idx, field_idx) =>
+      "struct.get_u \{type_idx} \{field_idx} \{ops}"
+    StructSet(type_idx, field_idx) =>
+      "struct.set \{type_idx} \{field_idx} \{ops}"
+
+    // GC operations - array
+    ArrayNew(type_idx) => "array.new \{type_idx}(\{ops})"
+    ArrayNewDefault(type_idx) => "array.new_default \{type_idx}(\{ops})"
+    ArrayNewFixed(type_idx, len) => "array.new_fixed \{type_idx} \{len}(\{ops})"
+    ArrayGet(type_idx) => "array.get \{type_idx} \{ops}"
+    ArrayGetS(type_idx) => "array.get_s \{type_idx} \{ops}"
+    ArrayGetU(type_idx) => "array.get_u \{type_idx} \{ops}"
+    ArraySet(type_idx) => "array.set \{type_idx} \{ops}"
+    ArrayLen => "array.len \{ops}"
+    ArrayFill(type_idx) => "array.fill \{type_idx} \{ops}"
+    ArrayCopy(dst_type_idx, src_type_idx) =>
+      "array.copy \{dst_type_idx} \{src_type_idx} \{ops}"
+
+    // GC operations - i31
+    I31New => "ref.i31 \{ops}"
+    I31GetS => "i31.get_s \{ops}"
+    I31GetU => "i31.get_u \{ops}"
+
+    // GC operations - type checking/casting
+    RefTest(type_idx, nullable) =>
+      if nullable {
+        "ref.test_null \{type_idx} \{ops}"
+      } else {
+        "ref.test \{type_idx} \{ops}"
+      }
+    RefCast(type_idx, nullable) =>
+      if nullable {
+        "ref.cast_null \{type_idx} \{ops}"
+      } else {
+        "ref.cast \{type_idx} \{ops}"
+      }
+
+    // GC operations - type conversions
+    AnyConvertExtern => "any.convert_extern \{ops}"
+    ExternConvertAny => "extern.convert_any \{ops}"
   }
 }
 

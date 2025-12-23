@@ -469,11 +469,11 @@ test "regression: explicit type definitions parsed before functions" {
   // Should have 2 types: (param i32) and (result f64)
   inspect(mod.types.length(), content="2")
   // $t should be type 0: (func (param i32))
-  inspect(mod.types[0].params.length(), content="1")
-  inspect(mod.types[0].results.length(), content="0")
+  inspect(mod.get_func_type(0).params.length(), content="1")
+  inspect(mod.get_func_type(0).results.length(), content="0")
   // Implicit type should be type 1: (func (result f64))
-  inspect(mod.types[1].params.length(), content="0")
-  inspect(mod.types[1].results.length(), content="1")
+  inspect(mod.get_func_type(1).params.length(), content="0")
+  inspect(mod.get_func_type(1).results.length(), content="1")
   // $g should use type 0 (same as explicit $t)
   inspect(mod.funcs[1], content="0")
 }
@@ -774,8 +774,8 @@ test "parse WAT: annotations around type definition" {
     #|)
   let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
   inspect(mod.types.length(), content="1")
-  inspect(mod.types[0].params.length(), content="1")
-  inspect(mod.types[0].results.length(), content="1")
+  inspect(mod.get_func_type(0).params.length(), content="1")
+  inspect(mod.get_func_type(0).results.length(), content="1")
 }
 
 ///|

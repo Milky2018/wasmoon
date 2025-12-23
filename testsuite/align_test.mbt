@@ -17,7 +17,7 @@ test "f32 store/load with align=1" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
 
   // Get locals from the function code
   let locals : Array[@types.ValueType] = []
@@ -30,7 +30,7 @@ test "f32 store/load with align=1" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0, // num_imports
     [], // import_func_type_indices
@@ -72,7 +72,7 @@ test "f64 store/load with align=1" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -81,7 +81,7 @@ test "f64 store/load with align=1" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],
@@ -120,7 +120,7 @@ test "i32 store/load at unaligned address" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -129,7 +129,7 @@ test "i32 store/load at unaligned address" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],
@@ -168,7 +168,7 @@ test "i64 store/load at unaligned address" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -177,7 +177,7 @@ test "i64 store/load at unaligned address" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],
@@ -216,7 +216,7 @@ test "f64 store/load at offset 5" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
   let locals : Array[@types.ValueType] = []
   for loc in func_code.locals {
     locals.push(loc)
@@ -225,7 +225,7 @@ test "f64 store/load at offset 5" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0,
     [],

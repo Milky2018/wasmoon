@@ -99,7 +99,7 @@ fn run_explore(
   let compiled_funcs : Array[CompiledFunc] = []
   for func_idx in func_indices {
     let type_idx = mod_.funcs[func_idx]
-    let func_type = mod_.types[type_idx]
+    let func_type = mod_.get_func_type(type_idx)
     let code = mod_.codes[func_idx]
     // Find function name from exports (func_idx needs to account for imports)
     let actual_func_idx = num_imports + func_idx
@@ -138,7 +138,7 @@ fn run_explore(
       "func_\{func_idx}",
       func_type,
       code.locals,
-      mod_.types,
+      @types.extract_func_types(mod_.types),
       mod_.funcs,
       num_imports,
       import_func_type_indices,

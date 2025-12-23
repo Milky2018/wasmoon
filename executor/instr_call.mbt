@@ -7,7 +7,7 @@ fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
   // func_addrs[func_idx] gives us the store address
   let store_addr = self.instance.func_addrs[func_idx]
   let type_idx = self.instance.func_type_indices[func_idx]
-  let func_type = self.instance.types[type_idx]
+  let func_type = self.instance.get_func_type(type_idx)
 
   // Pop arguments from stack in reverse order
   let num_params = func_type.params.length()
@@ -49,7 +49,7 @@ fn ExecContext::exec_call_indirect(
   }
 
   // Get the expected type
-  let expected_type = self.instance.types[type_idx]
+  let expected_type = self.instance.get_func_type(type_idx)
 
   // Type checking using unified type equivalence API
   let owner_idx = self.store.get_func_owner_idx(store_addr)
@@ -71,7 +71,7 @@ fn ExecContext::exec_call_indirect(
     } else {
       // No canonical info, fall back to structural comparison
       let ctx = @types.TypeEquivalenceContext::same_module(
-        self.instance.types,
+        @types.extract_func_types(self.instance.types),
         type_rec_groups=self.instance.type_rec_groups,
       )
       if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
@@ -85,8 +85,8 @@ fn ExecContext::exec_call_indirect(
       Some(o) => {
         // Cross-module call: use cross-module type equivalence
         let ctx = @types.TypeEquivalenceContext::cross_module(
-          self.instance.types,
-          o.types,
+          @types.extract_func_types(self.instance.types),
+          @types.extract_func_types(o.types),
           rec_groups1=self.instance.type_rec_groups,
           rec_groups2=o.type_rec_groups,
         )
@@ -136,7 +136,7 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
   }
 
   // Get the expected type
-  let expected_type = self.instance.types[type_idx]
+  let expected_type = self.instance.get_func_type(type_idx)
 
   // Verify type matches using type equivalence
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
@@ -145,8 +145,8 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
     Some(o) => {
       // Cross-module call: use cross-module type equivalence
       let ctx = @types.TypeEquivalenceContext::cross_module(
-        self.instance.types,
-        o.types,
+        @types.extract_func_types(self.instance.types),
+        @types.extract_func_types(o.types),
         rec_groups1=self.instance.type_rec_groups,
         rec_groups2=o.type_rec_groups,
       )
@@ -337,7 +337,7 @@ pub fn ExecContext::exec_tail_call(
   // Get function address and type from current module
   let store_addr = self.instance.func_addrs[func_idx]
   let type_idx = self.instance.func_type_indices[func_idx]
-  let func_type = self.instance.types[type_idx]
+  let func_type = self.instance.get_func_type(type_idx)
 
   // Pop arguments from stack into array (in reverse order)
   let num_params = func_type.params.length()
@@ -386,15 +386,15 @@ pub fn ExecContext::exec_tail_call_indirect(
   }
 
   // Get the expected type and verify type matches
-  let expected_type = self.instance.types[type_idx]
+  let expected_type = self.instance.get_func_type(type_idx)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   let owner = self.store.get_func_owner(store_addr)
   match owner {
     Some(o) => {
       // Cross-module call: use cross-module type equivalence
       let ctx = @types.TypeEquivalenceContext::cross_module(
-        self.instance.types,
-        o.types,
+        @types.extract_func_types(self.instance.types),
+        @types.extract_func_types(o.types),
         rec_groups1=self.instance.type_rec_groups,
         rec_groups2=o.type_rec_groups,
       )
@@ -448,15 +448,15 @@ pub fn ExecContext::exec_tail_call_ref(
   }
 
   // Get the expected type and verify type matches
-  let expected_type = self.instance.types[type_idx]
+  let expected_type = self.instance.get_func_type(type_idx)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   let owner = self.store.get_func_owner(store_addr)
   match owner {
     Some(o) => {
       // Cross-module call: use cross-module type equivalence
       let ctx = @types.TypeEquivalenceContext::cross_module(
-        self.instance.types,
-        o.types,
+        @types.extract_func_types(self.instance.types),
+        @types.extract_func_types(o.types),
         rec_groups1=self.instance.type_rec_groups,
         rec_groups2=o.type_rec_groups,
       )

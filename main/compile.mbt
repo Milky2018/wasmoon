@@ -35,7 +35,7 @@ fn run_compile(
     if imp.desc is Func(type_idx) {
       import_func_type_indices.push(type_idx)
       // Record import in the precompiled module
-      let func_type = mod_.types[type_idx]
+      let func_type = mod_.get_func_type(type_idx)
       precompiled.add_import(
         imp.mod_name,
         imp.name,
@@ -79,7 +79,7 @@ fn run_compile(
   for i, code in mod_.codes {
     let func_idx = num_imports + i
     let type_idx = mod_.funcs[i]
-    let func_type = mod_.types[type_idx]
+    let func_type = mod_.get_func_type(type_idx)
     let func_name = get_func_name(mod_, func_idx)
 
     // Stage 1: Translate WASM to IR
@@ -87,7 +87,7 @@ fn run_compile(
       func_name,
       func_type,
       code.locals,
-      mod_.types,
+      @types.extract_func_types(mod_.types),
       mod_.funcs,
       num_imports,
       import_func_type_indices,

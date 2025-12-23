@@ -8,7 +8,7 @@ fn ExecContext::block_arity(self : ExecContext, bt : @types.BlockType) -> Int {
     Value(_) => 1
     MultiValue(types) => types.length()
     InlineType(_, results) => results.length()
-    TypeIndex(idx) => self.instance.types[idx].results.length()
+    TypeIndex(idx) => self.instance.get_func_type(idx).results.length()
   }
 }
 
@@ -23,7 +23,7 @@ fn ExecContext::block_param_arity(
     Value(_) => 0 // Single value blocks have no params
     MultiValue(_) => 0 // MultiValue blocks have no params (result-only)
     InlineType(params, _) => params.length()
-    TypeIndex(idx) => self.instance.types[idx].params.length()
+    TypeIndex(idx) => self.instance.get_func_type(idx).params.length()
   }
 }
 

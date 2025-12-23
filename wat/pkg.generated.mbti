@@ -80,6 +80,11 @@ pub enum WastValue {
   RefNull(String)
   RefExtern(Int)
   RefFunc
+  RefArray
+  RefStruct
+  RefEq
+  RefI31
+  RefAny
 }
 pub impl Show for WastValue
 

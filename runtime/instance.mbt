@@ -1,7 +1,7 @@
 ///|
 /// Runtime instance of a WebAssembly module
 pub(all) struct ModuleInstance {
-  types : Array[@types.FuncType]
+  types : Array[@types.SubType] // GC: now stores SubType
   type_rec_groups : Array[Int] // rec group IDs for each type
   canonical_type_indices : Array[Int] // canonical indices for structural equivalence
   mut store_idx : Int // index in the store's instances array, -1 if not registered
@@ -36,5 +36,44 @@ pub fn ModuleInstance::new() -> ModuleInstance {
     data_segments: [],
     dropped_elems: [],
     dropped_datas: [],
+  }
+}
+
+///|
+/// Get the function type at the given index.
+/// Panics if the type is not a function type.
+pub fn ModuleInstance::get_func_type(
+  self : ModuleInstance,
+  idx : Int,
+) -> @types.FuncType {
+  match self.types[idx].composite {
+    Func(ft) => ft
+    _ => abort("Type at index \{idx} is not a function type")
+  }
+}
+
+///|
+/// Get the struct type at the given index.
+/// Panics if the type is not a struct type.
+pub fn ModuleInstance::get_struct_type(
+  self : ModuleInstance,
+  idx : Int,
+) -> @types.StructType {
+  match self.types[idx].composite {
+    Struct(st) => st
+    _ => abort("Type at index \{idx} is not a struct type")
+  }
+}
+
+///|
+/// Get the array type at the given index.
+/// Panics if the type is not an array type.
+pub fn ModuleInstance::get_array_type(
+  self : ModuleInstance,
+  idx : Int,
+) -> @types.ArrayType {
+  match self.types[idx].composite {
+    Array(at) => at
+    _ => abort("Type at index \{idx} is not an array type")
   }
 }

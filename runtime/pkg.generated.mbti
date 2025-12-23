@@ -16,6 +16,7 @@ pub(all) suberror RuntimeError {
   TypeMismatch
   OutOfBoundsMemoryAccess
   OutOfBoundsTableAccess
+  OutOfBoundsArrayAccess
   UndefinedElement
   UninitializedElement
   IndirectCallTypeMismatch
@@ -31,6 +32,12 @@ pub(all) suberror RuntimeError {
 pub impl Show for RuntimeError
 
 // Types and methods
+pub(all) struct ArrayInstance {
+  type_idx : Int
+  elements : Array[@types.Value]
+}
+pub impl Show for ArrayInstance
+
 pub(all) struct CallStackEntry {
   func_idx : Int
   func_name : String?
@@ -70,6 +77,55 @@ pub(all) enum FuncOwner {
 }
 pub impl Eq for FuncOwner
 pub impl Show for FuncOwner
+
+pub struct GCHeap {
+  objects : Array[GCObject?]
+  marks : Array[Bool]
+  free_list : Array[Int]
+  mut total_live : Int
+  mut gc_threshold : Int
+  mut collections : Int
+}
+pub fn GCHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
+pub fn GCHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
+pub fn GCHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+pub fn GCHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+pub fn GCHeap::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn GCHeap::array_len(Self, Int) -> Int raise RuntimeError
+pub fn GCHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn GCHeap::collect(Self, Array[@types.Value]) -> Int
+pub fn GCHeap::get(Self, Int) -> GCObject raise RuntimeError
+pub fn GCHeap::get_array(Self, Int) -> ArrayInstance raise RuntimeError
+pub fn GCHeap::get_struct(Self, Int) -> StructInstance raise RuntimeError
+pub fn GCHeap::get_threshold(Self) -> Int
+pub fn GCHeap::get_type_idx(Self, Int) -> Int raise RuntimeError
+pub fn GCHeap::is_alive(Self, Int) -> Bool
+pub fn GCHeap::length(Self) -> Int
+pub fn GCHeap::mark(Self, Int) -> Unit
+pub fn GCHeap::mark_roots(Self, Array[@types.Value]) -> Unit
+pub fn GCHeap::new() -> Self
+pub fn GCHeap::set_threshold(Self, Int) -> Unit
+pub fn GCHeap::should_collect(Self) -> Bool
+pub fn GCHeap::stats(Self) -> GCStats
+pub fn GCHeap::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn GCHeap::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn GCHeap::sweep(Self) -> Int
+pub fn GCHeap::with_threshold(Int) -> Self
+pub impl Show for GCHeap
+
+pub(all) enum GCObject {
+  Struct(StructInstance)
+  Array(ArrayInstance)
+}
+pub impl Show for GCObject
+
+pub(all) struct GCStats {
+  total_objects : Int
+  live_objects : Int
+  free_slots : Int
+  collections : Int
+}
+pub impl Show for GCStats
 
 type GlobalInstance
 pub fn GlobalInstance::get(Self) -> @types.Value
@@ -146,7 +202,7 @@ pub fn Memory::write_i64(Self, Int, Int64) -> Unit
 pub impl Show for Memory
 
 pub(all) struct ModuleInstance {
-  types : Array[@types.FuncType]
+  types : Array[@types.SubType]
   type_rec_groups : Array[Int]
   canonical_type_indices : Array[Int]
   mut store_idx : Int
@@ -162,6 +218,9 @@ pub(all) struct ModuleInstance {
   dropped_elems : Array[Bool]
   dropped_datas : Array[Bool]
 }
+pub fn ModuleInstance::get_array_type(Self, Int) -> @types.ArrayType
+pub fn ModuleInstance::get_func_type(Self, Int) -> @types.FuncType
+pub fn ModuleInstance::get_struct_type(Self, Int) -> @types.StructType
 pub fn ModuleInstance::new() -> Self
 pub impl Show for ModuleInstance
 
@@ -201,17 +260,25 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType]
   exns : Array[ExnInstance]
+  heap : GCHeap
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
 }
+pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType, type_idx? : Int) -> Int
 pub fn Store::alloc_global(Self, GlobalInstance) -> Int
 pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int
 pub fn Store::alloc_mem(Self, Memory) -> Int
+pub fn Store::alloc_struct(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int
 pub fn Store::alloc_tag(Self, @types.FuncType) -> Int
+pub fn Store::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+pub fn Store::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+pub fn Store::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn Store::array_len(Self, Int) -> Int raise RuntimeError
+pub fn Store::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 pub fn Store::get_func_canonical_type_idx(Self, Int) -> Int
@@ -220,6 +287,7 @@ pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_func_owner_idx(Self, Int) -> Int
 pub fn Store::get_func_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_func_type_idx(Self, Int) -> Int
+pub fn Store::get_gc_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
 pub fn Store::get_jit_table(Self, Int) -> @jit.JITTable?
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
@@ -228,7 +296,15 @@ pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
 pub fn Store::get_tag_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::new() -> Self
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
+pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub impl Show for Store
+
+pub(all) struct StructInstance {
+  type_idx : Int
+  fields : Array[@types.Value]
+}
+pub impl Show for StructInstance
 
 type Table
 pub fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError

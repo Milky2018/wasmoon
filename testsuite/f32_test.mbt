@@ -12,7 +12,7 @@ test "f32 add" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
 
   // Get locals from the function code
   let locals : Array[@types.ValueType] = []
@@ -25,7 +25,7 @@ test "f32 add" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0, // num_imports
     [], // import_func_type_indices
@@ -114,7 +114,7 @@ test "f64 add" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
 
   // Get locals from the function code
   let locals : Array[@types.ValueType] = []
@@ -127,7 +127,7 @@ test "f64 add" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0, // num_imports
     [], // import_func_type_indices
@@ -214,7 +214,7 @@ test "f32 sub" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
 
   // Get locals from the function code
   let locals : Array[@types.ValueType] = []
@@ -227,7 +227,7 @@ test "f32 sub" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0, // num_imports
     [], // import_func_type_indices
@@ -317,7 +317,7 @@ test "f32 mul" {
   let ir = @wat.parse(source)
   let func_code = ir.codes[0]
   let func_type_idx = ir.funcs[0]
-  let func_type = ir.types[func_type_idx]
+  let func_type = ir.get_func_type(func_type_idx)
 
   // Get locals from the function code
   let locals : Array[@types.ValueType] = []
@@ -330,7 +330,7 @@ test "f32 mul" {
     "test",
     func_type,
     locals,
-    ir.types,
+    @types.extract_func_types(ir.types),
     ir.funcs.mapi(fn(i, _) { ir.funcs[i] }),
     0, // num_imports
     [], // import_func_type_indices

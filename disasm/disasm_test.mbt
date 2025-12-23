@@ -10,14 +10,14 @@ test "disassemble empty module" {
 ///|
 test "disassemble module with types" {
   let mod_ = @types.Module::new()
-  mod_.types.push({
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  })
-  mod_.types.push({
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  })
+  mod_.types.push(
+    @types.SubType::func([@types.ValueType::I32], [@types.ValueType::I32]),
+  )
+  mod_.types.push(
+    @types.SubType::func([@types.ValueType::I32, @types.ValueType::I32], [
+      @types.ValueType::I32,
+    ]),
+  )
   let result = disassemble(mod_)
   let expected =
     #|(module
@@ -58,10 +58,11 @@ test "disassemble module with memory and max" {
 test "disassemble simple function" {
   let mod_ = @types.Module::new()
   // Add type: (i32, i32) -> i32
-  mod_.types.push({
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  })
+  mod_.types.push(
+    @types.SubType::func([@types.ValueType::I32, @types.ValueType::I32], [
+      @types.ValueType::I32,
+    ]),
+  )
   // Add function with type 0
   mod_.funcs.push(0)
   // Add function body: local.get 0, local.get 1, i32.add
@@ -93,7 +94,7 @@ test "disassemble simple function" {
 ///|
 test "disassemble function with locals" {
   let mod_ = @types.Module::new()
-  mod_.types.push({ params: [], results: [@types.ValueType::I32] })
+  mod_.types.push(@types.SubType::func([], [@types.ValueType::I32]))
   mod_.funcs.push(0)
   mod_.codes.push({
     locals: [
@@ -120,7 +121,7 @@ test "disassemble function with locals" {
 ///|
 test "disassemble block instruction" {
   let mod_ = @types.Module::new()
-  mod_.types.push({ params: [], results: [@types.ValueType::I32] })
+  mod_.types.push(@types.SubType::func([], [@types.ValueType::I32]))
   mod_.funcs.push(0)
   mod_.codes.push({
     locals: [],
@@ -148,10 +149,9 @@ test "disassemble block instruction" {
 ///|
 test "disassemble if-else instruction" {
   let mod_ = @types.Module::new()
-  mod_.types.push({
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  })
+  mod_.types.push(
+    @types.SubType::func([@types.ValueType::I32], [@types.ValueType::I32]),
+  )
   mod_.funcs.push(0)
   mod_.codes.push({
     locals: [],
@@ -200,7 +200,7 @@ test "disassemble global" {
 ///|
 test "disassemble import" {
   let mod_ = @types.Module::new()
-  mod_.types.push({ params: [@types.ValueType::I32], results: [] })
+  mod_.types.push(@types.SubType::func([@types.ValueType::I32], []))
   mod_.imports.push({
     mod_name: "console",
     name: "log",

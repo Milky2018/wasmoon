@@ -215,12 +215,22 @@ pub fn get_rec_group_info(
 /// Structurally equivalent types (with matching rec group info) will be
 /// assigned the same canonical index.
 pub fn compute_canonical_type_indices(
-  types : Array[FuncType],
+  types : Array[SubType],
   type_rec_groups? : Array[Int] = [],
 ) -> Array[Int] {
   let n = types.length()
   let canonical : Array[Int] = Array::make(n, -1)
-  let ctx = TypeEquivalenceContext::same_module(types, type_rec_groups~)
+  // Extract function types for equivalence checking (GC types not yet supported)
+  let func_types : Array[FuncType] = []
+  for subtype in types {
+    match subtype.composite {
+      Func(ft) => func_types.push(ft)
+      // For struct/array types, push a placeholder empty function type
+      // TODO: implement proper structural equivalence for GC types
+      _ => func_types.push({ params: [], results: [] })
+    }
+  }
+  let ctx = TypeEquivalenceContext::same_module(func_types, type_rec_groups~)
   for i in 0..<n {
     let mut found = false
     let rec_info_i = get_rec_group_info(type_rec_groups, i)
@@ -284,9 +294,20 @@ fn value_types_simple_equal(v1 : ValueType, v2 : ValueType) -> Bool {
     | (NullRef, NullRef)
     | (NullFuncRef, NullFuncRef)
     | (NullExnRef, NullExnRef)
-    | (NullExternRef, NullExternRef) => true
+    | (NullExternRef, NullExternRef)
+    // GC types
+    | (RefAny, RefAny)
+    | (RefEq, RefEq)
+    | (RefNullEq, RefNullEq)
+    | (RefI31, RefI31)
+    | (RefNullI31, RefNullI31)
+    | (RefNone, RefNone) => true
     (RefFuncTyped(ref1), RefFuncTyped(ref2)) => ref1 == ref2
     (RefNullFuncTyped(ref1), RefNullFuncTyped(ref2)) => ref1 == ref2
+    (RefStruct(ref1), RefStruct(ref2)) => ref1 == ref2
+    (RefNullStruct(ref1), RefNullStruct(ref2)) => ref1 == ref2
+    (RefArray(ref1), RefArray(ref2)) => ref1 == ref2
+    (RefNullArray(ref1), RefNullArray(ref2)) => ref1 == ref2
     _ => false
   }
 }

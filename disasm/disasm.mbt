@@ -8,11 +8,11 @@ pub fn disassemble(mod_ : @types.Module) -> String {
   buf.write_string("(module\n")
 
   // Types section
-  for i, func_type in mod_.types {
+  for i, subtype in mod_.types {
     buf.write_string("  (type (;")
     buf.write_string(i.to_string())
     buf.write_string(";) ")
-    write_func_type(buf, func_type)
+    write_composite_type(buf, subtype)
     buf.write_string(")\n")
   }
 
@@ -38,8 +38,10 @@ pub fn disassemble(mod_ : @types.Module) -> String {
     buf.write_string(")")
     // Get function type for signature
     if type_idx < mod_.types.length() {
-      let func_type = mod_.types[type_idx]
-      write_func_params_results(buf, func_type)
+      match mod_.types[type_idx].composite {
+        Func(func_type) => write_func_params_results(buf, func_type)
+        _ => ()
+      }
     }
     buf.write_string("\n")
     // Write function body
@@ -154,7 +156,30 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
-fn write_func_type(buf : StringBuilder, ft : @types.FuncType) -> Unit {
+fn write_composite_type(buf : StringBuilder, st : @types.SubType) -> Unit {
+  // Handle subtype wrapper
+  if not(st.final_) || st.supertypes.length() > 0 {
+    buf.write_string("(sub ")
+    if not(st.final_) {
+      buf.write_string("open ")
+    }
+    for sup in st.supertypes {
+      buf.write_string(sup.to_string())
+      buf.write_string(" ")
+    }
+  }
+  match st.composite {
+    Func(ft) => write_func_type_inner(buf, ft)
+    Struct(st) => write_struct_type(buf, st)
+    Array(at) => write_array_type(buf, at)
+  }
+  if not(st.final_) || st.supertypes.length() > 0 {
+    buf.write_string(")")
+  }
+}
+
+///|
+fn write_func_type_inner(buf : StringBuilder, ft : @types.FuncType) -> Unit {
   buf.write_string("(func")
   if ft.params.length() > 0 {
     buf.write_string(" (param")
@@ -173,6 +198,45 @@ fn write_func_type(buf : StringBuilder, ft : @types.FuncType) -> Unit {
     buf.write_string(")")
   }
   buf.write_string(")")
+}
+
+///|
+fn write_struct_type(buf : StringBuilder, st : @types.StructType) -> Unit {
+  buf.write_string("(struct")
+  for field in st.fields {
+    buf.write_string(" (field ")
+    if field.mutable {
+      buf.write_string("(mut ")
+    }
+    write_storage_type(buf, field.storage_type)
+    if field.mutable {
+      buf.write_string(")")
+    }
+    buf.write_string(")")
+  }
+  buf.write_string(")")
+}
+
+///|
+fn write_array_type(buf : StringBuilder, at : @types.ArrayType) -> Unit {
+  buf.write_string("(array ")
+  if at.element.mutable {
+    buf.write_string("(mut ")
+  }
+  write_storage_type(buf, at.element.storage_type)
+  if at.element.mutable {
+    buf.write_string(")")
+  }
+  buf.write_string(")")
+}
+
+///|
+fn write_storage_type(buf : StringBuilder, st : @types.StorageType) -> Unit {
+  match st {
+    Val(vt) => write_value_type(buf, vt)
+    Packed(I8) => buf.write_string("i8")
+    Packed(I16) => buf.write_string("i16")
+  }
 }
 
 ///|
@@ -215,6 +279,17 @@ fn write_value_type(buf : StringBuilder, vt : @types.ValueType) -> Unit {
     NullFuncRef => buf.write_string("nullfuncref")
     NullExnRef => buf.write_string("nullexnref")
     NullExternRef => buf.write_string("nullexternref")
+    // GC types
+    RefStruct(idx) => buf.write_string("(ref \{idx})")
+    RefNullStruct(idx) => buf.write_string("(ref null \{idx})")
+    RefArray(idx) => buf.write_string("(ref \{idx})")
+    RefNullArray(idx) => buf.write_string("(ref null \{idx})")
+    RefAny => buf.write_string("(ref any)")
+    RefEq => buf.write_string("(ref eq)")
+    RefNullEq => buf.write_string("eqref")
+    RefI31 => buf.write_string("(ref i31)")
+    RefNullI31 => buf.write_string("i31ref")
+    RefNone => buf.write_string("(ref none)")
   }
 }
 
@@ -858,6 +933,130 @@ fn write_instruction_simple(
     // Nested blocks - should be handled by write_instruction
     Block(_, _) | Loop(_, _) | If(_, _, _) =>
       buf.write_string(";; nested block")
+
+    // GC instructions - struct operations
+    StructNew(type_idx) => {
+      buf.write_string("struct.new ")
+      buf.write_string(type_idx.to_string())
+    }
+    StructNewDefault(type_idx) => {
+      buf.write_string("struct.new_default ")
+      buf.write_string(type_idx.to_string())
+    }
+    StructGet(type_idx, field_idx) => {
+      buf.write_string("struct.get ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(field_idx.to_string())
+    }
+    StructGetS(type_idx, field_idx) => {
+      buf.write_string("struct.get_s ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(field_idx.to_string())
+    }
+    StructGetU(type_idx, field_idx) => {
+      buf.write_string("struct.get_u ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(field_idx.to_string())
+    }
+    StructSet(type_idx, field_idx) => {
+      buf.write_string("struct.set ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(field_idx.to_string())
+    }
+
+    // GC instructions - array operations
+    ArrayNew(type_idx) => {
+      buf.write_string("array.new ")
+      buf.write_string(type_idx.to_string())
+    }
+    ArrayNewDefault(type_idx) => {
+      buf.write_string("array.new_default ")
+      buf.write_string(type_idx.to_string())
+    }
+    ArrayNewFixed(type_idx, len) => {
+      buf.write_string("array.new_fixed ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(len.to_string())
+    }
+    ArrayNewData(type_idx, data_idx) => {
+      buf.write_string("array.new_data ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(data_idx.to_string())
+    }
+    ArrayNewElem(type_idx, elem_idx) => {
+      buf.write_string("array.new_elem ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(elem_idx.to_string())
+    }
+    ArrayGet(type_idx) => {
+      buf.write_string("array.get ")
+      buf.write_string(type_idx.to_string())
+    }
+    ArrayGetS(type_idx) => {
+      buf.write_string("array.get_s ")
+      buf.write_string(type_idx.to_string())
+    }
+    ArrayGetU(type_idx) => {
+      buf.write_string("array.get_u ")
+      buf.write_string(type_idx.to_string())
+    }
+    ArraySet(type_idx) => {
+      buf.write_string("array.set ")
+      buf.write_string(type_idx.to_string())
+    }
+    ArrayLen => buf.write_string("array.len")
+    ArrayFill(type_idx) => {
+      buf.write_string("array.fill ")
+      buf.write_string(type_idx.to_string())
+    }
+    ArrayCopy(dst_type, src_type) => {
+      buf.write_string("array.copy ")
+      buf.write_string(dst_type.to_string())
+      buf.write_string(" ")
+      buf.write_string(src_type.to_string())
+    }
+    ArrayInitData(type_idx, data_idx) => {
+      buf.write_string("array.init_data ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(data_idx.to_string())
+    }
+    ArrayInitElem(type_idx, elem_idx) => {
+      buf.write_string("array.init_elem ")
+      buf.write_string(type_idx.to_string())
+      buf.write_string(" ")
+      buf.write_string(elem_idx.to_string())
+    }
+
+    // GC instructions - reference casting
+    RefTest(_) => buf.write_string("ref.test")
+    RefTestNull(_) => buf.write_string("ref.test null")
+    RefCast(_) => buf.write_string("ref.cast")
+    RefCastNull(_) => buf.write_string("ref.cast null")
+    BrOnCast(label, _, _) => {
+      buf.write_string("br_on_cast ")
+      buf.write_string(label.to_string())
+    }
+    BrOnCastFail(label, _, _) => {
+      buf.write_string("br_on_cast_fail ")
+      buf.write_string(label.to_string())
+    }
+
+    // GC instructions - i31
+    RefI31 => buf.write_string("ref.i31")
+    I31GetS => buf.write_string("i31.get_s")
+    I31GetU => buf.write_string("i31.get_u")
+
+    // GC instructions - type conversion
+    AnyConvertExtern => buf.write_string("any.convert_extern")
+    ExternConvertAny => buf.write_string("extern.convert_any")
   }
 }
 

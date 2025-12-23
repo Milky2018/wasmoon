@@ -49,6 +49,8 @@ pub(all) struct Translator {
   // Cross-module support: maps local import indices to global indices
   // If empty, uses local indices directly
   import_remap : Array[Int]
+  // Module composite types (struct/array/func types) for GC support
+  module_types : Array[@types.SubType]
 }
 
 ///|
@@ -88,6 +90,7 @@ pub fn Translator::new(
   type_rec_groups? : Array[Int] = [],
   func_base? : Int = 0,
   import_remap? : Array[Int] = [],
+  module_types? : Array[@types.SubType] = [],
 ) -> Translator {
   let builder = IRBuilder::new(name)
   // Following Cranelift: add vmctx as explicit params
@@ -135,7 +138,7 @@ pub fn Translator::new(
   // Compute canonical type indices for structural type equivalence
   // Structurally equivalent types will map to the same canonical index
   let canonical_type_indices = @types.compute_canonical_type_indices(
-    func_types,
+    @types.func_types_to_subtypes(func_types),
     type_rec_groups~,
   )
   {
@@ -158,6 +161,39 @@ pub fn Translator::new(
     canonical_type_indices,
     func_base,
     import_remap,
+    module_types,
+  }
+}
+
+///|
+/// Get the number of fields in a struct type
+fn Translator::get_struct_field_count(self : Translator, type_idx : Int) -> Int {
+  if type_idx >= self.module_types.length() {
+    abort("Invalid type index: \{type_idx}")
+  }
+  let subtype = self.module_types[type_idx]
+  match subtype.composite {
+    @types.CompositeType::Struct(st) => st.fields.length()
+    _ => abort("Type \{type_idx} is not a struct type")
+  }
+}
+
+///|
+/// Extract type index from a ValueType (for GC reference types)
+fn Translator::extract_type_idx(
+  self : Translator,
+  value_type : @types.ValueType,
+) -> Int {
+  // Ignore the self parameter - we don't need module context to extract indices
+  let _ = self
+  match value_type {
+    @types.ValueType::RefStruct(idx) | @types.ValueType::RefNullStruct(idx) =>
+      idx
+    @types.ValueType::RefArray(idx) | @types.ValueType::RefNullArray(idx) => idx
+    @types.ValueType::RefFuncTyped(idx)
+    | @types.ValueType::RefNullFuncTyped(idx) => idx
+    // For abstract types, return -1 to indicate runtime check needed
+    _ => -1
   }
 }
 
@@ -950,6 +986,175 @@ fn Translator::translate_instruction(
       // Set global variable value
       let value = self.pop()
       self.builder.global_set(idx, value)
+    }
+
+    // GC instructions - struct operations
+    StructNew(type_idx) => {
+      // Pop field values from stack (in reverse order)
+      let field_count = self.get_struct_field_count(type_idx)
+      let fields : Array[Value] = []
+      for i = 0; i < field_count; i = i + 1 {
+        fields.push(self.pop())
+      }
+      // Reverse to get correct order
+      fields.rev_in_place()
+      let result = self.builder.struct_new(type_idx, fields)
+      self.push(result)
+    }
+    StructNewDefault(type_idx) => {
+      let result = self.builder.struct_new_default(type_idx)
+      self.push(result)
+    }
+    StructGet(type_idx, field_idx) => {
+      let struct_ref = self.pop()
+      let result = self.builder.struct_get(type_idx, field_idx, struct_ref)
+      self.push(result)
+    }
+    StructGetS(type_idx, field_idx) => {
+      let struct_ref = self.pop()
+      let result = self.builder.struct_get_s(type_idx, field_idx, struct_ref)
+      self.push(result)
+    }
+    StructGetU(type_idx, field_idx) => {
+      let struct_ref = self.pop()
+      let result = self.builder.struct_get_u(type_idx, field_idx, struct_ref)
+      self.push(result)
+    }
+    StructSet(type_idx, field_idx) => {
+      let value = self.pop()
+      let struct_ref = self.pop()
+      self.builder.struct_set(type_idx, field_idx, struct_ref, value)
+    }
+
+    // GC instructions - array operations
+    ArrayNew(type_idx) => {
+      // Stack: [init_value, length] -> [arrayref]
+      let length = self.pop()
+      let init_value = self.pop()
+      let result = self.builder.array_new(type_idx, init_value, length)
+      self.push(result)
+    }
+    ArrayNewDefault(type_idx) => {
+      // Stack: [length] -> [arrayref]
+      let length = self.pop()
+      let result = self.builder.array_new_default(type_idx, length)
+      self.push(result)
+    }
+    ArrayNewFixed(type_idx, count) => {
+      // Pop count values from stack
+      let elements : Array[Value] = []
+      for i = 0; i < count; i = i + 1 {
+        elements.push(self.pop())
+      }
+      // Reverse to get correct order
+      elements.rev_in_place()
+      let result = self.builder.array_new_fixed(type_idx, count, elements)
+      self.push(result)
+    }
+    ArrayGet(type_idx) => {
+      // Stack: [arrayref, index] -> [value]
+      let index = self.pop()
+      let array_ref = self.pop()
+      let result = self.builder.array_get(type_idx, array_ref, index)
+      self.push(result)
+    }
+    ArrayGetS(type_idx) => {
+      let index = self.pop()
+      let array_ref = self.pop()
+      let result = self.builder.array_get_s(type_idx, array_ref, index)
+      self.push(result)
+    }
+    ArrayGetU(type_idx) => {
+      let index = self.pop()
+      let array_ref = self.pop()
+      let result = self.builder.array_get_u(type_idx, array_ref, index)
+      self.push(result)
+    }
+    ArraySet(type_idx) => {
+      // Stack: [arrayref, index, value] -> []
+      let value = self.pop()
+      let index = self.pop()
+      let array_ref = self.pop()
+      self.builder.array_set(type_idx, array_ref, index, value)
+    }
+    ArrayLen => {
+      let array_ref = self.pop()
+      let result = self.builder.array_len(array_ref)
+      self.push(result)
+    }
+    ArrayFill(type_idx) => {
+      // Stack: [arrayref, offset, value, count] -> []
+      let count = self.pop()
+      let value = self.pop()
+      let offset = self.pop()
+      let array_ref = self.pop()
+      self.builder.array_fill(type_idx, array_ref, offset, value, count)
+    }
+    ArrayCopy(dst_type_idx, src_type_idx) => {
+      // Stack: [dst, dst_offset, src, src_offset, count] -> []
+      let count = self.pop()
+      let src_offset = self.pop()
+      let src = self.pop()
+      let dst_offset = self.pop()
+      let dst = self.pop()
+      self.builder.array_copy(
+        dst_type_idx, src_type_idx, dst, dst_offset, src, src_offset, count,
+      )
+    }
+
+    // GC instructions - i31 operations
+    RefI31 => {
+      let value = self.pop()
+      let result = self.builder.i31_new(value)
+      self.push(result)
+    }
+    I31GetS => {
+      let i31_ref = self.pop()
+      let result = self.builder.i31_get_s(i31_ref)
+      self.push(result)
+    }
+    I31GetU => {
+      let i31_ref = self.pop()
+      let result = self.builder.i31_get_u(i31_ref)
+      self.push(result)
+    }
+
+    // GC instructions - type conversions
+    AnyConvertExtern => {
+      let extern_ref = self.pop()
+      let result = self.builder.any_convert_extern(extern_ref)
+      self.push(result)
+    }
+    ExternConvertAny => {
+      let any_ref = self.pop()
+      let result = self.builder.extern_convert_any(any_ref)
+      self.push(result)
+    }
+
+    // Type testing/casting - these are more complex, need runtime support
+    RefTest(value_type) => {
+      let ref_val = self.pop()
+      let type_idx = self.extract_type_idx(value_type)
+      let result = self.builder.ref_test(type_idx, false, ref_val)
+      self.push(result)
+    }
+    RefTestNull(value_type) => {
+      let ref_val = self.pop()
+      let type_idx = self.extract_type_idx(value_type)
+      let result = self.builder.ref_test(type_idx, true, ref_val)
+      self.push(result)
+    }
+    RefCast(value_type) => {
+      let ref_val = self.pop()
+      let type_idx = self.extract_type_idx(value_type)
+      let result = self.builder.ref_cast(type_idx, false, ref_val)
+      self.push(result)
+    }
+    RefCastNull(value_type) => {
+      let ref_val = self.pop()
+      let type_idx = self.extract_type_idx(value_type)
+      let result = self.builder.ref_cast(type_idx, true, ref_val)
+      self.push(result)
     }
     inst => abort("unimplemented ir instruction \{inst}")
   }

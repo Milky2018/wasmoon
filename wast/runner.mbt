@@ -565,6 +565,8 @@ pub fn invoke_action(
                   RefNull(_) => -1L // null sentinel
                   RefExtern(n) => n.to_int64()
                   RefFunc => 0L // func ref (placeholder)
+                  // GC reference types - these shouldn't appear as args but handle them
+                  RefArray | RefStruct | RefEq | RefI31 | RefAny => 0L
                 }
                 i64_args.push(v)
               }
@@ -661,6 +663,11 @@ fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
       }
     // GC reference types - treat as null for now
     AnyRef | NullRef | ExnRef | NullExnRef => @types.Value::Null
+    RefStruct(_) | RefNullStruct(_) => @types.Value::Null
+    RefArray(_) | RefNullArray(_) => @types.Value::Null
+    RefAny | RefEq | RefNullEq => @types.Value::Null
+    RefI31 | RefNullI31 => @types.Value::Null
+    RefNone => @types.Value::Null
     V128 => abort("V128 not supported in JIT")
   }
 }
@@ -678,6 +685,8 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
     RefNull(_) => @types.Value::Null
     RefExtern(n) => @types.Value::ExternRef(n)
     RefFunc => @types.Value::FuncRef(0) // Placeholder
+    // GC reference types - these are abstract type matchers, not concrete values
+    RefArray | RefStruct | RefEq | RefI31 | RefAny => @types.Value::Null // Placeholder
   }
 }
 
@@ -693,6 +702,19 @@ pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
     (Null, RefNull(_)) => true
     (FuncRef(_), RefFunc) => true
     (ExternRef(a), RefExtern(e)) => a == e
+    // GC reference type matching
+    (ArrayRef(_), RefArray) => true
+    (StructRef(_), RefStruct) => true
+    // ref.eq matches i31, struct, and array references
+    (I31(_), RefEq) => true
+    (StructRef(_), RefEq) => true
+    (ArrayRef(_), RefEq) => true
+    // ref.i31 matches i31 references
+    (I31(_), RefI31) => true
+    // ref.any matches any GC reference
+    (I31(_), RefAny) => true
+    (StructRef(_), RefAny) => true
+    (ArrayRef(_), RefAny) => true
     _ => false
   }
 }

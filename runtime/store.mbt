@@ -24,6 +24,7 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType] // Tag types (params only, no results)
   exns : Array[ExnInstance] // Exception instances for exnref
+  heap : GCHeap // GC heap for struct and array instances
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
   func_owners : Array[FuncOwner]
@@ -45,6 +46,7 @@ pub fn Store::new() -> Store {
     globals: [],
     tags: [],
     exns: [],
+    heap: GCHeap::new(),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -160,6 +162,111 @@ pub fn Store::get_exn(
     raise UndefinedElement
   }
   self.exns[idx]
+}
+
+///|
+/// Allocate a struct instance and return its reference index
+pub fn Store::alloc_struct(
+  self : Store,
+  type_idx : Int,
+  fields : Array[@types.Value],
+) -> Int {
+  self.heap.alloc_struct(type_idx, fields)
+}
+
+///|
+/// Allocate an array instance and return its reference index
+pub fn Store::alloc_array(
+  self : Store,
+  type_idx : Int,
+  elements : Array[@types.Value],
+) -> Int {
+  self.heap.alloc_array(type_idx, elements)
+}
+
+///|
+/// Get a struct field value
+pub fn Store::struct_get(
+  self : Store,
+  struct_idx : Int,
+  field_idx : Int,
+) -> @types.Value raise RuntimeError {
+  self.heap.struct_get(struct_idx, field_idx)
+}
+
+///|
+/// Set a struct field value
+pub fn Store::struct_set(
+  self : Store,
+  struct_idx : Int,
+  field_idx : Int,
+  value : @types.Value,
+) -> Unit raise RuntimeError {
+  self.heap.struct_set(struct_idx, field_idx, value)
+}
+
+///|
+/// Get array length
+pub fn Store::array_len(
+  self : Store,
+  array_idx : Int,
+) -> Int raise RuntimeError {
+  self.heap.array_len(array_idx)
+}
+
+///|
+/// Get an array element value
+pub fn Store::array_get(
+  self : Store,
+  array_idx : Int,
+  elem_idx : Int,
+) -> @types.Value raise RuntimeError {
+  self.heap.array_get(array_idx, elem_idx)
+}
+
+///|
+/// Set an array element value
+pub fn Store::array_set(
+  self : Store,
+  array_idx : Int,
+  elem_idx : Int,
+  value : @types.Value,
+) -> Unit raise RuntimeError {
+  self.heap.array_set(array_idx, elem_idx, value)
+}
+
+///|
+/// Fill array elements with a value
+pub fn Store::array_fill(
+  self : Store,
+  array_idx : Int,
+  offset : Int,
+  value : @types.Value,
+  count : Int,
+) -> Unit raise RuntimeError {
+  self.heap.array_fill(array_idx, offset, value, count)
+}
+
+///|
+/// Copy elements between arrays
+pub fn Store::array_copy(
+  self : Store,
+  dst_idx : Int,
+  dst_offset : Int,
+  src_idx : Int,
+  src_offset : Int,
+  count : Int,
+) -> Unit raise RuntimeError {
+  self.heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count)
+}
+
+///|
+/// Get the type index of a GC object
+pub fn Store::get_gc_type_idx(
+  self : Store,
+  idx : Int,
+) -> Int raise RuntimeError {
+  self.heap.get_type_idx(idx)
 }
 
 ///|
