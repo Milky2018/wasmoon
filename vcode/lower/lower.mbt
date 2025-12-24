@@ -4351,44 +4351,42 @@ fn lower_array_len(
 
 ///|
 /// Lower array.fill: Fill array elements with a value
-/// Uses runtime libcall: gc_array_fill_impl(ref, type_idx, offset, value, count)
+/// Uses runtime libcall: gc_array_fill_impl(ref, offset, value, count)
 fn lower_array_fill(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : @block.VCodeBlock,
-  type_idx : Int,
+  _type_idx : Int,
 ) -> Unit {
   // Operands: ref, offset, value, count
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let offset_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
   let val_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
   let count_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
-  // Materialize type_idx
-  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayFill))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
-  // Call: gc_array_fill_impl(ref, type_idx, offset, value, count)
+  // Call: gc_array_fill_impl(ref, offset, value, count)
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [ref_vreg, type_idx_vreg, offset_vreg, val_vreg, count_vreg],
+    [ref_vreg, offset_vreg, val_vreg, count_vreg],
     None,
   )
 }
 
 ///|
 /// Lower array.copy: Copy elements between arrays
-/// Uses runtime libcall: gc_array_copy_impl(dst_ref, dst_type, dst_off, src_ref, src_type, src_off, count)
+/// Uses runtime libcall: gc_array_copy_impl(dst_ref, dst_off, src_ref, src_off, count)
 fn lower_array_copy(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : @block.VCodeBlock,
-  dst_type : Int,
-  src_type : Int,
+  _dst_type : Int,
+  _src_type : Int,
 ) -> Unit {
   // Operands: dst_ref, dst_offset, src_ref, src_offset, count
   let dst_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
@@ -4396,23 +4394,17 @@ fn lower_array_copy(
   let src_ref_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
   let src_off_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
   let count_vreg = ctx.get_vreg_for_use(inst.operands[4], block)
-  // Materialize type indices
-  let dst_type_vreg = materialize_imm(ctx, block, dst_type.to_int64())
-  let src_type_vreg = materialize_imm(ctx, block, src_type.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayCopy))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
-  // Call: gc_array_copy_impl(dst_ref, dst_type, dst_off, src_ref, src_type, src_off, count)
+  // Call: gc_array_copy_impl(dst_ref, dst_off, src_ref, src_off, count)
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [
-      dst_ref_vreg, dst_type_vreg, dst_off_vreg, src_ref_vreg, src_type_vreg, src_off_vreg,
-      count_vreg,
-    ],
+    [dst_ref_vreg, dst_off_vreg, src_ref_vreg, src_off_vreg, count_vreg],
     None,
   )
 }

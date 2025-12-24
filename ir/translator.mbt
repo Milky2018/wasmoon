@@ -1952,25 +1952,28 @@ fn Translator::translate_br_on_cast(
   let taken = self.builder.create_block()
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
-    // Collect values that would be passed on branch
-    // The ref is one of the results, so we need result_types.length() - 1 from stack
-    let args : Array[Value] = []
+    // Collect values that would be passed on branch (excluding the ref)
     let stack_values_needed = frame.result_types.length() - 1
+    let stack_args : Array[Value] = []
     for i in 0..<stack_values_needed {
-      args.push(
+      stack_args.push(
         self.value_stack[self.value_stack.length() - stack_values_needed + i],
       )
     }
-    // Add the ref as the last value (the cast ref being passed)
-    args.push(ref_val)
-    // Always pass current local values
+    // Branch: if matches (matches == 1), go to taken; otherwise fall through
+    self.builder.brnz(matches, taken, fallthrough)
+    // Critical edge split: taken block creates cast value and jumps to target
+    self.builder.switch_to_block(taken)
+    // Create the cast value in the taken block (we know the cast succeeded here)
+    let cast_val = self.builder.ref_cast(type_idx, nullable, ref_val)
+    let args : Array[Value] = []
+    for v in stack_args {
+      args.push(v)
+    }
+    args.push(cast_val)
     for loc in self.locals {
       args.push(loc)
     }
-    // Branch: if matches (matches == 1), go to taken; otherwise fall through
-    self.builder.brnz(matches, taken, fallthrough)
-    // Critical edge split: taken block jumps to target with args
-    self.builder.switch_to_block(taken)
     self.builder.jump(frame.block, args)
     // Continue with fallthrough - push the original ref back
     self.builder.switch_to_block(fallthrough)
@@ -1978,19 +1981,25 @@ fn Translator::translate_br_on_cast(
   } else if idx == -1 {
     // Jump to function level (early return)
     let ret_cont = self.get_or_create_return_continuation()
-    let args : Array[Value] = []
     let stack_values_needed = self.func_result_types.length() - 1
+    let stack_args : Array[Value] = []
     for i in 0..<stack_values_needed {
-      args.push(
+      stack_args.push(
         self.value_stack[self.value_stack.length() - stack_values_needed + i],
       )
     }
-    args.push(ref_val)
+    self.builder.brnz(matches, taken, fallthrough)
+    self.builder.switch_to_block(taken)
+    // Create the cast value in the taken block
+    let cast_val = self.builder.ref_cast(type_idx, nullable, ref_val)
+    let args : Array[Value] = []
+    for v in stack_args {
+      args.push(v)
+    }
+    args.push(cast_val)
     for loc in self.locals {
       args.push(loc)
     }
-    self.builder.brnz(matches, taken, fallthrough)
-    self.builder.switch_to_block(taken)
     self.builder.jump(ret_cont, args)
     self.builder.switch_to_block(fallthrough)
     self.push(ref_val)
@@ -2018,38 +2027,47 @@ fn Translator::translate_br_on_cast_fail(
   let taken = self.builder.create_block()
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
-    // Collect values that would be passed on branch
-    let args : Array[Value] = []
+    // Collect values that would be passed on branch (excluding the ref)
     let stack_values_needed = frame.result_types.length() - 1
+    let stack_args : Array[Value] = []
     for i in 0..<stack_values_needed {
-      args.push(
+      stack_args.push(
         self.value_stack[self.value_stack.length() - stack_values_needed + i],
       )
     }
-    // Add the ref as the last value
+    // Build args for the taken (fail) branch - uses original ref_val
+    let args : Array[Value] = []
+    for v in stack_args {
+      args.push(v)
+    }
     args.push(ref_val)
-    // Always pass current local values
     for loc in self.locals {
       args.push(loc)
     }
     // Branch: if NOT matches (matches == 0), go to taken; otherwise fall through
     // brnz branches if non-zero, so we invert: if matches, go to fallthrough
     self.builder.brnz(matches, fallthrough, taken)
-    // Critical edge split: taken block jumps to target with args
+    // Critical edge split: taken block jumps to target with original ref
     self.builder.switch_to_block(taken)
     self.builder.jump(frame.block, args)
-    // Continue with fallthrough - push the cast ref back (it matched)
+    // Continue with fallthrough - push the cast ref (it matched)
     self.builder.switch_to_block(fallthrough)
-    self.push(ref_val)
+    let cast_val = self.builder.ref_cast(type_idx, nullable, ref_val)
+    self.push(cast_val)
   } else if idx == -1 {
     // Jump to function level (early return)
     let ret_cont = self.get_or_create_return_continuation()
-    let args : Array[Value] = []
     let stack_values_needed = self.func_result_types.length() - 1
+    let stack_args : Array[Value] = []
     for i in 0..<stack_values_needed {
-      args.push(
+      stack_args.push(
         self.value_stack[self.value_stack.length() - stack_values_needed + i],
       )
+    }
+    // Build args for the taken (fail) branch - uses original ref_val
+    let args : Array[Value] = []
+    for v in stack_args {
+      args.push(v)
     }
     args.push(ref_val)
     for loc in self.locals {
@@ -2058,8 +2076,10 @@ fn Translator::translate_br_on_cast_fail(
     self.builder.brnz(matches, fallthrough, taken)
     self.builder.switch_to_block(taken)
     self.builder.jump(ret_cont, args)
+    // Continue with fallthrough - push the cast ref (it matched)
     self.builder.switch_to_block(fallthrough)
-    self.push(ref_val)
+    let cast_val = self.builder.ref_cast(type_idx, nullable, ref_val)
+    self.push(cast_val)
   }
 }
 
