@@ -58,6 +58,8 @@ priv struct Parser {
   mut types : Array[@types.SubType]
   // Reference to module type_rec_groups for implicit type matching
   mut type_rec_groups : Array[Int]
+  // Field names per type: type_idx -> (field_name -> field_idx)
+  field_names : Map[Int, Map[String, Int]]
 }
 
 ///|
@@ -79,6 +81,7 @@ fn Parser::new(input : String) -> Parser raise WatError {
     label_stack: [],
     types: [],
     type_rec_groups: [],
+    field_names: {},
   }
 }
 
@@ -137,6 +140,42 @@ fn Parser::resolve_memory(self : Parser, name : String) -> Int raise WatError {
   match self.memory_names.get(name) {
     Some(idx) => idx
     None => raise WatError::UndefinedIdentifier("memory $\{name}", self.loc())
+  }
+}
+
+///|
+/// Parse field index (numeric or by name for the given type)
+fn Parser::parse_field_idx(self : Parser, type_idx : Int) -> Int raise WatError {
+  match self.current.token {
+    Number(s) => {
+      self.advance()
+      parse_u32(s)
+    }
+    Id(name) =>
+      match self.field_names.get(type_idx) {
+        Some(names) =>
+          match names.get(name) {
+            Some(idx) => {
+              self.advance()
+              idx
+            }
+            None =>
+              raise WatError::UndefinedIdentifier(
+                "field $\{name} in type \{type_idx}",
+                self.loc(),
+              )
+          }
+        None =>
+          raise WatError::UndefinedIdentifier(
+            "field $\{name} in type \{type_idx}",
+            self.loc(),
+          )
+      }
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected field index or name",
+        self.loc(),
+      )
   }
 }
 
@@ -1694,12 +1733,16 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         Keyword("any") => {
           self.advance()
           self.expect_rparen()
-          @types.ValueType::AnyRef // any is always nullable in this context
+          if is_nullable {
+            @types.ValueType::AnyRef
+          } else {
+            @types.ValueType::RefAny
+          }
         }
         Keyword("exn") => {
           self.advance()
           self.expect_rparen()
-          @types.ValueType::ExnRef // exn is always nullable in this context
+          @types.ValueType::ExnRef // exn only has nullable form in current spec
         }
         Keyword("none") => {
           self.advance()
@@ -1759,7 +1802,7 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           }
         }
         Id(name) => {
-          // Typed function reference like (ref $t)
+          // Typed reference like (ref $t)
           let type_idx = match self.type_names.get(name) {
             Some(idx) => idx
             None =>
@@ -1770,22 +1813,14 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           }
           self.advance()
           self.expect_rparen()
-          if is_nullable {
-            @types.ValueType::RefNullFuncTyped(type_idx)
-          } else {
-            @types.ValueType::RefFuncTyped(type_idx)
-          }
+          self.get_typed_ref(type_idx, is_nullable)
         }
         Number(s) => {
-          // Typed function reference with numeric index like (ref 0)
+          // Typed reference with numeric index like (ref 0)
           let type_idx = parse_int(s)
           self.advance()
           self.expect_rparen()
-          if is_nullable {
-            @types.ValueType::RefNullFuncTyped(type_idx)
-          } else {
-            @types.ValueType::RefFuncTyped(type_idx)
-          }
+          self.get_typed_ref(type_idx, is_nullable)
         }
         _ => {
           self.expect_rparen()
@@ -2376,28 +2411,58 @@ fn Parser::parse_type_def(
     self.type_names.set(name, type_idx)
   }
   self.expect_lparen()
+  // Check for sub keyword (type inheritance)
+  let (is_final, supertypes, has_sub) = if self.current.token == Keyword("sub") {
+    self.advance() // skip "sub"
+    // Check for optional "final" keyword
+    let is_final = if self.current.token == Keyword("final") {
+      self.advance()
+      true
+    } else {
+      false
+    }
+    // Check for optional supertype index
+    let supertypes : Array[Int] = []
+    if self.current.token is Id(name) {
+      match self.type_names.get(name) {
+        Some(idx) => {
+          supertypes.push(idx)
+          self.advance()
+        }
+        None =>
+          raise WatError::UnexpectedToken(
+            "unknown type identifier: \{name}",
+            self.loc(),
+          )
+      }
+    } else if self.current.token is Number(s) {
+      supertypes.push(parse_int(s))
+      self.advance()
+    }
+    self.expect_lparen() // lparen for composite type
+    (is_final, supertypes, true)
+  } else {
+    (true, [], false) // Default: final type without supertypes
+  }
   // Handle different type definition kinds: func, struct, array
-  match self.current.token {
+  let composite = match self.current.token {
     Keyword("func") => {
       self.advance() // skip "func"
       let ft = self.parse_func_type()
       self.expect_rparen() // close func
-      self.expect_rparen() // close type
-      @types.SubType::from_func(ft)
+      @types.CompositeType::Func(ft)
     }
     Keyword("struct") => {
       self.advance() // skip "struct"
-      let st = self.parse_struct_type()
+      let st = self.parse_struct_type(type_idx)
       self.expect_rparen() // close struct
-      self.expect_rparen() // close type
-      @types.SubType::simple(@types.CompositeType::Struct(st))
+      @types.CompositeType::Struct(st)
     }
     Keyword("array") => {
       self.advance() // skip "array"
       let at = self.parse_array_type()
       self.expect_rparen() // close array
-      self.expect_rparen() // close type
-      @types.SubType::simple(@types.CompositeType::Array(at))
+      @types.CompositeType::Array(at)
     }
     _ =>
       raise WatError::UnexpectedToken(
@@ -2405,6 +2470,11 @@ fn Parser::parse_type_def(
         self.loc(),
       )
   }
+  if has_sub {
+    self.expect_rparen() // close sub
+  }
+  self.expect_rparen() // close type
+  { final_: is_final, supertypes, composite }
 }
 
 ///|
@@ -2544,18 +2614,18 @@ fn Parser::parse_heap_type(
       self.advance()
       // Abstract struct type (not a specific struct)
       if is_nullable {
-        @types.ValueType::AnyRef // TODO: add RefNullStruct abstract?
+        @types.ValueType::RefNullStruct(-1)
       } else {
-        @types.ValueType::RefAny
+        @types.ValueType::RefStruct(-1)
       }
     }
     Keyword("array") => {
       self.advance()
       // Abstract array type (not a specific array)
       if is_nullable {
-        @types.ValueType::AnyRef // TODO: add RefNullArray abstract?
+        @types.ValueType::RefNullArray(-1)
       } else {
-        @types.ValueType::RefAny
+        @types.ValueType::RefArray(-1)
       }
     }
     Keyword("exn") => {
@@ -2585,22 +2655,12 @@ fn Parser::parse_heap_type(
           raise WatError::UnexpectedToken("unknown type \{name}", self.loc())
       }
       self.advance()
-      // Need to determine if this is a func, struct, or array type
-      // For now, use generic typed reference
-      if is_nullable {
-        @types.ValueType::RefNullFuncTyped(type_idx)
-      } else {
-        @types.ValueType::RefFuncTyped(type_idx)
-      }
+      self.get_typed_ref(type_idx, is_nullable)
     }
     Number(s) => {
       let type_idx = parse_int(s)
       self.advance()
-      if is_nullable {
-        @types.ValueType::RefNullFuncTyped(type_idx)
-      } else {
-        @types.ValueType::RefFuncTyped(type_idx)
-      }
+      self.get_typed_ref(type_idx, is_nullable)
     }
     _ =>
       raise WatError::UnexpectedToken(
@@ -2612,13 +2672,109 @@ fn Parser::parse_heap_type(
 
 ///|
 /// Parse struct type: (field ...) (field ...) ...
-fn Parser::parse_struct_type(self : Parser) -> @types.StructType raise WatError {
+fn Parser::parse_struct_type(
+  self : Parser,
+  type_idx : Int,
+) -> @types.StructType raise WatError {
   let fields : Array[@types.FieldType] = []
+  // Initialize field names map for this type
+  self.field_names.set(type_idx, {})
   // Parse fields until we hit RParen (end of struct)
   while self.current.token != RParen {
-    fields.push(self.parse_field_type())
+    self.parse_field_types(type_idx, fields)
   }
   { fields, }
+}
+
+///|
+/// Parse field types - handles abbreviated form (field i32 i32) which produces multiple fields
+fn Parser::parse_field_types(
+  self : Parser,
+  type_idx : Int,
+  fields : Array[@types.FieldType],
+) -> Unit raise WatError {
+  // Check if this is a full field definition with (field ...)
+  if self.current.token == LParen {
+    self.advance()
+    if self.current.token == Keyword("field") {
+      self.advance() // skip "field"
+      // Optional field name - only one name allowed, applied to first field
+      let field_name : String? = if self.current.token is Id(name) {
+        self.advance()
+        Some(name)
+      } else {
+        None
+      }
+      // Register field name if present (for the first field only)
+      match field_name {
+        Some(name) =>
+          match self.field_names.get(type_idx) {
+            Some(names) => names.set(name, fields.length())
+            None => ()
+          }
+        None => ()
+      }
+      // Check for (mut ...) first - this only applies to single field
+      if self.current.token == LParen {
+        self.advance()
+        if self.current.token == Keyword("mut") {
+          self.advance()
+          let storage_type = self.parse_storage_type()
+          self.expect_rparen() // close mut
+          fields.push({ storage_type, mutable: true })
+          self.expect_rparen() // close field
+          return
+        } else {
+          // Not mut, it's a storage type like (ref ...), parse it but continue for more
+          let storage_type = self.parse_storage_type_after_lparen()
+          fields.push({ storage_type, mutable: false })
+          // Continue parsing more types if any
+          while self.current.token != RParen {
+            let storage_type = self.parse_storage_type()
+            fields.push({ storage_type, mutable: false })
+          }
+          self.expect_rparen() // close field
+          return
+        }
+      }
+      // Parse one or more storage types (abbreviated form)
+      // Can include (mut <valtype>) for mutable fields
+      while self.current.token != RParen {
+        if self.current.token == LParen {
+          self.advance()
+          if self.current.token == Keyword("mut") {
+            // Mutable field: (mut <storage_type>)
+            self.advance()
+            let storage_type = self.parse_storage_type()
+            self.expect_rparen()
+            fields.push({ storage_type, mutable: true })
+          } else {
+            // Reference type: (ref ...)
+            let storage_type = self.parse_storage_type_after_lparen()
+            fields.push({ storage_type, mutable: false })
+          }
+        } else {
+          let storage_type = self.parse_storage_type()
+          fields.push({ storage_type, mutable: false })
+        }
+      }
+      self.expect_rparen() // close field
+    } else if self.current.token == Keyword("mut") {
+      // Shorthand: (mut <storage_type>)
+      self.advance()
+      let storage_type = self.parse_storage_type()
+      self.expect_rparen()
+      fields.push({ storage_type, mutable: true })
+    } else {
+      // It's a storage type starting with lparen, like (ref ...)
+      let storage_type = self.parse_storage_type_after_lparen()
+      fields.push({ storage_type, mutable: false })
+    }
+  } else {
+    // Just a storage type
+    let storage_type = self.parse_storage_type()
+    fields.push({ storage_type, mutable: false })
+  }
 }
 
 ///|
@@ -3678,8 +3834,21 @@ fn Parser::parse_plain_instruction(
     "ref.is_null" => @types.Instruction::RefIsNull
     "ref.func" => @types.Instruction::RefFunc(self.parse_func_idx())
     "ref.as_non_null" => @types.Instruction::RefAsNonNull
+    "ref.eq" => @types.Instruction::RefEqInstr
     "br_on_null" => @types.Instruction::BrOnNull(self.parse_label_idx())
     "br_on_non_null" => @types.Instruction::BrOnNonNull(self.parse_label_idx())
+    "br_on_cast" => {
+      let label_idx = self.parse_label_idx()
+      let from_type = self.parse_ref_type()
+      let to_type = self.parse_ref_type()
+      @types.Instruction::BrOnCast(label_idx, from_type, to_type)
+    }
+    "br_on_cast_fail" => {
+      let label_idx = self.parse_label_idx()
+      let from_type = self.parse_ref_type()
+      let to_type = self.parse_ref_type()
+      @types.Instruction::BrOnCastFail(label_idx, from_type, to_type)
+    }
 
     // Variable
     "local.get" => @types.Instruction::LocalGet(self.parse_local_idx())
@@ -4005,22 +4174,22 @@ fn Parser::parse_plain_instruction(
       @types.Instruction::StructNewDefault(self.parse_type_idx())
     "struct.get" => {
       let type_idx = self.parse_type_idx()
-      let field_idx = self.parse_u32()
+      let field_idx = self.parse_field_idx(type_idx)
       @types.Instruction::StructGet(type_idx, field_idx)
     }
     "struct.get_s" => {
       let type_idx = self.parse_type_idx()
-      let field_idx = self.parse_u32()
+      let field_idx = self.parse_field_idx(type_idx)
       @types.Instruction::StructGetS(type_idx, field_idx)
     }
     "struct.get_u" => {
       let type_idx = self.parse_type_idx()
-      let field_idx = self.parse_u32()
+      let field_idx = self.parse_field_idx(type_idx)
       @types.Instruction::StructGetU(type_idx, field_idx)
     }
     "struct.set" => {
       let type_idx = self.parse_type_idx()
-      let field_idx = self.parse_u32()
+      let field_idx = self.parse_field_idx(type_idx)
       @types.Instruction::StructSet(type_idx, field_idx)
     }
 
@@ -4077,23 +4246,23 @@ fn Parser::parse_plain_instruction(
     // GC instructions - type testing and casting
     "ref.test" => {
       // ref.test <heaptype> or ref.test (ref <heaptype>)
+      // Uses RefTestNull if the type is nullable, otherwise RefTest
       let vt = self.parse_value_type()
-      @types.Instruction::RefTest(vt)
-    }
-    "ref.test_null" => {
-      // ref.test_null <heaptype> - test for nullable type
-      let vt = self.parse_value_type()
-      @types.Instruction::RefTestNull(vt)
+      if vt.is_nullable() {
+        @types.Instruction::RefTestNull(vt)
+      } else {
+        @types.Instruction::RefTest(vt)
+      }
     }
     "ref.cast" => {
       // ref.cast <heaptype> or ref.cast (ref <heaptype>)
+      // Uses RefCastNull if the type is nullable, otherwise RefCast
       let vt = self.parse_value_type()
-      @types.Instruction::RefCast(vt)
-    }
-    "ref.cast_null" => {
-      // ref.cast_null <heaptype> - cast to nullable type
-      let vt = self.parse_value_type()
-      @types.Instruction::RefCastNull(vt)
+      if vt.is_nullable() {
+        @types.Instruction::RefCastNull(vt)
+      } else {
+        @types.Instruction::RefCast(vt)
+      }
     }
     _ => raise WatError::InvalidInstruction(kw, self.loc())
   }
@@ -4441,9 +4610,141 @@ fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
+/// Get the appropriate typed reference for a type index
+fn Parser::get_typed_ref(
+  self : Parser,
+  type_idx : Int,
+  is_nullable : Bool,
+) -> @types.ValueType {
+  // Check if we have type info for this index
+  if type_idx >= 0 && type_idx < self.types.length() {
+    match self.types[type_idx].composite {
+      Struct(_) =>
+        if is_nullable {
+          @types.ValueType::RefNullStruct(type_idx)
+        } else {
+          @types.ValueType::RefStruct(type_idx)
+        }
+      Array(_) =>
+        if is_nullable {
+          @types.ValueType::RefNullArray(type_idx)
+        } else {
+          @types.ValueType::RefArray(type_idx)
+        }
+      Func(_) =>
+        if is_nullable {
+          @types.ValueType::RefNullFuncTyped(type_idx)
+        } else {
+          @types.ValueType::RefFuncTyped(type_idx)
+        }
+    }
+    // Type not yet defined, assume func type (may need forward reference handling)
+  } else if is_nullable {
+    @types.ValueType::RefNullFuncTyped(type_idx)
+  } else {
+    @types.ValueType::RefFuncTyped(type_idx)
+  }
+}
+
+///|
 /// Parse a reference type for ref.null instruction
 fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
   match self.current.token {
+    LParen => {
+      // Handle (ref ...) syntax
+      self.advance()
+      self.expect_keyword("ref")
+      // Check for nullable: (ref null ...) vs non-null: (ref ...)
+      let is_nullable = self.current.token == Keyword("null")
+      if is_nullable {
+        self.advance()
+      }
+      // Parse the heap type
+      let result = match self.current.token {
+        Keyword("func") => {
+          self.advance()
+          if is_nullable {
+            @types.ValueType::FuncRef
+          } else {
+            @types.ValueType::RefFunc
+          }
+        }
+        Keyword("extern") => {
+          self.advance()
+          if is_nullable {
+            @types.ValueType::ExternRef
+          } else {
+            @types.ValueType::RefExtern
+          }
+        }
+        Keyword("any") => {
+          self.advance()
+          if is_nullable {
+            @types.ValueType::AnyRef
+          } else {
+            @types.ValueType::RefAny
+          }
+        }
+        Keyword("eq") => {
+          self.advance()
+          if is_nullable {
+            @types.ValueType::RefNullEq
+          } else {
+            @types.ValueType::RefEq
+          }
+        }
+        Keyword("i31") => {
+          self.advance()
+          if is_nullable {
+            @types.ValueType::RefNullI31
+          } else {
+            @types.ValueType::RefI31
+          }
+        }
+        Keyword("struct") => {
+          self.advance()
+          if is_nullable {
+            @types.ValueType::RefNullStruct(-1)
+          } else {
+            @types.ValueType::RefStruct(-1)
+          }
+        }
+        Keyword("array") => {
+          self.advance()
+          if is_nullable {
+            @types.ValueType::RefNullArray(-1)
+          } else {
+            @types.ValueType::RefArray(-1)
+          }
+        }
+        Keyword("none") => {
+          self.advance()
+          @types.ValueType::RefNone // bottom type (always non-null when specified as ref none)
+        }
+        Id(name) =>
+          match self.type_names.get(name) {
+            Some(idx) => {
+              self.advance()
+              // Check what kind of type this is
+              self.get_typed_ref(idx, is_nullable)
+            }
+            None =>
+              raise WatError::UnexpectedToken(
+                "unknown type \{name}",
+                self.loc(),
+              )
+          }
+        Number(s) => {
+          let idx = parse_int(s)
+          self.advance()
+          // Check what kind of type this is
+          self.get_typed_ref(idx, is_nullable)
+        }
+        _ => raise WatError::UnexpectedToken("expected heap type", self.loc())
+      }
+      self.expect_rparen()
+      result
+    }
     Keyword("func") | Keyword("funcref") => {
       self.advance()
       @types.ValueType::FuncRef
@@ -6141,6 +6442,8 @@ pub enum WastValue {
   F64ArithmeticNan
   RefNull(String)
   RefExtern(Int)
+  RefExternAny // (ref.extern) without number - matches any non-null externref
+  RefHost(Int) // (ref.host <idx>) - host reference for testing
   RefFunc
   // GC reference types
   RefArray // (ref.array) - any array reference
@@ -7148,7 +7451,17 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
           self.advance()
           RefExtern(parse_wast_int(n))
         }
-        _ => raise WatError::UnexpectedToken("expected number", self.loc())
+        _ => RefExternAny // no argument means any non-null externref
+      }
+    }
+    Keyword("ref.host") => {
+      self.advance()
+      match self.current.token {
+        Number(n) => {
+          self.advance()
+          RefHost(parse_wast_int(n))
+        }
+        _ => RefHost(0) // no argument means any host ref
       }
     }
     Keyword("ref.func") => {

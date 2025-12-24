@@ -1,5 +1,24 @@
 // WAST Runner - Execute WAST test scripts
 
+// Reference encoding constants for JIT
+// These must match the encoding in jit/jit_ffi/jit.c
+
+///|
+/// Null reference value for GC types and externref (used in JIT)
+pub const NULL_REF : Int64 = 0L
+
+///|
+/// Null reference sentinel for funcref in interpreter mode
+pub const FUNCREF_NULL_SENTINEL : Int64 = -1L
+
+///|
+/// Tag for externref values: bit 62 set
+pub const EXTERNREF_TAG : Int64 = 0x4000000000000000L
+
+///|
+/// Tag for funcref pointer values: bit 61 set
+pub const FUNCREF_TAG : Int64 = 0x2000000000000000L
+
 ///|
 /// Result of running WAST commands
 pub struct WastResult {
@@ -58,7 +77,12 @@ pub fn WastContext::new(
   use_jit : Bool,
   jit_compiler? : JITCompiler? = None,
 ) -> WastContext {
-  let store = @runtime.Store::new()
+  // Use c_heap when JIT is enabled for GC support
+  let store = if use_jit {
+    @runtime.Store::with_c_heap()
+  } else {
+    @runtime.Store::new()
+  }
   // Create spectest module with standard test functions/values
   let spectest_instance = create_spectest_module(store)
   let registered_modules : Map[String, @runtime.ModuleInstance] = Map::new()
@@ -562,21 +586,43 @@ pub fn invoke_action(
                     @types.ToInt64::to_int64_bits(@float.not_a_number)
                   F64CanonicalNan | F64ArithmeticNan =>
                     @types.ToInt64::to_int64_bits(@double.not_a_number)
-                  RefNull(_) => -1L // null sentinel
-                  RefExtern(n) => n.to_int64()
-                  RefFunc => 0L // func ref (placeholder)
+                  RefNull(_) => NULL_REF
+                  // Externref uses special encoding: EXTERNREF_TAG | (host_idx << 1)
+                  RefExtern(n) => EXTERNREF_TAG | (n.to_int64() << 1)
+                  RefHost(n) => EXTERNREF_TAG | (n.to_int64() << 1)
+                  RefFunc => NULL_REF // func ref (placeholder)
+                  RefExternAny => NULL_REF // any extern ref (placeholder)
                   // GC reference types - these shouldn't appear as args but handle them
-                  RefArray | RefStruct | RefEq | RefI31 | RefAny => 0L
+                  RefArray | RefStruct | RefEq | RefI31 | RefAny => NULL_REF
                 }
                 i64_args.push(v)
               }
+              // Set up GC heap for JIT execution if c_heap is available
+              match ctx.store.c_heap {
+                Some(heap) => {
+                  // Compute canonical type indices for proper type equivalence checking
+                  let canonical = @types.compute_canonical_type_indices(
+                    ctx.store.module_types,
+                  )
+                  @jit.gc_setup(heap, ctx.store.module_types, canonical)
+                }
+                None => ()
+              }
+              // Note: We don't sync interpreter tables to JIT tables here because:
+              // - If init was run via JIT, the JIT tables already have the correct values
+              // - Syncing from interpreter (which has nulls) would overwrite the JIT values
+              // TODO: Implement bidirectional sync when mixing interpreter/JIT execution
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
+                  // Tear down GC context on trap
+                  @jit.gc_teardown()
                   // Sync globals even on trap (in case globals were modified before trap)
                   sync_jit_globals_to_store(jit, ctx.store)
                   raise RuntimeError(msg)
                 }
               }
+              // Tear down GC context after JIT call
+              @jit.gc_teardown()
               // Sync JIT globals back to store after successful call
               sync_jit_globals_to_store(jit, ctx.store)
               // Convert results back to Values based on function return types
@@ -648,26 +694,54 @@ fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
     I64 => @types.Value::I64(@types.FromInt64::from_int64_bits(v))
     F32 => @types.Value::F32(@types.FromInt64::from_int64_bits(v))
     F64 => @types.Value::F64(@types.FromInt64::from_int64_bits(v))
-    // Reference types: -1L is null sentinel, otherwise index
+    // Reference types: JIT uses NULL_REF (0L) for null references
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      if v == -1L {
+      if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::FuncRef(v.to_int())
+        // FuncRef is tagged with FUNCREF_TAG (bit 61), extract the actual function index
+        let func_idx = (v & 0x1FFFFFFFFFFFFFFFL).to_int()
+        @types.Value::FuncRef(func_idx)
       }
     ExternRef | RefExtern | NullExternRef =>
-      if v == -1L {
+      // Externref encoding: null=NULL_REF, non-null=EXTERNREF_TAG | (host_idx << 1)
+      if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::ExternRef(v.to_int())
+        // Decode by shifting right to get the original host_idx
+        @types.Value::ExternRef((v >> 1).to_int())
       }
-    // GC reference types - treat as null for now
-    AnyRef | NullRef | ExnRef | NullExnRef => @types.Value::Null
-    RefStruct(_) | RefNullStruct(_) => @types.Value::Null
-    RefArray(_) | RefNullArray(_) => @types.Value::Null
-    RefAny | RefEq | RefNullEq => @types.Value::Null
-    RefI31 | RefNullI31 => @types.Value::Null
-    RefNone => @types.Value::Null
+    // GC reference types - decode using c_heap encoding
+    // Encoding: StructRef/ArrayRef = (gc_ref - 1) << 1 (even), i31 = (value << 1) | 1 (odd), null = NULL_REF
+    AnyRef | RefAny | RefEq | RefNullEq =>
+      if v == NULL_REF {
+        @types.Value::Null
+      } else if (v & 1L) == 1L {
+        // i31 (odd)
+        @types.Value::I31((v >> 1).to_int())
+      } else {
+        // Struct/array ref (even, non-zero)
+        @types.Value::StructRef((v >> 1).to_int())
+      }
+    RefStruct(_) | RefNullStruct(_) =>
+      if v == NULL_REF {
+        @types.Value::Null
+      } else {
+        @types.Value::StructRef((v >> 1).to_int())
+      }
+    RefArray(_) | RefNullArray(_) =>
+      if v == NULL_REF {
+        @types.Value::Null
+      } else {
+        @types.Value::ArrayRef((v >> 1).to_int())
+      }
+    RefI31 | RefNullI31 =>
+      if v == NULL_REF {
+        @types.Value::Null
+      } else {
+        @types.Value::I31((v >> 1).to_int())
+      }
+    NullRef | ExnRef | NullExnRef | RefNone => @types.Value::Null
     V128 => abort("V128 not supported in JIT")
   }
 }
@@ -684,7 +758,9 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
     F64CanonicalNan | F64ArithmeticNan => @types.Value::F64(0.0 / 0.0)
     RefNull(_) => @types.Value::Null
     RefExtern(n) => @types.Value::ExternRef(n)
+    RefHost(n) => @types.Value::ExternRef(n) // ref.host is like ref.extern for testing
     RefFunc => @types.Value::FuncRef(0) // Placeholder
+    RefExternAny => @types.Value::ExternRef(0) // Placeholder for matching
     // GC reference types - these are abstract type matchers, not concrete values
     RefArray | RefStruct | RefEq | RefI31 | RefAny => @types.Value::Null // Placeholder
   }
@@ -702,6 +778,8 @@ pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
     (Null, RefNull(_)) => true
     (FuncRef(_), RefFunc) => true
     (ExternRef(a), RefExtern(e)) => a == e
+    (ExternRef(_), RefExternAny) => true // any non-null externref
+    (ExternRef(a), RefHost(e)) => a == e // ref.host is like ref.extern
     // GC reference type matching
     (ArrayRef(_), RefArray) => true
     (StructRef(_), RefStruct) => true

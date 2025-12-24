@@ -219,7 +219,16 @@ fn ExecContext::exec_instr(
         | RefFunc
         | RefExtern
         | RefFuncTyped(_)
-        | RefNullFuncTyped(_) => self.stack.push(Null)
+        | RefNullFuncTyped(_)
+        // GC reference types
+        | RefNullEq
+        | RefEq
+        | RefNullI31
+        | RefI31
+        | RefNullStruct(_)
+        | RefStruct(_)
+        | RefNullArray(_)
+        | RefArray(_) => self.stack.push(Null)
         _ => raise @runtime.RuntimeError::TypeMismatch
       }
     RefIsNull => {
@@ -241,6 +250,19 @@ fn ExecContext::exec_instr(
         Null => raise @runtime.RuntimeError::Unreachable
         _ => self.stack.push(value)
       }
+    }
+    RefEqInstr => {
+      // ref.eq: compare two references for equality
+      let v2 = self.stack.pop()
+      let v1 = self.stack.pop()
+      let equal = match (v1, v2) {
+        (Null, Null) => true
+        (I31(a), I31(b)) => a == b
+        (StructRef(a), StructRef(b)) => a == b
+        (ArrayRef(a), ArrayRef(b)) => a == b
+        _ => false
+      }
+      self.stack.push(I32(if equal { 1 } else { 0 }))
     }
     BrOnNull(_) | BrOnNonNull(_) =>
       // br_on_null and br_on_non_null are control instructions
@@ -643,6 +665,8 @@ pub fn instantiate_module(
   mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) {
   let store = @runtime.Store::new()
+  // Set module types for GC support
+  store.set_module_types(mod.types)
 
   // Allocate functions with their types
   let func_addrs : Array[Int] = []
@@ -670,7 +694,13 @@ pub fn instantiate_module(
   for table_def in mod.tables {
     // Evaluate table init expression if present
     let init_value : @types.Value = if table_def.init is Some(init_expr) {
-      eval_const_expr(init_expr, func_addrs~, globals=[])
+      eval_const_expr(
+        init_expr,
+        func_addrs~,
+        globals=[],
+        store=Some(store),
+        types=mod.types,
+      )
     } else {
       @types.Value::Null
     }
@@ -689,10 +719,13 @@ pub fn instantiate_module(
   let global_instances : Array[@runtime.GlobalInstance] = []
   for global in mod.globals {
     // Evaluate init expression with access to already-initialized globals
+    // Pass store and types for GC const expr support (array.new_default, struct.new, etc.)
     let init_value = eval_const_expr(
       global.init,
       func_addrs~,
       globals=global_instances,
+      store=Some(store),
+      types=mod.types,
     )
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)
@@ -747,10 +780,13 @@ pub fn instantiate_module(
 ///|
 /// Evaluate a constant initialization expression
 /// Supports extended constant expressions with arithmetic operations
+/// and GC instructions (array.new, array.new_default, struct.new, struct.new_default)
 fn eval_const_expr(
   instrs : Array[@types.Instruction],
   func_addrs? : Array[Int] = [],
   globals? : Array[@runtime.GlobalInstance] = [],
+  store? : @runtime.Store? = None,
+  types? : Array[@types.SubType] = [],
 ) -> @types.Value {
   // Use stack-based evaluation for extended constant expressions
   let stack : Array[@types.Value] = []
@@ -784,6 +820,69 @@ fn eval_const_expr(
               stack.push(I31(i31_val))
             }
             _ => ()
+          }
+        }
+      // GC: array.new_default - create array with default values
+      ArrayNewDefault(type_idx) =>
+        if stack.length() >= 1 && store is Some(s) && type_idx < types.length() {
+          let len_val = stack.pop().unwrap()
+          if len_val is I32(len) {
+            let array_type = match types[type_idx].composite {
+              Array(at) => at
+              _ => continue
+            }
+            let default_val = default_value_for_storage_type(
+              array_type.element.storage_type,
+            )
+            let elements : Array[@types.Value] = Array::make(len, default_val)
+            let ref_idx = s.alloc_array(type_idx, elements)
+            stack.push(ArrayRef(ref_idx))
+          }
+        }
+      // GC: array.new - create array with initial value
+      ArrayNew(type_idx) =>
+        if stack.length() >= 2 && store is Some(s) {
+          let len_val = stack.pop().unwrap()
+          let init_val = stack.pop().unwrap()
+          if len_val is I32(len) {
+            let elements : Array[@types.Value] = Array::make(len, init_val)
+            let ref_idx = s.alloc_array(type_idx, elements)
+            stack.push(ArrayRef(ref_idx))
+          }
+        }
+      // GC: struct.new_default - create struct with default values
+      StructNewDefault(type_idx) =>
+        if store is Some(s) && type_idx < types.length() {
+          let struct_type = match types[type_idx].composite {
+            Struct(st) => st
+            _ => continue
+          }
+          let fields : Array[@types.Value] = []
+          for field in struct_type.fields {
+            fields.push(default_value_for_storage_type(field.storage_type))
+          }
+          let ref_idx = s.alloc_struct(type_idx, fields)
+          stack.push(StructRef(ref_idx))
+        }
+      // GC: struct.new - create struct from stack values
+      StructNew(type_idx) =>
+        if store is Some(s) && type_idx < types.length() {
+          let struct_type = match types[type_idx].composite {
+            Struct(st) => st
+            _ => continue
+          }
+          let num_fields = struct_type.fields.length()
+          if stack.length() >= num_fields {
+            // Pop fields in reverse order (last field pushed first)
+            let fields : Array[@types.Value] = Array::make(
+              num_fields,
+              @types.Value::Null,
+            )
+            for i = num_fields - 1; i >= 0; i = i - 1 {
+              fields[i] = stack.pop().unwrap()
+            }
+            let ref_idx = s.alloc_struct(type_idx, fields)
+            stack.push(StructRef(ref_idx))
           }
         }
       // i32 arithmetic operations
@@ -1052,6 +1151,9 @@ pub fn instantiate_module_with_imports(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  // Set module types for GC support
+  store.set_module_types(mod.types)
+
   // Compute canonical type indices early (needed for import type checking)
   let canonical_type_indices = @types.compute_canonical_type_indices(
     mod.types,
@@ -1078,15 +1180,30 @@ pub fn instantiate_module_with_imports(
             let actual_type = store.get_func_type(addr)
             match owner {
               Some(o) => {
-                // Cross-module function: use type equivalence with rec groups
+                // Cross-module function: the exported type must be a subtype
+                // of the imported type (T_export <: T_import).
+                // For GC types, this means checking declared supertype chains
+                // and structural compatibility across modules.
                 let actual_type_idx = store.get_func_type_idx(addr)
-                let ctx = @types.TypeEquivalenceContext::cross_module(
-                  @types.extract_func_types(mod.types),
-                  @types.extract_func_types(o.types),
-                  rec_groups1=mod.type_rec_groups,
-                  rec_groups2=o.type_rec_groups,
+
+                // Compute canonical indices for both modules
+                let canonical_import = canonical_type_indices
+                let canonical_export = @types.compute_canonical_type_indices(
+                  o.types,
+                  type_rec_groups=o.type_rec_groups,
                 )
-                if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+
+                // Use subtyping context for cross-module comparison
+                let ctx = @types.SubtypingContext::cross_module(
+                  o.types,
+                  mod.types,
+                  rec_groups1=o.type_rec_groups,
+                  rec_groups2=mod.type_rec_groups,
+                  canonical1=canonical_export,
+                  canonical2=canonical_import,
+                )
+                // Check if T_export <: T_import
+                if not(ctx.is_subtype(actual_type_idx, type_idx)) {
                   raise @runtime.LinkError
                 }
               }
@@ -1255,7 +1372,13 @@ pub fn instantiate_module_with_imports(
     // Evaluate table init expression if present
     let init_value : @types.Value = match table_def.init {
       Some(init_expr) =>
-        eval_const_expr(init_expr, func_addrs~, globals=global_instances)
+        eval_const_expr(
+          init_expr,
+          func_addrs~,
+          globals=global_instances,
+          store=Some(store),
+          types=mod.types,
+        )
       None => @types.Value::Null
     }
     let table = @runtime.Table::new(
@@ -1274,6 +1397,8 @@ pub fn instantiate_module_with_imports(
       global.init,
       func_addrs~,
       globals=global_instances,
+      store=Some(store),
+      types=mod.types,
     )
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)

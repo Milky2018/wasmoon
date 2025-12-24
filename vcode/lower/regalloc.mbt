@@ -647,6 +647,124 @@ fn InstEdits::new() -> InstEdits {
   { before: [], after: [] }
 }
 
+// ============ Parallel Move Resolver ============
+// Resolves parallel moves to avoid conflicts when moves have cyclic dependencies.
+// For example: X2->X3, X3->X2 cannot be executed in sequence without a temp.
+// This implements a standard parallel move algorithm:
+// 1. Find moves whose dest is not a src of any other move, emit those first
+// 2. For cycles, use a temp register (X16) to break the cycle
+
+///|
+/// Resolve parallel moves and emit them in the correct order.
+/// Returns a list of moves that can be safely executed in sequence.
+fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
+  if moves.length() <= 1 {
+    return moves
+  }
+  let result : Array[RegMove] = []
+  let pending : Array[RegMove] = []
+  for mv in moves {
+    // Skip identity moves (same register index and same class)
+    let same_class = match (mv.from.class, mv.to.class) {
+      (@abi.Int, @abi.Int) => true
+      (@abi.Float32, @abi.Float32) => true
+      (@abi.Float64, @abi.Float64) => true
+      _ => false
+    }
+    if mv.from.index != mv.to.index || not(same_class) {
+      pending.push(mv)
+    }
+  }
+
+  // Build a set of source registers for quick lookup
+  fn rebuild_src_set(pending : Array[RegMove]) -> Set[Int] {
+    let srcs : Set[Int] = Set::new()
+    for mv in pending {
+      if not(mv.from.is_spilled()) {
+        // Encode class in the key to distinguish int/float
+        let key = mv.from.index * 4 +
+          (match mv.from.class {
+            @abi.Int => 0
+            @abi.Float32 => 1
+            @abi.Float64 => 2
+          })
+        srcs.add(key)
+      }
+    }
+    srcs
+  }
+
+  fn make_key(preg : @abi.PReg) -> Int {
+    preg.index * 4 +
+    (match preg.class {
+      @abi.Int => 0
+      @abi.Float32 => 1
+      @abi.Float64 => 2
+    })
+  }
+
+  // Iterate until all moves are resolved
+  while pending.length() > 0 {
+    let src_set = rebuild_src_set(pending)
+
+    // Find a move whose destination is not a source of any other pending move
+    let mut found_idx : Int? = None
+    for i, mv in pending {
+      if mv.to.is_spilled() {
+        // Spill destinations never conflict with register sources
+        found_idx = Some(i)
+        break
+      }
+      let dest_key = make_key(mv.to)
+      if not(src_set.contains(dest_key)) {
+        found_idx = Some(i)
+        break
+      }
+    }
+    match found_idx {
+      Some(idx) =>
+        // Safe to emit this move
+        result.push(pending.remove(idx))
+      None => {
+        // All remaining moves form cycles - break with temp register
+        // Use X16 as scratch for int, V16 for float (outside allocatable range)
+        let mv = pending.remove(0)
+        let temp_preg : @abi.PReg = { index: 16, class: mv.from.class }
+
+        // mv: A -> B, where B is used by another move (B -> C)
+        // Solution: A -> temp, then continue. Later emit temp -> B
+        // But we need to also update the other move that uses B as src
+
+        // 1. Emit: src -> temp
+        result.push({ from: mv.from, to: temp_preg, class: mv.class })
+
+        // 2. Replace all uses of mv.from as source with temp
+        for i in 0..<pending.length() {
+          let same_class = match (pending[i].from.class, mv.from.class) {
+            (@abi.Int, @abi.Int) => true
+            (@abi.Float32, @abi.Float32) => true
+            (@abi.Float64, @abi.Float64) => true
+            _ => false
+          }
+          if pending[i].from.index == mv.from.index &&
+            same_class &&
+            not(pending[i].from.is_spilled()) {
+            pending[i] = {
+              from: temp_preg,
+              to: pending[i].to,
+              class: pending[i].class,
+            }
+          }
+        }
+
+        // 3. Add the original move with temp as source
+        pending.push({ from: temp_preg, to: mv.to, class: mv.class })
+      }
+    }
+  }
+  result
+}
+
 ///|
 /// Register allocation result
 pub(all) struct RegAllocResult {
@@ -1258,19 +1376,19 @@ pub fn apply_allocation(
       // Track which scratch registers are used for each spilled vreg
       let spill_regs : Map[Int, @abi.PReg] = {}
 
-      // Check if this is a CallIndirect or ReturnCallIndirect instruction - needs special handling
-      let is_call_indirect = inst.opcode is CallIndirect(_, _) ||
-        inst.opcode is ReturnCallIndirect(_, _)
+      // Check if this is a tail call instruction - needs special handling
+      // Note: CallPtr uses FixedReg constraints, so regalloc handles it normally
+      let is_call_indirect = inst.opcode is ReturnCallIndirect(_, _)
 
-      // For CallIndirect/ReturnCallIndirect with many spilled args, we use a special strategy:
+      // For ReturnCallIndirect with many spilled args, we use a special strategy:
       // - func_ptr (uses[0]): reload to X18
       // - register args (uses[1-8]): if spilled, reload to X16/X17 (max 2)
       // - stack args (uses[9+]): if spilled, use spilled register encoding (emit handles them)
       //
       // X16, X17 are the only truly safe scratch registers because:
       // - X3-X10: may hold function parameters
-      // - X11-X15: used by CallIndirect marshalling
-      // - X18: used by CallIndirect for func_ptr
+      // - X11-X15: used by call marshalling
+      // - X18: used for func_ptr
       // - X19+: allocatable callee-saved registers
 
       let mut inst_spill_idx = 0
@@ -1411,8 +1529,10 @@ pub fn apply_allocation(
 
       // Process constraint edits: insert moves before the instruction
       // Following Cranelift's design for fixed register constraints
+      // Use parallel move resolver to handle cyclic dependencies
       if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
-        for mv in edits.before {
+        let resolved_moves = resolve_parallel_moves(edits.before)
+        for mv in resolved_moves {
           if mv.from.is_spilled() {
             // Reload from spill slot to target register
             let slot = mv.from.get_spill_slot()
@@ -1431,8 +1551,10 @@ pub fn apply_allocation(
       new_block.add_inst(new_inst)
 
       // Process constraint edits: insert moves after the instruction
+      // Use parallel move resolver for consistency (though after moves rarely conflict)
       if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
-        for mv in edits.after {
+        let resolved_moves = resolve_parallel_moves(edits.after)
+        for mv in resolved_moves {
           if mv.to.is_spilled() {
             // Store to spill slot from source register
             let slot = mv.to.get_spill_slot()
@@ -1566,11 +1688,13 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     // Type check can trap
     TypeCheckIndirect(_) => true
     // Function calls have side effects
-    CallIndirect(_, _) | ReturnCallIndirect(_, _) | CallPtr(_, _) => true
+    ReturnCallIndirect(_, _) | CallPtr(_, _, _) => true
     // Memory operations have side effects (modify memory or global state)
     MemoryGrow(_) | MemoryFill | MemoryCopy => true
     // Table operations have side effects (modify table state)
-    TableGrow(_) => true
+    TableGrow(_) | TableSet(_) => true
+    // Traps must not be eliminated
+    TrapIfZero(_, _) | TrapIfUge(_) | TrapIfUgt(_) | TrapIf(_, _) => true
     // Everything else is pure computation
     _ => false
   }

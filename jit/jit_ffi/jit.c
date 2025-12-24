@@ -26,6 +26,12 @@
 
 #include "moonbit.h"
 #include "jit_ffi.h"
+#include "gc_heap.h"
+
+// ============ GC Heap Pointer ============
+// Global heap pointer for JIT GC operations
+// Set before JIT execution, cleared after
+static GcHeap* g_gc_heap = NULL;
 
 // ============ Trap Handling ============
 // Jump buffer for catching JIT traps (BRK instructions and stack overflow)
@@ -433,11 +439,11 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
     void **table = (void **)calloc(count * 2, sizeof(void *));
     if (!table) return 0;
 
-    // Initialize all entries to -1 (null reference sentinel)
-    // func_ptr = -1 represents ref.null (matching IR translator convention)
+    // Initialize all entries to 0 (null reference)
+    // func_ptr = 0 represents ref.null (matching GC encoding convention)
     // type_idx = -1 represents uninitialized/invalid type
     for (int i = 0; i < count; i++) {
-        table[i * 2] = (void*)(intptr_t)(-1);     // func_ptr (null reference)
+        table[i * 2] = (void*)(intptr_t)(0);      // func_ptr (null reference)
         table[i * 2 + 1] = (void*)(intptr_t)(-1); // type_idx
     }
 
@@ -502,7 +508,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow(
     }
 
     // Initialize new elements with init_value
-    // For funcref: init_value is the function pointer (or -1 for null)
+    // For funcref: init_value is the function pointer (or 0 for null)
     // type_idx is set to -1 (unknown) for grown elements
     for (size_t i = old_size; i < new_size; i++) {
         new_table[i * 2] = (void *)init_value;      // func_ptr
@@ -1162,4 +1168,608 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_read_i64(int64_t addr) {
         return *((int64_t*)addr);
     }
     return 0;
+}
+
+// ============ GC Runtime Helpers ============
+// These helpers support GC operations in JIT code.
+// They access global type cache set up before JIT execution.
+
+// GC type cache
+// Format: [super_idx, kind, num_fields] per type (3 int32_t each)
+static int32_t *g_gc_type_cache = NULL;
+static int g_gc_num_types = 0;
+static int32_t *g_gc_canonical_indices = NULL;
+static int g_gc_num_canonical = 0;
+
+// Type kind constants
+#define GC_KIND_FUNC   0
+#define GC_KIND_STRUCT 1
+#define GC_KIND_ARRAY  2
+
+// Value encoding helpers
+// null: 0
+// i31: (value << 1) | 1 (positive, lowest bit = 1)
+// struct/array ref: gc_ref << 1 (positive, lowest bit = 0, gc_ref >= 1, so value >= 2)
+// funcref: -(func_idx + 1) for IR, or func_ptr | FUNCREF_TAG for table entries
+// externref: 0x4000000000000000 | (host_idx << 1) (bit 62 set)
+
+#define EXTERNREF_TAG 0x4000000000000000LL
+#define FUNCREF_TAG   0x2000000000000000LL  // Bit 61 for table funcref pointers
+#define REF_TAGS_MASK (EXTERNREF_TAG | FUNCREF_TAG)
+
+static inline int is_null_value(int64_t val) {
+    return val == 0;
+}
+
+static inline int is_externref_value(int64_t val) {
+    return (val & EXTERNREF_TAG) != 0;  // Bit 62 set
+}
+
+static inline int is_funcref_ptr_value(int64_t val) {
+    return (val & FUNCREF_TAG) != 0 && (val & EXTERNREF_TAG) == 0;  // Bit 61 set, bit 62 clear
+}
+
+static inline int is_funcref_value(int64_t val) {
+    // Either negative (IR encoded) or tagged pointer (table entry)
+    return val < 0 || is_funcref_ptr_value(val);
+}
+
+static inline int is_i31_value(int64_t val) {
+    return val > 0 && (val & REF_TAGS_MASK) == 0 && (val & 1) == 1;  // Positive odd, no tags
+}
+
+static inline int is_heap_ref_value(int64_t val) {
+    return val > 0 && (val & REF_TAGS_MASK) == 0 && (val & 1) == 0;  // Positive even (>= 2), no tags
+}
+
+static inline int32_t decode_i31_value(int64_t val) {
+    int32_t raw = (int32_t)(val >> 1);
+    // Sign extend from 31 bits
+    if (raw & 0x40000000) {
+        raw |= 0x80000000;
+    }
+    return raw;
+}
+
+static inline int32_t decode_heap_ref(int64_t val) {
+    return (int32_t)(val >> 1);
+}
+
+static inline int32_t decode_funcref(int64_t val) {
+    return (int32_t)(-val - 1);  // -(func_idx + 1) -> func_idx
+}
+
+// Check if type1 is a subtype of type2 using the type cache
+static int is_subtype_cached(int type1, int type2) {
+    if (type1 == type2) return 1;
+    if (type1 < 0 || type1 >= g_gc_num_types) return 0;
+    if (type2 < 0 || type2 >= g_gc_num_types) return 0;
+
+    // Check canonical indices first (if available)
+    if (g_gc_canonical_indices && g_gc_num_canonical > 0) {
+        if (type1 < g_gc_num_canonical && type2 < g_gc_num_canonical) {
+            if (g_gc_canonical_indices[type1] == g_gc_canonical_indices[type2]) {
+                return 1;
+            }
+        }
+    }
+
+    // Walk the supertype chain
+    int current = type1;
+    while (current >= 0 && current < g_gc_num_types) {
+        if (current == type2) return 1;
+        int super_idx = g_gc_type_cache[current * 3];  // offset 0 = super_idx
+        if (super_idx < 0) break;  // No more supertypes
+        if (super_idx == current) break;  // Avoid infinite loop
+        current = super_idx;
+    }
+    return 0;
+}
+
+// Abstract type indices (negative values)
+#define ABSTRACT_TYPE_ANY     (-1)   // anyref
+#define ABSTRACT_TYPE_EQ      (-2)   // eqref
+#define ABSTRACT_TYPE_I31     (-3)   // i31ref
+#define ABSTRACT_TYPE_STRUCT  (-4)   // structref (abstract)
+#define ABSTRACT_TYPE_ARRAY   (-5)   // arrayref (abstract)
+#define ABSTRACT_TYPE_FUNC    (-6)   // funcref
+#define ABSTRACT_TYPE_EXTERN  (-7)   // externref
+#define ABSTRACT_TYPE_NONE    (-8)   // nullref (bottom type for any)
+#define ABSTRACT_TYPE_NOFUNC  (-9)   // nofunc (bottom type for func)
+#define ABSTRACT_TYPE_NOEXTERN (-10) // noextern (bottom type for extern)
+
+// ref.test implementation
+// Returns 1 if value matches type, 0 otherwise
+// value: encoded value (null=0, i31=positive odd, heap ref=positive even, funcref=negative)
+// type_idx: target type index (>= 0 for concrete, < 0 for abstract)
+// nullable: 1 if null is allowed, 0 otherwise
+static int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable) {
+    // Handle null
+    if (is_null_value(value)) {
+        return nullable ? 1 : 0;
+    }
+
+    // Handle externref values (bit 62 set) - MUST check before other types
+    // Externref (host values) only match externref and anyref (via any.convert_extern)
+    if (is_externref_value(value)) {
+        switch (type_idx) {
+            case ABSTRACT_TYPE_ANY:     // anyref - externref matches via any.convert_extern
+            case ABSTRACT_TYPE_EXTERN:  // externref - direct match
+                return 1;
+            case ABSTRACT_TYPE_EQ:      // eqref - host externref is NOT eq
+            case ABSTRACT_TYPE_I31:     // i31ref - host externref is NOT i31
+            case ABSTRACT_TYPE_STRUCT:  // structref - host externref is NOT struct
+            case ABSTRACT_TYPE_ARRAY:   // arrayref - host externref is NOT array
+            case ABSTRACT_TYPE_FUNC:    // funcref - host externref is NOT func
+            case ABSTRACT_TYPE_NONE:    // nullref - only null matches
+            case ABSTRACT_TYPE_NOFUNC:  // nofunc - only null matches
+            case ABSTRACT_TYPE_NOEXTERN:// noextern - only null matches
+            default:
+                return 0;
+        }
+    }
+
+    // Handle funcref values (negative)
+    if (is_funcref_value(value)) {
+        // funcref matches: funcref (-6) and typed func refs (>= 0 with func kind)
+        switch (type_idx) {
+            case ABSTRACT_TYPE_FUNC:    // funcref - all funcs match
+                return 1;
+            case ABSTRACT_TYPE_NOFUNC:  // nofunc - only null matches, not funcs
+            case ABSTRACT_TYPE_NONE:    // nullref - only null matches
+            case ABSTRACT_TYPE_ANY:     // anyref - funcref is NOT anyref
+            case ABSTRACT_TYPE_EQ:      // eqref - funcref is NOT eqref
+            case ABSTRACT_TYPE_I31:     // i31ref - funcref is NOT i31
+            case ABSTRACT_TYPE_STRUCT:  // structref - funcref is NOT struct
+            case ABSTRACT_TYPE_ARRAY:   // arrayref - funcref is NOT array
+            case ABSTRACT_TYPE_EXTERN:  // externref - funcref is NOT externref
+            case ABSTRACT_TYPE_NOEXTERN: // noextern - funcref is NOT extern
+                return 0;
+            default:
+                // For concrete type indices, check if it's a func type
+                // TODO: For now, assume concrete types >= 0 with correct kind match
+                // We would need type_kind info in cache to do this properly
+                return 0;
+        }
+    }
+
+    // Handle i31 values (positive odd)
+    if (is_i31_value(value)) {
+        // i31 matches: i31ref (-3), eqref (-2), anyref (-1)
+        // i31 also matches externref (-7) when converted via extern.convert_any
+        switch (type_idx) {
+            case ABSTRACT_TYPE_ANY:     // anyref
+            case ABSTRACT_TYPE_EQ:      // eqref
+            case ABSTRACT_TYPE_I31:     // i31ref
+            case ABSTRACT_TYPE_EXTERN:  // externref (when converted)
+                return 1;
+            default:
+                // i31 doesn't match concrete types, structref, arrayref, funcref, nullref
+                return 0;
+        }
+    }
+
+    // Handle struct/array reference (positive even, heap reference)
+    if (!is_heap_ref_value(value)) {
+        return 0;  // Not a valid heap reference
+    }
+
+    // Value is encoded as (gc_ref << 1) where gc_ref is 1-based
+    int32_t gc_ref = (int32_t)(value >> 1);
+    if (gc_ref <= 0 || !g_gc_heap) {
+        return 0;  // Invalid reference
+    }
+
+    // Get the object kind from heap (1=struct, 2=array)
+    int32_t obj_kind = gc_heap_get_kind(g_gc_heap, gc_ref);
+    int32_t obj_type_idx = gc_heap_get_type_idx(g_gc_heap, gc_ref);
+
+    // Handle abstract types
+    if (type_idx < 0) {
+        switch (type_idx) {
+            case ABSTRACT_TYPE_ANY:     // anyref - matches all heap objects
+                return 1;
+            case ABSTRACT_TYPE_EQ:      // eqref - matches struct and array
+                return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
+            case ABSTRACT_TYPE_STRUCT:  // structref - matches any struct
+                return (obj_kind == 1) ? 1 : 0;
+            case ABSTRACT_TYPE_ARRAY:   // arrayref - matches any array
+                return (obj_kind == 2) ? 1 : 0;
+            case ABSTRACT_TYPE_EXTERN:  // externref - struct/array match when converted
+                return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
+            case ABSTRACT_TYPE_I31:     // i31ref - heap objects don't match
+            case ABSTRACT_TYPE_FUNC:    // funcref - heap objects don't match
+            case ABSTRACT_TYPE_NONE:    // nullref - only null matches
+            case ABSTRACT_TYPE_NOFUNC:  // nofunc - only null matches
+            case ABSTRACT_TYPE_NOEXTERN:// noextern - only null matches
+            default:
+                return 0;
+        }
+    }
+
+    // Handle concrete type: check if object's type is subtype of target type
+    // Uses canonical indices for type equivalence checking
+    if (g_gc_type_cache && obj_type_idx >= 0 && obj_type_idx < g_gc_num_types &&
+        type_idx >= 0 && type_idx < g_gc_num_types) {
+        // Get canonical index for target type
+        int32_t target_canonical = g_gc_canonical_indices ?
+            g_gc_canonical_indices[type_idx] : type_idx;
+
+        // Walk the supertype chain to check subtyping
+        int32_t current_type = obj_type_idx;
+        while (current_type >= 0 && current_type < g_gc_num_types) {
+            // Check canonical equivalence instead of direct index match
+            int32_t current_canonical = g_gc_canonical_indices ?
+                g_gc_canonical_indices[current_type] : current_type;
+            if (current_canonical == target_canonical) {
+                return 1;  // Found match (canonical equivalence)
+            }
+            // Get supertype from cache (format: [super_idx, kind, num_fields] per type)
+            int32_t super_idx = g_gc_type_cache[current_type * 3];
+            if (super_idx < 0 || super_idx == current_type) {
+                break;  // No supertype or cycle
+            }
+            current_type = super_idx;
+        }
+    }
+
+    return 0;  // No match found
+}
+
+// ref.cast implementation
+// Returns the value if cast succeeds, traps on failure
+static int64_t gc_ref_cast_impl(int64_t value, int32_t type_idx, int32_t nullable) {
+    int result = gc_ref_test_impl(value, type_idx, nullable);
+    if (!result) {
+        // Cast failed - trigger trap
+        g_trap_code = 4;  // Type mismatch
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+    }
+    return value;
+}
+
+// Stub implementations for allocation and access
+// These will be filled in as we implement heap access
+
+static int64_t gc_struct_new_impl(int32_t type_idx, int64_t* fields, int32_t num_fields) {
+    if (!g_gc_heap) {
+        g_trap_code = 3;  // Unreachable - GC heap not set
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+
+    // Handle struct.new_default: num_fields == 0 means use default values
+    int64_t* actual_fields = fields;
+    int32_t actual_num_fields = num_fields;
+    int64_t* default_fields = NULL;
+
+    if (num_fields == 0 && g_gc_type_cache && type_idx >= 0 && type_idx < g_gc_num_types) {
+        // Get actual field count from type cache
+        // Format: [super_idx, kind, num_fields] per type
+        actual_num_fields = g_gc_type_cache[type_idx * 3 + 2];
+        if (actual_num_fields > 0) {
+            // Allocate and zero-initialize default fields
+            default_fields = (int64_t*)calloc(actual_num_fields, sizeof(int64_t));
+            if (!default_fields) {
+                g_trap_code = 3;  // Allocation failed
+                if (g_trap_active) {
+                    siglongjmp(g_trap_jmp_buf, 1);
+                }
+                return 0;
+            }
+            actual_fields = default_fields;
+        }
+    }
+
+    // Allocate struct and return encoded reference
+    // gc_heap uses 1-based gc_ref, JIT uses (gc_ref << 1) encoding
+    int32_t gc_ref = gc_heap_alloc_struct(g_gc_heap, type_idx, actual_fields, actual_num_fields);
+
+    // Free temporary default fields buffer
+    if (default_fields) {
+        free(default_fields);
+    }
+
+    if (gc_ref == 0) {
+        g_trap_code = 3;  // Allocation failed
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    // Encode for JIT: gc_ref << 1 (1-based gc_ref stays 1-based, just shifted)
+    // This ensures gc_ref=1 becomes value=2, which doesn't conflict with null (0)
+    int64_t encoded = ((int64_t)gc_ref) << 1;
+    return encoded;
+}
+
+static int64_t gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx) {
+    (void)type_idx;  // type_idx not needed for access, only for type checking
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
+    int32_t gc_ref = (int32_t)(ref >> 1);
+    int64_t result = gc_heap_struct_get(g_gc_heap, gc_ref, field_idx);
+    return result;
+}
+
+static void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_t value) {
+    (void)type_idx;
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
+    int32_t gc_ref = (int32_t)(ref >> 1);
+    gc_heap_struct_set(g_gc_heap, gc_ref, field_idx, value);
+}
+
+static int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill) {
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    int32_t gc_ref = gc_heap_alloc_array(g_gc_heap, type_idx, len, fill);
+    if (gc_ref == 0) {
+        g_trap_code = 3;  // Allocation failed
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    // Encode: gc_ref << 1 (1-based gc_ref, ensures gc_ref=1 -> value=2)
+    int64_t encoded = ((int64_t)gc_ref) << 1;
+    return encoded;
+}
+
+static int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
+    (void)type_idx;
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    // Decode: gc_ref = ref >> 1 (1-based)
+    int32_t gc_ref = (int32_t)(ref >> 1);
+    // Check bounds
+    int32_t len = gc_heap_array_len(g_gc_heap, gc_ref);
+    if (idx < 0 || idx >= len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    return gc_heap_array_get(g_gc_heap, gc_ref, idx);
+}
+
+static void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value) {
+    (void)type_idx;
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Decode: gc_ref = ref >> 1 (1-based)
+    int32_t gc_ref = (int32_t)(ref >> 1);
+    // Check bounds
+    int32_t len = gc_heap_array_len(g_gc_heap, gc_ref);
+    if (idx < 0 || idx >= len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    gc_heap_array_set(g_gc_heap, gc_ref, idx, value);
+}
+
+static int32_t gc_array_len_impl(int64_t ref) {
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    // Decode: gc_ref = ref >> 1 (1-based)
+    int32_t gc_ref = (int32_t)(ref >> 1);
+    return gc_heap_array_len(g_gc_heap, gc_ref);
+}
+
+static void gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t count) {
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 2;  // Null reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Decode: gc_ref = ref >> 1 (1-based)
+    int32_t gc_ref = (int32_t)(ref >> 1);
+    // Bounds check
+    int32_t len = gc_heap_array_len(g_gc_heap, gc_ref);
+    if (offset < 0 || count < 0 || offset + count > len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    gc_heap_array_fill(g_gc_heap, gc_ref, offset, value, count);
+}
+
+static void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
+                               int64_t src_ref, int32_t src_offset, int32_t count) {
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Check for null references (encoded as 0)
+    if (dst_ref == 0 || src_ref == 0) {
+        g_trap_code = 2;  // Null reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Decode: gc_ref = ref >> 1 (1-based)
+    int32_t dst_gc_ref = (int32_t)(dst_ref >> 1);
+    int32_t src_gc_ref = (int32_t)(src_ref >> 1);
+    // Bounds check
+    int32_t dst_len = gc_heap_array_len(g_gc_heap, dst_gc_ref);
+    int32_t src_len = gc_heap_array_len(g_gc_heap, src_gc_ref);
+    if (dst_offset < 0 || src_offset < 0 || count < 0 ||
+        dst_offset + count > dst_len || src_offset + count > src_len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    gc_heap_array_copy(g_gc_heap, dst_gc_ref, dst_offset, src_gc_ref, src_offset, count);
+}
+
+// FFI exports for getting function pointers
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_ref_test_ptr(void) {
+    return (int64_t)gc_ref_test_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_ref_cast_ptr(void) {
+    return (int64_t)gc_ref_cast_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_new_ptr(void) {
+    fflush(stderr);
+    return (int64_t)gc_struct_new_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_get_ptr(void) {
+    return (int64_t)gc_struct_get_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_set_ptr(void) {
+    return (int64_t)gc_struct_set_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_new_ptr(void) {
+    return (int64_t)gc_array_new_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_get_ptr(void) {
+    return (int64_t)gc_array_get_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_set_ptr(void) {
+    return (int64_t)gc_array_set_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_len_ptr(void) {
+    return (int64_t)gc_array_len_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_fill_ptr(void) {
+    return (int64_t)gc_array_fill_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_copy_ptr(void) {
+    return (int64_t)gc_array_copy_impl;
+}
+
+// Type cache management
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(int32_t* types_data, int num_types) {
+    // Free old cache
+    if (g_gc_type_cache) {
+        free(g_gc_type_cache);
+    }
+
+    // Allocate and copy new cache
+    // Format: [super_idx, kind, num_fields] per type (3 int32_t each)
+    g_gc_num_types = num_types;
+    if (num_types > 0 && types_data) {
+        g_gc_type_cache = (int32_t*)malloc(num_types * 3 * sizeof(int32_t));
+        if (g_gc_type_cache) {
+            memcpy(g_gc_type_cache, types_data, num_types * 3 * sizeof(int32_t));
+        }
+    } else {
+        g_gc_type_cache = NULL;
+    }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_canonical_indices(int32_t* canonical, int num_types) {
+    // Free old indices
+    if (g_gc_canonical_indices) {
+        free(g_gc_canonical_indices);
+    }
+
+    // Allocate and copy new indices
+    g_gc_num_canonical = num_types;
+    if (num_types > 0 && canonical) {
+        g_gc_canonical_indices = (int32_t*)malloc(num_types * sizeof(int32_t));
+        if (g_gc_canonical_indices) {
+            memcpy(g_gc_canonical_indices, canonical, num_types * sizeof(int32_t));
+        }
+    } else {
+        g_gc_canonical_indices = NULL;
+    }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(void) {
+    if (g_gc_type_cache) {
+        free(g_gc_type_cache);
+        g_gc_type_cache = NULL;
+    }
+    g_gc_num_types = 0;
+
+    if (g_gc_canonical_indices) {
+        free(g_gc_canonical_indices);
+        g_gc_canonical_indices = NULL;
+    }
+    g_gc_num_canonical = 0;
+}
+
+// ============ GC Heap Pointer Management ============
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_heap(int64_t heap_ptr) {
+    g_gc_heap = (GcHeap*)(uintptr_t)heap_ptr;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_heap(void) {
+    g_gc_heap = NULL;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_gc_get_heap(void) {
+    return (int64_t)(uintptr_t)g_gc_heap;
 }

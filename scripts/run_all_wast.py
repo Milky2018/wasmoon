@@ -112,54 +112,91 @@ def print_summary(results: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run .wast tests for wasmoon")
     parser.add_argument(
-        "--all",
+        "--dir",
+        type=str,
+        default="spec",
+        help="Directory containing .wast files (default: spec)",
+    )
+    parser.add_argument(
+        "--rec",
         action="store_true",
-        help="Run all .wast files including subdirectories (default: only spec/*.wast)",
+        help="Recursively search subdirectories for .wast files",
+    )
+    parser.add_argument(
+        "--only-jit",
+        action="store_true",
+        help="Only run JIT mode tests",
+    )
+    parser.add_argument(
+        "--only-interp",
+        action="store_true",
+        help="Only run interpreter mode tests (no JIT)",
     )
     args = parser.parse_args()
 
-    test_dir = Path("spec")
-    if args.all:
+    # Validate mutually exclusive options
+    if args.only_jit and args.only_interp:
+        parser.error("--only-jit and --only-interp are mutually exclusive")
+
+    test_dir = Path(args.dir)
+    if not test_dir.exists():
+        print(f"Error: Directory '{test_dir}' does not exist")
+        return
+
+    if args.rec:
         # Recursive: include all subdirectories
         wast_files = sorted(test_dir.glob("**/*.wast"))
     else:
-        # Non-recursive: only direct children of spec/
+        # Non-recursive: only direct children
         wast_files = sorted(test_dir.glob("*.wast"))
 
-    print(f"Found {len(wast_files)} .wast test files")
+    if not wast_files:
+        print(f"No .wast files found in '{test_dir}'")
+        return
 
-    # Run tests with interpreter (--no-jit)
-    interp_results = run_tests_for_mode(wast_files, test_dir, use_jit=False)
+    print(f"Found {len(wast_files)} .wast test files in '{test_dir}'")
 
-    # Run tests with JIT
-    jit_results = run_tests_for_mode(wast_files, test_dir, use_jit=True)
+    interp_results = None
+    jit_results = None
+
+    # Run tests based on mode selection
+    if not args.only_jit:
+        # Run tests with interpreter (--no-jit)
+        interp_results = run_tests_for_mode(wast_files, test_dir, use_jit=False)
+
+    if not args.only_interp:
+        # Run tests with JIT
+        jit_results = run_tests_for_mode(wast_files, test_dir, use_jit=True)
 
     # Print combined summary
     print("\n" + "=" * 60)
     print("COMBINED SUMMARY")
     print("=" * 60)
 
-    print_summary(interp_results)
-    print_summary(jit_results)
+    if interp_results:
+        print_summary(interp_results)
+    if jit_results:
+        print_summary(jit_results)
 
-    # Compare results
-    print("\n" + "-" * 40)
-    print("Comparison:")
-    interp_ok = len(interp_results['fully_passed'])
-    jit_ok = len(jit_results['fully_passed'])
-    print(f"  Interpreter: {interp_ok}/{interp_results['total_files']} files passed")
-    print(f"  JIT:         {jit_ok}/{jit_results['total_files']} files passed")
+    # Compare results (only if both modes were run)
+    if interp_results and jit_results:
+        print("\n" + "-" * 40)
+        print("Comparison:")
+        interp_ok = len(interp_results['fully_passed'])
+        jit_ok = len(jit_results['fully_passed'])
+        print(f"  Interpreter: {interp_ok}/{interp_results['total_files']} files passed")
+        print(f"  JIT:         {jit_ok}/{jit_results['total_files']} files passed")
 
-    # Show files that work with interpreter but fail with JIT
-    interp_set = set(interp_results['fully_passed'])
-    jit_set = set(jit_results['fully_passed'])
-    jit_regressions = interp_set - jit_set
-    if jit_regressions:
-        print(f"\n  JIT regressions (pass with interpreter, fail with JIT): {len(jit_regressions)}")
-        for name in sorted(jit_regressions)[:10]:
-            print(f"    - {name}")
-        if len(jit_regressions) > 10:
-            print(f"    ... and {len(jit_regressions) - 10} more")
+        # Show files that work with interpreter but fail with JIT
+        interp_set = set(interp_results['fully_passed'])
+        jit_set = set(jit_results['fully_passed'])
+        jit_regressions = interp_set - jit_set
+        if jit_regressions:
+            print(f"\n  JIT regressions (pass with interpreter, fail with JIT): {len(jit_regressions)}")
+            for name in sorted(jit_regressions)[:10]:
+                print(f"    - {name}")
+            if len(jit_regressions) > 10:
+                print(f"    ... and {len(jit_regressions) - 10} more")
 
 
 if __name__ == "__main__":

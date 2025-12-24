@@ -732,6 +732,13 @@ pub fn IRBuilder::table_grow(
 }
 
 ///|
+/// Get function reference (tagged function pointer) for storing in tables
+/// The pointer is tagged with FUNCREF_TAG (bit 61) for ref.test detection
+pub fn IRBuilder::get_func_ref(self : IRBuilder, func_idx : Int) -> Value {
+  self.emit_inst(Type::I64, Opcode::GetFuncRef(func_idx), [])
+}
+
+///|
 /// Get global variable value
 pub fn IRBuilder::global_get(
   self : IRBuilder,
@@ -1333,4 +1340,10 @@ pub fn IRBuilder::extern_convert_any(
   any_ref : Value,
 ) -> Value {
   self.emit_inst(Type::I64, Opcode::ExternConvertAny, [any_ref])
+}
+
+///|
+/// ref.eq - compare two references for equality
+pub fn IRBuilder::ref_eq(self : IRBuilder, ref1 : Value, ref2 : Value) -> Value {
+  self.emit_inst(Type::I32, Opcode::RefEq, [ref1, ref2])
 }

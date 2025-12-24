@@ -187,6 +187,7 @@ fn format_opcode(
     ReturnCallIndirect(type_idx, table_idx) =>
       "return_call_indirect type=\{type_idx} table=\{table_idx}(\{ops})"
     ReturnCallRef(type_idx) => "return_call_ref type=\{type_idx}(\{ops})"
+    GetFuncRef(func_idx) => "get_func_ref \{func_idx}"
 
     // Raw pointer operations (for trampolines)
     LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
@@ -241,6 +242,9 @@ fn format_opcode(
     // GC operations - type conversions
     AnyConvertExtern => "any.convert_extern \{ops}"
     ExternConvertAny => "extern.convert_any \{ops}"
+
+    // GC operations - reference equality
+    RefEq => "ref.eq \{ops}"
   }
 }
 

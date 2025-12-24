@@ -10,6 +10,13 @@ import(
 // Errors
 
 // Types and methods
+pub(all) enum CallConv {
+  Wasm
+  C
+}
+pub impl Eq for CallConv
+pub impl Show for CallConv
+
 pub(all) enum CallType {
   None
   Regular
@@ -93,6 +100,22 @@ pub(all) enum FloatToIntKind {
   F64ToI64USat
 }
 pub impl Show for FloatToIntKind
+
+pub(all) enum GCLibcall {
+  RefTest
+  RefCast
+  StructNew
+  StructGet
+  StructSet
+  ArrayNew
+  ArrayGet
+  ArraySet
+  ArrayLen
+  ArrayFill
+  ArrayCopy
+}
+pub impl Eq for GCLibcall
+pub impl Show for GCLibcall
 
 pub(all) enum IntToFloatKind {
   I32SToF32
@@ -208,7 +231,6 @@ pub(all) enum VCodeOpcode {
   Madd
   Msub
   Mneg
-  CallIndirect(Int, Int)
   ReturnCallIndirect(Int, Int)
   TypeCheckIndirect(Int)
   StackLoad(Int)
@@ -225,9 +247,11 @@ pub(all) enum VCodeOpcode {
   GlobalSet(Int)
   LoadPtr(MemType, Int)
   StorePtr(MemType, Int)
-  CallPtr(Int, Int)
+  LoadGCFuncPtr(GCLibcall)
+  CallPtr(Int, Int, CallConv)
   AdjustSP(Int)
   StoreToStack(Int)
+  LoadSP
 }
 pub fn VCodeOpcode::call_type(Self) -> CallType
 pub impl Show for VCodeOpcode

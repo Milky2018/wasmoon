@@ -5,7 +5,7 @@
 test "TypeEquivalenceContext: identical simple types" {
   let t1 : FuncType = { params: [I32, I64], results: [F32] }
   let t2 : FuncType = { params: [I32, I64], results: [F32] }
-  let types : Array[FuncType] = [t1, t2]
+  let types = func_types_to_subtypes([t1, t2])
   let ctx = TypeEquivalenceContext::same_module(types)
   inspect(ctx.types_equivalent(0, 1), content="true")
 }
@@ -14,7 +14,7 @@ test "TypeEquivalenceContext: identical simple types" {
 test "TypeEquivalenceContext: different param counts" {
   let t1 : FuncType = { params: [I32], results: [] }
   let t2 : FuncType = { params: [I32, I64], results: [] }
-  let types : Array[FuncType] = [t1, t2]
+  let types = func_types_to_subtypes([t1, t2])
   let ctx = TypeEquivalenceContext::same_module(types)
   inspect(ctx.types_equivalent(0, 1), content="false")
 }
@@ -23,7 +23,7 @@ test "TypeEquivalenceContext: different param counts" {
 test "TypeEquivalenceContext: different result counts" {
   let t1 : FuncType = { params: [], results: [I32] }
   let t2 : FuncType = { params: [], results: [I32, I64] }
-  let types : Array[FuncType] = [t1, t2]
+  let types = func_types_to_subtypes([t1, t2])
   let ctx = TypeEquivalenceContext::same_module(types)
   inspect(ctx.types_equivalent(0, 1), content="false")
 }
@@ -32,7 +32,7 @@ test "TypeEquivalenceContext: different result counts" {
 test "TypeEquivalenceContext: different param types" {
   let t1 : FuncType = { params: [I32], results: [] }
   let t2 : FuncType = { params: [I64], results: [] }
-  let types : Array[FuncType] = [t1, t2]
+  let types = func_types_to_subtypes([t1, t2])
   let ctx = TypeEquivalenceContext::same_module(types)
   inspect(ctx.types_equivalent(0, 1), content="false")
 }
@@ -44,7 +44,7 @@ test "TypeEquivalenceContext: self-referential types are equal" {
   // These should be structurally equal because both reference "self"
   let t1 : FuncType = { params: [], results: [RefNullFuncTyped(0)] }
   let t2 : FuncType = { params: [], results: [RefNullFuncTyped(1)] }
-  let types : Array[FuncType] = [t1, t2]
+  let types = func_types_to_subtypes([t1, t2])
   let ctx = TypeEquivalenceContext::same_module(types)
   inspect(ctx.types_equivalent(0, 1), content="true")
 }
@@ -58,7 +58,7 @@ test "TypeEquivalenceContext: indirect types with same referenced type" {
   let s0 : FuncType = { params: [I32], results: [] }
   let s1 : FuncType = { params: [I32, RefFuncTyped(0)], results: [] }
   let s2 : FuncType = { params: [I32, RefFuncTyped(0)], results: [] }
-  let types : Array[FuncType] = [s0, s1, s2]
+  let types = func_types_to_subtypes([s0, s1, s2])
   let ctx = TypeEquivalenceContext::same_module(types)
   inspect(ctx.types_equivalent(1, 2), content="true")
 }
@@ -74,7 +74,7 @@ test "TypeEquivalenceContext: different referenced types" {
   let s1 : FuncType = { params: [I64], results: [] }
   let t1 : FuncType = { params: [RefFuncTyped(0)], results: [] }
   let t2 : FuncType = { params: [RefFuncTyped(1)], results: [] }
-  let types : Array[FuncType] = [s0, s1, t1, t2]
+  let types = func_types_to_subtypes([s0, s1, t1, t2])
   let ctx = TypeEquivalenceContext::same_module(types)
   inspect(ctx.types_equivalent(2, 3), content="false")
 }
@@ -109,7 +109,7 @@ test "TypeEquivalenceContext: rec group position matters" {
   let t1 : FuncType = { params: [], results: [] }
   let t2 : FuncType = { params: [], results: [] }
   let t3 : FuncType = { params: [], results: [] }
-  let types : Array[FuncType] = [t1, t2, t3]
+  let types = func_types_to_subtypes([t1, t2, t3])
   // t1 is at position 0 in a 2-type rec group
   // t2 is at position 1 in a 2-type rec group
   // t3 is at position 0 in a 1-type rec group
@@ -128,8 +128,8 @@ test "TypeEquivalenceContext: rec group position matters" {
 test "TypeEquivalenceContext: cross-module comparison" {
   let t1 : FuncType = { params: [I32], results: [I64] }
   let t2 : FuncType = { params: [I32], results: [I64] }
-  let types1 : Array[FuncType] = [t1]
-  let types2 : Array[FuncType] = [t2]
+  let types1 = func_types_to_subtypes([t1])
+  let types2 = func_types_to_subtypes([t2])
   let ctx = TypeEquivalenceContext::cross_module(types1, types2)
   inspect(ctx.types_equivalent(0, 0), content="true")
 }

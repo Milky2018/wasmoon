@@ -416,6 +416,10 @@ fn lower_inst(
     @ir.Opcode::ReturnCallRef(type_idx) =>
       lower_return_call_ref(ctx, inst, block, type_idx)
 
+    // Function reference
+    @ir.Opcode::GetFuncRef(func_idx) =>
+      lower_get_func_ref(ctx, inst, block, func_idx)
+
     // Raw pointer operations (for trampolines)
     @ir.Opcode::LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
     @ir.Opcode::StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
@@ -431,28 +435,43 @@ fn lower_inst(
     @ir.Opcode::AnyConvertExtern | @ir.Opcode::ExternConvertAny =>
       lower_gc_convert(ctx, inst, block)
 
-    // GC operations - struct/array (require runtime support, not yet implemented)
-    @ir.Opcode::StructNew(_)
-    | @ir.Opcode::StructNewDefault(_)
-    | @ir.Opcode::StructGet(_, _)
-    | @ir.Opcode::StructGetS(_, _)
-    | @ir.Opcode::StructGetU(_, _)
-    | @ir.Opcode::StructSet(_, _)
-    | @ir.Opcode::ArrayNew(_)
-    | @ir.Opcode::ArrayNewDefault(_)
-    | @ir.Opcode::ArrayNewFixed(_, _)
-    | @ir.Opcode::ArrayGet(_)
-    | @ir.Opcode::ArrayGetS(_)
-    | @ir.Opcode::ArrayGetU(_)
-    | @ir.Opcode::ArraySet(_)
-    | @ir.Opcode::ArrayLen
-    | @ir.Opcode::ArrayFill(_)
-    | @ir.Opcode::ArrayCopy(_, _)
-    | @ir.Opcode::RefTest(_, _)
-    | @ir.Opcode::RefCast(_, _) =>
-      abort(
-        "GC struct/array instruction lowering not yet implemented: \{inst.opcode}",
-      )
+    // GC operations - struct/array (use runtime libcalls)
+    @ir.Opcode::StructNew(type_idx) =>
+      lower_struct_new(ctx, inst, block, type_idx)
+    @ir.Opcode::StructNewDefault(type_idx) =>
+      lower_struct_new_default(ctx, inst, block, type_idx)
+    @ir.Opcode::StructGet(type_idx, field_idx) =>
+      lower_struct_get(ctx, inst, block, type_idx, field_idx)
+    @ir.Opcode::StructGetS(type_idx, field_idx) =>
+      lower_struct_get(ctx, inst, block, type_idx, field_idx) // TODO: sign extension
+    @ir.Opcode::StructGetU(type_idx, field_idx) =>
+      lower_struct_get(ctx, inst, block, type_idx, field_idx) // TODO: zero extension
+    @ir.Opcode::StructSet(type_idx, field_idx) =>
+      lower_struct_set(ctx, inst, block, type_idx, field_idx)
+    @ir.Opcode::ArrayNew(type_idx) =>
+      lower_array_new(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayNewDefault(type_idx) =>
+      lower_array_new_default(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayNewFixed(type_idx, len) =>
+      lower_array_new_fixed(ctx, inst, block, type_idx, len)
+    @ir.Opcode::ArrayGet(type_idx) =>
+      lower_array_get(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayGetS(type_idx) =>
+      lower_array_get(ctx, inst, block, type_idx) // TODO: sign extension
+    @ir.Opcode::ArrayGetU(type_idx) =>
+      lower_array_get(ctx, inst, block, type_idx) // TODO: zero extension
+    @ir.Opcode::ArraySet(type_idx) =>
+      lower_array_set(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayLen => lower_array_len(ctx, inst, block)
+    @ir.Opcode::ArrayFill(type_idx) =>
+      lower_array_fill(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayCopy(dst_type, src_type) =>
+      lower_array_copy(ctx, inst, block, dst_type, src_type)
+    @ir.Opcode::RefTest(type_idx, nullable) =>
+      lower_ref_test(ctx, inst, block, type_idx, nullable)
+    @ir.Opcode::RefCast(type_idx, nullable) =>
+      lower_ref_cast(ctx, inst, block, type_idx, nullable)
+    @ir.Opcode::RefEq => lower_ref_eq(ctx, inst, block)
   }
 }
 
@@ -1204,7 +1223,11 @@ fn lower_icmp(
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let kind = ir_intcc_to_cmp_kind(cc)
     // Determine is_64 from operand type, not result type (result is always i32)
-    let is_64 = inst.operands[0].ty is @ir.Type::I64
+    // Reference types (FuncRef, ExternRef) are also 64-bit values
+    let is_64 = match inst.operands[0].ty {
+      @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+      _ => false
+    }
     let vcode_inst = @instr.VCodeInst::new(Cmp(kind, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
@@ -1382,6 +1405,40 @@ fn emit_load_table0_base(
   load_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int })) // X19 = vmctx
   block.add_inst(load_inst)
   table0_base_vreg
+}
+
+///|
+/// Lower GetFuncRef - get tagged function pointer for storing in tables
+/// Returns func_ptr | FUNCREF_TAG (bit 61) for ref.test detection
+fn lower_get_func_ref(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  func_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let result_vreg = ctx.get_vreg(result)
+
+  // Step 1: Load func_table pointer from vmctx
+  let func_table_vreg = emit_load_func_table(ctx, block)
+
+  // Step 2: Load func_ptr from func_table[func_idx * 8]
+  let raw_func_ptr = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(Load(I64, func_idx * 8))
+  load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
+  load_ptr.add_use(Virtual(func_table_vreg))
+  block.add_inst(load_ptr)
+
+  // Step 3: OR with FUNCREF_TAG (0x2000000000000000)
+  let tag_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_tag = @instr.VCodeInst::new(LoadConst(0x2000000000000000L))
+  load_tag.add_def({ reg: Virtual(tag_vreg) })
+  block.add_inst(load_tag)
+  let or_inst = @instr.VCodeInst::new(Or)
+  or_inst.add_def({ reg: Virtual(result_vreg) })
+  or_inst.add_use(Virtual(raw_func_ptr))
+  or_inst.add_use(Virtual(tag_vreg))
+  block.add_inst(or_inst)
 }
 
 ///|
@@ -2083,42 +2140,26 @@ fn lower_call(
   for operand in inst.operands {
     arg_vregs.push(ctx.get_vreg_for_use(operand, block))
   }
-  let num_args = arg_vregs.length()
 
-  // Get all results (primary result + extra_results)
-  let all_results = inst.all_results()
-  let num_results = all_results.length()
+  // Get all result vregs
+  let result_vregs : Array[@abi.VReg] = []
+  for result in inst.all_results() {
+    result_vregs.push(ctx.get_vreg(result))
+  }
 
   // Load func_table from vmctx on-demand
   let func_table = emit_load_func_table(ctx, block)
 
-  // Create a temporary vreg for the function pointer
+  // Load function pointer from table: func_ptr = [func_table + func_idx * 8]
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-
-  // Step 1: Load function pointer from table
-  // func_ptr = [func_table + func_idx * 8]
   let offset = func_idx * 8
   let load_inst = @instr.VCodeInst::new(Load(I64, offset))
   load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   load_inst.add_use(Virtual(func_table))
   block.add_inst(load_inst)
 
-  // Step 2: Emit CallIndirect instruction
-  let call_inst = @instr.VCodeInst::new(CallIndirect(num_args, num_results))
-  // Define all results
-  for result in all_results {
-    let dst = ctx.get_vreg(result)
-    call_inst.add_def({ reg: Virtual(dst) })
-  }
-  // Add clobbers for all caller-saved registers
-  // This tells the register allocator that these registers are destroyed by the call
-  add_call_clobbers(call_inst)
-  // Uses: function pointer first, then arguments
-  call_inst.add_use(Virtual(func_ptr_vreg))
-  for arg_vreg in arg_vregs {
-    call_inst.add_use(Virtual(arg_vreg))
-  }
-  block.add_inst(call_inst)
+  // Use Cranelift-style call lowering
+  lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
 }
 
 ///|
@@ -2584,11 +2625,12 @@ fn lower_call_indirect(
   for i in 1..<inst.operands.length() {
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
-  let num_args = arg_vregs.length()
 
-  // Get all results (primary result + extra_results)
-  let all_results = inst.all_results()
-  let num_results = all_results.length()
+  // Get all result vregs
+  let result_vregs : Array[@abi.VReg] = []
+  for result in inst.all_results() {
+    result_vregs.push(ctx.get_vreg(result))
+  }
 
   // Create temporaries for calculation
   let offset_vreg = ctx.vcode_func.new_vreg(Int)
@@ -2617,10 +2659,24 @@ fn lower_call_indirect(
   block.add_inst(add_inst)
 
   // Step 3: Load function pointer from address (offset 0)
+  let raw_func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_func_inst = @instr.VCodeInst::new(Load(I64, 0))
-  load_func_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_func_inst.add_def({ reg: Virtual(raw_func_ptr_vreg) })
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
+
+  // Step 3.5: Clear FUNCREF_TAG (bit 61) from function pointer
+  // Function pointers in tables are tagged with 0x2000000000000000 for ref.test
+  // We need to clear this tag before calling: mask = ~0x2000000000000000 = 0xDFFFFFFFFFFFFFFF
+  let mask_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
+  load_mask.add_def({ reg: Virtual(mask_vreg) })
+  block.add_inst(load_mask)
+  let and_inst = @instr.VCodeInst::new(And)
+  and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  and_inst.add_use(Virtual(raw_func_ptr_vreg))
+  and_inst.add_use(Virtual(mask_vreg))
+  block.add_inst(and_inst)
 
   // Step 4: Load actual type index from address + 8
   let load_type_inst = @instr.VCodeInst::new(Load(I64, 8))
@@ -2635,39 +2691,24 @@ fn lower_call_indirect(
   type_check_inst.add_use(Virtual(actual_type_vreg))
   block.add_inst(type_check_inst)
 
-  // Step 6: Emit CallIndirect instruction
-  let call_inst = @instr.VCodeInst::new(CallIndirect(num_args, num_results))
-  // Define all results
-  for result in all_results {
-    let dst = ctx.get_vreg(result)
-    call_inst.add_def({ reg: Virtual(dst) })
-  }
-  // Add clobbers for all caller-saved registers
-  // This tells the register allocator that these registers are destroyed by the call
-  add_call_clobbers(call_inst)
-  // Uses: function pointer first, then arguments
-  call_inst.add_use(Virtual(func_ptr_vreg))
-  for arg_vreg in arg_vregs {
-    call_inst.add_use(Virtual(arg_vreg))
-  }
-  block.add_inst(call_inst)
+  // Step 6: Use Cranelift-style call lowering
+  lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
 }
 
 ///|
 /// Lower call_ref instruction
-/// call_ref calls through a function reference (function index on stack)
+/// call_ref calls through a function reference (tagged function pointer)
+/// The func_ref is a tagged pointer (func_ptr | FUNCREF_TAG where FUNCREF_TAG = 0x2000000000000000)
 /// The null check is already done in IR, so we just need to:
-/// 1. Load func_table from vmctx
-/// 2. Calculate address = func_table + func_ref * 8
-/// 3. Load function pointer
-/// 4. Call through the function pointer
+/// 1. Strip the FUNCREF_TAG to get the raw function pointer
+/// 2. Call through the function pointer
 fn lower_call_ref(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : @block.VCodeBlock,
   _type_idx : Int,
 ) -> Unit {
-  // First operand is the function reference (function index as I64)
+  // First operand is the function reference (tagged function pointer)
   if inst.operands.length() == 0 {
     return
   }
@@ -2678,57 +2719,28 @@ fn lower_call_ref(
   for i in 1..<inst.operands.length() {
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
-  let num_args = arg_vregs.length()
 
-  // Get all results (primary result + extra_results)
-  let all_results = inst.all_results()
-  let num_results = all_results.length()
+  // Get all result vregs
+  let result_vregs : Array[@abi.VReg] = []
+  for result in inst.all_results() {
+    result_vregs.push(ctx.get_vreg(result))
+  }
 
-  // Load func_table from vmctx on-demand
-  let func_table = emit_load_func_table(ctx, block)
-
-  // Step 1: Calculate offset = func_ref * 8 (each function pointer is 8 bytes)
-  let const_8_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_8 = @instr.VCodeInst::new(LoadConst(8L))
-  load_8.add_def({ reg: Virtual(const_8_vreg) })
-  block.add_inst(load_8)
-  let offset_vreg = ctx.vcode_func.new_vreg(Int)
-  let mul_inst = @instr.VCodeInst::new(Mul(true))
-  mul_inst.add_def({ reg: Virtual(offset_vreg) })
-  mul_inst.add_use(Virtual(func_ref_vreg))
-  mul_inst.add_use(Virtual(const_8_vreg))
-  block.add_inst(mul_inst)
-
-  // Step 2: Calculate address = func_table + offset
-  let addr_vreg = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(Add(true))
-  add_inst.add_def({ reg: Virtual(addr_vreg) })
-  add_inst.add_use(Virtual(func_table))
-  add_inst.add_use(Virtual(offset_vreg))
-  block.add_inst(add_inst)
-
-  // Step 3: Load function pointer from address
+  // Step 1: Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
+  // func_ptr = func_ref & 0x1FFFFFFFFFFFFFFF (clear bit 61)
+  let mask_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_mask = @instr.VCodeInst::new(LoadConst(0x1FFFFFFFFFFFFFFFL))
+  load_mask.add_def({ reg: Virtual(mask_vreg) })
+  block.add_inst(load_mask)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_inst = @instr.VCodeInst::new(Load(I64, 0))
-  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-  load_inst.add_use(Virtual(addr_vreg))
-  block.add_inst(load_inst)
+  let and_inst = @instr.VCodeInst::new(And)
+  and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  and_inst.add_use(Virtual(func_ref_vreg))
+  and_inst.add_use(Virtual(mask_vreg))
+  block.add_inst(and_inst)
 
-  // Step 4: Emit CallIndirect instruction
-  let call_inst = @instr.VCodeInst::new(CallIndirect(num_args, num_results))
-  // Define all results
-  for result in all_results {
-    let dst = ctx.get_vreg(result)
-    call_inst.add_def({ reg: Virtual(dst) })
-  }
-  // Add clobbers for all caller-saved registers
-  add_call_clobbers(call_inst)
-  // Uses: function pointer first, then arguments
-  call_inst.add_use(Virtual(func_ptr_vreg))
-  for arg_vreg in arg_vregs {
-    call_inst.add_use(Virtual(arg_vreg))
-  }
-  block.add_inst(call_inst)
+  // Step 2: Use Cranelift-style call lowering
+  lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
 }
 
 ///|
@@ -2993,8 +3005,8 @@ fn lower_call_ptr(
     block.add_inst(store)
   }
 
-  // Step 3: Create CallPtr instruction with FixedReg constraints
-  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results))
+  // Step 3: Create CallPtr instruction with FixedReg constraints (Wasm calling convention)
+  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
 
   // func_ptr constrained to X17
   call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
@@ -3070,6 +3082,240 @@ fn lower_call_ptr(
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
   // No AdjustSP needed - outgoing args space is pre-allocated in prologue
+}
+
+// ============ C Libcall Lowering (Cranelift-style) ============
+
+///|
+/// Lower a simple C libcall with up to 8 integer arguments.
+/// This is for calling C runtime functions like GC helpers.
+/// Uses standard C calling convention: args go to X0-X7, result in X0.
+///
+/// Unlike lower_call_ptr which handles Wasm calling convention with vmctx,
+/// this is for simple C functions where args go directly to X0-X7.
+fn lower_c_libcall(
+  _ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  func_ptr : @abi.VReg,
+  args : Array[@abi.VReg],
+  result : @abi.VReg?,
+) -> Unit {
+  guard args.length() <= 8 else {
+    abort("lower_c_libcall: too many arguments (max 8)")
+  }
+
+  // Create CallPtr instruction with C calling convention
+  let num_args = args.length()
+  let num_results = if result is Some(_) { 1 } else { 0 }
+  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, C))
+
+  // func_ptr constrained to X17
+  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
+    index: 17,
+    class: @abi.Int,
+  })
+
+  // Args constrained to X0, X1, X2, ... (C calling convention)
+  for i, arg in args {
+    call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
+      index: i,
+      class: @abi.Int,
+    })
+  }
+
+  // Result constrained to X0
+  if result is Some(dst) {
+    call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
+      index: 0,
+      class: @abi.Int,
+    })
+  }
+
+  // Add clobbers for all caller-saved registers
+  add_call_clobbers(call_inst)
+  block.add_inst(call_inst)
+}
+
+///|
+/// Helper to materialize an immediate value into a vreg
+fn materialize_imm(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  value : Int64,
+) -> @abi.VReg {
+  let vreg = ctx.vcode_func.new_vreg(Int)
+  let mov = @instr.VCodeInst::new(LoadConst(value))
+  mov.add_def({ reg: Virtual(vreg) })
+  block.add_inst(mov)
+  vreg
+}
+
+// ============ Wasm Call Lowering (Cranelift-style) ============
+
+///|
+/// Lower a Wasm function call using Cranelift-style approach.
+/// All argument placement is done in lowering via FixedReg constraints.
+/// The emit phase just emits BLR X17.
+///
+/// Wasm v3 ABI:
+/// - X0 = callee_vmctx, X1 = caller_vmctx
+/// - X2-X7 = integer user args (up to 6)
+/// - V0-V7 = float user args (up to 8)
+/// - Overflow args go to stack
+/// - X0/V0 = first result, etc.
+fn lower_wasm_call(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  func_ptr : @abi.VReg,
+  args : Array[@abi.VReg],
+  results : Array[@abi.VReg],
+) -> Unit {
+  // vmctx is always in X19
+  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+
+  // Classify user arguments by type
+  let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
+  for arg in args {
+    match arg.class {
+      @abi.Int => int_args.push((arg, @abi.Int))
+      @abi.Float32 => float_args.push((arg, @abi.Float32))
+      @abi.Float64 => float_args.push((arg, @abi.Float64))
+    }
+  }
+
+  // Calculate overflow args
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6 (X2-X7)
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
+  let int_overflow = if int_args.length() > max_int_reg_args {
+    int_args.length() - max_int_reg_args
+  } else {
+    0
+  }
+  let float_overflow = if float_args.length() > max_float_reg_args {
+    float_args.length() - max_float_reg_args
+  } else {
+    0
+  }
+  let total_overflow = int_overflow + float_overflow
+
+  // Generate StoreToStack for overflow arguments
+  // These use the pre-allocated outgoing args area (offset from SP)
+  for i in max_int_reg_args..<int_args.length() {
+    let (vreg, _) = int_args[i]
+    let stack_idx = i - max_int_reg_args
+    let offset = stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+  for i in max_float_reg_args..<float_args.length() {
+    let (vreg, _) = float_args[i]
+    let stack_idx = i - max_float_reg_args
+    let offset = int_overflow * 8 + stack_idx * 8
+    let store = @instr.VCodeInst::new(StoreToStack(offset))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+
+  // Track outgoing args size for frame layout
+  if total_overflow > 0 {
+    let overflow_bytes = total_overflow * 8
+    ctx.vcode_func.update_max_outgoing_args_size(overflow_bytes)
+  }
+
+  // Create CallPtr instruction with Wasm calling convention
+  let num_args = args.length()
+  let num_results = results.length()
+  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
+
+  // func_ptr constrained to X17
+  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
+    index: 17,
+    class: @abi.Int,
+  })
+
+  // vmctx constrained to X0 (callee_vmctx) and X1 (caller_vmctx)
+  // Note: We need to copy vmctx (X19) into vregs so regalloc will insert moves
+  // Using Physical directly doesn't trigger move insertion
+  let callee_vmctx = ctx.vcode_func.new_vreg(Int)
+  let caller_vmctx = ctx.vcode_func.new_vreg(Int)
+  let copy_callee = @instr.VCodeInst::new(Move)
+  copy_callee.add_def({ reg: Virtual(callee_vmctx) })
+  copy_callee.add_use(Physical(vmctx_preg))
+  block.add_inst(copy_callee)
+  let copy_caller = @instr.VCodeInst::new(Move)
+  copy_caller.add_def({ reg: Virtual(caller_vmctx) })
+  copy_caller.add_use(Physical(vmctx_preg))
+  block.add_inst(copy_caller)
+  call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
+    index: 0,
+    class: @abi.Int,
+  })
+  call_inst.add_use_fixed(Virtual(caller_vmctx), @abi.PReg::{
+    index: 1,
+    class: @abi.Int,
+  })
+
+  // Register int args: X2-X7
+  let int_reg_count = if int_args.length() < max_int_reg_args {
+    int_args.length()
+  } else {
+    max_int_reg_args
+  }
+  for i in 0..<int_reg_count {
+    let (vreg, _) = int_args[i]
+    let preg_idx = 2 + i // X2, X3, X4, X5, X6, X7
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: preg_idx,
+      class: @abi.Int,
+    })
+  }
+
+  // Register float args: V0-V7
+  let float_reg_count = if float_args.length() < max_float_reg_args {
+    float_args.length()
+  } else {
+    max_float_reg_args
+  }
+  for i in 0..<float_reg_count {
+    let (vreg, class) = float_args[i]
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+  }
+
+  // Define results with fixed register constraints
+  // Classify results by type and assign to X0-X7 / V0-V7
+  let mut int_result_idx = 0
+  let mut float_result_idx = 0
+  for result in results {
+    match result.class {
+      @abi.Int => {
+        call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
+          index: int_result_idx,
+          class: @abi.Int,
+        })
+        int_result_idx += 1
+      }
+      @abi.Float32 => {
+        call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
+          index: float_result_idx,
+          class: @abi.Float32,
+        })
+        float_result_idx += 1
+      }
+      @abi.Float64 => {
+        call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
+          index: float_result_idx,
+          class: @abi.Float64,
+        })
+        float_result_idx += 1
+      }
+    }
+  }
+
+  // Add clobbers for all caller-saved registers
+  add_call_clobbers(call_inst)
+  block.add_inst(call_inst)
 }
 
 // ============ Tail Call Lowering (Cranelift-style) ============
@@ -3239,11 +3485,24 @@ fn lower_return_call_indirect(
   add_inst.add_use(Virtual(table_ptr_vreg))
   add_inst.add_use(Virtual(offset_vreg))
   block.add_inst(add_inst)
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  // Load raw function pointer
+  let raw_func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_func_inst = @instr.VCodeInst::new(Load(I64, 0))
-  load_func_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_func_inst.add_def({ reg: Virtual(raw_func_ptr_vreg) })
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
+
+  // Clear FUNCREF_TAG (bit 61) from function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let mask_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
+  load_mask.add_def({ reg: Virtual(mask_vreg) })
+  block.add_inst(load_mask)
+  let and_inst = @instr.VCodeInst::new(And)
+  and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  and_inst.add_use(Virtual(raw_func_ptr_vreg))
+  and_inst.add_use(Virtual(mask_vreg))
+  block.add_inst(and_inst)
   let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
   let load_type_inst = @instr.VCodeInst::new(Load(I64, 8))
   load_type_inst.add_def({ reg: Virtual(actual_type_vreg) })
@@ -3345,6 +3604,7 @@ fn lower_return_call_indirect(
 
 ///|
 /// Lower return_call_ref (tail call through function reference)
+/// The func_ref is a tagged pointer (func_ptr | FUNCREF_TAG where FUNCREF_TAG = 0x2000000000000000)
 /// Following Cranelift: parameters handled in lowering
 fn lower_return_call_ref(
   ctx : LoweringContext,
@@ -3355,29 +3615,18 @@ fn lower_return_call_ref(
   guard inst.operands.length() > 0 else { return }
   let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // Load func_table and calculate function pointer
-  let func_table = emit_load_func_table(ctx, block)
-  let const_8_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_8 = @instr.VCodeInst::new(LoadConst(8L))
-  load_8.add_def({ reg: Virtual(const_8_vreg) })
-  block.add_inst(load_8)
-  let offset_vreg = ctx.vcode_func.new_vreg(Int)
-  let mul_inst = @instr.VCodeInst::new(Mul(true))
-  mul_inst.add_def({ reg: Virtual(offset_vreg) })
-  mul_inst.add_use(Virtual(func_ref_vreg))
-  mul_inst.add_use(Virtual(const_8_vreg))
-  block.add_inst(mul_inst)
-  let addr_vreg = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(Add(true))
-  add_inst.add_def({ reg: Virtual(addr_vreg) })
-  add_inst.add_use(Virtual(func_table))
-  add_inst.add_use(Virtual(offset_vreg))
-  block.add_inst(add_inst)
+  // Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
+  // func_ptr = func_ref & 0x1FFFFFFFFFFFFFFF (clear bit 61)
+  let mask_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_mask = @instr.VCodeInst::new(LoadConst(0x1FFFFFFFFFFFFFFFL))
+  load_mask.add_def({ reg: Virtual(mask_vreg) })
+  block.add_inst(load_mask)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_inst = @instr.VCodeInst::new(Load(I64, 0))
-  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-  load_inst.add_use(Virtual(addr_vreg))
-  block.add_inst(load_inst)
+  let and_inst = @instr.VCodeInst::new(And)
+  and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  and_inst.add_use(Virtual(func_ref_vreg))
+  and_inst.add_use(Virtual(mask_vreg))
+  block.add_inst(and_inst)
 
   // Get vmctx
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
@@ -3472,7 +3721,8 @@ fn lower_return_call_ref(
 // ============ GC Operations ============
 
 ///|
-/// Lower i31.new: Convert i32 to i31ref (just zero-extend to i64)
+/// Lower i31.new: Convert i32 to i31ref
+/// Encoding: (value << 1) | 1 (positive odd for i31)
 fn lower_i31_new(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -3481,16 +3731,40 @@ fn lower_i31_new(
   guard inst.result is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
-  // i31ref is represented as i64, so zero-extend the i32 value
-  let vcode_inst = @instr.VCodeInst::new(Extend(Unsigned32To64))
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(src))
-  block.add_inst(vcode_inst)
+
+  // Step 1: Zero-extend i32 to i64
+  let ext_vreg = ctx.vcode_func.new_vreg(Int)
+  let extend_inst = @instr.VCodeInst::new(Extend(Unsigned32To64))
+  extend_inst.add_def({ reg: Virtual(ext_vreg) })
+  extend_inst.add_use(Virtual(src))
+  block.add_inst(extend_inst)
+
+  // Step 2: Shift left by 1
+  let shifted_vreg = ctx.vcode_func.new_vreg(Int)
+  let one_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_one = @instr.VCodeInst::new(LoadConst(1L))
+  load_one.add_def({ reg: Virtual(one_vreg) })
+  block.add_inst(load_one)
+  let shift_inst = @instr.VCodeInst::new(Shl(true))
+  shift_inst.add_def({ reg: Virtual(shifted_vreg) })
+  shift_inst.add_use(Virtual(ext_vreg))
+  shift_inst.add_use(Virtual(one_vreg))
+  block.add_inst(shift_inst)
+
+  // Step 3: OR with 1 to set low bit
+  let or_inst = @instr.VCodeInst::new(Or)
+  or_inst.add_def({ reg: Virtual(dst) })
+  or_inst.add_use(Virtual(shifted_vreg))
+  or_inst.add_use(Virtual(one_vreg))
+  block.add_inst(or_inst)
 }
 
 ///|
 /// Lower i31.get_s: Sign-extend 31 bits to i32
-/// Implementation: shift left 1, then arithmetic shift right 1
+/// Encoding is (value << 1) | 1, so:
+/// 1. Check for null (0) and trap
+/// 2. Shift right by 1 to decode (removes the tag bit)
+/// 3. Sign-extend from 31 bits
 fn lower_i31_get_s(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -3500,27 +3774,38 @@ fn lower_i31_get_s(
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // First, truncate i64 to i32 (take lower 32 bits)
-  let tmp1 = ctx.new_vreg(@abi.Int)
-  let trunc_inst = @instr.VCodeInst::new(Truncate)
-  trunc_inst.add_def({ reg: Virtual(tmp1) })
-  trunc_inst.add_use(Virtual(src))
-  block.add_inst(trunc_inst)
+  // Step 0: Null check - trap if i31 ref is null (0)
+  let trap_inst = @instr.VCodeInst::new(TrapIfZero(true, 2))
+  trap_inst.add_use(Virtual(src))
+  block.add_inst(trap_inst)
 
-  // Shift left by 1 to move bit 30 to bit 31
-  let tmp2 = ctx.new_vreg(@abi.Int)
+  // Step 1: Shift right by 1 to decode the i31 value (64-bit)
   let shift_amount = ctx.new_vreg(@abi.Int)
   let load_1 = @instr.VCodeInst::new(LoadConst(1L))
   load_1.add_def({ reg: Virtual(shift_amount) })
   block.add_inst(load_1)
-  let shl_inst = @instr.VCodeInst::new(Shl(false)) // 32-bit shift
+  let decoded = ctx.new_vreg(@abi.Int)
+  let lsr_inst = @instr.VCodeInst::new(LShr(true))
+  lsr_inst.add_def({ reg: Virtual(decoded) })
+  lsr_inst.add_use(Virtual(src))
+  lsr_inst.add_use(Virtual(shift_amount))
+  block.add_inst(lsr_inst)
+
+  // Step 2: Truncate to 32 bits
+  let tmp = ctx.new_vreg(@abi.Int)
+  let trunc_inst = @instr.VCodeInst::new(Truncate)
+  trunc_inst.add_def({ reg: Virtual(tmp) })
+  trunc_inst.add_use(Virtual(decoded))
+  block.add_inst(trunc_inst)
+
+  // Step 3: Sign-extend from 31 bits by shifting left then arithmetic right
+  let tmp2 = ctx.new_vreg(@abi.Int)
+  let shl_inst = @instr.VCodeInst::new(Shl(false))
   shl_inst.add_def({ reg: Virtual(tmp2) })
-  shl_inst.add_use(Virtual(tmp1))
+  shl_inst.add_use(Virtual(tmp))
   shl_inst.add_use(Virtual(shift_amount))
   block.add_inst(shl_inst)
-
-  // Arithmetic shift right by 1 to sign-extend
-  let asr_inst = @instr.VCodeInst::new(AShr(false)) // 32-bit shift
+  let asr_inst = @instr.VCodeInst::new(AShr(false))
   asr_inst.add_def({ reg: Virtual(dst) })
   asr_inst.add_use(Virtual(tmp2))
   asr_inst.add_use(Virtual(shift_amount))
@@ -3528,7 +3813,11 @@ fn lower_i31_get_s(
 }
 
 ///|
-/// Lower i31.get_u: Zero-extend 31 bits (mask with 0x7FFFFFFF)
+/// Lower i31.get_u: Zero-extend 31 bits
+/// Encoding is (value << 1) | 1, so:
+/// 1. Check for null (0) and trap
+/// 2. Shift right by 1 to decode (removes the tag bit)
+/// 3. Mask with 0x7FFFFFFF for 31 bits
 fn lower_i31_get_u(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -3538,20 +3827,35 @@ fn lower_i31_get_u(
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // First, truncate i64 to i32 (take lower 32 bits)
+  // Step 0: Null check - trap if i31 ref is null (0)
+  let trap_inst = @instr.VCodeInst::new(TrapIfZero(true, 2))
+  trap_inst.add_use(Virtual(src))
+  block.add_inst(trap_inst)
+
+  // Step 1: Shift right by 1 to decode the i31 value (64-bit)
+  let shift_amount = ctx.new_vreg(@abi.Int)
+  let load_1 = @instr.VCodeInst::new(LoadConst(1L))
+  load_1.add_def({ reg: Virtual(shift_amount) })
+  block.add_inst(load_1)
+  let decoded = ctx.new_vreg(@abi.Int)
+  let lsr_inst = @instr.VCodeInst::new(LShr(true))
+  lsr_inst.add_def({ reg: Virtual(decoded) })
+  lsr_inst.add_use(Virtual(src))
+  lsr_inst.add_use(Virtual(shift_amount))
+  block.add_inst(lsr_inst)
+
+  // Step 2: Truncate to 32 bits
   let tmp = ctx.new_vreg(@abi.Int)
   let trunc_inst = @instr.VCodeInst::new(Truncate)
   trunc_inst.add_def({ reg: Virtual(tmp) })
-  trunc_inst.add_use(Virtual(src))
+  trunc_inst.add_use(Virtual(decoded))
   block.add_inst(trunc_inst)
 
-  // Load mask 0x7FFFFFFF
+  // Step 3: Mask with 0x7FFFFFFF for 31 bits (already decoded, just ensure upper bit is clear)
   let mask = ctx.new_vreg(@abi.Int)
   let load_mask = @instr.VCodeInst::new(LoadConst(0x7FFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask) })
   block.add_inst(load_mask)
-
-  // AND with mask
   let and_inst = @instr.VCodeInst::new(And)
   and_inst.add_def({ reg: Virtual(dst) })
   and_inst.add_use(Virtual(tmp))
@@ -3575,4 +3879,532 @@ fn lower_gc_convert(
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(src))
   block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower ref.test: Test if reference matches type
+/// Uses runtime libcall: gc_ref_test_impl(ref, type_idx, nullable) -> 0 or 1
+fn lower_ref_test(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  nullable : Bool,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Materialize immediate arguments
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let nullable_vreg = materialize_imm(
+    ctx,
+    block,
+    if nullable {
+      1L
+    } else {
+      0L
+    },
+  )
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(RefTest))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_ref_test_impl(ref, type_idx, nullable) -> result
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, nullable_vreg],
+    Some(dst),
+  )
+}
+
+///|
+/// Lower ref.cast: Cast reference to type (traps on failure)
+/// Uses runtime libcall: gc_ref_cast_impl(ref, type_idx, nullable) -> ref or trap
+fn lower_ref_cast(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  nullable : Bool,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Materialize immediate arguments
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let nullable_vreg = materialize_imm(
+    ctx,
+    block,
+    if nullable {
+      1L
+    } else {
+      0L
+    },
+  )
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(RefCast))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_ref_cast_impl(ref, type_idx, nullable) -> result
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, nullable_vreg],
+    Some(dst),
+  )
+}
+
+///|
+/// Lower ref.eq: Compare two references for equality
+/// Returns 1 if equal, 0 otherwise
+fn lower_ref_eq(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref1_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let ref2_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Compare two references as i64 values
+  // Use Cmp(Eq, true) for 64-bit equality comparison
+  let cmp_inst = @instr.VCodeInst::new(Cmp(@instr.CmpKind::Eq, true))
+  cmp_inst.add_def({ reg: Virtual(dst) })
+  cmp_inst.add_use(Virtual(ref1_vreg))
+  cmp_inst.add_use(Virtual(ref2_vreg))
+  block.add_inst(cmp_inst)
+}
+
+///|
+/// Lower struct.new: Allocate struct with field values
+/// Uses runtime libcall: gc_struct_new_impl(type_idx, fields_ptr, num_fields) -> struct_ref
+fn lower_struct_new(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let num_fields = inst.operands.length()
+
+  // Materialize arguments
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let num_fields_vreg = materialize_imm(ctx, block, num_fields.to_int64())
+
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructNew))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  if num_fields > 0 {
+    // Allocate stack space for fields (8 bytes each, aligned to 16)
+    let stack_space = (num_fields * 8 + 15) / 16 * 16
+    let alloc = @instr.VCodeInst::new(AdjustSP(-stack_space))
+    block.add_inst(alloc)
+
+    // Store each field value to stack
+    for i in 0..<num_fields {
+      let field_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+      let offset = i * 8
+      let store = @instr.VCodeInst::new(StoreToStack(offset))
+      store.add_use(Virtual(field_vreg))
+      block.add_inst(store)
+    }
+
+    // Get current stack pointer as fields_ptr
+    let sp_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_sp = @instr.VCodeInst::new(LoadSP)
+    load_sp.add_def({ reg: Virtual(sp_vreg) })
+    block.add_inst(load_sp)
+
+    // Call: gc_struct_new_impl(type_idx, fields_ptr, num_fields) -> result
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [type_idx_vreg, sp_vreg, num_fields_vreg],
+      Some(dst),
+    )
+
+    // Deallocate stack space
+    let dealloc = @instr.VCodeInst::new(AdjustSP(stack_space))
+    block.add_inst(dealloc)
+  } else {
+    // No fields - pass null pointer
+    let null_ptr = materialize_imm(ctx, block, 0L)
+    // Call: gc_struct_new_impl(type_idx, null, 0) -> result
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [type_idx_vreg, null_ptr, num_fields_vreg],
+      Some(dst),
+    )
+  }
+}
+
+///|
+/// Lower struct.new_default: Allocate struct with default values
+/// Uses runtime libcall: gc_struct_new_impl(type_idx, null, 0) -> struct_ref
+fn lower_struct_new_default(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+
+  // Materialize arguments
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let zero_vreg = materialize_imm(ctx, block, 0L)
+
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructNew))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+
+  // Call: gc_struct_new_impl(type_idx, null, 0) -> result
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [type_idx_vreg, zero_vreg, zero_vreg],
+    Some(dst),
+  )
+}
+
+///|
+/// Lower struct.get: Get struct field value
+/// Uses runtime libcall: gc_struct_get_impl(ref, type_idx, field_idx) -> value
+fn lower_struct_get(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  field_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Materialize immediate arguments
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let field_idx_vreg = materialize_imm(ctx, block, field_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructGet))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_struct_get_impl(ref, type_idx, field_idx) -> result
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, field_idx_vreg],
+    Some(dst),
+  )
+}
+
+///|
+/// Lower struct.set: Set struct field value
+/// Uses runtime libcall: gc_struct_set_impl(ref, type_idx, field_idx, value)
+fn lower_struct_set(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  field_idx : Int,
+) -> Unit {
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let val_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  // Materialize immediate arguments
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let field_idx_vreg = materialize_imm(ctx, block, field_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructSet))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_struct_set_impl(ref, type_idx, field_idx, value)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, field_idx_vreg, val_vreg],
+    None,
+  )
+}
+
+///|
+/// Lower array.new: Allocate array with init value and length
+/// Uses runtime libcall: gc_array_new_impl(type_idx, init_value, length) -> array_ref
+fn lower_array_new(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let init_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let len_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  // Materialize type_idx
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNew))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_array_new_impl(type_idx, init_value, length) -> result
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [type_idx_vreg, init_vreg, len_vreg],
+    Some(dst),
+  )
+}
+
+///|
+/// Lower array.new_default: Allocate array with default values
+/// Uses runtime libcall: gc_array_new_impl(type_idx, init_value=0, length) -> array_ref
+fn lower_array_new_default(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let len_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Load default value (0) for the init value
+  let zero_vreg = materialize_imm(ctx, block, 0L)
+  // Materialize type_idx
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNew))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_array_new_impl(type_idx, init_value, length) -> result
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [type_idx_vreg, zero_vreg, len_vreg],
+    Some(dst),
+  )
+}
+
+///|
+/// Lower array.new_fixed: Allocate fixed-size array with element values
+/// Uses runtime libcalls: gc_array_new_impl and gc_array_set_impl
+fn lower_array_new_fixed(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  len : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  // Materialize common values
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let len_vreg = materialize_imm(ctx, block, len.to_int64())
+
+  // Load ArrayNew function pointer (we'll need it for the initial allocation)
+  let array_new_fp = ctx.vcode_func.new_vreg(Int)
+  let load_new_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNew))
+  load_new_fp.add_def({ reg: Virtual(array_new_fp) })
+  block.add_inst(load_new_fp)
+  if len == 0 {
+    // Empty array - use zero init and length 0
+    let zero_vreg = materialize_imm(ctx, block, 0L)
+    // Call: gc_array_new_impl(type_idx, init_value=0, length=0) -> result
+    lower_c_libcall(
+      ctx,
+      block,
+      array_new_fp,
+      [type_idx_vreg, zero_vreg, zero_vreg],
+      Some(dst),
+    )
+  } else {
+    // Create array with first element
+    let first_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+    // Call: gc_array_new_impl(type_idx, init_value, length) -> result
+    lower_c_libcall(
+      ctx,
+      block,
+      array_new_fp,
+      [type_idx_vreg, first_vreg, len_vreg],
+      Some(dst),
+    )
+    // Set remaining elements using gc_array_set_impl
+    if len > 1 {
+      // Load ArraySet function pointer once for all set operations
+      let array_set_fp = ctx.vcode_func.new_vreg(Int)
+      let load_set_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArraySet))
+      load_set_fp.add_def({ reg: Virtual(array_set_fp) })
+      block.add_inst(load_set_fp)
+      for i in 1..<len {
+        let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+        let idx_vreg = materialize_imm(ctx, block, i.to_int64())
+        // Call: gc_array_set_impl(ref, type_idx, idx, value)
+        lower_c_libcall(
+          ctx,
+          block,
+          array_set_fp,
+          [dst, type_idx_vreg, idx_vreg, elem_vreg],
+          None,
+        )
+      }
+    }
+  }
+}
+
+///|
+/// Lower array.get: Get array element
+/// Uses runtime libcall: gc_array_get_impl(ref, type_idx, idx) -> value
+fn lower_array_get(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  // Materialize type_idx
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayGet))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_array_get_impl(ref, type_idx, idx) -> result
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, idx_vreg],
+    Some(dst),
+  )
+}
+
+///|
+/// Lower array.set: Set array element
+/// Uses runtime libcall: gc_array_set_impl(ref, type_idx, idx, value)
+fn lower_array_set(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let val_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
+  // Materialize type_idx
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArraySet))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_array_set_impl(ref, type_idx, idx, value)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, idx_vreg, val_vreg],
+    None,
+  )
+}
+
+///|
+/// Lower array.len: Get array length
+/// Uses runtime libcall: gc_array_len_impl(ref) -> length
+fn lower_array_len(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayLen))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_array_len_impl(ref) -> result
+  lower_c_libcall(ctx, block, func_ptr_vreg, [ref_vreg], Some(dst))
+}
+
+///|
+/// Lower array.fill: Fill array elements with a value
+/// Uses runtime libcall: gc_array_fill_impl(ref, offset, value, count)
+fn lower_array_fill(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  _type_idx : Int,
+) -> Unit {
+  // Operands: ref, offset, value, count
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let offset_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let val_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
+  let count_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayFill))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_array_fill_impl(ref, offset, value, count)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, offset_vreg, val_vreg, count_vreg],
+    None,
+  )
+}
+
+///|
+/// Lower array.copy: Copy elements between arrays
+/// Uses runtime libcall: gc_array_copy_impl(dst_ref, dst_off, src_ref, src_off, count)
+fn lower_array_copy(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  _dst_type : Int,
+  _src_type : Int,
+) -> Unit {
+  // Operands: dst_ref, dst_offset, src_ref, src_offset, count
+  let dst_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let dst_off_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let src_ref_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
+  let src_off_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
+  let count_vreg = ctx.get_vreg_for_use(inst.operands[4], block)
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayCopy))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call: gc_array_copy_impl(dst_ref, dst_off, src_ref, src_off, count)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [dst_ref_vreg, dst_off_vreg, src_ref_vreg, src_off_vreg, count_vreg],
+    None,
+  )
 }

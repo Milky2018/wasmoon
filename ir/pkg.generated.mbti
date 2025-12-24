@@ -156,6 +156,7 @@ pub fn IRBuilder::fpromote(Self, Value) -> Value
 pub fn IRBuilder::fsqrt(Self, Value) -> Value
 pub fn IRBuilder::fsub(Self, Value, Value) -> Value
 pub fn IRBuilder::ftrunc(Self, Value) -> Value
+pub fn IRBuilder::get_func_ref(Self, Int) -> Value
 pub fn IRBuilder::get_function(Self) -> Function
 pub fn IRBuilder::global_get(Self, Int, Type) -> Value
 pub fn IRBuilder::global_set(Self, Int, Value) -> Unit
@@ -198,6 +199,7 @@ pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::popcnt(Self, Value) -> Value
 pub fn IRBuilder::print(Self) -> String
 pub fn IRBuilder::ref_cast(Self, Int, Bool, Value) -> Value
+pub fn IRBuilder::ref_eq(Self, Value, Value) -> Value
 pub fn IRBuilder::ref_test(Self, Int, Bool, Value) -> Value
 pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
 pub fn IRBuilder::return_call_indirect_multi(Self, Int, Int, Value, Array[Value]) -> Unit
@@ -349,6 +351,7 @@ pub enum Opcode {
   ReturnCall(Int)
   ReturnCallIndirect(Int, Int)
   ReturnCallRef(Int)
+  GetFuncRef(Int)
   LoadPtr(Type)
   StorePtr(Type)
   CallPtr(Int, Int)
@@ -375,6 +378,7 @@ pub enum Opcode {
   RefCast(Int, Bool)
   AnyConvertExtern
   ExternConvertAny
+  RefEq
 }
 pub impl Show for Opcode
 

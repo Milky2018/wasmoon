@@ -79,6 +79,8 @@ pub enum WastValue {
   F64ArithmeticNan
   RefNull(String)
   RefExtern(Int)
+  RefExternAny
+  RefHost(Int)
   RefFunc
   RefArray
   RefStruct

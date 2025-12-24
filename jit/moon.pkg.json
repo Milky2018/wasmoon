@@ -19,6 +19,12 @@
     "jit_runtime.mbt": [
       "native"
     ],
+    "gc_helpers.mbt": [
+      "native"
+    ],
+    "c_heap.mbt": [
+      "native"
+    ],
     "execution_wbtest.mbt": [
       "native"
     ]

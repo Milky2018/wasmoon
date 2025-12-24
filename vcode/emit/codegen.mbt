@@ -1076,348 +1076,6 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_mneg(rd, rn, rm)
     }
-    CallIndirect(num_args, num_results) => {
-      // Call through a function pointer in a register
-      // v3 ABI: X0=callee_vmctx, X1=caller_vmctx, X2-X7=user int params, V0-V7=float params
-      // Return values: X0-X7 for up to 8 int results, V0-V7 for up to 8 float results
-      // Integer and float params are counted SEPARATELY!
-      // Uses: [func_ptr, arg0, arg1, ...]
-      let func_ptr = reg_num(inst.uses[0])
-      // Save function pointer to X17 (intra-procedure call scratch register)
-      self.emit_mov_reg(17, func_ptr) // MOV X17, func_ptr
-
-      // v3 ABI: Separate integer and float arguments
-      // Integer params go in X2-X7 (up to 6), float params go in V0-V7 (up to 8)
-      let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6
-      let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8
-
-      // Classify arguments by type
-      let int_args : Array[(Int, @abi.RegClass, Int)] = [] // (src_reg, class, use_idx)
-      let float_args : Array[(Int, @abi.RegClass, Int)] = [] // (src_reg, class, use_idx)
-      for i in 0..<num_args {
-        let src = reg_num(inst.uses[i + 1])
-        let arg_class = match inst.uses[i + 1] {
-          Physical(preg) => preg.class
-          Virtual(vreg) => vreg.class
-        }
-        match arg_class {
-          Int => int_args.push((src, arg_class, i + 1))
-          Float32 | Float64 => float_args.push((src, arg_class, i + 1))
-        }
-      }
-
-      // Calculate stack space needed
-      let int_stack_args = if int_args.length() > max_int_reg_args {
-        int_args.length() - max_int_reg_args
-      } else {
-        0
-      }
-      let float_stack_args = if float_args.length() > max_float_reg_args {
-        float_args.length() - max_float_reg_args
-      } else {
-        0
-      }
-      let overflow_space = (int_stack_args + float_stack_args) * 8
-      // Temp space for all args to avoid register clobbering
-      let temp_space = num_args * 8
-      let total_stack_space = (overflow_space + temp_space + 15) / 16 * 16
-      if total_stack_space > 0 {
-        self.emit_sub_imm(31, 31, total_stack_space)
-      }
-
-      // Phase 1: Save all arguments to temp space on stack
-      for i in 0..<num_args {
-        let src = reg_num(inst.uses[i + 1])
-        let temp_offset = overflow_space + i * 8
-        let arg_class = match inst.uses[i + 1] {
-          Physical(preg) => preg.class
-          Virtual(vreg) => vreg.class
-        }
-        if src >= @abi.spill_slot_base {
-          // Already spilled - skip, we'll load from spill slot later
-          ()
-        } else {
-          match arg_class {
-            Int => self.emit_str_imm(src, 31, temp_offset)
-            Float32 => self.emit_str_s_imm(src, 31, temp_offset)
-            Float64 => self.emit_str_d_imm(src, 31, temp_offset)
-          }
-        }
-      }
-
-      // Phase 2: Load integer arguments to X2-X7
-      let int_reg_count = @cmp.minimum(int_args.length(), max_int_reg_args)
-      for i in 0..<int_reg_count {
-        let (src, _, use_idx) = int_args[i]
-        let dst = @abi.USER_PARAM_BASE_REG + i // X2, X3, X4, ...
-        let temp_offset = overflow_space + (use_idx - 1) * 8
-        if src >= @abi.spill_slot_base {
-          let spill_slot = src - @abi.spill_slot_base
-          let spill_offset = spill_base_offset +
-            total_stack_space +
-            spill_slot * 8
-          self.emit_ldr_imm(dst, 31, spill_offset)
-        } else {
-          self.emit_ldr_imm(dst, 31, temp_offset)
-        }
-      }
-
-      // Phase 3: Load float arguments to V0-V7
-      let float_reg_count = @cmp.minimum(
-        float_args.length(),
-        max_float_reg_args,
-      )
-      for i in 0..<float_reg_count {
-        let (src, arg_class, use_idx) = float_args[i]
-        let dst = i // V0, V1, V2, ...
-        let temp_offset = overflow_space + (use_idx - 1) * 8
-        if src >= @abi.spill_slot_base {
-          let spill_slot = src - @abi.spill_slot_base
-          let spill_offset = spill_base_offset +
-            total_stack_space +
-            spill_slot * 8
-          match arg_class {
-            Float32 => self.emit_ldr_s_imm(dst, 31, spill_offset)
-            Float64 => self.emit_ldr_d_imm(dst, 31, spill_offset)
-            _ => ()
-          }
-        } else {
-          match arg_class {
-            Float32 => self.emit_ldr_s_imm(dst, 31, temp_offset)
-            Float64 => self.emit_ldr_d_imm(dst, 31, temp_offset)
-            _ => ()
-          }
-        }
-      }
-
-      // Phase 4: Store overflow args to call stack
-      // Stack layout: [int_overflow..., float_overflow...]
-      // Int overflow args
-      for i in max_int_reg_args..<int_args.length() {
-        let (src, _, use_idx) = int_args[i]
-        let stack_idx = i - max_int_reg_args
-        let overflow_offset = stack_idx * 8
-        let temp_offset = overflow_space + (use_idx - 1) * 8
-        if src >= @abi.spill_slot_base {
-          let spill_slot = src - @abi.spill_slot_base
-          let spill_offset = spill_base_offset +
-            total_stack_space +
-            spill_slot * 8
-          self.emit_ldr_imm(16, 31, spill_offset) // Load from spill slot to X16
-          self.emit_str_imm(16, 31, overflow_offset) // Store to overflow area
-        } else {
-          self.emit_ldr_imm(16, 31, temp_offset) // Load from temp to X16
-          self.emit_str_imm(16, 31, overflow_offset) // Store to overflow area
-        }
-      }
-      // Float overflow args (after int overflow)
-      for i in max_float_reg_args..<float_args.length() {
-        let (src, arg_class, use_idx) = float_args[i]
-        let stack_idx = i - max_float_reg_args
-        let overflow_offset = int_stack_args * 8 + stack_idx * 8
-        let temp_offset = overflow_space + (use_idx - 1) * 8
-        if src >= @abi.spill_slot_base {
-          let spill_slot = src - @abi.spill_slot_base
-          let spill_offset = spill_base_offset +
-            total_stack_space +
-            spill_slot * 8
-          match arg_class {
-            Float32 => {
-              self.emit_ldr_w_imm(16, 31, spill_offset)
-              self.emit_str_w_imm(16, 31, overflow_offset)
-            }
-            Float64 => {
-              self.emit_ldr_imm(16, 31, spill_offset)
-              self.emit_str_imm(16, 31, overflow_offset)
-            }
-            _ => ()
-          }
-        } else {
-          match arg_class {
-            Float32 => {
-              self.emit_ldr_w_imm(16, 31, temp_offset)
-              self.emit_str_w_imm(16, 31, overflow_offset)
-            }
-            Float64 => {
-              self.emit_ldr_imm(16, 31, temp_offset)
-              self.emit_str_imm(16, 31, overflow_offset)
-            }
-            _ => ()
-          }
-        }
-      }
-
-      // Set up vmctx for callee (v3 ABI requires X0=callee_vmctx, X1=caller_vmctx)
-      self.emit_mov_reg(0, 19) // X0 = callee_vmctx
-      self.emit_mov_reg(1, 19) // X1 = caller_vmctx
-
-      // Call the function
-      self.emit_blr(17)
-
-      // Restore stack
-      if total_stack_space > 0 {
-        self.emit_add_imm(31, 31, total_stack_space)
-      }
-      // Note: func_table is loaded on-demand from vmctx, no need to reload
-      // Move results to destination registers
-      // JIT ABI: integer returns in X0, X1; float returns in D0/S0, D1/S1
-      // Two-phase is only needed when there's potential conflict:
-      // - For ints: if dest is X0/X1 and we have multiple int results
-      // - For floats: if mixing f32 and f64 types
-
-      // Collect result info
-      let int_results : Array[(Int, Int)] = [] // (dest_reg, abi_idx)
-      let float_results : Array[(@abi.RegClass, Int, Int)] = [] // (class, dest_reg, abi_idx)
-      let mut int_abi_idx = 0
-      let mut float_abi_idx = 0
-      for i in 0..<num_results {
-        if i >= inst.defs.length() {
-          break
-        }
-        let rd = wreg_num(inst.defs[i])
-        let def_class = match inst.defs[i].reg {
-          Physical(preg) => preg.class
-          Virtual(vreg) => vreg.class
-        }
-        match def_class {
-          Int => {
-            int_results.push((rd, int_abi_idx))
-            int_abi_idx = int_abi_idx + 1
-          }
-          Float32 | Float64 => {
-            float_results.push((def_class, rd, float_abi_idx))
-            float_abi_idx = float_abi_idx + 1
-          }
-        }
-      }
-
-      // v3 ABI: Handle integer results (up to 8 in X0-X7)
-      // Need two-phase if: multiple results AND any dest is in return register range (would conflict)
-      let max_int_ret = 8 // X0-X7
-      let int_need_two_phase = int_results.length() >= 2 &&
-        {
-          let mut has_conflict = false
-          for entry in int_results {
-            let (rd, _) = entry
-            if rd >= 0 && rd < max_int_ret {
-              has_conflict = true
-              break
-            }
-          }
-          has_conflict
-        }
-      if int_need_two_phase {
-        // Two-phase: save to temps first (X10-X17 as temps)
-        let temp_int_base = 10
-        let num_in_regs = if int_results.length() < max_int_ret {
-          int_results.length()
-        } else {
-          max_int_ret
-        }
-        for i in 0..<num_in_regs {
-          let (_, abi_idx) = int_results[i]
-          if abi_idx < max_int_ret {
-            self.emit_mov_reg(temp_int_base + abi_idx, abi_idx)
-          }
-        }
-        for entry in int_results {
-          let (rd, abi_idx) = entry
-          if abi_idx < max_int_ret {
-            let temp = temp_int_base + abi_idx
-            if rd != temp {
-              self.emit_mov_reg(rd, temp)
-            }
-          } else {
-            // Extra results from SRET buffer (X8)
-            let offset = (abi_idx - max_int_ret) * 8
-            self.emit_ldr_imm(rd, 8, offset)
-          }
-        }
-      } else {
-        // Direct move: no conflict
-        for entry in int_results {
-          let (rd, abi_idx) = entry
-          if abi_idx < max_int_ret && rd != abi_idx {
-            self.emit_mov_reg(rd, abi_idx)
-          } else if abi_idx >= max_int_ret {
-            // Extra results from SRET buffer (X8)
-            let offset = (abi_idx - max_int_ret) * 8
-            self.emit_ldr_imm(rd, 8, offset)
-          }
-        }
-      }
-
-      // v3 ABI: Handle float results (up to 8 in V0-V7)
-      // Need two-phase only when mixing f32 and f64 (D/S register aliasing)
-      let max_float_ret = 8 // V0-V7
-      let mut has_f32 = false
-      let mut has_f64 = false
-      for entry in float_results {
-        let (class, _, _) = entry
-        match class {
-          Float32 => has_f32 = true
-          _ => has_f64 = true
-        }
-      }
-      let float_need_two_phase = has_f32 &&
-        has_f64 &&
-        float_results.length() >= 2
-      if float_need_two_phase {
-        // Two-phase: save to temps first (V24-V31 as temps)
-        let temp_float_base = 24
-        let num_in_regs = if float_results.length() < max_float_ret {
-          float_results.length()
-        } else {
-          max_float_ret
-        }
-        for i in 0..<num_in_regs {
-          let (_, _, abi_idx) = float_results[i]
-          if abi_idx < max_float_ret {
-            self.emit_fmov_d(temp_float_base + abi_idx, abi_idx)
-          }
-        }
-        for entry in float_results {
-          let (class, rd, abi_idx) = entry
-          if abi_idx < max_float_ret {
-            let temp = temp_float_base + abi_idx
-            if rd != temp {
-              match class {
-                Float32 => self.emit_fmov_s(rd, temp)
-                _ => self.emit_fmov_d(rd, temp)
-              }
-            }
-          } else {
-            // Extra results from SRET buffer (X8)
-            let offset = (abi_idx - max_float_ret) * 8
-            match class {
-              Float32 => self.emit_ldr_s_imm(rd, 8, offset)
-              _ => self.emit_ldr_d_imm(rd, 8, offset)
-            }
-          }
-        }
-      } else {
-        // Direct move: no conflict
-        for entry in float_results {
-          let (class, rd, abi_idx) = entry
-          if abi_idx < max_float_ret {
-            if rd != abi_idx {
-              match class {
-                Float32 => self.emit_fmov_s(rd, abi_idx)
-                _ => self.emit_fmov_d(rd, abi_idx)
-              }
-            }
-          } else {
-            // Extra results from SRET buffer (X8)
-            let offset = (abi_idx - max_float_ret) * 8
-            match class {
-              Float32 => self.emit_ldr_s_imm(rd, 8, offset)
-              _ => self.emit_ldr_d_imm(rd, 8, offset)
-            }
-          }
-        }
-      }
-      // Stack already restored after blr, no need to restore again
-    }
     ReturnCallIndirect(_num_args, _num_results) => {
       // Tail call optimization following Cranelift's design
       // Parameters are already set up by lowering phase via:
@@ -1716,7 +1374,26 @@ fn MachineCode::emit_instruction(
       let value_reg = reg_num(inst.uses[1])
       self.emit_store(ty, value_reg, base_reg, offset)
     }
-    CallPtr(_, _) =>
+    LoadGCFuncPtr(libcall) => {
+      // Load GC runtime function pointer
+      // Uses: [], Defs: [result (function pointer)]
+      let result_reg = wreg_num(inst.defs[0])
+      let func_ptr = match libcall {
+        RefTest => @jit_ffi.c_jit_get_gc_ref_test_ptr()
+        RefCast => @jit_ffi.c_jit_get_gc_ref_cast_ptr()
+        StructNew => @jit_ffi.c_jit_get_gc_struct_new_ptr()
+        StructGet => @jit_ffi.c_jit_get_gc_struct_get_ptr()
+        StructSet => @jit_ffi.c_jit_get_gc_struct_set_ptr()
+        ArrayNew => @jit_ffi.c_jit_get_gc_array_new_ptr()
+        ArrayGet => @jit_ffi.c_jit_get_gc_array_get_ptr()
+        ArraySet => @jit_ffi.c_jit_get_gc_array_set_ptr()
+        ArrayLen => @jit_ffi.c_jit_get_gc_array_len_ptr()
+        ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
+        ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
+      }
+      self.emit_load_imm64(result_reg, func_ptr)
+    }
+    CallPtr(_, _, _call_conv) =>
       // Cranelift-style call: all arguments are already in place
       //
       // The lower phase generates:
@@ -1726,11 +1403,17 @@ fn MachineCode::emit_instruction(
       // - AdjustSP to deallocate stack space
       //
       // The regalloc phase processes constraints and inserts moves:
+      // For Wasm calling convention:
       // - func_ptr is constrained to X17
       // - callee_vmctx is constrained to X0
       // - caller_vmctx is constrained to X1
       // - int user args are constrained to X2-X7
       // - float user args are constrained to V0-V7
+      // - results are constrained to X0/V0 etc.
+      // For C calling convention:
+      // - func_ptr is constrained to X17
+      // - int args are constrained to X0-X7 (no vmctx)
+      // - float args are constrained to V0-V7
       // - results are constrained to X0/V0 etc.
       //
       // By the time we get here, everything is in the right place!
@@ -1760,6 +1443,12 @@ fn MachineCode::emit_instruction(
         Float32 => self.emit_str_s_imm(src, 31, actual_offset)
         Float64 => self.emit_str_d_imm(src, 31, actual_offset)
       }
+    }
+    LoadSP => {
+      // Load stack pointer into result register
+      // Uses ADD Xd, SP, #0 because MOV with SP has encoding issues
+      let result_reg = wreg_num(inst.defs[0])
+      self.emit_add_imm(result_reg, 31, 0)
     }
   }
 }

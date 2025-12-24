@@ -78,41 +78,6 @@ pub(all) enum FuncOwner {
 pub impl Eq for FuncOwner
 pub impl Show for FuncOwner
 
-pub struct GCHeap {
-  objects : Array[GCObject?]
-  marks : Array[Bool]
-  free_list : Array[Int]
-  mut total_live : Int
-  mut gc_threshold : Int
-  mut collections : Int
-}
-pub fn GCHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
-pub fn GCHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
-pub fn GCHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
-pub fn GCHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
-pub fn GCHeap::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
-pub fn GCHeap::array_len(Self, Int) -> Int raise RuntimeError
-pub fn GCHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-pub fn GCHeap::collect(Self, Array[@types.Value]) -> Int
-pub fn GCHeap::get(Self, Int) -> GCObject raise RuntimeError
-pub fn GCHeap::get_array(Self, Int) -> ArrayInstance raise RuntimeError
-pub fn GCHeap::get_struct(Self, Int) -> StructInstance raise RuntimeError
-pub fn GCHeap::get_threshold(Self) -> Int
-pub fn GCHeap::get_type_idx(Self, Int) -> Int raise RuntimeError
-pub fn GCHeap::is_alive(Self, Int) -> Bool
-pub fn GCHeap::length(Self) -> Int
-pub fn GCHeap::mark(Self, Int) -> Unit
-pub fn GCHeap::mark_roots(Self, Array[@types.Value]) -> Unit
-pub fn GCHeap::new() -> Self
-pub fn GCHeap::set_threshold(Self, Int) -> Unit
-pub fn GCHeap::should_collect(Self) -> Bool
-pub fn GCHeap::stats(Self) -> GCStats
-pub fn GCHeap::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
-pub fn GCHeap::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-pub fn GCHeap::sweep(Self) -> Int
-pub fn GCHeap::with_threshold(Int) -> Self
-pub impl Show for GCHeap
-
 pub(all) enum GCObject {
   Struct(StructInstance)
   Array(ArrayInstance)
@@ -126,6 +91,16 @@ pub(all) struct GCStats {
   collections : Int
 }
 pub impl Show for GCStats
+
+pub(all) struct GcStats {
+  total_slots : Int
+  live_objects : Int
+  free_slots : Int
+  collections : Int
+  bytes_allocated : Int64
+  bytes_collected : Int64
+}
+pub impl Show for GcStats
 
 type GlobalInstance
 pub fn GlobalInstance::get(Self) -> @types.Value
@@ -159,6 +134,45 @@ pub fn Linker::get_store(Self) -> Store
 pub fn Linker::new() -> Self
 pub fn Linker::register(Self, String, ModuleInstance) -> Unit
 pub fn Linker::with_store(Store) -> Self
+
+pub struct MarkSweepHeap {
+  objects : Array[GCObject?]
+  marks : Array[Bool]
+  free_list : Array[Int]
+  mut total_live : Int
+  mut gc_threshold : Int
+  mut collections : Int
+}
+pub fn MarkSweepHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
+pub fn MarkSweepHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
+pub fn MarkSweepHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn MarkSweepHeap::array_len(Self, Int) -> Int raise RuntimeError
+pub fn MarkSweepHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::collect(Self, Array[@types.Value]) -> Int
+pub fn MarkSweepHeap::get(Self, Int) -> GCObject raise RuntimeError
+pub fn MarkSweepHeap::get_array(Self, Int) -> ArrayInstance raise RuntimeError
+pub fn MarkSweepHeap::get_struct(Self, Int) -> StructInstance raise RuntimeError
+pub fn MarkSweepHeap::get_threshold(Self) -> Int
+pub fn MarkSweepHeap::get_type_idx(Self, Int) -> Int raise RuntimeError
+pub fn MarkSweepHeap::is_alive(Self, Int) -> Bool
+pub fn MarkSweepHeap::is_valid(Self, Int) -> Bool
+pub fn MarkSweepHeap::length(Self) -> Int
+pub fn MarkSweepHeap::mark(Self, Int) -> Unit
+pub fn MarkSweepHeap::mark_roots(Self, Array[@types.Value]) -> Unit
+pub fn MarkSweepHeap::new() -> Self
+pub fn MarkSweepHeap::set_threshold(Self, Int) -> Unit
+pub fn MarkSweepHeap::should_collect(Self) -> Bool
+pub fn MarkSweepHeap::stats(Self) -> GCStats
+pub fn MarkSweepHeap::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn MarkSweepHeap::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::sweep(Self) -> Int
+pub fn MarkSweepHeap::with_threshold(Int) -> Self
+pub impl GcHeap for MarkSweepHeap
+pub impl GcManager for MarkSweepHeap
+pub impl GcRuntime for MarkSweepHeap
+pub impl Show for MarkSweepHeap
 
 type Memory
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
@@ -260,7 +274,10 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType]
   exns : Array[ExnInstance]
-  heap : GCHeap
+  heap : MarkSweepHeap
+  mut c_heap : @jit.CHeap?
+  mut module_types : Array[@types.SubType]
+  wrapped_externs : Array[@types.Value]
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
@@ -279,6 +296,10 @@ pub fn Store::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise Runtim
 pub fn Store::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::array_len(Self, Int) -> Int raise RuntimeError
 pub fn Store::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int
+pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
+pub fn Store::enable_c_heap(Self) -> Unit
+pub fn Store::get_c_heap_ptr(Self) -> Int64
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 pub fn Store::get_func_canonical_type_idx(Self, Int) -> Int
@@ -287,6 +308,7 @@ pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_func_owner_idx(Self, Int) -> Int
 pub fn Store::get_func_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_func_type_idx(Self, Int) -> Int
+pub fn Store::get_gc_stats(Self) -> (Int64, Int64, Int, Int, Int)
 pub fn Store::get_gc_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
 pub fn Store::get_jit_table(Self, Int) -> @jit.JITTable?
@@ -294,10 +316,18 @@ pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory
 pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
 pub fn Store::get_tag_type(Self, Int) -> @types.FuncType raise RuntimeError
+pub fn Store::has_c_heap(Self) -> Bool
+pub fn Store::is_gc_valid(Self, Int) -> Bool
+pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::new() -> Self
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
+pub fn Store::set_module_types(Self, Array[@types.SubType]) -> Unit
+pub fn Store::should_collect(Self, threshold? : Double) -> Bool
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
+pub fn Store::with_c_heap() -> Self
+pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value
 pub impl Show for Store
 
 pub(all) struct StructInstance {
@@ -321,4 +351,48 @@ pub impl Show for Table
 // Type aliases
 
 // Traits
+pub(open) trait GcHeap {
+  alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  alloc_array(Self, Int, Array[@types.Value]) -> Int
+  struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  array_len(Self, Int) -> Int raise RuntimeError
+  array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  get_type_idx(Self, Int) -> Int raise RuntimeError
+  is_valid(Self, Int) -> Bool
+}
+
+pub(open) trait GcManager {
+  alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  alloc_array(Self, Int, Array[@types.Value]) -> Int
+  struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  array_len(Self, Int) -> Int raise RuntimeError
+  array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  get_type_idx(Self, Int) -> Int raise RuntimeError
+  is_valid(Self, Int) -> Bool
+  should_collect(Self) -> Bool
+  collect(Self, Array[@types.Value]) -> Unit
+  stats(Self) -> GcStats
+  write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
+}
+
+pub(open) trait GcRuntime {
+  should_collect(Self) -> Bool
+  collect(Self, Array[@types.Value]) -> Unit
+  force_collect(Self, Array[@types.Value]) -> Unit
+  write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
+  write_barrier_post(Self, Int, @types.Value) -> Unit
+  read_barrier(Self, Int) -> @types.Value
+  stats(Self) -> GcStats
+  collection_count(Self) -> Int
+  set_threshold(Self, Int) -> Unit
+  get_threshold(Self) -> Int
+}
 

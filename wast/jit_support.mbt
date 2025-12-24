@@ -173,6 +173,28 @@ pub fn sync_jit_globals_to_store(
 }
 
 ///|
+/// Sync interpreter tables to JIT tables before JIT execution
+/// This ensures that table modifications made by the interpreter are visible to JIT
+pub fn sync_tables_to_jit(
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+  jit_module : @jit.JITModule,
+) -> Unit {
+  // Iterate over all tables in the instance
+  for table_addr in instance.table_addrs {
+    // Get the interpreter table
+    let table = store.get_table(table_addr) catch { _ => continue }
+    // Get the corresponding JIT table
+    let jit_table = match store.get_jit_table(table_addr) {
+      Some(jt) => jt
+      None => continue
+    }
+    // Sync the table
+    sync_table_to_jit(table, jit_table, jit_module)
+  }
+}
+
+///|
 /// Evaluate element segment offset constant expression
 /// Supports i32.const, i32.add, i32.sub, i32.mul, global.get for computing offsets
 pub fn eval_elem_offset_expr(
@@ -339,4 +361,68 @@ pub fn count_func_imports(imports : Array[@types.Import]) -> Int {
     }
   }
   count
+}
+
+///|
+/// Sync interpreter table values to JIT table
+/// This is needed when interpreter modifies table entries that JIT will read
+/// Encoding for JIT table:
+/// - null = 0
+/// - i31 = (value << 1) | 1 (positive odd)
+/// - struct/array ref = gc_ref << 1 (positive even, gc_ref >= 1)
+/// - funcref = func_ptr | FUNCREF_TAG (bit 61 set)
+/// - externref = EXTERNREF_TAG | (host_idx << 1) (bit 62 set)
+pub fn sync_table_to_jit(
+  table : @runtime.Table,
+  jit_table : @jit.JITTable,
+  jit_module : @jit.JITModule,
+) -> Unit {
+  let size = table.size()
+  for i in 0..<size {
+    let value = table.get(i) catch { _ => continue }
+    let encoded : Int64 = encode_value_for_jit(value, jit_module)
+    // Use type_hash 0 for GC values (not used for type checking)
+    jit_table.set(i, encoded, 0)
+  }
+}
+
+///|
+/// Encode a Value for JIT table storage
+fn encode_value_for_jit(
+  value : @types.Value,
+  jit_module : @jit.JITModule,
+) -> Int64 {
+  match value {
+    Null => NULL_REF
+    I31(n) => {
+      // i31 encoding: (value << 1) | 1
+      let n64 = n.to_int64() & 0x7FFFFFFFL
+      ( // 31-bit value
+        n64 << 1
+      ) |
+      1L
+    }
+    StructRef(gc_ref) | ArrayRef(gc_ref) =>
+      // Heap reference encoding: gc_ref << 1 (gc_ref >= 1, so result >= 2)
+      gc_ref.to_int64() << 1
+    FuncRef(func_idx) => {
+      // Function reference: get function pointer and tag with FUNCREF_TAG
+      let func_ptr = jit_module.get_func_ptr(func_idx)
+      if func_ptr == 0L {
+        NULL_REF // null funcref if function not found
+      } else {
+        // FUNCREF_TAG = 0x2000000000000000 (bit 61)
+        func_ptr | FUNCREF_TAG
+      }
+    }
+    ExternRef(host_idx) =>
+      // Extern reference: EXTERNREF_TAG | (host_idx << 1)
+      EXTERNREF_TAG | (host_idx.to_int64() << 1)
+    // Numeric types shouldn't be in reference tables
+    I32(n) => n.to_int64()
+    I64(n) => n
+    F32(n) => n.reinterpret_as_int().to_int64()
+    F64(n) => n.reinterpret_as_int64()
+    ExnRef(_) => NULL_REF // Exception refs not supported in tables
+  }
 }

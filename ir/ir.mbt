@@ -252,6 +252,9 @@ pub enum Opcode {
   ReturnCallIndirect(Int, Int) // Tail call indirect (type index, table index)
   ReturnCallRef(Int) // Tail call through function reference (type index)
 
+  // Function reference - returns tagged function pointer for storing in tables
+  GetFuncRef(Int) // Get function reference (function index) - returns tagged func_ptr
+
   // Raw pointer operations (for trampolines, no bounds checking)
   // These follow Cranelift's approach for host code generation
   LoadPtr(Type) // Load from pointer+offset (operand 0 = base ptr)
@@ -294,6 +297,9 @@ pub enum Opcode {
   // GC operations - type conversions
   AnyConvertExtern // Convert externref to anyref - operand: externref
   ExternConvertAny // Convert anyref to externref - operand: anyref
+
+  // GC operations - reference equality
+  RefEq // ref.eq - compare two references for equality - operands: ref1, ref2
 } derive(Show)
 
 ///|

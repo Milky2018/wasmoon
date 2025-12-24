@@ -42,6 +42,23 @@ pub(all) enum ValueType {
   NullExternRef // bottom type for extern (ref null noextern)
 } derive(Eq, Show)
 
+///|
+/// Check if a reference type is nullable
+pub fn ValueType::is_nullable(self : ValueType) -> Bool {
+  match self {
+    // Nullable reference types
+    FuncRef | ExternRef | AnyRef | ExnRef => true
+    RefNullFuncTyped(_) | RefNullStruct(_) | RefNullArray(_) => true
+    RefNullEq | RefNullI31 => true
+    NullRef | NullFuncRef | NullExnRef | NullExternRef => true
+    // Non-nullable reference types
+    RefFunc | RefExtern | RefAny | RefEq | RefI31 | RefNone => false
+    RefFuncTyped(_) | RefStruct(_) | RefArray(_) => false
+    // Value types (not references)
+    I32 | I64 | F32 | F64 | V128 => false
+  }
+}
+
 // ============================================================
 // GC Types (WebAssembly GC Proposal)
 // ============================================================
@@ -244,6 +261,7 @@ pub(all) enum Instruction {
   RefIsNull // ref.is_null: test if reference is null
   RefFunc(Int) // ref.func: push reference to function by index
   RefAsNonNull // ref.as_non_null: convert nullable ref to non-null ref
+  RefEqInstr // ref.eq: compare two references for equality
   BrOnNull(Int) // br_on_null: branch if reference is null
   BrOnNonNull(Int) // br_on_non_null: branch if reference is non-null
 

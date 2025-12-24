@@ -792,3 +792,87 @@ test "parse array of references" {
   // Reference to struct at index 0
   inspect(at.element.storage_type, content="Val(RefNullFuncTyped(0))")
 }
+
+///|
+test "parse sub keyword for type inheritance" {
+  let wat =
+    #|(module
+    #|  (type $t0 (sub (struct)))
+    #|  (type $t1 (sub $t0 (struct (field i32))))
+    #|  (type $t2 (sub $t1 (struct (field i32) (field i32))))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.types.length(), content="3")
+  // t0: non-final type without parent
+  inspect(mod_.types[0].final_, content="false")
+  inspect(mod_.types[0].supertypes.length(), content="0")
+  // t1: non-final type with parent t0
+  inspect(mod_.types[1].final_, content="false")
+  inspect(mod_.types[1].supertypes.length(), content="1")
+  inspect(mod_.types[1].supertypes[0], content="0")
+  // t2: non-final type with parent t1
+  inspect(mod_.types[2].final_, content="false")
+  inspect(mod_.types[2].supertypes.length(), content="1")
+  inspect(mod_.types[2].supertypes[0], content="1")
+}
+
+///|
+test "parse sub final keyword" {
+  let wat =
+    #|(module
+    #|  (type $t0 (sub (struct)))
+    #|  (type $t1 (sub final $t0 (struct (field i32))))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.types.length(), content="2")
+  // t0: non-final
+  inspect(mod_.types[0].final_, content="false")
+  // t1: final with parent t0
+  inspect(mod_.types[1].final_, content="true")
+  inspect(mod_.types[1].supertypes.length(), content="1")
+  inspect(mod_.types[1].supertypes[0], content="0")
+}
+
+///|
+test "parse empty struct type" {
+  let wat =
+    #|(module
+    #|  (type $empty (struct))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.types.length(), content="1")
+  inspect(mod_.is_struct_type(0), content="true")
+  let st = mod_.get_struct_type(0)
+  inspect(st.fields.length(), content="0")
+}
+
+///|
+test "parse abbreviated field syntax with multiple types" {
+  let wat =
+    #|(module
+    #|  (type $t (struct (field i32 i32)))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.types.length(), content="1")
+  let st = mod_.get_struct_type(0)
+  inspect(st.fields.length(), content="2")
+  inspect(st.fields[0].storage_type, content="Val(I32)")
+  inspect(st.fields[1].storage_type, content="Val(I32)")
+}
+
+///|
+test "parse struct.get with field name" {
+  let wat =
+    #|(module
+    #|  (type $vec (struct (field f32) (field $y (mut f32)) (field $z f32)))
+    #|  (func (param (ref $vec)) (result f32)
+    #|    (struct.get $vec $y (local.get 0))
+    #|  )
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.types.length(), content="2")
+  // struct.get $vec $y should resolve $y to field index 1
+  let body = mod_.codes[0].body
+  inspect(body[0], content="LocalGet(0)")
+  inspect(body[1], content="StructGet(0, 1)")
+}

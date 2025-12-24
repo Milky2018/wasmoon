@@ -212,6 +212,7 @@ pub(all) enum Instruction {
   RefIsNull
   RefFunc(Int)
   RefAsNonNull
+  RefEqInstr
   BrOnNull(Int)
   BrOnNonNull(Int)
   I32Const(Int)
@@ -457,6 +458,22 @@ pub fn SubType::simple(CompositeType) -> Self
 pub impl Eq for SubType
 pub impl Show for SubType
 
+pub struct SubtypingContext {
+  types1 : Array[SubType]
+  types2 : Array[SubType]
+  rec_groups1 : Array[Int]
+  rec_groups2 : Array[Int]
+  canonical1 : Array[Int]
+  canonical2 : Array[Int]
+  cross_module : Bool
+  visited : Map[(Int, Int), Bool]
+}
+pub fn SubtypingContext::cross_module(Array[SubType], Array[SubType], rec_groups1? : Array[Int], rec_groups2? : Array[Int], canonical1? : Array[Int], canonical2? : Array[Int]) -> Self
+pub fn SubtypingContext::is_subtype(Self, Int, Int) -> Bool
+pub fn SubtypingContext::same_module(Array[SubType], rec_groups? : Array[Int], canonical? : Array[Int]) -> Self
+pub fn SubtypingContext::validate_declared_subtype(Self, Int, Int) -> Bool
+pub fn SubtypingContext::value_type_subtype(Self, ValueType, ValueType, _idx1? : Int, _idx2? : Int) -> Bool
+
 pub(all) struct Table {
   type_ : TableType
   init : Array[Instruction]?
@@ -478,15 +495,15 @@ pub impl Eq for TagType
 pub impl Show for TagType
 
 pub struct TypeEquivalenceContext {
-  types1 : Array[FuncType]
-  types2 : Array[FuncType]
+  types1 : Array[SubType]
+  types2 : Array[SubType]
   rec_groups1 : Array[Int]
   rec_groups2 : Array[Int]
   cross_module : Bool
   visited : Map[(Int, Int), Bool]
 }
-pub fn TypeEquivalenceContext::cross_module(Array[FuncType], Array[FuncType], rec_groups1? : Array[Int], rec_groups2? : Array[Int]) -> Self
-pub fn TypeEquivalenceContext::same_module(Array[FuncType], type_rec_groups? : Array[Int]) -> Self
+pub fn TypeEquivalenceContext::cross_module(Array[SubType], Array[SubType], rec_groups1? : Array[Int], rec_groups2? : Array[Int]) -> Self
+pub fn TypeEquivalenceContext::same_module(Array[SubType], type_rec_groups? : Array[Int]) -> Self
 pub fn TypeEquivalenceContext::types_equivalent(Self, Int, Int) -> Bool
 
 pub(all) enum Value {
@@ -534,6 +551,7 @@ pub(all) enum ValueType {
   NullExnRef
   NullExternRef
 }
+pub fn ValueType::is_nullable(Self) -> Bool
 pub impl Eq for ValueType
 pub impl Show for ValueType
 

@@ -348,3 +348,264 @@ pub extern "c" fn c_jit_write_i64(addr : Int64, value : Int64) -> Unit = "wasmoo
 ///|
 /// Read an int64 value from a memory address
 pub extern "c" fn c_jit_read_i64(addr : Int64) -> Int64 = "wasmoon_jit_read_i64"
+
+// ============ GC Runtime Helpers ============
+
+///|
+/// Get ref.test libcall function pointer
+pub extern "c" fn c_jit_get_gc_ref_test_ptr() -> Int64 = "wasmoon_jit_get_gc_ref_test_ptr"
+
+///|
+/// Get ref.cast libcall function pointer
+pub extern "c" fn c_jit_get_gc_ref_cast_ptr() -> Int64 = "wasmoon_jit_get_gc_ref_cast_ptr"
+
+///|
+/// Get struct.new libcall function pointer
+pub extern "c" fn c_jit_get_gc_struct_new_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_new_ptr"
+
+///|
+/// Get struct.get libcall function pointer
+pub extern "c" fn c_jit_get_gc_struct_get_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_get_ptr"
+
+///|
+/// Get struct.set libcall function pointer
+pub extern "c" fn c_jit_get_gc_struct_set_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_set_ptr"
+
+///|
+/// Get array.new libcall function pointer
+pub extern "c" fn c_jit_get_gc_array_new_ptr() -> Int64 = "wasmoon_jit_get_gc_array_new_ptr"
+
+///|
+/// Get array.get libcall function pointer
+pub extern "c" fn c_jit_get_gc_array_get_ptr() -> Int64 = "wasmoon_jit_get_gc_array_get_ptr"
+
+///|
+/// Get array.set libcall function pointer
+pub extern "c" fn c_jit_get_gc_array_set_ptr() -> Int64 = "wasmoon_jit_get_gc_array_set_ptr"
+
+///|
+/// Get array.len libcall function pointer
+pub extern "c" fn c_jit_get_gc_array_len_ptr() -> Int64 = "wasmoon_jit_get_gc_array_len_ptr"
+
+///|
+/// Get array.fill libcall function pointer
+/// Signature: void gc_array_fill(int64_t ref, int32_t offset, int64_t value, int32_t count)
+pub extern "c" fn c_jit_get_gc_array_fill_ptr() -> Int64 = "wasmoon_jit_get_gc_array_fill_ptr"
+
+///|
+/// Get array.copy libcall function pointer
+/// Signature: void gc_array_copy(int64_t dst_ref, int32_t dst_offset, int64_t src_ref, int32_t src_offset, int32_t count)
+pub extern "c" fn c_jit_get_gc_array_copy_ptr() -> Int64 = "wasmoon_jit_get_gc_array_copy_ptr"
+
+///|
+/// Set type cache for GC operations
+/// types_data: array of [super_idx, kind] pairs per type
+#borrow(types_data)
+pub extern "c" fn c_jit_gc_set_type_cache(
+  types_data : FixedArray[Int],
+  num_types : Int,
+) -> Unit = "wasmoon_jit_gc_set_type_cache"
+
+///|
+/// Set canonical type indices for subtyping
+#borrow(canonical)
+pub extern "c" fn c_jit_gc_set_canonical_indices(
+  canonical : FixedArray[Int],
+  num_types : Int,
+) -> Unit = "wasmoon_jit_gc_set_canonical_indices"
+
+///|
+/// Clear GC cache after JIT execution
+pub extern "c" fn c_jit_gc_clear_cache() -> Unit = "wasmoon_jit_gc_clear_cache"
+
+///|
+/// Set GC heap pointer for JIT execution
+pub extern "c" fn c_jit_gc_set_heap(heap_ptr : Int64) -> Unit = "wasmoon_jit_gc_set_heap"
+
+///|
+/// Clear GC heap pointer after JIT execution
+pub extern "c" fn c_jit_gc_clear_heap() -> Unit = "wasmoon_jit_gc_clear_heap"
+
+///|
+/// Get current GC heap pointer (for debugging)
+pub extern "c" fn c_jit_gc_get_heap() -> Int64 = "wasmoon_jit_gc_get_heap"
+
+// ============ C GC Heap ============
+
+///|
+/// Create a new GC heap with the given initial capacity
+/// Returns heap pointer as Int64
+pub extern "c" fn c_gc_heap_new(capacity : Int64) -> Int64 = "wasmoon_gc_heap_new"
+
+///|
+/// Free a GC heap and all its memory
+pub extern "c" fn c_gc_heap_free(heap : Int64) -> Unit = "wasmoon_gc_heap_free"
+
+// ============ Struct Operations ============
+
+///|
+/// Allocate a new struct
+/// Returns gc_ref (1-based index), or 0 on failure
+#borrow(fields)
+pub extern "c" fn c_gc_heap_alloc_struct(
+  heap : Int64,
+  type_idx : Int,
+  fields : FixedArray[Int64],
+  num_fields : Int,
+) -> Int = "wasmoon_gc_heap_alloc_struct"
+
+///|
+/// Get a struct field value
+pub extern "c" fn c_gc_heap_struct_get(
+  heap : Int64,
+  gc_ref : Int,
+  field_idx : Int,
+) -> Int64 = "wasmoon_gc_heap_struct_get"
+
+///|
+/// Set a struct field value
+pub extern "c" fn c_gc_heap_struct_set(
+  heap : Int64,
+  gc_ref : Int,
+  field_idx : Int,
+  value : Int64,
+) -> Unit = "wasmoon_gc_heap_struct_set"
+
+// ============ Array Operations ============
+
+///|
+/// Allocate a new array
+/// Returns gc_ref (1-based index), or 0 on failure
+pub extern "c" fn c_gc_heap_alloc_array(
+  heap : Int64,
+  type_idx : Int,
+  len : Int,
+  init_value : Int64,
+) -> Int = "wasmoon_gc_heap_alloc_array"
+
+///|
+/// Allocate a new array from existing values
+/// Returns gc_ref (1-based index), or 0 on failure
+#borrow(values)
+pub extern "c" fn c_gc_heap_alloc_array_from_values(
+  heap : Int64,
+  type_idx : Int,
+  values : FixedArray[Int64],
+  len : Int,
+) -> Int = "wasmoon_gc_heap_alloc_array_from_values"
+
+///|
+/// Get array length
+pub extern "c" fn c_gc_heap_array_len(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_array_len"
+
+///|
+/// Get an array element
+pub extern "c" fn c_gc_heap_array_get(
+  heap : Int64,
+  gc_ref : Int,
+  idx : Int,
+) -> Int64 = "wasmoon_gc_heap_array_get"
+
+///|
+/// Set an array element
+pub extern "c" fn c_gc_heap_array_set(
+  heap : Int64,
+  gc_ref : Int,
+  idx : Int,
+  value : Int64,
+) -> Unit = "wasmoon_gc_heap_array_set"
+
+///|
+/// Fill array elements with a value
+pub extern "c" fn c_gc_heap_array_fill(
+  heap : Int64,
+  gc_ref : Int,
+  offset : Int,
+  value : Int64,
+  count : Int,
+) -> Unit = "wasmoon_gc_heap_array_fill"
+
+///|
+/// Copy array elements
+pub extern "c" fn c_gc_heap_array_copy(
+  heap : Int64,
+  dst_ref : Int,
+  dst_offset : Int,
+  src_ref : Int,
+  src_offset : Int,
+  count : Int,
+) -> Unit = "wasmoon_gc_heap_array_copy"
+
+// ============ Type Information ============
+
+///|
+/// Get the type index of an object
+pub extern "c" fn c_gc_heap_get_type_idx(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_type_idx"
+
+///|
+/// Get the kind of an object (1=struct, 2=array)
+pub extern "c" fn c_gc_heap_get_kind(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_kind"
+
+///|
+/// Check if a gc_ref is valid (non-null and within bounds)
+pub extern "c" fn c_gc_heap_is_valid(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_is_valid"
+
+// ============ GC Operations ============
+
+///|
+/// Mark an object as reachable (for GC)
+pub extern "c" fn c_gc_heap_mark(heap : Int64, gc_ref : Int) -> Unit = "wasmoon_gc_heap_mark"
+
+///|
+/// Mark all objects reachable from roots
+#borrow(roots)
+pub extern "c" fn c_gc_heap_mark_roots(
+  heap : Int64,
+  roots : FixedArray[Int64],
+  num_roots : Int,
+) -> Unit = "wasmoon_gc_heap_mark_roots"
+
+///|
+/// Sweep unmarked objects
+/// Returns number of objects collected
+pub extern "c" fn c_gc_heap_sweep(heap : Int64) -> Int = "wasmoon_gc_heap_sweep"
+
+///|
+/// Perform a full GC cycle (mark + sweep)
+/// Returns number of objects collected
+#borrow(roots)
+pub extern "c" fn c_gc_heap_collect(
+  heap : Int64,
+  roots : FixedArray[Int64],
+  num_roots : Int,
+) -> Int = "wasmoon_gc_heap_collect"
+
+// ============ JIT Utilities ============
+
+///|
+/// Get heap base pointer (for JIT inline access)
+pub extern "c" fn c_gc_heap_get_base(heap : Int64) -> Int64 = "wasmoon_gc_heap_get_base"
+
+///|
+/// Get object offset in heap (for JIT inline access)
+pub extern "c" fn c_gc_heap_get_offset(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_offset"
+
+///|
+/// Get current heap size (bytes used)
+pub extern "c" fn c_gc_heap_get_size(heap : Int64) -> Int64 = "wasmoon_gc_heap_get_size"
+
+///|
+/// Get heap capacity (total allocated bytes)
+pub extern "c" fn c_gc_heap_get_capacity(heap : Int64) -> Int64 = "wasmoon_gc_heap_get_capacity"
+
+///|
+/// Get number of objects in heap
+pub extern "c" fn c_gc_heap_get_object_count(heap : Int64) -> Int = "wasmoon_gc_heap_get_object_count"
+
+///|
+/// Get total number of allocations since heap creation
+pub extern "c" fn c_gc_heap_get_total_allocations(heap : Int64) -> Int = "wasmoon_gc_heap_get_total_allocations"
+
+///|
+/// Get total number of GC cycles performed
+pub extern "c" fn c_gc_heap_get_total_collections(heap : Int64) -> Int = "wasmoon_gc_heap_get_total_collections"
