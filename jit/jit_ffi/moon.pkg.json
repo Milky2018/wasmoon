@@ -1,6 +1,7 @@
 {
   "native-stub": [
     "jit.c",
+    "gc_heap.c",
     "wasi.c"
   ]
 }

@@ -35,6 +35,10 @@ pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, jit_compiler? : JI
 
 pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
 
+pub fn sync_table_to_jit(@runtime.Table, @jit.JITTable, @jit.JITModule) -> Unit
+
+pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
+
 pub fn values_match(@types.Value, @wat.WastValue) -> Bool
 
 pub fn wast_value_to_runtime(@wat.WastValue) -> @types.Value

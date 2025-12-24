@@ -344,6 +344,9 @@ fn validate_instruction(
     | ReturnCallRef(_)
     | CallPtr(_, _) => ()
 
+    // GetFuncRef has no operands
+    GetFuncRef(_) => ()
+
     // Raw pointer operations (for trampolines)
     LoadPtr(_) =>
       if inst.operands.length() < 1 {
@@ -451,6 +454,14 @@ fn validate_instruction(
       if inst.operands.length() != 1 {
         result.add_error(
           "Type conversion expects 1 operand, got \{inst.operands.length()}",
+        )
+      }
+
+    // GC operations - reference equality
+    RefEq =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "RefEq expects 2 operands (refs), got \{inst.operands.length()}",
         )
       }
   }

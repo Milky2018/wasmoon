@@ -126,6 +126,13 @@ fn has_side_effects(inst : Inst) -> Bool {
     Sdiv | Udiv | Srem | Urem => true
     // Float-to-int conversion can trap on NaN or out-of-range values
     FcvtToSint | FcvtToUint => true
+    // GC operations that allocate memory - each call allocates a new object
+    StructNew(_) | StructNewDefault(_) => true
+    ArrayNew(_) | ArrayNewDefault(_) | ArrayNewFixed(_, _) => true
+    // GC operations that modify state
+    StructSet(_, _) | ArraySet(_) | ArrayFill(_) | ArrayCopy(_, _) => true
+    // GC type check operations can trap
+    RefCast(_, _) => true
     // Other instructions are pure
     _ => false
   }

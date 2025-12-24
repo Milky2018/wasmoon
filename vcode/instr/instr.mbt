@@ -297,6 +297,35 @@ pub(all) enum VCodeOpcode {
   // Uses: [value], Defs: []
   GlobalSet(Int)
 
+  // GC operations (use runtime libcalls)
+  // GCRefTest(type_idx, nullable): test if reference matches type
+  // Uses: [ref], Defs: [result (0 or 1)]
+  GCRefTest(Int, Bool)
+  // GCRefCast(type_idx, nullable): cast reference to type (traps on failure)
+  // Uses: [ref], Defs: [result]
+  GCRefCast(Int, Bool)
+  // GCStructNew(type_idx, num_fields): allocate struct
+  // Uses: [field0, field1, ...], Defs: [result]
+  GCStructNew(Int, Int)
+  // GCStructGet(type_idx, field_idx): get struct field
+  // Uses: [ref], Defs: [result]
+  GCStructGet(Int, Int)
+  // GCStructSet(type_idx, field_idx): set struct field
+  // Uses: [ref, value], Defs: []
+  GCStructSet(Int, Int)
+  // GCArrayNew(type_idx): allocate array
+  // Uses: [init_value, length], Defs: [result]
+  GCArrayNew(Int)
+  // GCArrayGet(type_idx): get array element
+  // Uses: [ref, idx], Defs: [result]
+  GCArrayGet(Int)
+  // GCArraySet(type_idx): set array element
+  // Uses: [ref, idx, value], Defs: []
+  GCArraySet(Int)
+  // GCArrayLen: get array length
+  // Uses: [ref], Defs: [result]
+  GCArrayLen
+
   // Raw pointer operations (for trampolines, no bounds checking)
   // LoadPtr(type, offset): Load from [base + offset]
   // Uses: [base], Defs: [result]
@@ -450,6 +479,18 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     TableGrow(table_idx) => "table_grow \{table_idx}"
     GlobalGet(global_idx) => "global_get \{global_idx}"
     GlobalSet(global_idx) => "global_set \{global_idx}"
+    GCRefTest(type_idx, nullable) =>
+      "gc_ref_test \{type_idx} nullable=\{nullable}"
+    GCRefCast(type_idx, nullable) =>
+      "gc_ref_cast \{type_idx} nullable=\{nullable}"
+    GCStructNew(type_idx, num_fields) =>
+      "gc_struct_new \{type_idx} fields=\{num_fields}"
+    GCStructGet(type_idx, field_idx) => "gc_struct_get \{type_idx}.\{field_idx}"
+    GCStructSet(type_idx, field_idx) => "gc_struct_set \{type_idx}.\{field_idx}"
+    GCArrayNew(type_idx) => "gc_array_new \{type_idx}"
+    GCArrayGet(type_idx) => "gc_array_get \{type_idx}"
+    GCArraySet(type_idx) => "gc_array_set \{type_idx}"
+    GCArrayLen => "gc_array_len"
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
     CallPtr(num_args, num_results) =>
@@ -814,6 +855,16 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
     MemoryGrow(_) | MemorySize | MemoryFill | MemoryCopy => Regular
     // Table operations that call C runtime functions
     TableGrow(_) => Regular
+    // GC operations that call C runtime functions
+    GCRefTest(_, _)
+    | GCRefCast(_, _)
+    | GCStructNew(_, _)
+    | GCStructGet(_, _)
+    | GCStructSet(_, _)
+    | GCArrayNew(_)
+    | GCArrayGet(_)
+    | GCArraySet(_)
+    | GCArrayLen => Regular
     // Everything else is not a call
     _ => None
   }

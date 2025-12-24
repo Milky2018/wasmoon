@@ -2,6 +2,58 @@
 package "Milky2018/wasmoon/jit/jit_ffi"
 
 // Values
+pub fn c_gc_heap_alloc_array(Int64, Int, Int, Int64) -> Int
+
+pub fn c_gc_heap_alloc_array_from_values(Int64, Int, FixedArray[Int64], Int) -> Int
+
+pub fn c_gc_heap_alloc_struct(Int64, Int, FixedArray[Int64], Int) -> Int
+
+pub fn c_gc_heap_array_copy(Int64, Int, Int, Int, Int, Int) -> Unit
+
+pub fn c_gc_heap_array_fill(Int64, Int, Int, Int64, Int) -> Unit
+
+pub fn c_gc_heap_array_get(Int64, Int, Int) -> Int64
+
+pub fn c_gc_heap_array_len(Int64, Int) -> Int
+
+pub fn c_gc_heap_array_set(Int64, Int, Int, Int64) -> Unit
+
+pub fn c_gc_heap_collect(Int64, FixedArray[Int64], Int) -> Int
+
+pub fn c_gc_heap_free(Int64) -> Unit
+
+pub fn c_gc_heap_get_base(Int64) -> Int64
+
+pub fn c_gc_heap_get_capacity(Int64) -> Int64
+
+pub fn c_gc_heap_get_kind(Int64, Int) -> Int
+
+pub fn c_gc_heap_get_object_count(Int64) -> Int
+
+pub fn c_gc_heap_get_offset(Int64, Int) -> Int
+
+pub fn c_gc_heap_get_size(Int64) -> Int64
+
+pub fn c_gc_heap_get_total_allocations(Int64) -> Int
+
+pub fn c_gc_heap_get_total_collections(Int64) -> Int
+
+pub fn c_gc_heap_get_type_idx(Int64, Int) -> Int
+
+pub fn c_gc_heap_is_valid(Int64, Int) -> Int
+
+pub fn c_gc_heap_mark(Int64, Int) -> Unit
+
+pub fn c_gc_heap_mark_roots(Int64, FixedArray[Int64], Int) -> Unit
+
+pub fn c_gc_heap_new(Int64) -> Int64
+
+pub fn c_gc_heap_struct_get(Int64, Int, Int) -> Int64
+
+pub fn c_gc_heap_struct_set(Int64, Int, Int, Int64) -> Unit
+
+pub fn c_gc_heap_sweep(Int64) -> Int
+
 pub fn c_jit_alloc_context_managed(Int) -> JITContext
 
 pub fn c_jit_alloc_exec(Int) -> Int64
@@ -46,6 +98,18 @@ pub fn c_jit_free_memory(Int64) -> Unit
 
 pub fn c_jit_free_shared_indirect_table(Int64) -> Unit
 
+pub fn c_jit_gc_clear_cache() -> Unit
+
+pub fn c_jit_gc_clear_heap() -> Unit
+
+pub fn c_jit_gc_get_heap() -> Int64
+
+pub fn c_jit_gc_set_canonical_indices(FixedArray[Int], Int) -> Unit
+
+pub fn c_jit_gc_set_heap(Int64) -> Unit
+
+pub fn c_jit_gc_set_type_cache(FixedArray[Int], Int) -> Unit
+
 pub fn c_jit_get_args_get_ptr() -> Int64
 
 pub fn c_jit_get_args_sizes_get_ptr() -> Int64
@@ -67,6 +131,24 @@ pub fn c_jit_get_fd_prestat_get_ptr() -> Int64
 pub fn c_jit_get_fd_read_ptr() -> Int64
 
 pub fn c_jit_get_fd_write_ptr() -> Int64
+
+pub fn c_jit_get_gc_array_get_ptr() -> Int64
+
+pub fn c_jit_get_gc_array_len_ptr() -> Int64
+
+pub fn c_jit_get_gc_array_new_ptr() -> Int64
+
+pub fn c_jit_get_gc_array_set_ptr() -> Int64
+
+pub fn c_jit_get_gc_ref_cast_ptr() -> Int64
+
+pub fn c_jit_get_gc_ref_test_ptr() -> Int64
+
+pub fn c_jit_get_gc_struct_get_ptr() -> Int64
+
+pub fn c_jit_get_gc_struct_new_ptr() -> Int64
+
+pub fn c_jit_get_gc_struct_set_ptr() -> Int64
 
 pub fn c_jit_get_memory_base_ptr() -> Int64
 

@@ -148,6 +148,10 @@ fn run_wasm(
   // - Element segment initialization
   // - Start function execution
   let store = linker.get_store()
+  // Enable C heap for JIT mode (required for GC operations)
+  if use_jit {
+    store.enable_c_heap()
+  }
   let imports = linker.build_imports()
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
     e => {
@@ -582,13 +586,27 @@ fn run_with_jit(
               if debug_config.verbose {
                 println("[DEBUG] JIT: Calling function '\{func_name}'")
               }
+              // Set up GC heap for JIT execution if c_heap is available
+              match store.c_heap {
+                Some(heap) => {
+                  // Compute canonical type indices for proper type equivalence checking
+                  let canonical = @types.compute_canonical_type_indices(
+                    store.module_types,
+                  )
+                  @jit.gc_setup(heap, store.module_types, canonical)
+                }
+                None => ()
+              }
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
+                  @jit.gc_teardown()
                   println("JIT Trap: \{msg}")
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
                   return []
                 }
               }
+              // Tear down GC context after JIT call
+              @jit.gc_teardown()
               // Convert Int64 results to Value based on result types
               let values : Array[@types.Value] = []
               for i, r in results {
@@ -715,6 +733,7 @@ fn compile_module_to_jit(
       tables=mod_.tables,
       global_types~,
       type_rec_groups=mod_.type_rec_groups,
+      module_types=mod_.types,
     )
     let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (O2 level)

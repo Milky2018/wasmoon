@@ -58,7 +58,12 @@ pub fn WastContext::new(
   use_jit : Bool,
   jit_compiler? : JITCompiler? = None,
 ) -> WastContext {
-  let store = @runtime.Store::new()
+  // Use c_heap when JIT is enabled for GC support
+  let store = if use_jit {
+    @runtime.Store::with_c_heap()
+  } else {
+    @runtime.Store::new()
+  }
   // Create spectest module with standard test functions/values
   let spectest_instance = create_spectest_module(store)
   let registered_modules : Map[String, @runtime.ModuleInstance] = Map::new()
@@ -562,9 +567,10 @@ pub fn invoke_action(
                     @types.ToInt64::to_int64_bits(@float.not_a_number)
                   F64CanonicalNan | F64ArithmeticNan =>
                     @types.ToInt64::to_int64_bits(@double.not_a_number)
-                  RefNull(_) => -1L // null sentinel
-                  RefExtern(n) => n.to_int64()
-                  RefHost(n) => n.to_int64() // ref.host like ref.extern
+                  RefNull(_) => 0L // null
+                  // Externref uses special encoding: bit 62 set + (host_idx << 1)
+                  RefExtern(n) => 0x4000000000000000L | (n.to_int64() << 1)
+                  RefHost(n) => 0x4000000000000000L | (n.to_int64() << 1)
                   RefFunc => 0L // func ref (placeholder)
                   RefExternAny => 0L // any extern ref (placeholder)
                   // GC reference types - these shouldn't appear as args but handle them
@@ -572,13 +578,32 @@ pub fn invoke_action(
                 }
                 i64_args.push(v)
               }
+              // Set up GC heap for JIT execution if c_heap is available
+              match ctx.store.c_heap {
+                Some(heap) => {
+                  // Compute canonical type indices for proper type equivalence checking
+                  let canonical = @types.compute_canonical_type_indices(
+                    ctx.store.module_types,
+                  )
+                  @jit.gc_setup(heap, ctx.store.module_types, canonical)
+                }
+                None => ()
+              }
+              // Note: We don't sync interpreter tables to JIT tables here because:
+              // - If init was run via JIT, the JIT tables already have the correct values
+              // - Syncing from interpreter (which has nulls) would overwrite the JIT values
+              // TODO: Implement bidirectional sync when mixing interpreter/JIT execution
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
+                  // Tear down GC context on trap
+                  @jit.gc_teardown()
                   // Sync globals even on trap (in case globals were modified before trap)
                   sync_jit_globals_to_store(jit, ctx.store)
                   raise RuntimeError(msg)
                 }
               }
+              // Tear down GC context after JIT call
+              @jit.gc_teardown()
               // Sync JIT globals back to store after successful call
               sync_jit_globals_to_store(jit, ctx.store)
               // Convert results back to Values based on function return types
@@ -663,13 +688,37 @@ fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
       } else {
         @types.Value::ExternRef(v.to_int())
       }
-    // GC reference types - treat as null for now
-    AnyRef | NullRef | ExnRef | NullExnRef => @types.Value::Null
-    RefStruct(_) | RefNullStruct(_) => @types.Value::Null
-    RefArray(_) | RefNullArray(_) => @types.Value::Null
-    RefAny | RefEq | RefNullEq => @types.Value::Null
-    RefI31 | RefNullI31 => @types.Value::Null
-    RefNone => @types.Value::Null
+    // GC reference types - decode using c_heap encoding
+    // Encoding: StructRef/ArrayRef = (gc_ref - 1) << 1 (even), i31 = (value << 1) | 1 (odd), null = 0
+    AnyRef | RefAny | RefEq | RefNullEq =>
+      if v == 0L {
+        @types.Value::Null
+      } else if (v & 1L) == 1L {
+        // i31 (odd)
+        @types.Value::I31((v >> 1).to_int())
+      } else {
+        // Struct/array ref (even, non-zero)
+        @types.Value::StructRef((v >> 1).to_int())
+      }
+    RefStruct(_) | RefNullStruct(_) =>
+      if v == 0L {
+        @types.Value::Null
+      } else {
+        @types.Value::StructRef((v >> 1).to_int())
+      }
+    RefArray(_) | RefNullArray(_) =>
+      if v == 0L {
+        @types.Value::Null
+      } else {
+        @types.Value::ArrayRef((v >> 1).to_int())
+      }
+    RefI31 | RefNullI31 =>
+      if v == 0L {
+        @types.Value::Null
+      } else {
+        @types.Value::I31((v >> 1).to_int())
+      }
+    NullRef | ExnRef | NullExnRef | RefNone => @types.Value::Null
     V128 => abort("V128 not supported in JIT")
   }
 }

@@ -24,7 +24,11 @@ pub struct Store {
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType] // Tag types (params only, no results)
   exns : Array[ExnInstance] // Exception instances for exnref
-  heap : MarkSweepHeap // GC heap for struct and array instances
+  heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
+  // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
+  mut c_heap : @jit.CHeap?
+  // Module types for CHeap type lookups (needed to decode Int64 to Value)
+  mut module_types : Array[@types.SubType]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
   wrapped_externs : Array[@types.Value]
@@ -50,11 +54,67 @@ pub fn Store::new() -> Store {
     tags: [],
     exns: [],
     heap: MarkSweepHeap::new(),
+    c_heap: None,
+    module_types: [],
     wrapped_externs: [],
     func_owners: [],
     instances: [],
     jit_tables: [],
   }
+}
+
+///|
+/// Create a store with C heap enabled (for JIT mode)
+pub fn Store::with_c_heap() -> Store {
+  {
+    funcs: [],
+    func_types: [],
+    func_type_indices: [],
+    tables: [],
+    mems: [],
+    globals: [],
+    tags: [],
+    exns: [],
+    heap: MarkSweepHeap::new(), // Keep for fallback
+    c_heap: Some(@jit.CHeap::new()),
+    module_types: [],
+    wrapped_externs: [],
+    func_owners: [],
+    instances: [],
+    jit_tables: [],
+  }
+}
+
+///|
+/// Enable C heap for this store
+pub fn Store::enable_c_heap(self : Store) -> Unit {
+  if self.c_heap is None {
+    self.c_heap = Some(@jit.CHeap::new())
+  }
+}
+
+///|
+/// Set module types (needed for CHeap type lookups)
+pub fn Store::set_module_types(
+  self : Store,
+  types : Array[@types.SubType],
+) -> Unit {
+  self.module_types = types
+}
+
+///|
+/// Get the C heap pointer (for JIT)
+pub fn Store::get_c_heap_ptr(self : Store) -> Int64 {
+  match self.c_heap {
+    Some(heap) => heap.get_ptr()
+    None => 0L
+  }
+}
+
+///|
+/// Check if C heap is enabled
+pub fn Store::has_c_heap(self : Store) -> Bool {
+  self.c_heap is Some(_)
 }
 
 ///|
@@ -207,13 +267,56 @@ pub fn Store::get_exn(
 }
 
 ///|
+/// Get the field type of a struct from module_types
+fn Store::get_struct_field_type(
+  self : Store,
+  type_idx : Int,
+  field_idx : Int,
+) -> @types.ValueType {
+  if type_idx < 0 || type_idx >= self.module_types.length() {
+    return @types.ValueType::I64 // Fallback
+  }
+  match self.module_types[type_idx].composite {
+    Struct(st) =>
+      if field_idx >= 0 && field_idx < st.fields.length() {
+        match st.fields[field_idx].storage_type {
+          Val(vt) => vt
+          Packed(I8) | Packed(I16) => @types.ValueType::I32
+        }
+      } else {
+        @types.ValueType::I64
+      }
+    _ => @types.ValueType::I64
+  }
+}
+
+///|
+/// Get the element type of an array from module_types
+fn Store::get_array_elem_type(self : Store, type_idx : Int) -> @types.ValueType {
+  if type_idx < 0 || type_idx >= self.module_types.length() {
+    return @types.ValueType::I64
+  }
+  match self.module_types[type_idx].composite {
+    Array(at) =>
+      match at.element.storage_type {
+        Val(vt) => vt
+        Packed(I8) | Packed(I16) => @types.ValueType::I32
+      }
+    _ => @types.ValueType::I64
+  }
+}
+
+///|
 /// Allocate a struct instance and return its reference index
 pub fn Store::alloc_struct(
   self : Store,
   type_idx : Int,
   fields : Array[@types.Value],
 ) -> Int {
-  self.heap.alloc_struct(type_idx, fields)
+  match self.c_heap {
+    Some(heap) => heap.alloc_struct(type_idx, fields)
+    None => self.heap.alloc_struct(type_idx, fields)
+  }
 }
 
 ///|
@@ -223,7 +326,10 @@ pub fn Store::alloc_array(
   type_idx : Int,
   elements : Array[@types.Value],
 ) -> Int {
-  self.heap.alloc_array(type_idx, elements)
+  match self.c_heap {
+    Some(heap) => heap.alloc_array_from_values(type_idx, elements)
+    None => self.heap.alloc_array(type_idx, elements)
+  }
 }
 
 ///|
@@ -233,7 +339,14 @@ pub fn Store::struct_get(
   struct_idx : Int,
   field_idx : Int,
 ) -> @types.Value raise RuntimeError {
-  self.heap.struct_get(struct_idx, field_idx)
+  match self.c_heap {
+    Some(heap) => {
+      let type_idx = heap.get_type_idx(struct_idx)
+      let field_type = self.get_struct_field_type(type_idx, field_idx)
+      heap.struct_get(struct_idx, field_idx, field_type)
+    }
+    None => self.heap.struct_get(struct_idx, field_idx)
+  }
 }
 
 ///|
@@ -244,7 +357,10 @@ pub fn Store::struct_set(
   field_idx : Int,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
-  self.heap.struct_set(struct_idx, field_idx, value)
+  match self.c_heap {
+    Some(heap) => heap.struct_set(struct_idx, field_idx, value)
+    None => self.heap.struct_set(struct_idx, field_idx, value)
+  }
 }
 
 ///|
@@ -253,7 +369,10 @@ pub fn Store::array_len(
   self : Store,
   array_idx : Int,
 ) -> Int raise RuntimeError {
-  self.heap.array_len(array_idx)
+  match self.c_heap {
+    Some(heap) => heap.array_len(array_idx)
+    None => self.heap.array_len(array_idx)
+  }
 }
 
 ///|
@@ -263,7 +382,14 @@ pub fn Store::array_get(
   array_idx : Int,
   elem_idx : Int,
 ) -> @types.Value raise RuntimeError {
-  self.heap.array_get(array_idx, elem_idx)
+  match self.c_heap {
+    Some(heap) => {
+      let type_idx = heap.get_type_idx(array_idx)
+      let elem_type = self.get_array_elem_type(type_idx)
+      heap.array_get(array_idx, elem_idx, elem_type)
+    }
+    None => self.heap.array_get(array_idx, elem_idx)
+  }
 }
 
 ///|
@@ -274,7 +400,10 @@ pub fn Store::array_set(
   elem_idx : Int,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
-  self.heap.array_set(array_idx, elem_idx, value)
+  match self.c_heap {
+    Some(heap) => heap.array_set(array_idx, elem_idx, value)
+    None => self.heap.array_set(array_idx, elem_idx, value)
+  }
 }
 
 ///|
@@ -286,7 +415,10 @@ pub fn Store::array_fill(
   value : @types.Value,
   count : Int,
 ) -> Unit raise RuntimeError {
-  self.heap.array_fill(array_idx, offset, value, count)
+  match self.c_heap {
+    Some(heap) => heap.array_fill(array_idx, offset, value, count)
+    None => self.heap.array_fill(array_idx, offset, value, count)
+  }
 }
 
 ///|
@@ -299,7 +431,12 @@ pub fn Store::array_copy(
   src_offset : Int,
   count : Int,
 ) -> Unit raise RuntimeError {
-  self.heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count)
+  match self.c_heap {
+    Some(heap) =>
+      heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count)
+    None =>
+      self.heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count)
+  }
 }
 
 ///|
@@ -308,7 +445,19 @@ pub fn Store::get_gc_type_idx(
   self : Store,
   idx : Int,
 ) -> Int raise RuntimeError {
-  self.heap.get_type_idx(idx)
+  match self.c_heap {
+    Some(heap) => heap.get_type_idx(idx)
+    None => self.heap.get_type_idx(idx)
+  }
+}
+
+///|
+/// Check if a GC object reference is valid
+pub fn Store::is_gc_valid(self : Store, idx : Int) -> Bool {
+  match self.c_heap {
+    Some(heap) => heap.is_valid(idx)
+    None => self.heap.is_valid(idx)
+  }
 }
 
 ///|
@@ -474,5 +623,129 @@ pub fn Store::get_func_owner_idx(self : Store, func_addr : Int) -> Int {
   match self.func_owners[func_addr] {
     Module(idx) => idx
     _ => -1
+  }
+}
+
+// ============================================================
+// Garbage Collection
+// ============================================================
+
+///|
+/// Check if a value is a GC reference (struct, array, or i31)
+fn is_gc_ref(value : @types.Value) -> Bool {
+  match value {
+    StructRef(_) | ArrayRef(_) | I31(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Collect all GC roots from the store (globals, tables, exns, wrapped_externs)
+/// Additional roots can be passed in (e.g., from the interpreter stack)
+pub fn Store::collect_roots(
+  self : Store,
+  additional_roots : Array[@types.Value],
+) -> Array[@types.Value] {
+  let roots : Array[@types.Value] = []
+
+  // Collect from globals
+  for global in self.globals {
+    if is_gc_ref(global.value) {
+      roots.push(global.value)
+    }
+  }
+
+  // Collect from tables
+  for table in self.tables {
+    for i in 0..<table.size {
+      let value = table.elements[i]
+      if is_gc_ref(value) {
+        roots.push(value)
+      }
+    }
+  }
+
+  // Collect from exception instances
+  for exn in self.exns {
+    for value in exn.values {
+      if is_gc_ref(value) {
+        roots.push(value)
+      }
+    }
+  }
+
+  // Collect from wrapped externrefs
+  for value in self.wrapped_externs {
+    if is_gc_ref(value) {
+      roots.push(value)
+    }
+  }
+
+  // Add additional roots (e.g., from interpreter stack)
+  for value in additional_roots {
+    if is_gc_ref(value) {
+      roots.push(value)
+    }
+  }
+  roots
+}
+
+///|
+/// Perform garbage collection on the C heap
+/// Returns the number of objects collected, or 0 if no C heap is enabled
+/// The additional_roots parameter allows passing in roots from the interpreter stack
+pub fn Store::collect_garbage(
+  self : Store,
+  additional_roots? : Array[@types.Value] = [],
+) -> Int {
+  match self.c_heap {
+    Some(heap) => {
+      let roots = self.collect_roots(additional_roots)
+      heap.collect(roots)
+    }
+    None => 0 // No C heap, nothing to collect
+  }
+}
+
+///|
+/// Check if GC should be triggered based on heap usage
+/// Returns true if heap usage exceeds the threshold (default 75%)
+pub fn Store::should_collect(self : Store, threshold? : Double = 0.75) -> Bool {
+  match self.c_heap {
+    Some(heap) => heap.should_collect(threshold~)
+    None => false
+  }
+}
+
+///|
+/// Perform garbage collection if heap usage exceeds the threshold
+/// Returns the number of objects collected, or 0 if GC was not triggered
+pub fn Store::maybe_collect(
+  self : Store,
+  additional_roots? : Array[@types.Value] = [],
+  threshold? : Double = 0.75,
+) -> Int {
+  if self.should_collect(threshold~) {
+    self.collect_garbage(additional_roots~)
+  } else {
+    0
+  }
+}
+
+///|
+/// Get GC statistics for the C heap
+/// Returns (size, capacity, object_count, total_allocations, total_collections)
+/// or (0, 0, 0, 0, 0) if no C heap is enabled
+pub fn Store::get_gc_stats(self : Store) -> (Int64, Int64, Int, Int, Int) {
+  match self.c_heap {
+    Some(heap) =>
+      (
+        heap.get_size(),
+        heap.get_capacity(),
+        heap.get_object_count(),
+        heap.get_total_allocations(),
+        heap.get_total_collections(),
+      )
+    None => (0L, 0L, 0, 0, 0)
   }
 }

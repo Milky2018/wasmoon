@@ -186,14 +186,38 @@ fn Translator::extract_type_idx(
 ) -> Int {
   // Ignore the self parameter - we don't need module context to extract indices
   let _ = self
+  // Abstract types are encoded as negative indices:
+  // -1 = anyref (any), -2 = eqref (eq), -3 = i31ref
+  // -4 = structref (abstract), -5 = arrayref (abstract)
+  // -6 = funcref, -7 = externref
+  // -8 = nullref, -9 = nofunc, -10 = noextern
   match value_type {
+    // Concrete struct types (idx >= 0) or abstract struct (-1 -> -4)
     @types.ValueType::RefStruct(idx) | @types.ValueType::RefNullStruct(idx) =>
-      idx
-    @types.ValueType::RefArray(idx) | @types.ValueType::RefNullArray(idx) => idx
+      if idx < 0 {
+        -4
+      } else {
+        idx
+      }
+    // Concrete array types (idx >= 0) or abstract array (-1 -> -5)
+    @types.ValueType::RefArray(idx) | @types.ValueType::RefNullArray(idx) =>
+      if idx < 0 {
+        -5
+      } else {
+        idx
+      }
     @types.ValueType::RefFuncTyped(idx)
     | @types.ValueType::RefNullFuncTyped(idx) => idx
-    // For abstract types, return -1 to indicate runtime check needed
-    _ => -1
+    AnyRef | RefAny => -1
+    RefEq | RefNullEq => -2
+    RefI31 | RefNullI31 => -3
+    FuncRef | RefFunc => -6
+    ExternRef | RefExtern => -7
+    NullRef => -8
+    NullFuncRef => -9
+    NullExternRef => -10
+    // For value types or unsupported ref types, return -100 as error marker
+    _ => -100
   }
 }
 
@@ -911,28 +935,29 @@ fn Translator::translate_instruction(
 
     // Reference types
     RefNull(_ref_type) => {
-      // A null reference is represented as -1 (sentinel value, since 0 can be a valid index)
-      let result = self.builder.iconst(Type::I64, -1L)
+      // Null reference is represented as 0
+      // (GC refs are encoded as (gc_ref << 1) where gc_ref is 1-based, so 0 is safe for null)
+      let result = self.builder.iconst(Type::I64, 0L)
       self.push(result)
     }
     RefIsNull => {
-      // Check if reference is null (compare with -1)
+      // Check if reference is null (compare with 0)
       let ref_val = self.pop()
-      let null_sentinel = self.builder.iconst(Type::I64, -1L)
+      let null_sentinel = self.builder.iconst(Type::I64, 0L)
       let result = self.builder.icmp_eq(ref_val, null_sentinel)
       self.push(result)
     }
     RefFunc(func_idx) => {
-      // Create a function reference - store the function index
-      // The actual function pointer will be looked up at runtime
-      let result = self.builder.iconst(Type::I64, func_idx.to_int64())
+      // Create a function reference - use GetFuncRef to get tagged function pointer
+      // The pointer is tagged with FUNCREF_TAG (bit 61) for ref.test detection
+      let result = self.builder.get_func_ref(func_idx)
       self.push(result)
     }
     RefAsNonNull => {
       // ref.as_non_null: convert nullable ref to non-null ref
       // Pop the reference, check if null, trap if so, otherwise push back
       let ref_val = self.pop()
-      let null_sentinel = self.builder.iconst(Type::I64, -1L)
+      let null_sentinel = self.builder.iconst(Type::I64, 0L)
       let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
       // Create trap block and continuation block
@@ -949,6 +974,13 @@ fn Translator::translate_instruction(
       // Continue block: push the non-null ref back on stack
       self.builder.switch_to_block(continue_block)
       self.push(ref_val)
+    }
+    RefEqInstr => {
+      // ref.eq: compare two references for equality
+      let ref2 = self.pop()
+      let ref1 = self.pop()
+      let result = self.builder.ref_eq(ref1, ref2)
+      self.push(result)
     }
     TableGet(table_idx) => {
       // Get element from table

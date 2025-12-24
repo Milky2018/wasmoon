@@ -386,14 +386,16 @@ pub fn JITModule::init_shared_tables(
       Some(tbl) => tbl
       None => continue
     }
-    // Get function pointer
+    // Get function pointer and encode as funcref
     // func_idx = -1 represents ref.null (null reference sentinel)
-    let func_ptr = if func_idx == -1 {
-      -1L // Use -1L for null reference (matching IR translator convention)
+    let funcref_value = if func_idx == -1 {
+      0L // Use 0 for null reference (matches new encoding)
     } else {
-      self.get_func_ptr(func_idx)
+      // Tag function pointer with FUNCREF_TAG (bit 61) for ref.test detection
+      // FUNCREF_TAG = 0x2000000000000000
+      self.get_func_ptr(func_idx) | 0x2000000000000000L
     }
     // Set the table entry (including null references)
-    jit_table.set(elem_idx, func_ptr, type_hash)
+    jit_table.set(elem_idx, funcref_value, type_hash)
   }
 }

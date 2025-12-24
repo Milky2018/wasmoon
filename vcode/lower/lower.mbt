@@ -416,6 +416,10 @@ fn lower_inst(
     @ir.Opcode::ReturnCallRef(type_idx) =>
       lower_return_call_ref(ctx, inst, block, type_idx)
 
+    // Function reference
+    @ir.Opcode::GetFuncRef(func_idx) =>
+      lower_get_func_ref(ctx, inst, block, func_idx)
+
     // Raw pointer operations (for trampolines)
     @ir.Opcode::LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
     @ir.Opcode::StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
@@ -431,28 +435,41 @@ fn lower_inst(
     @ir.Opcode::AnyConvertExtern | @ir.Opcode::ExternConvertAny =>
       lower_gc_convert(ctx, inst, block)
 
-    // GC operations - struct/array (require runtime support, not yet implemented)
-    @ir.Opcode::StructNew(_)
-    | @ir.Opcode::StructNewDefault(_)
-    | @ir.Opcode::StructGet(_, _)
-    | @ir.Opcode::StructGetS(_, _)
-    | @ir.Opcode::StructGetU(_, _)
-    | @ir.Opcode::StructSet(_, _)
-    | @ir.Opcode::ArrayNew(_)
-    | @ir.Opcode::ArrayNewDefault(_)
-    | @ir.Opcode::ArrayNewFixed(_, _)
-    | @ir.Opcode::ArrayGet(_)
-    | @ir.Opcode::ArrayGetS(_)
-    | @ir.Opcode::ArrayGetU(_)
-    | @ir.Opcode::ArraySet(_)
-    | @ir.Opcode::ArrayLen
-    | @ir.Opcode::ArrayFill(_)
-    | @ir.Opcode::ArrayCopy(_, _)
-    | @ir.Opcode::RefTest(_, _)
-    | @ir.Opcode::RefCast(_, _) =>
-      abort(
-        "GC struct/array instruction lowering not yet implemented: \{inst.opcode}",
-      )
+    // GC operations - struct/array (use runtime libcalls)
+    @ir.Opcode::StructNew(type_idx) =>
+      lower_struct_new(ctx, inst, block, type_idx)
+    @ir.Opcode::StructNewDefault(type_idx) =>
+      lower_struct_new_default(ctx, inst, block, type_idx)
+    @ir.Opcode::StructGet(type_idx, field_idx) =>
+      lower_struct_get(ctx, inst, block, type_idx, field_idx)
+    @ir.Opcode::StructGetS(type_idx, field_idx) =>
+      lower_struct_get(ctx, inst, block, type_idx, field_idx) // TODO: sign extension
+    @ir.Opcode::StructGetU(type_idx, field_idx) =>
+      lower_struct_get(ctx, inst, block, type_idx, field_idx) // TODO: zero extension
+    @ir.Opcode::StructSet(type_idx, field_idx) =>
+      lower_struct_set(ctx, inst, block, type_idx, field_idx)
+    @ir.Opcode::ArrayNew(type_idx) =>
+      lower_array_new(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayNewDefault(type_idx) =>
+      lower_array_new_default(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayNewFixed(type_idx, len) =>
+      lower_array_new_fixed(ctx, inst, block, type_idx, len)
+    @ir.Opcode::ArrayGet(type_idx) =>
+      lower_array_get(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayGetS(type_idx) =>
+      lower_array_get(ctx, inst, block, type_idx) // TODO: sign extension
+    @ir.Opcode::ArrayGetU(type_idx) =>
+      lower_array_get(ctx, inst, block, type_idx) // TODO: zero extension
+    @ir.Opcode::ArraySet(type_idx) =>
+      lower_array_set(ctx, inst, block, type_idx)
+    @ir.Opcode::ArrayLen => lower_array_len(ctx, inst, block)
+    @ir.Opcode::ArrayFill(_) | @ir.Opcode::ArrayCopy(_, _) =>
+      abort("ArrayFill/ArrayCopy not yet implemented in JIT")
+    @ir.Opcode::RefTest(type_idx, nullable) =>
+      lower_ref_test(ctx, inst, block, type_idx, nullable)
+    @ir.Opcode::RefCast(type_idx, nullable) =>
+      lower_ref_cast(ctx, inst, block, type_idx, nullable)
+    @ir.Opcode::RefEq => lower_ref_eq(ctx, inst, block)
   }
 }
 
@@ -1382,6 +1399,40 @@ fn emit_load_table0_base(
   load_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int })) // X19 = vmctx
   block.add_inst(load_inst)
   table0_base_vreg
+}
+
+///|
+/// Lower GetFuncRef - get tagged function pointer for storing in tables
+/// Returns func_ptr | FUNCREF_TAG (bit 61) for ref.test detection
+fn lower_get_func_ref(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  func_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let result_vreg = ctx.get_vreg(result)
+
+  // Step 1: Load func_table pointer from vmctx
+  let func_table_vreg = emit_load_func_table(ctx, block)
+
+  // Step 2: Load func_ptr from func_table[func_idx * 8]
+  let raw_func_ptr = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(Load(I64, func_idx * 8))
+  load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
+  load_ptr.add_use(Virtual(func_table_vreg))
+  block.add_inst(load_ptr)
+
+  // Step 3: OR with FUNCREF_TAG (0x2000000000000000)
+  let tag_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_tag = @instr.VCodeInst::new(LoadConst(0x2000000000000000L))
+  load_tag.add_def({ reg: Virtual(tag_vreg) })
+  block.add_inst(load_tag)
+  let or_inst = @instr.VCodeInst::new(Or)
+  or_inst.add_def({ reg: Virtual(result_vreg) })
+  or_inst.add_use(Virtual(raw_func_ptr))
+  or_inst.add_use(Virtual(tag_vreg))
+  block.add_inst(or_inst)
 }
 
 ///|
@@ -2617,10 +2668,24 @@ fn lower_call_indirect(
   block.add_inst(add_inst)
 
   // Step 3: Load function pointer from address (offset 0)
+  let raw_func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_func_inst = @instr.VCodeInst::new(Load(I64, 0))
-  load_func_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_func_inst.add_def({ reg: Virtual(raw_func_ptr_vreg) })
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
+
+  // Step 3.5: Clear FUNCREF_TAG (bit 61) from function pointer
+  // Function pointers in tables are tagged with 0x2000000000000000 for ref.test
+  // We need to clear this tag before calling: mask = ~0x2000000000000000 = 0xDFFFFFFFFFFFFFFF
+  let mask_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
+  load_mask.add_def({ reg: Virtual(mask_vreg) })
+  block.add_inst(load_mask)
+  let and_inst = @instr.VCodeInst::new(And)
+  and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  and_inst.add_use(Virtual(raw_func_ptr_vreg))
+  and_inst.add_use(Virtual(mask_vreg))
+  block.add_inst(and_inst)
 
   // Step 4: Load actual type index from address + 8
   let load_type_inst = @instr.VCodeInst::new(Load(I64, 8))
@@ -3239,11 +3304,24 @@ fn lower_return_call_indirect(
   add_inst.add_use(Virtual(table_ptr_vreg))
   add_inst.add_use(Virtual(offset_vreg))
   block.add_inst(add_inst)
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  // Load raw function pointer
+  let raw_func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_func_inst = @instr.VCodeInst::new(Load(I64, 0))
-  load_func_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  load_func_inst.add_def({ reg: Virtual(raw_func_ptr_vreg) })
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
+
+  // Clear FUNCREF_TAG (bit 61) from function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let mask_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
+  load_mask.add_def({ reg: Virtual(mask_vreg) })
+  block.add_inst(load_mask)
+  let and_inst = @instr.VCodeInst::new(And)
+  and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+  and_inst.add_use(Virtual(raw_func_ptr_vreg))
+  and_inst.add_use(Virtual(mask_vreg))
+  block.add_inst(and_inst)
   let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
   let load_type_inst = @instr.VCodeInst::new(Load(I64, 8))
   load_type_inst.add_def({ reg: Virtual(actual_type_vreg) })
@@ -3472,7 +3550,8 @@ fn lower_return_call_ref(
 // ============ GC Operations ============
 
 ///|
-/// Lower i31.new: Convert i32 to i31ref (just zero-extend to i64)
+/// Lower i31.new: Convert i32 to i31ref
+/// Encoding: (value << 1) | 1 (positive odd for i31)
 fn lower_i31_new(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -3481,16 +3560,39 @@ fn lower_i31_new(
   guard inst.result is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
-  // i31ref is represented as i64, so zero-extend the i32 value
-  let vcode_inst = @instr.VCodeInst::new(Extend(Unsigned32To64))
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(src))
-  block.add_inst(vcode_inst)
+
+  // Step 1: Zero-extend i32 to i64
+  let ext_vreg = ctx.vcode_func.new_vreg(Int)
+  let extend_inst = @instr.VCodeInst::new(Extend(Unsigned32To64))
+  extend_inst.add_def({ reg: Virtual(ext_vreg) })
+  extend_inst.add_use(Virtual(src))
+  block.add_inst(extend_inst)
+
+  // Step 2: Shift left by 1
+  let shifted_vreg = ctx.vcode_func.new_vreg(Int)
+  let one_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_one = @instr.VCodeInst::new(LoadConst(1L))
+  load_one.add_def({ reg: Virtual(one_vreg) })
+  block.add_inst(load_one)
+  let shift_inst = @instr.VCodeInst::new(Shl(true))
+  shift_inst.add_def({ reg: Virtual(shifted_vreg) })
+  shift_inst.add_use(Virtual(ext_vreg))
+  shift_inst.add_use(Virtual(one_vreg))
+  block.add_inst(shift_inst)
+
+  // Step 3: OR with 1 to set low bit
+  let or_inst = @instr.VCodeInst::new(Or)
+  or_inst.add_def({ reg: Virtual(dst) })
+  or_inst.add_use(Virtual(shifted_vreg))
+  or_inst.add_use(Virtual(one_vreg))
+  block.add_inst(or_inst)
 }
 
 ///|
 /// Lower i31.get_s: Sign-extend 31 bits to i32
-/// Implementation: shift left 1, then arithmetic shift right 1
+/// Encoding is (value << 1) | 1, so:
+/// 1. Shift right by 1 to decode (removes the tag bit)
+/// 2. Sign-extend from 31 bits
 fn lower_i31_get_s(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -3500,27 +3602,33 @@ fn lower_i31_get_s(
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // First, truncate i64 to i32 (take lower 32 bits)
-  let tmp1 = ctx.new_vreg(@abi.Int)
-  let trunc_inst = @instr.VCodeInst::new(Truncate)
-  trunc_inst.add_def({ reg: Virtual(tmp1) })
-  trunc_inst.add_use(Virtual(src))
-  block.add_inst(trunc_inst)
-
-  // Shift left by 1 to move bit 30 to bit 31
-  let tmp2 = ctx.new_vreg(@abi.Int)
+  // Step 1: Shift right by 1 to decode the i31 value (64-bit)
   let shift_amount = ctx.new_vreg(@abi.Int)
   let load_1 = @instr.VCodeInst::new(LoadConst(1L))
   load_1.add_def({ reg: Virtual(shift_amount) })
   block.add_inst(load_1)
-  let shl_inst = @instr.VCodeInst::new(Shl(false)) // 32-bit shift
+  let decoded = ctx.new_vreg(@abi.Int)
+  let lsr_inst = @instr.VCodeInst::new(LShr(true))
+  lsr_inst.add_def({ reg: Virtual(decoded) })
+  lsr_inst.add_use(Virtual(src))
+  lsr_inst.add_use(Virtual(shift_amount))
+  block.add_inst(lsr_inst)
+
+  // Step 2: Truncate to 32 bits
+  let tmp = ctx.new_vreg(@abi.Int)
+  let trunc_inst = @instr.VCodeInst::new(Truncate)
+  trunc_inst.add_def({ reg: Virtual(tmp) })
+  trunc_inst.add_use(Virtual(decoded))
+  block.add_inst(trunc_inst)
+
+  // Step 3: Sign-extend from 31 bits by shifting left then arithmetic right
+  let tmp2 = ctx.new_vreg(@abi.Int)
+  let shl_inst = @instr.VCodeInst::new(Shl(false))
   shl_inst.add_def({ reg: Virtual(tmp2) })
-  shl_inst.add_use(Virtual(tmp1))
+  shl_inst.add_use(Virtual(tmp))
   shl_inst.add_use(Virtual(shift_amount))
   block.add_inst(shl_inst)
-
-  // Arithmetic shift right by 1 to sign-extend
-  let asr_inst = @instr.VCodeInst::new(AShr(false)) // 32-bit shift
+  let asr_inst = @instr.VCodeInst::new(AShr(false))
   asr_inst.add_def({ reg: Virtual(dst) })
   asr_inst.add_use(Virtual(tmp2))
   asr_inst.add_use(Virtual(shift_amount))
@@ -3528,7 +3636,10 @@ fn lower_i31_get_s(
 }
 
 ///|
-/// Lower i31.get_u: Zero-extend 31 bits (mask with 0x7FFFFFFF)
+/// Lower i31.get_u: Zero-extend 31 bits
+/// Encoding is (value << 1) | 1, so:
+/// 1. Shift right by 1 to decode (removes the tag bit)
+/// 2. Mask with 0x7FFFFFFF for 31 bits
 fn lower_i31_get_u(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -3538,20 +3649,30 @@ fn lower_i31_get_u(
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // First, truncate i64 to i32 (take lower 32 bits)
+  // Step 1: Shift right by 1 to decode the i31 value (64-bit)
+  let shift_amount = ctx.new_vreg(@abi.Int)
+  let load_1 = @instr.VCodeInst::new(LoadConst(1L))
+  load_1.add_def({ reg: Virtual(shift_amount) })
+  block.add_inst(load_1)
+  let decoded = ctx.new_vreg(@abi.Int)
+  let lsr_inst = @instr.VCodeInst::new(LShr(true))
+  lsr_inst.add_def({ reg: Virtual(decoded) })
+  lsr_inst.add_use(Virtual(src))
+  lsr_inst.add_use(Virtual(shift_amount))
+  block.add_inst(lsr_inst)
+
+  // Step 2: Truncate to 32 bits
   let tmp = ctx.new_vreg(@abi.Int)
   let trunc_inst = @instr.VCodeInst::new(Truncate)
   trunc_inst.add_def({ reg: Virtual(tmp) })
-  trunc_inst.add_use(Virtual(src))
+  trunc_inst.add_use(Virtual(decoded))
   block.add_inst(trunc_inst)
 
-  // Load mask 0x7FFFFFFF
+  // Step 3: Mask with 0x7FFFFFFF for 31 bits (already decoded, just ensure upper bit is clear)
   let mask = ctx.new_vreg(@abi.Int)
   let load_mask = @instr.VCodeInst::new(LoadConst(0x7FFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask) })
   block.add_inst(load_mask)
-
-  // AND with mask
   let and_inst = @instr.VCodeInst::new(And)
   and_inst.add_def({ reg: Virtual(dst) })
   and_inst.add_use(Virtual(tmp))
@@ -3574,5 +3695,283 @@ fn lower_gc_convert(
   let vcode_inst = @instr.VCodeInst::new(Move)
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(src))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower ref.test: Test if reference matches type
+/// Uses runtime libcall, returns 0 or 1
+fn lower_ref_test(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  nullable : Bool,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let vcode_inst = @instr.VCodeInst::new(GCRefTest(type_idx, nullable))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(ref_vreg))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower ref.cast: Cast reference to type (traps on failure)
+fn lower_ref_cast(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  nullable : Bool,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let vcode_inst = @instr.VCodeInst::new(GCRefCast(type_idx, nullable))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(ref_vreg))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower ref.eq: Compare two references for equality
+/// Returns 1 if equal, 0 otherwise
+fn lower_ref_eq(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref1_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let ref2_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Compare two references as i64 values
+  // Use Cmp(Eq, true) for 64-bit equality comparison
+  let cmp_inst = @instr.VCodeInst::new(Cmp(@instr.CmpKind::Eq, true))
+  cmp_inst.add_def({ reg: Virtual(dst) })
+  cmp_inst.add_use(Virtual(ref1_vreg))
+  cmp_inst.add_use(Virtual(ref2_vreg))
+  block.add_inst(cmp_inst)
+}
+
+///|
+/// Lower struct.new: Allocate struct with field values
+fn lower_struct_new(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let num_fields = inst.operands.length()
+  let vcode_inst = @instr.VCodeInst::new(GCStructNew(type_idx, num_fields))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  // Add all field values as uses
+  for i in 0..<num_fields {
+    let field_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+    vcode_inst.add_use(Virtual(field_vreg))
+  }
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower struct.new_default: Allocate struct with default values
+fn lower_struct_new_default(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  // struct.new_default has no operands - codegen will handle getting default values
+  let vcode_inst = @instr.VCodeInst::new(GCStructNew(type_idx, 0))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower struct.get: Get struct field value
+fn lower_struct_get(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  field_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let vcode_inst = @instr.VCodeInst::new(GCStructGet(type_idx, field_idx))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(ref_vreg))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower struct.set: Set struct field value
+fn lower_struct_set(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  field_idx : Int,
+) -> Unit {
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let val_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let vcode_inst = @instr.VCodeInst::new(GCStructSet(type_idx, field_idx))
+  vcode_inst.add_use(Virtual(ref_vreg))
+  vcode_inst.add_use(Virtual(val_vreg))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower array.new: Allocate array with init value and length
+fn lower_array_new(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let init_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let len_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let vcode_inst = @instr.VCodeInst::new(GCArrayNew(type_idx))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(init_vreg))
+  vcode_inst.add_use(Virtual(len_vreg))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower array.new_default: Allocate array with default values
+fn lower_array_new_default(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let len_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Load default value (0) for the init value
+  let zero_vreg = ctx.new_vreg(@abi.Int)
+  let load_zero = @instr.VCodeInst::new(LoadConst(0L))
+  load_zero.add_def({ reg: Virtual(zero_vreg) })
+  block.add_inst(load_zero)
+  let vcode_inst = @instr.VCodeInst::new(GCArrayNew(type_idx))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(zero_vreg))
+  vcode_inst.add_use(Virtual(len_vreg))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower array.new_fixed: Allocate fixed-size array with element values
+fn lower_array_new_fixed(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  len : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  // For now, create array with first element and set the rest
+  // This is inefficient but correct - can optimize later
+  if len == 0 {
+    // Empty array - use zero init and length 0
+    let zero_vreg = ctx.new_vreg(@abi.Int)
+    let load_zero = @instr.VCodeInst::new(LoadConst(0L))
+    load_zero.add_def({ reg: Virtual(zero_vreg) })
+    block.add_inst(load_zero)
+    let vcode_inst = @instr.VCodeInst::new(GCArrayNew(type_idx))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(zero_vreg))
+    vcode_inst.add_use(Virtual(zero_vreg))
+    block.add_inst(vcode_inst)
+  } else {
+    // Create array with first element, then set remaining elements
+    let first_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+    let len_vreg = ctx.new_vreg(@abi.Int)
+    let load_len = @instr.VCodeInst::new(LoadConst(len.to_int64()))
+    load_len.add_def({ reg: Virtual(len_vreg) })
+    block.add_inst(load_len)
+    let vcode_inst = @instr.VCodeInst::new(GCArrayNew(type_idx))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(first_vreg))
+    vcode_inst.add_use(Virtual(len_vreg))
+    block.add_inst(vcode_inst)
+    // Set remaining elements
+    for i in 1..<len {
+      let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+      let idx_vreg = ctx.new_vreg(@abi.Int)
+      let load_idx = @instr.VCodeInst::new(LoadConst(i.to_int64()))
+      load_idx.add_def({ reg: Virtual(idx_vreg) })
+      block.add_inst(load_idx)
+      let set_inst = @instr.VCodeInst::new(GCArraySet(type_idx))
+      set_inst.add_use(Virtual(dst))
+      set_inst.add_use(Virtual(idx_vreg))
+      set_inst.add_use(Virtual(elem_vreg))
+      block.add_inst(set_inst)
+    }
+  }
+}
+
+///|
+/// Lower array.get: Get array element
+fn lower_array_get(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let vcode_inst = @instr.VCodeInst::new(GCArrayGet(type_idx))
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(ref_vreg))
+  vcode_inst.add_use(Virtual(idx_vreg))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower array.set: Set array element
+fn lower_array_set(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+) -> Unit {
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let val_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
+  let vcode_inst = @instr.VCodeInst::new(GCArraySet(type_idx))
+  vcode_inst.add_use(Virtual(ref_vreg))
+  vcode_inst.add_use(Virtual(idx_vreg))
+  vcode_inst.add_use(Virtual(val_vreg))
+  block.add_inst(vcode_inst)
+}
+
+///|
+/// Lower array.len: Get array length
+fn lower_array_len(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let vcode_inst = @instr.VCodeInst::new(GCArrayLen)
+  vcode_inst.add_def({ reg: Virtual(dst) })
+  vcode_inst.add_use(Virtual(ref_vreg))
   block.add_inst(vcode_inst)
 }

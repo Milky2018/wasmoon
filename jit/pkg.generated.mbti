@@ -18,7 +18,23 @@ pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
 pub fn check_trap() -> Unit raise JITTrap
 
+pub fn decode_heap_ref(Int64) -> Int
+
+pub fn decode_i31(Int64) -> Int
+
+pub fn encode_heap_ref(Int) -> Int64
+
+pub fn encode_i31(Int) -> Int64
+
 pub fn free_memory(Int64) -> Unit
+
+pub fn gc_clear_heap() -> Unit
+
+pub fn gc_set_heap(CHeap) -> Unit
+
+pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int]) -> Unit
+
+pub fn gc_teardown() -> Unit
 
 pub fn get_args_get_ptr() -> Int64
 
@@ -41,6 +57,24 @@ pub fn get_fd_prestat_get_ptr() -> Int64
 pub fn get_fd_read_ptr() -> Int64
 
 pub fn get_fd_write_ptr() -> Int64
+
+pub fn get_gc_array_get_ptr() -> Int64
+
+pub fn get_gc_array_len_ptr() -> Int64
+
+pub fn get_gc_array_new_ptr() -> Int64
+
+pub fn get_gc_array_set_ptr() -> Int64
+
+pub fn get_gc_ref_cast_ptr() -> Int64
+
+pub fn get_gc_ref_test_ptr() -> Int64
+
+pub fn get_gc_struct_get_ptr() -> Int64
+
+pub fn get_gc_struct_new_ptr() -> Int64
+
+pub fn get_gc_struct_set_ptr() -> Int64
 
 pub fn get_memory_base_ptr() -> Int64
 
@@ -72,9 +106,19 @@ pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
 pub fn has_import_trampoline(String, String) -> Bool
 
+pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
+
+pub fn is_i31(Int64) -> Bool
+
 pub fn is_jit_supported_module(String) -> Bool
 
+pub fn is_null(Int64) -> Bool
+
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
+
+pub fn setup_type_cache_from_types(Array[@types.SubType], Array[Int]) -> Unit
+
+pub fn value_to_i64(@types.Value) -> Int64
 
 // Errors
 pub suberror JITTrap String
@@ -117,6 +161,39 @@ pub fn BreakpointManager::get(Self, Int) -> Breakpoint?
 pub fn BreakpointManager::new() -> Self
 pub fn BreakpointManager::remove(Self, Int) -> Bool
 pub fn BreakpointManager::should_break(Self, Int, Int) -> Bool
+
+pub struct CHeap {
+  ptr : Int64
+}
+pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int
+pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int
+pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
+pub fn CHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit
+pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit
+pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value
+pub fn CHeap::array_len(Self, Int) -> Int
+pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit
+pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
+pub fn CHeap::free(Self) -> Unit
+pub fn CHeap::get_base(Self) -> Int64
+pub fn CHeap::get_capacity(Self) -> Int64
+pub fn CHeap::get_kind(Self, Int) -> Int
+pub fn CHeap::get_object_count(Self) -> Int
+pub fn CHeap::get_offset(Self, Int) -> Int
+pub fn CHeap::get_ptr(Self) -> Int64
+pub fn CHeap::get_size(Self) -> Int64
+pub fn CHeap::get_total_allocations(Self) -> Int
+pub fn CHeap::get_total_collections(Self) -> Int
+pub fn CHeap::get_type_idx(Self, Int) -> Int
+pub fn CHeap::get_usage_ratio(Self) -> Double
+pub fn CHeap::is_array(Self, Int) -> Bool
+pub fn CHeap::is_struct(Self, Int) -> Bool
+pub fn CHeap::is_valid(Self, Int) -> Bool
+pub fn CHeap::new(capacity? : Int) -> Self
+pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
+pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
+pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
+pub impl Show for CHeap
 
 pub(all) struct CallCounter {
   counts : Map[Int, Int]

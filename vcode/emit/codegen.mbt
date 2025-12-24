@@ -1702,6 +1702,209 @@ fn MachineCode::emit_instruction(
       let offset = global_idx * 16
       self.emit_str_imm(value_reg, 16, offset)
     }
+    // GC operations - call runtime libcalls
+    GCRefTest(type_idx, nullable) => {
+      // gc_ref_test(ref, type_idx, nullable) -> 0 or 1
+      // Uses: [ref], Defs: [result]
+      let ref_reg = reg_num(inst.uses[0])
+      let result_reg = wreg_num(inst.defs[0])
+
+      // Move ref to X0
+      self.emit_mov_reg(0, ref_reg)
+      // Load type_idx to X1
+      self.emit_load_imm64(1, type_idx.to_int64())
+      // Load nullable flag to X2
+      self.emit_load_imm64(2, if nullable { 1L } else { 0L })
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_ref_test_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+      // Move result from X0 to destination
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0)
+      }
+    }
+    GCRefCast(type_idx, nullable) => {
+      // gc_ref_cast(ref, type_idx, nullable) -> ref or trap
+      // Uses: [ref], Defs: [result]
+      let ref_reg = reg_num(inst.uses[0])
+      let result_reg = wreg_num(inst.defs[0])
+
+      // Move ref to X0
+      self.emit_mov_reg(0, ref_reg)
+      // Load type_idx to X1
+      self.emit_load_imm64(1, type_idx.to_int64())
+      // Load nullable flag to X2
+      self.emit_load_imm64(2, if nullable { 1L } else { 0L })
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_ref_cast_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+      // Move result from X0 to destination
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0)
+      }
+    }
+    GCStructNew(type_idx, num_fields) => {
+      // gc_struct_new(type_idx, fields_ptr, num_fields) -> struct_ref
+      // C signature: int64_t gc_struct_new_impl(int32_t type_idx, int64_t* fields, int32_t num_fields)
+      // For simplicity, we pass fields on stack and call the helper
+      // Args: X0 = type_idx, X1 = fields ptr (stack), X2 = num_fields
+      let result_reg = wreg_num(inst.defs[0])
+      // Save fields to stack (if any)
+      if num_fields > 0 {
+        // Allocate stack space for fields (8 bytes each)
+        let stack_space = num_fields * 8
+        self.emit_sub_imm(31, 31, stack_space) // sub sp, sp, #(num_fields * 8)
+        // Store each field to stack
+        for i in 0..<num_fields {
+          let field_reg = reg_num(inst.uses[i])
+          let offset = i * 8
+          self.emit_store(@instr.MemType::I64, field_reg, 31, offset) // str field, [sp, #offset]
+        }
+        // X0 = type_idx
+        self.emit_load_imm64(0, type_idx.to_int64())
+        // X1 = fields ptr (sp)
+        self.emit_mov_reg(1, 31)
+        // X2 = num_fields
+        self.emit_load_imm64(2, num_fields.to_int64())
+      } else {
+        // X0 = type_idx
+        self.emit_load_imm64(0, type_idx.to_int64())
+        // X1 = null (no fields)
+        self.emit_load_imm64(1, 0L)
+        // X2 = 0
+        self.emit_load_imm64(2, 0L)
+      }
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_struct_new_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+      // Deallocate stack space for fields
+      if num_fields > 0 {
+        let stack_space = num_fields * 8
+        self.emit_add_imm(31, 31, stack_space) // add sp, sp, #(num_fields * 8)
+      }
+      // Move result to destination register
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0)
+      }
+    }
+    GCStructGet(type_idx, field_idx) => {
+      // gc_struct_get(ref, type_idx, field_idx) -> value
+      // C signature: int64_t gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx)
+      let ref_reg = reg_num(inst.uses[0])
+      let result_reg = wreg_num(inst.defs[0])
+      // X0 = ref
+      self.emit_mov_reg(0, ref_reg)
+      // X1 = type_idx
+      self.emit_load_imm64(1, type_idx.to_int64())
+      // X2 = field_idx
+      self.emit_load_imm64(2, field_idx.to_int64())
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_struct_get_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+      // Move result to destination register
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0)
+      }
+    }
+    GCStructSet(type_idx, field_idx) => {
+      // gc_struct_set(ref, type_idx, field_idx, value)
+      // C signature: void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_t value)
+      let ref_reg = reg_num(inst.uses[0])
+      let val_reg = reg_num(inst.uses[1])
+      // X0 = ref
+      self.emit_mov_reg(0, ref_reg)
+      // X1 = type_idx
+      self.emit_load_imm64(1, type_idx.to_int64())
+      // X2 = field_idx
+      self.emit_load_imm64(2, field_idx.to_int64())
+      // X3 = value
+      self.emit_mov_reg(3, val_reg)
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_struct_set_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+    }
+    GCArrayNew(type_idx) => {
+      // gc_array_new(type_idx, len, fill) -> array_ref
+      // C signature: int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill)
+      let init_reg = reg_num(inst.uses[0])
+      let len_reg = reg_num(inst.uses[1])
+      let result_reg = wreg_num(inst.defs[0])
+      // X0 = type_idx
+      self.emit_load_imm64(0, type_idx.to_int64())
+      // X1 = len
+      self.emit_mov_reg(1, len_reg)
+      // X2 = fill (init value)
+      self.emit_mov_reg(2, init_reg)
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_array_new_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+      // Move result to destination register
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0)
+      }
+    }
+    GCArrayGet(type_idx) => {
+      // gc_array_get(ref, type_idx, idx) -> value
+      // C signature: int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx)
+      let ref_reg = reg_num(inst.uses[0])
+      let idx_reg = reg_num(inst.uses[1])
+      let result_reg = wreg_num(inst.defs[0])
+      // X0 = ref
+      self.emit_mov_reg(0, ref_reg)
+      // X1 = type_idx
+      self.emit_load_imm64(1, type_idx.to_int64())
+      // X2 = idx
+      self.emit_mov_reg(2, idx_reg)
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_array_get_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+      // Move result to destination register
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0)
+      }
+    }
+    GCArraySet(type_idx) => {
+      // gc_array_set(ref, type_idx, idx, value)
+      // C signature: void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value)
+      let ref_reg = reg_num(inst.uses[0])
+      let idx_reg = reg_num(inst.uses[1])
+      let val_reg = reg_num(inst.uses[2])
+      // X0 = ref
+      self.emit_mov_reg(0, ref_reg)
+      // X1 = type_idx
+      self.emit_load_imm64(1, type_idx.to_int64())
+      // X2 = idx
+      self.emit_mov_reg(2, idx_reg)
+      // X3 = value
+      self.emit_mov_reg(3, val_reg)
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_array_set_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+    }
+    GCArrayLen => {
+      // gc_array_len(ref) -> len
+      // C signature: int32_t gc_array_len_impl(int64_t ref)
+      let ref_reg = reg_num(inst.uses[0])
+      let result_reg = wreg_num(inst.defs[0])
+      // X0 = ref
+      self.emit_mov_reg(0, ref_reg)
+      // Load function pointer and call
+      let func_ptr = @jit_ffi.c_jit_get_gc_array_len_ptr()
+      self.emit_load_imm64(16, func_ptr)
+      self.emit_blr(16)
+      // Move result to destination register
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0)
+      }
+    }
     LoadPtr(ty, offset) => {
       // Raw pointer load (no bounds checking)
       // Uses: [base], Defs: [result]

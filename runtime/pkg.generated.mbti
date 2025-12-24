@@ -275,6 +275,8 @@ pub struct Store {
   tags : Array[@types.FuncType]
   exns : Array[ExnInstance]
   heap : MarkSweepHeap
+  mut c_heap : @jit.CHeap?
+  mut module_types : Array[@types.SubType]
   wrapped_externs : Array[@types.Value]
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
@@ -294,6 +296,10 @@ pub fn Store::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise Runtim
 pub fn Store::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::array_len(Self, Int) -> Int raise RuntimeError
 pub fn Store::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int
+pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
+pub fn Store::enable_c_heap(Self) -> Unit
+pub fn Store::get_c_heap_ptr(Self) -> Int64
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 pub fn Store::get_func_canonical_type_idx(Self, Int) -> Int
@@ -302,6 +308,7 @@ pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_func_owner_idx(Self, Int) -> Int
 pub fn Store::get_func_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_func_type_idx(Self, Int) -> Int
+pub fn Store::get_gc_stats(Self) -> (Int64, Int64, Int, Int, Int)
 pub fn Store::get_gc_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
 pub fn Store::get_jit_table(Self, Int) -> @jit.JITTable?
@@ -309,11 +316,17 @@ pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory
 pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
 pub fn Store::get_tag_type(Self, Int) -> @types.FuncType raise RuntimeError
+pub fn Store::has_c_heap(Self) -> Bool
+pub fn Store::is_gc_valid(Self, Int) -> Bool
+pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::new() -> Self
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
+pub fn Store::set_module_types(Self, Array[@types.SubType]) -> Unit
+pub fn Store::should_collect(Self, threshold? : Double) -> Bool
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
+pub fn Store::with_c_heap() -> Self
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value
 pub impl Show for Store
 
