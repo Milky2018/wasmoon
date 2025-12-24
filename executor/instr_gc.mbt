@@ -965,40 +965,18 @@ fn value_matches_type(
 
 ///|
 /// Check if type1 is a subtype of type2.
-/// In WebAssembly GC isorecursive typing, structurally equivalent types with
-/// equivalent supertypes are canonically equal and considered subtypes of each other.
+/// Uses the unified SubtypingContext API for proper isorecursive type checking.
 fn is_subtype(
   type_idx1 : Int,
   type_idx2 : Int,
   instance : @runtime.ModuleInstance,
 ) -> Bool {
-  // Direct match - same type index means same type
-  if type_idx1 == type_idx2 {
-    return true
-  }
-  // Check canonical type indices for isorecursive type equivalence.
-  // Types with the same canonical index are structurally equivalent and
-  // considered equal for subtyping purposes.
-  if type_idx1 >= 0 &&
-    type_idx1 < instance.canonical_type_indices.length() &&
-    type_idx2 >= 0 &&
-    type_idx2 < instance.canonical_type_indices.length() {
-    let canon1 = instance.canonical_type_indices[type_idx1]
-    let canon2 = instance.canonical_type_indices[type_idx2]
-    if canon1 == canon2 {
-      return true
-    }
-  }
-  // Check supertype chain - type1 is a subtype of type2 if type2 is in type1's supertype chain
-  if type_idx1 >= 0 && type_idx1 < instance.types.length() {
-    let subtype = instance.types[type_idx1]
-    for super_idx in subtype.supertypes {
-      if super_idx == type_idx2 || is_subtype(super_idx, type_idx2, instance) {
-        return true
-      }
-    }
-  }
-  false
+  let ctx = @types.SubtypingContext::same_module(
+    instance.types,
+    rec_groups=instance.type_rec_groups,
+    canonical=instance.canonical_type_indices,
+  )
+  ctx.is_subtype(type_idx1, type_idx2)
 }
 
 ///|

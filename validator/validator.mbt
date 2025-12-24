@@ -767,7 +767,9 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     }
   }
 
-  // Validate subtype declarations: supertypes must not be final and must have matching kind
+  // Validate subtype declarations: supertypes must not be final, must have matching kind,
+  // and must satisfy structural subtyping rules
+  let subtyping_ctx = @types.SubtypingContext::same_module(mod.types)
   for type_idx, subtype in mod.types {
     for super_idx in subtype.supertypes {
       if super_idx < 0 || super_idx >= num_types {
@@ -789,6 +791,12 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
       if not(valid_kind) {
         raise TypeMismatch(
           "sub type: type \{type_idx} has incompatible kind with supertype \{super_idx}",
+        )
+      }
+      // Validate structural subtyping: subtype's structure must be compatible with supertype
+      if not(subtyping_ctx.validate_declared_subtype(type_idx, super_idx)) {
+        raise TypeMismatch(
+          "sub type: type \{type_idx} is not a valid structural subtype of \{super_idx}",
         )
       }
     }
@@ -967,8 +975,10 @@ pub fn validate_module_with_context(
     ignore(i)
   }
 
-  // Validate subtype declarations: supertypes must not be final and must have matching kind
+  // Validate subtype declarations: supertypes must not be final, must have matching kind,
+  // and must satisfy structural subtyping rules
   let num_types = ctx.types.length()
+  let subtyping_ctx = @types.SubtypingContext::same_module(mod.types)
   for type_idx, subtype in mod.types {
     for super_idx in subtype.supertypes {
       if super_idx < 0 || super_idx >= num_types {
@@ -998,6 +1008,16 @@ pub fn validate_module_with_context(
           ValidationErrorContext::from_error(
             TypeMismatch(
               "sub type: type \{type_idx} has incompatible kind with supertype \{super_idx}",
+            ),
+          ),
+        )
+      }
+      // Validate structural subtyping: subtype's structure must be compatible with supertype
+      if not(subtyping_ctx.validate_declared_subtype(type_idx, super_idx)) {
+        raise WithContext(
+          ValidationErrorContext::from_error(
+            TypeMismatch(
+              "sub type: type \{type_idx} is not a valid structural subtype of \{super_idx}",
             ),
           ),
         )

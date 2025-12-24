@@ -51,52 +51,42 @@ fn ExecContext::exec_call_indirect(
   // Get the expected type
   let expected_type = self.instance.get_func_type(type_idx)
 
-  // Type checking using unified type equivalence API
+  // Type checking using unified subtyping API
+  // For call_indirect, the actual function type must be a subtype of the expected type
   let owner_idx = self.store.get_func_owner_idx(store_addr)
   let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   if same_module {
-    // Same module: use canonical type indices for proper rec group handling
-    let expected_canonical = if type_idx >= 0 &&
-      type_idx < self.instance.canonical_type_indices.length() {
-      self.instance.canonical_type_indices[type_idx]
-    } else {
-      -1
-    }
-    let actual_canonical = self.store.get_func_canonical_type_idx(store_addr)
-    if expected_canonical >= 0 && actual_canonical >= 0 {
-      if expected_canonical != actual_canonical {
-        raise @runtime.IndirectCallTypeMismatch
-      }
-    } else {
-      // No canonical info, fall back to structural comparison
-      let ctx = @types.TypeEquivalenceContext::same_module(
-        @types.extract_func_types(self.instance.types),
-        type_rec_groups=self.instance.type_rec_groups,
-      )
-      if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
-        raise @runtime.IndirectCallTypeMismatch
-      }
+    // Same module: use subtyping context for proper rec group handling
+    let ctx = @types.SubtypingContext::same_module(
+      self.instance.types,
+      rec_groups=self.instance.type_rec_groups,
+      canonical=self.instance.canonical_type_indices,
+    )
+    if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+      raise @runtime.IndirectCallTypeMismatch
     }
   } else {
     // Cross-module or ownerless function call
     let owner = self.store.get_func_owner(store_addr)
     match owner {
       Some(o) => {
-        // Cross-module call: use cross-module type equivalence
-        let ctx = @types.TypeEquivalenceContext::cross_module(
-          @types.extract_func_types(self.instance.types),
-          @types.extract_func_types(o.types),
-          rec_groups1=self.instance.type_rec_groups,
-          rec_groups2=o.type_rec_groups,
+        // Cross-module call: use cross-module subtyping
+        let ctx = @types.SubtypingContext::cross_module(
+          o.types, // actual function's types
+          self.instance.types, // expected type's types
+          rec_groups1=o.type_rec_groups,
+          rec_groups2=self.instance.type_rec_groups,
+          canonical1=o.canonical_type_indices,
+          canonical2=self.instance.canonical_type_indices,
         )
-        if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+        if not(ctx.is_subtype(actual_type_idx, type_idx)) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }
       None => {
         // Ownerless function (host function or directly allocated):
-        // Use direct type comparison
+        // Use direct type comparison (host functions don't have subtyping)
         let actual_type = self.store.get_func_type(store_addr)
         if not(@types.func_types_equal(expected_type, actual_type)) {
           raise @runtime.IndirectCallTypeMismatch
@@ -138,27 +128,43 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
   // Get the expected type
   let expected_type = self.instance.get_func_type(type_idx)
 
-  // Verify type matches using type equivalence
+  // Verify type matches using subtyping
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
-  let owner = self.store.get_func_owner(store_addr)
-  match owner {
-    Some(o) => {
-      // Cross-module call: use cross-module type equivalence
-      let ctx = @types.TypeEquivalenceContext::cross_module(
-        @types.extract_func_types(self.instance.types),
-        @types.extract_func_types(o.types),
-        rec_groups1=self.instance.type_rec_groups,
-        rec_groups2=o.type_rec_groups,
-      )
-      if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
-        raise @runtime.IndirectCallTypeMismatch
-      }
+  let owner_idx = self.store.get_func_owner_idx(store_addr)
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
+  if same_module {
+    // Same module: use subtyping context
+    let ctx = @types.SubtypingContext::same_module(
+      self.instance.types,
+      rec_groups=self.instance.type_rec_groups,
+      canonical=self.instance.canonical_type_indices,
+    )
+    if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+      raise @runtime.IndirectCallTypeMismatch
     }
-    None => {
-      // Ownerless function: use direct type comparison
-      let actual_type = self.store.get_func_type(store_addr)
-      if not(@types.func_types_equal(expected_type, actual_type)) {
-        raise @runtime.IndirectCallTypeMismatch
+  } else {
+    let owner = self.store.get_func_owner(store_addr)
+    match owner {
+      Some(o) => {
+        // Cross-module call: use cross-module subtyping
+        let ctx = @types.SubtypingContext::cross_module(
+          o.types,
+          self.instance.types,
+          rec_groups1=o.type_rec_groups,
+          rec_groups2=self.instance.type_rec_groups,
+          canonical1=o.canonical_type_indices,
+          canonical2=self.instance.canonical_type_indices,
+        )
+        if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+          raise @runtime.IndirectCallTypeMismatch
+        }
+      }
+      None => {
+        // Ownerless function: use direct type comparison
+        let actual_type = self.store.get_func_type(store_addr)
+        if not(@types.func_types_equal(expected_type, actual_type)) {
+          raise @runtime.IndirectCallTypeMismatch
+        }
       }
     }
   }
@@ -385,28 +391,44 @@ pub fn ExecContext::exec_tail_call_indirect(
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 
-  // Get the expected type and verify type matches
+  // Get the expected type and verify type matches using subtyping
   let expected_type = self.instance.get_func_type(type_idx)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
-  let owner = self.store.get_func_owner(store_addr)
-  match owner {
-    Some(o) => {
-      // Cross-module call: use cross-module type equivalence
-      let ctx = @types.TypeEquivalenceContext::cross_module(
-        @types.extract_func_types(self.instance.types),
-        @types.extract_func_types(o.types),
-        rec_groups1=self.instance.type_rec_groups,
-        rec_groups2=o.type_rec_groups,
-      )
-      if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
-        raise @runtime.IndirectCallTypeMismatch
-      }
+  let owner_idx = self.store.get_func_owner_idx(store_addr)
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
+  if same_module {
+    // Same module: use subtyping context
+    let ctx = @types.SubtypingContext::same_module(
+      self.instance.types,
+      rec_groups=self.instance.type_rec_groups,
+      canonical=self.instance.canonical_type_indices,
+    )
+    if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+      raise @runtime.IndirectCallTypeMismatch
     }
-    None => {
-      // Ownerless function: use direct type comparison
-      let actual_type = self.store.get_func_type(store_addr)
-      if not(@types.func_types_equal(expected_type, actual_type)) {
-        raise @runtime.IndirectCallTypeMismatch
+  } else {
+    let owner = self.store.get_func_owner(store_addr)
+    match owner {
+      Some(o) => {
+        // Cross-module call: use cross-module subtyping
+        let ctx = @types.SubtypingContext::cross_module(
+          o.types,
+          self.instance.types,
+          rec_groups1=o.type_rec_groups,
+          rec_groups2=self.instance.type_rec_groups,
+          canonical1=o.canonical_type_indices,
+          canonical2=self.instance.canonical_type_indices,
+        )
+        if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+          raise @runtime.IndirectCallTypeMismatch
+        }
+      }
+      None => {
+        // Ownerless function: use direct type comparison
+        let actual_type = self.store.get_func_type(store_addr)
+        if not(@types.func_types_equal(expected_type, actual_type)) {
+          raise @runtime.IndirectCallTypeMismatch
+        }
       }
     }
   }
@@ -447,28 +469,44 @@ pub fn ExecContext::exec_tail_call_ref(
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 
-  // Get the expected type and verify type matches
+  // Get the expected type and verify type matches using subtyping
   let expected_type = self.instance.get_func_type(type_idx)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
-  let owner = self.store.get_func_owner(store_addr)
-  match owner {
-    Some(o) => {
-      // Cross-module call: use cross-module type equivalence
-      let ctx = @types.TypeEquivalenceContext::cross_module(
-        @types.extract_func_types(self.instance.types),
-        @types.extract_func_types(o.types),
-        rec_groups1=self.instance.type_rec_groups,
-        rec_groups2=o.type_rec_groups,
-      )
-      if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
-        raise @runtime.IndirectCallTypeMismatch
-      }
+  let owner_idx = self.store.get_func_owner_idx(store_addr)
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
+  if same_module {
+    // Same module: use subtyping context
+    let ctx = @types.SubtypingContext::same_module(
+      self.instance.types,
+      rec_groups=self.instance.type_rec_groups,
+      canonical=self.instance.canonical_type_indices,
+    )
+    if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+      raise @runtime.IndirectCallTypeMismatch
     }
-    None => {
-      // Ownerless function: use direct type comparison
-      let actual_type = self.store.get_func_type(store_addr)
-      if not(@types.func_types_equal(expected_type, actual_type)) {
-        raise @runtime.IndirectCallTypeMismatch
+  } else {
+    let owner = self.store.get_func_owner(store_addr)
+    match owner {
+      Some(o) => {
+        // Cross-module call: use cross-module subtyping
+        let ctx = @types.SubtypingContext::cross_module(
+          o.types,
+          self.instance.types,
+          rec_groups1=o.type_rec_groups,
+          rec_groups2=self.instance.type_rec_groups,
+          canonical1=o.canonical_type_indices,
+          canonical2=self.instance.canonical_type_indices,
+        )
+        if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+          raise @runtime.IndirectCallTypeMismatch
+        }
+      }
+      None => {
+        // Ownerless function: use direct type comparison
+        let actual_type = self.store.get_func_type(store_addr)
+        if not(@types.func_types_equal(expected_type, actual_type)) {
+          raise @runtime.IndirectCallTypeMismatch
+        }
       }
     }
   }

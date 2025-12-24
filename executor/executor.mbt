@@ -1175,15 +1175,30 @@ pub fn instantiate_module_with_imports(
             let actual_type = store.get_func_type(addr)
             match owner {
               Some(o) => {
-                // Cross-module function: use type equivalence with rec groups
+                // Cross-module function: the exported type must be a subtype
+                // of the imported type (T_export <: T_import).
+                // For GC types, this means checking declared supertype chains
+                // and structural compatibility across modules.
                 let actual_type_idx = store.get_func_type_idx(addr)
-                let ctx = @types.TypeEquivalenceContext::cross_module(
-                  @types.extract_func_types(mod.types),
-                  @types.extract_func_types(o.types),
-                  rec_groups1=mod.type_rec_groups,
-                  rec_groups2=o.type_rec_groups,
+
+                // Compute canonical indices for both modules
+                let canonical_import = canonical_type_indices
+                let canonical_export = @types.compute_canonical_type_indices(
+                  o.types,
+                  type_rec_groups=o.type_rec_groups,
                 )
-                if not(ctx.types_equivalent(type_idx, actual_type_idx)) {
+
+                // Use subtyping context for cross-module comparison
+                let ctx = @types.SubtypingContext::cross_module(
+                  o.types,
+                  mod.types,
+                  rec_groups1=o.type_rec_groups,
+                  rec_groups2=mod.type_rec_groups,
+                  canonical1=canonical_export,
+                  canonical2=canonical_import,
+                )
+                // Check if T_export <: T_import
+                if not(ctx.is_subtype(actual_type_idx, type_idx)) {
                   raise @runtime.LinkError
                 }
               }
