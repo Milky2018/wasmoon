@@ -439,11 +439,11 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
     void **table = (void **)calloc(count * 2, sizeof(void *));
     if (!table) return 0;
 
-    // Initialize all entries to -1 (null reference sentinel)
-    // func_ptr = -1 represents ref.null (matching IR translator convention)
+    // Initialize all entries to 0 (null reference)
+    // func_ptr = 0 represents ref.null (matching GC encoding convention)
     // type_idx = -1 represents uninitialized/invalid type
     for (int i = 0; i < count; i++) {
-        table[i * 2] = (void*)(intptr_t)(-1);     // func_ptr (null reference)
+        table[i * 2] = (void*)(intptr_t)(0);      // func_ptr (null reference)
         table[i * 2 + 1] = (void*)(intptr_t)(-1); // type_idx
     }
 
@@ -508,7 +508,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow(
     }
 
     // Initialize new elements with init_value
-    // For funcref: init_value is the function pointer (or -1 for null)
+    // For funcref: init_value is the function pointer (or 0 for null)
     // type_idx is set to -1 (unknown) for grown elements
     for (size_t i = old_size; i < new_size; i++) {
         new_table[i * 2] = (void *)init_value;      // func_ptr
@@ -1498,7 +1498,8 @@ static int64_t gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_i
     }
     // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
     int32_t gc_ref = (int32_t)(ref >> 1);
-    return gc_heap_struct_get(g_gc_heap, gc_ref, field_idx);
+    int64_t result = gc_heap_struct_get(g_gc_heap, gc_ref, field_idx);
+    return result;
 }
 
 static void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_t value) {
@@ -1595,6 +1596,70 @@ static int32_t gc_array_len_impl(int64_t ref) {
     return gc_heap_array_len(g_gc_heap, gc_ref);
 }
 
+static void gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t count) {
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 2;  // Null reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Decode: gc_ref = ref >> 1 (1-based)
+    int32_t gc_ref = (int32_t)(ref >> 1);
+    // Bounds check
+    int32_t len = gc_heap_array_len(g_gc_heap, gc_ref);
+    if (offset < 0 || count < 0 || offset + count > len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    gc_heap_array_fill(g_gc_heap, gc_ref, offset, value, count);
+}
+
+static void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
+                               int64_t src_ref, int32_t src_offset, int32_t count) {
+    if (!g_gc_heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Check for null references (encoded as 0)
+    if (dst_ref == 0 || src_ref == 0) {
+        g_trap_code = 2;  // Null reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Decode: gc_ref = ref >> 1 (1-based)
+    int32_t dst_gc_ref = (int32_t)(dst_ref >> 1);
+    int32_t src_gc_ref = (int32_t)(src_ref >> 1);
+    // Bounds check
+    int32_t dst_len = gc_heap_array_len(g_gc_heap, dst_gc_ref);
+    int32_t src_len = gc_heap_array_len(g_gc_heap, src_gc_ref);
+    if (dst_offset < 0 || src_offset < 0 || count < 0 ||
+        dst_offset + count > dst_len || src_offset + count > src_len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    gc_heap_array_copy(g_gc_heap, dst_gc_ref, dst_offset, src_gc_ref, src_offset, count);
+}
+
 // FFI exports for getting function pointers
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_ref_test_ptr(void) {
@@ -1606,6 +1671,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_ref_cast_ptr(void) {
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_new_ptr(void) {
+    fflush(stderr);
     return (int64_t)gc_struct_new_impl;
 }
 
@@ -1631,6 +1697,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_set_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_len_ptr(void) {
     return (int64_t)gc_array_len_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_fill_ptr(void) {
+    return (int64_t)gc_array_fill_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_copy_ptr(void) {
+    return (int64_t)gc_array_copy_impl;
 }
 
 // Type cache management

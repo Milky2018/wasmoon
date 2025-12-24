@@ -1,51 +1,56 @@
-# Project Agents.md Guide
+# Repository Guidelines
 
-This is a [MoonBit](https://docs.moonbitlang.com) project.
+## Project Structure & Module Organization
 
-## Project Structure
+Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `moon.mod.json`; each package directory has a `moon.pkg.json`.
 
-- MoonBit packages are organized per directory, for each directory, there is a
-  `moon.pkg.json` file listing its dependencies. Each package has its files and
-  blackbox test files (common, ending in `_test.mbt`) and whitebox test files
-  (ending in `_wbtest.mbt`).
+High-level pipeline: parsers (`wat/`, `wast/`, `cwasm/`) → `validator/` → `runtime/` → `executor/` or JIT (`ir/` → `vcode/` → `jit/`).
 
-- In the toplevel directory, this is a `moon.mod.json` file listing about the
-  module and some meta information.
+Key packages:
+- `main/`: CLI entry point (builds the `wasmoon` binary)
+- `wat/`, `wast/`, `cwasm/`, `parser/`: text/binary parsing
+- `validator/`: module validation
+- `runtime/`, `executor/`: runtime + interpreter
+- `ir/`, `vcode/`, `jit/`: JIT pipeline (AArch64)
+- `wasi/`: WASI Preview 1
+- `testsuite/`: MoonBit tests
+- `spec/`: upstream WAST scripts used by the CLI test runner
 
-## Coding convention
+Build artifacts live under `target/`. `install.sh` copies the built executable to `./wasmoon`.
 
-- MoonBit code is organized in block style, each block is separated by `///|`,
-  the order of each block is irrelevant. In some refactorings, you can process
-  block by block independently.
+## Build, Test, and Development Commands
 
-- Try to keep deprecated blocks in file called `deprecated.mbt` in each
-  directory.
+- `moon update`: fetch/update MoonBit dependencies.
+- `moon check --target native`: type-check + lint (CI runs this).
+- `moon test --target native`: run MoonBit tests.
+- `moon test --update`: update snapshots when behavior changes.
+- `moon info && moon fmt`: update `.mbti` interfaces and format code (CI requires a clean diff; review `.mbti` diffs for API changes).
+- `moon build --target native --release && ./install.sh`: build and install the CLI locally.
 
-## Tooling
+CLI example: `./wasmoon test spec/i32.wast` (add `--no-jit` to force interpreter)
 
-- `moon fmt` is used to format your code properly.
+## Coding Style & Naming Conventions
 
-- `moon info` is used to update the generated interface of the package, each
-  package has a generated interface file `.mbti`, it is a brief formal
-  description of the package. If nothing in `.mbti` changes, this means your
-  change does not bring the visible changes to the external package users, it is
-  typically a safe refactoring.
+- Use MoonBit “block style”: separate top-level blocks with `///|`.
+- Naming: functions `snake_case`, types/constructors `PascalCase`, constants `SCREAMING_SNAKE_CASE`.
+- Prefer `expr |> ignore` over `let _ = expr`; use `suberror`/`raise`/`try` patterns for errors.
+- Keep deprecated APIs in `deprecated.mbt` within the relevant package directory.
+- Format with `moon fmt` before pushing.
 
-- In the last step, run `moon info && moon fmt` to update the interface and
-  format the code. Check the diffs of `.mbti` file to see if the changes are
-  expected.
+## Testing Guidelines
 
-- Run `moon test` to check the test is passed. MoonBit supports snapshot
-  testing, so when your changes indeed change the behavior of the code, you
-  should run `moon test --update` to update the snapshot.
+- Test files: blackbox `*_test.mbt`, whitebox `*_wbtest.mbt`.
+- Prefer snapshot-style assertions via `inspect(...)` (avoid `println`); only use `assert_eq` in loops/parameterized cases.
+- For JIT regressions in `testsuite/`, prefer `compare_jit_interp(wat_string)`.
+- WAST regression: run a file with `./wasmoon test spec/<name>.wast` or all via `python3 scripts/run_all_wast.py`.
 
-- You can run `moon check` to check the code is linted correctly.
+## Commit & Pull Request Guidelines
 
-- When writing tests, you are encouraged to use `inspect` and run
-  `moon test --update` to update the snapshots, only use assertions like
-  `assert_eq` when you are in some loops where each snapshot may vary. You can
-  use `moon coverage analyze > uncovered.log` to see which parts of your code
-  are not covered by tests.
+- Use Conventional Commits as seen in history: `feat(scope): ...`, `fix: ...`, `refactor: ...`, `docs: ...`, `test: ...`, `chore: ...`, `style: ...`.
+- Write commit messages in English; avoid `git commit --amend` and `git push --force` (use follow-up commits).
+- PRs should include: a short rationale, linked issues, how you tested (commands + target), and note any snapshot updates.
+- Optional: enable hooks with `git config core.hooksPath .githooks`.
 
-- agent-todo.md has some small tasks that are easy for AI to pick up, agent is
-  welcome to finish the tasks and check the box when you are done
+## Security Note
+
+This project is AI-assisted and not thoroughly audited; avoid production/security-sensitive use.

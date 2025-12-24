@@ -8,6 +8,30 @@ pub(all) enum CallType {
 }
 
 ///|
+/// Calling convention for function calls
+/// Following Cranelift's CallConv design
+pub(all) enum CallConv {
+  Wasm // Wasm calling convention: X0=callee_vmctx, X1=caller_vmctx, X2-X7=user_args
+  C // Standard C calling convention: X0-X7=args, no vmctx
+} derive(Eq, Show)
+
+///|
+/// GC runtime library calls
+pub(all) enum GCLibcall {
+  RefTest // gc_ref_test_impl
+  RefCast // gc_ref_cast_impl
+  StructNew // gc_struct_new_impl
+  StructGet // gc_struct_get_impl
+  StructSet // gc_struct_set_impl
+  ArrayNew // gc_array_new_impl
+  ArrayGet // gc_array_get_impl
+  ArraySet // gc_array_set_impl
+  ArrayLen // gc_array_len_impl
+  ArrayFill // gc_array_fill_impl
+  ArrayCopy // gc_array_copy_impl
+} derive(Eq, Show)
+
+///|
 /// VCode instruction - a machine-level instruction with virtual registers
 /// Following Cranelift's design with operand constraints for fixed register allocation
 pub(all) struct VCodeInst {
@@ -60,9 +84,9 @@ pub fn VCodeInst::add_def_fixed(
 ///|
 fn VCodeInst::to_string(self : VCodeInst) -> String {
   let mut result = ""
-  // Print definitions (skip clobbers for CallIndirect and ReturnCallIndirect)
+  // Print definitions (skip clobbers for call instructions)
   let defs_to_print = match self.opcode {
-    CallIndirect(_, num_results) | ReturnCallIndirect(_, num_results) =>
+    ReturnCallIndirect(_, num_results) | CallPtr(_, num_results, _) =>
       // Only print result registers, not clobbers
       self.defs.iter().take(num_results).collect()
     _ => self.defs
@@ -78,10 +102,9 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
   }
   // Print opcode
   result = result + self.opcode.to_string()
-  // Print uses (simplified for CallIndirect and ReturnCallIndirect)
-  if self.opcode is CallIndirect(_, _) ||
-    self.opcode is ReturnCallIndirect(_, _) {
-    // For call_indirect/return_call_indirect, only print the function pointer (first use)
+  // Print uses (simplified for call instructions)
+  if self.opcode is ReturnCallIndirect(_, _) || self.opcode is CallPtr(_, _, _) {
+    // For call instructions, only print the function pointer (first use)
     if self.uses.length() > 0 {
       result = result + " " + self.uses[0].to_string()
     }
@@ -240,11 +263,6 @@ pub(all) enum VCodeOpcode {
   Msub // Xd = Xa - Xn * Xm (3 uses: acc, src1, src2)
   Mneg // Xd = -(Xn * Xm) (2 uses: src1, src2)
   // Function calls
-  // CallIndirect: call through a function pointer in a register
-  // Uses: [func_ptr, arg0, arg1, ...]
-  // Defs: [result0, result1, ...] (multiple results supported)
-  // Parameters: num_args, num_results
-  CallIndirect(Int, Int)
   // ReturnCallIndirect: tail call through a function pointer
   // Uses: [func_ptr, arg0, arg1, ...]
   // Parameters: num_args, num_results
@@ -297,35 +315,6 @@ pub(all) enum VCodeOpcode {
   // Uses: [value], Defs: []
   GlobalSet(Int)
 
-  // GC operations (use runtime libcalls)
-  // GCRefTest(type_idx, nullable): test if reference matches type
-  // Uses: [ref], Defs: [result (0 or 1)]
-  GCRefTest(Int, Bool)
-  // GCRefCast(type_idx, nullable): cast reference to type (traps on failure)
-  // Uses: [ref], Defs: [result]
-  GCRefCast(Int, Bool)
-  // GCStructNew(type_idx, num_fields): allocate struct
-  // Uses: [field0, field1, ...], Defs: [result]
-  GCStructNew(Int, Int)
-  // GCStructGet(type_idx, field_idx): get struct field
-  // Uses: [ref], Defs: [result]
-  GCStructGet(Int, Int)
-  // GCStructSet(type_idx, field_idx): set struct field
-  // Uses: [ref, value], Defs: []
-  GCStructSet(Int, Int)
-  // GCArrayNew(type_idx): allocate array
-  // Uses: [init_value, length], Defs: [result]
-  GCArrayNew(Int)
-  // GCArrayGet(type_idx): get array element
-  // Uses: [ref, idx], Defs: [result]
-  GCArrayGet(Int)
-  // GCArraySet(type_idx): set array element
-  // Uses: [ref, idx, value], Defs: []
-  GCArraySet(Int)
-  // GCArrayLen: get array length
-  // Uses: [ref], Defs: [result]
-  GCArrayLen
-
   // Raw pointer operations (for trampolines, no bounds checking)
   // LoadPtr(type, offset): Load from [base + offset]
   // Uses: [base], Defs: [result]
@@ -334,11 +323,18 @@ pub(all) enum VCodeOpcode {
   // Uses: [base, value], Defs: []
   StorePtr(MemType, Int)
 
-  // CallPtr: call through a function pointer (for trampolines)
-  // Uses: [func_ptr, vmctx, arg0, arg1, ...]
+  // Load GC runtime function pointer
+  // LoadGCFuncPtr(libcall): Load function pointer for GC runtime call
+  // Uses: [], Defs: [result (function pointer)]
+  LoadGCFuncPtr(GCLibcall)
+
+  // CallPtr: call through a function pointer
+  // Uses depend on calling convention:
+  //   Wasm: [func_ptr, callee_vmctx, caller_vmctx, arg0, arg1, ...]
+  //   C:    [func_ptr, arg0, arg1, ...]
   // Defs: [result0, result1, ...] (multiple results supported)
-  // Parameters: num_args (excluding vmctx), num_results
-  CallPtr(Int, Int)
+  // Parameters: num_args, num_results, calling convention
+  CallPtr(Int, Int, CallConv)
 
   // Stack pointer adjustment for outgoing call arguments (Cranelift-style)
   // AdjustSP(delta): Adjust SP by delta bytes
@@ -352,6 +348,11 @@ pub(all) enum VCodeOpcode {
   // Used in call lowering to store overflow args before the call
   // Uses: [value], Defs: []
   StoreToStack(Int)
+
+  // Load current stack pointer into a register
+  // LoadSP: Defs: [result], Uses: []
+  // Used for passing stack addresses to C functions
+  LoadSP
 }
 
 ///|
@@ -456,8 +457,6 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Madd => "madd"
     Msub => "msub"
     Mneg => "mneg"
-    CallIndirect(num_args, num_results) =>
-      "call_indirect(\{num_args}) -> \{num_results} results"
     ReturnCallIndirect(num_args, num_results) =>
       "return_call_indirect(\{num_args}) -> \{num_results} results"
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
@@ -479,22 +478,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     TableGrow(table_idx) => "table_grow \{table_idx}"
     GlobalGet(global_idx) => "global_get \{global_idx}"
     GlobalSet(global_idx) => "global_set \{global_idx}"
-    GCRefTest(type_idx, nullable) =>
-      "gc_ref_test \{type_idx} nullable=\{nullable}"
-    GCRefCast(type_idx, nullable) =>
-      "gc_ref_cast \{type_idx} nullable=\{nullable}"
-    GCStructNew(type_idx, num_fields) =>
-      "gc_struct_new \{type_idx} fields=\{num_fields}"
-    GCStructGet(type_idx, field_idx) => "gc_struct_get \{type_idx}.\{field_idx}"
-    GCStructSet(type_idx, field_idx) => "gc_struct_set \{type_idx}.\{field_idx}"
-    GCArrayNew(type_idx) => "gc_array_new \{type_idx}"
-    GCArrayGet(type_idx) => "gc_array_get \{type_idx}"
-    GCArraySet(type_idx) => "gc_array_set \{type_idx}"
-    GCArrayLen => "gc_array_len"
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
-    CallPtr(num_args, num_results) =>
-      "call_ptr(\{num_args}) -> \{num_results} results"
+    LoadGCFuncPtr(libcall) => "load_gc_func_ptr.\{libcall}"
+    CallPtr(num_args, num_results, call_conv) =>
+      "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
     AdjustSP(delta) =>
       if delta >= 0 {
         "add sp, sp, #\{delta}"
@@ -502,6 +490,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
         "sub sp, sp, #\{-delta}"
       }
     StoreToStack(offset) => "str [sp+\{offset}]"
+    LoadSP => "mov rd, sp"
   }
 }
 
@@ -847,24 +836,14 @@ pub impl Show for VCodeTerminator with output(self, logger) {
 /// are classified as calls for register allocation purposes
 pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
   match self {
-    // Direct and indirect function calls
-    CallIndirect(_, _) | CallPtr(_, _) => Regular
+    // Direct and indirect function calls (Cranelift-style via CallPtr)
+    CallPtr(_, _, _) => Regular
     // Tail calls that don't return to caller
     ReturnCallIndirect(_, _) => TailCall
     // Memory operations that call C runtime functions
     MemoryGrow(_) | MemorySize | MemoryFill | MemoryCopy => Regular
     // Table operations that call C runtime functions
     TableGrow(_) => Regular
-    // GC operations that call C runtime functions
-    GCRefTest(_, _)
-    | GCRefCast(_, _)
-    | GCStructNew(_, _)
-    | GCStructGet(_, _)
-    | GCStructSet(_, _)
-    | GCArrayNew(_)
-    | GCArrayGet(_)
-    | GCArraySet(_)
-    | GCArrayLen => Regular
     // Everything else is not a call
     _ => None
   }

@@ -1463,8 +1463,8 @@ test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
   ptr_inst.add_def({ reg: @abi.Virtual(func_ptr) })
   block.add_inst(ptr_inst)
 
-  // @instr.CallIndirect with 8 f64 args, 1 f64 result
-  let call_inst = @instr.VCodeInst::new(@instr.CallIndirect(8, 1))
+  // CallPtr with 8 f64 args, 1 f64 result (Cranelift-style)
+  let call_inst = @instr.VCodeInst::new(@instr.CallPtr(8, 1, @instr.Wasm))
   let call_result = func.new_vreg(@abi.Float64)
   call_inst.add_def({ reg: @abi.Virtual(call_result) })
   call_inst.add_use(@abi.Virtual(func_ptr)) // First use is func_ptr
@@ -1564,9 +1564,9 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
   ptr_inst.add_def({ reg: @abi.Virtual(func_ptr) })
   block.add_inst(ptr_inst)
 
-  // @instr.CallIndirect with 1 f64 arg, returns 1 f64
+  // CallPtr with 1 f64 arg, returns 1 f64 (Cranelift-style)
   // The f32_val must survive across this call
-  let call_inst = @instr.VCodeInst::new(@instr.CallIndirect(1, 1))
+  let call_inst = @instr.VCodeInst::new(@instr.CallPtr(1, 1, @instr.Wasm))
   let call_result = func.new_vreg(@abi.Float64)
   call_inst.add_def({ reg: @abi.Virtual(call_result) })
   call_inst.add_use(@abi.Virtual(func_ptr))

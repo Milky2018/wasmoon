@@ -51,17 +51,20 @@ pub fn is_null(value : Int64) -> Bool {
 
 ///|
 /// Encode a heap reference (struct or array) for JIT
+/// heap_idx is 0-based (from MoonBit Store/CHeap)
+/// JIT uses 1-based gc_ref internally to avoid collision with null (0)
 pub fn encode_heap_ref(heap_idx : Int) -> Int64 {
-  // Heap indices are even (no tag bit), shifted left by 1 to leave room
-  // Actually, we just use the index directly since it's always positive
-  // and i31 uses the tag bit
-  heap_idx.to_int64() << 1
+  // Convert 0-based to 1-based, then shift left by 1
+  // This ensures encoded value is never 0 (which is null)
+  (heap_idx + 1).to_int64() << 1
 }
 
 ///|
 /// Decode a heap reference from JIT representation
+/// Returns 0-based heap_idx for MoonBit Store/CHeap
 pub fn decode_heap_ref(encoded : Int64) -> Int {
-  (encoded >> 1).to_int()
+  // Shift right to get 1-based gc_ref, then convert to 0-based
+  (encoded >> 1).to_int() - 1
 }
 
 // ============ GC Libcall Function Pointers ============
@@ -135,6 +138,22 @@ pub fn get_gc_array_set_ptr() -> Int64 {
 /// Returns the array length
 pub fn get_gc_array_len_ptr() -> Int64 {
   @jit_ffi.c_jit_get_gc_array_len_ptr()
+}
+
+///|
+/// Get array.fill libcall function pointer
+/// Signature: void gc_array_fill(int64_t ref, int32_t offset, int64_t value, int32_t count)
+/// Fills array elements with a value
+pub fn get_gc_array_fill_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_gc_array_fill_ptr()
+}
+
+///|
+/// Get array.copy libcall function pointer
+/// Signature: void gc_array_copy(int64_t dst_ref, int32_t dst_off, int64_t src_ref, int32_t src_off, int32_t count)
+/// Copies array elements from source to destination
+pub fn get_gc_array_copy_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_gc_array_copy_ptr()
 }
 
 // ============ GC Context Setup ============

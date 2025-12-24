@@ -1188,6 +1188,10 @@ fn Translator::translate_instruction(
       let result = self.builder.ref_cast(type_idx, true, ref_val)
       self.push(result)
     }
+    BrOnCast(label_depth, _from_type, to_type) =>
+      self.translate_br_on_cast(label_depth, to_type)
+    BrOnCastFail(label_depth, _from_type, to_type) =>
+      self.translate_br_on_cast_fail(label_depth, to_type)
     inst => abort("unimplemented ir instruction \{inst}")
   }
 }
@@ -1799,8 +1803,8 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
   let ref_val = self.pop()
   let idx = self.block_stack.length() - 1 - depth
 
-  // Check if reference is null (compare with -1)
-  let null_sentinel = self.builder.iconst(Type::I64, -1L)
+  // Check if reference is null (GC refs use 0 for null)
+  let null_sentinel = self.builder.iconst(Type::I64, 0L)
   let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
   // For br_on_null, we need a fallthrough block and a taken block (critical edge split)
@@ -1863,8 +1867,8 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
   let ref_val = self.pop()
   let idx = self.block_stack.length() - 1 - depth
 
-  // Check if reference is null (compare with -1)
-  let null_sentinel = self.builder.iconst(Type::I64, -1L)
+  // Check if reference is null (GC refs use 0 for null)
+  let null_sentinel = self.builder.iconst(Type::I64, 0L)
   let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
   // For br_on_non_null, we need a fallthrough block and a taken block
@@ -1924,6 +1928,138 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
     self.builder.switch_to_block(taken)
     self.builder.jump(ret_cont, args)
     self.builder.switch_to_block(fallthrough)
+  }
+}
+
+///|
+/// Translate a br_on_cast instruction
+/// br_on_cast: pop ref, if it matches target type, branch with the cast value;
+/// otherwise push the original value and continue
+fn Translator::translate_br_on_cast(
+  self : Translator,
+  depth : Int,
+  target_type : @types.ValueType,
+) -> Unit {
+  let ref_val = self.pop()
+  let idx = self.block_stack.length() - 1 - depth
+  // Get the type index for the target type
+  let type_idx = self.extract_type_idx(target_type)
+  let nullable = target_type.is_nullable()
+  // Use ref_test to check if the reference matches the target type
+  let matches = self.builder.ref_test(type_idx, nullable, ref_val)
+  // Create fallthrough and taken blocks
+  let fallthrough = self.builder.create_block()
+  let taken = self.builder.create_block()
+  if idx >= 0 && idx < self.block_stack.length() {
+    let frame = self.block_stack[idx]
+    // Collect values that would be passed on branch
+    // The ref is one of the results, so we need result_types.length() - 1 from stack
+    let args : Array[Value] = []
+    let stack_values_needed = frame.result_types.length() - 1
+    for i in 0..<stack_values_needed {
+      args.push(
+        self.value_stack[self.value_stack.length() - stack_values_needed + i],
+      )
+    }
+    // Add the ref as the last value (the cast ref being passed)
+    args.push(ref_val)
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
+    // Branch: if matches (matches == 1), go to taken; otherwise fall through
+    self.builder.brnz(matches, taken, fallthrough)
+    // Critical edge split: taken block jumps to target with args
+    self.builder.switch_to_block(taken)
+    self.builder.jump(frame.block, args)
+    // Continue with fallthrough - push the original ref back
+    self.builder.switch_to_block(fallthrough)
+    self.push(ref_val)
+  } else if idx == -1 {
+    // Jump to function level (early return)
+    let ret_cont = self.get_or_create_return_continuation()
+    let args : Array[Value] = []
+    let stack_values_needed = self.func_result_types.length() - 1
+    for i in 0..<stack_values_needed {
+      args.push(
+        self.value_stack[self.value_stack.length() - stack_values_needed + i],
+      )
+    }
+    args.push(ref_val)
+    for loc in self.locals {
+      args.push(loc)
+    }
+    self.builder.brnz(matches, taken, fallthrough)
+    self.builder.switch_to_block(taken)
+    self.builder.jump(ret_cont, args)
+    self.builder.switch_to_block(fallthrough)
+    self.push(ref_val)
+  }
+}
+
+///|
+/// Translate a br_on_cast_fail instruction
+/// br_on_cast_fail: pop ref, if it does NOT match target type, branch with the value;
+/// otherwise push the cast value and continue
+fn Translator::translate_br_on_cast_fail(
+  self : Translator,
+  depth : Int,
+  target_type : @types.ValueType,
+) -> Unit {
+  let ref_val = self.pop()
+  let idx = self.block_stack.length() - 1 - depth
+  // Get the type index for the target type
+  let type_idx = self.extract_type_idx(target_type)
+  let nullable = target_type.is_nullable()
+  // Use ref_test to check if the reference matches the target type
+  let matches = self.builder.ref_test(type_idx, nullable, ref_val)
+  // Create fallthrough and taken blocks
+  let fallthrough = self.builder.create_block()
+  let taken = self.builder.create_block()
+  if idx >= 0 && idx < self.block_stack.length() {
+    let frame = self.block_stack[idx]
+    // Collect values that would be passed on branch
+    let args : Array[Value] = []
+    let stack_values_needed = frame.result_types.length() - 1
+    for i in 0..<stack_values_needed {
+      args.push(
+        self.value_stack[self.value_stack.length() - stack_values_needed + i],
+      )
+    }
+    // Add the ref as the last value
+    args.push(ref_val)
+    // Always pass current local values
+    for loc in self.locals {
+      args.push(loc)
+    }
+    // Branch: if NOT matches (matches == 0), go to taken; otherwise fall through
+    // brnz branches if non-zero, so we invert: if matches, go to fallthrough
+    self.builder.brnz(matches, fallthrough, taken)
+    // Critical edge split: taken block jumps to target with args
+    self.builder.switch_to_block(taken)
+    self.builder.jump(frame.block, args)
+    // Continue with fallthrough - push the cast ref back (it matched)
+    self.builder.switch_to_block(fallthrough)
+    self.push(ref_val)
+  } else if idx == -1 {
+    // Jump to function level (early return)
+    let ret_cont = self.get_or_create_return_continuation()
+    let args : Array[Value] = []
+    let stack_values_needed = self.func_result_types.length() - 1
+    for i in 0..<stack_values_needed {
+      args.push(
+        self.value_stack[self.value_stack.length() - stack_values_needed + i],
+      )
+    }
+    args.push(ref_val)
+    for loc in self.locals {
+      args.push(loc)
+    }
+    self.builder.brnz(matches, fallthrough, taken)
+    self.builder.switch_to_block(taken)
+    self.builder.jump(ret_cont, args)
+    self.builder.switch_to_block(fallthrough)
+    self.push(ref_val)
   }
 }
 

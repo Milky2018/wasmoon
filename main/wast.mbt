@@ -120,8 +120,8 @@ fn try_compile_jit(
           copy_interp_memory_to_jit(instance, store, mem_ptr)
           // Set memory in JIT context
           jm.set_memory(mem_ptr, mem_size)
-          // Initialize globals
-          let globals_ptr = init_jit_globals(instance, store)
+          // Initialize globals (pass jm for tagged funcref pointers)
+          let globals_ptr = init_jit_globals(instance, store, jm)
           if globals_ptr != 0L {
             jm.set_globals(globals_ptr)
           }

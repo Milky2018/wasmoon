@@ -132,6 +132,10 @@ pub fn c_jit_get_fd_read_ptr() -> Int64
 
 pub fn c_jit_get_fd_write_ptr() -> Int64
 
+pub fn c_jit_get_gc_array_copy_ptr() -> Int64
+
+pub fn c_jit_get_gc_array_fill_ptr() -> Int64
+
 pub fn c_jit_get_gc_array_get_ptr() -> Int64
 
 pub fn c_jit_get_gc_array_len_ptr() -> Int64

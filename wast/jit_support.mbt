@@ -393,7 +393,7 @@ fn encode_value_for_jit(
   jit_module : @jit.JITModule,
 ) -> Int64 {
   match value {
-    Null => 0L
+    Null => NULL_REF
     I31(n) => {
       // i31 encoding: (value << 1) | 1
       let n64 = n.to_int64() & 0x7FFFFFFFL
@@ -409,21 +409,20 @@ fn encode_value_for_jit(
       // Function reference: get function pointer and tag with FUNCREF_TAG
       let func_ptr = jit_module.get_func_ptr(func_idx)
       if func_ptr == 0L {
-        0L // null funcref if function not found
+        NULL_REF // null funcref if function not found
       } else {
         // FUNCREF_TAG = 0x2000000000000000 (bit 61)
-        func_ptr | 0x2000000000000000L
+        func_ptr | FUNCREF_TAG
       }
     }
     ExternRef(host_idx) =>
       // Extern reference: EXTERNREF_TAG | (host_idx << 1)
-      // EXTERNREF_TAG = 0x4000000000000000 (bit 62)
-      0x4000000000000000L | (host_idx.to_int64() << 1)
+      EXTERNREF_TAG | (host_idx.to_int64() << 1)
     // Numeric types shouldn't be in reference tables
     I32(n) => n.to_int64()
     I64(n) => n
     F32(n) => n.reinterpret_as_int().to_int64()
     F64(n) => n.reinterpret_as_int64()
-    ExnRef(_) => 0L // Exception refs not supported in tables
+    ExnRef(_) => NULL_REF // Exception refs not supported in tables
   }
 }

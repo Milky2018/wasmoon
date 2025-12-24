@@ -453,9 +453,11 @@ fn store_addr_to_module_func_idx(
 /// Allocate and initialize globals array for JIT
 /// Returns the pointer to the allocated array, or 0 on failure
 /// The caller is responsible for freeing the memory
+/// jit_module: The JIT module (needed for FuncRef globals to get tagged function pointers)
 fn init_jit_globals(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
+  jit_module : @jit.JITModule,
 ) -> Int64 {
   let num_globals = instance.global_addrs.length()
   if num_globals == 0 {
@@ -467,28 +469,38 @@ fn init_jit_globals(
   if globals_ptr == 0L {
     return 0L
   }
+  // FUNCREF_TAG: bit 61 set for tagged function pointers (same as lower_get_func_ref)
+  let funcref_tag = 0x2000000000000000L
   // Write each global value to the array
   for i in 0..<num_globals {
     let global_addr = instance.global_addrs[i]
     let global_inst = store.globals[global_addr]
     let value = global_inst.get()
     // Convert value to Int64 for storage
-    // Note: -1L is used as null sentinel in JIT
-    // For FuncRef, we need to convert store address to module function index
-    // because JIT func_table is indexed by module function index
+    // For FuncRef, we need to get the tagged function pointer from JIT module
+    // This matches the encoding used by ref.func (via GetFuncRef)
     let raw_value = match value {
       I32(n) => @types.ToInt64::to_int64_bits(n)
       I64(n) => @types.ToInt64::to_int64_bits(n)
       F32(f) => @types.ToInt64::to_int64_bits(f)
       F64(d) => @types.ToInt64::to_int64_bits(d)
-      FuncRef(store_addr) =>
-        store_addr_to_module_func_idx(store_addr, instance).to_int64()
+      FuncRef(store_addr) => {
+        // Convert store address to module function index
+        let func_idx = store_addr_to_module_func_idx(store_addr, instance)
+        // Get function pointer from JIT module and tag it
+        let func_ptr = jit_module.get_func_ptr(func_idx)
+        if func_ptr == 0L {
+          0L // null funcref
+        } else {
+          func_ptr | funcref_tag // Tagged function pointer
+        }
+      }
       ExternRef(idx) => idx.to_int64()
       ExnRef(idx) => idx.to_int64()
-      ArrayRef(idx) => idx.to_int64()
-      StructRef(idx) => idx.to_int64()
-      I31(n) => n.to_int64()
-      Null => -1L // null sentinel
+      ArrayRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
+      StructRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
+      I31(n) => @jit.encode_i31(n)
+      Null => 0L // null is encoded as 0 in JIT
     }
     // Write value at offset i * 16
     let offset = globals_ptr + (i * 16).to_int64()
@@ -556,8 +568,8 @@ fn run_with_jit(
           copy_interp_memory_to_jit(instance, store, mem_ptr)
           // Set memory in JIT context
           jm.set_memory(mem_ptr, mem_size)
-          // Initialize globals
-          let globals_ptr = init_jit_globals(instance, store)
+          // Initialize globals (pass jm for tagged funcref pointers)
+          let globals_ptr = init_jit_globals(instance, store, jm)
           if globals_ptr != 0L {
             jm.set_globals(globals_ptr)
           }

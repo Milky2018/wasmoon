@@ -388,6 +388,16 @@ pub extern "c" fn c_jit_get_gc_array_set_ptr() -> Int64 = "wasmoon_jit_get_gc_ar
 pub extern "c" fn c_jit_get_gc_array_len_ptr() -> Int64 = "wasmoon_jit_get_gc_array_len_ptr"
 
 ///|
+/// Get array.fill libcall function pointer
+/// Signature: void gc_array_fill(int64_t ref, int32_t offset, int64_t value, int32_t count)
+pub extern "c" fn c_jit_get_gc_array_fill_ptr() -> Int64 = "wasmoon_jit_get_gc_array_fill_ptr"
+
+///|
+/// Get array.copy libcall function pointer
+/// Signature: void gc_array_copy(int64_t dst_ref, int32_t dst_offset, int64_t src_ref, int32_t src_offset, int32_t count)
+pub extern "c" fn c_jit_get_gc_array_copy_ptr() -> Int64 = "wasmoon_jit_get_gc_array_copy_ptr"
+
+///|
 /// Set type cache for GC operations
 /// types_data: array of [super_idx, kind] pairs per type
 #borrow(types_data)

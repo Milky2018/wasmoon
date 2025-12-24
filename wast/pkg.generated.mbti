@@ -9,6 +9,14 @@ import(
 )
 
 // Values
+pub const EXTERNREF_TAG : Int64 = 0x4000000000000000
+
+pub const FUNCREF_NULL_SENTINEL : Int64 = -1
+
+pub const FUNCREF_TAG : Int64 = 0x2000000000000000
+
+pub const NULL_REF : Int64 = 0
+
 pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], Array[@types.ValueType])]
 
 pub fn count_func_imports(Array[@types.Import]) -> Int

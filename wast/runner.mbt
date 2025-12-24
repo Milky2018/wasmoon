@@ -1,5 +1,24 @@
 // WAST Runner - Execute WAST test scripts
 
+// Reference encoding constants for JIT
+// These must match the encoding in jit/jit_ffi/jit.c
+
+///|
+/// Null reference value for GC types and externref (used in JIT)
+pub const NULL_REF : Int64 = 0L
+
+///|
+/// Null reference sentinel for funcref in interpreter mode
+pub const FUNCREF_NULL_SENTINEL : Int64 = -1L
+
+///|
+/// Tag for externref values: bit 62 set
+pub const EXTERNREF_TAG : Int64 = 0x4000000000000000L
+
+///|
+/// Tag for funcref pointer values: bit 61 set
+pub const FUNCREF_TAG : Int64 = 0x2000000000000000L
+
 ///|
 /// Result of running WAST commands
 pub struct WastResult {
@@ -567,14 +586,14 @@ pub fn invoke_action(
                     @types.ToInt64::to_int64_bits(@float.not_a_number)
                   F64CanonicalNan | F64ArithmeticNan =>
                     @types.ToInt64::to_int64_bits(@double.not_a_number)
-                  RefNull(_) => 0L // null
-                  // Externref uses special encoding: bit 62 set + (host_idx << 1)
-                  RefExtern(n) => 0x4000000000000000L | (n.to_int64() << 1)
-                  RefHost(n) => 0x4000000000000000L | (n.to_int64() << 1)
-                  RefFunc => 0L // func ref (placeholder)
-                  RefExternAny => 0L // any extern ref (placeholder)
+                  RefNull(_) => NULL_REF
+                  // Externref uses special encoding: EXTERNREF_TAG | (host_idx << 1)
+                  RefExtern(n) => EXTERNREF_TAG | (n.to_int64() << 1)
+                  RefHost(n) => EXTERNREF_TAG | (n.to_int64() << 1)
+                  RefFunc => NULL_REF // func ref (placeholder)
+                  RefExternAny => NULL_REF // any extern ref (placeholder)
                   // GC reference types - these shouldn't appear as args but handle them
-                  RefArray | RefStruct | RefEq | RefI31 | RefAny => 0L
+                  RefArray | RefStruct | RefEq | RefI31 | RefAny => NULL_REF
                 }
                 i64_args.push(v)
               }
@@ -675,23 +694,27 @@ fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
     I64 => @types.Value::I64(@types.FromInt64::from_int64_bits(v))
     F32 => @types.Value::F32(@types.FromInt64::from_int64_bits(v))
     F64 => @types.Value::F64(@types.FromInt64::from_int64_bits(v))
-    // Reference types: -1L is null sentinel, otherwise index
+    // Reference types: JIT uses NULL_REF (0L) for null references
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      if v == -1L {
+      if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::FuncRef(v.to_int())
+        // FuncRef is tagged with FUNCREF_TAG (bit 61), extract the actual function index
+        let func_idx = (v & 0x1FFFFFFFFFFFFFFFL).to_int()
+        @types.Value::FuncRef(func_idx)
       }
     ExternRef | RefExtern | NullExternRef =>
-      if v == -1L {
+      // Externref encoding: null=NULL_REF, non-null=EXTERNREF_TAG | (host_idx << 1)
+      if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::ExternRef(v.to_int())
+        // Decode by shifting right to get the original host_idx
+        @types.Value::ExternRef((v >> 1).to_int())
       }
     // GC reference types - decode using c_heap encoding
-    // Encoding: StructRef/ArrayRef = (gc_ref - 1) << 1 (even), i31 = (value << 1) | 1 (odd), null = 0
+    // Encoding: StructRef/ArrayRef = (gc_ref - 1) << 1 (even), i31 = (value << 1) | 1 (odd), null = NULL_REF
     AnyRef | RefAny | RefEq | RefNullEq =>
-      if v == 0L {
+      if v == NULL_REF {
         @types.Value::Null
       } else if (v & 1L) == 1L {
         // i31 (odd)
@@ -701,19 +724,19 @@ fn convert_jit_result(v : Int64, ty : @types.ValueType) -> @types.Value {
         @types.Value::StructRef((v >> 1).to_int())
       }
     RefStruct(_) | RefNullStruct(_) =>
-      if v == 0L {
+      if v == NULL_REF {
         @types.Value::Null
       } else {
         @types.Value::StructRef((v >> 1).to_int())
       }
     RefArray(_) | RefNullArray(_) =>
-      if v == 0L {
+      if v == NULL_REF {
         @types.Value::Null
       } else {
         @types.Value::ArrayRef((v >> 1).to_int())
       }
     RefI31 | RefNullI31 =>
-      if v == 0L {
+      if v == NULL_REF {
         @types.Value::Null
       } else {
         @types.Value::I31((v >> 1).to_int())

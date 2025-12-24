@@ -201,7 +201,7 @@ pub fn VCodeFunction::needs_extra_results_ptr(self : VCodeFunction) -> Bool {
 pub fn VCodeFunction::calls_multi_value_function(self : VCodeFunction) -> Bool {
   for block in self.blocks {
     for inst in block.insts {
-      if inst.opcode is CallIndirect(_, num_results) && num_results > 2 {
+      if inst.opcode is CallPtr(_, num_results, _) && num_results > 2 {
         return true
       }
     }
