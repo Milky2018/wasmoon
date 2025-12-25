@@ -388,20 +388,11 @@ fn lower_inst(
     @ir.Opcode::MemoryCopy => lower_memory_copy(ctx, inst, block)
 
     // Table operations
-    @ir.Opcode::TableGet(table_idx) =>
-      lower_table_get(ctx, inst, block, table_idx)
-    @ir.Opcode::TableSet(table_idx) =>
-      lower_table_set(ctx, inst, block, table_idx)
-    @ir.Opcode::TableSize(table_idx) =>
-      lower_table_size(ctx, inst, block, table_idx)
+    // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
     @ir.Opcode::TableGrow(table_idx) =>
       lower_table_grow(ctx, inst, block, table_idx)
 
-    // Global operations
-    @ir.Opcode::GlobalGet(global_idx) =>
-      lower_global_get(ctx, inst, block, global_idx)
-    @ir.Opcode::GlobalSet(global_idx) =>
-      lower_global_set(ctx, inst, block, global_idx)
+    // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment at IR level
 
     // Function calls
     @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
@@ -721,87 +712,8 @@ fn lower_call(
   lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
 }
 
-///|
-/// Lower global.get instruction
-/// Loads a global variable value
-///
-/// Cranelift-style lowering: expand to LoadPtr instructions here
-/// instead of deferring to emit phase with hardcoded registers.
-///
-/// Generated sequence:
-/// 1. globals_ptr = LoadPtr(I64, VMCTX_GLOBALS_OFFSET) from vmctx (X19)
-/// 2. result = LoadPtr(I64, global_idx * 16) from globals_ptr
-fn lower_global_get(
-  ctx : LoweringContext,
-  inst : @ir.Inst,
-  block : @block.VCodeBlock,
-  global_idx : Int,
-) -> Unit {
-  // Get the result vreg
-  guard inst.result is Some(result) else { return }
-  let result_vreg = ctx.get_vreg(result)
-
-  // Step 1: Load globals array pointer from vmctx
-  // vmctx is pinned to X19, use it as Physical register
-  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
-  let globals_ptr = ctx.new_vreg(@abi.Int)
-  let load_globals = @instr.VCodeInst::new(
-    LoadPtr(@instr.I64, @abi.VMCTX_GLOBALS_OFFSET),
-  )
-  load_globals.add_use(Physical(vmctx_preg))
-  load_globals.add_def({ reg: Virtual(globals_ptr) })
-  block.add_inst(load_globals)
-
-  // Step 2: Load global value from globals array
-  // Each global is 16 bytes (value + type tag)
-  let offset = global_idx * 16
-  let mem_ty = ir_type_to_mem_type(result.ty)
-  let load_value = @instr.VCodeInst::new(LoadPtr(mem_ty, offset))
-  load_value.add_use(Virtual(globals_ptr))
-  load_value.add_def({ reg: Virtual(result_vreg) })
-  block.add_inst(load_value)
-}
-
-///|
-/// Lower global.set instruction
-/// Stores a value to a global variable
-///
-/// Cranelift-style lowering: expand to LoadPtr + StorePtr instructions
-/// instead of deferring to emit phase with hardcoded registers.
-///
-/// Generated sequence:
-/// 1. globals_ptr = LoadPtr(I64, VMCTX_GLOBALS_OFFSET) from vmctx (X19)
-/// 2. StorePtr(I64, global_idx * 16) value to globals_ptr
-fn lower_global_set(
-  ctx : LoweringContext,
-  inst : @ir.Inst,
-  block : @block.VCodeBlock,
-  global_idx : Int,
-) -> Unit {
-  // Get the value operand
-  guard inst.operands.length() > 0 else { return }
-  let value = ctx.get_vreg_for_use(inst.operands[0], block)
-
-  // Step 1: Load globals array pointer from vmctx
-  // vmctx is pinned to X19, use it as Physical register
-  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
-  let globals_ptr = ctx.new_vreg(@abi.Int)
-  let load_globals = @instr.VCodeInst::new(
-    LoadPtr(@instr.I64, @abi.VMCTX_GLOBALS_OFFSET),
-  )
-  load_globals.add_use(Physical(vmctx_preg))
-  load_globals.add_def({ reg: Virtual(globals_ptr) })
-  block.add_inst(load_globals)
-
-  // Step 2: Store global value to globals array
-  // Each global is 16 bytes (value + type tag)
-  let offset = global_idx * 16
-  let mem_ty = ir_type_to_mem_type(inst.operands[0].ty)
-  let store_value = @instr.VCodeInst::new(StorePtr(mem_ty, offset))
-  store_value.add_use(Virtual(globals_ptr)) // base address
-  store_value.add_use(Virtual(value)) // value to store
-  block.add_inst(store_value)
-}
+// NOTE: lower_global_get, lower_global_set are removed
+// These operations are desugared via FuncEnvironment at IR level to LoadPtr/StorePtr
 
 // ============ Raw Pointer Operations (for trampolines) ============
 

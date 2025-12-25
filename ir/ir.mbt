@@ -235,14 +235,10 @@ pub enum Opcode {
   Copy // Copy value (for register allocation)
 
   // Table operations (for reference types)
-  TableGet(Int) // Get element from table (table index)
-  TableSet(Int) // Set element in table (table index)
-  TableSize(Int) // Get current size of table (table index)
+  // NOTE: TableGet, TableSet, TableSize are desugared at IR translation phase via FuncEnvironment
   TableGrow(Int) // Grow table, returns previous size or -1 (table index)
 
-  // Global operations
-  GlobalGet(Int) // Get global variable value (global index)
-  GlobalSet(Int) // Set global variable value (global index)
+  // NOTE: GlobalGet, GlobalSet are desugared at IR translation phase via FuncEnvironment
 
   // Function calls
   Call(Int) // Direct call (function index)

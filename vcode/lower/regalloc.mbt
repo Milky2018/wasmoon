@@ -1692,7 +1692,8 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     // Memory operations have side effects (modify memory or global state)
     MemoryGrow(_) | MemoryFill | MemoryCopy => true
     // Table operations have side effects (modify table state)
-    TableGrow(_) | TableSet(_) => true
+    // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment
+    TableGrow(_) => true
     // Traps must not be eliminated
     TrapIfZero(_, _) | TrapIfUge(_) | TrapIfUgt(_) | TrapIf(_, _) => true
     // Everything else is pure computation

@@ -1278,36 +1278,7 @@ fn MachineCode::emit_instruction(
       // Call the function
       self.emit_blr(16)
     }
-    TableGet(_table_idx) => {
-      // Load reference from indirect table
-      // Uses: [elem_idx], Defs: [result]
-      // Table layout: each element is 16 bytes (func_ptr, type_idx)
-      // result = table[elem_idx].func_ptr = [table0_base + elem_idx * 16]
-      let result_reg = wreg_num(inst.defs[0])
-      let elem_idx_reg = reg_num(inst.uses[0])
-      // Load table0_base from vmctx on-demand: X17 = [X19 + VMCTX_TABLE0_BASE_OFFSET]
-      self.emit_ldr_imm(17, 19, @abi.VMCTX_TABLE0_BASE_OFFSET)
-      // Calculate address: X16 = X17 + (elem_idx << 4)
-      // Use ADD (shifted register): ADD X16, X17, elem_idx, LSL #4
-      self.emit_add_shifted(16, 17, elem_idx_reg, @instr.ShiftType::Lsl, 4)
-      // LDR result, [X16]
-      self.emit_ldr_imm(result_reg, 16, 0)
-    }
-    TableSet(_table_idx) => {
-      // Store reference to indirect table
-      // Uses: [elem_idx, value], Defs: []
-      // Table layout: each element is 16 bytes (func_ptr, type_idx)
-      // table[elem_idx].func_ptr = value => [table0_base + elem_idx * 16] = value
-      let elem_idx_reg = reg_num(inst.uses[0])
-      let value_reg = reg_num(inst.uses[1])
-      // Load table0_base from vmctx on-demand: X17 = [X19 + VMCTX_TABLE0_BASE_OFFSET]
-      self.emit_ldr_imm(17, 19, @abi.VMCTX_TABLE0_BASE_OFFSET)
-      // Calculate address: X16 = X17 + (elem_idx << 4)
-      // Use ADD (shifted register): ADD X16, X17, elem_idx, LSL #4
-      self.emit_add_shifted(16, 17, elem_idx_reg, @instr.ShiftType::Lsl, 4)
-      // STR value, [X16]
-      self.emit_str_imm(value_reg, 16, 0)
-    }
+    // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
     TableGrow(table_idx) => {
       // Grow table by delta elements (Cranelift-style runtime call)
       // Uses: [delta, init_value], Defs: [result]
@@ -1336,30 +1307,7 @@ fn MachineCode::emit_instruction(
         self.emit_mov_reg(result_reg, 0) // MOV result, X0
       }
     }
-    GlobalGet(global_idx) => {
-      // Load global variable value
-      // Uses: [], Defs: [result]
-      // X19 = context pointer
-      // Load globals array pointer from context: X16 = [X19 + 48]
-      self.emit_ldr_imm(16, 19, @abi.VMCTX_GLOBALS_OFFSET)
-      // Load global value: result = [X16 + global_idx * 16]
-      // Each WasmValue is 16 bytes (i64/f64 + tag)
-      let result_reg = wreg_num(inst.defs[0])
-      let offset = global_idx * 16
-      self.emit_ldr_imm(result_reg, 16, offset)
-    }
-    GlobalSet(global_idx) => {
-      // Store global variable value
-      // Uses: [value], Defs: []
-      // X19 = context pointer
-      // Load globals array pointer from context: X16 = [X19 + 48]
-      self.emit_ldr_imm(16, 19, @abi.VMCTX_GLOBALS_OFFSET)
-      // Store global value: [X16 + global_idx * 16] = value
-      // Each WasmValue is 16 bytes (i64/f64 + tag)
-      let value_reg = reg_num(inst.uses[0])
-      let offset = global_idx * 16
-      self.emit_str_imm(value_reg, 16, offset)
-    }
+    // NOTE: GlobalGet, GlobalSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
     LoadPtr(ty, offset) => {
       // Raw pointer load (no bounds checking)
       // Uses: [base], Defs: [result]

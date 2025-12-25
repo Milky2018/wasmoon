@@ -119,9 +119,7 @@ fn has_side_effects(inst : Inst) -> Bool {
     MemoryGrow(_) | MemoryFill | MemoryCopy => true
     // Table operations that modify global state
     TableGrow(_) => true
-    // Global operations: GlobalGet reads mutable state, GlobalSet modifies it
-    // Mark both as having side effects to prevent incorrect CSE
-    GlobalGet(_) | GlobalSet(_) => true
+    // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment to LoadPtr/StorePtr
     // Division/remainder can trap on divide-by-zero or overflow (INT_MIN / -1)
     Sdiv | Udiv | Srem | Urem => true
     // Float-to-int conversion can trap on NaN or out-of-range values
@@ -136,6 +134,12 @@ fn has_side_effects(inst : Inst) -> Bool {
     ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) | ArrayLen => true
     // GC type check operations can trap
     RefCast(_, _) => true
+    // Raw pointer operations (used for VMContext access)
+    // LoadPtr reads memory that may be modified by StorePtr
+    // StorePtr modifies memory
+    LoadPtr(_) | StorePtr(_) => true
+    // CallPtr can have side effects (calls arbitrary functions)
+    CallPtr(_, _) => true
     // Other instructions are pure
     _ => false
   }

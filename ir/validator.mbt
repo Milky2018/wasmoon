@@ -296,24 +296,7 @@ fn validate_instruction(
       }
 
     // Table operations
-    TableGet(_) =>
-      if inst.operands.length() != 1 {
-        result.add_error(
-          "TableGet expects 1 operand (elem_idx), got \{inst.operands.length()}",
-        )
-      }
-    TableSet(_) =>
-      if inst.operands.length() != 2 {
-        result.add_error(
-          "TableSet expects 2 operands (elem_idx, value), got \{inst.operands.length()}",
-        )
-      }
-    TableSize(_) =>
-      if inst.operands.length() != 0 {
-        result.add_error(
-          "TableSize expects 0 operands, got \{inst.operands.length()}",
-        )
-      }
+    // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
     TableGrow(_) =>
       if inst.operands.length() != 2 {
         result.add_error(
@@ -321,19 +304,7 @@ fn validate_instruction(
         )
       }
 
-    // Global operations
-    GlobalGet(_) =>
-      if inst.operands.length() != 0 {
-        result.add_error(
-          "GlobalGet expects 0 operands, got \{inst.operands.length()}",
-        )
-      }
-    GlobalSet(_) =>
-      if inst.operands.length() != 1 {
-        result.add_error(
-          "GlobalSet expects 1 operand (value), got \{inst.operands.length()}",
-        )
-      }
+    // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment at IR level
 
     // Calls can have any number of operands
     Call(_)

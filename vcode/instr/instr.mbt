@@ -299,22 +299,11 @@ pub(all) enum VCodeOpcode {
   // Uses: [dst, src, size], Defs: []
   MemoryCopy
   // Table operations (for reference types)
-  // TableGet(table_idx): load from indirect table at index
-  // Uses: [elem_idx], Defs: [result (function pointer)]
-  TableGet(Int)
-  // TableSet(table_idx): store to indirect table at index
-  // Uses: [elem_idx, value], Defs: []
-  TableSet(Int)
+  // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
   // TableGrow(table_idx): grow table, returns previous size or -1
   // Uses: [delta, init_value], Defs: [result]
   TableGrow(Int)
-  // Global operations
-  // GlobalGet(global_idx): load global variable value
-  // Uses: [], Defs: [result]
-  GlobalGet(Int)
-  // GlobalSet(global_idx): store global variable value
-  // Uses: [value], Defs: []
-  GlobalSet(Int)
+  // NOTE: GlobalGet, GlobalSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
 
   // Raw pointer operations (for trampolines, no bounds checking)
   // LoadPtr(type, offset): Load from [base + offset]
@@ -474,11 +463,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     MemorySize => "memory_size"
     MemoryFill => "memory_fill"
     MemoryCopy => "memory_copy"
-    TableGet(table_idx) => "table_get \{table_idx}"
-    TableSet(table_idx) => "table_set \{table_idx}"
+    // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
     TableGrow(table_idx) => "table_grow \{table_idx}"
-    GlobalGet(global_idx) => "global_get \{global_idx}"
-    GlobalSet(global_idx) => "global_set \{global_idx}"
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
     LoadGCFuncPtr(libcall) => "load_gc_func_ptr.\{libcall}"

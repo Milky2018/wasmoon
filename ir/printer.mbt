@@ -169,14 +169,10 @@ fn format_opcode(
     Copy => "copy \{ops}"
 
     // Table operations
-    TableGet(idx) => "table_get \{idx} \{ops}"
-    TableSet(idx) => "table_set \{idx} \{ops}"
-    TableSize(idx) => "table_size \{idx}"
+    // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment
     TableGrow(idx) => "table_grow \{idx} \{ops}"
 
-    // Global operations
-    GlobalGet(idx) => "global_get \{idx}"
-    GlobalSet(idx) => "global_set \{idx} \{ops}"
+    // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment
 
     // Function calls
     Call(idx) => "call \{idx}(\{ops})"

@@ -241,11 +241,7 @@ pub(all) enum VCodeOpcode {
   MemorySize
   MemoryFill
   MemoryCopy
-  TableGet(Int)
-  TableSet(Int)
   TableGrow(Int)
-  GlobalGet(Int)
-  GlobalSet(Int)
   LoadPtr(MemType, Int)
   StorePtr(MemType, Int)
   LoadGCFuncPtr(GCLibcall)
