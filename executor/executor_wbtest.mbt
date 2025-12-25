@@ -1449,7 +1449,7 @@ test "import validation: missing import raises error" {
   // Should raise UnknownImport
   inspect(
     try? instantiate_module_with_imports(store, mod, imports),
-    content="Err(UnknownImport)",
+    content="Err(UnknownImport(\"env\", \"missing_func\"))",
   )
 }
 

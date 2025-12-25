@@ -25,7 +25,7 @@ pub(all) suberror RuntimeError {
   InvalidConversion
   Unreachable
   CallStackExhausted
-  UnknownImport
+  UnknownImport(String, String)
   LinkError
   NullReference
 }

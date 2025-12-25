@@ -108,7 +108,7 @@ test "Imports resolution for module linking" {
 ///|
 test "format_runtime_error provides descriptive message" {
   let formatted = @runtime.format_runtime_error(@runtime.DivisionByZero)
-  assert_true(formatted.contains("division by zero"))
+  assert_true(formatted.contains("DivisionByZero"))
 }
 
 ///|
@@ -120,7 +120,7 @@ test "RuntimeErrorContext formats with call stack" {
     ],
   )
   let formatted = ctx.format()
-  assert_true(formatted.contains("out of bounds memory access"))
+  assert_true(formatted.contains("OutOfBoundsMemoryAccess"))
   assert_true(formatted.contains("call stack"))
   assert_true(formatted.contains("main"))
   assert_true(formatted.contains("func[1]"))
@@ -156,7 +156,7 @@ test "all RuntimeError types have descriptive messages" {
     @runtime.InvalidConversion,
     @runtime.Unreachable,
     @runtime.CallStackExhausted,
-    @runtime.UnknownImport,
+    @runtime.UnknownImport("test_mod", "test_field"),
   ]
   for err in errors {
     let formatted = @runtime.format_runtime_error(err)

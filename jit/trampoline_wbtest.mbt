@@ -18,42 +18,44 @@ test "trampoline pointers are valid" {
 }
 
 ///|
-test "has_import_trampoline: supported functions" {
+test "get_import_trampoline: supported functions" {
   let supported = [
     "fd_write", "fd_read", "fd_close", "fd_fdstat_get", "fd_prestat_get", "proc_exit",
     "args_sizes_get", "args_get", "environ_sizes_get", "environ_get", "clock_time_get",
     "random_get",
   ]
   for name in supported {
-    assert_true(has_import_trampoline("wasi_snapshot_preview1", name))
+    assert_true(
+      get_import_trampoline("wasi_snapshot_preview1", name) is Some(_),
+    )
   }
 }
 
 ///|
-test "has_import_trampoline: unsupported functions" {
+test "get_import_trampoline: unsupported functions" {
   let unsupported = ["fd_seek", "path_open", "fd_readdir", "fd_pread"]
   for name in unsupported {
-    assert_false(has_import_trampoline("wasi_snapshot_preview1", name))
+    assert_true(get_import_trampoline("wasi_snapshot_preview1", name) is None)
   }
 }
 
 ///|
-test "has_import_trampoline: spectest module" {
+test "get_import_trampoline: spectest module" {
   let supported = [
     "print", "print_i32", "print_i64", "print_f32", "print_f64", "print_i32_f32",
     "print_f64_f64", "print_char",
   ]
   for name in supported {
-    assert_true(has_import_trampoline("spectest", name))
+    assert_true(get_import_trampoline("spectest", name) is Some(_))
   }
   // Unsupported spectest functions
-  assert_false(has_import_trampoline("spectest", "unknown_func"))
+  assert_true(get_import_trampoline("spectest", "unknown_func") is None)
 }
 
 ///|
-test "has_import_trampoline: unknown module" {
-  assert_false(has_import_trampoline("env", "memory"))
-  assert_false(has_import_trampoline("unknown_module", "some_func"))
+test "get_import_trampoline: unknown module" {
+  assert_true(get_import_trampoline("env", "memory") is None)
+  assert_true(get_import_trampoline("unknown_module", "some_func") is None)
 }
 
 ///|

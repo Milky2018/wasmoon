@@ -14,7 +14,7 @@ pub(all) suberror RuntimeError {
   InvalidConversion
   Unreachable
   CallStackExhausted
-  UnknownImport // Import not found during instantiation
+  UnknownImport(String, String) // Import not found: (module_name, field_name)
   LinkError // Import type mismatch during linking
   NullReference // Null exception reference (null exnref thrown)
 } derive(Show)
@@ -76,35 +76,8 @@ pub fn RuntimeErrorContext::with_func_idx(
 /// Format the runtime error with full context for display
 pub fn RuntimeErrorContext::format(self : RuntimeErrorContext) -> String {
   let result = StringBuilder::new()
-
-  // Error type and message
-  let error_msg = match self.error {
-    StackUnderflow => "stack underflow: attempted to pop from empty stack"
-    StackOverflow => "stack overflow: stack limit exceeded"
-    TypeMismatch => "type mismatch: unexpected value type on stack"
-    OutOfBoundsMemoryAccess =>
-      "out of bounds memory access: address outside memory bounds"
-    OutOfBoundsTableAccess =>
-      "out of bounds table access: index outside table bounds"
-    OutOfBoundsArrayAccess =>
-      "out of bounds array access: index outside array bounds"
-    UndefinedElement => "undefined element: element segment or export not found"
-    UninitializedElement =>
-      "uninitialized element: table slot contains null reference"
-    IndirectCallTypeMismatch =>
-      "indirect call type mismatch: function signature does not match"
-    DivisionByZero => "integer division by zero"
-    IntegerOverflow => "integer overflow: result outside representable range"
-    InvalidConversion =>
-      "invalid conversion: cannot convert float to integer (NaN or out of range)"
-    Unreachable => "unreachable: execution reached unreachable instruction"
-    CallStackExhausted => "call stack exhausted: too many nested function calls"
-    UnknownImport => "unknown import: required import not provided"
-    LinkError => "incompatible import type"
-    NullReference => "null reference: attempted to use null exception reference"
-  }
   result.write_string("runtime error: ")
-  result.write_string(error_msg)
+  result.write_string(self.error.to_string())
   result.write_string("\n")
 
   // Show instruction if available
