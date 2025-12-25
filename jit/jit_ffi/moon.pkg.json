@@ -1,6 +1,12 @@
 {
   "native-stub": [
     "jit.c",
+    "trap.c",
+    "exec_mem.c",
+    "jit_context.c",
+    "memory_ops.c",
+    "gc_type_cache.c",
+    "gc_ops.c",
     "gc_heap.c",
     "wasi.c"
   ]
