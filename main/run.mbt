@@ -100,6 +100,9 @@ fn run_wasm(
 
   // Register WASI functions
   @wasi.register_wasi(linker, wasi_ctx)
+  // Register spectest module (standard test functions)
+  let spectest_instance = @wast.create_spectest_module(linker.get_store())
+  linker.register("spectest", spectest_instance)
   // Load preloaded modules
   for preload in preloads {
     // Parse NAME=PATH format

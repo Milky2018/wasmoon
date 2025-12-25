@@ -156,7 +156,7 @@ test "all RuntimeError types have descriptive messages" {
     @runtime.InvalidConversion,
     @runtime.Unreachable,
     @runtime.CallStackExhausted,
-    @runtime.UnknownImport,
+    @runtime.UnknownImport("test_mod", "test_field"),
   ]
   for err in errors {
     let formatted = @runtime.format_runtime_error(err)

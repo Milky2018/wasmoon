@@ -1135,7 +1135,7 @@ pub fn instantiate_module_with_init(
       @runtime.InvalidConversion => raise @runtime.InvalidConversion
       @runtime.Unreachable => raise @runtime.Unreachable
       @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-      @runtime.UnknownImport => raise @runtime.UnknownImport
+      @runtime.UnknownImport(_) as e => raise e
       _ => raise @runtime.Unreachable
     })
     |> ignore
@@ -1227,7 +1227,7 @@ pub fn instantiate_module_with_imports(
             func_addrs.push(addr)
             func_type_indices.push(type_idx)
           }
-          _ => raise @runtime.UnknownImport
+          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
         }
       Memory(expected_mem_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
@@ -1252,7 +1252,7 @@ pub fn instantiate_module_with_imports(
             } // actual has no max but expected does
             mem_addrs.push(addr)
           }
-          _ => raise @runtime.UnknownImport
+          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
         }
       Table(expected_table_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
@@ -1282,7 +1282,7 @@ pub fn instantiate_module_with_imports(
             }
             table_addrs.push(addr)
           }
-          _ => raise @runtime.UnknownImport
+          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
         }
       Global(expected_global_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
@@ -1316,7 +1316,7 @@ pub fn instantiate_module_with_imports(
             }
             global_addrs.push(addr)
           }
-          _ => raise @runtime.UnknownImport
+          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
         }
       Tag(expected_type_idx) =>
         match imports.resolve(imp.mod_name, imp.name) {
@@ -1330,7 +1330,7 @@ pub fn instantiate_module_with_imports(
             }
             tag_addrs.push(addr)
           }
-          _ => raise @runtime.UnknownImport
+          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
         }
     }
   }
@@ -1506,7 +1506,7 @@ pub fn instantiate_module_with_imports(
       @runtime.InvalidConversion => raise @runtime.InvalidConversion
       @runtime.Unreachable => raise @runtime.Unreachable
       @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-      @runtime.UnknownImport => raise @runtime.UnknownImport
+      @runtime.UnknownImport(_) as e => raise e
       @runtime.LinkError => raise @runtime.LinkError
       _ => raise @runtime.Unreachable
     })
@@ -1567,7 +1567,7 @@ pub fn call_exported_func(
             @runtime.InvalidConversion => raise @runtime.InvalidConversion
             @runtime.Unreachable => raise @runtime.Unreachable
             @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-            @runtime.UnknownImport => raise @runtime.UnknownImport
+            @runtime.UnknownImport(_) as e => raise e
             _ => raise @runtime.Unreachable
           }
         } // Unknown error
@@ -1698,7 +1698,7 @@ pub fn instantiate_with_linker(
       @runtime.InvalidConversion => raise @runtime.InvalidConversion
       @runtime.Unreachable => raise @runtime.Unreachable
       @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-      @runtime.UnknownImport => raise @runtime.UnknownImport
+      @runtime.UnknownImport(_) as e => raise e
       _ => raise @runtime.Unreachable
     })
     |> ignore
