@@ -51,6 +51,10 @@ pub(all) struct Translator {
   import_remap : Array[Int]
   // Module composite types (struct/array/func types) for GC support
   module_types : Array[@types.SubType]
+  // VMContext value (callee_vmctx parameter) for accessing runtime state
+  vmctx : Value
+  // Function environment for desugaring Wasm operations to IR primitives
+  func_env : FuncEnvironment
 }
 
 ///|
@@ -96,9 +100,12 @@ pub fn Translator::new(
   // Following Cranelift: add vmctx as explicit params
   // - params[0] = callee_vmctx (X0)
   // - params[1] = caller_vmctx (X1)
-  // These are not referenced by wasm code, but needed for ABI
-  builder.add_param(Type::I64) |> ignore // callee_vmctx
+  // These are referenced for desugaring global/table/memory operations
+  let vmctx = builder.add_param(Type::I64) // callee_vmctx
   builder.add_param(Type::I64) |> ignore // caller_vmctx
+
+  // Create function environment for desugaring Wasm operations
+  let func_env = FuncEnvironment::new(global_types, memory_max)
 
   // Add wasm function parameters (starting from params[2])
   let local_values : Array[Value] = []
@@ -169,6 +176,8 @@ pub fn Translator::new(
     func_base,
     import_remap,
     module_types,
+    vmctx,
+    func_env,
   }
 }
 
@@ -1019,6 +1028,8 @@ fn Translator::translate_instruction(
     ReturnCallRef(type_idx) => self.translate_return_call_ref(type_idx)
 
     // Memory management (memidx is ignored - JIT only supports single memory)
+    // Note: These use IR opcodes instead of desugaring because they require
+    // libcalls that are handled in the VCode emit phase
     MemoryGrow(_) => {
       let delta = self.pop()
       let result = match self.memory_max {
@@ -1094,24 +1105,40 @@ fn Translator::translate_instruction(
       self.push(result)
     }
     TableGet(table_idx) => {
-      // Get element from table
+      // Desugar to load from vmctx.tables[table_idx][elem_idx]
       let elem_idx = self.pop()
-      let result = self.builder.table_get(table_idx, elem_idx)
+      let result = self.func_env.translate_table_get(
+        self.builder,
+        self.vmctx,
+        table_idx,
+        elem_idx,
+      )
       self.push(result)
     }
     TableSet(table_idx) => {
-      // Set element in table
+      // Desugar to store to vmctx.tables[table_idx][elem_idx]
       let value = self.pop()
       let elem_idx = self.pop()
-      self.builder.table_set(table_idx, elem_idx, value)
+      self.func_env.translate_table_set(
+        self.builder,
+        self.vmctx,
+        table_idx,
+        elem_idx,
+        value,
+      )
     }
     TableSize(table_idx) => {
-      // Get current size of table
-      let result = self.builder.table_size(table_idx)
+      // Desugar to load from vmctx.table_sizes[table_idx]
+      let result = self.func_env.translate_table_size(
+        self.builder,
+        self.vmctx,
+        table_idx,
+      )
       self.push(result)
     }
     TableGrow(table_idx) => {
-      // Grow table by delta elements
+      // Note: Uses IR opcode instead of desugaring because it requires
+      // a libcall that is handled in the VCode emit phase
       // Stack: [init_value, delta] -> [result]
       let delta = self.pop()
       let init_value = self.pop()
@@ -1119,16 +1146,18 @@ fn Translator::translate_instruction(
       self.push(result)
     }
     GlobalGet(idx) => {
-      // Get global variable value
-      let global_type = self.global_types[idx]
-      let ty = Type::from_wasm(global_type.value_type)
-      let result = self.builder.global_get(idx, ty)
+      // Desugar to load from vmctx.globals[idx]
+      let result = self.func_env.translate_global_get(
+        self.builder,
+        self.vmctx,
+        idx,
+      )
       self.push(result)
     }
     GlobalSet(idx) => {
-      // Set global variable value
+      // Desugar to store to vmctx.globals[idx]
       let value = self.pop()
-      self.builder.global_set(idx, value)
+      self.func_env.translate_global_set(self.builder, self.vmctx, idx, value)
     }
 
     // GC instructions - struct operations

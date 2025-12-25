@@ -690,34 +690,8 @@ pub fn IRBuilder::memory_copy(
 }
 
 // ============ Table Operations ============
-
-///|
-/// Get element from table (for reference types)
-/// Returns i64 (function reference/pointer)
-pub fn IRBuilder::table_get(
-  self : IRBuilder,
-  table_idx : Int,
-  elem_idx : Value,
-) -> Value {
-  self.emit_inst(Type::I64, Opcode::TableGet(table_idx), [elem_idx])
-}
-
-///|
-/// Set element in table (for reference types)
-pub fn IRBuilder::table_set(
-  self : IRBuilder,
-  table_idx : Int,
-  elem_idx : Value,
-  value : Value,
-) -> Unit {
-  self.emit_void_inst(Opcode::TableSet(table_idx), [elem_idx, value])
-}
-
-///|
-/// Get current size of table (number of elements)
-pub fn IRBuilder::table_size(self : IRBuilder, table_idx : Int) -> Value {
-  self.emit_inst(Type::I32, Opcode::TableSize(table_idx), [])
-}
+// NOTE: table_get, table_set, table_size are desugared at IR translation phase via FuncEnvironment
+// Use FuncEnvironment::translate_table_get/set/size instead
 
 ///|
 /// Grow table by delta elements, initializing new elements with init_value
@@ -738,25 +712,8 @@ pub fn IRBuilder::get_func_ref(self : IRBuilder, func_idx : Int) -> Value {
   self.emit_inst(Type::I64, Opcode::GetFuncRef(func_idx), [])
 }
 
-///|
-/// Get global variable value
-pub fn IRBuilder::global_get(
-  self : IRBuilder,
-  global_idx : Int,
-  ty : Type,
-) -> Value {
-  self.emit_inst(ty, Opcode::GlobalGet(global_idx), [])
-}
-
-///|
-/// Set global variable value
-pub fn IRBuilder::global_set(
-  self : IRBuilder,
-  global_idx : Int,
-  value : Value,
-) -> Unit {
-  self.emit_void_inst(Opcode::GlobalSet(global_idx), [value])
-}
+// NOTE: global_get, global_set are desugared at IR translation phase via FuncEnvironment
+// Use FuncEnvironment::translate_global_get/set instead
 
 // ============ Misc Operations ============
 
