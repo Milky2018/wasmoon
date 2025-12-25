@@ -131,6 +131,9 @@ fn has_side_effects(inst : Inst) -> Bool {
     ArrayNew(_) | ArrayNewDefault(_) | ArrayNewFixed(_, _) => true
     // GC operations that modify state
     StructSet(_, _) | ArraySet(_) | ArrayFill(_) | ArrayCopy(_, _) => true
+    // GC read operations can trap on null reference
+    StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _) => true
+    ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) | ArrayLen => true
     // GC type check operations can trap
     RefCast(_, _) => true
     // Other instructions are pure

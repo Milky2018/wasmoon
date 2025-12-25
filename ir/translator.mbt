@@ -202,6 +202,87 @@ fn Translator::get_array_element_ir_type(
 }
 
 ///|
+/// Get the IR type for a struct field
+fn Translator::get_struct_field_ir_type(
+  self : Translator,
+  type_idx : Int,
+  field_idx : Int,
+) -> Type {
+  if type_idx >= self.module_types.length() {
+    return Type::I64
+  }
+  let subtype = self.module_types[type_idx]
+  match subtype.composite {
+    @types.CompositeType::Struct(st) => {
+      if field_idx >= st.fields.length() {
+        return Type::I64
+      }
+      match st.fields[field_idx].storage_type {
+        @types.StorageType::Val(vt) => Type::from_wasm(vt)
+        // Packed types (i8, i16) are extended to i32
+        @types.StorageType::Packed(_) => Type::I32
+      }
+    }
+    _ => Type::I64
+  }
+}
+
+///|
+/// Get the byte width for a packed struct field (for sign/zero extension)
+/// Returns 1 for i8, 2 for i16, 0 for non-packed types
+fn Translator::get_struct_field_byte_width(
+  self : Translator,
+  type_idx : Int,
+  field_idx : Int,
+) -> Int {
+  if type_idx >= self.module_types.length() {
+    return 0
+  }
+  let subtype = self.module_types[type_idx]
+  match subtype.composite {
+    @types.CompositeType::Struct(st) => {
+      if field_idx >= st.fields.length() {
+        return 0
+      }
+      match st.fields[field_idx].storage_type {
+        @types.StorageType::Val(_) => 0 // Not a packed type
+        @types.StorageType::Packed(packed) =>
+          match packed {
+            @types.PackedType::I8 => 1
+            @types.PackedType::I16 => 2
+          }
+      }
+    }
+    _ => 0
+  }
+}
+
+///|
+/// Get the byte width for a packed array element (for sign/zero extension)
+/// Returns 1 for i8, 2 for i16, 0 for non-packed types
+fn Translator::get_array_element_byte_width(
+  self : Translator,
+  type_idx : Int,
+) -> Int {
+  if type_idx >= self.module_types.length() {
+    return 0
+  }
+  let subtype = self.module_types[type_idx]
+  match subtype.composite {
+    @types.CompositeType::Array(arr) =>
+      match arr.element.storage_type {
+        @types.StorageType::Val(_) => 0 // Not a packed type
+        @types.StorageType::Packed(packed) =>
+          match packed {
+            @types.PackedType::I8 => 1
+            @types.PackedType::I16 => 2
+          }
+      }
+    _ => 0
+  }
+}
+
+///|
 /// Extract type index from a ValueType (for GC reference types)
 fn Translator::extract_type_idx(
   self : Translator,
@@ -1062,17 +1143,28 @@ fn Translator::translate_instruction(
     }
     StructGet(type_idx, field_idx) => {
       let struct_ref = self.pop()
-      let result = self.builder.struct_get(type_idx, field_idx, struct_ref)
+      let field_type = self.get_struct_field_ir_type(type_idx, field_idx)
+      let result = self.builder.struct_get(
+        type_idx, field_idx, struct_ref, field_type,
+      )
       self.push(result)
     }
     StructGetS(type_idx, field_idx) => {
       let struct_ref = self.pop()
-      let result = self.builder.struct_get_s(type_idx, field_idx, struct_ref)
+      let field_type = self.get_struct_field_ir_type(type_idx, field_idx)
+      let byte_width = self.get_struct_field_byte_width(type_idx, field_idx)
+      let result = self.builder.struct_get_s(
+        type_idx, field_idx, struct_ref, field_type, byte_width,
+      )
       self.push(result)
     }
     StructGetU(type_idx, field_idx) => {
       let struct_ref = self.pop()
-      let result = self.builder.struct_get_u(type_idx, field_idx, struct_ref)
+      let field_type = self.get_struct_field_ir_type(type_idx, field_idx)
+      let byte_width = self.get_struct_field_byte_width(type_idx, field_idx)
+      let result = self.builder.struct_get_u(
+        type_idx, field_idx, struct_ref, field_type, byte_width,
+      )
       self.push(result)
     }
     StructSet(type_idx, field_idx) => {
@@ -1118,8 +1210,9 @@ fn Translator::translate_instruction(
       let index = self.pop()
       let array_ref = self.pop()
       let elem_type = self.get_array_element_ir_type(type_idx)
+      let byte_width = self.get_array_element_byte_width(type_idx)
       let result = self.builder.array_get_s(
-        type_idx, array_ref, index, elem_type,
+        type_idx, array_ref, index, elem_type, byte_width,
       )
       self.push(result)
     }
@@ -1127,8 +1220,9 @@ fn Translator::translate_instruction(
       let index = self.pop()
       let array_ref = self.pop()
       let elem_type = self.get_array_element_ir_type(type_idx)
+      let byte_width = self.get_array_element_byte_width(type_idx)
       let result = self.builder.array_get_u(
-        type_idx, array_ref, index, elem_type,
+        type_idx, array_ref, index, elem_type, byte_width,
       )
       self.push(result)
     }

@@ -442,10 +442,10 @@ fn lower_inst(
       lower_struct_new_default(ctx, inst, block, type_idx)
     @ir.Opcode::StructGet(type_idx, field_idx) =>
       lower_struct_get(ctx, inst, block, type_idx, field_idx)
-    @ir.Opcode::StructGetS(type_idx, field_idx) =>
-      lower_struct_get(ctx, inst, block, type_idx, field_idx) // TODO: sign extension
-    @ir.Opcode::StructGetU(type_idx, field_idx) =>
-      lower_struct_get(ctx, inst, block, type_idx, field_idx) // TODO: zero extension
+    @ir.Opcode::StructGetS(type_idx, field_idx, byte_width) =>
+      lower_struct_get_s(ctx, inst, block, type_idx, field_idx, byte_width)
+    @ir.Opcode::StructGetU(type_idx, field_idx, byte_width) =>
+      lower_struct_get_u(ctx, inst, block, type_idx, field_idx, byte_width)
     @ir.Opcode::StructSet(type_idx, field_idx) =>
       lower_struct_set(ctx, inst, block, type_idx, field_idx)
     @ir.Opcode::ArrayNew(type_idx) =>
@@ -456,10 +456,10 @@ fn lower_inst(
       lower_array_new_fixed(ctx, inst, block, type_idx, len)
     @ir.Opcode::ArrayGet(type_idx) =>
       lower_array_get(ctx, inst, block, type_idx)
-    @ir.Opcode::ArrayGetS(type_idx) =>
-      lower_array_get(ctx, inst, block, type_idx) // TODO: sign extension
-    @ir.Opcode::ArrayGetU(type_idx) =>
-      lower_array_get(ctx, inst, block, type_idx) // TODO: zero extension
+    @ir.Opcode::ArrayGetS(type_idx, byte_width) =>
+      lower_array_get_s(ctx, inst, block, type_idx, byte_width)
+    @ir.Opcode::ArrayGetU(type_idx, byte_width) =>
+      lower_array_get_u(ctx, inst, block, type_idx, byte_width)
     @ir.Opcode::ArraySet(type_idx) =>
       lower_array_set(ctx, inst, block, type_idx)
     @ir.Opcode::ArrayLen => lower_array_len(ctx, inst, block)
@@ -4103,14 +4103,143 @@ fn lower_struct_get(
   let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructGet))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
-  // Call: gc_struct_get_impl(ref, type_idx, field_idx) -> result
+  // Check if result is a float type - C libcall returns int64, need bitcast
+  let is_float = result.ty is (@ir.Type::F32 | @ir.Type::F64)
+  if is_float {
+    // For float results: call returns int64, then bitcast to float
+    let int_result = ctx.vcode_func.new_vreg(Int)
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [ref_vreg, type_idx_vreg, field_idx_vreg],
+      Some(int_result),
+    )
+    // Bitcast from int to float
+    let bitcast = @instr.VCodeInst::new(Bitcast)
+    bitcast.add_def({ reg: Virtual(dst) })
+    bitcast.add_use(Virtual(int_result))
+    block.add_inst(bitcast)
+  } else {
+    // For integer results: call returns directly
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [ref_vreg, type_idx_vreg, field_idx_vreg],
+      Some(dst),
+    )
+  }
+}
+
+///|
+/// Lower struct.get_s: Get struct field value with sign extension
+/// Uses runtime libcall then sign extends based on byte_width
+fn lower_struct_get_s(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  field_idx : Int,
+  byte_width : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Materialize immediate arguments
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let field_idx_vreg = materialize_imm(ctx, block, field_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructGet))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call and get raw value
+  let raw_result = ctx.vcode_func.new_vreg(Int)
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
     [ref_vreg, type_idx_vreg, field_idx_vreg],
-    Some(dst),
+    Some(raw_result),
   )
+  // Sign extend based on byte_width
+  // For i8 (byte_width=1): sign extend byte to i32
+  // For i16 (byte_width=2): sign extend halfword to i32
+  if byte_width == 1 {
+    // SXTB: Sign extend byte to 32-bit
+    let ext = @instr.VCodeInst::new(Extend(Signed8To32))
+    ext.add_def({ reg: Virtual(dst) })
+    ext.add_use(Virtual(raw_result))
+    block.add_inst(ext)
+  } else if byte_width == 2 {
+    // SXTH: Sign extend halfword to 32-bit
+    let ext = @instr.VCodeInst::new(Extend(Signed16To32))
+    ext.add_def({ reg: Virtual(dst) })
+    ext.add_use(Virtual(raw_result))
+    block.add_inst(ext)
+  } else {
+    // No extension needed, just move
+    let mov = @instr.VCodeInst::new(Move)
+    mov.add_def({ reg: Virtual(dst) })
+    mov.add_use(Virtual(raw_result))
+    block.add_inst(mov)
+  }
+}
+
+///|
+/// Lower struct.get_u: Get struct field value with zero extension
+/// Uses runtime libcall then zero extends based on byte_width
+fn lower_struct_get_u(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  field_idx : Int,
+  byte_width : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  // Materialize immediate arguments
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let field_idx_vreg = materialize_imm(ctx, block, field_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructGet))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call and get raw value
+  let raw_result = ctx.vcode_func.new_vreg(Int)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, field_idx_vreg],
+    Some(raw_result),
+  )
+  // Zero extend based on byte_width
+  // For i8 (byte_width=1): mask with 0xFF
+  // For i16 (byte_width=2): mask with 0xFFFF
+  if byte_width == 1 {
+    // UXTB: Zero extend byte to 32-bit
+    let ext = @instr.VCodeInst::new(Extend(Unsigned8To32))
+    ext.add_def({ reg: Virtual(dst) })
+    ext.add_use(Virtual(raw_result))
+    block.add_inst(ext)
+  } else if byte_width == 2 {
+    // UXTH: Zero extend halfword to 32-bit
+    let ext = @instr.VCodeInst::new(Extend(Unsigned16To32))
+    ext.add_def({ reg: Virtual(dst) })
+    ext.add_use(Virtual(raw_result))
+    block.add_inst(ext)
+  } else {
+    // No extension needed, just move
+    let mov = @instr.VCodeInst::new(Move)
+    mov.add_def({ reg: Virtual(dst) })
+    mov.add_use(Virtual(raw_result))
+    block.add_inst(mov)
+  }
 }
 
 ///|
@@ -4133,12 +4262,25 @@ fn lower_struct_set(
   let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructSet))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
+  // Check if value is a float type - C libcall expects int64, need bitcast
+  let is_float = inst.operands[1].ty is (@ir.Type::F32 | @ir.Type::F64)
+  let actual_val_vreg = if is_float {
+    // For float values: bitcast to int before passing to C function
+    let int_val = ctx.vcode_func.new_vreg(Int)
+    let bitcast = @instr.VCodeInst::new(Bitcast)
+    bitcast.add_def({ reg: Virtual(int_val) })
+    bitcast.add_use(Virtual(val_vreg))
+    block.add_inst(bitcast)
+    int_val
+  } else {
+    val_vreg
+  }
   // Call: gc_struct_set_impl(ref, type_idx, field_idx, value)
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [ref_vreg, type_idx_vreg, field_idx_vreg, val_vreg],
+    [ref_vreg, type_idx_vreg, field_idx_vreg, actual_val_vreg],
     None,
   )
 }
@@ -4350,6 +4492,104 @@ fn lower_array_get(
       [ref_vreg, type_idx_vreg, idx_vreg],
       Some(dst),
     )
+  }
+}
+
+///|
+/// Lower array.get_s: Get array element with sign extension
+/// Uses runtime libcall then sign extends based on byte_width
+fn lower_array_get_s(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  byte_width : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  // Materialize type_idx
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayGet))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call and get raw value
+  let raw_result = ctx.vcode_func.new_vreg(Int)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, idx_vreg],
+    Some(raw_result),
+  )
+  // Sign extend based on byte_width
+  if byte_width == 1 {
+    let ext = @instr.VCodeInst::new(Extend(Signed8To32))
+    ext.add_def({ reg: Virtual(dst) })
+    ext.add_use(Virtual(raw_result))
+    block.add_inst(ext)
+  } else if byte_width == 2 {
+    let ext = @instr.VCodeInst::new(Extend(Signed16To32))
+    ext.add_def({ reg: Virtual(dst) })
+    ext.add_use(Virtual(raw_result))
+    block.add_inst(ext)
+  } else {
+    let mov = @instr.VCodeInst::new(Move)
+    mov.add_def({ reg: Virtual(dst) })
+    mov.add_use(Virtual(raw_result))
+    block.add_inst(mov)
+  }
+}
+
+///|
+/// Lower array.get_u: Get array element with zero extension
+/// Uses runtime libcall then zero extends based on byte_width
+fn lower_array_get_u(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  byte_width : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  // Materialize type_idx
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayGet))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Call and get raw value
+  let raw_result = ctx.vcode_func.new_vreg(Int)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [ref_vreg, type_idx_vreg, idx_vreg],
+    Some(raw_result),
+  )
+  // Zero extend based on byte_width
+  if byte_width == 1 {
+    let ext = @instr.VCodeInst::new(Extend(Unsigned8To32))
+    ext.add_def({ reg: Virtual(dst) })
+    ext.add_use(Virtual(raw_result))
+    block.add_inst(ext)
+  } else if byte_width == 2 {
+    let ext = @instr.VCodeInst::new(Extend(Unsigned16To32))
+    ext.add_def({ reg: Virtual(dst) })
+    ext.add_use(Virtual(raw_result))
+    block.add_inst(ext)
+  } else {
+    let mov = @instr.VCodeInst::new(Move)
+    mov.add_def({ reg: Virtual(dst) })
+    mov.add_use(Virtual(raw_result))
+    block.add_inst(mov)
   }
 }
 

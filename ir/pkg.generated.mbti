@@ -106,8 +106,8 @@ pub fn IRBuilder::any_convert_extern(Self, Value) -> Value
 pub fn IRBuilder::array_copy(Self, Int, Int, Value, Value, Value, Value, Value) -> Unit
 pub fn IRBuilder::array_fill(Self, Int, Value, Value, Value, Value) -> Unit
 pub fn IRBuilder::array_get(Self, Int, Value, Value, Type) -> Value
-pub fn IRBuilder::array_get_s(Self, Int, Value, Value, Type) -> Value
-pub fn IRBuilder::array_get_u(Self, Int, Value, Value, Type) -> Value
+pub fn IRBuilder::array_get_s(Self, Int, Value, Value, Type, Int) -> Value
+pub fn IRBuilder::array_get_u(Self, Int, Value, Value, Type, Int) -> Value
 pub fn IRBuilder::array_len(Self, Value) -> Value
 pub fn IRBuilder::array_new(Self, Int, Value, Value) -> Value
 pub fn IRBuilder::array_new_default(Self, Int, Value) -> Value
@@ -221,9 +221,9 @@ pub fn IRBuilder::store16(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store32(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store8(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
-pub fn IRBuilder::struct_get(Self, Int, Int, Value) -> Value
-pub fn IRBuilder::struct_get_s(Self, Int, Int, Value) -> Value
-pub fn IRBuilder::struct_get_u(Self, Int, Int, Value) -> Value
+pub fn IRBuilder::struct_get(Self, Int, Int, Value, Type) -> Value
+pub fn IRBuilder::struct_get_s(Self, Int, Int, Value, Type, Int) -> Value
+pub fn IRBuilder::struct_get_u(Self, Int, Int, Value, Type, Int) -> Value
 pub fn IRBuilder::struct_new(Self, Int, Array[Value]) -> Value
 pub fn IRBuilder::struct_new_default(Self, Int) -> Value
 pub fn IRBuilder::struct_set(Self, Int, Int, Value, Value) -> Unit
@@ -358,15 +358,15 @@ pub enum Opcode {
   StructNew(Int)
   StructNewDefault(Int)
   StructGet(Int, Int)
-  StructGetS(Int, Int)
-  StructGetU(Int, Int)
+  StructGetS(Int, Int, Int)
+  StructGetU(Int, Int, Int)
   StructSet(Int, Int)
   ArrayNew(Int)
   ArrayNewDefault(Int)
   ArrayNewFixed(Int, Int)
   ArrayGet(Int)
-  ArrayGetS(Int)
-  ArrayGetU(Int)
+  ArrayGetS(Int, Int)
+  ArrayGetU(Int, Int)
   ArraySet(Int)
   ArrayLen
   ArrayFill(Int)

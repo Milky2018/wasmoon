@@ -200,10 +200,10 @@ fn format_opcode(
     StructNewDefault(type_idx) => "struct.new_default \{type_idx}"
     StructGet(type_idx, field_idx) =>
       "struct.get \{type_idx} \{field_idx} \{ops}"
-    StructGetS(type_idx, field_idx) =>
-      "struct.get_s \{type_idx} \{field_idx} \{ops}"
-    StructGetU(type_idx, field_idx) =>
-      "struct.get_u \{type_idx} \{field_idx} \{ops}"
+    StructGetS(type_idx, field_idx, byte_width) =>
+      "struct.get_s \{type_idx} \{field_idx} bw=\{byte_width} \{ops}"
+    StructGetU(type_idx, field_idx, byte_width) =>
+      "struct.get_u \{type_idx} \{field_idx} bw=\{byte_width} \{ops}"
     StructSet(type_idx, field_idx) =>
       "struct.set \{type_idx} \{field_idx} \{ops}"
 
@@ -212,8 +212,10 @@ fn format_opcode(
     ArrayNewDefault(type_idx) => "array.new_default \{type_idx}(\{ops})"
     ArrayNewFixed(type_idx, len) => "array.new_fixed \{type_idx} \{len}(\{ops})"
     ArrayGet(type_idx) => "array.get \{type_idx} \{ops}"
-    ArrayGetS(type_idx) => "array.get_s \{type_idx} \{ops}"
-    ArrayGetU(type_idx) => "array.get_u \{type_idx} \{ops}"
+    ArrayGetS(type_idx, byte_width) =>
+      "array.get_s \{type_idx} bw=\{byte_width} \{ops}"
+    ArrayGetU(type_idx, byte_width) =>
+      "array.get_u \{type_idx} bw=\{byte_width} \{ops}"
     ArraySet(type_idx) => "array.set \{type_idx} \{ops}"
     ArrayLen => "array.len \{ops}"
     ArrayFill(type_idx) => "array.fill \{type_idx} \{ops}"
