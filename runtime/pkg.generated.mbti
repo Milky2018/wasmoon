@@ -277,6 +277,7 @@ pub struct Store {
   heap : MarkSweepHeap
   mut c_heap : @jit.CHeap?
   mut module_types : Array[@types.SubType]
+  mut module_rec_groups : Array[Int]
   wrapped_externs : Array[@types.Value]
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
@@ -321,7 +322,7 @@ pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::new() -> Self
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
-pub fn Store::set_module_types(Self, Array[@types.SubType]) -> Unit
+pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit
 pub fn Store::should_collect(Self, threshold? : Double) -> Bool
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError

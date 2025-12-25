@@ -29,6 +29,7 @@ pub(all) enum GCLibcall {
   ArrayLen // gc_array_len_impl
   ArrayFill // gc_array_fill_impl
   ArrayCopy // gc_array_copy_impl
+  TypeCheckSubtype // gc_type_check_subtype - checks subtyping for call_indirect
 } derive(Eq, Show)
 
 ///|

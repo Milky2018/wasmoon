@@ -137,8 +137,15 @@ pub fn Translator::new(
   }
   // Compute canonical type indices for structural type equivalence
   // Structurally equivalent types will map to the same canonical index
+  // Use module_types if available (preserves finality and supertypes),
+  // otherwise fall back to converting func_types
+  let types_for_canonical = if module_types.length() > 0 {
+    module_types
+  } else {
+    @types.func_types_to_subtypes(func_types)
+  }
   let canonical_type_indices = @types.compute_canonical_type_indices(
-    @types.func_types_to_subtypes(func_types),
+    types_for_canonical,
     type_rec_groups~,
   )
   {
@@ -2350,9 +2357,8 @@ fn Translator::translate_call_indirect(
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
-    // Get canonical type index for structural type equivalence
-    // Structurally equivalent types will have the same canonical index
-    let canonical_idx = self.canonical_type_indices[type_idx]
+    // Use original type_idx - the JIT type check (is_subtype_cached) handles
+    // canonical indices internally to support both subtyping and structural equivalence
     // Pop callee (element index within the table)
     let elem_idx = self.pop()
 
@@ -2388,10 +2394,10 @@ fn Translator::translate_call_indirect(
     args.rev_in_place()
     // Get result types
     let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
-    // Emit call_indirect with canonical type index for structural equivalence
-    // Pass elem_idx directly (table_idx tells lowering which table to use)
+    // Emit call_indirect with original type_idx
+    // is_subtype_cached handles canonical indices for structural equivalence
     let results = self.builder.call_indirect_multi(
-      canonical_idx, table_idx, result_types, elem_idx, args,
+      type_idx, table_idx, result_types, elem_idx, args,
     )
     // Push all results onto the stack
     for v in results {
@@ -2494,9 +2500,8 @@ fn Translator::translate_return_call_indirect(
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
-    // Get canonical type index for structural type equivalence
-    // Structurally equivalent types will have the same canonical index
-    let canonical_idx = self.canonical_type_indices[type_idx]
+    // Use original type_idx - the JIT type check (is_subtype_cached) handles
+    // canonical indices internally to support both subtyping and structural equivalence
     // Pop callee (element index within the table)
     let elem_idx = self.pop()
 
@@ -2509,9 +2514,7 @@ fn Translator::translate_return_call_indirect(
 
     // Emit return_call_indirect instruction (tail call - does not return to caller)
     // Following Cranelift: emit a single ReturnCallIndirect IR instruction, not call + return
-    self.builder.return_call_indirect_multi(
-      canonical_idx, table_idx, elem_idx, args,
-    )
+    self.builder.return_call_indirect_multi(type_idx, table_idx, elem_idx, args)
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
   }

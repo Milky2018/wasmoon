@@ -147,6 +147,18 @@ fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
 }
 
 ///|
+/// Get the function table base pointer
+fn JITContext::get_func_table_ptr(self : JITContext) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_func_table(self.ptr())
+}
+
+///|
+/// Get the function count
+fn JITContext::get_func_count(self : JITContext) -> Int {
+  @jit_ffi.c_jit_ctx_get_func_count(self.ptr())
+}
+
+///|
 /// Set multiple indirect tables (for multi-table support)
 /// jit_tables: Array of JITTable? from Store
 /// This enables proper multi-table support where each call_indirect can specify which table to use

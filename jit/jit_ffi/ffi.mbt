@@ -111,6 +111,10 @@ pub extern "c" fn c_jit_ctx_set_globals(
 pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
 
 ///|
+/// Get function count from context
+pub extern "c" fn c_jit_ctx_get_func_count(ctx_ptr : Int64) -> Int = "wasmoon_jit_ctx_get_func_count"
+
+///|
 /// Allocate indirect table for context v2
 pub extern "c" fn c_jit_ctx_alloc_indirect_table(
   ctx_ptr : Int64,
@@ -402,6 +406,12 @@ pub extern "c" fn c_jit_get_gc_array_fill_ptr() -> Int64 = "wasmoon_jit_get_gc_a
 pub extern "c" fn c_jit_get_gc_array_copy_ptr() -> Int64 = "wasmoon_jit_get_gc_array_copy_ptr"
 
 ///|
+/// Get type check subtype libcall function pointer for call_indirect with subtyping
+/// Signature: void gc_type_check_subtype(int32_t actual_type, int32_t expected_type)
+/// Traps if actual_type is not a subtype of expected_type
+pub extern "c" fn c_jit_get_gc_type_check_subtype_ptr() -> Int64 = "wasmoon_jit_get_gc_type_check_subtype_ptr"
+
+///|
 /// Set type cache for GC operations
 /// types_data: array of [super_idx, kind] pairs per type
 #borrow(types_data)
@@ -417,6 +427,21 @@ pub extern "c" fn c_jit_gc_set_canonical_indices(
   canonical : FixedArray[Int],
   num_types : Int,
 ) -> Unit = "wasmoon_jit_gc_set_canonical_indices"
+
+///|
+/// Set function type indices for funcref subtyping
+#borrow(func_type_indices)
+pub extern "c" fn c_jit_gc_set_func_type_indices(
+  func_type_indices : FixedArray[Int],
+  num_funcs : Int,
+) -> Unit = "wasmoon_jit_gc_set_func_type_indices"
+
+///|
+/// Set function table pointer for funcref lookup
+pub extern "c" fn c_jit_gc_set_func_table(
+  func_table_ptr : Int64,
+  num_funcs : Int,
+) -> Unit = "wasmoon_jit_gc_set_func_table"
 
 ///|
 /// Clear GC cache after JIT execution

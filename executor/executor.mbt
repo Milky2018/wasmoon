@@ -666,7 +666,7 @@ pub fn instantiate_module(
 ) -> (@runtime.Store, @runtime.ModuleInstance) {
   let store = @runtime.Store::new()
   // Set module types for GC support
-  store.set_module_types(mod.types)
+  store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 
   // Allocate functions with their types
   let func_addrs : Array[Int] = []
@@ -1152,7 +1152,7 @@ pub fn instantiate_module_with_imports(
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
   // Set module types for GC support
-  store.set_module_types(mod.types)
+  store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 
   // Compute canonical type indices early (needed for import type checking)
   let canonical_type_indices = @types.compute_canonical_type_indices(

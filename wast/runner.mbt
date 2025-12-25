@@ -603,8 +603,33 @@ pub fn invoke_action(
                   // Compute canonical type indices for proper type equivalence checking
                   let canonical = @types.compute_canonical_type_indices(
                     ctx.store.module_types,
+                    type_rec_groups=ctx.store.module_rec_groups,
                   )
-                  @jit.gc_setup(heap, ctx.store.module_types, canonical)
+                  // Remap func_type_indices: JIT func_idx -> store func_addr -> type_idx
+                  // The JIT func_table has entries for this module's functions, but
+                  // the Store's func_type_indices has entries for ALL functions.
+                  // We need to create a mapping from JIT func_idx to type_idx.
+                  let jit_func_type_indices : Array[Int] = []
+                  for func_addr in jit.func_addrs {
+                    if func_addr >= 0 &&
+                      func_addr < ctx.store.func_type_indices.length() {
+                      jit_func_type_indices.push(
+                        ctx.store.func_type_indices[func_addr],
+                      )
+                    } else {
+                      jit_func_type_indices.push(-1) // Invalid/unknown type
+                    }
+                  }
+                  // Pass function type indices for funcref subtyping checks
+                  // Also pass func_table pointer for looking up func_idx from tagged pointer funcrefs
+                  @jit.gc_setup(
+                    heap,
+                    ctx.store.module_types,
+                    canonical,
+                    func_type_indices=jit_func_type_indices,
+                    func_table_ptr=jit.jit_module.get_func_table_ptr(),
+                    num_funcs=jit.jit_module.get_func_count(),
+                  )
                 }
                 None => ()
               }

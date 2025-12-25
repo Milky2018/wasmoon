@@ -113,6 +113,7 @@ pub(all) enum GCLibcall {
   ArrayLen
   ArrayFill
   ArrayCopy
+  TypeCheckSubtype
 }
 pub impl Eq for GCLibcall
 pub impl Show for GCLibcall
