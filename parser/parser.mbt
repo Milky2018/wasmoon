@@ -900,6 +900,9 @@ fn Parser::read_instruction(
     0x22 => LocalTee(self.read_u32())
     0x23 => GlobalGet(self.read_u32())
     0x24 => GlobalSet(self.read_u32())
+    // Table instructions
+    0x25 => TableGet(self.read_u32())
+    0x26 => TableSet(self.read_u32())
     // Memory instructions (with alignment validation)
     0x28 => {
       let (memidx, align, offset) = self.read_memarg()
@@ -1204,10 +1207,37 @@ fn Parser::read_instruction(
           let memidx = self.read_leb128_u32()
           MemoryFill(memidx)
         }
+        12 => {
+          // table.init: elem_idx, table_idx
+          let elem_idx = self.read_u32()
+          let table_idx = self.read_u32()
+          TableInit(table_idx, elem_idx)
+        }
         13 => {
           // elem.drop: elem_idx
           let elem_idx = self.read_u32()
           ElemDrop(elem_idx)
+        }
+        14 => {
+          // table.copy: dest_table_idx, src_table_idx
+          let dest_idx = self.read_u32()
+          let src_idx = self.read_u32()
+          TableCopy(dest_idx, src_idx)
+        }
+        15 => {
+          // table.grow: table_idx
+          let table_idx = self.read_u32()
+          TableGrow(table_idx)
+        }
+        16 => {
+          // table.size: table_idx
+          let table_idx = self.read_u32()
+          TableSize(table_idx)
+        }
+        17 => {
+          // table.fill: table_idx
+          let table_idx = self.read_u32()
+          TableFill(table_idx)
         }
         _ => raise UnknownOpcode(0xFC00 + subopcode)
       }
@@ -1255,9 +1285,32 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
     }
 
     // Check section ordering (non-custom sections must be in order, no duplicates)
+    // The canonical order is: 1→2→3→4→5→6→13→7→8→9→12→10→11
+    // (DataCount=12 appears between Elem=9 and Code=10, Tag=13 after Global=6)
+    fn section_order(id : Int) -> Int {
+      match id {
+        1 => 1 // Type
+        2 => 2 // Import
+        3 => 3 // Function
+        4 => 4 // Table
+        5 => 5 // Memory
+        6 => 6 // Global
+        13 => 7 // Tag (exception handling, after Global)
+        7 => 8 // Export
+        8 => 9 // Start
+        9 => 10 // Elem
+        12 => 11 // DataCount (before Code)
+        10 => 12 // Code
+        11 => 13 // Data
+        _ => id // Custom (0) or unknown
+      }
+    }
+
     if section_id != 0 {
       // Custom sections (id=0) can appear anywhere
-      if section_id <= last_section_id {
+      let current_order = section_order(section_id)
+      let last_order = section_order(last_section_id)
+      if current_order <= last_order {
         raise DuplicateSection(section_id)
       }
       last_section_id = section_id
