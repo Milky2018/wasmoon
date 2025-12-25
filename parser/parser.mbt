@@ -28,6 +28,8 @@ suberror ParserError {
   DuplicateSection(Int) // non-custom section appears multiple times or out of order
   MalformedReferenceType(Int) // element segment has non-reference type
   MalformedMutability(Int) // mutability must be 0 or 1
+  MalformedDataSegmentFlags(Int) // data segment flags must be 0, 1, or 2
+  DataCountRequired // memory.init/data.drop require data count section
   ParseError(String) // Generic error with message
 }
 
@@ -115,6 +117,9 @@ pub impl Show for ParserError with output(self, logger) {
     DuplicateSection(_) => "unexpected content after last section"
     MalformedReferenceType(_) => "malformed reference type"
     MalformedMutability(_) => "malformed mutability"
+    MalformedDataSegmentFlags(flags) =>
+      "malformed data segment flags: \{flags} (expected 0, 1, or 2)"
+    DataCountRequired => "data count section required"
     ParseError(msg) => msg
   }
   logger.write_string(msg)
@@ -128,12 +133,13 @@ pub impl Show for ParserError with output(self, logger) {
 struct Parser {
   data : Bytes
   mut pos : Int
+  mut has_data_count : Bool // true if data count section was seen
 } derive(Show)
 
 ///|
 /// Create a new parser from bytes
 pub fn Parser::new(data : Bytes) -> Parser {
-  { data, pos: 0 }
+  { data, pos: 0, has_data_count: false }
 }
 
 ///|
@@ -778,6 +784,29 @@ fn Parser::read_expr(
 }
 
 ///|
+/// Read if-then body, stopping at either 0x05 (else) or 0x0B (end)
+/// Returns (body, has_else) where has_else is true if we stopped at else
+fn Parser::read_if_then_body(
+  self : Parser,
+) -> (Array[@types.Instruction], Bool) raise ParserError {
+  loop [] {
+    instructions => {
+      let opcode = self.read_byte()
+      if opcode == 0x0B {
+        // end - no else clause
+        (instructions, false)
+      } else if opcode == 0x05 {
+        // else
+        (instructions, true)
+      } else {
+        instructions.push(self.read_instruction(opcode))
+        continue instructions
+      }
+    }
+  }
+}
+
+///|
 fn Parser::read_instruction(
   self : Parser,
   opcode : Int,
@@ -798,10 +827,10 @@ fn Parser::read_instruction(
     }
     0x04 => {
       let bt = self.read_block_type()
-      let then_body = self.read_expr()
-      // Check for else clause using peek
-      if self.peek_byte() == 0x05 {
-        self.skip(1) // consume else opcode
+      // Read then body, which ends at either 0x05 (else) or 0x0B (end)
+      let (then_body, has_else) = self.read_if_then_body()
+      if has_else {
+        // Read else body until 0x0B (end)
         let else_body = self.read_expr()
         If(bt, then_body, else_body)
       } else {
@@ -871,6 +900,9 @@ fn Parser::read_instruction(
     0x22 => LocalTee(self.read_u32())
     0x23 => GlobalGet(self.read_u32())
     0x24 => GlobalSet(self.read_u32())
+    // Table instructions
+    0x25 => TableGet(self.read_u32())
+    0x26 => TableSet(self.read_u32())
     // Memory instructions (with alignment validation)
     0x28 => {
       let (memidx, align, offset) = self.read_memarg()
@@ -1147,12 +1179,20 @@ fn Parser::read_instruction(
         // Bulk memory operations
         8 => {
           // memory.init: data_idx, memory_idx
+          // Requires data count section to be present
+          if not(self.has_data_count) {
+            raise DataCountRequired
+          }
           let data_idx = self.read_u32()
           let memidx = self.read_leb128_u32()
           MemoryInit(memidx, data_idx)
         }
         9 => {
           // data.drop: data_idx
+          // Requires data count section to be present
+          if not(self.has_data_count) {
+            raise DataCountRequired
+          }
           let data_idx = self.read_u32()
           DataDrop(data_idx)
         }
@@ -1167,10 +1207,37 @@ fn Parser::read_instruction(
           let memidx = self.read_leb128_u32()
           MemoryFill(memidx)
         }
+        12 => {
+          // table.init: elem_idx, table_idx
+          let elem_idx = self.read_u32()
+          let table_idx = self.read_u32()
+          TableInit(table_idx, elem_idx)
+        }
         13 => {
           // elem.drop: elem_idx
           let elem_idx = self.read_u32()
           ElemDrop(elem_idx)
+        }
+        14 => {
+          // table.copy: dest_table_idx, src_table_idx
+          let dest_idx = self.read_u32()
+          let src_idx = self.read_u32()
+          TableCopy(dest_idx, src_idx)
+        }
+        15 => {
+          // table.grow: table_idx
+          let table_idx = self.read_u32()
+          TableGrow(table_idx)
+        }
+        16 => {
+          // table.size: table_idx
+          let table_idx = self.read_u32()
+          TableSize(table_idx)
+        }
+        17 => {
+          // table.fill: table_idx
+          let table_idx = self.read_u32()
+          TableFill(table_idx)
         }
         _ => raise UnknownOpcode(0xFC00 + subopcode)
       }
@@ -1218,9 +1285,32 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
     }
 
     // Check section ordering (non-custom sections must be in order, no duplicates)
+    // The canonical order is: 1→2→3→4→5→6→13→7→8→9→12→10→11
+    // (DataCount=12 appears between Elem=9 and Code=10, Tag=13 after Global=6)
+    fn section_order(id : Int) -> Int {
+      match id {
+        1 => 1 // Type
+        2 => 2 // Import
+        3 => 3 // Function
+        4 => 4 // Table
+        5 => 5 // Memory
+        6 => 6 // Global
+        13 => 7 // Tag (exception handling, after Global)
+        7 => 8 // Export
+        8 => 9 // Start
+        9 => 10 // Elem
+        12 => 11 // DataCount (before Code)
+        10 => 12 // Code
+        11 => 13 // Data
+        _ => id // Custom (0) or unknown
+      }
+    }
+
     if section_id != 0 {
       // Custom sections (id=0) can appear anywhere
-      if section_id <= last_section_id {
+      let current_order = section_order(section_id)
+      let last_order = section_order(last_section_id)
+      if current_order <= last_order {
         raise DuplicateSection(section_id)
       }
       last_section_id = section_id
@@ -1345,11 +1435,28 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         }
       }
       11 => {
-        // Data section
+        // Data section (bulk-memory encoding)
         let count = parser.read_u32()
         for _ in 0..<count {
-          let memory_idx = parser.read_u32()
-          let offset = parser.read_expr()
+          let flags = parser.read_u32()
+          let (memory_idx, offset) : (Int, Array[@types.Instruction]) = match
+            flags {
+            0 => {
+              // Active segment with implicit memory 0
+              let offset = parser.read_expr()
+              (0, offset)
+            }
+            1 =>
+              // Passive segment (no memory, no offset)
+              (0, [])
+            2 => {
+              // Active segment with explicit memory index
+              let memory_idx = parser.read_u32()
+              let offset = parser.read_expr()
+              (memory_idx, offset)
+            }
+            _ => raise MalformedDataSegmentFlags(flags)
+          }
           let size = parser.read_u32()
           let init = parser.read_bytes(size)
           mod.datas.push({ memory_idx, offset, init })
@@ -1366,9 +1473,11 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         // Skip any remaining custom section content
         parser.pos = section_end
       }
-      12 =>
+      12 => {
         // Data count section (bulk memory)
         data_count = Some(parser.read_u32())
+        parser.has_data_count = true
+      }
       13 => {
         // Tag section (exception handling)
         let count = parser.read_u32()

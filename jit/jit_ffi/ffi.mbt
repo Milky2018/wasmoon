@@ -272,6 +272,10 @@ pub extern "c" fn c_jit_get_spectest_print_i32_f32_ptr() -> Int64 = "wasmoon_jit
 /// Get spectest print_f64_f64 trampoline pointer
 pub extern "c" fn c_jit_get_spectest_print_f64_f64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f64_f64_ptr"
 
+///|
+/// Get spectest print_char trampoline pointer
+pub extern "c" fn c_jit_get_spectest_print_char_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_char_ptr"
+
 // ============ Bulk Memory Operations ============
 
 ///|

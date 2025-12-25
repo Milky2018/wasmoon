@@ -397,6 +397,12 @@ pub fn get_spectest_print_f64_f64_ptr() -> Int64 {
   @jit_ffi.c_jit_get_spectest_print_f64_f64_ptr()
 }
 
+///|
+/// Get spectest print_char trampoline pointer
+pub fn get_spectest_print_char_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_spectest_print_char_ptr()
+}
+
 // ============ Executable Code Block ============
 
 ///|

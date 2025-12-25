@@ -369,7 +369,7 @@ fn validate_instruction(
           "StructNewDefault expects 0 operands, got \{inst.operands.length()}",
         )
       }
-    StructGet(_, _) | StructGetS(_, _) | StructGetU(_, _) =>
+    StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "StructGet expects 1 operand (structref), got \{inst.operands.length()}",
@@ -396,7 +396,7 @@ fn validate_instruction(
         )
       }
     ArrayNewFixed(_, _) => () // Can have any number of operands (element values)
-    ArrayGet(_) | ArrayGetS(_) | ArrayGetU(_) =>
+    ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) =>
       if inst.operands.length() != 2 {
         result.add_error(
           "ArrayGet expects 2 operands (arrayref, index), got \{inst.operands.length()}",

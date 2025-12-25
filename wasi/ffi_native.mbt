@@ -361,6 +361,16 @@ fn utf8_bytes_to_string(bytes : Bytes) -> String {
 extern "c" fn c_print_string(str : FixedArray[Byte], len : Int) -> Unit = "wasmoon_print_string"
 
 ///|
+/// Print a single character to stdout
+extern "c" fn c_putchar(c : Int) -> Unit = "wasmoon_putchar"
+
+///|
+/// Print a single character to stdout (public wrapper)
+pub fn putchar(c : Int) -> Unit {
+  c_putchar(c)
+}
+
+///|
 /// Print a string to stdout without newline
 pub fn print_string(s : String) -> Unit {
   let bytes = string_to_cstring(s)

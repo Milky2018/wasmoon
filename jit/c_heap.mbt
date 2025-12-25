@@ -4,10 +4,23 @@
 /// the interpreter and JIT-compiled code.
 
 // ============================================================
+// Error Types
+// ============================================================
+
+///|
+/// CHeap error types for runtime errors
+pub(all) suberror CHeapError {
+  OutOfBoundsArrayAccess
+  NullReference
+}
+
+// ============================================================
 // Value Encoding Constants
 // ============================================================
 
 // Object kinds (must match GC_KIND_* in gc_heap.h)
+
+///|
 let gc_kind_struct : Int = 1
 
 ///|
@@ -248,8 +261,13 @@ pub fn CHeap::array_get(
   array_idx : Int,
   elem_idx : Int,
   elem_type : @types.ValueType,
-) -> @types.Value {
+) -> @types.Value raise CHeapError {
   let gc_ref = array_idx + 1
+  // Check bounds before accessing
+  let len = @jit_ffi.c_gc_heap_array_len(self.ptr, gc_ref)
+  if elem_idx < 0 || elem_idx >= len {
+    raise OutOfBoundsArrayAccess
+  }
   let raw = @jit_ffi.c_gc_heap_array_get(self.ptr, gc_ref, elem_idx)
   i64_to_value(raw, elem_type)
 }
@@ -261,8 +279,13 @@ pub fn CHeap::array_set(
   array_idx : Int,
   elem_idx : Int,
   value : @types.Value,
-) -> Unit {
+) -> Unit raise CHeapError {
   let gc_ref = array_idx + 1
+  // Check bounds before accessing
+  let len = @jit_ffi.c_gc_heap_array_len(self.ptr, gc_ref)
+  if elem_idx < 0 || elem_idx >= len {
+    raise OutOfBoundsArrayAccess
+  }
   let raw = value_to_i64(value)
   @jit_ffi.c_gc_heap_array_set(self.ptr, gc_ref, elem_idx, raw)
 }
@@ -275,8 +298,13 @@ pub fn CHeap::array_fill(
   offset : Int,
   value : @types.Value,
   count : Int,
-) -> Unit {
+) -> Unit raise CHeapError {
   let gc_ref = array_idx + 1
+  // Check bounds before filling
+  let len = @jit_ffi.c_gc_heap_array_len(self.ptr, gc_ref)
+  if offset < 0 || count < 0 || offset + count > len {
+    raise OutOfBoundsArrayAccess
+  }
   let raw = value_to_i64(value)
   @jit_ffi.c_gc_heap_array_fill(self.ptr, gc_ref, offset, raw, count)
 }
@@ -290,9 +318,19 @@ pub fn CHeap::array_copy(
   src_idx : Int,
   src_offset : Int,
   count : Int,
-) -> Unit {
+) -> Unit raise CHeapError {
   let dst_ref = dst_idx + 1
   let src_ref = src_idx + 1
+  // Check bounds before copying
+  let dst_len = @jit_ffi.c_gc_heap_array_len(self.ptr, dst_ref)
+  let src_len = @jit_ffi.c_gc_heap_array_len(self.ptr, src_ref)
+  if dst_offset < 0 ||
+    src_offset < 0 ||
+    count < 0 ||
+    dst_offset + count > dst_len ||
+    src_offset + count > src_len {
+    raise OutOfBoundsArrayAccess
+  }
   @jit_ffi.c_gc_heap_array_copy(
     self.ptr,
     dst_ref,

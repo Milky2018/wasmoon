@@ -1124,35 +1124,47 @@ pub fn IRBuilder::struct_get(
   type_idx : Int,
   field_idx : Int,
   struct_ref : Value,
+  field_type : Type,
 ) -> Value {
-  // Result type depends on field type, but we use I64 as a generic reference
-  self.emit_inst(Type::I64, Opcode::StructGet(type_idx, field_idx), [struct_ref])
+  self.emit_inst(field_type, Opcode::StructGet(type_idx, field_idx), [
+    struct_ref,
+  ])
 }
 
 ///|
 /// Get a field from a struct (signed extension)
+/// byte_width: 1 for i8, 2 for i16
 pub fn IRBuilder::struct_get_s(
   self : IRBuilder,
   type_idx : Int,
   field_idx : Int,
   struct_ref : Value,
+  field_type : Type,
+  byte_width : Int,
 ) -> Value {
-  self.emit_inst(Type::I64, Opcode::StructGetS(type_idx, field_idx), [
-    struct_ref,
-  ])
+  self.emit_inst(
+    field_type,
+    Opcode::StructGetS(type_idx, field_idx, byte_width),
+    [struct_ref],
+  )
 }
 
 ///|
 /// Get a field from a struct (unsigned extension)
+/// byte_width: 1 for i8, 2 for i16
 pub fn IRBuilder::struct_get_u(
   self : IRBuilder,
   type_idx : Int,
   field_idx : Int,
   struct_ref : Value,
+  field_type : Type,
+  byte_width : Int,
 ) -> Value {
-  self.emit_inst(Type::I64, Opcode::StructGetU(type_idx, field_idx), [
-    struct_ref,
-  ])
+  self.emit_inst(
+    field_type,
+    Opcode::StructGetU(type_idx, field_idx, byte_width),
+    [struct_ref],
+  )
 }
 
 ///|
@@ -1208,30 +1220,41 @@ pub fn IRBuilder::array_get(
   type_idx : Int,
   array_ref : Value,
   index : Value,
+  element_type : Type,
 ) -> Value {
-  self.emit_inst(Type::I64, Opcode::ArrayGet(type_idx), [array_ref, index])
+  self.emit_inst(element_type, Opcode::ArrayGet(type_idx), [array_ref, index])
 }
 
 ///|
 /// Get an element from an array (signed extension)
+/// byte_width: 1 for i8, 2 for i16
 pub fn IRBuilder::array_get_s(
   self : IRBuilder,
   type_idx : Int,
   array_ref : Value,
   index : Value,
+  element_type : Type,
+  byte_width : Int,
 ) -> Value {
-  self.emit_inst(Type::I64, Opcode::ArrayGetS(type_idx), [array_ref, index])
+  self.emit_inst(element_type, Opcode::ArrayGetS(type_idx, byte_width), [
+    array_ref, index,
+  ])
 }
 
 ///|
 /// Get an element from an array (unsigned extension)
+/// byte_width: 1 for i8, 2 for i16
 pub fn IRBuilder::array_get_u(
   self : IRBuilder,
   type_idx : Int,
   array_ref : Value,
   index : Value,
+  element_type : Type,
+  byte_width : Int,
 ) -> Value {
-  self.emit_inst(Type::I64, Opcode::ArrayGetU(type_idx), [array_ref, index])
+  self.emit_inst(element_type, Opcode::ArrayGetU(type_idx, byte_width), [
+    array_ref, index,
+  ])
 }
 
 ///|

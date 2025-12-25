@@ -269,8 +269,8 @@ pub enum Opcode {
   StructNew(Int) // Allocate struct (type index) - operands are field values
   StructNewDefault(Int) // Allocate struct with default values (type index)
   StructGet(Int, Int) // Get struct field (type index, field index) - operand is structref
-  StructGetS(Int, Int) // Get struct field signed-extended (type index, field index)
-  StructGetU(Int, Int) // Get struct field zero-extended (type index, field index)
+  StructGetS(Int, Int, Int) // Get struct field signed-extended (type index, field index, byte_width: 1=i8, 2=i16)
+  StructGetU(Int, Int, Int) // Get struct field zero-extended (type index, field index, byte_width: 1=i8, 2=i16)
   StructSet(Int, Int) // Set struct field (type index, field index) - operands: structref, value
 
   // GC operations - array
@@ -278,8 +278,8 @@ pub enum Opcode {
   ArrayNewDefault(Int) // Allocate array with default values (type index) - operand: length
   ArrayNewFixed(Int, Int) // Allocate fixed-size array (type index, length) - operands are element values
   ArrayGet(Int) // Get array element (type index) - operands: arrayref, index
-  ArrayGetS(Int) // Get array element signed-extended (type index)
-  ArrayGetU(Int) // Get array element zero-extended (type index)
+  ArrayGetS(Int, Int) // Get array element signed-extended (type index, byte_width: 1=i8, 2=i16)
+  ArrayGetU(Int, Int) // Get array element zero-extended (type index, byte_width: 1=i8, 2=i16)
   ArraySet(Int) // Set array element (type index) - operands: arrayref, index, value
   ArrayLen // Get array length - operand: arrayref
   ArrayFill(Int) // Fill array (type index) - operands: arrayref, offset, value, count

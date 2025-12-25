@@ -768,6 +768,14 @@ static void spectest_print_f64_f64_impl(int64_t func_table, int64_t mem_base, in
     (void)arg1;
 }
 
+// print_char: (i32) -> () - prints character to stdout
+static void spectest_print_char_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+    (void)func_table;
+    (void)mem_base;
+    putchar((int)arg0);
+    fflush(stdout);
+}
+
 // Get spectest trampoline pointers
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_ptr(void) {
     return (int64_t)spectest_print_impl;
@@ -795,6 +803,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i32_f32_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_f64_ptr(void) {
     return (int64_t)spectest_print_f64_f64_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_char_ptr(void) {
+    return (int64_t)spectest_print_char_impl;
 }
 
 // ============ Linear Memory Allocation ============
@@ -1496,6 +1508,14 @@ static int64_t gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_i
         }
         return 0;
     }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 3;  // null structure reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
     // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
     int32_t gc_ref = (int32_t)(ref >> 1);
     int64_t result = gc_heap_struct_get(g_gc_heap, gc_ref, field_idx);
@@ -1506,6 +1526,14 @@ static void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
     (void)type_idx;
     if (!g_gc_heap) {
         g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 3;  // null structure reference
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -1546,6 +1574,14 @@ static int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
         }
         return 0;
     }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 3;  // null array reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
     // Decode: gc_ref = ref >> 1 (1-based)
     int32_t gc_ref = (int32_t)(ref >> 1);
     // Check bounds
@@ -1569,6 +1605,14 @@ static void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_
         }
         return;
     }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 3;  // null array reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
     // Decode: gc_ref = ref >> 1 (1-based)
     int32_t gc_ref = (int32_t)(ref >> 1);
     // Check bounds
@@ -1586,6 +1630,14 @@ static void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_
 static int32_t gc_array_len_impl(int64_t ref) {
     if (!g_gc_heap) {
         g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 3;  // null array reference
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }

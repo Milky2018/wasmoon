@@ -386,7 +386,10 @@ pub fn Store::array_get(
     Some(heap) => {
       let type_idx = heap.get_type_idx(array_idx)
       let elem_type = self.get_array_elem_type(type_idx)
-      heap.array_get(array_idx, elem_idx, elem_type)
+      heap.array_get(array_idx, elem_idx, elem_type) catch {
+        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        @jit.CHeapError::NullReference => raise NullReference
+      }
     }
     None => self.heap.array_get(array_idx, elem_idx)
   }
@@ -401,7 +404,11 @@ pub fn Store::array_set(
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   match self.c_heap {
-    Some(heap) => heap.array_set(array_idx, elem_idx, value)
+    Some(heap) =>
+      heap.array_set(array_idx, elem_idx, value) catch {
+        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        @jit.CHeapError::NullReference => raise NullReference
+      }
     None => self.heap.array_set(array_idx, elem_idx, value)
   }
 }
@@ -416,7 +423,11 @@ pub fn Store::array_fill(
   count : Int,
 ) -> Unit raise RuntimeError {
   match self.c_heap {
-    Some(heap) => heap.array_fill(array_idx, offset, value, count)
+    Some(heap) =>
+      heap.array_fill(array_idx, offset, value, count) catch {
+        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        @jit.CHeapError::NullReference => raise NullReference
+      }
     None => self.heap.array_fill(array_idx, offset, value, count)
   }
 }
@@ -433,7 +444,10 @@ pub fn Store::array_copy(
 ) -> Unit raise RuntimeError {
   match self.c_heap {
     Some(heap) =>
-      heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count)
+      heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count) catch {
+        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        @jit.CHeapError::NullReference => raise NullReference
+      }
     None =>
       self.heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count)
   }

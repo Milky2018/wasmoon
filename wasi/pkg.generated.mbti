@@ -77,6 +77,8 @@ pub fn print_string(String) -> Unit
 
 pub fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
 
+pub fn putchar(Int) -> Unit
+
 pub fn random_get(@runtime.Memory, Int, Int) -> Int
 
 pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit
