@@ -66,16 +66,19 @@ pub fn JITModule::load_with_imports(
     Some(ctx) => {
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {
-        // First check external imports
-        let func_ptr = match external_imports.get(imp.module_name) {
-          Some(mod_exports) =>
-            match mod_exports.get(imp.func_name) {
-              Some(ptr) => ptr
-              None => get_import_trampoline(imp.module_name, imp.func_name)
-            }
+        // First check external imports, then fall back to built-in trampolines
+        let func_ptr : Int64? = match external_imports.get(imp.module_name) {
+          Some(m) => m.get(imp.func_name)
+          None => None
+        }
+        let func_ptr : Int64? = match func_ptr {
+          Some(_) => func_ptr
           None => get_import_trampoline(imp.module_name, imp.func_name)
         }
-        ctx.set_func(i, func_ptr)
+        match func_ptr {
+          Some(ptr) => ctx.set_func(i, ptr)
+          None => return None // Unsupported import
+        }
       }
 
       // Step 2: Load compiled functions and populate their pointers
@@ -178,83 +181,56 @@ pub fn JITModule::get_func_count(self : JITModule) -> Int {
 }
 
 ///|
-/// Get trampoline function pointer for a WASI import
-fn get_import_trampoline(module_name : String, field_name : String) -> Int64 {
-  if module_name == "wasi_snapshot_preview1" {
-    match field_name {
-      "fd_write" => get_fd_write_ptr()
-      "fd_read" => get_fd_read_ptr()
-      "fd_close" => get_fd_close_ptr()
-      "fd_fdstat_get" => get_fd_fdstat_get_ptr()
-      "fd_prestat_get" => get_fd_prestat_get_ptr()
-      "proc_exit" => get_proc_exit_ptr()
-      "args_sizes_get" => get_args_sizes_get_ptr()
-      "args_get" => get_args_get_ptr()
-      "environ_sizes_get" => get_environ_sizes_get_ptr()
-      "environ_get" => get_environ_get_ptr()
-      "clock_time_get" => get_clock_time_get_ptr()
-      "random_get" => get_random_get_ptr()
-      _ => abort("Unknown WASI function: \{field_name}")
-    }
-  } else if module_name == "spectest" {
-    match field_name {
-      "print" => get_spectest_print_ptr()
-      "print_i32" => get_spectest_print_i32_ptr()
-      "print_i64" => get_spectest_print_i64_ptr()
-      "print_f32" => get_spectest_print_f32_ptr()
-      "print_f64" => get_spectest_print_f64_ptr()
-      "print_i32_f32" => get_spectest_print_i32_f32_ptr()
-      "print_f64_f64" => get_spectest_print_f64_f64_ptr()
-      "print_char" => get_spectest_print_char_ptr()
-      _ => abort("Unknown spectest function: \{field_name}")
-    }
-  } else {
-    abort("Unknown import module: \{module_name}")
+/// Trampoline registry - maps (module, field) to function pointer getter
+let import_trampolines : Map[String, Map[String, () -> Int64]] = {
+  let m : Map[String, Map[String, () -> Int64]] = {}
+  // WASI functions
+  m["wasi_snapshot_preview1"] = {
+    "fd_write": get_fd_write_ptr,
+    "fd_read": get_fd_read_ptr,
+    "fd_close": get_fd_close_ptr,
+    "fd_fdstat_get": get_fd_fdstat_get_ptr,
+    "fd_prestat_get": get_fd_prestat_get_ptr,
+    "proc_exit": get_proc_exit_ptr,
+    "args_sizes_get": get_args_sizes_get_ptr,
+    "args_get": get_args_get_ptr,
+    "environ_sizes_get": get_environ_sizes_get_ptr,
+    "environ_get": get_environ_get_ptr,
+    "clock_time_get": get_clock_time_get_ptr,
+    "random_get": get_random_get_ptr,
   }
+  // Spectest functions
+  m["spectest"] = {
+    "print": get_spectest_print_ptr,
+    "print_i32": get_spectest_print_i32_ptr,
+    "print_i64": get_spectest_print_i64_ptr,
+    "print_f32": get_spectest_print_f32_ptr,
+    "print_f64": get_spectest_print_f64_ptr,
+    "print_i32_f32": get_spectest_print_i32_f32_ptr,
+    "print_f64_f64": get_spectest_print_f64_f64_ptr,
+    "print_char": get_spectest_print_char_ptr,
+  }
+  m
 }
 
 ///|
-/// Check if an import has a JIT trampoline implementation
-pub fn has_import_trampoline(module_name : String, field_name : String) -> Bool {
-  if module_name == "wasi_snapshot_preview1" {
-    match field_name {
-      "fd_write"
-      | "fd_read"
-      | "fd_close"
-      | "fd_fdstat_get"
-      | "fd_prestat_get"
-      | "proc_exit"
-      | "args_sizes_get"
-      | "args_get"
-      | "environ_sizes_get"
-      | "environ_get"
-      | "clock_time_get"
-      | "random_get" => true
-      _ => false
-    }
-  } else if module_name == "spectest" {
-    match field_name {
-      "print"
-      | "print_i32"
-      | "print_i64"
-      | "print_f32"
-      | "print_f64"
-      | "print_i32_f32"
-      | "print_f64_f64"
-      | "print_char" => true
-      _ => false
-    }
-  } else {
-    false
-  }
+/// Get trampoline function pointer for an import
+/// Returns None if the import is not supported by JIT
+pub fn get_import_trampoline(
+  module_name : String,
+  field_name : String,
+) -> Int64? {
+  import_trampolines
+  .get(module_name)
+  .bind(fn(m) { m.get(field_name) })
+  .map(fn(f) { f() })
 }
 
 ///|
 /// Check if a module is known to JIT (has trampoline support)
 /// JIT can handle imports from these modules without interpreter state sharing
 pub fn is_jit_supported_module(module_name : String) -> Bool {
-  let supported_modules = ["spectest", "wasi_snapshot_preview1"]
-  supported_modules.contains(module_name)
+  import_trampolines.contains(module_name)
 }
 
 ///|

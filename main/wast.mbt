@@ -77,7 +77,7 @@ fn try_compile_jit(
   // Check if all imports are supported by JIT
   for imp in mod_.imports {
     if imp.desc is Func(_) &&
-      !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+      @jit.get_import_trampoline(imp.mod_name, imp.name) is None {
       return None // Unsupported import
     }
   }

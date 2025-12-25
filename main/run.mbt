@@ -918,7 +918,7 @@ fn check_jit_import_support(
   let unsupported : Array[String] = []
   for imp in mod_.imports {
     if imp.desc is Func(_) &&
-      !@jit.has_import_trampoline(imp.mod_name, imp.name) {
+      @jit.get_import_trampoline(imp.mod_name, imp.name) is None {
       unsupported.push("\{imp.mod_name}.\{imp.name}")
     }
   }
