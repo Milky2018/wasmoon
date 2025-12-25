@@ -156,6 +156,14 @@ pub fn get_gc_array_copy_ptr() -> Int64 {
   @jit_ffi.c_jit_get_gc_array_copy_ptr()
 }
 
+///|
+/// Get type check subtype libcall function pointer for call_indirect with subtyping
+/// Signature: void gc_type_check_subtype(int32_t actual_type, int32_t expected_type)
+/// Traps if actual_type is not a subtype of expected_type
+pub fn get_gc_type_check_subtype_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
+}
+
 // ============ GC Context Setup ============
 // Note: The actual gc_setup function that takes Store/Instance is in
 // jit/ffi_jit.mbt, which has access to the runtime package.
@@ -234,7 +242,22 @@ pub fn gc_setup(
   heap : CHeap,
   types : Array[@types.SubType],
   canonical_indices : Array[Int],
+  func_type_indices? : Array[Int] = [],
+  func_table_ptr? : Int64 = 0L,
+  num_funcs? : Int = 0,
 ) -> Unit {
   gc_set_heap(heap)
   setup_type_cache_from_types(types, canonical_indices)
+  // Also set function type indices for funcref subtyping
+  if func_type_indices.length() > 0 {
+    let indices = FixedArray::make(func_type_indices.length(), 0)
+    for i, idx in func_type_indices {
+      indices[i] = idx
+    }
+    @jit_ffi.c_jit_gc_set_func_type_indices(indices, func_type_indices.length())
+  }
+  // Set function table pointer for tagged pointer funcref lookups
+  if func_table_ptr != 0L && num_funcs > 0 {
+    @jit_ffi.c_jit_gc_set_func_table(func_table_ptr, num_funcs)
+  }
 }

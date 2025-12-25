@@ -322,6 +322,12 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
     return ctx ? (int64_t)ctx->func_table : 0;
 }
 
+// Get function count from context
+MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_func_count(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    return ctx ? ctx->func_count : 0;
+}
+
 // Allocate indirect table for context v3
 // Each entry is 16 bytes: (func_ptr, type_idx) pair
 // Layout: [func_ptr_0, type_idx_0, func_ptr_1, type_idx_1, ...]
@@ -1193,6 +1199,16 @@ static int g_gc_num_types = 0;
 static int32_t *g_gc_canonical_indices = NULL;
 static int g_gc_num_canonical = 0;
 
+// Function type table: maps func_idx to type_idx
+// Used for ref.test/ref.cast on funcrefs with concrete types
+static int32_t *g_func_type_indices = NULL;
+static int g_num_funcs = 0;
+
+// Function table pointer for funcref lookups
+// This allows finding func_idx from func_ptr by linear search
+static void **g_func_table = NULL;
+static int g_func_table_size = 0;
+
 // Type kind constants
 #define GC_KIND_FUNC   0
 #define GC_KIND_STRUCT 1
@@ -1321,7 +1337,7 @@ static int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullabl
         }
     }
 
-    // Handle funcref values (negative)
+    // Handle funcref values (negative or tagged pointer)
     if (is_funcref_value(value)) {
         // funcref matches: funcref (-6) and typed func refs (>= 0 with func kind)
         switch (type_idx) {
@@ -1338,9 +1354,52 @@ static int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullabl
             case ABSTRACT_TYPE_NOEXTERN: // noextern - funcref is NOT extern
                 return 0;
             default:
-                // For concrete type indices, check if it's a func type
-                // TODO: For now, assume concrete types >= 0 with correct kind match
-                // We would need type_kind info in cache to do this properly
+                // For concrete type indices, check if the function's type is a subtype of target
+                {
+                    int32_t func_idx = -1;
+
+                    if (value < 0) {
+                        // IR-encoded funcref: value = -(func_idx + 1)
+                        func_idx = (int32_t)(-(value + 1));
+                    } else if (is_funcref_ptr_value(value) && g_func_table && g_func_table_size > 0) {
+                        // Tagged pointer funcref: search func_table for the ptr
+                        void* raw_ptr = (void*)(value & ~FUNCREF_TAG);
+                        for (int i = 0; i < g_func_table_size; i++) {
+                            if (g_func_table[i] == raw_ptr) {
+                                func_idx = i;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (func_idx >= 0 && func_idx < g_num_funcs &&
+                        g_func_type_indices && g_gc_type_cache) {
+                        int32_t func_type_idx = g_func_type_indices[func_idx];
+                        // Check if func's type is subtype of target type using canonical indices
+                        if (func_type_idx >= 0 && func_type_idx < g_gc_num_types &&
+                            type_idx >= 0 && type_idx < g_gc_num_types) {
+                            // Get canonical index for target type
+                            int32_t target_canonical = g_gc_canonical_indices ?
+                                g_gc_canonical_indices[type_idx] : type_idx;
+
+                            // Walk the supertype chain to check subtyping
+                            int32_t current_type = func_type_idx;
+                            while (current_type >= 0 && current_type < g_gc_num_types) {
+                                int32_t current_canonical = g_gc_canonical_indices ?
+                                    g_gc_canonical_indices[current_type] : current_type;
+                                if (current_canonical == target_canonical) {
+                                    return 1;  // Found match
+                                }
+                                // Get supertype from cache
+                                int32_t super_idx = g_gc_type_cache[current_type * 3];
+                                if (super_idx < 0 || super_idx == current_type) {
+                                    break;  // No supertype or cycle
+                                }
+                                current_type = super_idx;
+                            }
+                        }
+                    }
+                }
                 return 0;
         }
     }
@@ -1712,6 +1771,28 @@ static void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
     gc_heap_array_copy(g_gc_heap, dst_gc_ref, dst_offset, src_gc_ref, src_offset, count);
 }
 
+// Type check for call_indirect with subtype support
+// Checks if actual_type is a subtype of expected_type, traps if not
+// actual_type: the type index from the function being called
+// expected_type: the type index expected by call_indirect
+static void gc_type_check_subtype_impl(int32_t actual_type, int32_t expected_type) {
+    // Fast path: exact type match (handles non-GC modules without type cache)
+    if (actual_type == expected_type) {
+        return;  // Types match, continue execution
+    }
+
+    // Subtype check using type cache (for GC modules with subtyping)
+    if (is_subtype_cached(actual_type, expected_type)) {
+        return;  // Types match via subtyping, continue execution
+    }
+
+    // Types don't match - trap
+    g_trap_code = 4;  // Indirect call type mismatch
+    if (g_trap_active) {
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+}
+
 // FFI exports for getting function pointers
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_ref_test_ptr(void) {
@@ -1759,6 +1840,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_copy_ptr(void) {
     return (int64_t)gc_array_copy_impl;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_type_check_subtype_ptr(void) {
+    return (int64_t)gc_type_check_subtype_impl;
+}
+
 // Type cache management
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(int32_t* types_data, int num_types) {
@@ -1798,6 +1883,30 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_canonical_indices(int32_t* canonical,
     }
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_type_indices(int32_t* indices, int num_funcs) {
+    // Free old table
+    if (g_func_type_indices) {
+        free(g_func_type_indices);
+    }
+
+    // Allocate and copy new table
+    g_num_funcs = num_funcs;
+    if (num_funcs > 0 && indices) {
+        g_func_type_indices = (int32_t*)malloc(num_funcs * sizeof(int32_t));
+        if (g_func_type_indices) {
+            memcpy(g_func_type_indices, indices, num_funcs * sizeof(int32_t));
+        }
+    } else {
+        g_func_type_indices = NULL;
+    }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_table(int64_t func_table_ptr, int num_funcs) {
+    // Store pointer to the func_table (not a copy - it's owned by the JIT context)
+    g_func_table = (void**)func_table_ptr;
+    g_func_table_size = num_funcs;
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(void) {
     if (g_gc_type_cache) {
         free(g_gc_type_cache);
@@ -1810,6 +1919,16 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(void) {
         g_gc_canonical_indices = NULL;
     }
     g_gc_num_canonical = 0;
+
+    if (g_func_type_indices) {
+        free(g_func_type_indices);
+        g_func_type_indices = NULL;
+    }
+    g_num_funcs = 0;
+
+    // Clear func_table pointer (not freed - owned by JIT context)
+    g_func_table = NULL;
+    g_func_table_size = 0;
 }
 
 // ============ GC Heap Pointer Management ============

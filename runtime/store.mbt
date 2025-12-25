@@ -29,6 +29,8 @@ pub struct Store {
   mut c_heap : @jit.CHeap?
   // Module types for CHeap type lookups (needed to decode Int64 to Value)
   mut module_types : Array[@types.SubType]
+  // Module rec groups for canonical type index computation
+  mut module_rec_groups : Array[Int]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
   wrapped_externs : Array[@types.Value]
@@ -56,6 +58,7 @@ pub fn Store::new() -> Store {
     heap: MarkSweepHeap::new(),
     c_heap: None,
     module_types: [],
+    module_rec_groups: [],
     wrapped_externs: [],
     func_owners: [],
     instances: [],
@@ -78,6 +81,7 @@ pub fn Store::with_c_heap() -> Store {
     heap: MarkSweepHeap::new(), // Keep for fallback
     c_heap: Some(@jit.CHeap::new()),
     module_types: [],
+    module_rec_groups: [],
     wrapped_externs: [],
     func_owners: [],
     instances: [],
@@ -94,12 +98,14 @@ pub fn Store::enable_c_heap(self : Store) -> Unit {
 }
 
 ///|
-/// Set module types (needed for CHeap type lookups)
+/// Set module types and rec groups (needed for CHeap type lookups and canonical indices)
 pub fn Store::set_module_types(
   self : Store,
   types : Array[@types.SubType],
+  rec_groups? : Array[Int] = [],
 ) -> Unit {
   self.module_types = types
+  self.module_rec_groups = rec_groups
 }
 
 ///|

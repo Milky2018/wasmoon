@@ -158,6 +158,26 @@ pub fn JITModule::from_single_function(
 }
 
 ///|
+/// Get the function table pointer for GC subtyping checks
+/// Returns 0 if no context is available
+pub fn JITModule::get_func_table_ptr(self : JITModule) -> Int64 {
+  match self.context {
+    Some(ctx) => ctx.get_func_table_ptr()
+    None => 0L
+  }
+}
+
+///|
+/// Get the number of functions in the function table
+/// Returns 0 if no context is available
+pub fn JITModule::get_func_count(self : JITModule) -> Int {
+  match self.context {
+    Some(ctx) => ctx.get_func_count()
+    None => 0
+  }
+}
+
+///|
 /// Get trampoline function pointer for a WASI import
 fn get_import_trampoline(module_name : String, field_name : String) -> Int64 {
   if module_name == "wasi_snapshot_preview1" {

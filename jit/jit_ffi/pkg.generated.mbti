@@ -76,6 +76,8 @@ pub fn c_jit_copy_code(Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_ctx_alloc_indirect_table(Int64, Int) -> Int
 
+pub fn c_jit_ctx_get_func_count(Int64) -> Int
+
 pub fn c_jit_ctx_get_func_table(Int64) -> Int64
 
 pub fn c_jit_ctx_get_memory(Int64) -> Int64
@@ -105,6 +107,10 @@ pub fn c_jit_gc_clear_heap() -> Unit
 pub fn c_jit_gc_get_heap() -> Int64
 
 pub fn c_jit_gc_set_canonical_indices(FixedArray[Int], Int) -> Unit
+
+pub fn c_jit_gc_set_func_table(Int64, Int) -> Unit
+
+pub fn c_jit_gc_set_func_type_indices(FixedArray[Int], Int) -> Unit
 
 pub fn c_jit_gc_set_heap(Int64) -> Unit
 
@@ -153,6 +159,8 @@ pub fn c_jit_get_gc_struct_get_ptr() -> Int64
 pub fn c_jit_get_gc_struct_new_ptr() -> Int64
 
 pub fn c_jit_get_gc_struct_set_ptr() -> Int64
+
+pub fn c_jit_get_gc_type_check_subtype_ptr() -> Int64
 
 pub fn c_jit_get_memory_base_ptr() -> Int64
 
