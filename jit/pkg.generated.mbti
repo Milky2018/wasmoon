@@ -125,6 +125,11 @@ pub fn setup_type_cache_from_types(Array[@types.SubType], Array[Int]) -> Unit
 pub fn value_to_i64(@types.Value) -> Int64
 
 // Errors
+pub(all) suberror CHeapError {
+  OutOfBoundsArrayAccess
+  NullReference
+}
+
 pub suberror JITTrap String
 pub impl Show for JITTrap
 
@@ -172,11 +177,11 @@ pub struct CHeap {
 pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int
 pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int
 pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
-pub fn CHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit
-pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit
-pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value
+pub fn CHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise CHeapError
+pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise CHeapError
+pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value raise CHeapError
 pub fn CHeap::array_len(Self, Int) -> Int
-pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit
+pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise CHeapError
 pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
 pub fn CHeap::free(Self) -> Unit
 pub fn CHeap::get_base(Self) -> Int64

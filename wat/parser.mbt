@@ -2150,6 +2150,11 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   self.lexer.token_start_column = saved_token_start_column
   self.current = saved_current
 
+  // Share types array with parser BEFORE parsing types
+  // This allows types to reference previously parsed types during the intermediate pass
+  self.types = mod_.types
+  self.type_rec_groups = mod_.type_rec_groups
+
   // Intermediate pass: parse ONLY explicit type definitions first
   // This ensures all explicit types are available before functions create implicit types
   while self.current.token != RParen && self.current.token != Eof {
@@ -2177,10 +2182,6 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
       _ => self.advance()
     }
   }
-
-  // Share types array with parser for inline type resolution in call_indirect
-  self.types = mod_.types
-  self.type_rec_groups = mod_.type_rec_groups
 
   // Restore lexer state for main parsing pass
   self.lexer.pos = saved_pos

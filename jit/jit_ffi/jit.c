@@ -1562,6 +1562,14 @@ static int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
         }
         return 0;
     }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 3;  // null array reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
     // Decode: gc_ref = ref >> 1 (1-based)
     int32_t gc_ref = (int32_t)(ref >> 1);
     // Check bounds
@@ -1585,6 +1593,14 @@ static void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_
         }
         return;
     }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 3;  // null array reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
     // Decode: gc_ref = ref >> 1 (1-based)
     int32_t gc_ref = (int32_t)(ref >> 1);
     // Check bounds
@@ -1602,6 +1618,14 @@ static void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_
 static int32_t gc_array_len_impl(int64_t ref) {
     if (!g_gc_heap) {
         g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        g_trap_code = 3;  // null array reference
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
