@@ -790,7 +790,7 @@ test "parse array of references" {
   let at = mod_.get_array_type(1)
   inspect(at.element.mutable, content="true")
   // Reference to struct at index 0
-  inspect(at.element.storage_type, content="Val(RefNullFuncTyped(0))")
+  inspect(at.element.storage_type, content="Val(RefNullStruct(0))")
 }
 
 ///|
