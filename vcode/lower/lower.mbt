@@ -4145,7 +4145,7 @@ fn lower_struct_set(
 
 ///|
 /// Lower array.new: Allocate array with init value and length
-/// Uses runtime libcall: gc_array_new_impl(type_idx, init_value, length) -> array_ref
+/// Uses runtime libcall: gc_array_new_impl(type_idx, length, init_value) -> array_ref
 fn lower_array_new(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -4163,19 +4163,31 @@ fn lower_array_new(
   let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNew))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
-  // Call: gc_array_new_impl(type_idx, init_value, length) -> result
+  // Check if init value is float - C libcall expects int64, need bitcast
+  let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
+  let actual_init_vreg = if is_float {
+    let int_val = ctx.vcode_func.new_vreg(Int)
+    let bitcast = @instr.VCodeInst::new(Bitcast)
+    bitcast.add_def({ reg: Virtual(int_val) })
+    bitcast.add_use(Virtual(init_vreg))
+    block.add_inst(bitcast)
+    int_val
+  } else {
+    init_vreg
+  }
+  // Call: gc_array_new_impl(type_idx, length, init_value) -> result
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [type_idx_vreg, init_vreg, len_vreg],
+    [type_idx_vreg, len_vreg, actual_init_vreg],
     Some(dst),
   )
 }
 
 ///|
 /// Lower array.new_default: Allocate array with default values
-/// Uses runtime libcall: gc_array_new_impl(type_idx, init_value=0, length) -> array_ref
+/// Uses runtime libcall: gc_array_new_impl(type_idx, length, init_value=0) -> array_ref
 fn lower_array_new_default(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -4194,12 +4206,12 @@ fn lower_array_new_default(
   let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNew))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
-  // Call: gc_array_new_impl(type_idx, init_value, length) -> result
+  // Call: gc_array_new_impl(type_idx, length, init_value) -> result
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [type_idx_vreg, zero_vreg, len_vreg],
+    [type_idx_vreg, len_vreg, zero_vreg],
     Some(dst),
   )
 }
@@ -4228,7 +4240,7 @@ fn lower_array_new_fixed(
   if len == 0 {
     // Empty array - use zero init and length 0
     let zero_vreg = materialize_imm(ctx, block, 0L)
-    // Call: gc_array_new_impl(type_idx, init_value=0, length=0) -> result
+    // Call: gc_array_new_impl(type_idx, length=0, init_value=0) -> result
     lower_c_libcall(
       ctx,
       block,
@@ -4237,14 +4249,26 @@ fn lower_array_new_fixed(
       Some(dst),
     )
   } else {
+    // Check if element type is float
+    let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
     // Create array with first element
     let first_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
-    // Call: gc_array_new_impl(type_idx, init_value, length) -> result
+    let actual_first = if is_float {
+      let int_val = ctx.vcode_func.new_vreg(Int)
+      let bitcast = @instr.VCodeInst::new(Bitcast)
+      bitcast.add_def({ reg: Virtual(int_val) })
+      bitcast.add_use(Virtual(first_vreg))
+      block.add_inst(bitcast)
+      int_val
+    } else {
+      first_vreg
+    }
+    // Call: gc_array_new_impl(type_idx, length, init_value) -> result
     lower_c_libcall(
       ctx,
       block,
       array_new_fp,
-      [type_idx_vreg, first_vreg, len_vreg],
+      [type_idx_vreg, len_vreg, actual_first],
       Some(dst),
     )
     // Set remaining elements using gc_array_set_impl
@@ -4256,13 +4280,23 @@ fn lower_array_new_fixed(
       block.add_inst(load_set_fp)
       for i in 1..<len {
         let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+        let actual_elem = if is_float {
+          let int_val = ctx.vcode_func.new_vreg(Int)
+          let bitcast = @instr.VCodeInst::new(Bitcast)
+          bitcast.add_def({ reg: Virtual(int_val) })
+          bitcast.add_use(Virtual(elem_vreg))
+          block.add_inst(bitcast)
+          int_val
+        } else {
+          elem_vreg
+        }
         let idx_vreg = materialize_imm(ctx, block, i.to_int64())
         // Call: gc_array_set_impl(ref, type_idx, idx, value)
         lower_c_libcall(
           ctx,
           block,
           array_set_fp,
-          [dst, type_idx_vreg, idx_vreg, elem_vreg],
+          [dst, type_idx_vreg, idx_vreg, actual_elem],
           None,
         )
       }
@@ -4290,14 +4324,33 @@ fn lower_array_get(
   let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayGet))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
-  // Call: gc_array_get_impl(ref, type_idx, idx) -> result
-  lower_c_libcall(
-    ctx,
-    block,
-    func_ptr_vreg,
-    [ref_vreg, type_idx_vreg, idx_vreg],
-    Some(dst),
-  )
+  // Check if result is a float type - C libcall returns int64, need bitcast
+  let is_float = result.ty is (@ir.Type::F32 | @ir.Type::F64)
+  if is_float {
+    // For float results: call returns int64, then bitcast to float
+    let int_result = ctx.vcode_func.new_vreg(Int)
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [ref_vreg, type_idx_vreg, idx_vreg],
+      Some(int_result),
+    )
+    // Bitcast from int to float
+    let bitcast = @instr.VCodeInst::new(Bitcast)
+    bitcast.add_def({ reg: Virtual(dst) })
+    bitcast.add_use(Virtual(int_result))
+    block.add_inst(bitcast)
+  } else {
+    // For integer results: call returns directly
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [ref_vreg, type_idx_vreg, idx_vreg],
+      Some(dst),
+    )
+  }
 }
 
 ///|
@@ -4319,12 +4372,25 @@ fn lower_array_set(
   let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArraySet))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
+  // Check if value is a float type - C libcall expects int64, need bitcast
+  let is_float = inst.operands[2].ty is (@ir.Type::F32 | @ir.Type::F64)
+  let actual_val_vreg = if is_float {
+    // For float values: bitcast to int before passing to C function
+    let int_val = ctx.vcode_func.new_vreg(Int)
+    let bitcast = @instr.VCodeInst::new(Bitcast)
+    bitcast.add_def({ reg: Virtual(int_val) })
+    bitcast.add_use(Virtual(val_vreg))
+    block.add_inst(bitcast)
+    int_val
+  } else {
+    val_vreg
+  }
   // Call: gc_array_set_impl(ref, type_idx, idx, value)
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [ref_vreg, type_idx_vreg, idx_vreg, val_vreg],
+    [ref_vreg, type_idx_vreg, idx_vreg, actual_val_vreg],
     None,
   )
 }

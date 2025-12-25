@@ -1208,8 +1208,9 @@ pub fn IRBuilder::array_get(
   type_idx : Int,
   array_ref : Value,
   index : Value,
+  element_type : Type,
 ) -> Value {
-  self.emit_inst(Type::I64, Opcode::ArrayGet(type_idx), [array_ref, index])
+  self.emit_inst(element_type, Opcode::ArrayGet(type_idx), [array_ref, index])
 }
 
 ///|
@@ -1219,8 +1220,9 @@ pub fn IRBuilder::array_get_s(
   type_idx : Int,
   array_ref : Value,
   index : Value,
+  element_type : Type,
 ) -> Value {
-  self.emit_inst(Type::I64, Opcode::ArrayGetS(type_idx), [array_ref, index])
+  self.emit_inst(element_type, Opcode::ArrayGetS(type_idx), [array_ref, index])
 }
 
 ///|
@@ -1230,8 +1232,9 @@ pub fn IRBuilder::array_get_u(
   type_idx : Int,
   array_ref : Value,
   index : Value,
+  element_type : Type,
 ) -> Value {
-  self.emit_inst(Type::I64, Opcode::ArrayGetU(type_idx), [array_ref, index])
+  self.emit_inst(element_type, Opcode::ArrayGetU(type_idx), [array_ref, index])
 }
 
 ///|

@@ -179,6 +179,29 @@ fn Translator::get_struct_field_count(self : Translator, type_idx : Int) -> Int 
 }
 
 ///|
+/// Get the IR type for an array element
+fn Translator::get_array_element_ir_type(
+  self : Translator,
+  type_idx : Int,
+) -> Type {
+  if type_idx >= self.module_types.length() {
+    // Default to I64 for unknown types
+    return Type::I64
+  }
+  let subtype = self.module_types[type_idx]
+  match subtype.composite {
+    @types.CompositeType::Array(arr) =>
+      match arr.element.storage_type {
+        @types.StorageType::Val(vt) => Type::from_wasm(vt)
+        // Packed types (i8, i16) are extended to i32
+        @types.StorageType::Packed(_) => Type::I32
+      }
+    // Not an array type, default to I64
+    _ => Type::I64
+  }
+}
+
+///|
 /// Extract type index from a ValueType (for GC reference types)
 fn Translator::extract_type_idx(
   self : Translator,
@@ -1087,19 +1110,26 @@ fn Translator::translate_instruction(
       // Stack: [arrayref, index] -> [value]
       let index = self.pop()
       let array_ref = self.pop()
-      let result = self.builder.array_get(type_idx, array_ref, index)
+      let elem_type = self.get_array_element_ir_type(type_idx)
+      let result = self.builder.array_get(type_idx, array_ref, index, elem_type)
       self.push(result)
     }
     ArrayGetS(type_idx) => {
       let index = self.pop()
       let array_ref = self.pop()
-      let result = self.builder.array_get_s(type_idx, array_ref, index)
+      let elem_type = self.get_array_element_ir_type(type_idx)
+      let result = self.builder.array_get_s(
+        type_idx, array_ref, index, elem_type,
+      )
       self.push(result)
     }
     ArrayGetU(type_idx) => {
       let index = self.pop()
       let array_ref = self.pop()
-      let result = self.builder.array_get_u(type_idx, array_ref, index)
+      let elem_type = self.get_array_element_ir_type(type_idx)
+      let result = self.builder.array_get_u(
+        type_idx, array_ref, index, elem_type,
+      )
       self.push(result)
     }
     ArraySet(type_idx) => {

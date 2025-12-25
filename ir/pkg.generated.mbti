@@ -105,9 +105,9 @@ pub fn IRBuilder::add_result(Self, Type) -> Unit
 pub fn IRBuilder::any_convert_extern(Self, Value) -> Value
 pub fn IRBuilder::array_copy(Self, Int, Int, Value, Value, Value, Value, Value) -> Unit
 pub fn IRBuilder::array_fill(Self, Int, Value, Value, Value, Value) -> Unit
-pub fn IRBuilder::array_get(Self, Int, Value, Value) -> Value
-pub fn IRBuilder::array_get_s(Self, Int, Value, Value) -> Value
-pub fn IRBuilder::array_get_u(Self, Int, Value, Value) -> Value
+pub fn IRBuilder::array_get(Self, Int, Value, Value, Type) -> Value
+pub fn IRBuilder::array_get_s(Self, Int, Value, Value, Type) -> Value
+pub fn IRBuilder::array_get_u(Self, Int, Value, Value, Type) -> Value
 pub fn IRBuilder::array_len(Self, Value) -> Value
 pub fn IRBuilder::array_new(Self, Int, Value, Value) -> Value
 pub fn IRBuilder::array_new_default(Self, Int, Value) -> Value
