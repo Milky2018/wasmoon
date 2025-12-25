@@ -184,6 +184,12 @@ MOONBIT_FFI_EXPORT void wasmoon_print_string(moonbit_bytes_t str, int len) {
   fflush(stdout);
 }
 
+// Print a single character to stdout
+MOONBIT_FFI_EXPORT void wasmoon_putchar(int c) {
+  putchar(c);
+  fflush(stdout);
+}
+
 #ifdef __cplusplus
 }
 #endif

@@ -64,6 +64,22 @@ pub fn create_spectest_module(
   let print_type : @types.FuncType = { params: [], results: [] }
   let print_addr = store.alloc_host_func(fn(_args) { [] }, func_type=print_type)
 
+  // print_char: (i32) -> () - prints character to stdout
+  let print_char_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [],
+  }
+  let print_char_addr = store.alloc_host_func(
+    fn(args) {
+      match args[0] {
+        @types.Value::I32(c) => @wasi.putchar(c)
+        _ => ()
+      }
+      []
+    },
+    func_type=print_char_type,
+  )
+
   // Allocate memory: (memory 1 2) - min 1 page, max 2 pages
   let memory = @runtime.Memory::new(1, Some(2))
   let memory_addr = store.alloc_mem(memory)
@@ -111,6 +127,7 @@ pub fn create_spectest_module(
     { name: "print_i32_f32", desc: @types.ExportDesc::Func(4) },
     { name: "print_f64_f64", desc: @types.ExportDesc::Func(5) },
     { name: "print", desc: @types.ExportDesc::Func(6) },
+    { name: "print_char", desc: @types.ExportDesc::Func(7) },
     { name: "memory", desc: @types.ExportDesc::Memory(0) },
     { name: "table", desc: @types.ExportDesc::Table(0) },
     { name: "global_i32", desc: @types.ExportDesc::Global(0) },
@@ -125,7 +142,7 @@ pub fn create_spectest_module(
     store_idx: -1,
     func_addrs: [
       print_i32_addr, print_i64_addr, print_f32_addr, print_f64_addr, print_i32_f32_addr,
-      print_f64_f64_addr, print_addr,
+      print_f64_f64_addr, print_addr, print_char_addr,
     ],
     func_type_indices: [],
     table_addrs: [table_addr],

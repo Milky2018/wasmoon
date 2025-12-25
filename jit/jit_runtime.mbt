@@ -185,6 +185,7 @@ fn get_import_trampoline(module_name : String, field_name : String) -> Int64 {
       "print_f64" => get_spectest_print_f64_ptr()
       "print_i32_f32" => get_spectest_print_i32_f32_ptr()
       "print_f64_f64" => get_spectest_print_f64_f64_ptr()
+      "print_char" => get_spectest_print_char_ptr()
       _ => abort("Unknown spectest function: \{field_name}")
     }
   } else {
@@ -219,7 +220,8 @@ pub fn has_import_trampoline(module_name : String, field_name : String) -> Bool 
       | "print_f32"
       | "print_f64"
       | "print_i32_f32"
-      | "print_f64_f64" => true
+      | "print_f64_f64"
+      | "print_char" => true
       _ => false
     }
   } else {

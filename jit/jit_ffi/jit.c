@@ -768,6 +768,14 @@ static void spectest_print_f64_f64_impl(int64_t func_table, int64_t mem_base, in
     (void)arg1;
 }
 
+// print_char: (i32) -> () - prints character to stdout
+static void spectest_print_char_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+    (void)func_table;
+    (void)mem_base;
+    putchar((int)arg0);
+    fflush(stdout);
+}
+
 // Get spectest trampoline pointers
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_ptr(void) {
     return (int64_t)spectest_print_impl;
@@ -795,6 +803,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i32_f32_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_f64_ptr(void) {
     return (int64_t)spectest_print_f64_f64_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_char_ptr(void) {
+    return (int64_t)spectest_print_char_impl;
 }
 
 // ============ Linear Memory Allocation ============
