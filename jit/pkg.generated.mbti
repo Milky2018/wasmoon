@@ -42,8 +42,6 @@ pub fn get_args_sizes_get_ptr() -> Int64
 
 pub fn get_clock_time_get_ptr() -> Int64
 
-pub fn get_current_memory_base() -> Int64
-
 pub fn get_environ_get_ptr() -> Int64
 
 pub fn get_environ_sizes_get_ptr() -> Int64
@@ -83,14 +81,6 @@ pub fn get_gc_struct_set_ptr() -> Int64
 pub fn get_gc_type_check_subtype_ptr() -> Int64
 
 pub fn get_import_trampoline(String, String) -> Int64?
-
-pub fn get_memory_base_ptr() -> Int64
-
-pub fn get_memory_grow_ptr() -> Int64
-
-pub fn get_memory_size_bytes_ptr() -> Int64
-
-pub fn get_memory_size_ptr() -> Int64
 
 pub fn get_proc_exit_ptr() -> Int64
 

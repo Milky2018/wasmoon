@@ -58,9 +58,7 @@ pub(all) struct FuncEnvironment {
 pub fn FuncEnvironment::new(
   global_types : Array[@types.GlobalType],
 ) -> FuncEnvironment {
-  {
-    global_types,
-  }
+  { global_types, }
 }
 
 // ============ Global Variable Operations ============

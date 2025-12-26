@@ -28,8 +28,6 @@ pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
 
 pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
 
-pub const WASM_PAGE_SIZE : Int = 65536
-
 pub fn eliminate_common_subexpressions(Function) -> OptResult
 
 pub fn eliminate_dead_code(Function) -> OptResult
@@ -104,23 +102,12 @@ pub(all) enum FloatCC {
 pub impl Show for FloatCC
 
 pub(all) struct FuncEnvironment {
-  mut memory_grow_ptr : Int64
-  mut memory_fill_ptr : Int64
-  mut memory_copy_ptr : Int64
-  mut table_grow_ptr : Int64
   global_types : Array[@types.GlobalType]
-  memory_max : Int?
 }
-pub fn FuncEnvironment::new(Array[@types.GlobalType], Int?) -> Self
-pub fn FuncEnvironment::set_libcalls(Self, Int64, Int64, Int64, Int64) -> Unit
+pub fn FuncEnvironment::new(Array[@types.GlobalType]) -> Self
 pub fn FuncEnvironment::translate_global_get(Self, IRBuilder, Value, Int) -> Value
 pub fn FuncEnvironment::translate_global_set(Self, IRBuilder, Value, Int, Value) -> Unit
-pub fn FuncEnvironment::translate_memory_copy(Self, IRBuilder, Value, Value, Value, Value) -> Unit
-pub fn FuncEnvironment::translate_memory_fill(Self, IRBuilder, Value, Value, Value, Value) -> Unit
-pub fn FuncEnvironment::translate_memory_grow(Self, IRBuilder, Value, Value) -> Value
-pub fn FuncEnvironment::translate_memory_size(Self, IRBuilder, Value) -> Value
 pub fn FuncEnvironment::translate_table_get(Self, IRBuilder, Value, Int, Value) -> Value
-pub fn FuncEnvironment::translate_table_grow(Self, IRBuilder, Value, Int, Value, Value) -> Value
 pub fn FuncEnvironment::translate_table_set(Self, IRBuilder, Value, Int, Value, Value) -> Unit
 pub fn FuncEnvironment::translate_table_size(Self, IRBuilder, Value, Int) -> Value
 

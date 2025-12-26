@@ -110,7 +110,6 @@ test "entry trampoline: no params, i32 result" {
       #|  003c: fd7bc1a8  ldp x29, x30, [sp], #16
       #|  0040: c0035fd6  ret
       #|
-
     ),
   )
 }
@@ -146,7 +145,6 @@ test "entry trampoline: i32 param, i32 result" {
       #|  0044: fd7bc1a8  ldp x29, x30, [sp], #16
       #|  0048: c0035fd6  ret
       #|
-
     ),
   )
 }
@@ -210,7 +208,6 @@ test "entry trampoline: f64 param, f64 result" {
       #|  0040: fd7bc1a8  ldp x29, x30, [sp], #16
       #|  0044: c0035fd6  ret
       #|
-
     ),
   )
 }
@@ -252,7 +249,6 @@ test "entry trampoline: multiple params" {
       #|  0054: fd7bc1a8  ldp x29, x30, [sp], #16
       #|  0058: c0035fd6  ret
       #|
-
     ),
   )
 }
@@ -312,7 +308,6 @@ test "entry trampoline: 8 f64 params" {
       #|  0098: fd7bc1a8  ldp x29, x30, [sp], #16
       #|  009c: c0035fd6  ret
       #|
-
     ),
   )
 }
@@ -405,7 +400,6 @@ test "entry trampoline: 20 i64 params (debug)" {
       #|  011c: fd7bc1a8  ldp x29, x30, [sp], #16
       #|  0120: c0035fd6  ret
       #|
-
     ),
   )
 }

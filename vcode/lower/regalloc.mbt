@@ -748,7 +748,8 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
         // 2. Replace all uses of mv.from as source with temp
         for i in 0..<pending.length() {
-          if not(pending[i].from.is_spilled()) && aliases(pending[i].from, mv.from) {
+          if not(pending[i].from.is_spilled()) &&
+            aliases(pending[i].from, mv.from) {
             pending[i] = {
               from: temp_preg,
               to: pending[i].to,
@@ -1681,20 +1682,20 @@ fn rewrite_reg(reg : @abi.Reg, alloc : RegAllocResult) -> @abi.Reg {
 
 ///|
 /// Check if an opcode has side effects (cannot be eliminated even if dead)
-  fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
-    match opcode {
-      // Memory stores have side effects
-      Store(_, _) | StackStore(_) | StorePtr(_, _) => true
-      // Type check can trap
-      TypeCheckIndirect(_) => true
-      // Function calls have side effects
-      ReturnCallIndirect(_, _) | CallPtr(_, _, _) => true
-      // Traps must not be eliminated
-      TrapIfZero(_, _) | TrapIfUge(_) | TrapIfUgt(_) | TrapIf(_, _) => true
-      // Everything else is pure computation
-      _ => false
-    }
+fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
+  match opcode {
+    // Memory stores have side effects
+    Store(_, _) | StackStore(_) | StorePtr(_, _) => true
+    // Type check can trap
+    TypeCheckIndirect(_) => true
+    // Function calls have side effects
+    ReturnCallIndirect(_, _) | CallPtr(_, _, _) => true
+    // Traps must not be eliminated
+    TrapIfZero(_, _) | TrapIfUge(_) | TrapIfUgt(_) | TrapIf(_, _) => true
+    // Everything else is pure computation
+    _ => false
   }
+}
 
 ///|
 /// Eliminate dead code from a VCode function

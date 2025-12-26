@@ -1620,7 +1620,6 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
       #|    ret d8, d1
       #|}
       #|
-
     ),
   )
 }

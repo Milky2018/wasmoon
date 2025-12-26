@@ -221,7 +221,6 @@ test "regalloc: call result is not cross-call" {
   let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
   load_ptr.add_def({ reg: @abi.Virtual(func_ptr) })
   block.add_inst(load_ptr)
-
   let call_result = func.new_vreg(Int)
   let call_inst = @instr.VCodeInst::new(CallPtr(1, 1, C))
   call_inst.add_use(@abi.Virtual(func_ptr))
@@ -233,16 +232,13 @@ test "regalloc: call result is not cross-call" {
   let one_inst = @instr.VCodeInst::new(LoadConst(1L))
   one_inst.add_def({ reg: @abi.Virtual(one) })
   block.add_inst(one_inst)
-
   let sum = func.new_vreg(Int)
   let add_inst = @instr.VCodeInst::new(Add(true))
   add_inst.add_def({ reg: @abi.Virtual(sum) })
   add_inst.add_use(@abi.Virtual(call_result))
   add_inst.add_use(@abi.Virtual(one))
   block.add_inst(add_inst)
-
   block.set_terminator(Return([@abi.Virtual(sum)]))
-
   let liveness = @lower.compute_liveness(func)
   let interval = liveness.intervals.get(call_result.id).unwrap()
   inspect(interval.crosses_call, content="false")
