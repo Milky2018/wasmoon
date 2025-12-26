@@ -38,11 +38,6 @@ fn main {
           help="WASI option (e.g., inherit-env, inherit-stdin)",
         ),
         "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
-        "wasm-opt": @clap.Arg::named(
-          short='W',
-          nargs=@clap.Nargs::Any,
-          help="WASM semantic option (e.g., max-memory=100, simd=true)",
-        ),
         "no-jit": @clap.Arg::flag(
           help="Disable JIT compilation (use interpreter)",
         ),
@@ -188,13 +183,6 @@ fn main {
                     sub.args.get("wasi") {
                     Some(arr) => arr
                     None => []
-                  }
-                  // Get WASM semantic options from -W flag
-                  let wasm_config = WasmConfig::default()
-                  if sub.args.get("wasm-opt") is Some(flags) {
-                    for flag in flags {
-                      wasm_config.apply_flag(flag)
-                    }
                   }
                   // Check if JIT is disabled (default: enabled)
                   let use_jit = match sub.flags.get("no-jit") {
