@@ -1411,6 +1411,11 @@ fn Translator::translate_instruction(
       let is_exception = self.builder.icmp_ne(setjmp_result, zero)
       self.builder.brnz(is_exception, catch_dispatch, try_body_block)
 
+      // Save locals BEFORE translating body - catch handlers will use these values
+      // because longjmp returns to the point of setjmp, so locals should have
+      // their values from before the try body executed
+      let saved_locals = self.locals.copy()
+
       // === Try body block ===
       self.builder.switch_to_block(try_body_block)
 
@@ -1429,6 +1434,14 @@ fn Translator::translate_instruction(
 
       // === Catch dispatch block ===
       self.builder.switch_to_block(catch_dispatch)
+
+      // Restore locals to pre-body state for catch handlers
+      // This is SSA-correct because catch handlers are reached via longjmp
+      // from the setjmp point, not through the try body
+      self.locals.clear()
+      for loc in saved_locals {
+        self.locals.push(loc)
+      }
 
       // Get exception tag for matching
       let exn_tag = self.builder.get_exception_tag()
@@ -1657,21 +1670,6 @@ fn Translator::emit_catch_all_ref_branch(
     let ret_cont = self.get_or_create_return_continuation()
     self.builder.jump(ret_cont, args)
   }
-}
-
-///|
-/// Get the number of values for an exception tag
-fn Translator::get_tag_value_count(self : Translator, tag_idx : Int) -> Int {
-  // Look up the tag and get its parameter count
-  if tag_idx >= 0 && tag_idx < self.tags.length() {
-    let tag = self.tags[tag_idx]
-    // Get the function type for this tag
-    if tag.type_idx >= 0 && tag.type_idx < self.func_types.length() {
-      let func_type = self.func_types[tag.type_idx]
-      return func_type.params.length()
-    }
-  }
-  0 // Default to no values if tag not found
 }
 
 ///|

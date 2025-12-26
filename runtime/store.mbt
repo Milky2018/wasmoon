@@ -23,6 +23,8 @@ pub struct Store {
   mems : Array[Memory]
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType] // Tag types (params only, no results)
+  tag_type_indices : Array[Int] // Original type index for each tag
+  tag_owners : Array[FuncOwner] // Owner module for each tag
   exns : Array[ExnInstance] // Exception instances for exnref
   heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
   // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
@@ -54,6 +56,8 @@ pub fn Store::new() -> Store {
     mems: [],
     globals: [],
     tags: [],
+    tag_type_indices: [],
+    tag_owners: [],
     exns: [],
     heap: MarkSweepHeap::new(),
     c_heap: None,
@@ -77,6 +81,8 @@ pub fn Store::with_c_heap() -> Store {
     mems: [],
     globals: [],
     tags: [],
+    tag_type_indices: [],
+    tag_owners: [],
     exns: [],
     heap: MarkSweepHeap::new(), // Keep for fallback
     c_heap: Some(@jit.CHeap::new()),
@@ -231,9 +237,15 @@ pub fn Store::alloc_global(self : Store, global : GlobalInstance) -> Int {
 
 ///|
 /// Allocate a tag with its type (params from FuncType, results ignored)
-pub fn Store::alloc_tag(self : Store, tag_type : @types.FuncType) -> Int {
+pub fn Store::alloc_tag(
+  self : Store,
+  tag_type : @types.FuncType,
+  type_idx? : Int = -1,
+) -> Int {
   let idx = self.tags.length()
   self.tags.push(tag_type)
+  self.tag_type_indices.push(type_idx)
+  self.tag_owners.push(FuncOwner::Unowned)
   idx
 }
 
@@ -246,6 +258,32 @@ pub fn Store::get_tag_type(
     raise UndefinedElement
   }
   self.tags[idx]
+}
+
+///|
+/// Get the original type index for a tag
+pub fn Store::get_tag_type_idx(self : Store, tag_addr : Int) -> Int {
+  if tag_addr < 0 || tag_addr >= self.tag_type_indices.length() {
+    return -1
+  }
+  self.tag_type_indices[tag_addr]
+}
+
+///|
+/// Get the owner module for a tag
+pub fn Store::get_tag_owner(self : Store, tag_addr : Int) -> ModuleInstance? {
+  if tag_addr < 0 || tag_addr >= self.tag_owners.length() {
+    return None
+  }
+  match self.tag_owners[tag_addr] {
+    FuncOwner::Module(idx) =>
+      if idx >= 0 && idx < self.instances.length() {
+        Some(self.instances[idx])
+      } else {
+        None
+      }
+    _ => None
+  }
 }
 
 ///|
@@ -610,6 +648,14 @@ pub fn Store::register_instance(self : Store, instance : ModuleInstance) -> Int 
     if func_addr >= 0 && func_addr < self.func_owners.length() {
       if self.func_owners[func_addr] == FuncOwner::Unowned {
         self.func_owners[func_addr] = FuncOwner::Module(instance_idx)
+      }
+    }
+  }
+  // Set ownership for unowned tags
+  for tag_addr in instance.tag_addrs {
+    if tag_addr >= 0 && tag_addr < self.tag_owners.length() {
+      if self.tag_owners[tag_addr] == FuncOwner::Unowned {
+        self.tag_owners[tag_addr] = FuncOwner::Module(instance_idx)
       }
     }
   }

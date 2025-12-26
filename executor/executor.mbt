@@ -737,7 +737,7 @@ pub fn instantiate_module(
   let tag_addrs : Array[Int] = []
   for tag in mod.tags {
     let tag_type = mod.get_func_type(tag.type_idx)
-    let addr = store.alloc_tag(tag_type)
+    let addr = store.alloc_tag(tag_type, type_idx=tag.type_idx)
     tag_addrs.push(addr)
   }
 
@@ -1322,11 +1322,60 @@ pub fn instantiate_module_with_imports(
         match imports.resolve(imp.mod_name, imp.name) {
           Some(Tag(addr)) => {
             // Check that imported tag type matches expected type
+            let owner = store.get_tag_owner(addr)
+            let actual_type_idx = store.get_tag_type_idx(addr)
             let expected_type = mod.get_func_type(expected_type_idx)
-            let actual_type = store.get_tag_type(addr)
-            // Tag types match if their params match (tags have no results)
-            if expected_type.params != actual_type.params {
-              raise @runtime.LinkError
+            let actual_type = try! store.get_tag_type(addr)
+            match owner {
+              Some(o) => {
+                // Cross-module tag: check rec group membership
+                let expected_rec_info = @types.get_rec_group_info(
+                  mod.type_rec_groups,
+                  expected_type_idx,
+                )
+                let actual_rec_info = @types.get_rec_group_info(
+                  o.type_rec_groups,
+                  actual_type_idx,
+                )
+
+                // If both are singleton rec groups, compare structurally
+                if expected_rec_info.1 == 1 && actual_rec_info.1 == 1 {
+                  // Both are singleton - structural comparison
+                  if expected_type.params != actual_type.params {
+                    raise @runtime.LinkError
+                  }
+                } else {
+                  // At least one is in a multi-type rec group - use canonical comparison
+                  let canonical_import = canonical_type_indices
+                  let canonical_export = @types.compute_canonical_type_indices(
+                    o.types,
+                    type_rec_groups=o.type_rec_groups,
+                  )
+
+                  // Use subtyping context for cross-module comparison
+                  let ctx = @types.SubtypingContext::cross_module(
+                    o.types,
+                    mod.types,
+                    rec_groups1=o.type_rec_groups,
+                    rec_groups2=mod.type_rec_groups,
+                    canonical1=canonical_export,
+                    canonical2=canonical_import,
+                  )
+                  // For tags in rec groups, types must match via canonical indices
+                  // Check bidirectional subtyping for equality
+                  if not(
+                      ctx.is_subtype(actual_type_idx, expected_type_idx) &&
+                      ctx.is_subtype(expected_type_idx, actual_type_idx),
+                    ) {
+                    raise @runtime.LinkError
+                  }
+                }
+              }
+              None =>
+                // No owner - fallback to structural comparison
+                if expected_type.params != actual_type.params {
+                  raise @runtime.LinkError
+                }
             }
             tag_addrs.push(addr)
           }
@@ -1409,7 +1458,7 @@ pub fn instantiate_module_with_imports(
   // Allocate tags (after imported tags)
   for tag in mod.tags {
     let tag_type = mod.get_func_type(tag.type_idx)
-    let addr = store.alloc_tag(tag_type)
+    let addr = store.alloc_tag(tag_type, type_idx=tag.type_idx)
     tag_addrs.push(addr)
   }
 

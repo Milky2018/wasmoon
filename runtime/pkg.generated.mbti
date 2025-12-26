@@ -273,6 +273,8 @@ pub struct Store {
   mems : Array[Memory]
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType]
+  tag_type_indices : Array[Int]
+  tag_owners : Array[FuncOwner]
   exns : Array[ExnInstance]
   heap : MarkSweepHeap
   mut c_heap : @jit.CHeap?
@@ -291,7 +293,7 @@ pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value]
 pub fn Store::alloc_mem(Self, Memory) -> Int
 pub fn Store::alloc_struct(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int
-pub fn Store::alloc_tag(Self, @types.FuncType) -> Int
+pub fn Store::alloc_tag(Self, @types.FuncType, type_idx? : Int) -> Int
 pub fn Store::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
 pub fn Store::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
 pub fn Store::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
@@ -316,7 +318,9 @@ pub fn Store::get_jit_table(Self, Int) -> @jit.JITTable?
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory
 pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
+pub fn Store::get_tag_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_tag_type(Self, Int) -> @types.FuncType raise RuntimeError
+pub fn Store::get_tag_type_idx(Self, Int) -> Int
 pub fn Store::has_c_heap(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int

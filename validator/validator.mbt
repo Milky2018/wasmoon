@@ -171,6 +171,7 @@ priv struct ValidationContext {
   returns : Array[@types.ValueType] // current function's return types
   local_init : Array[Bool] // tracks which locals have been initialized (for non-nullable refs)
   declared_funcs : @hashset.HashSet[Int] // functions declared in elem/global (for ref.func validation)
+  subtyping_ctx : @types.SubtypingContext // for subtype checking
 }
 
 ///|
@@ -348,6 +349,7 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
     returns: [],
     local_init: [],
     declared_funcs,
+    subtyping_ctx: @types.SubtypingContext::same_module(mod.types),
   }
 }
 
@@ -1180,6 +1182,7 @@ fn validate_function_with_offset(
     returns: func_type.results,
     local_init,
     declared_funcs: ctx.declared_funcs,
+    subtyping_ctx: ctx.subtyping_ctx,
   }
   let stack = OperandStack::new()
 
@@ -1378,6 +1381,7 @@ fn validate_function(
     returns: func_type.results,
     local_init,
     declared_funcs: ctx.declared_funcs,
+    subtyping_ctx: ctx.subtyping_ctx,
   }
   let stack = OperandStack::new()
 
@@ -2493,6 +2497,19 @@ fn validate_instr(
                 "catch handler arity mismatch: tag has \{tag_type.params.length()} params, label expects \{expected_types.length()}",
               )
             }
+            // Check that each tag param is a subtype of the expected label type
+            for i, param_type in tag_type.params {
+              if not(
+                  ctx.subtyping_ctx.value_type_subtype(
+                    param_type,
+                    expected_types[i],
+                  ),
+                ) {
+                raise TypeMismatch(
+                  "catch handler type mismatch: tag param \{i} has type \{param_type}, label expects \{expected_types[i]}",
+                )
+              }
+            }
           }
           @types.CatchHandler::CatchRef(tag_idx, label_idx) => {
             // Validate tag index
@@ -2514,6 +2531,20 @@ fn validate_instr(
                 "catch_ref handler arity mismatch: tag has \{tag_type.params.length()} params + exnref, label expects \{expected_types.length()}",
               )
             }
+            // Check that each tag param is a subtype of the expected label type
+            for i, param_type in tag_type.params {
+              if not(
+                  ctx.subtyping_ctx.value_type_subtype(
+                    param_type,
+                    expected_types[i],
+                  ),
+                ) {
+                raise TypeMismatch(
+                  "catch_ref handler type mismatch: tag param \{i} has type \{param_type}, label expects \{expected_types[i]}",
+                )
+              }
+            }
+            // The last expected type should be ExnRef (exnref is always a subtype of itself)
           }
           @types.CatchHandler::CatchAll(label_idx) => {
             // Validate label index
@@ -2546,19 +2577,39 @@ fn validate_instr(
         }
       }
 
+      // Create inner stack with params (like Block)
+      let block_stack = OperandStack::new()
+      for param in params {
+        block_stack.push(param)
+      }
+
+      // Save local_init state - locals initialized inside block don't count outside
+      let saved_init = ctx.local_init.copy()
+
       // Now push try_table's label for body validation
       let label = { kind: BlockLabel, block_type: bt }
       ctx.labels.push(label)
 
-      // Validate body
-      for instr in body {
-        validate_instr(ctx, stack, instr)
-      }
+      // Validate body with block_stack
+      validate_expr(ctx, block_stack, body)
 
       // Remove label
       ctx.labels.pop() |> ignore
 
-      // Push results
+      // Restore local_init state
+      for i in 0..<saved_init.length() {
+        ctx.local_init[i] = saved_init[i]
+      }
+
+      // Check stack height: should have exactly results.length() values
+      block_stack.check_height(results.length(), "try_table exit")
+
+      // Verify result types
+      for i = results.length() - 1; i >= 0; i = i - 1 {
+        block_stack.pop(results[i])
+      }
+
+      // Push results onto outer stack
       for result in results {
         stack.push(result)
       }
