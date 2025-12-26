@@ -73,10 +73,6 @@ fn main {
             nargs=@clap.Nargs::AtMost(1),
             help="Optimization level (0-3, default: 2)",
           ),
-          "opt": @clap.Arg::named(
-            nargs=@clap.Nargs::Any,
-            help="Specific optimization flag (e.g., licm=true, dce=false)",
-          ),
         },
       ),
       "test": @clap.SubCommand::new(
@@ -262,14 +258,6 @@ fn main {
                   None => 2
                 }
                 let config = CompilerConfig::from_level(opt_level)
-                // Apply specific optimization flags
-                match sub.args.get("opt") {
-                  Some(flags) =>
-                    for flag in flags {
-                      config.apply_flag(flag)
-                    }
-                  None => ()
-                }
                 run_compile(positional[0], output_opt, emit_ir_opt, config)
               } else {
                 println("Error: missing file argument")

@@ -1,118 +1,20 @@
 ///|
 /// Compiler configuration options
+/// Only optimization level (0-3) is configurable
 priv struct CompilerConfig {
-  // Optimization level (0-3)
-  opt_level : Int
-  // Specific optimization flags
-  mut const_fold : Bool
-  mut copy_prop : Bool
-  mut cse : Bool
-  mut dce : Bool
-  mut branch_simplify : Bool
-  mut unreachable_elim : Bool
-  mut block_merge : Bool
-  mut jump_thread : Bool
-  mut licm : Bool
-  mut loop_unroll : Bool
-  mut strength_reduce : Bool
+  opt_level : Int // 0=none, 1=basic, 2=default, 3=aggressive
 }
 
 ///|
 fn CompilerConfig::default() -> CompilerConfig {
-  // Default: O2 equivalent
-  CompilerConfig::{
-    opt_level: 2,
-    const_fold: true,
-    copy_prop: true,
-    cse: true,
-    dce: true,
-    branch_simplify: true,
-    unreachable_elim: true,
-    block_merge: true,
-    jump_thread: true,
-    licm: false,
-    loop_unroll: false,
-    strength_reduce: false,
-  }
+  CompilerConfig::{ opt_level: 2 }
 }
 
 ///|
 fn CompilerConfig::from_level(level : Int) -> CompilerConfig {
-  match level {
-    0 =>
-      CompilerConfig::{
-        opt_level: 0,
-        const_fold: false,
-        copy_prop: false,
-        cse: false,
-        dce: false,
-        branch_simplify: false,
-        unreachable_elim: false,
-        block_merge: false,
-        jump_thread: false,
-        licm: false,
-        loop_unroll: false,
-        strength_reduce: false,
-      }
-    1 =>
-      CompilerConfig::{
-        opt_level: 1,
-        const_fold: true,
-        copy_prop: true,
-        cse: true,
-        dce: true,
-        branch_simplify: false,
-        unreachable_elim: false,
-        block_merge: false,
-        jump_thread: false,
-        licm: false,
-        loop_unroll: false,
-        strength_reduce: false,
-      }
-    2 => CompilerConfig::default()
-    _ =>
-      // O3
-      CompilerConfig::{
-        opt_level: 3,
-        const_fold: true,
-        copy_prop: true,
-        cse: true,
-        dce: true,
-        branch_simplify: true,
-        unreachable_elim: true,
-        block_merge: true,
-        jump_thread: true,
-        licm: true,
-        loop_unroll: true,
-        strength_reduce: true,
-      }
-  }
-}
-
-///|
-/// Parse optimization flags from KEY=VAL format
-/// Examples: "const-fold=false", "licm=true"
-fn CompilerConfig::apply_flag(self : CompilerConfig, flag : String) -> Unit {
-  let parts = flag.split("=").collect()
-  if parts.length() != 2 {
-    return
-  }
-  let key = parts[0]
-  let value = parts[1] == "true" || parts[1] == "1"
-  match key {
-    "const-fold" => self.const_fold = value
-    "copy-prop" => self.copy_prop = value
-    "cse" => self.cse = value
-    "dce" => self.dce = value
-    "branch-simplify" => self.branch_simplify = value
-    "unreachable-elim" => self.unreachable_elim = value
-    "block-merge" => self.block_merge = value
-    "jump-thread" => self.jump_thread = value
-    "licm" => self.licm = value
-    "loop-unroll" => self.loop_unroll = value
-    "strength-reduce" => self.strength_reduce = value
-    _ => ()
-  }
+  // Clamp to valid range 0-3
+  let clamped = if level < 0 { 0 } else if level > 3 { 3 } else { level }
+  CompilerConfig::{ opt_level: clamped }
 }
 
 ///|
@@ -249,15 +151,7 @@ fn run_config(action : String) -> Unit {
       println("")
       println("# Wasmoon configuration file")
       println("[optimization]")
-      println("level = 2")
-      println("const-fold = true")
-      println("cse = true")
-      println("dce = true")
-      println("")
-      println("[wasm]")
-      println("max-memory = 0")
-      println("max-call-depth = 1000")
-      println("multi-value = true")
+      println("level = 2  # 0=none, 1=basic, 2=default, 3=aggressive")
       println("")
       println("[debug]")
       println("verbose = false")
