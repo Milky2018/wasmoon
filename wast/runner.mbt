@@ -24,7 +24,7 @@ pub const FUNCREF_TAG : Int64 = 0x2000000000000000L
 pub struct WastResult {
   mut passed : Int
   mut failed : Int
-  mut skipped : Int
+  skipped : Int
   failures : Array[String]
 }
 
@@ -193,11 +193,8 @@ pub fn run_wast_command(
         imports,
       ) catch {
         e => {
-          // If instantiation fails, skip this module
-          result.skipped = result.skipped + 1
-          result.failures.push(
-            "line \{line}: skipped (instantiation failed: \{e})",
-          )
+          result.failed = result.failed + 1
+          result.failures.push("line \{line}: instantiation failed: \{e}")
           return
         }
       }
@@ -230,11 +227,8 @@ pub fn run_wast_command(
       wat_text.write_string(")")
       let mod_ = @wat.parse(wat_text.to_string()) catch {
         e => {
-          // If parsing fails, skip this module
-          result.skipped = result.skipped + 1
-          result.failures.push(
-            "line \{line}: skipped (quoted module parse failed: \{e})",
-          )
+          result.failed = result.failed + 1
+          result.failures.push("line \{line}: quoted module parse failed: \{e}")
           return
         }
       }
@@ -247,10 +241,9 @@ pub fn run_wast_command(
         imports,
       ) catch {
         e => {
-          // If instantiation fails, skip this module
-          result.skipped = result.skipped + 1
+          result.failed = result.failed + 1
           result.failures.push(
-            "line \{line}: skipped (quoted module instantiation failed: \{e})",
+            "line \{line}: quoted module instantiation failed: \{e}",
           )
           return
         }
@@ -263,11 +256,8 @@ pub fn run_wast_command(
       }
     }
     ModuleBinaryFailed(err) => {
-      // Binary module failed to parse (unsupported features), skip
-      result.skipped = result.skipped + 1
-      result.failures.push(
-        "line \{line}: skipped (binary parse failed: \{err})",
-      )
+      result.failed = result.failed + 1
+      result.failures.push("line \{line}: binary parse failed: \{err}")
     }
     ModuleDefinition(mod_, name) => {
       // Module definition - validates and stores for later instantiation
@@ -305,10 +295,8 @@ pub fn run_wast_command(
         imports,
       ) catch {
         e => {
-          result.skipped = result.skipped + 1
-          result.failures.push(
-            "line \{line}: skipped (module instance failed: \{e})",
-          )
+          result.failed = result.failed + 1
+          result.failures.push("line \{line}: module instance failed: \{e}")
           return
         }
       }
