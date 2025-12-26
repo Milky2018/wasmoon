@@ -161,14 +161,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
     }
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow(int32_t table_idx, int64_t delta, int64_t init_value) {
-    return table_grow_internal(table_idx, delta, init_value);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr(void) {
-    return (int64_t)wasmoon_jit_table_grow;
-}
-
 // ============ v3 ctx-passing Memory/Table Operations (re-entrant) ============
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow_v3(
@@ -312,25 +304,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     }
 }
 
-// ============ Global Context Management ============
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_set_context_managed(void *jit_context) {
-    if (g_jit_context_obj != NULL) {
-        moonbit_decref(g_jit_context_obj);
-    }
-    if (jit_context != NULL) {
-        moonbit_incref(jit_context);
-        g_jit_context = (jit_context_t *)(*(int64_t *)jit_context);
-    } else {
-        g_jit_context = NULL;
-    }
-    g_jit_context_obj = jit_context;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_context(void) {
-    return (int64_t)g_jit_context;
-}
-
 // ============ Trampoline-based Call ============
 
 typedef int (*entry_trampoline_fn)(jit_context_t *vmctx, int64_t *values_vec, void *func_ptr);
@@ -351,12 +324,9 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     g_trap_active = 1;
 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    jit_context_t *prev_ctx = g_jit_context;
-    g_jit_context = ctx;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
-        g_jit_context = prev_ctx;
         return (int)g_trap_code;
     }
 
@@ -364,13 +334,24 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     int result = trampoline(ctx, values_vec, (void *)func_ptr);
 
     g_trap_active = 0;
-    g_jit_context = prev_ctx;
 
     if (g_trap_code != 0) {
         return (int)g_trap_code;
     }
 
     return result;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
+    void *jit_context,
+    int64_t trampoline_ptr,
+    int64_t func_ptr,
+    int64_t *values_vec,
+    int values_len
+) {
+    if (!jit_context) return -1;
+    int64_t ctx_ptr = wasmoon_jit_context_ptr(jit_context);
+    return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
 }
 
 // ============ Spectest Trampolines ============
@@ -471,69 +452,11 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory(int64_t mem_ptr) {
     }
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(int32_t delta, int32_t max_pages) {
-    return memory_grow_internal(delta, max_pages);
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size(void) {
-    return memory_size_internal();
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base(void) {
-    return get_memory_base_internal();
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes(void) {
-    return get_memory_size_bytes_internal();
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_grow;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_base_ptr(void) {
-    return (int64_t)wasmoon_jit_get_memory_base;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_bytes_ptr(void) {
-    return (int64_t)wasmoon_jit_get_memory_size_bytes;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_size;
-}
-
 MOONBIT_FFI_EXPORT int wasmoon_jit_memory_init(int64_t mem_ptr, int64_t offset, moonbit_bytes_t data, int size) {
     if (!mem_ptr || !data || size <= 0) return -1;
     uint8_t *mem = (uint8_t *)mem_ptr;
     memcpy(mem + offset, data, (size_t)size);
     return 0;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) {
-        return (int64_t)ctx->memory_base;
-    }
-    return 0;
-}
-
-// ============ Bulk Memory Operations FFI Exports ============
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill(int32_t dst, int32_t val, int32_t size) {
-    memory_fill_internal(dst, val, size);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(int32_t dst, int32_t src, int32_t size) {
-    memory_copy_internal(dst, src, size);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_fill;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
-    return (int64_t)wasmoon_jit_memory_copy;
 }
 
 // ============ Executable Memory FFI Exports ============

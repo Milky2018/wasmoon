@@ -1,7 +1,7 @@
 // FuncEnvironment - handles Wasm semantic operations by desugaring to IR primitives
 //
 // This module implements Cranelift-style desugaring where high-level Wasm operations
-// (global.get, memory.grow, table.get, etc.) are translated to lower-level IR primitives
+// (global.get, table.get, etc.) are translated to lower-level IR primitives
 // (LoadPtr, StorePtr, CallPtr) during IR translation, not during lowering.
 //
 // Benefits:
@@ -39,10 +39,6 @@ pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
 pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
 
 ///|
-/// Wasm page size constant
-pub const WASM_PAGE_SIZE : Int = 65536
-
-///|
 /// Global variable stride (each global occupies 16 bytes for alignment)
 pub const GLOBAL_STRIDE : Int = 16
 
@@ -51,50 +47,20 @@ pub const GLOBAL_STRIDE : Int = 16
 pub const TABLE_ENTRY_STRIDE : Int = 16
 
 ///|
-/// FuncEnvironment holds runtime function pointers and VMContext layout info
-/// Used during IR translation to desugar Wasm operations
+/// FuncEnvironment holds VMContext layout info used during IR translation to
+/// desugar Wasm operations.
 pub(all) struct FuncEnvironment {
-  // Runtime libcall function pointers (set by JIT before translation)
-  mut memory_grow_ptr : Int64
-  mut memory_fill_ptr : Int64
-  mut memory_copy_ptr : Int64
-  mut table_grow_ptr : Int64
-
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
-
-  // Memory limits
-  memory_max : Int?
 }
 
 ///|
 pub fn FuncEnvironment::new(
   global_types : Array[@types.GlobalType],
-  memory_max : Int?,
 ) -> FuncEnvironment {
   {
-    memory_grow_ptr: 0L,
-    memory_fill_ptr: 0L,
-    memory_copy_ptr: 0L,
-    table_grow_ptr: 0L,
     global_types,
-    memory_max,
   }
-}
-
-///|
-/// Set runtime function pointers (called from JIT setup)
-pub fn FuncEnvironment::set_libcalls(
-  self : FuncEnvironment,
-  memory_grow_ptr : Int64,
-  memory_fill_ptr : Int64,
-  memory_copy_ptr : Int64,
-  table_grow_ptr : Int64,
-) -> Unit {
-  self.memory_grow_ptr = memory_grow_ptr
-  self.memory_fill_ptr = memory_fill_ptr
-  self.memory_copy_ptr = memory_copy_ptr
-  self.table_grow_ptr = table_grow_ptr
 }
 
 // ============ Global Variable Operations ============
@@ -156,89 +122,6 @@ pub fn FuncEnvironment::translate_global_set(
   builder.store_ptr(ty, globals_ptr, value, field_offset)
 }
 
-// ============ Memory Operations ============
-
-///|
-/// Translate memory.size to IR primitives:
-/// Load memory_size from vmctx, divide by page size
-pub fn FuncEnvironment::translate_memory_size(
-  _self : FuncEnvironment,
-  builder : IRBuilder,
-  vmctx : Value,
-) -> Value {
-  // Load memory_size (in bytes) from vmctx
-  let size_offset = builder.iconst(
-    Type::I64,
-    VMCTX_MEMORY_SIZE_OFFSET.to_int64(),
-  )
-  let size_bytes = builder.load_ptr(Type::I64, vmctx, size_offset)
-
-  // Convert to i32 and divide by page size (shift right by 16)
-  let size_i32 = builder.ireduce(Type::I32, size_bytes)
-  let page_shift = builder.iconst(Type::I32, 16L) // 65536 = 2^16
-  builder.ushr(size_i32, page_shift)
-}
-
-///|
-/// Translate memory.grow to IR primitives:
-/// Call runtime function: memory_grow(delta, max_pages) -> i32
-pub fn FuncEnvironment::translate_memory_grow(
-  self : FuncEnvironment,
-  builder : IRBuilder,
-  vmctx : Value,
-  delta : Value,
-) -> Value {
-  // Load function pointer (or use constant if known)
-  let func_ptr = builder.iconst(Type::I64, self.memory_grow_ptr)
-
-  // max_pages argument
-  let max_pages = match self.memory_max {
-    Some(max) => builder.iconst(Type::I32, max.to_int64())
-    None => builder.iconst(Type::I32, 65536L) // Default max: 4GB
-  }
-
-  // Call: memory_grow(delta, max_pages) -> i32
-  // Note: The runtime function uses g_jit_context, not vmctx parameter
-  let _ = vmctx // vmctx is implicit via global context
-  let results = builder.call_ptr(func_ptr, vmctx, vmctx, [delta, max_pages], [
-    Type::I32,
-  ])
-  results[0]
-}
-
-///|
-/// Translate memory.fill to IR primitives:
-/// Call runtime function: memory_fill(dst, val, size)
-pub fn FuncEnvironment::translate_memory_fill(
-  self : FuncEnvironment,
-  builder : IRBuilder,
-  vmctx : Value,
-  dst : Value,
-  val : Value,
-  size : Value,
-) -> Unit {
-  let func_ptr = builder.iconst(Type::I64, self.memory_fill_ptr)
-  // memory_fill returns void, so empty result types
-  let _ = builder.call_ptr(func_ptr, vmctx, vmctx, [dst, val, size], [])
-
-}
-
-///|
-/// Translate memory.copy to IR primitives:
-/// Call runtime function: memory_copy(dst, src, size)
-pub fn FuncEnvironment::translate_memory_copy(
-  self : FuncEnvironment,
-  builder : IRBuilder,
-  vmctx : Value,
-  dst : Value,
-  src : Value,
-  size : Value,
-) -> Unit {
-  let func_ptr = builder.iconst(Type::I64, self.memory_copy_ptr)
-  let _ = builder.call_ptr(func_ptr, vmctx, vmctx, [dst, src, size], [])
-
-}
-
 // ============ Table Operations ============
 
 ///|
@@ -270,29 +153,6 @@ pub fn FuncEnvironment::translate_table_size(
     let size_i64 = builder.load_ptr(Type::I64, sizes_ptr, elem_offset)
     builder.ireduce(Type::I32, size_i64)
   }
-}
-
-///|
-/// Translate table.grow to IR primitives:
-/// Call runtime function: table_grow(table_idx, delta, init_value) -> i32
-pub fn FuncEnvironment::translate_table_grow(
-  self : FuncEnvironment,
-  builder : IRBuilder,
-  vmctx : Value,
-  table_idx : Int,
-  delta : Value,
-  init_value : Value,
-) -> Value {
-  let func_ptr = builder.iconst(Type::I64, self.table_grow_ptr)
-  let table_idx_val = builder.iconst(Type::I32, table_idx.to_int64())
-  let results = builder.call_ptr(
-    func_ptr,
-    vmctx,
-    vmctx,
-    [table_idx_val, delta, init_value],
-    [Type::I32],
-  )
-  results[0]
 }
 
 ///|

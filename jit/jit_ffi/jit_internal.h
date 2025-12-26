@@ -56,10 +56,6 @@ int free_exec_internal(int64_t ptr);
 
 // ============ JIT Context (jit_context.c) ============
 
-// Global JIT context (defined in jit_context.c)
-// Note: g_jit_context is also declared in jit_ffi.h for wasi.c
-extern void *g_jit_context_obj;
-
 // Context allocation/free (internal implementations)
 jit_context_t *alloc_context_internal(int func_count);
 void free_context_internal(jit_context_t *ctx);
@@ -67,14 +63,6 @@ void free_context_internal(jit_context_t *ctx);
 // ============ Memory Operations (memory_ops.c) ============
 
 #define WASM_PAGE_SIZE 65536
-
-int32_t memory_grow_internal(int32_t delta, int32_t max_pages);
-int32_t memory_size_internal(void);
-int64_t get_memory_base_internal(void);
-int64_t get_memory_size_bytes_internal(void);
-void memory_fill_internal(int32_t dst, int32_t val, int32_t size);
-void memory_copy_internal(int32_t dst, int32_t src, int32_t size);
-int32_t table_grow_internal(int32_t table_idx, int64_t delta, int64_t init_value);
 
 // v3 ctx-passing (re-entrant) variants (internal implementations)
 int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_pages);

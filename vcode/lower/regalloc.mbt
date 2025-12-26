@@ -678,31 +678,37 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     }
   }
 
+  // Float32/Float64 registers alias the same Vn hardware register.
+  // When resolving parallel moves we must treat them as the same location to
+  // avoid clobbering (e.g. D1 <- D0 would overwrite S1).
+  fn reg_kind(preg : @abi.PReg) -> Int {
+    match preg.class {
+      @abi.Int => 0
+      @abi.Float32 | @abi.Float64 => 1
+    }
+  }
+
+  fn alias_key(preg : @abi.PReg) -> Int {
+    preg.index * 2 + reg_kind(preg)
+  }
+
+  fn aliases(a : @abi.PReg, b : @abi.PReg) -> Bool {
+    a.index == b.index && reg_kind(a) == reg_kind(b)
+  }
+
   // Build a set of source registers for quick lookup
   fn rebuild_src_set(pending : Array[RegMove]) -> Set[Int] {
     let srcs : Set[Int] = Set::new()
     for mv in pending {
       if not(mv.from.is_spilled()) {
-        // Encode class in the key to distinguish int/float
-        let key = mv.from.index * 4 +
-          (match mv.from.class {
-            @abi.Int => 0
-            @abi.Float32 => 1
-            @abi.Float64 => 2
-          })
-        srcs.add(key)
+        srcs.add(alias_key(mv.from))
       }
     }
     srcs
   }
 
   fn make_key(preg : @abi.PReg) -> Int {
-    preg.index * 4 +
-    (match preg.class {
-      @abi.Int => 0
-      @abi.Float32 => 1
-      @abi.Float64 => 2
-    })
+    alias_key(preg)
   }
 
   // Iterate until all moves are resolved
@@ -742,15 +748,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
         // 2. Replace all uses of mv.from as source with temp
         for i in 0..<pending.length() {
-          let same_class = match (pending[i].from.class, mv.from.class) {
-            (@abi.Int, @abi.Int) => true
-            (@abi.Float32, @abi.Float32) => true
-            (@abi.Float64, @abi.Float64) => true
-            _ => false
-          }
-          if pending[i].from.index == mv.from.index &&
-            same_class &&
-            not(pending[i].from.is_spilled()) {
+          if not(pending[i].from.is_spilled()) && aliases(pending[i].from, mv.from) {
             pending[i] = {
               from: temp_preg,
               to: pending[i].to,

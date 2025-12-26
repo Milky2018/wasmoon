@@ -105,7 +105,7 @@ pub fn Translator::new(
   builder.add_param(Type::I64) |> ignore // caller_vmctx
 
   // Create function environment for desugaring Wasm operations
-  let func_env = FuncEnvironment::new(global_types, memory_max)
+  let func_env = FuncEnvironment::new(global_types)
 
   // Add wasm function parameters (starting from params[2])
   let local_values : Array[Value] = []
