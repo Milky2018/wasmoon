@@ -600,11 +600,13 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
     // If so, it cannot be assigned to a caller-saved register
     for call_point in result.call_points {
       // An interval crosses a call if:
-      // - The call is after the interval's start AND before the interval's end
+      // - The call is strictly after the interval's start AND before the interval's end
+      //   (Values defined by the call itself start at the same progpoint and do not
+      //    need to survive across the call.)
       let start_cmp = interval.start.compare_with_order(call_point, block_order)
       let end_cmp = interval.end.compare_with_order(call_point, block_order)
-      // start <= call_point < end (interval is live across the call)
-      if start_cmp <= 0 && end_cmp > 0 {
+      // start < call_point < end (interval is live across the call)
+      if start_cmp < 0 && end_cmp > 0 {
         interval.crosses_call = true
         break
       }
@@ -676,31 +678,37 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     }
   }
 
+  // Float32/Float64 registers alias the same Vn hardware register.
+  // When resolving parallel moves we must treat them as the same location to
+  // avoid clobbering (e.g. D1 <- D0 would overwrite S1).
+  fn reg_kind(preg : @abi.PReg) -> Int {
+    match preg.class {
+      @abi.Int => 0
+      @abi.Float32 | @abi.Float64 => 1
+    }
+  }
+
+  fn alias_key(preg : @abi.PReg) -> Int {
+    preg.index * 2 + reg_kind(preg)
+  }
+
+  fn aliases(a : @abi.PReg, b : @abi.PReg) -> Bool {
+    a.index == b.index && reg_kind(a) == reg_kind(b)
+  }
+
   // Build a set of source registers for quick lookup
   fn rebuild_src_set(pending : Array[RegMove]) -> Set[Int] {
     let srcs : Set[Int] = Set::new()
     for mv in pending {
       if not(mv.from.is_spilled()) {
-        // Encode class in the key to distinguish int/float
-        let key = mv.from.index * 4 +
-          (match mv.from.class {
-            @abi.Int => 0
-            @abi.Float32 => 1
-            @abi.Float64 => 2
-          })
-        srcs.add(key)
+        srcs.add(alias_key(mv.from))
       }
     }
     srcs
   }
 
   fn make_key(preg : @abi.PReg) -> Int {
-    preg.index * 4 +
-    (match preg.class {
-      @abi.Int => 0
-      @abi.Float32 => 1
-      @abi.Float64 => 2
-    })
+    alias_key(preg)
   }
 
   // Iterate until all moves are resolved
@@ -740,15 +748,8 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
         // 2. Replace all uses of mv.from as source with temp
         for i in 0..<pending.length() {
-          let same_class = match (pending[i].from.class, mv.from.class) {
-            (@abi.Int, @abi.Int) => true
-            (@abi.Float32, @abi.Float32) => true
-            (@abi.Float64, @abi.Float64) => true
-            _ => false
-          }
-          if pending[i].from.index == mv.from.index &&
-            same_class &&
-            not(pending[i].from.is_spilled()) {
+          if not(pending[i].from.is_spilled()) &&
+            aliases(pending[i].from, mv.from) {
             pending[i] = {
               from: temp_preg,
               to: pending[i].to,
@@ -1689,11 +1690,6 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     TypeCheckIndirect(_) => true
     // Function calls have side effects
     ReturnCallIndirect(_, _) | CallPtr(_, _, _) => true
-    // Memory operations have side effects (modify memory or global state)
-    MemoryGrow(_) | MemoryFill | MemoryCopy => true
-    // Table operations have side effects (modify table state)
-    // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment
-    TableGrow(_) => true
     // Traps must not be eliminated
     TrapIfZero(_, _) | TrapIfUge(_) | TrapIfUgt(_) | TrapIf(_, _) => true
     // Everything else is pure computation

@@ -48,9 +48,6 @@ typedef struct {
     int envc;                 // WASI: number of env vars
 } jit_context_t;
 
-// Global JIT context (defined in jit.c, used by wasi.c)
-extern jit_context_t *g_jit_context;
-
 // ============ Executable Memory Functions ============
 // Forward declarations for GC-managed ExecCode
 

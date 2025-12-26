@@ -33,6 +33,16 @@ pub(all) enum GCLibcall {
 } derive(Eq, Show)
 
 ///|
+/// JIT runtime library calls (v3 ctx-passing helpers).
+pub(all) enum JITLibcall {
+  MemoryGrowV3
+  MemorySizeV3
+  MemoryFillV3
+  MemoryCopyV3
+  TableGrowV3
+} derive(Eq, Show)
+
+///|
 /// VCode instruction - a machine-level instruction with virtual registers
 /// Following Cranelift's design with operand constraints for fixed register allocation
 pub(all) struct VCodeInst {
@@ -284,25 +294,8 @@ pub(all) enum VCodeOpcode {
   //   param_idx < 0: float overflow param at index (-param_idx - 1), after int_overflow_count int params
   // Stack layout: [int_overflow..., float_overflow...]
   LoadStackParam(Int, @abi.RegClass, Int)
-  // Memory management
-  // MemoryGrow: grow memory by delta pages, returns previous size in pages or -1
-  // Int = max_pages (0 = no limit)
-  // Uses: [delta], Defs: [result]
-  MemoryGrow(Int)
-  // MemorySize: get current memory size in pages
-  // Uses: [], Defs: [result]
-  MemorySize
-  // MemoryFill: fill memory region with a byte value
-  // Uses: [dst, val, size], Defs: []
-  MemoryFill
-  // MemoryCopy: copy memory region (handles overlapping regions)
-  // Uses: [dst, src, size], Defs: []
-  MemoryCopy
-  // Table operations (for reference types)
+  // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
   // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
-  // TableGrow(table_idx): grow table, returns previous size or -1
-  // Uses: [delta, init_value], Defs: [result]
-  TableGrow(Int)
   // NOTE: GlobalGet, GlobalSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
 
   // Raw pointer operations (for trampolines, no bounds checking)
@@ -317,6 +310,11 @@ pub(all) enum VCodeOpcode {
   // LoadGCFuncPtr(libcall): Load function pointer for GC runtime call
   // Uses: [], Defs: [result (function pointer)]
   LoadGCFuncPtr(GCLibcall)
+
+  // Load JIT runtime function pointer (ctx-passing v3 helpers)
+  // LoadJITFuncPtr(libcall): Load function pointer for JIT runtime call
+  // Uses: [], Defs: [result (function pointer)]
+  LoadJITFuncPtr(JITLibcall)
 
   // CallPtr: call through a function pointer
   // Uses depend on calling convention:
@@ -454,20 +452,12 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(param_idx, class, _) =>
       "load_stack_param \{param_idx} (\{class})"
-    MemoryGrow(max_pages) =>
-      if max_pages == 0 {
-        "memory_grow"
-      } else {
-        "memory_grow max=\{max_pages}"
-      }
-    MemorySize => "memory_size"
-    MemoryFill => "memory_fill"
-    MemoryCopy => "memory_copy"
+    // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
     // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
-    TableGrow(table_idx) => "table_grow \{table_idx}"
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
     LoadGCFuncPtr(libcall) => "load_gc_func_ptr.\{libcall}"
+    LoadJITFuncPtr(libcall) => "load_jit_func_ptr.\{libcall}"
     CallPtr(num_args, num_results, call_conv) =>
       "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
     AdjustSP(delta) =>
@@ -827,10 +817,6 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
     CallPtr(_, _, _) => Regular
     // Tail calls that don't return to caller
     ReturnCallIndirect(_, _) => TailCall
-    // Memory operations that call C runtime functions
-    MemoryGrow(_) | MemorySize | MemoryFill | MemoryCopy => Regular
-    // Table operations that call C runtime functions
-    TableGrow(_) => Regular
     // Everything else is not a call
     _ => None
   }

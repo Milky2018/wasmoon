@@ -130,6 +130,16 @@ pub(all) enum IntToFloatKind {
 }
 pub impl Show for IntToFloatKind
 
+pub(all) enum JITLibcall {
+  MemoryGrowV3
+  MemorySizeV3
+  MemoryFillV3
+  MemoryCopyV3
+  TableGrowV3
+}
+pub impl Eq for JITLibcall
+pub impl Show for JITLibcall
+
 pub(all) enum MemType {
   I8
   I16
@@ -237,14 +247,10 @@ pub(all) enum VCodeOpcode {
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, @abi.RegClass, Int)
-  MemoryGrow(Int)
-  MemorySize
-  MemoryFill
-  MemoryCopy
-  TableGrow(Int)
   LoadPtr(MemType, Int)
   StorePtr(MemType, Int)
   LoadGCFuncPtr(GCLibcall)
+  LoadJITFuncPtr(JITLibcall)
   CallPtr(Int, Int, CallConv)
   AdjustSP(Int)
   StoreToStack(Int)

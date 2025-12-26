@@ -55,10 +55,6 @@ pub extern "c" fn c_jit_ctx_set_memory(
 ) -> Unit = "wasmoon_jit_ctx_set_memory"
 
 ///|
-/// Get memory base from context
-pub extern "c" fn c_jit_ctx_get_memory(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_memory"
-
-///|
 /// Allocate linear memory for WASM
 pub extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_memory"
 
@@ -67,47 +63,35 @@ pub extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc
 pub extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory"
 
 ///|
-/// Get memory_grow v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_grow_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_ptr"
+/// Get memory_grow v3 function pointer for JIT (ctx-passing)
+pub extern "c" fn c_jit_get_memory_grow_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_grow_ptr_v3"
 
 ///|
-/// Get get_memory_base v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_base_ptr() -> Int64 = "wasmoon_jit_get_memory_base_ptr"
+/// Get memory_size v3 function pointer for JIT (ctx-passing, returns pages)
+pub extern "c" fn c_jit_get_memory_size_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_size_ptr_v3"
 
 ///|
-/// Get get_memory_size_bytes v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_size_bytes_ptr() -> Int64 = "wasmoon_jit_get_memory_size_bytes_ptr"
+/// Get memory_fill v3 function pointer for JIT (ctx-passing)
+pub extern "c" fn c_jit_get_memory_fill_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_fill_ptr_v3"
 
 ///|
-/// Get memory_size v2 function pointer for JIT (returns pages)
-pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory_size_ptr"
+/// Get memory_copy v3 function pointer for JIT (ctx-passing)
+pub extern "c" fn c_jit_get_memory_copy_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_copy_ptr_v3"
 
 ///|
-/// Get memory_fill v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_ptr"
+/// Get table_grow v3 function pointer for JIT (ctx-passing)
+/// Signature: table_grow(ctx: *jit_context_t, table_idx: i32, delta: i64, init_value: i64) -> i32
+pub extern "c" fn c_jit_get_table_grow_ptr_v3() -> Int64 = "wasmoon_jit_get_table_grow_ptr_v3"
 
 ///|
-/// Get memory_copy v2 function pointer for JIT
-pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
-
-///|
-/// Get table_grow function pointer for JIT
-/// Signature: table_grow(table_idx: i32, delta: i64, init_value: i64) -> i32
-pub extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_grow_ptr"
-
-///|
-/// Get current memory base from v2 context (for proper cleanup after memory.grow)
-pub extern "c" fn c_jit_get_current_memory_base() -> Int64 = "wasmoon_jit_get_memory_base"
-
-///|
-/// Set globals array in the context v2
+/// Set globals array in the context
 pub extern "c" fn c_jit_ctx_set_globals(
   ctx_ptr : Int64,
   globals_ptr : Int64,
 ) -> Unit = "wasmoon_jit_ctx_set_globals"
 
 ///|
-/// Get function table base address from context v2
+/// Get function table base address from context
 pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
 
 ///|
@@ -115,14 +99,14 @@ pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_
 pub extern "c" fn c_jit_ctx_get_func_count(ctx_ptr : Int64) -> Int = "wasmoon_jit_ctx_get_func_count"
 
 ///|
-/// Allocate indirect table for context v2
+/// Allocate indirect table for context
 pub extern "c" fn c_jit_ctx_alloc_indirect_table(
   ctx_ptr : Int64,
   count : Int,
 ) -> Int = "wasmoon_jit_ctx_alloc_indirect_table"
 
 ///|
-/// Set an entry in indirect table v2 (table_idx -> func_table[func_idx])
+/// Set an entry in indirect table (table_idx -> func_table[func_idx])
 /// type_idx: the type index of the function (for type checking)
 pub extern "c" fn c_jit_ctx_set_indirect(
   ctx_ptr : Int64,
@@ -174,12 +158,6 @@ pub extern "c" fn c_jit_ctx_set_table_pointers(
 ) -> Unit = "wasmoon_jit_ctx_set_table_pointers"
 
 ///|
-/// Set the global JIT context v2 with managed object (handles reference counting)
-/// This prevents GC from collecting the context while it's active
-#borrow(jit_context)
-pub extern "c" fn c_jit_set_context_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_set_context_managed"
-
-///|
 /// C FFI for trampoline-based calls (new, simple interface)
 /// Uses JIT-generated trampoline that handles all ABI complexity
 /// trampoline_ptr: Pointer to JIT-generated entry trampoline
@@ -195,6 +173,19 @@ pub extern "c" fn c_jit_call_trampoline(
   values_vec : FixedArray[Int64],
   values_len : Int,
 ) -> Int = "wasmoon_jit_call_trampoline"
+
+///|
+/// C FFI for trampoline-based calls that keeps the GC-managed `JITContext`
+/// alive for the duration of the call.
+/// This avoids relying on any global "current context" state.
+#borrow(jit_context, values_vec)
+pub extern "c" fn c_jit_call_trampoline_managed(
+  jit_context : JITContext,
+  trampoline_ptr : Int64,
+  func_ptr : Int64,
+  values_vec : FixedArray[Int64],
+  values_len : Int,
+) -> Int = "wasmoon_jit_call_trampoline_managed"
 
 // ============ WASI Trampoline Pointers ============
 

@@ -127,8 +127,14 @@ fn lower_wasm_call(
     max_float_reg_args
   }
   for i in 0..<float_reg_count {
-    let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+    let (vreg, _class) = float_args[i]
+    // Use Float64 physical class for all float registers (V0-V7).
+    // f32 vs f64 is handled by the opcodes (S vs D) and IR types, while the
+    // underlying hardware register is the same Vn.
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: i,
+      class: @abi.Float64,
+    })
   }
 
   // Define results with fixed register constraints
@@ -144,14 +150,8 @@ fn lower_wasm_call(
         })
         int_result_idx += 1
       }
-      @abi.Float32 => {
-        call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
-          index: float_result_idx,
-          class: @abi.Float32,
-        })
-        float_result_idx += 1
-      }
-      @abi.Float64 => {
+      @abi.Float32 | @abi.Float64 => {
+        // Same reasoning as float args: constrain to Vn using Float64 class.
         call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
           index: float_result_idx,
           class: @abi.Float64,

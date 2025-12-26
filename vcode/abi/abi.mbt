@@ -291,6 +291,22 @@ pub fn call_clobbered_fprs() -> Array[PReg] {
     { index: 5, class: Float64 },
     { index: 6, class: Float64 },
     { index: 7, class: Float64 },
+    { index: 16, class: Float64 },
+    { index: 17, class: Float64 },
+    { index: 18, class: Float64 },
+    { index: 19, class: Float64 },
+    { index: 20, class: Float64 },
+    { index: 21, class: Float64 },
+    { index: 22, class: Float64 },
+    { index: 23, class: Float64 },
+    { index: 24, class: Float64 },
+    { index: 25, class: Float64 },
+    { index: 26, class: Float64 },
+    { index: 27, class: Float64 },
+    { index: 28, class: Float64 },
+    { index: 29, class: Float64 },
+    { index: 30, class: Float64 },
+    { index: 31, class: Float64 },
   ]
 }
 

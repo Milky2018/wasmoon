@@ -25,13 +25,23 @@ fn lower_table_grow(
     None => ctx.vcode_func.new_vreg(@abi.Int) // Create a temp vreg for the unused result
   }
 
-  // Create the TableGrow VCode instruction
-  // Uses: [delta, init_value], Defs: [result]
-  let grow_inst = @instr.VCodeInst::new(TableGrow(table_idx))
-  grow_inst.add_def({ reg: Virtual(result_vreg) })
-  grow_inst.add_use(Virtual(delta))
-  grow_inst.add_use(Virtual(init_value))
-  // Add clobbers for caller-saved registers (it's a call)
-  add_call_clobbers(grow_inst)
-  block.add_inst(grow_inst)
+  // Lower to a C call (re-entrant v3 helper):
+  //   wasmoon_jit_table_grow_v3(vmctx, table_idx, delta, init_value) -> i32
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(TableGrowV3))
+  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_ptr)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let table_idx_vreg = materialize_imm(ctx, block, table_idx.to_int64())
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, table_idx_vreg, delta, init_value],
+    Some(result_vreg),
+  )
 }

@@ -40,40 +40,6 @@ pub fn check_trap() -> Unit raise JITTrap {
   }
 }
 
-// ============ Memory v2 functions (for v2 ABI) ============
-
-///|
-/// Get memory_grow v2 function pointer for JIT
-pub fn get_memory_grow_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_grow_ptr()
-}
-
-///|
-/// Get get_memory_base v2 function pointer for JIT
-pub fn get_memory_base_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_base_ptr()
-}
-
-///|
-/// Get get_memory_size_bytes v2 function pointer for JIT
-pub fn get_memory_size_bytes_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_size_bytes_ptr()
-}
-
-///|
-/// Get memory_size v2 function pointer for JIT (returns pages)
-pub fn get_memory_size_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_memory_size_ptr()
-}
-
-///|
-/// Get current memory base from v2 context (for proper cleanup after memory.grow)
-/// Returns the actual current memory base address, which may differ from the
-/// originally allocated address if memory.grow caused a realloc.
-pub fn get_current_memory_base() -> Int64 {
-  @jit_ffi.c_jit_get_current_memory_base()
-}
-
 // ============ JIT Context Wrapper ============
 
 ///|
@@ -225,13 +191,6 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
     bytes[i] = data[i]
   }
   @jit_ffi.c_jit_memory_init(mem_ptr, offset, bytes, size) == 0
-}
-
-///|
-/// Activate this context for WASI calls (v2)
-/// Uses reference counting to prevent GC from collecting this context
-fn JITContext::activate(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_set_context_managed(self.ctx)
 }
 
 // NOTE: No free() method needed - GC handles cleanup automatically!
@@ -528,9 +487,9 @@ fn JITContext::call_multi_return(
   }
 
   // Call via trampoline (Cranelift-style: all ABI complexity in JIT code)
-  let trap_code = @jit_ffi.c_jit_call_trampoline(
+  let trap_code = @jit_ffi.c_jit_call_trampoline_managed(
+    self.ctx,
     trampoline_ptr,
-    self.ptr(),
     func_ptr,
     values_vec,
     values_len,

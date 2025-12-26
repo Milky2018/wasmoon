@@ -6,11 +6,11 @@
 
 // ============ Linear Memory Operations ============
 
-int32_t memory_grow_internal(int32_t delta, int32_t max_pages) {
-    if (!g_jit_context) return -1;
+int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_pages) {
+    if (!ctx) return -1;
     if (delta < 0) return -1;
 
-    size_t current_size = g_jit_context->memory_size;
+    size_t current_size = ctx->memory_size;
     int32_t current_pages = (int32_t)(current_size / WASM_PAGE_SIZE);
 
     // Check for overflow
@@ -28,38 +28,27 @@ int32_t memory_grow_internal(int32_t delta, int32_t max_pages) {
     if (delta == 0) return current_pages;
 
     // Reallocate memory
-    uint8_t *new_mem = (uint8_t *)realloc(g_jit_context->memory_base, new_size);
+    uint8_t *new_mem = (uint8_t *)realloc(ctx->memory_base, new_size);
     if (!new_mem) return -1;
 
     // Zero-initialize the new pages
     memset(new_mem + current_size, 0, new_size - current_size);
 
     // Update context
-    g_jit_context->memory_base = new_mem;
-    g_jit_context->memory_size = new_size;
+    ctx->memory_base = new_mem;
+    ctx->memory_size = new_size;
 
     return current_pages;
 }
 
-int32_t memory_size_internal(void) {
-    if (!g_jit_context) return 0;
-    return (int32_t)(g_jit_context->memory_size / WASM_PAGE_SIZE);
-}
-
-int64_t get_memory_base_internal(void) {
-    if (!g_jit_context) return 0;
-    return (int64_t)g_jit_context->memory_base;
-}
-
-int64_t get_memory_size_bytes_internal(void) {
-    if (!g_jit_context) return 0;
-    return (int64_t)g_jit_context->memory_size;
+int32_t memory_size_ctx_internal(jit_context_t *ctx) {
+    if (!ctx) return 0;
+    return (int32_t)(ctx->memory_size / WASM_PAGE_SIZE);
 }
 
 // ============ Bulk Memory Operations ============
 
-void memory_fill_internal(int32_t dst, int32_t val, int32_t size) {
-    jit_context_t *ctx = g_jit_context;
+void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int32_t size) {
     if (!ctx || !ctx->memory_base) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
@@ -81,8 +70,7 @@ void memory_fill_internal(int32_t dst, int32_t val, int32_t size) {
     memset(ctx->memory_base + dst, val & 0xFF, size);
 }
 
-void memory_copy_internal(int32_t dst, int32_t src, int32_t size) {
-    jit_context_t *ctx = g_jit_context;
+void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int32_t size) {
     if (!ctx || !ctx->memory_base) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
@@ -108,8 +96,12 @@ void memory_copy_internal(int32_t dst, int32_t src, int32_t size) {
 
 // ============ Table Operations ============
 
-int32_t table_grow_internal(int32_t table_idx, int64_t delta, int64_t init_value) {
-    jit_context_t *ctx = g_jit_context;
+int32_t table_grow_ctx_internal(
+    jit_context_t *ctx,
+    int32_t table_idx,
+    int64_t delta,
+    int64_t init_value
+) {
     if (!ctx || table_idx < 0 || delta < 0) return -1;
     if (table_idx >= ctx->table_count) return -1;
     if (!ctx->tables || !ctx->table_sizes) return -1;

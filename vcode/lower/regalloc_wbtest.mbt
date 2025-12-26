@@ -1616,8 +1616,8 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
       #|    d8 = ldf 42
       #|    d0 = ldf 3.14
       #|    x8 = ldi 8192
-      #|    d9 = call_ptr[Wasm](1) -> 1 results x8
-      #|    ret d8, d9
+      #|    d1 = call_ptr[Wasm](1) -> 1 results x8
+      #|    ret d8, d1
       #|}
       #|
     ),

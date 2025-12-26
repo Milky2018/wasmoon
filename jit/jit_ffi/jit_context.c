@@ -4,11 +4,6 @@
 
 #include "jit_internal.h"
 
-// ============ Global Context ============
-
-jit_context_t *g_jit_context = NULL;
-void *g_jit_context_obj = NULL;
-
 // ============ Context Allocation ============
 
 jit_context_t *alloc_context_internal(int func_count) {

@@ -68,6 +68,8 @@ pub fn c_jit_call_multi_return(Int64, Int64, FixedArray[Int64], Int, FixedArray[
 
 pub fn c_jit_call_trampoline(Int64, Int64, Int64, FixedArray[Int64], Int) -> Int
 
+pub fn c_jit_call_trampoline_managed(JITContext, Int64, Int64, FixedArray[Int64], Int) -> Int
+
 pub fn c_jit_clear_trap() -> Unit
 
 pub fn c_jit_context_ptr(JITContext) -> Int64
@@ -79,8 +81,6 @@ pub fn c_jit_ctx_alloc_indirect_table(Int64, Int) -> Int
 pub fn c_jit_ctx_get_func_count(Int64) -> Int
 
 pub fn c_jit_ctx_get_func_table(Int64) -> Int64
-
-pub fn c_jit_ctx_get_memory(Int64) -> Int64
 
 pub fn c_jit_ctx_set_func(Int64, Int, Int64) -> Unit
 
@@ -122,8 +122,6 @@ pub fn c_jit_get_args_sizes_get_ptr() -> Int64
 
 pub fn c_jit_get_clock_time_get_ptr() -> Int64
 
-pub fn c_jit_get_current_memory_base() -> Int64
-
 pub fn c_jit_get_environ_get_ptr() -> Int64
 
 pub fn c_jit_get_environ_sizes_get_ptr() -> Int64
@@ -162,17 +160,13 @@ pub fn c_jit_get_gc_struct_set_ptr() -> Int64
 
 pub fn c_jit_get_gc_type_check_subtype_ptr() -> Int64
 
-pub fn c_jit_get_memory_base_ptr() -> Int64
+pub fn c_jit_get_memory_copy_ptr_v3() -> Int64
 
-pub fn c_jit_get_memory_copy_ptr() -> Int64
+pub fn c_jit_get_memory_fill_ptr_v3() -> Int64
 
-pub fn c_jit_get_memory_fill_ptr() -> Int64
+pub fn c_jit_get_memory_grow_ptr_v3() -> Int64
 
-pub fn c_jit_get_memory_grow_ptr() -> Int64
-
-pub fn c_jit_get_memory_size_bytes_ptr() -> Int64
-
-pub fn c_jit_get_memory_size_ptr() -> Int64
+pub fn c_jit_get_memory_size_ptr_v3() -> Int64
 
 pub fn c_jit_get_proc_exit_ptr() -> Int64
 
@@ -194,7 +188,7 @@ pub fn c_jit_get_spectest_print_i64_ptr() -> Int64
 
 pub fn c_jit_get_spectest_print_ptr() -> Int64
 
-pub fn c_jit_get_table_grow_ptr() -> Int64
+pub fn c_jit_get_table_grow_ptr_v3() -> Int64
 
 pub fn c_jit_get_trap_code() -> Int
 
@@ -205,8 +199,6 @@ pub fn c_jit_memory_fill(Int, Int, Int) -> Unit
 pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_read_i64(Int64) -> Int64
-
-pub fn c_jit_set_context_managed(JITContext) -> Unit
 
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
 
