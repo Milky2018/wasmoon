@@ -1414,13 +1414,17 @@ fn Translator::translate_instruction(
       // Save locals BEFORE translating body - catch handlers will use these values
       // because longjmp returns to the point of setjmp, so locals should have
       // their values from before the try body executed
-      let saved_locals = self.locals.copy()
+      let saved_locals_for_catch = self.locals.copy()
 
       // === Try body block ===
       self.builder.switch_to_block(try_body_block)
 
       // Translate the body using normal block translation
       self.translate_block(block_type, body)
+
+      // Save post-body locals for the normal continuation path
+      // (locals modified in try body should be visible after try_table)
+      let post_body_locals = self.locals.copy()
 
       // Emit TryTableEnd - pops exception handler
       self.builder.try_table_end(handler_id)
@@ -1439,7 +1443,7 @@ fn Translator::translate_instruction(
       // This is SSA-correct because catch handlers are reached via longjmp
       // from the setjmp point, not through the try body
       self.locals.clear()
-      for loc in saved_locals {
+      for loc in saved_locals_for_catch {
         self.locals.push(loc)
       }
 
@@ -1500,6 +1504,13 @@ fn Translator::translate_instruction(
 
       // === Continuation block ===
       self.builder.switch_to_block(try_continuation)
+
+      // Restore post-body locals for the normal continuation path
+      // This ensures locals modified in the try body are visible after try_table
+      self.locals.clear()
+      for loc in post_body_locals {
+        self.locals.push(loc)
+      }
       self.is_unreachable = false
     }
     inst => abort("unimplemented ir instruction \{inst}")
