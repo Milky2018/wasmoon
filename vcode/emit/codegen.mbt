@@ -1255,7 +1255,7 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64(result_reg, func_ptr)
     }
     LoadJITFuncPtr(libcall) => {
-      // Load JIT runtime function pointer (v3 ctx-passing helpers)
+      // Load JIT runtime function pointer (v3/v4 ctx-passing helpers)
       // Uses: [], Defs: [result (function pointer)]
       let result_reg = wreg_num(inst.defs[0])
       let func_ptr = match libcall {
@@ -1264,6 +1264,11 @@ fn MachineCode::emit_instruction(
         MemoryFillV3 => @jit_ffi.c_jit_get_memory_fill_ptr_v3()
         MemoryCopyV3 => @jit_ffi.c_jit_get_memory_copy_ptr_v3()
         TableGrowV3 => @jit_ffi.c_jit_get_table_grow_ptr_v3()
+        // v4 helpers with memidx for multi-memory support
+        MemoryGrowV4 => @jit_ffi.c_jit_get_memory_grow_ptr_v4()
+        MemorySizeV4 => @jit_ffi.c_jit_get_memory_size_ptr_v4()
+        MemoryFillV4 => @jit_ffi.c_jit_get_memory_fill_ptr_v4()
+        MemoryCopyV4 => @jit_ffi.c_jit_get_memory_copy_ptr_v4()
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }

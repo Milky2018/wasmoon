@@ -152,6 +152,10 @@ pub(all) enum JITLibcall {
   MemoryFillV3
   MemoryCopyV3
   TableGrowV3
+  MemoryGrowV4
+  MemorySizeV4
+  MemoryFillV4
+  MemoryCopyV4
 }
 pub impl Eq for JITLibcall
 pub impl Show for JITLibcall

@@ -40,6 +40,11 @@ pub(all) enum JITLibcall {
   MemoryFillV3
   MemoryCopyV3
   TableGrowV3
+  // v4 helpers with memidx for multi-memory support
+  MemoryGrowV4
+  MemorySizeV4
+  MemoryFillV4
+  MemoryCopyV4
 } derive(Eq, Show)
 
 ///|
