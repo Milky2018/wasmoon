@@ -46,14 +46,6 @@ pub fn AArch64Regs::x5(Self) -> @abi.PReg
 pub fn AArch64Regs::x6(Self) -> @abi.PReg
 pub fn AArch64Regs::x7(Self) -> @abi.PReg
 
-pub enum CallConv {
-  SystemV
-  WindowsFastcall
-  Aapcs64
-  Wasm
-}
-pub impl Show for CallConv
-
 pub(all) struct CodeCache {
   functions : Map[Int, CompiledFunction]
   mut total_size : Int
@@ -151,6 +143,18 @@ pub struct NoBarrierGcCompiler {
 }
 pub fn NoBarrierGcCompiler::new() -> Self
 pub impl GcCompiler for NoBarrierGcCompiler
+
+pub enum PlatformABI {
+  SystemV_AMD64
+  Windows_x64
+  AAPCS64
+  Apple_ARM64
+}
+pub fn PlatformABI::current() -> Self
+pub fn PlatformABI::float_arg_regs(Self) -> Int
+pub fn PlatformABI::int_arg_regs(Self) -> Int
+pub fn PlatformABI::requires_16_byte_stack_align(Self) -> Bool
+pub impl Show for PlatformABI
 
 pub(all) struct VCodeBuilder {
   func : @lower.VCodeFunction
