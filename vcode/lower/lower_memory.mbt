@@ -414,18 +414,26 @@ fn lower_memory_grow(
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
-  // Create the MemoryGrow VCode instruction
-  // Uses: [delta], Defs: [result]
-  // Convert Int? to Int (0 = no limit)
+  // Lower to a C call (re-entrant v3 helper):
+  //   wasmoon_jit_memory_grow_v3(vmctx, delta, max_pages) -> i32
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryGrowV3))
+  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_ptr)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
   let max_pages_value = max_pages.unwrap_or(0)
-  let grow_inst = @instr.VCodeInst::new(MemoryGrow(max_pages_value))
-  grow_inst.add_def({ reg: Virtual(result_vreg) })
-  grow_inst.add_use(Virtual(delta_vreg))
-  // Add clobbers for caller-saved registers (it's a call)
-  add_call_clobbers(grow_inst)
-  // Also clobber X19 since emit uses it as temp to save result across internal calls
-  grow_inst.add_def({ reg: Physical({ index: 19, class: Int }) })
-  block.add_inst(grow_inst)
+  let max_pages_vreg = materialize_imm(ctx, block, max_pages_value.to_int64())
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, delta_vreg, max_pages_vreg],
+    Some(result_vreg),
+  )
 }
 
 ///|
@@ -440,13 +448,18 @@ fn lower_memory_size(
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
-  // Create the MemorySize VCode instruction
-  // Uses: [], Defs: [result]
-  let size_inst = @instr.VCodeInst::new(MemorySize)
-  size_inst.add_def({ reg: Virtual(result_vreg) })
-  // Add clobbers for caller-saved registers (it's a call)
-  add_call_clobbers(size_inst)
-  block.add_inst(size_inst)
+  // Lower to a C call (re-entrant v3 helper):
+  //   wasmoon_jit_memory_size_v3(vmctx) -> i32
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemorySizeV3))
+  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_ptr)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg], Some(result_vreg))
 }
 
 ///|
@@ -463,19 +476,18 @@ fn lower_memory_fill(
   let val = ctx.get_vreg_for_use(inst.operands[1], block)
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
-  // Create the MemoryFill VCode instruction
-  // Uses: [dst, val, size], Defs: []
-  let fill_inst = @instr.VCodeInst::new(MemoryFill)
-  fill_inst.add_use(Virtual(dst))
-  fill_inst.add_use(Virtual(val))
-  fill_inst.add_use(Virtual(size))
-  // Only clobber registers actually used by codegen: x0-x2 (args), x16 (func ptr)
-  // Don't clobber all caller-saved regs to avoid breaking value reuse
-  fill_inst.add_def({ reg: Physical({ index: 0, class: Int }) }) // x0
-  fill_inst.add_def({ reg: Physical({ index: 1, class: Int }) }) // x1
-  fill_inst.add_def({ reg: Physical({ index: 2, class: Int }) }) // x2
-  fill_inst.add_def({ reg: Physical({ index: 16, class: Int }) }) // x16
-  block.add_inst(fill_inst)
+  // Lower to a C call (re-entrant v3 helper):
+  //   wasmoon_jit_memory_fill_v3(vmctx, dst, val, size)
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryFillV3))
+  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_ptr)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, dst, val, size], None)
 }
 
 ///|
@@ -492,17 +504,16 @@ fn lower_memory_copy(
   let src = ctx.get_vreg_for_use(inst.operands[1], block)
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
-  // Create the MemoryCopy VCode instruction
-  // Uses: [dst, src, size], Defs: []
-  let copy_inst = @instr.VCodeInst::new(MemoryCopy)
-  copy_inst.add_use(Virtual(dst))
-  copy_inst.add_use(Virtual(src))
-  copy_inst.add_use(Virtual(size))
-  // Only clobber registers actually used by codegen: x0-x2 (args), x16 (func ptr)
-  // Don't clobber all caller-saved regs to avoid breaking value reuse
-  copy_inst.add_def({ reg: Physical({ index: 0, class: Int }) }) // x0
-  copy_inst.add_def({ reg: Physical({ index: 1, class: Int }) }) // x1
-  copy_inst.add_def({ reg: Physical({ index: 2, class: Int }) }) // x2
-  copy_inst.add_def({ reg: Physical({ index: 16, class: Int }) }) // x16
-  block.add_inst(copy_inst)
+  // Lower to a C call (re-entrant v3 helper):
+  //   wasmoon_jit_memory_copy_v3(vmctx, dst, src, size)
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryCopyV3))
+  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_ptr)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, dst, src, size], None)
 }

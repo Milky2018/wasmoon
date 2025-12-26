@@ -600,11 +600,13 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
     // If so, it cannot be assigned to a caller-saved register
     for call_point in result.call_points {
       // An interval crosses a call if:
-      // - The call is after the interval's start AND before the interval's end
+      // - The call is strictly after the interval's start AND before the interval's end
+      //   (Values defined by the call itself start at the same progpoint and do not
+      //    need to survive across the call.)
       let start_cmp = interval.start.compare_with_order(call_point, block_order)
       let end_cmp = interval.end.compare_with_order(call_point, block_order)
-      // start <= call_point < end (interval is live across the call)
-      if start_cmp <= 0 && end_cmp > 0 {
+      // start < call_point < end (interval is live across the call)
+      if start_cmp < 0 && end_cmp > 0 {
         interval.crosses_call = true
         break
       }
@@ -1681,25 +1683,20 @@ fn rewrite_reg(reg : @abi.Reg, alloc : RegAllocResult) -> @abi.Reg {
 
 ///|
 /// Check if an opcode has side effects (cannot be eliminated even if dead)
-fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
-  match opcode {
-    // Memory stores have side effects
-    Store(_, _) | StackStore(_) | StorePtr(_, _) => true
-    // Type check can trap
-    TypeCheckIndirect(_) => true
-    // Function calls have side effects
-    ReturnCallIndirect(_, _) | CallPtr(_, _, _) => true
-    // Memory operations have side effects (modify memory or global state)
-    MemoryGrow(_) | MemoryFill | MemoryCopy => true
-    // Table operations have side effects (modify table state)
-    // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment
-    TableGrow(_) => true
-    // Traps must not be eliminated
-    TrapIfZero(_, _) | TrapIfUge(_) | TrapIfUgt(_) | TrapIf(_, _) => true
-    // Everything else is pure computation
-    _ => false
+  fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
+    match opcode {
+      // Memory stores have side effects
+      Store(_, _) | StackStore(_) | StorePtr(_, _) => true
+      // Type check can trap
+      TypeCheckIndirect(_) => true
+      // Function calls have side effects
+      ReturnCallIndirect(_, _) | CallPtr(_, _, _) => true
+      // Traps must not be eliminated
+      TrapIfZero(_, _) | TrapIfUge(_) | TrapIfUgt(_) | TrapIf(_, _) => true
+      // Everything else is pure computation
+      _ => false
+    }
   }
-}
 
 ///|
 /// Eliminate dead code from a VCode function

@@ -169,6 +169,67 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr(void) {
     return (int64_t)wasmoon_jit_table_grow;
 }
 
+// ============ v3 ctx-passing Memory/Table Operations (re-entrant) ============
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow_v3(
+    jit_context_t *ctx,
+    int32_t delta,
+    int32_t max_pages
+) {
+    return memory_grow_ctx_internal(ctx, delta, max_pages);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size_v3(jit_context_t *ctx) {
+    return memory_size_ctx_internal(ctx);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v3(
+    jit_context_t *ctx,
+    int32_t dst,
+    int32_t val,
+    int32_t size
+) {
+    memory_fill_ctx_internal(ctx, dst, val, size);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v3(
+    jit_context_t *ctx,
+    int32_t dst,
+    int32_t src,
+    int32_t size
+) {
+    memory_copy_ctx_internal(ctx, dst, src, size);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow_v3(
+    jit_context_t *ctx,
+    int32_t table_idx,
+    int64_t delta,
+    int64_t init_value
+) {
+    return table_grow_ctx_internal(ctx, table_idx, delta, init_value);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr_v3(void) {
+    return (int64_t)wasmoon_jit_memory_grow_v3;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr_v3(void) {
+    return (int64_t)wasmoon_jit_memory_size_v3;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr_v3(void) {
+    return (int64_t)wasmoon_jit_memory_fill_v3;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr_v3(void) {
+    return (int64_t)wasmoon_jit_memory_copy_v3;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr_v3(void) {
+    return (int64_t)wasmoon_jit_table_grow_v3;
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx) return;
@@ -290,10 +351,12 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     g_trap_active = 1;
 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    jit_context_t *prev_ctx = g_jit_context;
     g_jit_context = ctx;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
+        g_jit_context = prev_ctx;
         return (int)g_trap_code;
     }
 
@@ -301,6 +364,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     int result = trampoline(ctx, values_vec, (void *)func_ptr);
 
     g_trap_active = 0;
+    g_jit_context = prev_ctx;
 
     if (g_trap_code != 0) {
         return (int)g_trap_code;

@@ -90,6 +90,14 @@ priv struct JITContext {
 }
 
 ///|
+/// Pin this context during JIT execution.
+/// This prevents the GC-managed context object from being collected while native
+/// code is running and may call back into runtime helpers.
+fn JITContext::activate(self : JITContext) -> Unit {
+  @jit_ffi.c_jit_set_context_managed(self.ctx)
+}
+
+///|
 /// Create a new JIT context (v3) - GC managed
 fn JITContext::new(total_funcs : Int) -> JITContext? {
   let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
@@ -225,13 +233,6 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
     bytes[i] = data[i]
   }
   @jit_ffi.c_jit_memory_init(mem_ptr, offset, bytes, size) == 0
-}
-
-///|
-/// Activate this context for WASI calls (v2)
-/// Uses reference counting to prevent GC from collecting this context
-fn JITContext::activate(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_set_context_managed(self.ctx)
 }
 
 // NOTE: No free() method needed - GC handles cleanup automatically!

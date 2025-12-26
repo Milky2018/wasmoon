@@ -301,7 +301,6 @@ pub fn JITModule::call_with_context(
 ) -> Array[Int64] raise JITTrap {
   match self.context {
     Some(ctx) => {
-      // Activate context for WASI calls
       ctx.activate()
       let num_results = func.result_types.length()
       let results : Array[Int64] = Array::make(num_results, 0L)

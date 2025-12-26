@@ -640,106 +640,177 @@ test "emit_mul encoding verification" {
 }
 
 ///|
-test "emit: memory_grow instruction disasm" {
-  // Test MemoryGrow instruction emission with disassembly dump
+test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
+  // Test CallPtr instruction emission with disassembly dump
   // This verifies that annotations are not duplicated
-  let func = @lower.VCodeFunction::new("test_memory_grow")
-  func.add_param(Int) |> ignore // delta
-  func.add_result(Int) // returns previous size
+  let func = @lower.VCodeFunction::new("test_call_ptr_c_3_1")
+  func.add_result(Int)
   let block = func.new_block()
 
-  // MemoryGrow(max_pages)
-  let grow_inst = @instr.VCodeInst::new(MemoryGrow(65536))
-  grow_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
-  grow_inst.add_use(@abi.Physical({ index: 3, class: Int })) // delta in X3
-  block.add_inst(grow_inst)
+  // Put a dummy function pointer in X17 then call it.
+  let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
+  load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
+  block.add_inst(load_ptr)
+  let call_inst = @instr.VCodeInst::new(CallPtr(3, 1, C))
+  block.add_inst(call_inst)
   block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
   let mc = @emit.emit_function(func)
   let disasm = mc.dump_disasm()
 
-  // Should NOT have duplicate "blr x16" annotations
-  // Count occurrences of "blr x16" - should be exactly 1
+  // Should NOT have duplicate "blr x17" annotations
+  // Count occurrences of "blr x17" - should be exactly 1
   let mut blr_count = 0
   let lines = disasm.split("\n")
   for line in lines {
-    if line.contains("blr x16") {
+    if line.contains("blr x17") {
       blr_count = blr_count + 1
     }
   }
   // If there are duplicate annotations, this will fail
   inspect(blr_count, content="1")
+  inspect(
+    disasm,
+    content=(
+      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  0004: fd031faa  mov x29, x31
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
+      #|  000c: ff4300d1  sub sp, sp, #16
+      #|  0010: f30300aa  mov x19, x0
+      #|block0:
+      #|  0014: 110080d2  movz x17, #0, lsl #0
+      #|  0018: 20023fd6  blr x17
+      #|  001c: ff430091  add sp, sp, #16
+      #|  0020: f30741f8  ldr x19, [sp], #16
+      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0028: c0035fd6  ret
+      #|
+    ),
+  )
 }
 
 ///|
-test "emit: memory_size instruction disasm" {
-  // Test MemorySize instruction emission
-  let func = @lower.VCodeFunction::new("test_memory_size")
+test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
+  let func = @lower.VCodeFunction::new("test_call_ptr_c_1_1")
   func.add_result(Int)
   let block = func.new_block()
-  let size_inst = @instr.VCodeInst::new(MemorySize)
-  size_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
-  block.add_inst(size_inst)
+  let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
+  load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
+  block.add_inst(load_ptr)
+  let call_inst = @instr.VCodeInst::new(CallPtr(1, 1, C))
+  block.add_inst(call_inst)
   block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
   let mc = @emit.emit_function(func)
   let disasm = mc.dump_disasm()
 
-  // Count "blr x16" - should be exactly 1
+  // Count "blr x17" - should be exactly 1
   let mut blr_count = 0
   let lines = disasm.split("\n")
   for line in lines {
-    if line.contains("blr x16") {
+    if line.contains("blr x17") {
       blr_count = blr_count + 1
     }
   }
   inspect(blr_count, content="1")
+  inspect(
+    disasm,
+    content=(
+      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  0004: fd031faa  mov x29, x31
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
+      #|  000c: ff4300d1  sub sp, sp, #16
+      #|  0010: f30300aa  mov x19, x0
+      #|block0:
+      #|  0014: 110080d2  movz x17, #0, lsl #0
+      #|  0018: 20023fd6  blr x17
+      #|  001c: ff430091  add sp, sp, #16
+      #|  0020: f30741f8  ldr x19, [sp], #16
+      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0028: c0035fd6  ret
+      #|
+    ),
+  )
 }
 
 ///|
-test "emit: memory_fill instruction disasm" {
-  // Test MemoryFill instruction emission
-  let func = @lower.VCodeFunction::new("test_memory_fill")
+test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
+  let func = @lower.VCodeFunction::new("test_call_ptr_c_4_0")
   let block = func.new_block()
-  let fill_inst = @instr.VCodeInst::new(MemoryFill)
-  fill_inst.add_use(@abi.Physical({ index: 3, class: Int })) // dst
-  fill_inst.add_use(@abi.Physical({ index: 4, class: Int })) // val
-  fill_inst.add_use(@abi.Physical({ index: 5, class: Int })) // size
-  block.add_inst(fill_inst)
+  let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
+  load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
+  block.add_inst(load_ptr)
+  let call_inst = @instr.VCodeInst::new(CallPtr(4, 0, C))
+  block.add_inst(call_inst)
   block.set_terminator(Return([]))
   let mc = @emit.emit_function(func)
   let disasm = mc.dump_disasm()
 
-  // Count "blr x16" - should be exactly 1
+  // Count "blr x17" - should be exactly 1
   let mut blr_count = 0
   let lines = disasm.split("\n")
   for line in lines {
-    if line.contains("blr x16") {
+    if line.contains("blr x17") {
       blr_count = blr_count + 1
     }
   }
   inspect(blr_count, content="1")
+  inspect(
+    disasm,
+    content=(
+      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  0004: fd031faa  mov x29, x31
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
+      #|  000c: ff4300d1  sub sp, sp, #16
+      #|  0010: f30300aa  mov x19, x0
+      #|block0:
+      #|  0014: 110080d2  movz x17, #0, lsl #0
+      #|  0018: 20023fd6  blr x17
+      #|  001c: ff430091  add sp, sp, #16
+      #|  0020: f30741f8  ldr x19, [sp], #16
+      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0028: c0035fd6  ret
+      #|
+    ),
+  )
 }
 
 ///|
-test "emit: memory_copy instruction disasm" {
-  // Test MemoryCopy instruction emission
-  let func = @lower.VCodeFunction::new("test_memory_copy")
+test "emit: call_ptr(C) instruction disasm (4 args, 0 result) 2" {
+  let func = @lower.VCodeFunction::new("test_call_ptr_c_4_0_2")
   let block = func.new_block()
-  let copy_inst = @instr.VCodeInst::new(MemoryCopy)
-  copy_inst.add_use(@abi.Physical({ index: 3, class: Int })) // dst
-  copy_inst.add_use(@abi.Physical({ index: 4, class: Int })) // src
-  copy_inst.add_use(@abi.Physical({ index: 5, class: Int })) // size
-  block.add_inst(copy_inst)
+  let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
+  load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
+  block.add_inst(load_ptr)
+  let call_inst = @instr.VCodeInst::new(CallPtr(4, 0, C))
+  block.add_inst(call_inst)
   block.set_terminator(Return([]))
   let mc = @emit.emit_function(func)
   let disasm = mc.dump_disasm()
 
-  // Count "blr x16" - should be exactly 1
+  // Count "blr x17" - should be exactly 1
   let mut blr_count = 0
   let lines = disasm.split("\n")
   for line in lines {
-    if line.contains("blr x16") {
+    if line.contains("blr x17") {
       blr_count = blr_count + 1
     }
   }
   inspect(blr_count, content="1")
+  inspect(
+    disasm,
+    content=(
+      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  0004: fd031faa  mov x29, x31
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
+      #|  000c: ff4300d1  sub sp, sp, #16
+      #|  0010: f30300aa  mov x19, x0
+      #|block0:
+      #|  0014: 110080d2  movz x17, #0, lsl #0
+      #|  0018: 20023fd6  blr x17
+      #|  001c: ff430091  add sp, sp, #16
+      #|  0020: f30741f8  ldr x19, [sp], #16
+      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0028: c0035fd6  ret
+      #|
+    ),
+  )
 }

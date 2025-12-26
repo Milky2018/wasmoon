@@ -71,6 +71,10 @@ pub extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free
 pub extern "c" fn c_jit_get_memory_grow_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_ptr"
 
 ///|
+/// Get memory_grow v3 function pointer for JIT (ctx-passing)
+pub extern "c" fn c_jit_get_memory_grow_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_grow_ptr_v3"
+
+///|
 /// Get get_memory_base v2 function pointer for JIT
 pub extern "c" fn c_jit_get_memory_base_ptr() -> Int64 = "wasmoon_jit_get_memory_base_ptr"
 
@@ -83,17 +87,34 @@ pub extern "c" fn c_jit_get_memory_size_bytes_ptr() -> Int64 = "wasmoon_jit_get_
 pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory_size_ptr"
 
 ///|
+/// Get memory_size v3 function pointer for JIT (ctx-passing, returns pages)
+pub extern "c" fn c_jit_get_memory_size_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_size_ptr_v3"
+
+///|
 /// Get memory_fill v2 function pointer for JIT
 pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_ptr"
+
+///|
+/// Get memory_fill v3 function pointer for JIT (ctx-passing)
+pub extern "c" fn c_jit_get_memory_fill_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_fill_ptr_v3"
 
 ///|
 /// Get memory_copy v2 function pointer for JIT
 pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
 
 ///|
+/// Get memory_copy v3 function pointer for JIT (ctx-passing)
+pub extern "c" fn c_jit_get_memory_copy_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_copy_ptr_v3"
+
+///|
 /// Get table_grow function pointer for JIT
 /// Signature: table_grow(table_idx: i32, delta: i64, init_value: i64) -> i32
 pub extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_grow_ptr"
+
+///|
+/// Get table_grow v3 function pointer for JIT (ctx-passing)
+/// Signature: table_grow(ctx: *jit_context_t, table_idx: i32, delta: i64, init_value: i64) -> i32
+pub extern "c" fn c_jit_get_table_grow_ptr_v3() -> Int64 = "wasmoon_jit_get_table_grow_ptr_v3"
 
 ///|
 /// Get current memory base from v2 context (for proper cleanup after memory.grow)

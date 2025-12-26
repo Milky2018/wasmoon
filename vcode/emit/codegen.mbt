@@ -1193,121 +1193,6 @@ fn MachineCode::emit_instruction(
         }
       }
     }
-    MemoryGrow(max_pages) => {
-      // Call wasmoon_jit_memory_grow(delta, max_pages)
-      // Uses: [delta], Defs: [result]
-      // Get the delta from the use register
-      let delta_reg = reg_num(inst.uses[0])
-      let result_reg = wreg_num(inst.defs[0])
-
-      // Move delta to X0 (first argument)
-      self.emit_mov_reg(0, delta_reg) // MOV X0, delta
-
-      // Set X1 = max_pages
-      self.emit_movz(1, max_pages & 0xFFFF, 0) // MOVZ X1, #(max_pages & 0xFFFF)
-      if max_pages > 0xFFFF {
-        self.emit_movk(1, (max_pages >> 16) & 0xFFFF, 16) // MOVK X1, #((max_pages >> 16) & 0xFFFF), LSL #16
-      }
-
-      // Load memory_grow function pointer into X16
-      let grow_ptr = @jit_ffi.c_jit_get_memory_grow_ptr()
-      self.emit_load_imm64(16, grow_ptr)
-
-      // Call the function
-      self.emit_blr(16)
-
-      // Move result from X0 to destination
-      // Note: memory_base and memory_size are loaded on-demand from vmctx,
-      // and wasmoon_jit_memory_grow already updates the vmctx structure.
-      if result_reg != 0 {
-        self.emit_mov_reg(result_reg, 0) // MOV result, X0
-      }
-    }
-    MemorySize => {
-      // Call wasmoon_jit_memory_size()
-      // Uses: [], Defs: [result]
-      let result_reg = wreg_num(inst.defs[0])
-
-      // Load memory_size function pointer into X16
-      let size_ptr = @jit_ffi.c_jit_get_memory_size_ptr()
-      self.emit_load_imm64(16, size_ptr)
-
-      // Call the function
-      self.emit_blr(16)
-
-      // Move result from X0 to destination
-      if result_reg != 0 {
-        self.emit_mov_reg(result_reg, 0) // MOV result, X0
-      }
-    }
-    MemoryFill => {
-      // Call wasmoon_jit_memory_fill(dst, val, size)
-      // Uses: [dst, val, size], Defs: []
-      let dst_reg = reg_num(inst.uses[0])
-      let val_reg = reg_num(inst.uses[1])
-      let size_reg = reg_num(inst.uses[2])
-
-      // Move arguments to X0, X1, X2
-      self.emit_mov_reg(0, dst_reg) // MOV X0, dst
-      self.emit_mov_reg(1, val_reg) // MOV X1, val
-      self.emit_mov_reg(2, size_reg) // MOV X2, size
-
-      // Load memory_fill function pointer into X16
-      let fill_ptr = @jit_ffi.c_jit_get_memory_fill_ptr()
-      self.emit_load_imm64(16, fill_ptr)
-
-      // Call the function
-      self.emit_blr(16)
-    }
-    MemoryCopy => {
-      // Call wasmoon_jit_memory_copy(dst, src, size)
-      // Uses: [dst, src, size], Defs: []
-      let dst_reg = reg_num(inst.uses[0])
-      let src_reg = reg_num(inst.uses[1])
-      let size_reg = reg_num(inst.uses[2])
-
-      // Move arguments to X0, X1, X2
-      self.emit_mov_reg(0, dst_reg) // MOV X0, dst
-      self.emit_mov_reg(1, src_reg) // MOV X1, src
-      self.emit_mov_reg(2, size_reg) // MOV X2, size
-
-      // Load memory_copy function pointer into X16
-      let copy_ptr = @jit_ffi.c_jit_get_memory_copy_ptr()
-      self.emit_load_imm64(16, copy_ptr)
-
-      // Call the function
-      self.emit_blr(16)
-    }
-    // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
-    TableGrow(table_idx) => {
-      // Grow table by delta elements (Cranelift-style runtime call)
-      // Uses: [delta, init_value], Defs: [result]
-      // Calls: wasmoon_jit_table_grow(table_idx: i32, delta: i64, init_value: i64) -> i32
-      let delta_reg = reg_num(inst.uses[0])
-      let init_value_reg = reg_num(inst.uses[1])
-      let result_reg = wreg_num(inst.defs[0])
-
-      // Set up arguments:
-      // X0 = table_idx (immediate)
-      // X1 = delta (from uses[0])
-      // X2 = init_value (from uses[1])
-      self.emit_movz(0, table_idx & 0xFFFF, 0) // MOV W0, #table_idx
-      self.emit_mov_reg(1, delta_reg) // MOV X1, delta
-      self.emit_mov_reg(2, init_value_reg) // MOV X2, init_value
-
-      // Load table_grow function pointer into X16
-      let grow_ptr = @jit_ffi.c_jit_get_table_grow_ptr()
-      self.emit_load_imm64(16, grow_ptr)
-
-      // Call the function
-      self.emit_blr(16)
-
-      // Move result from X0 to destination
-      if result_reg != 0 {
-        self.emit_mov_reg(result_reg, 0) // MOV result, X0
-      }
-    }
-    // NOTE: GlobalGet, GlobalSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
     LoadPtr(ty, offset) => {
       // Raw pointer load (no bounds checking)
       // Uses: [base], Defs: [result]
@@ -1339,6 +1224,19 @@ fn MachineCode::emit_instruction(
         ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
         ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
         TypeCheckSubtype => @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
+      }
+      self.emit_load_imm64(result_reg, func_ptr)
+    }
+    LoadJITFuncPtr(libcall) => {
+      // Load JIT runtime function pointer (v3 ctx-passing helpers)
+      // Uses: [], Defs: [result (function pointer)]
+      let result_reg = wreg_num(inst.defs[0])
+      let func_ptr = match libcall {
+        MemoryGrowV3 => @jit_ffi.c_jit_get_memory_grow_ptr_v3()
+        MemorySizeV3 => @jit_ffi.c_jit_get_memory_size_ptr_v3()
+        MemoryFillV3 => @jit_ffi.c_jit_get_memory_fill_ptr_v3()
+        MemoryCopyV3 => @jit_ffi.c_jit_get_memory_copy_ptr_v3()
+        TableGrowV3 => @jit_ffi.c_jit_get_table_grow_ptr_v3()
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }
