@@ -10,12 +10,10 @@ fn run_wasm(
   dirs : Array[String],
   envs : Array[String],
   wasi_options : Array[String],
-  debug_config : DebugConfig,
-  wasm_config : WasmConfig,
+  debug : Bool,
   use_jit : Bool,
 ) -> Unit {
-  ignore(wasm_config) // Will be used in full implementation
-  if debug_config.verbose {
+  if debug {
     println("[DEBUG] Loading module: \{wasm_path}")
     let jit_status = if use_jit { "enabled" } else { "disabled" }
     println("[DEBUG] JIT: \{jit_status}")
@@ -53,7 +51,7 @@ fn run_wasm(
     let mapping = parse_dir_mapping(dir)
     match mapping {
       Some((host_path, guest_path)) => {
-        if debug_config.verbose {
+        if debug {
           println("[DEBUG] Preopen dir: \{host_path} -> \{guest_path}")
         }
         wasi_builder.preopen_dir(host_path, guest_path) |> ignore
@@ -70,7 +68,7 @@ fn run_wasm(
     let parsed = parse_env_var(env_var)
     match parsed {
       Some((key, value)) => {
-        if debug_config.verbose {
+        if debug {
           println("[DEBUG] Environment: \{key}=\{value}")
         }
         wasi_builder.env(key, value) |> ignore
@@ -83,7 +81,7 @@ fn run_wasm(
   }
   // Handle inherit-env option
   if inherit_env {
-    if debug_config.verbose {
+    if debug {
       println("[DEBUG] Inheriting host environment variables")
     }
     // Note: MoonBit doesn't have direct access to host environment variables
@@ -140,7 +138,7 @@ fn run_wasm(
       return
     }
   }
-  if debug_config.verbose {
+  if debug {
     println(
       "[DEBUG] Module loaded: \{mod_.codes.length()} functions, \{mod_.imports.length()} imports",
     )
@@ -162,7 +160,7 @@ fn run_wasm(
       return
     }
   }
-  if debug_config.verbose {
+  if debug {
     println("[DEBUG] Module instantiated successfully")
   }
   // Determine which function to call
@@ -170,7 +168,7 @@ fn run_wasm(
     Some(name) => name
     None => "_start" // Default to WASI-style entry point
   }
-  if debug_config.verbose {
+  if debug {
     println("[DEBUG] Calling function: \{func_name}")
   }
   // Find the function type to parse arguments correctly
@@ -186,14 +184,14 @@ fn run_wasm(
     // Call the function
     // Check if JIT can handle all imports
     let can_use_jit = if use_jit {
-      check_jit_import_support(mod_, debug_config)
+      check_jit_import_support(mod_, debug)
     } else {
       false
     }
     if can_use_jit {
       // JIT execution path
       let jit_results = run_with_jit(
-        mod_, instance, store, func_name, args, debug_config,
+        mod_, instance, store, func_name, args, debug,
       )
       if jit_results.length() > 0 {
         // Print all results separated by spaces
@@ -521,9 +519,9 @@ fn run_with_jit(
   store : @runtime.Store,
   func_name : String,
   args : Array[@types.Value],
-  debug_config : DebugConfig,
+  debug : Bool,
 ) -> Array[@types.Value] {
-  if debug_config.verbose {
+  if debug {
     println("[DEBUG] JIT: Compiling module...")
   }
   // Get actual memory max from the store (for imported memories)
@@ -538,11 +536,7 @@ fn run_with_jit(
     None
   }
   // Compile module to precompiled format in memory
-  let precompiled = compile_module_to_jit(
-    mod_,
-    debug_config,
-    actual_memory_max~,
-  )
+  let precompiled = compile_module_to_jit(mod_, debug, actual_memory_max~)
   match precompiled {
     None => {
       println("Error: JIT compilation failed")
@@ -598,7 +592,7 @@ fn run_with_jit(
                 }
                 i64_args.push(v)
               }
-              if debug_config.verbose {
+              if debug {
                 println("[DEBUG] JIT: Calling function '\{func_name}'")
               }
               // Set up GC heap for JIT execution if c_heap is available
@@ -626,7 +620,7 @@ fn run_with_jit(
               let values : Array[@types.Value] = []
               for i, r in results {
                 if i < f.result_types.length() {
-                  if debug_config.verbose {
+                  if debug {
                     println(
                       "[DEBUG] result[\{i}] type: \{f.result_types[i]}, raw value: \{r}",
                     )
@@ -689,7 +683,7 @@ fn run_with_jit(
 /// actual_memory_max: Override for memory max limit (used for imported memories)
 fn compile_module_to_jit(
   mod_ : @types.Module,
-  debug_config : DebugConfig,
+  debug : Bool,
   actual_memory_max? : Int? = None,
 ) -> @cwasm.PrecompiledModule? {
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
@@ -755,21 +749,21 @@ fn compile_module_to_jit(
     // Stage 2: Optimize IR (O2 level)
     @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
     // DEBUG: Print IR
-    if debug_config.verbose {
+    if debug {
       println("[DEBUG] IR for \{func_name}:")
       println(ir_func.print())
     }
     // Stage 3: Lower to VCode
     let vcode_func = @lower.lower_function(ir_func)
     // DEBUG: Print VCode before regalloc
-    if debug_config.verbose {
+    if debug {
       println("[DEBUG] VCode before regalloc for \{func_name}:")
       println(vcode_func.print())
     }
     // Stage 4: Register allocation
     let allocated = @lower.allocate_registers_aarch64(vcode_func)
     // DEBUG: Print VCode after regalloc
-    if debug_config.verbose {
+    if debug {
       println("[DEBUG] VCode after regalloc for \{func_name}:")
       println(allocated.print())
     }
@@ -782,7 +776,7 @@ fn compile_module_to_jit(
     precompiled.add_function(
       func_idx, func_name, compiled, num_params, num_results,
     )
-    if debug_config.verbose && mod_.codes.length() > 10 && (i + 1) % 10 == 0 {
+    if debug && mod_.codes.length() > 10 && (i + 1) % 10 == 0 {
       println("[DEBUG] JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
     }
   }
@@ -912,10 +906,7 @@ fn parse_func_args(
 
 ///|
 /// Check if all imports are supported by JIT trampolines
-fn check_jit_import_support(
-  mod_ : @types.Module,
-  debug_config : DebugConfig,
-) -> Bool {
+fn check_jit_import_support(mod_ : @types.Module, debug : Bool) -> Bool {
   let unsupported : Array[String] = []
   for imp in mod_.imports {
     if imp.desc is Func(_) &&
@@ -924,7 +915,7 @@ fn check_jit_import_support(
     }
   }
   if unsupported.length() > 0 {
-    if debug_config.verbose {
+    if debug {
       let joined = unsupported.join(", ")
       println(
         "[DEBUG] JIT: Falling back to interpreter - unsupported imports: \{joined}",

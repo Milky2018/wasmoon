@@ -1,10 +1,5 @@
 ///|
 fn main {
-  // Define choices for debug options
-  let debug_choices = @hashset.HashSet::from_array([
-    "verbose", "print-ir", "print-vcode", "print-regalloc", "trace-exec",
-  ])
-
   // Define choices for explore stages
   let stage_choices = @hashset.HashSet::from_array([
     "wasm", "ir", "opt-ir", "vcode", "regalloc", "mc",
@@ -42,12 +37,7 @@ fn main {
           nargs=@clap.Nargs::Any,
           help="WASI option (e.g., inherit-env, inherit-stdin)",
         ),
-        "debug": @clap.Arg::named(
-          short='D',
-          nargs=@clap.Nargs::Any,
-          choices=debug_choices,
-          help="Debug option (verbose, print-ir, print-vcode, print-regalloc, trace-exec)",
-        ),
+        "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
         "wasm-opt": @clap.Arg::named(
           short='W',
           nargs=@clap.Nargs::Any,
@@ -172,16 +162,11 @@ fn main {
                   Some(arr) => arr
                   None => []
                 }
-                // Get debug options from -D flag
-                let debug_config = DebugConfig::new()
-                if sub.args.get("debug") is Some(flags) {
-                  for flag in flags {
-                    debug_config.apply_flag(flag)
-                  }
-                }
+                // Get debug flag
+                let debug = sub.flags.get("debug") is Some(true)
                 // Check if it's a .cwasm file
                 if file_path.has_suffix(".cwasm") {
-                  run_cwasm(file_path, invoke_opt, func_args, debug_config)
+                  run_cwasm(file_path, invoke_opt, func_args, debug)
                 } else {
                   // Get preload modules from --preload option
                   let preloads : Array[String] = match sub.args.get("preload") {
@@ -218,7 +203,7 @@ fn main {
                   }
                   run_wasm(
                     file_path, invoke_opt, func_args, preloads, dirs, envs, wasi_options,
-                    debug_config, wasm_config, use_jit,
+                    debug, use_jit,
                   )
                 }
               } else {

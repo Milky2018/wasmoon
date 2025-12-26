@@ -93,10 +93,9 @@ fn try_compile_jit(
     None
   }
   // Compile module to JIT
-  let debug_config = DebugConfig::new()
   let precompiled = compile_module_to_jit(
     mod_,
-    debug_config,
+    false, // debug mode off for wast tests
     actual_memory_max~,
   )
   match precompiled {

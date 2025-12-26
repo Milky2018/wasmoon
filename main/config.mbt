@@ -18,54 +18,6 @@ fn CompilerConfig::from_level(level : Int) -> CompilerConfig {
 }
 
 ///|
-/// Debug configuration options
-priv struct DebugConfig {
-  mut verbose : Bool
-  mut print_ir : Bool
-  mut print_vcode : Bool
-  mut print_regalloc : Bool
-  mut trace_exec : Bool
-}
-
-///|
-fn DebugConfig::new() -> DebugConfig {
-  DebugConfig::{
-    verbose: false,
-    print_ir: false,
-    print_vcode: false,
-    print_regalloc: false,
-    trace_exec: false,
-  }
-}
-
-///|
-fn DebugConfig::apply_flag(self : DebugConfig, flag : String) -> Unit {
-  let parts = flag.split("=").collect()
-  if parts.length() != 2 {
-    // Check for bare flags (e.g., "verbose" means "verbose=true")
-    match flag {
-      "verbose" => self.verbose = true
-      "print-ir" => self.print_ir = true
-      "print-vcode" => self.print_vcode = true
-      "print-regalloc" => self.print_regalloc = true
-      "trace-exec" => self.trace_exec = true
-      _ => ()
-    }
-    return
-  }
-  let key = parts[0]
-  let value = parts[1] == "true" || parts[1] == "1"
-  match key {
-    "verbose" => self.verbose = value
-    "print-ir" => self.print_ir = value
-    "print-vcode" => self.print_vcode = value
-    "print-regalloc" => self.print_regalloc = value
-    "trace-exec" => self.trace_exec = value
-    _ => ()
-  }
-}
-
-///|
 /// WASM semantic configuration options
 priv struct WasmConfig {
   // Memory limits
@@ -152,9 +104,6 @@ fn run_config(action : String) -> Unit {
       println("# Wasmoon configuration file")
       println("[optimization]")
       println("level = 2  # 0=none, 1=basic, 2=default, 3=aggressive")
-      println("")
-      println("[debug]")
-      println("verbose = false")
       println("")
       println("Note: Config file support is currently read-only.")
       println("Use command-line flags for full control.")
