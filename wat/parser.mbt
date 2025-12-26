@@ -2020,6 +2020,40 @@ fn Parser::parse_table_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
+/// Parse an index for memory.init instruction.
+/// This handles the ambiguity where the first index could be either memidx or dataidx.
+/// We parse it as a raw number/id and resolve based on context.
+fn Parser::parse_index_for_memory_init(self : Parser) -> Int raise WatError {
+  match self.current.token {
+    Number(s) => {
+      self.advance()
+      parse_int(s)
+    }
+    Id(name) => {
+      self.advance()
+      // Try memory names first, then data names
+      match self.memory_names.get(name) {
+        Some(idx) => idx
+        None =>
+          match self.data_names.get(name) {
+            Some(idx) => idx
+            None =>
+              raise WatError::UndefinedIdentifier(
+                "memory or data $\{name}",
+                self.loc(),
+              )
+          }
+      }
+    }
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected memory or data index",
+        self.loc(),
+      )
+  }
+}
+
+///|
 fn Parser::parse_data_idx(self : Parser) -> Int raise WatError {
   match self.current.token {
     Number(s) => {

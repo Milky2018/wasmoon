@@ -760,11 +760,23 @@ fn Parser::parse_plain_instruction(
     "memory.grow" =>
       @types.Instruction::MemoryGrow(self.parse_optional_memidx())
     "memory.init" => {
-      // Multi-memory format: memory.init memidx dataidx
-      // memidx is optional (defaults to 0), dataidx is required
-      let memidx = self.parse_optional_memidx()
-      let dataidx = self.parse_data_idx()
-      @types.Instruction::MemoryInit(memidx, dataidx)
+      // memory.init can have one or two indices:
+      // - memory.init dataidx (memidx defaults to 0)
+      // - memory.init memidx dataidx
+      // We need to look ahead to determine which format
+      let first_idx = self.parse_index_for_memory_init()
+      // Check if there's another index
+      match self.current.token {
+        Number(_) | Id(_) => {
+          // Two indices: first is memidx, second is dataidx
+          let memidx = first_idx
+          let dataidx = self.parse_data_idx()
+          @types.Instruction::MemoryInit(memidx, dataidx)
+        }
+        _ =>
+          // One index: it's dataidx, memidx defaults to 0
+          @types.Instruction::MemoryInit(0, first_idx)
+      }
     }
     "memory.copy" => {
       let dst = self.parse_optional_memidx()
