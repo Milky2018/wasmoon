@@ -615,6 +615,8 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   let mut memory_idx = 0
   let mut table_idx = 0
   let mut tag_idx = 0
+  let mut data_idx = 0
+  let mut elem_idx = 0
   while self.current.token != RParen && self.current.token != Eof {
     match self.current.token {
       LParen => {
@@ -785,6 +787,30 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             }
             tag_idx = tag_idx + 1
             // Skip to end of tag
+            self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
+          }
+          Keyword("data") => {
+            self.advance()
+            // Check for data name
+            if self.current.token is Id(name) {
+              self.data_names.set(name, data_idx)
+              self.advance()
+            }
+            data_idx = data_idx + 1
+            // Skip to end of data
+            self.skip_to_matching_rparen()
+            self.advance() // Move past closing )
+          }
+          Keyword("elem") => {
+            self.advance()
+            // Check for elem name
+            if self.current.token is Id(name) {
+              self.elem_names.set(name, elem_idx)
+              self.advance()
+            }
+            elem_idx = elem_idx + 1
+            // Skip to end of elem
             self.skip_to_matching_rparen()
             self.advance() // Move past closing )
           }

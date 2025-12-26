@@ -386,17 +386,25 @@ fn ExecContext::exec_memory_misc(
       let n = self.stack.pop_i32() // length
       let s = self.stack.pop_i32() // source
       let d = self.stack.pop_i32() // destination
+      // Bounds check for both source and destination (even when n == 0)
+      let src_mem_addr = self.instance.mem_addrs[src_memidx]
+      let dst_mem_addr = self.instance.mem_addrs[dst_memidx]
+      let src_mem = self.store.get_mem(src_mem_addr)
+      let dst_mem = self.store.get_mem(dst_mem_addr)
+      // Use 64-bit arithmetic to avoid overflow
+      let n64 = n.to_int64() & 0xFFFF_FFFFL
+      let s64 = s.to_int64() & 0xFFFF_FFFFL
+      let d64 = d.to_int64() & 0xFFFF_FFFFL
+      let src_size = src_mem.size_pages().to_int64() * 65536L
+      let dst_size = dst_mem.size_pages().to_int64() * 65536L
+      if s64 + n64 > src_size || d64 + n64 > dst_size {
+        raise @runtime.OutOfBoundsMemoryAccess
+      }
       if dst_memidx == src_memidx {
         // Same memory - use optimized copy
-        let mem_addr = self.instance.mem_addrs[dst_memidx]
-        let mem = self.store.get_mem(mem_addr)
-        mem.copy(d, s, n)
+        src_mem.copy(d, s, n)
       } else {
-        // Different memories - need to copy byte by byte
-        let src_mem_addr = self.instance.mem_addrs[src_memidx]
-        let dst_mem_addr = self.instance.mem_addrs[dst_memidx]
-        let src_mem = self.store.get_mem(src_mem_addr)
-        let dst_mem = self.store.get_mem(dst_mem_addr)
+        // Different memories - copy byte by byte
         for i in 0..<n {
           let byte = src_mem.load_byte(s + i)
           dst_mem.store_byte(d + i, byte)
