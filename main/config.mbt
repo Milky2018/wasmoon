@@ -6,11 +6,6 @@ priv struct CompilerConfig {
 }
 
 ///|
-fn CompilerConfig::default() -> CompilerConfig {
-  CompilerConfig::{ opt_level: 2 }
-}
-
-///|
 fn CompilerConfig::from_level(level : Int) -> CompilerConfig {
   // Clamp to valid range 0-3
   let clamped = if level < 0 { 0 } else if level > 3 { 3 } else { level }

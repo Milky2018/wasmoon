@@ -24,6 +24,7 @@ pub(open) trait TargetISA {
 ///
 /// Note: This is different from vcode/instr/CallConv which describes
 /// internal WASM call vs C call at the instruction level.
+#warnings("-unused_constructor")
 pub enum PlatformABI {
   /// System V AMD64 ABI (Linux, macOS on x86-64)
   /// - Args: RDI, RSI, RDX, RCX, R8, R9, then stack
