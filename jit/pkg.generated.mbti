@@ -312,6 +312,7 @@ pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@type
 pub fn JITModule::new() -> Self
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
+pub fn JITModule::set_memory_pointers(Self, Array[Int64], Array[Int64], Array[Int?]) -> Unit
 
 type JITTable
 pub fn JITTable::get_max(Self) -> Int?

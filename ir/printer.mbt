@@ -139,30 +139,17 @@ fn format_opcode(
     Sextend16 => "sextend16 \{ops}"
     Sextend32 => "sextend32 \{ops}"
 
-    // Memory operations
-    Load(ty, offset) => "load.\{format_type(ty)} \{ops} +\{offset}"
-    Store(ty, offset) => "store.\{format_type(ty)} \{ops} +\{offset}"
-    // Narrow load operations (8/16/32-bit with sign/zero extension)
-    Load8S(ty, offset) => "load8_s.\{format_type(ty)} \{ops} +\{offset}"
-    Load8U(ty, offset) => "load8_u.\{format_type(ty)} \{ops} +\{offset}"
-    Load16S(ty, offset) => "load16_s.\{format_type(ty)} \{ops} +\{offset}"
-    Load16U(ty, offset) => "load16_u.\{format_type(ty)} \{ops} +\{offset}"
-    Load32S(offset) => "load32_s \{ops} +\{offset}"
-    Load32U(offset) => "load32_u \{ops} +\{offset}"
-    // Narrow store operations (8/16/32-bit)
-    Store8(offset) => "store8 \{ops} +\{offset}"
-    Store16(offset) => "store16 \{ops} +\{offset}"
-    Store32(offset) => "store32 \{ops} +\{offset}"
-
-    // Memory management
-    MemoryGrow(max_pages) =>
+    // Memory management (with memidx for multi-memory support)
+    // Note: Load/Store opcodes removed - now use LoadPtr/StorePtr
+    MemoryGrow(memidx, max_pages) =>
       match max_pages {
-        Some(max) => "memory_grow \{ops} max=\{max}"
-        None => "memory_grow \{ops}"
+        Some(max) => "memory_grow mem=\{memidx} \{ops} max=\{max}"
+        None => "memory_grow mem=\{memidx} \{ops}"
       }
-    MemorySize => "memory_size"
-    MemoryFill => "memory_fill \{ops}"
-    MemoryCopy => "memory_copy \{ops}"
+    MemorySize(memidx) => "memory_size mem=\{memidx}"
+    MemoryFill(memidx) => "memory_fill mem=\{memidx} \{ops}"
+    MemoryCopy(dst_memidx, src_memidx) =>
+      "memory_copy dst=\{dst_memidx} src=\{src_memidx} \{ops}"
 
     // Misc
     Select => "select \{ops}"
@@ -188,6 +175,11 @@ fn format_opcode(
     // Raw pointer operations (for trampolines)
     LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
     StorePtr(ty) => "store_ptr.\{ty} \{ops}"
+    LoadPtrNarrow(result_ty, bits, signed) => {
+      let sign_str = if signed { "s" } else { "u" }
+      "load_ptr\{bits}_\{sign_str}.\{result_ty} \{ops}"
+    }
+    StorePtrNarrow(bits) => "store_ptr\{bits} \{ops}"
     CallPtr(num_args, num_results) =>
       "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
 

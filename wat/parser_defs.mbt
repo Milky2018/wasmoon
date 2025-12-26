@@ -3,9 +3,8 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   self.advance() // skip "memory"
   let export_names : Array[String] = []
 
-  // Optional name
-  if self.current.token is Id(name) {
-    self.memory_names.set(name, 0)
+  // Optional name (already registered during first pass, just skip it)
+  if self.current.token is Id(_) {
     self.advance()
   }
 

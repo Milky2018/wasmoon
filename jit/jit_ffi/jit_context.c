@@ -32,6 +32,12 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->table_sizes = NULL;      // Array of table sizes
     ctx->table_max_sizes = NULL;  // Array of table max sizes
 
+    // Multi-memory support
+    ctx->memories = NULL;         // Array of memory base pointers
+    ctx->memory_sizes = NULL;     // Array of memory sizes
+    ctx->memory_max_sizes = NULL; // Array of memory max sizes
+    ctx->memory_count = 0;
+
     // Additional fields (not accessed by JIT code directly)
     ctx->owns_indirect_table = 0; // Default: does not own table0_base
     ctx->args = NULL;
@@ -62,6 +68,11 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx->table0_base && ctx->owns_indirect_table) free(ctx->table0_base);
     if (ctx->memory_base) free(ctx->memory_base);
     if (ctx->globals) free(ctx->globals);
+
+    // Free multi-memory arrays (but not the memory data itself - managed by caller)
+    if (ctx->memories) free(ctx->memories);
+    if (ctx->memory_sizes) free(ctx->memory_sizes);
+    if (ctx->memory_max_sizes) free(ctx->memory_max_sizes);
 
     // Free exception handling state
     if (ctx->exception_values) free(ctx->exception_values);

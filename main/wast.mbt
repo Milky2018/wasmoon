@@ -108,17 +108,10 @@ fn try_compile_jit(
       match jit_module {
         None => abort("Failed to create JIT module")
         Some(jm) => {
-          // Allocate linear memory
-          let mem_size = get_memory_size(instance, store)
-          let mem_ptr = @jit.alloc_memory(mem_size)
-          if mem_ptr == 0L {
-            // NOTE: No need to manually free - GC handles cleanup
+          // Initialize all memories (multi-memory support)
+          if not(init_jit_memories(instance, store, jm)) {
             return None
           }
-          // Copy interpreter memory to JIT memory (preserves start function effects)
-          copy_interp_memory_to_jit(instance, store, mem_ptr)
-          // Set memory in JIT context
-          jm.set_memory(mem_ptr, mem_size)
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
           if globals_ptr != 0L {

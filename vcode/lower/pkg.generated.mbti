@@ -160,8 +160,6 @@ pub enum PatternOpcode {
   Fconst
   Icmp
   Fcmp
-  Load
-  Store
   Copy
   Select
 }

@@ -40,6 +40,11 @@ pub(all) enum JITLibcall {
   MemoryFillV3
   MemoryCopyV3
   TableGrowV3
+  // v4 helpers with memidx for multi-memory support
+  MemoryGrowV4
+  MemorySizeV4
+  MemoryFillV4
+  MemoryCopyV4
 } derive(Eq, Show)
 
 ///|
@@ -321,6 +326,12 @@ pub(all) enum VCodeOpcode {
   // StorePtr(type, offset): Store to [base + offset]
   // Uses: [base, value], Defs: []
   StorePtr(MemType, Int)
+  // LoadPtrNarrow(bits, signed, offset): Load narrow value from [base + offset]
+  // Uses: [base], Defs: [result]
+  LoadPtrNarrow(Int, Bool, Int) // (bits, signed, offset)
+  // StorePtrNarrow(bits, offset): Store narrow value to [base + offset]
+  // Uses: [base, value], Defs: []
+  StorePtrNarrow(Int, Int) // (bits, offset)
 
   // Load GC runtime function pointer
   // LoadGCFuncPtr(libcall): Load function pointer for GC runtime call
@@ -477,6 +488,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
+    LoadPtrNarrow(bits, signed, offset) => {
+      let sign_str = if signed { "s" } else { "u" }
+      "load_ptr\{bits}_\{sign_str} +\{offset}"
+    }
+    StorePtrNarrow(bits, offset) => "store_ptr\{bits} +\{offset}"
     LoadGCFuncPtr(libcall) => "load_gc_func_ptr.\{libcall}"
     LoadJITFuncPtr(libcall) => "load_jit_func_ptr.\{libcall}"
     LoadExceptionFuncPtr(libcall) => "load_exception_func_ptr.\{libcall}"

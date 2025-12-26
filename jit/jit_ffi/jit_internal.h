@@ -65,10 +65,20 @@ void free_context_internal(jit_context_t *ctx);
 #define WASM_PAGE_SIZE 65536
 
 // v3 ctx-passing (re-entrant) variants (internal implementations)
+// These operate on memory 0 (fast path, backward compatible)
 int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_pages);
 int32_t memory_size_ctx_internal(jit_context_t *ctx);
 void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int32_t size);
 void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int32_t size);
+
+// v4 multi-memory variants (with memidx parameter)
+int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t delta, int32_t max_pages);
+int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
+void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t dst, int32_t val, int32_t size);
+void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
+                                   int32_t dst, int32_t src, int32_t size);
+
+// Table operations
 int32_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t delta, int64_t init_value);
 
 // ============ GC Type Cache (gc_type_cache.c) ============

@@ -83,6 +83,43 @@ pub extern "c" fn c_jit_get_memory_copy_ptr_v3() -> Int64 = "wasmoon_jit_get_mem
 /// Signature: table_grow(ctx: *jit_context_t, table_idx: i32, delta: i64, init_value: i64) -> i32
 pub extern "c" fn c_jit_get_table_grow_ptr_v3() -> Int64 = "wasmoon_jit_get_table_grow_ptr_v3"
 
+// ============ Multi-Memory v4 Operations (with memidx) ============
+
+///|
+/// Get memory_grow v4 function pointer for JIT (multi-memory)
+/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i32, max_pages: i32) -> i32
+pub extern "c" fn c_jit_get_memory_grow_ptr_v4() -> Int64 = "wasmoon_jit_get_memory_grow_ptr_v4"
+
+///|
+/// Get memory_size v4 function pointer for JIT (multi-memory)
+/// Signature: memory_size(ctx: *jit_context_t, memidx: i32) -> i32
+pub extern "c" fn c_jit_get_memory_size_ptr_v4() -> Int64 = "wasmoon_jit_get_memory_size_ptr_v4"
+
+///|
+/// Get memory_fill v4 function pointer for JIT (multi-memory)
+/// Signature: memory_fill(ctx: *jit_context_t, memidx: i32, dst: i32, val: i32, size: i32) -> void
+pub extern "c" fn c_jit_get_memory_fill_ptr_v4() -> Int64 = "wasmoon_jit_get_memory_fill_ptr_v4"
+
+///|
+/// Get memory_copy v4 function pointer for JIT (multi-memory)
+/// Signature: memory_copy(ctx: *jit_context_t, dst_memidx: i32, src_memidx: i32, dst: i32, src: i32, size: i32) -> void
+pub extern "c" fn c_jit_get_memory_copy_ptr_v4() -> Int64 = "wasmoon_jit_get_memory_copy_ptr_v4"
+
+///|
+/// Configure JIT context with multiple memories (for multi-memory support)
+/// memory_ptrs: FixedArray of Int64 (memory base pointers)
+/// memory_sizes: FixedArray of Int64 (memory sizes in bytes)
+/// memory_max_sizes: FixedArray of Int (max sizes in pages, -1 = unlimited)
+/// memory_count: Number of memories
+#borrow(memory_ptrs, memory_sizes, memory_max_sizes)
+pub extern "c" fn c_jit_ctx_set_memory_pointers(
+  ctx_ptr : Int64,
+  memory_ptrs : FixedArray[Int64],
+  memory_sizes : FixedArray[Int64],
+  memory_max_sizes : FixedArray[Int],
+  memory_count : Int,
+) -> Unit = "wasmoon_jit_ctx_set_memory_pointers"
+
 ///|
 /// Set globals array in the context
 pub extern "c" fn c_jit_ctx_set_globals(

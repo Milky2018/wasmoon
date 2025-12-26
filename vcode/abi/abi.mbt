@@ -58,6 +58,24 @@ pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
 /// Offset of table_sizes array in VMContext
 pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
 
+// Multi-memory support offsets (parallel to multi-table)
+
+///|
+/// Offset of memories array in VMContext (multi-memory support)
+pub const VMCTX_MEMORIES_OFFSET : Int = 80
+
+///|
+/// Offset of memory_sizes array in VMContext (multi-memory support)
+pub const VMCTX_MEMORY_SIZES_OFFSET : Int = 88
+
+///|
+/// Offset of memory_max_sizes array in VMContext (multi-memory support)
+pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
+
+///|
+/// Offset of memory_count in VMContext (multi-memory support)
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
+
 // ============ Reserved Registers ============
 
 ///|

@@ -209,26 +209,12 @@ pub enum Opcode {
   Sextend16 // Sign extend from 16 bits (i32 or i64)
   Sextend32 // Sign extend from 32 bits (i64 only)
 
-  // Memory operations
-  Load(Type, Int) // Load from memory (type, offset)
-  Store(Type, Int) // Store to memory (type, offset)
-
-  // Narrow memory operations (8/16-bit with sign/zero extension)
-  Load8S(Type, Int) // Load 8-bit signed and extend to Type (offset)
-  Load8U(Type, Int) // Load 8-bit unsigned and extend to Type (offset)
-  Load16S(Type, Int) // Load 16-bit signed and extend to Type (offset)
-  Load16U(Type, Int) // Load 16-bit unsigned and extend to Type (offset)
-  Load32S(Int) // Load 32-bit signed and extend to i64 (offset)
-  Load32U(Int) // Load 32-bit unsigned and extend to i64 (offset)
-  Store8(Int) // Store low 8 bits (offset)
-  Store16(Int) // Store low 16 bits (offset)
-  Store32(Int) // Store low 32 bits of i64 (offset)
-
-  // Memory management
-  MemoryGrow(Int?) // Grow memory by delta pages, returns previous size or -1. Int? = max_pages (None = no limit)
-  MemorySize // Get current memory size in pages
-  MemoryFill // Fill memory region with a byte value (dst, val, size)
-  MemoryCopy // Copy memory region (dst, src, size)
+  // Memory management (desugared via FuncEnvironment at IR translation time)
+  // Note: Load/Store opcodes removed - now use LoadPtr/StorePtr with explicit bounds checks
+  MemoryGrow(Int, Int?) // Grow memory by delta pages (memidx, max_pages). Returns previous size or -1.
+  MemorySize(Int) // Get current memory size in pages (memidx)
+  MemoryFill(Int) // Fill memory region with a byte value (memidx) - operands: dst, val, size
+  MemoryCopy(Int, Int) // Copy memory region (dst_memidx, src_memidx) - operands: dst, src, size
 
   // Misc
   Select // Conditional select (cond ? a : b)
@@ -255,6 +241,9 @@ pub enum Opcode {
   // These follow Cranelift's approach for host code generation
   LoadPtr(Type) // Load from pointer+offset (operand 0 = base ptr)
   StorePtr(Type) // Store to pointer+offset (operand 0 = base ptr, operand 1 = value)
+  // Narrow load/store from raw pointer (result_type, bits, signed)
+  LoadPtrNarrow(Type, Int, Bool) // Load narrow from pointer+offset, extend to result_type
+  StorePtrNarrow(Int) // Store narrow to pointer+offset (bits)
 
   // Raw function pointer call (for trampolines)
   // CallPtr(num_args, num_results) - call via function pointer

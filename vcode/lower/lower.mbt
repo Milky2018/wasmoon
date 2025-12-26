@@ -330,29 +330,7 @@ fn lower_inst(
     // Floating point comparisons
     @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
 
-    // Memory operations
-    @ir.Opcode::Load(ty, offset) => lower_load(ctx, inst, block, ty, offset)
-    @ir.Opcode::Store(ty, offset) => lower_store(ctx, inst, block, ty, offset)
-
-    // Narrow memory operations (8/16/32-bit with sign/zero extension)
-    @ir.Opcode::Load8S(_ty, offset) =>
-      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load8S(o) })
-    @ir.Opcode::Load8U(_ty, offset) =>
-      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load8U(o) })
-    @ir.Opcode::Load16S(_ty, offset) =>
-      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load16S(o) })
-    @ir.Opcode::Load16U(_ty, offset) =>
-      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load16U(o) })
-    @ir.Opcode::Load32S(offset) =>
-      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load32S(o) })
-    @ir.Opcode::Load32U(offset) =>
-      lower_load_narrow(ctx, inst, block, offset, fn(o) { Load32U(o) })
-    @ir.Opcode::Store8(offset) =>
-      lower_store_narrow(ctx, inst, block, offset, I8)
-    @ir.Opcode::Store16(offset) =>
-      lower_store_narrow(ctx, inst, block, offset, I16)
-    @ir.Opcode::Store32(offset) =>
-      lower_store_narrow(ctx, inst, block, offset, I32)
+    // Note: Load/Store opcodes removed - now desugared via FuncEnvironment to LoadPtr/StorePtr
 
     // Conversions
     @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
@@ -379,12 +357,15 @@ fn lower_inst(
     @ir.Opcode::Copy => lower_copy(ctx, inst, block)
     @ir.Opcode::Select => lower_select(ctx, inst, block)
 
-    // Memory management
-    @ir.Opcode::MemoryGrow(max_pages) =>
-      lower_memory_grow(ctx, inst, block, max_pages)
-    @ir.Opcode::MemorySize => lower_memory_size(ctx, inst, block)
-    @ir.Opcode::MemoryFill => lower_memory_fill(ctx, inst, block)
-    @ir.Opcode::MemoryCopy => lower_memory_copy(ctx, inst, block)
+    // Memory management (with memidx for multi-memory support)
+    @ir.Opcode::MemoryGrow(memidx, max_pages) =>
+      lower_memory_grow(ctx, inst, block, memidx, max_pages)
+    @ir.Opcode::MemorySize(memidx) =>
+      lower_memory_size(ctx, inst, block, memidx)
+    @ir.Opcode::MemoryFill(memidx) =>
+      lower_memory_fill(ctx, inst, block, memidx)
+    @ir.Opcode::MemoryCopy(dst_memidx, src_memidx) =>
+      lower_memory_copy(ctx, inst, block, dst_memidx, src_memidx)
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
@@ -413,6 +394,10 @@ fn lower_inst(
     // Raw pointer operations (for trampolines)
     @ir.Opcode::LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
     @ir.Opcode::StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
+    @ir.Opcode::LoadPtrNarrow(result_ty, bits, signed) =>
+      lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
+    @ir.Opcode::StorePtrNarrow(bits) =>
+      lower_store_ptr_narrow(ctx, inst, block, bits)
     @ir.Opcode::CallPtr(num_args, num_results) =>
       lower_call_ptr(ctx, inst, block, num_args, num_results)
 
@@ -809,6 +794,78 @@ fn lower_store_ptr(
 
   // Create StorePtr instruction
   let store_inst = @instr.VCodeInst::new(StorePtr(mem_ty, offset))
+  store_inst.add_use(Virtual(base))
+  store_inst.add_use(Virtual(value))
+  block.add_inst(store_inst)
+}
+
+///|
+/// Lower load_ptr_narrow instruction (raw pointer narrow load without bounds checking)
+/// Used by FuncEnvironment for memory loads
+fn lower_load_ptr_narrow(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  _result_ty : @ir.Type,
+  bits : Int,
+  signed : Bool,
+) -> Unit {
+  // operand 0 = base pointer
+  // operand 1 = offset constant
+  guard inst.operands.length() >= 1 else { return }
+  guard inst.result is Some(result) else { return }
+  let result_vreg = ctx.get_vreg(result)
+  let base = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Check if we have an offset from a second operand
+  let offset = if inst.operands.length() > 1 {
+    if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
+      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      off.to_int()
+    } else {
+      0
+    }
+  } else {
+    0
+  }
+
+  // Create LoadPtrNarrow instruction
+  let load_inst = @instr.VCodeInst::new(LoadPtrNarrow(bits, signed, offset))
+  load_inst.add_def({ reg: Virtual(result_vreg) })
+  load_inst.add_use(Virtual(base))
+  block.add_inst(load_inst)
+}
+
+///|
+/// Lower store_ptr_narrow instruction (raw pointer narrow store without bounds checking)
+/// Used by FuncEnvironment for memory stores
+fn lower_store_ptr_narrow(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  bits : Int,
+) -> Unit {
+  // operand 0 = base pointer
+  // operand 1 = value to store
+  // operand 2 = offset constant (optional)
+  guard inst.operands.length() >= 2 else { return }
+  let base = ctx.get_vreg_for_use(inst.operands[0], block)
+  let value = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Check if we have an offset from a third operand
+  let offset = if inst.operands.length() > 2 {
+    if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
+      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      off.to_int()
+    } else {
+      0
+    }
+  } else {
+    0
+  }
+
+  // Create StorePtrNarrow instruction
+  let store_inst = @instr.VCodeInst::new(StorePtrNarrow(bits, offset))
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)

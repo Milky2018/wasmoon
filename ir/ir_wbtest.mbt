@@ -101,25 +101,31 @@ test "float operations" {
 
 ///|
 test "memory operations" {
+  // Note: Load/Store with memidx replaced by LoadPtr/StorePtr
+  // Memory bounds checking now handled at IR translation time via FuncEnvironment
   let builder = IRBuilder::new("load_store")
-  let addr = builder.add_param(Type::I32)
+  let addr = builder.add_param(Type::I64) // ptr is i64
   builder.add_result(Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let loaded = builder.load(Type::I32, addr, 0)
+  let offset0 = builder.iconst_i64(0)
+  let loaded = builder.load_ptr(Type::I32, addr, offset0)
   let c1 = builder.iconst_i32(1)
   let added = builder.iadd(loaded, c1)
-  builder.store(Type::I32, addr, added, 4)
+  let offset4 = builder.iconst_i64(4)
+  builder.store_ptr(Type::I32, addr, added, offset4)
   builder.return_([added])
   let output = builder.print()
   let expected =
-    #|function load_store(v0:i32) -> i32 {
+    #|function load_store(v0:i64) -> i32 {
     #|block0:
-    #|    v1:i32 = load.i32 v0 +0
-    #|    v2:i32 = iconst 1
-    #|    v3:i32 = iadd v1, v2
-    #|    store.i32 v0, v3 +4
-    #|    return v3
+    #|    v1:i64 = iconst 0
+    #|    v2:i32 = load_ptr.I32 v0, v1
+    #|    v3:i32 = iconst 1
+    #|    v4:i32 = iadd v2, v3
+    #|    v5:i64 = iconst 4
+    #|    store_ptr.I32 v0, v4, v5
+    #|    return v4
     #|}
     #|
   inspect(output, content=expected)
@@ -944,7 +950,7 @@ test "LICM: hoist invariant computation" {
 test "LICM: don't hoist side effects" {
   // Create a loop with a store - should not be hoisted
   let builder = IRBuilder::new("licm_no_hoist")
-  let addr = builder.add_param(Type::I32)
+  let addr = builder.add_param(Type::I64) // ptr is i64 for store_ptr
   let n = builder.add_param(Type::I32)
   builder.add_result(Type::I32)
   let entry = builder.create_block()
@@ -960,10 +966,11 @@ test "LICM: don't hoist side effects" {
   builder.switch_to_block(header)
   let cmp = builder.icmp_slt(i, n)
   builder.brnz(cmp, body, exit)
-  // Body - store has side effects
+  // Body - store has side effects (use store_ptr since Load/Store with memidx removed)
   builder.switch_to_block(body)
   let val = builder.iconst_i32(42)
-  builder.store(Type::I32, addr, val, 0)
+  let offset0 = builder.iconst_i64(0)
+  builder.store_ptr(Type::I32, addr, val, offset0)
   let one = builder.iconst_i32(1)
   let new_i = builder.iadd(i, one)
   builder.jump(header, [new_i])
@@ -982,7 +989,7 @@ test "LICM: don't hoist side effects" {
     .iter()
     .any(fn(inst) {
       match inst.opcode {
-        Store(_, _) => true
+        StorePtr(_) => true
         _ => false
       }
     })

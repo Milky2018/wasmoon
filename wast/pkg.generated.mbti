@@ -91,7 +91,7 @@ pub fn WastContext::new(Bool, jit_compiler? : JITCompiler?) -> Self
 pub struct WastResult {
   mut passed : Int
   mut failed : Int
-  mut skipped : Int
+  skipped : Int
   failures : Array[String]
 }
 pub fn WastResult::new() -> Self

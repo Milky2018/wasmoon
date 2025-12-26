@@ -13,8 +13,8 @@
 // X19 caches callee_vmctx for fast access within the function
 
 // VMContext v3 - layout MUST match vcode/abi/abi.mbt constants:
-//   +0:  memory_base (uint8_t*)     - High frequency: linear memory base
-//   +8:  memory_size (size_t)       - High frequency: memory size in bytes
+//   +0:  memory_base (uint8_t*)     - High frequency: linear memory base (memory 0 fast path)
+//   +8:  memory_size (size_t)       - High frequency: memory size in bytes (memory 0 fast path)
 //   +16: func_table (void**)        - High frequency: function pointer array
 //   +24: table0_base (void**)       - High frequency: table 0 base (fast path for call_indirect)
 //   +32: table0_elements (size_t)   - Medium frequency: table 0 element count
@@ -22,6 +22,12 @@
 //   +48: tables (void***)           - Low frequency: multi-table pointer array
 //   +56: table_count (int)          - Low frequency: number of tables
 //   +60: func_count (int)           - Low frequency: number of functions
+//   +64: table_sizes (size_t*)      - Low frequency: array of table sizes
+//   +72: table_max_sizes (size_t*)  - Low frequency: array of table max sizes
+//   +80: memories (uint8_t**)       - Low frequency: multi-memory pointer array
+//   +88: memory_sizes (size_t*)     - Low frequency: array of memory sizes
+//   +96: memory_max_sizes (size_t*) - Low frequency: array of memory max sizes (in pages)
+//   +104: memory_count (int)        - Low frequency: number of memories
 typedef struct {
     // High frequency fields (accessed in hot paths)
     uint8_t *memory_base;     // +0:  WebAssembly linear memory base
@@ -39,6 +45,12 @@ typedef struct {
     int func_count;           // +60: Number of entries in func_table
     size_t *table_sizes;      // +64: Array of table current sizes for all tables
     size_t *table_max_sizes;  // +72: Array of table max sizes (-1 = unlimited)
+
+    // Multi-memory support (parallel to multi-table)
+    uint8_t **memories;       // +80: Array of memory base pointers
+    size_t *memory_sizes;     // +88: Array of memory sizes in bytes
+    size_t *memory_max_sizes; // +96: Array of memory max sizes in pages (-1 = unlimited)
+    int memory_count;         // +104: Number of memories
 
     // Additional fields (not accessed by JIT code directly)
     int owns_indirect_table;  // Whether this context owns table0_base (should free it)

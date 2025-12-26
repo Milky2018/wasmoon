@@ -176,15 +176,19 @@ test "lower conditional branch" {
 
 ///|
 test "lower memory operations" {
+  // Note: Uses load_ptr/store_ptr directly (raw pointer ops without bounds checking)
+  // Bounds checking is now done at IR translation time via FuncEnvironment
   let builder = @ir.IRBuilder::new("load_store")
-  let addr = builder.add_param(@ir.Type::I64)
+  let addr = builder.add_param(@ir.Type::I64) // ptr is i64
   builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let loaded = builder.load(@ir.Type::I32, addr, 0)
+  let offset0 = builder.iconst_i64(0)
+  let loaded = builder.load_ptr(@ir.Type::I32, addr, offset0)
   let one = builder.iconst_i32(1)
   let sum = builder.iadd(loaded, one)
-  builder.store(@ir.Type::I32, addr, sum, 4)
+  let offset4 = builder.iconst_i64(4)
+  builder.store_ptr(@ir.Type::I32, addr, sum, offset4)
   builder.return_([sum])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
@@ -193,23 +197,13 @@ test "lower memory operations" {
     content=(
       #|vcode load_store(v0:int) -> int {
       #|block0:
-      #|    v2 = extend.u32_64 v0
-      #|    v3 = add #4 v2
-      #|    v4 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v3, v4
-      #|    v5 = load.i64 +0 x19
-      #|    v6 = add v5, v0
-      #|    v1 = load.i32 +0 v6
-      #|    v7 = ldi 1
-      #|    v8 = add32 v1, v7
-      #|    v9 = extend.u32_64 v0
-      #|    v10 = add #8 v9
-      #|    v11 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v10, v11
-      #|    v12 = load.i64 +0 x19
-      #|    v13 = add v12, v0
-      #|    store.i32 +4 v13, v8
-      #|    ret v8
+      #|    v1 = ldi 0
+      #|    v2 = load_ptr.i32 +0 v0
+      #|    v3 = ldi 1
+      #|    v4 = add32 v2, v3
+      #|    v5 = ldi 4
+      #|    store_ptr.i32 +4 v0, v4
+      #|    ret v4
       #|}
       #|
     ),
@@ -848,27 +842,28 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   builder.switch_to_block(entry)
   let local1 = builder.fconst_f32(10.0)
   let local2_init = builder.fconst_f32(0.0)
-  let addr = builder.iconst_i32(0)
+  let addr = builder.iconst_i64(0) // ptr is i64
+  let offset0 = builder.iconst_i64(0)
   // br_table with 3 cases + default
   // targets = [case0, case1, case2], default = exit
   builder.br_table(selector, [case0, case1, case2], exit)
 
   // case0: store local1, load to local2, jump exit with local2
   builder.switch_to_block(case0)
-  builder.store(@ir.Type::F32, addr, local1, 0)
-  let local2_0 = builder.load(@ir.Type::F32, addr, 0)
+  builder.store_ptr(@ir.Type::F32, addr, local1, offset0)
+  let local2_0 = builder.load_ptr(@ir.Type::F32, addr, offset0)
   builder.jump(exit, [local2_0])
 
   // case1: same pattern
   builder.switch_to_block(case1)
-  builder.store(@ir.Type::F32, addr, local1, 0)
-  let local2_1 = builder.load(@ir.Type::F32, addr, 0)
+  builder.store_ptr(@ir.Type::F32, addr, local1, offset0)
+  let local2_1 = builder.load_ptr(@ir.Type::F32, addr, offset0)
   builder.jump(exit, [local2_1])
 
   // case2: same pattern
   builder.switch_to_block(case2)
-  builder.store(@ir.Type::F32, addr, local1, 0)
-  let local2_2 = builder.load(@ir.Type::F32, addr, 0)
+  builder.store_ptr(@ir.Type::F32, addr, local1, offset0)
+  let local2_2 = builder.load_ptr(@ir.Type::F32, addr, offset0)
   builder.jump(exit, [local2_2])
 
   // exit: return local2_phi
@@ -891,70 +886,35 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    f2 = ldf 10
       #|    f3 = ldf 0
       #|    v4 = ldi 0
-      #|    v6 = ldi 0
-      #|    v5 = cmp32.eq v0, v6
-      #|    branch v5, block1, block5
+      #|    v5 = ldi 0
+      #|    v7 = ldi 0
+      #|    v6 = cmp32.eq v0, v7
+      #|    branch v6, block1, block5
       #|block1:
-      #|    v11 = extend.u32_64 v4
-      #|    v12 = add #4 v11
-      #|    v13 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v12, v13
-      #|    v14 = load.i64 +0 x19
-      #|    v15 = add v14, v4
-      #|    store.f32 +0 v15, f2
-      #|    v17 = extend.u32_64 v4
-      #|    v18 = add #4 v17
-      #|    v19 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v18, v19
-      #|    v20 = load.i64 +0 x19
-      #|    v21 = add v20, v4
-      #|    f16 = load.f32 +0 v21
-      #|    f1 = mov f16
+      #|    store_ptr.f32 +0 v4, f2
+      #|    f12 = load_ptr.f32 +0 v4
+      #|    f1 = mov f12
       #|    jump block4
       #|block2:
-      #|    v22 = extend.u32_64 v4
-      #|    v23 = add #4 v22
-      #|    v24 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v23, v24
-      #|    v25 = load.i64 +0 x19
-      #|    v26 = add v25, v4
-      #|    store.f32 +0 v26, f2
-      #|    v28 = extend.u32_64 v4
-      #|    v29 = add #4 v28
-      #|    v30 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v29, v30
-      #|    v31 = load.i64 +0 x19
-      #|    v32 = add v31, v4
-      #|    f27 = load.f32 +0 v32
-      #|    f1 = mov f27
+      #|    store_ptr.f32 +0 v4, f2
+      #|    f13 = load_ptr.f32 +0 v4
+      #|    f1 = mov f13
       #|    jump block4
       #|block3:
-      #|    v33 = extend.u32_64 v4
-      #|    v34 = add #4 v33
-      #|    v35 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v34, v35
-      #|    v36 = load.i64 +0 x19
-      #|    v37 = add v36, v4
-      #|    store.f32 +0 v37, f2
-      #|    v39 = extend.u32_64 v4
-      #|    v40 = add #4 v39
-      #|    v41 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v40, v41
-      #|    v42 = load.i64 +0 x19
-      #|    v43 = add v42, v4
-      #|    f38 = load.f32 +0 v43
-      #|    f1 = mov f38
+      #|    store_ptr.f32 +0 v4, f2
+      #|    f14 = load_ptr.f32 +0 v4
+      #|    f1 = mov f14
       #|    jump block4
       #|block4(f1:float):
       #|    ret f1
       #|block5:
-      #|    v7 = ldi 1
-      #|    v8 = cmp32.eq v0, v7
-      #|    branch v8, block2, block6
+      #|    v8 = ldi 1
+      #|    v9 = cmp32.eq v0, v8
+      #|    branch v9, block2, block6
       #|block6:
-      #|    v9 = ldi 2
-      #|    v10 = cmp32.eq v0, v9
-      #|    branch v10, block3, block4
+      #|    v10 = ldi 2
+      #|    v11 = cmp32.eq v0, v10
+      #|    branch v11, block3, block4
       #|}
       #|
     ),
@@ -979,54 +939,18 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    x10 = cmp32.eq x0, x9
       #|    branch x10, block1, block5
       #|block1:
-      #|    x9 = extend.u32_64 x8
-      #|    x10 = add #4 x9
-      #|    x11 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 x10, x11
-      #|    x9 = load.i64 +0 x19
-      #|    x10 = add x9, x8
-      #|    store.f32 +0 x10, d0
-      #|    x9 = extend.u32_64 x8
-      #|    x10 = add #4 x9
-      #|    x11 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 x10, x11
-      #|    x9 = load.i64 +0 x19
-      #|    x10 = add x9, x8
-      #|    d0 = load.f32 +0 x10
-      #|    d2 = mov d0
+      #|    store_ptr.f32 +0 x8, d0
+      #|    d1 = load_ptr.f32 +0 x8
+      #|    d2 = mov d1
       #|    jump block4
       #|block2:
-      #|    x9 = extend.u32_64 x8
-      #|    x10 = add #4 x9
-      #|    x11 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 x10, x11
-      #|    x9 = load.i64 +0 x19
-      #|    x10 = add x9, x8
-      #|    store.f32 +0 x10, d0
-      #|    x9 = extend.u32_64 x8
-      #|    x10 = add #4 x9
-      #|    x11 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 x10, x11
-      #|    x9 = load.i64 +0 x19
-      #|    x10 = add x9, x8
-      #|    d1 = load.f32 +0 x10
+      #|    store_ptr.f32 +0 x8, d0
+      #|    d1 = load_ptr.f32 +0 x8
       #|    d2 = mov d1
       #|    jump block4
       #|block3:
-      #|    x9 = extend.u32_64 x8
-      #|    x10 = add #4 x9
-      #|    x11 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 x10, x11
-      #|    x9 = load.i64 +0 x19
-      #|    x10 = add x9, x8
-      #|    store.f32 +0 x10, d0
-      #|    x9 = extend.u32_64 x8
-      #|    x10 = add #4 x9
-      #|    x11 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 x10, x11
-      #|    x9 = load.i64 +0 x19
-      #|    x10 = add x9, x8
-      #|    d1 = load.f32 +0 x10
+      #|    store_ptr.f32 +0 x8, d0
+      #|    d1 = load_ptr.f32 +0 x8
       #|    d2 = mov d1
       #|    jump block4
       #|block4(f1:float):
@@ -1102,8 +1026,9 @@ test "minimal: dead float constant should not affect live values" {
   let v1 = builder.fconst_f32(1.0) // DEAD - should not affect result
   let v2 = builder.fconst_f32(2.0) // LIVE - returned, must be 2.0
   let v3 = builder.fconst_f32(10.0) // LIVE - stored to memory
-  let addr = builder.iconst_i32(0)
-  builder.store(@ir.Type::F32, addr, v3, 0)
+  let addr = builder.iconst_i64(0) // ptr is i64
+  let offset0 = builder.iconst_i64(0)
+  builder.store_ptr(@ir.Type::F32, addr, v3, offset0)
   builder.return_([v2])
   ignore(v1)
 
@@ -1118,13 +1043,8 @@ test "minimal: dead float constant should not affect live values" {
       #|    f1 = ldf 2
       #|    f2 = ldf 10
       #|    v3 = ldi 0
-      #|    v4 = extend.u32_64 v3
-      #|    v5 = add #4 v4
-      #|    v6 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 v5, v6
-      #|    v7 = load.i64 +0 x19
-      #|    v8 = add v7, v3
-      #|    store.f32 +0 v8, f2
+      #|    v4 = ldi 0
+      #|    store_ptr.f32 +0 v3, f2
       #|    ret f1
       #|}
       #|
@@ -1143,13 +1063,7 @@ test "minimal: dead float constant should not affect live values" {
       #|    d0 = ldf 2
       #|    d1 = ldf 10
       #|    x8 = ldi 0
-      #|    x9 = extend.u32_64 x8
-      #|    x10 = add #4 x9
-      #|    x11 = load_ptr.i64 +8 x19
-      #|    trap_if_ugt #1 x10, x11
-      #|    x9 = load.i64 +0 x19
-      #|    x10 = add x9, x8
-      #|    store.f32 +0 x10, d1
+      #|    store_ptr.f32 +0 x8, d1
       #|    ret d0
       #|}
       #|

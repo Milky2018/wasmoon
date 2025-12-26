@@ -163,6 +163,39 @@ fn JITContext::set_table_pointers(
 }
 
 ///|
+/// Set multiple memories (for multi-memory support)
+/// memory_ptrs: Array of Int64 (memory base pointers)
+/// memory_sizes: Array of Int64 (memory sizes in bytes)
+/// memory_max_pages: Array of Int? (max sizes in pages, None = unlimited)
+fn JITContext::set_memory_pointers(
+  self : JITContext,
+  memory_ptrs : Array[Int64],
+  memory_sizes : Array[Int64],
+  memory_max_pages : Array[Int?],
+) -> Unit {
+  if memory_ptrs.is_empty() {
+    return
+  }
+  let count = memory_ptrs.length()
+  // Convert to FixedArrays for FFI
+  let ptrs = FixedArray::make(count, 0L)
+  let sizes = FixedArray::make(count, 0L)
+  let max_sizes = FixedArray::make(count, -1) // -1 = unlimited
+  for i in 0..<count {
+    ptrs[i] = memory_ptrs[i]
+    sizes[i] = memory_sizes[i]
+    max_sizes[i] = memory_max_pages[i].unwrap_or(-1)
+  }
+  @jit_ffi.c_jit_ctx_set_memory_pointers(
+    self.ptr(),
+    ptrs,
+    sizes,
+    max_sizes,
+    count,
+  )
+}
+
+///|
 /// Allocate linear memory for WASM (returns 0 on failure)
 /// NOTE: If you set the memory to a JITContext (via set_memory), the context
 /// takes ownership and its finalizer will free the memory. Do NOT call

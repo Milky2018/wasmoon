@@ -822,10 +822,8 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
     validate_value_type(elem.type_, num_types)
   }
 
-  // Check for multiple memories (not allowed in MVP)
-  if ctx.mems.length() > 1 {
-    raise MultipleMemories
-  }
+  // Multi-memory support is now enabled
+  // The restriction has been removed to support WebAssembly multi-memory proposal
 
   // Multi-table support is now enabled
   // The restriction has been removed to support WebAssembly reference types proposal
@@ -1030,15 +1028,9 @@ pub fn validate_module_with_context(
     ignore(type_idx)
   }
 
-  // Check for multiple memories (not allowed in MVP)
-  if ctx.mems.length() > 1 {
-    raise WithContext(ValidationErrorContext::from_error(MultipleMemories))
-  }
+  // Multi-memory support is now enabled (WebAssembly multi-memory proposal)
 
-  // Check for multiple tables (not allowed in MVP)
-  if ctx.tables.length() > 1 {
-    raise WithContext(ValidationErrorContext::from_error(MultipleTables))
-  }
+  // Multi-table support is now enabled (WebAssembly reference types proposal)
 
   // Validate memory limits
   for mem in ctx.mems {
