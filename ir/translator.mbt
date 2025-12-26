@@ -1497,13 +1497,12 @@ fn Translator::translate_instruction(
       self.builder.switch_to_block(try_body_block)
 
       // Increment try_table_depth so spill_locals_if_in_try knows to spill
+      // Note: decrement happens AFTER all catch handlers are translated,
+      // so catch handlers can still spill for outer try_tables
       self.try_table_depth = self.try_table_depth + 1
 
       // Translate the body using normal block translation
       self.translate_block(block_type, body)
-
-      // Decrement try_table_depth
-      self.try_table_depth = self.try_table_depth - 1
 
       // Save post-body locals for the normal continuation path
       // (locals modified in try body should be visible after try_table)
@@ -1586,6 +1585,10 @@ fn Translator::translate_instruction(
       if self.builder.current_block() is Some(blk) && blk.terminator is None {
         self.builder.delegate(1) // Propagate to outer handler
       }
+
+      // Decrement try_table_depth AFTER all catch handlers are translated
+      // This ensures catch handlers can still spill for outer try_tables
+      self.try_table_depth = self.try_table_depth - 1
 
       // === Continuation block ===
       self.builder.switch_to_block(try_continuation)
