@@ -226,6 +226,7 @@ pub fn run_jit(
         tables=mod_.tables,
         type_rec_groups=mod_.type_rec_groups,
         module_types=mod_.types,
+        tags=mod_.tags,
       )
       let ir_func = translator.translate(code.body)
 

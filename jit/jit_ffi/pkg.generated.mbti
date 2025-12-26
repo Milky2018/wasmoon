@@ -126,6 +126,22 @@ pub fn c_jit_get_environ_get_ptr() -> Int64
 
 pub fn c_jit_get_environ_sizes_get_ptr() -> Int64
 
+pub fn c_jit_get_exception_delegate_ptr() -> Int64
+
+pub fn c_jit_get_exception_get_tag_ptr() -> Int64
+
+pub fn c_jit_get_exception_get_value_count_ptr() -> Int64
+
+pub fn c_jit_get_exception_get_value_ptr() -> Int64
+
+pub fn c_jit_get_exception_throw_ptr() -> Int64
+
+pub fn c_jit_get_exception_throw_ref_ptr() -> Int64
+
+pub fn c_jit_get_exception_try_begin_ptr() -> Int64
+
+pub fn c_jit_get_exception_try_end_ptr() -> Int64
+
 pub fn c_jit_get_fd_close_ptr() -> Int64
 
 pub fn c_jit_get_fd_fdstat_get_ptr() -> Int64
@@ -171,6 +187,8 @@ pub fn c_jit_get_memory_size_ptr_v3() -> Int64
 pub fn c_jit_get_proc_exit_ptr() -> Int64
 
 pub fn c_jit_get_random_get_ptr() -> Int64
+
+pub fn c_jit_get_sigsetjmp_ptr() -> Int64
 
 pub fn c_jit_get_spectest_print_char_ptr() -> Int64
 

@@ -1327,3 +1327,58 @@ pub fn IRBuilder::extern_convert_any(
 pub fn IRBuilder::ref_eq(self : IRBuilder, ref1 : Value, ref2 : Value) -> Value {
   self.emit_inst(Type::I32, Opcode::RefEq, [ref1, ref2])
 }
+
+// ============ Exception Handling ============
+
+///|
+/// emit_throw - throw an exception with the given tag
+pub fn IRBuilder::emit_throw(
+  self : IRBuilder,
+  tag_idx : Int,
+  values : Array[Value],
+) -> Unit {
+  self.emit_void_inst(Opcode::Throw(tag_idx), values)
+}
+
+///|
+/// emit_throw_ref - re-throw an exception from an exnref
+pub fn IRBuilder::emit_throw_ref(self : IRBuilder, exnref : Value) -> Unit {
+  self.emit_void_inst(Opcode::ThrowRef, [exnref])
+}
+
+///|
+/// try_table_begin - setup exception handler, returns setjmp result
+/// Returns 0 on normal entry, handler_id on exception catch
+pub fn IRBuilder::try_table_begin(self : IRBuilder, handler_id : Int) -> Value {
+  self.emit_inst(Type::I32, Opcode::TryTableBegin(handler_id), [])
+}
+
+///|
+/// try_table_end - pop exception handler
+pub fn IRBuilder::try_table_end(self : IRBuilder, handler_id : Int) -> Unit {
+  self.emit_void_inst(Opcode::TryTableEnd(handler_id), [])
+}
+
+///|
+/// get_exception_tag - get tag of caught exception
+pub fn IRBuilder::get_exception_tag(self : IRBuilder) -> Value {
+  self.emit_inst(Type::I32, Opcode::GetExceptionTag, [])
+}
+
+///|
+/// get_exception_value - get exception value at index
+pub fn IRBuilder::get_exception_value(self : IRBuilder, idx : Int) -> Value {
+  self.emit_inst(Type::I64, Opcode::GetExceptionValue(idx), [])
+}
+
+///|
+/// get_exception_value_count - get number of exception values
+pub fn IRBuilder::get_exception_value_count(self : IRBuilder) -> Value {
+  self.emit_inst(Type::I32, Opcode::GetExceptionValueCount, [])
+}
+
+///|
+/// delegate - delegate exception to outer handler at depth
+pub fn IRBuilder::delegate(self : IRBuilder, depth : Int) -> Unit {
+  self.emit_void_inst(Opcode::Delegate(depth), [])
+}

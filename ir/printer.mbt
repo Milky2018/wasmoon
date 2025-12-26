@@ -243,6 +243,16 @@ fn format_opcode(
 
     // GC operations - reference equality
     RefEq => "ref.eq \{ops}"
+
+    // Exception handling
+    Throw(tag_idx) => "throw \{tag_idx} \{ops}"
+    ThrowRef => "throw_ref \{ops}"
+    TryTableBegin(handler_id) => "try_table_begin \{handler_id}"
+    TryTableEnd(handler_id) => "try_table_end \{handler_id}"
+    GetExceptionTag => "get_exception_tag"
+    GetExceptionValue(idx) => "get_exception_value \{idx}"
+    GetExceptionValueCount => "get_exception_value_count"
+    Delegate(depth) => "delegate \{depth}"
   }
 }
 

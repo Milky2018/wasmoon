@@ -1,0 +1,219 @@
+// Copyright 2025
+// Exception handling for JIT runtime
+// Implements WebAssembly exception handling using setjmp/longjmp
+
+#include "jit_internal.h"
+
+// ============ Exception Handler Management ============
+
+sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
+    // Allocate new handler node
+    exception_handler_t *handler = (exception_handler_t *)malloc(sizeof(exception_handler_t));
+    if (!handler) {
+        // Out of memory - trap
+        g_trap_code = 99;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+
+    // Link to previous handler
+    handler->prev = (exception_handler_t *)ctx->exception_handler;
+    handler->handler_id = handler_id;
+    ctx->exception_handler = handler;
+
+    // Return pointer to jmp_buf for caller to call setjmp
+    return &handler->jmp_buf;
+}
+
+void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
+    exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
+
+    // Pop handler from chain (should match handler_id)
+    if (handler && handler->handler_id == handler_id) {
+        ctx->exception_handler = handler->prev;
+        free(handler);
+    }
+
+    // Clear any pending exception values
+    if (ctx->exception_values) {
+        free(ctx->exception_values);
+        ctx->exception_values = NULL;
+    }
+    ctx->exception_value_count = 0;
+}
+
+// ============ Exception Throwing ============
+
+void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
+                          int64_t *values, int32_t count) {
+    // Free any previous exception values
+    if (ctx->exception_values) {
+        free(ctx->exception_values);
+        ctx->exception_values = NULL;
+    }
+
+    // Store exception info
+    ctx->exception_tag = tag_addr;
+    ctx->exception_value_count = count;
+
+    if (count > 0 && values) {
+        // Copy exception values to heap
+        ctx->exception_values = (int64_t *)malloc(count * sizeof(int64_t));
+        if (ctx->exception_values) {
+            memcpy(ctx->exception_values, values, count * sizeof(int64_t));
+        }
+    } else {
+        ctx->exception_values = NULL;
+    }
+
+    // Find handler and longjmp
+    exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
+    if (handler) {
+        siglongjmp(handler->jmp_buf, handler->handler_id);
+    }
+
+    // No handler - propagate as trap (uncaught exception)
+    // Use trap code 8 for uncaught exception
+    g_trap_code = 8;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
+void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) {
+    // exnref encodes (tag_addr, exn_instance_index) or similar
+    // For now, treat exnref as a packed value:
+    // - Low 32 bits: exception instance index
+    // - We need to look up the stored exception from the runtime
+
+    // The exception values should already be stored in ctx from when it was caught
+    // Just re-throw with current exception state
+    exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
+    if (handler) {
+        siglongjmp(handler->jmp_buf, handler->handler_id);
+    }
+
+    // No handler - uncaught exception trap
+    g_trap_code = 8;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
+void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
+    // Delegate skips 'depth' handlers and throws to the one at that level
+    exception_handler_t *target = (exception_handler_t *)ctx->exception_handler;
+
+    // Walk up the handler chain by depth
+    for (int i = 0; i < depth && target; i++) {
+        // Pop this handler (we're delegating past it)
+        exception_handler_t *to_free = target;
+        target = target->prev;
+        ctx->exception_handler = target;
+        free(to_free);
+    }
+
+    if (target) {
+        // longjmp to target handler
+        siglongjmp(target->jmp_buf, target->handler_id);
+    }
+
+    // No handler at that depth - uncaught exception
+    g_trap_code = 8;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
+// ============ Exception Value Access ============
+
+int32_t exception_get_tag_impl(jit_context_t *ctx) {
+    return ctx->exception_tag;
+}
+
+int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx) {
+    if (idx >= 0 && idx < ctx->exception_value_count && ctx->exception_values) {
+        return ctx->exception_values[idx];
+    }
+    return 0;  // Return 0 for out-of-bounds access
+}
+
+int32_t exception_get_value_count_impl(jit_context_t *ctx) {
+    return ctx->exception_value_count;
+}
+
+// ============ FFI Exports ============
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_try_begin(int64_t ctx_ptr, int32_t handler_id) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    return (int64_t)exception_try_begin_impl(ctx, handler_id);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_exception_try_end(int64_t ctx_ptr, int32_t handler_id) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    exception_try_end_impl(ctx, handler_id);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw(int64_t ctx_ptr, int32_t tag_addr,
+                                                     int64_t values_ptr, int32_t count) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    int64_t *values = (int64_t *)values_ptr;
+    exception_throw_impl(ctx, tag_addr, values, count);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_ref(int64_t ctx_ptr, int64_t exnref) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    exception_throw_ref_impl(ctx, exnref);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_exception_delegate(int64_t ctx_ptr, int32_t depth) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    exception_delegate_impl(ctx, depth);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_get_tag(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    return exception_get_tag_impl(ctx);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_get_value(int64_t ctx_ptr, int32_t idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    return exception_get_value_impl(ctx, idx);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_get_value_count(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    return exception_get_value_count_impl(ctx);
+}
+
+// Get function pointers for JIT codegen
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_try_begin_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_try_begin;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_try_end_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_try_end;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_throw;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_ref_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_throw_ref;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_delegate_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_delegate;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_tag_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_get_tag;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_value_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_get_value;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_value_count_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_get_value_count;
+}
+
+// Get sigsetjmp function pointer for JIT to call directly
+// sigsetjmp(jmp_buf, savemask) returns 0 on first call, handler_id on longjmp
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sigsetjmp_ptr(void) {
+    return (int64_t)sigsetjmp;
+}

@@ -1240,6 +1240,23 @@ fn MachineCode::emit_instruction(
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }
+    LoadExceptionFuncPtr(libcall) => {
+      // Load exception handling runtime function pointer
+      // Uses: [], Defs: [result (function pointer)]
+      let result_reg = wreg_num(inst.defs[0])
+      let func_ptr = match libcall {
+        TryBegin => @jit_ffi.c_jit_get_exception_try_begin_ptr()
+        TryEnd => @jit_ffi.c_jit_get_exception_try_end_ptr()
+        Throw => @jit_ffi.c_jit_get_exception_throw_ptr()
+        ThrowRef => @jit_ffi.c_jit_get_exception_throw_ref_ptr()
+        Delegate => @jit_ffi.c_jit_get_exception_delegate_ptr()
+        GetTag => @jit_ffi.c_jit_get_exception_get_tag_ptr()
+        GetValue => @jit_ffi.c_jit_get_exception_get_value_ptr()
+        GetValueCount => @jit_ffi.c_jit_get_exception_get_value_count_ptr()
+        Sigsetjmp => @jit_ffi.c_jit_get_sigsetjmp_ptr()
+      }
+      self.emit_load_imm64(result_reg, func_ptr)
+    }
     CallPtr(_, _, _call_conv) =>
       // Cranelift-style call: all arguments are already in place
       //

@@ -46,6 +46,12 @@ typedef struct {
     int argc;                 // WASI: number of arguments
     char **envp;              // WASI: environment variables
     int envc;                 // WASI: number of env vars
+
+    // Exception handling state
+    void *exception_handler;  // Current exception handler (exception_handler_t*)
+    int32_t exception_tag;    // Tag of in-flight exception
+    int64_t *exception_values; // Exception payload values
+    int32_t exception_value_count; // Number of exception values
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

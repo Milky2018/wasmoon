@@ -2461,24 +2461,103 @@ fn validate_instr(
       stack.set_polymorphic()
     }
     TryTable(bt, handlers, body) => {
-      // TODO: Full validation of try_table when exception handling is complete
-      // For now, validate as a regular block
-      ignore(handlers)
       let results = get_block_results(ctx, bt)
       let params = get_block_params(ctx, bt)
+
       // Pop params
       for i = params.length() - 1; i >= 0; i = i - 1 {
         stack.pop(params[i])
       }
-      // Add label for the block
+
+      // Validate each handler BEFORE pushing try_table's label
+      // (handlers reference labels visible at the try_table instruction,
+      // NOT from inside the try_table body)
+      for handler in handlers {
+        match handler {
+          @types.CatchHandler::Catch(tag_idx, label_idx) => {
+            // Validate tag index
+            if tag_idx < 0 || tag_idx >= ctx.tags.length() {
+              raise UnknownTag(tag_idx)
+            }
+            // Validate label index (labels are indexed from innermost)
+            if label_idx >= ctx.labels.length() {
+              raise InvalidLabelIndex(label_idx)
+            }
+            // Get expected types at label
+            let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+            let expected_types = get_label_types(ctx, target_label)
+            // Catch provides tag params
+            let tag_type = ctx.tags[tag_idx]
+            if tag_type.params.length() != expected_types.length() {
+              raise TypeMismatch(
+                "catch handler arity mismatch: tag has \{tag_type.params.length()} params, label expects \{expected_types.length()}",
+              )
+            }
+          }
+          @types.CatchHandler::CatchRef(tag_idx, label_idx) => {
+            // Validate tag index
+            if tag_idx < 0 || tag_idx >= ctx.tags.length() {
+              raise UnknownTag(tag_idx)
+            }
+            // Validate label index
+            if label_idx >= ctx.labels.length() {
+              raise InvalidLabelIndex(label_idx)
+            }
+            // Get expected types at label
+            let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+            let expected_types = get_label_types(ctx, target_label)
+            // CatchRef provides tag params + exnref
+            let tag_type = ctx.tags[tag_idx]
+            let expected_arity = tag_type.params.length() + 1
+            if expected_arity != expected_types.length() {
+              raise TypeMismatch(
+                "catch_ref handler arity mismatch: tag has \{tag_type.params.length()} params + exnref, label expects \{expected_types.length()}",
+              )
+            }
+          }
+          @types.CatchHandler::CatchAll(label_idx) => {
+            // Validate label index
+            if label_idx >= ctx.labels.length() {
+              raise InvalidLabelIndex(label_idx)
+            }
+            // CatchAll provides no values
+            let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+            let expected_types = get_label_types(ctx, target_label)
+            if expected_types.length() != 0 {
+              raise TypeMismatch(
+                "catch_all handler arity mismatch: provides 0 values, label expects \{expected_types.length()}",
+              )
+            }
+          }
+          @types.CatchHandler::CatchAllRef(label_idx) => {
+            // Validate label index
+            if label_idx >= ctx.labels.length() {
+              raise InvalidLabelIndex(label_idx)
+            }
+            // CatchAllRef provides exnref only
+            let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+            let expected_types = get_label_types(ctx, target_label)
+            if expected_types.length() != 1 {
+              raise TypeMismatch(
+                "catch_all_ref handler arity mismatch: provides 1 value (exnref), label expects \{expected_types.length()}",
+              )
+            }
+          }
+        }
+      }
+
+      // Now push try_table's label for body validation
       let label = { kind: BlockLabel, block_type: bt }
       ctx.labels.push(label)
+
       // Validate body
       for instr in body {
         validate_instr(ctx, stack, instr)
       }
+
       // Remove label
       ctx.labels.pop() |> ignore
+
       // Push results
       for result in results {
         stack.push(result)

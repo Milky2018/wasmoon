@@ -296,6 +296,25 @@ pub enum Opcode {
 
   // GC operations - reference equality
   RefEq // ref.eq - compare two references for equality - operands: ref1, ref2
+
+  // Exception handling operations
+  // Throw exception with tag - operands are exception values
+  Throw(Int) // tag_idx
+  // Re-throw exception from exnref - operand is exnref
+  ThrowRef
+  // Try-table control flow (lowered to setjmp/longjmp pattern)
+  // TryTableBegin(handler_id) - setup exception handler, returns 0 normally or handler_id on exception
+  TryTableBegin(Int)
+  // TryTableEnd(handler_id) - pop exception handler
+  TryTableEnd(Int)
+  // Get tag of caught exception
+  GetExceptionTag
+  // Get exception value at index - operand is index (immediate)
+  GetExceptionValue(Int)
+  // Get count of exception values
+  GetExceptionValueCount
+  // Delegate exception to outer handler at relative depth
+  Delegate(Int) // depth
 } derive(Show)
 
 ///|

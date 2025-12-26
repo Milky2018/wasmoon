@@ -164,6 +164,9 @@ pub fn IRBuilder::copy(Self, Value) -> Value
 pub fn IRBuilder::create_block(Self) -> Block
 pub fn IRBuilder::ctz(Self, Value) -> Value
 pub fn IRBuilder::current_block(Self) -> Block?
+pub fn IRBuilder::delegate(Self, Int) -> Unit
+pub fn IRBuilder::emit_throw(Self, Int, Array[Value]) -> Unit
+pub fn IRBuilder::emit_throw_ref(Self, Value) -> Unit
 pub fn IRBuilder::extern_convert_any(Self, Value) -> Value
 pub fn IRBuilder::fabs(Self, Value) -> Value
 pub fn IRBuilder::fadd(Self, Value, Value) -> Value
@@ -188,6 +191,9 @@ pub fn IRBuilder::fpromote(Self, Value) -> Value
 pub fn IRBuilder::fsqrt(Self, Value) -> Value
 pub fn IRBuilder::fsub(Self, Value, Value) -> Value
 pub fn IRBuilder::ftrunc(Self, Value) -> Value
+pub fn IRBuilder::get_exception_tag(Self) -> Value
+pub fn IRBuilder::get_exception_value(Self, Int) -> Value
+pub fn IRBuilder::get_exception_value_count(Self) -> Value
 pub fn IRBuilder::get_func_ref(Self, Int) -> Value
 pub fn IRBuilder::get_function(Self) -> Function
 pub fn IRBuilder::i31_get_s(Self, Value) -> Value
@@ -260,6 +266,8 @@ pub fn IRBuilder::struct_set(Self, Int, Int, Value, Value) -> Unit
 pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
 pub fn IRBuilder::table_grow(Self, Int, Value, Value) -> Value
 pub fn IRBuilder::trap(Self, String) -> Unit
+pub fn IRBuilder::try_table_begin(Self, Int) -> Value
+pub fn IRBuilder::try_table_end(Self, Int) -> Unit
 pub fn IRBuilder::udiv(Self, Value, Value) -> Value
 pub fn IRBuilder::uextend(Self, Type, Value) -> Value
 pub fn IRBuilder::uint_to_fcvt(Self, Type, Value) -> Value
@@ -401,6 +409,14 @@ pub enum Opcode {
   AnyConvertExtern
   ExternConvertAny
   RefEq
+  Throw(Int)
+  ThrowRef
+  TryTableBegin(Int)
+  TryTableEnd(Int)
+  GetExceptionTag
+  GetExceptionValue(Int)
+  GetExceptionValueCount
+  Delegate(Int)
 }
 pub impl Show for Opcode
 
@@ -451,8 +467,9 @@ pub(all) struct Translator {
   module_types : Array[@types.SubType]
   vmctx : Value
   func_env : FuncEnvironment
+  tags : Array[@types.TagType]
 }
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType]) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {

@@ -463,6 +463,20 @@ fn lower_inst(
     @ir.Opcode::RefCast(type_idx, nullable) =>
       lower_ref_cast(ctx, inst, block, type_idx, nullable)
     @ir.Opcode::RefEq => lower_ref_eq(ctx, inst, block)
+
+    // Exception handling operations
+    @ir.Opcode::Throw(tag_idx) => lower_throw(ctx, inst, block, tag_idx)
+    @ir.Opcode::ThrowRef => lower_throw_ref(ctx, inst, block)
+    @ir.Opcode::TryTableBegin(handler_id) =>
+      lower_try_table_begin(ctx, inst, block, handler_id)
+    @ir.Opcode::TryTableEnd(handler_id) =>
+      lower_try_table_end(ctx, inst, block, handler_id)
+    @ir.Opcode::GetExceptionTag => lower_get_exception_tag(ctx, inst, block)
+    @ir.Opcode::GetExceptionValue(idx) =>
+      lower_get_exception_value(ctx, inst, block, idx)
+    @ir.Opcode::GetExceptionValueCount =>
+      lower_get_exception_value_count(ctx, inst, block)
+    @ir.Opcode::Delegate(depth) => lower_delegate(ctx, inst, block, depth)
   }
 }
 

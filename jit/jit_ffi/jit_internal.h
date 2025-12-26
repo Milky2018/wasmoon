@@ -118,6 +118,26 @@ void set_func_type_indices_internal(int32_t *indices, int num_funcs);
 void set_func_table_internal(void **func_table_ptr, int num_funcs);
 void clear_type_cache_internal(void);
 
+// ============ Exception Handling (exception.c) ============
+
+// Exception handler structure (linked list for nested try blocks)
+typedef struct exception_handler {
+    sigjmp_buf jmp_buf;               // longjmp target
+    struct exception_handler *prev;    // Outer handler (linked list)
+    int32_t handler_id;                // Unique ID for this handler
+} exception_handler_t;
+
+// Exception handling functions
+sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id);
+void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id);
+void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
+                          int64_t *values, int32_t count) __attribute__((noreturn));
+void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) __attribute__((noreturn));
+void exception_delegate_impl(jit_context_t *ctx, int32_t depth) __attribute__((noreturn));
+int32_t exception_get_tag_impl(jit_context_t *ctx);
+int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
+int32_t exception_get_value_count_impl(jit_context_t *ctx);
+
 // ============ GC Operations (gc_ops.c) ============
 
 // GC heap pointer (set before JIT execution)
