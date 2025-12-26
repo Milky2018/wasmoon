@@ -54,6 +54,8 @@ pub(all) enum ExceptionLibcall {
   GetValue // exception_get_value - get exception value at index
   GetValueCount // exception_get_value_count - get number of values
   Sigsetjmp // sigsetjmp(jmp_buf, savemask) - libc setjmp, returns 0 or handler_id
+  SpillLocals // exception_spill_locals - save locals before throw
+  GetSpilledLocal // exception_get_spilled_local - get spilled local value
 } derive(Eq, Show)
 
 ///|

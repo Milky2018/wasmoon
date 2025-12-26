@@ -67,6 +67,8 @@ pub(all) enum ExceptionLibcall {
   GetValue
   GetValueCount
   Sigsetjmp
+  SpillLocals
+  GetSpilledLocal
 }
 pub impl Eq for ExceptionLibcall
 pub impl Show for ExceptionLibcall

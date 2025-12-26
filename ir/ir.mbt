@@ -315,6 +315,10 @@ pub enum Opcode {
   GetExceptionValueCount
   // Delegate exception to outer handler at relative depth
   Delegate(Int) // depth
+  // Spill all locals before throw - operands are local values, Int is count
+  SpillLocalsForThrow(Int)
+  // Get spilled local at index (for catch handlers)
+  GetSpilledLocal(Int)
 } derive(Show)
 
 ///|

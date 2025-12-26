@@ -52,6 +52,12 @@ typedef struct {
     int32_t exception_tag;    // Tag of in-flight exception
     int64_t *exception_values; // Exception payload values
     int32_t exception_value_count; // Number of exception values
+
+    // Spilled locals for exception handling
+    // When throwing, current local values are saved here so catch handlers
+    // can see the values at the throw point (not the setjmp point)
+    int64_t *spilled_locals;      // Saved local values
+    int32_t spilled_locals_count; // Number of saved locals
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

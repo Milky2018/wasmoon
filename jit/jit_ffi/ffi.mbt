@@ -677,3 +677,15 @@ pub extern "c" fn c_jit_get_exception_get_value_count_ptr() -> Int64 = "wasmoon_
 /// Signature: sigsetjmp(jmp_buf, savemask: i32) -> i32
 /// Returns 0 on first call, handler_id on longjmp return
 pub extern "c" fn c_jit_get_sigsetjmp_ptr() -> Int64 = "wasmoon_jit_get_sigsetjmp_ptr"
+
+///|
+/// Get exception spill_locals function pointer for JIT
+/// Signature: spill_locals(ctx: *jit_context_t, locals: *i64, count: i32) -> void
+/// Saves locals before throw so catch handlers see throw-time values
+pub extern "c" fn c_jit_get_exception_spill_locals_ptr() -> Int64 = "wasmoon_jit_get_exception_spill_locals_ptr"
+
+///|
+/// Get exception get_spilled_local function pointer for JIT
+/// Signature: get_spilled_local(ctx: *jit_context_t, idx: i32) -> i64
+/// Gets a spilled local value for catch handlers
+pub extern "c" fn c_jit_get_exception_get_spilled_local_ptr() -> Int64 = "wasmoon_jit_get_exception_get_spilled_local_ptr"

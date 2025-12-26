@@ -464,6 +464,11 @@ fn validate_instruction(
         result.add_error("GetExceptionValueCount must have a result")
       }
     Delegate(_depth) => ()
+    SpillLocalsForThrow(_count) => () // Void instruction, no result
+    GetSpilledLocal(_idx) =>
+      if inst.result is None {
+        result.add_error("GetSpilledLocal must have a result")
+      }
   }
 }
 

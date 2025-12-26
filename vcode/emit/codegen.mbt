@@ -1254,6 +1254,8 @@ fn MachineCode::emit_instruction(
         GetValue => @jit_ffi.c_jit_get_exception_get_value_ptr()
         GetValueCount => @jit_ffi.c_jit_get_exception_get_value_count_ptr()
         Sigsetjmp => @jit_ffi.c_jit_get_sigsetjmp_ptr()
+        SpillLocals => @jit_ffi.c_jit_get_exception_spill_locals_ptr()
+        GetSpilledLocal => @jit_ffi.c_jit_get_exception_get_spilled_local_ptr()
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }

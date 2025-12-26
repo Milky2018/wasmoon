@@ -137,6 +137,8 @@ void exception_delegate_impl(jit_context_t *ctx, int32_t depth) __attribute__((n
 int32_t exception_get_tag_impl(jit_context_t *ctx);
 int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
 int32_t exception_get_value_count_impl(jit_context_t *ctx);
+void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count);
+int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);
 
 // ============ GC Operations (gc_ops.c) ============
 

@@ -39,6 +39,13 @@ void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
         ctx->exception_values = NULL;
     }
     ctx->exception_value_count = 0;
+
+    // Clear any spilled locals
+    if (ctx->spilled_locals) {
+        free(ctx->spilled_locals);
+        ctx->spilled_locals = NULL;
+    }
+    ctx->spilled_locals_count = 0;
 }
 
 // ============ Exception Throwing ============
@@ -116,6 +123,35 @@ void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
     // No handler at that depth - uncaught exception
     g_trap_code = 8;
     siglongjmp(g_trap_jmp_buf, 1);
+}
+
+// ============ Locals Spilling for Exception Handling ============
+
+void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count) {
+    // Free any previous spilled locals
+    if (ctx->spilled_locals) {
+        free(ctx->spilled_locals);
+        ctx->spilled_locals = NULL;
+    }
+
+    ctx->spilled_locals_count = count;
+
+    if (count > 0 && locals) {
+        // Copy locals to heap
+        ctx->spilled_locals = (int64_t *)malloc(count * sizeof(int64_t));
+        if (ctx->spilled_locals) {
+            memcpy(ctx->spilled_locals, locals, count * sizeof(int64_t));
+        }
+    } else {
+        ctx->spilled_locals = NULL;
+    }
+}
+
+int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx) {
+    if (idx >= 0 && idx < ctx->spilled_locals_count && ctx->spilled_locals) {
+        return ctx->spilled_locals[idx];
+    }
+    return 0;  // Return 0 for out-of-bounds access
 }
 
 // ============ Exception Value Access ============
@@ -210,6 +246,27 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_value_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_value_count_ptr(void) {
     return (int64_t)wasmoon_jit_exception_get_value_count;
+}
+
+// Spill/restore locals for exception handling
+MOONBIT_FFI_EXPORT void wasmoon_jit_exception_spill_locals(int64_t ctx_ptr,
+                                                            int64_t locals_ptr, int32_t count) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    int64_t *locals = (int64_t *)locals_ptr;
+    exception_spill_locals_impl(ctx, locals, count);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_get_spilled_local(int64_t ctx_ptr, int32_t idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    return exception_get_spilled_local_impl(ctx, idx);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_spill_locals_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_spill_locals;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_spilled_local_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_get_spilled_local;
 }
 
 // Get sigsetjmp function pointer for JIT to call directly

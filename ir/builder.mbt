@@ -1382,3 +1382,18 @@ pub fn IRBuilder::get_exception_value_count(self : IRBuilder) -> Value {
 pub fn IRBuilder::delegate(self : IRBuilder, depth : Int) -> Unit {
   self.emit_void_inst(Opcode::Delegate(depth), [])
 }
+
+///|
+/// spill_locals_for_throw - save all locals before throw so catch handlers see throw-time values
+pub fn IRBuilder::spill_locals_for_throw(
+  self : IRBuilder,
+  locals : Array[Value],
+) -> Unit {
+  self.emit_void_inst(Opcode::SpillLocalsForThrow(locals.length()), locals)
+}
+
+///|
+/// get_spilled_local - load a spilled local value at index (for catch handlers)
+pub fn IRBuilder::get_spilled_local(self : IRBuilder, idx : Int) -> Value {
+  self.emit_inst(Type::I64, Opcode::GetSpilledLocal(idx), [])
+}

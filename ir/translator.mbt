@@ -57,6 +57,8 @@ pub(all) struct Translator {
   func_env : FuncEnvironment
   // Exception tags for catch handler dispatch
   tags : Array[@types.TagType]
+  // Depth of nested try_table blocks - when > 0, need to spill locals before calls
+  mut try_table_depth : Int
 }
 
 ///|
@@ -182,6 +184,57 @@ pub fn Translator::new(
     vmctx,
     func_env,
     tags,
+    try_table_depth: 0,
+  }
+}
+
+///|
+/// Convert a local value to i64 bits for exception spilling
+/// i32: zero-extend to i64
+/// i64: as-is
+/// f32: bitcast to i32, zero-extend to i64
+/// f64: bitcast to i64
+/// ref: already i64 in IR
+fn Translator::local_to_i64_bits(self : Translator, loc_val : Value) -> Value {
+  match loc_val.ty {
+    I32 => self.builder.uextend(I64, loc_val)
+    I64 | FuncRef | ExternRef => loc_val // refs are already i64
+    F32 => {
+      let bits32 = self.builder.bitcast(I32, loc_val)
+      self.builder.uextend(I64, bits32)
+    }
+    F64 => self.builder.bitcast(I64, loc_val)
+  }
+}
+
+///|
+/// Convert i64 bits back to the original local type
+fn Translator::i64_bits_to_local(
+  self : Translator,
+  bits : Value,
+  target_ty : Type,
+) -> Value {
+  match target_ty {
+    I32 => self.builder.ireduce(I32, bits)
+    I64 | FuncRef | ExternRef => bits // refs are already i64
+    F32 => {
+      let bits32 = self.builder.ireduce(I32, bits)
+      self.builder.bitcast(F32, bits32)
+    }
+    F64 => self.builder.bitcast(F64, bits)
+  }
+}
+
+///|
+/// Spill all locals before instructions that might throw
+/// Called when try_table_depth > 0 and before Call/CallIndirect/CallRef/Throw/ThrowRef
+fn Translator::spill_locals_if_in_try(self : Translator) -> Unit {
+  if self.try_table_depth > 0 {
+    let locals_bits : Array[Value] = []
+    for loc in self.locals {
+      locals_bits.push(self.local_to_i64_bits(loc))
+    }
+    self.builder.spill_locals_for_throw(locals_bits)
   }
 }
 
@@ -1021,15 +1074,32 @@ fn Translator::translate_instruction(
     BrOnNull(depth) => self.translate_br_on_null(depth)
     BrOnNonNull(depth) => self.translate_br_on_non_null(depth)
 
-    // Function calls
-    Call(func_idx) => self.translate_call(func_idx)
-    CallIndirect(type_idx, table_idx) =>
+    // Function calls - spill locals before call when inside try_table
+    // because the callee might throw and we need caller's locals at call point
+    Call(func_idx) => {
+      self.spill_locals_if_in_try()
+      self.translate_call(func_idx)
+    }
+    CallIndirect(type_idx, table_idx) => {
+      self.spill_locals_if_in_try()
       self.translate_call_indirect(type_idx, table_idx)
-    CallRef(type_idx) => self.translate_call_ref(type_idx)
-    ReturnCall(func_idx) => self.translate_return_call(func_idx)
-    ReturnCallIndirect(type_idx, table_idx) =>
+    }
+    CallRef(type_idx) => {
+      self.spill_locals_if_in_try()
+      self.translate_call_ref(type_idx)
+    }
+    ReturnCall(func_idx) => {
+      self.spill_locals_if_in_try()
+      self.translate_return_call(func_idx)
+    }
+    ReturnCallIndirect(type_idx, table_idx) => {
+      self.spill_locals_if_in_try()
       self.translate_return_call_indirect(type_idx, table_idx)
-    ReturnCallRef(type_idx) => self.translate_return_call_ref(type_idx)
+    }
+    ReturnCallRef(type_idx) => {
+      self.spill_locals_if_in_try()
+      self.translate_return_call_ref(type_idx)
+    }
 
     // Memory management (memidx is ignored - JIT only supports single memory)
     // Note: These use IR opcodes instead of desugaring because they require
@@ -1372,6 +1442,9 @@ fn Translator::translate_instruction(
         values[i] = self.pop()
       }
 
+      // Spill all locals before throw so catch handlers see throw-time values
+      self.spill_locals_if_in_try()
+
       // Emit Throw IR opcode with the exception values
       self.builder.emit_throw(tag_idx, values)
       self.is_unreachable = true
@@ -1379,6 +1452,8 @@ fn Translator::translate_instruction(
     ThrowRef => {
       // Pop exnref from stack
       let exnref = self.pop()
+      // Spill all locals before throw so catch handlers see throw-time values
+      self.spill_locals_if_in_try()
       // Emit ThrowRef IR opcode
       self.builder.emit_throw_ref(exnref)
       self.is_unreachable = true
@@ -1411,16 +1486,24 @@ fn Translator::translate_instruction(
       let is_exception = self.builder.icmp_ne(setjmp_result, zero)
       self.builder.brnz(is_exception, catch_dispatch, try_body_block)
 
-      // Save locals BEFORE translating body - catch handlers will use these values
-      // because longjmp returns to the point of setjmp, so locals should have
-      // their values from before the try body executed
-      let saved_locals_for_catch = self.locals.copy()
+      // Save local types before translating body for proper restoration in catch
+      let local_types : Array[Type] = []
+      for loc in self.locals {
+        local_types.push(loc.ty)
+      }
+      let num_locals = local_types.length()
 
       // === Try body block ===
       self.builder.switch_to_block(try_body_block)
 
+      // Increment try_table_depth so spill_locals_if_in_try knows to spill
+      self.try_table_depth = self.try_table_depth + 1
+
       // Translate the body using normal block translation
       self.translate_block(block_type, body)
+
+      // Decrement try_table_depth
+      self.try_table_depth = self.try_table_depth - 1
 
       // Save post-body locals for the normal continuation path
       // (locals modified in try body should be visible after try_table)
@@ -1439,12 +1522,13 @@ fn Translator::translate_instruction(
       // === Catch dispatch block ===
       self.builder.switch_to_block(catch_dispatch)
 
-      // Restore locals to pre-body state for catch handlers
-      // This is SSA-correct because catch handlers are reached via longjmp
-      // from the setjmp point, not through the try body
+      // Load locals from spilled storage (saved before throw/call)
+      // and convert i64 bits back to original types
       self.locals.clear()
-      for loc in saved_locals_for_catch {
-        self.locals.push(loc)
+      for i in 0..<num_locals {
+        let spilled_bits = self.builder.get_spilled_local(i)
+        let restored_val = self.i64_bits_to_local(spilled_bits, local_types[i])
+        self.locals.push(restored_val)
       }
 
       // Get exception tag for matching
@@ -1497,9 +1581,10 @@ fn Translator::translate_instruction(
       }
 
       // If no handler matched, rethrow (delegate to outer handler)
-      // This should not normally happen if handlers are complete
+      // Use depth=1 to skip this handler and propagate to the next outer one
+      // (depth=0 would cause infinite loop by re-entering this same handler)
       if self.builder.current_block() is Some(blk) && blk.terminator is None {
-        self.builder.delegate(0) // Re-throw to immediate outer handler
+        self.builder.delegate(1) // Propagate to outer handler
       }
 
       // === Continuation block ===

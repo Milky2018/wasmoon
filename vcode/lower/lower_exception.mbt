@@ -299,3 +299,108 @@ fn lower_delegate(
   // This is noreturn
   lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, depth_vreg], None)
 }
+
+///|
+/// Lower SpillLocalsForThrow(count) instruction
+/// Calls exception_spill_locals(ctx, locals_ptr, count)
+/// This saves all locals to memory so catch handlers can see throw-time values
+fn lower_spill_locals_for_throw(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  count : Int,
+) -> Unit {
+  // Get vmctx
+  let vmctx_vreg = emit_load_vmctx(ctx, block)
+
+  // If no locals, pass null and 0
+  let (locals_ptr_vreg, count_vreg) = if count > 0 {
+    // Allocate stack space for locals (8 bytes each, aligned to 16)
+    let stack_space = (count * 8 + 15) / 16 * 16
+    let alloc = @instr.VCodeInst::new(AdjustSP(-stack_space))
+    block.add_inst(alloc)
+
+    // Store each local value to stack
+    for i in 0..<count {
+      let val_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+      let offset = i * 8
+      let store = @instr.VCodeInst::new(StoreToStack(offset))
+      store.add_use(Virtual(val_vreg))
+      block.add_inst(store)
+    }
+
+    // Get current stack pointer as locals_ptr
+    let sp_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_sp = @instr.VCodeInst::new(LoadSP)
+    load_sp.add_def({ reg: Virtual(sp_vreg) })
+    block.add_inst(load_sp)
+
+    // Materialize count
+    let count_vreg = materialize_imm(ctx, block, count.to_int64())
+
+    // Call spill_locals helper
+    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_fp = @instr.VCodeInst::new(LoadExceptionFuncPtr(SpillLocals))
+    load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+    block.add_inst(load_fp)
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [vmctx_vreg, sp_vreg, count_vreg],
+      None,
+    )
+
+    // Clean up stack space
+    let dealloc = @instr.VCodeInst::new(AdjustSP(stack_space))
+    block.add_inst(dealloc)
+    (sp_vreg, count_vreg)
+  } else {
+    // No locals - pass null and 0
+    let null_vreg = materialize_imm(ctx, block, 0L)
+    let zero_vreg = materialize_imm(ctx, block, 0L)
+
+    // Still call spill_locals to clear any previous spilled state
+    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_fp = @instr.VCodeInst::new(LoadExceptionFuncPtr(SpillLocals))
+    load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+    block.add_inst(load_fp)
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [vmctx_vreg, null_vreg, zero_vreg],
+      None,
+    )
+    (null_vreg, zero_vreg)
+  }
+  ignore((locals_ptr_vreg, count_vreg))
+}
+
+///|
+/// Lower GetSpilledLocal(idx) instruction
+/// Calls exception_get_spilled_local(ctx, idx) -> value
+fn lower_get_spilled_local(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  idx : Int,
+) -> Unit {
+  guard inst.result is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+
+  // Get vmctx
+  let vmctx_vreg = emit_load_vmctx(ctx, block)
+
+  // Materialize index
+  let idx_vreg = materialize_imm(ctx, block, idx.to_int64())
+
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadExceptionFuncPtr(GetSpilledLocal))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+
+  // Call: exception_get_spilled_local(ctx, idx) -> value
+  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, idx_vreg], Some(dst))
+}

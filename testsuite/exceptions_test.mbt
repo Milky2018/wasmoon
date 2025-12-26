@@ -315,12 +315,12 @@ test "exception_mixed_type_values" {
   let source =
     #|(module
     #|  (tag $e (param i32 i64))
-    #|  (func (export "test") (result i64)
+    #|  (func (export "test") (result i32)
     #|    (block $h (result i32 i64)
     #|      (try_table (catch $e $h)
     #|        (throw $e (i32.const 1) (i64.const 2))
     #|      )
-    #|      (return (i64.const 0))
+    #|      (return (i32.const 0))
     #|    )
     #|    (drop)
     #|  )

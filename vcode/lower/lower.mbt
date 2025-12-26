@@ -477,6 +477,10 @@ fn lower_inst(
     @ir.Opcode::GetExceptionValueCount =>
       lower_get_exception_value_count(ctx, inst, block)
     @ir.Opcode::Delegate(depth) => lower_delegate(ctx, inst, block, depth)
+    @ir.Opcode::SpillLocalsForThrow(count) =>
+      lower_spill_locals_for_throw(ctx, inst, block, count)
+    @ir.Opcode::GetSpilledLocal(idx) =>
+      lower_get_spilled_local(ctx, inst, block, idx)
   }
 }
 

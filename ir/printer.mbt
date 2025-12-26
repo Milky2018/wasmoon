@@ -253,6 +253,8 @@ fn format_opcode(
     GetExceptionValue(idx) => "get_exception_value \{idx}"
     GetExceptionValueCount => "get_exception_value_count"
     Delegate(depth) => "delegate \{depth}"
+    SpillLocalsForThrow(count) => "spill_locals_for_throw \{count}"
+    GetSpilledLocal(idx) => "get_spilled_local \{idx}"
   }
 }
 
