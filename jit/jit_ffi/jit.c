@@ -222,6 +222,128 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr_v3(void) {
     return (int64_t)wasmoon_jit_table_grow_v3;
 }
 
+// ============ v4 Multi-Memory Operations (with memidx) ============
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow_v4(
+    jit_context_t *ctx,
+    int32_t memidx,
+    int32_t delta,
+    int32_t max_pages
+) {
+    return memory_grow_indexed_internal(ctx, memidx, delta, max_pages);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size_v4(jit_context_t *ctx, int32_t memidx) {
+    return memory_size_indexed_internal(ctx, memidx);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v4(
+    jit_context_t *ctx,
+    int32_t memidx,
+    int32_t dst,
+    int32_t val,
+    int32_t size
+) {
+    memory_fill_indexed_internal(ctx, memidx, dst, val, size);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v4(
+    jit_context_t *ctx,
+    int32_t dst_memidx,
+    int32_t src_memidx,
+    int32_t dst,
+    int32_t src,
+    int32_t size
+) {
+    memory_copy_indexed_internal(ctx, dst_memidx, src_memidx, dst, src, size);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr_v4(void) {
+    return (int64_t)wasmoon_jit_memory_grow_v4;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr_v4(void) {
+    return (int64_t)wasmoon_jit_memory_size_v4;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr_v4(void) {
+    return (int64_t)wasmoon_jit_memory_fill_v4;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr_v4(void) {
+    return (int64_t)wasmoon_jit_memory_copy_v4;
+}
+
+// ============ Multi-Memory Array Setup ============
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
+    int64_t ctx_ptr,
+    int64_t *memory_ptrs,
+    int64_t *memory_sizes,
+    int32_t *memory_max_sizes,
+    int memory_count
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || memory_count <= 0 || !memory_ptrs) return;
+
+    // Free existing arrays
+    if (ctx->memories) {
+        free(ctx->memories);
+        ctx->memories = NULL;
+    }
+    if (ctx->memory_sizes) {
+        free(ctx->memory_sizes);
+        ctx->memory_sizes = NULL;
+    }
+    if (ctx->memory_max_sizes) {
+        free(ctx->memory_max_sizes);
+        ctx->memory_max_sizes = NULL;
+    }
+    ctx->memory_count = 0;
+
+    // Allocate arrays
+    ctx->memories = (uint8_t **)calloc(memory_count, sizeof(uint8_t *));
+    if (!ctx->memories) return;
+
+    ctx->memory_sizes = (size_t *)calloc(memory_count, sizeof(size_t));
+    if (!ctx->memory_sizes) {
+        free(ctx->memories);
+        ctx->memories = NULL;
+        return;
+    }
+
+    ctx->memory_max_sizes = (size_t *)calloc(memory_count, sizeof(size_t));
+    if (!ctx->memory_max_sizes) {
+        free(ctx->memories);
+        free(ctx->memory_sizes);
+        ctx->memories = NULL;
+        ctx->memory_sizes = NULL;
+        return;
+    }
+
+    // Copy memory data
+    for (int i = 0; i < memory_count; i++) {
+        ctx->memories[i] = (uint8_t *)memory_ptrs[i];
+        if (memory_sizes) {
+            ctx->memory_sizes[i] = (size_t)memory_sizes[i];
+        }
+        if (memory_max_sizes) {
+            ctx->memory_max_sizes[i] = (memory_max_sizes[i] < 0) ? SIZE_MAX : (size_t)memory_max_sizes[i];
+        } else {
+            ctx->memory_max_sizes[i] = SIZE_MAX;
+        }
+    }
+    ctx->memory_count = memory_count;
+
+    // Set memory 0 fast path
+    if (memory_count > 0 && memory_ptrs[0] != 0) {
+        ctx->memory_base = (uint8_t *)memory_ptrs[0];
+        if (memory_sizes) {
+            ctx->memory_size = (size_t)memory_sizes[0];
+        }
+    }
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx) return;

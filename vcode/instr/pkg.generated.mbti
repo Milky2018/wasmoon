@@ -265,6 +265,8 @@ pub(all) enum VCodeOpcode {
   LoadStackParam(Int, @abi.RegClass, Int)
   LoadPtr(MemType, Int)
   StorePtr(MemType, Int)
+  LoadPtrNarrow(Int, Bool, Int)
+  StorePtrNarrow(Int, Int)
   LoadGCFuncPtr(GCLibcall)
   LoadJITFuncPtr(JITLibcall)
   LoadExceptionFuncPtr(ExceptionLibcall)

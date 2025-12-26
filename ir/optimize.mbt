@@ -98,16 +98,10 @@ fn get_terminator_uses(term : Terminator) -> Array[Value] {
 /// Check if an instruction has side effects
 fn has_side_effects(inst : Inst) -> Bool {
   match inst.opcode {
-    // All Store variants have side effects (modify memory)
-    Store(_, _) | Store8(_) | Store16(_) | Store32(_) => true
-    // All Load variants have side effects (can trap on out-of-bounds access)
-    Load(_, _)
-    | Load8S(_, _)
-    | Load8U(_, _)
-    | Load16S(_, _)
-    | Load16U(_, _)
-    | Load32S(_)
-    | Load32U(_) => true
+    // StorePtr has side effects (modifies memory)
+    StorePtr(_) | StorePtrNarrow(_) => true
+    // LoadPtr has side effects (can trap on null pointer)
+    LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
     // Calls may have side effects
     Call(_)
     | CallIndirect(_)
@@ -116,7 +110,7 @@ fn has_side_effects(inst : Inst) -> Bool {
     | ReturnCallIndirect(_, _)
     | ReturnCallRef(_) => true
     // Memory operations that modify global state
-    MemoryGrow(_) | MemoryFill | MemoryCopy => true
+    MemoryGrow(_, _) | MemoryFill(_) | MemoryCopy(_, _) => true
     // Table operations that modify global state
     TableGrow(_) => true
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment to LoadPtr/StorePtr
@@ -134,10 +128,6 @@ fn has_side_effects(inst : Inst) -> Bool {
     ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) | ArrayLen => true
     // GC type check operations can trap
     RefCast(_, _) => true
-    // Raw pointer operations (used for VMContext access)
-    // LoadPtr reads memory that may be modified by StorePtr
-    // StorePtr modifies memory
-    LoadPtr(_) | StorePtr(_) => true
     // CallPtr can have side effects (calls arbitrary functions)
     CallPtr(_, _) => true
     // Other instructions are pure

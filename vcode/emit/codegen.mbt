@@ -1207,6 +1207,33 @@ fn MachineCode::emit_instruction(
       let value_reg = reg_num(inst.uses[1])
       self.emit_store(ty, value_reg, base_reg, offset)
     }
+    LoadPtrNarrow(bits, signed, offset) => {
+      // Raw pointer narrow load (no bounds checking)
+      // Uses: [base], Defs: [result]
+      let result_reg = wreg_num(inst.defs[0])
+      let base_reg = reg_num(inst.uses[0])
+      match (bits, signed) {
+        (8, true) => self.emit_ldrsb_x_imm(result_reg, base_reg, offset)
+        (8, false) => self.emit_ldrb_imm(result_reg, base_reg, offset)
+        (16, true) => self.emit_ldrsh_x_imm(result_reg, base_reg, offset)
+        (16, false) => self.emit_ldrh_imm(result_reg, base_reg, offset)
+        (32, true) => self.emit_ldrsw_imm(result_reg, base_reg, offset)
+        (32, false) => self.emit_ldr_w_imm(result_reg, base_reg, offset)
+        _ => () // Unsupported bit width
+      }
+    }
+    StorePtrNarrow(bits, offset) => {
+      // Raw pointer narrow store (no bounds checking)
+      // Uses: [base, value], Defs: []
+      let base_reg = reg_num(inst.uses[0])
+      let value_reg = reg_num(inst.uses[1])
+      match bits {
+        8 => self.emit_strb_imm(value_reg, base_reg, offset)
+        16 => self.emit_strh_imm(value_reg, base_reg, offset)
+        32 => self.emit_str_w_imm(value_reg, base_reg, offset)
+        _ => () // Unsupported bit width
+      }
+    }
     LoadGCFuncPtr(libcall) => {
       // Load GC runtime function pointer
       // Uses: [], Defs: [result (function pointer)]

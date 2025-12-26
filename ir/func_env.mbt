@@ -38,6 +38,24 @@ pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
 ///|
 pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
 
+// Multi-memory support offsets
+
+///|
+pub const VMCTX_MEMORIES_OFFSET : Int = 80
+
+///|
+pub const VMCTX_MEMORY_SIZES_OFFSET : Int = 88
+
+///|
+pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
+
+///|
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
+
+///|
+/// WASM page size in bytes (64KB)
+pub const WASM_PAGE_SIZE : Int = 65536
+
 ///|
 /// Global variable stride (each global occupies 16 bytes for alignment)
 pub const GLOBAL_STRIDE : Int = 16
@@ -290,4 +308,313 @@ pub fn FuncEnvironment::translate_table_set(
   // Store the funcref value (first 8 bytes of entry)
   let zero_offset = builder.iconst(Type::I64, 0L)
   builder.store_ptr(Type::I64, addr, value, zero_offset)
+}
+
+// ============ Memory Operations ============
+
+///|
+/// Helper to load memory base and size for a given memidx
+/// For memidx 0: use fast path (direct vmctx fields)
+/// For memidx > 0: load from memories/memory_sizes arrays
+fn load_memory_base_and_size(
+  builder : IRBuilder,
+  vmctx : Value,
+  memidx : Int,
+) -> (Value, Value) {
+  if memidx == 0 {
+    // Fast path for memory 0
+    let base_offset = builder.iconst(
+      Type::I64,
+      VMCTX_MEMORY_BASE_OFFSET.to_int64(),
+    )
+    let base = builder.load_ptr(Type::I64, vmctx, base_offset)
+    let size_offset = builder.iconst(
+      Type::I64,
+      VMCTX_MEMORY_SIZE_OFFSET.to_int64(),
+    )
+    let size = builder.load_ptr(Type::I64, vmctx, size_offset)
+    (base, size)
+  } else {
+    // General path: load from memories/memory_sizes arrays
+    let memories_offset = builder.iconst(
+      Type::I64,
+      VMCTX_MEMORIES_OFFSET.to_int64(),
+    )
+    let memories_ptr = builder.load_ptr(Type::I64, vmctx, memories_offset)
+    let idx_offset = builder.iconst(Type::I64, (memidx * 8).to_int64())
+    let base = builder.load_ptr(Type::I64, memories_ptr, idx_offset)
+    let sizes_offset = builder.iconst(
+      Type::I64,
+      VMCTX_MEMORY_SIZES_OFFSET.to_int64(),
+    )
+    let sizes_ptr = builder.load_ptr(Type::I64, vmctx, sizes_offset)
+    let size = builder.load_ptr(Type::I64, sizes_ptr, idx_offset)
+    (base, size)
+  }
+}
+
+///|
+/// Get the byte size for a type
+fn type_byte_size(ty : Type) -> Int {
+  match ty {
+    I32 => 4
+    I64 => 8
+    F32 => 4
+    F64 => 8
+    FuncRef | ExternRef => 8 // Reference types are pointer-sized
+  }
+}
+
+///|
+/// Translate memory load to IR primitives:
+/// 1. Load memory_base and memory_size from vmctx
+/// 2. Bounds check: trap if addr + offset + size > memory_size
+/// 3. Calculate effective address: memory_base + addr + offset
+/// 4. LoadPtr
+pub fn FuncEnvironment::translate_memory_load(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  vmctx : Value,
+  memidx : Int,
+  ty : Type,
+  wasm_addr : Value,
+  offset : Int,
+) -> Value {
+  let (memory_base, memory_size) = load_memory_base_and_size(
+    builder, vmctx, memidx,
+  )
+  let access_size = type_byte_size(ty)
+
+  // Extend wasm_addr (i32) to i64
+  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+
+  // Calculate end address for bounds check: addr + offset + access_size
+  // Note: offset is u32 in WASM, so treat it as unsigned when extending to 64-bit
+  let offset_u64 = offset.reinterpret_as_uint().to_int64()
+  let offset_val = builder.iconst(Type::I64, offset_u64)
+  let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+  let size_val = builder.iconst(Type::I64, access_size.to_int64())
+  let end_addr = builder.iadd(addr_plus_offset, size_val)
+
+  // Bounds check: trap if end_addr > memory_size
+  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  builder.brnz(in_bounds, continue_block, trap_block)
+
+  // Trap block
+  builder.switch_to_block(trap_block)
+  builder.trap("memory out of bounds")
+
+  // Continue block: perform the load
+  builder.switch_to_block(continue_block)
+
+  // Calculate effective address: memory_base + addr + offset
+  let effective_addr = builder.iadd(memory_base, addr_plus_offset)
+  let zero_offset = builder.iconst(Type::I64, 0L)
+  builder.load_ptr(ty, effective_addr, zero_offset)
+}
+
+///|
+/// Translate memory store to IR primitives:
+/// 1. Load memory_base and memory_size from vmctx
+/// 2. Bounds check: trap if addr + offset + size > memory_size
+/// 3. Calculate effective address: memory_base + addr + offset
+/// 4. StorePtr
+pub fn FuncEnvironment::translate_memory_store(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  vmctx : Value,
+  memidx : Int,
+  ty : Type,
+  wasm_addr : Value,
+  value : Value,
+  offset : Int,
+) -> Unit {
+  let (memory_base, memory_size) = load_memory_base_and_size(
+    builder, vmctx, memidx,
+  )
+  let access_size = type_byte_size(ty)
+
+  // Extend wasm_addr (i32) to i64
+  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+
+  // Calculate end address for bounds check: addr + offset + access_size
+  // Note: offset is u32 in WASM, so treat it as unsigned when extending to 64-bit
+  let offset_u64 = offset.reinterpret_as_uint().to_int64()
+  let offset_val = builder.iconst(Type::I64, offset_u64)
+  let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+  let size_val = builder.iconst(Type::I64, access_size.to_int64())
+  let end_addr = builder.iadd(addr_plus_offset, size_val)
+
+  // Bounds check: trap if end_addr > memory_size
+  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  builder.brnz(in_bounds, continue_block, trap_block)
+
+  // Trap block
+  builder.switch_to_block(trap_block)
+  builder.trap("memory out of bounds")
+
+  // Continue block: perform the store
+  builder.switch_to_block(continue_block)
+
+  // Calculate effective address: memory_base + addr + offset
+  let effective_addr = builder.iadd(memory_base, addr_plus_offset)
+  let zero_offset = builder.iconst(Type::I64, 0L)
+  builder.store_ptr(ty, effective_addr, value, zero_offset)
+}
+
+///|
+/// Translate narrow memory load (i32.load8_s, i32.load16_u, etc.) to IR primitives
+pub fn FuncEnvironment::translate_memory_load_narrow(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  vmctx : Value,
+  memidx : Int,
+  result_ty : Type,
+  narrow_bits : Int,
+  signed : Bool,
+  wasm_addr : Value,
+  offset : Int,
+) -> Value {
+  let (memory_base, memory_size) = load_memory_base_and_size(
+    builder, vmctx, memidx,
+  )
+  let access_size = narrow_bits / 8
+
+  // Extend wasm_addr (i32) to i64
+  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+
+  // Calculate end address for bounds check
+  // Note: offset is u32 in WASM, so treat it as unsigned when extending to 64-bit
+  let offset_u64 = offset.reinterpret_as_uint().to_int64()
+  let offset_val = builder.iconst(Type::I64, offset_u64)
+  let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+  let size_val = builder.iconst(Type::I64, access_size.to_int64())
+  let end_addr = builder.iadd(addr_plus_offset, size_val)
+
+  // Bounds check
+  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  builder.brnz(in_bounds, continue_block, trap_block)
+
+  // Trap block
+  builder.switch_to_block(trap_block)
+  builder.trap("memory out of bounds")
+
+  // Continue block: perform the load
+  builder.switch_to_block(continue_block)
+
+  // Calculate effective address
+  let effective_addr = builder.iadd(memory_base, addr_plus_offset)
+  let zero_offset = builder.iconst(Type::I64, 0L)
+  builder.load_ptr_narrow(
+    result_ty, narrow_bits, signed, effective_addr, zero_offset,
+  )
+}
+
+///|
+/// Translate narrow memory store (i32.store8, i32.store16, etc.) to IR primitives
+pub fn FuncEnvironment::translate_memory_store_narrow(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  vmctx : Value,
+  memidx : Int,
+  narrow_bits : Int,
+  wasm_addr : Value,
+  value : Value,
+  offset : Int,
+) -> Unit {
+  let (memory_base, memory_size) = load_memory_base_and_size(
+    builder, vmctx, memidx,
+  )
+  let access_size = narrow_bits / 8
+
+  // Extend wasm_addr (i32) to i64
+  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+
+  // Calculate end address for bounds check
+  // Note: offset is u32 in WASM, so treat it as unsigned when extending to 64-bit
+  let offset_u64 = offset.reinterpret_as_uint().to_int64()
+  let offset_val = builder.iconst(Type::I64, offset_u64)
+  let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+  let size_val = builder.iconst(Type::I64, access_size.to_int64())
+  let end_addr = builder.iadd(addr_plus_offset, size_val)
+
+  // Bounds check
+  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  builder.brnz(in_bounds, continue_block, trap_block)
+
+  // Trap block
+  builder.switch_to_block(trap_block)
+  builder.trap("memory out of bounds")
+
+  // Continue block: perform the store
+  builder.switch_to_block(continue_block)
+
+  // Calculate effective address
+  let effective_addr = builder.iadd(memory_base, addr_plus_offset)
+  let zero_offset = builder.iconst(Type::I64, 0L)
+  builder.store_ptr_narrow(narrow_bits, effective_addr, value, zero_offset)
+}
+
+///|
+/// Translate memory.size to IR primitives:
+/// Uses existing MemorySize IR opcode (lowering handles reading from vmctx)
+pub fn FuncEnvironment::translate_memory_size(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  memidx : Int,
+) -> Value {
+  builder.memory_size(memidx)
+}
+
+///|
+/// Translate memory.grow to IR primitives:
+/// Uses existing MemoryGrow IR opcode (lowering handles C call)
+pub fn FuncEnvironment::translate_memory_grow(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  memidx : Int,
+  delta : Value,
+  max_pages : Int?,
+) -> Value {
+  match max_pages {
+    Some(max) => builder.memory_grow(memidx, delta, max_pages=max)
+    None => builder.memory_grow(memidx, delta)
+  }
+}
+
+///|
+/// Translate memory.fill to IR primitives:
+/// Uses existing MemoryFill IR opcode (lowering handles C call)
+pub fn FuncEnvironment::translate_memory_fill(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  memidx : Int,
+  dst : Value,
+  val : Value,
+  size : Value,
+) -> Unit {
+  builder.memory_fill(memidx, dst, val, size)
+}
+
+///|
+/// Translate memory.copy to IR primitives:
+/// Uses existing MemoryCopy IR opcode (lowering handles C call)
+pub fn FuncEnvironment::translate_memory_copy(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  dst_memidx : Int,
+  src_memidx : Int,
+  dst : Value,
+  src : Value,
+  size : Value,
+) -> Unit {
+  builder.memory_copy(dst_memidx, src_memidx, dst, src, size)
 }

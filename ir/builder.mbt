@@ -526,141 +526,26 @@ pub fn IRBuilder::bitcast(self : IRBuilder, ty : Type, a : Value) -> Value {
 
 // ============ Memory Operations ============
 
-///|
-/// Load from memory
-pub fn IRBuilder::load(
-  self : IRBuilder,
-  ty : Type,
-  addr : Value,
-  offset : Int,
-) -> Value {
-  self.emit_inst(ty, Opcode::Load(ty, offset), [addr])
-}
-
-///|
-/// Load 8-bit signed value and extend to target type
-pub fn IRBuilder::load8_s(
-  self : IRBuilder,
-  ty : Type,
-  addr : Value,
-  offset : Int,
-) -> Value {
-  self.emit_inst(ty, Opcode::Load8S(ty, offset), [addr])
-}
-
-///|
-/// Load 8-bit unsigned value and extend to target type
-pub fn IRBuilder::load8_u(
-  self : IRBuilder,
-  ty : Type,
-  addr : Value,
-  offset : Int,
-) -> Value {
-  self.emit_inst(ty, Opcode::Load8U(ty, offset), [addr])
-}
-
-///|
-/// Load 16-bit signed value and extend to target type
-pub fn IRBuilder::load16_s(
-  self : IRBuilder,
-  ty : Type,
-  addr : Value,
-  offset : Int,
-) -> Value {
-  self.emit_inst(ty, Opcode::Load16S(ty, offset), [addr])
-}
-
-///|
-/// Load 16-bit unsigned value and extend to target type
-pub fn IRBuilder::load16_u(
-  self : IRBuilder,
-  ty : Type,
-  addr : Value,
-  offset : Int,
-) -> Value {
-  self.emit_inst(ty, Opcode::Load16U(ty, offset), [addr])
-}
-
-///|
-/// Load 32-bit signed value and extend to i64
-pub fn IRBuilder::load32_s(
-  self : IRBuilder,
-  addr : Value,
-  offset : Int,
-) -> Value {
-  self.emit_inst(Type::I64, Opcode::Load32S(offset), [addr])
-}
-
-///|
-/// Load 32-bit unsigned value and extend to i64
-pub fn IRBuilder::load32_u(
-  self : IRBuilder,
-  addr : Value,
-  offset : Int,
-) -> Value {
-  self.emit_inst(Type::I64, Opcode::Load32U(offset), [addr])
-}
-
-///|
-/// Store to memory
-pub fn IRBuilder::store(
-  self : IRBuilder,
-  ty : Type,
-  addr : Value,
-  value : Value,
-  offset : Int,
-) -> Unit {
-  self.emit_void_inst(Opcode::Store(ty, offset), [addr, value])
-}
-
-///|
-/// Store low 8 bits of value
-pub fn IRBuilder::store8(
-  self : IRBuilder,
-  addr : Value,
-  value : Value,
-  offset : Int,
-) -> Unit {
-  self.emit_void_inst(Opcode::Store8(offset), [addr, value])
-}
-
-///|
-/// Store low 16 bits of value
-pub fn IRBuilder::store16(
-  self : IRBuilder,
-  addr : Value,
-  value : Value,
-  offset : Int,
-) -> Unit {
-  self.emit_void_inst(Opcode::Store16(offset), [addr, value])
-}
-
-///|
-/// Store low 32 bits of i64 value
-pub fn IRBuilder::store32(
-  self : IRBuilder,
-  addr : Value,
-  value : Value,
-  offset : Int,
-) -> Unit {
-  self.emit_void_inst(Opcode::Store32(offset), [addr, value])
-}
+// Note: Load/Store memory methods removed - now use FuncEnvironment.translate_memory_load/store
+// which generate LoadPtr/StorePtr with explicit bounds checks
 
 ///|
 /// Grow memory by delta pages, returns previous size in pages or -1 on failure
+/// memidx: memory index
 /// max_pages: maximum allowed pages (None = no limit)
 pub fn IRBuilder::memory_grow(
   self : IRBuilder,
+  memidx : Int,
   delta : Value,
   max_pages? : Int,
 ) -> Value {
-  self.emit_inst(Type::I32, Opcode::MemoryGrow(max_pages), [delta])
+  self.emit_inst(Type::I32, Opcode::MemoryGrow(memidx, max_pages), [delta])
 }
 
 ///|
 /// Get current memory size in pages
-pub fn IRBuilder::memory_size(self : IRBuilder) -> Value {
-  self.emit_inst(Type::I32, Opcode::MemorySize, [])
+pub fn IRBuilder::memory_size(self : IRBuilder, memidx : Int) -> Value {
+  self.emit_inst(Type::I32, Opcode::MemorySize(memidx), [])
 }
 
 ///|
@@ -669,24 +554,30 @@ pub fn IRBuilder::memory_size(self : IRBuilder) -> Value {
 /// No return value
 pub fn IRBuilder::memory_fill(
   self : IRBuilder,
+  memidx : Int,
   dst : Value,
   val : Value,
   size : Value,
 ) -> Unit {
-  self.emit_void_inst(Opcode::MemoryFill, [dst, val, size])
+  self.emit_void_inst(Opcode::MemoryFill(memidx), [dst, val, size])
 }
 
 ///|
 /// Copy memory region
+/// dst_memidx, src_memidx: destination and source memory indices
 /// Operands: dst (i32), src (i32), size (i32)
 /// No return value
 pub fn IRBuilder::memory_copy(
   self : IRBuilder,
+  dst_memidx : Int,
+  src_memidx : Int,
   dst : Value,
   src : Value,
   size : Value,
 ) -> Unit {
-  self.emit_void_inst(Opcode::MemoryCopy, [dst, src, size])
+  self.emit_void_inst(Opcode::MemoryCopy(dst_memidx, src_memidx), [
+    dst, src, size,
+  ])
 }
 
 // ============ Table Operations ============
@@ -1010,6 +901,35 @@ pub fn IRBuilder::store_ptr(
   offset : Value,
 ) -> Unit {
   self.emit_void_inst(Opcode::StorePtr(ty), [base, value, offset])
+}
+
+///|
+/// Load narrow value from raw pointer (no bounds checking)
+/// Loads 'bits' bits from memory and extends to result_ty
+pub fn IRBuilder::load_ptr_narrow(
+  self : IRBuilder,
+  result_ty : Type,
+  bits : Int,
+  signed : Bool,
+  base : Value,
+  offset : Value,
+) -> Value {
+  self.emit_inst(result_ty, Opcode::LoadPtrNarrow(result_ty, bits, signed), [
+    base, offset,
+  ])
+}
+
+///|
+/// Store narrow value to raw pointer (no bounds checking)
+/// Stores the low 'bits' bits of value to memory
+pub fn IRBuilder::store_ptr_narrow(
+  self : IRBuilder,
+  bits : Int,
+  base : Value,
+  value : Value,
+  offset : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::StorePtrNarrow(bits), [base, value, offset])
 }
 
 ///|

@@ -202,42 +202,7 @@ fn validate_instruction(
         )
       }
 
-    // Load needs 1 operand (address)
-    Load(_, _) =>
-      if inst.operands.length() != 1 {
-        result.add_error(
-          "Load expects 1 operand (address), got \{inst.operands.length()}",
-        )
-      }
-
-    // Store needs 2 operands (address, value)
-    Store(_, _) =>
-      if inst.operands.length() != 2 {
-        result.add_error(
-          "Store expects 2 operands (address, value), got \{inst.operands.length()}",
-        )
-      }
-
-    // Narrow load operations need 1 operand (address)
-    Load8S(_, _)
-    | Load8U(_, _)
-    | Load16S(_, _)
-    | Load16U(_, _)
-    | Load32S(_)
-    | Load32U(_) =>
-      if inst.operands.length() != 1 {
-        result.add_error(
-          "Narrow load expects 1 operand (address), got \{inst.operands.length()}",
-        )
-      }
-
-    // Narrow store operations need 2 operands (address, value)
-    Store8(_) | Store16(_) | Store32(_) =>
-      if inst.operands.length() != 2 {
-        result.add_error(
-          "Narrow store expects 2 operands (address, value), got \{inst.operands.length()}",
-        )
-      }
+    // Note: Load/Store opcodes removed - now use LoadPtr/StorePtr
 
     // Conversions need 1 operand
     Ireduce
@@ -269,26 +234,26 @@ fn validate_instruction(
         )
       }
 
-    // Memory management
-    MemoryGrow(_) =>
+    // Memory management (with memidx for multi-memory support)
+    MemoryGrow(_, _) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "MemoryGrow expects 1 operand (delta), got \{inst.operands.length()}",
         )
       }
-    MemorySize =>
+    MemorySize(_) =>
       if inst.operands.length() != 0 {
         result.add_error(
           "MemorySize expects 0 operands, got \{inst.operands.length()}",
         )
       }
-    MemoryFill =>
+    MemoryFill(_) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "MemoryFill expects 3 operands (dst, val, size), got \{inst.operands.length()}",
         )
       }
-    MemoryCopy =>
+    MemoryCopy(_, _) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "MemoryCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
@@ -329,6 +294,18 @@ fn validate_instruction(
       if inst.operands.length() < 2 {
         result.add_error(
           "StorePtr expects at least 2 operands (base, value), got \{inst.operands.length()}",
+        )
+      }
+    LoadPtrNarrow(_, _, _) =>
+      if inst.operands.length() < 1 {
+        result.add_error(
+          "LoadPtrNarrow expects at least 1 operand (base), got \{inst.operands.length()}",
+        )
+      }
+    StorePtrNarrow(_) =>
+      if inst.operands.length() < 2 {
+        result.add_error(
+          "StorePtrNarrow expects at least 2 operands (base, value), got \{inst.operands.length()}",
         )
       }
 

@@ -50,9 +50,7 @@ pub enum PatternOpcode {
   // Comparisons
   Icmp
   Fcmp
-  // Memory
-  Load
-  Store
+  // Note: Load/Store removed - use LoadPtr/StorePtr now
   // Misc
   Copy
   Select
@@ -81,8 +79,7 @@ fn opcode_to_pattern(opcode : @ir.Opcode) -> PatternOpcode? {
     @ir.Opcode::Fconst(_) => Some(Fconst)
     @ir.Opcode::Icmp(_) => Some(Icmp)
     @ir.Opcode::Fcmp(_) => Some(Fcmp)
-    @ir.Opcode::Load(_, _) => Some(Load)
-    @ir.Opcode::Store(_, _) => Some(Store)
+    // Note: Load/Store with memidx removed - use LoadPtr/StorePtr now
     @ir.Opcode::Copy => Some(Copy)
     @ir.Opcode::Select => Some(Select)
     _ => None
@@ -305,8 +302,6 @@ fn pattern_opcode_eq(a : PatternOpcode, b : PatternOpcode) -> Bool {
     (Fconst, Fconst) => true
     (Icmp, Icmp) => true
     (Fcmp, Fcmp) => true
-    (Load, Load) => true
-    (Store, Store) => true
     (Copy, Copy) => true
     (Select, Select) => true
     _ => false
@@ -717,9 +712,7 @@ fn lower_inst_default(
     // Floating point comparisons
     @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
 
-    // Memory operations
-    @ir.Opcode::Load(ty, offset) => lower_load(ctx, inst, block, ty, offset)
-    @ir.Opcode::Store(ty, offset) => lower_store(ctx, inst, block, ty, offset)
+    // Note: Load/Store with memidx removed - use LoadPtr/StorePtr via FuncEnvironment
 
     // Conversions
     @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)

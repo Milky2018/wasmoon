@@ -14,7 +14,15 @@ pub const VMCTX_FUNC_TABLE_OFFSET : Int = 16
 
 pub const VMCTX_GLOBALS_OFFSET : Int = 40
 
+pub const VMCTX_MEMORIES_OFFSET : Int = 80
+
 pub const VMCTX_MEMORY_BASE_OFFSET : Int = 0
+
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
+
+pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
+
+pub const VMCTX_MEMORY_SIZES_OFFSET : Int = 88
 
 pub const VMCTX_MEMORY_SIZE_OFFSET : Int = 8
 
@@ -27,6 +35,8 @@ pub const VMCTX_TABLES_OFFSET : Int = 48
 pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
 
 pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
+
+pub const WASM_PAGE_SIZE : Int = 65536
 
 pub fn eliminate_common_subexpressions(Function) -> OptResult
 
@@ -107,6 +117,14 @@ pub(all) struct FuncEnvironment {
 pub fn FuncEnvironment::new(Array[@types.GlobalType]) -> Self
 pub fn FuncEnvironment::translate_global_get(Self, IRBuilder, Value, Int) -> Value
 pub fn FuncEnvironment::translate_global_set(Self, IRBuilder, Value, Int, Value) -> Unit
+pub fn FuncEnvironment::translate_memory_copy(Self, IRBuilder, Int, Int, Value, Value, Value) -> Unit
+pub fn FuncEnvironment::translate_memory_fill(Self, IRBuilder, Int, Value, Value, Value) -> Unit
+pub fn FuncEnvironment::translate_memory_grow(Self, IRBuilder, Int, Value, Int?) -> Value
+pub fn FuncEnvironment::translate_memory_load(Self, IRBuilder, Value, Int, Type, Value, Int) -> Value
+pub fn FuncEnvironment::translate_memory_load_narrow(Self, IRBuilder, Value, Int, Type, Int, Bool, Value, Int) -> Value
+pub fn FuncEnvironment::translate_memory_size(Self, IRBuilder, Int) -> Value
+pub fn FuncEnvironment::translate_memory_store(Self, IRBuilder, Value, Int, Type, Value, Value, Int) -> Unit
+pub fn FuncEnvironment::translate_memory_store_narrow(Self, IRBuilder, Value, Int, Int, Value, Value, Int) -> Unit
 pub fn FuncEnvironment::translate_table_get(Self, IRBuilder, Value, Int, Value) -> Value
 pub fn FuncEnvironment::translate_table_set(Self, IRBuilder, Value, Int, Value, Value) -> Unit
 pub fn FuncEnvironment::translate_table_size(Self, IRBuilder, Value, Int) -> Value
@@ -220,18 +238,12 @@ pub fn IRBuilder::ireduce(Self, Type, Value) -> Value
 pub fn IRBuilder::ishl(Self, Value, Value) -> Value
 pub fn IRBuilder::isub(Self, Value, Value) -> Value
 pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
-pub fn IRBuilder::load(Self, Type, Value, Int) -> Value
-pub fn IRBuilder::load16_s(Self, Type, Value, Int) -> Value
-pub fn IRBuilder::load16_u(Self, Type, Value, Int) -> Value
-pub fn IRBuilder::load32_s(Self, Value, Int) -> Value
-pub fn IRBuilder::load32_u(Self, Value, Int) -> Value
-pub fn IRBuilder::load8_s(Self, Type, Value, Int) -> Value
-pub fn IRBuilder::load8_u(Self, Type, Value, Int) -> Value
 pub fn IRBuilder::load_ptr(Self, Type, Value, Value) -> Value
-pub fn IRBuilder::memory_copy(Self, Value, Value, Value) -> Unit
-pub fn IRBuilder::memory_fill(Self, Value, Value, Value) -> Unit
-pub fn IRBuilder::memory_grow(Self, Value, max_pages? : Int) -> Value
-pub fn IRBuilder::memory_size(Self) -> Value
+pub fn IRBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
+pub fn IRBuilder::memory_copy(Self, Int, Int, Value, Value, Value) -> Unit
+pub fn IRBuilder::memory_fill(Self, Int, Value, Value, Value) -> Unit
+pub fn IRBuilder::memory_grow(Self, Int, Value, max_pages? : Int) -> Value
+pub fn IRBuilder::memory_size(Self, Int) -> Value
 pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::popcnt(Self, Value) -> Value
 pub fn IRBuilder::print(Self) -> String
@@ -254,11 +266,8 @@ pub fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
 pub fn IRBuilder::spill_locals_for_throw(Self, Array[Value]) -> Unit
 pub fn IRBuilder::srem(Self, Value, Value) -> Value
 pub fn IRBuilder::sshr(Self, Value, Value) -> Value
-pub fn IRBuilder::store(Self, Type, Value, Value, Int) -> Unit
-pub fn IRBuilder::store16(Self, Value, Value, Int) -> Unit
-pub fn IRBuilder::store32(Self, Value, Value, Int) -> Unit
-pub fn IRBuilder::store8(Self, Value, Value, Int) -> Unit
 pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
+pub fn IRBuilder::store_ptr_narrow(Self, Int, Value, Value, Value) -> Unit
 pub fn IRBuilder::struct_get(Self, Int, Int, Value, Type) -> Value
 pub fn IRBuilder::struct_get_s(Self, Int, Int, Value, Type, Int) -> Value
 pub fn IRBuilder::struct_get_u(Self, Int, Int, Value, Type, Int) -> Value
@@ -359,21 +368,10 @@ pub enum Opcode {
   Sextend8
   Sextend16
   Sextend32
-  Load(Type, Int)
-  Store(Type, Int)
-  Load8S(Type, Int)
-  Load8U(Type, Int)
-  Load16S(Type, Int)
-  Load16U(Type, Int)
-  Load32S(Int)
-  Load32U(Int)
-  Store8(Int)
-  Store16(Int)
-  Store32(Int)
-  MemoryGrow(Int?)
-  MemorySize
-  MemoryFill
-  MemoryCopy
+  MemoryGrow(Int, Int?)
+  MemorySize(Int)
+  MemoryFill(Int)
+  MemoryCopy(Int, Int)
   Select
   Copy
   TableGrow(Int)
@@ -386,6 +384,8 @@ pub enum Opcode {
   GetFuncRef(Int)
   LoadPtr(Type)
   StorePtr(Type)
+  LoadPtrNarrow(Type, Int, Bool)
+  StorePtrNarrow(Int)
   CallPtr(Int, Int)
   StructNew(Int)
   StructNewDefault(Int)

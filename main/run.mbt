@@ -553,18 +553,11 @@ fn run_with_jit(
           return []
         }
         Some(jm) => {
-          // Allocate linear memory
-          let mem_size = get_memory_size(instance, store)
-          let mem_ptr = @jit.alloc_memory(mem_size)
-          if mem_ptr == 0L {
-            println("Error: Failed to allocate linear memory")
-            // NOTE: No need to manually free - GC handles cleanup
+          // Initialize all memories (multi-memory support)
+          if not(init_jit_memories(instance, store, jm)) {
+            println("Error: Failed to initialize JIT memories")
             return []
           }
-          // Copy interpreter memory to JIT memory (preserves start function effects)
-          copy_interp_memory_to_jit(instance, store, mem_ptr)
-          // Set memory in JIT context
-          jm.set_memory(mem_ptr, mem_size)
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
           if globals_ptr != 0L {
@@ -784,38 +777,58 @@ fn compile_module_to_jit(
 }
 
 ///|
-/// Get memory size from module instance
-fn get_memory_size(
-  instance : @runtime.ModuleInstance,
+/// Copy interpreter memory to JIT memory (for a specific memory index)
+/// This preserves any modifications made by the start function
+fn copy_interp_memory_to_jit_indexed(
   store : @runtime.Store,
-) -> Int64 {
-  if instance.mem_addrs.length() > 0 {
-    let mem = store.get_mem(instance.mem_addrs[0]) catch {
-      _ => return 65536L // Default 1 page
-    }
-    mem.size_pages().to_int64() * 65536L // pages to bytes
-  } else {
-    65536L // Default 1 page = 64KB
+  mem_addr : Int,
+  jit_mem_ptr : Int64,
+) -> Unit {
+  let mem = store.get_memory(mem_addr)
+  let size = mem.size_pages() * 65536 // Convert pages to bytes
+  if size > 0 {
+    let data = mem.read_bytes(0, size)
+    @jit.memory_init(jit_mem_ptr, 0L, data) |> ignore
   }
 }
 
 ///|
-/// Copy interpreter memory to JIT memory
-/// This preserves any modifications made by the start function
-fn copy_interp_memory_to_jit(
+/// Initialize all JIT memories from interpreter memories (multi-memory support)
+/// Returns true on success, false on failure
+fn init_jit_memories(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  mem_ptr : Int64,
-) -> Unit {
+  jm : @jit.JITModule,
+) -> Bool {
   if instance.mem_addrs.is_empty() {
-    return
+    return true // No memories to initialize
   }
-  let mem = store.get_memory(instance.mem_addrs[0])
-  let size = mem.size_pages() * 65536 // Convert pages to bytes
-  if size > 0 {
-    let data = mem.read_bytes(0, size)
-    @jit.memory_init(mem_ptr, 0L, data) |> ignore
+  let memory_ptrs : Array[Int64] = []
+  let memory_sizes : Array[Int64] = []
+  let memory_max_pages : Array[Int?] = []
+  // Allocate and copy each memory
+  for mem_addr in instance.mem_addrs {
+    let mem = store.get_mem(mem_addr) catch { _ => return false }
+    let size = mem.size_pages().to_int64() * 65536L
+    let (_, max) = mem.get_limits()
+    // Allocate JIT memory
+    let mem_ptr = @jit.alloc_memory(size)
+    if mem_ptr == 0L && size > 0L {
+      return false // Allocation failed
+    }
+    // Copy interpreter memory data to JIT memory
+    copy_interp_memory_to_jit_indexed(store, mem_addr, mem_ptr)
+    memory_ptrs.push(mem_ptr)
+    memory_sizes.push(size)
+    memory_max_pages.push(max)
   }
+  // Set up multi-memory in JIT context
+  jm.set_memory_pointers(memory_ptrs, memory_sizes, memory_max_pages)
+  // Also set fast path for memory 0 (backward compatibility)
+  if memory_ptrs.length() > 0 {
+    jm.set_memory(memory_ptrs[0], memory_sizes[0])
+  }
+  true
 }
 
 ///|

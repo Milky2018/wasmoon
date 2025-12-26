@@ -914,125 +914,317 @@ fn Translator::translate_instruction(
       self.push(result)
     }
 
-    // Memory operations (memidx is ignored - JIT only supports single memory)
-    I32Load(_, _, offset) => {
+    // Memory operations (desugared via FuncEnvironment to LoadPtr with explicit bounds check)
+    I32Load(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load(Type::I32, addr, offset)
+      let result = self.func_env.translate_memory_load(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I32,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I64Load(_, _, offset) => {
+    I64Load(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load(Type::I64, addr, offset)
+      let result = self.func_env.translate_memory_load(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I64,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    F32Load(_, _, offset) => {
+    F32Load(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load(Type::F32, addr, offset)
+      let result = self.func_env.translate_memory_load(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::F32,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    F64Load(_, _, offset) => {
+    F64Load(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load(Type::F64, addr, offset)
+      let result = self.func_env.translate_memory_load(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::F64,
+        addr,
+        offset,
+      )
       self.push(result)
     }
 
-    // Narrow load operations (8/16/32-bit with sign/zero extension)
-    I32Load8S(_, _, offset) => {
+    // Narrow load operations (desugared via FuncEnvironment)
+    I32Load8S(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load8_s(Type::I32, addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I32,
+        8,
+        true,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I32Load8U(_, _, offset) => {
+    I32Load8U(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load8_u(Type::I32, addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I32,
+        8,
+        false,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I32Load16S(_, _, offset) => {
+    I32Load16S(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load16_s(Type::I32, addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I32,
+        16,
+        true,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I32Load16U(_, _, offset) => {
+    I32Load16U(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load16_u(Type::I32, addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I32,
+        16,
+        false,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I64Load8S(_, _, offset) => {
+    I64Load8S(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load8_s(Type::I64, addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I64,
+        8,
+        true,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I64Load8U(_, _, offset) => {
+    I64Load8U(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load8_u(Type::I64, addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I64,
+        8,
+        false,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I64Load16S(_, _, offset) => {
+    I64Load16S(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load16_s(Type::I64, addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I64,
+        16,
+        true,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I64Load16U(_, _, offset) => {
+    I64Load16U(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load16_u(Type::I64, addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I64,
+        16,
+        false,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I64Load32S(_, _, offset) => {
+    I64Load32S(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load32_s(addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I64,
+        32,
+        true,
+        addr,
+        offset,
+      )
       self.push(result)
     }
-    I64Load32U(_, _, offset) => {
+    I64Load32U(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.builder.load32_u(addr, offset)
+      let result = self.func_env.translate_memory_load_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I64,
+        32,
+        false,
+        addr,
+        offset,
+      )
       self.push(result)
-    }
-    I32Store(_, _, offset) => {
-      let value = self.pop()
-      let addr = self.pop()
-      self.builder.store(Type::I32, addr, value, offset)
-    }
-    I64Store(_, _, offset) => {
-      let value = self.pop()
-      let addr = self.pop()
-      self.builder.store(Type::I64, addr, value, offset)
-    }
-    F32Store(_, _, offset) => {
-      let value = self.pop()
-      let addr = self.pop()
-      self.builder.store(Type::F32, addr, value, offset)
-    }
-    F64Store(_, _, offset) => {
-      let value = self.pop()
-      let addr = self.pop()
-      self.builder.store(Type::F64, addr, value, offset)
     }
 
-    // Narrow store operations (8/16/32-bit)
-    I32Store8(_, _, offset) => {
+    // Store operations (desugared via FuncEnvironment to StorePtr with explicit bounds check)
+    I32Store(memidx, _, offset) => {
       let value = self.pop()
       let addr = self.pop()
-      self.builder.store8(addr, value, offset)
+      self.func_env.translate_memory_store(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I32,
+        addr,
+        value,
+        offset,
+      )
     }
-    I32Store16(_, _, offset) => {
+    I64Store(memidx, _, offset) => {
       let value = self.pop()
       let addr = self.pop()
-      self.builder.store16(addr, value, offset)
+      self.func_env.translate_memory_store(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::I64,
+        addr,
+        value,
+        offset,
+      )
     }
-    I64Store8(_, _, offset) => {
+    F32Store(memidx, _, offset) => {
       let value = self.pop()
       let addr = self.pop()
-      self.builder.store8(addr, value, offset)
+      self.func_env.translate_memory_store(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::F32,
+        addr,
+        value,
+        offset,
+      )
     }
-    I64Store16(_, _, offset) => {
+    F64Store(memidx, _, offset) => {
       let value = self.pop()
       let addr = self.pop()
-      self.builder.store16(addr, value, offset)
+      self.func_env.translate_memory_store(
+        self.builder,
+        self.vmctx,
+        memidx,
+        Type::F64,
+        addr,
+        value,
+        offset,
+      )
     }
-    I64Store32(_, _, offset) => {
+
+    // Narrow store operations (desugared via FuncEnvironment)
+    I32Store8(memidx, _, offset) => {
       let value = self.pop()
       let addr = self.pop()
-      self.builder.store32(addr, value, offset)
+      self.func_env.translate_memory_store_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        8,
+        addr,
+        value,
+        offset,
+      )
+    }
+    I32Store16(memidx, _, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.func_env.translate_memory_store_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        16,
+        addr,
+        value,
+        offset,
+      )
+    }
+    I64Store8(memidx, _, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.func_env.translate_memory_store_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        8,
+        addr,
+        value,
+        offset,
+      )
+    }
+    I64Store16(memidx, _, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.func_env.translate_memory_store_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        16,
+        addr,
+        value,
+        offset,
+      )
+    }
+    I64Store32(memidx, _, offset) => {
+      let value = self.pop()
+      let addr = self.pop()
+      self.func_env.translate_memory_store_narrow(
+        self.builder,
+        self.vmctx,
+        memidx,
+        32,
+        addr,
+        value,
+        offset,
+      )
     }
 
     // Control flow
@@ -1088,32 +1280,32 @@ fn Translator::translate_instruction(
       self.translate_return_call_ref(type_idx)
     }
 
-    // Memory management (memidx is ignored - JIT only supports single memory)
+    // Memory management (multi-memory support via memidx)
     // Note: These use IR opcodes instead of desugaring because they require
     // libcalls that are handled in the VCode emit phase
-    MemoryGrow(_) => {
+    MemoryGrow(memidx) => {
       let delta = self.pop()
       let result = match self.memory_max {
-        Some(max) => self.builder.memory_grow(delta, max_pages=max)
-        None => self.builder.memory_grow(delta)
+        Some(max) => self.builder.memory_grow(memidx, delta, max_pages=max)
+        None => self.builder.memory_grow(memidx, delta)
       }
       self.push(result)
     }
-    MemorySize(_) => {
-      let result = self.builder.memory_size()
+    MemorySize(memidx) => {
+      let result = self.builder.memory_size(memidx)
       self.push(result)
     }
-    MemoryFill(_) => {
+    MemoryFill(memidx) => {
       let n = self.pop() // size
       let val = self.pop() // value (byte)
       let d = self.pop() // destination
-      self.builder.memory_fill(d, val, n)
+      self.builder.memory_fill(memidx, d, val, n)
     }
-    MemoryCopy(_, _) => {
+    MemoryCopy(dst_memidx, src_memidx) => {
       let n = self.pop() // size
       let s = self.pop() // source
       let d = self.pop() // destination
-      self.builder.memory_copy(d, s, n)
+      self.builder.memory_copy(dst_memidx, src_memidx, d, s, n)
     }
 
     // Reference types
