@@ -138,7 +138,6 @@ pub enum Pattern {
   ConstFloat(Double)
   AnyConstInt
   Inst(PatternOpcode, Array[Pattern])
-  Lowered
 }
 
 pub enum PatternOpcode {
@@ -203,10 +202,8 @@ pub(all) struct ReloadInfo {
 }
 
 pub enum RewriteResult {
-  Rewritten(Array[@instr.VCodeInst])
   Identity(Int)
   Constant(Int64)
-  ConstantFloat(Double)
   ShiftLeft(Int, Int)
   ShiftRight(Int, Int)
   NoMatch
@@ -244,13 +241,6 @@ pub fn StackFrame::print(Self) -> String
 pub fn StackFrame::size(Self) -> Int
 pub impl Show for StackFrame
 
-pub enum StackOpcode {
-  AdjustSP(Int)
-  PushReg(@abi.PReg)
-  PopReg(@abi.PReg)
-}
-pub impl Show for StackOpcode
-
 pub(all) struct StackSlot {
   offset : Int
   size : Int
@@ -264,7 +254,6 @@ pub enum StackSlotKind {
   Local(Int)
   OutgoingArg(Int)
   CalleeSaved(@abi.PReg)
-  ReturnAddress
 }
 pub impl Show for StackSlotKind
 

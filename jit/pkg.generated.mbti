@@ -134,37 +134,6 @@ pub suberror PolycallError {
 }
 
 // Types and methods
-pub(all) struct Breakpoint {
-  id : Int
-  func_idx : Int
-  offset : Int
-  mut enabled : Bool
-  mut hit_count : Int
-  condition : String?
-}
-pub fn Breakpoint::disable(Self) -> Unit
-pub fn Breakpoint::enable(Self) -> Unit
-pub fn Breakpoint::hit(Self) -> Unit
-pub fn Breakpoint::new(Int, Int, Int) -> Self
-pub fn Breakpoint::with_condition(Int, Int, Int, String) -> Self
-pub impl Show for Breakpoint
-
-pub(all) struct BreakpointManager {
-  breakpoints : Map[Int, Breakpoint]
-  by_location : Map[Int, Map[Int, Int]]
-  mut next_id : Int
-}
-pub fn BreakpointManager::add(Self, Int, Int) -> Breakpoint
-pub fn BreakpointManager::add_conditional(Self, Int, Int, String) -> Breakpoint
-pub fn BreakpointManager::all(Self) -> Array[Breakpoint]
-pub fn BreakpointManager::at_location(Self, Int, Int) -> Breakpoint?
-pub fn BreakpointManager::clear(Self) -> Unit
-pub fn BreakpointManager::count(Self) -> Int
-pub fn BreakpointManager::get(Self, Int) -> Breakpoint?
-pub fn BreakpointManager::new() -> Self
-pub fn BreakpointManager::remove(Self, Int) -> Bool
-pub fn BreakpointManager::should_break(Self, Int, Int) -> Bool
-
 pub struct CHeap {
   ptr : Int64
 }
@@ -246,7 +215,6 @@ pub fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
 
 pub enum CompilationStatus {
   NotCompiled
-  Compiling
   Compiled
   Failed(String)
 }
@@ -268,22 +236,6 @@ pub fn CompilationStrategy::next_to_compile(Self) -> CompilationRequest?
 pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
 pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
 pub impl Show for CompilationStrategy
-
-pub(all) struct DebugContext {
-  source_map : SourceMap
-  breakpoints : BreakpointManager
-  mut enabled : Bool
-  mut step_mode : StepMode
-  mut current_trace : StackTrace?
-}
-pub fn DebugContext::disable(Self) -> Unit
-pub fn DebugContext::enable(Self) -> Unit
-pub fn DebugContext::location_string(Self, Int, Int) -> String
-pub fn DebugContext::new() -> Self
-pub fn DebugContext::on_pause(Self, Int, Int) -> Unit
-pub fn DebugContext::set_step_mode(Self, StepMode) -> Unit
-pub fn DebugContext::should_pause(Self, Int, Int) -> Bool
-pub impl Show for DebugContext
 
 pub struct ExecCode(@jit_ffi.ExecCode)
 #deprecated
@@ -390,59 +342,6 @@ pub(all) struct Single[A](A)
 pub fn[A] Single::inner(Self[A]) -> A
 pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
 pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
-
-pub(all) struct SourceLocation {
-  func_idx : Int
-  offset : Int
-  file : String?
-  line : Int?
-  column : Int?
-}
-pub fn SourceLocation::new(Int, Int) -> Self
-pub fn SourceLocation::with_source(Int, Int, String, Int, Int) -> Self
-pub impl Show for SourceLocation
-
-pub(all) struct SourceMap {
-  mappings : Map[Int, Map[Int, SourceLocation]]
-  func_names : Map[Int, String]
-}
-pub fn SourceMap::add_func_name(Self, Int, String) -> Unit
-pub fn SourceMap::add_mapping(Self, Int, Int, SourceLocation) -> Unit
-pub fn SourceMap::find_nearest(Self, Int, Int) -> SourceLocation?
-pub fn SourceMap::get_func_name(Self, Int) -> String
-pub fn SourceMap::get_location(Self, Int, Int) -> SourceLocation?
-pub fn SourceMap::mapping_count(Self) -> Int
-pub fn SourceMap::new() -> Self
-
-pub(all) struct StackFrame {
-  index : Int
-  func_idx : Int
-  ip : Int
-  func_name : String
-  location : SourceLocation?
-  local_count : Int
-}
-pub fn StackFrame::new(Int, Int, Int, String) -> Self
-pub fn StackFrame::with_location(Int, Int, Int, String, SourceLocation) -> Self
-pub impl Show for StackFrame
-
-pub(all) struct StackTrace {
-  frames : Array[StackFrame]
-  error : String?
-}
-pub fn StackTrace::depth(Self) -> Int
-pub fn StackTrace::new() -> Self
-pub fn StackTrace::push_frame(Self, StackFrame) -> Unit
-pub fn StackTrace::with_error(String) -> Self
-pub impl Show for StackTrace
-
-pub enum StepMode {
-  Continue
-  StepInto
-  StepOver
-  StepOut
-}
-pub impl Show for StepMode
 
 pub(all) struct TieredConfig {
   baseline_threshold : Int
