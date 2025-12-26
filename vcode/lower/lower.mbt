@@ -75,7 +75,6 @@ fn LoweringContext::get_vreg_for_use(
 
 ///|
 /// Create a new @abi.VReg with the given class
-#warnings("-unused_value")
 fn LoweringContext::new_vreg(
   self : LoweringContext,
   class : @abi.RegClass,

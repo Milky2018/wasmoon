@@ -1665,19 +1665,6 @@ fn rewrite_reg_with_spill(
   }
 }
 
-///|
-#warnings("-unused_value")
-fn rewrite_reg(reg : @abi.Reg, alloc : RegAllocResult) -> @abi.Reg {
-  match reg {
-    @abi.Virtual(vreg) =>
-      match alloc.assignments.get(vreg.id) {
-        Some(preg) => @abi.Physical(preg)
-        None => reg // Keep as virtual if not allocated (spilled)
-      }
-    @abi.Physical(_) => reg
-  }
-}
-
 // ============ Dead Code Elimination ============
 
 ///|

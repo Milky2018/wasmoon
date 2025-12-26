@@ -1,10 +1,5 @@
 ///|
 fn main {
-  // Define choices for debug options
-  let debug_choices = @hashset.HashSet::from_array([
-    "verbose", "print-ir", "print-vcode", "print-regalloc", "trace-exec",
-  ])
-
   // Define choices for explore stages
   let stage_choices = @hashset.HashSet::from_array([
     "wasm", "ir", "opt-ir", "vcode", "regalloc", "mc",
@@ -42,17 +37,7 @@ fn main {
           nargs=@clap.Nargs::Any,
           help="WASI option (e.g., inherit-env, inherit-stdin)",
         ),
-        "debug": @clap.Arg::named(
-          short='D',
-          nargs=@clap.Nargs::Any,
-          choices=debug_choices,
-          help="Debug option (verbose, print-ir, print-vcode, print-regalloc, trace-exec)",
-        ),
-        "wasm-opt": @clap.Arg::named(
-          short='W',
-          nargs=@clap.Nargs::Any,
-          help="WASM semantic option (e.g., max-memory=100, simd=true)",
-        ),
+        "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
         "no-jit": @clap.Arg::flag(
           help="Disable JIT compilation (use interpreter)",
         ),
@@ -72,10 +57,6 @@ fn main {
           "O": @clap.Arg::named(
             nargs=@clap.Nargs::AtMost(1),
             help="Optimization level (0-3, default: 2)",
-          ),
-          "opt": @clap.Arg::named(
-            nargs=@clap.Nargs::Any,
-            help="Specific optimization flag (e.g., licm=true, dce=false)",
           ),
         },
       ),
@@ -176,16 +157,11 @@ fn main {
                   Some(arr) => arr
                   None => []
                 }
-                // Get debug options from -D flag
-                let debug_config = DebugConfig::new()
-                if sub.args.get("debug") is Some(flags) {
-                  for flag in flags {
-                    debug_config.apply_flag(flag)
-                  }
-                }
+                // Get debug flag
+                let debug = sub.flags.get("debug") is Some(true)
                 // Check if it's a .cwasm file
                 if file_path.has_suffix(".cwasm") {
-                  run_cwasm(file_path, invoke_opt, func_args, debug_config)
+                  run_cwasm(file_path, invoke_opt, func_args, debug)
                 } else {
                   // Get preload modules from --preload option
                   let preloads : Array[String] = match sub.args.get("preload") {
@@ -208,13 +184,6 @@ fn main {
                     Some(arr) => arr
                     None => []
                   }
-                  // Get WASM semantic options from -W flag
-                  let wasm_config = WasmConfig::default()
-                  if sub.args.get("wasm-opt") is Some(flags) {
-                    for flag in flags {
-                      wasm_config.apply_flag(flag)
-                    }
-                  }
                   // Check if JIT is disabled (default: enabled)
                   let use_jit = match sub.flags.get("no-jit") {
                     Some(true) => false
@@ -222,7 +191,7 @@ fn main {
                   }
                   run_wasm(
                     file_path, invoke_opt, func_args, preloads, dirs, envs, wasi_options,
-                    debug_config, wasm_config, use_jit,
+                    debug, use_jit,
                   )
                 }
               } else {
@@ -262,14 +231,6 @@ fn main {
                   None => 2
                 }
                 let config = CompilerConfig::from_level(opt_level)
-                // Apply specific optimization flags
-                match sub.args.get("opt") {
-                  Some(flags) =>
-                    for flag in flags {
-                      config.apply_flag(flag)
-                    }
-                  None => ()
-                }
                 run_compile(positional[0], output_opt, emit_ir_opt, config)
               } else {
                 println("Error: missing file argument")

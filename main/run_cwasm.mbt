@@ -4,7 +4,7 @@ fn run_cwasm(
   cwasm_path : String,
   invoke : String?,
   func_args : Array[String],
-  _debug_config : DebugConfig,
+  _debug : Bool,
 ) -> Unit {
   // Read the .cwasm file
   let bytes = @fs.read_file_to_bytes(cwasm_path) catch {

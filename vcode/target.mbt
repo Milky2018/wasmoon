@@ -18,32 +18,88 @@ pub(open) trait TargetISA {
 }
 
 ///|
-/// Calling convention - how function calls are made
+/// Platform ABI - how to interface with the platform's C runtime
+/// This determines register usage, stack layout, and calling semantics
+/// for external (non-WASM) function calls.
+///
+/// Note: This is different from vcode/instr/CallConv which describes
+/// internal WASM call vs C call at the instruction level.
 #warnings("-unused_constructor")
-pub enum CallConv {
+pub enum PlatformABI {
   /// System V AMD64 ABI (Linux, macOS on x86-64)
-  SystemV
+  /// - Args: RDI, RSI, RDX, RCX, R8, R9, then stack
+  /// - Returns: RAX, RDX
+  /// - Caller-saved: RAX, RCX, RDX, RSI, RDI, R8-R11
+  /// - Callee-saved: RBX, RBP, R12-R15
+  SystemV_AMD64
   /// Windows x64 calling convention
-  WindowsFastcall
-  /// ARM64 AAPCS calling convention
-  Aapcs64
-  /// WebAssembly calling convention
-  Wasm
+  /// - Args: RCX, RDX, R8, R9, then stack (shadow space required)
+  /// - Returns: RAX
+  /// - Caller-saved: RAX, RCX, RDX, R8-R11
+  /// - Callee-saved: RBX, RBP, RDI, RSI, R12-R15
+  Windows_x64
+  /// ARM64 AAPCS calling convention (Linux, Android)
+  /// - Args: X0-X7 (int), D0-D7 (float), then stack
+  /// - Returns: X0-X1, D0-D3
+  /// - Caller-saved: X0-X17, D0-D7, D16-D31
+  /// - Callee-saved: X19-X28, D8-D15
+  AAPCS64
+  /// Apple ARM64 calling convention (macOS, iOS)
+  /// - Same as AAPCS64 with minor variations
+  /// - X18 is reserved (platform register)
+  Apple_ARM64
 }
 
 ///|
-fn CallConv::to_string(self : CallConv) -> String {
+fn PlatformABI::to_string(self : PlatformABI) -> String {
   match self {
-    SystemV => "system_v"
-    WindowsFastcall => "windows_fastcall"
-    Aapcs64 => "aapcs64"
-    Wasm => "wasm"
+    SystemV_AMD64 => "sysv_amd64"
+    Windows_x64 => "windows_x64"
+    AAPCS64 => "aapcs64"
+    Apple_ARM64 => "apple_arm64"
   }
 }
 
 ///|
-pub impl Show for CallConv with output(self, logger) {
+pub impl Show for PlatformABI with output(self, logger) {
   logger.write_string(self.to_string())
+}
+
+///|
+/// Get the platform ABI for the current build target
+/// Currently only Apple ARM64 is supported
+pub fn PlatformABI::current() -> PlatformABI {
+  // TODO: Use conditional compilation when available
+  // For now, we only support Apple ARM64 (macOS on Apple Silicon)
+  Apple_ARM64
+}
+
+///|
+/// Check if the platform uses 16-byte stack alignment
+pub fn PlatformABI::requires_16_byte_stack_align(self : PlatformABI) -> Bool {
+  match self {
+    SystemV_AMD64 | Windows_x64 | AAPCS64 | Apple_ARM64 => true
+  }
+}
+
+///|
+/// Get the number of integer argument registers
+pub fn PlatformABI::int_arg_regs(self : PlatformABI) -> Int {
+  match self {
+    SystemV_AMD64 => 6 // RDI, RSI, RDX, RCX, R8, R9
+    Windows_x64 => 4 // RCX, RDX, R8, R9
+    AAPCS64 | Apple_ARM64 => 8 // X0-X7
+  }
+}
+
+///|
+/// Get the number of float argument registers
+pub fn PlatformABI::float_arg_regs(self : PlatformABI) -> Int {
+  match self {
+    SystemV_AMD64 => 8 // XMM0-XMM7
+    Windows_x64 => 4 // XMM0-XMM3
+    AAPCS64 | Apple_ARM64 => 8 // D0-D7
+  }
 }
 
 // ============ AArch64 Target ============

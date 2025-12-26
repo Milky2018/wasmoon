@@ -24,7 +24,6 @@ pub(all) struct StackSlot {
 
 ///|
 /// Kind of stack slot
-#warnings("-unused_constructor")
 pub enum StackSlotKind {
   // Spilled register
   Spill(@abi.VReg)
@@ -34,8 +33,6 @@ pub enum StackSlotKind {
   OutgoingArg(Int) // Argument index
   // Saved callee-saved register
   CalleeSaved(@abi.PReg)
-  // Return address (if needed)
-  ReturnAddress
 }
 
 ///|
@@ -45,7 +42,6 @@ fn StackSlotKind::to_string(self : StackSlotKind) -> String {
     Local(idx) => "local\{idx}"
     OutgoingArg(idx) => "arg\{idx}"
     CalleeSaved(preg) => "saved(\{preg})"
-    ReturnAddress => "ra"
   }
 }
 
@@ -478,37 +474,4 @@ fn is_call_instruction(inst : @instr.VCodeInst) -> Bool {
   // This would be extended when we add call support
   ignore(inst)
   false
-}
-
-// ============ VCode Extension for Stack Adjustment ============
-
-// Add AdjustSP opcode to VCodeOpcode (would need to be added to vcode.mbt)
-// For now, we'll represent it as a special case
-
-///|
-/// Extended opcode for stack operations
-#warnings("-unused_constructor")
-pub enum StackOpcode {
-  AdjustSP(Int) // Adjust SP by immediate (negative = grow, positive = shrink)
-  PushReg(@abi.PReg) // Push register to stack
-  PopReg(@abi.PReg) // Pop register from stack
-}
-
-///|
-fn StackOpcode::to_string(self : StackOpcode) -> String {
-  match self {
-    AdjustSP(imm) =>
-      if imm < 0 {
-        "sub sp, sp, #\{-imm}"
-      } else {
-        "add sp, sp, #\{imm}"
-      }
-    PushReg(preg) => "push \{preg}"
-    PopReg(preg) => "pop \{preg}"
-  }
-}
-
-///|
-pub impl Show for StackOpcode with output(self, logger) {
-  logger.write_string(self.to_string())
 }

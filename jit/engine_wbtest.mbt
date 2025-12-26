@@ -11,7 +11,6 @@ test "function entry: creation" {
 ///|
 test "compilation status: show" {
   inspect(CompilationStatus::NotCompiled.to_string(), content="not_compiled")
-  inspect(CompilationStatus::Compiling.to_string(), content="compiling")
   inspect(CompilationStatus::Compiled.to_string(), content="compiled")
   inspect(
     CompilationStatus::Failed("test error").to_string(),

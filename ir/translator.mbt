@@ -63,24 +63,11 @@ pub(all) struct Translator {
 
 ///|
 /// Block frame for tracking control flow constructs
-#warnings("-unused_field")
 struct BlockFrame {
-  kind : BlockKind
   block : Block // The continuation block
   result_types : Array[Type]
-  // For loops, the header block
-  loop_header : Block?
   // Stack height at block entry
   stack_height : Int
-}
-
-///|
-/// Kind of block frame
-#warnings("-unused_constructor")
-priv enum BlockKind {
-  Block
-  Loop
-  If(Block?) // else block if present
 }
 
 ///|
@@ -1926,10 +1913,8 @@ fn Translator::translate_block(
 
   // Push block frame
   let frame : BlockFrame = {
-    kind: BlockKind::Block,
     block: continuation,
     result_types,
-    loop_header: None,
     stack_height: self.value_stack.length(),
   }
   self.block_stack.push(frame)
@@ -2052,10 +2037,8 @@ fn Translator::translate_loop(
   // Push block frame (br targets loop header for loops)
   // Store local_param_start so br can pass locals too
   let frame : BlockFrame = {
-    kind: BlockKind::Loop,
     block: loop_header, // Loop's br target is the header
     result_types: param_types, // For br, we need params not results
-    loop_header: Some(loop_header),
     stack_height: self.value_stack.length(),
   }
   self.block_stack.push(frame)
@@ -2180,10 +2163,8 @@ fn Translator::translate_if(
 
   // Push frame for then branch (else block as the "else" continuation)
   let frame : BlockFrame = {
-    kind: BlockKind::If(Some(else_block)),
     block: continuation,
     result_types,
-    loop_header: None,
     stack_height: stack_height_after_params,
   }
   self.block_stack.push(frame)
