@@ -57,6 +57,22 @@ pub(all) enum Cond {
 pub fn Cond::to_bits(Self) -> Int
 pub impl Show for Cond
 
+pub(all) enum ExceptionLibcall {
+  TryBegin
+  TryEnd
+  Throw
+  ThrowRef
+  Delegate
+  GetTag
+  GetValue
+  GetValueCount
+  Sigsetjmp
+  SpillLocals
+  GetSpilledLocal
+}
+pub impl Eq for ExceptionLibcall
+pub impl Show for ExceptionLibcall
+
 pub(all) enum ExtendKind {
   Signed8To32
   Signed8To64
@@ -251,6 +267,7 @@ pub(all) enum VCodeOpcode {
   StorePtr(MemType, Int)
   LoadGCFuncPtr(GCLibcall)
   LoadJITFuncPtr(JITLibcall)
+  LoadExceptionFuncPtr(ExceptionLibcall)
   CallPtr(Int, Int, CallConv)
   AdjustSP(Int)
   StoreToStack(Int)

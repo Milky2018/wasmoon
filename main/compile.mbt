@@ -96,6 +96,7 @@ fn run_compile(
       global_types~,
       type_rec_groups=mod_.type_rec_groups,
       module_types=mod_.types,
+      tags=mod_.tags,
     )
     let ir_func = translator.translate(code.body)
 

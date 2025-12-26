@@ -629,3 +629,63 @@ pub extern "c" fn c_gc_heap_get_total_allocations(heap : Int64) -> Int = "wasmoo
 ///|
 /// Get total number of GC cycles performed
 pub extern "c" fn c_gc_heap_get_total_collections(heap : Int64) -> Int = "wasmoon_gc_heap_get_total_collections"
+
+// ============ Exception Handling ============
+
+///|
+/// Get exception try_begin function pointer for JIT
+/// Signature: try_begin(ctx: *jit_context_t, handler_id: i32) -> *sigjmp_buf
+pub extern "c" fn c_jit_get_exception_try_begin_ptr() -> Int64 = "wasmoon_jit_get_exception_try_begin_ptr"
+
+///|
+/// Get exception try_end function pointer for JIT
+/// Signature: try_end(ctx: *jit_context_t, handler_id: i32)
+pub extern "c" fn c_jit_get_exception_try_end_ptr() -> Int64 = "wasmoon_jit_get_exception_try_end_ptr"
+
+///|
+/// Get exception throw function pointer for JIT
+/// Signature: throw(ctx: *jit_context_t, tag_addr: i32, values_ptr: i64, count: i32) -> noreturn
+pub extern "c" fn c_jit_get_exception_throw_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_ptr"
+
+///|
+/// Get exception throw_ref function pointer for JIT
+/// Signature: throw_ref(ctx: *jit_context_t, exnref: i64) -> noreturn
+pub extern "c" fn c_jit_get_exception_throw_ref_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_ref_ptr"
+
+///|
+/// Get exception delegate function pointer for JIT
+/// Signature: delegate(ctx: *jit_context_t, depth: i32) -> noreturn
+pub extern "c" fn c_jit_get_exception_delegate_ptr() -> Int64 = "wasmoon_jit_get_exception_delegate_ptr"
+
+///|
+/// Get exception get_tag function pointer for JIT
+/// Signature: get_tag(ctx: *jit_context_t) -> i32
+pub extern "c" fn c_jit_get_exception_get_tag_ptr() -> Int64 = "wasmoon_jit_get_exception_get_tag_ptr"
+
+///|
+/// Get exception get_value function pointer for JIT
+/// Signature: get_value(ctx: *jit_context_t, idx: i32) -> i64
+pub extern "c" fn c_jit_get_exception_get_value_ptr() -> Int64 = "wasmoon_jit_get_exception_get_value_ptr"
+
+///|
+/// Get exception get_value_count function pointer for JIT
+/// Signature: get_value_count(ctx: *jit_context_t) -> i32
+pub extern "c" fn c_jit_get_exception_get_value_count_ptr() -> Int64 = "wasmoon_jit_get_exception_get_value_count_ptr"
+
+///|
+/// Get sigsetjmp function pointer for JIT to call directly
+/// Signature: sigsetjmp(jmp_buf, savemask: i32) -> i32
+/// Returns 0 on first call, handler_id on longjmp return
+pub extern "c" fn c_jit_get_sigsetjmp_ptr() -> Int64 = "wasmoon_jit_get_sigsetjmp_ptr"
+
+///|
+/// Get exception spill_locals function pointer for JIT
+/// Signature: spill_locals(ctx: *jit_context_t, locals: *i64, count: i32) -> void
+/// Saves locals before throw so catch handlers see throw-time values
+pub extern "c" fn c_jit_get_exception_spill_locals_ptr() -> Int64 = "wasmoon_jit_get_exception_spill_locals_ptr"
+
+///|
+/// Get exception get_spilled_local function pointer for JIT
+/// Signature: get_spilled_local(ctx: *jit_context_t, idx: i32) -> i64
+/// Gets a spilled local value for catch handlers
+pub extern "c" fn c_jit_get_exception_get_spilled_local_ptr() -> Int64 = "wasmoon_jit_get_exception_get_spilled_local_ptr"

@@ -749,6 +749,7 @@ fn compile_module_to_jit(
       global_types~,
       type_rec_groups=mod_.type_rec_groups,
       module_types=mod_.types,
+      tags=mod_.tags,
     )
     let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (O2 level)

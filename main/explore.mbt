@@ -147,6 +147,7 @@ fn run_explore(
       global_types~,
       type_rec_groups=mod_.type_rec_groups,
       module_types=mod_.types,
+      tags=mod_.tags,
     )
     let ir_func = translator.translate(code.body)
     let ir_text = ir_func.print()

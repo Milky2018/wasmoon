@@ -39,6 +39,12 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->envp = NULL;
     ctx->envc = 0;
 
+    // Exception handling state
+    ctx->exception_handler = NULL;
+    ctx->exception_tag = 0;
+    ctx->exception_values = NULL;
+    ctx->exception_value_count = 0;
+
     return ctx;
 }
 
@@ -56,6 +62,17 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx->table0_base && ctx->owns_indirect_table) free(ctx->table0_base);
     if (ctx->memory_base) free(ctx->memory_base);
     if (ctx->globals) free(ctx->globals);
+
+    // Free exception handling state
+    if (ctx->exception_values) free(ctx->exception_values);
+    // Free any remaining exception handlers
+    exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
+    while (handler) {
+        exception_handler_t *prev = handler->prev;
+        free(handler);
+        handler = prev;
+    }
+
     free(ctx);
 }
 

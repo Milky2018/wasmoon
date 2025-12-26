@@ -43,6 +43,22 @@ pub(all) enum JITLibcall {
 } derive(Eq, Show)
 
 ///|
+/// Exception handling runtime library calls
+pub(all) enum ExceptionLibcall {
+  TryBegin // exception_try_begin - setup handler, returns jmp_buf ptr
+  TryEnd // exception_try_end - pop handler
+  Throw // exception_throw - throw exception (noreturn)
+  ThrowRef // exception_throw_ref - re-throw from exnref (noreturn)
+  Delegate // exception_delegate - delegate to outer handler (noreturn)
+  GetTag // exception_get_tag - get exception tag
+  GetValue // exception_get_value - get exception value at index
+  GetValueCount // exception_get_value_count - get number of values
+  Sigsetjmp // sigsetjmp(jmp_buf, savemask) - libc setjmp, returns 0 or handler_id
+  SpillLocals // exception_spill_locals - save locals before throw
+  GetSpilledLocal // exception_get_spilled_local - get spilled local value
+} derive(Eq, Show)
+
+///|
 /// VCode instruction - a machine-level instruction with virtual registers
 /// Following Cranelift's design with operand constraints for fixed register allocation
 pub(all) struct VCodeInst {
@@ -316,6 +332,11 @@ pub(all) enum VCodeOpcode {
   // Uses: [], Defs: [result (function pointer)]
   LoadJITFuncPtr(JITLibcall)
 
+  // Load exception handling runtime function pointer
+  // LoadExceptionFuncPtr(libcall): Load function pointer for exception runtime call
+  // Uses: [], Defs: [result (function pointer)]
+  LoadExceptionFuncPtr(ExceptionLibcall)
+
   // CallPtr: call through a function pointer
   // Uses depend on calling convention:
   //   Wasm: [func_ptr, callee_vmctx, caller_vmctx, arg0, arg1, ...]
@@ -458,6 +479,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
     LoadGCFuncPtr(libcall) => "load_gc_func_ptr.\{libcall}"
     LoadJITFuncPtr(libcall) => "load_jit_func_ptr.\{libcall}"
+    LoadExceptionFuncPtr(libcall) => "load_exception_func_ptr.\{libcall}"
     CallPtr(num_args, num_results, call_conv) =>
       "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
     AdjustSP(delta) =>

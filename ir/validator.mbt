@@ -435,6 +435,40 @@ fn validate_instruction(
           "RefEq expects 2 operands (refs), got \{inst.operands.length()}",
         )
       }
+
+    // Exception handling operations
+    Throw(_tag_idx) => ()
+    ThrowRef =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "ThrowRef expects 1 operand (exnref), got \{inst.operands.length()}",
+        )
+      }
+    TryTableBegin(_handler_id) =>
+      if inst.result is None {
+        result.add_error(
+          "TryTableBegin must have a result (setjmp return value)",
+        )
+      }
+    TryTableEnd(_handler_id) => ()
+    GetExceptionTag =>
+      if inst.result is None {
+        result.add_error("GetExceptionTag must have a result")
+      }
+    GetExceptionValue(_idx) =>
+      if inst.result is None {
+        result.add_error("GetExceptionValue must have a result")
+      }
+    GetExceptionValueCount =>
+      if inst.result is None {
+        result.add_error("GetExceptionValueCount must have a result")
+      }
+    Delegate(_depth) => ()
+    SpillLocalsForThrow(_count) => () // Void instruction, no result
+    GetSpilledLocal(_idx) =>
+      if inst.result is None {
+        result.add_error("GetSpilledLocal must have a result")
+      }
   }
 }
 

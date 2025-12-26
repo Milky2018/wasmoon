@@ -55,6 +55,10 @@ pub(all) struct Translator {
   vmctx : Value
   // Function environment for desugaring Wasm operations to IR primitives
   func_env : FuncEnvironment
+  // Exception tags for catch handler dispatch
+  tags : Array[@types.TagType]
+  // Depth of nested try_table blocks - when > 0, need to spill locals before calls
+  mut try_table_depth : Int
 }
 
 ///|
@@ -95,6 +99,7 @@ pub fn Translator::new(
   func_base? : Int = 0,
   import_remap? : Array[Int] = [],
   module_types? : Array[@types.SubType] = [],
+  tags? : Array[@types.TagType] = [],
 ) -> Translator {
   let builder = IRBuilder::new(name)
   // Following Cranelift: add vmctx as explicit params
@@ -178,6 +183,58 @@ pub fn Translator::new(
     module_types,
     vmctx,
     func_env,
+    tags,
+    try_table_depth: 0,
+  }
+}
+
+///|
+/// Convert a local value to i64 bits for exception spilling
+/// i32: zero-extend to i64
+/// i64: as-is
+/// f32: bitcast to i32, zero-extend to i64
+/// f64: bitcast to i64
+/// ref: already i64 in IR
+fn Translator::local_to_i64_bits(self : Translator, loc_val : Value) -> Value {
+  match loc_val.ty {
+    I32 => self.builder.uextend(I64, loc_val)
+    I64 | FuncRef | ExternRef => loc_val // refs are already i64
+    F32 => {
+      let bits32 = self.builder.bitcast(I32, loc_val)
+      self.builder.uextend(I64, bits32)
+    }
+    F64 => self.builder.bitcast(I64, loc_val)
+  }
+}
+
+///|
+/// Convert i64 bits back to the original local type
+fn Translator::i64_bits_to_local(
+  self : Translator,
+  bits : Value,
+  target_ty : Type,
+) -> Value {
+  match target_ty {
+    I32 => self.builder.ireduce(I32, bits)
+    I64 | FuncRef | ExternRef => bits // refs are already i64
+    F32 => {
+      let bits32 = self.builder.ireduce(I32, bits)
+      self.builder.bitcast(F32, bits32)
+    }
+    F64 => self.builder.bitcast(F64, bits)
+  }
+}
+
+///|
+/// Spill all locals before instructions that might throw
+/// Called when try_table_depth > 0 and before Call/CallIndirect/CallRef/Throw/ThrowRef
+fn Translator::spill_locals_if_in_try(self : Translator) -> Unit {
+  if self.try_table_depth > 0 {
+    let locals_bits : Array[Value] = []
+    for loc in self.locals {
+      locals_bits.push(self.local_to_i64_bits(loc))
+    }
+    self.builder.spill_locals_for_throw(locals_bits)
   }
 }
 
@@ -1017,15 +1074,32 @@ fn Translator::translate_instruction(
     BrOnNull(depth) => self.translate_br_on_null(depth)
     BrOnNonNull(depth) => self.translate_br_on_non_null(depth)
 
-    // Function calls
-    Call(func_idx) => self.translate_call(func_idx)
-    CallIndirect(type_idx, table_idx) =>
+    // Function calls - spill locals before call when inside try_table
+    // because the callee might throw and we need caller's locals at call point
+    Call(func_idx) => {
+      self.spill_locals_if_in_try()
+      self.translate_call(func_idx)
+    }
+    CallIndirect(type_idx, table_idx) => {
+      self.spill_locals_if_in_try()
       self.translate_call_indirect(type_idx, table_idx)
-    CallRef(type_idx) => self.translate_call_ref(type_idx)
-    ReturnCall(func_idx) => self.translate_return_call(func_idx)
-    ReturnCallIndirect(type_idx, table_idx) =>
+    }
+    CallRef(type_idx) => {
+      self.spill_locals_if_in_try()
+      self.translate_call_ref(type_idx)
+    }
+    ReturnCall(func_idx) => {
+      self.spill_locals_if_in_try()
+      self.translate_return_call(func_idx)
+    }
+    ReturnCallIndirect(type_idx, table_idx) => {
+      self.spill_locals_if_in_try()
       self.translate_return_call_indirect(type_idx, table_idx)
-    ReturnCallRef(type_idx) => self.translate_return_call_ref(type_idx)
+    }
+    ReturnCallRef(type_idx) => {
+      self.spill_locals_if_in_try()
+      self.translate_return_call_ref(type_idx)
+    }
 
     // Memory management (memidx is ignored - JIT only supports single memory)
     // Note: These use IR opcodes instead of desugaring because they require
@@ -1352,8 +1426,365 @@ fn Translator::translate_instruction(
       self.translate_br_on_cast(label_depth, to_type)
     BrOnCastFail(label_depth, _from_type, to_type) =>
       self.translate_br_on_cast_fail(label_depth, to_type)
+
+    // Exception handling
+    // Uses setjmp/longjmp pattern in the JIT runtime
+    Throw(tag_idx) => {
+      // Get the tag's parameter types to know how many values to pop
+      let tag_types = self.get_tag_param_types(tag_idx)
+
+      // Pop exception values from stack (in reverse order)
+      let values : Array[Value] = Array::make(
+        tag_types.length(),
+        self.builder.iconst_i32(0),
+      )
+      for i = tag_types.length() - 1; i >= 0; i = i - 1 {
+        values[i] = self.pop()
+      }
+
+      // Spill all locals before throw so catch handlers see throw-time values
+      self.spill_locals_if_in_try()
+
+      // Emit Throw IR opcode with the exception values
+      self.builder.emit_throw(tag_idx, values)
+      self.is_unreachable = true
+    }
+    ThrowRef => {
+      // Pop exnref from stack
+      let exnref = self.pop()
+      // Spill all locals before throw so catch handlers see throw-time values
+      self.spill_locals_if_in_try()
+      // Emit ThrowRef IR opcode
+      self.builder.emit_throw_ref(exnref)
+      self.is_unreachable = true
+    }
+    TryTable(block_type, handlers, body) => {
+      // Exception handling via setjmp/longjmp
+      //
+      // The TryTableBegin opcode returns:
+      // - 0 on normal entry (first setjmp return)
+      // - non-zero on exception catch (longjmp return with handler_id)
+      //
+      // Flow:
+      // 1. Call TryTableBegin (setjmp)
+      // 2. If result != 0, branch to catch_dispatch
+      // 3. Otherwise, execute try body
+      // 4. In catch_dispatch: match tag and branch to handler
+
+      let handler_id = self.block_stack.length() // Use stack depth as unique ID
+
+      // Create blocks for control flow
+      let try_body_block = self.builder.create_block()
+      let catch_dispatch = self.builder.create_block()
+      let try_continuation = self.builder.create_block()
+
+      // Emit TryTableBegin - sets up exception handler and calls setjmp
+      let setjmp_result = self.builder.try_table_begin(handler_id)
+
+      // Branch based on setjmp result: 0 = normal, non-zero = exception caught
+      let zero = self.builder.iconst_i32(0)
+      let is_exception = self.builder.icmp_ne(setjmp_result, zero)
+      self.builder.brnz(is_exception, catch_dispatch, try_body_block)
+
+      // Save local types before translating body for proper restoration in catch
+      let local_types : Array[Type] = []
+      for loc in self.locals {
+        local_types.push(loc.ty)
+      }
+      let num_locals = local_types.length()
+
+      // === Try body block ===
+      self.builder.switch_to_block(try_body_block)
+
+      // Increment try_table_depth so spill_locals_if_in_try knows to spill
+      // Note: decrement happens AFTER all catch handlers are translated,
+      // so catch handlers can still spill for outer try_tables
+      self.try_table_depth = self.try_table_depth + 1
+
+      // Translate the body using normal block translation
+      self.translate_block(block_type, body)
+
+      // Save post-body locals for the normal continuation path
+      // (locals modified in try body should be visible after try_table)
+      let post_body_locals = self.locals.copy()
+
+      // Emit TryTableEnd - pops exception handler
+      self.builder.try_table_end(handler_id)
+
+      // Jump to continuation after try body
+      if not(self.is_unreachable) &&
+        self.builder.current_block() is Some(blk) &&
+        blk.terminator is None {
+        self.builder.jump(try_continuation, [])
+      }
+
+      // === Catch dispatch block ===
+      self.builder.switch_to_block(catch_dispatch)
+
+      // Load locals from spilled storage (saved before throw/call)
+      // and convert i64 bits back to original types
+      self.locals.clear()
+      for i in 0..<num_locals {
+        let spilled_bits = self.builder.get_spilled_local(i)
+        let restored_val = self.i64_bits_to_local(spilled_bits, local_types[i])
+        self.locals.push(restored_val)
+      }
+
+      // Get exception tag for matching
+      let exn_tag = self.builder.get_exception_tag()
+
+      // Process each handler
+      // Note: handlers reference labels in the OUTER block stack, not inside try_table
+      for handler in handlers {
+        match handler {
+          Catch(tag_idx, label_depth) => {
+            // Check if exception tag matches this handler
+            let handler_tag = self.builder.iconst_i32(tag_idx)
+            let tag_matches = self.builder.icmp_eq(exn_tag, handler_tag)
+
+            // Create block for next handler check
+            let next_check = self.builder.create_block()
+
+            // If matches, branch to handler; otherwise continue checking
+            let handler_block = self.builder.create_block()
+            self.builder.brnz(tag_matches, handler_block, next_check)
+
+            // In handler block: pop handler and branch to label
+            self.builder.switch_to_block(handler_block)
+            self.emit_catch_branch(tag_idx, label_depth, handler_id)
+            self.builder.switch_to_block(next_check)
+          }
+          CatchRef(tag_idx, label_depth) => {
+            // Same as Catch but also pushes exnref
+            let handler_tag = self.builder.iconst_i32(tag_idx)
+            let tag_matches = self.builder.icmp_eq(exn_tag, handler_tag)
+            let next_check = self.builder.create_block()
+            let handler_block = self.builder.create_block()
+            self.builder.brnz(tag_matches, handler_block, next_check)
+            self.builder.switch_to_block(handler_block)
+            self.emit_catch_ref_branch(tag_idx, label_depth, handler_id)
+            self.builder.switch_to_block(next_check)
+          }
+          CatchAll(label_depth) => {
+            // Catch any exception - no tag check needed
+            self.emit_catch_all_branch(label_depth, handler_id)
+            // No need to continue checking after catch_all
+            break
+          }
+          CatchAllRef(label_depth) => {
+            // Catch any exception with exnref
+            self.emit_catch_all_ref_branch(label_depth, handler_id)
+            break
+          }
+        }
+      }
+
+      // If no handler matched, rethrow (delegate to outer handler)
+      // Use depth=1 to skip this handler and propagate to the next outer one
+      // (depth=0 would cause infinite loop by re-entering this same handler)
+      if self.builder.current_block() is Some(blk) && blk.terminator is None {
+        self.builder.delegate(1) // Propagate to outer handler
+      }
+
+      // Decrement try_table_depth AFTER all catch handlers are translated
+      // This ensures catch handlers can still spill for outer try_tables
+      self.try_table_depth = self.try_table_depth - 1
+
+      // === Continuation block ===
+      self.builder.switch_to_block(try_continuation)
+
+      // Restore post-body locals for the normal continuation path
+      // This ensures locals modified in the try body are visible after try_table
+      self.locals.clear()
+      for loc in post_body_locals {
+        self.locals.push(loc)
+      }
+      self.is_unreachable = false
+    }
     inst => abort("unimplemented ir instruction \{inst}")
   }
+}
+
+///|
+/// Helper for emitting catch branch with exception values
+/// Gets exception values for the tag and branches to handler label
+fn Translator::emit_catch_branch(
+  self : Translator,
+  tag_idx : Int,
+  label_depth : Int,
+  handler_id : Int,
+) -> Unit {
+  // Get the tag's parameter types
+  let tag_types = self.get_tag_param_types(tag_idx)
+
+  // Get exception values BEFORE calling try_table_end (which frees them)
+  let args : Array[Value] = []
+  for i, ty in tag_types {
+    let val_i64 = self.builder.get_exception_value(i)
+    // Convert i64 to appropriate type
+    let val = match ty {
+      @types.ValueType::I32 => self.builder.ireduce(Type::I32, val_i64)
+      @types.ValueType::I64 => val_i64
+      @types.ValueType::F32 => {
+        // Reinterpret bits: i64 -> i32 -> f32
+        let val_i32 = self.builder.ireduce(Type::I32, val_i64)
+        self.builder.bitcast(Type::F32, val_i32)
+      }
+      @types.ValueType::F64 => self.builder.bitcast(Type::F64, val_i64)
+      _ => val_i64 // Reference types use i64 representation
+    }
+    args.push(val)
+  }
+
+  // Pop the exception handler AFTER reading values
+  // This is required so that throw_ref doesn't loop back to the same handler
+  self.builder.try_table_end(handler_id)
+
+  // Also pass current local values (for SSA correctness)
+  for loc in self.locals {
+    args.push(loc)
+  }
+
+  // Branch to the handler label
+  let idx = self.block_stack.length() - 1 - label_depth
+  if idx >= 0 && idx < self.block_stack.length() {
+    let frame = self.block_stack[idx]
+    self.builder.jump(frame.block, args)
+  } else {
+    // Function-level branch
+    let ret_cont = self.get_or_create_return_continuation()
+    self.builder.jump(ret_cont, args)
+  }
+}
+
+///|
+/// Helper for emitting catch_ref branch (includes exnref on stack)
+fn Translator::emit_catch_ref_branch(
+  self : Translator,
+  tag_idx : Int,
+  label_depth : Int,
+  handler_id : Int,
+) -> Unit {
+  // Get the tag's parameter types
+  let tag_types = self.get_tag_param_types(tag_idx)
+
+  // Get exception values BEFORE calling try_table_end (which frees them)
+  let args : Array[Value] = []
+  for i, ty in tag_types {
+    let val_i64 = self.builder.get_exception_value(i)
+    // Convert i64 to appropriate type
+    let val = match ty {
+      @types.ValueType::I32 => self.builder.ireduce(Type::I32, val_i64)
+      @types.ValueType::I64 => val_i64
+      @types.ValueType::F32 => {
+        let val_i32 = self.builder.ireduce(Type::I32, val_i64)
+        self.builder.bitcast(Type::F32, val_i32)
+      }
+      @types.ValueType::F64 => self.builder.bitcast(Type::F64, val_i64)
+      _ => val_i64
+    }
+    args.push(val)
+  }
+
+  // Add exnref (placeholder - use exception tag as simple exnref)
+  let exnref = self.builder.get_exception_tag()
+  let exnref_i64 = self.builder.sextend32(exnref)
+  args.push(exnref_i64)
+
+  // Pop the exception handler AFTER reading values
+  self.builder.try_table_end(handler_id)
+
+  // Also pass current local values
+  for loc in self.locals {
+    args.push(loc)
+  }
+
+  // Branch to the handler label
+  let idx = self.block_stack.length() - 1 - label_depth
+  if idx >= 0 && idx < self.block_stack.length() {
+    let frame = self.block_stack[idx]
+    self.builder.jump(frame.block, args)
+  } else {
+    let ret_cont = self.get_or_create_return_continuation()
+    self.builder.jump(ret_cont, args)
+  }
+}
+
+///|
+/// Helper for emitting catch_all branch (no exception values)
+fn Translator::emit_catch_all_branch(
+  self : Translator,
+  label_depth : Int,
+  handler_id : Int,
+) -> Unit {
+  // Pop the exception handler before branching to the catch target
+  self.builder.try_table_end(handler_id)
+
+  // catch_all doesn't pass exception values, just branches
+  let args : Array[Value] = []
+
+  // Pass current local values
+  for loc in self.locals {
+    args.push(loc)
+  }
+
+  // Branch to the handler label
+  let idx = self.block_stack.length() - 1 - label_depth
+  if idx >= 0 && idx < self.block_stack.length() {
+    let frame = self.block_stack[idx]
+    self.builder.jump(frame.block, args)
+  } else {
+    let ret_cont = self.get_or_create_return_continuation()
+    self.builder.jump(ret_cont, args)
+  }
+}
+
+///|
+/// Helper for emitting catch_all_ref branch (includes exnref)
+fn Translator::emit_catch_all_ref_branch(
+  self : Translator,
+  label_depth : Int,
+  handler_id : Int,
+) -> Unit {
+  // Pop the exception handler before branching to the catch target
+  self.builder.try_table_end(handler_id)
+  let args : Array[Value] = []
+
+  // Add exnref (placeholder)
+  let exnref = self.builder.get_exception_tag()
+  let exnref_i64 = self.builder.sextend32(exnref)
+  args.push(exnref_i64)
+
+  // Pass current local values
+  for loc in self.locals {
+    args.push(loc)
+  }
+
+  // Branch to the handler label
+  let idx = self.block_stack.length() - 1 - label_depth
+  if idx >= 0 && idx < self.block_stack.length() {
+    let frame = self.block_stack[idx]
+    self.builder.jump(frame.block, args)
+  } else {
+    let ret_cont = self.get_or_create_return_continuation()
+    self.builder.jump(ret_cont, args)
+  }
+}
+
+///|
+/// Get the parameter types for a tag
+fn Translator::get_tag_param_types(
+  self : Translator,
+  tag_idx : Int,
+) -> Array[@types.ValueType] {
+  if tag_idx >= 0 && tag_idx < self.tags.length() {
+    let tag = self.tags[tag_idx]
+    if tag.type_idx >= 0 && tag.type_idx < self.func_types.length() {
+      let func_type = self.func_types[tag.type_idx]
+      return func_type.params
+    }
+  }
+  [] // Default to empty array if tag not found
 }
 
 ///|
