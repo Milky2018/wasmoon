@@ -379,10 +379,12 @@ pub fn Memory::copy(
   src : Int,
   len : Int,
 ) -> Unit raise RuntimeError {
-  if dest < 0 ||
-    src < 0 ||
-    dest + len > self.data.length() ||
-    src + len > self.data.length() {
+  // Use 64-bit unsigned arithmetic to avoid wraparound
+  let dest64 = dest.to_int64() & 0xFFFF_FFFFL
+  let src64 = src.to_int64() & 0xFFFF_FFFFL
+  let len64 = len.to_int64() & 0xFFFF_FFFFL
+  let mem_size = self.data.length().to_int64()
+  if dest64 + len64 > mem_size || src64 + len64 > mem_size {
     raise OutOfBoundsMemoryAccess
   }
   if len == 0 {
@@ -410,8 +412,15 @@ pub fn Memory::fill(
   value : Byte,
   len : Int,
 ) -> Unit raise RuntimeError {
-  if dest < 0 || dest + len > self.data.length() {
+  // Use 64-bit unsigned arithmetic to avoid wraparound
+  let dest64 = dest.to_int64() & 0xFFFF_FFFFL
+  let len64 = len.to_int64() & 0xFFFF_FFFFL
+  let mem_size = self.data.length().to_int64()
+  if dest64 + len64 > mem_size {
     raise OutOfBoundsMemoryAccess
+  }
+  if len == 0 {
+    return
   }
   for i in 0..<len {
     self.data[dest + i] = value

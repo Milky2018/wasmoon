@@ -14,6 +14,7 @@ pub(all) suberror ValidationError {
   InvalidMemoryIndex(Int)
   InvalidLabelIndex(Int)
   InvalidElemIndex(Int)
+  InvalidDataIndex(Int) // Unknown data segment index
   UnknownTag(Int) // Unknown tag index
   UnknownType(Int) // Forward type reference outside rec group
   UnreachableCode
@@ -61,7 +62,8 @@ pub fn ValidationErrorContext::from_error(
     InvalidTableIndex(idx) => "invalid table index: \{idx}"
     InvalidMemoryIndex(idx) => "invalid memory index: \{idx}"
     InvalidLabelIndex(idx) => "invalid label index: \{idx}"
-    InvalidElemIndex(idx) => "invalid element index: \{idx}"
+    InvalidElemIndex(idx) => "unknown elem segment \{idx}"
+    InvalidDataIndex(idx) => "unknown data segment \{idx}"
     UnknownTag(idx) => "unknown tag \{idx}"
     UnknownType(_) => "unknown type"
     UnreachableCode => "unreachable code"
@@ -1914,15 +1916,21 @@ fn validate_instr(
       }
       stack.push(@types.ValueType::I32)
     }
-    MemoryInit(memidx, _) => {
+    MemoryInit(memidx, data_idx) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
+      }
+      if data_idx >= ctx.data_count {
+        raise InvalidDataIndex(data_idx)
       }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
     }
-    DataDrop(_) => ()
+    DataDrop(data_idx) =>
+      if data_idx >= ctx.data_count {
+        raise InvalidDataIndex(data_idx)
+      }
     MemoryCopy(dst, src) => {
       if dst >= ctx.mems.length() {
         raise InvalidMemoryIndex(dst)
@@ -1975,7 +1983,21 @@ fn validate_instr(
       stack.pop(ctx.tables[idx].elem_type) // value
       stack.pop(@types.ValueType::I32) // i
     }
-    TableCopy(_, _) => {
+    TableCopy(dst_idx, src_idx) => {
+      if dst_idx >= ctx.tables.length() {
+        raise InvalidTableIndex(dst_idx)
+      }
+      if src_idx >= ctx.tables.length() {
+        raise InvalidTableIndex(src_idx)
+      }
+      // Check that source element type is subtype of destination element type
+      let dst_elem_type = ctx.tables[dst_idx].elem_type
+      let src_elem_type = ctx.tables[src_idx].elem_type
+      if not(is_type_subtype(src_elem_type, dst_elem_type)) {
+        raise TypeMismatch(
+          "table.copy: source element type \{src_elem_type} is not subtype of destination element type \{dst_elem_type}",
+        )
+      }
       stack.pop(@types.ValueType::I32) // n
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
@@ -2000,7 +2022,10 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // s
       stack.pop(@types.ValueType::I32) // d
     }
-    ElemDrop(_) => ()
+    ElemDrop(elem_idx) =>
+      if elem_idx >= ctx.elems.length() {
+        raise InvalidElemIndex(elem_idx)
+      }
 
     // Reference instructions
     RefNull(ref_type) => stack.push(ref_type)

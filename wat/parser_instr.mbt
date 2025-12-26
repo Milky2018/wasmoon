@@ -760,8 +760,10 @@ fn Parser::parse_plain_instruction(
     "memory.grow" =>
       @types.Instruction::MemoryGrow(self.parse_optional_memidx())
     "memory.init" => {
-      let memidx = self.parse_optional_memidx()
+      // WAT format: memory.init dataidx [memidx]
+      // dataidx is required, memidx is optional (defaults to 0)
       let dataidx = self.parse_data_idx()
+      let memidx = self.parse_optional_memidx()
       @types.Instruction::MemoryInit(memidx, dataidx)
     }
     "memory.copy" => {

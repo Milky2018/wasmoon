@@ -347,22 +347,34 @@ fn ExecContext::exec_memory_misc(
       let n = self.stack.pop_i32() // length
       let s = self.stack.pop_i32() // source offset in data segment
       let d = self.stack.pop_i32() // destination in memory
-      // Check if segment has been dropped
-      if self.instance.dropped_datas[data_idx] {
-        // Dropped segments behave as if they have zero length
-        if n != 0 {
-          raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
-        }
-        return
-      }
       let mem_addr = self.instance.mem_addrs[memidx]
       let mem = self.store.get_mem(mem_addr)
-      let data_segment = self.instance.data_segments[data_idx]
-      // Extract the slice from data segment
-      if s < 0 || n < 0 || s + n > data_segment.init.length() {
+      // Use 64-bit arithmetic to avoid overflow
+      let n64 = n.to_int64() & 0xFFFF_FFFFL
+      let s64 = s.to_int64() & 0xFFFF_FFFFL
+      let d64 = d.to_int64() & 0xFFFF_FFFFL
+      // Determine data segment length (0 if dropped)
+      let data_len = if self.instance.dropped_datas[data_idx] {
+        0
+      } else {
+        self.instance.data_segments[data_idx].init.length()
+      }
+      // Check bounds (must happen even when n=0)
+      // 1. Check data segment bounds
+      if s64 + n64 > data_len.to_int64() {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
+      // 2. Check memory bounds
+      let mem_size_bytes = mem.size_pages() * 65536
+      if d64 + n64 > mem_size_bytes.to_int64() {
+        raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
+      }
+      // 3. If n=0, no-op
+      if n == 0 {
+        return
+      }
       // Copy bytes directly to memory
+      let data_segment = self.instance.data_segments[data_idx]
       for i in 0..<n {
         mem.store_byte(d + i, data_segment.init[s + i])
       }
