@@ -117,7 +117,6 @@ fn CompilerConfig::apply_flag(self : CompilerConfig, flag : String) -> Unit {
 
 ///|
 /// Debug configuration options
-#warnings("-unused_field")
 priv struct DebugConfig {
   mut verbose : Bool
   mut print_ir : Bool
@@ -166,7 +165,6 @@ fn DebugConfig::apply_flag(self : DebugConfig, flag : String) -> Unit {
 
 ///|
 /// WASM semantic configuration options
-#warnings("-unused_field")
 priv struct WasmConfig {
   // Memory limits
   mut max_memory_pages : Int // Maximum memory pages (64KB each), 0 = no limit
@@ -217,27 +215,6 @@ fn WasmConfig::apply_flag(self : WasmConfig, flag : String) -> Unit {
     "tail-call" => self.tail_call = value == "true" || value == "1"
     _ => ()
   }
-}
-
-///|
-#warnings("-unused_value")
-fn CompilerConfig::to_string(self : CompilerConfig) -> String {
-  let sb = StringBuilder::new()
-  sb.write_string("CompilerConfig {\n")
-  sb.write_string("  opt_level: \{self.opt_level}\n")
-  sb.write_string("  const_fold: \{self.const_fold}\n")
-  sb.write_string("  copy_prop: \{self.copy_prop}\n")
-  sb.write_string("  cse: \{self.cse}\n")
-  sb.write_string("  dce: \{self.dce}\n")
-  sb.write_string("  branch_simplify: \{self.branch_simplify}\n")
-  sb.write_string("  unreachable_elim: \{self.unreachable_elim}\n")
-  sb.write_string("  block_merge: \{self.block_merge}\n")
-  sb.write_string("  jump_thread: \{self.jump_thread}\n")
-  sb.write_string("  licm: \{self.licm}\n")
-  sb.write_string("  loop_unroll: \{self.loop_unroll}\n")
-  sb.write_string("  strength_reduce: \{self.strength_reduce}\n")
-  sb.write_string("}")
-  sb.to_string()
 }
 
 ///|

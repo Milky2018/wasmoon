@@ -11,7 +11,6 @@
 ///|
 /// A pattern that matches IR instruction trees
 /// Patterns can match opcodes, operands, and constants
-#warnings("-unused_constructor")
 pub enum Pattern {
   // Match any value (captures into a variable)
   Any
@@ -22,8 +21,6 @@ pub enum Pattern {
   AnyConstInt
   // Match an instruction with specific opcode and operand patterns
   Inst(PatternOpcode, Array[Pattern])
-  // Match a value that is already lowered (a VReg)
-  Lowered
 }
 
 ///|
@@ -211,7 +208,6 @@ fn match_pattern_impl(
         let operand = inst.operands[i]
         match sub_pat {
           Any => result.add_value(operand)
-          Lowered => result.add_value(operand)
           ConstInt(expected) => {
             // Try to find the defining instruction
             let def_inst = find_defining_inst(ctx, operand)
@@ -279,13 +275,6 @@ fn match_pattern_impl(
         }
       }
       // Capture the result value
-      if inst.result is Some(v) {
-        result.add_value(v)
-      }
-      true
-    }
-    Lowered => {
-      // A lowered pattern matches any value that's already been processed
       if inst.result is Some(v) {
         result.add_value(v)
       }
@@ -434,15 +423,11 @@ pub fn get_optimization_rules() -> Array[RewriteRule] {
 
 ///|
 /// Result of applying a rewrite rule
-#warnings("-unused_constructor")
 pub enum RewriteResult {
-  // The instruction was optimized - emit the given VCode instructions
-  Rewritten(Array[@instr.VCodeInst])
   // Use the identity value (just copy from operand)
   Identity(Int) // Index of the operand to use as identity
   // Produce a constant
   Constant(Int64)
-  ConstantFloat(Double)
   // Strength reduction: mul by power of 2 -> shift left
   ShiftLeft(Int, Int) // operand index, shift amount
   // Strength reduction: div by power of 2 -> logical shift right
@@ -552,12 +537,6 @@ pub fn lower_inst_with_patterns(
 ) -> Bool {
   let rewrite_result = try_apply_rules(inst, ctx, rules)
   match rewrite_result {
-    Rewritten(insts) => {
-      for vcode_inst in insts {
-        block.add_inst(vcode_inst)
-      }
-      true
-    }
     Identity(operand_idx) =>
       // Emit a move from the identity operand to the result
       if inst.result is Some(result) {
@@ -576,30 +555,6 @@ pub fn lower_inst_with_patterns(
       if inst.result is Some(result) {
         let dst = ctx.get_vreg(result)
         let vcode_inst = @instr.VCodeInst::new(@instr.LoadConst(val))
-        vcode_inst.add_def({ reg: @abi.Virtual(dst) })
-        block.add_inst(vcode_inst)
-        true
-      } else {
-        false
-      }
-    ConstantFloat(val) =>
-      if inst.result is Some(result) {
-        let dst = ctx.get_vreg(result)
-        // Determine if this is an F32 or F64 constant based on the result type
-        let opcode = match result.ty {
-          @ir.Type::F32 => {
-            // Convert Double to Float, then get its 32-bit representation
-            let float_val = Float::from_double(val)
-            let bits = float_val.reinterpret_as_int()
-            @instr.LoadConstF32(bits)
-          }
-          _ => {
-            // F64: get 64-bit representation
-            let bits = val.reinterpret_as_int64()
-            @instr.LoadConstF64(bits)
-          }
-        }
-        let vcode_inst = @instr.VCodeInst::new(opcode)
         vcode_inst.add_def({ reg: @abi.Virtual(dst) })
         block.add_inst(vcode_inst)
         true

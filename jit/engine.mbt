@@ -9,12 +9,9 @@
 
 ///|
 /// Status of a function's compilation
-#warnings("-unused_constructor")
 pub enum CompilationStatus {
   // Never compiled, use interpreter
   NotCompiled
-  // Currently being compiled (async mode)
-  Compiling
   // Compiled and ready for execution
   Compiled
   // Compilation failed, fall back to interpreter
@@ -25,7 +22,6 @@ pub enum CompilationStatus {
 fn CompilationStatus::to_string(self : CompilationStatus) -> String {
   match self {
     NotCompiled => "not_compiled"
-    Compiling => "compiling"
     Compiled => "compiled"
     Failed(msg) => "failed: \{msg}"
   }
