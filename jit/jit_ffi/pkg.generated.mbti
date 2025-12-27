@@ -64,11 +64,17 @@ pub fn c_jit_alloc_memory(Int64) -> Int64
 
 pub fn c_jit_alloc_shared_indirect_table(Int) -> Int64
 
+pub fn c_jit_alloc_wasm_stack(Int64, Int64) -> Int
+
 pub fn c_jit_call_multi_return(Int64, Int64, FixedArray[Int64], Int, FixedArray[Int64], FixedArray[Int], Int) -> Int
 
 pub fn c_jit_call_trampoline(Int64, Int64, Int64, FixedArray[Int64], Int) -> Int
 
 pub fn c_jit_call_trampoline_managed(JITContext, Int64, Int64, FixedArray[Int64], Int) -> Int
+
+pub fn c_jit_call_with_stack_switch(Int64, Int64, Int64, FixedArray[Int64], Int) -> Int
+
+pub fn c_jit_call_with_stack_switch_managed(JITContext, Int64, Int64, FixedArray[Int64], Int) -> Int
 
 pub fn c_jit_clear_trap() -> Unit
 
@@ -223,6 +229,8 @@ pub fn c_jit_get_spectest_print_ptr() -> Int64
 pub fn c_jit_get_table_grow_ptr_v3() -> Int64
 
 pub fn c_jit_get_trap_code() -> Int
+
+pub fn c_jit_get_wasm_stack_top(Int64) -> Int64
 
 pub fn c_jit_memory_copy(Int, Int, Int) -> Unit
 

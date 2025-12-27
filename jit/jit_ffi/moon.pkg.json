@@ -9,6 +9,8 @@
     "gc_ops.c",
     "gc_heap.c",
     "exception.c",
-    "wasi.c"
+    "wasi.c",
+    "wasm_stack.c",
+    "stack_switch_aarch64.S"
   ]
 }

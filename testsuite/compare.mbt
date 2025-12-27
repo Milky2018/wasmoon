@@ -258,6 +258,10 @@ pub fn run_jit(
       return Err("Failed to create JIT module")
     }
 
+    // Allocate independent WASM stack with guard page (1MB)
+    // This provides controlled stack overflow behavior
+    let _ = jm.alloc_wasm_stack(1048576L)
+
     // Allocate memory - support multi-memory by using the array-based API
     let mem_size = 65536L // 64KB (1 page)
     let mem_ptr = @jit.alloc_memory(mem_size)

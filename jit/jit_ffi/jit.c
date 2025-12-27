@@ -476,6 +476,93 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
     return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
 }
 
+// ============ Stack-Switching Trampoline Call ============
+
+// External assembly function for stack switching (from stack_switch_aarch64.S)
+#if defined(__aarch64__) || defined(_M_ARM64)
+extern int stack_switch_call(
+    void *wasm_stack_top,
+    void *trampoline_ptr,
+    void *vmctx,
+    void *values_vec,
+    void *func_ptr
+);
+#endif
+
+// Global pointer to current JIT context for guard page detection in signal handler
+// This is set before JIT execution and cleared after
+static __thread jit_context_t *g_current_jit_context = NULL;
+
+jit_context_t *get_current_jit_context(void) {
+    return g_current_jit_context;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
+    int64_t trampoline_ptr,
+    int64_t ctx_ptr,
+    int64_t func_ptr,
+    int64_t *values_vec,
+    int values_len
+) {
+    (void)values_len;
+
+    if (!trampoline_ptr || !ctx_ptr || !func_ptr) return -1;
+
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+
+    // Check if WASM stack is allocated
+    if (!ctx->wasm_stack_top) {
+        // Fall back to regular call if no WASM stack
+        return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
+    }
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+    install_trap_handler();
+    g_trap_code = 0;
+    g_trap_active = 1;
+    g_current_jit_context = ctx;  // Set for guard page detection
+
+    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
+        g_trap_active = 0;
+        g_current_jit_context = NULL;
+        return (int)g_trap_code;
+    }
+
+    // Call using stack-switching assembly
+    int result = stack_switch_call(
+        ctx->wasm_stack_top,
+        (void *)trampoline_ptr,
+        ctx,
+        values_vec,
+        (void *)func_ptr
+    );
+
+    g_trap_active = 0;
+    g_current_jit_context = NULL;
+
+    if (g_trap_code != 0) {
+        return (int)g_trap_code;
+    }
+
+    return result;
+#else
+    // On non-AArch64, fall back to regular call
+    return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch_managed(
+    void *jit_context,
+    int64_t trampoline_ptr,
+    int64_t func_ptr,
+    int64_t *values_vec,
+    int values_len
+) {
+    if (!jit_context) return -1;
+    int64_t ctx_ptr = wasmoon_jit_context_ptr(jit_context);
+    return wasmoon_jit_call_with_stack_switch(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
+}
+
 // ============ Spectest Trampolines ============
 
 static void spectest_print_impl(int64_t func_table, int64_t mem_base) {

@@ -224,6 +224,55 @@ pub extern "c" fn c_jit_call_trampoline_managed(
   values_len : Int,
 ) -> Int = "wasmoon_jit_call_trampoline_managed"
 
+// ============ WASM Stack (Independent Stack with Guard Page) ============
+
+///|
+/// Allocate an independent WASM stack with guard page protection.
+/// The stack is mmap-allocated and has a guard page at the bottom.
+/// When the WASM code overflows the stack, it hits the guard page
+/// and triggers a controlled "call stack exhausted" trap.
+///
+/// Parameters:
+///   ctx_ptr: JIT context pointer
+///   stack_size: Size of the stack in bytes (recommended: 1MB = 1048576)
+///
+/// Returns: 0 on success, -1 on failure
+pub extern "c" fn c_jit_alloc_wasm_stack(
+  ctx_ptr : Int64,
+  stack_size : Int64,
+) -> Int = "wasmoon_jit_alloc_wasm_stack"
+
+///|
+/// Get the WASM stack top pointer from a context.
+/// Returns 0 if no WASM stack is allocated.
+pub extern "c" fn c_jit_get_wasm_stack_top(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_get_wasm_stack_top"
+
+///|
+/// Call a WASM function through the trampoline with stack switching.
+/// This switches to the independent WASM stack before calling,
+/// providing controlled stack overflow behavior.
+///
+/// If no WASM stack is allocated, falls back to regular call.
+#borrow(values_vec)
+pub extern "c" fn c_jit_call_with_stack_switch(
+  trampoline_ptr : Int64,
+  ctx_ptr : Int64,
+  func_ptr : Int64,
+  values_vec : FixedArray[Int64],
+  values_len : Int,
+) -> Int = "wasmoon_jit_call_with_stack_switch"
+
+///|
+/// GC-managed version of stack-switching call.
+#borrow(jit_context, values_vec)
+pub extern "c" fn c_jit_call_with_stack_switch_managed(
+  jit_context : JITContext,
+  trampoline_ptr : Int64,
+  func_ptr : Int64,
+  values_vec : FixedArray[Int64],
+  values_len : Int,
+) -> Int = "wasmoon_jit_call_with_stack_switch_managed"
+
 // ============ WASI Trampoline Pointers ============
 
 ///|

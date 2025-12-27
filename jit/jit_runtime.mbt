@@ -350,6 +350,37 @@ pub fn JITModule::set_memory_pointers(
 }
 
 ///|
+/// Allocate an independent WASM stack with guard page protection.
+/// When enabled, JIT-compiled WASM code runs on a separate stack,
+/// providing controlled stack overflow behavior:
+/// - Stack overflows hit a guard page and trigger "call stack exhausted" trap
+/// - Host stack is protected from runaway WASM recursion
+/// - Cross-platform consistent behavior
+///
+/// Parameters:
+///   stack_size: Size of the stack in bytes (default: 1MB = 1048576)
+///
+/// Returns: true on success, false on failure
+pub fn JITModule::alloc_wasm_stack(
+  self : JITModule,
+  stack_size : Int64,
+) -> Bool {
+  match self.context {
+    Some(ctx) => ctx.alloc_wasm_stack(stack_size)
+    None => false
+  }
+}
+
+///|
+/// Check if a WASM stack has been allocated
+pub fn JITModule::has_wasm_stack(self : JITModule) -> Bool {
+  match self.context {
+    Some(ctx) => ctx.has_wasm_stack()
+    None => false
+  }
+}
+
+///|
 /// Initialize indirect table for call_indirect.
 /// table_size: number of table elements
 /// elem_init: array of (table_idx, func_idx, type_idx) triples

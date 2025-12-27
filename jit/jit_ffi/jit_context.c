@@ -51,6 +51,17 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->exception_values = NULL;
     ctx->exception_value_count = 0;
 
+    // Spilled locals for exception handling
+    ctx->spilled_locals = NULL;
+    ctx->spilled_locals_count = 0;
+
+    // WASM stack (initially not allocated)
+    ctx->wasm_stack_base = NULL;
+    ctx->wasm_stack_top = NULL;
+    ctx->wasm_stack_size = 0;
+    ctx->wasm_stack_guard = NULL;
+    ctx->guard_page_size = 0;
+
     return ctx;
 }
 
@@ -82,6 +93,13 @@ void free_context_internal(jit_context_t *ctx) {
         exception_handler_t *prev = handler->prev;
         free(handler);
         handler = prev;
+    }
+    // Free spilled locals
+    if (ctx->spilled_locals) free(ctx->spilled_locals);
+
+    // Free WASM stack (if allocated)
+    if (ctx->wasm_stack_base) {
+        munmap(ctx->wasm_stack_base, ctx->wasm_stack_size);
     }
 
     free(ctx);
