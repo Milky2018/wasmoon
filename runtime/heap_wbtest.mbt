@@ -102,10 +102,13 @@ test "MarkSweepHeap: array copy" {
 test "MarkSweepHeap: array out of bounds" {
   let heap = MarkSweepHeap::new()
   let idx = heap.alloc_array(0, [@types.Value::I32(1), @types.Value::I32(2)])
-  inspect(try? heap.array_get(idx, 5), content="Err(OutOfBoundsArrayAccess)")
+  inspect(
+    try? heap.array_get(idx, 5),
+    content="Err(out of bounds array access)",
+  )
   inspect(
     try? heap.array_set(idx, -1, @types.Value::I32(0)),
-    content="Err(OutOfBoundsArrayAccess)",
+    content="Err(out of bounds array access)",
   )
 }
 
@@ -116,9 +119,9 @@ test "MarkSweepHeap: type mismatch" {
   let array_idx = heap.alloc_array(1, [])
 
   // Try to get struct as array
-  inspect(try? heap.get_array(struct_idx), content="Err(TypeMismatch)")
+  inspect(try? heap.get_array(struct_idx), content="Err(type mismatch)")
   // Try to get array as struct
-  inspect(try? heap.get_struct(array_idx), content="Err(TypeMismatch)")
+  inspect(try? heap.get_struct(array_idx), content="Err(type mismatch)")
 }
 
 ///|
@@ -293,5 +296,5 @@ test "GC: collected object becomes inaccessible" {
   inspect(heap.is_alive(idx), content="false")
 
   // Trying to access collected object should fail
-  inspect(try? heap.get(idx), content="Err(UndefinedElement)")
+  inspect(try? heap.get(idx), content="Err(undefined element)")
 }

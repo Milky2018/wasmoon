@@ -151,7 +151,7 @@ test "wasm-testsuite: i64.div_s trap on zero" {
       I64(1L),
       I64(0L),
     ]),
-    content="Err(DivisionByZero)",
+    content="Err(integer divide by zero)",
   )
 }
 
@@ -166,7 +166,7 @@ test "wasm-testsuite: i64.div_s trap on overflow" {
       I64(-9223372036854775808L),
       I64(-1L),
     ]),
-    content="Err(IntegerOverflow)",
+    content="Err(integer overflow)",
   )
 }
 

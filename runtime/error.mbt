@@ -17,7 +17,33 @@ pub(all) suberror RuntimeError {
   UnknownImport(String, String) // Import not found: (module_name, field_name)
   LinkError // Import type mismatch during linking
   NullReference // Null exception reference (null exnref thrown)
-} derive(Show)
+}
+
+///|
+/// Custom Show implementation for WebAssembly-spec-compliant error messages
+pub impl Show for RuntimeError with output(self, logger) {
+  let msg = match self {
+    StackUnderflow => "stack underflow"
+    StackOverflow => "stack overflow"
+    TypeMismatch => "type mismatch"
+    OutOfBoundsMemoryAccess => "out of bounds memory access"
+    OutOfBoundsTableAccess => "out of bounds table access"
+    OutOfBoundsArrayAccess => "out of bounds array access"
+    UndefinedElement => "undefined element"
+    UninitializedElement => "uninitialized element"
+    IndirectCallTypeMismatch => "indirect call type mismatch"
+    DivisionByZero => "integer divide by zero"
+    IntegerOverflow => "integer overflow"
+    InvalidConversion => "invalid conversion to integer"
+    Unreachable => "unreachable"
+    CallStackExhausted => "call stack exhausted"
+    UnknownImport(mod_name, field_name) =>
+      "unknown import: \{mod_name}.\{field_name}"
+    LinkError => "link error"
+    NullReference => "null reference"
+  }
+  logger.write_string(msg)
+}
 
 ///|
 /// A stack frame entry for error reporting

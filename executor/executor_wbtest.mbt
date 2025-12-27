@@ -1449,7 +1449,7 @@ test "import validation: missing import raises error" {
   // Should raise UnknownImport
   inspect(
     try? instantiate_module_with_imports(store, mod, imports),
-    content="Err(UnknownImport(\"env\", \"missing_func\"))",
+    content="Err(unknown import: env.missing_func)",
   )
 }
 
@@ -2385,7 +2385,7 @@ test "bulk memory: data.drop" {
   // After drop: init_nonzero should fail
   inspect(
     try? call_exported_func(store, instance, "init_nonzero", []),
-    content="Err(OutOfBoundsMemoryAccess)",
+    content="Err(out of bounds memory access)",
   )
 }
 
