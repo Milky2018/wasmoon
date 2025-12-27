@@ -102,7 +102,10 @@ test "MarkSweepHeap: array copy" {
 test "MarkSweepHeap: array out of bounds" {
   let heap = MarkSweepHeap::new()
   let idx = heap.alloc_array(0, [@types.Value::I32(1), @types.Value::I32(2)])
-  inspect(try? heap.array_get(idx, 5), content="Err(out of bounds array access)")
+  inspect(
+    try? heap.array_get(idx, 5),
+    content="Err(out of bounds array access)",
+  )
   inspect(
     try? heap.array_set(idx, -1, @types.Value::I32(0)),
     content="Err(out of bounds array access)",
