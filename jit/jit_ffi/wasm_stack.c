@@ -9,6 +9,76 @@
 
 // ============ Internal Stack Allocation ============
 
+#ifdef _WIN32
+// Windows implementation using VirtualAlloc/VirtualProtect/VirtualFree
+
+static int alloc_wasm_stack_internal(jit_context_t *ctx, size_t requested_size) {
+    if (!ctx) return -1;
+
+    // If stack already allocated, free it first
+    if (ctx->wasm_stack_base) {
+        VirtualFree(ctx->wasm_stack_base, 0, MEM_RELEASE);
+        ctx->wasm_stack_base = NULL;
+        ctx->wasm_stack_top = NULL;
+        ctx->wasm_stack_guard = NULL;
+        ctx->wasm_stack_size = 0;
+        ctx->guard_page_size = 0;
+    }
+
+    // Get system page size
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    size_t page_size = si.dwPageSize;
+    size_t guard_size = page_size;  // One guard page
+
+    // Calculate total size (align to page boundary)
+    size_t stack_size = requested_size > 0 ? requested_size : DEFAULT_WASM_STACK_SIZE;
+    size_t total_size = stack_size + guard_size;
+    total_size = (total_size + page_size - 1) & ~(page_size - 1);
+
+    // Allocate memory with VirtualAlloc
+    void *mem = VirtualAlloc(NULL, total_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (mem == NULL) {
+        return -1;
+    }
+
+    // Set up guard page at the bottom (low address)
+    // Stack grows downward, so overflow hits the guard page
+    DWORD old_protect;
+    if (!VirtualProtect(mem, guard_size, PAGE_NOACCESS, &old_protect)) {
+        VirtualFree(mem, 0, MEM_RELEASE);
+        return -1;
+    }
+
+    // Initialize context fields
+    ctx->wasm_stack_base = mem;
+    ctx->wasm_stack_guard = mem;
+    ctx->guard_page_size = guard_size;
+    ctx->wasm_stack_size = total_size;
+
+    // Stack pointer starts at the top (high address)
+    // Align to 16 bytes for ABI compliance
+    uintptr_t top = (uintptr_t)mem + total_size;
+    top &= ~(uintptr_t)0xF;  // 16-byte alignment
+    ctx->wasm_stack_top = (void *)top;
+
+    return 0;
+}
+
+static void free_wasm_stack_internal(jit_context_t *ctx) {
+    if (!ctx || !ctx->wasm_stack_base) return;
+
+    VirtualFree(ctx->wasm_stack_base, 0, MEM_RELEASE);
+    ctx->wasm_stack_base = NULL;
+    ctx->wasm_stack_top = NULL;
+    ctx->wasm_stack_guard = NULL;
+    ctx->wasm_stack_size = 0;
+    ctx->guard_page_size = 0;
+}
+
+#else
+// POSIX implementation using mmap/mprotect/munmap
+
 static int alloc_wasm_stack_internal(jit_context_t *ctx, size_t requested_size) {
     if (!ctx) return -1;
 
@@ -76,6 +146,8 @@ static void free_wasm_stack_internal(jit_context_t *ctx) {
     ctx->wasm_stack_size = 0;
     ctx->guard_page_size = 0;
 }
+
+#endif // _WIN32
 
 // ============ Guard Page Detection ============
 
