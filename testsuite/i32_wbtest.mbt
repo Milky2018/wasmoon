@@ -195,7 +195,7 @@ test "wasm-testsuite: i32.div_s trap on zero" {
   // (assert_trap (invoke "div_s" (i32.const 1) (i32.const 0)) "integer divide by zero")
   inspect(
     try? @executor.call_exported_func(store, instance, "div_s", [I32(1), I32(0)]),
-    content="Err(DivisionByZero)",
+    content="Err(integer divide by zero)",
   )
 }
 
@@ -210,7 +210,7 @@ test "wasm-testsuite: i32.div_s trap on overflow" {
       I32(-2147483648),
       I32(-1),
     ]),
-    content="Err(IntegerOverflow)",
+    content="Err(integer overflow)",
   )
 }
 
