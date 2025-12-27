@@ -1071,20 +1071,9 @@ pub fn instantiate_module_with_init(
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
   let (store, instance) = instantiate_module(mod)
 
-  // Initialize data segments (copy data to memory)
-  // Get global instances for evaluating offset expressions
-  let globals_for_data = get_global_instances(store, instance.global_addrs)
-  for data in mod.datas {
-    if instance.mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
-
-      // Evaluate offset expression using extended const expr evaluator
-      let offset = eval_extended_const_expr(data.offset, globals_for_data)
-
-      // Copy data to memory
-      mem.init_data(offset, data.init)
-    }
-  }
+  // Per WebAssembly spec: element segments are initialized BEFORE data segments
+  // This ensures that if data segment initialization traps, the element segment
+  // modifications to shared tables are already visible.
 
   // Initialize element segments (populate tables with function references)
   for elem_idx, elem in mod.elems {
@@ -1113,6 +1102,21 @@ pub fn instantiate_module_with_init(
       }
       // Active elem segments are implicitly dropped after initialization
       instance.dropped_elems[elem_idx] = true
+    }
+  }
+
+  // Initialize data segments (copy data to memory)
+  // Get global instances for evaluating offset expressions
+  let globals_for_data = get_global_instances(store, instance.global_addrs)
+  for data in mod.datas {
+    if instance.mem_addrs.length() > data.memory_idx {
+      let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
+
+      // Evaluate offset expression using extended const expr evaluator
+      let offset = eval_extended_const_expr(data.offset, globals_for_data)
+
+      // Copy data to memory
+      mem.init_data(offset, data.init)
     }
   }
 
@@ -1472,18 +1476,9 @@ pub fn instantiate_module_with_imports(
     dropped_datas.push(false)
   }
 
-  // Initialize active data segments (copy data to memory)
-  let globals_for_data_init = get_global_instances(store, global_addrs)
-  for data in mod.datas {
-    // Active data segments have a non-empty offset expression
-    if data.offset.length() > 0 && mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(mem_addrs[data.memory_idx])
-      // Evaluate offset expression using extended const expr evaluator
-      let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
-      // Copy data to memory
-      mem.init_data(offset, data.init)
-    }
-  }
+  // Per WebAssembly spec: element segments are initialized BEFORE data segments
+  // This ensures that if data segment initialization traps, the element segment
+  // modifications to shared tables are already visible.
 
   // Initialize active element segments (populate tables with function references)
   for elem_idx, elem in mod.elems {
@@ -1511,6 +1506,19 @@ pub fn instantiate_module_with_imports(
       }
       // Active elem segments are implicitly dropped after initialization
       dropped_elems[elem_idx] = true
+    }
+  }
+
+  // Initialize active data segments (copy data to memory)
+  let globals_for_data_init = get_global_instances(store, global_addrs)
+  for data in mod.datas {
+    // Active data segments have a non-empty offset expression
+    if data.offset.length() > 0 && mem_addrs.length() > data.memory_idx {
+      let mem = store.get_mem(mem_addrs[data.memory_idx])
+      // Evaluate offset expression using extended const expr evaluator
+      let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
+      // Copy data to memory
+      mem.init_data(offset, data.init)
     }
   }
   // canonical_type_indices was computed at the start of the function (for import type checking)
