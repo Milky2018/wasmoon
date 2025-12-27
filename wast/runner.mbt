@@ -366,20 +366,33 @@ pub fn run_wast_command(
         )
       }
     }
-    AssertExhaustion(action, _msg) =>
-      // Just try to invoke - should cause stack exhaustion
-      if (try? invoke_action(ctx, action)) is Err(_) {
-        result.passed = result.passed + 1
-        if show_success {
-          let action_desc = format_action(action)
-          println("line \{line}: assert_exhaustion \{action_desc}: PASSED")
+    AssertExhaustion(action, expected_msg) => {
+      // Try to invoke - should cause stack exhaustion with matching message
+      let action_desc = format_action(action)
+      try invoke_action(ctx, action) catch {
+        e => {
+          let err_str = e.to_string()
+          if err_str.contains(expected_msg) {
+            result.passed = result.passed + 1
+            if show_success {
+              println("line \{line}: assert_exhaustion \{action_desc}: PASSED")
+            }
+          } else {
+            result.failed = result.failed + 1
+            result.failures.push(
+              "line \{line}: assert_exhaustion \{action_desc}: expected '\{expected_msg}', got '\{err_str}'",
+            )
+          }
         }
-      } else {
-        result.failed = result.failed + 1
-        result.failures.push(
-          "line \{line}: assert_exhaustion: expected exhaustion",
-        )
+      } noraise {
+        _ => {
+          result.failed = result.failed + 1
+          result.failures.push(
+            "line \{line}: assert_exhaustion \{action_desc}: expected exhaustion but succeeded",
+          )
+        }
       }
+    }
     AssertModuleTrap(source, msg) => {
       // Try to instantiate - should trap during instantiation (e.g., start function)
       // Unlike assert_unlinkable, this tests for runtime traps, not linking errors
