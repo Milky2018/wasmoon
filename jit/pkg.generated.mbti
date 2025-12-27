@@ -295,6 +295,7 @@ pub struct JITFunction {
 }
 
 type JITModule
+pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
@@ -305,6 +306,7 @@ pub fn JITModule::get_func_count(Self) -> Int
 pub fn JITModule::get_func_ptr(Self, Int) -> Int64
 pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
 pub fn JITModule::get_func_table_ptr(Self) -> Int64
+pub fn JITModule::has_wasm_stack(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int, Int)]) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])]) -> Self?

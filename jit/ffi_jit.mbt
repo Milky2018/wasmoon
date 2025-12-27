@@ -196,6 +196,32 @@ fn JITContext::set_memory_pointers(
 }
 
 ///|
+/// Allocate an independent WASM stack with guard page protection.
+/// This provides controlled stack overflow behavior - when WASM code
+/// overflows the stack, it hits the guard page and triggers a
+/// "call stack exhausted" trap instead of crashing.
+///
+/// Parameters:
+///   stack_size: Size of the stack in bytes (default: 1MB = 1048576)
+///
+/// Returns: true on success, false on failure
+fn JITContext::alloc_wasm_stack(self : JITContext, stack_size : Int64) -> Bool {
+  @jit_ffi.c_jit_alloc_wasm_stack(self.ptr(), stack_size) == 0
+}
+
+///|
+/// Free the WASM stack (called automatically on context finalization)
+fn JITContext::free_wasm_stack(self : JITContext) -> Unit {
+  @jit_ffi.c_jit_free_wasm_stack(self.ptr())
+}
+
+///|
+/// Check if a WASM stack has been allocated
+fn JITContext::has_wasm_stack(self : JITContext) -> Bool {
+  @jit_ffi.c_jit_get_wasm_stack_top(self.ptr()) != 0L
+}
+
+///|
 /// Allocate linear memory for WASM (returns 0 on failure)
 /// NOTE: If you set the memory to a JITContext (via set_memory), the context
 /// takes ownership and its finalizer will free the memory. Do NOT call
@@ -520,13 +546,24 @@ fn JITContext::call_multi_return(
   }
 
   // Call via trampoline (Cranelift-style: all ABI complexity in JIT code)
-  let trap_code = @jit_ffi.c_jit_call_trampoline_managed(
-    self.ctx,
-    trampoline_ptr,
-    func_ptr,
-    values_vec,
-    values_len,
-  )
+  // Use stack-switching call if a WASM stack has been allocated
+  let trap_code = if self.has_wasm_stack() {
+    @jit_ffi.c_jit_call_with_stack_switch_managed(
+      self.ctx,
+      trampoline_ptr,
+      func_ptr,
+      values_vec,
+      values_len,
+    )
+  } else {
+    @jit_ffi.c_jit_call_trampoline_managed(
+      self.ctx,
+      trampoline_ptr,
+      func_ptr,
+      values_vec,
+      values_len,
+    )
+  }
   if trap_code != 0 {
     let msg = match trap_code {
       1 => "out of bounds memory access"

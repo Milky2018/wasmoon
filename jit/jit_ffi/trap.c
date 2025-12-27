@@ -156,8 +156,17 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
     if (g_trap_active) {
         void *fault_addr = info->si_addr;
 
+        // First, check for WASM stack guard page access
+        // This has priority over native stack overflow detection
+        jit_context_t *ctx = get_current_jit_context();
+        if (ctx && is_wasm_guard_page_access(ctx, fault_addr)) {
+            // WASM stack overflow - hit the guard page
+            g_trap_code = 2;  // call stack exhausted
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+
         if (is_stack_overflow(fault_addr)) {
-            // Stack overflow detected
+            // Native stack overflow detected (fallback for non-stack-switching mode)
             g_trap_code = 2;  // call stack exhausted
             siglongjmp(g_trap_jmp_buf, 1);
         } else {

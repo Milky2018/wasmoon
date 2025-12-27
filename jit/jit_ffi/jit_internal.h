@@ -150,6 +150,14 @@ int32_t exception_get_value_count_impl(jit_context_t *ctx);
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count);
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);
 
+// ============ WASM Stack (wasm_stack.c) ============
+
+// Check if an address is in the WASM stack guard page
+int is_wasm_guard_page_access(jit_context_t *ctx, void *addr);
+
+// Get current JIT context (thread-local, set during stack-switching calls)
+jit_context_t *get_current_jit_context(void);
+
 // ============ GC Operations (gc_ops.c) ============
 
 // GC heap pointer (set before JIT execution)

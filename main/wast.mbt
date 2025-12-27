@@ -108,6 +108,9 @@ fn try_compile_jit(
       match jit_module {
         None => abort("Failed to create JIT module")
         Some(jm) => {
+          // Allocate independent WASM stack with guard page (1MB)
+          // This provides controlled stack overflow behavior
+          let _ = jm.alloc_wasm_stack(1048576L)
           // Initialize all memories (multi-memory support)
           if not(init_jit_memories(instance, store, jm)) {
             return None
