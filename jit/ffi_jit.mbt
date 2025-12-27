@@ -210,12 +210,6 @@ fn JITContext::alloc_wasm_stack(self : JITContext, stack_size : Int64) -> Bool {
 }
 
 ///|
-/// Free the WASM stack (called automatically on context finalization)
-fn JITContext::free_wasm_stack(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_free_wasm_stack(self.ptr())
-}
-
-///|
 /// Check if a WASM stack has been allocated
 fn JITContext::has_wasm_stack(self : JITContext) -> Bool {
   @jit_ffi.c_jit_get_wasm_stack_top(self.ptr()) != 0L

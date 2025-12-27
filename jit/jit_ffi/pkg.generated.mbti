@@ -108,8 +108,6 @@ pub fn c_jit_free_memory(Int64) -> Unit
 
 pub fn c_jit_free_shared_indirect_table(Int64) -> Unit
 
-pub fn c_jit_free_wasm_stack(Int64) -> Unit
-
 pub fn c_jit_gc_clear_cache() -> Unit
 
 pub fn c_jit_gc_clear_heap() -> Unit

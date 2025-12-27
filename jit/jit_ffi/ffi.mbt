@@ -243,12 +243,6 @@ pub extern "c" fn c_jit_alloc_wasm_stack(
 ) -> Int = "wasmoon_jit_alloc_wasm_stack"
 
 ///|
-/// Free the WASM stack associated with a context.
-/// The stack is automatically freed when the context is freed,
-/// but this can be called earlier if needed.
-pub extern "c" fn c_jit_free_wasm_stack(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_wasm_stack"
-
-///|
 /// Get the WASM stack top pointer from a context.
 /// Returns 0 if no WASM stack is allocated.
 pub extern "c" fn c_jit_get_wasm_stack_top(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_get_wasm_stack_top"
