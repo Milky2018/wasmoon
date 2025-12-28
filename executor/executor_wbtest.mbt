@@ -1,44 +1,13 @@
 // Executor Tests
 
 ///|
-/// Helper function to create a simple module with one function type and one function.
-/// This reduces boilerplate in tests that don't need tables, memories, globals, etc.
-fn make_simple_module(
-  func_type : @types.FuncType,
-  code : @types.FunctionCode,
-  export_name : String,
-) -> @types.Module {
-  {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: export_name, desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [code],
-    datas: [],
-    tags: [],
-  }
-}
-
-///|
 test "execute simple add function" {
-  // Create a simple module that adds two i32 values
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let code : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), LocalGet(1), I32Add],
-  }
-  let mod = make_simple_module(func_type, code, "add")
-
-  // Instantiate and call
+  let mod = @types.Module::simple(
+    [@types.ValueType::I32, @types.ValueType::I32],
+    [@types.ValueType::I32],
+    [LocalGet(0), LocalGet(1), I32Add],
+    "add",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "add", [
     @types.Value::I32(5),
@@ -53,23 +22,24 @@ test "execute simple add function" {
 ///|
 test "execute function with local variables" {
   // Function: (a, b) => { let tmp = a + b; return tmp * 2 }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
+  let body : Array[@types.Instruction] = [
+    LocalGet(0), // get a
+    LocalGet(1), // get b
+    I32Add, // a + b
+    LocalSet(2), // store in local (index 2)
+    LocalGet(2), // get local
+    I32Const(2), // constant 2
+    I32Mul, // tmp * 2
+  ]
+  let mod = {
+    ..@types.Module::simple(
+      [@types.ValueType::I32, @types.ValueType::I32],
+      [@types.ValueType::I32],
+      body,
+      "double_sum",
+    ),
+    codes: [{ locals: [@types.ValueType::I32], body }],
   }
-  let code : @types.FunctionCode = {
-    locals: [@types.ValueType::I32], // one local variable
-    body: [
-      LocalGet(0), // get a
-      LocalGet(1), // get b
-      I32Add, // a + b
-      LocalSet(2), // store in local (index 2)
-      LocalGet(2), // get local
-      I32Const(2), // constant 2
-      I32Mul, // tmp * 2
-    ],
-  }
-  let mod = make_simple_module(func_type, code, "double_sum")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "double_sum", [
     @types.Value::I32(3),
@@ -83,30 +53,12 @@ test "execute function with local variables" {
 
 ///|
 test "execute i64 addition" {
-  // Test i64 arithmetic: (a, b) => a + b
-  let i64_add_func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), LocalGet(1), I64Add],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I64, @types.ValueType::I64],
-    results: [@types.ValueType::I64],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "i64_add", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [i64_add_func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::I64, @types.ValueType::I64],
+    [@types.ValueType::I64],
+    [LocalGet(0), LocalGet(1), I64Add],
+    "i64_add",
+  )
   let (store, instance) = instantiate_module(mod)
   let args = [
     @types.Value::I64(1000000000000L),
@@ -121,36 +73,12 @@ test "execute i64 addition" {
 
 ///|
 test "execute f32 arithmetic" {
-  // Test f32 operations: (a, b) => a + b * 2.0
-  let f32_func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      LocalGet(1), // b
-      F32Const(2.0), // 2.0
-      F32Mul, // b * 2.0
-      LocalGet(0), // a
-      F32Add,
-    ],
-  } // a + (b * 2.0)
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F32, @types.ValueType::F32],
-    results: [@types.ValueType::F32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "f32_test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [f32_func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F32, @types.ValueType::F32],
+    [@types.ValueType::F32],
+    [LocalGet(1), F32Const(2.0), F32Mul, LocalGet(0), F32Add],
+    "f32_test",
+  )
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::F32(3.5), @types.Value::F32(4.0)]
   let results = call_exported_func(store, instance, "f32_test", args)
@@ -162,36 +90,12 @@ test "execute f32 arithmetic" {
 
 ///|
 test "execute f64 arithmetic" {
-  // Test f64 operations: (a, b) => (a - b) * 0.5
-  let f64_func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      LocalGet(0), // a
-      LocalGet(1), // b
-      F64Sub, // a - b
-      F64Const(0.5), // 0.5
-      F64Mul,
-    ],
-  } // (a - b) * 0.5
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F64, @types.ValueType::F64],
-    results: [@types.ValueType::F64],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "f64_test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [f64_func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F64, @types.ValueType::F64],
+    [@types.ValueType::F64],
+    [LocalGet(0), LocalGet(1), F64Sub, F64Const(0.5), F64Mul],
+    "f64_test",
+  )
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::F64(10.0), @types.Value::F64(6.0)]
   let results = call_exported_func(store, instance, "f64_test", args)
@@ -203,30 +107,12 @@ test "execute f64 arithmetic" {
 
 ///|
 test "execute i64 comparison" {
-  // Test i64 comparison: (a, b) => a < b
-  let i64_cmp_func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), LocalGet(1), I64LtS],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I64, @types.ValueType::I64],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "i64_lt", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [i64_cmp_func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::I64, @types.ValueType::I64],
+    [@types.ValueType::I32],
+    [LocalGet(0), LocalGet(1), I64LtS],
+    "i64_lt",
+  )
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::I64(100L), @types.Value::I64(200L)]
   let results = call_exported_func(store, instance, "i64_lt", args)
@@ -238,31 +124,13 @@ test "execute i64 comparison" {
 
 ///|
 test "numeric conversion: i32.wrap_i64" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I32WrapI64],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I64],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "wrap", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::I64],
+    [@types.ValueType::I32],
+    [LocalGet(0), I32WrapI64],
+    "wrap",
+  )
   let (store, instance) = instantiate_module(mod)
-  // 0x0000000100000005 -> 0x00000005 = 5
   let args = [@types.Value::I64(4294967301L)]
   let results = call_exported_func(store, instance, "wrap", args)
   match results[0] {
@@ -273,31 +141,13 @@ test "numeric conversion: i32.wrap_i64" {
 
 ///|
 test "numeric conversion: i64.extend_i32_s" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I64ExtendI32S],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I64],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "extend_s", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::I32],
+    [@types.ValueType::I64],
+    [LocalGet(0), I64ExtendI32S],
+    "extend_s",
+  )
   let (store, instance) = instantiate_module(mod)
-  // -1 (i32) -> -1 (i64)
   let args = [@types.Value::I32(-1)]
   let results = call_exported_func(store, instance, "extend_s", args)
   match results[0] {
@@ -308,29 +158,12 @@ test "numeric conversion: i64.extend_i32_s" {
 
 ///|
 test "numeric conversion: f64.convert_i32_s" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), F64ConvertI32S],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::F64],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "convert", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::I32],
+    [@types.ValueType::F64],
+    [LocalGet(0), F64ConvertI32S],
+    "convert",
+  )
   let (store, instance) = instantiate_module(mod)
   let args = [@types.Value::I32(-42)]
   let results = call_exported_func(store, instance, "convert", args)
@@ -342,31 +175,13 @@ test "numeric conversion: f64.convert_i32_s" {
 
 ///|
 test "numeric conversion: i32.reinterpret_f32" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I32ReinterpretF32],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F32],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "reinterpret", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F32],
+    [@types.ValueType::I32],
+    [LocalGet(0), I32ReinterpretF32],
+    "reinterpret",
+  )
   let (store, instance) = instantiate_module(mod)
-  // 1.0f32 IEEE 754 representation is 0x3F800000 = 1065353216
   let args = [@types.Value::F32(1.0)]
   let results = call_exported_func(store, instance, "reinterpret", args)
   match results[0] {
@@ -377,31 +192,13 @@ test "numeric conversion: i32.reinterpret_f32" {
 
 ///|
 test "saturating truncation: i32.trunc_sat_f32_s overflow" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I32TruncSatF32S],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F32],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "trunc_sat", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F32],
+    [@types.ValueType::I32],
+    [LocalGet(0), I32TruncSatF32S],
+    "trunc_sat",
+  )
   let (store, instance) = instantiate_module(mod)
-  // Exceeds i32 max, should saturate to 2147483647
   let args = [@types.Value::F32(3000000000.0)]
   let results = call_exported_func(store, instance, "trunc_sat", args)
   match results[0] {
@@ -412,31 +209,13 @@ test "saturating truncation: i32.trunc_sat_f32_s overflow" {
 
 ///|
 test "saturating truncation: i32.trunc_sat_f64_u negative" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I32TruncSatF64U],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "trunc_sat_u", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F64],
+    [@types.ValueType::I32],
+    [LocalGet(0), I32TruncSatF64U],
+    "trunc_sat_u",
+  )
   let (store, instance) = instantiate_module(mod)
-  // Negative values for unsigned saturating truncation should return 0
   let args = [@types.Value::F64(-100.0)]
   let results = call_exported_func(store, instance, "trunc_sat_u", args)
   match results[0] {
@@ -447,35 +226,20 @@ test "saturating truncation: i32.trunc_sat_f64_u negative" {
 
 ///|
 test "memory: i32.store and i32.load" {
-  // Function: store value 42 at address 0, then load and return it
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(0), // address
-      I32Const(42), // value
-      I32Store(0, 2, 0), // align=2, offset=0
-      I32Const(0), // address
-      I32Load(0, 2, 0),
-    ],
-  } // align=2, offset=0
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [
+        I32Const(0),
+        I32Const(42),
+        I32Store(0, 2, 0),
+        I32Const(0),
+        I32Load(0, 2, 0),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -487,34 +251,20 @@ test "memory: i32.store and i32.load" {
 
 ///|
 test "memory: i64.store and i64.load" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(0), // address
-      I64Const(1234567890123L), // value
-      I64Store(0, 3, 0), // align=3, offset=0
-      I32Const(0), // address
-      I64Load(0, 3, 0),
-    ],
-  } // load
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I64],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I64],
+      [
+        I32Const(0),
+        I64Const(1234567890123L),
+        I64Store(0, 3, 0),
+        I32Const(0),
+        I64Load(0, 3, 0),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -526,40 +276,25 @@ test "memory: i64.store and i64.load" {
 
 ///|
 test "memory: f32.store and f32.load" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(0), // address
-      F32Const(3.14), // value
-      F32Store(0, 2, 0), // store
-      I32Const(0), // address
-      F32Load(0, 2, 0),
-    ],
-  } // load
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::F32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::F32],
+      [
+        I32Const(0),
+        F32Const(3.14),
+        F32Store(0, 2, 0),
+        I32Const(0),
+        F32Load(0, 2, 0),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
     F32(f) => {
-      // f32 has limited precision, check approximately
       let diff = (f - 3.14).abs()
       inspect(diff < 0.001, content="true")
     }
@@ -569,35 +304,20 @@ test "memory: f32.store and f32.load" {
 
 ///|
 test "memory: load with offset" {
-  // Store 100 at address 8, then load from address 0 with offset 8
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(8), // address
-      I32Const(100), // value
-      I32Store(0, 2, 0), // store at address 8
-      I32Const(0), // base address
-      I32Load(0, 2, 8),
-    ],
-  } // load from 0 + offset 8 = 8
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [
+        I32Const(8),
+        I32Const(100),
+        I32Store(0, 2, 0),
+        I32Const(0),
+        I32Load(0, 2, 8),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -609,36 +329,20 @@ test "memory: load with offset" {
 
 ///|
 test "memory: i32.load8_s sign extension" {
-  // Store 0xFF at address 0 (as i32), then load as signed byte
-  // 0xFF as signed byte is -1
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(0), // address
-      I32Const(255), // value (0xFF)
-      I32Store8(0, 0, 0), // store as byte
-      I32Const(0), // address
-      I32Load8S(0, 0, 0),
-    ],
-  } // load as signed byte
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [
+        I32Const(0),
+        I32Const(255),
+        I32Store8(0, 0, 0),
+        I32Const(0),
+        I32Load8S(0, 0, 0),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -650,36 +354,20 @@ test "memory: i32.load8_s sign extension" {
 
 ///|
 test "memory: i32.load8_u zero extension" {
-  // Store 0xFF at address 0, then load as unsigned byte
-  // 0xFF as unsigned byte is 255
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(0), // address
-      I32Const(255), // value (0xFF)
-      I32Store8(0, 0, 0), // store as byte
-      I32Const(0), // address
-      I32Load8U(0, 0, 0),
-    ],
-  } // load as unsigned byte
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [
+        I32Const(0),
+        I32Const(255),
+        I32Store8(0, 0, 0),
+        I32Const(0),
+        I32Load8U(0, 0, 0),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -691,36 +379,14 @@ test "memory: i32.load8_u zero extension" {
 
 ///|
 test "memory: memory.size and memory.grow" {
-  // Check initial size (1 page), grow by 2 pages, return new size
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      MemorySize(0), // get current size (1)
-      Drop, // discard
-      I32Const(2), // delta
-      MemoryGrow(0), // grow by 2, returns old size (1)
-      Drop, // discard old size
-      MemorySize(0),
-    ],
-  } // get new size (3)
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [MemorySize(0), Drop, I32Const(2), MemoryGrow(0), Drop, MemorySize(0)],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -732,31 +398,12 @@ test "memory: memory.size and memory.grow" {
 
 ///|
 test "control flow: simple block" {
-  // block returns value from inner expression
-  // (block (result i32) (i32.const 42))
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [Block(Value(@types.ValueType::I32), [I32Const(42)])],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [],
+    [@types.ValueType::I32],
+    [Block(Value(@types.ValueType::I32), [I32Const(42)])],
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -767,36 +414,12 @@ test "control flow: simple block" {
 
 ///|
 test "control flow: br exits block" {
-  // (block (result i32)
-  //   (i32.const 10)
-  //   (br 0)
-  //   (i32.const 20)  ;; unreachable
-  // )
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      Block(Value(@types.ValueType::I32), [I32Const(10), Br(0), I32Const(20)]),
-    ],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [],
+    [@types.ValueType::I32],
+    [Block(Value(@types.ValueType::I32), [I32Const(10), Br(0), I32Const(20)])],
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -807,17 +430,10 @@ test "control flow: br exits block" {
 
 ///|
 test "control flow: br_if conditional" {
-  // (func (param i32) (result i32)
-  //   (block (result i32)
-  //     (i32.const 100)
-  //     (local.get 0)
-  //     (br_if 0)  ;; if param != 0, exit with 100
-  //     (drop)
-  //     (i32.const 200)
-  //   ))
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
+  let mod = @types.Module::simple(
+    [@types.ValueType::I32],
+    [@types.ValueType::I32],
+    [
       Block(Value(@types.ValueType::I32), [
         I32Const(100),
         LocalGet(0),
@@ -826,34 +442,14 @@ test "control flow: br_if conditional" {
         I32Const(200),
       ]),
     ],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
-  // Test with condition true (1) - should return 100
   let results1 = call_exported_func(store, instance, "test", [I32(1)])
   match results1[0] {
     I32(n) => inspect(n, content="100")
     _ => fail("Expected I32 result")
   }
-  // Test with condition false (0) - should return 200
   let results2 = call_exported_func(store, instance, "test", [I32(0)])
   match results2[0] {
     I32(n) => inspect(n, content="200")
@@ -864,101 +460,51 @@ test "control flow: br_if conditional" {
 ///|
 test "control flow: loop with br" {
   // Sum 1 to 5 using loop
-  // (func (result i32)
-  //   (local i32 i32)  ;; counter, sum
-  //   (local.set 0 (i32.const 1))  ;; counter = 1
-  //   (local.set 1 (i32.const 0))  ;; sum = 0
-  //   (loop
-  //     (local.set 1 (i32.add (local.get 1) (local.get 0)))  ;; sum += counter
-  //     (local.set 0 (i32.add (local.get 0) (i32.const 1)))  ;; counter++
-  //     (br_if 0 (i32.le_s (local.get 0) (i32.const 5)))     ;; if counter <= 5, loop
-  //   )
-  //   (local.get 1))  ;; return sum
-  let func : @types.FunctionCode = {
-    locals: [@types.ValueType::I32, @types.ValueType::I32], // counter, sum
-    body: [
-      I32Const(1),
-      LocalSet(0), // counter = 1
-      I32Const(0),
-      LocalSet(1), // sum = 0
-      Loop(Empty, [
-        LocalGet(1),
-        LocalGet(0),
-        I32Add,
-        LocalSet(1), // sum += counter
-        LocalGet(0),
-        I32Const(1),
-        I32Add,
-        LocalSet(0), // counter++
-        LocalGet(0),
-        I32Const(5),
-        I32LeS,
-        BrIf(0),
-      ]), // if counter <= 5, continue
+  let body : Array[@types.Instruction] = [
+    I32Const(1),
+    LocalSet(0),
+    I32Const(0),
+    LocalSet(1),
+    Loop(Empty, [
       LocalGet(1),
-    ],
-  } // return sum
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
+      LocalGet(0),
+      I32Add,
+      LocalSet(1),
+      LocalGet(0),
+      I32Const(1),
+      I32Add,
+      LocalSet(0),
+      LocalGet(0),
+      I32Const(5),
+      I32LeS,
+      BrIf(0),
+    ]),
+    LocalGet(1),
+  ]
+  let mod = {
+    ..@types.Module::simple([], [@types.ValueType::I32], body, "test"),
+    codes: [{ locals: [@types.ValueType::I32, @types.ValueType::I32], body }],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
-    I32(n) => inspect(n, content="15") // 1+2+3+4+5 = 15
+    I32(n) => inspect(n, content="15")
     _ => fail("Expected I32 result")
   }
 }
 
 ///|
 test "control flow: if-else" {
-  // (func (param i32) (result i32)
-  //   (if (result i32) (local.get 0)
-  //     (then (i32.const 111))
-  //     (else (i32.const 222))))
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
+  let mod = @types.Module::simple(
+    [@types.ValueType::I32],
+    [@types.ValueType::I32],
+    [
       LocalGet(0),
       If(Value(@types.ValueType::I32), [I32Const(111)], [I32Const(222)]),
     ],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
-  // Test with true (1)
   let results1 = call_exported_func(store, instance, "test", [I32(1)])
   match results1[0] {
     I32(n) => inspect(n, content="111")
@@ -974,40 +520,17 @@ test "control flow: if-else" {
 
 ///|
 test "control flow: nested blocks with br" {
-  // (block $outer (result i32)
-  //   (block $inner
-  //     (i32.const 50)
-  //     (br 1)  ;; jump to outer
-  //   )
-  //   (i32.const 99))
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
+  let mod = @types.Module::simple(
+    [],
+    [@types.ValueType::I32],
+    [
       Block(Value(@types.ValueType::I32), [
         Block(Empty, [I32Const(50), Br(1)]),
         I32Const(99),
       ]),
     ],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -1018,37 +541,13 @@ test "control flow: nested blocks with br" {
 
 ///|
 test "control flow: select" {
-  // (func (param i32 i32 i32) (result i32)
-  //   (select (local.get 0) (local.get 1) (local.get 2)))
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), LocalGet(1), LocalGet(2), Select],
-  }
-  let func_type : @types.FuncType = {
-    params: [
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-    ],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::I32, @types.ValueType::I32, @types.ValueType::I32],
+    [@types.ValueType::I32],
+    [LocalGet(0), LocalGet(1), LocalGet(2), Select],
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
-  // select(10, 20, 1) -> 10 (condition true)
   let results1 = call_exported_func(store, instance, "test", [
     I32(10),
     I32(20),
@@ -1058,7 +557,6 @@ test "control flow: select" {
     I32(n) => inspect(n, content="10")
     _ => fail("Expected I32 result")
   }
-  // select(10, 20, 0) -> 20 (condition false)
   let results2 = call_exported_func(store, instance, "test", [
     I32(10),
     I32(20),
@@ -1565,118 +1063,66 @@ test "table import: call_indirect with imported table" {
 
 ///|
 test "global variables: global.get and global.set" {
-  // Module with a mutable global initialized to 10
-  // Function: increment global and return new value
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      GlobalGet(0), // get global value (10)
-      I32Const(5), // add 5
-      I32Add,
-      GlobalSet(0), // set global to 15
-      GlobalGet(0),
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [GlobalGet(0), I32Const(5), I32Add, GlobalSet(0), GlobalGet(0)],
+      "test",
+    ),
+    globals: [
+      {
+        type_: { value_type: @types.ValueType::I32, mutable: true },
+        init: [I32Const(10)],
+      },
     ],
-  } // return new value
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let global : @types.Global = {
-    type_: { value_type: @types.ValueType::I32, mutable: true },
-    init: [I32Const(10)],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [global],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
-    I32(n) => inspect(n, content="15") // 10 + 5 = 15
+    I32(n) => inspect(n, content="15")
     _ => fail("Expected I32 result")
   }
 }
 
 ///|
 test "global variables: multiple globals" {
-  // Module with two globals: counter (mutable) and max (immutable)
-  // Function: add counter + max
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [GlobalGet(0), GlobalGet(1), I32Add],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let counter : @types.Global = {
-    type_: { value_type: @types.ValueType::I32, mutable: true },
-    init: [I32Const(7)],
-  }
-  let max : @types.Global = {
-    type_: { value_type: @types.ValueType::I32, mutable: false },
-    init: [I32Const(100)],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [counter, max],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [GlobalGet(0), GlobalGet(1), I32Add],
+      "test",
+    ),
+    globals: [
+      {
+        type_: { value_type: @types.ValueType::I32, mutable: true },
+        init: [I32Const(7)],
+      },
+      {
+        type_: { value_type: @types.ValueType::I32, mutable: false },
+        init: [I32Const(100)],
+      },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
-    I32(n) => inspect(n, content="107") // 7 + 100 = 107
+    I32(n) => inspect(n, content="107")
     _ => fail("Expected I32 result")
   }
 }
 
 ///|
 test "global variables: i64 global" {
-  // Module with an i64 global
-  let func : @types.FunctionCode = { locals: [], body: [GlobalGet(0)] }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I64],
-  }
-  let global : @types.Global = {
-    type_: { value_type: @types.ValueType::I64, mutable: false },
-    init: [I64Const(9999999999L)],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [global],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
+  let mod = {
+    ..@types.Module::simple([], [@types.ValueType::I64], [GlobalGet(0)], "test"),
+    globals: [
+      {
+        type_: { value_type: @types.ValueType::I64, mutable: false },
+        init: [I64Const(9999999999L)],
+      },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1688,23 +1134,14 @@ test "global variables: i64 global" {
 
 ///|
 test "global import: imported global" {
-  // Create a store with a global
   let store = @runtime.Store::new()
   let global_inst = @runtime.GlobalInstance::new(
     { value_type: @types.ValueType::I32, mutable: true },
     @types.Value::I32(42),
   )
   let global_addr = store.alloc_global(global_inst)
-
-  // Module that imports and uses the global
-  let func : @types.FunctionCode = { locals: [], body: [GlobalGet(0)] }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
+  let mod = {
+    ..@types.Module::simple([], [@types.ValueType::I32], [GlobalGet(0)], "get"),
     imports: [
       {
         mod_name: "env",
@@ -1712,16 +1149,6 @@ test "global import: imported global" {
         desc: Global({ value_type: @types.ValueType::I32, mutable: true }),
       },
     ],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "get", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let imports = @runtime.Imports::new()
   imports.add_global("env", "g", global_addr)
@@ -1735,17 +1162,8 @@ test "global import: imported global" {
 
 ///|
 test "table operations: table.size" {
-  // Module with a table, get its size
-  let func : @types.FunctionCode = { locals: [], body: [TableSize(0)] }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
+  let mod = {
+    ..@types.Module::simple([], [@types.ValueType::I32], [TableSize(0)], "test"),
     tables: [
       {
         type_: {
@@ -1756,19 +1174,11 @@ test "table operations: table.size" {
         init: None,
       },
     ],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
-    I32(n) => inspect(n, content="4") // table size is 4
+    I32(n) => inspect(n, content="4")
     _ => fail("Expected I32 result")
   }
 }
@@ -1941,32 +1351,16 @@ test "module initialization: start function execution" {
 
 ///|
 test "module initialization: data segment" {
-  // Module with a data segment that initializes memory
-  let read_func : @types.FunctionCode = {
-    locals: [],
-    body: [I32Const(0), I32Load(0, 2, 0)], // load i32 from address 0
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  // Data segment: store bytes [0x2A, 0x00, 0x00, 0x00] at offset 0
-  // This is 42 in little-endian
   let data_bytes = Bytes::from_array([b'\x2A', b'\x00', b'\x00', b'\x00'])
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [I32Const(0), I32Load(0, 2, 0)],
+      "read",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "read", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [read_func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
-    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1980,38 +1374,23 @@ test "module initialization: data segment" {
 
 ///|
 test "module initialization: data segment with offset" {
-  // Module with a data segment at non-zero offset
-  let read_func : @types.FunctionCode = {
-    locals: [],
-    body: [I32Const(100), I32Load(0, 2, 0)], // load from address 100
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  // Data at offset 100: 0x12345678
   let data_bytes = Bytes::from_array([b'\x78', b'\x56', b'\x34', b'\x12'])
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [I32Const(100), I32Load(0, 2, 0)],
+      "read",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "read", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [read_func],
     datas: [{ memory_idx: 0, offset: [I32Const(100)], init: data_bytes }],
-    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
   }
   let results = call_exported_func(store, instance, "read", [])
   match results[0] {
-    I32(n) => inspect(n, content="305419896") // 0x12345678
+    I32(n) => inspect(n, content="305419896")
     _ => fail("Expected I32 result")
   }
 }
@@ -2086,41 +1465,25 @@ test "module initialization: element segment" {
 
 ///|
 test "bulk memory: memory.fill" {
-  // Function: fill memory[0..4] with 0x42, then read back
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(0), // dest
-      I32Const(0x42), // value
-      I32Const(4), // len
-      MemoryFill(0), // fill
-      I32Const(0),
-      I32Load(0, 2, 0),
-    ],
-  } // read back
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [
+        I32Const(0),
+        I32Const(0x42),
+        I32Const(4),
+        MemoryFill(0),
+        I32Const(0),
+        I32Load(0, 2, 0),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
-    // 0x42424242 = 1111638594
     I32(n) => inspect(n, content="1111638594")
     _ => fail("Expected I32 result")
   }
@@ -2128,93 +1491,57 @@ test "bulk memory: memory.fill" {
 
 ///|
 test "bulk memory: memory.copy non-overlapping" {
-  // Store 0x12345678 at address 0, then copy to address 100
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(0),
-      I32Const(0x12345678),
-      I32Store(0, 2, 0), // store at address 0
-      I32Const(100), // dest
-      I32Const(0), // src
-      I32Const(4), // len
-      MemoryCopy(0, 0), // copy
-      I32Const(100),
-      I32Load(0, 2, 0),
-    ],
-  } // read from dest
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [
+        I32Const(0),
+        I32Const(0x12345678),
+        I32Store(0, 2, 0),
+        I32Const(100),
+        I32Const(0),
+        I32Const(4),
+        MemoryCopy(0, 0),
+        I32Const(100),
+        I32Load(0, 2, 0),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
-    I32(n) => inspect(n, content="305419896") // 0x12345678
+    I32(n) => inspect(n, content="305419896")
     _ => fail("Expected I32 result")
   }
 }
 
 ///|
 test "bulk memory: memory.copy overlapping backward" {
-  // Fill memory[0..8] with pattern, then copy memory[0..4] to memory[2..6]
-  // This tests backward copy when dest > src
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      // Store [0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00] at address 0
-      I32Const(0),
-      I32Const(0x04030201),
-      I32Store(0, 2, 0),
-      // Copy from 0 to 2, length 4
-      // Expected: [0x01, 0x02, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00]
-      I32Const(2), // dest
-      I32Const(0), // src
-      I32Const(4), // len
-      MemoryCopy(0, 0),
-      // Read from address 2
-      I32Const(2),
-      I32Load(0, 2, 0),
-    ],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple(
+      [],
+      [@types.ValueType::I32],
+      [
+        I32Const(0),
+        I32Const(0x04030201),
+        I32Store(0, 2, 0),
+        I32Const(2),
+        I32Const(0),
+        I32Const(4),
+        MemoryCopy(0, 0),
+        I32Const(2),
+        I32Load(0, 2, 0),
+      ],
+      "test",
+    ),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
-    // At address 2: [0x01, 0x02, 0x03, 0x04] = 0x04030201
     I32(n) => inspect(n, content="67305985")
     _ => fail("Expected I32 result")
   }
@@ -2223,37 +1550,20 @@ test "bulk memory: memory.copy overlapping backward" {
 ///|
 test "bulk memory: memory.init from data segment" {
   // Module with a data segment, use memory.init to copy part of it
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(100), // dest in memory
-      I32Const(0), // src offset in data segment
-      I32Const(4), // len
-      MemoryInit(0, 0), // init from data segment 0
-      I32Const(100),
-      I32Load(0, 2, 0),
-    ],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let body : Array[@types.Instruction] = [
+    I32Const(100), // dest in memory
+    I32Const(0), // src offset in data segment
+    I32Const(4), // len
+    MemoryInit(0, 0), // init from data segment 0
+    I32Const(100),
+    I32Load(0, 2, 0),
+  ]
   // Data: 0xDEADBEEF in little-endian
   let data_bytes = Bytes::from_array([b'\xEF', b'\xBE', b'\xAD', b'\xDE'])
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple([], [@types.ValueType::I32], body, "test"),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
-    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2268,37 +1578,20 @@ test "bulk memory: memory.init from data segment" {
 ///|
 test "bulk memory: memory.init with offset" {
   // Use memory.init with non-zero source offset
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      I32Const(0), // dest in memory
-      I32Const(2), // src offset in data segment (skip first 2 bytes)
-      I32Const(2), // len (copy last 2 bytes)
-      MemoryInit(0, 0),
-      I32Const(0),
-      I32Load16U(0, 1, 0),
-    ],
-  } // load 16-bit unsigned
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let body : Array[@types.Instruction] = [
+    I32Const(0), // dest in memory
+    I32Const(2), // src offset in data segment (skip first 2 bytes)
+    I32Const(2), // len (copy last 2 bytes)
+    MemoryInit(0, 0),
+    I32Const(0),
+    I32Load16U(0, 1, 0), // load 16-bit unsigned
+  ]
   // Data: [0x11, 0x22, 0x33, 0x44]
   let data_bytes = Bytes::from_array([b'\x11', b'\x22', b'\x33', b'\x44'])
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
+  let mod = {
+    ..@types.Module::simple([], [@types.ValueType::I32], body, "test"),
     memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
-    tags: [],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -2487,29 +1780,11 @@ test "bulk memory: data.drop is idempotent" {
 ///|
 test "reference types: ref.null funcref" {
   // Function: push null funcref and check if it's null
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [RefNull(@types.ValueType::FuncRef), RefIsNull],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let body : Array[@types.Instruction] = [
+    RefNull(@types.ValueType::FuncRef),
+    RefIsNull,
+  ]
+  let mod = @types.Module::simple([], [@types.ValueType::I32], body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -2521,29 +1796,11 @@ test "reference types: ref.null funcref" {
 ///|
 test "reference types: ref.null externref" {
   // Function: push null externref and check if it's null
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [RefNull(@types.ValueType::ExternRef), RefIsNull],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let body : Array[@types.Instruction] = [
+    RefNull(@types.ValueType::ExternRef),
+    RefIsNull,
+  ]
+  let mod = @types.Module::simple([], [@types.ValueType::I32], body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -2697,29 +1954,9 @@ test "reference types: ref.func used with table.set" {
 ///|
 test "multi-value: function returning two values" {
   // Function returns (i32, i32) pair
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [I32Const(10), I32Const(20)], // push 10, then 20
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32, @types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let results_types = [@types.ValueType::I32, @types.ValueType::I32]
+  let body : Array[@types.Instruction] = [I32Const(10), I32Const(20)]
+  let mod = @types.Module::simple([], results_types, body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   inspect(results.length(), content="2")
@@ -2736,33 +1973,17 @@ test "multi-value: function returning two values" {
 ///|
 test "multi-value: function returning three values" {
   // Function returns (i32, i64, f32)
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [I32Const(1), I64Const(2L), F32Const(3.0)],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [
-      @types.ValueType::I32,
-      @types.ValueType::I64,
-      @types.ValueType::F32,
-    ],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let results_types = [
+    @types.ValueType::I32,
+    @types.ValueType::I64,
+    @types.ValueType::F32,
+  ]
+  let body : Array[@types.Instruction] = [
+    I32Const(1),
+    I64Const(2L),
+    F32Const(3.0),
+  ]
+  let mod = @types.Module::simple([], results_types, body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   inspect(results.length(), content="3")
@@ -2783,23 +2004,7 @@ test "multi-value: function returning three values" {
 ///|
 test "multi-value: function returning no values" {
   // Function returns nothing (void)
-  let func : @types.FunctionCode = { locals: [], body: [Nop] }
-  let func_type : @types.FuncType = { params: [], results: [] }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple([], [], [Nop], "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   inspect(results.length(), content="0")
@@ -2959,31 +2164,10 @@ test "multi-value: if returning two values" {
 ///|
 test "multi-value: block with single Value type" {
   // Block with Value(I32) returns single value (existing behavior)
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [I32Const(42)]),
-    ],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let body : Array[@types.Instruction] = [
+    Block(@types.BlockType::Value(@types.ValueType::I32), [I32Const(42)]),
+  ]
+  let mod = @types.Module::simple([], [@types.ValueType::I32], body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -2995,29 +2179,11 @@ test "multi-value: block with single Value type" {
 ///|
 test "multi-value: empty block" {
   // Block with Empty type returns nothing
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [Block(@types.BlockType::Empty, [Nop]), I32Const(99)],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let body : Array[@types.Instruction] = [
+    Block(@types.BlockType::Empty, [Nop]),
+    I32Const(99),
+  ]
+  let mod = @types.Module::simple([], [@types.ValueType::I32], body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -3473,32 +2639,13 @@ test "call_indirect type index bug reproduction" {
 
 ///|
 test "i32.trunc_f64_u: value in (-1, 0) truncates to 0" {
-  // Values in (-1, 0) should truncate to 0, not overflow
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I32TruncF64U],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "trunc", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F64],
+    [@types.ValueType::I32],
+    [LocalGet(0), I32TruncF64U],
+    "trunc",
+  )
   let (store, instance) = instantiate_module(mod)
-  // -0.9 should truncate to 0
   let results = call_exported_func(store, instance, "trunc", [F64(-0.9)])
   match results[0] {
     I32(n) => inspect(n, content="0")
@@ -3508,31 +2655,13 @@ test "i32.trunc_f64_u: value in (-1, 0) truncates to 0" {
 
 ///|
 test "i32.trunc_f32_u: value in (-1, 0) truncates to 0" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I32TruncF32U],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F32],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "trunc", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F32],
+    [@types.ValueType::I32],
+    [LocalGet(0), I32TruncF32U],
+    "trunc",
+  )
   let (store, instance) = instantiate_module(mod)
-  // -0.5f should truncate to 0
   let results = call_exported_func(store, instance, "trunc", [F32(-0.5)])
   match results[0] {
     I32(n) => inspect(n, content="0")
@@ -3542,36 +2671,16 @@ test "i32.trunc_f32_u: value in (-1, 0) truncates to 0" {
 
 ///|
 test "i64.trunc_f64_u: large value near 2^64" {
-  // Test that values close to but below 2^64 work correctly
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I64TruncF64U],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [@types.ValueType::I64],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "trunc", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F64],
+    [@types.ValueType::I64],
+    [LocalGet(0), I64TruncF64U],
+    "trunc",
+  )
   let (store, instance) = instantiate_module(mod)
-  // 2^63 = 9223372036854775808.0 should convert correctly
   let pow2_63 = 2.0.pow(63.0)
   let results = call_exported_func(store, instance, "trunc", [F64(pow2_63)])
   match results[0] {
-    // 2^63 as unsigned i64, reinterpreted as signed = -9223372036854775808
     I64(n) => inspect(n, content="-9223372036854775808")
     _ => fail("Expected I64 result")
   }
@@ -3579,66 +2688,30 @@ test "i64.trunc_f64_u: large value near 2^64" {
 
 ///|
 test "i64.trunc_sat_f64_u: large value saturates correctly" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I64TruncSatF64U],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [@types.ValueType::I64],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "trunc_sat", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F64],
+    [@types.ValueType::I64],
+    [LocalGet(0), I64TruncSatF64U],
+    "trunc_sat",
+  )
   let (store, instance) = instantiate_module(mod)
-  // Value >= 2^64 should saturate to u64::MAX (-1 as i64)
   let pow2_64 = 2.0.pow(64.0)
   let results = call_exported_func(store, instance, "trunc_sat", [F64(pow2_64)])
   match results[0] {
-    I64(n) => inspect(n, content="-1") // u64::MAX = -1 as signed
+    I64(n) => inspect(n, content="-1")
     _ => fail("Expected I64 result")
   }
 }
 
 ///|
 test "i64.trunc_sat_f64_u: value in range converts correctly" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I64TruncSatF64U],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [@types.ValueType::I64],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "trunc_sat", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F64],
+    [@types.ValueType::I64],
+    [LocalGet(0), I64TruncSatF64U],
+    "trunc_sat",
+  )
   let (store, instance) = instantiate_module(mod)
-  // 2^63 should convert to -9223372036854775808 (as signed)
   let pow2_63 = 2.0.pow(63.0)
   let results = call_exported_func(store, instance, "trunc_sat", [F64(pow2_63)])
   match results[0] {
@@ -3649,31 +2722,13 @@ test "i64.trunc_sat_f64_u: value in range converts correctly" {
 
 ///|
 test "i32.trunc_f64_s: boundary near INT32_MIN" {
-  let func : @types.FunctionCode = {
-    locals: [],
-    body: [LocalGet(0), I32TruncF64S],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [@types.ValueType::I32],
-  }
-  let mod : @types.Module = {
-    types: [@types.SubType::from_func(func_type)],
-    type_rec_groups: [0],
-    imports: [],
-    funcs: [0],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [{ name: "trunc", desc: @types.ExportDesc::Func(0) }],
-    start: None,
-    elems: [],
-    codes: [func],
-    datas: [],
-    tags: [],
-  }
+  let mod = @types.Module::simple(
+    [@types.ValueType::F64],
+    [@types.ValueType::I32],
+    [LocalGet(0), I32TruncF64S],
+    "trunc",
+  )
   let (store, instance) = instantiate_module(mod)
-  // -2147483648.0 is exactly INT32_MIN, should work
   let results = call_exported_func(store, instance, "trunc", [
     F64(-2147483648.0),
   ])

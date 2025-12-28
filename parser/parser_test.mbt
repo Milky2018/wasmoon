@@ -1,6 +1,7 @@
 // Binary Parser Tests for Memory64 and Table64
 
 // Helper to construct WASM binary from bytes
+
 ///|
 fn make_wasm_module(sections : Array[FixedArray[Int]]) -> Bytes {
   let bytes : Array[Int] = []

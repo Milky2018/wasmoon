@@ -420,6 +420,7 @@ pub(all) struct Module {
   datas : Array[Data]
   tags : Array[TagType]
 }
+pub fn Module::empty() -> Self
 pub fn Module::get_array_type(Self, Int) -> ArrayType
 pub fn Module::get_func_type(Self, Int) -> FuncType
 pub fn Module::get_struct_type(Self, Int) -> StructType
@@ -427,6 +428,7 @@ pub fn Module::is_array_type(Self, Int) -> Bool
 pub fn Module::is_func_type(Self, Int) -> Bool
 pub fn Module::is_struct_type(Self, Int) -> Bool
 pub fn Module::new() -> Self
+pub fn Module::simple(Array[ValueType], Array[ValueType], Array[Instruction], String) -> Self
 pub impl Show for Module
 
 pub(all) enum PackedType {

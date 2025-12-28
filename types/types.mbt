@@ -798,6 +798,53 @@ pub(all) struct Module {
 } derive(Show)
 
 ///|
+/// Create an empty module with all fields set to empty arrays/None.
+pub fn Module::empty() -> Module {
+  {
+    types: [],
+    type_rec_groups: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [],
+    tags: [],
+  }
+}
+
+///|
+/// Create a simple module with one function.
+/// This is useful for tests that need a minimal valid module.
+pub fn Module::simple(
+  params : Array[ValueType],
+  results : Array[ValueType],
+  body : Array[Instruction],
+  export_name : String,
+) -> Module {
+  let func_type : FuncType = { params, results }
+  {
+    types: [SubType::from_func(func_type)],
+    type_rec_groups: [0],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: export_name, desc: ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [{ locals: [], body }],
+    datas: [],
+    tags: [],
+  }
+}
+
+///|
 /// Get the function type at the given index.
 /// Panics if the type is not a function type.
 pub fn Module::get_func_type(self : Module, idx : Int) -> FuncType {
