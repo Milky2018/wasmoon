@@ -780,7 +780,7 @@ test "validator: data segment with i64 offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -806,7 +806,7 @@ test "validator: data segment with ref.null offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -834,7 +834,7 @@ test "validator: data segment with empty offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -860,7 +860,7 @@ test "validator: data segment with non-constant instruction should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -881,7 +881,7 @@ test "validator: data segment with nop offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -902,7 +902,7 @@ test "validator: data segment with unknown global should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -923,7 +923,7 @@ test "validator: data segment with mutable global offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [
       {
         type_: { value_type: @types.ValueType::I32, mutable: true },
@@ -949,7 +949,7 @@ test "validator: data segment with valid i32 const offset should pass" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -970,7 +970,7 @@ test "validator: data segment with immutable global offset should pass" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [
       {
         type_: { value_type: @types.ValueType::I32, mutable: false },
@@ -1004,6 +1004,7 @@ test "validator: elem segment with i64 offset should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1044,6 +1045,7 @@ test "validator: elem segment with non-constant instruction should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1075,6 +1077,7 @@ test "validator: elem segment with unknown global should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1110,6 +1113,7 @@ test "validator: elem segment with mutable global offset should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1177,6 +1181,7 @@ test "validator: elem segment type mismatch with table should fail" {
         type_: {
           elem_type: @types.ValueType::ExternRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1211,6 +1216,7 @@ test "validator: elem segment with valid i32 const offset should pass" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1246,6 +1252,7 @@ test "validator: elem init with wrong type should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1282,6 +1289,7 @@ test "validator: elem with unknown function should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 2, max: None },
+          is_table64: false,
         },
         init: None,
       },

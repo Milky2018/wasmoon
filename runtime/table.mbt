@@ -5,6 +5,7 @@ struct Table {
   elements : Array[@types.Value]
   mut size : Int
   max : Int?
+  is_table64 : Bool // true for table64 (i64-indexed table)
 } derive(Show)
 
 ///|
@@ -13,12 +14,13 @@ pub fn Table::new(
   min : Int,
   max : Int?,
   init_value? : @types.Value = @types.Value::Null,
+  is_table64? : Bool = false,
 ) -> Table {
   let elements : Array[@types.Value] = []
   for _ in 0..<min {
     elements.push(init_value)
   }
-  { elem_type, elements, size: min, max }
+  { elem_type, elements, size: min, max, is_table64 }
 }
 
 ///|
@@ -130,4 +132,10 @@ pub fn Table::get_elem_type(self : Table) -> @types.ValueType {
 /// Get table limits (min, max) for type checking
 pub fn Table::get_limits(self : Table) -> (Int, Int?) {
   (self.size, self.max)
+}
+
+///|
+/// Check if this is a table64 (i64-indexed table)
+pub fn Table::is_table64(self : Table) -> Bool {
+  self.is_table64
 }

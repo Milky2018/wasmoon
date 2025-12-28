@@ -220,10 +220,13 @@ fn run_cross_module_jit(
 
     // Get memory max from module
     let memory_max : Int? = if mod_.memories.length() > 0 {
-      mod_.memories[0].limits.max
+      mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
     } else {
       None
     }
+
+    // Build memory_is_64 array for memory64 support
+    let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
 
     // Compile each function in this module
     for i, code in mod_.codes {
@@ -262,6 +265,7 @@ fn run_cross_module_jit(
         num_imports,
         import_func_type_indices,
         memory_max~,
+        memory_is_64~,
         tables=mod_.tables,
         type_rec_groups=mod_.type_rec_groups,
         func_base=base,

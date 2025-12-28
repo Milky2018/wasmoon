@@ -533,19 +533,28 @@ pub fn IRBuilder::bitcast(self : IRBuilder, ty : Type, a : Value) -> Value {
 /// Grow memory by delta pages, returns previous size in pages or -1 on failure
 /// memidx: memory index
 /// max_pages: maximum allowed pages (None = no limit)
+/// is_memory64: true if memory uses 64-bit addresses (returns i64)
 pub fn IRBuilder::memory_grow(
   self : IRBuilder,
   memidx : Int,
   delta : Value,
   max_pages? : Int,
+  is_memory64? : Bool = false,
 ) -> Value {
-  self.emit_inst(Type::I32, Opcode::MemoryGrow(memidx, max_pages), [delta])
+  let result_type = if is_memory64 { Type::I64 } else { Type::I32 }
+  self.emit_inst(result_type, Opcode::MemoryGrow(memidx, max_pages), [delta])
 }
 
 ///|
 /// Get current memory size in pages
-pub fn IRBuilder::memory_size(self : IRBuilder, memidx : Int) -> Value {
-  self.emit_inst(Type::I32, Opcode::MemorySize(memidx), [])
+/// is_memory64: true if memory uses 64-bit addresses (returns i64)
+pub fn IRBuilder::memory_size(
+  self : IRBuilder,
+  memidx : Int,
+  is_memory64? : Bool = false,
+) -> Value {
+  let result_type = if is_memory64 { Type::I64 } else { Type::I32 }
+  self.emit_inst(result_type, Opcode::MemorySize(memidx), [])
 }
 
 ///|

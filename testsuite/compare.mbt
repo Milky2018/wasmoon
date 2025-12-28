@@ -201,10 +201,13 @@ pub fn run_jit(
 
     // Get memory max limit from module (if memory is defined)
     let memory_max : Int? = if mod_.memories.length() > 0 {
-      mod_.memories[0].limits.max
+      mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
     } else {
       None
     }
+
+    // Build memory_is_64 array for memory64 support
+    let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
 
     // Compile each function in the module
     for i, code in mod_.codes {
@@ -223,6 +226,7 @@ pub fn run_jit(
         num_imports,
         import_func_type_indices,
         memory_max~,
+        memory_is_64~,
         tables=mod_.tables,
         type_rec_groups=mod_.type_rec_groups,
         module_types=mod_.types,
@@ -307,7 +311,7 @@ fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
 
 ///|
 /// Evaluate element segment offset constant expression
-/// Supports i32.const, i32.add, i32.sub, i32.mul, global.get for computing offsets
+/// Supports i32.const, i64.const (for table64), i32.add, i32.sub, i32.mul, global.get for computing offsets
 fn eval_elem_offset_expr(
   instrs : Array[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
@@ -316,9 +320,14 @@ fn eval_elem_offset_expr(
   for instr in instrs {
     match instr {
       I32Const(n) => stack.push(n)
+      I64Const(n) => stack.push(n.to_int()) // For table64 offset expressions
       GlobalGet(idx) =>
-        if idx < globals.length() && globals[idx].get() is I32(n) {
-          stack.push(n)
+        if idx < globals.length() {
+          match globals[idx].get() {
+            I32(n) => stack.push(n)
+            I64(n) => stack.push(n.to_int()) // For table64
+            _ => ()
+          }
         }
       I32Add =>
         if stack.length() >= 2 {
@@ -333,6 +342,24 @@ fn eval_elem_offset_expr(
           stack.push(a.unwrap() - b.unwrap())
         }
       I32Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() * b.unwrap())
+        }
+      I64Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() + b.unwrap())
+        }
+      I64Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() - b.unwrap())
+        }
+      I64Mul =>
         if stack.length() >= 2 {
           let b = stack.pop()
           let a = stack.pop()
@@ -391,8 +418,8 @@ fn init_elem_segments(
   // Create a JIT table for each WebAssembly table
   let jit_tables : Array[@jit.JITTable?] = []
   for table in mod_.tables {
-    let min_size = table.type_.limits.min
-    let max_size = table.type_.limits.max
+    let min_size = table.type_.limits.min.to_int()
+    let max_size = table.type_.limits.max.map(fn(m) { m.to_int() })
     match @jit.JITTable::new(min_size, max_size) {
       Some(jit_table) => jit_tables.push(Some(jit_table))
       None => jit_tables.push(None)

@@ -33,12 +33,18 @@ fn ExecContext::exec_call_indirect(
   type_idx : Int,
   table_idx : Int,
 ) -> Unit raise {
-  // Pop the function index from the stack
-  let func_ref_idx = self.stack.pop_i32()
-
-  // Get the table address from instance and look up the function reference
+  // Get the table address from instance
   let table_addr = self.instance.table_addrs[table_idx]
   let table = self.store.get_table(table_addr)
+
+  // Pop the function index from the stack (i64 for table64, i32 otherwise)
+  let func_ref_idx = if table.is_table64() {
+    self.stack.pop_i64().to_int()
+  } else {
+    self.stack.pop_i32()
+  }
+
+  // Look up the function reference
   let elem = table.get(func_ref_idx)
 
   // The element should be a function reference
@@ -372,16 +378,18 @@ pub fn ExecContext::exec_tail_call_indirect(
   type_idx : Int,
   table_idx : Int,
 ) -> Unit raise {
-  // Pop the function reference index from stack
-  let func_ref_idx_value = self.stack.pop()
-  let func_ref_idx = match func_ref_idx_value {
-    I32(i) => i
-    _ => raise @runtime.IndirectCallTypeMismatch
-  }
-
-  // Get table and element
+  // Get table
   let table_addr = self.instance.table_addrs[table_idx]
   let table = self.store.get_table(table_addr)
+
+  // Pop the function reference index from stack (i64 for table64, i32 otherwise)
+  let func_ref_idx = if table.is_table64() {
+    self.stack.pop_i64().to_int()
+  } else {
+    self.stack.pop_i32()
+  }
+
+  // Look up the element
   let elem = table.get(func_ref_idx)
 
   // The element should be a function reference

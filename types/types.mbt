@@ -225,29 +225,30 @@ pub(all) enum Instruction {
   TableInit(Int, Int) // table index, elem index
 
   // Memory instructions - (memidx, align, offset)
-  I32Load(Int, Int, Int) // memidx, align, offset
-  I64Load(Int, Int, Int)
-  F32Load(Int, Int, Int)
-  F64Load(Int, Int, Int)
-  I32Load8S(Int, Int, Int)
-  I32Load8U(Int, Int, Int)
-  I32Load16S(Int, Int, Int)
-  I32Load16U(Int, Int, Int)
-  I64Load8S(Int, Int, Int)
-  I64Load8U(Int, Int, Int)
-  I64Load16S(Int, Int, Int)
-  I64Load16U(Int, Int, Int)
-  I64Load32S(Int, Int, Int)
-  I64Load32U(Int, Int, Int)
-  I32Store(Int, Int, Int)
-  I64Store(Int, Int, Int)
-  F32Store(Int, Int, Int)
-  F64Store(Int, Int, Int)
-  I32Store8(Int, Int, Int)
-  I32Store16(Int, Int, Int)
-  I64Store8(Int, Int, Int)
-  I64Store16(Int, Int, Int)
-  I64Store32(Int, Int, Int)
+  // offset is Int64 to support memory64 64-bit offsets
+  I32Load(Int, Int, Int64) // memidx, align, offset
+  I64Load(Int, Int, Int64)
+  F32Load(Int, Int, Int64)
+  F64Load(Int, Int, Int64)
+  I32Load8S(Int, Int, Int64)
+  I32Load8U(Int, Int, Int64)
+  I32Load16S(Int, Int, Int64)
+  I32Load16U(Int, Int, Int64)
+  I64Load8S(Int, Int, Int64)
+  I64Load8U(Int, Int, Int64)
+  I64Load16S(Int, Int, Int64)
+  I64Load16U(Int, Int, Int64)
+  I64Load32S(Int, Int, Int64)
+  I64Load32U(Int, Int, Int64)
+  I32Store(Int, Int, Int64)
+  I64Store(Int, Int, Int64)
+  F32Store(Int, Int, Int64)
+  F64Store(Int, Int, Int64)
+  I32Store8(Int, Int, Int64)
+  I32Store16(Int, Int, Int64)
+  I64Store8(Int, Int, Int64)
+  I64Store16(Int, Int, Int64)
+  I64Store32(Int, Int, Int64)
   MemorySize(Int) // memidx
   MemoryGrow(Int) // memidx
   MemoryInit(Int, Int) // memidx, data segment index
@@ -647,22 +648,35 @@ fn ValueType::structurally_equal(
 
 ///|
 /// Limits for memory and tables
+/// Uses Int64 to support memory64 proposal (limits up to 2^48 pages)
 pub(all) struct Limits {
-  min : Int
-  max : Int?
+  min : Int64
+  max : Int64?
 } derive(Eq, Show)
 
 ///|
 /// Memory type
 pub(all) struct MemoryType {
   limits : Limits
+  is_memory64 : Bool // true for i64-indexed memory (memory64 proposal)
 } derive(Eq, Show)
+
+///|
+/// Get the address type for this memory (I32 for 32-bit, I64 for 64-bit)
+pub fn MemoryType::addr_type(self : MemoryType) -> ValueType {
+  if self.is_memory64 {
+    I64
+  } else {
+    I32
+  }
+}
 
 ///|
 /// Table type
 pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
+  is_table64 : Bool // true for table64 (i64-indexed table)
 } derive(Eq, Show)
 
 ///|

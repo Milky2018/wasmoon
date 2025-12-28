@@ -1047,10 +1047,10 @@ fn Parser::parse_plain_instruction(
 ///|
 fn parse_mem_arg(
   parser : Parser,
-  instr : (Int, Int, Int) -> @types.Instruction,
+  instr : (Int, Int, Int64) -> @types.Instruction,
 ) -> @types.Instruction raise WatError {
   let mut memidx = 0
-  let mut offset = 0
+  let mut offset = 0L
   let mut align = 0
   // Multi-memory: Parse optional memory index (e.g., $mem1 or 0)
   match parser.current.token {
@@ -1096,8 +1096,8 @@ fn parse_mem_arg(
           for i in 7..<s.length() {
             offset_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
-          // Use parse_u32 for offset (can be up to 0xFFFFFFFF)
-          offset = parse_u32(offset_str.to_string())
+          // Use parse_u64 for offset (memory64 supports 64-bit offsets)
+          offset = parse_u64(offset_str.to_string())
           parser.advance()
         } else if s.has_prefix("align=") {
           let align_str = StringBuilder::new()

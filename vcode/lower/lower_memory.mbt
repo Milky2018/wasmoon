@@ -91,6 +91,9 @@ fn lower_memory_grow(
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
+  // Check if result type is I64 (memory64)
+  let is_memory64 = result.ty is @ir.Type::I64
+
   // Lower to a C call (v4 helper with memidx):
   //   wasmoon_jit_memory_grow_v4(vmctx, memidx, delta, max_pages) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -105,13 +108,29 @@ fn lower_memory_grow(
   let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
   let max_pages_value = max_pages.unwrap_or(0)
   let max_pages_vreg = materialize_imm(ctx, block, max_pages_value.to_int64())
+
+  // For memory64, use a temporary vreg for the i32 result, then sign-extend to i64
+  let call_result_vreg = if is_memory64 {
+    ctx.vcode_func.new_vreg(Int)
+  } else {
+    result_vreg
+  }
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
     [vmctx_vreg, memidx_vreg, delta_vreg, max_pages_vreg],
-    Some(result_vreg),
+    Some(call_result_vreg),
   )
+
+  // For memory64, sign-extend the i32 result to i64
+  // This handles -1 (failure) properly: 0xFFFFFFFF -> 0xFFFFFFFFFFFFFFFF
+  if is_memory64 {
+    let extend_inst = @instr.VCodeInst::new(Extend(Signed32To64))
+    extend_inst.add_def({ reg: Virtual(result_vreg) })
+    extend_inst.add_use(Virtual(call_result_vreg))
+    block.add_inst(extend_inst)
+  }
 }
 
 ///|
@@ -128,6 +147,9 @@ fn lower_memory_size(
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
+  // Check if result type is I64 (memory64)
+  let is_memory64 = result.ty is @ir.Type::I64
+
   // Lower to a C call (v4 helper with memidx):
   //   wasmoon_jit_memory_size_v4(vmctx, memidx) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -140,13 +162,29 @@ fn lower_memory_size(
   vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
   block.add_inst(vmctx_mov)
   let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
+
+  // For memory64, use a temporary vreg for the i32 result, then zero-extend to i64
+  // (memory.size is always non-negative, so zero-extend is fine)
+  let call_result_vreg = if is_memory64 {
+    ctx.vcode_func.new_vreg(Int)
+  } else {
+    result_vreg
+  }
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
     [vmctx_vreg, memidx_vreg],
-    Some(result_vreg),
+    Some(call_result_vreg),
   )
+
+  // For memory64, zero-extend the i32 result to i64
+  if is_memory64 {
+    let extend_inst = @instr.VCodeInst::new(Extend(Unsigned32To64))
+    extend_inst.add_def({ reg: Virtual(result_vreg) })
+    extend_inst.add_use(Virtual(call_result_vreg))
+    block.add_inst(extend_inst)
+  }
 }
 
 ///|

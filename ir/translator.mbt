@@ -28,6 +28,9 @@ pub(all) struct Translator {
   func_result_types : Array[Type]
   // Memory max pages limit (None = no limit)
   memory_max : Int?
+  // Memory is 64-bit indexed (for memory64 proposal)
+  // memory_is_64[i] = true if memory i uses 64-bit addresses
+  memory_is_64 : Array[Bool]
   // Table base offsets for multi-table support
   // table_base_offsets[i] = starting index of table i in the flattened indirect_table
   table_base_offsets : Array[Int]
@@ -59,6 +62,9 @@ pub(all) struct Translator {
   tags : Array[@types.TagType]
   // Depth of nested try_table blocks - when > 0, need to spill locals before calls
   mut try_table_depth : Int
+  // Table is 64-bit indexed (for table64 proposal)
+  // table_is_64[i] = true if table i uses 64-bit indices
+  table_is_64 : Array[Bool]
 }
 
 ///|
@@ -80,6 +86,7 @@ pub fn Translator::new(
   num_imports : Int,
   import_func_type_indices : Array[Int],
   memory_max? : Int? = None,
+  memory_is_64? : Array[Bool] = [],
   tables? : Array[@types.Table] = [],
   global_types? : Array[@types.GlobalType] = [],
   type_rec_groups? : Array[Int] = [],
@@ -127,11 +134,13 @@ pub fn Translator::new(
   // table_base_offsets[i] = starting index of table i in the flattened table
   let table_base_offsets : Array[Int] = []
   let table_sizes : Array[Int] = []
+  let table_is_64 : Array[Bool] = []
   let mut offset = 0
   for table in tables {
-    let size = table.type_.limits.min
+    let size = table.type_.limits.min.to_int() // Tables always use 32-bit limits
     table_base_offsets.push(offset)
     table_sizes.push(size)
+    table_is_64.push(table.type_.is_table64)
     offset = offset + size
   }
   // Compute canonical type indices for structural type equivalence
@@ -160,8 +169,10 @@ pub fn Translator::new(
     return_continuation: None,
     func_result_types,
     memory_max,
+    memory_is_64,
     table_base_offsets,
     table_sizes,
+    table_is_64,
     global_types,
     num_wasm_params: func_type.params.length(),
     canonical_type_indices,
@@ -1285,14 +1296,24 @@ fn Translator::translate_instruction(
     // libcalls that are handled in the VCode emit phase
     MemoryGrow(memidx) => {
       let delta = self.pop()
+      let is_mem64 = memidx < self.memory_is_64.length() &&
+        self.memory_is_64[memidx]
       let result = match self.memory_max {
-        Some(max) => self.builder.memory_grow(memidx, delta, max_pages=max)
-        None => self.builder.memory_grow(memidx, delta)
+        Some(max) =>
+          self.builder.memory_grow(
+            memidx,
+            delta,
+            max_pages=max,
+            is_memory64=is_mem64,
+          )
+        None => self.builder.memory_grow(memidx, delta, is_memory64=is_mem64)
       }
       self.push(result)
     }
     MemorySize(memidx) => {
-      let result = self.builder.memory_size(memidx)
+      let is_mem64 = memidx < self.memory_is_64.length() &&
+        self.memory_is_64[memidx]
+      let result = self.builder.memory_size(memidx, is_memory64=is_mem64)
       self.push(result)
     }
     MemoryFill(memidx) => {
@@ -1360,11 +1381,14 @@ fn Translator::translate_instruction(
     TableGet(table_idx) => {
       // Desugar to load from vmctx.tables[table_idx][elem_idx]
       let elem_idx = self.pop()
+      let is_table64 = table_idx < self.table_is_64.length() &&
+        self.table_is_64[table_idx]
       let result = self.func_env.translate_table_get(
         self.builder,
         self.vmctx,
         table_idx,
         elem_idx,
+        is_table64~,
       )
       self.push(result)
     }
@@ -1372,20 +1396,26 @@ fn Translator::translate_instruction(
       // Desugar to store to vmctx.tables[table_idx][elem_idx]
       let value = self.pop()
       let elem_idx = self.pop()
+      let is_table64 = table_idx < self.table_is_64.length() &&
+        self.table_is_64[table_idx]
       self.func_env.translate_table_set(
         self.builder,
         self.vmctx,
         table_idx,
         elem_idx,
         value,
+        is_table64~,
       )
     }
     TableSize(table_idx) => {
       // Desugar to load from vmctx.table_sizes[table_idx]
+      let is_table64 = table_idx < self.table_is_64.length() &&
+        self.table_is_64[table_idx]
       let result = self.func_env.translate_table_size(
         self.builder,
         self.vmctx,
         table_idx,
+        is_table64~,
       )
       self.push(result)
     }

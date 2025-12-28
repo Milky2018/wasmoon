@@ -114,6 +114,57 @@ fn parse_hex_u32(s : String) -> Int raise WatError {
 }
 
 ///|
+/// Parse an unsigned 64-bit integer (for memory64 limits)
+/// Returns Int64 to support memory64 proposal limits
+fn parse_u64(s : String) -> Int64 raise WatError {
+  let trimmed = s
+  if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
+    if trimmed.length() > 2 {
+      let hex_part = StringBuilder::new()
+      for i in 2..<trimmed.length() {
+        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
+      }
+      parse_hex_u64(hex_part.to_string())
+    } else {
+      raise WatError::InvalidNumber(s, default_loc())
+    }
+  } else {
+    // Parse decimal as unsigned 64-bit
+    let u64 = @strconv.parse_uint64(trimmed) catch {
+      _ => raise WatError::InvalidNumber(s, default_loc())
+    }
+    u64.reinterpret_as_int64()
+  }
+}
+
+///|
+fn parse_hex_u64(s : String) -> Int64 raise WatError {
+  let mut result : UInt64 = 0UL
+  let mut overflow = false
+  for i in 0..<s.length() {
+    let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue // Skip underscores (WAT number separator)
+    }
+    match hex_digit_value(c) {
+      Some(v) => {
+        let new_result = result * 16UL + v.to_int64().reinterpret_as_uint64()
+        // Detect overflow
+        if new_result < result {
+          overflow = true
+        }
+        result = new_result
+      }
+      None => raise WatError::InvalidNumber(s, default_loc())
+    }
+  }
+  if overflow {
+    raise WatError::InvalidNumber(s, default_loc())
+  }
+  result.reinterpret_as_int64()
+}
+
+///|
 fn parse_int64(s : String) -> Int64 raise WatError {
   let trimmed = s
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {

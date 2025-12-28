@@ -1067,14 +1067,14 @@ fn write_mem_instr(
   name : String,
   memidx : Int,
   align : Int,
-  offset : Int,
+  offset : Int64,
 ) -> Unit {
   buf.write_string(name)
   if memidx != 0 {
     buf.write_string(" ")
     buf.write_string(memidx.to_string())
   }
-  if offset != 0 {
+  if offset != 0L {
     buf.write_string(" offset=")
     buf.write_string(offset.to_string())
   }

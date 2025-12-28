@@ -830,7 +830,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
 
   // Validate memory limits
   for mem in ctx.mems {
-    validate_memory_limits(mem.limits)
+    validate_memory_limits(mem)
   }
 
   // Validate table types and limits
@@ -886,8 +886,13 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
           "element segment type \{elem.type_} does not match table element type \{table_elem_type}",
         )
       }
-      // Validate offset expression is a constant expression producing i32
-      validate_const_expr(ctx.globals, offset_expr, @types.ValueType::I32)
+      // Validate offset expression - i32 for table32, i64 for table64
+      let offset_type = if ctx.tables[table_idx].is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      validate_const_expr(ctx.globals, offset_expr, offset_type)
     }
     // Validate each init expression is a constant expression producing the element type
     for init in elem.init {
@@ -1034,7 +1039,7 @@ pub fn validate_module_with_context(
 
   // Validate memory limits
   for mem in ctx.mems {
-    validate_memory_limits(mem.limits) catch {
+    validate_memory_limits(mem) catch {
       e => raise WithContext(ValidationErrorContext::from_error(e))
     }
   }
@@ -1080,8 +1085,13 @@ pub fn validate_module_with_context(
           ),
         )
       }
-      // Validate offset expression is a constant expression producing i32
-      validate_const_expr(ctx.globals, offset_expr, @types.ValueType::I32) catch {
+      // Validate offset expression - i32 for table32, i64 for table64
+      let offset_type = if ctx.tables[table_idx].is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      validate_const_expr(ctx.globals, offset_expr, offset_type) catch {
         e => raise WithContext(ValidationErrorContext::from_error(e))
       }
     }
@@ -1228,23 +1238,37 @@ fn validate_expr_with_offset(
 
 ///|
 /// Validate memory limits according to WASM spec
-fn validate_memory_limits(limits : @types.Limits) -> Unit raise ValidationError {
-  let max_pages = 65536 // 4GiB / 64KiB per page
+fn validate_memory_limits(
+  mem : @types.MemoryType,
+) -> Unit raise ValidationError {
+  let limits = mem.limits
+  // memory32: max 65536 pages (2^16) = 4GB
+  // memory64: max 2^48 pages = 16EB (theoretical, but limit to 2^48 pages)
+  // Note: 2^48 = 281474976710656, but we use the representation that fits in Int64
+  let max_pages : Int64 = if mem.is_memory64 {
+    281474976710656L // 2^48 pages
+  } else {
+    65536L
+  }
+  let error_msg = if mem.is_memory64 {
+    "memory size must be at most 2^48 pages"
+  } else {
+    "memory size must be at most 65536 pages"
+  }
 
   // Check min doesn't exceed max allowed
-  // Use unsigned comparison since limits can be large values that overflow signed Int
-  if limits.min.reinterpret_as_uint() > max_pages.reinterpret_as_uint() {
-    raise InvalidLimits("memory size must be at most 65536 pages")
+  if limits.min.reinterpret_as_uint64() > max_pages.reinterpret_as_uint64() {
+    raise InvalidLimits(error_msg)
   }
 
   // Check max if specified
   if limits.max is Some(max_val) {
-    // max must not exceed allowed maximum (unsigned comparison)
-    if max_val.reinterpret_as_uint() > max_pages.reinterpret_as_uint() {
-      raise InvalidLimits("memory size must be at most 65536 pages")
+    // max must not exceed allowed maximum
+    if max_val.reinterpret_as_uint64() > max_pages.reinterpret_as_uint64() {
+      raise InvalidLimits(error_msg)
     }
     // min must not be greater than max (unsigned comparison)
-    if limits.min.reinterpret_as_uint() > max_val.reinterpret_as_uint() {
+    if limits.min.reinterpret_as_uint64() > max_val.reinterpret_as_uint64() {
       raise InvalidLimits("size minimum must not be greater than maximum")
     }
   }
@@ -1252,13 +1276,41 @@ fn validate_memory_limits(limits : @types.Limits) -> Unit raise ValidationError 
 
 ///|
 /// Validate table limits according to WASM spec
-fn validate_table_limits(limits : @types.Limits) -> Unit raise ValidationError {
+fn validate_table_limits(
+  limits : @types.Limits,
+  is_table64? : Bool = false,
+) -> Unit raise ValidationError {
+  // For table32, min and max must fit in 32 bits (< 2^32)
+  let max_table32_size = 0x100000000L // 2^32
+  if not(is_table64) {
+    if limits.min >= max_table32_size {
+      raise InvalidLimits("table size")
+    }
+    if limits.max is Some(max_val) && max_val >= max_table32_size {
+      raise InvalidLimits("table size")
+    }
+  }
   // Check max if specified
   if limits.max is Some(max_val) {
     // min must not be greater than max (unsigned comparison)
-    if limits.min.reinterpret_as_uint() > max_val.reinterpret_as_uint() {
+    if limits.min.reinterpret_as_uint64() > max_val.reinterpret_as_uint64() {
       raise InvalidLimits("size minimum must not be greater than maximum")
     }
+  }
+}
+
+///|
+/// Validate memory offset for load/store instructions
+/// For memory32, offset must be < 2^32
+fn validate_mem_offset(
+  mem : @types.MemoryType,
+  offset : Int64,
+) -> Unit raise ValidationError {
+  // For memory32, offset must fit in 32 bits (< 2^32)
+  // Use unsigned comparison to handle large values like 0xFFFF_FFFF_FFFF_FFFF
+  let max_offset = 0x100000000L.reinterpret_as_uint64() // 2^32
+  if not(mem.is_memory64) && offset.reinterpret_as_uint64() >= max_offset {
+    raise InvalidLimits("offset out of range")
   }
 }
 
@@ -1279,7 +1331,7 @@ fn validate_table_type(
   func_addrs : Array[Int],
 ) -> Unit raise ValidationError {
   // Validate table limits
-  validate_table_limits(table.type_.limits)
+  validate_table_limits(table.type_.limits, is_table64=table.type_.is_table64)
   // Validate table init expression if present
   if table.init is Some(init_expr) {
     // Validate the init expression produces the correct type
@@ -1683,230 +1735,249 @@ fn validate_instr(
 
     // Memory operations - validate memory index exists
     // Natural alignment: 8-bit=0, 16-bit=1, 32-bit=2, 64-bit=3
-    I32Load(memidx, align, _) => {
+    I32Load(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 2 {
         raise InvalidAlignment(
           "i32.load alignment \{align} exceeds natural alignment 2",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::I32)
     }
-    I32Load8S(memidx, align, _) | I32Load8U(memidx, align, _) => {
+    I32Load8S(memidx, align, offset) | I32Load8U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 0 {
         raise InvalidAlignment(
           "i32.load8 alignment \{align} exceeds natural alignment 0",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::I32)
     }
-    I32Load16S(memidx, align, _) | I32Load16U(memidx, align, _) => {
+    I32Load16S(memidx, align, offset) | I32Load16U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 1 {
         raise InvalidAlignment(
           "i32.load16 alignment \{align} exceeds natural alignment 1",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::I32)
     }
-    I64Load(memidx, align, _) => {
+    I64Load(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 3 {
         raise InvalidAlignment(
           "i64.load alignment \{align} exceeds natural alignment 3",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::I64)
     }
-    I64Load8S(memidx, align, _) | I64Load8U(memidx, align, _) => {
+    I64Load8S(memidx, align, offset) | I64Load8U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 0 {
         raise InvalidAlignment(
           "i64.load8 alignment \{align} exceeds natural alignment 0",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::I64)
     }
-    I64Load16S(memidx, align, _) | I64Load16U(memidx, align, _) => {
+    I64Load16S(memidx, align, offset) | I64Load16U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 1 {
         raise InvalidAlignment(
           "i64.load16 alignment \{align} exceeds natural alignment 1",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::I64)
     }
-    I64Load32S(memidx, align, _) | I64Load32U(memidx, align, _) => {
+    I64Load32S(memidx, align, offset) | I64Load32U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 2 {
         raise InvalidAlignment(
           "i64.load32 alignment \{align} exceeds natural alignment 2",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::I64)
     }
-    F32Load(memidx, align, _) => {
+    F32Load(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 2 {
         raise InvalidAlignment(
           "f32.load alignment \{align} exceeds natural alignment 2",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::F32)
     }
-    F64Load(memidx, align, _) => {
+    F64Load(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 3 {
         raise InvalidAlignment(
           "f64.load alignment \{align} exceeds natural alignment 3",
         )
       }
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
       stack.push(@types.ValueType::F64)
     }
-    I32Store(memidx, align, _) => {
+    I32Store(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 2 {
         raise InvalidAlignment(
           "i32.store alignment \{align} exceeds natural alignment 2",
         )
       }
       stack.pop(@types.ValueType::I32) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
-    I32Store8(memidx, align, _) => {
+    I32Store8(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 0 {
         raise InvalidAlignment(
           "i32.store8 alignment \{align} exceeds natural alignment 0",
         )
       }
       stack.pop(@types.ValueType::I32) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
-    I32Store16(memidx, align, _) => {
+    I32Store16(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 1 {
         raise InvalidAlignment(
           "i32.store16 alignment \{align} exceeds natural alignment 1",
         )
       }
       stack.pop(@types.ValueType::I32) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
-    I64Store(memidx, align, _) => {
+    I64Store(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 3 {
         raise InvalidAlignment(
           "i64.store alignment \{align} exceeds natural alignment 3",
         )
       }
       stack.pop(@types.ValueType::I64) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
-    I64Store8(memidx, align, _) => {
+    I64Store8(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 0 {
         raise InvalidAlignment(
           "i64.store8 alignment \{align} exceeds natural alignment 0",
         )
       }
       stack.pop(@types.ValueType::I64) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
-    I64Store16(memidx, align, _) => {
+    I64Store16(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 1 {
         raise InvalidAlignment(
           "i64.store16 alignment \{align} exceeds natural alignment 1",
         )
       }
       stack.pop(@types.ValueType::I64) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
-    I64Store32(memidx, align, _) => {
+    I64Store32(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 2 {
         raise InvalidAlignment(
           "i64.store32 alignment \{align} exceeds natural alignment 2",
         )
       }
       stack.pop(@types.ValueType::I64) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
-    F32Store(memidx, align, _) => {
+    F32Store(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 2 {
         raise InvalidAlignment(
           "f32.store alignment \{align} exceeds natural alignment 2",
         )
       }
       stack.pop(@types.ValueType::F32) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
-    F64Store(memidx, align, _) => {
+    F64Store(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      validate_mem_offset(ctx.mems[memidx], offset)
       if align > 3 {
         raise InvalidAlignment(
           "f64.store alignment \{align} exceeds natural alignment 3",
         )
       }
       stack.pop(@types.ValueType::F64) // value
-      stack.pop(@types.ValueType::I32) // address
+      stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     MemorySize(memidx) | MemoryGrow(memidx) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
+      let addr_type = ctx.mems[memidx].addr_type()
       if instr is MemoryGrow(_) {
-        stack.pop(@types.ValueType::I32) // delta
+        stack.pop(addr_type) // delta
       }
-      stack.push(@types.ValueType::I32)
+      stack.push(addr_type)
     }
     MemoryInit(memidx, data_idx) => {
       if memidx >= ctx.mems.length() {
@@ -1915,9 +1986,10 @@ fn validate_instr(
       if data_idx >= ctx.data_count {
         raise InvalidDataIndex(data_idx)
       }
-      stack.pop(@types.ValueType::I32) // n
-      stack.pop(@types.ValueType::I32) // s
-      stack.pop(@types.ValueType::I32) // d
+      let addr_type = ctx.mems[memidx].addr_type()
+      stack.pop(@types.ValueType::I32) // n (always i32 for data segment offset)
+      stack.pop(@types.ValueType::I32) // s (always i32 for data segment offset)
+      stack.pop(addr_type) // d (memory address)
     }
     DataDrop(data_idx) =>
       if data_idx >= ctx.data_count {
@@ -1930,17 +2002,27 @@ fn validate_instr(
       if src >= ctx.mems.length() {
         raise InvalidMemoryIndex(src)
       }
-      stack.pop(@types.ValueType::I32) // n
-      stack.pop(@types.ValueType::I32) // s
-      stack.pop(@types.ValueType::I32) // d
+      let dst_addr_type = ctx.mems[dst].addr_type()
+      let src_addr_type = ctx.mems[src].addr_type()
+      // n uses the larger of the two address types
+      let n_type = if dst_addr_type == @types.ValueType::I64 ||
+        src_addr_type == @types.ValueType::I64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(n_type) // n
+      stack.pop(src_addr_type) // s
+      stack.pop(dst_addr_type) // d
     }
     MemoryFill(memidx) => {
       if memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      stack.pop(@types.ValueType::I32) // n
-      stack.pop(@types.ValueType::I32) // val
-      stack.pop(@types.ValueType::I32) // d
+      let addr_type = ctx.mems[memidx].addr_type()
+      stack.pop(addr_type) // n
+      stack.pop(@types.ValueType::I32) // val (always i32)
+      stack.pop(addr_type) // d
     }
 
     // Table operations
@@ -1948,32 +2030,66 @@ fn validate_instr(
       if idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
-      stack.pop(@types.ValueType::I32) // index
-      stack.push(ctx.tables[idx].elem_type)
+      let table = ctx.tables[idx]
+      let idx_type = if table.is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(idx_type) // index
+      stack.push(table.elem_type)
     }
     TableSet(idx) => {
       if idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
-      stack.pop(ctx.tables[idx].elem_type) // value
-      stack.pop(@types.ValueType::I32) // index
+      let table = ctx.tables[idx]
+      let idx_type = if table.is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(table.elem_type) // value
+      stack.pop(idx_type) // index
     }
-    TableSize(_) => stack.push(@types.ValueType::I32)
+    TableSize(idx) => {
+      if idx >= ctx.tables.length() {
+        raise InvalidTableIndex(idx)
+      }
+      let table = ctx.tables[idx]
+      if table.is_table64 {
+        stack.push(@types.ValueType::I64)
+      } else {
+        stack.push(@types.ValueType::I32)
+      }
+    }
     TableGrow(idx) => {
       if idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
-      stack.pop(@types.ValueType::I32) // delta
-      stack.pop(ctx.tables[idx].elem_type) // init value
-      stack.push(@types.ValueType::I32) // old size or -1
+      let table = ctx.tables[idx]
+      let idx_type = if table.is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(idx_type) // delta
+      stack.pop(table.elem_type) // init value
+      stack.push(idx_type) // old size or -1
     }
     TableFill(idx) => {
       if idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
-      stack.pop(@types.ValueType::I32) // n
-      stack.pop(ctx.tables[idx].elem_type) // value
-      stack.pop(@types.ValueType::I32) // i
+      let table = ctx.tables[idx]
+      let idx_type = if table.is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(idx_type) // n
+      stack.pop(table.elem_type) // value
+      stack.pop(idx_type) // i
     }
     TableCopy(dst_idx, src_idx) => {
       if dst_idx >= ctx.tables.length() {
@@ -1983,16 +2099,36 @@ fn validate_instr(
         raise InvalidTableIndex(src_idx)
       }
       // Check that source element type is subtype of destination element type
-      let dst_elem_type = ctx.tables[dst_idx].elem_type
-      let src_elem_type = ctx.tables[src_idx].elem_type
-      if not(is_type_subtype(src_elem_type, dst_elem_type)) {
+      let dst_table = ctx.tables[dst_idx]
+      let src_table = ctx.tables[src_idx]
+      if not(is_type_subtype(src_table.elem_type, dst_table.elem_type)) {
         raise TypeMismatch(
-          "table.copy: source element type \{src_elem_type} is not subtype of destination element type \{dst_elem_type}",
+          "table.copy: source element type \{src_table.elem_type} is not subtype of destination element type \{dst_table.elem_type}",
         )
       }
-      stack.pop(@types.ValueType::I32) // n
-      stack.pop(@types.ValueType::I32) // s
-      stack.pop(@types.ValueType::I32) // d
+      // Length uses i64 only if BOTH tables are table64 (minimum of both types)
+      let len_type = if dst_table.is_table64 && src_table.is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(len_type) // n
+      // Source index uses source table's index type
+      stack.pop(
+        if src_table.is_table64 {
+          @types.ValueType::I64
+        } else {
+          @types.ValueType::I32
+        },
+      ) // s
+      // Dest index uses dest table's index type
+      stack.pop(
+        if dst_table.is_table64 {
+          @types.ValueType::I64
+        } else {
+          @types.ValueType::I32
+        },
+      ) // d
     }
     TableInit(table_idx, elem_idx) => {
       // Validate table and elem indices
@@ -2003,16 +2139,23 @@ fn validate_instr(
         raise InvalidElemIndex(elem_idx)
       }
       // Check elem segment type matches table element type
-      let table_elem_type = ctx.tables[table_idx].elem_type
+      let table = ctx.tables[table_idx]
       let elem_type = ctx.elems[elem_idx]
-      if elem_type != table_elem_type {
+      if elem_type != table.elem_type {
         raise TypeMismatch(
-          "element segment type \{elem_type} does not match table element type \{table_elem_type}",
+          "element segment type \{elem_type} does not match table element type \{table.elem_type}",
         )
       }
-      stack.pop(@types.ValueType::I32) // n
-      stack.pop(@types.ValueType::I32) // s
-      stack.pop(@types.ValueType::I32) // d
+      // For table64: d uses table's index type, s and n are always i32
+      // (s is offset into elem segment, n is count - both use i32 since elem is i32-indexed)
+      let idx_type = if table.is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(@types.ValueType::I32) // n (always i32 - elem segments are i32-indexed)
+      stack.pop(@types.ValueType::I32) // s (always i32 - offset into elem segment)
+      stack.pop(idx_type) // d (table's index type)
     }
     ElemDrop(elem_idx) =>
       if elem_idx >= ctx.elems.length() {
@@ -2151,16 +2294,22 @@ fn validate_instr(
         raise InvalidTableIndex(table_idx)
       }
       // call_indirect requires a funcref table
-      let table_type = ctx.tables[table_idx]
-      if table_type.elem_type != @types.ValueType::FuncRef {
+      let table = ctx.tables[table_idx]
+      if table.elem_type != @types.ValueType::FuncRef {
         raise TypeMismatch(
-          "call_indirect requires funcref table, got \{table_type.elem_type}",
+          "call_indirect requires funcref table, got \{table.elem_type}",
         )
       }
       if type_idx < 0 || type_idx >= ctx.types.length() {
         raise InvalidTypeIndex(type_idx)
       }
-      stack.pop(@types.ValueType::I32) // table index
+      // Table index uses i64 for table64
+      let idx_type = if table.is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(idx_type) // table index
       let func_type = ctx.get_func_type(type_idx)
       let num_ci_params = func_type.params.length()
       for offset in 0..<num_ci_params {
@@ -2220,16 +2369,22 @@ fn validate_instr(
         raise InvalidTableIndex(table_idx)
       }
       // return_call_indirect requires a funcref table
-      let table_type = ctx.tables[table_idx]
-      if table_type.elem_type != @types.ValueType::FuncRef {
+      let table = ctx.tables[table_idx]
+      if table.elem_type != @types.ValueType::FuncRef {
         raise TypeMismatch(
-          "return_call_indirect requires funcref table, got \{table_type.elem_type}",
+          "return_call_indirect requires funcref table, got \{table.elem_type}",
         )
       }
       if type_idx < 0 || type_idx >= ctx.types.length() {
         raise InvalidTypeIndex(type_idx)
       }
-      stack.pop(@types.ValueType::I32) // table index
+      // Table index uses i64 for table64
+      let idx_type = if table.is_table64 {
+        @types.ValueType::I64
+      } else {
+        @types.ValueType::I32
+      }
+      stack.pop(idx_type) // table index
       let func_type = ctx.get_func_type(type_idx)
       let num_params = func_type.params.length()
       for offset in 0..<num_params {

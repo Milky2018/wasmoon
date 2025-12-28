@@ -76,7 +76,7 @@ fn run_explore(
 
   // Get memory max limit from module (if memory is defined)
   let memory_max : Int? = if mod_.memories.length() > 0 {
-    mod_.memories[0].limits.max
+    mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
   } else {
     None
   }
@@ -133,6 +133,9 @@ fn run_explore(
       }
     }
 
+    // Build memory_is_64 array for memory64 support
+    let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
+
     // Stage 2: IR (SSA form)
     let translator = @ir.Translator::new(
       "func_\{func_idx}",
@@ -143,6 +146,7 @@ fn run_explore(
       num_imports,
       import_func_type_indices,
       memory_max~,
+      memory_is_64~,
       tables=mod_.tables,
       global_types~,
       type_rec_groups=mod_.type_rec_groups,

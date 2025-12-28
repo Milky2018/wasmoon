@@ -31,7 +31,7 @@ test "disassemble module with types" {
 ///|
 test "disassemble module with memory" {
   let mod_ = @types.Module::new()
-  mod_.memories.push({ limits: { min: 1, max: None } })
+  mod_.memories.push({ limits: { min: 1, max: None }, is_memory64: false })
   let result = disassemble(mod_)
   let expected =
     #|(module
@@ -44,7 +44,7 @@ test "disassemble module with memory" {
 ///|
 test "disassemble module with memory and max" {
   let mod_ = @types.Module::new()
-  mod_.memories.push({ limits: { min: 1, max: Some(16) } })
+  mod_.memories.push({ limits: { min: 1, max: Some(16) }, is_memory64: false })
   let result = disassemble(mod_)
   let expected =
     #|(module

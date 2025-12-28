@@ -295,6 +295,22 @@ fn Parser::parse_u32(self : Parser) -> Int raise WatError {
 }
 
 ///|
+/// Parse a u64 number (for memory64 limits)
+fn Parser::parse_u64(self : Parser) -> Int64 raise WatError {
+  match self.current.token {
+    Number(s) => {
+      self.advance()
+      parse_u64(s)
+    }
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected number, got \{self.current}",
+        self.loc(),
+      )
+  }
+}
+
+///|
 fn Parser::parse_i32(self : Parser) -> Int raise WatError {
   match self.current.token {
     Number(s) => {
