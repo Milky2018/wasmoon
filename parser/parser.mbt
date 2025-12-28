@@ -33,6 +33,34 @@ suberror ParserError {
   ParseError(String) // Generic error with message
 }
 
+// ============================================================
+// Limits flags constants
+// ============================================================
+
+// Common flags
+
+///|
+const LIMITS_NO_MAX : Int = 0x00
+
+///|
+const LIMITS_HAS_MAX : Int = 0x01
+
+// Memory-specific flags
+
+///|
+const LIMITS_SHARED : Int = 0x03 // shared, has max (memory only)
+
+// 64-bit flags
+
+///|
+const LIMITS_64_NO_MAX : Int = 0x04
+
+///|
+const LIMITS_64_HAS_MAX : Int = 0x05
+
+///|
+const LIMITS_64_SHARED : Int = 0x07 // shared, has max, 64-bit (memory only)
+
 ///|
 /// Convert int to hex string
 fn int_to_hex(n : Int) -> String {
@@ -318,6 +346,30 @@ fn Parser::read_leb128_i64(self : Parser) -> Int64 raise ParserError {
   }
 }
 
+///|
+/// Decode unsigned LEB128 u64
+fn Parser::read_leb128_u64(self : Parser) -> Int64 raise ParserError {
+  loop (0L, 0) {
+    (result, shift) => {
+      if shift > 63 {
+        raise LEB128TooLarge
+      }
+      let byte = self.read_byte()
+      // For the 10th byte (shift=63), only bit 0 can be used for u64
+      // If any other bit is set, it would overflow u64
+      if shift == 63 && (byte & 0x7E) != 0 {
+        raise LEB128TooLarge
+      }
+      let new_result = result | (byte.land(0x7F).to_int64() << shift)
+      if (byte & 0x80) == 0 {
+        new_result
+      } else {
+        continue (new_result, shift + 7)
+      }
+    }
+  }
+}
+
 // ============================================================
 // Basic Type Parsing
 // ============================================================
@@ -329,11 +381,18 @@ fn Parser::read_u32(self : Parser) -> Int raise ParserError {
 }
 
 ///|
+/// Read a u64
+fn Parser::read_u64(self : Parser) -> Int64 raise ParserError {
+  self.read_leb128_u64()
+}
+
+///|
 /// Read memory argument (memidx, align, offset) with validation
 /// Multi-memory: if bit 6 of flags is set, memory index follows
 /// Alignment values >= 32 are reserved and should be rejected as malformed
 /// The flags byte must not have continuation bit set (must fit in single byte)
-fn Parser::read_memarg(self : Parser) -> (Int, Int, Int) raise ParserError {
+/// offset is read as u64 to support memory64 64-bit offsets
+fn Parser::read_memarg(self : Parser) -> (Int, Int, Int64) raise ParserError {
   // Read first byte directly - must not have continuation bit (0x80) set
   let flags_byte = self.read_byte()
   if (flags_byte & 0x80) != 0 {
@@ -348,7 +407,8 @@ fn Parser::read_memarg(self : Parser) -> (Int, Int, Int) raise ParserError {
   if align >= 32 {
     raise MalformedMemopFlags
   }
-  let offset = self.read_leb128_u32()
+  // Read offset as u64 to support memory64 64-bit offsets
+  let offset = self.read_leb128_u64()
   (memidx, align, offset)
 }
 
@@ -587,26 +647,6 @@ fn Parser::read_func_type(self : Parser) -> @types.FuncType raise ParserError {
 }
 
 // ============================================================
-// Limits Parsing
-// ============================================================
-
-///|
-fn Parser::read_limits(self : Parser) -> @types.Limits raise ParserError {
-  let flags = self.read_byte()
-  // Valid flags: 0x00 (no max), 0x01 (has max), 0x03 (shared memory with max)
-  if flags != 0x00 && flags != 0x01 && flags != 0x03 {
-    raise MalformedLimitsFlags(flags)
-  }
-  let min = self.read_u32()
-  let max = if flags == 0x01 || flags == 0x03 {
-    Some(self.read_u32())
-  } else {
-    None
-  }
-  { min, max }
-}
-
-// ============================================================
 // Table and Memory Type Parsing
 // ============================================================
 
@@ -622,15 +662,15 @@ fn Parser::read_table(self : Parser) -> @types.Table raise ParserError {
       raise MalformedReferenceType(second_byte)
     }
     let elem_type = self.read_value_type()
-    let limits = self.read_limits()
+    let (limits, is_table64) = self.read_table_limits()
     // Read the initialization expression
     let init = self.read_expr()
-    { type_: { elem_type, limits }, init: Some(init) }
+    { type_: { elem_type, limits, is_table64 }, init: Some(init) }
   } else {
     // Standard encoding: reftype limits
     let elem_type = self.read_value_type()
-    let limits = self.read_limits()
-    { type_: { elem_type, limits }, init: None }
+    let (limits, is_table64) = self.read_table_limits()
+    { type_: { elem_type, limits, is_table64 }, init: None }
   }
 }
 
@@ -638,16 +678,87 @@ fn Parser::read_table(self : Parser) -> @types.Table raise ParserError {
 fn Parser::read_table_type(self : Parser) -> @types.TableType raise ParserError {
   // For imports, we just need the table type (no init expression)
   let elem_type = self.read_value_type()
-  let limits = self.read_limits()
-  { elem_type, limits }
+  let (limits, is_table64) = self.read_table_limits()
+  { elem_type, limits, is_table64 }
+}
+
+///|
+/// Read table limits with table64 support
+/// Returns (limits, is_table64)
+fn Parser::read_table_limits(
+  self : Parser,
+) -> (@types.Limits, Bool) raise ParserError {
+  // Table limits flags:
+  // Bit 0: has max (0x01)
+  // Bit 2: table64 (0x04)
+  // Valid combinations: 0x00, 0x01, 0x04, 0x05
+  // Tables don't support shared bit (0x02)
+  let flags = self.read_byte()
+  let valid_table_flags : FixedArray[Int] = [
+    LIMITS_NO_MAX,
+    LIMITS_HAS_MAX,
+    LIMITS_64_NO_MAX,
+    LIMITS_64_HAS_MAX,
+  ]
+  if not(valid_table_flags.contains(flags)) {
+    raise MalformedLimitsFlags(flags)
+  }
+  let has_max = (flags & LIMITS_HAS_MAX) != 0
+  let is_table64 = (flags & LIMITS_64_NO_MAX) != 0
+
+  // Read min/max based on table64 flag
+  let (min, max) = if is_table64 {
+    let min = self.read_leb128_u64()
+    let max = if has_max { Some(self.read_leb128_u64()) } else { None }
+    (min, max)
+  } else {
+    let min = self.read_leb128_u32().to_int64()
+    let max = if has_max {
+      Some(self.read_leb128_u32().to_int64())
+    } else {
+      None
+    }
+    (min, max)
+  }
+  ({ min, max }, is_table64)
 }
 
 ///|
 fn Parser::read_memory_type(
   self : Parser,
 ) -> @types.MemoryType raise ParserError {
-  let limits = self.read_limits()
-  { limits, }
+  // Memory type flags:
+  // Bit 0: has max (0x01)
+  // Bit 1: shared (0x02) - only valid with has max
+  // Bit 2: memory64 (0x04)
+  // Valid combinations: 0x00, 0x01, 0x03, 0x04, 0x05, 0x07
+  let flags = self.read_byte()
+  let has_max = (flags & LIMITS_HAS_MAX) != 0
+  let is_memory64 = (flags & LIMITS_64_NO_MAX) != 0
+  // Validate flags
+  let valid_memory_flags : FixedArray[Int] = [
+    LIMITS_NO_MAX,
+    LIMITS_HAS_MAX,
+    LIMITS_SHARED,
+    LIMITS_64_NO_MAX,
+    LIMITS_64_HAS_MAX,
+    LIMITS_64_SHARED,
+  ]
+  if not(valid_memory_flags.contains(flags)) {
+    raise MalformedLimitsFlags(flags)
+  }
+  // Read limits - for memory64, use u64; for memory32, use u32
+  let min = if is_memory64 {
+    self.read_u64()
+  } else {
+    self.read_u32().to_int64()
+  }
+  let max = if has_max {
+    Some(if is_memory64 { self.read_u64() } else { self.read_u32().to_int64() })
+  } else {
+    None
+  }
+  { limits: { min, max }, is_memory64 }
 }
 
 ///|

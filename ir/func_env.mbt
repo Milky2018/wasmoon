@@ -149,6 +149,7 @@ pub fn FuncEnvironment::translate_table_size(
   builder : IRBuilder,
   vmctx : Value,
   table_idx : Int,
+  is_table64? : Bool = false,
 ) -> Value {
   if table_idx == 0 {
     // Fast path for table 0
@@ -157,7 +158,12 @@ pub fn FuncEnvironment::translate_table_size(
       VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64(),
     )
     let size_i64 = builder.load_ptr(Type::I64, vmctx, offset)
-    builder.ireduce(Type::I32, size_i64)
+    // For table64, return i64; for table32, reduce to i32
+    if is_table64 {
+      size_i64
+    } else {
+      builder.ireduce(Type::I32, size_i64)
+    }
   } else {
     // General path: load from table_sizes array
     let sizes_offset = builder.iconst(
@@ -167,7 +173,11 @@ pub fn FuncEnvironment::translate_table_size(
     let sizes_ptr = builder.load_ptr(Type::I64, vmctx, sizes_offset)
     let elem_offset = builder.iconst(Type::I64, (table_idx * 8).to_int64())
     let size_i64 = builder.load_ptr(Type::I64, sizes_ptr, elem_offset)
-    builder.ireduce(Type::I32, size_i64)
+    if is_table64 {
+      size_i64
+    } else {
+      builder.ireduce(Type::I32, size_i64)
+    }
   }
 }
 
@@ -183,6 +193,7 @@ pub fn FuncEnvironment::translate_table_get(
   vmctx : Value,
   table_idx : Int,
   elem_idx : Value,
+  is_table64? : Bool = false,
 ) -> Value {
   // Get table size for bounds check
   let (table_size, table_base) = if table_idx == 0 {
@@ -217,7 +228,12 @@ pub fn FuncEnvironment::translate_table_get(
   }
 
   // Bounds check: trap if elem_idx >= table_size
-  let elem_idx_i64 = builder.uextend(Type::I64, elem_idx)
+  // For table64, elem_idx is already i64; for table32, extend to i64
+  let elem_idx_i64 = if is_table64 {
+    elem_idx
+  } else {
+    builder.uextend(Type::I64, elem_idx)
+  }
   let in_bounds = builder.icmp(IntCC::Ult, elem_idx_i64, table_size)
 
   // Create trap and continue blocks
@@ -255,6 +271,7 @@ pub fn FuncEnvironment::translate_table_set(
   table_idx : Int,
   elem_idx : Value,
   value : Value,
+  is_table64? : Bool = false,
 ) -> Unit {
   // Get table size for bounds check
   let (table_size, table_base) = if table_idx == 0 {
@@ -287,7 +304,12 @@ pub fn FuncEnvironment::translate_table_set(
   }
 
   // Bounds check
-  let elem_idx_i64 = builder.uextend(Type::I64, elem_idx)
+  // For table64, elem_idx is already i64; for table32, extend to i64
+  let elem_idx_i64 = if is_table64 {
+    elem_idx
+  } else {
+    builder.uextend(Type::I64, elem_idx)
+  }
   let in_bounds = builder.icmp(IntCC::Ult, elem_idx_i64, table_size)
   let trap_block = builder.create_block()
   let continue_block = builder.create_block()
@@ -378,7 +400,7 @@ pub fn FuncEnvironment::translate_memory_load(
   memidx : Int,
   ty : Type,
   wasm_addr : Value,
-  offset : Int,
+  offset : Int64,
 ) -> Value {
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
@@ -389,9 +411,8 @@ pub fn FuncEnvironment::translate_memory_load(
   let addr_i64 = builder.uextend(Type::I64, wasm_addr)
 
   // Calculate end address for bounds check: addr + offset + access_size
-  // Note: offset is u32 in WASM, so treat it as unsigned when extending to 64-bit
-  let offset_u64 = offset.reinterpret_as_uint().to_int64()
-  let offset_val = builder.iconst(Type::I64, offset_u64)
+  // offset is Int64 (supports memory64 64-bit offsets)
+  let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   let size_val = builder.iconst(Type::I64, access_size.to_int64())
   let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -429,7 +450,7 @@ pub fn FuncEnvironment::translate_memory_store(
   ty : Type,
   wasm_addr : Value,
   value : Value,
-  offset : Int,
+  offset : Int64,
 ) -> Unit {
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
@@ -440,9 +461,8 @@ pub fn FuncEnvironment::translate_memory_store(
   let addr_i64 = builder.uextend(Type::I64, wasm_addr)
 
   // Calculate end address for bounds check: addr + offset + access_size
-  // Note: offset is u32 in WASM, so treat it as unsigned when extending to 64-bit
-  let offset_u64 = offset.reinterpret_as_uint().to_int64()
-  let offset_val = builder.iconst(Type::I64, offset_u64)
+  // offset is Int64 (supports memory64 64-bit offsets)
+  let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   let size_val = builder.iconst(Type::I64, access_size.to_int64())
   let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -477,7 +497,7 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   narrow_bits : Int,
   signed : Bool,
   wasm_addr : Value,
-  offset : Int,
+  offset : Int64,
 ) -> Value {
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
@@ -488,9 +508,8 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   let addr_i64 = builder.uextend(Type::I64, wasm_addr)
 
   // Calculate end address for bounds check
-  // Note: offset is u32 in WASM, so treat it as unsigned when extending to 64-bit
-  let offset_u64 = offset.reinterpret_as_uint().to_int64()
-  let offset_val = builder.iconst(Type::I64, offset_u64)
+  // offset is Int64 (supports memory64 64-bit offsets)
+  let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   let size_val = builder.iconst(Type::I64, access_size.to_int64())
   let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -526,7 +545,7 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   narrow_bits : Int,
   wasm_addr : Value,
   value : Value,
-  offset : Int,
+  offset : Int64,
 ) -> Unit {
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
@@ -537,9 +556,8 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   let addr_i64 = builder.uextend(Type::I64, wasm_addr)
 
   // Calculate end address for bounds check
-  // Note: offset is u32 in WASM, so treat it as unsigned when extending to 64-bit
-  let offset_u64 = offset.reinterpret_as_uint().to_int64()
-  let offset_val = builder.iconst(Type::I64, offset_u64)
+  // offset is Int64 (supports memory64 64-bit offsets)
+  let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   let size_val = builder.iconst(Type::I64, access_size.to_int64())
   let end_addr = builder.iadd(addr_plus_offset, size_val)

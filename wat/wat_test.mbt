@@ -876,3 +876,265 @@ test "parse struct.get with field name" {
   inspect(body[0], content="LocalGet(0)")
   inspect(body[1], content="StructGet(0, 1)")
 }
+
+// ============================================================
+// Memory64 Tests
+// ============================================================
+
+///|
+test "parse memory64 basic" {
+  // Memory64: (memory i64 min)
+  let wat =
+    #|(module
+    #|  (memory i64 1)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.memories.length(), content="1")
+  inspect(mod_.memories[0].limits.min, content="1")
+  inspect(mod_.memories[0].is_memory64, content="true")
+}
+
+///|
+test "parse memory64 with max" {
+  // Memory64: (memory i64 min max)
+  let wat =
+    #|(module
+    #|  (memory i64 1 16)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.memories[0].limits.min, content="1")
+  inspect(mod_.memories[0].limits.max, content="Some(16)")
+  inspect(mod_.memories[0].is_memory64, content="true")
+}
+
+///|
+test "parse memory32 default" {
+  // Default is memory32 (no i64 keyword)
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.memories[0].is_memory64, content="false")
+}
+
+///|
+test "parse memory64 with export" {
+  let wat =
+    #|(module
+    #|  (memory (export "mem64") i64 1)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.memories[0].is_memory64, content="true")
+  inspect(mod_.exports.length(), content="1")
+  inspect(mod_.exports[0].name, content="mem64")
+}
+
+///|
+test "parse memory64 import" {
+  let wat =
+    #|(module
+    #|  (import "env" "mem" (memory i64 1 2))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.imports.length(), content="1")
+  inspect(mod_.imports[0].mod_name, content="env")
+  inspect(mod_.imports[0].name, content="mem")
+  if mod_.imports[0].desc is @types.ImportDesc::Memory(mem_type) {
+    inspect(mem_type.is_memory64, content="true")
+    inspect(mem_type.limits.min, content="1")
+    inspect(mem_type.limits.max, content="Some(2)")
+  } else {
+    panic()
+  }
+}
+
+///|
+test "parse memory64 data segment with i64 offset" {
+  let wat =
+    #|(module
+    #|  (memory i64 1)
+    #|  (data (i64.const 0x100) "test")
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.memories[0].is_memory64, content="true")
+  inspect(mod_.datas.length(), content="1")
+  // Offset should be i64.const
+  inspect(mod_.datas[0].offset[0], content="I64Const(256)")
+}
+
+// ============================================================
+// Table64 Tests
+// ============================================================
+
+///|
+test "parse table64 basic" {
+  // Table64: (table i64 min reftype)
+  let wat =
+    #|(module
+    #|  (table i64 1 funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables.length(), content="1")
+  inspect(mod_.tables[0].type_.limits.min, content="1")
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+}
+
+///|
+test "parse table64 with max" {
+  // Table64: (table i64 min max reftype)
+  let wat =
+    #|(module
+    #|  (table i64 1 10 funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables[0].type_.limits.min, content="1")
+  inspect(mod_.tables[0].type_.limits.max, content="Some(10)")
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+}
+
+///|
+test "parse table32 default" {
+  // Default is table32 (no i64 keyword)
+  let wat =
+    #|(module
+    #|  (table 1 funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables[0].type_.is_table64, content="false")
+}
+
+///|
+test "parse table64 with export" {
+  let wat =
+    #|(module
+    #|  (table (export "tbl64") i64 1 funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+  inspect(mod_.exports.length(), content="1")
+  inspect(mod_.exports[0].name, content="tbl64")
+}
+
+///|
+test "parse table64 import" {
+  let wat =
+    #|(module
+    #|  (import "env" "tbl" (table i64 1 10 funcref))
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.imports.length(), content="1")
+  inspect(mod_.imports[0].mod_name, content="env")
+  inspect(mod_.imports[0].name, content="tbl")
+  if mod_.imports[0].desc is @types.ImportDesc::Table(tbl_type) {
+    inspect(tbl_type.is_table64, content="true")
+    inspect(tbl_type.limits.min, content="1")
+    inspect(tbl_type.limits.max, content="Some(10)")
+  } else {
+    panic()
+  }
+}
+
+///|
+test "parse table64 elem segment with i64 offset" {
+  let wat =
+    #|(module
+    #|  (table i64 10 funcref)
+    #|  (func $f)
+    #|  (elem (i64.const 0) $f)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+  inspect(mod_.elems.length(), content="1")
+  // Check elem mode offset expression
+  if mod_.elems[0].mode is @types.ElemMode::Active(_, offset_expr) {
+    inspect(offset_expr[0], content="I64Const(0)")
+  } else {
+    panic()
+  }
+}
+
+///|
+test "parse table64 externref" {
+  let wat =
+    #|(module
+    #|  (table i64 5 externref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+  inspect(mod_.tables[0].type_.elem_type, content="ExternRef")
+}
+
+///|
+test "parse multi-memory with memory64" {
+  let wat =
+    #|(module
+    #|  (memory $m0 1)
+    #|  (memory $m1 i64 2)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.memories.length(), content="2")
+  inspect(mod_.memories[0].is_memory64, content="false")
+  inspect(mod_.memories[1].is_memory64, content="true")
+}
+
+///|
+test "parse multi-table with table64" {
+  let wat =
+    #|(module
+    #|  (table $t0 1 funcref)
+    #|  (table $t1 i64 2 funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables.length(), content="2")
+  inspect(mod_.tables[0].type_.is_table64, content="false")
+  inspect(mod_.tables[1].type_.is_table64, content="true")
+}
+
+///|
+test "parse table64 with large 64-bit limits" {
+  // Regression test: table64 limits must use u64 parsing, not u32
+  let wat =
+    #|(module
+    #|  (table i64 0xffff_ffff_ffff funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables.length(), content="1")
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+  // 0xffffffffffff = 281474976710655
+  inspect(mod_.tables[0].type_.limits.min, content="281474976710655")
+  inspect(mod_.tables[0].type_.limits.max, content="None")
+}
+
+///|
+test "parse table64 with large 64-bit min and max" {
+  // Regression test: both min and max must use u64 parsing
+  let wat =
+    #|(module
+    #|  (table i64 0x1_0000_0000 0x2_0000_0000 funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+  // 0x100000000 = 4294967296 (larger than u32 max)
+  inspect(mod_.tables[0].type_.limits.min, content="4294967296")
+  // 0x200000000 = 8589934592
+  inspect(mod_.tables[0].type_.limits.max, content="Some(8589934592)")
+}
+
+///|
+test "parse table64 import with large 64-bit limits" {
+  // Regression test: imported table64 limits must use u64 parsing
+  let wat =
+    #|(module
+    #|  (import "m" "t" (table i64 0xffff_ffff_ffff 0x1_0000_0000_0000 funcref))
+    #|)
+  let mod_ = parse(wat)
+  guard mod_.imports[0].desc is @types.ImportDesc::Table(tbl_type) else {
+    return
+  }
+  inspect(tbl_type.is_table64, content="true")
+  // 0xffffffffffff = 281474976710655
+  inspect(tbl_type.limits.min, content="281474976710655")
+  // 0x1000000000000 = 281474976710656
+  inspect(tbl_type.limits.max, content="Some(281474976710656)")
+}

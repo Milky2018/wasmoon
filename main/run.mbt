@@ -714,7 +714,7 @@ fn compile_module_to_jit(
     Some(_) => actual_memory_max
     None =>
       if mod_.memories.length() > 0 {
-        mod_.memories[0].limits.max
+        mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
       } else {
         None
       }
@@ -725,6 +725,8 @@ fn compile_module_to_jit(
     let type_idx = mod_.funcs[i]
     let func_type = mod_.get_func_type(type_idx)
     let func_name = get_func_name(mod_, func_idx)
+    // Build memory_is_64 array for memory64 support
+    let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
     // Stage 1: Translate WASM to IR
     let translator = @ir.Translator::new(
       func_name,
@@ -735,6 +737,7 @@ fn compile_module_to_jit(
       num_imports,
       import_func_type_indices,
       memory_max~,
+      memory_is_64~,
       tables=mod_.tables,
       global_types~,
       type_rec_groups=mod_.type_rec_groups,

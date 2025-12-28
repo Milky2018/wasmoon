@@ -79,56 +79,107 @@ fn ExecContext::exec_instr(
 
     // Table operations
     TableGet(table_idx) => {
-      let elem_idx = self.stack.pop_i32()
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
+      let elem_idx = if table.is_table64() {
+        self.stack.pop_i64().to_int()
+      } else {
+        self.stack.pop_i32()
+      }
       let value = table.get(elem_idx)
       self.stack.push(value)
     }
     TableSet(table_idx) => {
       let value = self.stack.pop()
-      let elem_idx = self.stack.pop_i32()
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
+      let elem_idx = if table.is_table64() {
+        self.stack.pop_i64().to_int()
+      } else {
+        self.stack.pop_i32()
+      }
       table.set(elem_idx, value)
     }
     TableSize(table_idx) => {
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
-      self.stack.push(I32(table.size()))
+      if table.is_table64() {
+        self.stack.push(I64(table.size().to_int64()))
+      } else {
+        self.stack.push(I32(table.size()))
+      }
     }
     TableGrow(table_idx) => {
-      let delta = self.stack.pop_i32()
-      let init_val = self.stack.pop()
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
+      let delta = if table.is_table64() {
+        self.stack.pop_i64().to_int()
+      } else {
+        self.stack.pop_i32()
+      }
+      let init_val = self.stack.pop()
       let old_size = table.grow(delta, init_val)
-      self.stack.push(I32(old_size))
+      if table.is_table64() {
+        self.stack.push(I64(old_size.to_int64()))
+      } else {
+        self.stack.push(I32(old_size))
+      }
     }
     TableFill(table_idx) => {
-      let n = self.stack.pop_i32()
-      let value = self.stack.pop()
-      let dest = self.stack.pop_i32()
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
+      let (n, value, dest) = if table.is_table64() {
+        let n = self.stack.pop_i64().to_int()
+        let value = self.stack.pop()
+        let dest = self.stack.pop_i64().to_int()
+        (n, value, dest)
+      } else {
+        let n = self.stack.pop_i32()
+        let value = self.stack.pop()
+        let dest = self.stack.pop_i32()
+        (n, value, dest)
+      }
       table.fill(dest, value, n)
     }
     TableCopy(dest_table_idx, src_table_idx) => {
-      let n = self.stack.pop_i32()
-      let src = self.stack.pop_i32()
-      let dest = self.stack.pop_i32()
       let dest_table_addr = self.instance.table_addrs[dest_table_idx]
       let src_table_addr = self.instance.table_addrs[src_table_idx]
       let dest_table = self.store.get_table(dest_table_addr)
       let src_table = self.store.get_table(src_table_addr)
+      // Length uses i64 only if BOTH tables are table64 (minimum of both types)
+      let n = if dest_table.is_table64() && src_table.is_table64() {
+        self.stack.pop_i64().to_int()
+      } else {
+        self.stack.pop_i32()
+      }
+      // Source index uses source table's index type
+      let src = if src_table.is_table64() {
+        self.stack.pop_i64().to_int()
+      } else {
+        self.stack.pop_i32()
+      }
+      // Dest index uses dest table's index type
+      let dest = if dest_table.is_table64() {
+        self.stack.pop_i64().to_int()
+      } else {
+        self.stack.pop_i32()
+      }
       dest_table.copy_from(dest, src_table, src, n)
     }
     TableInit(table_idx, elem_idx) => {
       // table.init copies elements from elem segment to table
       // Pop operands: n (count), s (src offset in elem), d (dest offset in table)
+      let table_addr = self.instance.table_addrs[table_idx]
+      let table = self.store.get_table(table_addr)
+      // s and n are always i32 (elem segments are i32-indexed)
+      // d uses table's index type
       let n = self.stack.pop_i32()
       let s = self.stack.pop_i32()
-      let d = self.stack.pop_i32()
+      let d = if table.is_table64() {
+        self.stack.pop_i64().to_int()
+      } else {
+        self.stack.pop_i32()
+      }
 
       // Get elem segment
       let elem_segment = self.instance.elem_segments[elem_idx]
@@ -680,7 +731,11 @@ pub fn instantiate_module(
   // Allocate memories
   let mem_addrs : Array[Int] = []
   for mem_type in mod.memories {
-    let mem = @runtime.Memory::new(mem_type.limits.min, mem_type.limits.max)
+    let mem = @runtime.Memory::new(
+      mem_type.limits.min.to_int(),
+      mem_type.limits.max.map(fn(m) { m.to_int() }),
+      is_memory64=mem_type.is_memory64,
+    )
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
@@ -706,9 +761,10 @@ pub fn instantiate_module(
     }
     let table = @runtime.Table::new(
       table_def.type_.elem_type,
-      table_def.type_.limits.min,
-      table_def.type_.limits.max,
+      table_def.type_.limits.min.to_int(),
+      table_def.type_.limits.max.map(fn(m) { m.to_int() }),
       init_value~,
+      is_table64=table_def.type_.is_table64,
     )
     let addr = store.alloc_table(table)
     table_addrs.push(addr)
@@ -948,34 +1004,39 @@ fn eval_const_expr(
 
 ///|
 /// Evaluate an extended constant expression for elem/data segment offsets
-/// Supports i32.add, i32.sub, i32.mul in addition to basic constants
-/// Returns the i32 offset value
+/// Supports i32/i64.add, i32/i64.sub, i32/i64.mul in addition to basic constants
+/// Returns the offset value as Int (truncated for i64)
 fn eval_extended_const_expr(
   instrs : Array[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
 ) -> Int {
-  // Use a simple stack-based evaluator
-  let stack : Array[Int] = []
+  // Use a simple stack-based evaluator with Int64 to handle both i32 and i64
+  let stack : Array[Int64] = []
   for instr in instrs {
     match instr {
-      I32Const(n) => stack.push(n)
+      I32Const(n) => stack.push(n.to_int64())
+      I64Const(n) => stack.push(n)
       GlobalGet(idx) =>
-        if idx < globals.length() && globals[idx].get() is I32(n) {
-          stack.push(n)
+        if idx < globals.length() {
+          match globals[idx].get() {
+            I32(n) => stack.push(n.to_int64())
+            I64(n) => stack.push(n)
+            _ => ()
+          }
         }
-      I32Add =>
+      I32Add | I64Add =>
         if stack.length() >= 2 {
           let b = stack.pop()
           let a = stack.pop()
           stack.push(a.unwrap() + b.unwrap())
         }
-      I32Sub =>
+      I32Sub | I64Sub =>
         if stack.length() >= 2 {
           let b = stack.pop()
           let a = stack.pop()
           stack.push(a.unwrap() - b.unwrap())
         }
-      I32Mul =>
+      I32Mul | I64Mul =>
         if stack.length() >= 2 {
           let b = stack.pop()
           let a = stack.pop()
@@ -985,7 +1046,7 @@ fn eval_extended_const_expr(
     }
   }
   if stack.length() > 0 {
-    stack[stack.length() - 1]
+    stack[stack.length() - 1].to_int()
   } else {
     0
   }
@@ -1239,16 +1300,20 @@ pub fn instantiate_module_with_imports(
             // Check memory type compatibility
             let actual_mem = store.get_mem(addr)
             let actual_limits = actual_mem.get_limits()
+            // Memory64 status must match
+            if actual_mem.is_memory64() != expected_mem_type.is_memory64 {
+              raise @runtime.LinkError
+            }
             // Import memory limits must be compatible:
             // - actual min >= expected min
             // - if expected has max, actual must have max <= expected max
-            if actual_limits.0 < expected_mem_type.limits.min {
+            if actual_limits.0 < expected_mem_type.limits.min.to_int() {
               raise @runtime.LinkError
             }
             if expected_mem_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max {
+                  if actual_max > expected_max.to_int() {
                     raise @runtime.LinkError
                   }
                 None => raise @runtime.LinkError
@@ -1269,16 +1334,20 @@ pub fn instantiate_module_with_imports(
             if actual_elem_type != expected_table_type.elem_type {
               raise @runtime.LinkError
             }
+            // Table64 status must match
+            if actual_table.is_table64() != expected_table_type.is_table64 {
+              raise @runtime.LinkError
+            }
             // Limits must be compatible:
             // - actual min >= expected min
             // - if expected has max, actual must have max <= expected max
-            if actual_limits.0 < expected_table_type.limits.min {
+            if actual_limits.0 < expected_table_type.limits.min.to_int() {
               raise @runtime.LinkError
             }
             if expected_table_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max {
+                  if actual_max > expected_max.to_int() {
                     raise @runtime.LinkError
                   }
                 None => raise @runtime.LinkError
@@ -1399,7 +1468,11 @@ pub fn instantiate_module_with_imports(
 
   // Allocate memories (after imported memories)
   for mem_type in mod.memories {
-    let mem = @runtime.Memory::new(mem_type.limits.min, mem_type.limits.max)
+    let mem = @runtime.Memory::new(
+      mem_type.limits.min.to_int(),
+      mem_type.limits.max.map(fn(m) { m.to_int() }),
+      is_memory64=mem_type.is_memory64,
+    )
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
@@ -1436,9 +1509,10 @@ pub fn instantiate_module_with_imports(
     }
     let table = @runtime.Table::new(
       table_def.type_.elem_type,
-      table_def.type_.limits.min,
-      table_def.type_.limits.max,
+      table_def.type_.limits.min.to_int(),
+      table_def.type_.limits.max.map(fn(m) { m.to_int() }),
       init_value~,
+      is_table64=table_def.type_.is_table64,
     )
     let addr = store.alloc_table(table)
     table_addrs.push(addr)

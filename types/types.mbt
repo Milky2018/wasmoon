@@ -225,29 +225,30 @@ pub(all) enum Instruction {
   TableInit(Int, Int) // table index, elem index
 
   // Memory instructions - (memidx, align, offset)
-  I32Load(Int, Int, Int) // memidx, align, offset
-  I64Load(Int, Int, Int)
-  F32Load(Int, Int, Int)
-  F64Load(Int, Int, Int)
-  I32Load8S(Int, Int, Int)
-  I32Load8U(Int, Int, Int)
-  I32Load16S(Int, Int, Int)
-  I32Load16U(Int, Int, Int)
-  I64Load8S(Int, Int, Int)
-  I64Load8U(Int, Int, Int)
-  I64Load16S(Int, Int, Int)
-  I64Load16U(Int, Int, Int)
-  I64Load32S(Int, Int, Int)
-  I64Load32U(Int, Int, Int)
-  I32Store(Int, Int, Int)
-  I64Store(Int, Int, Int)
-  F32Store(Int, Int, Int)
-  F64Store(Int, Int, Int)
-  I32Store8(Int, Int, Int)
-  I32Store16(Int, Int, Int)
-  I64Store8(Int, Int, Int)
-  I64Store16(Int, Int, Int)
-  I64Store32(Int, Int, Int)
+  // offset is Int64 to support memory64 64-bit offsets
+  I32Load(Int, Int, Int64) // memidx, align, offset
+  I64Load(Int, Int, Int64)
+  F32Load(Int, Int, Int64)
+  F64Load(Int, Int, Int64)
+  I32Load8S(Int, Int, Int64)
+  I32Load8U(Int, Int, Int64)
+  I32Load16S(Int, Int, Int64)
+  I32Load16U(Int, Int, Int64)
+  I64Load8S(Int, Int, Int64)
+  I64Load8U(Int, Int, Int64)
+  I64Load16S(Int, Int, Int64)
+  I64Load16U(Int, Int, Int64)
+  I64Load32S(Int, Int, Int64)
+  I64Load32U(Int, Int, Int64)
+  I32Store(Int, Int, Int64)
+  I64Store(Int, Int, Int64)
+  F32Store(Int, Int, Int64)
+  F64Store(Int, Int, Int64)
+  I32Store8(Int, Int, Int64)
+  I32Store16(Int, Int, Int64)
+  I64Store8(Int, Int, Int64)
+  I64Store16(Int, Int, Int64)
+  I64Store32(Int, Int, Int64)
   MemorySize(Int) // memidx
   MemoryGrow(Int) // memidx
   MemoryInit(Int, Int) // memidx, data segment index
@@ -647,22 +648,35 @@ fn ValueType::structurally_equal(
 
 ///|
 /// Limits for memory and tables
+/// Uses Int64 to support memory64 proposal (limits up to 2^48 pages)
 pub(all) struct Limits {
-  min : Int
-  max : Int?
+  min : Int64
+  max : Int64?
 } derive(Eq, Show)
 
 ///|
 /// Memory type
 pub(all) struct MemoryType {
   limits : Limits
+  is_memory64 : Bool // true for i64-indexed memory (memory64 proposal)
 } derive(Eq, Show)
+
+///|
+/// Get the address type for this memory (I32 for 32-bit, I64 for 64-bit)
+pub fn MemoryType::addr_type(self : MemoryType) -> ValueType {
+  if self.is_memory64 {
+    I64
+  } else {
+    I32
+  }
+}
 
 ///|
 /// Table type
 pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
+  is_table64 : Bool // true for table64 (i64-indexed table)
 } derive(Eq, Show)
 
 ///|
@@ -782,6 +796,53 @@ pub(all) struct Module {
   datas : Array[Data]
   tags : Array[TagType] // exception tags
 } derive(Show)
+
+///|
+/// Create an empty module with all fields set to empty arrays/None.
+pub fn Module::empty() -> Module {
+  {
+    types: [],
+    type_rec_groups: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [],
+    tags: [],
+  }
+}
+
+///|
+/// Create a simple module with one function.
+/// This is useful for tests that need a minimal valid module.
+pub fn Module::simple(
+  params : Array[ValueType],
+  results : Array[ValueType],
+  body : Array[Instruction],
+  export_name : String,
+) -> Module {
+  let func_type : FuncType = { params, results }
+  {
+    types: [SubType::from_func(func_type)],
+    type_rec_groups: [0],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [{ name: export_name, desc: ExportDesc::Func(0) }],
+    start: None,
+    elems: [],
+    codes: [{ locals: [], body }],
+    datas: [],
+    tags: [],
+  }
+}
 
 ///|
 /// Get the function type at the given index.

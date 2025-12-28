@@ -178,29 +178,29 @@ pub(all) enum Instruction {
   TableFill(Int)
   TableCopy(Int, Int)
   TableInit(Int, Int)
-  I32Load(Int, Int, Int)
-  I64Load(Int, Int, Int)
-  F32Load(Int, Int, Int)
-  F64Load(Int, Int, Int)
-  I32Load8S(Int, Int, Int)
-  I32Load8U(Int, Int, Int)
-  I32Load16S(Int, Int, Int)
-  I32Load16U(Int, Int, Int)
-  I64Load8S(Int, Int, Int)
-  I64Load8U(Int, Int, Int)
-  I64Load16S(Int, Int, Int)
-  I64Load16U(Int, Int, Int)
-  I64Load32S(Int, Int, Int)
-  I64Load32U(Int, Int, Int)
-  I32Store(Int, Int, Int)
-  I64Store(Int, Int, Int)
-  F32Store(Int, Int, Int)
-  F64Store(Int, Int, Int)
-  I32Store8(Int, Int, Int)
-  I32Store16(Int, Int, Int)
-  I64Store8(Int, Int, Int)
-  I64Store16(Int, Int, Int)
-  I64Store32(Int, Int, Int)
+  I32Load(Int, Int, Int64)
+  I64Load(Int, Int, Int64)
+  F32Load(Int, Int, Int64)
+  F64Load(Int, Int, Int64)
+  I32Load8S(Int, Int, Int64)
+  I32Load8U(Int, Int, Int64)
+  I32Load16S(Int, Int, Int64)
+  I32Load16U(Int, Int, Int64)
+  I64Load8S(Int, Int, Int64)
+  I64Load8U(Int, Int, Int64)
+  I64Load16S(Int, Int, Int64)
+  I64Load16U(Int, Int, Int64)
+  I64Load32S(Int, Int, Int64)
+  I64Load32U(Int, Int, Int64)
+  I32Store(Int, Int, Int64)
+  I64Store(Int, Int, Int64)
+  F32Store(Int, Int, Int64)
+  F64Store(Int, Int, Int64)
+  I32Store8(Int, Int, Int64)
+  I32Store16(Int, Int, Int64)
+  I64Store8(Int, Int, Int64)
+  I64Store16(Int, Int, Int64)
+  I64Store32(Int, Int, Int64)
   MemorySize(Int)
   MemoryGrow(Int)
   MemoryInit(Int, Int)
@@ -391,15 +391,17 @@ pub impl Eq for Instruction
 pub impl Show for Instruction
 
 pub(all) struct Limits {
-  min : Int
-  max : Int?
+  min : Int64
+  max : Int64?
 }
 pub impl Eq for Limits
 pub impl Show for Limits
 
 pub(all) struct MemoryType {
   limits : Limits
+  is_memory64 : Bool
 }
+pub fn MemoryType::addr_type(Self) -> ValueType
 pub impl Eq for MemoryType
 pub impl Show for MemoryType
 
@@ -418,6 +420,7 @@ pub(all) struct Module {
   datas : Array[Data]
   tags : Array[TagType]
 }
+pub fn Module::empty() -> Self
 pub fn Module::get_array_type(Self, Int) -> ArrayType
 pub fn Module::get_func_type(Self, Int) -> FuncType
 pub fn Module::get_struct_type(Self, Int) -> StructType
@@ -425,6 +428,7 @@ pub fn Module::is_array_type(Self, Int) -> Bool
 pub fn Module::is_func_type(Self, Int) -> Bool
 pub fn Module::is_struct_type(Self, Int) -> Bool
 pub fn Module::new() -> Self
+pub fn Module::simple(Array[ValueType], Array[ValueType], Array[Instruction], String) -> Self
 pub impl Show for Module
 
 pub(all) enum PackedType {
@@ -484,6 +488,7 @@ pub impl Show for Table
 pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
+  is_table64 : Bool
 }
 pub impl Eq for TableType
 pub impl Show for TableType

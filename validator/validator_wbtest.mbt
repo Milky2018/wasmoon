@@ -780,7 +780,7 @@ test "validator: data segment with i64 offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -806,7 +806,7 @@ test "validator: data segment with ref.null offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -834,7 +834,7 @@ test "validator: data segment with empty offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -860,7 +860,7 @@ test "validator: data segment with non-constant instruction should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -881,7 +881,7 @@ test "validator: data segment with nop offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -902,7 +902,7 @@ test "validator: data segment with unknown global should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -923,7 +923,7 @@ test "validator: data segment with mutable global offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [
       {
         type_: { value_type: @types.ValueType::I32, mutable: true },
@@ -949,7 +949,7 @@ test "validator: data segment with valid i32 const offset should pass" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [],
     exports: [],
     start: None,
@@ -970,7 +970,7 @@ test "validator: data segment with immutable global offset should pass" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None } }],
+    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
     globals: [
       {
         type_: { value_type: @types.ValueType::I32, mutable: false },
@@ -1004,6 +1004,7 @@ test "validator: elem segment with i64 offset should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1044,6 +1045,7 @@ test "validator: elem segment with non-constant instruction should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1075,6 +1077,7 @@ test "validator: elem segment with unknown global should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1110,6 +1113,7 @@ test "validator: elem segment with mutable global offset should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1177,6 +1181,7 @@ test "validator: elem segment type mismatch with table should fail" {
         type_: {
           elem_type: @types.ValueType::ExternRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1211,6 +1216,7 @@ test "validator: elem segment with valid i32 const offset should pass" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1246,6 +1252,7 @@ test "validator: elem init with wrong type should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 1, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1282,6 +1289,7 @@ test "validator: elem with unknown function should fail" {
         type_: {
           elem_type: @types.ValueType::FuncRef,
           limits: { min: 2, max: None },
+          is_table64: false,
         },
         init: None,
       },
@@ -1634,4 +1642,183 @@ test "validator: mixed func, struct, array types should pass" {
     tags: [],
   }
   inspect(try? validate_module(mod), content="Ok(())")
+}
+
+// ============================================================
+// Memory64/Table64 Validation Tests - Helpers
+// ============================================================
+
+///|
+fn module_with_memory(
+  body : Array[@types.Instruction],
+  results : Array[@types.ValueType],
+  is_memory64? : Bool = false,
+) -> @types.Module {
+  let func_type : @types.FuncType = { params: [], results }
+  let mem_type : @types.MemoryType = {
+    limits: { min: 1L, max: None },
+    is_memory64,
+  }
+  {
+    types: [@types.SubType::from_func(func_type)],
+    type_rec_groups: [0],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [mem_type],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [{ locals: [], body }],
+    datas: [],
+    tags: [],
+  }
+}
+
+///|
+fn module_with_table(
+  body : Array[@types.Instruction],
+  results : Array[@types.ValueType],
+  is_table64? : Bool = false,
+) -> @types.Module {
+  let func_type : @types.FuncType = { params: [], results }
+  let table_type : @types.TableType = {
+    limits: { min: 1L, max: None },
+    elem_type: @types.ValueType::FuncRef,
+    is_table64,
+  }
+  {
+    types: [@types.SubType::from_func(func_type)],
+    type_rec_groups: [0],
+    imports: [],
+    funcs: [0],
+    tables: [{ type_: table_type, init: None }],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [{ locals: [], body }],
+    datas: [],
+    tags: [],
+  }
+}
+
+// ============================================================
+// Memory64 Validation Tests
+// ============================================================
+
+///|
+test "validator: memory64 i32.load expects i64 address" {
+  let mod = module_with_memory(
+    [I64Const(0L), I32Load(0, 0, 0L)],
+    [I32],
+    is_memory64=true,
+  )
+  validate_module(mod)
+}
+
+///|
+test "validator: memory64 rejects i32 address" {
+  let mod = module_with_memory(
+    [I32Const(0), I32Load(0, 0, 0L)],
+    [I32],
+    is_memory64=true,
+  )
+  inspect(
+    try? validate_module(mod),
+    content="Err(TypeMismatch(\"Expected I64, got I32\"))",
+  )
+}
+
+///|
+test "validator: memory32 i32.load expects i32 address" {
+  let mod = module_with_memory(
+    [I32Const(0), I32Load(0, 0, 0L)],
+    [I32],
+    is_memory64=false,
+  )
+  validate_module(mod)
+}
+
+///|
+test "validator: memory64 memory.size returns i64" {
+  let mod = module_with_memory([MemorySize(0)], [I64], is_memory64=true)
+  validate_module(mod)
+}
+
+///|
+test "validator: memory32 memory.size returns i32" {
+  let mod = module_with_memory([MemorySize(0)], [I32], is_memory64=false)
+  validate_module(mod)
+}
+
+///|
+test "validator: memory64 memory.grow takes and returns i64" {
+  let mod = module_with_memory(
+    [I64Const(1L), MemoryGrow(0)],
+    [I64],
+    is_memory64=true,
+  )
+  validate_module(mod)
+}
+
+// ============================================================
+// Table64 Validation Tests
+// ============================================================
+
+///|
+test "validator: table64 table.get expects i64 index" {
+  let mod = module_with_table(
+    [I64Const(0L), TableGet(0)],
+    [FuncRef],
+    is_table64=true,
+  )
+  validate_module(mod)
+}
+
+///|
+test "validator: table64 rejects i32 index" {
+  let mod = module_with_table(
+    [I32Const(0), TableGet(0)],
+    [FuncRef],
+    is_table64=true,
+  )
+  inspect(
+    try? validate_module(mod),
+    content="Err(TypeMismatch(\"Expected I64, got I32\"))",
+  )
+}
+
+///|
+test "validator: table32 table.get expects i32 index" {
+  let mod = module_with_table(
+    [I32Const(0), TableGet(0)],
+    [FuncRef],
+    is_table64=false,
+  )
+  validate_module(mod)
+}
+
+///|
+test "validator: table64 table.size returns i64" {
+  let mod = module_with_table([TableSize(0)], [I64], is_table64=true)
+  validate_module(mod)
+}
+
+///|
+test "validator: table32 table.size returns i32" {
+  let mod = module_with_table([TableSize(0)], [I32], is_table64=false)
+  validate_module(mod)
+}
+
+///|
+test "validator: table64 table.grow takes and returns i64" {
+  let mod = module_with_table(
+    [RefNull(FuncRef), I64Const(1L), TableGrow(0)],
+    [I64],
+    is_table64=true,
+  )
+  validate_module(mod)
 }

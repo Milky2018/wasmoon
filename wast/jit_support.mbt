@@ -202,7 +202,7 @@ pub fn sync_tables_to_jit(
 
 ///|
 /// Evaluate element segment offset constant expression
-/// Supports i32.const, i32.add, i32.sub, i32.mul, global.get for computing offsets
+/// Supports i32.const, i64.const (for table64), i32.add, i32.sub, i32.mul, global.get for computing offsets
 pub fn eval_elem_offset_expr(
   instrs : Array[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
@@ -211,9 +211,14 @@ pub fn eval_elem_offset_expr(
   for instr in instrs {
     match instr {
       I32Const(n) => stack.push(n)
+      I64Const(n) => stack.push(n.to_int()) // For table64 offset expressions
       GlobalGet(idx) =>
-        if idx < globals.length() && globals[idx].get() is I32(n) {
-          stack.push(n)
+        if idx < globals.length() {
+          match globals[idx].get() {
+            I32(n) => stack.push(n)
+            I64(n) => stack.push(n.to_int()) // For table64
+            _ => ()
+          }
         }
       I32Add =>
         if stack.length() >= 2 {
@@ -228,6 +233,24 @@ pub fn eval_elem_offset_expr(
           stack.push(a.unwrap() - b.unwrap())
         }
       I32Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() * b.unwrap())
+        }
+      I64Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() + b.unwrap())
+        }
+      I64Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop()
+          let a = stack.pop()
+          stack.push(a.unwrap() - b.unwrap())
+        }
+      I64Mul =>
         if stack.length() >= 2 {
           let b = stack.pop()
           let a = stack.pop()

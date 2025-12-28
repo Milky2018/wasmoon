@@ -180,6 +180,7 @@ pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
 pub fn Memory::get_limits(Self) -> (Int, Int?)
 pub fn Memory::grow(Self, Int) -> Int
 pub fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
+pub fn Memory::is_memory64(Self) -> Bool
 pub fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
 pub fn Memory::load_f32(Self, Int) -> Float raise RuntimeError
 pub fn Memory::load_f64(Self, Int) -> Double raise RuntimeError
@@ -195,7 +196,7 @@ pub fn Memory::load_i64_32s(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_32u(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8s(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
-pub fn Memory::new(Int, Int?) -> Self
+pub fn Memory::new(Int, Int?, is_memory64? : Bool) -> Self
 pub fn Memory::read_byte(Self, Int) -> Byte
 pub fn Memory::read_bytes(Self, Int, Int) -> Bytes
 pub fn Memory::read_i32(Self, Int) -> Int
@@ -348,7 +349,8 @@ pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError
 pub fn Table::get_elem_type(Self) -> @types.ValueType
 pub fn Table::get_limits(Self) -> (Int, Int?)
 pub fn Table::grow(Self, Int, @types.Value) -> Int
-pub fn Table::new(@types.ValueType, Int, Int?, init_value? : @types.Value) -> Self
+pub fn Table::is_table64(Self) -> Bool
+pub fn Table::new(@types.ValueType, Int, Int?, init_value? : @types.Value, is_table64? : Bool) -> Self
 pub fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
 pub fn Table::size(Self) -> Int
 pub impl Show for Table

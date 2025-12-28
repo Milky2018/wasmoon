@@ -4,17 +4,22 @@ struct Memory {
   data : Array[Byte]
   mut size : Int // current size in pages
   max : Int? // max size in pages
+  is_memory64 : Bool // true for memory64 (i64-indexed)
 } derive(Show)
 
 ///|
-pub fn Memory::new(min : Int, max : Int?) -> Memory {
+pub fn Memory::new(
+  min : Int,
+  max : Int?,
+  is_memory64? : Bool = false,
+) -> Memory {
   let page_size = 65536 // 64KB
   let initial_size = min * page_size
   let data : Array[Byte] = []
   for _ in 0..<initial_size {
     data.push(b'\x00')
   }
-  { data, size: min, max }
+  { data, size: min, max, is_memory64 }
 }
 
 ///|
@@ -330,6 +335,11 @@ pub fn Memory::size_pages(self : Memory) -> Int {
 }
 
 ///|
+pub fn Memory::is_memory64(self : Memory) -> Bool {
+  self.is_memory64
+}
+
+///|
 pub fn Memory::grow(self : Memory, delta : Int) -> Int {
   let old_size = self.size
   let new_size = old_size + delta
@@ -339,8 +349,11 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
     return -1
   }
 
-  // Check absolute limit (65536 pages = 4GB)
-  if new_size > 65536 {
+  // Check absolute limit
+  // memory32: 65536 pages = 4GB
+  // memory64: theoretically 2^48 pages, but we use Int so limit is practical
+  let max_pages = if self.is_memory64 { 2147483647 } else { 65536 }
+  if new_size > max_pages {
     return -1
   }
 

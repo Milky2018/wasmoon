@@ -66,17 +66,37 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
           }
         }
 
-        // Parse limits
-        let min = self.parse_u32()
+        // Check for i64 keyword (memory64)
+        let is_memory64 = match self.current.token {
+          Keyword("i64") => {
+            self.advance()
+            true
+          }
+          _ => false
+        }
+
+        // Parse limits (use u64 for memory64)
+        let min = if is_memory64 {
+          self.parse_u64()
+        } else {
+          self.parse_u32().to_int64()
+        }
         let max = match self.current.token {
-          Number(_) => Some(self.parse_u32())
+          Number(_) =>
+            Some(
+              if is_memory64 {
+                self.parse_u64()
+              } else {
+                self.parse_u32().to_int64()
+              },
+            )
           _ => None
         }
         self.expect_rparen() // close memory
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Memory({ limits: { min, max } }),
+          desc: @types.ImportDesc::Memory({ limits: { min, max }, is_memory64 }),
         }
         return MemoryDefResult::MemoryImport(imp, export_names)
       }
@@ -150,17 +170,39 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   )
               }
               self.expect_rparen() // close import
-              // Parse limits
-              let min = self.parse_u32()
+              // Check for i64 keyword (memory64)
+              let is_memory64 = match self.current.token {
+                Keyword("i64") => {
+                  self.advance()
+                  true
+                }
+                _ => false
+              }
+              // Parse limits (use u64 for memory64)
+              let min = if is_memory64 {
+                self.parse_u64()
+              } else {
+                self.parse_u32().to_int64()
+              }
               let max = match self.current.token {
-                Number(_) => Some(self.parse_u32())
+                Number(_) =>
+                  Some(
+                    if is_memory64 {
+                      self.parse_u64()
+                    } else {
+                      self.parse_u32().to_int64()
+                    },
+                  )
                 _ => None
               }
               self.expect_rparen() // close memory
               let imp : @types.Import = {
                 mod_name,
                 name: import_name,
-                desc: @types.ImportDesc::Memory({ limits: { min, max } }),
+                desc: @types.ImportDesc::Memory({
+                  limits: { min, max },
+                  is_memory64,
+                }),
               }
               return MemoryDefResult::MemoryImport(imp, export_names)
             }
@@ -196,9 +238,13 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         let data_len = init_bytes.length()
         let min_pages = (data_len + page_size - 1) / page_size
         // Ensure at least 1 page if there's any data
-        let min = if data_len > 0 && min_pages == 0 { 1 } else { min_pages }
+        let min : Int64 = (if data_len > 0 && min_pages == 0 {
+          1
+        } else {
+          min_pages
+        }).to_int64()
         return MemoryDefResult::MemoryWithData(
-          { limits: { min, max: Some(min) } },
+          { limits: { min, max: Some(min) }, is_memory64: false },
           export_names,
           Bytes::from_array(init_bytes),
         )
@@ -214,14 +260,85 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
     }
   }
 
-  // Parse limits
-  let min = self.parse_u32()
+  // Check for i64 keyword (memory64)
+  let is_memory64 = match self.current.token {
+    Keyword("i64") => {
+      self.advance()
+      true
+    }
+    _ => false
+  }
+
+  // Check for (data) inline syntax after i64 keyword
+  if self.current.token == LParen {
+    let saved = self.lexer.pos
+    let saved_line = self.lexer.line
+    let saved_column = self.lexer.column
+    let saved_token_start_line = self.lexer.token_start_line
+    let saved_token_start_column = self.lexer.token_start_column
+    self.advance()
+    if self.current.token == Keyword("data") {
+      // Inline data syntax: (memory [i64] (data "..."))
+      self.advance() // skip "data"
+      let init_bytes : Array[Byte] = []
+      while self.current.token is String_(_) {
+        if self.current.token is String_(s) {
+          for i in 0..<s.length() {
+            init_bytes.push(s.code_unit_at(i).to_byte())
+          }
+          self.advance()
+        }
+      }
+      self.expect_rparen() // close data
+      self.expect_rparen() // close memory
+      // Calculate minimum pages needed (64KB per page)
+      let page_size = 65536
+      let data_len = init_bytes.length()
+      let min_pages = (data_len + page_size - 1) / page_size
+      // Ensure at least 1 page if there's any data
+      let min : Int64 = (if data_len > 0 && min_pages == 0 {
+        1
+      } else {
+        min_pages
+      }).to_int64()
+      return MemoryDefResult::MemoryWithData(
+        { limits: { min, max: Some(min) }, is_memory64 },
+        export_names,
+        Bytes::from_array(init_bytes),
+      )
+    } else {
+      // Not (data), restore and continue to limits parsing
+      self.lexer.pos = saved
+      self.lexer.line = saved_line
+      self.lexer.column = saved_column
+      self.lexer.token_start_line = saved_token_start_line
+      self.lexer.token_start_column = saved_token_start_column
+      self.current = LocatedToken::synthetic(LParen)
+    }
+  }
+
+  // Parse limits (use u64 for memory64)
+  let min = if is_memory64 {
+    self.parse_u64()
+  } else {
+    self.parse_u32().to_int64()
+  }
   let max = match self.current.token {
-    Number(_) => Some(self.parse_u32())
+    Number(_) =>
+      Some(
+        if is_memory64 {
+          self.parse_u64()
+        } else {
+          self.parse_u32().to_int64()
+        },
+      )
     _ => None
   }
   self.expect_rparen()
-  MemoryDefResult::MemoryDef({ limits: { min, max } }, export_names)
+  MemoryDefResult::MemoryDef(
+    { limits: { min, max }, is_memory64 },
+    export_names,
+  )
 }
 
 ///|
@@ -557,10 +674,27 @@ fn Parser::parse_table_def(
         }
         self.expect_rparen() // close import
 
-        // Parse limits
-        let min = self.parse_u32()
+        // Check for table64 (i64 keyword before limits)
+        let is_table64 = self.current.token is Keyword("i64")
+        if is_table64 {
+          self.advance()
+        }
+
+        // Parse limits - use u64 for table64, u32 for table32
+        let min = if is_table64 {
+          self.parse_u64()
+        } else {
+          self.parse_u32().to_int64()
+        }
         let max = match self.current.token {
-          Number(_) => Some(self.parse_u32())
+          Number(_) =>
+            Some(
+              if is_table64 {
+                self.parse_u64()
+              } else {
+                self.parse_u32().to_int64()
+              },
+            )
           _ => None
         }
         // Parse element type
@@ -571,12 +705,16 @@ fn Parser::parse_table_def(
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Table({ elem_type, limits: { min, max } }),
+          desc: @types.ImportDesc::Table({
+            elem_type,
+            limits: { min, max },
+            is_table64,
+          }),
         }
         mod_.imports.push(imp)
         // Return a placeholder table (the import is what matters)
         return (
-          { type_: { elem_type, limits: { min, max } }, init: None },
+          { type_: { elem_type, limits: { min, max }, is_table64 }, init: None },
           export_name,
           None,
           table_name,
@@ -687,7 +825,11 @@ fn Parser::parse_table_def(
             let table : @types.Table = {
               type_: {
                 elem_type,
-                limits: { min: init.length(), max: Some(init.length()) },
+                limits: {
+                  min: init.length().to_int64(),
+                  max: Some(init.length().to_int64()),
+                },
+                is_table64: false,
               },
               init: None,
             }
@@ -714,7 +856,14 @@ fn Parser::parse_table_def(
         self.expect_rparen()
         // This is a table with implicit size 0, no elements
         return (
-          { type_: { elem_type, limits: { min: 0, max: None } }, init: None },
+          {
+            type_: {
+              elem_type,
+              limits: { min: 0L, max: None },
+              is_table64: false,
+            },
+            init: None,
+          },
           export_name,
           None,
           table_name,
@@ -722,10 +871,147 @@ fn Parser::parse_table_def(
       }
     }
     _ => {
-      // Standard syntax: (table MIN [MAX] elemtype [init_expr])
-      let min = self.parse_u32()
+      // Standard syntax: (table [i64] MIN [MAX] elemtype [init_expr])
+      // Or table64 inline elem: (table i64 elemtype (elem ...))
+      // Check for table64 (i64 keyword before limits)
+      let is_table64 = self.current.token is Keyword("i64")
+      if is_table64 {
+        self.advance()
+      }
+
+      // Check if this is table64 with inline elem (i64 followed by elem type, not a number)
+      if is_table64 {
+        match self.current.token {
+          Keyword("funcref")
+          | Keyword("func")
+          | Keyword("externref")
+          | Keyword("extern")
+          | Keyword("i31ref")
+          | Keyword("eqref")
+          | Keyword("structref")
+          | Keyword("arrayref")
+          | Keyword("anyref")
+          | LParen => {
+            // table64 with inline elem syntax: (table i64 elemtype (elem ...))
+            let elem_type = self.parse_value_type()
+            // Check if followed by inline elem
+            if self.current.token == LParen {
+              self.advance()
+              match self.current.token {
+                Keyword("elem") => {
+                  self.advance()
+                  // Parse element init expressions (can be indices or expressions)
+                  let init : Array[Array[@types.Instruction]] = []
+                  while self.current.token != RParen {
+                    match self.current.token {
+                      Id(name) =>
+                        match self.func_names.get(name) {
+                          Some(idx) => {
+                            init.push([@types.Instruction::RefFunc(idx)])
+                            self.advance()
+                          }
+                          None => self.advance() // Placeholder for late-bound refs
+                        }
+                      Number(_) => {
+                        let idx = self.parse_u32()
+                        init.push([@types.Instruction::RefFunc(idx)])
+                      }
+                      LParen => {
+                        self.advance()
+                        match self.current.token {
+                          Keyword("ref.func") => {
+                            self.advance()
+                            let idx = self.parse_func_idx()
+                            self.expect_rparen()
+                            init.push([@types.Instruction::RefFunc(idx)])
+                          }
+                          Keyword("ref.null") => {
+                            self.advance()
+                            let ref_type = self.parse_ref_type()
+                            self.expect_rparen()
+                            init.push([@types.Instruction::RefNull(ref_type)])
+                          }
+                          Keyword("item") => {
+                            self.advance()
+                            let expr = self.parse_instructions()
+                            self.expect_rparen()
+                            init.push(expr)
+                          }
+                          _ => {
+                            let expr = self.parse_instructions()
+                            self.expect_rparen()
+                            init.push(expr)
+                          }
+                        }
+                      }
+                      _ => break
+                    }
+                  }
+                  self.expect_rparen() // close elem
+                  self.expect_rparen() // close table
+                  let table_idx = mod_.tables.length()
+                  let elem : @types.Element = {
+                    mode: @types.ElemMode::Active(table_idx, [
+                      @types.Instruction::I64Const(0L), // Use i64 for table64
+                    ]),
+                    type_: elem_type,
+                    init,
+                  }
+                  let table : @types.Table = {
+                    type_: {
+                      elem_type,
+                      limits: {
+                        min: init.length().to_int64(),
+                        max: Some(init.length().to_int64()),
+                      },
+                      is_table64: true,
+                    },
+                    init: None,
+                  }
+                  return (table, export_name, Some(elem), table_name)
+                }
+                _ =>
+                  raise WatError::UnexpectedToken(
+                    "expected elem in inline table64",
+                    self.loc(),
+                  )
+              }
+            } else {
+              // Just element type followed by closing paren (no inline elem, no limits)
+              self.expect_rparen()
+              return (
+                {
+                  type_: {
+                    elem_type,
+                    limits: { min: 0L, max: None },
+                    is_table64: true,
+                  },
+                  init: None,
+                },
+                export_name,
+                None,
+                table_name,
+              )
+            }
+          }
+          _ => () // Fall through to standard limits parsing
+        }
+      }
+      // Parse limits - use u64 for table64, u32 for table32
+      let min = if is_table64 {
+        self.parse_u64()
+      } else {
+        self.parse_u32().to_int64()
+      }
       let max = match self.current.token {
-        Number(_) => Some(self.parse_u32())
+        Number(_) =>
+          Some(
+            if is_table64 {
+              self.parse_u64()
+            } else {
+              self.parse_u32().to_int64()
+            },
+          )
         _ => None
       }
       let elem_type = self.parse_value_type()
@@ -775,7 +1061,10 @@ fn Parser::parse_table_def(
       }
       self.expect_rparen()
       (
-        { type_: { elem_type, limits: { min, max } }, init: table_init },
+        {
+          type_: { elem_type, limits: { min, max }, is_table64 },
+          init: table_init,
+        },
         export_name,
         None,
         table_name,
@@ -928,12 +1217,32 @@ fn Parser::parse_import_def(
         self.memory_names.set(mname, count_memory_imports(mod_.imports))
         self.advance()
       }
-      let min = self.parse_u32()
+      // Check for i64 keyword (memory64)
+      let is_memory64 = match self.current.token {
+        Keyword("i64") => {
+          self.advance()
+          true
+        }
+        _ => false
+      }
+      // Parse limits (use u64 for memory64)
+      let min = if is_memory64 {
+        self.parse_u64()
+      } else {
+        self.parse_u32().to_int64()
+      }
       let max = match self.current.token {
-        Number(_) => Some(self.parse_u32())
+        Number(_) =>
+          Some(
+            if is_memory64 {
+              self.parse_u64()
+            } else {
+              self.parse_u32().to_int64()
+            },
+          )
         _ => None
       }
-      @types.ImportDesc::Memory({ limits: { min, max } })
+      @types.ImportDesc::Memory({ limits: { min, max }, is_memory64 })
     }
     Keyword("table") => {
       self.advance()
@@ -943,13 +1252,30 @@ fn Parser::parse_import_def(
         self.table_names.set(tname, count_table_imports(mod_.imports))
         self.advance()
       }
-      let min = self.parse_u32()
+      // Check for table64 (i64 keyword before limits)
+      let is_table64 = self.current.token is Keyword("i64")
+      if is_table64 {
+        self.advance()
+      }
+      // Use u64 for table64 limits, u32 for table32
+      let min = if is_table64 {
+        self.parse_u64()
+      } else {
+        self.parse_u32().to_int64()
+      }
       let max = match self.current.token {
-        Number(_) => Some(self.parse_u32())
+        Number(_) =>
+          Some(
+            if is_table64 {
+              self.parse_u64()
+            } else {
+              self.parse_u32().to_int64()
+            },
+          )
         _ => None
       }
       let elem_type = self.parse_value_type()
-      @types.ImportDesc::Table({ elem_type, limits: { min, max } })
+      @types.ImportDesc::Table({ elem_type, limits: { min, max }, is_table64 })
     }
     Keyword("global") => {
       self.advance()

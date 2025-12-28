@@ -88,6 +88,15 @@ pub fn create_spectest_module(
   let table = @runtime.Table::new(@types.ValueType::FuncRef, 10, Some(20))
   let table_addr = store.alloc_table(table)
 
+  // Allocate table64: (table i64 10 20 funcref)
+  let table64 = @runtime.Table::new(
+    @types.ValueType::FuncRef,
+    10,
+    Some(20),
+    is_table64=true,
+  )
+  let table64_addr = store.alloc_table(table64)
+
   // Allocate globals
   // global_i32: (global i32 (i32.const 666))
   let global_i32_addr = store.alloc_global(
@@ -130,6 +139,7 @@ pub fn create_spectest_module(
     { name: "print_char", desc: @types.ExportDesc::Func(7) },
     { name: "memory", desc: @types.ExportDesc::Memory(0) },
     { name: "table", desc: @types.ExportDesc::Table(0) },
+    { name: "table64", desc: @types.ExportDesc::Table(1) },
     { name: "global_i32", desc: @types.ExportDesc::Global(0) },
     { name: "global_i64", desc: @types.ExportDesc::Global(1) },
     { name: "global_f32", desc: @types.ExportDesc::Global(2) },
@@ -145,7 +155,7 @@ pub fn create_spectest_module(
       print_f64_f64_addr, print_addr, print_char_addr,
     ],
     func_type_indices: [],
-    table_addrs: [table_addr],
+    table_addrs: [table_addr, table64_addr],
     mem_addrs: [memory_addr],
     global_addrs: [
       global_i32_addr, global_i64_addr, global_f32_addr, global_f64_addr,
