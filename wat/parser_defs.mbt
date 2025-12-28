@@ -680,10 +680,21 @@ fn Parser::parse_table_def(
           self.advance()
         }
 
-        // Parse limits
-        let min = self.parse_u64()
+        // Parse limits - use u64 for table64, u32 for table32
+        let min = if is_table64 {
+          self.parse_u64()
+        } else {
+          self.parse_u32().to_int64()
+        }
         let max = match self.current.token {
-          Number(_) => Some(self.parse_u64())
+          Number(_) =>
+            Some(
+              if is_table64 {
+                self.parse_u64()
+              } else {
+                self.parse_u32().to_int64()
+              },
+            )
           _ => None
         }
         // Parse element type
@@ -986,9 +997,21 @@ fn Parser::parse_table_def(
           _ => () // Fall through to standard limits parsing
         }
       }
-      let min = self.parse_u64()
+      // Parse limits - use u64 for table64, u32 for table32
+      let min = if is_table64 {
+        self.parse_u64()
+      } else {
+        self.parse_u32().to_int64()
+      }
       let max = match self.current.token {
-        Number(_) => Some(self.parse_u64())
+        Number(_) =>
+          Some(
+            if is_table64 {
+              self.parse_u64()
+            } else {
+              self.parse_u32().to_int64()
+            },
+          )
         _ => None
       }
       let elem_type = self.parse_value_type()

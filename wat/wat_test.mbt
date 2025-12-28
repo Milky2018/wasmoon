@@ -1090,3 +1090,51 @@ test "parse multi-table with table64" {
   inspect(mod_.tables[0].type_.is_table64, content="false")
   inspect(mod_.tables[1].type_.is_table64, content="true")
 }
+
+///|
+test "parse table64 with large 64-bit limits" {
+  // Regression test: table64 limits must use u64 parsing, not u32
+  let wat =
+    #|(module
+    #|  (table i64 0xffff_ffff_ffff funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables.length(), content="1")
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+  // 0xffffffffffff = 281474976710655
+  inspect(mod_.tables[0].type_.limits.min, content="281474976710655")
+  inspect(mod_.tables[0].type_.limits.max, content="None")
+}
+
+///|
+test "parse table64 with large 64-bit min and max" {
+  // Regression test: both min and max must use u64 parsing
+  let wat =
+    #|(module
+    #|  (table i64 0x1_0000_0000 0x2_0000_0000 funcref)
+    #|)
+  let mod_ = parse(wat)
+  inspect(mod_.tables[0].type_.is_table64, content="true")
+  // 0x100000000 = 4294967296 (larger than u32 max)
+  inspect(mod_.tables[0].type_.limits.min, content="4294967296")
+  // 0x200000000 = 8589934592
+  inspect(mod_.tables[0].type_.limits.max, content="Some(8589934592)")
+}
+
+///|
+test "parse table64 import with large 64-bit limits" {
+  // Regression test: imported table64 limits must use u64 parsing
+  let wat =
+    #|(module
+    #|  (import "m" "t" (table i64 0xffff_ffff_ffff 0x1_0000_0000_0000 funcref))
+    #|)
+  let mod_ = parse(wat)
+  guard mod_.imports[0].desc is @types.ImportDesc::Table(tbl_type) else {
+    return
+  }
+  inspect(tbl_type.is_table64, content="true")
+  // 0xffffffffffff = 281474976710655
+  inspect(tbl_type.limits.min, content="281474976710655")
+  // 0x1000000000000 = 281474976710656
+  inspect(tbl_type.limits.max, content="Some(281474976710656)")
+}
