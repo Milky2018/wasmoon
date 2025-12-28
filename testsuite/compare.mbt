@@ -76,6 +76,7 @@ pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
     StructRef(idx) => idx.to_int64()
     I31(n) => n.to_int64()
     Null => -1L // null sentinel
+    V128(_) => abort("V128 not yet supported in testsuite")
   }
 }
 

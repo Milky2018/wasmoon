@@ -33,6 +33,7 @@ pub(all) suberror ValidationError {
   MultipleTables
   InvalidLimits(String)
   InvalidAlignment(String)
+  InvalidLaneIndex(Int, Int)
   ConstantExpressionRequired
   MutableGlobalInConstExpr
   DuplicateExportName(String)

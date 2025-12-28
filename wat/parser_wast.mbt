@@ -1028,8 +1028,166 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
       self.advance()
       RefAny
     }
+    Keyword("v128.const") => {
+      self.advance()
+      // Parse lane type and values - may contain NaN patterns
+      self.parse_wast_v128_const()
+    }
     _ =>
       raise WatError::UnexpectedToken("expected const instruction", self.loc())
+  }
+}
+
+///|
+/// Parse v128.const for WAST - handles NaN patterns
+fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
+  match self.current.token {
+    Keyword(lane_type) => {
+      self.advance()
+      match lane_type {
+        "i8x16" => {
+          let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+          for _ in 0..<16 {
+            let v = self.parse_wast_i32()
+            buf.write_byte(v.to_byte())
+          }
+          V128(buf.contents())
+        }
+        "i16x8" => {
+          let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+          for _ in 0..<8 {
+            let v = self.parse_wast_i32()
+            buf.write_byte(v.to_byte())
+            buf.write_byte((v >> 8).to_byte())
+          }
+          V128(buf.contents())
+        }
+        "i32x4" => {
+          let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+          for _ in 0..<4 {
+            let v = self.parse_wast_i32()
+            buf.write_byte(v.to_byte())
+            buf.write_byte((v >> 8).to_byte())
+            buf.write_byte((v >> 16).to_byte())
+            buf.write_byte((v >> 24).to_byte())
+          }
+          V128(buf.contents())
+        }
+        "i64x2" => {
+          let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+          for _ in 0..<2 {
+            let v = self.parse_wast_i64()
+            buf.write_byte(v.to_byte())
+            buf.write_byte((v >> 8).to_byte())
+            buf.write_byte((v >> 16).to_byte())
+            buf.write_byte((v >> 24).to_byte())
+            buf.write_byte((v >> 32).to_byte())
+            buf.write_byte((v >> 40).to_byte())
+            buf.write_byte((v >> 48).to_byte())
+            buf.write_byte((v >> 56).to_byte())
+          }
+          V128(buf.contents())
+        }
+        "f32x4" => {
+          // Check if any lane has NaN pattern
+          let lanes : Array[WastLaneValue] = []
+          let mut has_nan = false
+          for _ in 0..<4 {
+            match self.current.token {
+              Keyword("nan:canonical") => {
+                self.advance()
+                lanes.push(WastLaneValue::F32CanonicalNan)
+                has_nan = true
+              }
+              Keyword("nan:arithmetic") => {
+                self.advance()
+                lanes.push(WastLaneValue::F32ArithmeticNan)
+                has_nan = true
+              }
+              _ => {
+                let f = self.parse_wast_f32()
+                lanes.push(WastLaneValue::F32(f))
+              }
+            }
+          }
+          if has_nan {
+            V128Pattern(lanes)
+          } else {
+            // Build bytes from float values
+            let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+            for lane in lanes {
+              match lane {
+                WastLaneValue::F32(f) => {
+                  let v = f.reinterpret_as_int()
+                  buf.write_byte(v.to_byte())
+                  buf.write_byte((v >> 8).to_byte())
+                  buf.write_byte((v >> 16).to_byte())
+                  buf.write_byte((v >> 24).to_byte())
+                }
+                _ => ()
+              }
+            }
+            V128(buf.contents())
+          }
+        }
+        "f64x2" => {
+          // Check if any lane has NaN pattern
+          let lanes : Array[WastLaneValue] = []
+          let mut has_nan = false
+          for _ in 0..<2 {
+            match self.current.token {
+              Keyword("nan:canonical") => {
+                self.advance()
+                lanes.push(WastLaneValue::F64CanonicalNan)
+                has_nan = true
+              }
+              Keyword("nan:arithmetic") => {
+                self.advance()
+                lanes.push(WastLaneValue::F64ArithmeticNan)
+                has_nan = true
+              }
+              _ => {
+                let f = self.parse_wast_f64()
+                lanes.push(WastLaneValue::F64(f))
+              }
+            }
+          }
+          if has_nan {
+            V128Pattern(lanes)
+          } else {
+            // Build bytes from double values
+            let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+            for lane in lanes {
+              match lane {
+                WastLaneValue::F64(f) => {
+                  let v = f.reinterpret_as_int64()
+                  buf.write_byte(v.to_byte())
+                  buf.write_byte((v >> 8).to_byte())
+                  buf.write_byte((v >> 16).to_byte())
+                  buf.write_byte((v >> 24).to_byte())
+                  buf.write_byte((v >> 32).to_byte())
+                  buf.write_byte((v >> 40).to_byte())
+                  buf.write_byte((v >> 48).to_byte())
+                  buf.write_byte((v >> 56).to_byte())
+                }
+                _ => ()
+              }
+            }
+            V128(buf.contents())
+          }
+        }
+        _ =>
+          raise WatError::ParseError(
+            "invalid v128.const lane type: \{lane_type}",
+            self.loc(),
+          )
+      }
+    }
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected lane type (i8x16, i16x8, etc), got \{self.current}",
+        self.loc(),
+      )
   }
 }
 

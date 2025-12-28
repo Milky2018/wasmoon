@@ -56,6 +56,20 @@ pub enum WastCommand {
 }
 pub impl Show for WastCommand
 
+pub enum WastLaneValue {
+  I8(Int)
+  I16(Int)
+  I32(Int)
+  I64(Int64)
+  F32(Float)
+  F64(Double)
+  F32CanonicalNan
+  F32ArithmeticNan
+  F64CanonicalNan
+  F64ArithmeticNan
+}
+pub impl Show for WastLaneValue
+
 pub enum WastModuleSource {
   Binary(Bytes)
   Quote(Array[String])
@@ -73,10 +87,12 @@ pub enum WastValue {
   I64(Int64)
   F32(Float)
   F64(Double)
+  V128(Bytes)
   F32CanonicalNan
   F32ArithmeticNan
   F64CanonicalNan
   F64ArithmeticNan
+  V128Pattern(Array[WastLaneValue])
   RefNull(String)
   RefExtern(Int)
   RefExternAny

@@ -452,6 +452,7 @@ fn encode_value_for_jit(
     I64(n) => n
     F32(n) => n.reinterpret_as_int().to_int64()
     F64(n) => n.reinterpret_as_int64()
+    V128(_) => abort("V128 not supported in JIT")
     ExnRef(_) => NULL_REF // Exception refs not supported in tables
   }
 }

@@ -287,6 +287,19 @@ fn format_value(v : @types.Value) -> String {
     ArrayRef(idx) => "arrayref(\{idx})"
     StructRef(idx) => "structref(\{idx})"
     I31(n) => "i31(\{n})"
+    V128(bytes) => {
+      let hex_chars = "0123456789abcdef"
+      let hex = StringBuilder::new()
+      for i in 0..<bytes.length() {
+        if i > 0 {
+          hex.write_string(" ")
+        }
+        let b = bytes[i].to_int()
+        hex.write_char(hex_chars.code_unit_at(b / 16).unsafe_to_char())
+        hex.write_char(hex_chars.code_unit_at(b % 16).unsafe_to_char())
+      }
+      "v128(\{hex.to_string()})"
+    }
   }
 }
 
@@ -502,6 +515,7 @@ fn init_jit_globals(
       StructRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
       I31(n) => @jit.encode_i31(n)
       Null => 0L // null is encoded as 0 in JIT
+      V128(_) => abort("V128 globals not yet supported in JIT")
     }
     // Write value at offset i * 16
     let offset = globals_ptr + (i * 16).to_int64()
@@ -585,6 +599,7 @@ fn run_with_jit(
                   StructRef(idx) => idx.to_int64()
                   I31(n) => n.to_int64()
                   Null => -1L // Sentinel value for null reference
+                  V128(_) => abort("V128 args not yet supported in JIT")
                 }
                 i64_args.push(v)
               }

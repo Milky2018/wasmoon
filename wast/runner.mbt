@@ -595,6 +595,9 @@ pub fn invoke_action(
                   RefExternAny => NULL_REF // any extern ref (placeholder)
                   // GC reference types - these shouldn't appear as args but handle them
                   RefArray | RefStruct | RefEq | RefI31 | RefAny => NULL_REF
+                  // V128 not yet supported as JIT args
+                  V128(_) | V128Pattern(_) =>
+                    abort("V128 args not yet supported in JIT")
                 }
                 i64_args.push(v)
               }
@@ -804,9 +807,13 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
     I64(n) => @types.Value::I64(n)
     F32(n) => @types.Value::F32(n)
     F64(n) => @types.Value::F64(n)
+    V128(bytes) => @types.Value::V128(bytes)
     F32CanonicalNan | F32ArithmeticNan =>
       @types.Value::F32((0.0 : Float) / (0.0 : Float))
     F64CanonicalNan | F64ArithmeticNan => @types.Value::F64(0.0 / 0.0)
+    V128Pattern(_) =>
+      // For patterns, use a placeholder - actual matching is done in values_match
+      @types.Value::V128(Bytes::make(16, b'\x00'))
     RefNull(_) => @types.Value::Null
     RefExtern(n) => @types.Value::ExternRef(n)
     RefHost(n) => @types.Value::ExternRef(n) // ref.host is like ref.extern for testing
@@ -844,7 +851,82 @@ pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
     (I31(_), RefAny) => true
     (StructRef(_), RefAny) => true
     (ArrayRef(_), RefAny) => true
+    // V128 matching
+    (V128(a), V128(e)) => bytes_equal(a, e)
+    (V128(a), V128Pattern(lanes)) => v128_pattern_match(a, lanes)
     _ => false
+  }
+}
+
+///|
+fn bytes_equal(a : Bytes, b : Bytes) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  for i in 0..<a.length() {
+    if a[i] != b[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn v128_pattern_match(
+  actual : Bytes,
+  lanes : Array[@wat.WastLaneValue],
+) -> Bool {
+  // Match lane by lane
+  if lanes.length() == 4 {
+    // f32x4 - 4 lanes
+    for i in 0..<4 {
+      let offset = i * 4
+      let lane_bits = actual[offset].to_int() |
+        (actual[offset + 1].to_int() << 8) |
+        (actual[offset + 2].to_int() << 16) |
+        (actual[offset + 3].to_int() << 24)
+      let actual_f = Float::reinterpret_from_int(lane_bits)
+      match lanes[i] {
+        F32(e) =>
+          if not(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
+            return false
+          }
+        F32CanonicalNan | F32ArithmeticNan =>
+          if not(actual_f.is_nan()) {
+            return false
+          }
+        _ => return false
+      }
+    }
+    true
+  } else if lanes.length() == 2 {
+    // f64x2 - 2 lanes
+    for i in 0..<2 {
+      let offset = i * 8
+      let lane_bits = actual[offset].to_int().to_int64() |
+        (actual[offset + 1].to_int().to_int64() << 8) |
+        (actual[offset + 2].to_int().to_int64() << 16) |
+        (actual[offset + 3].to_int().to_int64() << 24) |
+        (actual[offset + 4].to_int().to_int64() << 32) |
+        (actual[offset + 5].to_int().to_int64() << 40) |
+        (actual[offset + 6].to_int().to_int64() << 48) |
+        (actual[offset + 7].to_int().to_int64() << 56)
+      let actual_f = lane_bits.reinterpret_as_double()
+      match lanes[i] {
+        F64(e) =>
+          if not(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
+            return false
+          }
+        F64CanonicalNan | F64ArithmeticNan =>
+          if not(actual_f.is_nan()) {
+            return false
+          }
+        _ => return false
+      }
+    }
+    true
+  } else {
+    false
   }
 }
 

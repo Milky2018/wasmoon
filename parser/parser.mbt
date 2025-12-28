@@ -1353,7 +1353,430 @@ fn Parser::read_instruction(
         _ => raise UnknownOpcode(0xFC00 + subopcode)
       }
     }
+    // SIMD instructions (0xFD prefix)
+    0xFD => {
+      let subopcode = self.read_u32()
+      self.parse_simd_instruction(subopcode)
+    }
     _ => raise UnknownOpcode(opcode)
+  }
+}
+
+///|
+/// Parse SIMD instruction given the subopcode after 0xFD prefix
+fn Parser::parse_simd_instruction(
+  self : Parser,
+  subopcode : Int,
+) -> @types.Instruction raise ParserError {
+  match subopcode {
+    // Memory operations
+    0 => {
+      // v128.load memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load(memidx, align, offset)
+    }
+    1 => {
+      // v128.load8x8_s memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load8x8S(memidx, align, offset)
+    }
+    2 => {
+      // v128.load8x8_u memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load8x8U(memidx, align, offset)
+    }
+    3 => {
+      // v128.load16x4_s memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load16x4S(memidx, align, offset)
+    }
+    4 => {
+      // v128.load16x4_u memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load16x4U(memidx, align, offset)
+    }
+    5 => {
+      // v128.load32x2_s memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load32x2S(memidx, align, offset)
+    }
+    6 => {
+      // v128.load32x2_u memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load32x2U(memidx, align, offset)
+    }
+    7 => {
+      // v128.load8_splat memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load8Splat(memidx, align, offset)
+    }
+    8 => {
+      // v128.load16_splat memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load16Splat(memidx, align, offset)
+    }
+    9 => {
+      // v128.load32_splat memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load32Splat(memidx, align, offset)
+    }
+    10 => {
+      // v128.load64_splat memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load64Splat(memidx, align, offset)
+    }
+    11 => {
+      // v128.store memarg
+      let (memidx, align, offset) = self.read_memarg()
+      V128Store(memidx, align, offset)
+    }
+    12 => {
+      // v128.const: read 16 bytes
+      let bytes = self.read_bytes(16)
+      V128Const(bytes)
+    }
+    13 => {
+      // i8x16.shuffle: read 16 lane indices
+      let lanes : FixedArray[Int] = FixedArray::make(16, 0)
+      for i in 0..<16 {
+        lanes[i] = self.read_byte()
+      }
+      I8x16Shuffle(lanes)
+    }
+    14 => I8x16Swizzle
+    // Splat operations
+    15 => I8x16Splat
+    16 => I16x8Splat
+    17 => I32x4Splat
+    18 => I64x2Splat
+    19 => F32x4Splat
+    20 => F64x2Splat
+    // Lane operations
+    21 => {
+      let lane = self.read_byte()
+      I8x16ExtractLaneS(lane)
+    }
+    22 => {
+      let lane = self.read_byte()
+      I8x16ExtractLaneU(lane)
+    }
+    23 => {
+      let lane = self.read_byte()
+      I8x16ReplaceLane(lane)
+    }
+    24 => {
+      let lane = self.read_byte()
+      I16x8ExtractLaneS(lane)
+    }
+    25 => {
+      let lane = self.read_byte()
+      I16x8ExtractLaneU(lane)
+    }
+    26 => {
+      let lane = self.read_byte()
+      I16x8ReplaceLane(lane)
+    }
+    27 => {
+      let lane = self.read_byte()
+      I32x4ExtractLane(lane)
+    }
+    28 => {
+      let lane = self.read_byte()
+      I32x4ReplaceLane(lane)
+    }
+    29 => {
+      let lane = self.read_byte()
+      I64x2ExtractLane(lane)
+    }
+    30 => {
+      let lane = self.read_byte()
+      I64x2ReplaceLane(lane)
+    }
+    31 => {
+      let lane = self.read_byte()
+      F32x4ExtractLane(lane)
+    }
+    32 => {
+      let lane = self.read_byte()
+      F32x4ReplaceLane(lane)
+    }
+    33 => {
+      let lane = self.read_byte()
+      F64x2ExtractLane(lane)
+    }
+    34 => {
+      let lane = self.read_byte()
+      F64x2ReplaceLane(lane)
+    }
+    // i8x16 comparisons
+    35 => I8x16Eq
+    36 => I8x16Ne
+    37 => I8x16LtS
+    38 => I8x16LtU
+    39 => I8x16GtS
+    40 => I8x16GtU
+    41 => I8x16LeS
+    42 => I8x16LeU
+    43 => I8x16GeS
+    44 => I8x16GeU
+    // i16x8 comparisons
+    45 => I16x8Eq
+    46 => I16x8Ne
+    47 => I16x8LtS
+    48 => I16x8LtU
+    49 => I16x8GtS
+    50 => I16x8GtU
+    51 => I16x8LeS
+    52 => I16x8LeU
+    53 => I16x8GeS
+    54 => I16x8GeU
+    // i32x4 comparisons
+    55 => I32x4Eq
+    56 => I32x4Ne
+    57 => I32x4LtS
+    58 => I32x4LtU
+    59 => I32x4GtS
+    60 => I32x4GtU
+    61 => I32x4LeS
+    62 => I32x4LeU
+    63 => I32x4GeS
+    64 => I32x4GeU
+    // f32x4 comparisons
+    65 => F32x4Eq
+    66 => F32x4Ne
+    67 => F32x4Lt
+    68 => F32x4Gt
+    69 => F32x4Le
+    70 => F32x4Ge
+    // f64x2 comparisons
+    71 => F64x2Eq
+    72 => F64x2Ne
+    73 => F64x2Lt
+    74 => F64x2Gt
+    75 => F64x2Le
+    76 => F64x2Ge
+    // v128 bitwise
+    77 => V128Not
+    78 => V128And
+    79 => V128AndNot
+    80 => V128Or
+    81 => V128Xor
+    82 => V128Bitselect
+    83 => V128AnyTrue
+    // Load lane operations
+    84 => {
+      let (memidx, align, offset) = self.read_memarg()
+      let lane = self.read_byte()
+      V128Load8Lane(memidx, align, offset, lane)
+    }
+    85 => {
+      let (memidx, align, offset) = self.read_memarg()
+      let lane = self.read_byte()
+      V128Load16Lane(memidx, align, offset, lane)
+    }
+    86 => {
+      let (memidx, align, offset) = self.read_memarg()
+      let lane = self.read_byte()
+      V128Load32Lane(memidx, align, offset, lane)
+    }
+    87 => {
+      let (memidx, align, offset) = self.read_memarg()
+      let lane = self.read_byte()
+      V128Load64Lane(memidx, align, offset, lane)
+    }
+    // Store lane operations
+    88 => {
+      let (memidx, align, offset) = self.read_memarg()
+      let lane = self.read_byte()
+      V128Store8Lane(memidx, align, offset, lane)
+    }
+    89 => {
+      let (memidx, align, offset) = self.read_memarg()
+      let lane = self.read_byte()
+      V128Store16Lane(memidx, align, offset, lane)
+    }
+    90 => {
+      let (memidx, align, offset) = self.read_memarg()
+      let lane = self.read_byte()
+      V128Store32Lane(memidx, align, offset, lane)
+    }
+    91 => {
+      let (memidx, align, offset) = self.read_memarg()
+      let lane = self.read_byte()
+      V128Store64Lane(memidx, align, offset, lane)
+    }
+    // Load zero operations
+    92 => {
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load32Zero(memidx, align, offset)
+    }
+    93 => {
+      let (memidx, align, offset) = self.read_memarg()
+      V128Load64Zero(memidx, align, offset)
+    }
+    // Floating-point rounding
+    94 => F32x4DemoteF64x2Zero
+    95 => F64x2PromoteLowF32x4
+    // i8x16 operations
+    96 => I8x16Abs
+    97 => I8x16Neg
+    98 => I8x16Popcnt
+    99 => I8x16AllTrue
+    100 => I8x16Bitmask
+    101 => I8x16NarrowI16x8S
+    102 => I8x16NarrowI16x8U
+    103 => F32x4Ceil
+    104 => F32x4Floor
+    105 => F32x4Trunc
+    106 => F32x4Nearest
+    107 => I8x16Shl
+    108 => I8x16ShrS
+    109 => I8x16ShrU
+    110 => I8x16Add
+    111 => I8x16AddSatS
+    112 => I8x16AddSatU
+    113 => I8x16Sub
+    114 => I8x16SubSatS
+    115 => I8x16SubSatU
+    116 => F64x2Ceil
+    117 => F64x2Floor
+    118 => I8x16MinS
+    119 => I8x16MinU
+    120 => I8x16MaxS
+    121 => I8x16MaxU
+    122 => F64x2Trunc
+    123 => I8x16AvgrU
+    124 => I16x8ExtAddPairwiseI8x16S
+    125 => I16x8ExtAddPairwiseI8x16U
+    126 => I32x4ExtAddPairwiseI16x8S
+    127 => I32x4ExtAddPairwiseI16x8U
+    // i16x8 operations
+    128 => I16x8Abs
+    129 => I16x8Neg
+    130 => I16x8Q15MulrSatS
+    131 => I16x8AllTrue
+    132 => I16x8Bitmask
+    133 => I16x8NarrowI32x4S
+    134 => I16x8NarrowI32x4U
+    135 => I16x8ExtendLowI8x16S
+    136 => I16x8ExtendHighI8x16S
+    137 => I16x8ExtendLowI8x16U
+    138 => I16x8ExtendHighI8x16U
+    139 => I16x8Shl
+    140 => I16x8ShrS
+    141 => I16x8ShrU
+    142 => I16x8Add
+    143 => I16x8AddSatS
+    144 => I16x8AddSatU
+    145 => I16x8Sub
+    146 => I16x8SubSatS
+    147 => I16x8SubSatU
+    148 => F64x2Nearest
+    149 => I16x8Mul
+    150 => I16x8MinS
+    151 => I16x8MinU
+    152 => I16x8MaxS
+    153 => I16x8MaxU
+    // 154 is reserved
+    155 => I16x8AvgrU
+    156 => I16x8ExtMulLowI8x16S
+    157 => I16x8ExtMulHighI8x16S
+    158 => I16x8ExtMulLowI8x16U
+    159 => I16x8ExtMulHighI8x16U
+    // i32x4 operations
+    160 => I32x4Abs
+    161 => I32x4Neg
+    // 162 is reserved
+    163 => I32x4AllTrue
+    164 => I32x4Bitmask
+    // 165-166 are reserved
+    167 => I32x4ExtendLowI16x8S
+    168 => I32x4ExtendHighI16x8S
+    169 => I32x4ExtendLowI16x8U
+    170 => I32x4ExtendHighI16x8U
+    171 => I32x4Shl
+    172 => I32x4ShrS
+    173 => I32x4ShrU
+    174 => I32x4Add
+    // 175-176 are reserved
+    177 => I32x4Sub
+    // 178-180 are reserved
+    181 => I32x4Mul
+    182 => I32x4MinS
+    183 => I32x4MinU
+    184 => I32x4MaxS
+    185 => I32x4MaxU
+    186 => I32x4DotI16x8S
+    // 187 is reserved
+    188 => I32x4ExtMulLowI16x8S
+    189 => I32x4ExtMulHighI16x8S
+    190 => I32x4ExtMulLowI16x8U
+    191 => I32x4ExtMulHighI16x8U
+    // i64x2 operations
+    192 => I64x2Abs
+    193 => I64x2Neg
+    // 194 is reserved
+    195 => I64x2AllTrue
+    196 => I64x2Bitmask
+    // 197-198 are reserved
+    199 => I64x2ExtendLowI32x4S
+    200 => I64x2ExtendHighI32x4S
+    201 => I64x2ExtendLowI32x4U
+    202 => I64x2ExtendHighI32x4U
+    203 => I64x2Shl
+    204 => I64x2ShrS
+    205 => I64x2ShrU
+    206 => I64x2Add
+    // 207-208 are reserved
+    209 => I64x2Sub
+    // 210-212 are reserved
+    213 => I64x2Mul
+    214 => I64x2Eq
+    215 => I64x2Ne
+    216 => I64x2LtS
+    217 => I64x2GtS
+    218 => I64x2LeS
+    219 => I64x2GeS
+    220 => I64x2ExtMulLowI32x4S
+    221 => I64x2ExtMulHighI32x4S
+    222 => I64x2ExtMulLowI32x4U
+    223 => I64x2ExtMulHighI32x4U
+    // f32x4 operations
+    224 => F32x4Abs
+    225 => F32x4Neg
+    // 226 is reserved
+    227 => F32x4Sqrt
+    228 => F32x4Add
+    229 => F32x4Sub
+    230 => F32x4Mul
+    231 => F32x4Div
+    232 => F32x4Min
+    233 => F32x4Max
+    234 => F32x4Pmin
+    235 => F32x4Pmax
+    // f64x2 operations
+    236 => F64x2Abs
+    237 => F64x2Neg
+    // 238 is reserved
+    239 => F64x2Sqrt
+    240 => F64x2Add
+    241 => F64x2Sub
+    242 => F64x2Mul
+    243 => F64x2Div
+    244 => F64x2Min
+    245 => F64x2Max
+    246 => F64x2Pmin
+    247 => F64x2Pmax
+    // Conversions
+    248 => I32x4TruncSatF32x4S
+    249 => I32x4TruncSatF32x4U
+    250 => F32x4ConvertI32x4S
+    251 => F32x4ConvertI32x4U
+    252 => I32x4TruncSatF64x2SZero
+    253 => I32x4TruncSatF64x2UZero
+    254 => F64x2ConvertLowI32x4S
+    255 => F64x2ConvertLowI32x4U
+    _ => raise UnknownOpcode(0xFD00 + subopcode)
   }
 }
 

@@ -81,6 +81,7 @@ pub fn value_to_i64(value : @types.Value) -> Int64 {
     I64(n) => n
     F32(f) => f.reinterpret_as_int().to_int64()
     F64(d) => d.reinterpret_as_int64()
+    V128(_) => abort("V128 values not yet supported in JIT")
     // gc_ref is 1-based: StructRef(0) -> gc_ref=1 -> encoded=2
     StructRef(idx) => (idx + 1).to_int64() << 1
     ArrayRef(idx) => (idx + 1).to_int64() << 1
