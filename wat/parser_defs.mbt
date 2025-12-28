@@ -1234,9 +1234,21 @@ fn Parser::parse_import_def(
       if is_table64 {
         self.advance()
       }
-      let min = self.parse_u32().to_int64()
+      // Use u64 for table64 limits, u32 for table32
+      let min = if is_table64 {
+        self.parse_u64()
+      } else {
+        self.parse_u32().to_int64()
+      }
       let max = match self.current.token {
-        Number(_) => Some(self.parse_u32().to_int64())
+        Number(_) =>
+          Some(
+            if is_table64 {
+              self.parse_u64()
+            } else {
+              self.parse_u32().to_int64()
+            },
+          )
         _ => None
       }
       let elem_type = self.parse_value_type()
