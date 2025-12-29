@@ -558,3 +558,64 @@ fn lower_v128_fcmp_ne(
     block.add_inst(not_inst)
   }
 }
+
+///|
+/// Lower V128 fused multiply-add (relaxed_madd) or fused multiply-subtract (relaxed_nmadd)
+/// WebAssembly spec:
+///   relaxed_madd(a, b, c) = a * b + c
+///   relaxed_nmadd(a, b, c) = -(a * b) + c = c - a * b
+fn lower_v128_fma(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  is_f32 : Bool,
+  is_sub : Bool,
+) -> Unit {
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    // WebAssembly relaxed_madd: (a, b, c) -> a * b + c
+    // WebAssembly relaxed_nmadd: (a, b, c) -> -(a * b) + c = c - a * b
+    // AArch64 FMLA: Vd = Vd + Vn * Vm (accumulator is first operand AND destination)
+    // AArch64 FMLS: Vd = Vd - Vn * Vm
+    // For madd: dst = a * b + c = c + a * b, use FMLA with Vd=c, Vn=a, Vm=b
+    // For nmadd: dst = c - a * b, use FMLS with Vd=c, Vn=a, Vm=b
+    let a = ctx.get_vreg_for_use(inst.operands[0], block)
+    let b = ctx.get_vreg_for_use(inst.operands[1], block)
+    let c = ctx.get_vreg_for_use(inst.operands[2], block)
+    // Both madd and nmadd use: acc=c, v1=a, v2=b
+    // madd: c + a * b = a * b + c
+    // nmadd: c - a * b = -(a * b) + c
+    let opcode = if is_sub {
+      @instr.SIMDFMls(is_f32)
+    } else {
+      @instr.SIMDFMla(is_f32)
+    }
+    let vcode_inst = @instr.VCodeInst::new(opcode)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(c)) // accumulator
+    vcode_inst.add_use(Virtual(a)) // multiplicand 1
+    vcode_inst.add_use(Virtual(b)) // multiplicand 2
+    block.add_inst(vcode_inst)
+  }
+}
+
+///|
+/// Lower V128 relaxed dot product with accumulator: result = c + dot(a, b)
+fn lower_v128_relaxed_dot_add(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  if inst.result is Some(result) {
+    let dst = ctx.get_vreg(result)
+    let a = ctx.get_vreg_for_use(inst.operands[0], block)
+    let b = ctx.get_vreg_for_use(inst.operands[1], block)
+    let c = ctx.get_vreg_for_use(inst.operands[2], block)
+    let vcode_inst = @instr.VCodeInst::new(@instr.SIMDRelaxedDot8to32Add)
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(a))
+    vcode_inst.add_use(Virtual(b))
+    vcode_inst.add_use(Virtual(c))
+    block.add_inst(vcode_inst)
+  }
+}

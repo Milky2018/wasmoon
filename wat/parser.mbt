@@ -2476,6 +2476,8 @@ pub enum WastValue {
   RefEq // (ref.eq) - any eq reference
   RefI31 // (ref.i31) - any i31 reference
   RefAny // (ref.any) - any reference
+  // Relaxed SIMD: multiple valid results
+  Either(Array[WastValue]) // (either v1 v2 ...) - any of the alternatives is valid
 } derive(Show)
 
 ///|

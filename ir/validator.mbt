@@ -682,7 +682,28 @@ fn validate_instruction(
     | V128Store8Lane(_, _, _, _)
     | V128Store16Lane(_, _, _, _)
     | V128Store32Lane(_, _, _, _)
-    | V128Store64Lane(_, _, _, _) => ()
+    | V128Store64Lane(_, _, _, _)
+    // Relaxed SIMD instructions
+    | V128RelaxedSwizzle
+    | V128RelaxedTruncF32toI32S
+    | V128RelaxedTruncF32toI32U
+    | V128RelaxedTruncF64toI32SZero
+    | V128RelaxedTruncF64toI32UZero
+    | V128RelaxedMaddF32
+    | V128RelaxedNmaddF32
+    | V128RelaxedMaddF64
+    | V128RelaxedNmaddF64
+    | V128RelaxedLaneselect8
+    | V128RelaxedLaneselect16
+    | V128RelaxedLaneselect32
+    | V128RelaxedLaneselect64
+    | V128RelaxedMinF32
+    | V128RelaxedMaxF32
+    | V128RelaxedMinF64
+    | V128RelaxedMaxF64
+    | V128RelaxedQ15MulrS
+    | V128RelaxedDot8to16S
+    | V128RelaxedDot8to32AddS => ()
   }
 }
 

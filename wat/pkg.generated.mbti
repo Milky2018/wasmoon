@@ -103,6 +103,7 @@ pub enum WastValue {
   RefEq
   RefI31
   RefAny
+  Either(Array[WastValue])
 }
 pub impl Show for WastValue
 

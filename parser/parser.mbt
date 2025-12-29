@@ -1776,6 +1776,27 @@ fn Parser::parse_simd_instruction(
     253 => I32x4TruncSatF64x2UZero
     254 => F64x2ConvertLowI32x4S
     255 => F64x2ConvertLowI32x4U
+    // Relaxed SIMD instructions (0x100+)
+    256 => I8x16RelaxedSwizzle
+    257 => I32x4RelaxedTruncF32x4S
+    258 => I32x4RelaxedTruncF32x4U
+    259 => I32x4RelaxedTruncF64x2SZero
+    260 => I32x4RelaxedTruncF64x2UZero
+    261 => F32x4RelaxedMadd
+    262 => F32x4RelaxedNmadd
+    263 => F64x2RelaxedMadd
+    264 => F64x2RelaxedNmadd
+    265 => I8x16RelaxedLaneselect
+    266 => I16x8RelaxedLaneselect
+    267 => I32x4RelaxedLaneselect
+    268 => I64x2RelaxedLaneselect
+    269 => F32x4RelaxedMin
+    270 => F32x4RelaxedMax
+    271 => F64x2RelaxedMin
+    272 => F64x2RelaxedMax
+    273 => I16x8RelaxedQ15mulrS
+    274 => I16x8RelaxedDotI8x16I7x16S
+    275 => I32x4RelaxedDotI8x16I7x16AddS
     _ => raise UnknownOpcode(0xFD00 + subopcode)
   }
 }

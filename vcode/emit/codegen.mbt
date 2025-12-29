@@ -2579,6 +2579,73 @@ fn MachineCode::emit_instruction(
         }
       }
     }
+    // ============ Relaxed SIMD ============
+    SIMDFMla(is_f32) => {
+      // FMLA: Vd = Vd + Vn * Vm
+      // uses[0] = accumulator, uses[1] = v1, uses[2] = v2
+      let rd = wreg_num(inst.defs[0])
+      let acc = reg_num(inst.uses[0])
+      let rn = reg_num(inst.uses[1])
+      let rm = reg_num(inst.uses[2])
+      // First copy accumulator to destination
+      OrrVec(rd, acc).emit(self)
+      // Then do FMLA
+      if is_f32 {
+        Fmla4S(rd, rn, rm).emit(self)
+      } else {
+        Fmla2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDFMls(is_f32) => {
+      // FMLS: Vd = Vd - Vn * Vm
+      // uses[0] = accumulator, uses[1] = v1, uses[2] = v2
+      let rd = wreg_num(inst.defs[0])
+      let acc = reg_num(inst.uses[0])
+      let rn = reg_num(inst.uses[1])
+      let rm = reg_num(inst.uses[2])
+      // First copy accumulator to destination
+      OrrVec(rd, acc).emit(self)
+      // Then do FMLS
+      if is_f32 {
+        Fmls4S(rd, rn, rm).emit(self)
+      } else {
+        Fmls2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDRelaxedDot8to16 => {
+      // i16x8.relaxed_dot_i8x16_i7x16_s: dot product of i8x16 vectors to i16x8
+      // result[i] = a[2*i]*b[2*i] + a[2*i+1]*b[2*i+1]
+      // uses[0] = v1 (i8x16), uses[1] = v2 (i8x16)
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      // Step 1: SMULL for lower 8 bytes - products for bytes 0-7
+      Smull8H(16, rn, rm).emit(self)
+      // Step 2: SMULL2 for upper 8 bytes - products for bytes 8-15
+      Smull2_8H(17, rn, rm).emit(self)
+      // Step 3: ADDP pairwise add to get final dot products
+      // Result: [a0*b0+a1*b1, a2*b2+a3*b3, ..., a14*b14+a15*b15]
+      Addp8H(rd, 16, 17).emit(self)
+    }
+    SIMDRelaxedDot8to32Add => {
+      // i32x4.relaxed_dot_i8x16_i7x16_add_s: dot product + accumulator
+      // result[i] = c[i] + sum(a[4*i+k]*b[4*i+k], k=0..3)
+      // uses[0] = v1, uses[1] = v2, uses[2] = accumulator
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let acc = reg_num(inst.uses[2])
+      // Step 1: SMULL for lower 8 bytes
+      Smull8H(16, rn, rm).emit(self)
+      // Step 2: SMULL2 for upper 8 bytes
+      Smull2_8H(17, rn, rm).emit(self)
+      // Step 3: ADDP pairwise to get i16x8 dot products
+      Addp8H(16, 16, 17).emit(self)
+      // Step 4: SADDLP to get i32x4 from i16x8 (another pairwise add with widening)
+      Saddlp4S(16, 16).emit(self)
+      // Step 5: Add accumulator
+      Add4S(rd, 16, acc).emit(self)
+    }
   }
 }
 
