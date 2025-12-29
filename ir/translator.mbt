@@ -2463,6 +2463,134 @@ fn Translator::translate_instruction(
         Opcode::V128Store64Lane(memidx, 0, offset, lane),
       )
     }
+
+    // Relaxed SIMD instructions
+    I8x16RelaxedSwizzle => {
+      // Same as regular swizzle on ARM
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedSwizzle,
+        [a, b],
+      )
+      self.push(result)
+    }
+    I32x4RelaxedTruncF32x4S =>
+      self.translate_simd_unary(Opcode::V128RelaxedTruncF32toI32S)
+    I32x4RelaxedTruncF32x4U =>
+      self.translate_simd_unary(Opcode::V128RelaxedTruncF32toI32U)
+    I32x4RelaxedTruncF64x2SZero =>
+      self.translate_simd_unary(Opcode::V128RelaxedTruncF64toI32SZero)
+    I32x4RelaxedTruncF64x2UZero =>
+      self.translate_simd_unary(Opcode::V128RelaxedTruncF64toI32UZero)
+    F32x4RelaxedMadd => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedMaddF32,
+        [a, b, c],
+      )
+      self.push(result)
+    }
+    F32x4RelaxedNmadd => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedNmaddF32,
+        [a, b, c],
+      )
+      self.push(result)
+    }
+    F64x2RelaxedMadd => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedMaddF64,
+        [a, b, c],
+      )
+      self.push(result)
+    }
+    F64x2RelaxedNmadd => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedNmaddF64,
+        [a, b, c],
+      )
+      self.push(result)
+    }
+    I8x16RelaxedLaneselect => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedLaneselect8,
+        [a, b, c],
+      )
+      self.push(result)
+    }
+    I16x8RelaxedLaneselect => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedLaneselect16,
+        [a, b, c],
+      )
+      self.push(result)
+    }
+    I32x4RelaxedLaneselect => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedLaneselect32,
+        [a, b, c],
+      )
+      self.push(result)
+    }
+    I64x2RelaxedLaneselect => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedLaneselect64,
+        [a, b, c],
+      )
+      self.push(result)
+    }
+    F32x4RelaxedMin => self.translate_simd_binary(Opcode::V128RelaxedMinF32)
+    F32x4RelaxedMax => self.translate_simd_binary(Opcode::V128RelaxedMaxF32)
+    F64x2RelaxedMin => self.translate_simd_binary(Opcode::V128RelaxedMinF64)
+    F64x2RelaxedMax => self.translate_simd_binary(Opcode::V128RelaxedMaxF64)
+    I16x8RelaxedQ15mulrS =>
+      self.translate_simd_binary(Opcode::V128RelaxedQ15MulrS)
+    I16x8RelaxedDotI8x16I7x16S =>
+      self.translate_simd_binary(Opcode::V128RelaxedDot8to16S)
+    I32x4RelaxedDotI8x16I7x16AddS => {
+      let c = self.pop()
+      let b = self.pop()
+      let a = self.pop()
+      let result = self.builder.emit_inst(
+        Type::V128,
+        Opcode::V128RelaxedDot8to32AddS,
+        [a, b, c],
+      )
+      self.push(result)
+    }
     inst => abort("unimplemented ir instruction \{inst}")
   }
 }

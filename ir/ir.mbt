@@ -613,6 +613,28 @@ pub enum Opcode {
   V128Store16Lane(Int, Int, Int64, Int)
   V128Store32Lane(Int, Int, Int64, Int)
   V128Store64Lane(Int, Int, Int64, Int)
+
+  // Relaxed SIMD instructions
+  V128RelaxedSwizzle // v128, v128 -> v128 (same as swizzle on ARM)
+  V128RelaxedTruncF32toI32S // v128 -> v128
+  V128RelaxedTruncF32toI32U
+  V128RelaxedTruncF64toI32SZero
+  V128RelaxedTruncF64toI32UZero
+  V128RelaxedMaddF32 // v128, v128, v128 -> v128 (a * b + c)
+  V128RelaxedNmaddF32 // v128, v128, v128 -> v128 (-a * b + c)
+  V128RelaxedMaddF64
+  V128RelaxedNmaddF64
+  V128RelaxedLaneselect8 // v128, v128, v128 -> v128 (bitselect)
+  V128RelaxedLaneselect16
+  V128RelaxedLaneselect32
+  V128RelaxedLaneselect64
+  V128RelaxedMinF32 // v128, v128 -> v128
+  V128RelaxedMaxF32
+  V128RelaxedMinF64
+  V128RelaxedMaxF64
+  V128RelaxedQ15MulrS // v128, v128 -> v128
+  V128RelaxedDot8to16S // v128, v128 -> v128
+  V128RelaxedDot8to32AddS // v128, v128, v128 -> v128
 } derive(Show)
 
 ///|

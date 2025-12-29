@@ -403,6 +403,11 @@ enum Instruction {
   Fminnm2D(Int, Int, Int) // FMINNM Vd.2D, Vn.2D, Vm.2D
   Fmaxnm4S(Int, Int, Int) // FMAXNM Vd.4S, Vn.4S, Vm.4S
   Fmaxnm2D(Int, Int, Int) // FMAXNM Vd.2D, Vn.2D, Vm.2D
+  // Fused multiply-add (relaxed SIMD)
+  Fmla4S(Int, Int, Int) // FMLA Vd.4S, Vn.4S, Vm.4S: Vd = Vd + Vn * Vm
+  Fmla2D(Int, Int, Int) // FMLA Vd.2D, Vn.2D, Vm.2D
+  Fmls4S(Int, Int, Int) // FMLS Vd.4S, Vn.4S, Vm.4S: Vd = Vd - Vn * Vm
+  Fmls2D(Int, Int, Int) // FMLS Vd.2D, Vn.2D, Vm.2D
   // Float unary
   Fabs4S(Int, Int) // FABS Vd.4S, Vn.4S
   Fabs2D(Int, Int) // FABS Vd.2D, Vn.2D
@@ -925,6 +930,10 @@ fn Instruction::annotate(self : Instruction) -> String {
     Fminnm2D(rd, rn, rm) => "fminnm v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
     Fmaxnm4S(rd, rn, rm) => "fmaxnm v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
     Fmaxnm2D(rd, rn, rm) => "fmaxnm v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fmla4S(rd, rn, rm) => "fmla v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fmla2D(rd, rn, rm) => "fmla v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fmls4S(rd, rn, rm) => "fmls v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fmls2D(rd, rn, rm) => "fmls v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
     Fabs4S(rd, rn) => "fabs v\{rd}.4s, v\{rn}.4s"
     Fabs2D(rd, rn) => "fabs v\{rd}.2d, v\{rn}.2d"
     Fneg4S(rd, rn) => "fneg v\{rd}.4s, v\{rn}.4s"
@@ -2837,6 +2846,26 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
     Fmax2D(rd, rn, rm) => {
       // FMAX Vd.2D, Vn.2D, Vm.2D: 0x4E60F400 | (Rm << 16) | (Rn << 5) | Rd
       let enc = 0x4E60F400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmla4S(rd, rn, rm) => {
+      // FMLA Vd.4S, Vn.4S, Vm.4S: 0x4E20CC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E20CC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmla2D(rd, rn, rm) => {
+      // FMLA Vd.2D, Vn.2D, Vm.2D: 0x4E60CC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E60CC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmls4S(rd, rn, rm) => {
+      // FMLS Vd.4S, Vn.4S, Vm.4S: 0x4EA0CC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EA0CC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmls2D(rd, rn, rm) => {
+      // FMLS Vd.2D, Vn.2D, Vm.2D: 0x4EE0CC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EE0CC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
       (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
     }
     Fabs4S(rd, rn) => {

@@ -3545,7 +3545,12 @@ fn validate_instr(
     | F64x2ConvertLowI32x4S
     | F64x2ConvertLowI32x4U
     | F32x4DemoteF64x2Zero
-    | F64x2PromoteLowF32x4 => {
+    | F64x2PromoteLowF32x4
+    // Relaxed SIMD: v128 -> v128
+    | I32x4RelaxedTruncF32x4S
+    | I32x4RelaxedTruncF32x4U
+    | I32x4RelaxedTruncF64x2SZero
+    | I32x4RelaxedTruncF64x2UZero => {
       stack.pop(V128)
       stack.push(V128)
     }
@@ -3635,7 +3640,15 @@ fn validate_instr(
     | F64x2Min
     | F64x2Max
     | F64x2Pmin
-    | F64x2Pmax => {
+    | F64x2Pmax
+    // Relaxed SIMD: v128 v128 -> v128
+    | I8x16RelaxedSwizzle
+    | F32x4RelaxedMin
+    | F32x4RelaxedMax
+    | F64x2RelaxedMin
+    | F64x2RelaxedMax
+    | I16x8RelaxedQ15mulrS
+    | I16x8RelaxedDotI8x16I7x16S => {
       stack.pop(V128)
       stack.pop(V128)
       stack.push(V128)
@@ -3660,7 +3673,17 @@ fn validate_instr(
     }
 
     // Bitselect: v128 v128 v128 -> v128
-    V128Bitselect => {
+    V128Bitselect
+    // Relaxed SIMD: v128 v128 v128 -> v128
+    | F32x4RelaxedMadd
+    | F32x4RelaxedNmadd
+    | F64x2RelaxedMadd
+    | F64x2RelaxedNmadd
+    | I8x16RelaxedLaneselect
+    | I16x8RelaxedLaneselect
+    | I32x4RelaxedLaneselect
+    | I64x2RelaxedLaneselect
+    | I32x4RelaxedDotI8x16I7x16AddS => {
       stack.pop(V128)
       stack.pop(V128)
       stack.pop(V128)

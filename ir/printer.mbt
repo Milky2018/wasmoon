@@ -508,6 +508,29 @@ fn format_opcode(
       "v128.store32_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
     V128Store64Lane(memidx, align, offset, lane) =>
       "v128.store64_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
+    // Relaxed SIMD instructions
+    V128RelaxedSwizzle => "v128.relaxed_swizzle \{ops}"
+    V128RelaxedTruncF32toI32S => "v128.relaxed_trunc_f32_to_i32_s \{ops}"
+    V128RelaxedTruncF32toI32U => "v128.relaxed_trunc_f32_to_i32_u \{ops}"
+    V128RelaxedTruncF64toI32SZero =>
+      "v128.relaxed_trunc_f64_to_i32_s_zero \{ops}"
+    V128RelaxedTruncF64toI32UZero =>
+      "v128.relaxed_trunc_f64_to_i32_u_zero \{ops}"
+    V128RelaxedMaddF32 => "v128.relaxed_madd_f32 \{ops}"
+    V128RelaxedNmaddF32 => "v128.relaxed_nmadd_f32 \{ops}"
+    V128RelaxedMaddF64 => "v128.relaxed_madd_f64 \{ops}"
+    V128RelaxedNmaddF64 => "v128.relaxed_nmadd_f64 \{ops}"
+    V128RelaxedLaneselect8 => "v128.relaxed_laneselect8 \{ops}"
+    V128RelaxedLaneselect16 => "v128.relaxed_laneselect16 \{ops}"
+    V128RelaxedLaneselect32 => "v128.relaxed_laneselect32 \{ops}"
+    V128RelaxedLaneselect64 => "v128.relaxed_laneselect64 \{ops}"
+    V128RelaxedMinF32 => "v128.relaxed_min_f32 \{ops}"
+    V128RelaxedMaxF32 => "v128.relaxed_max_f32 \{ops}"
+    V128RelaxedMinF64 => "v128.relaxed_min_f64 \{ops}"
+    V128RelaxedMaxF64 => "v128.relaxed_max_f64 \{ops}"
+    V128RelaxedQ15MulrS => "v128.relaxed_q15mulr_s \{ops}"
+    V128RelaxedDot8to16S => "v128.relaxed_dot_8_to_16_s \{ops}"
+    V128RelaxedDot8to32AddS => "v128.relaxed_dot_8_to_32_add_s \{ops}"
   }
 }
 

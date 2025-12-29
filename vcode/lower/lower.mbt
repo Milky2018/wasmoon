@@ -947,6 +947,60 @@ fn lower_inst(
       lower_v128_store_lane(ctx, inst, block, S32, lane, offset.to_int())
     @ir.Opcode::V128Store64Lane(_, _, offset, lane) =>
       lower_v128_store_lane(ctx, inst, block, D64, lane, offset.to_int())
+
+    // ============ Relaxed SIMD ============
+    // relaxed_swizzle: same as swizzle (TBL instruction, out-of-range gives 0)
+    @ir.Opcode::V128RelaxedSwizzle => lower_v128_swizzle(ctx, inst, block)
+
+    // relaxed_trunc: same as trunc_sat (the relaxation is for NaN behavior)
+    @ir.Opcode::V128RelaxedTruncF32toI32S =>
+      lower_v128_unary(ctx, inst, block, SIMDFCvtToIntS(true))
+    @ir.Opcode::V128RelaxedTruncF32toI32U =>
+      lower_v128_unary(ctx, inst, block, SIMDFCvtToIntU(true))
+    @ir.Opcode::V128RelaxedTruncF64toI32SZero =>
+      lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32SZero)
+    @ir.Opcode::V128RelaxedTruncF64toI32UZero =>
+      lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32UZero)
+
+    // relaxed_madd/nmadd: fused multiply-add/subtract
+    @ir.Opcode::V128RelaxedMaddF32 =>
+      lower_v128_fma(ctx, inst, block, true, false)
+    @ir.Opcode::V128RelaxedNmaddF32 =>
+      lower_v128_fma(ctx, inst, block, true, true)
+    @ir.Opcode::V128RelaxedMaddF64 =>
+      lower_v128_fma(ctx, inst, block, false, false)
+    @ir.Opcode::V128RelaxedNmaddF64 =>
+      lower_v128_fma(ctx, inst, block, false, true)
+
+    // relaxed_laneselect: same as bitselect (BSL instruction)
+    @ir.Opcode::V128RelaxedLaneselect8 =>
+      lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    @ir.Opcode::V128RelaxedLaneselect16 =>
+      lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    @ir.Opcode::V128RelaxedLaneselect32 =>
+      lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    @ir.Opcode::V128RelaxedLaneselect64 =>
+      lower_v128_ternary(ctx, inst, block, SIMDBsl)
+
+    // relaxed_min/max: use FMIN/FMAX (relaxation is for NaN propagation)
+    @ir.Opcode::V128RelaxedMinF32 =>
+      lower_v128_binary(ctx, inst, block, SIMDFMin(true))
+    @ir.Opcode::V128RelaxedMaxF32 =>
+      lower_v128_binary(ctx, inst, block, SIMDFMax(true))
+    @ir.Opcode::V128RelaxedMinF64 =>
+      lower_v128_binary(ctx, inst, block, SIMDFMin(false))
+    @ir.Opcode::V128RelaxedMaxF64 =>
+      lower_v128_binary(ctx, inst, block, SIMDFMax(false))
+
+    // relaxed_q15mulr_s: same as q15mulr_s (SQRDMULH instruction)
+    @ir.Opcode::V128RelaxedQ15MulrS =>
+      lower_v128_binary(ctx, inst, block, SIMDQ15MulrSat)
+
+    // relaxed_dot products
+    @ir.Opcode::V128RelaxedDot8to16S =>
+      lower_v128_binary(ctx, inst, block, SIMDRelaxedDot8to16)
+    @ir.Opcode::V128RelaxedDot8to32AddS =>
+      lower_v128_relaxed_dot_add(ctx, inst, block)
   }
 }
 

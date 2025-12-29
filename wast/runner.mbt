@@ -660,6 +660,9 @@ pub fn invoke_action(
                   V128Pattern(_) =>
                     // For pattern matching, we shouldn't be passing these as args
                     abort("V128Pattern not valid as JIT argument")
+                  Either(_) =>
+                    // Either is for expected results, not arguments
+                    abort("Either not valid as JIT argument")
                 }
               }
               // Set up GC heap for JIT execution if c_heap is available
@@ -905,6 +908,8 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
     RefExternAny => @types.Value::ExternRef(0) // Placeholder for matching
     // GC reference types - these are abstract type matchers, not concrete values
     RefArray | RefStruct | RefEq | RefI31 | RefAny => @types.Value::Null // Placeholder
+    // Either is for matching, not for conversion to runtime value
+    Either(_) => abort("Either not valid as runtime value")
   }
 }
 
@@ -938,6 +943,9 @@ pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
     // V128 matching
     (V128(a), V128(e)) => bytes_equal(a, e)
     (V128(a), V128Pattern(lanes)) => v128_pattern_match(a, lanes)
+    // Relaxed SIMD: Either matches if any alternative matches
+    (_, Either(alternatives)) =>
+      alternatives.iter().any(fn(alt) { values_match(actual, alt) })
     _ => false
   }
 }

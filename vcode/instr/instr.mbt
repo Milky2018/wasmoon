@@ -765,6 +765,28 @@ pub(all) enum VCodeOpcode {
   // SIMDStoreLane(lane_size, lane, offset): ST1 Vn.T[lane], [Xd]
   // Uses: [base, vector], Defs: []
   SIMDStoreLane(LaneSize, Int, Int)
+
+  // ============ Relaxed SIMD Instructions ============
+
+  // Floating-point fused multiply-add: d = a + (b * c)
+  // SIMDFMla(is_f32): FMLA Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [accumulator, v1, v2], Defs: [result]
+  SIMDFMla(Bool)
+
+  // Floating-point fused multiply-subtract: d = a - (b * c)
+  // SIMDFMls(is_f32): FMLS Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [accumulator, v1, v2], Defs: [result]
+  SIMDFMls(Bool)
+
+  // Relaxed dot product i8x16 -> i16x8 (signed/unsigned hybrid)
+  // SIMDRelaxedDot8to16: sequence to compute dot product
+  // Uses: [v1, v2], Defs: [result]
+  SIMDRelaxedDot8to16
+
+  // Relaxed dot product i8x16 -> i32x4 with accumulator
+  // SIMDRelaxedDot8to32Add: sequence to compute dot product with add
+  // Uses: [v1, v2, accumulator], Defs: [result]
+  SIMDRelaxedDot8to32Add
 }
 
 ///|
@@ -1021,6 +1043,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       "ld1.\{lane_size}[\{lane}] +\{offset}"
     SIMDStoreLane(lane_size, lane, offset) =>
       "st1.\{lane_size}[\{lane}] +\{offset}"
+    // Relaxed SIMD
+    SIMDFMla(is_f32) => if is_f32 { "fmla.4s" } else { "fmla.2d" }
+    SIMDFMls(is_f32) => if is_f32 { "fmls.4s" } else { "fmls.2d" }
+    SIMDRelaxedDot8to16 => "relaxed_dot.8to16"
+    SIMDRelaxedDot8to32Add => "relaxed_dot.8to32_add"
   }
 }
 

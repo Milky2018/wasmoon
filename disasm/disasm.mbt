@@ -1388,6 +1388,31 @@ fn write_instruction_simple(
     F64x2ConvertLowI32x4U => buf.write_string("f64x2.convert_low_i32x4_u")
     F32x4DemoteF64x2Zero => buf.write_string("f32x4.demote_f64x2_zero")
     F64x2PromoteLowF32x4 => buf.write_string("f64x2.promote_low_f32x4")
+    // Relaxed SIMD instructions
+    I8x16RelaxedSwizzle => buf.write_string("i8x16.relaxed_swizzle")
+    I32x4RelaxedTruncF32x4S => buf.write_string("i32x4.relaxed_trunc_f32x4_s")
+    I32x4RelaxedTruncF32x4U => buf.write_string("i32x4.relaxed_trunc_f32x4_u")
+    I32x4RelaxedTruncF64x2SZero =>
+      buf.write_string("i32x4.relaxed_trunc_f64x2_s_zero")
+    I32x4RelaxedTruncF64x2UZero =>
+      buf.write_string("i32x4.relaxed_trunc_f64x2_u_zero")
+    F32x4RelaxedMadd => buf.write_string("f32x4.relaxed_madd")
+    F32x4RelaxedNmadd => buf.write_string("f32x4.relaxed_nmadd")
+    F64x2RelaxedMadd => buf.write_string("f64x2.relaxed_madd")
+    F64x2RelaxedNmadd => buf.write_string("f64x2.relaxed_nmadd")
+    I8x16RelaxedLaneselect => buf.write_string("i8x16.relaxed_laneselect")
+    I16x8RelaxedLaneselect => buf.write_string("i16x8.relaxed_laneselect")
+    I32x4RelaxedLaneselect => buf.write_string("i32x4.relaxed_laneselect")
+    I64x2RelaxedLaneselect => buf.write_string("i64x2.relaxed_laneselect")
+    F32x4RelaxedMin => buf.write_string("f32x4.relaxed_min")
+    F32x4RelaxedMax => buf.write_string("f32x4.relaxed_max")
+    F64x2RelaxedMin => buf.write_string("f64x2.relaxed_min")
+    F64x2RelaxedMax => buf.write_string("f64x2.relaxed_max")
+    I16x8RelaxedQ15mulrS => buf.write_string("i16x8.relaxed_q15mulr_s")
+    I16x8RelaxedDotI8x16I7x16S =>
+      buf.write_string("i16x8.relaxed_dot_i8x16_i7x16_s")
+    I32x4RelaxedDotI8x16I7x16AddS =>
+      buf.write_string("i32x4.relaxed_dot_i8x16_i7x16_add_s")
   }
 }
 

@@ -1602,6 +1602,238 @@ fn ExecContext::exec_simd(
       mem.store_i64(effective_addr.to_int(), v)
     }
 
+    // =========================================
+    // Relaxed SIMD instructions
+    // =========================================
+
+    I8x16RelaxedSwizzle => {
+      // Same as swizzle - out-of-range indices return 0 on ARM (TBL behavior)
+      let s = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<16 {
+        let idx = s[i].to_int()
+        if idx < 16 {
+          buf.write_byte(a[idx])
+        } else {
+          buf.write_byte(b'\x00')
+        }
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I32x4RelaxedTruncF32x4S => {
+      // Use native truncation - same as saturating for most values
+      let v = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<4 {
+        let f = get_f32_lane(v, i)
+        let n = trunc_sat_f32_to_i32_s(f)
+        write_i32_lane(buf, n)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I32x4RelaxedTruncF32x4U => {
+      let v = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<4 {
+        let f = get_f32_lane(v, i)
+        let n = trunc_sat_f32_to_i32_u(f)
+        write_i32_lane(buf, n)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I32x4RelaxedTruncF64x2SZero => {
+      let v = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<2 {
+        let f = get_f64_lane(v, i)
+        let n = trunc_sat_f64_to_i32_s(f)
+        write_i32_lane(buf, n)
+      }
+      // Zero-extend: add two zero i32 lanes
+      write_i32_lane(buf, 0)
+      write_i32_lane(buf, 0)
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I32x4RelaxedTruncF64x2UZero => {
+      let v = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<2 {
+        let f = get_f64_lane(v, i)
+        let n = trunc_sat_f64_to_i32_u(f)
+        write_i32_lane(buf, n)
+      }
+      write_i32_lane(buf, 0)
+      write_i32_lane(buf, 0)
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    F32x4RelaxedMadd => {
+      // FMA: a * b + c (may or may not be fused)
+      let c = self.stack.pop_v128()
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<4 {
+        let fa = get_f32_lane(a, i)
+        let fb = get_f32_lane(b, i)
+        let fc = get_f32_lane(c, i)
+        let result = fa * fb + fc
+        write_f32_lane(buf, result)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    F32x4RelaxedNmadd => {
+      // -a * b + c
+      let c = self.stack.pop_v128()
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<4 {
+        let fa = get_f32_lane(a, i)
+        let fb = get_f32_lane(b, i)
+        let fc = get_f32_lane(c, i)
+        let result = -fa * fb + fc
+        write_f32_lane(buf, result)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    F64x2RelaxedMadd => {
+      let c = self.stack.pop_v128()
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<2 {
+        let fa = get_f64_lane(a, i)
+        let fb = get_f64_lane(b, i)
+        let fc = get_f64_lane(c, i)
+        let result = fa * fb + fc
+        write_f64_lane(buf, result)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    F64x2RelaxedNmadd => {
+      let c = self.stack.pop_v128()
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<2 {
+        let fa = get_f64_lane(a, i)
+        let fb = get_f64_lane(b, i)
+        let fc = get_f64_lane(c, i)
+        let result = -fa * fb + fc
+        write_f64_lane(buf, result)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I8x16RelaxedLaneselect => {
+      // BSL: (a & mask) | (b & ~mask) - same as bitselect
+      let mask = self.stack.pop_v128()
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<16 {
+        let result = (a[i].to_int() & mask[i].to_int()) |
+          (b[i].to_int() & mask[i].to_int().lnot())
+        buf.write_byte(result.to_byte())
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I16x8RelaxedLaneselect => {
+      let mask = self.stack.pop_v128()
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<8 {
+        let va = get_i16_lane(a, i)
+        let vb = get_i16_lane(b, i)
+        let vm = get_i16_lane(mask, i)
+        let result = (va & vm) | (vb & vm.lnot())
+        write_i16_lane(buf, result)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I32x4RelaxedLaneselect => {
+      let mask = self.stack.pop_v128()
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<4 {
+        let va = get_i32_lane(a, i)
+        let vb = get_i32_lane(b, i)
+        let vm = get_i32_lane(mask, i)
+        let result = (va & vm) | (vb & vm.lnot())
+        write_i32_lane(buf, result)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I64x2RelaxedLaneselect => {
+      let mask = self.stack.pop_v128()
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<2 {
+        let va = get_i64_lane(a, i)
+        let vb = get_i64_lane(b, i)
+        let vm = get_i64_lane(mask, i)
+        let result = (va & vm) | (vb & vm.lnot())
+        write_i64_lane(buf, result)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    F32x4RelaxedMin =>
+      // Use native min (may differ in NaN handling)
+      self.exec_v128_binop_f32(fn(a, b) { f32_min(a, b) })
+    F32x4RelaxedMax => self.exec_v128_binop_f32(fn(a, b) { f32_max(a, b) })
+    F64x2RelaxedMin => self.exec_v128_binop_f64(fn(a, b) { f64_min(a, b) })
+    F64x2RelaxedMax => self.exec_v128_binop_f64(fn(a, b) { f64_max(a, b) })
+    I16x8RelaxedQ15mulrS => {
+      // Same as q15mulr_sat_s - SQRDMULH on ARM
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<8 {
+        let va = sign_extend_i16(get_i16_lane(a, i))
+        let vb = sign_extend_i16(get_i16_lane(b, i))
+        let product = va * vb
+        let result = ((product + 0x4000) >> 15) & 0xFFFF
+        write_i16_lane(buf, result)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I16x8RelaxedDotI8x16I7x16S => {
+      // Dot product: pairs of i8*i8 summed to i16
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<8 {
+        let a0 = sign_extend_i8(a[i * 2].to_int())
+        let a1 = sign_extend_i8(a[i * 2 + 1].to_int())
+        let b0 = sign_extend_i8(b[i * 2].to_int())
+        let b1 = sign_extend_i8(b[i * 2 + 1].to_int())
+        let sum = a0 * b0 + a1 * b1
+        write_i16_lane(buf, sum)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+    I32x4RelaxedDotI8x16I7x16AddS => {
+      // Dot product with accumulator: 4 pairs of i8*i8 summed + i32 acc
+      let c = self.stack.pop_v128() // accumulator
+      let b = self.stack.pop_v128()
+      let a = self.stack.pop_v128()
+      let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+      for i in 0..<4 {
+        let mut sum = get_i32_lane(c, i)
+        for j in 0..<4 {
+          let idx = i * 4 + j
+          let va = sign_extend_i8(a[idx].to_int())
+          let vb = sign_extend_i8(b[idx].to_int())
+          sum = sum + va * vb
+        }
+        write_i32_lane(buf, sum)
+      }
+      self.stack.push(@types.Value::V128(buf.contents()))
+    }
+
     // All remaining instructions handled
     _ => abort("SIMD instruction not yet implemented: \{instr}")
   }
@@ -1810,6 +2042,58 @@ fn write_f32_lane(buf : @buffer.Buffer, v : Float) -> Unit {
 ///|
 fn write_f64_lane(buf : @buffer.Buffer, v : Double) -> Unit {
   write_i64_lane(buf, v.reinterpret_as_int64())
+}
+
+///|
+fn write_i16_lane(buf : @buffer.Buffer, v : Int) -> Unit {
+  buf.write_byte(v.to_byte())
+  buf.write_byte((v >> 8).to_byte())
+}
+
+///|
+fn sign_extend_i8(v : Int) -> Int {
+  if (v & 0x80) != 0 {
+    v | 0xFFFFFF00
+  } else {
+    v & 0xFF
+  }
+}
+
+///|
+fn sign_extend_i16(v : Int) -> Int {
+  if (v & 0x8000) != 0 {
+    v | 0xFFFF0000
+  } else {
+    v & 0xFFFF
+  }
+}
+
+///|
+fn trunc_sat_f32_to_i32_u(f : Float) -> Int {
+  if f.is_nan() {
+    return 0
+  }
+  if f <= 0.0 {
+    return 0
+  }
+  if f >= 4294967296.0 {
+    return -1 // 0xFFFFFFFF as signed int
+  }
+  f.to_double().to_uint().reinterpret_as_int()
+}
+
+///|
+fn trunc_sat_f64_to_i32_u(f : Double) -> Int {
+  if f.is_nan() {
+    return 0
+  }
+  if f <= 0.0 {
+    return 0
+  }
+  if f >= 4294967296.0 {
+    return -1 // 0xFFFFFFFF as signed int
+  }
+  f.to_uint().reinterpret_as_int()
 }
 
 ///|

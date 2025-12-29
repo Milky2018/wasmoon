@@ -1413,6 +1413,32 @@ fn Parser::parse_plain_instruction(
     "f64x2.convert_low_i32x4_s" => @types.Instruction::F64x2ConvertLowI32x4S
     "f64x2.convert_low_i32x4_u" => @types.Instruction::F64x2ConvertLowI32x4U
     "f64x2.promote_low_f32x4" => @types.Instruction::F64x2PromoteLowF32x4
+
+    // Relaxed SIMD instructions
+    "i8x16.relaxed_swizzle" => @types.Instruction::I8x16RelaxedSwizzle
+    "i32x4.relaxed_trunc_f32x4_s" => @types.Instruction::I32x4RelaxedTruncF32x4S
+    "i32x4.relaxed_trunc_f32x4_u" => @types.Instruction::I32x4RelaxedTruncF32x4U
+    "i32x4.relaxed_trunc_f64x2_s_zero" =>
+      @types.Instruction::I32x4RelaxedTruncF64x2SZero
+    "i32x4.relaxed_trunc_f64x2_u_zero" =>
+      @types.Instruction::I32x4RelaxedTruncF64x2UZero
+    "f32x4.relaxed_madd" => @types.Instruction::F32x4RelaxedMadd
+    "f32x4.relaxed_nmadd" => @types.Instruction::F32x4RelaxedNmadd
+    "f64x2.relaxed_madd" => @types.Instruction::F64x2RelaxedMadd
+    "f64x2.relaxed_nmadd" => @types.Instruction::F64x2RelaxedNmadd
+    "i8x16.relaxed_laneselect" => @types.Instruction::I8x16RelaxedLaneselect
+    "i16x8.relaxed_laneselect" => @types.Instruction::I16x8RelaxedLaneselect
+    "i32x4.relaxed_laneselect" => @types.Instruction::I32x4RelaxedLaneselect
+    "i64x2.relaxed_laneselect" => @types.Instruction::I64x2RelaxedLaneselect
+    "f32x4.relaxed_min" => @types.Instruction::F32x4RelaxedMin
+    "f32x4.relaxed_max" => @types.Instruction::F32x4RelaxedMax
+    "f64x2.relaxed_min" => @types.Instruction::F64x2RelaxedMin
+    "f64x2.relaxed_max" => @types.Instruction::F64x2RelaxedMax
+    "i16x8.relaxed_q15mulr_s" => @types.Instruction::I16x8RelaxedQ15mulrS
+    "i16x8.relaxed_dot_i8x16_i7x16_s" =>
+      @types.Instruction::I16x8RelaxedDotI8x16I7x16S
+    "i32x4.relaxed_dot_i8x16_i7x16_add_s" =>
+      @types.Instruction::I32x4RelaxedDotI8x16I7x16AddS
     _ => raise WatError::InvalidInstruction(kw, self.loc())
   }
 }

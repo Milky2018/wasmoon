@@ -1033,6 +1033,19 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
       // Parse lane type and values - may contain NaN patterns
       self.parse_wast_v128_const()
     }
+    Keyword("either") => {
+      // Relaxed SIMD: multiple valid results
+      // (either (v128.const ...) (v128.const ...) ...)
+      self.advance()
+      let alternatives : Array[WastValue] = []
+      while self.current.token == LParen {
+        self.expect_lparen()
+        let value = self.parse_wast_const_value()
+        alternatives.push(value)
+        self.expect_rparen()
+      }
+      Either(alternatives)
+    }
     _ =>
       raise WatError::UnexpectedToken("expected const instruction", self.loc())
   }

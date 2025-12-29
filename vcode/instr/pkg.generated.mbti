@@ -382,6 +382,10 @@ pub(all) enum VCodeOpcode {
   SIMDLoadZero(Bool, Int)
   SIMDLoadLane(LaneSize, Int, Int)
   SIMDStoreLane(LaneSize, Int, Int)
+  SIMDFMla(Bool)
+  SIMDFMls(Bool)
+  SIMDRelaxedDot8to16
+  SIMDRelaxedDot8to32Add
 }
 pub fn VCodeOpcode::call_type(Self) -> CallType
 pub impl Show for VCodeOpcode
