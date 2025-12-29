@@ -411,7 +411,7 @@ test "cmp_imm_truncates_large_values" {
 }
 
 ///|
-/// Test Cranelift-style pre-indexed stores for prologue
+/// Test Standard pre-indexed stores for prologue
 test "emit_str_pre - GPR pre-indexed store" {
   let mc = MachineCode::new()
   // STR X19, [SP, #-16]! - single GPR push
@@ -430,7 +430,7 @@ test "emit_str_pre - GPR pre-indexed store" {
 }
 
 ///|
-/// Test Cranelift-style pre-indexed stores for FPR pairs
+/// Test Standard pre-indexed stores for FPR pairs
 test "emit_stp_d_pre - FPR pair pre-indexed store" {
   let mc = MachineCode::new()
   // STP D8, D9, [SP, #-16]! - FPR pair push
@@ -449,7 +449,7 @@ test "emit_stp_d_pre - FPR pair pre-indexed store" {
 }
 
 ///|
-/// Test Cranelift-style pre-indexed store for single FPR
+/// Test Standard pre-indexed store for single FPR
 test "emit_str_d_pre - FPR pre-indexed store" {
   let mc = MachineCode::new()
   // STR D8, [SP, #-16]! - single FPR push
@@ -468,7 +468,7 @@ test "emit_str_d_pre - FPR pre-indexed store" {
 }
 
 ///|
-/// Test Cranelift-style post-indexed loads for epilogue
+/// Test Standard post-indexed loads for epilogue
 test "emit_ldr_post - GPR post-indexed load" {
   let mc = MachineCode::new()
   // LDR X19, [SP], #16 - single GPR pop
@@ -487,7 +487,7 @@ test "emit_ldr_post - GPR post-indexed load" {
 }
 
 ///|
-/// Test Cranelift-style post-indexed loads for FPR pairs
+/// Test Standard post-indexed loads for FPR pairs
 test "emit_ldp_d_post - FPR pair post-indexed load" {
   let mc = MachineCode::new()
   // LDP D8, D9, [SP], #16 - FPR pair pop
@@ -506,7 +506,7 @@ test "emit_ldp_d_post - FPR pair post-indexed load" {
 }
 
 ///|
-/// Test Cranelift-style post-indexed load for single FPR
+/// Test Standard post-indexed load for single FPR
 test "emit_ldr_d_post - FPR post-indexed load" {
   let mc = MachineCode::new()
   // LDR D8, [SP], #16 - single FPR pop
@@ -575,8 +575,8 @@ test "emit_stp_ldp_d_offset - FPR pairs with offset" {
 }
 
 ///|
-/// Test complete Cranelift-style prologue sequence
-test "cranelift_style_prologue_sequence" {
+/// Test complete Standard prologue sequence
+test "standard_prologue_sequence" {
   let mc = MachineCode::new()
   // Step 1: Save FP/LR with fixed -16 pre-indexed
   mc.emit_stp_pre(29, 30, 31, -16)
@@ -607,8 +607,8 @@ test "cranelift_style_prologue_sequence" {
 }
 
 ///|
-/// Test complete Cranelift-style epilogue sequence
-test "cranelift_style_epilogue_sequence" {
+/// Test complete Standard epilogue sequence
+test "standard_epilogue_sequence" {
   let mc = MachineCode::new()
   // Step 1: Deallocate remaining stack
   mc.emit_add_imm(31, 31, 64)

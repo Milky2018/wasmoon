@@ -338,7 +338,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     // Process instructions
     for inst_idx, inst in block.insts {
       // Record call points for caller-saved register handling
-      // Following Cranelift's design: use call_type() to determine if an instruction
+      // Design: use call_type() to determine if an instruction
       // behaves like a call (clobbers caller-saved registers)
       if inst.opcode.call_type() is @instr.Regular {
         result.call_points.push({ block: block_idx, inst: inst_idx, pos: After })
@@ -619,7 +619,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
 
 ///|
 /// A register move instruction (from regalloc constraint processing)
-/// Following Cranelift's Edit::Move design
+/// Move operation between registers
 pub(all) struct RegMove {
   from : @abi.PReg // Source register (or spill slot encoded as negative index)
   to : @abi.PReg // Destination register
@@ -638,7 +638,7 @@ pub impl Show for RegMove with output(self, logger) {
 
 ///|
 /// Edits to insert before/after an instruction
-/// Following Cranelift's Edits design for constraint handling
+/// Register constraint handling
 pub(all) struct InstEdits {
   before : Array[RegMove] // Moves to insert before the instruction
   after : Array[RegMove] // Moves to insert after the instruction
@@ -779,7 +779,7 @@ pub(all) struct RegAllocResult {
   spills : Array[SpillInfo]
   reloads : Array[ReloadInfo]
   // Constraint edits: (block_idx, inst_idx) -> edits to insert
-  // Following Cranelift's design for fixed register constraints
+  // Fixed register constraint handling
   inst_edits : Map[(Int, Int), InstEdits]
 }
 
@@ -817,7 +817,7 @@ pub(all) struct LinearScanAllocator {
   block_order : Map[Int, Int]
   // Reserved registers at each instruction point (for FixedReg constraints)
   // Key: (block_idx, inst_idx), Value: set of reserved register indices
-  // Following Cranelift: constraints must be respected during allocation
+  // Note: constraints must be respected during allocation
   reserved_int_regs : Map[(Int, Int), Set[Int]]
   reserved_float_regs : Map[(Int, Int), Set[Int]]
 }
@@ -846,7 +846,7 @@ pub fn LinearScanAllocator::new(
 /// Collect FixedReg constraints from all instructions
 /// This must be called before allocation so that constrained registers
 /// can be avoided during the allocation process.
-/// Following Cranelift's design: constraints are known before allocation.
+/// Design: constraints are known before allocation.
 fn LinearScanAllocator::collect_constraints(
   self : LinearScanAllocator,
   func : VCodeFunction,
@@ -954,7 +954,7 @@ pub fn LinearScanAllocator::allocate(
   }
 
   // Pre-assign function parameters to ABI registers
-  // Following Cranelift: all params use X0-X7 (int) or V0-V7 (float)
+  // Note: all params use X0-X7 (int) or V0-V7 (float)
   // vmctx is an explicit param in the function signature, not special-cased here
   // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
   // it will be handled by the normal allocation process (which will use callee-saved)
@@ -1106,7 +1106,7 @@ fn reg_class_eq(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 
 ///|
 /// Try to allocate a physical register for an interval
-/// Following Cranelift: avoid registers that are reserved by constraints
+/// Note: avoid registers that are reserved by constraints
 fn LinearScanAllocator::try_allocate_reg(
   self : LinearScanAllocator,
   interval : LiveInterval,
@@ -1181,7 +1181,7 @@ fn LinearScanAllocator::spill_interval(
 
 ///|
 /// Process operand constraints and generate RegMove edits
-/// Following Cranelift's design: constraints are processed after allocation
+/// Design: constraints are processed after allocation
 /// and moves are inserted when the allocated register doesn't match the constraint
 pub fn process_constraints(
   func : VCodeFunction,
@@ -1285,7 +1285,7 @@ pub fn apply_allocation(
   new_func.set_num_spill_slots(alloc.num_spill_slots)
 
   // Convert function parameters
-  // Following Cranelift: all params use X0-X7 (int) or V0-V7 (float)
+  // Note: all params use X0-X7 (int) or V0-V7 (float)
   // vmctx is an explicit param in the function signature
   let max_int_params = @abi.MAX_REG_PARAMS // 8
   let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
@@ -1543,7 +1543,7 @@ pub fn apply_allocation(
       }
 
       // Process constraint edits: insert moves before the instruction
-      // Following Cranelift's design for fixed register constraints
+      // Fixed register constraint handling
       // Use parallel move resolver to handle cyclic dependencies
       if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
         let resolved_moves = resolve_parallel_moves(edits.before)
@@ -1863,7 +1863,7 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   let alloc_result = allocator.allocate(func, liveness)
 
   // Process constraints and generate RegMove edits
-  // Following Cranelift's design: constraints are resolved after allocation
+  // Design: constraints are resolved after allocation
   process_constraints(func, alloc_result)
 
   // Apply allocation

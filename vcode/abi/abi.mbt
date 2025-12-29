@@ -1,7 +1,7 @@
 // ABI Constants and Definitions
 // Centralized definition of JIT calling convention
 //
-// Wasmoon JIT ABI v3 (Cranelift-style):
+// Wasmoon JIT ABI v3 (Standard):
 // - X0: callee_vmctx (callee's VMContext)
 // - X1: caller_vmctx (caller's VMContext)
 // - X2-X7: User integer parameters (up to 6 in registers)

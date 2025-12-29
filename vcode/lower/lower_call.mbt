@@ -1,7 +1,7 @@
-// ============ Wasm Call Lowering (Cranelift-style) ============
+// ============ Wasm Call Lowering (Standard) ============
 
 ///|
-/// Lower a Wasm function call using Cranelift-style approach.
+/// Lower a Wasm function call using Standard approach.
 /// All argument placement is done in lowering via FixedReg constraints.
 /// The emit phase just emits BLR X17.
 ///
@@ -170,11 +170,11 @@ fn lower_wasm_call(
   block.add_inst(call_inst)
 }
 
-// ============ Tail Call Lowering (Cranelift-style) ============
+// ============ Tail Call Lowering (Standard) ============
 
 ///|
 /// Lower direct return_call (tail call optimization)
-/// Following Cranelift: parameters are handled in lowering phase
+/// Note: parameters are handled in lowering phase
 /// - Overflow args: StoreToStack instructions
 /// - Register args: Fixed register constraints via add_use_fixed
 /// - ReturnCallIndirect instruction only contains func_ptr use
@@ -300,7 +300,7 @@ fn lower_return_call(
 
 ///|
 /// Lower return_call_indirect (indirect tail call)
-/// Following Cranelift: parameters handled in lowering via StoreToStack and add_use_fixed
+/// Note: parameters handled in lowering via StoreToStack and add_use_fixed
 fn lower_return_call_indirect(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -493,7 +493,7 @@ fn lower_return_call_indirect(
 ///|
 /// Lower return_call_ref (tail call through function reference)
 /// The func_ref is a tagged pointer (func_ptr | FUNCREF_TAG where FUNCREF_TAG = 0x2000000000000000)
-/// Following Cranelift: parameters handled in lowering
+/// Note: parameters handled in lowering
 fn lower_return_call_ref(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -639,7 +639,7 @@ fn lower_call_indirect(
 
   // Multi-table support: determine which table pointer to use
   // Both table_idx == 0 and table_idx != 0 load the table pointer on-demand
-  // following Cranelift's approach (no pre-loaded registers for table pointers)
+  // on-demand (no pre-loaded registers for table pointers)
   let table_ptr_vreg : @abi.VReg = if table_idx == 0 {
     // Fast path for table 0: load table0_base from vmctx on-demand
     emit_load_table0_base(ctx, block)
@@ -694,7 +694,7 @@ fn lower_call_indirect(
   block.add_inst(mul_inst)
 
   // Step 2: Calculate address = table_ptr + offset (64-bit pointer arithmetic)
-  // table_ptr is loaded on-demand from vmctx (following Cranelift's approach)
+  // table_ptr is loaded on-demand from vmctx (on-demand)
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
   let add_inst = @instr.VCodeInst::new(Add(true))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
@@ -747,7 +747,7 @@ fn lower_call_indirect(
     None,
   )
 
-  // Step 6: Use Cranelift-style call lowering
+  // Step 6: Use Standard call lowering
   lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
 }
 
@@ -795,7 +795,7 @@ fn lower_call_ref(
   and_inst.add_use(Virtual(mask_vreg))
   block.add_inst(and_inst)
 
-  // Step 2: Use Cranelift-style call lowering
+  // Step 2: Use Standard call lowering
   lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
 }
 
@@ -819,13 +819,13 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
 /// Lower call_ptr instruction (call through a function pointer)
 /// Used in trampolines to call the target WASM function
 ///
-/// Operand layout (following Cranelift):
+/// Operand layout:
 ///   operand 0 = function pointer
 ///   operand 1 = callee_vmctx (X0)
 ///   operand 2 = caller_vmctx (X1)
 ///   operands 3..n = user arguments
 ///
-/// Cranelift-style ABI refactoring:
+/// Standard ABI refactoring:
 /// - Stack args are handled in lower phase via StoreToStack instructions
 /// - Register args use FixedReg constraints to tell regalloc which physical registers to use
 /// - X17 is used for func_ptr (constraint ensures no conflicts)
@@ -874,7 +874,7 @@ fn lower_call_ptr(
   // Align to 16 bytes
   let aligned_stack_space = (stack_arg_space + 15) / 16 * 16
 
-  // Update max_outgoing_args_size (Cranelift-style: pre-allocate in prologue)
+  // Update max_outgoing_args_size (Standard: pre-allocate in prologue)
   // This ensures SP doesn't move during call sequences, avoiding spill slot issues
   ctx.vcode_func.update_max_outgoing_args_size(aligned_stack_space)
 
@@ -977,7 +977,7 @@ fn lower_call_ptr(
   // No AdjustSP needed - outgoing args space is pre-allocated in prologue
 }
 
-// ============ C Libcall Lowering (Cranelift-style) ============
+// ============ C Libcall Lowering (Standard) ============
 
 ///|
 /// Lower a simple C libcall with up to 8 integer arguments.

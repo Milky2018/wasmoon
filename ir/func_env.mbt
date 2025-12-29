@@ -1,6 +1,6 @@
 // FuncEnvironment - handles Wasm semantic operations by desugaring to IR primitives
 //
-// This module implements Cranelift-style desugaring where high-level Wasm operations
+// This module implements Standard desugaring where high-level Wasm operations
 // (global.get, table.get, etc.) are translated to lower-level IR primitives
 // (LoadPtr, StorePtr, CallPtr) during IR translation, not during lowering.
 //

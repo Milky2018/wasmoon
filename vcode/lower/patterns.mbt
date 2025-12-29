@@ -1,5 +1,5 @@
 // Pattern Matching for Instruction Selection
-// Implements pattern-based lowering rules similar to Cranelift's ISLE DSL
+// Implements pattern-based lowering rules SSA-based IR DSL
 //
 // This module provides:
 // 1. Pattern definitions for matching IR instruction trees

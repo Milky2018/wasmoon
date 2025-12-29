@@ -84,7 +84,7 @@ fn lower_truncate(
 
 ///|
 /// Lower float to int conversion (trapping version)
-/// Cranelift-style lowering: expand to multiple primitive instructions
+/// Standard lowering: expand to multiple primitive instructions
 ///
 /// Generated sequence:
 /// 1. FpuCmp(src, src) - compare with self to check for NaN

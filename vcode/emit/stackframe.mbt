@@ -1,7 +1,7 @@
-// JIT Stack Frame Layout (ABI v3 - Cranelift style)
+// JIT Stack Frame Layout (ABI v3 - Standard style)
 // Encapsulates stack frame layout computation for JIT-compiled functions
 //
-// Cranelift-style Stack Frame Layout (from high to low address):
+// Standard Stack Frame Layout (from high to low address):
 // ┌───────────────────────────┐
 // │  Caller's Stack Args      │ (if any)
 // ├═══════════════════════════┤ ← SP at function entry
@@ -19,7 +19,7 @@
 // └═══════════════════════════┘ ← SP after prologue
 //
 // Key difference from old layout: FP/LR is at the TOP (highest address),
-// not at SP+0. This matches Cranelift's approach using fixed-size pre-indexed
+// not at SP+0. This approach using fixed-size pre-indexed
 // pushes that avoid SImm7 overflow issues with large frames.
 
 // ============ Constants ============
@@ -103,7 +103,7 @@ pub fn JITStackFrame::build(
   let aligned_outgoing = align_up(outgoing_args_size, 16)
 
   // Calculate frame size (excluding setup area, which is handled separately)
-  // Cranelift-style layout from SP upward:
+  // Standard layout from SP upward:
   // [SP+0]: outgoing args
   // [SP+outgoing]: spill slots
   // [SP+outgoing+spill]: FPR saves
@@ -112,7 +112,7 @@ pub fn JITStackFrame::build(
   let frame_size = gpr_save_size + fpr_save_size + spill_size + aligned_outgoing
 
   // Calculate offsets (from SP after frame allocation)
-  // Cranelift style: outgoing args at bottom, FP/LR at top
+  // Standard style: outgoing args at bottom, FP/LR at top
   let outgoing_args_offset = 0
   let spill_offset = aligned_outgoing
   let fpr_save_offset = spill_offset + spill_size

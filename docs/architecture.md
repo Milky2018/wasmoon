@@ -93,9 +93,9 @@ The IR uses Static Single Assignment form for easier optimization:
 - Phi nodes handle control flow merges
 - Enables standard optimizations (DCE, CSE, constant propagation)
 
-### Cranelift-style VCode
+### VCode (Virtual Code)
 
-VCode is a low-level IR similar to Cranelift's VCode:
+VCode is a low-level IR designed for efficient code generation:
 - Virtual registers (infinite)
 - Platform-specific instructions
 - Linear scan register allocation

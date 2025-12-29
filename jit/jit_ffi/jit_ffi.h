@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// ============ JIT Context v3 (Cranelift-style ABI) ============
+// ============ JIT Context v3 ============
 // New ABI passes vmctx via X0 (callee_vmctx) and X1 (caller_vmctx)
 // User integer params in X2-X7 (up to 6 in registers)
 // Float params in V0-V7 (S for f32, D for f64)

@@ -41,7 +41,7 @@ fn collect_used_callee_saved(
   for block in func.get_blocks() {
     for inst in block.insts {
       // Check if this instruction is a function call
-      // Following Cranelift's design: use call_type() to determine if an instruction
+      // Design: use call_type() to determine if an instruction
       // behaves like a call (clobbers caller-saved registers)
       if inst.opcode.call_type() is @instr.Regular {
         has_calls = true
@@ -56,7 +56,7 @@ fn collect_used_callee_saved(
     }
   }
   // If the function makes any calls, we must save LR (X30)
-  // Note: X20-X24 are no longer pre-loaded in prologue (following Cranelift's approach)
+  // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
   // They are loaded on-demand from vmctx and only need saving if used by regalloc
   if has_calls {
     used.add(30) // LR
@@ -128,7 +128,7 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
 /// - X1 = caller_vmctx (unused in current impl)
 /// - X2-X7 = user integer params (up to 6)
 /// - V0-V7 = user float params (S for f32, D for f64)
-/// Emit stack pointer adjustment for arbitrary sizes (Cranelift-style)
+/// Emit stack pointer adjustment for arbitrary sizes (Standard)
 ///
 /// Handles any size by using:
 /// - ADD/SUB with imm12 for values <= 4095
@@ -170,7 +170,7 @@ fn MachineCode::emit_prologue(
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
 
-  // Cranelift-style prologue:
+  // Standard prologue:
   // 1. Save FP/LR with fixed -16 pre-indexed (avoids SImm7 overflow)
   // 2. Save clobbered GPRs with -16 pre-indexed pushes
   // 3. Save clobbered FPRs with -16 pre-indexed pushes
@@ -184,8 +184,8 @@ fn MachineCode::emit_prologue(
     self.emit_mov_reg(29, 31)
   }
 
-  // Step 2: Save callee-saved GPRs with pre-indexed pushes (Cranelift style)
-  // Cranelift approach: handle remainder first, then reverse iterate pairs
+  // Step 2: Save callee-saved GPRs with pre-indexed pushes (Standard style)
+  // Approach: handle remainder first, then reverse iterate pairs
   // This ensures save/restore order matches perfectly
   let num_gprs = saved_gprs.length()
   if num_gprs > 0 {
@@ -208,8 +208,8 @@ fn MachineCode::emit_prologue(
     }
   }
 
-  // Step 3: Save callee-saved FPRs with pre-indexed pushes (Cranelift style)
-  // Cranelift approach: handle remainder first, then reverse iterate pairs
+  // Step 3: Save callee-saved FPRs with pre-indexed pushes (Standard style)
+  // Approach: handle remainder first, then reverse iterate pairs
   let num_fprs = saved_fprs.length()
   if num_fprs > 0 {
     // Handle remainder first (if odd number of registers)
@@ -238,14 +238,14 @@ fn MachineCode::emit_prologue(
     self.emit_sp_adjust(-remaining_size)
   }
 
-  // Step 5: Cache vmctx to X19 (the only pinned register, like Cranelift's X21)
-  // Following Cranelift: vmctx is params[0], passed in X0
+  // Step 5: Cache vmctx to X19 (the only pinned register)
+  // Note: vmctx is params[0], passed in X0
   // All other values (memory_base, memory_size, func_table, table0_base) are
-  // loaded on-demand from vmctx, following Cranelift's approach.
+  // loaded on-demand from vmctx, on-demand.
   self.emit_mov_reg(19, 0)
 
   // Step 6: Move arguments from ABI registers to allocated registers
-  // Following Cranelift: all params use X0-X7 (int) or V0-V7 (float)
+  // Note: all params use X0-X7 (int) or V0-V7 (float)
   // vmctx is params[0] and comes in X0, already cached to X19 above
   let max_int_params = @abi.MAX_REG_PARAMS // 8
   let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
@@ -1004,7 +1004,7 @@ fn MachineCode::emit_instruction(
     TrapIfDivOverflow(is_64, trap_code) => {
       // Trap if signed division would overflow (INT_MIN / -1)
       // Uses: [lhs, rhs]
-      // Following Cranelift's approach (no scratch registers needed):
+      // On-demand loading (no scratch registers needed):
       //   ADDS XZR, rhs, #1      ; Check rhs == -1 (sets Z if rhs == -1)
       //   CCMP lhs, #1, #0, Eq   ; If Z set, do CMP lhs-1 (sets V if overflow), else NZCV=0
       //   B.VC +8                ; Skip BRK if V clear
@@ -1129,7 +1129,7 @@ fn MachineCode::emit_instruction(
       self.emit_mneg(rd, rn, rm)
     }
     ReturnCallIndirect(_num_args, _num_results) => {
-      // Tail call optimization following Cranelift's design
+      // Tail call optimization
       // Parameters are already set up by lowering phase via:
       // - StoreToStack for overflow arguments
       // - add_use_fixed constraints for register arguments (X17=func_ptr, X0/X1=vmctx, X2-X7/V0-V7=args)
@@ -1138,7 +1138,7 @@ fn MachineCode::emit_instruction(
       // 2. BR to function pointer (doesn't save return address, callee returns to our caller)
 
       // Epilogue - restore callee-saved registers and frame pointer
-      // Following Cranelift's emit_return_call_common_sequence
+      // Tail call common sequence
       self.emit_epilogue(stack_frame)
 
       // BR (not BLR) - jump to function without saving return address
@@ -1204,7 +1204,7 @@ fn MachineCode::emit_instruction(
       }
     }
     LoadStackParam(param_idx, class, int_overflow_count) => {
-      // Load stack parameter from stack (Cranelift-style layout)
+      // Load stack parameter from stack (Standard layout)
       //
       // Stack layout from callee's perspective:
       // ┌───────────────────────────┐
@@ -1347,7 +1347,7 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64(result_reg, func_ptr)
     }
     CallPtr(_, _, _call_conv) =>
-      // Cranelift-style call: all arguments are already in place
+      // Standard call: all arguments are already in place
       //
       // The lower phase generates:
       // - AdjustSP to allocate stack space for overflow args
@@ -1374,7 +1374,7 @@ fn MachineCode::emit_instruction(
       self.emit_blr(17)
     AdjustSP(delta) =>
       // Adjust stack pointer by delta bytes
-      // Used in Cranelift-style call lowering for outgoing args
+      // Used in Standard call lowering for outgoing args
       if delta > 0 {
         self.emit_add_imm(31, 31, delta)
       } else if delta < 0 {
@@ -1383,7 +1383,7 @@ fn MachineCode::emit_instruction(
     // delta == 0: nop
     StoreToStack(offset) => {
       // Store value to [SP + outgoing_args_offset + offset]
-      // Used in Cranelift-style call lowering for overflow args
+      // Used in Standard call lowering for overflow args
       // The outgoing args area is pre-allocated in prologue, so SP doesn't change
       let actual_offset = stack_frame.outgoing_args_offset + offset
       let src = reg_num(inst.uses[0])
@@ -2740,9 +2740,9 @@ fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> Int {
 }
 
 ///|
-/// Emit epilogue for ABI v3 (Cranelift-style)
+/// Emit epilogue for ABI v3 (Standard)
 ///
-/// Reverses the prologue operations in reverse order (Cranelift style):
+/// Reverses the prologue operations in reverse order (Standard style):
 /// 1. Deallocate remaining stack space (spill + outgoing)
 /// 2. Restore callee-saved FPRs with post-indexed pops (forward pairs, then remainder)
 /// 3. Restore callee-saved GPRs with post-indexed pops (forward pairs, then remainder)
@@ -2760,8 +2760,8 @@ fn MachineCode::emit_epilogue(
     self.emit_sp_adjust(remaining_size)
   }
 
-  // Step 2: Restore callee-saved FPRs with post-indexed pops (Cranelift style)
-  // Cranelift approach: forward iterate pairs, then handle remainder
+  // Step 2: Restore callee-saved FPRs with post-indexed pops (Standard style)
+  // Approach: forward iterate pairs, then handle remainder
   // This mirrors the prologue which does: remainder first, then reverse pairs
   let num_fprs = saved_fprs.length()
   if num_fprs > 0 {
@@ -2784,8 +2784,8 @@ fn MachineCode::emit_epilogue(
     }
   }
 
-  // Step 3: Restore callee-saved GPRs with post-indexed pops (Cranelift style)
-  // Cranelift approach: forward iterate pairs, then handle remainder
+  // Step 3: Restore callee-saved GPRs with post-indexed pops (Standard style)
+  // Approach: forward iterate pairs, then handle remainder
   let num_gprs = saved_gprs.length()
   if num_gprs > 0 {
     // Forward iterate pairs
