@@ -331,10 +331,8 @@ pub fn run_jit(
       return Err("Failed to allocate memory")
     }
     // Set up multi-memory array (single memory at index 0)
-    let memory_ptrs = [mem_ptr]
-    let memory_sizes = [mem_size]
-    let memory_max_pages : Array[Int?] = [None] // No max limit
-    jm.set_memory_pointers(memory_ptrs, memory_sizes, memory_max_pages)
+    let memories = [@jit.MemoryInfo::new(mem_ptr, mem_size, None)]
+    jm.set_memory_pointers(memories)
     // Also set fast path for memory 0 (backward compatibility)
     jm.set_memory(mem_ptr, mem_size)
 

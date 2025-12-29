@@ -853,9 +853,7 @@ fn init_jit_memories(
   if instance.mem_addrs.is_empty() {
     return true // No memories to initialize
   }
-  let memory_ptrs : Array[Int64] = []
-  let memory_sizes : Array[Int64] = []
-  let memory_max_pages : Array[Int?] = []
+  let memories : Array[@jit.MemoryInfo] = []
   // Allocate and copy each memory
   for mem_addr in instance.mem_addrs {
     let mem = store.get_mem(mem_addr) catch { _ => return false }
@@ -868,15 +866,13 @@ fn init_jit_memories(
     }
     // Copy interpreter memory data to JIT memory
     copy_interp_memory_to_jit_indexed(store, mem_addr, mem_ptr)
-    memory_ptrs.push(mem_ptr)
-    memory_sizes.push(size)
-    memory_max_pages.push(max)
+    memories.push(@jit.MemoryInfo::new(mem_ptr, size, max))
   }
   // Set up multi-memory in JIT context
-  jm.set_memory_pointers(memory_ptrs, memory_sizes, memory_max_pages)
+  jm.set_memory_pointers(memories)
   // Also set fast path for memory 0 (backward compatibility)
-  if memory_ptrs.length() > 0 {
-    jm.set_memory(memory_ptrs[0], memory_sizes[0])
+  if memories.length() > 0 {
+    jm.set_memory(memories[0].ptr, memories[0].size)
   }
   true
 }
