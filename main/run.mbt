@@ -525,8 +525,8 @@ fn init_jit_globals(
         // Get function pointer from JIT module and tag it
         let func_ptr = jit_module.get_func_ptr(func_idx)
         if func_ptr == 0L {
-          0L // null funcref
-        } else {
+          @types.NULL_REF
+        } else { // null funcref
           func_ptr | funcref_tag // Tagged function pointer
         }
       }
@@ -535,7 +535,7 @@ fn init_jit_globals(
       ArrayRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
       StructRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
       I31(n) => @jit.encode_i31(n)
-      Null => 0L // null is encoded as 0 in JIT
+      Null => @types.NULL_REF // null is encoded as 0 in JIT
       V128(bytes) => {
         // V128 needs special handling - write both 64-bit halves
         let offset = globals_ptr + (i * 16).to_int64()
@@ -627,7 +627,7 @@ fn run_with_jit(
                   ArrayRef(idx) => idx.to_int64()
                   StructRef(idx) => idx.to_int64()
                   I31(n) => n.to_int64()
-                  Null => -1L // Sentinel value for null reference
+                  Null => @types.FUNCREF_NULL_SENTINEL // Sentinel value for null reference
                   V128(_) => abort("V128 args not yet supported in JIT")
                 }
                 i64_args.push(v)
@@ -679,13 +679,13 @@ fn run_with_jit(
                     | RefFuncTyped(_)
                     | RefNullFuncTyped(_)
                     | NullFuncRef =>
-                      if r == -1L {
+                      if r == @types.FUNCREF_NULL_SENTINEL {
                         @types.Value::Null
                       } else {
                         @types.Value::FuncRef(r.to_int())
                       }
                     ExternRef | RefExtern | NullExternRef =>
-                      if r == -1L {
+                      if r == @types.FUNCREF_NULL_SENTINEL {
                         @types.Value::Null
                       } else {
                         @types.Value::ExternRef(r.to_int())

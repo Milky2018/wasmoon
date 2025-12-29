@@ -1,23 +1,18 @@
 // WAST Runner - Execute WAST test scripts
 
-// Reference encoding constants for JIT
-// These must match the encoding in jit/jit_ffi/jit.c
+// Reference encoding constants - re-exported from @types for convenience
 
 ///|
-/// Null reference value for GC types and externref (used in JIT)
-pub const NULL_REF : Int64 = 0L
+pub const NULL_REF : Int64 = @types.NULL_REF
 
 ///|
-/// Null reference sentinel for funcref in interpreter mode
-pub const FUNCREF_NULL_SENTINEL : Int64 = -1L
+pub const FUNCREF_NULL_SENTINEL : Int64 = @types.FUNCREF_NULL_SENTINEL
 
 ///|
-/// Tag for externref values: bit 62 set
-pub const EXTERNREF_TAG : Int64 = 0x4000000000000000L
+pub const EXTERNREF_TAG : Int64 = @types.EXTERNREF_TAG
 
 ///|
-/// Tag for funcref pointer values: bit 61 set
-pub const FUNCREF_TAG : Int64 = 0x2000000000000000L
+pub const FUNCREF_TAG : Int64 = @types.FUNCREF_TAG
 
 ///|
 /// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)

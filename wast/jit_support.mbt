@@ -142,7 +142,7 @@ pub fn sync_jit_globals_to_store(
         | RefFuncTyped(_)
         | RefNullFuncTyped(_)
         | NullFuncRef =>
-          if raw_value == -1L {
+          if raw_value == FUNCREF_NULL_SENTINEL {
             @types.Value::Null
           } else {
             // Convert module function index back to store address
@@ -155,7 +155,7 @@ pub fn sync_jit_globals_to_store(
             }
           }
         ExternRef | RefExtern | NullExternRef =>
-          if raw_value == -1L {
+          if raw_value == FUNCREF_NULL_SENTINEL {
             @types.Value::Null
           } else {
             @types.Value::ExternRef(raw_value.to_int())

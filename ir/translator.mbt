@@ -1333,15 +1333,15 @@ fn Translator::translate_instruction(
 
     // Reference types
     RefNull(_ref_type) => {
-      // Null reference is represented as 0
+      // Null reference is represented as NULL_REF
       // (GC refs are encoded as (gc_ref << 1) where gc_ref is 1-based, so 0 is safe for null)
-      let result = self.builder.iconst(Type::I64, 0L)
+      let result = self.builder.iconst(Type::I64, @types.NULL_REF)
       self.push(result)
     }
     RefIsNull => {
-      // Check if reference is null (compare with 0)
+      // Check if reference is null (compare with NULL_REF)
       let ref_val = self.pop()
-      let null_sentinel = self.builder.iconst(Type::I64, 0L)
+      let null_sentinel = self.builder.iconst(Type::I64, @types.NULL_REF)
       let result = self.builder.icmp_eq(ref_val, null_sentinel)
       self.push(result)
     }
@@ -1355,7 +1355,7 @@ fn Translator::translate_instruction(
       // ref.as_non_null: convert nullable ref to non-null ref
       // Pop the reference, check if null, trap if so, otherwise push back
       let ref_val = self.pop()
-      let null_sentinel = self.builder.iconst(Type::I64, 0L)
+      let null_sentinel = self.builder.iconst(Type::I64, @types.NULL_REF)
       let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
       // Create trap block and continuation block
@@ -3516,8 +3516,8 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
   let ref_val = self.pop()
   let idx = self.block_stack.length() - 1 - depth
 
-  // Check if reference is null (GC refs use 0 for null)
-  let null_sentinel = self.builder.iconst(Type::I64, 0L)
+  // Check if reference is null (GC refs use NULL_REF for null)
+  let null_sentinel = self.builder.iconst(Type::I64, @types.NULL_REF)
   let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
   // For br_on_null, we need a fallthrough block and a taken block (critical edge split)
@@ -3580,8 +3580,8 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
   let ref_val = self.pop()
   let idx = self.block_stack.length() - 1 - depth
 
-  // Check if reference is null (GC refs use 0 for null)
-  let null_sentinel = self.builder.iconst(Type::I64, 0L)
+  // Check if reference is null (GC refs use NULL_REF for null)
+  let null_sentinel = self.builder.iconst(Type::I64, @types.NULL_REF)
   let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
   // For br_on_non_null, we need a fallthrough block and a taken block
@@ -3996,8 +3996,11 @@ fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
     // Pop the function reference (which is a function index stored as I64)
     let func_ref = self.pop()
 
-    // Null check: if func_ref == -1, trap
-    let null_sentinel = self.builder.iconst(Type::I64, -1L)
+    // Null check: if func_ref == FUNCREF_NULL_SENTINEL, trap
+    let null_sentinel = self.builder.iconst(
+      Type::I64,
+      @types.FUNCREF_NULL_SENTINEL,
+    )
     let is_null = self.builder.icmp_eq(func_ref, null_sentinel)
 
     // Create trap block and continuation block
@@ -4113,8 +4116,11 @@ fn Translator::translate_return_call_ref(
     // Pop the function reference (which is a function index stored as I64)
     let func_ref = self.pop()
 
-    // Null check: if func_ref == -1, trap
-    let null_sentinel = self.builder.iconst(Type::I64, -1L)
+    // Null check: if func_ref == FUNCREF_NULL_SENTINEL, trap
+    let null_sentinel = self.builder.iconst(
+      Type::I64,
+      @types.FUNCREF_NULL_SENTINEL,
+    )
     let is_null = self.builder.icmp_eq(func_ref, null_sentinel)
 
     // Create trap block and continuation block
