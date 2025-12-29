@@ -143,7 +143,8 @@ pub impl TargetISA for AArch64 with get_preg(
       } else {
         None
       }
-    Float32 | Float64 =>
+    Float32 | Float64 | Vector =>
+      // Vector uses same V0-V31 registers as floats on AArch64
       if index >= 0 && index < 32 {
         Some({ index, class })
       } else {

@@ -252,6 +252,20 @@ pub fn values_equal(actual : @types.Value, expected : @types.Value) -> Bool {
     (Null, Null) => true
     (FuncRef(a), FuncRef(e)) => a == e
     (ExternRef(a), ExternRef(e)) => a == e
+    (V128(a), V128(e)) =>
+      // Compare all 16 bytes
+      if a.length() != e.length() || a.length() != 16 {
+        false
+      } else {
+        let mut equal = true
+        for i in 0..<16 {
+          if a[i] != e[i] {
+            equal = false
+            break
+          }
+        }
+        equal
+      }
     _ => false
   }
 }

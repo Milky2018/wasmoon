@@ -114,6 +114,7 @@ pub(all) enum RegClass {
   Int
   Float32
   Float64
+  Vector
 }
 pub impl Show for RegClass
 

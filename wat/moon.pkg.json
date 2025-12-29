@@ -2,5 +2,6 @@
   "import": [
     "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/parser"
-  ]
+  ],
+  "warn-list": "-6"
 }

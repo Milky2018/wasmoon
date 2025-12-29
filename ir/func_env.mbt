@@ -383,8 +383,51 @@ fn type_byte_size(ty : Type) -> Int {
     I64 => 8
     F32 => 4
     F64 => 8
+    V128 => 16 // SIMD vector
     FuncRef | ExternRef => 8 // Reference types are pointer-sized
   }
+}
+
+///|
+/// Emit bounds check and return effective address for memory access
+/// This is a public helper for SIMD and other complex load operations
+pub fn FuncEnvironment::emit_bounds_check(
+  _self : FuncEnvironment,
+  builder : IRBuilder,
+  vmctx : Value,
+  memidx : Int,
+  wasm_addr : Value,
+  offset : Int64,
+  access_size : Int,
+) -> Value {
+  let (memory_base, memory_size) = load_memory_base_and_size(
+    builder, vmctx, memidx,
+  )
+
+  // Extend wasm_addr (i32) to i64
+  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+
+  // Calculate end address for bounds check: addr + offset + access_size
+  let offset_val = builder.iconst(Type::I64, offset)
+  let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+  let size_val = builder.iconst(Type::I64, access_size.to_int64())
+  let end_addr = builder.iadd(addr_plus_offset, size_val)
+
+  // Bounds check: trap if end_addr > memory_size
+  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  builder.brnz(in_bounds, continue_block, trap_block)
+
+  // Trap block
+  builder.switch_to_block(trap_block)
+  builder.trap("memory out of bounds")
+
+  // Continue block
+  builder.switch_to_block(continue_block)
+
+  // Return effective address: memory_base + addr + offset
+  builder.iadd(memory_base, addr_plus_offset)
 }
 
 ///|

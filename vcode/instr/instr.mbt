@@ -373,6 +373,398 @@ pub(all) enum VCodeOpcode {
   // LoadSP: Defs: [result], Uses: []
   // Used for passing stack addresses to C functions
   LoadSP
+
+  // ============ SIMD Instructions (AArch64 NEON) ============
+
+  // V128 constant load - load 128-bit immediate
+  // LoadConstV128(bytes): MOVI or load from constant pool
+  // Uses: [], Defs: [result]
+  LoadConstV128(Bytes)
+
+  // Splat - replicate scalar to all vector lanes
+  // SIMDSplat(lane_size): DUP Vd.T, Wn/Xn
+  // Uses: [scalar], Defs: [vector]
+  SIMDSplat(LaneSize)
+
+  // Splat from floating-point register
+  // SIMDSplatF(is_f32): DUP Vd.4S, Vn.S[0] or DUP Vd.2D, Vn.D[0]
+  // Uses: [fp_scalar], Defs: [vector]
+  SIMDSplatF(Bool)
+
+  // Extract lane to GPR (unsigned)
+  // SIMDExtractU(lane_size, lane): UMOV Wd/Xd, Vn.T[lane]
+  // Uses: [vector], Defs: [scalar]
+  SIMDExtractU(LaneSize, Int)
+
+  // Extract lane to GPR (signed)
+  // SIMDExtractS(lane_size, lane): SMOV Wd/Xd, Vn.T[lane]
+  // Uses: [vector], Defs: [scalar]
+  SIMDExtractS(LaneSize, Int)
+
+  // Extract lane to FPR
+  // SIMDExtractF(is_f32, lane): DUP Sd/Dd, Vn.S[lane]/Vn.D[lane]
+  // Uses: [vector], Defs: [fp_scalar]
+  SIMDExtractF(Bool, Int)
+
+  // Replace lane from GPR
+  // SIMDInsert(lane_size, lane): INS Vd.T[lane], Wn/Xn
+  // Uses: [vector, scalar], Defs: [vector]
+  SIMDInsert(LaneSize, Int)
+
+  // Replace lane from FPR
+  // SIMDInsertF(is_f32, lane): INS Vd.S[lane], Vn.S[0] or Vd.D[lane], Vn.D[0]
+  // Uses: [vector, fp_scalar], Defs: [vector]
+  SIMDInsertF(Bool, Int)
+
+  // Shuffle - select lanes from two vectors using immediate indices
+  // SIMDShuffle(lane_indices): TBL Vd.16B, {Vn.16B, Vm.16B}, Vt.16B (indices in Vt)
+  // Uses: [v1, v2], Defs: [result]
+  SIMDShuffle(FixedArray[Int])
+
+  // Swizzle - permute lanes based on indices vector
+  // SIMDSwizzle: TBL Vd.16B, {Vn.16B}, Vm.16B
+  // Uses: [values, indices], Defs: [result]
+  SIMDSwizzle
+
+  // Bitwise NOT
+  // SIMDNot: NOT Vd.16B, Vn.16B (same as MVN)
+  // Uses: [vector], Defs: [result]
+  SIMDNot
+
+  // Bitwise AND
+  // SIMDAnd: AND Vd.16B, Vn.16B, Vm.16B
+  // Uses: [v1, v2], Defs: [result]
+  SIMDAnd
+
+  // Bitwise AND-NOT (a & ~b)
+  // SIMDBic: BIC Vd.16B, Vn.16B, Vm.16B
+  // Uses: [v1, v2], Defs: [result]
+  SIMDBic
+
+  // Bitwise OR
+  // SIMDOr: ORR Vd.16B, Vn.16B, Vm.16B
+  // Uses: [v1, v2], Defs: [result]
+  SIMDOr
+
+  // Bitwise XOR
+  // SIMDXor: EOR Vd.16B, Vn.16B, Vm.16B
+  // Uses: [v1, v2], Defs: [result]
+  SIMDXor
+
+  // Bitselect - select bits from two vectors based on mask
+  // SIMDBsl: BSL Vd.16B, Vn.16B, Vm.16B (Vd = (Vn & Vd) | (Vm & ~Vd))
+  // Uses: [v1, v2, mask], Defs: [result]
+  SIMDBsl
+
+  // Any true - check if any lane is non-zero
+  // SIMDAnyTrue: UMAXV Bd, Vn.16B; UMOV Wd, Vd.B[0]; CMP Wd, #0; CSET Wd, ne
+  // Uses: [vector], Defs: [result (i32)]
+  SIMDAnyTrue
+
+  // All true - check if all lanes are non-zero
+  // SIMDAllTrue(lane_size): UMINV + check
+  // Uses: [vector], Defs: [result (i32)]
+  SIMDAllTrue(LaneSize)
+
+  // Bitmask - extract sign bits to GPR
+  // SIMDBitmask(lane_size): extract MSB of each lane
+  // Uses: [vector], Defs: [result (i32)]
+  SIMDBitmask(LaneSize)
+
+  // Integer add
+  // SIMDAdd(lane_size): ADD Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDAdd(LaneSize)
+
+  // Integer subtract
+  // SIMDSub(lane_size): SUB Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDSub(LaneSize)
+
+  // Integer multiply (no 64-bit variant in NEON)
+  // SIMDMul(lane_size): MUL Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDMul(LaneSize)
+
+  // Saturating add (signed)
+  // SIMDSqadd(lane_size): SQADD Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDSqadd(LaneSize)
+
+  // Saturating add (unsigned)
+  // SIMDUqadd(lane_size): UQADD Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDUqadd(LaneSize)
+
+  // Saturating subtract (signed)
+  // SIMDSqsub(lane_size): SQSUB Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDSqsub(LaneSize)
+
+  // Saturating subtract (unsigned)
+  // SIMDUqsub(lane_size): UQSUB Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDUqsub(LaneSize)
+
+  // Minimum (signed)
+  // SIMDSmin(lane_size): SMIN Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDSmin(LaneSize)
+
+  // Minimum (unsigned)
+  // SIMDUmin(lane_size): UMIN Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDUmin(LaneSize)
+
+  // Maximum (signed)
+  // SIMDSmax(lane_size): SMAX Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDSmax(LaneSize)
+
+  // Maximum (unsigned)
+  // SIMDUmax(lane_size): UMAX Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDUmax(LaneSize)
+
+  // Unsigned rounding halving add (average)
+  // SIMDUrhadd(lane_size): URHADD Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDUrhadd(LaneSize)
+
+  // Absolute value
+  // SIMDAbs(lane_size): ABS Vd.T, Vn.T
+  // Uses: [vector], Defs: [result]
+  SIMDAbs(LaneSize)
+
+  // Negate
+  // SIMDNeg(lane_size): NEG Vd.T, Vn.T
+  // Uses: [vector], Defs: [result]
+  SIMDNeg(LaneSize)
+
+  // Population count per byte
+  // SIMDCnt: CNT Vd.16B, Vn.16B
+  // Uses: [vector], Defs: [result]
+  SIMDCnt
+
+  // Shift left (by scalar)
+  // SIMDShl(lane_size): SHL Vd.T, Vn.T, #imm or SSHL/USHL for variable
+  // Uses: [vector, shift_amount], Defs: [result]
+  SIMDShl(LaneSize)
+
+  // Shift right signed (by scalar)
+  // SIMDSshr(lane_size): SSHR Vd.T, Vn.T, #imm or SSHL with negative
+  // Uses: [vector, shift_amount], Defs: [result]
+  SIMDSshr(LaneSize)
+
+  // Shift right unsigned (by scalar)
+  // SIMDUshr(lane_size): USHR Vd.T, Vn.T, #imm or USHL with negative
+  // Uses: [vector, shift_amount], Defs: [result]
+  SIMDUshr(LaneSize)
+
+  // Integer comparison
+  // SIMDCmp(lane_size, cmp_kind): CMEQ/CMGT/CMGE/CMHI/CMHS Vd.T, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDCmp(LaneSize, SIMDCmpKind)
+
+  // Narrow (pack two vectors to narrower lanes)
+  // SIMDNarrow(dst_lane_size, signed): XTN/SQXTN/SQXTUN/UQXTN Vd.T, Vn.T2
+  // Uses: [v1, v2], Defs: [result]
+  SIMDNarrow(LaneSize, Bool)
+
+  // Extend low half (widen to larger lanes)
+  // SIMDExtendLow(dst_lane_size, signed): SXTL/UXTL Vd.T2, Vn.T
+  // Uses: [vector], Defs: [result]
+  SIMDExtendLow(LaneSize, Bool)
+
+  // Extend high half (widen to larger lanes)
+  // SIMDExtendHigh(dst_lane_size, signed): SXTL2/UXTL2 Vd.T2, Vn.T
+  // Uses: [vector], Defs: [result]
+  SIMDExtendHigh(LaneSize, Bool)
+
+  // Extended multiply low
+  // SIMDExtMulLow(dst_lane_size, signed): SMULL/UMULL Vd.T2, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDExtMulLow(LaneSize, Bool)
+
+  // Extended multiply high
+  // SIMDExtMulHigh(dst_lane_size, signed): SMULL2/UMULL2 Vd.T2, Vn.T, Vm.T
+  // Uses: [v1, v2], Defs: [result]
+  SIMDExtMulHigh(LaneSize, Bool)
+
+  // Extended add pairwise
+  // SIMDExtAddPairwise(dst_lane_size, signed): SADDLP/UADDLP Vd.T2, Vn.T
+  // Uses: [vector], Defs: [result]
+  SIMDExtAddPairwise(LaneSize, Bool)
+
+  // Dot product (i32x4.dot_i16x8_s)
+  // SIMDDot: sequence of SMULL + SADDLP or SMLAL
+  // Uses: [v1, v2], Defs: [result]
+  SIMDDot
+
+  // Q15 saturating rounding multiply high
+  // SIMDQ15MulrSat: SQRDMULH Vd.8H, Vn.8H, Vm.8H
+  // Uses: [v1, v2], Defs: [result]
+  SIMDQ15MulrSat
+
+  // Floating-point add
+  // SIMDFAdd(is_f32): FADD Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFAdd(Bool)
+
+  // Floating-point subtract
+  // SIMDFSub(is_f32): FSUB Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFSub(Bool)
+
+  // Floating-point multiply
+  // SIMDFMul(is_f32): FMUL Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFMul(Bool)
+
+  // Floating-point divide
+  // SIMDFDiv(is_f32): FDIV Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFDiv(Bool)
+
+  // Floating-point min (propagating NaN)
+  // SIMDFMin(is_f32): FMIN Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFMin(Bool)
+
+  // Floating-point max (propagating NaN)
+  // SIMDFMax(is_f32): FMAX Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFMax(Bool)
+
+  // Floating-point pmin (pseudo-min, returns b if a is NaN)
+  // SIMDFPMin(is_f32): FCMGT + BSL sequence
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFPMin(Bool)
+
+  // Floating-point pmax (pseudo-max, returns b if a is NaN)
+  // SIMDFPMax(is_f32): FCMGT + BSL sequence
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFPMax(Bool)
+
+  // Floating-point absolute value
+  // SIMDFAbs(is_f32): FABS Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDFAbs(Bool)
+
+  // Floating-point negate
+  // SIMDFNeg(is_f32): FNEG Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDFNeg(Bool)
+
+  // Floating-point square root
+  // SIMDFSqrt(is_f32): FSQRT Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDFSqrt(Bool)
+
+  // Floating-point ceiling
+  // SIMDFCeil(is_f32): FRINTP Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDFCeil(Bool)
+
+  // Floating-point floor
+  // SIMDFFloor(is_f32): FRINTM Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDFFloor(Bool)
+
+  // Floating-point truncate
+  // SIMDFTrunc(is_f32): FRINTZ Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDFTrunc(Bool)
+
+  // Floating-point nearest
+  // SIMDFNearest(is_f32): FRINTN Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDFNearest(Bool)
+
+  // Floating-point comparison
+  // SIMDFCmp(is_f32, cmp_kind): FCMEQ/FCMGT/FCMGE Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
+  // Uses: [v1, v2], Defs: [result]
+  SIMDFCmp(Bool, SIMDFCmpKind)
+
+  // Conversions
+  // SIMDFCvtToIntS(is_f32): FCVTZS Vd.4S/2D, Vn.4S/2D (f32->i32 or f64->i64)
+  // Uses: [vector], Defs: [result]
+  SIMDFCvtToIntS(Bool)
+
+  // SIMDFCvtToIntU(is_f32): FCVTZU Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDFCvtToIntU(Bool)
+
+  // SIMDIntToFloatS(is_f32): SCVTF Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDIntToFloatS(Bool)
+
+  // SIMDIntToFloatU(is_f32): UCVTF Vd.4S/2D, Vn.4S/2D
+  // Uses: [vector], Defs: [result]
+  SIMDIntToFloatU(Bool)
+
+  // Truncate sat f64 to i32 with zero extend (special: produces i32x4 from f64x2)
+  // SIMDTruncSatF64ToI32SZero: FCVTZS + XTN
+  // Uses: [vector], Defs: [result]
+  SIMDTruncSatF64ToI32SZero
+
+  // SIMDTruncSatF64ToI32UZero: FCVTZU + XTN
+  // Uses: [vector], Defs: [result]
+  SIMDTruncSatF64ToI32UZero
+
+  // Convert low i32 lanes to f64 (i32x4 -> f64x2, using low 2 lanes)
+  // SIMDConvertLowI32ToF64S: SXTL + SCVTF
+  // Uses: [vector], Defs: [result]
+  SIMDConvertLowI32ToF64S
+
+  // SIMDConvertLowI32ToF64U: UXTL + UCVTF
+  // Uses: [vector], Defs: [result]
+  SIMDConvertLowI32ToF64U
+
+  // Demote f64 to f32 with zero (f64x2 -> f32x4, zeros in high lanes)
+  // SIMDDemoteF64ToF32Zero: FCVTN
+  // Uses: [vector], Defs: [result]
+  SIMDDemoteF64ToF32Zero
+
+  // Promote low f32 to f64 (f32x4 -> f64x2, using low 2 lanes)
+  // SIMDPromoteLowF32ToF64: FCVTL
+  // Uses: [vector], Defs: [result]
+  SIMDPromoteLowF32ToF64
+
+  // V128 load (128-bit)
+  // SIMDLoad(offset): LDR Qd, [Xn, #offset]
+  // Uses: [base], Defs: [result]
+  SIMDLoad(Int)
+
+  // V128 store (128-bit)
+  // SIMDStore(offset): STR Qn, [Xd, #offset]
+  // Uses: [base, value], Defs: []
+  SIMDStore(Int)
+
+  // Load and splat
+  // SIMDLoadSplat(lane_size, offset): LD1R Vd.T, [Xn]
+  // Uses: [base], Defs: [result]
+  SIMDLoadSplat(LaneSize, Int)
+
+  // Load and extend (8x8, 16x4, 32x2)
+  // SIMDLoadExtend(src_bits, signed, offset): load + SXTL/UXTL
+  // Uses: [base], Defs: [result]
+  SIMDLoadExtend(Int, Bool, Int)
+
+  // Load 32/64 bits and zero extend to v128
+  // SIMDLoadZero(is_64, offset): LDR S/D, then insert into zero vector
+  // Uses: [base], Defs: [result]
+  SIMDLoadZero(Bool, Int)
+
+  // Load lane (load single element into existing vector)
+  // SIMDLoadLane(lane_size, lane, offset): LD1 Vd.T[lane], [Xn]
+  // Uses: [base, vector], Defs: [result]
+  SIMDLoadLane(LaneSize, Int, Int)
+
+  // Store lane (store single element from vector)
+  // SIMDStoreLane(lane_size, lane, offset): ST1 Vn.T[lane], [Xd]
+  // Uses: [base, vector], Defs: []
+  SIMDStoreLane(LaneSize, Int, Int)
 }
 
 ///|
@@ -506,6 +898,129 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       }
     StoreToStack(offset) => "str [sp+\{offset}]"
     LoadSP => "mov rd, sp"
+    // SIMD instructions
+    LoadConstV128(_) => "ldi.v128"
+    SIMDSplat(lane_size) => "dup.\{lane_size}"
+    SIMDSplatF(is_f32) => if is_f32 { "dup.4s" } else { "dup.2d" }
+    SIMDExtractU(lane_size, lane) => "umov.\{lane_size}[\{lane}]"
+    SIMDExtractS(lane_size, lane) => "smov.\{lane_size}[\{lane}]"
+    SIMDExtractF(is_f32, lane) =>
+      if is_f32 {
+        "dup.s[\{lane}]"
+      } else {
+        "dup.d[\{lane}]"
+      }
+    SIMDInsert(lane_size, lane) => "ins.\{lane_size}[\{lane}]"
+    SIMDInsertF(is_f32, lane) =>
+      if is_f32 {
+        "ins.s[\{lane}]"
+      } else {
+        "ins.d[\{lane}]"
+      }
+    SIMDShuffle(_) => "tbl2.16b"
+    SIMDSwizzle => "tbl.16b"
+    SIMDNot => "not.16b"
+    SIMDAnd => "and.16b"
+    SIMDBic => "bic.16b"
+    SIMDOr => "orr.16b"
+    SIMDXor => "eor.16b"
+    SIMDBsl => "bsl.16b"
+    SIMDAnyTrue => "v128.any_true"
+    SIMDAllTrue(lane_size) => "all_true.\{lane_size}"
+    SIMDBitmask(lane_size) => "bitmask.\{lane_size}"
+    SIMDAdd(lane_size) => "add.\{lane_size}"
+    SIMDSub(lane_size) => "sub.\{lane_size}"
+    SIMDMul(lane_size) => "mul.\{lane_size}"
+    SIMDSqadd(lane_size) => "sqadd.\{lane_size}"
+    SIMDUqadd(lane_size) => "uqadd.\{lane_size}"
+    SIMDSqsub(lane_size) => "sqsub.\{lane_size}"
+    SIMDUqsub(lane_size) => "uqsub.\{lane_size}"
+    SIMDSmin(lane_size) => "smin.\{lane_size}"
+    SIMDUmin(lane_size) => "umin.\{lane_size}"
+    SIMDSmax(lane_size) => "smax.\{lane_size}"
+    SIMDUmax(lane_size) => "umax.\{lane_size}"
+    SIMDUrhadd(lane_size) => "urhadd.\{lane_size}"
+    SIMDAbs(lane_size) => "abs.\{lane_size}"
+    SIMDNeg(lane_size) => "neg.\{lane_size}"
+    SIMDCnt => "cnt.16b"
+    SIMDShl(lane_size) => "shl.\{lane_size}"
+    SIMDSshr(lane_size) => "sshr.\{lane_size}"
+    SIMDUshr(lane_size) => "ushr.\{lane_size}"
+    SIMDCmp(lane_size, kind) => "cmp.\{kind}.\{lane_size}"
+    SIMDNarrow(lane_size, signed) => {
+      let sign = if signed { "s" } else { "u" }
+      "xtn.\{sign}.\{lane_size}"
+    }
+    SIMDExtendLow(lane_size, signed) => {
+      let sign = if signed { "s" } else { "u" }
+      "xtl.\{sign}.\{lane_size}"
+    }
+    SIMDExtendHigh(lane_size, signed) => {
+      let sign = if signed { "s" } else { "u" }
+      "xtl2.\{sign}.\{lane_size}"
+    }
+    SIMDExtMulLow(lane_size, signed) => {
+      let sign = if signed { "s" } else { "u" }
+      "mull.\{sign}.\{lane_size}"
+    }
+    SIMDExtMulHigh(lane_size, signed) => {
+      let sign = if signed { "s" } else { "u" }
+      "mull2.\{sign}.\{lane_size}"
+    }
+    SIMDExtAddPairwise(lane_size, signed) => {
+      let sign = if signed { "s" } else { "u" }
+      "addlp.\{sign}.\{lane_size}"
+    }
+    SIMDDot => "dot.i16x8_s"
+    SIMDQ15MulrSat => "sqrdmulh.8h"
+    SIMDFAdd(is_f32) => if is_f32 { "fadd.4s" } else { "fadd.2d" }
+    SIMDFSub(is_f32) => if is_f32 { "fsub.4s" } else { "fsub.2d" }
+    SIMDFMul(is_f32) => if is_f32 { "fmul.4s" } else { "fmul.2d" }
+    SIMDFDiv(is_f32) => if is_f32 { "fdiv.4s" } else { "fdiv.2d" }
+    SIMDFMin(is_f32) => if is_f32 { "fmin.4s" } else { "fmin.2d" }
+    SIMDFMax(is_f32) => if is_f32 { "fmax.4s" } else { "fmax.2d" }
+    SIMDFPMin(is_f32) => if is_f32 { "fpmin.4s" } else { "fpmin.2d" }
+    SIMDFPMax(is_f32) => if is_f32 { "fpmax.4s" } else { "fpmax.2d" }
+    SIMDFAbs(is_f32) => if is_f32 { "fabs.4s" } else { "fabs.2d" }
+    SIMDFNeg(is_f32) => if is_f32 { "fneg.4s" } else { "fneg.2d" }
+    SIMDFSqrt(is_f32) => if is_f32 { "fsqrt.4s" } else { "fsqrt.2d" }
+    SIMDFCeil(is_f32) => if is_f32 { "frintp.4s" } else { "frintp.2d" }
+    SIMDFFloor(is_f32) => if is_f32 { "frintm.4s" } else { "frintm.2d" }
+    SIMDFTrunc(is_f32) => if is_f32 { "frintz.4s" } else { "frintz.2d" }
+    SIMDFNearest(is_f32) => if is_f32 { "frintn.4s" } else { "frintn.2d" }
+    SIMDFCmp(is_f32, kind) =>
+      if is_f32 {
+        "fcmp.\{kind}.4s"
+      } else {
+        "fcmp.\{kind}.2d"
+      }
+    SIMDFCvtToIntS(is_f32) => if is_f32 { "fcvtzs.4s" } else { "fcvtzs.2d" }
+    SIMDFCvtToIntU(is_f32) => if is_f32 { "fcvtzu.4s" } else { "fcvtzu.2d" }
+    SIMDIntToFloatS(is_f32) => if is_f32 { "scvtf.4s" } else { "scvtf.2d" }
+    SIMDIntToFloatU(is_f32) => if is_f32 { "ucvtf.4s" } else { "ucvtf.2d" }
+    SIMDTruncSatF64ToI32SZero => "fcvtzs.f64_i32_zero"
+    SIMDTruncSatF64ToI32UZero => "fcvtzu.f64_i32_zero"
+    SIMDConvertLowI32ToF64S => "scvtf.i32_f64_low"
+    SIMDConvertLowI32ToF64U => "ucvtf.i32_f64_low"
+    SIMDDemoteF64ToF32Zero => "fcvtn.f64_f32_zero"
+    SIMDPromoteLowF32ToF64 => "fcvtl.f32_f64_low"
+    SIMDLoad(offset) => "ldr.q +\{offset}"
+    SIMDStore(offset) => "str.q +\{offset}"
+    SIMDLoadSplat(lane_size, offset) => "ld1r.\{lane_size} +\{offset}"
+    SIMDLoadExtend(bits, signed, offset) => {
+      let sign = if signed { "s" } else { "u" }
+      "ldext.\{bits}\{sign} +\{offset}"
+    }
+    SIMDLoadZero(is_64, offset) =>
+      if is_64 {
+        "ldr.d_zero +\{offset}"
+      } else {
+        "ldr.s_zero +\{offset}"
+      }
+    SIMDLoadLane(lane_size, lane, offset) =>
+      "ld1.\{lane_size}[\{lane}] +\{offset}"
+    SIMDStoreLane(lane_size, lane, offset) =>
+      "st1.\{lane_size}[\{lane}] +\{offset}"
   }
 }
 
@@ -523,6 +1038,7 @@ pub(all) enum MemType {
   I64
   F32
   F64
+  V128 // 128-bit SIMD vector
 }
 
 ///|
@@ -534,6 +1050,7 @@ fn MemType::to_string(self : MemType) -> String {
     I64 => "i64"
     F32 => "f32"
     F64 => "f64"
+    V128 => "v128"
   }
 }
 
@@ -879,5 +1396,77 @@ fn ShiftType::to_string(self : ShiftType) -> String {
 
 ///|
 pub impl Show for ShiftType with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// SIMD lane size for vector operations
+pub(all) enum LaneSize {
+  B8 // 8-bit lanes (16 lanes in 128-bit vector)
+  H16 // 16-bit lanes (8 lanes)
+  S32 // 32-bit lanes (4 lanes)
+  D64 // 64-bit lanes (2 lanes)
+}
+
+///|
+fn LaneSize::to_string(self : LaneSize) -> String {
+  match self {
+    B8 => "8b"
+    H16 => "8h"
+    S32 => "4s"
+    D64 => "2d"
+  }
+}
+
+///|
+pub impl Show for LaneSize with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// SIMD comparison kind for integer vector comparisons
+pub(all) enum SIMDCmpKind {
+  Eq // CMEQ - equal
+  GtS // CMGT - signed greater than
+  GeS // CMGE - signed greater than or equal
+  GtU // CMHI - unsigned greater than (higher)
+  GeU // CMHS - unsigned greater than or equal (higher or same)
+}
+
+///|
+fn SIMDCmpKind::to_string(self : SIMDCmpKind) -> String {
+  match self {
+    Eq => "eq"
+    GtS => "gt.s"
+    GeS => "ge.s"
+    GtU => "gt.u"
+    GeU => "ge.u"
+  }
+}
+
+///|
+pub impl Show for SIMDCmpKind with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// SIMD floating-point comparison kind
+pub(all) enum SIMDFCmpKind {
+  Eq // FCMEQ - equal
+  Gt // FCMGT - greater than
+  Ge // FCMGE - greater than or equal
+}
+
+///|
+fn SIMDFCmpKind::to_string(self : SIMDFCmpKind) -> String {
+  match self {
+    Eq => "eq"
+    Gt => "gt"
+    Ge => "ge"
+  }
+}
+
+///|
+pub impl Show for SIMDFCmpKind with output(self, logger) {
   logger.write_string(self.to_string())
 }

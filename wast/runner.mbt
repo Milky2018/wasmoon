@@ -20,6 +20,52 @@ pub const EXTERNREF_TAG : Int64 = 0x4000000000000000L
 pub const FUNCREF_TAG : Int64 = 0x2000000000000000L
 
 ///|
+/// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
+fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
+  let b0 = bytes[offset].to_int64() & 0xFFL
+  let b1 = bytes[offset + 1].to_int64() & 0xFFL
+  let b2 = bytes[offset + 2].to_int64() & 0xFFL
+  let b3 = bytes[offset + 3].to_int64() & 0xFFL
+  let b4 = bytes[offset + 4].to_int64() & 0xFFL
+  let b5 = bytes[offset + 5].to_int64() & 0xFFL
+  let b6 = bytes[offset + 6].to_int64() & 0xFFL
+  let b7 = bytes[offset + 7].to_int64() & 0xFFL
+  b0 |
+  (b1 << 8) |
+  (b2 << 16) |
+  (b3 << 24) |
+  (b4 << 32) |
+  (b5 << 40) |
+  (b6 << 48) |
+  (b7 << 56)
+}
+
+///|
+/// Convert two Int64 (low and high) to V128 Bytes (16 bytes, little-endian)
+fn int64_pair_to_v128_le(low : Int64, high : Int64) -> Bytes {
+  let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+  // Write low 8 bytes
+  buf.write_byte((low & 0xFFL).to_byte())
+  buf.write_byte(((low >> 8) & 0xFFL).to_byte())
+  buf.write_byte(((low >> 16) & 0xFFL).to_byte())
+  buf.write_byte(((low >> 24) & 0xFFL).to_byte())
+  buf.write_byte(((low >> 32) & 0xFFL).to_byte())
+  buf.write_byte(((low >> 40) & 0xFFL).to_byte())
+  buf.write_byte(((low >> 48) & 0xFFL).to_byte())
+  buf.write_byte(((low >> 56) & 0xFFL).to_byte())
+  // Write high 8 bytes
+  buf.write_byte((high & 0xFFL).to_byte())
+  buf.write_byte(((high >> 8) & 0xFFL).to_byte())
+  buf.write_byte(((high >> 16) & 0xFFL).to_byte())
+  buf.write_byte(((high >> 24) & 0xFFL).to_byte())
+  buf.write_byte(((high >> 32) & 0xFFL).to_byte())
+  buf.write_byte(((high >> 40) & 0xFFL).to_byte())
+  buf.write_byte(((high >> 48) & 0xFFL).to_byte())
+  buf.write_byte(((high >> 56) & 0xFFL).to_byte())
+  buf.contents()
+}
+
+///|
 /// Result of running WAST commands
 pub struct WastResult {
   mut passed : Int
@@ -575,31 +621,46 @@ pub fn invoke_action(
           // Find and call JIT function
           match jit.jit_module.get_func_by_name(func_name) {
             Some(f) => {
-              // Convert args to Int64
+              // Convert args to Int64 (V128 uses two slots: low 8 bytes, then high 8 bytes)
               let i64_args : Array[Int64] = []
               for arg in args {
-                let v = match arg {
-                  I32(n) => @types.ToInt64::to_int64_bits(n)
-                  I64(n) => @types.ToInt64::to_int64_bits(n)
-                  F32(n) => @types.ToInt64::to_int64_bits(n)
-                  F64(n) => @types.ToInt64::to_int64_bits(n)
+                match arg {
+                  I32(n) => i64_args.push(@types.ToInt64::to_int64_bits(n))
+                  I64(n) => i64_args.push(@types.ToInt64::to_int64_bits(n))
+                  F32(n) => i64_args.push(@types.ToInt64::to_int64_bits(n))
+                  F64(n) => i64_args.push(@types.ToInt64::to_int64_bits(n))
                   F32CanonicalNan | F32ArithmeticNan =>
-                    @types.ToInt64::to_int64_bits(@float.not_a_number)
+                    i64_args.push(
+                      @types.ToInt64::to_int64_bits(@float.not_a_number),
+                    )
                   F64CanonicalNan | F64ArithmeticNan =>
-                    @types.ToInt64::to_int64_bits(@double.not_a_number)
-                  RefNull(_) => NULL_REF
+                    i64_args.push(
+                      @types.ToInt64::to_int64_bits(@double.not_a_number),
+                    )
+                  RefNull(_) => i64_args.push(NULL_REF)
                   // Externref uses special encoding: EXTERNREF_TAG | (host_idx << 1)
-                  RefExtern(n) => EXTERNREF_TAG | (n.to_int64() << 1)
-                  RefHost(n) => EXTERNREF_TAG | (n.to_int64() << 1)
-                  RefFunc => NULL_REF // func ref (placeholder)
-                  RefExternAny => NULL_REF // any extern ref (placeholder)
+                  RefExtern(n) =>
+                    i64_args.push(EXTERNREF_TAG | (n.to_int64() << 1))
+                  RefHost(n) =>
+                    i64_args.push(EXTERNREF_TAG | (n.to_int64() << 1))
+                  RefFunc => i64_args.push(NULL_REF) // func ref (placeholder)
+                  RefExternAny => i64_args.push(NULL_REF) // any extern ref (placeholder)
                   // GC reference types - these shouldn't appear as args but handle them
-                  RefArray | RefStruct | RefEq | RefI31 | RefAny => NULL_REF
-                  // V128 not yet supported as JIT args
-                  V128(_) | V128Pattern(_) =>
-                    abort("V128 args not yet supported in JIT")
+                  RefArray | RefStruct | RefEq | RefI31 | RefAny =>
+                    i64_args.push(NULL_REF)
+                  // V128: push 16 bytes as two Int64 (low then high) in little-endian
+                  V128(bytes) => {
+                    // Low 8 bytes
+                    let low = bytes_to_int64_le(bytes, 0)
+                    i64_args.push(low)
+                    // High 8 bytes
+                    let high = bytes_to_int64_le(bytes, 8)
+                    i64_args.push(high)
+                  }
+                  V128Pattern(_) =>
+                    // For pattern matching, we shouldn't be passing these as args
+                    abort("V128Pattern not valid as JIT argument")
                 }
-                i64_args.push(v)
               }
               // Set up GC heap for JIT execution if c_heap is available
               match ctx.store.c_heap {
@@ -655,12 +716,35 @@ pub fn invoke_action(
               // Sync JIT globals back to store after successful call
               sync_jit_globals_to_store(jit, ctx.store)
               // Convert results back to Values based on function return types
+              // V128 results take two slots (low then high 8 bytes)
               let values : Array[@types.Value] = []
-              for i, r in results {
-                if i < f.result_types.length() {
-                  values.push(
-                    convert_jit_result(r, f.result_types[i], ctx.store.c_heap),
-                  )
+              let mut result_idx = 0
+              for result_type in f.result_types {
+                if result_idx >= results.length() {
+                  break
+                }
+                match result_type {
+                  @types.ValueType::V128 => {
+                    // V128 uses two slots: low (first) and high (second)
+                    if result_idx + 1 >= results.length() {
+                      break
+                    }
+                    let low = results[result_idx]
+                    let high = results[result_idx + 1]
+                    let bytes = int64_pair_to_v128_le(low, high)
+                    values.push(@types.Value::V128(bytes))
+                    result_idx = result_idx + 2
+                  }
+                  _ => {
+                    values.push(
+                      convert_jit_result(
+                        results[result_idx],
+                        result_type,
+                        ctx.store.c_heap,
+                      ),
+                    )
+                    result_idx = result_idx + 1
+                  }
                 }
               }
               values

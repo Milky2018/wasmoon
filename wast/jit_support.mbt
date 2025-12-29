@@ -168,7 +168,11 @@ pub fn sync_jit_globals_to_store(
         RefAny | RefEq | RefNullEq => @types.Value::Null
         RefI31 | RefNullI31 => @types.Value::Null
         RefNone => @types.Value::Null
-        V128 => abort("V128 not supported in JIT global sync")
+        V128 => {
+          // Read both 64-bit halves and construct V128
+          let high_value = @jit.c_jit_read_i64(offset + 8L)
+          @types.Value::V128(int64_pair_to_v128_le(raw_value, high_value))
+        }
       }
       // We already checked mutability, so set should succeed
       global_inst.set(new_value) catch {

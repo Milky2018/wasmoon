@@ -1,5 +1,6 @@
 {
   "import": [
     "Milky2018/wasmoon/types"
-  ]
+  ],
+  "warn-list": "-6"
 }

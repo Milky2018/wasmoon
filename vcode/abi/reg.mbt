@@ -4,6 +4,7 @@ pub(all) enum RegClass {
   Int // Integer/general-purpose registers
   Float32 // 32-bit floating-point registers
   Float64 // 64-bit floating-point registers
+  Vector // 128-bit SIMD vector registers
 }
 
 ///|
@@ -12,6 +13,7 @@ fn RegClass::to_string(self : RegClass) -> String {
     Int => "int"
     Float32 => "float"
     Float64 => "double"
+    Vector => "vector"
   }
 }
 

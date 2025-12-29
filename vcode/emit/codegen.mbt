@@ -2,6 +2,27 @@
 // Translates VCode to machine code
 
 ///|
+/// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
+fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
+  let b0 = bytes[offset].to_int64() & 0xFFL
+  let b1 = bytes[offset + 1].to_int64() & 0xFFL
+  let b2 = bytes[offset + 2].to_int64() & 0xFFL
+  let b3 = bytes[offset + 3].to_int64() & 0xFFL
+  let b4 = bytes[offset + 4].to_int64() & 0xFFL
+  let b5 = bytes[offset + 5].to_int64() & 0xFFL
+  let b6 = bytes[offset + 6].to_int64() & 0xFFL
+  let b7 = bytes[offset + 7].to_int64() & 0xFFL
+  b0 |
+  (b1 << 8) |
+  (b2 << 16) |
+  (b3 << 24) |
+  (b4 << 32) |
+  (b5 << 40) |
+  (b6 << 48) |
+  (b7 << 56)
+}
+
+///|
 fn collect_used_callee_saved(
   func : @lower.VCodeFunction,
   _needs_sret : Bool,
@@ -248,6 +269,19 @@ fn MachineCode::emit_prologue(
                   Float32 => self.emit_fmov_s(preg.index, v_src)
                   _ => self.emit_fmov_d(preg.index, v_src)
                 }
+              }
+            None => ()
+          }
+          float_idx = float_idx + 1
+        }
+      Vector =>
+        // Vector params come in V0-V7 (same as floats)
+        if float_idx < max_float_params {
+          let v_src = float_idx
+          match dest_preg {
+            Some(preg) =>
+              if preg.index != v_src {
+                OrrVec(preg.index, v_src).emit(self)
               }
             None => ()
           }
@@ -696,6 +730,7 @@ fn MachineCode::emit_instruction(
         Float32 => self.emit_fmov_s(rd, rm)
         Float64 => self.emit_fmov_d(rd, rm)
         Int => self.emit_mov_reg(rd, rm)
+        Vector => OrrVec(rd, rm).emit(self)
       }
     }
     LoadConst(v) => {
@@ -778,6 +813,23 @@ fn MachineCode::emit_instruction(
         Int =>
           // Use CSEL for integer registers
           self.emit_csel(rd, true_val, false_val, NE.to_int())
+        Vector => {
+          // Vector select: dst = cond != 0 ? true_val : false_val
+          // Uses X16 as GPR temp, V16 as vector temp
+          // Step 1: CSET X16, NE (X16 = 0 or 1)
+          self.emit_cset(16, NE.to_int())
+          // Step 2: NEG X16, X16 (X16 = 0 or -1 for mask)
+          self.emit_sub_reg(16, 31, 16) // SUB X16, XZR, X16
+          // Step 3: DUP V16.2D, X16 (broadcast to all bits)
+          Dup2D(16, 16).emit(self)
+          // Step 4: BSL V16.16B, Vtrue.16B, Vfalse.16B
+          // BSL: V16 = (true_val & V16) | (false_val & ~V16)
+          Bsl16B(16, true_val, false_val).emit(self)
+          // Step 5: Move V16 to rd if needed
+          if rd != 16 {
+            Orr16B(rd, 16, 16).emit(self)
+          }
+        }
       }
     }
     Clz(is_64) => {
@@ -1130,6 +1182,7 @@ fn MachineCode::emit_instruction(
         // Always use 64-bit load for floats to avoid S/D register aliasing issues
         Float32 | Float64 =>
           self.emit_ldr_d_imm(rd, 31, spill_base_offset + offset) // LDR Dd, [SP, #offset]
+        Vector => self.emit_ldr_q_imm(rd, 31, spill_base_offset + offset) // LDR Qd, [SP, #offset]
       }
     }
     StackStore(offset) => {
@@ -1147,6 +1200,7 @@ fn MachineCode::emit_instruction(
         // Always use 64-bit store for floats to avoid S/D register aliasing issues
         Float32 | Float64 =>
           self.emit_str_d_imm(rt, 31, spill_base_offset + offset) // STR Dt, [SP, #offset]
+        Vector => self.emit_str_q_imm(rt, 31, spill_base_offset + offset) // STR Qt, [SP, #offset]
       }
     }
     LoadStackParam(param_idx, class, int_overflow_count) => {
@@ -1191,6 +1245,7 @@ fn MachineCode::emit_instruction(
           self.emit_ldr_imm(16, 31, stack_offset) // LDR X16, [SP, #offset]
           self.emit_fmov_x_to_d(rd, 16) // FMOV Dd, X16
         }
+        Vector => abort("SIMD JIT not implemented: vector stack param load")
       }
     }
     LoadPtr(ty, offset) => {
@@ -1340,6 +1395,7 @@ fn MachineCode::emit_instruction(
         Int => self.emit_str_imm(src, 31, actual_offset)
         Float32 => self.emit_str_s_imm(src, 31, actual_offset)
         Float64 => self.emit_str_d_imm(src, 31, actual_offset)
+        Vector => self.emit_str_q_imm(src, 31, actual_offset)
       }
     }
     LoadSP => {
@@ -1347,6 +1403,1181 @@ fn MachineCode::emit_instruction(
       // Uses ADD Xd, SP, #0 because MOV with SP has encoding issues
       let result_reg = wreg_num(inst.defs[0])
       self.emit_add_imm(result_reg, 31, 0)
+    }
+    // ============ SIMD Instructions ============
+    LoadConstV128(bytes) => {
+      // Load V128 constant using GPR + INS instructions
+      // Strategy: Load two 64-bit halves into X16, X17, then INS into vector register
+      let rd = wreg_num(inst.defs[0])
+
+      // Extract low and high 64-bit values (little-endian)
+      let low = bytes_to_int64_le(bytes, 0)
+      let high = bytes_to_int64_le(bytes, 8)
+
+      // Optimization: all zeros -> MOVI Vd.2D, #0
+      if low == 0L && high == 0L {
+        MoviZero(rd).emit(self)
+      } else {
+        // General case: MOVI zero, then INS the two 64-bit values
+        MoviZero(rd).emit(self)
+
+        // Insert low 64-bit (D[0])
+        if low != 0L {
+          self.emit_load_imm64(16, low)
+          InsD(rd, 0, 16).emit(self)
+        }
+
+        // Insert high 64-bit (D[1])
+        if high != 0L {
+          self.emit_load_imm64(16, high)
+          InsD(rd, 1, 16).emit(self)
+        }
+      }
+    }
+    SIMDSplat(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match lane_size {
+        B8 => Dup16B(rd, rn).emit(self)
+        H16 => Dup8H(rd, rn).emit(self)
+        S32 => Dup4S(rd, rn).emit(self)
+        D64 => Dup2D(rd, rn).emit(self)
+      }
+    }
+    SIMDSplatF(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        DupElem4S(rd, rn, 0).emit(self)
+      } else {
+        DupElem2D(rd, rn, 0).emit(self)
+      }
+    }
+    SIMDExtractU(lane_size, lane) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match lane_size {
+        B8 => UmovB(rd, rn, lane).emit(self)
+        H16 => UmovH(rd, rn, lane).emit(self)
+        S32 => UmovS(rd, rn, lane).emit(self)
+        D64 => UmovD(rd, rn, lane).emit(self)
+      }
+    }
+    SIMDExtractS(lane_size, lane) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match lane_size {
+        B8 => SmovB(rd, rn, lane).emit(self)
+        H16 => SmovH(rd, rn, lane).emit(self)
+        S32 => SmovS(rd, rn, lane).emit(self)
+        D64 => UmovD(rd, rn, lane).emit(self) // No SMOV for D64
+      }
+    }
+    SIMDExtractF(is_f32, lane) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        DupScalarS(rd, rn, lane).emit(self)
+      } else {
+        DupScalarD(rd, rn, lane).emit(self)
+      }
+    }
+    SIMDInsert(lane_size, lane) => {
+      let rd = wreg_num(inst.defs[0])
+      let rv = reg_num(inst.uses[0]) // source vector
+      let rn = reg_num(inst.uses[1]) // value to insert
+      // INS modifies destination in-place, so copy source vector first if different
+      if rd != rv {
+        OrrVec(rd, rv).emit(self)
+      }
+      match lane_size {
+        B8 => InsB(rd, lane, rn).emit(self)
+        H16 => InsH(rd, lane, rn).emit(self)
+        S32 => InsS(rd, lane, rn).emit(self)
+        D64 => InsD(rd, lane, rn).emit(self)
+      }
+    }
+    SIMDInsertF(is_f32, lane) => {
+      let rd = wreg_num(inst.defs[0])
+      let rv = reg_num(inst.uses[0]) // source vector
+      let rn = reg_num(inst.uses[1]) // value to insert
+      // INS modifies destination in-place, so copy source vector first if different
+      if rd != rv {
+        OrrVec(rd, rv).emit(self)
+      }
+      if is_f32 {
+        InsElemS(rd, lane, rn, 0).emit(self)
+      } else {
+        InsElemD(rd, lane, rn, 0).emit(self)
+      }
+    }
+    SIMDShuffle(lanes) => {
+      // i8x16.shuffle: select lanes from two source vectors using constant indices
+      // TBL2 requires consecutive source registers, so we use scratch regs V16, V17
+      // Indices loaded into V18
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0]) // first source
+      let rm = reg_num(inst.uses[1]) // second source
+      // Step 1: Copy sources to consecutive scratch registers V16, V17
+      OrrVec(16, rn).emit(self) // V16 = source 1
+      OrrVec(17, rm).emit(self) // V17 = source 2
+      // Step 2: Load lane indices as V128 constant into V18
+      // Build two Int64 values from the 16 lane indices (little-endian)
+      let mut low = 0L
+      let mut high = 0L
+      for i in 0..<8 {
+        low = low | ((lanes[i].to_int64() & 0xFFL) << (i * 8))
+        high = high | ((lanes[i + 8].to_int64() & 0xFFL) << (i * 8))
+      }
+      // Load indices into V18
+      MoviZero(18).emit(self)
+      if low != 0L {
+        self.emit_load_imm64(16, low) // Use X16 as scratch
+        InsD(18, 0, 16).emit(self)
+      }
+      if high != 0L {
+        self.emit_load_imm64(16, high)
+        InsD(18, 1, 16).emit(self)
+      }
+      // Step 3: Execute TBL2 with consecutive regs V16, V17 and indices V18
+      Tbl2(rd, 16, 17, 18).emit(self)
+    }
+    SIMDSwizzle => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      Tbl1(rd, rn, rm).emit(self)
+    }
+    SIMDNot => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      Not16B(rd, rn).emit(self)
+    }
+    SIMDAnd => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      And16B(rd, rn, rm).emit(self)
+    }
+    SIMDBic => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      Bic16B(rd, rn, rm).emit(self)
+    }
+    SIMDOr => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      Orr16B(rd, rn, rm).emit(self)
+    }
+    SIMDXor => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      Eor16B(rd, rn, rm).emit(self)
+    }
+    SIMDBsl => {
+      // v128.bitselect(a, b, c) = (a & c) | (b & ~c)
+      // uses[0] = a, uses[1] = b, uses[2] = c (mask)
+      // BSL Vd, Vn, Vm: Vd = (Vn & Vd) | (Vm & ~Vd)
+      // So we need: Vd = c (mask), Vn = a, Vm = b
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let c = reg_num(inst.uses[2]) // mask
+      // First copy mask to rd
+      OrrVec(rd, c).emit(self)
+      // Then do BSL: rd = (a & rd) | (b & ~rd)
+      Bsl16B(rd, a, b).emit(self)
+    }
+    SIMDAnyTrue => {
+      // v128.any_true: returns 1 if any bit is set, 0 otherwise
+      // Algorithm: UMAXV Bd, Vn.16B (max byte across lanes)
+      //            FMOV Xd, Dn (move to GPR - upper bits are zero)
+      //            CMP Xd, #0; CSET Wd, NE
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Step 1: UMAXV to get max byte into V16
+      Umaxv16B(16, rn).emit(self)
+      // Step 2: FMOV from D16 to X16 (result in low byte, rest is zero)
+      self.emit_fmov_d_to_x(16, 16)
+      // Step 3: CMP X16, #0
+      self.emit_cmp_imm(16, 0)
+      // Step 4: CSET Wd, NE (rd = 1 if X16 != 0, else 0)
+      self.emit_cset(rd, 1) // NE condition
+    }
+    SIMDAllTrue(lane_size) => {
+      // i*x*.all_true: returns 1 if all lanes are non-zero, 0 otherwise
+      // Algorithm: UMINV (min across lanes), compare != 0
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match lane_size {
+        B8 =>
+          // i8x16.all_true: UMINV Bd, Vn.16B
+          Uminv16B(16, rn).emit(self)
+        H16 =>
+          // i16x8.all_true: UMINV Hd, Vn.8H
+          Uminv8H(16, rn).emit(self)
+        S32 =>
+          // i32x4.all_true: UMINV Sd, Vn.4S
+          Uminv4S(16, rn).emit(self)
+        D64 => {
+          // i64x2.all_true: take AND of both lanes, check != 0
+          // Extract both 64-bit lanes and AND them
+          // UMOV X16, Vn.D[0]
+          // UMOV X17, Vn.D[1]
+          // AND X16, X16, X17
+          // Then compare != 0
+          // Use FMOV for the extracts (same as UMOV for 64-bit)
+          self.emit_fmov_d_to_x(16, rn) // low 64 bits
+          // For high 64 bits, we need to use DUP + FMOV or similar
+          // Simpler: use INS to copy high to low of scratch, then FMOV
+          OrrVec(17, rn).emit(self) // V17 = copy of Vn
+          // EXT V17.16B, V17.16B, V17.16B, #8 - rotate by 8 bytes
+          self.emit_ext_16b(17, 17, 17, 8)
+          self.emit_fmov_d_to_x(17, 17) // high 64 bits now in X17
+          // AND X16, X16, X17
+          AndShifted(16, 16, 17, @instr.ShiftType::Lsl, 0).emit(self)
+        }
+      }
+      // Common: compare result != 0 and set rd to 0/1
+      if lane_size is D64 {
+        // Already have result in X16, just compare
+        self.emit_cmp_imm(16, 0)
+      } else {
+        // FMOV from D16 to X16
+        self.emit_fmov_d_to_x(16, 16)
+        self.emit_cmp_imm(16, 0)
+      }
+      // CSET Wd, NE
+      self.emit_cset(rd, 1)
+    }
+    SIMDBitmask(lane_size) => {
+      // Extract MSB of each lane into an integer
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match lane_size {
+        D64 => {
+          // i64x2.bitmask: 2 lanes -> 2-bit result
+          // Extract lane 0 MSB using UMOV
+          UmovD(16, rn, 0).emit(self) // X16 = Vn.D[0]
+          self.emit_movz(17, 63, 0) // X17 = 63
+          self.emit_lsr_reg(16, 16, 17) // X16 = bit 0
+          // Extract lane 1 MSB
+          UmovD(17, rn, 1).emit(self) // X17 = Vn.D[1]
+          self.emit_movz(18, 63, 0)
+          self.emit_lsr_reg(17, 17, 18) // X17 = bit 1
+          // Combine: rd = bit0 | (bit1 << 1)
+          self.emit_orr_shifted(rd, 16, 17, @instr.ShiftType::Lsl, 1)
+        }
+        S32 => {
+          // i32x4.bitmask: 4 lanes -> 4-bit result
+          // Use UMOV to extract each lane, shift right by 31
+          self.emit_movz(18, 31, 0) // X18 = 31 (shift amount)
+          UmovS(16, rn, 0).emit(self) // W16 = Vn.S[0]
+          self.emit_lsr_reg32(16, 16, 18) // bit 0
+          UmovS(17, rn, 1).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 1) // bits 0-1
+          UmovS(17, rn, 2).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 2) // bits 0-2
+          UmovS(17, rn, 3).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(rd, 16, 17, @instr.ShiftType::Lsl, 3) // bits 0-3
+        }
+        H16 => {
+          // i16x8.bitmask: 8 lanes -> 8-bit result
+          // Extract each halfword, get MSB, combine
+          self.emit_movz(18, 15, 0) // X18 = 15 (shift amount)
+          UmovH(16, rn, 0).emit(self)
+          self.emit_lsr_reg32(16, 16, 18) // bit 0
+          UmovH(17, rn, 1).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 1)
+          UmovH(17, rn, 2).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 2)
+          UmovH(17, rn, 3).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 3)
+          UmovH(17, rn, 4).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 4)
+          UmovH(17, rn, 5).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 5)
+          UmovH(17, rn, 6).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 6)
+          UmovH(17, rn, 7).emit(self)
+          self.emit_lsr_reg32(17, 17, 18)
+          self.emit_orr_shifted(rd, 16, 17, @instr.ShiftType::Lsl, 7)
+        }
+        B8 => {
+          // i8x16.bitmask: 16 lanes -> 16-bit result
+          // Use weighted add approach for efficiency
+          // Step 1: Load weights [1,2,4,8,16,32,64,128,1,2,4,8,16,32,64,128]
+          // 0x8040201008040201 = weights for 8 bytes (little endian)
+          LoadImm64(17, 0x8040201008040201L).emit(self)
+          self.emit_fmov_x_to_d(16, 17) // V16.D[0] = weights
+          DupElem2D(16, 16, 0).emit(self) // V16.D[1] = V16.D[0]
+          // Step 2: Shift each byte right by 7 to get 0/1 based on MSB
+          // Load -7 into all lanes using MOVN (move not) or just use SSHL with negative shift
+          // -7 in 8-bit signed = 0xF9, but we need it sign-extended for SSHL
+          // Actually -7 as 8-bit value: 256 - 7 = 249 = 0xF9
+          self.emit_movz(17, 0xF9, 0) // X17 = 0xF9 = -7 as unsigned byte
+          // Need to sign-extend to match byte interpretation
+          // For SSHL, negative shift in each lane means right shift
+          // But the shift amount in Vm is interpreted as signed byte per lane
+          // 0xF9 = -7 in signed byte interpretation
+          Dup16B(17, 17).emit(self) // V17.16B = all 0xF9 = -7
+          Sshl16B(18, rn, 17).emit(self) // V18 = signed shift right by 7
+          // Now V18 has 0x00 or 0xFF in each lane (all 0s or all 1s)
+          // Step 3: AND with weights to get weighted bits
+          And16B(18, 18, 16).emit(self) // V18 = weighted bits
+          // Step 4: Pairwise add to combine
+          Uaddlp8H(18, 18).emit(self) // V18.8H = pairwise sums
+          Uaddlp4S(18, 18).emit(self) // V18.4S = pairwise sums
+          Uaddlp2D(18, 18).emit(self) // V18.2D = pairwise sums
+          // V18.D[0] = low 8 bits, V18.D[1] = high 8 bits
+          self.emit_fmov_d_to_x(16, 18) // X16 = low 8 bits
+          self.emit_ext_16b(17, 18, 18, 8) // rotate to get high half
+          self.emit_fmov_d_to_x(17, 17) // X17 = high 8 bits
+          // Combine: rd = low | (high << 8)
+          self.emit_orr_shifted(rd, 16, 17, @instr.ShiftType::Lsl, 8)
+        }
+      }
+    }
+    SIMDAdd(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Add16B(rd, rn, rm).emit(self)
+        H16 => Add8H(rd, rn, rm).emit(self)
+        S32 => Add4S(rd, rn, rm).emit(self)
+        D64 => Add2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDSub(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Sub16B(rd, rn, rm).emit(self)
+        H16 => Sub8H(rd, rn, rm).emit(self)
+        S32 => Sub4S(rd, rn, rm).emit(self)
+        D64 => Sub2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDMul(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => abort("SIMD JIT: MUL.16B not supported, need expansion")
+        H16 => Mul8H(rd, rn, rm).emit(self)
+        S32 => Mul4S(rd, rn, rm).emit(self)
+        D64 => {
+          // i64x2.mul emulation: NEON doesn't have MUL.2D
+          // a*b = (a_hi*b_lo + a_lo*b_hi) << 32 + a_lo*b_lo
+          // Using temp registers V16-V20
+
+          // 1. Extract low 32-bit halves
+          Xtn2S(16, rn).emit(self) // v16 = [a0_lo, a1_lo]
+          Xtn2S(17, rm).emit(self) // v17 = [b0_lo, b1_lo]
+
+          // 2. Calculate a_lo * b_lo
+          Umull2D(18, 16, 17).emit(self) // v18 = a_lo * b_lo
+
+          // 3. Extract high 32-bit halves from a
+          Rev64_4S(19, rn).emit(self) // swap halves
+          Xtn2S(19, 19).emit(self) // v19 = [a0_hi, a1_hi]
+
+          // 4. Calculate a_hi * b_lo
+          Umull2D(20, 19, 17).emit(self) // v20 = a_hi * b_lo
+
+          // 5. Extract high 32-bit halves from b
+          Rev64_4S(19, rm).emit(self) // swap halves
+          Xtn2S(19, 19).emit(self) // v19 = [b0_hi, b1_hi]
+
+          // 6. Calculate a_lo * b_hi
+          Umull2D(17, 16, 19).emit(self) // v17 = a_lo * b_hi (reuse v17)
+
+          // 7. Add cross products
+          Add2D(17, 17, 20).emit(self) // v17 = cross sum
+
+          // 8. Shift cross products left by 32
+          ShlImm2D(17, 17, 32).emit(self)
+
+          // 9. Add to low*low to get final result
+          Add2D(rd, 18, 17).emit(self)
+        }
+      }
+    }
+    SIMDSqadd(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Sqadd16B(rd, rn, rm).emit(self)
+        H16 => Sqadd8H(rd, rn, rm).emit(self)
+        S32 => Sqadd4S(rd, rn, rm).emit(self)
+        D64 => Sqadd2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDUqadd(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Uqadd16B(rd, rn, rm).emit(self)
+        H16 => Uqadd8H(rd, rn, rm).emit(self)
+        S32 => Uqadd4S(rd, rn, rm).emit(self)
+        D64 => Uqadd2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDSqsub(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Sqsub16B(rd, rn, rm).emit(self)
+        H16 => Sqsub8H(rd, rn, rm).emit(self)
+        S32 => Sqsub4S(rd, rn, rm).emit(self)
+        D64 => Sqsub2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDUqsub(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Uqsub16B(rd, rn, rm).emit(self)
+        H16 => Uqsub8H(rd, rn, rm).emit(self)
+        S32 => Uqsub4S(rd, rn, rm).emit(self)
+        D64 => Uqsub2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDSmin(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Smin16B(rd, rn, rm).emit(self)
+        H16 => Smin8H(rd, rn, rm).emit(self)
+        S32 => Smin4S(rd, rn, rm).emit(self)
+        D64 => abort("SIMD JIT: SMIN.2D not supported")
+      }
+    }
+    SIMDUmin(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Umin16B(rd, rn, rm).emit(self)
+        H16 => Umin8H(rd, rn, rm).emit(self)
+        S32 => Umin4S(rd, rn, rm).emit(self)
+        D64 => abort("SIMD JIT: UMIN.2D not supported")
+      }
+    }
+    SIMDSmax(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Smax16B(rd, rn, rm).emit(self)
+        H16 => Smax8H(rd, rn, rm).emit(self)
+        S32 => Smax4S(rd, rn, rm).emit(self)
+        D64 => abort("SIMD JIT: SMAX.2D not supported")
+      }
+    }
+    SIMDUmax(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Umax16B(rd, rn, rm).emit(self)
+        H16 => Umax8H(rd, rn, rm).emit(self)
+        S32 => Umax4S(rd, rn, rm).emit(self)
+        D64 => abort("SIMD JIT: UMAX.2D not supported")
+      }
+    }
+    SIMDUrhadd(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match lane_size {
+        B8 => Urhadd16B(rd, rn, rm).emit(self)
+        H16 => Urhadd8H(rd, rn, rm).emit(self)
+        S32 => Urhadd4S(rd, rn, rm).emit(self)
+        D64 => abort("SIMD JIT: URHADD.2D not supported")
+      }
+    }
+    SIMDAbs(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match lane_size {
+        B8 => Abs16B(rd, rn).emit(self)
+        H16 => Abs8H(rd, rn).emit(self)
+        S32 => Abs4S(rd, rn).emit(self)
+        D64 => Abs2D(rd, rn).emit(self)
+      }
+    }
+    SIMDNeg(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match lane_size {
+        B8 => Neg16B(rd, rn).emit(self)
+        H16 => Neg8H(rd, rn).emit(self)
+        S32 => Neg4S(rd, rn).emit(self)
+        D64 => Neg2D(rd, rn).emit(self)
+      }
+    }
+    SIMDCnt => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      Cnt16B(rd, rn).emit(self)
+    }
+    SIMDShl(lane_size) => {
+      // WebAssembly SIMD shift: vector operand in uses[0], scalar shift amount in uses[1]
+      // NEON SSHL expects: vector in Vn, shift amount replicated in Vm (per lane)
+      // Shift amount is masked to valid range and broadcast to all lanes
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1]) // scalar shift amount in GPR
+      // Mask shift amount to valid range using X16
+      // Load mask into X17, then AND X16 = rm & X17
+      let mask = match lane_size {
+        B8 => 7L
+        H16 => 15L
+        S32 => 31L
+        D64 => 63L
+      }
+      self.emit_movz(17, mask.to_int(), 0) // X17 = mask
+      self.emit_and_reg(16, rm, 17) // X16 = shift_amount & mask
+      // Broadcast shift amount to V16 using DUP
+      match lane_size {
+        B8 => Dup16B(16, 16).emit(self) // V16.16B = X16
+        H16 => Dup8H(16, 16).emit(self)
+        S32 => Dup4S(16, 16).emit(self)
+        D64 => Dup2D(16, 16).emit(self)
+      }
+      // Use SSHL with vector shift amounts
+      match lane_size {
+        B8 => Sshl16B(rd, rn, 16).emit(self)
+        H16 => Sshl8H(rd, rn, 16).emit(self)
+        S32 => Sshl4S(rd, rn, 16).emit(self)
+        D64 => Sshl2D(rd, rn, 16).emit(self)
+      }
+    }
+    SIMDSshr(lane_size) => {
+      // For signed right shift, negate the shift amount and use SSHL
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      // Mask shift amount
+      let mask = match lane_size {
+        B8 => 7L
+        H16 => 15L
+        S32 => 31L
+        D64 => 63L
+      }
+      self.emit_movz(17, mask.to_int(), 0)
+      self.emit_and_reg(16, rm, 17)
+      // Negate: X16 = -X16 (SUB X16, XZR, X16)
+      self.emit_sub_reg(16, 31, 16)
+      // Broadcast to V16
+      match lane_size {
+        B8 => Dup16B(16, 16).emit(self)
+        H16 => Dup8H(16, 16).emit(self)
+        S32 => Dup4S(16, 16).emit(self)
+        D64 => Dup2D(16, 16).emit(self)
+      }
+      // SSHL with negative shift = signed right shift
+      match lane_size {
+        B8 => Sshl16B(rd, rn, 16).emit(self)
+        H16 => Sshl8H(rd, rn, 16).emit(self)
+        S32 => Sshl4S(rd, rn, 16).emit(self)
+        D64 => Sshl2D(rd, rn, 16).emit(self)
+      }
+    }
+    SIMDUshr(lane_size) => {
+      // For unsigned right shift, negate the shift amount and use USHL
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      // Mask shift amount
+      let mask = match lane_size {
+        B8 => 7L
+        H16 => 15L
+        S32 => 31L
+        D64 => 63L
+      }
+      self.emit_movz(17, mask.to_int(), 0)
+      self.emit_and_reg(16, rm, 17)
+      // Negate: X16 = -X16
+      self.emit_sub_reg(16, 31, 16)
+      // Broadcast to V16
+      match lane_size {
+        B8 => Dup16B(16, 16).emit(self)
+        H16 => Dup8H(16, 16).emit(self)
+        S32 => Dup4S(16, 16).emit(self)
+        D64 => Dup2D(16, 16).emit(self)
+      }
+      // USHL with negative shift = unsigned right shift
+      match lane_size {
+        B8 => Ushl16B(rd, rn, 16).emit(self)
+        H16 => Ushl8H(rd, rn, 16).emit(self)
+        S32 => Ushl4S(rd, rn, 16).emit(self)
+        D64 => Ushl2D(rd, rn, 16).emit(self)
+      }
+    }
+    SIMDCmp(lane_size, cmp_kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match (lane_size, cmp_kind) {
+        (B8, Eq) => Cmeq16B(rd, rn, rm).emit(self)
+        (H16, Eq) => Cmeq8H(rd, rn, rm).emit(self)
+        (S32, Eq) => Cmeq4S(rd, rn, rm).emit(self)
+        (D64, Eq) => Cmeq2D(rd, rn, rm).emit(self)
+        (B8, GtS) => Cmgt16B(rd, rn, rm).emit(self)
+        (H16, GtS) => Cmgt8H(rd, rn, rm).emit(self)
+        (S32, GtS) => Cmgt4S(rd, rn, rm).emit(self)
+        (D64, GtS) => Cmgt2D(rd, rn, rm).emit(self)
+        (B8, GeS) => Cmge16B(rd, rn, rm).emit(self)
+        (H16, GeS) => Cmge8H(rd, rn, rm).emit(self)
+        (S32, GeS) => Cmge4S(rd, rn, rm).emit(self)
+        (D64, GeS) => Cmge2D(rd, rn, rm).emit(self)
+        (B8, GtU) => Cmhi16B(rd, rn, rm).emit(self)
+        (H16, GtU) => Cmhi8H(rd, rn, rm).emit(self)
+        (S32, GtU) => Cmhi4S(rd, rn, rm).emit(self)
+        (D64, GtU) => Cmhi2D(rd, rn, rm).emit(self)
+        (B8, GeU) => Cmhs16B(rd, rn, rm).emit(self)
+        (H16, GeU) => Cmhs8H(rd, rn, rm).emit(self)
+        (S32, GeU) => Cmhs4S(rd, rn, rm).emit(self)
+        (D64, GeU) => Cmhs2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDNarrow(lane_size, is_signed) => {
+      // Narrow two v128 to one v128 with saturation
+      // First input -> lower half, second input -> upper half
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0]) // First input
+      let rm = reg_num(inst.uses[1]) // Second input
+      match (lane_size, is_signed) {
+        (B8, true) => {
+          // i8x16.narrow_i16x8_s
+          Sqxtn8B(rd, rn).emit(self) // Lower 8 bytes from first input
+          Sqxtn2_16B(rd, rm).emit(self) // Upper 8 bytes from second input
+        }
+        (B8, false) => {
+          // i8x16.narrow_i16x8_u
+          Sqxtun8B(rd, rn).emit(self) // Lower 8 bytes from first input
+          Sqxtun2_16B(rd, rm).emit(self) // Upper 8 bytes from second input
+        }
+        (H16, true) => {
+          // i16x8.narrow_i32x4_s
+          Sqxtn4H(rd, rn).emit(self) // Lower 4 halfwords from first input
+          Sqxtn2_8H(rd, rm).emit(self) // Upper 4 halfwords from second input
+        }
+        (H16, false) => {
+          // i16x8.narrow_i32x4_u
+          Sqxtun4H(rd, rn).emit(self) // Lower 4 halfwords from first input
+          Sqxtun2_8H(rd, rm).emit(self) // Upper 4 halfwords from second input
+        }
+        _ => abort("Unsupported narrow operation")
+      }
+    }
+    SIMDExtendLow(lane_size, is_signed) => {
+      // Extend lower half of input to full width
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match (lane_size, is_signed) {
+        (H16, true) => Sxtl8H(rd, rn).emit(self) // i8 -> i16 (low 8 bytes)
+        (H16, false) => Uxtl8H(rd, rn).emit(self)
+        (S32, true) => Sxtl4S(rd, rn).emit(self) // i16 -> i32 (low 4 halfwords)
+        (S32, false) => Uxtl4S(rd, rn).emit(self)
+        (D64, true) => Sxtl2D(rd, rn).emit(self) // i32 -> i64 (low 2 words)
+        (D64, false) => Uxtl2D(rd, rn).emit(self)
+        _ => abort("Unsupported extend low operation")
+      }
+    }
+    SIMDExtendHigh(lane_size, is_signed) => {
+      // Extend upper half of input to full width
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match (lane_size, is_signed) {
+        (H16, true) => Sxtl2_8H(rd, rn).emit(self) // i8 -> i16 (high 8 bytes)
+        (H16, false) => Uxtl2_8H(rd, rn).emit(self)
+        (S32, true) => Sxtl2_4S(rd, rn).emit(self) // i16 -> i32 (high 4 halfwords)
+        (S32, false) => Uxtl2_4S(rd, rn).emit(self)
+        (D64, true) => Sxtl2_2D(rd, rn).emit(self) // i32 -> i64 (high 2 words)
+        (D64, false) => Uxtl2_2D(rd, rn).emit(self)
+        _ => abort("Unsupported extend high operation")
+      }
+    }
+    SIMDExtMulLow(lane_size, is_signed) => {
+      // Extended multiply: multiply lower halves and produce wider result
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match (lane_size, is_signed) {
+        (H16, true) => Smull8H(rd, rn, rm).emit(self) // i8x8 -> i16x8
+        (H16, false) => Umull8H(rd, rn, rm).emit(self)
+        (S32, true) => Smull4S(rd, rn, rm).emit(self) // i16x4 -> i32x4
+        (S32, false) => Umull4S(rd, rn, rm).emit(self)
+        (D64, true) => Smull2D(rd, rn, rm).emit(self) // i32x2 -> i64x2
+        (D64, false) => Umull2D(rd, rn, rm).emit(self)
+        _ => abort("Unsupported extmul low operation")
+      }
+    }
+    SIMDExtMulHigh(lane_size, is_signed) => {
+      // Extended multiply: multiply upper halves and produce wider result
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match (lane_size, is_signed) {
+        (H16, true) => Smull2_8H(rd, rn, rm).emit(self) // i8x8 -> i16x8
+        (H16, false) => Umull2_8H(rd, rn, rm).emit(self)
+        (S32, true) => Smull2_4S(rd, rn, rm).emit(self) // i16x4 -> i32x4
+        (S32, false) => Umull2_4S(rd, rn, rm).emit(self)
+        (D64, true) => Smull2_2D(rd, rn, rm).emit(self) // i32x2 -> i64x2
+        (D64, false) => Umull2_2D(rd, rn, rm).emit(self)
+        _ => abort("Unsupported extmul high operation")
+      }
+    }
+    SIMDExtAddPairwise(lane_size, is_signed) => {
+      // Extended add pairwise: add adjacent pairs and widen result
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match (lane_size, is_signed) {
+        (H16, true) => Saddlp8H(rd, rn).emit(self) // pairs of i8 -> i16
+        (H16, false) => Uaddlp8H(rd, rn).emit(self)
+        (S32, true) => Saddlp4S(rd, rn).emit(self) // pairs of i16 -> i32
+        (S32, false) => Uaddlp4S(rd, rn).emit(self)
+        _ => abort("Unsupported ext add pairwise operation")
+      }
+    }
+    SIMDDot => {
+      // i32x4.dot_i16x8_s: multiply i16 pairs and add to get i32
+      // result[i] = a[2*i]*b[2*i] + a[2*i+1]*b[2*i+1]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      // Step 1: SMULL low halves [a0*b0, a1*b1, a2*b2, a3*b3]
+      Smull4S(16, rn, rm).emit(self)
+      // Step 2: SMULL2 high halves [a4*b4, a5*b5, a6*b6, a7*b7]
+      Smull2_4S(17, rn, rm).emit(self)
+      // Step 3: ADDP to add adjacent pairs
+      // Result: [a0*b0+a1*b1, a2*b2+a3*b3, a4*b4+a5*b5, a6*b6+a7*b7]
+      Addp4S(rd, 16, 17).emit(self)
+    }
+    SIMDQ15MulrSat => {
+      // i16x8.q15mulr_sat_s: saturating Q15 rounding multiply
+      // result = saturate((a * b + 0x4000) >> 15)
+      // SQRDMULH does exactly this
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      Sqrdmulh8H(rd, rn, rm).emit(self)
+    }
+    SIMDFAdd(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_f32 {
+        Fadd4S(rd, rn, rm).emit(self)
+      } else {
+        Fadd2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDFSub(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_f32 {
+        Fsub4S(rd, rn, rm).emit(self)
+      } else {
+        Fsub2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDFMul(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_f32 {
+        Fmul4S(rd, rn, rm).emit(self)
+      } else {
+        Fmul2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDFDiv(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_f32 {
+        Fdiv4S(rd, rn, rm).emit(self)
+      } else {
+        Fdiv2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDFMin(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_f32 {
+        Fmin4S(rd, rn, rm).emit(self)
+      } else {
+        Fmin2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDFMax(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_f32 {
+        Fmax4S(rd, rn, rm).emit(self)
+      } else {
+        Fmax2D(rd, rn, rm).emit(self)
+      }
+    }
+    SIMDFPMin(is_f32) => {
+      // pmin: returns min, but with comparison-based selection
+      // pmin(a, b) = if a < b then a else b
+      // Use FCMGT + BSL: FCMGT Vmask, Va, Vb; BSL Vmask, Vb, Va
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0]) // a
+      let rm = reg_num(inst.uses[1]) // b
+      // Step 1: FCMGT V16, Vn, Vm (mask = all 1s where a > b)
+      if is_f32 {
+        Fcmgt4S(16, rn, rm).emit(self)
+      } else {
+        Fcmgt2D(16, rn, rm).emit(self)
+      }
+      // Step 2: BSL V16, Vm, Vn (where a > b, use b; else use a)
+      Bsl16B(16, rm, rn).emit(self)
+      // Step 3: Move result to rd
+      if rd != 16 {
+        Orr16B(rd, 16, 16).emit(self)
+      }
+    }
+    SIMDFPMax(is_f32) => {
+      // pmax: returns max, but with comparison-based selection
+      // pmax(a, b) = if b > a then b else a
+      // Use FCMGT + BSL: FCMGT Vmask, Vb, Va; BSL Vmask, Vb, Va
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0]) // a
+      let rm = reg_num(inst.uses[1]) // b
+      // Step 1: FCMGT V16, Vm, Vn (mask = all 1s where b > a)
+      if is_f32 {
+        Fcmgt4S(16, rm, rn).emit(self)
+      } else {
+        Fcmgt2D(16, rm, rn).emit(self)
+      }
+      // Step 2: BSL V16, Vm, Vn (where b > a, use b; else use a)
+      Bsl16B(16, rm, rn).emit(self)
+      // Step 3: Move result to rd
+      if rd != 16 {
+        Orr16B(rd, 16, 16).emit(self)
+      }
+    }
+    SIMDFAbs(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Fabs4S(rd, rn).emit(self)
+      } else {
+        Fabs2D(rd, rn).emit(self)
+      }
+    }
+    SIMDFNeg(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Fneg4S(rd, rn).emit(self)
+      } else {
+        Fneg2D(rd, rn).emit(self)
+      }
+    }
+    SIMDFSqrt(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Fsqrt4S(rd, rn).emit(self)
+      } else {
+        Fsqrt2D(rd, rn).emit(self)
+      }
+    }
+    SIMDFCeil(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Frintp4S(rd, rn).emit(self)
+      } else {
+        Frintp2D(rd, rn).emit(self)
+      }
+    }
+    SIMDFFloor(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Frintm4S(rd, rn).emit(self)
+      } else {
+        Frintm2D(rd, rn).emit(self)
+      }
+    }
+    SIMDFTrunc(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Frintz4S(rd, rn).emit(self)
+      } else {
+        Frintz2D(rd, rn).emit(self)
+      }
+    }
+    SIMDFNearest(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Frintn4S(rd, rn).emit(self)
+      } else {
+        Frintn2D(rd, rn).emit(self)
+      }
+    }
+    SIMDFCmp(is_f32, kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match kind {
+        Eq =>
+          if is_f32 {
+            Fcmeq4S(rd, rn, rm).emit(self)
+          } else {
+            Fcmeq2D(rd, rn, rm).emit(self)
+          }
+        Gt =>
+          if is_f32 {
+            Fcmgt4S(rd, rn, rm).emit(self)
+          } else {
+            Fcmgt2D(rd, rn, rm).emit(self)
+          }
+        Ge =>
+          if is_f32 {
+            Fcmge4S(rd, rn, rm).emit(self)
+          } else {
+            Fcmge2D(rd, rn, rm).emit(self)
+          }
+      }
+    }
+    SIMDFCvtToIntS(is_f32) => {
+      // FCVTZS: float -> signed int (truncating, saturating)
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Fcvtzs4S(rd, rn).emit(self)
+      } else {
+        Fcvtzs2D(rd, rn).emit(self)
+      }
+    }
+    SIMDFCvtToIntU(is_f32) => {
+      // FCVTZU: float -> unsigned int (truncating, saturating)
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Fcvtzu4S(rd, rn).emit(self)
+      } else {
+        Fcvtzu2D(rd, rn).emit(self)
+      }
+    }
+    SIMDIntToFloatS(is_f32) => {
+      // SCVTF: signed int -> float
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Scvtf4S(rd, rn).emit(self)
+      } else {
+        Scvtf2D(rd, rn).emit(self)
+      }
+    }
+    SIMDIntToFloatU(is_f32) => {
+      // UCVTF: unsigned int -> float
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_f32 {
+        Ucvtf4S(rd, rn).emit(self)
+      } else {
+        Ucvtf2D(rd, rn).emit(self)
+      }
+    }
+    SIMDTruncSatF64ToI32SZero => {
+      // f64x2 -> i32x4 with zeros in high lanes (signed)
+      // FCVTZS V16.2D, Vn.2D; SQXTN Vd.2S, V16.2D
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      Fcvtzs2D(16, rn).emit(self) // Convert to i64x2 with saturation to INT64 range
+      Sqxtn2S(rd, 16).emit(self) // Saturating narrow to i32x2 (zeros in high lanes)
+    }
+    SIMDTruncSatF64ToI32UZero => {
+      // f64x2 -> i32x4 with zeros in high lanes (unsigned)
+      // FCVTZU V16.2D, Vn.2D; UQXTN Vd.2S, V16.2D
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      Fcvtzu2D(16, rn).emit(self) // Convert to u64x2 with saturation to UINT64 range
+      Uqxtn2S(rd, 16).emit(self) // Saturating narrow to u32x2 (zeros in high lanes)
+    }
+    SIMDConvertLowI32ToF64S => {
+      // Low 2 i32 lanes -> f64x2 (signed)
+      // SXTL V16.2D, Vn.2S; SCVTF Vd.2D, V16.2D
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      Sxtl2D(16, rn).emit(self) // Sign-extend i32x2 to i64x2
+      Scvtf2D(rd, 16).emit(self) // Convert i64x2 to f64x2
+    }
+    SIMDConvertLowI32ToF64U => {
+      // Low 2 i32 lanes -> f64x2 (unsigned)
+      // UXTL V16.2D, Vn.2S; UCVTF Vd.2D, V16.2D
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      Uxtl2D(16, rn).emit(self) // Zero-extend i32x2 to i64x2
+      Ucvtf2D(rd, 16).emit(self) // Convert i64x2 to f64x2
+    }
+    SIMDDemoteF64ToF32Zero => {
+      // f64x2 -> f32x4 with zeros in high lanes
+      // FCVTN Vd.2S, Vn.2D (high 64 bits become zeros)
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      Fcvtn2S(rd, rn).emit(self)
+    }
+    SIMDPromoteLowF32ToF64 => {
+      // Low 2 f32 lanes -> f64x2
+      // FCVTL Vd.2D, Vn.2S
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      Fcvtl2D(rd, rn).emit(self)
+    }
+    SIMDLoad(offset) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      LdrQ(rd, rn, offset).emit(self)
+    }
+    SIMDStore(offset) => {
+      let rt = reg_num(inst.uses[0])
+      let rn = reg_num(inst.uses[1])
+      StrQ(rt, rn, offset).emit(self)
+    }
+    SIMDLoadSplat(lane_size, offset) => {
+      // Load and replicate to all lanes
+      // uses[0] = base address
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // LD1R doesn't have immediate offset form, compute address if needed
+      if offset == 0 {
+        match lane_size {
+          B8 => Ld1rB(rd, rn).emit(self)
+          H16 => Ld1rH(rd, rn).emit(self)
+          S32 => Ld1rS(rd, rn).emit(self)
+          D64 => Ld1rD(rd, rn).emit(self)
+        }
+      } else {
+        // Use x16 as temp for address calculation
+        AddImm(16, rn, offset).emit(self)
+        match lane_size {
+          B8 => Ld1rB(rd, 16).emit(self)
+          H16 => Ld1rH(rd, 16).emit(self)
+          S32 => Ld1rS(rd, 16).emit(self)
+          D64 => Ld1rD(rd, 16).emit(self)
+        }
+      }
+    }
+    SIMDLoadExtend(src_bits, signed, offset) => {
+      // Load 64 bits and extend each element
+      // uses[0] = base address
+      // src_bits: 8 -> i8x8 to i16x8, 16 -> i16x4 to i32x4, 32 -> i32x2 to i64x2
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Load 64 bits into low half using LDR D
+      LdrDImm(rd, rn, offset).emit(self)
+      // Then extend using SXTL/UXTL
+      match (src_bits, signed) {
+        (8, true) => Sxtl8H(rd, rd).emit(self) // i8x8 -> i16x8 (signed)
+        (8, false) => Uxtl8H(rd, rd).emit(self) // i8x8 -> i16x8 (unsigned)
+        (16, true) => Sxtl4S(rd, rd).emit(self) // i16x4 -> i32x4 (signed)
+        (16, false) => Uxtl4S(rd, rd).emit(self) // i16x4 -> i32x4 (unsigned)
+        (32, true) => Sxtl2D(rd, rd).emit(self) // i32x2 -> i64x2 (signed)
+        (32, false) => Uxtl2D(rd, rd).emit(self) // i32x2 -> i64x2 (unsigned)
+        _ => abort("Invalid src_bits for SIMDLoadExtend")
+      }
+    }
+    SIMDLoadZero(is_64, offset) => {
+      // Load 32 or 64 bits to low lane, zero upper bits
+      // uses[0] = base address
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      // Scalar float load zeros upper bits
+      if is_64 {
+        LdrDImm(rd, rn, offset).emit(self)
+      } else {
+        LdrSImm(rd, rn, offset).emit(self)
+      }
+    }
+    SIMDLoadLane(lane_size, lane, offset) => {
+      // Load single element to specific lane
+      // uses[0] = base address (GPR)
+      // uses[1] = existing vector
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let vec = reg_num(inst.uses[1])
+      // Copy existing vector to destination first (LD1 modifies in place)
+      if rd != vec {
+        Orr16B(rd, vec, vec).emit(self)
+      }
+      // LD1 doesn't have immediate offset form, compute address if needed
+      if offset == 0 {
+        match lane_size {
+          B8 => Ld1B(rd, rn, lane).emit(self)
+          H16 => Ld1H(rd, rn, lane).emit(self)
+          S32 => Ld1S(rd, rn, lane).emit(self)
+          D64 => Ld1D(rd, rn, lane).emit(self)
+        }
+      } else {
+        // Use x16 as temp for address calculation
+        AddImm(16, rn, offset).emit(self)
+        match lane_size {
+          B8 => Ld1B(rd, 16, lane).emit(self)
+          H16 => Ld1H(rd, 16, lane).emit(self)
+          S32 => Ld1S(rd, 16, lane).emit(self)
+          D64 => Ld1D(rd, 16, lane).emit(self)
+        }
+      }
+    }
+    SIMDStoreLane(lane_size, lane, offset) => {
+      // Store single element from specific lane
+      // uses[0] = base address
+      // uses[1] = vector
+      let rn = reg_num(inst.uses[0])
+      let vec = reg_num(inst.uses[1])
+      // ST1 doesn't have immediate offset form, compute address if needed
+      if offset == 0 {
+        match lane_size {
+          B8 => St1B(vec, rn, lane).emit(self)
+          H16 => St1H(vec, rn, lane).emit(self)
+          S32 => St1S(vec, rn, lane).emit(self)
+          D64 => St1D(vec, rn, lane).emit(self)
+        }
+      } else {
+        // Use x16 as temp for address calculation
+        AddImm(16, rn, offset).emit(self)
+        match lane_size {
+          B8 => St1B(vec, 16, lane).emit(self)
+          H16 => St1H(vec, 16, lane).emit(self)
+          S32 => St1S(vec, 16, lane).emit(self)
+          D64 => St1D(vec, 16, lane).emit(self)
+        }
+      }
     }
   }
 }
@@ -1366,6 +2597,7 @@ fn MachineCode::emit_load(
     I64 => self.emit_ldr_imm(rt, rn, offset)
     F32 => self.emit_ldr_s_imm(rt, rn, offset)
     F64 => self.emit_ldr_d_imm(rt, rn, offset)
+    V128 => self.emit_ldr_q_imm(rt, rn, offset)
   }
 }
 
@@ -1384,6 +2616,7 @@ fn MachineCode::emit_store(
     I64 => self.emit_str_imm(rt, rn, offset)
     F32 => self.emit_str_s_imm(rt, rn, offset)
     F64 => self.emit_str_d_imm(rt, rn, offset)
+    V128 => self.emit_str_q_imm(rt, rn, offset)
   }
 }
 
@@ -1547,7 +2780,7 @@ fn MachineCode::emit_terminator_with_epilogue(
           @ir.Type::I64
         }
         match ty {
-          F32 | F64 => float_sources.push((ty, src, i))
+          F32 | F64 | V128 => float_sources.push((ty, src, i))
           _ => int_sources.push((src, i))
         }
       }
@@ -1638,6 +2871,7 @@ fn MachineCode::emit_terminator_with_epilogue(
           if src != temp {
             match ty {
               F32 => self.emit_fmov_s(temp, src)
+              V128 => OrrVec(temp, src).emit(self)
               _ => self.emit_fmov_d(temp, src)
             }
           }
@@ -1648,6 +2882,7 @@ fn MachineCode::emit_terminator_with_epilogue(
           if temp != idx {
             match ty {
               F32 => self.emit_fmov_s(idx, temp)
+              V128 => OrrVec(idx, temp).emit(self)
               _ => self.emit_fmov_d(idx, temp)
             }
           }
@@ -1666,6 +2901,7 @@ fn MachineCode::emit_terminator_with_epilogue(
             if src != idx {
               match ty {
                 F32 => self.emit_fmov_s(idx, src)
+                V128 => OrrVec(idx, src).emit(self)
                 _ => self.emit_fmov_d(idx, src)
               }
             }

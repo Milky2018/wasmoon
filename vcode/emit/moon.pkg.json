@@ -6,5 +6,6 @@
     "Milky2018/wasmoon/vcode/lower",
     "Milky2018/wasmoon/vcode/instr",
     "Milky2018/wasmoon/vcode/abi"
-  ]
+  ],
+  "warn-list": "-6"
 }
