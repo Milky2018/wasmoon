@@ -348,12 +348,10 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 /// Set multiple memories for the JIT context (multi-memory support)
 pub fn JITModule::set_memory_pointers(
   self : JITModule,
-  memory_ptrs : Array[Int64],
-  memory_sizes : Array[Int64],
-  memory_max_pages : Array[Int?],
+  memories : Array[MemoryInfo],
 ) -> Unit {
   if self.context is Some(ctx) {
-    ctx.set_memory_pointers(memory_ptrs, memory_sizes, memory_max_pages)
+    ctx.set_memory_pointers(memories)
   }
 }
 

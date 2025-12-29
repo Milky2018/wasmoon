@@ -40,6 +40,26 @@ pub fn check_trap() -> Unit raise JITTrap {
   }
 }
 
+// ============ Memory Info ============
+
+///|
+/// Memory information for JIT execution
+pub struct MemoryInfo {
+  ptr : Int64 // Memory base pointer
+  size : Int64 // Current size in bytes
+  max_pages : Int? // Max pages (None = unlimited)
+}
+
+///|
+/// Create a new MemoryInfo
+pub fn MemoryInfo::new(
+  ptr : Int64,
+  size : Int64,
+  max_pages : Int?,
+) -> MemoryInfo {
+  { ptr, size, max_pages }
+}
+
 // ============ JIT Context Wrapper ============
 
 ///|
@@ -164,27 +184,22 @@ fn JITContext::set_table_pointers(
 
 ///|
 /// Set multiple memories (for multi-memory support)
-/// memory_ptrs: Array of Int64 (memory base pointers)
-/// memory_sizes: Array of Int64 (memory sizes in bytes)
-/// memory_max_pages: Array of Int? (max sizes in pages, None = unlimited)
 fn JITContext::set_memory_pointers(
   self : JITContext,
-  memory_ptrs : Array[Int64],
-  memory_sizes : Array[Int64],
-  memory_max_pages : Array[Int?],
+  memories : Array[MemoryInfo],
 ) -> Unit {
-  if memory_ptrs.is_empty() {
+  if memories.is_empty() {
     return
   }
-  let count = memory_ptrs.length()
+  let count = memories.length()
   // Convert to FixedArrays for FFI
   let ptrs = FixedArray::make(count, 0L)
   let sizes = FixedArray::make(count, 0L)
   let max_sizes = FixedArray::make(count, -1) // -1 = unlimited
-  for i in 0..<count {
-    ptrs[i] = memory_ptrs[i]
-    sizes[i] = memory_sizes[i]
-    max_sizes[i] = memory_max_pages[i].unwrap_or(-1)
+  for i, mem in memories {
+    ptrs[i] = mem.ptr
+    sizes[i] = mem.size
+    max_sizes[i] = mem.max_pages.unwrap_or(-1)
   }
   @jit_ffi.c_jit_ctx_set_memory_pointers(
     self.ptr(),
