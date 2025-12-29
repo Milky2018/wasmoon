@@ -220,6 +220,7 @@ pub(all) enum VCodeOpcode {
   Add(Bool)
   AddImm(Int, Bool)
   Sub(Bool)
+  SubImm(Int, Bool)
   Mul(Bool)
   SDiv(Bool)
   UDiv(Bool)

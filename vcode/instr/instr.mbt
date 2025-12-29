@@ -164,6 +164,7 @@ pub(all) enum VCodeOpcode {
   Add(Bool) // ADD with size: true = 64-bit, false = 32-bit
   AddImm(Int, Bool) // ADD Xd, Xn, #imm with size: true = 64-bit, false = 32-bit
   Sub(Bool) // SUB with size: true = 64-bit, false = 32-bit
+  SubImm(Int, Bool) // SUB Xd, Xn, #imm with size: true = 64-bit, false = 32-bit
   Mul(Bool) // MUL with size: true = 64-bit, false = 32-bit
   SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
@@ -795,6 +796,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Add(is_64) => if is_64 { "add" } else { "add32" }
     AddImm(imm, is_64) => if is_64 { "add #\{imm}" } else { "add32 #\{imm}" }
     Sub(is_64) => if is_64 { "sub" } else { "sub32" }
+    SubImm(imm, is_64) => if is_64 { "sub #\{imm}" } else { "sub32 #\{imm}" }
     Mul(is_64) => if is_64 { "mul" } else { "mul32" }
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }

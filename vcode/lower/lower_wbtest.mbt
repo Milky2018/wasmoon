@@ -73,7 +73,7 @@ test "lower constants" {
       #|block0:
       #|    v0 = ldi 10
       #|    v1 = ldi 20
-      #|    v2 = add32 v0, v1
+      #|    v2 = add32 #20 v0
       #|    ret v2
       #|}
       #|
@@ -200,7 +200,7 @@ test "lower memory operations" {
       #|    v1 = ldi 0
       #|    v2 = load_ptr.i32 +0 v0
       #|    v3 = ldi 1
-      #|    v4 = add32 v2, v3
+      #|    v4 = add32 #1 v2
       #|    v5 = ldi 4
       #|    store_ptr.i32 +4 v0, v4
       #|    ret v4

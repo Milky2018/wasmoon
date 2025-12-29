@@ -393,6 +393,15 @@ fn MachineCode::emit_instruction(
         self.emit_sub_reg32(rd, rn, rm)
       }
     }
+    SubImm(imm, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_sub_imm(rd, rn, imm)
+      } else {
+        self.emit_sub_imm32(rd, rn, imm)
+      }
+    }
     Mul(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
