@@ -437,8 +437,8 @@ pub fn JITModule::init_shared_tables(
     // Get function pointer and encode as funcref
     // func_idx = -1 represents ref.null (null reference sentinel)
     let funcref_value = if func_idx == -1 {
-      0L // Use 0 for null reference (matches new encoding)
-    } else {
+      @types.NULL_REF
+    } else { // Use NULL_REF for null reference
       // Tag function pointer with FUNCREF_TAG (bit 61) for ref.test detection
       // FUNCREF_TAG = 0x2000000000000000
       self.get_func_ptr(func_idx) | 0x2000000000000000L

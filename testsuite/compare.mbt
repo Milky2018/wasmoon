@@ -50,11 +50,11 @@ pub fn jit_results_to_values(
         slot_idx += 1
         F64(@types.FromInt64::from_int64_bits(raw))
       }
-      // Reference types: -1L is null sentinel
+      // Reference types: FUNCREF_NULL_SENTINEL is null sentinel
       FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => {
         let raw = results[slot_idx]
         slot_idx += 1
-        if raw == -1L {
+        if raw == @types.FUNCREF_NULL_SENTINEL {
           Null
         } else {
           FuncRef(raw.to_int())
@@ -63,7 +63,7 @@ pub fn jit_results_to_values(
       ExternRef | RefExtern | NullExternRef => {
         let raw = results[slot_idx]
         slot_idx += 1
-        if raw == -1L {
+        if raw == @types.FUNCREF_NULL_SENTINEL {
           Null
         } else {
           ExternRef(raw.to_int())
@@ -132,7 +132,7 @@ pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
     ArrayRef(idx) => idx.to_int64()
     StructRef(idx) => idx.to_int64()
     I31(n) => n.to_int64()
-    Null => -1L // null sentinel
+    Null => @types.FUNCREF_NULL_SENTINEL // null sentinel
     V128(_) => abort("V128 not yet supported in testsuite")
   }
 }

@@ -89,7 +89,7 @@ pub fn value_to_i64(value : @types.Value) -> Int64 {
     ExternRef(idx) => (idx + 1).to_int64()
     ExnRef(idx) => (idx + 1).to_int64()
     I31(n) => (n.to_int64() << 1) | 1L
-    Null => 0L
+    Null => @types.NULL_REF
   }
 }
 
@@ -102,46 +102,46 @@ pub fn i64_to_value(raw : Int64, ty : @types.ValueType) -> @types.Value {
     F32 => @types.Value::F32(Float::reinterpret_from_int(raw.to_int()))
     F64 => @types.Value::F64(raw.reinterpret_as_double())
     RefStruct(_) | RefNullStruct(_) =>
-      if raw == 0L {
+      if raw == @types.NULL_REF {
         @types.Value::Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
         @types.Value::StructRef(((raw >> 1) - 1L).to_int())
       }
     RefArray(_) | RefNullArray(_) =>
-      if raw == 0L {
+      if raw == @types.NULL_REF {
         @types.Value::Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
         @types.Value::ArrayRef(((raw >> 1) - 1L).to_int())
       }
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
-      if raw == 0L {
+      if raw == @types.NULL_REF {
         @types.Value::Null
       } else {
         @types.Value::FuncRef((raw - 1L).to_int())
       }
     ExternRef | RefExtern =>
-      if raw == 0L {
+      if raw == @types.NULL_REF {
         @types.Value::Null
       } else {
         @types.Value::ExternRef((raw - 1L).to_int())
       }
     ExnRef =>
-      if raw == 0L {
+      if raw == @types.NULL_REF {
         @types.Value::Null
       } else {
         @types.Value::ExnRef((raw - 1L).to_int())
       }
     RefI31 | RefNullI31 =>
-      if raw == 0L {
+      if raw == @types.NULL_REF {
         @types.Value::Null
       } else {
         @types.Value::I31((raw >> 1).to_int())
       }
     RefEq | RefNullEq | AnyRef | RefAny =>
       // For abstract types, we need to decode based on the actual value
-      if raw == 0L {
+      if raw == @types.NULL_REF {
         @types.Value::Null
       } else if (raw & 1L) != 0L {
         // Tagged i31 (odd)
