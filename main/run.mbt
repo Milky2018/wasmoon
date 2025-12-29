@@ -35,10 +35,11 @@ fn run_wasm(
   use_jit : Bool,
 ) -> Unit {
   if debug {
-    println("[DEBUG] Loading module: \{wasm_path}")
-    let jit_status = if use_jit { "enabled" } else { "disabled" }
-    println("[DEBUG] JIT: \{jit_status}")
+    @logger.enable_debug()
   }
+  @logger.debug("Loading module: \{wasm_path}")
+  let jit_status = if use_jit { "enabled" } else { "disabled" }
+  @logger.debug("JIT: \{jit_status}")
   // Create linker for module linking
   let linker = @runtime.Linker::new()
 
@@ -62,7 +63,7 @@ fn run_wasm(
           inherit_stdout = true
           inherit_stderr = true
         }
-      _ => println("Warning: unknown WASI option '\{key}'")
+      _ => @logger.warn("unknown WASI option '\{key}'")
     }
   }
 
@@ -72,14 +73,12 @@ fn run_wasm(
     let mapping = parse_dir_mapping(dir)
     match mapping {
       Some((host_path, guest_path)) => {
-        if debug {
-          println("[DEBUG] Preopen dir: \{host_path} -> \{guest_path}")
-        }
+        @logger.debug("Preopen dir: \{host_path} -> \{guest_path}")
         wasi_builder.preopen_dir(host_path, guest_path) |> ignore
       }
       None => {
-        println(
-          "Error: invalid --dir format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
+        @logger.error(
+          "invalid --dir format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
         )
         return
       }
@@ -89,22 +88,18 @@ fn run_wasm(
     let parsed = parse_env_var(env_var)
     match parsed {
       Some((key, value)) => {
-        if debug {
-          println("[DEBUG] Environment: \{key}=\{value}")
-        }
+        @logger.debug("Environment: \{key}=\{value}")
         wasi_builder.env(key, value) |> ignore
       }
       None => {
-        println("Error: invalid --env format '\{env_var}', expected NAME=VALUE")
+        @logger.error("invalid --env format '\{env_var}', expected NAME=VALUE")
         return
       }
     }
   }
   // Handle inherit-env option
   if inherit_env {
-    if debug {
-      println("[DEBUG] Inheriting host environment variables")
-    }
+    @logger.debug("Inheriting host environment variables")
     // Note: MoonBit doesn't have direct access to host environment variables
     // This would require a native FFI call. For now, we just note that it's requested.
     // In a full implementation, we would iterate over host env vars and add them.
@@ -130,7 +125,7 @@ fn run_wasm(
       Some((name, path)) => {
         let preload_mod = load_module_from_path(path) catch {
           e => {
-            println("Error loading preload module '\{name}': \{e}")
+            @logger.error("loading preload module '\{name}': \{e}")
             return
           }
         }
@@ -138,16 +133,14 @@ fn run_wasm(
           linker, name, preload_mod,
         ) catch {
           e => {
-            println("Error instantiating preload module '\{name}': \{e}")
+            @logger.error("instantiating preload module '\{name}': \{e}")
             return
           }
         }
         linker.register(name, preload_instance)
       }
       None => {
-        println(
-          "Error: invalid preload format '\{preload}', expected NAME=PATH",
-        )
+        @logger.error("invalid preload format '\{preload}', expected NAME=PATH")
         return
       }
     }
@@ -155,15 +148,13 @@ fn run_wasm(
   // Load main module
   let mod_ = load_module_from_path(wasm_path) catch {
     e => {
-      println("Error loading main module: \{e}")
+      @logger.error("loading main module: \{e}")
       return
     }
   }
-  if debug {
-    println(
-      "[DEBUG] Module loaded: \{mod_.codes.length()} functions, \{mod_.imports.length()} imports",
-    )
-  }
+  @logger.debug(
+    "Module loaded: \{mod_.codes.length()} functions, \{mod_.imports.length()} imports",
+  )
   // Instantiate the main module
   // Note: instantiate_module_with_imports already handles:
   // - Data segment initialization
@@ -177,28 +168,24 @@ fn run_wasm(
   let imports = linker.build_imports()
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
     e => {
-      println("Error instantiating module: \{e}")
+      @logger.error("instantiating module: \{e}")
       return
     }
   }
-  if debug {
-    println("[DEBUG] Module instantiated successfully")
-  }
+  @logger.debug("Module instantiated successfully")
   // Determine which function to call
   let func_name = match invoke {
     Some(name) => name
     None => "_start" // Default to WASI-style entry point
   }
-  if debug {
-    println("[DEBUG] Calling function: \{func_name}")
-  }
+  @logger.debug("Calling function: \{func_name}")
   // Find the function type to parse arguments correctly
   let func_type = find_exported_func_type(mod_, func_name)
   if func_type is Some(ft) {
     // Parse arguments according to function type
     let args = parse_func_args(ft.params, func_args) catch {
       e => {
-        println("Error parsing arguments: \{e}")
+        @logger.error("parsing arguments: \{e}")
         return
       }
     }
@@ -225,7 +212,7 @@ fn run_wasm(
         store, instance, func_name, args,
       ) catch {
         e => {
-          println("Error: \{e}")
+          @logger.error("\{e}")
           return
         }
       }
@@ -237,7 +224,7 @@ fn run_wasm(
     }
     // No exported function found, check if there's a start function
   } else if invoke is Some(name) {
-    println("Error: function '\{name}' not found")
+    @logger.error("function '\{name}' not found")
   }
 }
 
@@ -564,9 +551,8 @@ fn run_with_jit(
   args : Array[@types.Value],
   debug : Bool,
 ) -> Array[@types.Value] {
-  if debug {
-    println("[DEBUG] JIT: Compiling module...")
-  }
+  ignore(debug)
+  @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
   let actual_memory_max : Int? = if instance.mem_addrs.length() > 0 {
@@ -582,7 +568,7 @@ fn run_with_jit(
   let precompiled = compile_module_to_jit(mod_, debug, actual_memory_max~)
   match precompiled {
     None => {
-      println("Error: JIT compilation failed")
+      @logger.error("JIT compilation failed")
       return []
     }
     Some(pc) => {
@@ -592,7 +578,7 @@ fn run_with_jit(
       let jit_module = @jit.JITModule::load(pc, func_signatures)
       match jit_module {
         None => {
-          println("Error: Failed to load JIT module")
+          @logger.error("Failed to load JIT module")
           return []
         }
         Some(jm) => {
@@ -601,7 +587,7 @@ fn run_with_jit(
           let _ = jm.alloc_wasm_stack(1048576L)
           // Initialize all memories (multi-memory support)
           if not(init_jit_memories(instance, store, jm)) {
-            println("Error: Failed to initialize JIT memories")
+            @logger.error("Failed to initialize JIT memories")
             return []
           }
           // Initialize globals (pass jm for tagged funcref pointers)
@@ -632,9 +618,7 @@ fn run_with_jit(
                 }
                 i64_args.push(v)
               }
-              if debug {
-                println("[DEBUG] JIT: Calling function '\{func_name}'")
-              }
+              @logger.debug("JIT: Calling function '\{func_name}'")
               // Set up GC heap for JIT execution if c_heap is available
               match store.c_heap {
                 Some(heap) => {
@@ -649,7 +633,7 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   @jit.gc_teardown()
-                  println("JIT Trap: \{msg}")
+                  @logger.error("JIT Trap: \{msg}")
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
                   return []
                 }
@@ -660,11 +644,9 @@ fn run_with_jit(
               let values : Array[@types.Value] = []
               for i, r in results {
                 if i < f.result_types.length() {
-                  if debug {
-                    println(
-                      "[DEBUG] result[\{i}] type: \{f.result_types[i]}, raw value: \{r}",
-                    )
-                  }
+                  @logger.debug(
+                    "result[\{i}] type: \{f.result_types[i]}, raw value: \{r}",
+                  )
                   let v = match f.result_types[i] {
                     I32 =>
                       @types.Value::I32(@types.FromInt64::from_int64_bits(r))
@@ -708,7 +690,7 @@ fn run_with_jit(
               values
             }
             None => {
-              println("Error: Function '\{func_name}' not found in JIT module")
+              @logger.error("Function '\{func_name}' not found in JIT module")
               []
             }
           }
@@ -723,7 +705,7 @@ fn run_with_jit(
 /// actual_memory_max: Override for memory max limit (used for imported memories)
 fn compile_module_to_jit(
   mod_ : @types.Module,
-  debug : Bool,
+  _debug : Bool,
   actual_memory_max? : Int? = None,
 ) -> @cwasm.PrecompiledModule? {
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
@@ -792,23 +774,23 @@ fn compile_module_to_jit(
     // Stage 2: Optimize IR (O2 level)
     @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
     // DEBUG: Print IR
-    if debug {
-      println("[DEBUG] IR for \{func_name}:")
-      println(ir_func.print())
+    if @logger.is_debug_enabled() {
+      @logger.debug("IR for \{func_name}:")
+      @logger.info(ir_func.print())
     }
     // Stage 3: Lower to VCode
     let vcode_func = @lower.lower_function(ir_func)
     // DEBUG: Print VCode before regalloc
-    if debug {
-      println("[DEBUG] VCode before regalloc for \{func_name}:")
-      println(vcode_func.print())
+    if @logger.is_debug_enabled() {
+      @logger.debug("VCode before regalloc for \{func_name}:")
+      @logger.info(vcode_func.print())
     }
     // Stage 4: Register allocation
     let allocated = @lower.allocate_registers_aarch64(vcode_func)
     // DEBUG: Print VCode after regalloc
-    if debug {
-      println("[DEBUG] VCode after regalloc for \{func_name}:")
-      println(allocated.print())
+    if @logger.is_debug_enabled() {
+      @logger.debug("VCode after regalloc for \{func_name}:")
+      @logger.info(allocated.print())
     }
     // Stage 5: Emit machine code
     let mc = @emit.emit_function(allocated)
@@ -819,8 +801,10 @@ fn compile_module_to_jit(
     precompiled.add_function(
       func_idx, func_name, compiled, num_params, num_results,
     )
-    if debug && mod_.codes.length() > 10 && (i + 1) % 10 == 0 {
-      println("[DEBUG] JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
+    if @logger.is_debug_enabled() &&
+      mod_.codes.length() > 10 &&
+      (i + 1) % 10 == 0 {
+      @logger.debug("JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
     }
   }
   Some(precompiled)
@@ -965,7 +949,7 @@ fn parse_func_args(
 
 ///|
 /// Check if all imports are supported by JIT trampolines
-fn check_jit_import_support(mod_ : @types.Module, debug : Bool) -> Bool {
+fn check_jit_import_support(mod_ : @types.Module, _debug : Bool) -> Bool {
   let unsupported : Array[String] = []
   for imp in mod_.imports {
     if imp.desc is Func(_) &&
@@ -974,12 +958,10 @@ fn check_jit_import_support(mod_ : @types.Module, debug : Bool) -> Bool {
     }
   }
   if unsupported.length() > 0 {
-    if debug {
-      let joined = unsupported.join(", ")
-      println(
-        "[DEBUG] JIT: Falling back to interpreter - unsupported imports: \{joined}",
-      )
-    }
+    let joined = unsupported.join(", ")
+    @logger.debug(
+      "JIT: Falling back to interpreter - unsupported imports: \{joined}",
+    )
     false
   } else {
     true

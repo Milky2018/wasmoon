@@ -18,7 +18,8 @@
     "Milky2018/wasmoon/executor",
     "Milky2018/wasmoon/runtime",
     "Milky2018/wasmoon/jit",
-    "Milky2018/wasmoon/vcode/lower"
+    "Milky2018/wasmoon/vcode/lower",
+    "Milky2018/wasmoon/logger"
   ],
   "targets": {
     "run_cwasm.mbt": ["native"]
