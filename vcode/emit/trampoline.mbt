@@ -1,7 +1,7 @@
-// Entry Trampoline Generation (Cranelift-style)
+// Entry Trampoline Generation (Standard)
 // Generates JIT trampolines for calling WASM functions from host code
 //
-// Following Cranelift's approach:
+// On-demand loading:
 // 1. Generate the trampoline as IR
 // 2. Compile through the normal pipeline (lower → regalloc → emit)
 // 3. Let the register allocator decide which registers to use
@@ -27,7 +27,7 @@
 ///   param_types: Array of parameter types (0=I32, 1=I64, 2=F32, 3=F64, 4=V128)
 ///   result_types: Array of result types
 ///
-/// This follows Cranelift's approach: generate IR, then compile through the
+/// Approach: generate IR, then compile through the
 /// normal pipeline. The register allocator will automatically choose callee-saved
 /// registers when needed, eliminating the need for hardcoded X23/X24.
 pub fn emit_entry_trampoline(
@@ -47,7 +47,7 @@ pub fn emit_entry_trampoline(
 
 ///|
 /// Generate IR function for the trampoline
-/// This is the Cranelift way: express the trampoline in IR, not machine code
+/// Approach: express the trampoline in IR, not machine code
 fn generate_trampoline_ir(
   param_types : Array[Int],
   result_types : Array[Int],

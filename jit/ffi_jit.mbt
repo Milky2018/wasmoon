@@ -44,7 +44,7 @@ pub fn check_trap() -> Unit raise JITTrap {
 
 ///|
 /// JIT execution context (v3 ABI) - GC managed
-/// Uses Cranelift-style on-demand loading from vmctx:
+/// Uses Standard on-demand loading from vmctx:
 /// +0: memory_base, +8: memory_size, +16: func_table, +24: table0_base
 /// Only X19 caches vmctx; all other values are loaded on-demand.
 /// Memory is automatically freed when the object is garbage collected
@@ -467,7 +467,7 @@ pub fn ExecCode::ptr(self : ExecCode) -> Int64 {
 
 ///|
 /// Call a JIT function with multiple return values (v3 ABI)
-/// Uses JIT-generated trampolines following Cranelift's approach.
+/// Uses JIT-generated trampolines on-demand.
 /// X19 = ctx_ptr (vmctx), all other values loaded on-demand from vmctx.
 /// Returns 0 on success, trap code on error
 fn JITContext::call_multi_return(
@@ -547,7 +547,7 @@ fn JITContext::call_multi_return(
     values_vec[i] = args[i]
   }
 
-  // Call via trampoline (Cranelift-style: all ABI complexity in JIT code)
+  // Call via trampoline (Standard: all ABI complexity in JIT code)
   // Use stack-switching call if a WASM stack has been allocated
   let trap_code = if self.has_wasm_stack() {
     @jit_ffi.c_jit_call_with_stack_switch_managed(

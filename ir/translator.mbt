@@ -96,7 +96,7 @@ pub fn Translator::new(
   tags? : Array[@types.TagType] = [],
 ) -> Translator {
   let builder = IRBuilder::new(name)
-  // Following Cranelift: add vmctx as explicit params
+  // Note: add vmctx as explicit params
   // - params[0] = callee_vmctx (X0)
   // - params[1] = caller_vmctx (X1)
   // These are referenced for desugaring global/table/memory operations
@@ -814,7 +814,7 @@ fn Translator::translate_instruction(
       let result = self.builder.uextend(Type::I64, a)
       self.push(result)
     }
-    // In-place sign extension instructions (like Cranelift's ireduce + sextend)
+    // In-place sign extension instructions 
     I32Extend8S => {
       let a = self.pop()
       let result = self.builder.sextend8(Type::I32, a)
@@ -3227,7 +3227,7 @@ fn Translator::translate_loop(
 ///|
 /// Translate an if-else construct
 ///
-/// Following Cranelift's approach:
+/// On-demand loading:
 /// - Support block params (multi-value extension)
 /// - Pass params to both then and else blocks
 /// - Pass all mutable locals through continuation for SSA phi nodes
@@ -3250,7 +3250,7 @@ fn Translator::translate_if(
     self.pop()
   }
 
-  // Pop param values from stack (following Cranelift: params are below condition)
+  // Pop param values from stack (Note: params are below condition)
   let param_values : Array[Value] = []
   if !outer_is_unreachable {
     for _ in 0..<param_types.length() {
@@ -3280,7 +3280,7 @@ fn Translator::translate_if(
   }
 
   // Branch with param values (only if not unreachable)
-  // Following Cranelift: pass params to both then and else blocks
+  // Note: pass params to both then and else blocks
   if !outer_is_unreachable {
     if param_values.is_empty() {
       // No params, use simple branch
@@ -4069,7 +4069,7 @@ fn Translator::translate_return_call(self : Translator, func_idx : Int) -> Unit 
     // Remap function index for cross-module calls
     let global_func_idx = self.remap_func_idx(func_idx)
     // Emit return_call instruction (tail call - does not return to caller)
-    // Following Cranelift: emit a single ReturnCall IR instruction, not call + return
+    // Note: emit a single ReturnCall IR instruction, not call + return
     self.builder.return_call_multi(global_func_idx, args)
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
@@ -4098,7 +4098,7 @@ fn Translator::translate_return_call_indirect(
     args.rev_in_place()
 
     // Emit return_call_indirect instruction (tail call - does not return to caller)
-    // Following Cranelift: emit a single ReturnCallIndirect IR instruction, not call + return
+    // Note: emit a single ReturnCallIndirect IR instruction, not call + return
     self.builder.return_call_indirect_multi(type_idx, table_idx, elem_idx, args)
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
@@ -4145,7 +4145,7 @@ fn Translator::translate_return_call_ref(
     args.rev_in_place()
 
     // Emit return_call_ref instruction (tail call - does not return to caller)
-    // Following Cranelift: emit a single ReturnCallRef IR instruction, not call + return
+    // Note: emit a single ReturnCallRef IR instruction, not call + return
     self.builder.return_call_ref_multi(type_idx, func_ref, args)
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true

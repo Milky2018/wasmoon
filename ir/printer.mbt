@@ -1,5 +1,5 @@
 // IR Printer - Pretty prints IR in a readable text format
-// Similar to Cranelift's textual IR format
+// Textual IR format for debugging
 
 ///|
 /// Print a type

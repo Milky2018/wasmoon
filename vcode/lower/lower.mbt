@@ -382,7 +382,7 @@ fn lower_inst(
     @ir.Opcode::CallIndirect(type_idx, table_idx) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx)
     @ir.Opcode::CallRef(type_idx) => lower_call_ref(ctx, inst, block, type_idx)
-    // Tail calls - use dedicated lowering functions with Cranelift-style parameter handling
+    // Tail calls - use dedicated lowering functions with Standard parameter handling
     @ir.Opcode::ReturnCall(func_idx) =>
       lower_return_call(ctx, inst, block, func_idx)
     @ir.Opcode::ReturnCallIndirect(type_idx, table_idx) =>
@@ -1246,7 +1246,7 @@ fn lower_call(
   load_inst.add_use(Virtual(func_table))
   block.add_inst(load_inst)
 
-  // Use Cranelift-style call lowering
+  // Use Standard call lowering
   lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
 }
 

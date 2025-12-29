@@ -1,5 +1,5 @@
 // IR Builder - Convenient API for constructing IR
-// Similar to Cranelift's FunctionBuilder
+// SSA function builder
 
 ///|
 /// IRBuilder - helps construct IR functions
@@ -443,21 +443,21 @@ pub fn IRBuilder::uextend(self : IRBuilder, ty : Type, a : Value) -> Value {
 
 ///|
 /// Sign extend from 8 bits (in-place, keeps the same type)
-/// Like Cranelift's ireduce(I8) + sextend(ty)
+/// Similar to ireduce(I8) + sextend(ty)
 pub fn IRBuilder::sextend8(self : IRBuilder, ty : Type, a : Value) -> Value {
   self.emit_inst(ty, Opcode::Sextend8, [a])
 }
 
 ///|
 /// Sign extend from 16 bits (in-place, keeps the same type)
-/// Like Cranelift's ireduce(I16) + sextend(ty)
+/// Similar to ireduce(I16) + sextend(ty)
 pub fn IRBuilder::sextend16(self : IRBuilder, ty : Type, a : Value) -> Value {
   self.emit_inst(ty, Opcode::Sextend16, [a])
 }
 
 ///|
 /// Sign extend from 32 bits to 64 bits
-/// Like Cranelift's ireduce(I32) + sextend(I64)
+/// Similar to ireduce(I32) + sextend(I64)
 pub fn IRBuilder::sextend32(self : IRBuilder, a : Value) -> Value {
   self.emit_inst(Type::I64, Opcode::Sextend32, [a])
 }
@@ -945,7 +945,7 @@ pub fn IRBuilder::store_ptr_narrow(
 /// Call via function pointer with multiple return values
 /// For trampolines calling WASM functions
 ///
-/// Following Cranelift's design: callee_vmctx and caller_vmctx are explicit
+/// Design: callee_vmctx and caller_vmctx are explicit
 /// arguments, allowing the register allocator to properly handle values that
 /// need to survive across the call (like values_vec in trampolines).
 ///

@@ -4,7 +4,7 @@ This document describes the calling convention and ABI used by wasmoon's JIT com
 
 ## Calling Convention
 
-Wasmoon uses a Cranelift-style calling convention optimized for WebAssembly execution.
+Wasmoon uses a custom calling convention optimized for WebAssembly execution.
 
 ### Register Usage
 

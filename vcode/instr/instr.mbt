@@ -1,6 +1,6 @@
 ///|
 /// Call type - classifies instructions that behave like calls
-/// Following Cranelift's CallType enum
+/// CallType enum for different call variants
 pub(all) enum CallType {
   None // Not a call instruction
   Regular // Regular call that returns to caller
@@ -9,7 +9,7 @@ pub(all) enum CallType {
 
 ///|
 /// Calling convention for function calls
-/// Following Cranelift's CallConv design
+/// Calling convention specification
 pub(all) enum CallConv {
   Wasm // Wasm calling convention: X0=callee_vmctx, X1=caller_vmctx, X2-X7=user_args
   C // Standard C calling convention: X0-X7=args, no vmctx
@@ -65,7 +65,7 @@ pub(all) enum ExceptionLibcall {
 
 ///|
 /// VCode instruction - a machine-level instruction with virtual registers
-/// Following Cranelift's design with operand constraints for fixed register allocation
+/// Operand constraints for fixed register allocation
 pub(all) struct VCodeInst {
   opcode : VCodeOpcode
   defs : Array[@abi.Writable] // Registers defined (written)
@@ -356,14 +356,14 @@ pub(all) enum VCodeOpcode {
   // Parameters: num_args, num_results, calling convention
   CallPtr(Int, Int, CallConv)
 
-  // Stack pointer adjustment for outgoing call arguments (Cranelift-style)
+  // Stack pointer adjustment for outgoing call arguments (Standard)
   // AdjustSP(delta): Adjust SP by delta bytes
   //   delta > 0: deallocate (add to SP)
   //   delta < 0: allocate (sub from SP)
   // Used in call lowering to allocate space for overflow args
   AdjustSP(Int)
 
-  // Store to outgoing call argument area (Cranelift-style)
+  // Store to outgoing call argument area (Standard)
   // StoreToStack(offset): Store use[0] to [SP + offset]
   // Used in call lowering to store overflow args before the call
   // Uses: [value], Defs: []
@@ -1271,7 +1271,7 @@ pub impl Show for IntToFloatKind with output(self, logger) {
 
 ///|
 /// AArch64 condition codes (for conditional branches and traps)
-/// Following Cranelift's Cond enum
+/// Condition codes for comparisons
 pub(all) enum Cond {
   Eq // Equal (Z=1)
   Ne // Not equal (Z=0)
@@ -1391,11 +1391,11 @@ pub impl Show for VCodeTerminator with output(self, logger) {
 
 ///|
 /// Get the call type for this opcode
-/// Following Cranelift's design: instructions that clobber caller-saved registers
+/// Design: instructions that clobber caller-saved registers
 /// are classified as calls for register allocation purposes
 pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
   match self {
-    // Direct and indirect function calls (Cranelift-style via CallPtr)
+    // Direct and indirect function calls (Standard via CallPtr)
     CallPtr(_, _, _) => Regular
     // Tail calls that don't return to caller
     ReturnCallIndirect(_, _) => TailCall

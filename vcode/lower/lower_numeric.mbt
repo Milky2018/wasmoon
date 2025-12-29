@@ -454,7 +454,7 @@ fn lower_bxor(
 
 ///|
 /// Lower rotate left instruction
-/// Cranelift-style lowering: expand to primitive instructions here
+/// Standard lowering: expand to primitive instructions here
 /// rotl(x, n) = rotr(x, 0 - n)
 ///
 /// AArch64 ROR only looks at lower bits of shift amount, so negating
@@ -499,7 +499,7 @@ fn lower_rotl(
 
 ///|
 /// Lower count trailing zeros instruction
-/// Cranelift-style lowering: expand to primitive instructions here
+/// Standard lowering: expand to primitive instructions here
 /// ctz(x) = clz(rbit(x))
 ///
 /// Generated sequence:
@@ -644,7 +644,7 @@ fn lower_unary_int(
 
 ///|
 /// Lower integer remainder: rem = a - (a / b) * b
-/// Cranelift-style lowering: expand to primitive instructions here
+/// Standard lowering: expand to primitive instructions here
 ///
 /// AArch64 doesn't have a direct remainder instruction, so we expand:
 ///   div = a / b  (SDIV or UDIV)

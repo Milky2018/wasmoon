@@ -1,5 +1,5 @@
 // Intermediate Representation (IR) for WebAssembly
-// Based on SSA (Static Single Assignment) form, similar to Cranelift's CLIF
+// Based on SSA (Static Single Assignment) form
 
 ///|
 /// IR Value - represents a virtual register in SSA form
@@ -206,7 +206,7 @@ pub enum Opcode {
   UintToFcvt // Unsigned int to float
   Bitcast // Reinterpret bits
 
-  // In-place sign extension (like Cranelift's ireduce + sextend)
+  // In-place sign extension 
   // These sign-extend the low N bits to fill the full register
   Sextend8 // Sign extend from 8 bits (i32 or i64)
   Sextend16 // Sign extend from 16 bits (i32 or i64)
@@ -241,7 +241,7 @@ pub enum Opcode {
   GetFuncRef(Int) // Get function reference (function index) - returns tagged func_ptr
 
   // Raw pointer operations (for trampolines, no bounds checking)
-  // These follow Cranelift's approach for host code generation
+  // Used for host code generation
   LoadPtr(Type) // Load from pointer+offset (operand 0 = base ptr)
   StorePtr(Type) // Store to pointer+offset (operand 0 = base ptr, operand 1 = value)
   // Narrow load/store from raw pointer (result_type, bits, signed)

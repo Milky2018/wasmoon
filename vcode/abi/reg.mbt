@@ -44,7 +44,7 @@ pub impl Show for Reg with output(self, logger) {
 
 ///|
 /// Operand constraint for register allocation
-/// Following Cranelift's design for fixed register constraints
+/// Fixed register constraint handling
 pub(all) enum OperandConstraint {
   Any // Any register is acceptable
   FixedReg(PReg) // Must use specific physical register

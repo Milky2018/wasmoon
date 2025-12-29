@@ -93,11 +93,11 @@ enum Instruction {
   LdpOffset(Int, Int, Int, Int) // rt1, rt2, rn, offset
   StpDOffset(Int, Int, Int, Int) // rt1(d), rt2(d), rn, offset (FPR)
   LdpDOffset(Int, Int, Int, Int) // rt1(d), rt2(d), rn, offset (FPR)
-  // Pre-indexed stores (Cranelift-style prologue)
+  // Pre-indexed stores (Standard prologue)
   StrPre(Int, Int, Int) // rt, rn, simm9 - STR Xt, [Xn, #simm9]!
   StpDPre(Int, Int, Int, Int) // rt1, rt2, rn, imm7 - STP Dt1, Dt2, [Xn, #imm7]!
   StrDPre(Int, Int, Int) // rt, rn, simm9 - STR Dt, [Xn, #simm9]!
-  // Post-indexed loads (Cranelift-style epilogue)
+  // Post-indexed loads (Standard epilogue)
   LdrPost(Int, Int, Int) // rt, rn, simm9 - LDR Xt, [Xn], #simm9
   LdpDPost(Int, Int, Int, Int) // rt1, rt2, rn, imm7 - LDP Dt1, Dt2, [Xn], #imm7
   LdrDPost(Int, Int, Int) // rt, rn, simm9 - LDR Dt, [Xn], #simm9
@@ -4880,7 +4880,7 @@ pub fn MachineCode::emit_addv_b(self : MachineCode, rd : Int, rn : Int) -> Unit 
 ///|
 /// Check if a register is a callee-saved allocatable GPR (X19-X28)
 /// All callee-saved registers are now available for allocation since
-/// we use Cranelift-style on-demand loading from vmctx (X19).
+/// we use Standard on-demand loading from vmctx (X19).
 fn is_callee_saved_alloc(reg : Int) -> Bool {
   reg >= 19 && reg <= 28
 }

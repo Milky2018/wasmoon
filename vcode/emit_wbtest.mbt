@@ -162,7 +162,7 @@ test "emit: full function" {
   // Emit machine code
   let mc = @emit.emit_function(func)
 
-  // Cranelift-style prologue/epilogue:
+  // Standard prologue/epilogue:
   // Prologue: stp x29,x30 + mov x29,sp + str x19 + sub sp + mov x19,x0 = 5 inst
   // Body: add x0,x0,x1 = 1 inst
   // Epilogue: add sp + ldr x19 + ldp x29,x30 + ret = 4 inst
