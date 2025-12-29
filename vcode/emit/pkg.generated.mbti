@@ -228,6 +228,7 @@ pub fn MachineCode::emit_str_w_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_strb_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_strh_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_sub_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit

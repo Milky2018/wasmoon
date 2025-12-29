@@ -166,6 +166,19 @@ fn is_const_zero_value(ctx : LoweringContext, value : @ir.Value) -> Bool {
 }
 
 ///|
+/// Check if a value is a constant and return the value if valid for ADD/SUB immediate
+/// Returns Some(val) if the value is a constant in valid 12-bit immediate range
+fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Iconst(val) {
+    if is_valid_add_imm(val) {
+      return Some(val)
+    }
+  }
+  None
+}
+
+///|
 /// Lower an entire IR function to VCode
 pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   let ctx = LoweringContext::new(ir_func)
