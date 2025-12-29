@@ -76,6 +76,19 @@ pub fn Stack::pop_f64(self : Stack) -> Double raise RuntimeError {
 }
 
 ///|
+pub fn Stack::push_v128(self : Stack, v : Bytes) -> Unit raise RuntimeError {
+  self.push(V128(v))
+}
+
+///|
+pub fn Stack::pop_v128(self : Stack) -> Bytes raise RuntimeError {
+  match self.pop() {
+    V128(v) => v
+    _ => raise TypeMismatch
+  }
+}
+
+///|
 pub fn Stack::size(self : Stack) -> Int {
   self.sp
 }

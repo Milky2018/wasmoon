@@ -15,6 +15,8 @@ pub const TYPE_I32 : Int = 0
 
 pub const TYPE_I64 : Int = 1
 
+pub const TYPE_V128 : Int = 4
+
 pub fn emit_entry_trampoline(Array[Int], Array[Int]) -> MachineCode
 
 pub fn emit_function(@lower.VCodeFunction) -> MachineCode
@@ -119,6 +121,7 @@ pub fn MachineCode::emit_cset(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_dmb_ish(Self) -> Unit
 pub fn MachineCode::emit_eor_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_eor_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_ext_16b(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fabs_d(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_fabs_s(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_fadd_d(Self, Int, Int, Int) -> Unit
@@ -173,6 +176,7 @@ pub fn MachineCode::emit_ldr_d_post(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_imm_signed(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_post(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_q_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_reg_scaled(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_s_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_w_imm(Self, Int, Int, Int) -> Unit
@@ -217,6 +221,7 @@ pub fn MachineCode::emit_str_d_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_d_pre(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_pre(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_q_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_reg_scaled(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_s_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_w_imm(Self, Int, Int, Int) -> Unit

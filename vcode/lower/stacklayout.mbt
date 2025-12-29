@@ -280,6 +280,7 @@ pub fn AArch64StackFrame::alloc_spill(
   let size = match vreg.class {
     Int => 8 // 64-bit
     Float32 | Float64 => 8 // 64-bit (all floats stored as f64)
+    Vector => 16 // 128-bit SIMD vector
   }
   self.frame.alloc_spill_slot(vreg, size, size)
 }

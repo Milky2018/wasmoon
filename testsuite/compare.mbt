@@ -21,40 +21,97 @@ pub impl Show for CompareResult with output(self, logger) {
 
 ///|
 /// Convert JIT Int64 results to @types.Value using result_types
+/// Note: V128 results use 2 Int64 slots (low and high parts)
 pub fn jit_results_to_values(
   results : Array[Int64],
   result_types : Array[@types.ValueType],
 ) -> Array[@types.Value] {
   let values : Array[@types.Value] = []
-  for i, ty in result_types {
-    let raw = results[i]
+  let mut slot_idx = 0
+  for ty in result_types {
     let value : @types.Value = match ty {
-      I32 => I32(@types.FromInt64::from_int64_bits(raw))
-      I64 => I64(@types.FromInt64::from_int64_bits(raw))
-      F32 => F32(@types.FromInt64::from_int64_bits(raw))
-      F64 => F64(@types.FromInt64::from_int64_bits(raw))
+      I32 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        I32(@types.FromInt64::from_int64_bits(raw))
+      }
+      I64 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        I64(@types.FromInt64::from_int64_bits(raw))
+      }
+      F32 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        F32(@types.FromInt64::from_int64_bits(raw))
+      }
+      F64 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        F64(@types.FromInt64::from_int64_bits(raw))
+      }
       // Reference types: -1L is null sentinel
-      FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
+      FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => {
+        let raw = results[slot_idx]
+        slot_idx += 1
         if raw == -1L {
           Null
         } else {
           FuncRef(raw.to_int())
         }
-      ExternRef | RefExtern | NullExternRef =>
+      }
+      ExternRef | RefExtern | NullExternRef => {
+        let raw = results[slot_idx]
+        slot_idx += 1
         if raw == -1L {
           Null
         } else {
           ExternRef(raw.to_int())
         }
+      }
       // GC reference types - treat as null for now
-      AnyRef | NullRef | ExnRef | NullExnRef => Null
+      AnyRef | NullRef | ExnRef | NullExnRef => {
+        slot_idx += 1
+        Null
+      }
       // New GC reference types
-      RefStruct(_) | RefNullStruct(_) => Null
-      RefArray(_) | RefNullArray(_) => Null
-      RefAny | RefEq | RefNullEq => Null
-      RefI31 | RefNullI31 => Null
-      RefNone => Null
-      V128 => abort("V128 not supported in JIT")
+      RefStruct(_) | RefNullStruct(_) => {
+        slot_idx += 1
+        Null
+      }
+      RefArray(_) | RefNullArray(_) => {
+        slot_idx += 1
+        Null
+      }
+      RefAny | RefEq | RefNullEq => {
+        slot_idx += 1
+        Null
+      }
+      RefI31 | RefNullI31 => {
+        slot_idx += 1
+        Null
+      }
+      RefNone => {
+        slot_idx += 1
+        Null
+      }
+      V128 => {
+        // V128 uses 2 slots: low 64 bits and high 64 bits
+        let low = results[slot_idx]
+        let high = results[slot_idx + 1]
+        slot_idx += 2
+        // Reconstruct 16 bytes from two Int64 values using Buffer
+        let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+        // Low 8 bytes (little-endian)
+        for i in 0..<8 {
+          buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
+        }
+        // High 8 bytes (little-endian)
+        for i in 0..<8 {
+          buf.write_byte(((high >> (i * 8)) & 0xFFL).to_byte())
+        }
+        V128(buf.contents())
+      }
     }
     values.push(value)
   }
@@ -76,6 +133,7 @@ pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
     StructRef(idx) => idx.to_int64()
     I31(n) => n.to_int64()
     Null => -1L // null sentinel
+    V128(_) => abort("V128 not yet supported in testsuite")
   }
 }
 

@@ -684,7 +684,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   fn reg_kind(preg : @abi.PReg) -> Int {
     match preg.class {
       @abi.Int => 0
-      @abi.Float32 | @abi.Float64 => 1
+      @abi.Float32 | @abi.Float64 | @abi.Vector => 1 // Vector uses same Vn registers
     }
   }
 
@@ -864,7 +864,7 @@ fn LinearScanAllocator::collect_constraints(
               }
               self.reserved_int_regs.get(key).unwrap().add(preg.index)
             }
-            @abi.Float32 | @abi.Float64 => {
+            @abi.Float32 | @abi.Float64 | @abi.Vector => {
               if self.reserved_float_regs.get(key) is None {
                 self.reserved_float_regs.set(key, Set::new())
               }
@@ -884,7 +884,7 @@ fn LinearScanAllocator::collect_constraints(
               }
               self.reserved_int_regs.get(key).unwrap().add(preg.index)
             }
-            @abi.Float32 | @abi.Float64 => {
+            @abi.Float32 | @abi.Float64 | @abi.Vector => {
               if self.reserved_float_regs.get(key) is None {
                 self.reserved_float_regs.set(key, Set::new())
               }
@@ -906,7 +906,7 @@ fn LinearScanAllocator::is_reserved_in_range(
 ) -> Bool {
   let reserved_map = match preg.class {
     @abi.Int => self.reserved_int_regs
-    @abi.Float32 | @abi.Float64 => self.reserved_float_regs
+    @abi.Float32 | @abi.Float64 | @abi.Vector => self.reserved_float_regs
   }
   let block_order = self.block_order
 
@@ -972,7 +972,8 @@ pub fn LinearScanAllocator::allocate(
           } else {
             (None, true) // Stack param
           }
-        @abi.Float32 | @abi.Float64 =>
+        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+          // Vector uses same Vn registers as Float
           if float_idx < max_float_params {
             (Some(@abi.PReg::{ index: float_idx, class: param.class }), false)
           } else {
@@ -1089,10 +1090,16 @@ fn LinearScanAllocator::expire_old_intervals(
 fn reg_class_eq(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
   match (a, b) {
     (@abi.Int, @abi.Int) => true
+    // Float32, Float64, and Vector all use V0-V31 registers
     (@abi.Float32, @abi.Float32)
     | (@abi.Float32, @abi.Float64)
+    | (@abi.Float32, @abi.Vector)
     | (@abi.Float64, @abi.Float32)
-    | (@abi.Float64, @abi.Float64) => true
+    | (@abi.Float64, @abi.Float64)
+    | (@abi.Float64, @abi.Vector)
+    | (@abi.Vector, @abi.Float32)
+    | (@abi.Vector, @abi.Float64)
+    | (@abi.Vector, @abi.Vector) => true
     _ => false
   }
 }
@@ -1157,7 +1164,7 @@ fn LinearScanAllocator::spill_interval(
     // Get a register for this reload (use first available)
     let avail_regs = match interval.vreg.class {
       @abi.Int => self.int_regs
-      @abi.Float32 | @abi.Float64 => self.float_regs
+      @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_regs
     }
     if avail_regs.length() > 0 {
       result.reloads.push({
@@ -1317,6 +1324,13 @@ pub fn apply_allocation(
             } else {
               (None, false)
             }
+          @abi.Vector =>
+            // Vector uses same Vn registers as Float
+            if float_idx < max_float_params {
+              (Some(@abi.PReg::{ index: float_idx, class: @abi.Vector }), false)
+            } else {
+              (None, false)
+            }
         }
         // Update counters
         if is_int {
@@ -1343,7 +1357,7 @@ pub fn apply_allocation(
         // Still need to increment indices for unassigned params
         match param.class {
           @abi.Int => int_idx += 1
-          @abi.Float32 | @abi.Float64 => float_idx += 1
+          @abi.Float32 | @abi.Float64 | @abi.Vector => float_idx += 1
         }
       }
     }

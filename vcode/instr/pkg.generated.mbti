@@ -160,6 +160,14 @@ pub(all) enum JITLibcall {
 pub impl Eq for JITLibcall
 pub impl Show for JITLibcall
 
+pub(all) enum LaneSize {
+  B8
+  H16
+  S32
+  D64
+}
+pub impl Show for LaneSize
+
 pub(all) enum MemType {
   I8
   I16
@@ -167,8 +175,25 @@ pub(all) enum MemType {
   I64
   F32
   F64
+  V128
 }
 pub impl Show for MemType
+
+pub(all) enum SIMDCmpKind {
+  Eq
+  GtS
+  GeS
+  GtU
+  GeU
+}
+pub impl Show for SIMDCmpKind
+
+pub(all) enum SIMDFCmpKind {
+  Eq
+  Gt
+  Ge
+}
+pub impl Show for SIMDFCmpKind
 
 pub(all) enum ShiftType {
   Lsl
@@ -278,6 +303,85 @@ pub(all) enum VCodeOpcode {
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP
+  LoadConstV128(Bytes)
+  SIMDSplat(LaneSize)
+  SIMDSplatF(Bool)
+  SIMDExtractU(LaneSize, Int)
+  SIMDExtractS(LaneSize, Int)
+  SIMDExtractF(Bool, Int)
+  SIMDInsert(LaneSize, Int)
+  SIMDInsertF(Bool, Int)
+  SIMDShuffle(FixedArray[Int])
+  SIMDSwizzle
+  SIMDNot
+  SIMDAnd
+  SIMDBic
+  SIMDOr
+  SIMDXor
+  SIMDBsl
+  SIMDAnyTrue
+  SIMDAllTrue(LaneSize)
+  SIMDBitmask(LaneSize)
+  SIMDAdd(LaneSize)
+  SIMDSub(LaneSize)
+  SIMDMul(LaneSize)
+  SIMDSqadd(LaneSize)
+  SIMDUqadd(LaneSize)
+  SIMDSqsub(LaneSize)
+  SIMDUqsub(LaneSize)
+  SIMDSmin(LaneSize)
+  SIMDUmin(LaneSize)
+  SIMDSmax(LaneSize)
+  SIMDUmax(LaneSize)
+  SIMDUrhadd(LaneSize)
+  SIMDAbs(LaneSize)
+  SIMDNeg(LaneSize)
+  SIMDCnt
+  SIMDShl(LaneSize)
+  SIMDSshr(LaneSize)
+  SIMDUshr(LaneSize)
+  SIMDCmp(LaneSize, SIMDCmpKind)
+  SIMDNarrow(LaneSize, Bool)
+  SIMDExtendLow(LaneSize, Bool)
+  SIMDExtendHigh(LaneSize, Bool)
+  SIMDExtMulLow(LaneSize, Bool)
+  SIMDExtMulHigh(LaneSize, Bool)
+  SIMDExtAddPairwise(LaneSize, Bool)
+  SIMDDot
+  SIMDQ15MulrSat
+  SIMDFAdd(Bool)
+  SIMDFSub(Bool)
+  SIMDFMul(Bool)
+  SIMDFDiv(Bool)
+  SIMDFMin(Bool)
+  SIMDFMax(Bool)
+  SIMDFPMin(Bool)
+  SIMDFPMax(Bool)
+  SIMDFAbs(Bool)
+  SIMDFNeg(Bool)
+  SIMDFSqrt(Bool)
+  SIMDFCeil(Bool)
+  SIMDFFloor(Bool)
+  SIMDFTrunc(Bool)
+  SIMDFNearest(Bool)
+  SIMDFCmp(Bool, SIMDFCmpKind)
+  SIMDFCvtToIntS(Bool)
+  SIMDFCvtToIntU(Bool)
+  SIMDIntToFloatS(Bool)
+  SIMDIntToFloatU(Bool)
+  SIMDTruncSatF64ToI32SZero
+  SIMDTruncSatF64ToI32UZero
+  SIMDConvertLowI32ToF64S
+  SIMDConvertLowI32ToF64U
+  SIMDDemoteF64ToF32Zero
+  SIMDPromoteLowF32ToF64
+  SIMDLoad(Int)
+  SIMDStore(Int)
+  SIMDLoadSplat(LaneSize, Int)
+  SIMDLoadExtend(Int, Bool, Int)
+  SIMDLoadZero(Bool, Int)
+  SIMDLoadLane(LaneSize, Int, Int)
+  SIMDStoreLane(LaneSize, Int, Int)
 }
 pub fn VCodeOpcode::call_type(Self) -> CallType
 pub impl Show for VCodeOpcode

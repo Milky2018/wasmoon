@@ -21,10 +21,10 @@
 ///
 /// The values_vec layout:
 ///   [arg0, arg1, ..., argN, result0, result1, ..., resultM]
-///   Each slot is 8 bytes (int64_t)
+///   Each slot is 8 bytes (int64_t), except V128 which uses 16 bytes (2 slots)
 ///
 /// Parameters:
-///   param_types: Array of parameter types (0=I32, 1=I64, 2=F32, 3=F64)
+///   param_types: Array of parameter types (0=I32, 1=I64, 2=F32, 3=F64, 4=V128)
 ///   result_types: Array of result types
 ///
 /// This follows Cranelift's approach: generate IR, then compile through the
@@ -67,15 +67,38 @@ fn generate_trampoline_ir(
   builder.switch_to_block(entry)
 
   // Load arguments from values_vec
+  // V128 args are passed as two I64 values (low then high) to avoid alignment issues
+  // with LDR Q which requires 16-byte aligned offsets
   let wasm_args : Array[@ir.Value] = []
   let wasm_arg_types : Array[@ir.Type] = []
-  for i, param_type in param_types {
+  let mut current_offset = 0
+  for param_type in param_types {
     let ir_type = type_code_to_ir_type(param_type)
     wasm_arg_types.push(ir_type)
-    let offset = builder.iconst_i64((i * 8).to_int64())
-    let arg = builder.load_ptr(ir_type, values_vec, offset)
-    wasm_args.push(arg)
+    match ir_type {
+      @ir.Type::V128 => {
+        // Load low 64 bits
+        let offset_low = builder.iconst_i64(current_offset.to_int64())
+        let low = builder.load_ptr(@ir.Type::I64, values_vec, offset_low)
+        // Load high 64 bits
+        let offset_high = builder.iconst_i64((current_offset + 8).to_int64())
+        let high = builder.load_ptr(@ir.Type::I64, values_vec, offset_high)
+        // Construct V128 from two I64 values
+        let vec = builder.v128_splat64(low)
+        let arg = builder.v128_replace64(vec, high, 1)
+        wasm_args.push(arg)
+        current_offset = current_offset + 16
+      }
+      _ => {
+        let offset = builder.iconst_i64(current_offset.to_int64())
+        let arg = builder.load_ptr(ir_type, values_vec, offset)
+        wasm_args.push(arg)
+        current_offset = current_offset + 8
+      }
+    }
   }
+  // Save total args size for result offset calculation
+  let args_total_size = current_offset
 
   // Determine result types for CallPtr
   let wasm_result_types : Array[@ir.Type] = []
@@ -92,11 +115,29 @@ fn generate_trampoline_ir(
   )
 
   // Store results back to values_vec
-  let results_base_offset = param_types.length() * 8
+  // V128 is stored as two I64 values (low then high) to avoid alignment issues
+  // with STR Q which requires 16-byte aligned offsets
+  let mut result_offset = args_total_size
   for i, result_val in results {
     let ir_type = wasm_result_types[i]
-    let offset = builder.iconst_i64((results_base_offset + i * 8).to_int64())
-    builder.store_ptr(ir_type, values_vec, result_val, offset)
+    match ir_type {
+      @ir.Type::V128 => {
+        // Extract and store low 64 bits
+        let low = builder.v128_extract64(result_val, 0)
+        let offset_low = builder.iconst_i64(result_offset.to_int64())
+        builder.store_ptr(@ir.Type::I64, values_vec, low, offset_low)
+        // Extract and store high 64 bits
+        let high = builder.v128_extract64(result_val, 1)
+        let offset_high = builder.iconst_i64((result_offset + 8).to_int64())
+        builder.store_ptr(@ir.Type::I64, values_vec, high, offset_high)
+        result_offset = result_offset + 16
+      }
+      _ => {
+        let offset = builder.iconst_i64(result_offset.to_int64())
+        builder.store_ptr(ir_type, values_vec, result_val, offset)
+        result_offset = result_offset + 8
+      }
+    }
   }
 
   // Return 0 (success)
@@ -113,6 +154,7 @@ fn type_code_to_ir_type(code : Int) -> @ir.Type {
     1 => @ir.Type::I64
     2 => @ir.Type::F32
     3 => @ir.Type::F64
+    4 => @ir.Type::V128
     _ => @ir.Type::I64 // Default
   }
 }
@@ -129,3 +171,6 @@ pub const TYPE_F32 : Int = 2
 
 ///|
 pub const TYPE_F64 : Int = 3
+
+///|
+pub const TYPE_V128 : Int = 4
