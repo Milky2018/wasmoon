@@ -301,8 +301,16 @@ pub fn JITModule::call_with_context(
 ) -> Array[Int64] raise JITTrap {
   match self.context {
     Some(ctx) => {
-      let num_results = func.result_types.length()
-      let results : Array[Int64] = Array::make(num_results, 0L)
+      // Calculate number of result slots (V128 needs 2 slots, others need 1)
+      let mut num_result_slots = 0
+      for result_type in func.result_types {
+        if result_type is @types.ValueType::V128 {
+          num_result_slots = num_result_slots + 2
+        } else {
+          num_result_slots = num_result_slots + 1
+        }
+      }
+      let results : Array[Int64] = Array::make(num_result_slots, 0L)
       ctx.call_multi_return(
         func.exec_code.ptr(),
         args,

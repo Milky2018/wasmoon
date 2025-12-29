@@ -201,6 +201,273 @@ enum Instruction {
   // SIMD for popcnt
   Cnt8B(Int, Int) // CNT Vd.8B, Vn.8B - count bits in each byte
   AddvB(Int, Int) // ADDV Bd, Vn.8B - sum all bytes
+  // ============ NEON SIMD Instructions ============
+  // V128 Load/Store
+  LdrQ(Int, Int, Int) // LDR Qd, [Xn, #imm] (128-bit)
+  StrQ(Int, Int, Int) // STR Qs, [Xn, #imm] (128-bit)
+  // Splat (DUP from GPR)
+  Dup16B(Int, Int) // DUP Vd.16B, Wn
+  Dup8H(Int, Int) // DUP Vd.8H, Wn
+  Dup4S(Int, Int) // DUP Vd.4S, Wn
+  Dup2D(Int, Int) // DUP Vd.2D, Xn
+  // Splat from element (DUP from scalar)
+  DupElem4S(Int, Int, Int) // DUP Vd.4S, Vn.S[lane]
+  DupElem2D(Int, Int, Int) // DUP Vd.2D, Vn.D[lane]
+  // Extract lane (UMOV/SMOV)
+  UmovB(Int, Int, Int) // UMOV Wd, Vn.B[lane]
+  UmovH(Int, Int, Int) // UMOV Wd, Vn.H[lane]
+  UmovS(Int, Int, Int) // UMOV Wd, Vn.S[lane]
+  UmovD(Int, Int, Int) // UMOV Xd, Vn.D[lane]
+  SmovB(Int, Int, Int) // SMOV Wd, Vn.B[lane]
+  SmovH(Int, Int, Int) // SMOV Wd, Vn.H[lane]
+  SmovS(Int, Int, Int) // SMOV Xd, Vn.S[lane] (sign extend to 64-bit)
+  // Extract float lane (DUP to scalar)
+  DupScalarS(Int, Int, Int) // DUP Sd, Vn.S[lane]
+  DupScalarD(Int, Int, Int) // DUP Dd, Vn.D[lane]
+  // Insert lane (INS from GPR)
+  InsB(Int, Int, Int) // INS Vd.B[lane], Wn
+  InsH(Int, Int, Int) // INS Vd.H[lane], Wn
+  InsS(Int, Int, Int) // INS Vd.S[lane], Wn
+  InsD(Int, Int, Int) // INS Vd.D[lane], Xn
+  // Insert from element
+  InsElemS(Int, Int, Int, Int) // INS Vd.S[lane], Vn.S[0]
+  InsElemD(Int, Int, Int, Int) // INS Vd.D[lane], Vn.D[0]
+  // Bitwise
+  Not16B(Int, Int) // NOT Vd.16B, Vn.16B
+  And16B(Int, Int, Int) // AND Vd.16B, Vn.16B, Vm.16B
+  Orr16B(Int, Int, Int) // ORR Vd.16B, Vn.16B, Vm.16B
+  Eor16B(Int, Int, Int) // EOR Vd.16B, Vn.16B, Vm.16B
+  Bic16B(Int, Int, Int) // BIC Vd.16B, Vn.16B, Vm.16B
+  Bsl16B(Int, Int, Int) // BSL Vd.16B, Vn.16B, Vm.16B
+  // Swizzle/Shuffle
+  Tbl1(Int, Int, Int) // TBL Vd.16B, {Vn.16B}, Vm.16B
+  Tbl2(Int, Int, Int, Int) // TBL Vd.16B, {Vn.16B, Vn+1.16B}, Vm.16B
+  // Integer arithmetic (16 lanes, 8-bit)
+  Add16B(Int, Int, Int) // ADD Vd.16B, Vn.16B, Vm.16B
+  Sub16B(Int, Int, Int) // SUB Vd.16B, Vn.16B, Vm.16B
+  // Integer arithmetic (8 lanes, 16-bit)
+  Add8H(Int, Int, Int) // ADD Vd.8H, Vn.8H, Vm.8H
+  Sub8H(Int, Int, Int) // SUB Vd.8H, Vn.8H, Vm.8H
+  Mul8H(Int, Int, Int) // MUL Vd.8H, Vn.8H, Vm.8H
+  // Integer arithmetic (4 lanes, 32-bit)
+  Add4S(Int, Int, Int) // ADD Vd.4S, Vn.4S, Vm.4S
+  Sub4S(Int, Int, Int) // SUB Vd.4S, Vn.4S, Vm.4S
+  Mul4S(Int, Int, Int) // MUL Vd.4S, Vn.4S, Vm.4S
+  // Integer arithmetic (2 lanes, 64-bit)
+  Add2D(Int, Int, Int) // ADD Vd.2D, Vn.2D, Vm.2D
+  Sub2D(Int, Int, Int) // SUB Vd.2D, Vn.2D, Vm.2D
+  // No MUL for 64-bit lanes in NEON, need PMULL or separate approach
+  // Saturating arithmetic
+  Sqadd16B(Int, Int, Int) // SQADD Vd.16B, Vn.16B, Vm.16B
+  Sqadd8H(Int, Int, Int) // SQADD Vd.8H, Vn.8H, Vm.8H
+  Sqadd4S(Int, Int, Int) // SQADD Vd.4S, Vn.4S, Vm.4S
+  Sqadd2D(Int, Int, Int) // SQADD Vd.2D, Vn.2D, Vm.2D
+  Uqadd16B(Int, Int, Int) // UQADD Vd.16B, Vn.16B, Vm.16B
+  Uqadd8H(Int, Int, Int) // UQADD Vd.8H, Vn.8H, Vm.8H
+  Uqadd4S(Int, Int, Int) // UQADD Vd.4S, Vn.4S, Vm.4S
+  Uqadd2D(Int, Int, Int) // UQADD Vd.2D, Vn.2D, Vm.2D
+  Sqsub16B(Int, Int, Int) // SQSUB Vd.16B, Vn.16B, Vm.16B
+  Sqsub8H(Int, Int, Int) // SQSUB Vd.8H, Vn.8H, Vm.8H
+  Sqsub4S(Int, Int, Int) // SQSUB Vd.4S, Vn.4S, Vm.4S
+  Sqsub2D(Int, Int, Int) // SQSUB Vd.2D, Vn.2D, Vm.2D
+  Uqsub16B(Int, Int, Int) // UQSUB Vd.16B, Vn.16B, Vm.16B
+  Uqsub8H(Int, Int, Int) // UQSUB Vd.8H, Vn.8H, Vm.8H
+  Uqsub4S(Int, Int, Int) // UQSUB Vd.4S, Vn.4S, Vm.4S
+  Uqsub2D(Int, Int, Int) // UQSUB Vd.2D, Vn.2D, Vm.2D
+  // Min/Max
+  Smin16B(Int, Int, Int) // SMIN Vd.16B, Vn.16B, Vm.16B
+  Smin8H(Int, Int, Int) // SMIN Vd.8H, Vn.8H, Vm.8H
+  Smin4S(Int, Int, Int) // SMIN Vd.4S, Vn.4S, Vm.4S
+  Umin16B(Int, Int, Int) // UMIN Vd.16B, Vn.16B, Vm.16B
+  Umin8H(Int, Int, Int) // UMIN Vd.8H, Vn.8H, Vm.8H
+  Umin4S(Int, Int, Int) // UMIN Vd.4S, Vn.4S, Vm.4S
+  Smax16B(Int, Int, Int) // SMAX Vd.16B, Vn.16B, Vm.16B
+  Smax8H(Int, Int, Int) // SMAX Vd.8H, Vn.8H, Vm.8H
+  Smax4S(Int, Int, Int) // SMAX Vd.4S, Vn.4S, Vm.4S
+  Umax16B(Int, Int, Int) // UMAX Vd.16B, Vn.16B, Vm.16B
+  Umax8H(Int, Int, Int) // UMAX Vd.8H, Vn.8H, Vm.8H
+  Umax4S(Int, Int, Int) // UMAX Vd.4S, Vn.4S, Vm.4S
+  // Urhadd
+  Urhadd16B(Int, Int, Int) // URHADD Vd.16B, Vn.16B, Vm.16B
+  Urhadd8H(Int, Int, Int) // URHADD Vd.8H, Vn.8H, Vm.8H
+  Urhadd4S(Int, Int, Int) // URHADD Vd.4S, Vn.4S, Vm.4S
+  // Abs/Neg
+  Abs16B(Int, Int) // ABS Vd.16B, Vn.16B
+  Abs8H(Int, Int) // ABS Vd.8H, Vn.8H
+  Abs4S(Int, Int) // ABS Vd.4S, Vn.4S
+  Abs2D(Int, Int) // ABS Vd.2D, Vn.2D
+  Neg16B(Int, Int) // NEG Vd.16B, Vn.16B
+  Neg8H(Int, Int) // NEG Vd.8H, Vn.8H
+  Neg4S(Int, Int) // NEG Vd.4S, Vn.4S
+  Neg2D(Int, Int) // NEG Vd.2D, Vn.2D
+  // CNT for full 128-bit
+  Cnt16B(Int, Int) // CNT Vd.16B, Vn.16B
+  // Shifts (register-based with scalar in GPR)
+  Sshl16B(Int, Int, Int) // SSHL Vd.16B, Vn.16B, Vm.16B (shift by element)
+  Sshl8H(Int, Int, Int) // SSHL Vd.8H, Vn.8H, Vm.8H
+  Sshl4S(Int, Int, Int) // SSHL Vd.4S, Vn.4S, Vm.4S
+  Sshl2D(Int, Int, Int) // SSHL Vd.2D, Vn.2D, Vm.2D
+  Ushl16B(Int, Int, Int) // USHL Vd.16B, Vn.16B, Vm.16B
+  Ushl8H(Int, Int, Int) // USHL Vd.8H, Vn.8H, Vm.8H
+  Ushl4S(Int, Int, Int) // USHL Vd.4S, Vn.4S, Vm.4S
+  Ushl2D(Int, Int, Int) // USHL Vd.2D, Vn.2D, Vm.2D
+  // Comparison
+  Cmeq16B(Int, Int, Int) // CMEQ Vd.16B, Vn.16B, Vm.16B
+  Cmeq8H(Int, Int, Int) // CMEQ Vd.8H, Vn.8H, Vm.8H
+  Cmeq4S(Int, Int, Int) // CMEQ Vd.4S, Vn.4S, Vm.4S
+  Cmeq2D(Int, Int, Int) // CMEQ Vd.2D, Vn.2D, Vm.2D
+  Cmgt16B(Int, Int, Int) // CMGT Vd.16B, Vn.16B, Vm.16B
+  Cmgt8H(Int, Int, Int) // CMGT Vd.8H, Vn.8H, Vm.8H
+  Cmgt4S(Int, Int, Int) // CMGT Vd.4S, Vn.4S, Vm.4S
+  Cmgt2D(Int, Int, Int) // CMGT Vd.2D, Vn.2D, Vm.2D
+  Cmge16B(Int, Int, Int) // CMGE Vd.16B, Vn.16B, Vm.16B
+  Cmge8H(Int, Int, Int) // CMGE Vd.8H, Vn.8H, Vm.8H
+  Cmge4S(Int, Int, Int) // CMGE Vd.4S, Vn.4S, Vm.4S
+  Cmge2D(Int, Int, Int) // CMGE Vd.2D, Vn.2D, Vm.2D
+  Cmhi16B(Int, Int, Int) // CMHI Vd.16B, Vn.16B, Vm.16B (unsigned >)
+  Cmhi8H(Int, Int, Int) // CMHI Vd.8H, Vn.8H, Vm.8H
+  Cmhi4S(Int, Int, Int) // CMHI Vd.4S, Vn.4S, Vm.4S
+  Cmhi2D(Int, Int, Int) // CMHI Vd.2D, Vn.2D, Vm.2D
+  Cmhs16B(Int, Int, Int) // CMHS Vd.16B, Vn.16B, Vm.16B (unsigned >=)
+  Cmhs8H(Int, Int, Int) // CMHS Vd.8H, Vn.8H, Vm.8H
+  Cmhs4S(Int, Int, Int) // CMHS Vd.4S, Vn.4S, Vm.4S
+  Cmhs2D(Int, Int, Int) // CMHS Vd.2D, Vn.2D, Vm.2D
+  // Narrowing (non-saturating - used by i64x2.mul implementation)
+  Xtn2S(Int, Int) // XTN Vd.2S, Vn.2D
+  // Narrowing (saturating - used by WebAssembly narrow operations)
+  Sqxtn8B(Int, Int) // SQXTN Vd.8B, Vn.8H
+  Sqxtn4H(Int, Int) // SQXTN Vd.4H, Vn.4S
+  Sqxtn2S(Int, Int) // SQXTN Vd.2S, Vn.2D
+  Sqxtun8B(Int, Int) // SQXTUN Vd.8B, Vn.8H
+  Sqxtun4H(Int, Int) // SQXTUN Vd.4H, Vn.4S
+  // Note: Sqxtun2S not needed - no i64->i32 narrow in WebAssembly
+  // Note: Uqxtn8B/4H not needed - WebAssembly narrow_u uses SQXTUN (signed source)
+  Uqxtn2S(Int, Int) // UQXTN Vd.2S, Vn.2D - used by i32x4.trunc_sat_f64x2_u_zero
+  // Narrowing (second half - writes to upper portion of Vd)
+  Sqxtn2_16B(Int, Int) // SQXTN2 Vd.16B, Vn.8H (writes upper 8 bytes)
+  Sqxtn2_8H(Int, Int) // SQXTN2 Vd.8H, Vn.4S (writes upper 4 halfwords)
+  Sqxtun2_16B(Int, Int) // SQXTUN2 Vd.16B, Vn.8H (writes upper 8 bytes)
+  Sqxtun2_8H(Int, Int) // SQXTUN2 Vd.8H, Vn.4S (writes upper 4 halfwords)
+  // Extending
+  Sxtl8H(Int, Int) // SXTL Vd.8H, Vn.8B (aka SSHLL with shift 0)
+  Sxtl4S(Int, Int) // SXTL Vd.4S, Vn.4H
+  Sxtl2D(Int, Int) // SXTL Vd.2D, Vn.2S
+  Sxtl2_8H(Int, Int) // SXTL2 Vd.8H, Vn.16B
+  Sxtl2_4S(Int, Int) // SXTL2 Vd.4S, Vn.8H
+  Sxtl2_2D(Int, Int) // SXTL2 Vd.2D, Vn.4S
+  Uxtl8H(Int, Int) // UXTL Vd.8H, Vn.8B (aka USHLL with shift 0)
+  Uxtl4S(Int, Int) // UXTL Vd.4S, Vn.4H
+  Uxtl2D(Int, Int) // UXTL Vd.2D, Vn.2S
+  Uxtl2_8H(Int, Int) // UXTL2 Vd.8H, Vn.16B
+  Uxtl2_4S(Int, Int) // UXTL2 Vd.4S, Vn.8H
+  Uxtl2_2D(Int, Int) // UXTL2 Vd.2D, Vn.4S
+  // Extended multiply (low half)
+  Smull8H(Int, Int, Int) // SMULL Vd.8H, Vn.8B, Vm.8B
+  Smull4S(Int, Int, Int) // SMULL Vd.4S, Vn.4H, Vm.4H
+  Smull2D(Int, Int, Int) // SMULL Vd.2D, Vn.2S, Vm.2S
+  Umull8H(Int, Int, Int) // UMULL Vd.8H, Vn.8B, Vm.8B
+  Umull4S(Int, Int, Int) // UMULL Vd.4S, Vn.4H, Vm.4H
+  Umull2D(Int, Int, Int) // UMULL Vd.2D, Vn.2S, Vm.2S
+  // Extended multiply (high half)
+  Smull2_8H(Int, Int, Int) // SMULL2 Vd.8H, Vn.16B, Vm.16B
+  Smull2_4S(Int, Int, Int) // SMULL2 Vd.4S, Vn.8H, Vm.8H
+  Smull2_2D(Int, Int, Int) // SMULL2 Vd.2D, Vn.4S, Vm.4S
+  Umull2_8H(Int, Int, Int) // UMULL2 Vd.8H, Vn.16B, Vm.16B
+  Umull2_4S(Int, Int, Int) // UMULL2 Vd.4S, Vn.8H, Vm.8H
+  Umull2_2D(Int, Int, Int) // UMULL2 Vd.2D, Vn.4S, Vm.4S
+  // Pairwise add
+  Saddlp8H(Int, Int) // SADDLP Vd.8H, Vn.16B
+  Saddlp4S(Int, Int) // SADDLP Vd.4S, Vn.8H
+  Saddlp2D(Int, Int) // SADDLP Vd.2D, Vn.4S
+  Uaddlp8H(Int, Int) // UADDLP Vd.8H, Vn.16B
+  Uaddlp4S(Int, Int) // UADDLP Vd.4S, Vn.8H
+  Uaddlp2D(Int, Int) // UADDLP Vd.2D, Vn.4S
+  // Pairwise add (for dot product)
+  Addp4S(Int, Int, Int) // ADDP Vd.4S, Vn.4S, Vm.4S
+  // Q15 saturating rounding multiply high
+  Sqrdmulh8H(Int, Int, Int) // SQRDMULH Vd.8H, Vn.8H, Vm.8H
+  // Float arithmetic
+  Fadd4S(Int, Int, Int) // FADD Vd.4S, Vn.4S, Vm.4S
+  Fadd2D(Int, Int, Int) // FADD Vd.2D, Vn.2D, Vm.2D
+  Fsub4S(Int, Int, Int) // FSUB Vd.4S, Vn.4S, Vm.4S
+  Fsub2D(Int, Int, Int) // FSUB Vd.2D, Vn.2D, Vm.2D
+  Fmul4S(Int, Int, Int) // FMUL Vd.4S, Vn.4S, Vm.4S
+  Fmul2D(Int, Int, Int) // FMUL Vd.2D, Vn.2D, Vm.2D
+  Fdiv4S(Int, Int, Int) // FDIV Vd.4S, Vn.4S, Vm.4S
+  Fdiv2D(Int, Int, Int) // FDIV Vd.2D, Vn.2D, Vm.2D
+  Fmin4S(Int, Int, Int) // FMIN Vd.4S, Vn.4S, Vm.4S
+  Fmin2D(Int, Int, Int) // FMIN Vd.2D, Vn.2D, Vm.2D
+  Fmax4S(Int, Int, Int) // FMAX Vd.4S, Vn.4S, Vm.4S
+  Fmax2D(Int, Int, Int) // FMAX Vd.2D, Vn.2D, Vm.2D
+  Fminnm4S(Int, Int, Int) // FMINNM Vd.4S, Vn.4S, Vm.4S
+  Fminnm2D(Int, Int, Int) // FMINNM Vd.2D, Vn.2D, Vm.2D
+  Fmaxnm4S(Int, Int, Int) // FMAXNM Vd.4S, Vn.4S, Vm.4S
+  Fmaxnm2D(Int, Int, Int) // FMAXNM Vd.2D, Vn.2D, Vm.2D
+  // Float unary
+  Fabs4S(Int, Int) // FABS Vd.4S, Vn.4S
+  Fabs2D(Int, Int) // FABS Vd.2D, Vn.2D
+  Fneg4S(Int, Int) // FNEG Vd.4S, Vn.4S
+  Fneg2D(Int, Int) // FNEG Vd.2D, Vn.2D
+  Fsqrt4S(Int, Int) // FSQRT Vd.4S, Vn.4S
+  Fsqrt2D(Int, Int) // FSQRT Vd.2D, Vn.2D
+  Frintp4S(Int, Int) // FRINTP Vd.4S, Vn.4S (ceil)
+  Frintp2D(Int, Int) // FRINTP Vd.2D, Vn.2D
+  Frintm4S(Int, Int) // FRINTM Vd.4S, Vn.4S (floor)
+  Frintm2D(Int, Int) // FRINTM Vd.2D, Vn.2D
+  Frintz4S(Int, Int) // FRINTZ Vd.4S, Vn.4S (trunc)
+  Frintz2D(Int, Int) // FRINTZ Vd.2D, Vn.2D
+  Frintn4S(Int, Int) // FRINTN Vd.4S, Vn.4S (nearest)
+  Frintn2D(Int, Int) // FRINTN Vd.2D, Vn.2D
+  // Float comparison
+  Fcmeq4S(Int, Int, Int) // FCMEQ Vd.4S, Vn.4S, Vm.4S
+  Fcmeq2D(Int, Int, Int) // FCMEQ Vd.2D, Vn.2D, Vm.2D
+  Fcmgt4S(Int, Int, Int) // FCMGT Vd.4S, Vn.4S, Vm.4S
+  Fcmgt2D(Int, Int, Int) // FCMGT Vd.2D, Vn.2D, Vm.2D
+  Fcmge4S(Int, Int, Int) // FCMGE Vd.4S, Vn.4S, Vm.4S
+  Fcmge2D(Int, Int, Int) // FCMGE Vd.2D, Vn.2D, Vm.2D
+  // Float conversion
+  Fcvtzs4S(Int, Int) // FCVTZS Vd.4S, Vn.4S (f32 -> i32)
+  Fcvtzs2D(Int, Int) // FCVTZS Vd.2D, Vn.2D (f64 -> i64)
+  Fcvtzu4S(Int, Int) // FCVTZU Vd.4S, Vn.4S
+  Fcvtzu2D(Int, Int) // FCVTZU Vd.2D, Vn.2D
+  Scvtf4S(Int, Int) // SCVTF Vd.4S, Vn.4S (i32 -> f32)
+  Scvtf2D(Int, Int) // SCVTF Vd.2D, Vn.2D (i64 -> f64)
+  Ucvtf4S(Int, Int) // UCVTF Vd.4S, Vn.4S
+  Ucvtf2D(Int, Int) // UCVTF Vd.2D, Vn.2D
+  // F64/F32 conversions
+  Fcvtn2S(Int, Int) // FCVTN Vd.2S, Vn.2D (demote f64x2 -> f32x2, lower 64 bits)
+  Fcvtl2D(Int, Int) // FCVTL Vd.2D, Vn.2S (promote f32x2 -> f64x2)
+  // Load splat
+  Ld1rB(Int, Int) // LD1R {Vd.16B}, [Xn]
+  Ld1rH(Int, Int) // LD1R {Vd.8H}, [Xn]
+  Ld1rS(Int, Int) // LD1R {Vd.4S}, [Xn]
+  Ld1rD(Int, Int) // LD1R {Vd.2D}, [Xn]
+  // Load single lane
+  Ld1B(Int, Int, Int) // LD1 {Vd.B}[lane], [Xn]
+  Ld1H(Int, Int, Int) // LD1 {Vd.H}[lane], [Xn]
+  Ld1S(Int, Int, Int) // LD1 {Vd.S}[lane], [Xn]
+  Ld1D(Int, Int, Int) // LD1 {Vd.D}[lane], [Xn]
+  // Store single lane
+  St1B(Int, Int, Int) // ST1 {Vn.B}[lane], [Xd]
+  St1H(Int, Int, Int) // ST1 {Vn.H}[lane], [Xd]
+  St1S(Int, Int, Int) // ST1 {Vn.S}[lane], [Xd]
+  St1D(Int, Int, Int) // ST1 {Vn.D}[lane], [Xd]
+  // UMAXV/UMINV for any_true/all_true
+  Umaxv16B(Int, Int) // UMAXV Bd, Vn.16B
+  Uminv16B(Int, Int) // UMINV Bd, Vn.16B
+  Uminv8H(Int, Int) // UMINV Hd, Vn.8H
+  Uminv4S(Int, Int) // UMINV Sd, Vn.4S
+  // ADDV for bitmask
+  Addv16B(Int, Int) // ADDV Bd, Vn.16B
+  // MOVI for zeroing
+  MoviZero(Int) // MOVI Vd.2D, #0
+  // Orr for move
+  OrrVec(Int, Int) // ORR Vd.16B, Vn.16B, Vn.16B (move)
+  // Load extending (8/16/32 -> 16/32/64)
+  Ld1_8B(Int, Int) // LD1 {Vd.8B}, [Xn]
+  // For i64x2.mul emulation
+  Rev64_4S(Int, Int) // REV64 Vd.4S, Vn.4S (swap 32-bit halves within 64-bit lanes)
+  ShlImm2D(Int, Int, Int) // SHL Vd.2D, Vn.2D, #imm
 }
 
 ///|
@@ -486,6 +753,230 @@ fn Instruction::annotate(self : Instruction) -> String {
     AlignTo(alignment) => "align to \{alignment} bytes"
     Cnt8B(rd, rn) => "cnt v\{rd}.8b, v\{rn}.8b"
     AddvB(rd, rn) => "addv b\{rd}, v\{rn}.8b"
+    // NEON SIMD instructions
+    LdrQ(rd, rn, imm) => "ldr q\{rd}, [x\{rn}, #\{imm}]"
+    StrQ(rt, rn, imm) => "str q\{rt}, [x\{rn}, #\{imm}]"
+    Dup16B(rd, rn) => "dup v\{rd}.16b, w\{rn}"
+    Dup8H(rd, rn) => "dup v\{rd}.8h, w\{rn}"
+    Dup4S(rd, rn) => "dup v\{rd}.4s, w\{rn}"
+    Dup2D(rd, rn) => "dup v\{rd}.2d, x\{rn}"
+    DupElem4S(rd, rn, lane) => "dup v\{rd}.4s, v\{rn}.s[\{lane}]"
+    DupElem2D(rd, rn, lane) => "dup v\{rd}.2d, v\{rn}.d[\{lane}]"
+    UmovB(rd, rn, lane) => "umov w\{rd}, v\{rn}.b[\{lane}]"
+    UmovH(rd, rn, lane) => "umov w\{rd}, v\{rn}.h[\{lane}]"
+    UmovS(rd, rn, lane) => "umov w\{rd}, v\{rn}.s[\{lane}]"
+    UmovD(rd, rn, lane) => "umov x\{rd}, v\{rn}.d[\{lane}]"
+    SmovB(rd, rn, lane) => "smov w\{rd}, v\{rn}.b[\{lane}]"
+    SmovH(rd, rn, lane) => "smov w\{rd}, v\{rn}.h[\{lane}]"
+    SmovS(rd, rn, lane) => "smov x\{rd}, v\{rn}.s[\{lane}]"
+    DupScalarS(rd, rn, lane) => "dup s\{rd}, v\{rn}.s[\{lane}]"
+    DupScalarD(rd, rn, lane) => "dup d\{rd}, v\{rn}.d[\{lane}]"
+    InsB(rd, lane, rn) => "ins v\{rd}.b[\{lane}], w\{rn}"
+    InsH(rd, lane, rn) => "ins v\{rd}.h[\{lane}], w\{rn}"
+    InsS(rd, lane, rn) => "ins v\{rd}.s[\{lane}], w\{rn}"
+    InsD(rd, lane, rn) => "ins v\{rd}.d[\{lane}], x\{rn}"
+    InsElemS(rd, dlane, rn, slane) =>
+      "ins v\{rd}.s[\{dlane}], v\{rn}.s[\{slane}]"
+    InsElemD(rd, dlane, rn, slane) =>
+      "ins v\{rd}.d[\{dlane}], v\{rn}.d[\{slane}]"
+    Not16B(rd, rn) => "not v\{rd}.16b, v\{rn}.16b"
+    And16B(rd, rn, rm) => "and v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Orr16B(rd, rn, rm) => "orr v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Eor16B(rd, rn, rm) => "eor v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Bic16B(rd, rn, rm) => "bic v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Bsl16B(rd, rn, rm) => "bsl v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Tbl1(rd, rn, rm) => "tbl v\{rd}.16b, {v\{rn}.16b}, v\{rm}.16b"
+    Tbl2(rd, rn1, rn2, rm) =>
+      "tbl v\{rd}.16b, {v\{rn1}.16b, v\{rn2}.16b}, v\{rm}.16b"
+    Add16B(rd, rn, rm) => "add v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Sub16B(rd, rn, rm) => "sub v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Add8H(rd, rn, rm) => "add v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Sub8H(rd, rn, rm) => "sub v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Mul8H(rd, rn, rm) => "mul v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Add4S(rd, rn, rm) => "add v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Sub4S(rd, rn, rm) => "sub v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Mul4S(rd, rn, rm) => "mul v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Add2D(rd, rn, rm) => "add v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Sub2D(rd, rn, rm) => "sub v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Sqadd16B(rd, rn, rm) => "sqadd v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Sqadd8H(rd, rn, rm) => "sqadd v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Sqadd4S(rd, rn, rm) => "sqadd v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Sqadd2D(rd, rn, rm) => "sqadd v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Uqadd16B(rd, rn, rm) => "uqadd v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Uqadd8H(rd, rn, rm) => "uqadd v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Uqadd4S(rd, rn, rm) => "uqadd v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Uqadd2D(rd, rn, rm) => "uqadd v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Sqsub16B(rd, rn, rm) => "sqsub v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Sqsub8H(rd, rn, rm) => "sqsub v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Sqsub4S(rd, rn, rm) => "sqsub v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Sqsub2D(rd, rn, rm) => "sqsub v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Uqsub16B(rd, rn, rm) => "uqsub v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Uqsub8H(rd, rn, rm) => "uqsub v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Uqsub4S(rd, rn, rm) => "uqsub v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Uqsub2D(rd, rn, rm) => "uqsub v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Smin16B(rd, rn, rm) => "smin v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Smin8H(rd, rn, rm) => "smin v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Smin4S(rd, rn, rm) => "smin v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Umin16B(rd, rn, rm) => "umin v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Umin8H(rd, rn, rm) => "umin v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Umin4S(rd, rn, rm) => "umin v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Smax16B(rd, rn, rm) => "smax v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Smax8H(rd, rn, rm) => "smax v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Smax4S(rd, rn, rm) => "smax v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Umax16B(rd, rn, rm) => "umax v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Umax8H(rd, rn, rm) => "umax v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Umax4S(rd, rn, rm) => "umax v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Urhadd16B(rd, rn, rm) => "urhadd v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Urhadd8H(rd, rn, rm) => "urhadd v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Urhadd4S(rd, rn, rm) => "urhadd v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Abs16B(rd, rn) => "abs v\{rd}.16b, v\{rn}.16b"
+    Abs8H(rd, rn) => "abs v\{rd}.8h, v\{rn}.8h"
+    Abs4S(rd, rn) => "abs v\{rd}.4s, v\{rn}.4s"
+    Abs2D(rd, rn) => "abs v\{rd}.2d, v\{rn}.2d"
+    Neg16B(rd, rn) => "neg v\{rd}.16b, v\{rn}.16b"
+    Neg8H(rd, rn) => "neg v\{rd}.8h, v\{rn}.8h"
+    Neg4S(rd, rn) => "neg v\{rd}.4s, v\{rn}.4s"
+    Neg2D(rd, rn) => "neg v\{rd}.2d, v\{rn}.2d"
+    Cnt16B(rd, rn) => "cnt v\{rd}.16b, v\{rn}.16b"
+    Sshl16B(rd, rn, rm) => "sshl v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Sshl8H(rd, rn, rm) => "sshl v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Sshl4S(rd, rn, rm) => "sshl v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Sshl2D(rd, rn, rm) => "sshl v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Ushl16B(rd, rn, rm) => "ushl v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Ushl8H(rd, rn, rm) => "ushl v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Ushl4S(rd, rn, rm) => "ushl v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Ushl2D(rd, rn, rm) => "ushl v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Cmeq16B(rd, rn, rm) => "cmeq v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Cmeq8H(rd, rn, rm) => "cmeq v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Cmeq4S(rd, rn, rm) => "cmeq v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Cmeq2D(rd, rn, rm) => "cmeq v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Cmgt16B(rd, rn, rm) => "cmgt v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Cmgt8H(rd, rn, rm) => "cmgt v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Cmgt4S(rd, rn, rm) => "cmgt v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Cmgt2D(rd, rn, rm) => "cmgt v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Cmge16B(rd, rn, rm) => "cmge v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Cmge8H(rd, rn, rm) => "cmge v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Cmge4S(rd, rn, rm) => "cmge v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Cmge2D(rd, rn, rm) => "cmge v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Cmhi16B(rd, rn, rm) => "cmhi v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Cmhi8H(rd, rn, rm) => "cmhi v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Cmhi4S(rd, rn, rm) => "cmhi v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Cmhi2D(rd, rn, rm) => "cmhi v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Cmhs16B(rd, rn, rm) => "cmhs v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
+    Cmhs8H(rd, rn, rm) => "cmhs v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Cmhs4S(rd, rn, rm) => "cmhs v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Cmhs2D(rd, rn, rm) => "cmhs v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Xtn2S(rd, rn) => "xtn v\{rd}.2s, v\{rn}.2d"
+    Sqxtn8B(rd, rn) => "sqxtn v\{rd}.8b, v\{rn}.8h"
+    Sqxtn4H(rd, rn) => "sqxtn v\{rd}.4h, v\{rn}.4s"
+    Sqxtn2S(rd, rn) => "sqxtn v\{rd}.2s, v\{rn}.2d"
+    Sqxtun8B(rd, rn) => "sqxtun v\{rd}.8b, v\{rn}.8h"
+    Sqxtun4H(rd, rn) => "sqxtun v\{rd}.4h, v\{rn}.4s"
+    Uqxtn2S(rd, rn) => "uqxtn v\{rd}.2s, v\{rn}.2d"
+    Sqxtn2_16B(rd, rn) => "sqxtn2 v\{rd}.16b, v\{rn}.8h"
+    Sqxtn2_8H(rd, rn) => "sqxtn2 v\{rd}.8h, v\{rn}.4s"
+    Sqxtun2_16B(rd, rn) => "sqxtun2 v\{rd}.16b, v\{rn}.8h"
+    Sqxtun2_8H(rd, rn) => "sqxtun2 v\{rd}.8h, v\{rn}.4s"
+    Sxtl8H(rd, rn) => "sxtl v\{rd}.8h, v\{rn}.8b"
+    Sxtl4S(rd, rn) => "sxtl v\{rd}.4s, v\{rn}.4h"
+    Sxtl2D(rd, rn) => "sxtl v\{rd}.2d, v\{rn}.2s"
+    Sxtl2_8H(rd, rn) => "sxtl2 v\{rd}.8h, v\{rn}.16b"
+    Sxtl2_4S(rd, rn) => "sxtl2 v\{rd}.4s, v\{rn}.8h"
+    Sxtl2_2D(rd, rn) => "sxtl2 v\{rd}.2d, v\{rn}.4s"
+    Uxtl8H(rd, rn) => "uxtl v\{rd}.8h, v\{rn}.8b"
+    Uxtl4S(rd, rn) => "uxtl v\{rd}.4s, v\{rn}.4h"
+    Uxtl2D(rd, rn) => "uxtl v\{rd}.2d, v\{rn}.2s"
+    Uxtl2_8H(rd, rn) => "uxtl2 v\{rd}.8h, v\{rn}.16b"
+    Uxtl2_4S(rd, rn) => "uxtl2 v\{rd}.4s, v\{rn}.8h"
+    Uxtl2_2D(rd, rn) => "uxtl2 v\{rd}.2d, v\{rn}.4s"
+    Smull8H(rd, rn, rm) => "smull v\{rd}.8h, v\{rn}.8b, v\{rm}.8b"
+    Smull4S(rd, rn, rm) => "smull v\{rd}.4s, v\{rn}.4h, v\{rm}.4h"
+    Smull2D(rd, rn, rm) => "smull v\{rd}.2d, v\{rn}.2s, v\{rm}.2s"
+    Umull8H(rd, rn, rm) => "umull v\{rd}.8h, v\{rn}.8b, v\{rm}.8b"
+    Umull4S(rd, rn, rm) => "umull v\{rd}.4s, v\{rn}.4h, v\{rm}.4h"
+    Umull2D(rd, rn, rm) => "umull v\{rd}.2d, v\{rn}.2s, v\{rm}.2s"
+    Smull2_8H(rd, rn, rm) => "smull2 v\{rd}.8h, v\{rn}.16b, v\{rm}.16b"
+    Smull2_4S(rd, rn, rm) => "smull2 v\{rd}.4s, v\{rn}.8h, v\{rm}.8h"
+    Smull2_2D(rd, rn, rm) => "smull2 v\{rd}.2d, v\{rn}.4s, v\{rm}.4s"
+    Umull2_8H(rd, rn, rm) => "umull2 v\{rd}.8h, v\{rn}.16b, v\{rm}.16b"
+    Umull2_4S(rd, rn, rm) => "umull2 v\{rd}.4s, v\{rn}.8h, v\{rm}.8h"
+    Umull2_2D(rd, rn, rm) => "umull2 v\{rd}.2d, v\{rn}.4s, v\{rm}.4s"
+    Saddlp8H(rd, rn) => "saddlp v\{rd}.8h, v\{rn}.16b"
+    Saddlp4S(rd, rn) => "saddlp v\{rd}.4s, v\{rn}.8h"
+    Saddlp2D(rd, rn) => "saddlp v\{rd}.2d, v\{rn}.4s"
+    Uaddlp8H(rd, rn) => "uaddlp v\{rd}.8h, v\{rn}.16b"
+    Uaddlp4S(rd, rn) => "uaddlp v\{rd}.4s, v\{rn}.8h"
+    Uaddlp2D(rd, rn) => "uaddlp v\{rd}.2d, v\{rn}.4s"
+    Addp4S(rd, rn, rm) => "addp v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Sqrdmulh8H(rd, rn, rm) => "sqrdmulh v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
+    Fadd4S(rd, rn, rm) => "fadd v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fadd2D(rd, rn, rm) => "fadd v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fsub4S(rd, rn, rm) => "fsub v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fsub2D(rd, rn, rm) => "fsub v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fmul4S(rd, rn, rm) => "fmul v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fmul2D(rd, rn, rm) => "fmul v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fdiv4S(rd, rn, rm) => "fdiv v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fdiv2D(rd, rn, rm) => "fdiv v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fmin4S(rd, rn, rm) => "fmin v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fmin2D(rd, rn, rm) => "fmin v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fmax4S(rd, rn, rm) => "fmax v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fmax2D(rd, rn, rm) => "fmax v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fminnm4S(rd, rn, rm) => "fminnm v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fminnm2D(rd, rn, rm) => "fminnm v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fmaxnm4S(rd, rn, rm) => "fmaxnm v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fmaxnm2D(rd, rn, rm) => "fmaxnm v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fabs4S(rd, rn) => "fabs v\{rd}.4s, v\{rn}.4s"
+    Fabs2D(rd, rn) => "fabs v\{rd}.2d, v\{rn}.2d"
+    Fneg4S(rd, rn) => "fneg v\{rd}.4s, v\{rn}.4s"
+    Fneg2D(rd, rn) => "fneg v\{rd}.2d, v\{rn}.2d"
+    Fsqrt4S(rd, rn) => "fsqrt v\{rd}.4s, v\{rn}.4s"
+    Fsqrt2D(rd, rn) => "fsqrt v\{rd}.2d, v\{rn}.2d"
+    Frintp4S(rd, rn) => "frintp v\{rd}.4s, v\{rn}.4s"
+    Frintp2D(rd, rn) => "frintp v\{rd}.2d, v\{rn}.2d"
+    Frintm4S(rd, rn) => "frintm v\{rd}.4s, v\{rn}.4s"
+    Frintm2D(rd, rn) => "frintm v\{rd}.2d, v\{rn}.2d"
+    Frintz4S(rd, rn) => "frintz v\{rd}.4s, v\{rn}.4s"
+    Frintz2D(rd, rn) => "frintz v\{rd}.2d, v\{rn}.2d"
+    Frintn4S(rd, rn) => "frintn v\{rd}.4s, v\{rn}.4s"
+    Frintn2D(rd, rn) => "frintn v\{rd}.2d, v\{rn}.2d"
+    Fcmeq4S(rd, rn, rm) => "fcmeq v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fcmeq2D(rd, rn, rm) => "fcmeq v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fcmgt4S(rd, rn, rm) => "fcmgt v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fcmgt2D(rd, rn, rm) => "fcmgt v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fcmge4S(rd, rn, rm) => "fcmge v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
+    Fcmge2D(rd, rn, rm) => "fcmge v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
+    Fcvtzs4S(rd, rn) => "fcvtzs v\{rd}.4s, v\{rn}.4s"
+    Fcvtzs2D(rd, rn) => "fcvtzs v\{rd}.2d, v\{rn}.2d"
+    Fcvtzu4S(rd, rn) => "fcvtzu v\{rd}.4s, v\{rn}.4s"
+    Fcvtzu2D(rd, rn) => "fcvtzu v\{rd}.2d, v\{rn}.2d"
+    Scvtf4S(rd, rn) => "scvtf v\{rd}.4s, v\{rn}.4s"
+    Scvtf2D(rd, rn) => "scvtf v\{rd}.2d, v\{rn}.2d"
+    Ucvtf4S(rd, rn) => "ucvtf v\{rd}.4s, v\{rn}.4s"
+    Ucvtf2D(rd, rn) => "ucvtf v\{rd}.2d, v\{rn}.2d"
+    Fcvtn2S(rd, rn) => "fcvtn v\{rd}.2s, v\{rn}.2d"
+    Fcvtl2D(rd, rn) => "fcvtl v\{rd}.2d, v\{rn}.2s"
+    Ld1rB(rd, rn) => "ld1r {v\{rd}.16b}, [x\{rn}]"
+    Ld1rH(rd, rn) => "ld1r {v\{rd}.8h}, [x\{rn}]"
+    Ld1rS(rd, rn) => "ld1r {v\{rd}.4s}, [x\{rn}]"
+    Ld1rD(rd, rn) => "ld1r {v\{rd}.2d}, [x\{rn}]"
+    Ld1B(rd, rn, lane) => "ld1 {v\{rd}.b}[\{lane}], [x\{rn}]"
+    Ld1H(rd, rn, lane) => "ld1 {v\{rd}.h}[\{lane}], [x\{rn}]"
+    Ld1S(rd, rn, lane) => "ld1 {v\{rd}.s}[\{lane}], [x\{rn}]"
+    Ld1D(rd, rn, lane) => "ld1 {v\{rd}.d}[\{lane}], [x\{rn}]"
+    St1B(rt, rn, lane) => "st1 {v\{rt}.b}[\{lane}], [x\{rn}]"
+    St1H(rt, rn, lane) => "st1 {v\{rt}.h}[\{lane}], [x\{rn}]"
+    St1S(rt, rn, lane) => "st1 {v\{rt}.s}[\{lane}], [x\{rn}]"
+    St1D(rt, rn, lane) => "st1 {v\{rt}.d}[\{lane}], [x\{rn}]"
+    Umaxv16B(rd, rn) => "umaxv b\{rd}, v\{rn}.16b"
+    Uminv16B(rd, rn) => "uminv b\{rd}, v\{rn}.16b"
+    Uminv8H(rd, rn) => "uminv h\{rd}, v\{rn}.8h"
+    Uminv4S(rd, rn) => "uminv s\{rd}, v\{rn}.4s"
+    Addv16B(rd, rn) => "addv b\{rd}, v\{rn}.16b"
+    MoviZero(rd) => "movi v\{rd}.2d, #0"
+    OrrVec(rd, rn) => "orr v\{rd}.16b, v\{rn}.16b, v\{rn}.16b"
+    Ld1_8B(rd, rn) => "ld1 {v\{rd}.8b}, [x\{rn}]"
+    Rev64_4S(rd, rn) => "rev64 v\{rd}.4s, v\{rn}.4s"
+    ShlImm2D(rd, rn, imm) => "shl v\{rd}.2d, v\{rn}.2d, #\{imm}"
   }
 }
 
@@ -1715,6 +2206,1107 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = (enc >> 24) & 0xFF
       (b0, b1, b2, b3)
     }
+    // ============ NEON SIMD Instructions ============
+    LdrQ(rd, rn, imm) => {
+      // LDR Qt, [Xn, #imm] (128-bit): 0x3DC00000 | (imm12/16 << 10) | (Rn << 5) | Rd
+      let scaled = (imm / 16) & 0xFFF
+      let enc = 0x3DC00000 | (scaled << 10) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    StrQ(rt, rn, imm) => {
+      // STR Qt, [Xn, #imm] (128-bit): 0x3D800000 | (imm12/16 << 10) | (Rn << 5) | Rt
+      let scaled = (imm / 16) & 0xFFF
+      let enc = 0x3D800000 | (scaled << 10) | ((rn & 31) << 5) | (rt & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Dup16B(rd, rn) => {
+      // DUP Vd.16B, Wn: 0x4E010C00 | (Rn << 5) | Rd
+      let enc = 0x4E010C00 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Dup8H(rd, rn) => {
+      // DUP Vd.8H, Wn: 0x4E020C00 | (Rn << 5) | Rd
+      let enc = 0x4E020C00 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Dup4S(rd, rn) => {
+      // DUP Vd.4S, Wn: 0x4E040C00 | (Rn << 5) | Rd
+      let enc = 0x4E040C00 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Dup2D(rd, rn) => {
+      // DUP Vd.2D, Xn: 0x4E080C00 | (Rn << 5) | Rd
+      let enc = 0x4E080C00 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    DupElem4S(rd, rn, lane) => {
+      // DUP Vd.4S, Vn.S[lane]: 0x4E040400 | (lane << 19) | (Rn << 5) | Rd
+      let enc = 0x4E040400 | ((lane & 3) << 19) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    DupElem2D(rd, rn, lane) => {
+      // DUP Vd.2D, Vn.D[lane]: 0x4E080400 | (lane << 20) | (Rn << 5) | Rd
+      let enc = 0x4E080400 | ((lane & 1) << 20) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    UmovB(rd, rn, lane) => {
+      // UMOV Wd, Vn.B[lane]: 0x0E013C00 | (lane << 17) | (Rn << 5) | Rd
+      let enc = 0x0E013C00 | ((lane & 15) << 17) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    UmovH(rd, rn, lane) => {
+      // UMOV Wd, Vn.H[lane]: 0x0E023C00 | (lane << 18) | (Rn << 5) | Rd
+      let enc = 0x0E023C00 | ((lane & 7) << 18) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    UmovS(rd, rn, lane) => {
+      // UMOV Wd, Vn.S[lane]: 0x0E043C00 | (lane << 19) | (Rn << 5) | Rd
+      let enc = 0x0E043C00 | ((lane & 3) << 19) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    UmovD(rd, rn, lane) => {
+      // UMOV Xd, Vn.D[lane]: 0x4E083C00 | (lane << 20) | (Rn << 5) | Rd
+      let enc = 0x4E083C00 | ((lane & 1) << 20) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    SmovB(rd, rn, lane) => {
+      // SMOV Wd, Vn.B[lane]: 0x0E012C00 | (lane << 17) | (Rn << 5) | Rd
+      let enc = 0x0E012C00 | ((lane & 15) << 17) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    SmovH(rd, rn, lane) => {
+      // SMOV Wd, Vn.H[lane]: 0x0E022C00 | (lane << 18) | (Rn << 5) | Rd
+      let enc = 0x0E022C00 | ((lane & 7) << 18) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    SmovS(rd, rn, lane) => {
+      // SMOV Xd, Vn.S[lane]: 0x4E042C00 | (lane << 19) | (Rn << 5) | Rd
+      let enc = 0x4E042C00 | ((lane & 3) << 19) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    DupScalarS(rd, rn, lane) => {
+      // DUP Sd, Vn.S[lane]: 0x5E040400 | (lane << 19) | (Rn << 5) | Rd
+      let enc = 0x5E040400 | ((lane & 3) << 19) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    DupScalarD(rd, rn, lane) => {
+      // DUP Dd, Vn.D[lane]: 0x5E080400 | (lane << 20) | (Rn << 5) | Rd
+      let enc = 0x5E080400 | ((lane & 1) << 20) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    InsB(rd, lane, rn) => {
+      // INS Vd.B[lane], Wn: 0x4E001C00 | (imm5 << 16) | (Rn << 5) | Rd
+      // imm5[0] = 1 (B size), imm5[4:1] = lane index (0-15)
+      let imm5 = (lane << 1) | 1
+      let enc = 0x4E001C00 | (imm5 << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    InsH(rd, lane, rn) => {
+      // INS Vd.H[lane], Wn: 0x4E001C00 | (imm5 << 16) | (Rn << 5) | Rd
+      // imm5[1:0] = 10 (H size), imm5[4:2] = lane index (0-7)
+      let imm5 = (lane << 2) | 2
+      let enc = 0x4E001C00 | (imm5 << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    InsS(rd, lane, rn) => {
+      // INS Vd.S[lane], Wn: 0x4E001C00 | (imm5 << 16) | (Rn << 5) | Rd
+      // imm5[2:0] = 100 (S size), imm5[4:3] = lane index (0-3)
+      let imm5 = (lane << 3) | 4
+      let enc = 0x4E001C00 | (imm5 << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    InsD(rd, lane, rn) => {
+      // INS Vd.D[lane], Xn: 0x4E001C00 | (imm5 << 16) | (Rn << 5) | Rd
+      // imm5[3:0] = 1000 (D size), imm5[4] = lane index
+      let imm5 = (lane << 4) | 8
+      let enc = 0x4E001C00 | (imm5 << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    InsElemS(rd, dlane, rn, slane) => {
+      // INS Vd.S[dlane], Vn.S[slane]: 0x6E000400 | (dlane << 19) | (slane << 13) | (Rn << 5) | Rd
+      let imm5 = (dlane << 3) | 4
+      let imm4 = slane << 2
+      let enc = 0x6E000400 |
+        (imm5 << 16) |
+        (imm4 << 11) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    InsElemD(rd, dlane, rn, slane) => {
+      // INS Vd.D[dlane], Vn.D[slane]: 0x6E000400 | (dlane << 20) | (slane << 14) | (Rn << 5) | Rd
+      let imm5 = (dlane << 4) | 8
+      let imm4 = slane << 3
+      let enc = 0x6E000400 |
+        (imm5 << 16) |
+        (imm4 << 11) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Not16B(rd, rn) => {
+      // NOT Vd.16B, Vn.16B: 0x6E205800 | (Rn << 5) | Rd
+      let enc = 0x6E205800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    And16B(rd, rn, rm) => {
+      // AND Vd.16B, Vn.16B, Vm.16B: 0x4E201C00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E201C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Orr16B(rd, rn, rm) => {
+      // ORR Vd.16B, Vn.16B, Vm.16B: 0x4EA01C00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EA01C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Eor16B(rd, rn, rm) => {
+      // EOR Vd.16B, Vn.16B, Vm.16B: 0x6E201C00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E201C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Bic16B(rd, rn, rm) => {
+      // BIC Vd.16B, Vn.16B, Vm.16B: 0x4E601C00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E601C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Bsl16B(rd, rn, rm) => {
+      // BSL Vd.16B, Vn.16B, Vm.16B: 0x6E601C00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E601C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Tbl1(rd, rn, rm) => {
+      // TBL Vd.16B, {Vn.16B}, Vm.16B: 0x4E000000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E000000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Tbl2(rd, rn1, _rn2, rm) => {
+      // TBL Vd.16B, {Vn.16B, Vn+1.16B}, Vm.16B: 0x4E002000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E002000 | ((rm & 31) << 16) | ((rn1 & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Add16B(rd, rn, rm) => {
+      // ADD Vd.16B, Vn.16B, Vm.16B: 0x4E208400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E208400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sub16B(rd, rn, rm) => {
+      // SUB Vd.16B, Vn.16B, Vm.16B: 0x6E208400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E208400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Add8H(rd, rn, rm) => {
+      // ADD Vd.8H, Vn.8H, Vm.8H: 0x4E608400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E608400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sub8H(rd, rn, rm) => {
+      // SUB Vd.8H, Vn.8H, Vm.8H: 0x6E608400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E608400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Mul8H(rd, rn, rm) => {
+      // MUL Vd.8H, Vn.8H, Vm.8H: 0x4E609C00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E609C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Add4S(rd, rn, rm) => {
+      // ADD Vd.4S, Vn.4S, Vm.4S: 0x4EA08400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EA08400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sub4S(rd, rn, rm) => {
+      // SUB Vd.4S, Vn.4S, Vm.4S: 0x6EA08400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6EA08400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Mul4S(rd, rn, rm) => {
+      // MUL Vd.4S, Vn.4S, Vm.4S: 0x4EA09C00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EA09C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Add2D(rd, rn, rm) => {
+      // ADD Vd.2D, Vn.2D, Vm.2D: 0x4EE08400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EE08400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sub2D(rd, rn, rm) => {
+      // SUB Vd.2D, Vn.2D, Vm.2D: 0x6EE08400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6EE08400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqadd16B(rd, rn, rm) => {
+      // SQADD Vd.16B, Vn.16B, Vm.16B: 0x4E200C00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E200C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqadd8H(rd, rn, rm) => {
+      let enc = 0x4E600C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqadd4S(rd, rn, rm) => {
+      let enc = 0x4EA00C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqadd2D(rd, rn, rm) => {
+      let enc = 0x4EE00C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqadd16B(rd, rn, rm) => {
+      // UQADD Vd.16B, Vn.16B, Vm.16B: 0x6E200C00 | ...
+      let enc = 0x6E200C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqadd8H(rd, rn, rm) => {
+      let enc = 0x6E600C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqadd4S(rd, rn, rm) => {
+      let enc = 0x6EA00C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqadd2D(rd, rn, rm) => {
+      let enc = 0x6EE00C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqsub16B(rd, rn, rm) => {
+      let enc = 0x4E202C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqsub8H(rd, rn, rm) => {
+      let enc = 0x4E602C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqsub4S(rd, rn, rm) => {
+      let enc = 0x4EA02C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqsub2D(rd, rn, rm) => {
+      let enc = 0x4EE02C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqsub16B(rd, rn, rm) => {
+      let enc = 0x6E202C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqsub8H(rd, rn, rm) => {
+      let enc = 0x6E602C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqsub4S(rd, rn, rm) => {
+      let enc = 0x6EA02C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqsub2D(rd, rn, rm) => {
+      let enc = 0x6EE02C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smin16B(rd, rn, rm) => {
+      let enc = 0x4E206C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smin8H(rd, rn, rm) => {
+      let enc = 0x4E606C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smin4S(rd, rn, rm) => {
+      let enc = 0x4EA06C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umin16B(rd, rn, rm) => {
+      let enc = 0x6E206C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umin8H(rd, rn, rm) => {
+      let enc = 0x6E606C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umin4S(rd, rn, rm) => {
+      let enc = 0x6EA06C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smax16B(rd, rn, rm) => {
+      let enc = 0x4E206400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smax8H(rd, rn, rm) => {
+      let enc = 0x4E606400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smax4S(rd, rn, rm) => {
+      let enc = 0x4EA06400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umax16B(rd, rn, rm) => {
+      let enc = 0x6E206400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umax8H(rd, rn, rm) => {
+      let enc = 0x6E606400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umax4S(rd, rn, rm) => {
+      let enc = 0x6EA06400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Urhadd16B(rd, rn, rm) => {
+      let enc = 0x6E201400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Urhadd8H(rd, rn, rm) => {
+      let enc = 0x6E601400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Urhadd4S(rd, rn, rm) => {
+      let enc = 0x6EA01400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Abs16B(rd, rn) => {
+      let enc = 0x4E20B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Abs8H(rd, rn) => {
+      let enc = 0x4E60B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Abs4S(rd, rn) => {
+      let enc = 0x4EA0B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Abs2D(rd, rn) => {
+      let enc = 0x4EE0B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Neg16B(rd, rn) => {
+      let enc = 0x6E20B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Neg8H(rd, rn) => {
+      let enc = 0x6E60B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Neg4S(rd, rn) => {
+      let enc = 0x6EA0B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Neg2D(rd, rn) => {
+      let enc = 0x6EE0B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cnt16B(rd, rn) => {
+      let enc = 0x4E205800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sshl16B(rd, rn, rm) => {
+      let enc = 0x4E204400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sshl8H(rd, rn, rm) => {
+      let enc = 0x4E604400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sshl4S(rd, rn, rm) => {
+      let enc = 0x4EA04400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sshl2D(rd, rn, rm) => {
+      let enc = 0x4EE04400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ushl16B(rd, rn, rm) => {
+      let enc = 0x6E204400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ushl8H(rd, rn, rm) => {
+      let enc = 0x6E604400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ushl4S(rd, rn, rm) => {
+      let enc = 0x6EA04400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ushl2D(rd, rn, rm) => {
+      let enc = 0x6EE04400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmeq16B(rd, rn, rm) => {
+      let enc = 0x6E208C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmeq8H(rd, rn, rm) => {
+      let enc = 0x6E608C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmeq4S(rd, rn, rm) => {
+      let enc = 0x6EA08C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmeq2D(rd, rn, rm) => {
+      let enc = 0x6EE08C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmgt16B(rd, rn, rm) => {
+      let enc = 0x4E203400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmgt8H(rd, rn, rm) => {
+      let enc = 0x4E603400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmgt4S(rd, rn, rm) => {
+      let enc = 0x4EA03400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmgt2D(rd, rn, rm) => {
+      let enc = 0x4EE03400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmge16B(rd, rn, rm) => {
+      let enc = 0x4E203C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmge8H(rd, rn, rm) => {
+      let enc = 0x4E603C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmge4S(rd, rn, rm) => {
+      let enc = 0x4EA03C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmge2D(rd, rn, rm) => {
+      let enc = 0x4EE03C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmhi16B(rd, rn, rm) => {
+      let enc = 0x6E203400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmhi8H(rd, rn, rm) => {
+      let enc = 0x6E603400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmhi4S(rd, rn, rm) => {
+      let enc = 0x6EA03400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmhi2D(rd, rn, rm) => {
+      let enc = 0x6EE03400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmhs16B(rd, rn, rm) => {
+      let enc = 0x6E203C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmhs8H(rd, rn, rm) => {
+      let enc = 0x6E603C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmhs4S(rd, rn, rm) => {
+      let enc = 0x6EA03C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Cmhs2D(rd, rn, rm) => {
+      let enc = 0x6EE03C00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    OrrVec(rd, rn) => {
+      // ORR Vd.16B, Vn.16B, Vn.16B (vector move): same as Orr16B with rm=rn
+      let enc = 0x4EA01C00 | ((rn & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    MoviZero(rd) => {
+      // MOVI Vd.2D, #0: 0x6F00E400 | Rd
+      // This zeroes the entire 128-bit vector register
+      let enc = 0x6F00E400 | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umaxv16B(rd, rn) => {
+      // UMAXV Bd, Vn.16B: 0x6E30A800 | (Rn << 5) | Rd
+      let enc = 0x6E30A800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uminv16B(rd, rn) => {
+      // UMINV Bd, Vn.16B: 0x6E31A800 | (Rn << 5) | Rd
+      let enc = 0x6E31A800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uminv8H(rd, rn) => {
+      // UMINV Hd, Vn.8H: 0x6E71A800 | (Rn << 5) | Rd
+      // Note: U bit (bit 29) must be 1 for unsigned; 0x4E would be SMINV
+      let enc = 0x6E71A800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uminv4S(rd, rn) => {
+      // UMINV Sd, Vn.4S: 0x6EB1A800 | (Rn << 5) | Rd
+      let enc = 0x6EB1A800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uaddlp8H(rd, rn) => {
+      // UADDLP Vd.8H, Vn.16B: 0x6E202800 | (Rn << 5) | Rd
+      let enc = 0x6E202800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uaddlp4S(rd, rn) => {
+      // UADDLP Vd.4S, Vn.8H: 0x6E602800 | (Rn << 5) | Rd
+      let enc = 0x6E602800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uaddlp2D(rd, rn) => {
+      // UADDLP Vd.2D, Vn.4S: 0x6EA02800 | (Rn << 5) | Rd
+      let enc = 0x6EA02800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Signed pairwise add long
+    Saddlp8H(rd, rn) => {
+      // SADDLP Vd.8H, Vn.16B: 0x4E202800 | (Rn << 5) | Rd
+      let enc = 0x4E202800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Saddlp4S(rd, rn) => {
+      // SADDLP Vd.4S, Vn.8H: 0x4E602800 | (Rn << 5) | Rd
+      let enc = 0x4E602800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Pairwise add (for dot product)
+    Addp4S(rd, rn, rm) => {
+      // ADDP Vd.4S, Vn.4S, Vm.4S: 0x4EA0BC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EA0BC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Q15 saturating rounding multiply high
+    Sqrdmulh8H(rd, rn, rm) => {
+      // SQRDMULH Vd.8H, Vn.8H, Vm.8H: 0x6E60B400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E60B400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Float SIMD arithmetic
+    Fadd4S(rd, rn, rm) => {
+      // FADD Vd.4S, Vn.4S, Vm.4S: 0x4E20D400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E20D400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fadd2D(rd, rn, rm) => {
+      // FADD Vd.2D, Vn.2D, Vm.2D: 0x4E60D400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E60D400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fsub4S(rd, rn, rm) => {
+      // FSUB Vd.4S, Vn.4S, Vm.4S: 0x4EA0D400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EA0D400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fsub2D(rd, rn, rm) => {
+      // FSUB Vd.2D, Vn.2D, Vm.2D: 0x4EE0D400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EE0D400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmul4S(rd, rn, rm) => {
+      // FMUL Vd.4S, Vn.4S, Vm.4S: 0x6E20DC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E20DC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmul2D(rd, rn, rm) => {
+      // FMUL Vd.2D, Vn.2D, Vm.2D: 0x6E60DC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E60DC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fdiv4S(rd, rn, rm) => {
+      // FDIV Vd.4S, Vn.4S, Vm.4S: 0x6E20FC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E20FC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fdiv2D(rd, rn, rm) => {
+      // FDIV Vd.2D, Vn.2D, Vm.2D: 0x6E60FC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E60FC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmin4S(rd, rn, rm) => {
+      // FMIN Vd.4S, Vn.4S, Vm.4S: 0x4EA0F400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EA0F400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmin2D(rd, rn, rm) => {
+      // FMIN Vd.2D, Vn.2D, Vm.2D: 0x4EE0F400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EE0F400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmax4S(rd, rn, rm) => {
+      // FMAX Vd.4S, Vn.4S, Vm.4S: 0x4E20F400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E20F400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fmax2D(rd, rn, rm) => {
+      // FMAX Vd.2D, Vn.2D, Vm.2D: 0x4E60F400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E60F400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fabs4S(rd, rn) => {
+      // FABS Vd.4S, Vn.4S: 0x4EA0F800 | (Rn << 5) | Rd
+      let enc = 0x4EA0F800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fabs2D(rd, rn) => {
+      // FABS Vd.2D, Vn.2D: 0x4EE0F800 | (Rn << 5) | Rd
+      let enc = 0x4EE0F800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fneg4S(rd, rn) => {
+      // FNEG Vd.4S, Vn.4S: 0x6EA0F800 | (Rn << 5) | Rd
+      let enc = 0x6EA0F800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fneg2D(rd, rn) => {
+      // FNEG Vd.2D, Vn.2D: 0x6EE0F800 | (Rn << 5) | Rd
+      let enc = 0x6EE0F800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fsqrt4S(rd, rn) => {
+      // FSQRT Vd.4S, Vn.4S: 0x6EA1F800 | (Rn << 5) | Rd
+      let enc = 0x6EA1F800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fsqrt2D(rd, rn) => {
+      // FSQRT Vd.2D, Vn.2D: 0x6EE1F800 | (Rn << 5) | Rd
+      let enc = 0x6EE1F800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Float comparisons
+    Fcmeq4S(rd, rn, rm) => {
+      // FCMEQ Vd.4S, Vn.4S, Vm.4S: 0x4E20E400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E20E400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcmeq2D(rd, rn, rm) => {
+      // FCMEQ Vd.2D, Vn.2D, Vm.2D: 0x4E60E400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E60E400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcmgt4S(rd, rn, rm) => {
+      // FCMGT Vd.4S, Vn.4S, Vm.4S: 0x6EA0E400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6EA0E400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcmgt2D(rd, rn, rm) => {
+      // FCMGT Vd.2D, Vn.2D, Vm.2D: 0x6EE0E400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6EE0E400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcmge4S(rd, rn, rm) => {
+      // FCMGE Vd.4S, Vn.4S, Vm.4S: 0x6E20E400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E20E400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcmge2D(rd, rn, rm) => {
+      // FCMGE Vd.2D, Vn.2D, Vm.2D: 0x6E60E400 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E60E400 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Float rounding
+    Frintp4S(rd, rn) => {
+      // FRINTP Vd.4S, Vn.4S (ceil): 0x4EA18800 | (Rn << 5) | Rd
+      let enc = 0x4EA18800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Frintp2D(rd, rn) => {
+      // FRINTP Vd.2D, Vn.2D (ceil): 0x4EE18800 | (Rn << 5) | Rd
+      let enc = 0x4EE18800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Frintm4S(rd, rn) => {
+      // FRINTM Vd.4S, Vn.4S (floor): 0x4E219800 | (Rn << 5) | Rd
+      let enc = 0x4E219800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Frintm2D(rd, rn) => {
+      // FRINTM Vd.2D, Vn.2D (floor): 0x4E619800 | (Rn << 5) | Rd
+      let enc = 0x4E619800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Frintz4S(rd, rn) => {
+      // FRINTZ Vd.4S, Vn.4S (trunc): 0x4EA19800 | (Rn << 5) | Rd
+      let enc = 0x4EA19800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Frintz2D(rd, rn) => {
+      // FRINTZ Vd.2D, Vn.2D (trunc): 0x4EE19800 | (Rn << 5) | Rd
+      let enc = 0x4EE19800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Frintn4S(rd, rn) => {
+      // FRINTN Vd.4S, Vn.4S (nearest): 0x4E218800 | (Rn << 5) | Rd
+      let enc = 0x4E218800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Frintn2D(rd, rn) => {
+      // FRINTN Vd.2D, Vn.2D (nearest): 0x4E618800 | (Rn << 5) | Rd
+      let enc = 0x4E618800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Rev64_4S(rd, rn) => {
+      // REV64 Vd.4S, Vn.4S: 0x4EA00800 | (Rn << 5) | Rd
+      // Swaps 32-bit halves within each 64-bit lane
+      let enc = 0x4EA00800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    ShlImm2D(rd, rn, imm) => {
+      // SHL Vd.2D, Vn.2D, #imm: 0x4F405400 | ((imm+64) << 16) | (Rn << 5) | Rd
+      // For .2D, shift amount encoding is (imm + 64)
+      let shift_enc = (imm + 64) & 127
+      let enc = 0x4F005400 | (shift_enc << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Xtn2S(rd, rn) => {
+      // XTN Vd.2S, Vn.2D: 0x0EA12800 | (Rn << 5) | Rd
+      // Narrows 64-bit elements to 32-bit, extracting lower halves
+      let enc = 0x0EA12800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umull2D(rd, rn, rm) => {
+      // UMULL Vd.2D, Vn.2S, Vm.2S: 0x2EA0C000 | (Rm << 16) | (Rn << 5) | Rd
+      // Multiplies 32-bit elements, producing 64-bit results
+      let enc = 0x2EA0C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Integer to float conversions
+    Scvtf4S(rd, rn) => {
+      // SCVTF Vd.4S, Vn.4S (signed i32 -> f32): 0x4E21D800 | (Rn << 5) | Rd
+      let enc = 0x4E21D800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Scvtf2D(rd, rn) => {
+      // SCVTF Vd.2D, Vn.2D (signed i64 -> f64): 0x4E61D800 | (Rn << 5) | Rd
+      let enc = 0x4E61D800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ucvtf4S(rd, rn) => {
+      // UCVTF Vd.4S, Vn.4S (unsigned i32 -> f32): 0x6E21D800 | (Rn << 5) | Rd
+      let enc = 0x6E21D800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ucvtf2D(rd, rn) => {
+      // UCVTF Vd.2D, Vn.2D (unsigned i64 -> f64): 0x6E61D800 | (Rn << 5) | Rd
+      let enc = 0x6E61D800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Float to integer conversions (truncating toward zero, saturating)
+    Fcvtzs4S(rd, rn) => {
+      // FCVTZS Vd.4S, Vn.4S (f32 -> signed i32): 0x4EA1B800 | (Rn << 5) | Rd
+      let enc = 0x4EA1B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcvtzs2D(rd, rn) => {
+      // FCVTZS Vd.2D, Vn.2D (f64 -> signed i64): 0x4EE1B800 | (Rn << 5) | Rd
+      let enc = 0x4EE1B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcvtzu4S(rd, rn) => {
+      // FCVTZU Vd.4S, Vn.4S (f32 -> unsigned i32): 0x6EA1B800 | (Rn << 5) | Rd
+      let enc = 0x6EA1B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcvtzu2D(rd, rn) => {
+      // FCVTZU Vd.2D, Vn.2D (f64 -> unsigned i64): 0x6EE1B800 | (Rn << 5) | Rd
+      let enc = 0x6EE1B800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Sign/zero extend i32x2 to i64x2 (for low lane conversions)
+    Sxtl2D(rd, rn) => {
+      // SXTL Vd.2D, Vn.2S (aka SSHLL #0): 0x0F20A400 | (Rn << 5) | Rd
+      let enc = 0x0F20A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uxtl2D(rd, rn) => {
+      // UXTL Vd.2D, Vn.2S (aka USHLL #0): 0x2F20A400 | (Rn << 5) | Rd
+      let enc = 0x2F20A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Additional extend operations (for all sizes)
+    Sxtl8H(rd, rn) => {
+      // SXTL Vd.8H, Vn.8B (aka SSHLL #0): 0x0F08A400 | (Rn << 5) | Rd
+      let enc = 0x0F08A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sxtl4S(rd, rn) => {
+      // SXTL Vd.4S, Vn.4H (aka SSHLL #0): 0x0F10A400 | (Rn << 5) | Rd
+      let enc = 0x0F10A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uxtl8H(rd, rn) => {
+      // UXTL Vd.8H, Vn.8B (aka USHLL #0): 0x2F08A400 | (Rn << 5) | Rd
+      let enc = 0x2F08A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uxtl4S(rd, rn) => {
+      // UXTL Vd.4S, Vn.4H (aka USHLL #0): 0x2F10A400 | (Rn << 5) | Rd
+      let enc = 0x2F10A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Extend high (SXTL2/UXTL2 - takes upper half of input)
+    Sxtl2_8H(rd, rn) => {
+      // SXTL2 Vd.8H, Vn.16B (aka SSHLL2 #0): 0x4F08A400 | (Rn << 5) | Rd
+      let enc = 0x4F08A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sxtl2_4S(rd, rn) => {
+      // SXTL2 Vd.4S, Vn.8H (aka SSHLL2 #0): 0x4F10A400 | (Rn << 5) | Rd
+      let enc = 0x4F10A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sxtl2_2D(rd, rn) => {
+      // SXTL2 Vd.2D, Vn.4S (aka SSHLL2 #0): 0x4F20A400 | (Rn << 5) | Rd
+      let enc = 0x4F20A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uxtl2_8H(rd, rn) => {
+      // UXTL2 Vd.8H, Vn.16B (aka USHLL2 #0): 0x6F08A400 | (Rn << 5) | Rd
+      let enc = 0x6F08A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uxtl2_4S(rd, rn) => {
+      // UXTL2 Vd.4S, Vn.8H (aka USHLL2 #0): 0x6F10A400 | (Rn << 5) | Rd
+      let enc = 0x6F10A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uxtl2_2D(rd, rn) => {
+      // UXTL2 Vd.2D, Vn.4S (aka USHLL2 #0): 0x6F20A400 | (Rn << 5) | Rd
+      let enc = 0x6F20A400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Float precision conversions
+    Fcvtn2S(rd, rn) => {
+      // FCVTN Vd.2S, Vn.2D (demote f64x2 to f32x2): 0x0E616800 | (Rn << 5) | Rd
+      let enc = 0x0E616800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Fcvtl2D(rd, rn) => {
+      // FCVTL Vd.2D, Vn.2S (promote f32x2 to f64x2): 0x0E617800 | (Rn << 5) | Rd
+      let enc = 0x0E617800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Saturating narrow (lower half)
+    // Note: 0x2800 is XTN (non-saturating), 0x4800 is SQXTN (saturating)
+    Sqxtn8B(rd, rn) => {
+      // SQXTN Vd.8B, Vn.8H: 0x0E214800 | (Rn << 5) | Rd
+      let enc = 0x0E214800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqxtn4H(rd, rn) => {
+      // SQXTN Vd.4H, Vn.4S: 0x0E614800 | (Rn << 5) | Rd
+      let enc = 0x0E614800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqxtn2S(rd, rn) => {
+      // SQXTN Vd.2S, Vn.2D: 0x0EA14800 | (Rn << 5) | Rd
+      // Note: 0x2800 is XTN (non-saturating), 0x4800 is SQXTN (saturating)
+      let enc = 0x0EA14800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqxtun8B(rd, rn) => {
+      // SQXTUN Vd.8B, Vn.8H: 0x2E212800 | (Rn << 5) | Rd
+      let enc = 0x2E212800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqxtun4H(rd, rn) => {
+      // SQXTUN Vd.4H, Vn.4S: 0x2E612800 | (Rn << 5) | Rd
+      let enc = 0x2E612800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Uqxtn2S(rd, rn) => {
+      // UQXTN Vd.2S, Vn.2D: 0x2EA14800 | (Rn << 5) | Rd
+      let enc = 0x2EA14800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Saturating narrow (upper half - writes to upper portion)
+    // Note: 0x2800 is XTN2 (non-saturating), 0x4800 is SQXTN2 (saturating)
+    Sqxtn2_16B(rd, rn) => {
+      // SQXTN2 Vd.16B, Vn.8H: 0x4E214800 | (Rn << 5) | Rd
+      let enc = 0x4E214800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqxtn2_8H(rd, rn) => {
+      // SQXTN2 Vd.8H, Vn.4S: 0x4E614800 | (Rn << 5) | Rd
+      let enc = 0x4E614800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqxtun2_16B(rd, rn) => {
+      // SQXTUN2 Vd.16B, Vn.8H: 0x6E212800 | (Rn << 5) | Rd
+      let enc = 0x6E212800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Sqxtun2_8H(rd, rn) => {
+      // SQXTUN2 Vd.8H, Vn.4S: 0x6E612800 | (Rn << 5) | Rd
+      let enc = 0x6E612800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Extended multiply (SMULL/UMULL - low half, SMULL2/UMULL2 - high half)
+    Smull8H(rd, rn, rm) => {
+      // SMULL Vd.8H, Vn.8B, Vm.8B: 0x0E20C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x0E20C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smull4S(rd, rn, rm) => {
+      // SMULL Vd.4S, Vn.4H, Vm.4H: 0x0E60C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x0E60C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smull2D(rd, rn, rm) => {
+      // SMULL Vd.2D, Vn.2S, Vm.2S: 0x0EA0C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x0EA0C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umull8H(rd, rn, rm) => {
+      // UMULL Vd.8H, Vn.8B, Vm.8B: 0x2E20C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x2E20C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umull4S(rd, rn, rm) => {
+      // UMULL Vd.4S, Vn.4H, Vm.4H: 0x2E60C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x2E60C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Note: Umull2D already defined above for i64x2.mul emulation
+    Smull2_8H(rd, rn, rm) => {
+      // SMULL2 Vd.8H, Vn.16B, Vm.16B: 0x4E20C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E20C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smull2_4S(rd, rn, rm) => {
+      // SMULL2 Vd.4S, Vn.8H, Vm.8H: 0x4E60C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E60C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Smull2_2D(rd, rn, rm) => {
+      // SMULL2 Vd.2D, Vn.4S, Vm.4S: 0x4EA0C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4EA0C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umull2_8H(rd, rn, rm) => {
+      // UMULL2 Vd.8H, Vn.16B, Vm.16B: 0x6E20C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E20C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umull2_4S(rd, rn, rm) => {
+      // UMULL2 Vd.4S, Vn.8H, Vm.8H: 0x6E60C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6E60C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Umull2_2D(rd, rn, rm) => {
+      // UMULL2 Vd.2D, Vn.4S, Vm.4S: 0x6EA0C000 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x6EA0C000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Load and replicate (LD1R)
+    Ld1rB(rd, rn) => {
+      // LD1R {Vd.16B}, [Xn]: 0x4D40C000 | (Rn << 5) | Rd
+      let enc = 0x4D40C000 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ld1rH(rd, rn) => {
+      // LD1R {Vd.8H}, [Xn]: 0x4D40C400 | (Rn << 5) | Rd
+      let enc = 0x4D40C400 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ld1rS(rd, rn) => {
+      // LD1R {Vd.4S}, [Xn]: 0x4D40C800 | (Rn << 5) | Rd
+      let enc = 0x4D40C800 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ld1rD(rd, rn) => {
+      // LD1R {Vd.2D}, [Xn]: 0x4D40CC00 | (Rn << 5) | Rd
+      let enc = 0x4D40CC00 | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Load single element to lane (LD1)
+    Ld1B(rd, rn, lane) => {
+      // LD1 {Vd.B}[lane], [Xn]: 0x0D400000 | (Q << 30) | (lane_hi << 11) | (lane_lo << 10) | (Rn << 5) | Rd
+      // For .B lanes 0-15: Q=lane[3], lane encoding in bits [12:10, 30]
+      let q = (lane >> 3) & 1
+      let s = (lane >> 2) & 1
+      let size = lane & 3
+      let enc = 0x0D400000 |
+        (q << 30) |
+        (s << 12) |
+        (size << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ld1H(rd, rn, lane) => {
+      // LD1 {Vd.H}[lane], [Xn]: lanes 0-7
+      let q = (lane >> 2) & 1
+      let s = (lane >> 1) & 1
+      let size = (lane & 1) << 1
+      let enc = 0x0D404000 |
+        (q << 30) |
+        (s << 12) |
+        (size << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ld1S(rd, rn, lane) => {
+      // LD1 {Vd.S}[lane], [Xn]: lanes 0-3
+      let q = (lane >> 1) & 1
+      let s = lane & 1
+      let enc = 0x0D408000 |
+        (q << 30) |
+        (s << 12) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Ld1D(rd, rn, lane) => {
+      // LD1 {Vd.D}[lane], [Xn]: lanes 0-1
+      let q = lane & 1
+      let enc = 0x0D408400 | (q << 30) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Store single element from lane (ST1)
+    St1B(rn, rd, lane) => {
+      // ST1 {Vn.B}[lane], [Xd]: Same encoding as LD1 but with L=0 instead of L=1
+      let q = (lane >> 3) & 1
+      let s = (lane >> 2) & 1
+      let size = lane & 3
+      let enc = 0x0D000000 |
+        (q << 30) |
+        (s << 12) |
+        (size << 10) |
+        ((rd & 31) << 5) |
+        (rn & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    St1H(rn, rd, lane) => {
+      // ST1 {Vn.H}[lane], [Xd]: lanes 0-7
+      let q = (lane >> 2) & 1
+      let s = (lane >> 1) & 1
+      let size = (lane & 1) << 1
+      let enc = 0x0D004000 |
+        (q << 30) |
+        (s << 12) |
+        (size << 10) |
+        ((rd & 31) << 5) |
+        (rn & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    St1S(rn, rd, lane) => {
+      // ST1 {Vn.S}[lane], [Xd]: lanes 0-3
+      let q = (lane >> 1) & 1
+      let s = lane & 1
+      let enc = 0x0D008000 |
+        (q << 30) |
+        (s << 12) |
+        ((rd & 31) << 5) |
+        (rn & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    St1D(rn, rd, lane) => {
+      // ST1 {Vn.D}[lane], [Xd]: lanes 0-1
+      let q = lane & 1
+      let enc = 0x0D008400 | (q << 30) | ((rd & 31) << 5) | (rn & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    // Narrowing/extending and remaining instructions use abort for now
+    // They require more complex encoding
+    _ => abort("NEON instruction encoding not yet implemented")
   }
 }
 
@@ -2981,6 +4573,30 @@ pub fn MachineCode::emit_fmov_w_to_s(
 }
 
 ///|
+/// EXT Vd.16B, Vn.16B, Vm.16B, #imm
+/// Extract and concatenate bytes from two vectors
+/// imm is the byte offset (0-15)
+pub fn MachineCode::emit_ext_16b(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  imm : Int,
+) -> Unit {
+  // EXT Vd.16B, Vn.16B, Vm.16B, #imm: 0x6E000000 | (Rm << 16) | (imm4 << 11) | (Rn << 5) | Rd
+  let enc = 0x6E000000 |
+    ((rm & 31) << 16) |
+    ((imm & 15) << 11) |
+    ((rn & 31) << 5) |
+    (rd & 31)
+  let b0 = enc & 0xFF
+  let b1 = (enc >> 8) & 0xFF
+  let b2 = (enc >> 16) & 0xFF
+  let b3 = (enc >> 24) & 0xFF
+  self.emit_inst(b0, b1, b2, b3)
+}
+
+///|
 pub fn MachineCode::emit_fcvt_d_s(
   self : MachineCode,
   rd : Int,
@@ -3036,6 +4652,28 @@ pub fn MachineCode::emit_str_d_imm(
   imm12 : Int,
 ) -> Unit {
   StrDImm(rt, rn, imm12).emit(self)
+}
+
+///|
+/// LDR Qt, [Xn, #imm] (128-bit Q-register load)
+pub fn MachineCode::emit_ldr_q_imm(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm : Int,
+) -> Unit {
+  LdrQ(rt, rn, imm).emit(self)
+}
+
+///|
+/// STR Qt, [Xn, #imm] (128-bit Q-register store)
+pub fn MachineCode::emit_str_q_imm(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  imm : Int,
+) -> Unit {
+  StrQ(rt, rn, imm).emit(self)
 }
 
 ///|

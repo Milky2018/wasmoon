@@ -478,28 +478,36 @@ fn JITContext::call_multi_return(
   results : Array[Int64],
   result_types : Array[@types.ValueType],
 ) -> Unit raise JITTrap {
-  let num_args = args.length()
-  let num_results = result_types.length()
+  let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
+  let num_params = param_types.length() // Number of actual WASM parameters
 
-  // Convert param_types to int codes for trampoline generation
-  let param_type_codes = FixedArray::make(num_args.max(1), 0)
-  for i in 0..<num_args {
-    param_type_codes[i] = if i < param_types.length() {
-      value_type_to_code(param_types[i])
+  // For results, V128 needs 2 slots
+  let mut num_result_slots = 0
+  for result_type in result_types {
+    if result_type is @types.ValueType::V128 {
+      num_result_slots = num_result_slots + 2
     } else {
-      0
+      num_result_slots = num_result_slots + 1
     }
   }
 
+  // Convert param_types to int codes for trampoline generation
+  // Note: param_type_codes uses the original parameter count, not expanded slot count
+  let param_type_codes = FixedArray::make(num_params.max(1), 0)
+  for i in 0..<num_params {
+    param_type_codes[i] = value_type_to_code(param_types[i])
+  }
+
   // Convert result_types to int codes for trampoline generation
-  let result_type_codes = FixedArray::make(num_results.max(1), 0)
-  for i in 0..<num_results {
+  let result_type_codes = FixedArray::make(result_types.length().max(1), 0)
+  for i in 0..<result_types.length() {
     result_type_codes[i] = value_type_to_code(result_types[i])
   }
 
   // Compute signature hash for trampoline cache lookup
+  let num_results = result_types.length()
   let sig_hash = compute_signature_hash(
-    param_type_codes, num_args, result_type_codes, num_results,
+    param_type_codes, num_params, result_type_codes, num_results,
   )
 
   // Get or generate trampoline
@@ -508,7 +516,7 @@ fn JITContext::call_multi_return(
     None => {
       // Generate trampoline using emit_entry_trampoline
       let param_codes_arr : Array[Int] = []
-      for i in 0..<num_args {
+      for i in 0..<num_params {
         param_codes_arr.push(param_type_codes[i])
       }
       let result_codes_arr : Array[Int] = []
@@ -530,12 +538,12 @@ fn JITContext::call_multi_return(
   }
 
   // Prepare values_vec: [args..., results...]
-  // Each slot is 8 bytes (Int64)
-  let values_len = num_args + num_results
+  // Each slot is 8 bytes (Int64), V128 uses 2 slots
+  let values_len = num_arg_slots + num_result_slots
   let values_vec = FixedArray::make(values_len.max(1), 0L)
 
   // Copy args to values_vec
-  for i in 0..<num_args {
+  for i in 0..<num_arg_slots {
     values_vec[i] = args[i]
   }
 
@@ -573,20 +581,22 @@ fn JITContext::call_multi_return(
   }
 
   // Copy results back from values_vec (results start after args)
-  for i in 0..<num_results {
-    results[i] = values_vec[num_args + i]
+  // V128 results take 2 slots
+  for i in 0..<num_result_slots {
+    results[i] = values_vec[num_arg_slots + i]
   }
 }
 
 ///|
 /// Convert ValueType to type code for trampoline generation
-/// 0=I32, 1=I64, 2=F32, 3=F64
+/// 0=I32, 1=I64, 2=F32, 3=F64, 4=V128
 fn value_type_to_code(ty : @types.ValueType) -> Int {
   match ty {
     I32 => 0
     I64 => 1
     F32 => 2
     F64 => 3
+    V128 => 4
     // Reference types are 64-bit integer values (indices/pointers)
     FuncRef
     | ExternRef
@@ -611,7 +621,6 @@ fn value_type_to_code(ty : @types.ValueType) -> Int {
     | RefI31
     | RefNullI31
     | RefNone => 1
-    V128 => abort("V128 not supported in JIT")
   }
 }
 

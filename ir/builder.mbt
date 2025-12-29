@@ -1326,3 +1326,306 @@ pub fn IRBuilder::spill_locals_for_throw(
 pub fn IRBuilder::get_spilled_local(self : IRBuilder, idx : Int) -> Value {
   self.emit_inst(Type::I64, Opcode::GetSpilledLocal(idx), [])
 }
+
+// ============ SIMD Operations ============
+
+///|
+/// v128_const - emit a V128 constant
+pub fn IRBuilder::v128_const(self : IRBuilder, bytes : Bytes) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Const(bytes), [])
+}
+
+///|
+/// v128_splat - broadcast a scalar to all lanes
+pub fn IRBuilder::v128_splat8(self : IRBuilder, val : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Splat8, [val])
+}
+
+///|
+pub fn IRBuilder::v128_splat16(self : IRBuilder, val : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Splat16, [val])
+}
+
+///|
+pub fn IRBuilder::v128_splat32(self : IRBuilder, val : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Splat32, [val])
+}
+
+///|
+pub fn IRBuilder::v128_splat64(self : IRBuilder, val : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Splat64, [val])
+}
+
+///|
+pub fn IRBuilder::v128_splat_f32(self : IRBuilder, val : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128SplatF32, [val])
+}
+
+///|
+pub fn IRBuilder::v128_splat_f64(self : IRBuilder, val : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128SplatF64, [val])
+}
+
+///|
+/// Extract a lane from a v128 value
+pub fn IRBuilder::v128_extract8s(
+  self : IRBuilder,
+  vec : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::I32, Opcode::V128ExtractLane8S(lane), [vec])
+}
+
+///|
+pub fn IRBuilder::v128_extract8u(
+  self : IRBuilder,
+  vec : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::I32, Opcode::V128ExtractLane8U(lane), [vec])
+}
+
+///|
+pub fn IRBuilder::v128_extract16s(
+  self : IRBuilder,
+  vec : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::I32, Opcode::V128ExtractLane16S(lane), [vec])
+}
+
+///|
+pub fn IRBuilder::v128_extract16u(
+  self : IRBuilder,
+  vec : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::I32, Opcode::V128ExtractLane16U(lane), [vec])
+}
+
+///|
+pub fn IRBuilder::v128_extract32(
+  self : IRBuilder,
+  vec : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::I32, Opcode::V128ExtractLane32(lane), [vec])
+}
+
+///|
+pub fn IRBuilder::v128_extract64(
+  self : IRBuilder,
+  vec : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::V128ExtractLane64(lane), [vec])
+}
+
+///|
+pub fn IRBuilder::v128_extract_f32(
+  self : IRBuilder,
+  vec : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::F32, Opcode::V128ExtractLaneF32(lane), [vec])
+}
+
+///|
+pub fn IRBuilder::v128_extract_f64(
+  self : IRBuilder,
+  vec : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::F64, Opcode::V128ExtractLaneF64(lane), [vec])
+}
+
+///|
+/// Replace a lane in a v128 value
+pub fn IRBuilder::v128_replace8(
+  self : IRBuilder,
+  vec : Value,
+  val : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128ReplaceLane8(lane), [vec, val])
+}
+
+///|
+pub fn IRBuilder::v128_replace16(
+  self : IRBuilder,
+  vec : Value,
+  val : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128ReplaceLane16(lane), [vec, val])
+}
+
+///|
+pub fn IRBuilder::v128_replace32(
+  self : IRBuilder,
+  vec : Value,
+  val : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128ReplaceLane32(lane), [vec, val])
+}
+
+///|
+pub fn IRBuilder::v128_replace64(
+  self : IRBuilder,
+  vec : Value,
+  val : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128ReplaceLane64(lane), [vec, val])
+}
+
+///|
+pub fn IRBuilder::v128_replace_f32(
+  self : IRBuilder,
+  vec : Value,
+  val : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128ReplaceLaneF32(lane), [vec, val])
+}
+
+///|
+pub fn IRBuilder::v128_replace_f64(
+  self : IRBuilder,
+  vec : Value,
+  val : Value,
+  lane : Int,
+) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128ReplaceLaneF64(lane), [vec, val])
+}
+
+///|
+/// Shuffle lanes from two v128 values
+pub fn IRBuilder::v128_shuffle(
+  self : IRBuilder,
+  a : Value,
+  b : Value,
+  lanes : FixedArray[Int],
+) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Shuffle(lanes), [a, b])
+}
+
+///|
+/// Swizzle lanes using indices from another v128
+pub fn IRBuilder::v128_swizzle(self : IRBuilder, a : Value, b : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Swizzle, [a, b])
+}
+
+///|
+/// Bitwise operations on v128
+pub fn IRBuilder::v128_not(self : IRBuilder, a : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Not, [a])
+}
+
+///|
+pub fn IRBuilder::v128_and(self : IRBuilder, a : Value, b : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128And, [a, b])
+}
+
+///|
+pub fn IRBuilder::v128_andnot(self : IRBuilder, a : Value, b : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128AndNot, [a, b])
+}
+
+///|
+pub fn IRBuilder::v128_or(self : IRBuilder, a : Value, b : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Or, [a, b])
+}
+
+///|
+pub fn IRBuilder::v128_xor(self : IRBuilder, a : Value, b : Value) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Xor, [a, b])
+}
+
+///|
+pub fn IRBuilder::v128_bitselect(
+  self : IRBuilder,
+  a : Value,
+  b : Value,
+  c : Value,
+) -> Value {
+  self.emit_inst(Type::V128, Opcode::V128Bitselect, [a, b, c])
+}
+
+///|
+pub fn IRBuilder::v128_anytrue(self : IRBuilder, a : Value) -> Value {
+  self.emit_inst(Type::I32, Opcode::V128AnyTrue, [a])
+}
+
+///|
+/// Generic SIMD instruction emitter
+/// Use this for operations that follow the pattern: opcode, operands -> V128/I32
+pub fn IRBuilder::v128_unary(
+  self : IRBuilder,
+  opcode : Opcode,
+  a : Value,
+) -> Value {
+  self.emit_inst(Type::V128, opcode, [a])
+}
+
+///|
+pub fn IRBuilder::v128_binary(
+  self : IRBuilder,
+  opcode : Opcode,
+  a : Value,
+  b : Value,
+) -> Value {
+  self.emit_inst(Type::V128, opcode, [a, b])
+}
+
+///|
+pub fn IRBuilder::v128_to_i32(
+  self : IRBuilder,
+  opcode : Opcode,
+  a : Value,
+) -> Value {
+  self.emit_inst(Type::I32, opcode, [a])
+}
+
+///|
+pub fn IRBuilder::v128_shift(
+  self : IRBuilder,
+  opcode : Opcode,
+  vec : Value,
+  shift : Value,
+) -> Value {
+  self.emit_inst(Type::V128, opcode, [vec, shift])
+}
+
+///|
+/// SIMD load with effective address (for complex SIMD loads)
+pub fn IRBuilder::v128_load_with_addr(
+  self : IRBuilder,
+  opcode : Opcode,
+  effective_addr : Value,
+) -> Value {
+  self.emit_inst(Type::V128, opcode, [effective_addr])
+}
+
+///|
+/// SIMD load lane with effective address and existing vector
+pub fn IRBuilder::v128_load_lane_with_addr(
+  self : IRBuilder,
+  opcode : Opcode,
+  effective_addr : Value,
+  vec : Value,
+) -> Value {
+  self.emit_inst(Type::V128, opcode, [effective_addr, vec])
+}
+
+///|
+/// SIMD store lane with effective address and vector (void)
+pub fn IRBuilder::v128_store_lane_with_addr(
+  self : IRBuilder,
+  opcode : Opcode,
+  effective_addr : Value,
+  vec : Value,
+) -> Unit {
+  self.emit_void_inst(opcode, [effective_addr, vec])
+}

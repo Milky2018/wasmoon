@@ -1058,6 +1058,336 @@ fn write_instruction_simple(
     // GC instructions - type conversion
     AnyConvertExtern => buf.write_string("any.convert_extern")
     ExternConvertAny => buf.write_string("extern.convert_any")
+
+    // SIMD instructions
+    V128Const(_) => buf.write_string("v128.const ...")
+    V128Load(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load", memidx, align, offset)
+    V128Load8x8S(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load8x8_s", memidx, align, offset)
+    V128Load8x8U(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load8x8_u", memidx, align, offset)
+    V128Load16x4S(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load16x4_s", memidx, align, offset)
+    V128Load16x4U(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load16x4_u", memidx, align, offset)
+    V128Load32x2S(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load32x2_s", memidx, align, offset)
+    V128Load32x2U(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load32x2_u", memidx, align, offset)
+    V128Load8Splat(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load8_splat", memidx, align, offset)
+    V128Load16Splat(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load16_splat", memidx, align, offset)
+    V128Load32Splat(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load32_splat", memidx, align, offset)
+    V128Load64Splat(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load64_splat", memidx, align, offset)
+    V128Load32Zero(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load32_zero", memidx, align, offset)
+    V128Load64Zero(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.load64_zero", memidx, align, offset)
+    V128Store(memidx, align, offset) =>
+      write_mem_instr(buf, "v128.store", memidx, align, offset)
+    V128Load8Lane(memidx, align, offset, lane) => {
+      write_mem_instr(buf, "v128.load8_lane", memidx, align, offset)
+      buf.write_string(" ")
+      buf.write_string(lane.to_string())
+    }
+    V128Load16Lane(memidx, align, offset, lane) => {
+      write_mem_instr(buf, "v128.load16_lane", memidx, align, offset)
+      buf.write_string(" ")
+      buf.write_string(lane.to_string())
+    }
+    V128Load32Lane(memidx, align, offset, lane) => {
+      write_mem_instr(buf, "v128.load32_lane", memidx, align, offset)
+      buf.write_string(" ")
+      buf.write_string(lane.to_string())
+    }
+    V128Load64Lane(memidx, align, offset, lane) => {
+      write_mem_instr(buf, "v128.load64_lane", memidx, align, offset)
+      buf.write_string(" ")
+      buf.write_string(lane.to_string())
+    }
+    V128Store8Lane(memidx, align, offset, lane) => {
+      write_mem_instr(buf, "v128.store8_lane", memidx, align, offset)
+      buf.write_string(" ")
+      buf.write_string(lane.to_string())
+    }
+    V128Store16Lane(memidx, align, offset, lane) => {
+      write_mem_instr(buf, "v128.store16_lane", memidx, align, offset)
+      buf.write_string(" ")
+      buf.write_string(lane.to_string())
+    }
+    V128Store32Lane(memidx, align, offset, lane) => {
+      write_mem_instr(buf, "v128.store32_lane", memidx, align, offset)
+      buf.write_string(" ")
+      buf.write_string(lane.to_string())
+    }
+    V128Store64Lane(memidx, align, offset, lane) => {
+      write_mem_instr(buf, "v128.store64_lane", memidx, align, offset)
+      buf.write_string(" ")
+      buf.write_string(lane.to_string())
+    }
+    I8x16Shuffle(_) => buf.write_string("i8x16.shuffle ...")
+    I8x16Swizzle => buf.write_string("i8x16.swizzle")
+    I8x16Splat => buf.write_string("i8x16.splat")
+    I16x8Splat => buf.write_string("i16x8.splat")
+    I32x4Splat => buf.write_string("i32x4.splat")
+    I64x2Splat => buf.write_string("i64x2.splat")
+    F32x4Splat => buf.write_string("f32x4.splat")
+    F64x2Splat => buf.write_string("f64x2.splat")
+    I8x16ExtractLaneS(lane) => {
+      buf.write_string("i8x16.extract_lane_s ")
+      buf.write_string(lane.to_string())
+    }
+    I8x16ExtractLaneU(lane) => {
+      buf.write_string("i8x16.extract_lane_u ")
+      buf.write_string(lane.to_string())
+    }
+    I16x8ExtractLaneS(lane) => {
+      buf.write_string("i16x8.extract_lane_s ")
+      buf.write_string(lane.to_string())
+    }
+    I16x8ExtractLaneU(lane) => {
+      buf.write_string("i16x8.extract_lane_u ")
+      buf.write_string(lane.to_string())
+    }
+    I32x4ExtractLane(lane) => {
+      buf.write_string("i32x4.extract_lane ")
+      buf.write_string(lane.to_string())
+    }
+    I64x2ExtractLane(lane) => {
+      buf.write_string("i64x2.extract_lane ")
+      buf.write_string(lane.to_string())
+    }
+    F32x4ExtractLane(lane) => {
+      buf.write_string("f32x4.extract_lane ")
+      buf.write_string(lane.to_string())
+    }
+    F64x2ExtractLane(lane) => {
+      buf.write_string("f64x2.extract_lane ")
+      buf.write_string(lane.to_string())
+    }
+    I8x16ReplaceLane(lane) => {
+      buf.write_string("i8x16.replace_lane ")
+      buf.write_string(lane.to_string())
+    }
+    I16x8ReplaceLane(lane) => {
+      buf.write_string("i16x8.replace_lane ")
+      buf.write_string(lane.to_string())
+    }
+    I32x4ReplaceLane(lane) => {
+      buf.write_string("i32x4.replace_lane ")
+      buf.write_string(lane.to_string())
+    }
+    I64x2ReplaceLane(lane) => {
+      buf.write_string("i64x2.replace_lane ")
+      buf.write_string(lane.to_string())
+    }
+    F32x4ReplaceLane(lane) => {
+      buf.write_string("f32x4.replace_lane ")
+      buf.write_string(lane.to_string())
+    }
+    F64x2ReplaceLane(lane) => {
+      buf.write_string("f64x2.replace_lane ")
+      buf.write_string(lane.to_string())
+    }
+    I8x16Eq => buf.write_string("i8x16.eq")
+    I8x16Ne => buf.write_string("i8x16.ne")
+    I8x16LtS => buf.write_string("i8x16.lt_s")
+    I8x16LtU => buf.write_string("i8x16.lt_u")
+    I8x16GtS => buf.write_string("i8x16.gt_s")
+    I8x16GtU => buf.write_string("i8x16.gt_u")
+    I8x16LeS => buf.write_string("i8x16.le_s")
+    I8x16LeU => buf.write_string("i8x16.le_u")
+    I8x16GeS => buf.write_string("i8x16.ge_s")
+    I8x16GeU => buf.write_string("i8x16.ge_u")
+    I16x8Eq => buf.write_string("i16x8.eq")
+    I16x8Ne => buf.write_string("i16x8.ne")
+    I16x8LtS => buf.write_string("i16x8.lt_s")
+    I16x8LtU => buf.write_string("i16x8.lt_u")
+    I16x8GtS => buf.write_string("i16x8.gt_s")
+    I16x8GtU => buf.write_string("i16x8.gt_u")
+    I16x8LeS => buf.write_string("i16x8.le_s")
+    I16x8LeU => buf.write_string("i16x8.le_u")
+    I16x8GeS => buf.write_string("i16x8.ge_s")
+    I16x8GeU => buf.write_string("i16x8.ge_u")
+    I32x4Eq => buf.write_string("i32x4.eq")
+    I32x4Ne => buf.write_string("i32x4.ne")
+    I32x4LtS => buf.write_string("i32x4.lt_s")
+    I32x4LtU => buf.write_string("i32x4.lt_u")
+    I32x4GtS => buf.write_string("i32x4.gt_s")
+    I32x4GtU => buf.write_string("i32x4.gt_u")
+    I32x4LeS => buf.write_string("i32x4.le_s")
+    I32x4LeU => buf.write_string("i32x4.le_u")
+    I32x4GeS => buf.write_string("i32x4.ge_s")
+    I32x4GeU => buf.write_string("i32x4.ge_u")
+    I64x2Eq => buf.write_string("i64x2.eq")
+    I64x2Ne => buf.write_string("i64x2.ne")
+    I64x2LtS => buf.write_string("i64x2.lt_s")
+    I64x2GtS => buf.write_string("i64x2.gt_s")
+    I64x2LeS => buf.write_string("i64x2.le_s")
+    I64x2GeS => buf.write_string("i64x2.ge_s")
+    F32x4Eq => buf.write_string("f32x4.eq")
+    F32x4Ne => buf.write_string("f32x4.ne")
+    F32x4Lt => buf.write_string("f32x4.lt")
+    F32x4Gt => buf.write_string("f32x4.gt")
+    F32x4Le => buf.write_string("f32x4.le")
+    F32x4Ge => buf.write_string("f32x4.ge")
+    F64x2Eq => buf.write_string("f64x2.eq")
+    F64x2Ne => buf.write_string("f64x2.ne")
+    F64x2Lt => buf.write_string("f64x2.lt")
+    F64x2Gt => buf.write_string("f64x2.gt")
+    F64x2Le => buf.write_string("f64x2.le")
+    F64x2Ge => buf.write_string("f64x2.ge")
+    V128Not => buf.write_string("v128.not")
+    V128And => buf.write_string("v128.and")
+    V128AndNot => buf.write_string("v128.andnot")
+    V128Or => buf.write_string("v128.or")
+    V128Xor => buf.write_string("v128.xor")
+    V128Bitselect => buf.write_string("v128.bitselect")
+    V128AnyTrue => buf.write_string("v128.any_true")
+    I8x16Abs => buf.write_string("i8x16.abs")
+    I8x16Neg => buf.write_string("i8x16.neg")
+    I8x16Popcnt => buf.write_string("i8x16.popcnt")
+    I8x16AllTrue => buf.write_string("i8x16.all_true")
+    I8x16Bitmask => buf.write_string("i8x16.bitmask")
+    I8x16NarrowI16x8S => buf.write_string("i8x16.narrow_i16x8_s")
+    I8x16NarrowI16x8U => buf.write_string("i8x16.narrow_i16x8_u")
+    I8x16Shl => buf.write_string("i8x16.shl")
+    I8x16ShrS => buf.write_string("i8x16.shr_s")
+    I8x16ShrU => buf.write_string("i8x16.shr_u")
+    I8x16Add => buf.write_string("i8x16.add")
+    I8x16AddSatS => buf.write_string("i8x16.add_sat_s")
+    I8x16AddSatU => buf.write_string("i8x16.add_sat_u")
+    I8x16Sub => buf.write_string("i8x16.sub")
+    I8x16SubSatS => buf.write_string("i8x16.sub_sat_s")
+    I8x16SubSatU => buf.write_string("i8x16.sub_sat_u")
+    I8x16MinS => buf.write_string("i8x16.min_s")
+    I8x16MinU => buf.write_string("i8x16.min_u")
+    I8x16MaxS => buf.write_string("i8x16.max_s")
+    I8x16MaxU => buf.write_string("i8x16.max_u")
+    I8x16AvgrU => buf.write_string("i8x16.avgr_u")
+    I16x8ExtAddPairwiseI8x16S =>
+      buf.write_string("i16x8.extadd_pairwise_i8x16_s")
+    I16x8ExtAddPairwiseI8x16U =>
+      buf.write_string("i16x8.extadd_pairwise_i8x16_u")
+    I16x8Abs => buf.write_string("i16x8.abs")
+    I16x8Neg => buf.write_string("i16x8.neg")
+    I16x8Q15MulrSatS => buf.write_string("i16x8.q15mulr_sat_s")
+    I16x8AllTrue => buf.write_string("i16x8.all_true")
+    I16x8Bitmask => buf.write_string("i16x8.bitmask")
+    I16x8NarrowI32x4S => buf.write_string("i16x8.narrow_i32x4_s")
+    I16x8NarrowI32x4U => buf.write_string("i16x8.narrow_i32x4_u")
+    I16x8ExtendLowI8x16S => buf.write_string("i16x8.extend_low_i8x16_s")
+    I16x8ExtendHighI8x16S => buf.write_string("i16x8.extend_high_i8x16_s")
+    I16x8ExtendLowI8x16U => buf.write_string("i16x8.extend_low_i8x16_u")
+    I16x8ExtendHighI8x16U => buf.write_string("i16x8.extend_high_i8x16_u")
+    I16x8Shl => buf.write_string("i16x8.shl")
+    I16x8ShrS => buf.write_string("i16x8.shr_s")
+    I16x8ShrU => buf.write_string("i16x8.shr_u")
+    I16x8Add => buf.write_string("i16x8.add")
+    I16x8AddSatS => buf.write_string("i16x8.add_sat_s")
+    I16x8AddSatU => buf.write_string("i16x8.add_sat_u")
+    I16x8Sub => buf.write_string("i16x8.sub")
+    I16x8SubSatS => buf.write_string("i16x8.sub_sat_s")
+    I16x8SubSatU => buf.write_string("i16x8.sub_sat_u")
+    I16x8Mul => buf.write_string("i16x8.mul")
+    I16x8MinS => buf.write_string("i16x8.min_s")
+    I16x8MinU => buf.write_string("i16x8.min_u")
+    I16x8MaxS => buf.write_string("i16x8.max_s")
+    I16x8MaxU => buf.write_string("i16x8.max_u")
+    I16x8AvgrU => buf.write_string("i16x8.avgr_u")
+    I16x8ExtMulLowI8x16S => buf.write_string("i16x8.extmul_low_i8x16_s")
+    I16x8ExtMulHighI8x16S => buf.write_string("i16x8.extmul_high_i8x16_s")
+    I16x8ExtMulLowI8x16U => buf.write_string("i16x8.extmul_low_i8x16_u")
+    I16x8ExtMulHighI8x16U => buf.write_string("i16x8.extmul_high_i8x16_u")
+    I32x4ExtAddPairwiseI16x8S =>
+      buf.write_string("i32x4.extadd_pairwise_i16x8_s")
+    I32x4ExtAddPairwiseI16x8U =>
+      buf.write_string("i32x4.extadd_pairwise_i16x8_u")
+    I32x4Abs => buf.write_string("i32x4.abs")
+    I32x4Neg => buf.write_string("i32x4.neg")
+    I32x4AllTrue => buf.write_string("i32x4.all_true")
+    I32x4Bitmask => buf.write_string("i32x4.bitmask")
+    I32x4ExtendLowI16x8S => buf.write_string("i32x4.extend_low_i16x8_s")
+    I32x4ExtendHighI16x8S => buf.write_string("i32x4.extend_high_i16x8_s")
+    I32x4ExtendLowI16x8U => buf.write_string("i32x4.extend_low_i16x8_u")
+    I32x4ExtendHighI16x8U => buf.write_string("i32x4.extend_high_i16x8_u")
+    I32x4Shl => buf.write_string("i32x4.shl")
+    I32x4ShrS => buf.write_string("i32x4.shr_s")
+    I32x4ShrU => buf.write_string("i32x4.shr_u")
+    I32x4Add => buf.write_string("i32x4.add")
+    I32x4Sub => buf.write_string("i32x4.sub")
+    I32x4Mul => buf.write_string("i32x4.mul")
+    I32x4MinS => buf.write_string("i32x4.min_s")
+    I32x4MinU => buf.write_string("i32x4.min_u")
+    I32x4MaxS => buf.write_string("i32x4.max_s")
+    I32x4MaxU => buf.write_string("i32x4.max_u")
+    I32x4DotI16x8S => buf.write_string("i32x4.dot_i16x8_s")
+    I32x4ExtMulLowI16x8S => buf.write_string("i32x4.extmul_low_i16x8_s")
+    I32x4ExtMulHighI16x8S => buf.write_string("i32x4.extmul_high_i16x8_s")
+    I32x4ExtMulLowI16x8U => buf.write_string("i32x4.extmul_low_i16x8_u")
+    I32x4ExtMulHighI16x8U => buf.write_string("i32x4.extmul_high_i16x8_u")
+    I64x2Abs => buf.write_string("i64x2.abs")
+    I64x2Neg => buf.write_string("i64x2.neg")
+    I64x2AllTrue => buf.write_string("i64x2.all_true")
+    I64x2Bitmask => buf.write_string("i64x2.bitmask")
+    I64x2ExtendLowI32x4S => buf.write_string("i64x2.extend_low_i32x4_s")
+    I64x2ExtendHighI32x4S => buf.write_string("i64x2.extend_high_i32x4_s")
+    I64x2ExtendLowI32x4U => buf.write_string("i64x2.extend_low_i32x4_u")
+    I64x2ExtendHighI32x4U => buf.write_string("i64x2.extend_high_i32x4_u")
+    I64x2Shl => buf.write_string("i64x2.shl")
+    I64x2ShrS => buf.write_string("i64x2.shr_s")
+    I64x2ShrU => buf.write_string("i64x2.shr_u")
+    I64x2Add => buf.write_string("i64x2.add")
+    I64x2Sub => buf.write_string("i64x2.sub")
+    I64x2Mul => buf.write_string("i64x2.mul")
+    I64x2ExtMulLowI32x4S => buf.write_string("i64x2.extmul_low_i32x4_s")
+    I64x2ExtMulHighI32x4S => buf.write_string("i64x2.extmul_high_i32x4_s")
+    I64x2ExtMulLowI32x4U => buf.write_string("i64x2.extmul_low_i32x4_u")
+    I64x2ExtMulHighI32x4U => buf.write_string("i64x2.extmul_high_i32x4_u")
+    F32x4Ceil => buf.write_string("f32x4.ceil")
+    F32x4Floor => buf.write_string("f32x4.floor")
+    F32x4Trunc => buf.write_string("f32x4.trunc")
+    F32x4Nearest => buf.write_string("f32x4.nearest")
+    F32x4Abs => buf.write_string("f32x4.abs")
+    F32x4Neg => buf.write_string("f32x4.neg")
+    F32x4Sqrt => buf.write_string("f32x4.sqrt")
+    F32x4Add => buf.write_string("f32x4.add")
+    F32x4Sub => buf.write_string("f32x4.sub")
+    F32x4Mul => buf.write_string("f32x4.mul")
+    F32x4Div => buf.write_string("f32x4.div")
+    F32x4Min => buf.write_string("f32x4.min")
+    F32x4Max => buf.write_string("f32x4.max")
+    F32x4Pmin => buf.write_string("f32x4.pmin")
+    F32x4Pmax => buf.write_string("f32x4.pmax")
+    F64x2Ceil => buf.write_string("f64x2.ceil")
+    F64x2Floor => buf.write_string("f64x2.floor")
+    F64x2Trunc => buf.write_string("f64x2.trunc")
+    F64x2Nearest => buf.write_string("f64x2.nearest")
+    F64x2Abs => buf.write_string("f64x2.abs")
+    F64x2Neg => buf.write_string("f64x2.neg")
+    F64x2Sqrt => buf.write_string("f64x2.sqrt")
+    F64x2Add => buf.write_string("f64x2.add")
+    F64x2Sub => buf.write_string("f64x2.sub")
+    F64x2Mul => buf.write_string("f64x2.mul")
+    F64x2Div => buf.write_string("f64x2.div")
+    F64x2Min => buf.write_string("f64x2.min")
+    F64x2Max => buf.write_string("f64x2.max")
+    F64x2Pmin => buf.write_string("f64x2.pmin")
+    F64x2Pmax => buf.write_string("f64x2.pmax")
+    I32x4TruncSatF32x4S => buf.write_string("i32x4.trunc_sat_f32x4_s")
+    I32x4TruncSatF32x4U => buf.write_string("i32x4.trunc_sat_f32x4_u")
+    F32x4ConvertI32x4S => buf.write_string("f32x4.convert_i32x4_s")
+    F32x4ConvertI32x4U => buf.write_string("f32x4.convert_i32x4_u")
+    I32x4TruncSatF64x2SZero => buf.write_string("i32x4.trunc_sat_f64x2_s_zero")
+    I32x4TruncSatF64x2UZero => buf.write_string("i32x4.trunc_sat_f64x2_u_zero")
+    F64x2ConvertLowI32x4S => buf.write_string("f64x2.convert_low_i32x4_s")
+    F64x2ConvertLowI32x4U => buf.write_string("f64x2.convert_low_i32x4_u")
+    F32x4DemoteF64x2Zero => buf.write_string("f32x4.demote_f64x2_zero")
+    F64x2PromoteLowF32x4 => buf.write_string("f64x2.promote_low_f32x4")
   }
 }
 

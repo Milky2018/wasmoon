@@ -29,6 +29,7 @@ fn lower_wasm_call(
       @abi.Int => int_args.push((arg, @abi.Int))
       @abi.Float32 => float_args.push((arg, @abi.Float32))
       @abi.Float64 => float_args.push((arg, @abi.Float64))
+      @abi.Vector => float_args.push((arg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
 
@@ -127,13 +128,15 @@ fn lower_wasm_call(
     max_float_reg_args
   }
   for i in 0..<float_reg_count {
-    let (vreg, _class) = float_args[i]
-    // Use Float64 physical class for all float registers (V0-V7).
-    // f32 vs f64 is handled by the opcodes (S vs D) and IR types, while the
-    // underlying hardware register is the same Vn.
+    let (vreg, arg_class) = float_args[i]
+    // For float registers V0-V7:
+    // - f32 uses Float32 class (S registers)
+    // - f64 uses Float64 class (D registers)
+    // - V128 uses Vector class (Q registers)
+    // All map to the same underlying Vn registers, but class affects move size
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
       index: i,
-      class: @abi.Float64,
+      class: arg_class,
     })
   }
 
@@ -150,11 +153,12 @@ fn lower_wasm_call(
         })
         int_result_idx += 1
       }
-      @abi.Float32 | @abi.Float64 => {
-        // Same reasoning as float args: constrain to Vn using Float64 class.
+      @abi.Float32 | @abi.Float64 | @abi.Vector => {
+        // Float/Vector results go to V0, V1, ...
+        // Use actual class for proper move size (32/64/128 bits)
         call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
           index: float_result_idx,
-          class: @abi.Float64,
+          class: result.class,
         })
         float_result_idx += 1
       }
@@ -212,6 +216,7 @@ fn lower_return_call(
       @abi.Int => int_args.push((vreg, @abi.Int))
       @abi.Float32 => float_args.push((vreg, @abi.Float32))
       @abi.Float64 => float_args.push((vreg, @abi.Float64))
+      @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
 
@@ -406,6 +411,7 @@ fn lower_return_call_indirect(
       @abi.Int => int_args.push((vreg, @abi.Int))
       @abi.Float32 => float_args.push((vreg, @abi.Float32))
       @abi.Float64 => float_args.push((vreg, @abi.Float64))
+      @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
 
@@ -533,6 +539,7 @@ fn lower_return_call_ref(
       @abi.Int => int_args.push((vreg, @abi.Int))
       @abi.Float32 => float_args.push((vreg, @abi.Float32))
       @abi.Float64 => float_args.push((vreg, @abi.Float64))
+      @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
 
@@ -846,6 +853,7 @@ fn lower_call_ptr(
       @abi.Int => int_args.push((vreg, @abi.Int))
       @abi.Float32 => float_args.push((vreg, @abi.Float32))
       @abi.Float64 => float_args.push((vreg, @abi.Float64))
+      @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
 
@@ -952,8 +960,8 @@ fn lower_call_ptr(
         })
         int_result_idx = int_result_idx + 1
       }
-      @abi.Float32 | @abi.Float64 => {
-        // Float results go to V0, V1, ...
+      @abi.Float32 | @abi.Float64 | @abi.Vector => {
+        // Float/Vector results go to V0, V1, ...
         call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
           index: float_result_idx,
           class: dst.class,

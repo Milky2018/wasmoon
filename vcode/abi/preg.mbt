@@ -10,6 +10,7 @@ fn PReg::to_string(self : PReg) -> String {
   match self.class {
     Int => "x\{self.index}"
     Float32 | Float64 => "d\{self.index}"
+    Vector => "v\{self.index}" // SIMD vector registers v0-v31
   }
 }
 

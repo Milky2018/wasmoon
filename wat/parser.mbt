@@ -371,6 +371,90 @@ fn Parser::parse_f64(self : Parser) -> Double raise WatError {
 }
 
 ///|
+/// Parse v128.const value
+/// Formats: (v128.const i8x16 v0 v1 ... v15)
+///          (v128.const i16x8 v0 v1 ... v7)
+///          (v128.const i32x4 v0 v1 v2 v3)
+///          (v128.const i64x2 v0 v1)
+///          (v128.const f32x4 v0 v1 v2 v3)
+///          (v128.const f64x2 v0 v1)
+fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
+  let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+  // Parse the lane type keyword
+  match self.current.token {
+    Keyword(lane_type) => {
+      self.advance()
+      match lane_type {
+        "i8x16" =>
+          for _ in 0..<16 {
+            let v = self.parse_i32()
+            buf.write_byte(v.to_byte())
+          }
+        "i16x8" =>
+          for _ in 0..<8 {
+            let v = self.parse_i32()
+            buf.write_byte(v.to_byte())
+            buf.write_byte((v >> 8).to_byte())
+          }
+        "i32x4" =>
+          for _ in 0..<4 {
+            let v = self.parse_i32()
+            buf.write_byte(v.to_byte())
+            buf.write_byte((v >> 8).to_byte())
+            buf.write_byte((v >> 16).to_byte())
+            buf.write_byte((v >> 24).to_byte())
+          }
+        "i64x2" =>
+          for _ in 0..<2 {
+            let v = self.parse_i64()
+            buf.write_byte(v.to_byte())
+            buf.write_byte((v >> 8).to_byte())
+            buf.write_byte((v >> 16).to_byte())
+            buf.write_byte((v >> 24).to_byte())
+            buf.write_byte((v >> 32).to_byte())
+            buf.write_byte((v >> 40).to_byte())
+            buf.write_byte((v >> 48).to_byte())
+            buf.write_byte((v >> 56).to_byte())
+          }
+        "f32x4" =>
+          for _ in 0..<4 {
+            let f = self.parse_f32()
+            let v = f.reinterpret_as_int()
+            buf.write_byte(v.to_byte())
+            buf.write_byte((v >> 8).to_byte())
+            buf.write_byte((v >> 16).to_byte())
+            buf.write_byte((v >> 24).to_byte())
+          }
+        "f64x2" =>
+          for _ in 0..<2 {
+            let f = self.parse_f64()
+            let v = f.reinterpret_as_int64()
+            buf.write_byte(v.to_byte())
+            buf.write_byte((v >> 8).to_byte())
+            buf.write_byte((v >> 16).to_byte())
+            buf.write_byte((v >> 24).to_byte())
+            buf.write_byte((v >> 32).to_byte())
+            buf.write_byte((v >> 40).to_byte())
+            buf.write_byte((v >> 48).to_byte())
+            buf.write_byte((v >> 56).to_byte())
+          }
+        _ =>
+          raise WatError::ParseError(
+            "invalid v128.const lane type: \{lane_type}",
+            self.loc(),
+          )
+      }
+    }
+    _ =>
+      raise WatError::UnexpectedToken(
+        "expected lane type (i8x16, i16x8, etc), got \{self.current}",
+        self.loc(),
+      )
+  }
+  buf.contents()
+}
+
+///|
 fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
   match self.current.token {
     LParen => {
@@ -2374,10 +2458,13 @@ pub enum WastValue {
   I64(Int64)
   F32(Float)
   F64(Double)
+  V128(Bytes) // SIMD 128-bit vector (16 bytes)
   F32CanonicalNan
   F32ArithmeticNan
   F64CanonicalNan
   F64ArithmeticNan
+  // SIMD lane patterns for NaN matching
+  V128Pattern(Array[WastLaneValue]) // For lane-by-lane comparison with NaN patterns
   RefNull(String)
   RefExtern(Int)
   RefExternAny // (ref.extern) without number - matches any non-null externref
@@ -2389,6 +2476,21 @@ pub enum WastValue {
   RefEq // (ref.eq) - any eq reference
   RefI31 // (ref.i31) - any i31 reference
   RefAny // (ref.any) - any reference
+} derive(Show)
+
+///|
+/// Lane value for V128 pattern matching
+pub enum WastLaneValue {
+  I8(Int)
+  I16(Int)
+  I32(Int)
+  I64(Int64)
+  F32(Float)
+  F64(Double)
+  F32CanonicalNan
+  F32ArithmeticNan
+  F64CanonicalNan
+  F64ArithmeticNan
 } derive(Show)
 
 ///|

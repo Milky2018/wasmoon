@@ -529,7 +529,7 @@ test "regalloc: SSA deconstruction scenario" {
   if alloc_result.assignments.get(f5.id) is Some(preg) {
     let class_name = match preg.class {
       @abi.Int => "@abi.Int"
-      @abi.Float32 | @abi.Float64 => "Float"
+      @abi.Float32 | @abi.Float64 | @abi.Vector => "Float"
     }
     inspect(class_name, content="Float")
   }
