@@ -1,13 +1,13 @@
 ///|
 /// Inspect a precompiled .cwasm file
 fn run_objdump(cwasm_path : String) -> Unit {
-  println("Inspecting: \{cwasm_path}")
+  @logger.info("Inspecting: \{cwasm_path}")
   println("=".repeat(60))
 
   // Read the file
   let bytes_raw = @fs.read_file_to_bytes(cwasm_path) catch {
     e => {
-      println("Error reading file: \{e}")
+      @logger.error("reading file: \{e}")
       return
     }
   }
@@ -21,7 +21,7 @@ fn run_objdump(cwasm_path : String) -> Unit {
   // Deserialize the precompiled module
   let precompiled = @cwasm.deserialize(bytes) catch {
     e => {
-      println("Error parsing cwasm: \{e}")
+      @logger.error("parsing cwasm: \{e}")
       return
     }
   }

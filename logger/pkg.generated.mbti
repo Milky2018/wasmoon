@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/logger"
+
+// Values
+pub fn debug(String) -> Unit
+
+pub fn disable_debug() -> Unit
+
+pub fn enable_debug() -> Unit
+
+pub fn error(String) -> Unit
+
+pub fn info(String) -> Unit
+
+pub fn is_debug_enabled() -> Bool
+
+pub fn warn(String) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) enum LogLevel {
+  Debug
+  Info
+  Warn
+  Error
+}
+
+// Type aliases
+
+// Traits
+

@@ -9,7 +9,7 @@ fn run_cwasm(
   // Read the .cwasm file
   let bytes = @fs.read_file_to_bytes(cwasm_path) catch {
     IOError(e) => {
-      println("Error: failed to read '\{cwasm_path}': \{e}")
+      @logger.error("failed to read '\{cwasm_path}': \{e}")
       return
     }
   }
@@ -21,7 +21,7 @@ fn run_cwasm(
   // Parse the precompiled module
   let precompiled = @cwasm.deserialize(byte_array) catch {
     e => {
-      println("Error: failed to parse '\{cwasm_path}': \{e}")
+      @logger.error("failed to parse '\{cwasm_path}': \{e}")
       return
     }
   }
@@ -51,7 +51,7 @@ fn run_cwasm(
       let mem_size = 65536L // 64KB
       let mem_ptr = @jit.alloc_memory(mem_size)
       if mem_ptr == 0L {
-        println("Error: failed to allocate linear memory")
+        @logger.error("failed to allocate linear memory")
         // NOTE: No need to manually free - GC handles cleanup
         return
       }
@@ -71,7 +71,7 @@ fn run_cwasm(
           for arg in func_args {
             let n = @strconv.parse_int64(arg) catch {
               _ => {
-                println("Error: invalid argument '\{arg}'")
+                @logger.error("invalid argument '\{arg}'")
                 // NOTE: Memory is freed by JITContext finalizer (GC-managed)
                 return
               }
@@ -81,7 +81,7 @@ fn run_cwasm(
           // Call the function using context (for proper inter-function calls)
           let results = jm.call_with_context(f, args) catch {
             @jit.JITTrap(msg) => {
-              println("JIT Trap: \{msg}")
+              @logger.error("JIT Trap: \{msg}")
               // NOTE: Memory is freed by JITContext finalizer (GC-managed)
               return
             }
@@ -91,10 +91,10 @@ fn run_cwasm(
             println(strs.join(" "))
           }
         }
-        None => println("Error: function '\{func_name}' not found")
+        None => @logger.error("function '\{func_name}' not found")
       }
       // NOTE: Memory and JIT module are freed automatically by GC
     }
-    None => println("Error: failed to load JIT module")
+    None => @logger.error("failed to load JIT module")
   }
 }
