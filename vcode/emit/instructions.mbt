@@ -383,6 +383,7 @@ enum Instruction {
   Uaddlp4S(Int, Int) // UADDLP Vd.4S, Vn.8H
   Uaddlp2D(Int, Int) // UADDLP Vd.2D, Vn.4S
   // Pairwise add (for dot product)
+  Addp8H(Int, Int, Int) // ADDP Vd.8H, Vn.8H, Vm.8H
   Addp4S(Int, Int, Int) // ADDP Vd.4S, Vn.4S, Vm.4S
   // Q15 saturating rounding multiply high
   Sqrdmulh8H(Int, Int, Int) // SQRDMULH Vd.8H, Vn.8H, Vm.8H
@@ -912,6 +913,7 @@ fn Instruction::annotate(self : Instruction) -> String {
     Uaddlp8H(rd, rn) => "uaddlp v\{rd}.8h, v\{rn}.16b"
     Uaddlp4S(rd, rn) => "uaddlp v\{rd}.4s, v\{rn}.8h"
     Uaddlp2D(rd, rn) => "uaddlp v\{rd}.2d, v\{rn}.4s"
+    Addp8H(rd, rn, rm) => "addp v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
     Addp4S(rd, rn, rm) => "addp v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
     Sqrdmulh8H(rd, rn, rm) => "sqrdmulh v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
     Fadd4S(rd, rn, rm) => "fadd v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
@@ -2779,6 +2781,11 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
     Addp4S(rd, rn, rm) => {
       // ADDP Vd.4S, Vn.4S, Vm.4S: 0x4EA0BC00 | (Rm << 16) | (Rn << 5) | Rd
       let enc = 0x4EA0BC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
+      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
+    }
+    Addp8H(rd, rn, rm) => {
+      // ADDP Vd.8H, Vn.8H, Vm.8H: 0x4E60BC00 | (Rm << 16) | (Rn << 5) | Rd
+      let enc = 0x4E60BC00 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
       (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
     }
     // Q15 saturating rounding multiply high
