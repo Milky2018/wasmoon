@@ -536,3 +536,274 @@ fn rule_ireduce_bxor() -> RewriteRule {
     },
   }
 }
+
+///|
+/// eq(sextend(x), 0) → eq(x, 0)
+/// Sign-extending can't change whether a number is zero
+fn rule_eq_sextend_zero() -> RewriteRule {
+  {
+    name: "eq_sextend_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Eq && node.children.length() == 2 {
+          // Check if left is sextend and right is zero
+          for left in eg.get_nodes(node.children[0]) {
+            if left.op is Sextend && left.children.length() == 1 {
+              for right in eg.get_nodes(node.children[1]) {
+                if right.op == Const(0L) {
+                  // eq(sextend(x), 0) = eq(x, 0)
+                  let zero = eg.add_const(0L)
+                  let new_node = eg.add({
+                    op: Eq,
+                    children: [left.children[0], zero],
+                  })
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+          // Also check symmetric case: eq(0, sextend(x))
+          for left in eg.get_nodes(node.children[0]) {
+            if left.op == Const(0L) {
+              for right in eg.get_nodes(node.children[1]) {
+                if right.op is Sextend && right.children.length() == 1 {
+                  let zero = eg.add_const(0L)
+                  let new_node = eg.add({
+                    op: Eq,
+                    children: [right.children[0], zero],
+                  })
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ne(sextend(x), 0) → ne(x, 0)
+/// Sign-extending can't change whether a number is zero
+fn rule_ne_sextend_zero() -> RewriteRule {
+  {
+    name: "ne_sextend_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Ne && node.children.length() == 2 {
+          // Check if left is sextend and right is zero
+          for left in eg.get_nodes(node.children[0]) {
+            if left.op is Sextend && left.children.length() == 1 {
+              for right in eg.get_nodes(node.children[1]) {
+                if right.op == Const(0L) {
+                  // ne(sextend(x), 0) = ne(x, 0)
+                  let zero = eg.add_const(0L)
+                  let new_node = eg.add({
+                    op: Ne,
+                    children: [left.children[0], zero],
+                  })
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+          // Also check symmetric case
+          for left in eg.get_nodes(node.children[0]) {
+            if left.op == Const(0L) {
+              for right in eg.get_nodes(node.children[1]) {
+                if right.op is Sextend && right.children.length() == 1 {
+                  let zero = eg.add_const(0L)
+                  let new_node = eg.add({
+                    op: Ne,
+                    children: [right.children[0], zero],
+                  })
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// Helper: check if IntCC is a signed comparison
+fn is_signed_cc(cc : Int) -> Bool {
+  // IntCC: 0=eq, 1=ne, 2=slt, 3=sle, 4=sgt, 5=sge, 6=ult, 7=ule, 8=ugt, 9=uge
+  cc >= 2 && cc <= 5 // slt, sle, sgt, sge
+}
+
+///|
+/// icmp(signed_cc, sextend(x), 0) → icmp(signed_cc, x, 0)
+/// Sign-extending doesn't change signed comparisons with zero
+fn rule_icmp_sextend_zero() -> RewriteRule {
+  {
+    name: "icmp_sextend_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        match node.op {
+          Icmp(cc) =>
+            if is_signed_cc(cc) && node.children.length() == 2 {
+              for left in eg.get_nodes(node.children[0]) {
+                if left.op is Sextend && left.children.length() == 1 {
+                  for right in eg.get_nodes(node.children[1]) {
+                    if right.op == Const(0L) {
+                      // icmp(cc, sextend(x), 0) = icmp(cc, x, 0)
+                      let zero = eg.add_const(0L)
+                      let new_node = eg.add({
+                        op: Icmp(cc),
+                        children: [left.children[0], zero],
+                      })
+                      let new_id = eg.merge(class_id, new_node)
+                      changed = new_id != class_id || changed
+                    }
+                  }
+                }
+              }
+            }
+          _ => ()
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ireduce(ireduce(x)) → ireduce(x)
+/// Chained reduces can be collapsed
+fn rule_ireduce_ireduce() -> RewriteRule {
+  {
+    name: "ireduce_ireduce",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Ireduce && node.children.length() == 1 {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Ireduce && inner.children.length() == 1 {
+              // ireduce(ireduce(x)) = ireduce(x)
+              let new_node = eg.add({
+                op: Ireduce,
+                children: [inner.children[0]],
+              })
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// iadd(uextend(x), uextend(y)) → uextend(iadd(x, y))
+/// Addition can be pushed inside uextends when there's no overflow concern
+/// Note: This is only valid when the result type is large enough to not overflow
+fn rule_iadd_uextend() -> RewriteRule {
+  {
+    name: "iadd_uextend",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          for left in eg.get_nodes(node.children[0]) {
+            if left.op is Uextend && left.children.length() == 1 {
+              for right in eg.get_nodes(node.children[1]) {
+                if right.op is Uextend && right.children.length() == 1 {
+                  // iadd(uextend(x), uextend(y)) = uextend(iadd(x, y))
+                  let inner_add = eg.add({
+                    op: Add,
+                    children: [left.children[0], right.children[0]],
+                  })
+                  let new_node = eg.add({ op: Uextend, children: [inner_add] })
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// isub(uextend(x), uextend(y)) → sextend(isub(x, y))
+/// Subtraction of uextended values produces a signed result
+fn rule_isub_uextend() -> RewriteRule {
+  {
+    name: "isub_uextend",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          for left in eg.get_nodes(node.children[0]) {
+            if left.op is Uextend && left.children.length() == 1 {
+              for right in eg.get_nodes(node.children[1]) {
+                if right.op is Uextend && right.children.length() == 1 {
+                  // isub(uextend(x), uextend(y)) = sextend(isub(x, y))
+                  let inner_sub = eg.add({
+                    op: Sub,
+                    children: [left.children[0], right.children[0]],
+                  })
+                  let new_node = eg.add({ op: Sextend, children: [inner_sub] })
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ireduce(ishl(x, y)) → ishl(ireduce(x), y)
+/// Shift amount doesn't need to be reduced, only the value being shifted
+fn rule_ireduce_ishl() -> RewriteRule {
+  {
+    name: "ireduce_ishl",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Ireduce && node.children.length() == 1 {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Shl && inner.children.length() == 2 {
+              // ireduce(shl(x, y)) = shl(ireduce(x), y)
+              let value_reduce = eg.add({
+                op: Ireduce,
+                children: [inner.children[0]],
+              })
+              let new_node = eg.add({
+                op: Shl,
+                children: [value_reduce, inner.children[1]],
+              })
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}

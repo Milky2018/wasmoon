@@ -148,6 +148,15 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_ireduce_band(), [TIreduce])
   rs.add_rule(rule_ireduce_bor(), [TIreduce])
   rs.add_rule(rule_ireduce_bxor(), [TIreduce])
+  rs.add_rule(rule_ireduce_ireduce(), [TIreduce])
+  rs.add_rule(rule_ireduce_ishl(), [TIreduce])
+  // Extend with comparison
+  rs.add_rule(rule_eq_sextend_zero(), [TEq])
+  rs.add_rule(rule_ne_sextend_zero(), [TNe])
+  rs.add_rule(rule_icmp_sextend_zero(), [TIcmp])
+  // Arithmetic with extends
+  rs.add_rule(rule_iadd_uextend(), [TAdd])
+  rs.add_rule(rule_isub_uextend(), [TSub])
   // Tree rebalancing
   rs.add_rule(rule_rebalance_add_right(), [TAdd])
   rs.add_rule(rule_rebalance_add_left(), [TAdd])
