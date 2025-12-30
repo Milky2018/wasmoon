@@ -25,28 +25,11 @@
      - `lower_band/bor/bxor`: AndShifted, OrShifted, XorShifted patterns
    - **This duplicates the pattern system logic** - two implementations of same optimizations
 
-4. **VCode Infrastructure**
-   - `VCodeTerminator::Branch(Reg, Int, Int)` - only takes condition register
-   - `AddImm(Int, Bool)` and `SubImm(Int, Bool)` exist and are now used in lowering
+4. **VCode Infrastructure** ✅
+   - `VCodeTerminator::BranchCmp` - compare and branch directly
+   - `VCodeTerminator::BranchZero` - CBZ/CBNZ for zero/nonzero conditions
+   - `AddImm(Int, Bool)` and `SubImm(Int, Bool)` for immediate operands
    - Load/store have offset fields but no complex addressing modes
-
-### What's Missing / Underutilized
-
-1. **Branch terminator limitation** (HIGH IMPACT)
-   - Current: `Branch(Reg, Int, Int)` forces `cmp + cset + cbnz` sequence
-   - Missing: `BranchCmp`, `BranchZero` for direct `cmp + b.cond` or `cbz/cbnz`
-
-2. **Immediate operand selection** ✅ DONE (PR #257)
-   - `AddImm` and `SubImm` now used in `lower_iadd` and `lower_isub`
-
-3. **Pattern system redundancy** (TECH DEBT)
-   - Two implementations: patterns.mbt + hand-written in lower_numeric.mbt
-   - Should consolidate, but hand-written code already works
-
-4. **Missing optimizations**
-   - Load/store addressing modes (base + offset fusion)
-   - Select → CSEL (currently: cmp + cset + conditional moves)
-   - Post-regalloc peephole (redundant moves, zero register)
 
 ---
 
@@ -61,7 +44,7 @@
 
 ---
 
-## Phase B: Immediate Operand Selection ✅ DONE (PR #257)
+## Phase B: Immediate Operand Selection ✅ DONE
 
 ### B1: Use AddImm for Constant Operands ✅
 
@@ -79,143 +62,109 @@ Added `SubImm(Int, Bool)` to VCodeOpcode with 32/64-bit emit support.
 
 ---
 
-## Phase C: Branch-on-Compare Optimization
+## Phase C: Branch-on-Compare Optimization ✅ DONE
 
-### C1: Add BranchCmp Terminator
+### C1: Add BranchCmp Terminator ✅
 
-**Goal**: Emit `CMP + B.cond` instead of `CMP + CSET + CBNZ`.
+Added `BranchCmp(Reg, Reg, Cond, Bool, Int, Int)` to VCodeTerminator.
+- Parameters: lhs, rhs, condition, is_64, then-block, else-block
+- Emits: `CMP + B.cond` (2 instructions instead of 3)
 
-**Current** (`vcode/instr/instr.mbt`):
-```moonbit
-pub(all) enum VCodeTerminator {
-  Branch(Reg, Int, Int)  // cond_reg, then_block, else_block
-  ...
-}
-```
+### C2: Add BranchZero Terminator ✅
 
-**Proposed addition**:
-```moonbit
-pub(all) enum VCodeTerminator {
-  Branch(Reg, Int, Int)           // Existing: branch on register
-  BranchCmp(Reg, Reg, Cond, Int, Int)  // New: branch on comparison
-  BranchCmpImm(Reg, Int64, Cond, Int, Int)  // New: branch comparing to immediate
-  BranchZero(Reg, Bool, Int, Int) // New: CBZ/CBNZ (Bool = is_nonzero)
-  ...
-}
-```
+Added `BranchZero(Reg, Bool, Bool, Int, Int)` to VCodeTerminator.
+- Parameters: reg, is_nonzero, is_64, then-block, else-block
+- Emits: `CBZ` or `CBNZ` (1 instruction)
 
-### C2: Lower IR Branch to BranchCmp
+### C3: Lower IR Branch to BranchCmp ✅
 
 When lowering `Brz`/`Brnz` with a comparison result:
-```moonbit
-// If condition comes from icmp, use BranchCmp
-if inst.operands[0] is defined by Icmp(cond, a, b) {
-  // Emit BranchCmp(a, b, cond, then, else)
-} else {
-  // Fall back to Branch(cond_reg, then, else)
-}
-```
+- Detect when condition comes from `Icmp` instruction
+- Use `BranchCmp` with the icmp operands directly
+- Otherwise fall back to `BranchZero` for boolean conditions
 
-### C3: Emit B.cond Instructions
+### C4: Emit B.cond Instructions ✅
 
-```moonbit
-BranchCmp(rn, rm, cond, then_id, else_id) => {
-  // CMP Xn, Xm
-  Cmp64(rn, rm).emit(self)
-  // B.cond to then_block
-  emit_bcond(cond, then_id)
-  // B to else_block (fallthrough optimization possible)
-  emit_branch(else_id)
-}
+Updated `codegen.mbt` to emit:
+- `CMP + B.cond + B` for BranchCmp (with 32/64-bit CMP based on operand type)
+- `CBZ/CBNZ + B` for BranchZero
 
-BranchZero(rn, is_nonzero, then_id, else_id) => {
-  if is_nonzero {
-    // CBNZ Xn, then_block
-    emit_cbnz(rn, then_id)
-  } else {
-    // CBZ Xn, then_block
-    emit_cbz(rn, then_id)
-  }
-  emit_branch(else_id)
-}
-```
+### C5: Update Register Allocation ✅
 
-**Expected improvement**:
+Updated `regalloc.mbt` to:
+- Track BranchCmp/BranchZero uses in liveness analysis
+- Rewrite BranchCmp/BranchZero registers during allocation
+- Handle new terminators in all pattern matches
+
+**Result**:
 - Before: `CMP + CSET + CBNZ` (3 instructions)
 - After: `CMP + B.cond` (2 instructions) or `CBZ/CBNZ` (1 instruction)
 
 ---
 
-## Phase D: Post-Regalloc Peephole Optimizations
+## Phase D: Post-Regalloc Peephole Optimizations ✅ DONE
 
-### D1: Redundant Move Elimination
+### D1: Redundant Move Elimination ✅
 
-**Goal**: Remove `MOV Xn, Xn` after register allocation.
+Skip emitting `MOV Xn, Xn` when source and destination are the same register.
+Implemented in `codegen.mbt` Move opcode handling.
 
-### D2: Zero Register Optimization
+### D2: Zero Register Optimization (Deferred)
 
-**Goal**: Use XZR/WZR when loading constant 0.
+Using XZR/WZR for constant 0 operations would require:
+- Tracking which vregs contain 0
+- Substituting XZR in operand positions
+- Complex analysis not worth the benefit
 
-### D3: Short Jump Optimization
+**Status**: Deferred - minimal impact for AArch64
 
-**Goal**: Use shorter branch encodings when possible.
+### D3: Short Jump Optimization (N/A)
+
+AArch64 branch instructions are all 4 bytes. The offset encoding is handled
+by the fixup system. No further optimization needed.
+
+**Status**: Not applicable for AArch64
 
 ---
 
-## Implementation Priority
-
-### High Priority - Architectural Changes
-1. **C1-C3: BranchCmp/BranchZero terminators** - Critical code quality gap
-   - Saves 1 instruction per branch (cmp+b.cond vs cmp+cset+cbnz)
-   - Requires changes to: `instr.mbt`, `lower.mbt`, `codegen.mbt`, `regalloc.mbt`
+## Implementation Summary
 
 ### Completed ✅
-2. **B1-B2: Immediate operands** - PR #257
-   - `AddImm` and `SubImm` now used in lowering
 
-### Lower Priority - Future Work
-3. **Select → CSEL fusion** - Common in conditional code
-4. **Load/store addressing modes** - Address calculation folding
-5. **Post-regalloc peephole** - Redundant move elimination
+| Phase | Description | Impact |
+|-------|-------------|--------|
+| A | IR Optimization in JIT path | Baseline |
+| B1-B2 | AddImm/SubImm immediate operands | Medium |
+| C1-C5 | BranchCmp/BranchZero terminators | **High** |
+| D1 | Redundant move elimination | Low |
 
-### Deferred - Pattern System Consolidation
-- Integrate `patterns.mbt` with hand-written lowering
-- Currently both work; consolidation is tech debt not functional gap
+### Future Work
 
----
-
-## Estimated Complexity
-
-| Phase | Effort | Impact | Key Files |
-|-------|--------|--------|-----------|
-| C1-C3 | High | **High** | instr.mbt, lower.mbt, codegen.mbt, regalloc |
-| B1-B2 | Low | Medium | ✅ Done (PR #257) |
-| Select→CSEL | Medium | Medium | lower.mbt, codegen.mbt |
-| Addressing | High | Medium | lower.mbt, instr.mbt, codegen.mbt |
-| Peephole | Low | Low | codegen.mbt |
+| Phase | Description | Impact |
+|-------|-------------|--------|
+| B3 | CmpImm for comparison with constants | Medium |
+| Select→CSEL | Conditional select fusion | Medium |
+| Addressing | Load/store address calculation folding | Medium |
+| Pattern consolidation | Integrate patterns.mbt with lowering | Tech debt |
 
 ---
 
-## Success Metrics
+## Files Modified
 
-1. **Instruction count reduction**: Compare generated code size before/after
-2. **Branch sequence optimization**: Count `cmp+b.cond` vs `cmp+cset+cbnz` in output
-3. **Immediate usage**: Count `add/sub/cmp` with immediate vs register operands
+- `vcode/instr/instr.mbt` - Added BranchCmp, BranchZero terminators; SubImm opcode
+- `vcode/lower/lower.mbt` - Branch optimization logic, helper functions
+- `vcode/lower/lower_numeric.mbt` - AddImm/SubImm patterns
+- `vcode/lower/regalloc.mbt` - Liveness tracking for new terminators
+- `vcode/emit/codegen.mbt` - Code generation for new terminators, peephole opt
+- `vcode/emit/instructions.mbt` - SubImm32 instruction
 
 ---
 
-## Next Steps
+## Test Results
 
-### Short Term (Branch Optimization)
-1. Add `BranchCmp(Reg, Reg, Cond, Int, Int)` to VCodeTerminator
-2. Add `BranchZero(Reg, Bool, Int, Int)` for CBZ/CBNZ
-3. Modify terminator lowering to detect `Brz(icmp(...))` patterns
-4. Update register allocation to handle new terminators
-5. Emit `CMP + B.cond` and `CBZ/CBNZ` in codegen
-
-### Medium Term
-1. Select → CSEL optimization
-2. Load/store addressing mode optimization
+- All 1160 unit tests pass
+- Interpreter: 62563 WAST tests pass (258/258 files)
+- JIT: 62561 WAST tests pass (257/258 files) - 1 pre-existing SIMD issue
 
 ---
 
