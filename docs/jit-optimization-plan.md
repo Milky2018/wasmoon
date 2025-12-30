@@ -179,11 +179,12 @@ Added `SelectCmp(CmpKind, Bool)` opcode that:
 
 | Phase | Description | Impact |
 |-------|-------------|--------|
-| F | Register allocation for WASM locals | **Critical** |
-| G | Redundant instruction elimination | Medium |
+| **J** | **E-graph optimization at IR level** | **Critical** |
 | H | Tail call optimization | **High** |
 | I | Bounds check elimination | Medium |
-| Pattern consolidation | Integrate patterns.mbt with lowering | Tech debt |
+
+Note: Phase F (Register Locals) was found to be already implemented - WASM locals
+are already SSA values in IR. Phase G (Peephole) is partially done in `peephole.mbt`.
 
 ---
 
@@ -412,10 +413,11 @@ since most stack accesses will be eliminated entirely.
 
 ## Priority Order
 
-1. **Phase F (Register Locals)** - Highest impact, eliminates most memory access
-2. **Phase G (Peephole)** - Quick wins, cleanup redundant code
-3. **Phase H (Tail Call)** - Important for recursive code
-4. **Phase I (Bounds Check)** - Lower priority after F
+1. **Phase J (E-graph)** - Unified optimization framework at IR level
+2. **Phase H (Tail Call)** - Important for recursive code
+3. **Phase I (Bounds Check)** - Lower priority
+
+Note: Phase F was found unnecessary (locals already SSA), Phase G partially done.
 
 ---
 
@@ -439,8 +441,165 @@ since most stack accesses will be eliminated entirely.
 
 ---
 
+## Phase J: E-graph Optimization at IR Level (TODO)
+
+### Motivation
+
+Current optimization approach has several issues:
+
+1. **Scattered implementations**: Optimizations spread across multiple files
+   - `ir/optimize.mbt`: CF/CP/CSE/DCE
+   - `vcode/lower/patterns.mbt`: Pattern rules (not integrated)
+   - `vcode/lower/lower_numeric.mbt`: Hand-written fusion
+   - `vcode/lower/peephole.mbt`: Post-lowering cleanup
+
+2. **Phase ordering problem**: Traditional rewrite passes can miss optimizations
+   ```
+   a * 2 + a * 2  →  (a * 2) * 2  →  a * 4   ✓
+   a * 2 + a * 2  →  a * 2 + a << 1  →  ???  ✗ (stuck)
+   ```
+
+3. **Incomplete coverage**: Many algebraic identities not implemented
+   - Associativity: `(a + b) + c = a + (b + c)`
+   - Distributivity: `a * (b + c) = a * b + a * c`
+   - Reassociation for constants: `(a + 1) + 2 = a + 3`
+
+### E-graph Solution
+
+E-graph (equality graph) maintains equivalence classes of expressions:
+
+```
+┌─────────────────────────────────────────┐
+│  E-class for "x * 2"                    │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐ │
+│  │ x * 2   │  │ x << 1  │  │ x + x   │ │
+│  └─────────┘  └─────────┘  └─────────┘ │
+└─────────────────────────────────────────┘
+```
+
+Benefits:
+- **No phase ordering**: All equivalent forms explored simultaneously
+- **Optimal selection**: Cost model picks best representation
+- **Extensible**: Add rules declaratively
+
+### Implementation Plan
+
+**J1: Core E-graph data structure** (`ir/egraph/`)
+
+```moonbit
+struct EGraph {
+  nodes : Array[ENode]      // All expression nodes
+  classes : UnionFind       // Equivalence classes
+  hashcons : Map[ENode, EClassId]  // Deduplication
+}
+
+struct ENode {
+  op : Opcode
+  children : Array[EClassId]  // Point to e-classes, not nodes
+}
+```
+
+**J2: Rewrite rules**
+
+```moonbit
+// Declarative rules
+let rules : Array[Rule] = [
+  // Strength reduction
+  rule("mul_pow2", "?x * ?c", "?x << log2(?c)", when: is_pow2),
+  rule("div_pow2", "?x / ?c", "?x >> log2(?c)", when: is_pow2),
+
+  // Identity
+  rule("add_zero", "?x + 0", "?x"),
+  rule("mul_one", "?x * 1", "?x"),
+  rule("mul_zero", "?x * 0", "0"),
+
+  // Reassociation
+  rule("add_assoc", "(?x + ?y) + ?z", "?x + (?y + ?z)"),
+  rule("add_const", "(?x + ?c1) + ?c2", "?x + (?c1 + ?c2)"),
+
+  // Distributivity
+  rule("factor", "?x * ?y + ?x * ?z", "?x * (?y + ?z)"),
+
+  // Boolean
+  rule("and_self", "?x & ?x", "?x"),
+  rule("or_self", "?x | ?x", "?x"),
+  rule("xor_self", "?x ^ ?x", "0"),
+]
+```
+
+**J3: Equality saturation algorithm**
+
+```moonbit
+fn optimize(func: Function) -> Function {
+  let egraph = EGraph::from_function(func)
+
+  // Saturate: apply rules until fixpoint
+  loop {
+    let changed = false
+    for rule in rules {
+      changed = changed || egraph.apply_rule(rule)
+    }
+    if !changed { break }
+  }
+
+  // Extract: pick lowest-cost equivalent
+  egraph.extract_best(cost_model)
+}
+```
+
+**J4: Cost model for extraction**
+
+```moonbit
+fn cost(node: ENode) -> Int {
+  match node.op {
+    Const(_) => 0           // Free
+    Add | Sub => 1          // 1 cycle
+    Mul => 3                // 3 cycles on AArch64
+    Div | Rem => 10         // Expensive
+    Shl | Shr => 1          // Prefer shifts
+    Load | Store => 4       // Memory access
+    _ => 1
+  }
+}
+```
+
+### Expected Optimizations
+
+| Pattern | Before | After |
+|---------|--------|-------|
+| `x * 8` | `mul x, 8` | `lsl x, 3` |
+| `x * 7` | `mul x, 7` | `lsl x, 3; sub x, x, orig` |
+| `x / 4` | `sdiv x, 4` | `asr x, 2` |
+| `x + x` | `add x, x` | `lsl x, 1` |
+| `(a + 1) + 2` | `add; add` | `add a, 3` |
+| `a * b + a * c` | `mul; mul; add` | `add b, c; mul a` |
+
+### Integration Points
+
+1. Replace `ir/optimize.mbt` with e-graph-based optimizer
+2. Subsumes: CF, CP, CSE (via hashconsing), algebraic simplification
+3. DCE handled separately (liveness-based, not equivalence-based)
+4. VCode lowering becomes simpler - IR already optimized
+
+### Complexity Estimate
+
+- Core e-graph: ~300 LOC
+- Rules: ~200 LOC
+- Extraction: ~100 LOC
+- Integration: ~100 LOC
+
+Total: ~700 LOC to replace scattered optimization code
+
+### References
+
+- [egg: Fast and Extensible Equality Saturation](https://egraphs-good.github.io/)
+- [Cranelift's use of e-graphs](https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/egraph)
+
+---
+
 ## References
 
 - AArch64 instruction reference: ARM Architecture Reference Manual
 - Existing patterns: `vcode/lower/aarch64_patterns.mbt`
 - Existing fusion: `vcode/lower/lower_numeric.mbt`
+- E-graph theory: egg library documentation
