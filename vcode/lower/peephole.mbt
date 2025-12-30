@@ -128,61 +128,6 @@ fn collect_block_param_uses(
 }
 
 ///|
-/// Check if an instruction is pure (no side effects) and can be eliminated if unused
-fn is_pure_instruction(opcode : @instr.VCodeOpcode) -> Bool {
-  match opcode {
-    // Pure arithmetic/logic - safe to eliminate
-    Add(_)
-    | AddImm(_, _)
-    | Sub(_)
-    | SubImm(_, _)
-    | Mul(_)
-    | And
-    | Or
-    | Xor
-    | Shl(_)
-    | AShr(_)
-    | LShr(_)
-    | Rotr(_)
-    | Not
-    | Cmp(_, _)
-    | FCmp(_)
-    | Extend(_)
-    | Truncate
-    | Move
-    | LoadConst(_)
-    | LoadConstF32(_)
-    | LoadConstF64(_)
-    | FAdd(_)
-    | FSub(_)
-    | FMul(_)
-    | FDiv(_)
-    | FSqrt(_)
-    | FAbs(_)
-    | FNeg(_)
-    | AddShifted(_, _)
-    | SubShifted(_, _)
-    | AndShifted(_, _)
-    | OrShifted(_, _)
-    | XorShifted(_, _)
-    | Madd
-    | Msub
-    | Mneg
-    | Select
-    | SelectCmp(_, _)
-    | Clz(_)
-    | Popcnt(_)
-    | Rbit(_)
-    | IntToFloat(_)
-    | FPromote
-    | FDemote
-    | Bitcast => true
-    // Instructions with side effects - keep
-    _ => false
-  }
-}
-
-///|
 /// Run peephole optimization on a single block
 /// Returns the number of instructions eliminated
 fn optimize_block(

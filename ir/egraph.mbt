@@ -58,6 +58,7 @@ pub(all) struct ENode {
 
 ///|
 /// E-class: an equivalence class of e-nodes
+#warnings("-unused_field")
 struct EClass {
   id : EClassId
   mut nodes : Array[ENode] // All equivalent nodes in this class
@@ -677,7 +678,7 @@ fn log2_if_pow2(n : Int64) -> Int? {
   let mut val = n
   while (val & 1L) == 0L {
     count = count + 1
-    val = val.lsr(1)
+    val = val >> 1
   }
   Some(count)
 }
@@ -759,22 +760,24 @@ fn rule_const_fold() -> RewriteRule {
                 Xor => Some(lhs ^ rhs)
                 Shl =>
                   if rhs >= 0L && rhs < 64L {
-                    Some(lhs.lsl(rhs.to_int()))
+                    Some(lhs << rhs.to_int())
                   } else {
                     None
                   }
                 Sshr =>
                   if rhs >= 0L && rhs < 64L {
-                    Some(lhs.asr(rhs.to_int()))
+                    Some(lhs >> rhs.to_int())
                   } else {
                     None
                   }
-                Ushr =>
+                Ushr => {
+                  let lhs = lhs.reinterpret_as_uint64()
                   if rhs >= 0L && rhs < 64L {
-                    Some(lhs.lsr(rhs.to_int()))
+                    Some((lhs >> rhs.to_int()).reinterpret_as_int64())
                   } else {
                     None
                   }
+                }
                 Sdiv => if rhs != 0L { Some(lhs / rhs) } else { None }
                 Udiv =>
                   if rhs != 0L {
@@ -831,10 +834,635 @@ fn rule_reassoc_add_const() -> RewriteRule {
   }
 }
 
+// ============================================================================
+// Commutativity rules
+// ============================================================================
+
+///|
+/// x + y = y + x (commutativity of addition)
+fn rule_add_comm() -> RewriteRule {
+  {
+    name: "add_comm",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          let swapped = eg.add_add(node.children[1], node.children[0])
+          let new_id = eg.merge(class_id, swapped)
+          changed = new_id != class_id || changed
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x * y = y * x (commutativity of multiplication)
+fn rule_mul_comm() -> RewriteRule {
+  {
+    name: "mul_comm",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Mul && node.children.length() == 2 {
+          let swapped = eg.add_mul(node.children[1], node.children[0])
+          let new_id = eg.merge(class_id, swapped)
+          changed = new_id != class_id || changed
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x & y = y & x (commutativity of and)
+fn rule_and_comm() -> RewriteRule {
+  {
+    name: "and_comm",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is And && node.children.length() == 2 {
+          let swapped = eg.add_and(node.children[1], node.children[0])
+          let new_id = eg.merge(class_id, swapped)
+          changed = new_id != class_id || changed
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x | y = y | x (commutativity of or)
+fn rule_or_comm() -> RewriteRule {
+  {
+    name: "or_comm",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Or && node.children.length() == 2 {
+          let swapped = eg.add_or(node.children[1], node.children[0])
+          let new_id = eg.merge(class_id, swapped)
+          changed = new_id != class_id || changed
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x ^ y = y ^ x (commutativity of xor)
+fn rule_xor_comm() -> RewriteRule {
+  {
+    name: "xor_comm",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Xor && node.children.length() == 2 {
+          let swapped = eg.add_xor(node.children[1], node.children[0])
+          let new_id = eg.merge(class_id, swapped)
+          changed = new_id != class_id || changed
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// Bitwise identity rules
+// ============================================================================
+
+///|
+/// x & 0 = 0
+fn rule_and_zero() -> RewriteRule {
+  {
+    name: "and_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is And && node.children.length() == 2 {
+          if eg.find_const(node.children[0]) is Some(0L) ||
+            eg.find_const(node.children[1]) is Some(0L) {
+            let zero = eg.add_const(0L)
+            let new_id = eg.merge(class_id, zero)
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x | 0 = x
+fn rule_or_zero() -> RewriteRule {
+  {
+    name: "or_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Or && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(0L) {
+            let new_id = eg.merge(class_id, node.children[0])
+            changed = new_id != class_id || changed
+          } else if eg.find_const(node.children[0]) is Some(0L) {
+            let new_id = eg.merge(class_id, node.children[1])
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x ^ 0 = x
+fn rule_xor_zero() -> RewriteRule {
+  {
+    name: "xor_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Xor && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(0L) {
+            let new_id = eg.merge(class_id, node.children[0])
+            changed = new_id != class_id || changed
+          } else if eg.find_const(node.children[0]) is Some(0L) {
+            let new_id = eg.merge(class_id, node.children[1])
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x & -1 = x (all bits set)
+fn rule_and_all_ones() -> RewriteRule {
+  {
+    name: "and_all_ones",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is And && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(-1L) {
+            let new_id = eg.merge(class_id, node.children[0])
+            changed = new_id != class_id || changed
+          } else if eg.find_const(node.children[0]) is Some(-1L) {
+            let new_id = eg.merge(class_id, node.children[1])
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x | -1 = -1
+fn rule_or_all_ones() -> RewriteRule {
+  {
+    name: "or_all_ones",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Or && node.children.length() == 2 {
+          if eg.find_const(node.children[0]) is Some(-1L) ||
+            eg.find_const(node.children[1]) is Some(-1L) {
+            let all_ones = eg.add_const(-1L)
+            let new_id = eg.merge(class_id, all_ones)
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// More strength reduction rules
+// ============================================================================
+
+///|
+/// x / 2^n = x >> n (for unsigned, or when x >= 0)
+/// Note: This is only valid for unsigned division
+fn rule_udiv_pow2() -> RewriteRule {
+  {
+    name: "udiv_pow2",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Udiv && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(c) {
+            if log2_if_pow2(c) is Some(shift) {
+              let shift_const = eg.add_const(shift.to_int64())
+              let new_node = eg.add_binop(Ushr, node.children[0], shift_const)
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x % 2^n = x & (2^n - 1) (for unsigned)
+fn rule_urem_pow2() -> RewriteRule {
+  {
+    name: "urem_pow2",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Urem && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(c) {
+            if log2_if_pow2(c) is Some(_) {
+              let mask = eg.add_const(c - 1L)
+              let new_node = eg.add_and(node.children[0], mask)
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x * 3 = (x << 1) + x
+fn rule_mul_3() -> RewriteRule {
+  {
+    name: "mul_3",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Mul && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(3L) {
+            let one = eg.add_const(1L)
+            let shifted = eg.add_shl(node.children[0], one)
+            let new_node = eg.add_add(shifted, node.children[0])
+            let new_id = eg.merge(class_id, new_node)
+            changed = new_id != class_id || changed
+          } else if eg.find_const(node.children[0]) is Some(3L) {
+            let one = eg.add_const(1L)
+            let shifted = eg.add_shl(node.children[1], one)
+            let new_node = eg.add_add(shifted, node.children[1])
+            let new_id = eg.merge(class_id, new_node)
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x * 5 = (x << 2) + x
+fn rule_mul_5() -> RewriteRule {
+  {
+    name: "mul_5",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Mul && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(5L) {
+            let two = eg.add_const(2L)
+            let shifted = eg.add_shl(node.children[0], two)
+            let new_node = eg.add_add(shifted, node.children[0])
+            let new_id = eg.merge(class_id, new_node)
+            changed = new_id != class_id || changed
+          } else if eg.find_const(node.children[0]) is Some(5L) {
+            let two = eg.add_const(2L)
+            let shifted = eg.add_shl(node.children[1], two)
+            let new_node = eg.add_add(shifted, node.children[1])
+            let new_id = eg.merge(class_id, new_node)
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x * 7 = (x << 3) - x
+fn rule_mul_7() -> RewriteRule {
+  {
+    name: "mul_7",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Mul && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(7L) {
+            let three = eg.add_const(3L)
+            let shifted = eg.add_shl(node.children[0], three)
+            let new_node = eg.add_sub(shifted, node.children[0])
+            let new_id = eg.merge(class_id, new_node)
+            changed = new_id != class_id || changed
+          } else if eg.find_const(node.children[0]) is Some(7L) {
+            let three = eg.add_const(3L)
+            let shifted = eg.add_shl(node.children[1], three)
+            let new_node = eg.add_sub(shifted, node.children[1])
+            let new_id = eg.merge(class_id, new_node)
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x * 9 = (x << 3) + x
+fn rule_mul_9() -> RewriteRule {
+  {
+    name: "mul_9",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Mul && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(9L) {
+            let three = eg.add_const(3L)
+            let shifted = eg.add_shl(node.children[0], three)
+            let new_node = eg.add_add(shifted, node.children[0])
+            let new_id = eg.merge(class_id, new_node)
+            changed = new_id != class_id || changed
+          } else if eg.find_const(node.children[0]) is Some(9L) {
+            let three = eg.add_const(3L)
+            let shifted = eg.add_shl(node.children[1], three)
+            let new_node = eg.add_add(shifted, node.children[1])
+            let new_id = eg.merge(class_id, new_node)
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// Shift rules
+// ============================================================================
+
+///|
+/// x << 0 = x
+fn rule_shl_zero() -> RewriteRule {
+  {
+    name: "shl_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Shl && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(0L) {
+            let new_id = eg.merge(class_id, node.children[0])
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x >> 0 = x (both arithmetic and logical)
+fn rule_shr_zero() -> RewriteRule {
+  {
+    name: "shr_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if (node.op is Sshr || node.op is Ushr) && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(0L) {
+            let new_id = eg.merge(class_id, node.children[0])
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// 0 << x = 0, 0 >> x = 0
+fn rule_shift_of_zero() -> RewriteRule {
+  {
+    name: "shift_of_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if (node.op is Shl || node.op is Sshr || node.op is Ushr) &&
+          node.children.length() == 2 {
+          if eg.find_const(node.children[0]) is Some(0L) {
+            let zero = eg.add_const(0L)
+            let new_id = eg.merge(class_id, zero)
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// (x << a) << b = x << (a + b) when a + b < 64
+fn rule_shl_shl() -> RewriteRule {
+  {
+    name: "shl_shl",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Shl && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(b) {
+            for inner in eg.get_nodes(node.children[0]) {
+              if inner.op is Shl && inner.children.length() == 2 {
+                if eg.find_const(inner.children[1]) is Some(a) {
+                  let total = a + b
+                  if total >= 0L && total < 64L {
+                    let total_const = eg.add_const(total)
+                    let new_node = eg.add_shl(inner.children[0], total_const)
+                    let new_id = eg.merge(class_id, new_node)
+                    changed = new_id != class_id || changed
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// Subtraction rules
+// ============================================================================
+
+///|
+/// 0 - x = neg(x) - but since we don't have neg yet, create sub(0, x)
+/// This helps recognize negation patterns
+fn rule_neg_zero() -> RewriteRule {
+  {
+    name: "neg_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          if eg.find_const(node.children[0]) is Some(0L) {
+            // 0 - x is already in canonical form for negation
+            // Add the Neg node as equivalent
+            let neg_node = eg.add({ op: Neg, children: [node.children[1]] })
+            let new_id = eg.merge(class_id, neg_node)
+            changed = new_id != class_id || changed
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x - (0 - y) = x + y
+fn rule_sub_neg() -> RewriteRule {
+  {
+    name: "sub_neg",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          for inner in eg.get_nodes(node.children[1]) {
+            if inner.op is Sub && inner.children.length() == 2 {
+              if eg.find_const(inner.children[0]) is Some(0L) {
+                // x - (0 - y) = x + y
+                let new_node = eg.add_add(node.children[0], inner.children[1])
+                let new_id = eg.merge(class_id, new_node)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x + (0 - y) = x - y
+fn rule_add_neg() -> RewriteRule {
+  {
+    name: "add_neg",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          for inner in eg.get_nodes(node.children[1]) {
+            if inner.op is Sub && inner.children.length() == 2 {
+              if eg.find_const(inner.children[0]) is Some(0L) {
+                // x + (0 - y) = x - y
+                let new_node = eg.add_sub(node.children[0], inner.children[1])
+                let new_id = eg.merge(class_id, new_node)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// Constant reassociation rules
+// ============================================================================
+
+///|
+/// (a * c1) * c2 = a * (c1 * c2) - reassociate multiplication constants
+fn rule_reassoc_mul_const() -> RewriteRule {
+  {
+    name: "reassoc_mul_const",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Mul && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(c2) {
+            for inner in eg.get_nodes(node.children[0]) {
+              if inner.op is Mul && inner.children.length() == 2 {
+                if eg.find_const(inner.children[1]) is Some(c1) {
+                  // (a * c1) * c2 = a * (c1 * c2)
+                  let combined = eg.add_const(c1 * c2)
+                  let new_mul = eg.add_mul(inner.children[0], combined)
+                  let new_id = eg.merge(class_id, new_mul)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// (a - c1) - c2 = a - (c1 + c2)
+fn rule_reassoc_sub_const() -> RewriteRule {
+  {
+    name: "reassoc_sub_const",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(c2) {
+            for inner in eg.get_nodes(node.children[0]) {
+              if inner.op is Sub && inner.children.length() == 2 {
+                if eg.find_const(inner.children[1]) is Some(c1) {
+                  // (a - c1) - c2 = a - (c1 + c2)
+                  let combined = eg.add_const(c1 + c2)
+                  let new_sub = eg.add_sub(inner.children[0], combined)
+                  let new_id = eg.merge(class_id, new_sub)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
 ///|
 /// Get all standard rewrite rules
 pub fn standard_rules() -> Array[RewriteRule] {
   [
+    // Identity rules
     rule_add_zero(),
     rule_sub_zero(),
     rule_mul_one(),
@@ -842,9 +1470,40 @@ pub fn standard_rules() -> Array[RewriteRule] {
     rule_idempotent(),
     rule_xor_self(),
     rule_sub_self(),
+    // Bitwise identity
+    rule_and_zero(),
+    rule_or_zero(),
+    rule_xor_zero(),
+    rule_and_all_ones(),
+    rule_or_all_ones(),
+    // Shift identity
+    rule_shl_zero(),
+    rule_shr_zero(),
+    rule_shift_of_zero(),
+    rule_shl_shl(),
+    // Strength reduction
     rule_mul_pow2(),
     rule_double(),
+    rule_udiv_pow2(),
+    rule_urem_pow2(),
+    rule_mul_3(),
+    rule_mul_5(),
+    rule_mul_7(),
+    rule_mul_9(),
+    // Negation patterns
+    rule_neg_zero(),
+    rule_sub_neg(),
+    rule_add_neg(),
+    // Constant folding and reassociation
     rule_const_fold(),
     rule_reassoc_add_const(),
+    rule_reassoc_mul_const(),
+    rule_reassoc_sub_const(),
+    // Commutativity (put last as they can cause explosion)
+    rule_add_comm(),
+    rule_mul_comm(),
+    rule_and_comm(),
+    rule_or_comm(),
+    rule_xor_comm(),
   ]
 }

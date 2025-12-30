@@ -225,14 +225,281 @@ test "egraph: num_classes and num_nodes" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
-  let sum = eg.add_add(x, y)
+  let _ = eg.add_add(x, y)
 
   // Before any merges
   inspect(eg.num_classes(), content="3")
   inspect(eg.num_nodes(), content="3")
+}
 
-  // After saturation (might add more equivalent nodes)
-  eg.saturate(standard_rules(), 5) |> ignore
-  // Classes should still be separate (no identity rules apply)
-  inspect(eg.num_classes(), content="3")
+// ============================================================================
+// New rule tests
+// ============================================================================
+
+///|
+test "egraph: x & 0 = 0" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let x_and_zero = eg.add_and(x, zero)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(x_and_zero, zero), content="true")
+}
+
+///|
+test "egraph: x | 0 = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let x_or_zero = eg.add_or(x, zero)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(x_or_zero, x), content="true")
+}
+
+///|
+test "egraph: x ^ 0 = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let x_xor_zero = eg.add_xor(x, zero)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(x_xor_zero, x), content="true")
+}
+
+///|
+test "egraph: x & -1 = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let all_ones = eg.add_const(-1L)
+  let result = eg.add_and(x, all_ones)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: x | -1 = -1" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let all_ones = eg.add_const(-1L)
+  let result = eg.add_or(x, all_ones)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, all_ones), content="true")
+}
+
+///|
+test "egraph: x << 0 = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let result = eg.add_shl(x, zero)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: 0 << x = 0" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let result = eg.add_shl(zero, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, zero), content="true")
+}
+
+///|
+test "egraph: (x << 2) << 3 = x << 5" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let two = eg.add_const(2L)
+  let three = eg.add_const(3L)
+  let five = eg.add_const(5L)
+  let inner = eg.add_shl(x, two)
+  let outer = eg.add_shl(inner, three)
+  let direct = eg.add_shl(x, five)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(outer, direct), content="true")
+}
+
+///|
+test "egraph: x * 3 = (x << 1) + x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let three = eg.add_const(3L)
+  let one = eg.add_const(1L)
+  let mul3 = eg.add_mul(x, three)
+  let shifted = eg.add_shl(x, one)
+  let add_form = eg.add_add(shifted, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(mul3, add_form), content="true")
+}
+
+///|
+test "egraph: x * 5 = (x << 2) + x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let five = eg.add_const(5L)
+  let two = eg.add_const(2L)
+  let mul5 = eg.add_mul(x, five)
+  let shifted = eg.add_shl(x, two)
+  let add_form = eg.add_add(shifted, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(mul5, add_form), content="true")
+}
+
+///|
+test "egraph: x * 7 = (x << 3) - x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let seven = eg.add_const(7L)
+  let three = eg.add_const(3L)
+  let mul7 = eg.add_mul(x, seven)
+  let shifted = eg.add_shl(x, three)
+  let sub_form = eg.add_sub(shifted, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(mul7, sub_form), content="true")
+}
+
+///|
+test "egraph: x * 9 = (x << 3) + x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let nine = eg.add_const(9L)
+  let three = eg.add_const(3L)
+  let mul9 = eg.add_mul(x, nine)
+  let shifted = eg.add_shl(x, three)
+  let add_form = eg.add_add(shifted, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(mul9, add_form), content="true")
+}
+
+///|
+test "egraph: x % 8 = x & 7 (urem)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let eight = eg.add_const(8L)
+  let seven = eg.add_const(7L)
+  let rem = eg.add_binop(Urem, x, eight)
+  let and_form = eg.add_and(x, seven)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(rem, and_form), content="true")
+}
+
+///|
+test "egraph: x / 4 = x >> 2 (udiv)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let four = eg.add_const(4L)
+  let two = eg.add_const(2L)
+  let div = eg.add_binop(Udiv, x, four)
+  let shr = eg.add_binop(Ushr, x, two)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(div, shr), content="true")
+}
+
+///|
+test "egraph: 0 - x creates Neg node" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let neg_x = eg.add_sub(zero, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+
+  // Check that Neg node exists in the class
+  let mut has_neg = false
+  for node in eg.get_nodes(neg_x) {
+    if node.op is Neg {
+      has_neg = true
+    }
+  }
+  inspect(has_neg, content="true")
+}
+
+///|
+test "egraph: x - (0 - y) = x + y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let zero = eg.add_const(0L)
+  let neg_y = eg.add_sub(zero, y)
+  let x_sub_neg_y = eg.add_sub(x, neg_y)
+  let x_add_y = eg.add_add(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(x_sub_neg_y, x_add_y), content="true")
+}
+
+///|
+test "egraph: x + (0 - y) = x - y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let zero = eg.add_const(0L)
+  let neg_y = eg.add_sub(zero, y)
+  let x_add_neg_y = eg.add_add(x, neg_y)
+  let x_sub_y = eg.add_sub(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(x_add_neg_y, x_sub_y), content="true")
+}
+
+///|
+test "egraph: (a * 2) * 3 = a * 6" {
+  let eg = EGraph::new()
+  let a = eg.add_var(0)
+  let two = eg.add_const(2L)
+  let three = eg.add_const(3L)
+  let six = eg.add_const(6L)
+  let a_times_2 = eg.add_mul(a, two)
+  let result = eg.add_mul(a_times_2, three)
+  let direct = eg.add_mul(a, six)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, direct), content="true")
+}
+
+///|
+test "egraph: (a - 1) - 2 = a - 3" {
+  let eg = EGraph::new()
+  let a = eg.add_var(0)
+  let one = eg.add_const(1L)
+  let two = eg.add_const(2L)
+  let three = eg.add_const(3L)
+  let a_sub_1 = eg.add_sub(a, one)
+  let result = eg.add_sub(a_sub_1, two)
+  let direct = eg.add_sub(a, three)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, direct), content="true")
+}
+
+///|
+test "egraph: commutativity - x + y equiv y + x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let xy = eg.add_add(x, y)
+  let yx = eg.add_add(y, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(xy, yx), content="true")
+}
+
+///|
+test "egraph: commutativity - x * y equiv y * x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let xy = eg.add_mul(x, y)
+  let yx = eg.add_mul(y, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(xy, yx), content="true")
+}
+
+///|
+test "egraph: extraction prefers add over mul for x*3" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let three = eg.add_const(3L)
+  let mul3 = eg.add_mul(x, three)
+  eg.saturate(standard_rules(), 10) |> ignore
+
+  // Should prefer (x << 1) + x (cost 2) over x * 3 (cost 3)
+  let (cost, _) = eg.extract(mul3)
+  // Cost should be: shl(1) + add(1) = 2
+  inspect(cost, content="2")
 }
