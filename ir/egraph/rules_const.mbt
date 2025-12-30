@@ -1,4 +1,5 @@
 // Constant folding and strength reduction rules
+
 ///|
 fn rule_mul_pow2() -> RewriteRule {
   {

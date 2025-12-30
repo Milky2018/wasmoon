@@ -607,3 +607,244 @@ test "egraph: x * (1 << y) = x << y" {
   eg.saturate(standard_rules(), 10) |> ignore
   inspect(eg.equiv(mul, shl_x), content="true")
 }
+
+///|
+test "egraph: x | x = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let x_or_x = eg.add_or(x, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(x_or_x, x), content="true")
+}
+
+///|
+test "egraph: x ^ ~x = -1" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let not_x = eg.add_bnot(x)
+  let result = eg.add_xor(x, not_x)
+  let all_ones = eg.add_const(-1L)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, all_ones), content="true")
+}
+
+///|
+test "egraph: x | ~x = -1" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let not_x = eg.add_bnot(x)
+  let result = eg.add_or(x, not_x)
+  let all_ones = eg.add_const(-1L)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, all_ones), content="true")
+}
+
+///|
+test "egraph: x & ~x = 0" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let not_x = eg.add_bnot(x)
+  let result = eg.add_and(x, not_x)
+  let zero = eg.add_const(0L)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, zero), content="true")
+}
+
+///|
+test "egraph: ~~x = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let not_x = eg.add_bnot(x)
+  let not_not_x = eg.add_bnot(not_x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(not_not_x, x), content="true")
+}
+
+///|
+test "egraph: DeMorgan ~(x | y) = ~x & ~y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_or_y = eg.add_or(x, y)
+  let not_or = eg.add_bnot(x_or_y)
+  let not_x = eg.add_bnot(x)
+  let not_y = eg.add_bnot(y)
+  let not_and = eg.add_and(not_x, not_y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(not_or, not_and), content="true")
+}
+
+///|
+test "egraph: DeMorgan ~(x & y) = ~x | ~y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_and_y = eg.add_and(x, y)
+  let not_and = eg.add_bnot(x_and_y)
+  let not_x = eg.add_bnot(x)
+  let not_y = eg.add_bnot(y)
+  let not_or = eg.add_or(not_x, not_y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(not_and, not_or), content="true")
+}
+
+///|
+test "egraph: x ^ -1 = ~x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let all_ones = eg.add_const(-1L)
+  let result = eg.add_xor(x, all_ones)
+  let not_x = eg.add_bnot(x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, not_x), content="true")
+}
+
+///|
+test "egraph: (x & y) ^ (x ^ y) = x | y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_and_y = eg.add_and(x, y)
+  let x_xor_y = eg.add_xor(x, y)
+  let result = eg.add_xor(x_and_y, x_xor_y)
+  let x_or_y = eg.add_or(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x_or_y), content="true")
+}
+
+///|
+test "egraph: (x | y) ^ (x & y) = x ^ y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_or_y = eg.add_or(x, y)
+  let x_and_y = eg.add_and(x, y)
+  let result = eg.add_xor(x_or_y, x_and_y)
+  let x_xor_y = eg.add_xor(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x_xor_y), content="true")
+}
+
+///|
+test "egraph: (x & y) | x = x (absorption)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_and_y = eg.add_and(x, y)
+  let result = eg.add_or(x_and_y, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: (x ^ y) ^ y = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_xor_y = eg.add_xor(x, y)
+  let result = eg.add_xor(x_xor_y, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: (z & x) ^ (z & y) = z & (x ^ y)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let z = eg.add_var(2)
+  let z_and_x = eg.add_and(z, x)
+  let z_and_y = eg.add_and(z, y)
+  let result = eg.add_xor(z_and_x, z_and_y)
+  let x_xor_y = eg.add_xor(x, y)
+  let expected = eg.add_and(z, x_xor_y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: (x & y) + (x ^ y) = x | y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_and_y = eg.add_and(x, y)
+  let x_xor_y = eg.add_xor(x, y)
+  let result = eg.add_add(x_and_y, x_xor_y)
+  let x_or_y = eg.add_or(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x_or_y), content="true")
+}
+
+///|
+test "egraph: (x | y) + (x & y) = x + y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_or_y = eg.add_or(x, y)
+  let x_and_y = eg.add_and(x, y)
+  let result = eg.add_add(x_or_y, x_and_y)
+  let x_add_y = eg.add_add(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x_add_y), content="true")
+}
+
+///|
+test "egraph: (x & y) | ~y = x | ~y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_and_y = eg.add_and(x, y)
+  let not_y = eg.add_bnot(y)
+  let result = eg.add_or(x_and_y, not_y)
+  let expected = eg.add_or(x, not_y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: (x | y) | x = x | y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_or_y = eg.add_or(x, y)
+  let result = eg.add_or(x_or_y, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x_or_y), content="true")
+}
+
+///|
+test "egraph: (x & y) & x = x & y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_and_y = eg.add_and(x, y)
+  let result = eg.add_and(x_and_y, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x_and_y), content="true")
+}
+
+///|
+test "egraph: (x ^ ~y) & x = x & y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let not_y = eg.add_bnot(y)
+  let x_xor_not_y = eg.add_xor(x, not_y)
+  let result = eg.add_and(x_xor_not_y, x)
+  let expected = eg.add_and(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: (x & y) | ~x = y | ~x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_and_y = eg.add_and(x, y)
+  let not_x = eg.add_bnot(x)
+  let result = eg.add_or(x_and_y, not_x)
+  let expected = eg.add_or(y, not_x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}

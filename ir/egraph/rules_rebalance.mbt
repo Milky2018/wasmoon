@@ -1,4 +1,5 @@
 // Tree rebalancing rules for associative operations
+
 ///|
 fn rule_rebalance_add_right() -> RewriteRule {
   {

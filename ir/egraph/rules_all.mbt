@@ -1,4 +1,5 @@
 // Standard rules collection
+
 ///|
 pub fn standard_rules() -> Array[RewriteRule] {
   [
@@ -16,6 +17,28 @@ pub fn standard_rules() -> Array[RewriteRule] {
     rule_xor_zero(),
     rule_and_all_ones(),
     rule_or_all_ones(),
+    rule_or_self(),
+    rule_xor_all_ones(),
+    // Bitwise with not
+    rule_xor_not(),
+    rule_or_not(),
+    rule_and_not(),
+    rule_double_bnot(),
+    rule_demorgan_or(),
+    rule_demorgan_and(),
+    // Bitwise algebraic
+    rule_and_xor_xor(),
+    rule_or_xor_and(),
+    rule_and_or_absorb(),
+    rule_xor_xor_cancel(),
+    rule_factor_and_xor(),
+    rule_and_add_xor(),
+    rule_or_add_and(),
+    rule_or_and_not(),
+    rule_or_or_absorb(),
+    rule_and_and_absorb(),
+    rule_xor_not_and(),
+    rule_and_or_not(),
     // Shift identity
     rule_shl_zero(),
     rule_shr_zero(),
@@ -110,6 +133,28 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_xor_zero(), [TXor])
   rs.add_rule(rule_and_all_ones(), [TAnd])
   rs.add_rule(rule_or_all_ones(), [TOr])
+  rs.add_rule(rule_or_self(), [TOr])
+  rs.add_rule(rule_xor_all_ones(), [TXor])
+  // Bitwise with not
+  rs.add_rule(rule_xor_not(), [TXor])
+  rs.add_rule(rule_or_not(), [TOr])
+  rs.add_rule(rule_and_not(), [TAnd])
+  rs.add_rule(rule_double_bnot(), [TBnot])
+  rs.add_rule(rule_demorgan_or(), [TBnot])
+  rs.add_rule(rule_demorgan_and(), [TBnot])
+  // Bitwise algebraic
+  rs.add_rule(rule_and_xor_xor(), [TXor])
+  rs.add_rule(rule_or_xor_and(), [TXor])
+  rs.add_rule(rule_and_or_absorb(), [TOr])
+  rs.add_rule(rule_xor_xor_cancel(), [TXor])
+  rs.add_rule(rule_factor_and_xor(), [TXor])
+  rs.add_rule(rule_and_add_xor(), [TAdd])
+  rs.add_rule(rule_or_add_and(), [TAdd])
+  rs.add_rule(rule_or_and_not(), [TOr])
+  rs.add_rule(rule_or_or_absorb(), [TOr])
+  rs.add_rule(rule_and_and_absorb(), [TAnd])
+  rs.add_rule(rule_xor_not_and(), [TAnd])
+  rs.add_rule(rule_and_or_not(), [TOr])
   // Shift identity
   rs.add_rule(rule_shl_zero(), [TShl])
   rs.add_rule(rule_shr_zero(), [TSshr, TUshr])
