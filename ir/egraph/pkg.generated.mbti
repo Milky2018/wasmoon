@@ -28,6 +28,7 @@ pub(all) struct EGraph {
   mut worklist : Array[EClassId]
   mut dirty : Bool
   opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
+  mut pending_rules : Array[(EClassId, EOpcodeTag)]
 }
 pub fn EGraph::add(Self, ENode) -> EClassId
 pub fn EGraph::add_add(Self, EClassId, EClassId) -> EClassId

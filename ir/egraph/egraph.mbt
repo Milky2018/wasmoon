@@ -324,6 +324,11 @@ fn UnionFind::union(self : UnionFind, a : Int, b : Int) -> Int {
   }
 }
 
+// Cranelift-style limits to prevent infinite rewriting
+
+///|
+let matches_limit : Int = 5 // Max rewrites per add_eager call
+
 ///|
 /// The main E-graph data structure
 pub(all) struct EGraph {
@@ -339,6 +344,8 @@ pub(all) struct EGraph {
   mut dirty : Bool
   // Opcode index: maps opcode tag to set of class ids containing that opcode
   opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
+  // Worklist of (class_id, opcode_tag) pairs pending rule application
+  mut pending_rules : Array[(EClassId, EOpcodeTag)]
 }
 
 ///|
@@ -350,6 +357,7 @@ pub fn EGraph::new() -> EGraph {
     worklist: [],
     dirty: false,
     opcode_index: {},
+    pending_rules: [],
   }
 }
 
@@ -385,6 +393,7 @@ fn EGraph::canonicalize(self : EGraph, node : ENode) -> ENode {
 ///|
 /// Add an e-node to the e-graph, returning its e-class id
 /// If an equivalent node already exists, returns the existing class id
+/// New nodes are queued for rule application (processed by add_eager)
 pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
   // Canonicalize the node first
   let node = self.canonicalize(node)
@@ -406,31 +415,46 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
   self.classes.set(id, eclass)
   self.hashcons.set(node, class_id)
   // Update opcode index
-  self.index_add(node.op.tag(), id)
+  let tag = node.op.tag()
+  self.index_add(tag, id)
+  // Queue for rule application (will be processed by add_eager)
+  self.pending_rules.push((class_id, tag))
   class_id
 }
 
 ///|
 /// Add an e-node and eagerly apply applicable rules
-/// This is more efficient than iterating to fixpoint when rules are directional
-/// (i.e., RHS cost >= LHS cost, so rules only simplify)
+/// Processes all pending nodes (including those created by rules) up to MATCHES_LIMIT
+/// This handles chained rewrites like x*8 → x<<3 → further optimizations
 pub fn EGraph::add_eager(
   self : EGraph,
   node : ENode,
   ruleset : IndexedRuleSet,
 ) -> EClassId {
   let class_id = self.add(node)
-  // Apply applicable rules immediately
-  let tag = node.op.tag()
-  if ruleset.by_opcode.get(tag) is Some(rules) {
-    for indexed_rule in rules {
-      (indexed_rule.rule.apply)(self, class_id) |> ignore
+  // Process all pending nodes with rule application
+  // Rules may add new nodes which also get processed
+  let mut rewrites = 0
+  while self.pending_rules.length() > 0 && rewrites < matches_limit {
+    let (pending_id, tag) = self.pending_rules.pop().unwrap()
+    let canonical_id = self.find(pending_id)
+    // Apply rules matching this opcode
+    if ruleset.by_opcode.get(tag) is Some(rules) {
+      for indexed_rule in rules {
+        if (indexed_rule.rule.apply)(self, canonical_id) {
+          rewrites = rewrites + 1
+        }
+      }
+    }
+    // Apply universal rules
+    for indexed_rule in ruleset.universal {
+      if (indexed_rule.rule.apply)(self, canonical_id) {
+        rewrites = rewrites + 1
+      }
     }
   }
-  // Also apply universal rules
-  for indexed_rule in ruleset.universal {
-    (indexed_rule.rule.apply)(self, class_id) |> ignore
-  }
+  // Clear any remaining pending (hit limit)
+  self.pending_rules.clear()
   // Return the (possibly merged) canonical class id
   self.find(class_id)
 }
@@ -566,6 +590,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
   }
   self.hashcons = new_hashcons
   self.worklist = []
+  self.pending_rules = [] // Clear pending rules (processed by saturate or add_eager)
   self.dirty = false
 }
 
