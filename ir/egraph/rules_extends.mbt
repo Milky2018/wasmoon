@@ -807,3 +807,191 @@ fn rule_ireduce_ishl() -> RewriteRule {
     },
   }
 }
+
+// IntCC constants for comparison conditions
+
+///|
+let cc_slt : Int = 2 // signed less than
+
+///|
+let cc_sge : Int = 5 // signed greater or equal
+
+///|
+/// slt(uextend(x), 0) → 0
+/// Zero-extended values are always non-negative, so slt with 0 is always false
+fn rule_slt_uextend_zero() -> RewriteRule {
+  {
+    name: "slt_uextend_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        match node.op {
+          Icmp(cc) =>
+            if cc == cc_slt && node.children.length() == 2 {
+              // Check if left is uextend and right is zero
+              for left in eg.get_nodes(node.children[0]) {
+                if left.op is Uextend {
+                  for right in eg.get_nodes(node.children[1]) {
+                    if right.op == Const(0L) {
+                      // slt(uextend(x), 0) = 0 (always false)
+                      let false_const = eg.add_const(0L)
+                      let new_id = eg.merge(class_id, false_const)
+                      changed = new_id != class_id || changed
+                    }
+                  }
+                }
+              }
+            }
+          _ => ()
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// sge(uextend(x), 0) → 1
+/// Zero-extended values are always non-negative, so sge with 0 is always true
+fn rule_sge_uextend_zero() -> RewriteRule {
+  {
+    name: "sge_uextend_zero",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        match node.op {
+          Icmp(cc) =>
+            if cc == cc_sge && node.children.length() == 2 {
+              // Check if left is uextend and right is zero
+              for left in eg.get_nodes(node.children[0]) {
+                if left.op is Uextend {
+                  for right in eg.get_nodes(node.children[1]) {
+                    if right.op == Const(0L) {
+                      // sge(uextend(x), 0) = 1 (always true)
+                      let true_const = eg.add_const(1L)
+                      let new_id = eg.merge(class_id, true_const)
+                      changed = new_id != class_id || changed
+                    }
+                  }
+                }
+              }
+            }
+          _ => ()
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// Helper: check if a constant is a type mask (0xFF, 0xFFFF, 0xFFFFFFFF)
+fn is_type_mask(c : Int64) -> Bool {
+  c == 0xFFL || c == 0xFFFFL || c == 0xFFFFFFFFL
+}
+
+///|
+/// band(uextend(x), mask) → uextend(x) when mask covers all bits of narrow type
+/// If masking with 0xFF/0xFFFF/0xFFFFFFFF and value is uextended, mask is no-op
+fn rule_band_uextend_mask() -> RewriteRule {
+  {
+    name: "band_uextend_mask",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is And && node.children.length() == 2 {
+          // Check band(uextend(x), mask)
+          for left in eg.get_nodes(node.children[0]) {
+            if left.op is Uextend && left.children.length() == 1 {
+              for right in eg.get_nodes(node.children[1]) {
+                match right.op {
+                  Const(mask) =>
+                    if is_type_mask(mask) {
+                      // band(uextend(x), mask) = uextend(x) when mask covers narrow type
+                      // This is safe because uextend already zeroes high bits
+                      let new_id = eg.merge(class_id, node.children[0])
+                      changed = new_id != class_id || changed
+                    }
+                  _ => ()
+                }
+              }
+            }
+          }
+          // Also check band(mask, uextend(x)) - symmetric case
+          for left in eg.get_nodes(node.children[0]) {
+            match left.op {
+              Const(mask) =>
+                if is_type_mask(mask) {
+                  for right in eg.get_nodes(node.children[1]) {
+                    if right.op is Uextend && right.children.length() == 1 {
+                      let new_id = eg.merge(class_id, node.children[1])
+                      changed = new_id != class_id || changed
+                    }
+                  }
+                }
+              _ => ()
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// band(sextend(x), mask) → uextend(x) when mask is narrow type mask
+/// Masking out the sign-extended bits turns sextend into uextend
+fn rule_band_sextend_mask() -> RewriteRule {
+  {
+    name: "band_sextend_mask",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is And && node.children.length() == 2 {
+          // Check band(sextend(x), mask)
+          for left in eg.get_nodes(node.children[0]) {
+            if left.op is Sextend && left.children.length() == 1 {
+              for right in eg.get_nodes(node.children[1]) {
+                match right.op {
+                  Const(mask) =>
+                    if is_type_mask(mask) {
+                      // band(sextend(x), mask) = uextend(x)
+                      // Masking clears the sign-extended bits
+                      let new_node = eg.add({
+                        op: Uextend,
+                        children: [left.children[0]],
+                      })
+                      let new_id = eg.merge(class_id, new_node)
+                      changed = new_id != class_id || changed
+                    }
+                  _ => ()
+                }
+              }
+            }
+          }
+          // Symmetric case
+          for left in eg.get_nodes(node.children[0]) {
+            match left.op {
+              Const(mask) =>
+                if is_type_mask(mask) {
+                  for right in eg.get_nodes(node.children[1]) {
+                    if right.op is Sextend && right.children.length() == 1 {
+                      let new_node = eg.add({
+                        op: Uextend,
+                        children: [right.children[0]],
+                      })
+                      let new_id = eg.merge(class_id, new_node)
+                      changed = new_id != class_id || changed
+                    }
+                  }
+                }
+              _ => ()
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}

@@ -157,6 +157,12 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   // Arithmetic with extends
   rs.add_rule(rule_iadd_uextend(), [TAdd])
   rs.add_rule(rule_isub_uextend(), [TSub])
+  // Uextend comparison optimizations (uextend values are always non-negative)
+  rs.add_rule(rule_slt_uextend_zero(), [TIcmp])
+  rs.add_rule(rule_sge_uextend_zero(), [TIcmp])
+  // Masking with type masks
+  rs.add_rule(rule_band_uextend_mask(), [TAnd])
+  rs.add_rule(rule_band_sextend_mask(), [TAnd])
   // Tree rebalancing
   rs.add_rule(rule_rebalance_add_right(), [TAdd])
   rs.add_rule(rule_rebalance_add_left(), [TAdd])
