@@ -164,6 +164,7 @@ pub(all) enum VCodeOpcode {
   Add(Bool) // ADD with size: true = 64-bit, false = 32-bit
   AddImm(Int, Bool) // ADD Xd, Xn, #imm with size: true = 64-bit, false = 32-bit
   Sub(Bool) // SUB with size: true = 64-bit, false = 32-bit
+  SubImm(Int, Bool) // SUB Xd, Xn, #imm with size: true = 64-bit, false = 32-bit
   Mul(Bool) // MUL with size: true = 64-bit, false = 32-bit
   SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
@@ -220,6 +221,11 @@ pub(all) enum VCodeOpcode {
   // Select: Xd = cond ? Xn : Xm
   // Uses: [cond, true_val, false_val], Defs: [result]
   Select
+  // SelectCmp: Fused compare and select
+  // SelectCmp(kind, is_64): CMP lhs, rhs; CSEL Xd, true_val, false_val, cond
+  // Uses: [cmp_lhs, cmp_rhs, true_val, false_val], Defs: [result]
+  // Saves one instruction compared to separate CMP + CSET + Select
+  SelectCmp(CmpKind, Bool)
   // Bit counting operations (Bool = true for 64-bit, false for 32-bit)
   Clz(Bool) // Count leading zeros with size
   Popcnt(Bool) // Population count with size
@@ -795,6 +801,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Add(is_64) => if is_64 { "add" } else { "add32" }
     AddImm(imm, is_64) => if is_64 { "add #\{imm}" } else { "add32 #\{imm}" }
     Sub(is_64) => if is_64 { "sub" } else { "sub32" }
+    SubImm(imm, is_64) => if is_64 { "sub #\{imm}" } else { "sub32 #\{imm}" }
     Mul(is_64) => if is_64 { "mul" } else { "mul32" }
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
@@ -848,6 +855,12 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FDemote => "fdemote"
     Bitcast => "bitcast"
     Select => "select"
+    SelectCmp(kind, is_64) =>
+      if is_64 {
+        "select_cmp.\{kind}"
+      } else {
+        "select_cmp32.\{kind}"
+      }
     Clz(is_64) => if is_64 { "clz" } else { "clz32" }
     Popcnt(is_64) => if is_64 { "popcnt" } else { "popcnt32" }
     Rbit(is_64) => if is_64 { "rbit" } else { "rbit32" }
@@ -1343,6 +1356,18 @@ pub fn Cond::to_bits(self : Cond) -> Int {
 pub(all) enum VCodeTerminator {
   Jump(Int) // Unconditional jump to block
   Branch(@abi.Reg, Int, Int) // Conditional: condition, then-block, else-block
+  // BranchCmp: compare two registers and branch on condition
+  // Emits: CMP Xn, Xm + B.cond (saves one instruction vs Branch)
+  // Parameters: lhs, rhs, cond, is_64, then-block, else-block
+  BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
+  // BranchZero: branch if register is zero/nonzero
+  // Emits: CBZ/CBNZ (saves two instructions vs Branch)
+  // Parameters: reg, is_nonzero, is_64, then-block, else-block
+  BranchZero(@abi.Reg, Bool, Bool, Int, Int)
+  // BranchCmpImm: compare register with immediate and branch on condition
+  // Emits: CMP Xn, #imm + B.cond (saves one instruction vs loading const to reg)
+  // Parameters: lhs, imm, cond, is_64, then-block, else-block
+  BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
   Return(Array[@abi.Reg]) // Return with values
   Trap(String) // Trap with message
   // BrTable: index register, target block IDs, default block ID
@@ -1356,6 +1381,14 @@ fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
     Jump(target) => "jump block\{target}"
     Branch(cond, then_b, else_b) =>
       "branch \{cond}, block\{then_b}, block\{else_b}"
+    BranchCmp(lhs, rhs, cond, _is_64, then_b, else_b) =>
+      "br_cmp.\{cond} \{lhs}, \{rhs}, block\{then_b}, block\{else_b}"
+    BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
+      let op = if is_nonzero { "cbnz" } else { "cbz" }
+      "\{op} \{reg}, block\{then_b}, block\{else_b}"
+    }
+    BranchCmpImm(lhs, imm, cond, _is_64, then_b, else_b) =>
+      "br_cmp_imm.\{cond} \{lhs}, #\{imm}, block\{then_b}, block\{else_b}"
     Return(values) => {
       let mut result = "ret"
       if values.length() > 0 {

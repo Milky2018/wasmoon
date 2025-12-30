@@ -218,6 +218,28 @@ fn lower_iadd(
     return
   }
 
+  // Pattern: add(x, const) -> AddImm where const is valid 12-bit immediate
+  if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
+    let lhs = ctx.get_vreg_for_use(lhs_val, block)
+    let is_64 = result.ty is @ir.Type::I64
+    let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: add(const, x) -> AddImm (commutative)
+  if match_add_imm_value(ctx, lhs_val) is Some(imm_val) {
+    let rhs = ctx.get_vreg_for_use(rhs_val, block)
+    let is_64 = result.ty is @ir.Type::I64
+    let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+    return
+  }
+
   // Default: regular add
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
@@ -299,6 +321,17 @@ fn lower_isub(
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: sub(x, const) -> SubImm where const is valid 12-bit immediate
+  if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
+    let lhs = ctx.get_vreg_for_use(lhs_val, block)
+    let is_64 = result.ty is @ir.Type::I64
+    let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
     block.add_inst(vcode_inst)
     return
   }

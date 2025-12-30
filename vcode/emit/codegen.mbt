@@ -378,7 +378,19 @@ fn MachineCode::emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_64 {
-        self.emit_add_imm(rd, rn, imm)
+        // AArch64 ADD immediate can encode:
+        // - imm12 directly (0-4095) when sh=0
+        // - imm12 << 12 (multiples of 4096 up to 0xFFF000) when sh=1
+        if imm <= 4095 {
+          self.emit_add_imm(rd, rn, imm)
+        } else if (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
+          // Shifted form: the immediate is a multiple of 4096 and fits in 12 bits after shift
+          self.emit_add_imm_shifted12(rd, rn, imm >> 12)
+        } else {
+          // Immediate too large or cannot be encoded - should not happen
+          // Lowering should have rejected immediates > 0xFFF000
+          abort("AddImm immediate \{imm} cannot be encoded (max 0xFFF000)")
+        }
       } else {
         self.emit_add_imm32(rd, rn, imm)
       }
@@ -391,6 +403,15 @@ fn MachineCode::emit_instruction(
         self.emit_sub_reg(rd, rn, rm)
       } else {
         self.emit_sub_reg32(rd, rn, rm)
+      }
+    }
+    SubImm(imm, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_sub_imm(rd, rn, imm)
+      } else {
+        self.emit_sub_imm32(rd, rn, imm)
       }
     }
     Mul(is_64) => {
@@ -721,6 +742,10 @@ fn MachineCode::emit_instruction(
     Move => {
       let rd = wreg_num(inst.defs[0])
       let rm = reg_num(inst.uses[0])
+      // Peephole: skip redundant mov (rd == rm)
+      if rd == rm {
+        return
+      }
       // Check register class to use appropriate move instruction
       let reg_class = match inst.defs[0].reg {
         Physical(preg) => preg.class
@@ -824,6 +849,48 @@ fn MachineCode::emit_instruction(
           Dup2D(16, 16).emit(self)
           // Step 4: BSL V16.16B, Vtrue.16B, Vfalse.16B
           // BSL: V16 = (true_val & V16) | (false_val & ~V16)
+          Bsl16B(16, true_val, false_val).emit(self)
+          // Step 5: Move V16 to rd if needed
+          if rd != 16 {
+            Orr16B(rd, 16, 16).emit(self)
+          }
+        }
+      }
+    }
+    SelectCmp(kind, is_64) => {
+      // SelectCmp: fused compare and select
+      // Uses: [cmp_lhs, cmp_rhs, true_val, false_val]
+      // Emits: CMP lhs, rhs; CSEL rd, true_val, false_val, cond
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      let true_val = reg_num(inst.uses[2])
+      let false_val = reg_num(inst.uses[3])
+      // Compare lhs with rhs
+      if is_64 {
+        self.emit_cmp_reg(lhs, rhs)
+      } else {
+        self.emit_cmp_reg32(lhs, rhs)
+      }
+      // Check register class to use appropriate select instruction
+      let reg_class = match inst.defs[0].reg {
+        Physical(preg) => preg.class
+        Virtual(_) => Int // Should not happen at emit time
+      }
+      let cond = cmp_kind_to_cond(kind)
+      match reg_class {
+        Float32 => self.emit_fcsel_s(rd, true_val, false_val, cond)
+        Float64 => self.emit_fcsel_d(rd, true_val, false_val, cond)
+        Int => self.emit_csel(rd, true_val, false_val, cond)
+        Vector => {
+          // Vector select with fused compare
+          // Step 1: CSET X16, cond
+          self.emit_cset(16, cond)
+          // Step 2: NEG X16, X16 (X16 = 0 or -1 for mask)
+          self.emit_sub_reg(16, 31, 16)
+          // Step 3: DUP V16.2D, X16 (broadcast to all bits)
+          Dup2D(16, 16).emit(self)
+          // Step 4: BSL V16.16B, Vtrue.16B, Vfalse.16B
           Bsl16B(16, true_val, false_val).emit(self)
           // Step 5: Move V16 to rd if needed
           if rd != 16 {
@@ -2827,6 +2894,42 @@ fn MachineCode::emit_terminator_with_epilogue(
     Branch(cond, then_b, else_b) => {
       let rt = reg_num(cond)
       self.emit_cbnz(rt, then_b)
+      self.emit_b(else_b)
+    }
+    BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
+      // CMP lhs, rhs + B.cond then_b + B else_b
+      let rn = reg_num(lhs)
+      let rm = reg_num(rhs)
+      if is_64 {
+        self.emit_cmp_reg(rn, rm)
+      } else {
+        self.emit_cmp_reg32(rn, rm)
+      }
+      // Emit conditional branch based on condition
+      self.emit_b_cond(cond.to_bits(), then_b)
+      self.emit_b(else_b)
+    }
+    BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
+      // CBZ/CBNZ reg, then_b + B else_b
+      // Note: Using 64-bit CBZ/CBNZ - works correctly since i32 values are zero-extended
+      let rt = reg_num(reg)
+      if is_nonzero {
+        self.emit_cbnz(rt, then_b)
+      } else {
+        self.emit_cbz(rt, then_b)
+      }
+      self.emit_b(else_b)
+    }
+    BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
+      // CMP lhs, #imm + B.cond then_b + B else_b
+      let rn = reg_num(lhs)
+      if is_64 {
+        self.emit_cmp_imm(rn, imm)
+      } else {
+        self.emit_cmp_imm32(rn, imm)
+      }
+      // Emit conditional branch based on condition
+      self.emit_b_cond(cond.to_bits(), then_b)
       self.emit_b(else_b)
     }
     Return(values) => {

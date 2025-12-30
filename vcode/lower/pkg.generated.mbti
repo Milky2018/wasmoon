@@ -6,6 +6,7 @@ import(
   "Milky2018/wasmoon/vcode/abi"
   "Milky2018/wasmoon/vcode/block"
   "Milky2018/wasmoon/vcode/instr"
+  "moonbitlang/core/hashset"
   "moonbitlang/core/set"
 )
 
@@ -122,6 +123,7 @@ pub(all) struct LoweringContext {
   value_map : Map[Int, @abi.VReg]
   block_map : Map[Int, Int]
   stack_param_map : Map[Int, (Int, @abi.RegClass)]
+  fused_icmps : @hashset.HashSet[Int]
 }
 pub fn LoweringContext::new(@ir.Function) -> Self
 

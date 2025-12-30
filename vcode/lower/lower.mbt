@@ -18,6 +18,8 @@ pub(all) struct LoweringContext {
   block_map : Map[Int, Int]
   // Map from IR Value id to stack param index (for params >= 8)
   stack_param_map : Map[Int, (Int, @abi.RegClass)]
+  // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
+  fused_icmps : @hashset.HashSet[Int]
 }
 
 ///|
@@ -28,7 +30,64 @@ pub fn LoweringContext::new(ir_func : @ir.Function) -> LoweringContext {
     value_map: {},
     block_map: {},
     stack_param_map: {},
+    fused_icmps: @hashset.new(),
   }
+}
+
+///|
+/// Compute which Icmp results are exclusively used by Select and can be fused.
+/// This allows lower_icmp to skip emitting redundant Cmp instructions.
+fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
+  // Step 1: Count uses of each value
+  let use_counts : Map[Int, Int] = {}
+  for block in ir_func.blocks {
+    for inst in block.instructions {
+      for op in inst.operands {
+        let count = use_counts.get(op.id).unwrap_or(0)
+        use_counts.set(op.id, count + 1)
+      }
+    }
+    // Also count uses in terminators
+    if block.terminator is Some(term) {
+      let term_uses = match term {
+        @ir.Terminator::Brz(cond, _, _) | @ir.Terminator::Brnz(cond, _, _) =>
+          [cond]
+        @ir.Terminator::BrTable(index, _, _) => [index]
+        @ir.Terminator::Jump(_, args) | @ir.Terminator::Return(args) => args
+        @ir.Terminator::Trap(_) => []
+      }
+      for v in term_uses {
+        let count = use_counts.get(v.id).unwrap_or(0)
+        use_counts.set(v.id, count + 1)
+      }
+    }
+  }
+
+  // Step 2: Find Icmp results that have exactly one use in a Select
+  let fused : @hashset.HashSet[Int] = @hashset.new()
+  for block in ir_func.blocks {
+    for inst in block.instructions {
+      // Check if this is a Select instruction
+      if inst.opcode is @ir.Opcode::Select {
+        let cond = inst.operands[0]
+        // Check if the condition is an Icmp result with exactly one use
+        if use_counts.get(cond.id).unwrap_or(0) == 1 {
+          // Find the defining instruction of the condition
+          for b in ir_func.blocks {
+            for i in b.instructions {
+              if i.result is Some(r) && r.id == cond.id {
+                // Check if it's an Icmp
+                if i.opcode is @ir.Opcode::Icmp(_) {
+                  fused.add(cond.id)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  fused
 }
 
 ///|
@@ -166,9 +225,98 @@ fn is_const_zero_value(ctx : LoweringContext, value : @ir.Value) -> Bool {
 }
 
 ///|
+/// Check if a value is a constant and return the value if valid for ADD/SUB immediate
+/// Returns Some(val) if the value is a constant in valid 12-bit immediate range
+fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Iconst(val) {
+    if is_valid_add_imm(val) {
+      return Some(val)
+    }
+  }
+  None
+}
+
+///|
+/// Check if a value is iadd(base, iconst(offset)) and return (base, offset) if matched
+/// Used for folding address calculations into load/store instructions
+fn match_iadd_const(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> (@ir.Value, Int64)? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Iadd {
+    // Check if second operand is a constant
+    if find_defining_inst(ctx, inst.operands[1]) is Some(const_inst) &&
+      const_inst.opcode is @ir.Opcode::Iconst(offset) {
+      return Some((inst.operands[0], offset))
+    }
+    // Also check first operand (iadd is commutative)
+    if find_defining_inst(ctx, inst.operands[0]) is Some(const_inst) &&
+      const_inst.opcode is @ir.Opcode::Iconst(offset) {
+      return Some((inst.operands[1], offset))
+    }
+  }
+  None
+}
+
+///|
+/// Check if an offset is valid for AArch64 LDR/STR unsigned immediate
+/// offset must be non-negative, aligned to access_size, and fit in 12-bit scaled
+fn is_valid_load_store_offset(offset : Int64, access_size : Int) -> Bool {
+  if offset < 0L {
+    return false
+  }
+  // Check alignment
+  if offset % access_size.to_int64() != 0L {
+    return false
+  }
+  // Check scaled offset fits in 12 bits (max 4095 * access_size)
+  let max_offset = 4095L * access_size.to_int64()
+  offset <= max_offset
+}
+
+///|
+/// Check if a value is the result of an Icmp instruction
+/// Returns (lhs, rhs, condition) if matched
+fn match_icmp_value(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> (@ir.Value, @ir.Value, @ir.IntCC)? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Icmp(cc) {
+    return Some((inst.operands[0], inst.operands[1], cc))
+  }
+  None
+}
+
+///|
+/// Convert IR IntCC to VCode Cond for conditional branches
+fn intcc_to_cond(cc : @ir.IntCC) -> @instr.Cond {
+  match cc {
+    Eq => @instr.Cond::Eq
+    Ne => @instr.Cond::Ne
+    Slt => @instr.Cond::Lt
+    Sle => @instr.Cond::Le
+    Sgt => @instr.Cond::Gt
+    Sge => @instr.Cond::Ge
+    Ult => @instr.Cond::Lo
+    Ule => @instr.Cond::Ls
+    Ugt => @instr.Cond::Hi
+    Uge => @instr.Cond::Hs
+  }
+}
+
+///|
 /// Lower an entire IR function to VCode
 pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   let ctx = LoweringContext::new(ir_func)
+
+  // Phase 0: Pre-compute which Icmps can be fused with Select
+  let fused = compute_fused_icmps(ir_func)
+  for id in fused {
+    ctx.fused_icmps.add(id)
+  }
 
   // Phase 1: Create VCode blocks and set up block mapping
   for ir_block in ir_func.blocks {
@@ -1030,6 +1178,10 @@ fn lower_icmp(
   cc : @ir.IntCC,
 ) -> Unit {
   if inst.result is Some(result) {
+    // Skip if this Icmp will be fused with a Select (to avoid redundant Cmp)
+    if ctx.fused_icmps.contains(result.id) {
+      return
+    }
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -1116,17 +1268,108 @@ fn lower_terminator(
       block.set_terminator(Jump(target_id))
     }
     @ir.Terminator::Brz(cond, then_block, else_block) => {
-      let cond_vreg = ctx.get_vreg_for_use(cond, block)
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)
-      // brz means branch if zero, so swap then/else for Branch semantics
-      block.set_terminator(Branch(Virtual(cond_vreg), else_id, then_id))
+      // brz means branch if zero, so:
+      // - If condition is from icmp, invert the condition for BranchCmp/BranchCmpImm
+      // - Otherwise use BranchZero with is_nonzero=false
+      if match_icmp_value(ctx, cond) is Some((lhs, rhs, cc)) {
+        // Brz(icmp(cc, a, b)) = branch to then if icmp result is 0 (i.e., condition is false)
+        // So we need to branch to else_block if condition is true, then_block if false
+        // This means: BranchCmp with swapped targets
+        let vcode_cond = intcc_to_cond(cc)
+        // Determine is_64 from operand type (same as lower_icmp)
+        let is_64 = match lhs.ty {
+          @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+          _ => false
+        }
+        // Try to use BranchCmpImm if RHS is a valid immediate
+        if match_add_imm_value(ctx, rhs) is Some(imm) {
+          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+          // Note: swapped - branch to else_id if condition is true
+          block.set_terminator(
+            BranchCmpImm(
+              Virtual(lhs_vreg),
+              imm.to_int(),
+              vcode_cond,
+              is_64,
+              else_id,
+              then_id,
+            ),
+          )
+        } else {
+          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+          let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
+          // Note: swapped - branch to else_id if condition is true
+          block.set_terminator(
+            BranchCmp(
+              Virtual(lhs_vreg),
+              Virtual(rhs_vreg),
+              vcode_cond,
+              is_64,
+              else_id,
+              then_id,
+            ),
+          )
+        }
+      } else {
+        // Use BranchZero: branch to then_block if reg is zero
+        // Condition result is always i32, so is_64=false
+        let cond_vreg = ctx.get_vreg_for_use(cond, block)
+        block.set_terminator(
+          BranchZero(Virtual(cond_vreg), false, false, then_id, else_id),
+        )
+      }
     }
     @ir.Terminator::Brnz(cond, then_block, else_block) => {
-      let cond_vreg = ctx.get_vreg_for_use(cond, block)
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)
-      block.set_terminator(Branch(Virtual(cond_vreg), then_id, else_id))
+      // brnz means branch if nonzero, so:
+      // - If condition is from icmp, use BranchCmp/BranchCmpImm directly
+      // - Otherwise use BranchZero with is_nonzero=true
+      if match_icmp_value(ctx, cond) is Some((lhs, rhs, cc)) {
+        // Brnz(icmp(cc, a, b)) = branch to then if icmp result is nonzero (i.e., condition is true)
+        let vcode_cond = intcc_to_cond(cc)
+        // Determine is_64 from operand type (same as lower_icmp)
+        let is_64 = match lhs.ty {
+          @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+          _ => false
+        }
+        // Try to use BranchCmpImm if RHS is a valid immediate
+        if match_add_imm_value(ctx, rhs) is Some(imm) {
+          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+          block.set_terminator(
+            BranchCmpImm(
+              Virtual(lhs_vreg),
+              imm.to_int(),
+              vcode_cond,
+              is_64,
+              then_id,
+              else_id,
+            ),
+          )
+        } else {
+          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+          let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
+          block.set_terminator(
+            BranchCmp(
+              Virtual(lhs_vreg),
+              Virtual(rhs_vreg),
+              vcode_cond,
+              is_64,
+              then_id,
+              else_id,
+            ),
+          )
+        }
+      } else {
+        // Use BranchZero: branch to then_block if reg is nonzero
+        // Condition result is always i32, so is_64=false
+        let cond_vreg = ctx.get_vreg_for_use(cond, block)
+        block.set_terminator(
+          BranchZero(Virtual(cond_vreg), true, false, then_id, else_id),
+        )
+      }
     }
     @ir.Terminator::Return(values) => {
       let regs : Array[@abi.Reg] = []
@@ -1267,31 +1510,49 @@ fn lower_load_ptr(
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
-  // Get the base pointer and offset from operands
-  // operand 0 = base pointer (values_vec)
-  // operand 1 = offset constant (optional, if 2 operands)
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
-
-  // Check if we have an offset from a second operand (must be an iconst)
-  let offset = if inst.operands.length() > 1 {
-    // Try to extract constant offset
-    if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode is @ir.Opcode::Iconst(off) {
-      off.to_int()
-    } else {
-      // If not a constant, we'd need to add the offset separately
-      // For simplicity in trampolines, we assume constant offsets
-      0
-    }
-  } else {
-    0
+  // Convert IR type to VCode memory type and get access size
+  let mem_ty = ir_type_to_mem_type(ty)
+  let access_size = match ty {
+    @ir.Type::I32 | @ir.Type::F32 => 4
+    @ir.Type::I64 | @ir.Type::F64 | @ir.Type::FuncRef | @ir.Type::ExternRef => 8
+    @ir.Type::V128 => 16
   }
 
-  // Convert IR type to VCode memory type
-  let mem_ty = ir_type_to_mem_type(ty)
+  // Get the base pointer and offset from operands
+  // operand 0 = base pointer
+  // operand 1 = offset constant (optional)
+  let base_value = inst.operands[0]
+
+  // Check if we have an offset from a second operand (must be an iconst)
+  let explicit_offset = if inst.operands.length() > 1 {
+    if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
+      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      off
+    } else {
+      0L
+    }
+  } else {
+    0L
+  }
+
+  // Try to fold address calculation: if base is iadd(real_base, const),
+  // we can fold the const into the load offset
+  let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
+    is Some((real_base, addr_offset)) {
+    let combined = explicit_offset + addr_offset
+    if is_valid_load_store_offset(combined, access_size) {
+      (real_base, combined.to_int())
+    } else {
+      // Offset too large or unaligned, can't fold
+      (base_value, explicit_offset.to_int())
+    }
+  } else {
+    (base_value, explicit_offset.to_int())
+  }
+  let base = ctx.get_vreg_for_use(actual_base_value, block)
 
   // Create LoadPtr instruction
-  let load_inst = @instr.VCodeInst::new(LoadPtr(mem_ty, offset))
+  let load_inst = @instr.VCodeInst::new(LoadPtr(mem_ty, total_offset))
   load_inst.add_def({ reg: Virtual(result_vreg) })
   load_inst.add_use(Virtual(base))
   block.add_inst(load_inst)
@@ -1310,26 +1571,48 @@ fn lower_store_ptr(
   // operand 1 = value to store
   // operand 2 = offset constant (optional)
   guard inst.operands.length() >= 2 else { return }
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
-  let value = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Convert IR type to VCode memory type and get access size
+  let mem_ty = ir_type_to_mem_type(ty)
+  let access_size = match ty {
+    @ir.Type::I32 | @ir.Type::F32 => 4
+    @ir.Type::I64 | @ir.Type::F64 | @ir.Type::FuncRef | @ir.Type::ExternRef => 8
+    @ir.Type::V128 => 16
+  }
+  let base_value = inst.operands[0]
+  let store_value = inst.operands[1]
 
   // Check if we have an offset from a third operand
-  let offset = if inst.operands.length() > 2 {
+  let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
       def_inst.opcode is @ir.Opcode::Iconst(off) {
-      off.to_int()
+      off
     } else {
-      0
+      0L
     }
   } else {
-    0
+    0L
   }
 
-  // Convert IR type to VCode memory type
-  let mem_ty = ir_type_to_mem_type(ty)
+  // Try to fold address calculation: if base is iadd(real_base, const),
+  // we can fold the const into the store offset
+  let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
+    is Some((real_base, addr_offset)) {
+    let combined = explicit_offset + addr_offset
+    if is_valid_load_store_offset(combined, access_size) {
+      (real_base, combined.to_int())
+    } else {
+      // Offset too large or unaligned, can't fold
+      (base_value, explicit_offset.to_int())
+    }
+  } else {
+    (base_value, explicit_offset.to_int())
+  }
+  let base = ctx.get_vreg_for_use(actual_base_value, block)
+  let value = ctx.get_vreg_for_use(store_value, block)
 
   // Create StorePtr instruction
-  let store_inst = @instr.VCodeInst::new(StorePtr(mem_ty, offset))
+  let store_inst = @instr.VCodeInst::new(StorePtr(mem_ty, total_offset))
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)
@@ -1351,22 +1634,42 @@ fn lower_load_ptr_narrow(
   guard inst.operands.length() >= 1 else { return }
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Access size in bytes
+  let access_size = bits / 8
+  let base_value = inst.operands[0]
 
   // Check if we have an offset from a second operand
-  let offset = if inst.operands.length() > 1 {
+  let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
       def_inst.opcode is @ir.Opcode::Iconst(off) {
-      off.to_int()
+      off
     } else {
-      0
+      0L
     }
   } else {
-    0
+    0L
   }
 
+  // Try to fold address calculation: if base is iadd(real_base, const),
+  // we can fold the const into the load offset
+  let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
+    is Some((real_base, addr_offset)) {
+    let combined = explicit_offset + addr_offset
+    if is_valid_load_store_offset(combined, access_size) {
+      (real_base, combined.to_int())
+    } else {
+      (base_value, explicit_offset.to_int())
+    }
+  } else {
+    (base_value, explicit_offset.to_int())
+  }
+  let base = ctx.get_vreg_for_use(actual_base_value, block)
+
   // Create LoadPtrNarrow instruction
-  let load_inst = @instr.VCodeInst::new(LoadPtrNarrow(bits, signed, offset))
+  let load_inst = @instr.VCodeInst::new(
+    LoadPtrNarrow(bits, signed, total_offset),
+  )
   load_inst.add_def({ reg: Virtual(result_vreg) })
   load_inst.add_use(Virtual(base))
   block.add_inst(load_inst)
@@ -1385,23 +1688,42 @@ fn lower_store_ptr_narrow(
   // operand 1 = value to store
   // operand 2 = offset constant (optional)
   guard inst.operands.length() >= 2 else { return }
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
-  let value = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Access size in bytes
+  let access_size = bits / 8
+  let base_value = inst.operands[0]
+  let store_value = inst.operands[1]
 
   // Check if we have an offset from a third operand
-  let offset = if inst.operands.length() > 2 {
+  let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
       def_inst.opcode is @ir.Opcode::Iconst(off) {
-      off.to_int()
+      off
     } else {
-      0
+      0L
     }
   } else {
-    0
+    0L
   }
 
+  // Try to fold address calculation: if base is iadd(real_base, const),
+  // we can fold the const into the store offset
+  let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
+    is Some((real_base, addr_offset)) {
+    let combined = explicit_offset + addr_offset
+    if is_valid_load_store_offset(combined, access_size) {
+      (real_base, combined.to_int())
+    } else {
+      (base_value, explicit_offset.to_int())
+    }
+  } else {
+    (base_value, explicit_offset.to_int())
+  }
+  let base = ctx.get_vreg_for_use(actual_base_value, block)
+  let value = ctx.get_vreg_for_use(store_value, block)
+
   // Create StorePtrNarrow instruction
-  let store_inst = @instr.VCodeInst::new(StorePtrNarrow(bits, offset))
+  let store_inst = @instr.VCodeInst::new(StorePtrNarrow(bits, total_offset))
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)

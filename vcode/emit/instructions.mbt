@@ -23,6 +23,7 @@ enum Instruction {
   AddReg(Int, Int, Int)
   AddShifted(Int, Int, Int, @instr.ShiftType, Int)
   AddImm(Int, Int, Int)
+  AddImmShifted12(Int, Int, Int) // ADD with immediate shifted left by 12
   SubReg(Int, Int, Int)
   SubShifted(Int, Int, Int, @instr.ShiftType, Int)
   SubImm(Int, Int, Int)
@@ -37,6 +38,7 @@ enum Instruction {
   SubReg32(Int, Int, Int) // 32-bit subtract
   AddReg32(Int, Int, Int) // 32-bit add
   AddImm32(Int, Int, Int) // 32-bit add immediate
+  SubImm32(Int, Int, Int) // 32-bit sub immediate
   Mul32(Int, Int, Int) // 32-bit multiply
   // Bitwise - Register
   AndReg(Int, Int, Int)
@@ -493,6 +495,11 @@ fn Instruction::annotate(self : Instruction) -> String {
       let rd_name = if rd == 31 { "sp" } else { "x\{rd}" }
       "add \{rd_name}, \{rn_name}, #\{imm12}"
     }
+    AddImmShifted12(rd, rn, imm12) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      let rd_name = if rd == 31 { "sp" } else { "x\{rd}" }
+      "add \{rd_name}, \{rn_name}, #\{imm12}, lsl #12"
+    }
     SubReg(rd, rn, rm) => "sub x\{rd}, x\{rn}, x\{rm}"
     SubShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
@@ -518,6 +525,7 @@ fn Instruction::annotate(self : Instruction) -> String {
     SubReg32(rd, rn, rm) => "sub w\{rd}, w\{rn}, w\{rm}"
     AddReg32(rd, rn, rm) => "add w\{rd}, w\{rn}, w\{rm}"
     AddImm32(rd, rn, imm) => "add w\{rd}, w\{rn}, #\{imm}"
+    SubImm32(rd, rn, imm) => "sub w\{rd}, w\{rn}, #\{imm}"
     Mul32(rd, rn, rm) => "mul w\{rd}, w\{rn}, w\{rm}"
     AndReg(rd, rn, rm) => "and x\{rd}, x\{rn}, x\{rm}"
     AndShifted(rd, rn, rm, shift, amount) => {
@@ -1048,6 +1056,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (rd & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
+    AddImmShifted12(rd, rn, imm12) => {
+      // Same as AddImm but with sh=1 (bit 22)
+      let imm = imm12 & 0xFFF
+      let inst = (0b1 << 31) |
+        (0 << 30) |
+        (0 << 29) |
+        (0b100010 << 23) |
+        (1 << 22) | // sh=1: shift imm12 left by 12
+        (imm << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     SubReg(rd, rn, rm) => {
       let b0 = (rd & 31) | ((rn & 7) << 5)
       let b1 = (rn >> 3) & 3
@@ -1150,6 +1171,14 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = ((rn >> 3) & 3) | ((imm & 0x3F) << 2)
       let b2 = (imm >> 6) & 0x3F
       let b3 = 0x11 // ADD imm 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    SubImm32(rd, rn, imm) => {
+      // SUB Wd, Wn, #imm (32-bit)
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((imm & 0x3F) << 2)
+      let b2 = (imm >> 6) & 0x3F
+      let b3 = 0x51 // SUB imm 32-bit: sf=0, op=1
       (b0, b1, b2, b3)
     }
     Mul32(rd, rn, rm) => {
@@ -3542,6 +3571,17 @@ pub fn MachineCode::emit_add_imm(
 }
 
 ///|
+/// Emit ADD with immediate shifted left by 12 bits
+pub fn MachineCode::emit_add_imm_shifted12(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  AddImmShifted12(rd, rn, imm12).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_sub_reg(
   self : MachineCode,
   rd : Int,
@@ -3724,6 +3764,16 @@ pub fn MachineCode::emit_add_imm32(
   imm : Int,
 ) -> Unit {
   AddImm32(rd, rn, imm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_sub_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm : Int,
+) -> Unit {
+  SubImm32(rd, rn, imm).emit(self)
 }
 
 ///|

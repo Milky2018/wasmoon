@@ -220,6 +220,7 @@ pub(all) enum VCodeOpcode {
   Add(Bool)
   AddImm(Int, Bool)
   Sub(Bool)
+  SubImm(Int, Bool)
   Mul(Bool)
   SDiv(Bool)
   UDiv(Bool)
@@ -265,6 +266,7 @@ pub(all) enum VCodeOpcode {
   FDemote
   Bitcast
   Select
+  SelectCmp(CmpKind, Bool)
   Clz(Bool)
   Popcnt(Bool)
   Rbit(Bool)
@@ -393,6 +395,9 @@ pub impl Show for VCodeOpcode
 pub(all) enum VCodeTerminator {
   Jump(Int)
   Branch(@abi.Reg, Int, Int)
+  BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
+  BranchZero(@abi.Reg, Bool, Bool, Int, Int)
+  BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
   Return(Array[@abi.Reg])
   Trap(String)
   BrTable(@abi.Reg, Array[Int], Int)
