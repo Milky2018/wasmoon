@@ -848,3 +848,72 @@ test "egraph: (x & y) | ~x = y | ~x" {
   eg.saturate(standard_rules(), 10) |> ignore
   inspect(eg.equiv(result, expected), content="true")
 }
+
+///|
+test "egraph: (x | 3) | 5 = x | 7 (or reassociation)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c3 = eg.add_const(3L)
+  let c5 = eg.add_const(5L)
+  let x_or_3 = eg.add_or(x, c3)
+  let result = eg.add_or(x_or_3, c5)
+  let c7 = eg.add_const(7L)
+  let expected = eg.add_or(x, c7)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: (x & 7) & 3 = x & 3 (and reassociation)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c7 = eg.add_const(7L)
+  let c3 = eg.add_const(3L)
+  let x_and_7 = eg.add_and(x, c7)
+  let result = eg.add_and(x_and_7, c3)
+  let expected = eg.add_and(x, c3)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: (x ^ 3) ^ 5 = x ^ 6 (xor reassociation)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c3 = eg.add_const(3L)
+  let c5 = eg.add_const(5L)
+  let x_xor_3 = eg.add_xor(x, c3)
+  let result = eg.add_xor(x_xor_3, c5)
+  let c6 = eg.add_const(6L)
+  let expected = eg.add_xor(x, c6)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: (x + 3) - 5 = x - 2 (sub-add reassociation)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c3 = eg.add_const(3L)
+  let c5 = eg.add_const(5L)
+  let x_add_3 = eg.add_add(x, c3)
+  let result = eg.add_sub(x_add_3, c5)
+  let c_neg2 = eg.add_const(-2L)
+  let expected = eg.add_add(x, c_neg2)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: (x - 3) + 5 = x + 2 (add-sub reassociation)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c3 = eg.add_const(3L)
+  let c5 = eg.add_const(5L)
+  let x_sub_3 = eg.add_sub(x, c3)
+  let result = eg.add_add(x_sub_3, c5)
+  let c2 = eg.add_const(2L)
+  let expected = eg.add_add(x, c2)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}

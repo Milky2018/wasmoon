@@ -82,6 +82,17 @@ pub fn standard_rules() -> Array[RewriteRule] {
     rule_reassoc_add_const(),
     rule_reassoc_mul_const(),
     rule_reassoc_sub_const(),
+    rule_reassoc_or_const(),
+    rule_reassoc_and_const(),
+    rule_reassoc_xor_const(),
+    rule_reassoc_sub_add_const(),
+    rule_reassoc_add_sub_const(),
+    rule_reassoc_sub_sub_const_left(),
+    rule_reassoc_add_sub_const_left(),
+    // Shift reassociation for constant propagation
+    rule_reassoc_shl_const(),
+    rule_reassoc_ushr_const(),
+    rule_reassoc_sshr_const(),
     // Tree rebalancing (uses subsume to avoid infinite loops with commutativity)
     rule_rebalance_add_right(),
     rule_rebalance_add_left(),
@@ -199,6 +210,17 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_reassoc_add_const(), [TAdd])
   rs.add_rule(rule_reassoc_mul_const(), [TMul])
   rs.add_rule(rule_reassoc_sub_const(), [TSub])
+  rs.add_rule(rule_reassoc_or_const(), [TOr])
+  rs.add_rule(rule_reassoc_and_const(), [TAnd])
+  rs.add_rule(rule_reassoc_xor_const(), [TXor])
+  rs.add_rule(rule_reassoc_sub_add_const(), [TSub])
+  rs.add_rule(rule_reassoc_add_sub_const(), [TAdd])
+  rs.add_rule(rule_reassoc_sub_sub_const_left(), [TSub])
+  rs.add_rule(rule_reassoc_add_sub_const_left(), [TAdd])
+  // Shift reassociation for constant propagation
+  rs.add_rule(rule_reassoc_shl_const(), [TShl])
+  rs.add_rule(rule_reassoc_ushr_const(), [TUshr])
+  rs.add_rule(rule_reassoc_sshr_const(), [TSshr])
   // Tree rebalancing
   rs.add_rule(rule_rebalance_add_right(), [TAdd])
   rs.add_rule(rule_rebalance_add_left(), [TAdd])
