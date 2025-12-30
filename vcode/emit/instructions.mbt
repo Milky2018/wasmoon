@@ -23,6 +23,7 @@ enum Instruction {
   AddReg(Int, Int, Int)
   AddShifted(Int, Int, Int, @instr.ShiftType, Int)
   AddImm(Int, Int, Int)
+  AddImmShifted12(Int, Int, Int) // ADD with immediate shifted left by 12
   SubReg(Int, Int, Int)
   SubShifted(Int, Int, Int, @instr.ShiftType, Int)
   SubImm(Int, Int, Int)
@@ -493,6 +494,11 @@ fn Instruction::annotate(self : Instruction) -> String {
       let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
       let rd_name = if rd == 31 { "sp" } else { "x\{rd}" }
       "add \{rd_name}, \{rn_name}, #\{imm12}"
+    }
+    AddImmShifted12(rd, rn, imm12) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      let rd_name = if rd == 31 { "sp" } else { "x\{rd}" }
+      "add \{rd_name}, \{rn_name}, #\{imm12}, lsl #12"
     }
     SubReg(rd, rn, rm) => "sub x\{rd}, x\{rn}, x\{rm}"
     SubShifted(rd, rn, rm, shift, amount) => {
@@ -1045,6 +1051,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (0 << 29) |
         (0b100010 << 23) |
         (0 << 22) |
+        (imm << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    AddImmShifted12(rd, rn, imm12) => {
+      // Same as AddImm but with sh=1 (bit 22)
+      let imm = imm12 & 0xFFF
+      let inst = (0b1 << 31) |
+        (0 << 30) |
+        (0 << 29) |
+        (0b100010 << 23) |
+        (1 << 22) | // sh=1: shift imm12 left by 12
         (imm << 10) |
         ((rn & 31) << 5) |
         (rd & 31)
@@ -3549,6 +3568,17 @@ pub fn MachineCode::emit_add_imm(
   imm12 : Int,
 ) -> Unit {
   AddImm(rd, rn, imm12).emit(self)
+}
+
+///|
+/// Emit ADD with immediate shifted left by 12 bits
+pub fn MachineCode::emit_add_imm_shifted12(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  AddImmShifted12(rd, rn, imm12).emit(self)
 }
 
 ///|

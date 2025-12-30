@@ -378,7 +378,18 @@ fn MachineCode::emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_64 {
-        self.emit_add_imm(rd, rn, imm)
+        // AArch64 ADD immediate can encode:
+        // - imm12 directly (0-4095) when sh=0
+        // - imm12 << 12 (multiples of 4096 up to 0xFFF000) when sh=1
+        if imm <= 4095 {
+          self.emit_add_imm(rd, rn, imm)
+        } else if (imm & 0xFFF) == 0 {
+          // Shifted form: the immediate is a multiple of 4096
+          self.emit_add_imm_shifted12(rd, rn, imm >> 12)
+        } else {
+          // Should not happen - lowering should have rejected this
+          abort("AddImm immediate \{imm} cannot be encoded")
+        }
       } else {
         self.emit_add_imm32(rd, rn, imm)
       }
