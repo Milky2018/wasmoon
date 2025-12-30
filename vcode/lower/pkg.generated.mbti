@@ -43,6 +43,14 @@ pub fn lower_function_optimized(@ir.Function) -> VCodeFunction
 
 pub fn lower_inst_with_patterns(LoweringContext, @ir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool
 
+pub fn magic_s32(Int) -> MagicS32
+
+pub fn magic_s64(Int64) -> MagicS64
+
+pub fn magic_u32(UInt) -> MagicU32
+
+pub fn magic_u64(UInt64) -> MagicU64
+
 pub fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
 
 pub fn optimize_vcode(VCodeFunction) -> Unit
@@ -130,6 +138,28 @@ pub(all) struct LoweringContext {
   fused_icmps : @hashset.HashSet[Int]
 }
 pub fn LoweringContext::new(@ir.Function) -> Self
+
+pub(all) struct MagicS32 {
+  mul_by : Int
+  shift_by : Int
+}
+
+pub(all) struct MagicS64 {
+  mul_by : Int64
+  shift_by : Int
+}
+
+pub(all) struct MagicU32 {
+  mul_by : UInt
+  do_add : Bool
+  shift_by : Int
+}
+
+pub(all) struct MagicU64 {
+  mul_by : UInt64
+  do_add : Bool
+  shift_by : Int
+}
 
 pub(all) struct MatchResult {
   values : Array[@ir.Value]

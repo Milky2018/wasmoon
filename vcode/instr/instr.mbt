@@ -300,6 +300,11 @@ pub(all) enum VCodeOpcode {
   Madd // Xd = Xa + Xn * Xm (3 uses: acc, src1, src2)
   Msub // Xd = Xa - Xn * Xm (3 uses: acc, src1, src2)
   Mneg // Xd = -(Xn * Xm) (2 uses: src1, src2)
+  // AArch64-specific: multiply high instructions
+  Umulh // Xd = (Xn * Xm) >> 64 (unsigned multiply high, 64-bit only)
+  Smulh // Xd = (Xn * Xm) >> 64 (signed multiply high, 64-bit only)
+  Umull // Xd = Wn * Wm (unsigned 32x32->64 multiply)
+  Smull // Xd = Wn * Wm (signed 32x32->64 multiply)
   // Function calls
   // ReturnCallIndirect: tail call through a function pointer
   // Uses: [func_ptr, arg0, arg1, ...]
@@ -904,6 +909,10 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Madd => "madd"
     Msub => "msub"
     Mneg => "mneg"
+    Umulh => "umulh"
+    Smulh => "smulh"
+    Umull => "umull"
+    Smull => "smull"
     ReturnCallIndirect(num_args, num_results) =>
       "return_call_indirect(\{num_args}) -> \{num_results} results"
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"

@@ -1195,6 +1195,34 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_mneg(rd, rn, rm)
     }
+    Umulh => {
+      // Xd = (Xn * Xm) >> 64 (unsigned), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_umulh(rd, rn, rm)
+    }
+    Smulh => {
+      // Xd = (Xn * Xm) >> 64 (signed), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_smulh(rd, rn, rm)
+    }
+    Umull => {
+      // Xd = Wn * Wm (unsigned 32x32->64), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_umull(rd, rn, rm)
+    }
+    Smull => {
+      // Xd = Wn * Wm (signed 32x32->64), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_smull(rd, rn, rm)
+    }
     ReturnCallIndirect(_num_args, _num_results) => {
       // Tail call optimization
       // Parameters are already set up by lowering phase via:
