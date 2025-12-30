@@ -3,6 +3,8 @@
 
 ///|
 /// Helper to create splat8 pattern: replicate byte 16 times
+/// TODO: Use when type info available for lane width detection
+#warnings("-unused_value")
 fn splat8(n : UInt64) -> Bytes {
   let byte = (n & 0xFFUL).to_byte()
   Bytes::make(16, byte)
@@ -10,6 +12,8 @@ fn splat8(n : UInt64) -> Bytes {
 
 ///|
 /// Helper to create splat16 pattern: replicate 16-bit value 8 times
+/// TODO: Use when type info available for lane width detection
+#warnings("-unused_value")
 fn splat16(n : UInt64) -> Bytes {
   let val = (n & 0xFFFFUL).to_int()
   Bytes::makei(16, fn(i) {
@@ -22,6 +26,8 @@ fn splat16(n : UInt64) -> Bytes {
 
 ///|
 /// Helper to create splat32 pattern: replicate 32-bit value 4 times
+/// TODO: Use when type info available for lane width detection
+#warnings("-unused_value")
 fn splat32(n : UInt64) -> Bytes {
   let val = (n & 0xFFFFFFFFUL).reinterpret_as_int64()
   Bytes::makei(16, fn(i) {
