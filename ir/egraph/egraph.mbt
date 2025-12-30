@@ -16,7 +16,7 @@ pub(all) struct EClassId(Int) derive(Eq, Hash, Show, Compare)
 
 ///|
 /// E-node opcode for e-graph expressions
-/// Simplified from IR Opcode to focus on optimizable operations
+/// Aligned with Cranelift IR opcodes for consistent optimization
 pub(all) enum EOpcode {
   // Constants
   Const(Int64)
@@ -30,20 +30,41 @@ pub(all) enum EOpcode {
   Srem
   Urem
 
-  // Bitwise operations
+  // Bitwise operations (binary)
   And
   Or
   Xor
   Shl
   Sshr
   Ushr
+  Rotl // Rotate left
+  Rotr // Rotate right
 
-  // Unary
-  Neg // Represented as 0 - x or -1 * x in IR, but useful for patterns
+  // Unary arithmetic
+  Neg // Integer negation (-x)
   Bnot // Bitwise NOT (~x)
 
-  // Comparison placeholder (simplified - just track the condition code as int)
-  Cmp(Int) // Stores IntCC ordinal
+  // Bit counting/manipulation (unary)
+  Clz // Count leading zeros
+  Ctz // Count trailing zeros
+  Popcnt // Population count (count 1 bits)
+  Bswap // Byte swap
+  Bitrev // Bit reverse
+
+  // Comparison (binary, returns i1)
+  // IntCC: 0=eq, 1=ne, 2=slt, 3=sle, 4=sgt, 5=sge, 6=ult, 7=ule, 8=ugt, 9=uge
+  Icmp(Int) // Integer compare with condition code
+  Eq // Equal (shorthand for Icmp(0))
+  Ne // Not equal (shorthand for Icmp(1))
+
+  // Conditional
+  Select // select(cond, a, b) = cond ? a : b
+  Bmask // Boolean mask: 0 -> 0, nonzero -> -1
+
+  // Type conversions
+  Ireduce // Integer reduce (truncate to smaller type)
+  Uextend // Unsigned extend to larger type
+  Sextend // Signed extend to larger type
 
   // Variable reference (leaf node representing an IR value)
   Var(Int) // IR Value id
@@ -53,6 +74,7 @@ pub(all) enum EOpcode {
 /// E-opcode tag for indexing (ignores parameters like Const value)
 pub(all) enum EOpcodeTag {
   TConst
+  // Arithmetic
   TAdd
   TSub
   TMul
@@ -60,15 +82,36 @@ pub(all) enum EOpcodeTag {
   TUdiv
   TSrem
   TUrem
+  // Bitwise
   TAnd
   TOr
   TXor
   TShl
   TSshr
   TUshr
+  TRotl
+  TRotr
+  // Unary
   TNeg
   TBnot
-  TCmp
+  // Bit manipulation
+  TClz
+  TCtz
+  TPopcnt
+  TBswap
+  TBitrev
+  // Comparison
+  TIcmp
+  TEq
+  TNe
+  // Conditional
+  TSelect
+  TBmask
+  // Type conversion
+  TIreduce
+  TUextend
+  TSextend
+  // Variable
   TVar
 } derive(Eq, Hash, Show)
 
@@ -77,6 +120,7 @@ pub(all) enum EOpcodeTag {
 fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
   match self {
     Const(_) => TConst
+    // Arithmetic
     Add => TAdd
     Sub => TSub
     Mul => TMul
@@ -84,15 +128,36 @@ fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
     Udiv => TUdiv
     Srem => TSrem
     Urem => TUrem
+    // Bitwise
     And => TAnd
     Or => TOr
     Xor => TXor
     Shl => TShl
     Sshr => TSshr
     Ushr => TUshr
+    Rotl => TRotl
+    Rotr => TRotr
+    // Unary
     Neg => TNeg
     Bnot => TBnot
-    Cmp(_) => TCmp
+    // Bit manipulation
+    Clz => TClz
+    Ctz => TCtz
+    Popcnt => TPopcnt
+    Bswap => TBswap
+    Bitrev => TBitrev
+    // Comparison
+    Icmp(_) => TIcmp
+    Eq => TEq
+    Ne => TNe
+    // Conditional
+    Select => TSelect
+    Bmask => TBmask
+    // Type conversion
+    Ireduce => TIreduce
+    Uextend => TUextend
+    Sextend => TSextend
+    // Variable
     Var(_) => TVar
   }
 }
@@ -595,6 +660,120 @@ pub fn EGraph::add_sshr(
   self.add_binop(Sshr, lhs, rhs)
 }
 
+///|
+pub fn EGraph::add_rotl(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Rotl, lhs, rhs)
+}
+
+///|
+pub fn EGraph::add_rotr(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Rotr, lhs, rhs)
+}
+
+///|
+/// Add a count leading zeros node
+pub fn EGraph::add_clz(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Clz, children: [operand] })
+}
+
+///|
+/// Add a count trailing zeros node
+pub fn EGraph::add_ctz(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Ctz, children: [operand] })
+}
+
+///|
+/// Add a population count node
+pub fn EGraph::add_popcnt(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Popcnt, children: [operand] })
+}
+
+///|
+/// Add a byte swap node
+pub fn EGraph::add_bswap(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Bswap, children: [operand] })
+}
+
+///|
+/// Add a bit reverse node
+pub fn EGraph::add_bitrev(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Bitrev, children: [operand] })
+}
+
+///|
+/// Add an integer compare node with condition code
+pub fn EGraph::add_icmp(
+  self : EGraph,
+  cc : Int,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add({ op: Icmp(cc), children: [lhs, rhs] })
+}
+
+///|
+/// Add an equality comparison node
+pub fn EGraph::add_eq(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Eq, lhs, rhs)
+}
+
+///|
+/// Add a not-equal comparison node
+pub fn EGraph::add_ne(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Ne, lhs, rhs)
+}
+
+///|
+/// Add a select node: select(cond, a, b) = cond ? a : b
+pub fn EGraph::add_select(
+  self : EGraph,
+  cond : EClassId,
+  a : EClassId,
+  b : EClassId,
+) -> EClassId {
+  self.add({ op: Select, children: [cond, a, b] })
+}
+
+///|
+/// Add a boolean mask node: 0 -> 0, nonzero -> -1
+pub fn EGraph::add_bmask(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Bmask, children: [operand] })
+}
+
+///|
+/// Add an integer reduce (truncate) node
+pub fn EGraph::add_ireduce(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Ireduce, children: [operand] })
+}
+
+///|
+/// Add an unsigned extend node
+pub fn EGraph::add_uextend(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Uextend, children: [operand] })
+}
+
+///|
+/// Add a signed extend node
+pub fn EGraph::add_sextend(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Sextend, children: [operand] })
+}
+
 // ============================================================================
 // Cost model for extraction
 // ============================================================================
@@ -605,15 +784,28 @@ fn node_cost(node : ENode) -> Int {
   match node.op {
     Const(_) => 0 // Constants are free
     Var(_) => 0 // Variables are free (already in registers)
-    Add | Sub => 1 // Simple ALU ops
+    // Simple ALU ops
+    Add | Sub => 1
     And | Or | Xor => 1
-    Shl | Sshr | Ushr => 1 // Shifts are cheap
-    Mul => 3 // Multiplication is more expensive
-    Sdiv | Udiv => 10 // Division is very expensive
+    Shl | Sshr | Ushr => 1
+    Rotl | Rotr => 1
+    Neg | Bnot => 1
+    // Bit manipulation (usually single instruction)
+    Clz | Ctz => 2
+    Popcnt => 2
+    Bswap => 2
+    Bitrev => 3 // Bit reverse is more expensive on some architectures
+    // Comparison
+    Icmp(_) | Eq | Ne => 1
+    // Conditional
+    Select => 2
+    Bmask => 1
+    // Type conversion
+    Ireduce | Uextend | Sextend => 1
+    // Expensive ops
+    Mul => 3
+    Sdiv | Udiv => 10
     Srem | Urem => 10
-    Neg => 1
-    Bnot => 1
-    Cmp(_) => 1
   }
 }
 

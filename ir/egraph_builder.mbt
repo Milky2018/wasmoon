@@ -59,10 +59,20 @@ fn opcode_to_eopcode(opcode : Opcode) -> @egraph.EOpcode? {
     Band => Some(@egraph.EOpcode::And)
     Bor => Some(@egraph.EOpcode::Or)
     Bxor => Some(@egraph.EOpcode::Xor)
+    Bnot => Some(@egraph.EOpcode::Bnot)
     Ishl => Some(@egraph.EOpcode::Shl)
     Sshr => Some(@egraph.EOpcode::Sshr)
     Ushr => Some(@egraph.EOpcode::Ushr)
-    Icmp(cc) => Some(@egraph.EOpcode::Cmp(intcc_to_ordinal(cc)))
+    Rotl => Some(@egraph.EOpcode::Rotl)
+    Rotr => Some(@egraph.EOpcode::Rotr)
+    Clz => Some(@egraph.EOpcode::Clz)
+    Ctz => Some(@egraph.EOpcode::Ctz)
+    Popcnt => Some(@egraph.EOpcode::Popcnt)
+    Icmp(cc) => Some(@egraph.EOpcode::Icmp(intcc_to_ordinal(cc)))
+    Select => Some(@egraph.EOpcode::Select)
+    Ireduce => Some(@egraph.EOpcode::Ireduce)
+    Uextend => Some(@egraph.EOpcode::Uextend)
+    Sextend => Some(@egraph.EOpcode::Sextend)
     _ => None // Not optimizable via e-graph
   }
 }
@@ -193,9 +203,23 @@ fn eopcode_to_opcode(eop : @egraph.EOpcode) -> Opcode? {
     Shl => Some(Ishl)
     Sshr => Some(Sshr)
     Ushr => Some(Ushr)
+    Rotl => Some(Rotl)
+    Rotr => Some(Rotr)
     Neg => None // Neg is synthetic, not in IR
     Bnot => Some(Bnot) // Bitwise NOT
-    Cmp(_) => None // Would need to reconstruct IntCC
+    Clz => Some(Clz)
+    Ctz => Some(Ctz)
+    Popcnt => Some(Popcnt)
+    Bswap => None // Not in IR
+    Bitrev => None // Not in IR
+    Icmp(_) => None // Would need to reconstruct IntCC
+    Eq => None // Shorthand for Icmp, not direct IR op
+    Ne => None // Shorthand for Icmp, not direct IR op
+    Select => Some(Select)
+    Bmask => None // Not in IR
+    Ireduce => Some(Ireduce)
+    Uextend => Some(Uextend)
+    Sextend => Some(Sextend)
     Var(_) => None // Variable reference, not an instruction
   }
 }

@@ -35,18 +35,33 @@ pub fn EGraph::add(Self, ENode) -> EClassId
 pub fn EGraph::add_add(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_and(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_binop(Self, EOpcode, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_bitrev(Self, EClassId) -> EClassId
+pub fn EGraph::add_bmask(Self, EClassId) -> EClassId
 pub fn EGraph::add_bnot(Self, EClassId) -> EClassId
+pub fn EGraph::add_bswap(Self, EClassId) -> EClassId
+pub fn EGraph::add_clz(Self, EClassId) -> EClassId
 pub fn EGraph::add_const(Self, Int64) -> EClassId
+pub fn EGraph::add_ctz(Self, EClassId) -> EClassId
 pub fn EGraph::add_eager(Self, ENode, IndexedRuleSet) -> EClassId
+pub fn EGraph::add_eq(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_icmp(Self, Int, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_ireduce(Self, EClassId) -> EClassId
 pub fn EGraph::add_mul(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_ne(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_neg(Self, EClassId) -> EClassId
 pub fn EGraph::add_or(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_popcnt(Self, EClassId) -> EClassId
+pub fn EGraph::add_rotl(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_rotr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sdiv(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_select(Self, EClassId, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_sextend(Self, EClassId) -> EClassId
 pub fn EGraph::add_shl(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_srem(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sshr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sub(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_udiv(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_uextend(Self, EClassId) -> EClassId
 pub fn EGraph::add_urem(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_ushr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_var(Self, Int) -> EClassId
@@ -87,9 +102,23 @@ pub(all) enum EOpcode {
   Shl
   Sshr
   Ushr
+  Rotl
+  Rotr
   Neg
   Bnot
-  Cmp(Int)
+  Clz
+  Ctz
+  Popcnt
+  Bswap
+  Bitrev
+  Icmp(Int)
+  Eq
+  Ne
+  Select
+  Bmask
+  Ireduce
+  Uextend
+  Sextend
   Var(Int)
 }
 pub impl Eq for EOpcode
@@ -111,9 +140,23 @@ pub(all) enum EOpcodeTag {
   TShl
   TSshr
   TUshr
+  TRotl
+  TRotr
   TNeg
   TBnot
-  TCmp
+  TClz
+  TCtz
+  TPopcnt
+  TBswap
+  TBitrev
+  TIcmp
+  TEq
+  TNe
+  TSelect
+  TBmask
+  TIreduce
+  TUextend
+  TSextend
   TVar
 }
 pub impl Eq for EOpcodeTag
