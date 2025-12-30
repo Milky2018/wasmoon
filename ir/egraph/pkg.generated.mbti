@@ -6,8 +6,6 @@ import(
 )
 
 // Values
-pub fn standard_rules() -> Array[RewriteRule]
-
 pub fn standard_rules_indexed() -> IndexedRuleSet
 
 // Errors

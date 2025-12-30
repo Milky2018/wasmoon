@@ -110,6 +110,7 @@ pub(all) struct EGraphBuilder {
   egraph : @egraph.EGraph
   value_map : Map[Int, @egraph.EClassId]
   def_map : Map[Int, Inst]
+  ruleset : @egraph.IndexedRuleSet
 }
 pub fn EGraphBuilder::add_value(Self, Value) -> @egraph.EClassId
 pub fn EGraphBuilder::extract(Self, Value) -> (Int, @egraph.ENode)?

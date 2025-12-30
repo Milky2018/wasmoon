@@ -11,11 +11,18 @@ pub(all) struct EGraphBuilder {
   value_map : Map[Int, @egraph.EClassId]
   // Map from IR Value id to its defining instruction
   def_map : Map[Int, Inst]
+  // Ruleset for eager optimization
+  ruleset : @egraph.IndexedRuleSet
 }
 
 ///|
 pub fn EGraphBuilder::new() -> EGraphBuilder {
-  { egraph: @egraph.EGraph::new(), value_map: {}, def_map: {} }
+  {
+    egraph: @egraph.EGraph::new(),
+    value_map: {},
+    def_map: {},
+    ruleset: @egraph.standard_rules_indexed(),
+  }
 }
 
 ///|
@@ -79,13 +86,14 @@ fn opcode_to_eopcode(opcode : Opcode) -> @egraph.EOpcode? {
 
 ///|
 /// Add an IR value to the e-graph, recursively adding its definition
+/// Uses eager optimization: rules are applied immediately when adding nodes
 pub fn EGraphBuilder::add_value(
   self : EGraphBuilder,
   value : Value,
 ) -> @egraph.EClassId {
   // Check if already converted
   match self.value_map.get(value.id) {
-    Some(id) => return id
+    Some(id) => return self.egraph.find(id) // Return canonical id
     None => ()
   }
 
@@ -109,8 +117,8 @@ pub fn EGraphBuilder::add_value(
               for operand in inst.operands {
                 children.push(self.add_value(operand))
               }
-              // Add the node to e-graph
-              self.egraph.add({ op: eop, children })
+              // Add the node with eager optimization
+              self.egraph.add_eager({ op: eop, children }, self.ruleset)
             }
           }
       }
@@ -121,8 +129,9 @@ pub fn EGraphBuilder::add_value(
 
 ///|
 /// Run optimization on the e-graph
+/// With eager optimization, this only needs to rebuild to restore invariants
 pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
-  self.egraph.saturate_indexed(@egraph.standard_rules_indexed(), 10) |> ignore
+  self.egraph.rebuild()
 }
 
 ///|
