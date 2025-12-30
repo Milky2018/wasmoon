@@ -158,19 +158,19 @@ int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
     int32_t offset = (int32_t)heap->size;
     GcHeader* header = (GcHeader*)(heap->data + offset);
 
+    // Zero entire allocation to avoid uninitialized padding being scanned as refs
+    memset(header, 0, total_size);
+
     header->kind = GC_KIND_STRUCT;
     header->flags = 0;
     header->type_idx = (uint16_t)type_idx;
     header->size = (uint32_t)total_size;
-    header->reserved = 0;
+    header->reserved = num_fields;  // Store actual field count for GC
 
     // Copy field values
     int64_t* field_data = (int64_t*)(heap->data + offset + GC_HEADER_SIZE);
     if (fields && num_fields > 0) {
         memcpy(field_data, fields, num_fields * sizeof(int64_t));
-    } else {
-        // Initialize with zeros
-        memset(field_data, 0, num_fields * sizeof(int64_t));
     }
 
     // Update heap state
@@ -228,6 +228,9 @@ int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
     int32_t offset = (int32_t)heap->size;
     GcHeader* header = (GcHeader*)(heap->data + offset);
 
+    // Zero entire allocation to avoid uninitialized padding being scanned as refs
+    memset(header, 0, total_size);
+
     header->kind = GC_KIND_ARRAY;
     header->flags = 0;
     header->type_idx = (uint16_t)type_idx;
@@ -238,7 +241,6 @@ int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
     uint8_t* data = heap->data + offset + GC_HEADER_SIZE;
     int32_t* len_ptr = (int32_t*)data;
     len_ptr[0] = len;
-    len_ptr[1] = 0;  // padding
 
     // Initialize elements
     int64_t* elements = (int64_t*)(data + 8);
@@ -357,6 +359,9 @@ int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
     int32_t offset = (int32_t)heap->size;
     GcHeader* header = (GcHeader*)(heap->data + offset);
 
+    // Zero entire allocation to avoid uninitialized padding being scanned as refs
+    memset(header, 0, total_size);
+
     header->kind = GC_KIND_ARRAY;
     header->flags = 0;
     header->type_idx = (uint16_t)type_idx;
@@ -367,14 +372,11 @@ int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
     uint8_t* data = heap->data + offset + GC_HEADER_SIZE;
     int32_t* len_ptr = (int32_t*)data;
     len_ptr[0] = len;
-    len_ptr[1] = 0;  // padding
 
     // Copy element values
     int64_t* elements = (int64_t*)(data + 8);
     if (values && len > 0) {
         memcpy(elements, values, len * sizeof(int64_t));
-    } else {
-        memset(elements, 0, len * sizeof(int64_t));
     }
 
     // Update heap state
@@ -428,8 +430,8 @@ void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
 
     if (header->kind == GC_KIND_STRUCT) {
         // Struct: scan all fields for references
-        size_t data_size = header->size - GC_HEADER_SIZE;
-        int32_t num_fields = (int32_t)(data_size / sizeof(int64_t));
+        // Use stored field count (in reserved) to avoid scanning padding bytes
+        int32_t num_fields = (int32_t)header->reserved;
         int64_t* fields = (int64_t*)data;
 
         for (int32_t i = 0; i < num_fields; i++) {
