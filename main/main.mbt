@@ -2,7 +2,7 @@
 fn main {
   // Define choices for explore stages
   let stage_choices = @hashset.HashSet::from_array([
-    "wasm", "ir", "opt-ir", "vcode", "regalloc", "mc",
+    "source", "ir", "opt-ir", "vcode", "regalloc", "mc",
   ])
 
   // Define choices for config action

@@ -3,6 +3,7 @@
 struct CompiledFunc {
   name : String
   type_str : String
+  source : String // WAT source code
   ir : String
   ir_opt : String
   vcode : String
@@ -21,7 +22,7 @@ fn run_explore(
 ) -> Unit {
   // Parse stages - empty means show all
   let show_all = stages.is_empty()
-  let show_wasm = show_all || stages.contains("wasm")
+  let show_source = show_all || stages.contains("source")
   let show_ir = show_all || stages.contains("ir")
   let show_opt_ir = show_all || stages.contains("opt-ir")
   let show_vcode = show_all || stages.contains("vcode")
@@ -117,19 +118,19 @@ fn run_explore(
         name
       }
     }
+    // Generate WAT source text for this function
+    let source_text = func_to_wat(func_name, func_type, code.locals, code.body)
     if !html_output {
       println("")
       println("╔" + "═".repeat(58) + "╗")
       println("║  \{func_name} \{format_func_type(func_type)}")
       println("╚" + "═".repeat(58) + "╝")
 
-      // Stage 1: WASM instructions
-      if show_wasm {
+      // Stage 1: WAT Source
+      if show_source {
         println("")
-        println("── WASM Instructions ──")
-        for i, instr in code.body {
-          println("  \{i}: \{instr}")
-        }
+        println("── WAT Source ──")
+        println(source_text)
       }
     }
 
@@ -203,6 +204,7 @@ fn run_explore(
       compiled_funcs.push({
         name: func_name,
         type_str: format_func_type(func_type),
+        source: source_text,
         ir: ir_text,
         ir_opt: ir_optimized,
         vcode: vcode_text,

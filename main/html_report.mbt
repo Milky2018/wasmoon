@@ -166,6 +166,14 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
     sb.write_string(" <code>")
     sb.write_string(html_escape(func.type_str))
     sb.write_string("</code></h1>\n\n")
+    // WAT Source
+    sb.write_string(
+      "        <h2 onclick=\"toggleSection('\{id}-source')\">WAT Source <span class=\"toggle\" id=\"\{id}-source-toggle\">[collapse]</span></h2>\n",
+    )
+    sb.write_string("        <div class=\"section\" id=\"\{id}-source\">\n")
+    sb.write_string("          <div class=\"section-content\"><pre>")
+    sb.write_string(html_escape(func.source))
+    sb.write_string("</pre></div>\n        </div>\n\n")
     // IR
     sb.write_string(
       "        <h2 onclick=\"toggleSection('\{id}-ir')\">IR (SSA Form) <span class=\"toggle\" id=\"\{id}-ir-toggle\">[collapse]</span></h2>\n",

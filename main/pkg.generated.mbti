@@ -1,7 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/main"
 
+import(
+  "Milky2018/wasmoon/types"
+)
+
 // Values
+pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
 
 // Errors
 
