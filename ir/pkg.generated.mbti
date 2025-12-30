@@ -128,12 +128,19 @@ pub fn EGraph::add(Self, ENode) -> EClassId
 pub fn EGraph::add_add(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_and(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_binop(Self, EOpcode, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_bnot(Self, EClassId) -> EClassId
 pub fn EGraph::add_const(Self, Int64) -> EClassId
 pub fn EGraph::add_mul(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_neg(Self, EClassId) -> EClassId
 pub fn EGraph::add_or(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_sdiv(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_shl(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_srem(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_sshr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sub(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_udiv(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_urem(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_ushr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_var(Self, Int) -> EClassId
 pub fn EGraph::add_xor(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::equiv(Self, EClassId, EClassId) -> Bool
@@ -185,6 +192,7 @@ pub(all) enum EOpcode {
   Sshr
   Ushr
   Neg
+  Bnot
   Cmp(Int)
   Var(Int)
 }

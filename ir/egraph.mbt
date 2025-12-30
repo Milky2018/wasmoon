@@ -40,6 +40,7 @@ pub(all) enum EOpcode {
 
   // Unary
   Neg // Represented as 0 - x or -1 * x in IR, but useful for patterns
+  Bnot // Bitwise NOT (~x)
 
   // Comparison placeholder (simplified - just track the condition code as int)
   Cmp(Int) // Stores IntCC ordinal
@@ -403,6 +404,66 @@ pub fn EGraph::add_neg(self : EGraph, operand : EClassId) -> EClassId {
   self.add({ op: Neg, children: [operand] })
 }
 
+///|
+/// Add a bitwise NOT node: ~x
+pub fn EGraph::add_bnot(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Bnot, children: [operand] })
+}
+
+///|
+pub fn EGraph::add_sdiv(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Sdiv, lhs, rhs)
+}
+
+///|
+pub fn EGraph::add_udiv(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Udiv, lhs, rhs)
+}
+
+///|
+pub fn EGraph::add_srem(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Srem, lhs, rhs)
+}
+
+///|
+pub fn EGraph::add_urem(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Urem, lhs, rhs)
+}
+
+///|
+pub fn EGraph::add_ushr(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Ushr, lhs, rhs)
+}
+
+///|
+pub fn EGraph::add_sshr(
+  self : EGraph,
+  lhs : EClassId,
+  rhs : EClassId,
+) -> EClassId {
+  self.add_binop(Sshr, lhs, rhs)
+}
+
 // ============================================================================
 // Cost model for extraction
 // ============================================================================
@@ -420,6 +481,7 @@ fn node_cost(node : ENode) -> Int {
     Sdiv | Udiv => 10 // Division is very expensive
     Srem | Urem => 10
     Neg => 1
+    Bnot => 1
     Cmp(_) => 1
   }
 }
@@ -1686,6 +1748,207 @@ fn rule_srem_neg_one() -> RewriteRule {
 }
 
 ///|
+/// x / 1 = x (signed and unsigned)
+fn rule_div_one() -> RewriteRule {
+  {
+    name: "div_one",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        match node.op {
+          Sdiv | Udiv =>
+            if node.children.length() == 2 {
+              if eg.find_const(node.children[1]) is Some(1L) {
+                let new_id = eg.merge(class_id, node.children[0])
+                changed = new_id != class_id || changed
+              }
+            }
+          _ => ()
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// x % 1 = 0 (signed and unsigned)
+fn rule_rem_one() -> RewriteRule {
+  {
+    name: "rem_one",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        match node.op {
+          Srem | Urem =>
+            if node.children.length() == 2 {
+              if eg.find_const(node.children[1]) is Some(1L) {
+                let zero = eg.add_const(0L)
+                let new_id = eg.merge(class_id, zero)
+                changed = new_id != class_id || changed
+              }
+            }
+          _ => ()
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// (!x) + 1 = -x (two's complement negation)
+fn rule_bnot_add_one() -> RewriteRule {
+  {
+    name: "bnot_add_one",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          // Check (!x) + 1
+          if eg.find_const(node.children[1]) is Some(1L) {
+            for inner in eg.get_nodes(node.children[0]) {
+              if inner.op is Bnot && inner.children.length() == 1 {
+                let neg = eg.add_neg(inner.children[0])
+                let new_id = eg.merge(class_id, neg)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+          // Check 1 + (!x)
+          if eg.find_const(node.children[0]) is Some(1L) {
+            for inner in eg.get_nodes(node.children[1]) {
+              if inner.op is Bnot && inner.children.length() == 1 {
+                let neg = eg.add_neg(inner.children[0])
+                let new_id = eg.merge(class_id, neg)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// !(x - 1) = -x
+fn rule_bnot_sub_one() -> RewriteRule {
+  {
+    name: "bnot_sub_one",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Bnot && node.children.length() == 1 {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Sub && inner.children.length() == 2 {
+              if eg.find_const(inner.children[1]) is Some(1L) {
+                let neg = eg.add_neg(inner.children[0])
+                let new_id = eg.merge(class_id, neg)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// !(x + (-1)) = -x
+fn rule_bnot_add_neg_one() -> RewriteRule {
+  {
+    name: "bnot_add_neg_one",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Bnot && node.children.length() == 1 {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Add && inner.children.length() == 2 {
+              if eg.find_const(inner.children[1]) is Some(-1L) {
+                let neg = eg.add_neg(inner.children[0])
+                let new_id = eg.merge(class_id, neg)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// or(x, C) + (-C) = and(x, ~C)
+fn rule_or_add_neg() -> RewriteRule {
+  {
+    name: "or_add_neg",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          if eg.find_const(node.children[1]) is Some(m) {
+            for inner in eg.get_nodes(node.children[0]) {
+              if inner.op is Or && inner.children.length() == 2 {
+                if eg.find_const(inner.children[1]) is Some(n) {
+                  if m == -n {
+                    // or(x, C) + (-C) = and(x, ~C)
+                    let not_c = eg.add_const(n.lnot())
+                    let result = eg.add_and(inner.children[0], not_c)
+                    let new_id = eg.merge(class_id, result)
+                    changed = new_id != class_id || changed
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// (x + y) - (x | y) = x & y
+fn rule_add_sub_or_to_and() -> RewriteRule {
+  {
+    name: "add_sub_or_to_and",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          for add_node in eg.get_nodes(node.children[0]) {
+            if add_node.op is Add && add_node.children.length() == 2 {
+              for or_node in eg.get_nodes(node.children[1]) {
+                if or_node.op is Or && or_node.children.length() == 2 {
+                  let add_x = eg.find(add_node.children[0])
+                  let add_y = eg.find(add_node.children[1])
+                  let or_x = eg.find(or_node.children[0])
+                  let or_y = eg.find(or_node.children[1])
+                  // Check if (x+y) - (x|y) or (x+y) - (y|x)
+                  if (add_x == or_x && add_y == or_y) ||
+                    (add_x == or_y && add_y == or_x) {
+                    let result = eg.add_and(add_x, add_y)
+                    let new_id = eg.merge(class_id, result)
+                    changed = new_id != class_id || changed
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
 /// x * (1 << y) = x << y
 fn rule_mul_shl_one() -> RewriteRule {
   {
@@ -1995,6 +2258,473 @@ fn rule_rebalance_xor_left() -> RewriteRule {
   }
 }
 
+// ============================================================================
+// Add/Sub mixed rebalancing rules
+// These rules balance combinations of + and - to increase ILP
+// ============================================================================
+
+///|
+/// a - (b - (c - d)) = (a - b) + (c - d)
+fn rule_rebalance_sub_sub_sub() -> RewriteRule {
+  {
+    name: "rebalance_sub_sub_sub",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          let a = node.children[0]
+          for mid in eg.get_nodes(node.children[1]) {
+            if mid.op is Sub && mid.children.length() == 2 {
+              let b = mid.children[0]
+              for inner in eg.get_nodes(mid.children[1]) {
+                if inner.op is Sub && inner.children.length() == 2 {
+                  let c = inner.children[0]
+                  let d = inner.children[1]
+                  let ab = eg.add_sub(a, b)
+                  let cd = eg.add_sub(c, d)
+                  let result = eg.add_add(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// a - (b - (c + d)) = (a - b) + (c + d)
+fn rule_rebalance_sub_sub_add() -> RewriteRule {
+  {
+    name: "rebalance_sub_sub_add",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          let a = node.children[0]
+          for mid in eg.get_nodes(node.children[1]) {
+            if mid.op is Sub && mid.children.length() == 2 {
+              let b = mid.children[0]
+              for inner in eg.get_nodes(mid.children[1]) {
+                if inner.op is Add && inner.children.length() == 2 {
+                  let c = inner.children[0]
+                  let d = inner.children[1]
+                  let ab = eg.add_sub(a, b)
+                  let cd = eg.add_add(c, d)
+                  let result = eg.add_add(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// a - (b + (c - d)) = (a - b) - (c - d)
+fn rule_rebalance_sub_add_sub() -> RewriteRule {
+  {
+    name: "rebalance_sub_add_sub",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          let a = node.children[0]
+          for mid in eg.get_nodes(node.children[1]) {
+            if mid.op is Add && mid.children.length() == 2 {
+              let b = mid.children[0]
+              for inner in eg.get_nodes(mid.children[1]) {
+                if inner.op is Sub && inner.children.length() == 2 {
+                  let c = inner.children[0]
+                  let d = inner.children[1]
+                  let ab = eg.add_sub(a, b)
+                  let cd = eg.add_sub(c, d)
+                  let result = eg.add_sub(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// a - (b + (c + d)) = (a - b) - (c + d)
+fn rule_rebalance_sub_add_add() -> RewriteRule {
+  {
+    name: "rebalance_sub_add_add",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          let a = node.children[0]
+          for mid in eg.get_nodes(node.children[1]) {
+            if mid.op is Add && mid.children.length() == 2 {
+              let b = mid.children[0]
+              for inner in eg.get_nodes(mid.children[1]) {
+                if inner.op is Add && inner.children.length() == 2 {
+                  let c = inner.children[0]
+                  let d = inner.children[1]
+                  let ab = eg.add_sub(a, b)
+                  let cd = eg.add_add(c, d)
+                  let result = eg.add_sub(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// a + (b - (c - d)) = (a + b) - (c - d)
+fn rule_rebalance_add_sub_sub() -> RewriteRule {
+  {
+    name: "rebalance_add_sub_sub",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          let a = node.children[0]
+          for mid in eg.get_nodes(node.children[1]) {
+            if mid.op is Sub && mid.children.length() == 2 {
+              let b = mid.children[0]
+              for inner in eg.get_nodes(mid.children[1]) {
+                if inner.op is Sub && inner.children.length() == 2 {
+                  let c = inner.children[0]
+                  let d = inner.children[1]
+                  let ab = eg.add_add(a, b)
+                  let cd = eg.add_sub(c, d)
+                  let result = eg.add_sub(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// a + (b - (c + d)) = (a + b) - (c + d)
+fn rule_rebalance_add_sub_add() -> RewriteRule {
+  {
+    name: "rebalance_add_sub_add",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          let a = node.children[0]
+          for mid in eg.get_nodes(node.children[1]) {
+            if mid.op is Sub && mid.children.length() == 2 {
+              let b = mid.children[0]
+              for inner in eg.get_nodes(mid.children[1]) {
+                if inner.op is Add && inner.children.length() == 2 {
+                  let c = inner.children[0]
+                  let d = inner.children[1]
+                  let ab = eg.add_add(a, b)
+                  let cd = eg.add_add(c, d)
+                  let result = eg.add_sub(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// a + (b + (c - d)) = (a + b) + (c - d)
+fn rule_rebalance_add_add_sub() -> RewriteRule {
+  {
+    name: "rebalance_add_add_sub",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          let a = node.children[0]
+          for mid in eg.get_nodes(node.children[1]) {
+            if mid.op is Add && mid.children.length() == 2 {
+              let b = mid.children[0]
+              for inner in eg.get_nodes(mid.children[1]) {
+                if inner.op is Sub && inner.children.length() == 2 {
+                  let c = inner.children[0]
+                  let d = inner.children[1]
+                  let ab = eg.add_add(a, b)
+                  let cd = eg.add_sub(c, d)
+                  let result = eg.add_add(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ((a - b) - c) - d = (a - b) - (c + d)
+fn rule_rebalance_left_sub_sub_sub() -> RewriteRule {
+  {
+    name: "rebalance_left_sub_sub_sub",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          let d = node.children[1]
+          for mid in eg.get_nodes(node.children[0]) {
+            if mid.op is Sub && mid.children.length() == 2 {
+              let c = mid.children[1]
+              for inner in eg.get_nodes(mid.children[0]) {
+                if inner.op is Sub && inner.children.length() == 2 {
+                  let a = inner.children[0]
+                  let b = inner.children[1]
+                  let ab = eg.add_sub(a, b)
+                  let cd = eg.add_add(c, d)
+                  let result = eg.add_sub(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ((a - b) - c) + d = (a - b) - (c - d)
+fn rule_rebalance_left_sub_sub_add() -> RewriteRule {
+  {
+    name: "rebalance_left_sub_sub_add",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          let d = node.children[1]
+          for mid in eg.get_nodes(node.children[0]) {
+            if mid.op is Sub && mid.children.length() == 2 {
+              let c = mid.children[1]
+              for inner in eg.get_nodes(mid.children[0]) {
+                if inner.op is Sub && inner.children.length() == 2 {
+                  let a = inner.children[0]
+                  let b = inner.children[1]
+                  let ab = eg.add_sub(a, b)
+                  let cd = eg.add_sub(c, d)
+                  let result = eg.add_sub(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ((a - b) + c) - d = (a - b) + (c - d)
+fn rule_rebalance_left_sub_add_sub() -> RewriteRule {
+  {
+    name: "rebalance_left_sub_add_sub",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          let d = node.children[1]
+          for mid in eg.get_nodes(node.children[0]) {
+            if mid.op is Add && mid.children.length() == 2 {
+              let c = mid.children[1]
+              for inner in eg.get_nodes(mid.children[0]) {
+                if inner.op is Sub && inner.children.length() == 2 {
+                  let a = inner.children[0]
+                  let b = inner.children[1]
+                  let ab = eg.add_sub(a, b)
+                  let cd = eg.add_sub(c, d)
+                  let result = eg.add_add(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ((a - b) + c) + d = (a - b) + (c + d)
+fn rule_rebalance_left_sub_add_add() -> RewriteRule {
+  {
+    name: "rebalance_left_sub_add_add",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          let d = node.children[1]
+          for mid in eg.get_nodes(node.children[0]) {
+            if mid.op is Add && mid.children.length() == 2 {
+              let c = mid.children[1]
+              for inner in eg.get_nodes(mid.children[0]) {
+                if inner.op is Sub && inner.children.length() == 2 {
+                  let a = inner.children[0]
+                  let b = inner.children[1]
+                  let ab = eg.add_sub(a, b)
+                  let cd = eg.add_add(c, d)
+                  let result = eg.add_add(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ((a + b) - c) - d = (a + b) - (c + d)
+fn rule_rebalance_left_add_sub_sub() -> RewriteRule {
+  {
+    name: "rebalance_left_add_sub_sub",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          let d = node.children[1]
+          for mid in eg.get_nodes(node.children[0]) {
+            if mid.op is Sub && mid.children.length() == 2 {
+              let c = mid.children[1]
+              for inner in eg.get_nodes(mid.children[0]) {
+                if inner.op is Add && inner.children.length() == 2 {
+                  let a = inner.children[0]
+                  let b = inner.children[1]
+                  let ab = eg.add_add(a, b)
+                  let cd = eg.add_add(c, d)
+                  let result = eg.add_sub(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ((a + b) - c) + d = (a + b) - (c - d)
+fn rule_rebalance_left_add_sub_add() -> RewriteRule {
+  {
+    name: "rebalance_left_add_sub_add",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Add && node.children.length() == 2 {
+          let d = node.children[1]
+          for mid in eg.get_nodes(node.children[0]) {
+            if mid.op is Sub && mid.children.length() == 2 {
+              let c = mid.children[1]
+              for inner in eg.get_nodes(mid.children[0]) {
+                if inner.op is Add && inner.children.length() == 2 {
+                  let a = inner.children[0]
+                  let b = inner.children[1]
+                  let ab = eg.add_add(a, b)
+                  let cd = eg.add_sub(c, d)
+                  let result = eg.add_sub(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ((a + b) + c) - d = (a + b) + (c - d)
+fn rule_rebalance_left_add_add_sub() -> RewriteRule {
+  {
+    name: "rebalance_left_add_add_sub",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Sub && node.children.length() == 2 {
+          let d = node.children[1]
+          for mid in eg.get_nodes(node.children[0]) {
+            if mid.op is Add && mid.children.length() == 2 {
+              let c = mid.children[1]
+              for inner in eg.get_nodes(mid.children[0]) {
+                if inner.op is Add && inner.children.length() == 2 {
+                  let a = inner.children[0]
+                  let b = inner.children[1]
+                  let ab = eg.add_add(a, b)
+                  let cd = eg.add_sub(c, d)
+                  let result = eg.add_add(ab, cd)
+                  let new_id = eg.subsume(class_id, result)
+                  changed = new_id != class_id || changed
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
 ///|
 /// Get all standard rewrite rules
 pub fn standard_rules() -> Array[RewriteRule] {
@@ -2035,6 +2765,16 @@ pub fn standard_rules() -> Array[RewriteRule] {
     rule_neg_mul_neg(),
     rule_sdiv_neg_one(),
     rule_srem_neg_one(),
+    // Division/Remainder by 1
+    rule_div_one(),
+    rule_rem_one(),
+    // Bnot patterns
+    rule_bnot_add_one(),
+    rule_bnot_sub_one(),
+    rule_bnot_add_neg_one(),
+    // Additional patterns
+    rule_or_add_neg(),
+    rule_add_sub_or_to_and(),
     // Cancellation patterns
     rule_sub_add_cancel(),
     rule_add_sub_cancel(),
@@ -2055,6 +2795,21 @@ pub fn standard_rules() -> Array[RewriteRule] {
     rule_rebalance_and_left(),
     rule_rebalance_xor_right(),
     rule_rebalance_xor_left(),
+    // Add/Sub mixed rebalancing
+    rule_rebalance_sub_sub_sub(),
+    rule_rebalance_sub_sub_add(),
+    rule_rebalance_sub_add_sub(),
+    rule_rebalance_sub_add_add(),
+    rule_rebalance_add_sub_sub(),
+    rule_rebalance_add_sub_add(),
+    rule_rebalance_add_add_sub(),
+    rule_rebalance_left_sub_sub_sub(),
+    rule_rebalance_left_sub_sub_add(),
+    rule_rebalance_left_sub_add_sub(),
+    rule_rebalance_left_sub_add_add(),
+    rule_rebalance_left_add_sub_sub(),
+    rule_rebalance_left_add_sub_add(),
+    rule_rebalance_left_add_add_sub(),
     // Commutativity (put last as they can cause explosion)
     rule_add_comm(),
     rule_mul_comm(),
@@ -2259,6 +3014,7 @@ fn eopcode_to_opcode(eop : EOpcode) -> Opcode? {
     Sshr => Some(Sshr)
     Ushr => Some(Ushr)
     Neg => None // Neg is synthetic, not in IR
+    Bnot => Some(Bnot) // Bitwise NOT
     Cmp(_) => None // Would need to reconstruct IntCC
     Var(_) => None // Variable reference, not an instruction
   }
