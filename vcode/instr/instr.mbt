@@ -1353,6 +1353,10 @@ pub(all) enum VCodeTerminator {
   // Emits: CBZ/CBNZ (saves two instructions vs Branch)
   // Parameters: reg, is_nonzero, is_64, then-block, else-block
   BranchZero(@abi.Reg, Bool, Bool, Int, Int)
+  // BranchCmpImm: compare register with immediate and branch on condition
+  // Emits: CMP Xn, #imm + B.cond (saves one instruction vs loading const to reg)
+  // Parameters: lhs, imm, cond, is_64, then-block, else-block
+  BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
   Return(Array[@abi.Reg]) // Return with values
   Trap(String) // Trap with message
   // BrTable: index register, target block IDs, default block ID
@@ -1372,6 +1376,8 @@ fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
       let op = if is_nonzero { "cbnz" } else { "cbz" }
       "\{op} \{reg}, block\{then_b}, block\{else_b}"
     }
+    BranchCmpImm(lhs, imm, cond, _is_64, then_b, else_b) =>
+      "br_cmp_imm.\{cond} \{lhs}, #\{imm}, block\{then_b}, block\{else_b}"
     Return(values) => {
       let mut result = "ret"
       if values.length() > 0 {

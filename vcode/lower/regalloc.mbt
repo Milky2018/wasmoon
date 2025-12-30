@@ -253,6 +253,10 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
             dfs(func, then_b, visited, postorder)
             dfs(func, else_b, visited, postorder)
           }
+          BranchCmpImm(_, _, _, _, then_b, else_b) => {
+            dfs(func, then_b, visited, postorder)
+            dfs(func, else_b, visited, postorder)
+          }
           BranchZero(_, _, _, then_b, else_b) => {
             dfs(func, then_b, visited, postorder)
             dfs(func, else_b, visited, postorder)
@@ -424,6 +428,8 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
           record_term_use(lhs, result, block_idx, inst_idx)
           record_term_use(rhs, result, block_idx, inst_idx)
         }
+        BranchCmpImm(lhs, _, _, _, _, _) =>
+          record_term_use(lhs, result, block_idx, inst_idx)
         BranchZero(reg, _, _, _, _) =>
           record_term_use(reg, result, block_idx, inst_idx)
         Return(values) =>
@@ -485,6 +491,10 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
             use_set.add(vreg.id)
           }
         }
+        BranchCmpImm(lhs, _, _, _, _, _) =>
+          if lhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+            use_set.add(vreg.id)
+          }
         BranchZero(reg, _, _, _, _) =>
           if reg is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
             use_set.add(vreg.id)
@@ -513,6 +523,10 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
           succs.push(else_b)
         }
         BranchCmp(_, _, _, _, then_b, else_b) => {
+          succs.push(then_b)
+          succs.push(else_b)
+        }
+        BranchCmpImm(_, _, _, _, then_b, else_b) => {
           succs.push(then_b)
           succs.push(else_b)
         }
@@ -1636,6 +1650,11 @@ pub fn apply_allocation(
           let new_rhs = rewrite_reg_with_spill(rhs, alloc, new_block)
           BranchCmp(new_lhs, new_rhs, cond, is_64, then_b, else_b)
         }
+        BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
+          // Handle spilled register
+          let new_lhs = rewrite_reg_with_spill(lhs, alloc, new_block)
+          BranchCmpImm(new_lhs, imm, cond, is_64, then_b, else_b)
+        }
         BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
           // Handle spilled register
           let new_reg = rewrite_reg_with_spill(reg, alloc, new_block)
@@ -1777,6 +1796,10 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
             used_vregs.add(vreg.id)
           }
         }
+        BranchCmpImm(lhs, _, _, _, _, _) =>
+          if lhs is @abi.Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
         BranchZero(reg, _, _, _, _) =>
           if reg is @abi.Virtual(vreg) {
             used_vregs.add(vreg.id)

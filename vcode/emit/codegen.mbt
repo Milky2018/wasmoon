@@ -2866,6 +2866,18 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
       self.emit_b(else_b)
     }
+    BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
+      // CMP lhs, #imm + B.cond then_b + B else_b
+      let rn = reg_num(lhs)
+      if is_64 {
+        self.emit_cmp_imm(rn, imm)
+      } else {
+        self.emit_cmp_imm32(rn, imm)
+      }
+      // Emit conditional branch based on condition
+      self.emit_b_cond(cond.to_bits(), then_b)
+      self.emit_b(else_b)
+    }
     Return(values) => {
       // v3 ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7
       // If more returns are needed, SRET pointer is passed in X8

@@ -1163,31 +1163,47 @@ fn lower_terminator(
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)
       // brz means branch if zero, so:
-      // - If condition is from icmp, invert the condition for BranchCmp
+      // - If condition is from icmp, invert the condition for BranchCmp/BranchCmpImm
       // - Otherwise use BranchZero with is_nonzero=false
       if match_icmp_value(ctx, cond) is Some((lhs, rhs, cc)) {
         // Brz(icmp(cc, a, b)) = branch to then if icmp result is 0 (i.e., condition is false)
         // So we need to branch to else_block if condition is true, then_block if false
         // This means: BranchCmp with swapped targets
-        let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
-        let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
         let vcode_cond = intcc_to_cond(cc)
         // Determine is_64 from operand type (same as lower_icmp)
         let is_64 = match lhs.ty {
           @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
           _ => false
         }
-        // Note: swapped - branch to else_id if condition is true
-        block.set_terminator(
-          BranchCmp(
-            Virtual(lhs_vreg),
-            Virtual(rhs_vreg),
-            vcode_cond,
-            is_64,
-            else_id,
-            then_id,
-          ),
-        )
+        // Try to use BranchCmpImm if RHS is a valid immediate
+        if match_add_imm_value(ctx, rhs) is Some(imm) {
+          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+          // Note: swapped - branch to else_id if condition is true
+          block.set_terminator(
+            BranchCmpImm(
+              Virtual(lhs_vreg),
+              imm.to_int(),
+              vcode_cond,
+              is_64,
+              else_id,
+              then_id,
+            ),
+          )
+        } else {
+          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+          let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
+          // Note: swapped - branch to else_id if condition is true
+          block.set_terminator(
+            BranchCmp(
+              Virtual(lhs_vreg),
+              Virtual(rhs_vreg),
+              vcode_cond,
+              is_64,
+              else_id,
+              then_id,
+            ),
+          )
+        }
       } else {
         // Use BranchZero: branch to then_block if reg is zero
         // Condition result is always i32, so is_64=false
@@ -1201,28 +1217,43 @@ fn lower_terminator(
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)
       // brnz means branch if nonzero, so:
-      // - If condition is from icmp, use BranchCmp directly
+      // - If condition is from icmp, use BranchCmp/BranchCmpImm directly
       // - Otherwise use BranchZero with is_nonzero=true
       if match_icmp_value(ctx, cond) is Some((lhs, rhs, cc)) {
         // Brnz(icmp(cc, a, b)) = branch to then if icmp result is nonzero (i.e., condition is true)
-        let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
-        let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
         let vcode_cond = intcc_to_cond(cc)
         // Determine is_64 from operand type (same as lower_icmp)
         let is_64 = match lhs.ty {
           @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
           _ => false
         }
-        block.set_terminator(
-          BranchCmp(
-            Virtual(lhs_vreg),
-            Virtual(rhs_vreg),
-            vcode_cond,
-            is_64,
-            then_id,
-            else_id,
-          ),
-        )
+        // Try to use BranchCmpImm if RHS is a valid immediate
+        if match_add_imm_value(ctx, rhs) is Some(imm) {
+          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+          block.set_terminator(
+            BranchCmpImm(
+              Virtual(lhs_vreg),
+              imm.to_int(),
+              vcode_cond,
+              is_64,
+              then_id,
+              else_id,
+            ),
+          )
+        } else {
+          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+          let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
+          block.set_terminator(
+            BranchCmp(
+              Virtual(lhs_vreg),
+              Virtual(rhs_vreg),
+              vcode_cond,
+              is_64,
+              then_id,
+              else_id,
+            ),
+          )
+        }
       } else {
         // Use BranchZero: branch to then_block if reg is nonzero
         // Condition result is always i32, so is_64=false
