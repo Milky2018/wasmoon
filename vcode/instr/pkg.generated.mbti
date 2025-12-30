@@ -394,6 +394,8 @@ pub impl Show for VCodeOpcode
 pub(all) enum VCodeTerminator {
   Jump(Int)
   Branch(@abi.Reg, Int, Int)
+  BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
+  BranchZero(@abi.Reg, Bool, Bool, Int, Int)
   Return(Array[@abi.Reg])
   Trap(String)
   BrTable(@abi.Reg, Array[Int], Int)

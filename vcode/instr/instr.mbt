@@ -1345,6 +1345,14 @@ pub fn Cond::to_bits(self : Cond) -> Int {
 pub(all) enum VCodeTerminator {
   Jump(Int) // Unconditional jump to block
   Branch(@abi.Reg, Int, Int) // Conditional: condition, then-block, else-block
+  // BranchCmp: compare two registers and branch on condition
+  // Emits: CMP Xn, Xm + B.cond (saves one instruction vs Branch)
+  // Parameters: lhs, rhs, cond, is_64, then-block, else-block
+  BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
+  // BranchZero: branch if register is zero/nonzero
+  // Emits: CBZ/CBNZ (saves two instructions vs Branch)
+  // Parameters: reg, is_nonzero, is_64, then-block, else-block
+  BranchZero(@abi.Reg, Bool, Bool, Int, Int)
   Return(Array[@abi.Reg]) // Return with values
   Trap(String) // Trap with message
   // BrTable: index register, target block IDs, default block ID
@@ -1358,6 +1366,12 @@ fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
     Jump(target) => "jump block\{target}"
     Branch(cond, then_b, else_b) =>
       "branch \{cond}, block\{then_b}, block\{else_b}"
+    BranchCmp(lhs, rhs, cond, _is_64, then_b, else_b) =>
+      "br_cmp.\{cond} \{lhs}, \{rhs}, block\{then_b}, block\{else_b}"
+    BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
+      let op = if is_nonzero { "cbnz" } else { "cbz" }
+      "\{op} \{reg}, block\{then_b}, block\{else_b}"
+    }
     Return(values) => {
       let mut result = "ret"
       if values.length() > 0 {

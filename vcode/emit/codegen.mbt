@@ -2838,6 +2838,30 @@ fn MachineCode::emit_terminator_with_epilogue(
       self.emit_cbnz(rt, then_b)
       self.emit_b(else_b)
     }
+    BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
+      // CMP lhs, rhs + B.cond then_b + B else_b
+      let rn = reg_num(lhs)
+      let rm = reg_num(rhs)
+      if is_64 {
+        self.emit_cmp_reg(rn, rm)
+      } else {
+        self.emit_cmp_reg32(rn, rm)
+      }
+      // Emit conditional branch based on condition
+      self.emit_b_cond(cond.to_bits(), then_b)
+      self.emit_b(else_b)
+    }
+    BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
+      // CBZ/CBNZ reg, then_b + B else_b
+      // Note: Using 64-bit CBZ/CBNZ - works correctly since i32 values are zero-extended
+      let rt = reg_num(reg)
+      if is_nonzero {
+        self.emit_cbnz(rt, then_b)
+      } else {
+        self.emit_cbz(rt, then_b)
+      }
+      self.emit_b(else_b)
+    }
     Return(values) => {
       // v3 ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7
       // If more returns are needed, SRET pointer is passed in X8

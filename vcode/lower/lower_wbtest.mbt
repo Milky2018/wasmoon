@@ -163,7 +163,7 @@ test "lower conditional branch" {
       #|vcode max(v0:int, v1:int) -> int {
       #|block0:
       #|    v2 = cmp32.sgt v0, v1
-      #|    branch v2, block1, block2
+      #|    br_cmp.gt v0, v1, block1, block2
       #|block1:
       #|    ret v0
       #|block2:

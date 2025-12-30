@@ -249,6 +249,14 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
             dfs(func, then_b, visited, postorder)
             dfs(func, else_b, visited, postorder)
           }
+          BranchCmp(_, _, _, _, then_b, else_b) => {
+            dfs(func, then_b, visited, postorder)
+            dfs(func, else_b, visited, postorder)
+          }
+          BranchZero(_, _, _, then_b, else_b) => {
+            dfs(func, then_b, visited, postorder)
+            dfs(func, else_b, visited, postorder)
+          }
           BrTable(_, targets, default) => {
             for t in targets {
               dfs(func, t, visited, postorder)
@@ -390,40 +398,37 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
     // Record uses in terminator
     if block.terminator is Some(term) {
-      match term {
-        Branch(cond, _, _) =>
-          if cond is @abi.Virtual(vreg) {
-            let info = if result.use_def.get(vreg.id) is Some(existing) {
-              existing
-            } else {
-              let new_info = UseDefInfo::new(vreg)
-              result.use_def.set(vreg.id, new_info)
-              new_info
-            }
-            let inst_idx = block.insts.length()
-            info.use_points.push({
-              block: block_idx,
-              inst: inst_idx,
-              pos: Before,
-            })
+      // Helper to record a use point for a virtual register
+      fn record_term_use(
+        reg : @abi.Reg,
+        result : LivenessResult,
+        block_idx : Int,
+        inst_idx : Int,
+      ) -> Unit {
+        if reg is @abi.Virtual(vreg) {
+          let info = if result.use_def.get(vreg.id) is Some(existing) {
+            existing
+          } else {
+            let new_info = UseDefInfo::new(vreg)
+            result.use_def.set(vreg.id, new_info)
+            new_info
           }
+          info.use_points.push({ block: block_idx, inst: inst_idx, pos: Before })
+        }
+      }
+
+      let inst_idx = block.insts.length()
+      match term {
+        Branch(cond, _, _) => record_term_use(cond, result, block_idx, inst_idx)
+        BranchCmp(lhs, rhs, _, _, _, _) => {
+          record_term_use(lhs, result, block_idx, inst_idx)
+          record_term_use(rhs, result, block_idx, inst_idx)
+        }
+        BranchZero(reg, _, _, _, _) =>
+          record_term_use(reg, result, block_idx, inst_idx)
         Return(values) =>
           for value in values {
-            if value is @abi.Virtual(vreg) {
-              let info = if result.use_def.get(vreg.id) is Some(existing) {
-                existing
-              } else {
-                let new_info = UseDefInfo::new(vreg)
-                result.use_def.set(vreg.id, new_info)
-                new_info
-              }
-              let inst_idx = block.insts.length()
-              info.use_points.push({
-                block: block_idx,
-                inst: inst_idx,
-                pos: Before,
-              })
-            }
+            record_term_use(value, result, block_idx, inst_idx)
           }
         _ => ()
       }
@@ -472,6 +477,18 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
           if cond is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
             use_set.add(vreg.id)
           }
+        BranchCmp(lhs, rhs, _, _, _, _) => {
+          if lhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+            use_set.add(vreg.id)
+          }
+          if rhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+            use_set.add(vreg.id)
+          }
+        }
+        BranchZero(reg, _, _, _, _) =>
+          if reg is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+            use_set.add(vreg.id)
+          }
         Return(values) =>
           for value in values {
             if value is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
@@ -492,6 +509,14 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       match term {
         Jump(target) => succs.push(target)
         Branch(_, then_b, else_b) => {
+          succs.push(then_b)
+          succs.push(else_b)
+        }
+        BranchCmp(_, _, _, _, then_b, else_b) => {
+          succs.push(then_b)
+          succs.push(else_b)
+        }
+        BranchZero(_, _, _, then_b, else_b) => {
           succs.push(then_b)
           succs.push(else_b)
         }
@@ -1605,6 +1630,17 @@ pub fn apply_allocation(
           let new_cond = rewrite_reg_with_spill(cond, alloc, new_block)
           Branch(new_cond, then_b, else_b)
         }
+        BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
+          // Handle spilled registers
+          let new_lhs = rewrite_reg_with_spill(lhs, alloc, new_block)
+          let new_rhs = rewrite_reg_with_spill(rhs, alloc, new_block)
+          BranchCmp(new_lhs, new_rhs, cond, is_64, then_b, else_b)
+        }
+        BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
+          // Handle spilled register
+          let new_reg = rewrite_reg_with_spill(reg, alloc, new_block)
+          BranchZero(new_reg, is_nonzero, is_64, then_b, else_b)
+        }
         BrTable(index, targets, default) => {
           // Handle spilled index register
           let new_index = rewrite_reg_with_spill(index, alloc, new_block)
@@ -1731,6 +1767,18 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
       match term {
         Branch(cond, _, _) =>
           if cond is @abi.Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        BranchCmp(lhs, rhs, _, _, _, _) => {
+          if lhs is @abi.Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+          if rhs is @abi.Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        }
+        BranchZero(reg, _, _, _, _) =>
+          if reg is @abi.Virtual(vreg) {
             used_vregs.add(vreg.id)
           }
         BrTable(index, _, _) =>
