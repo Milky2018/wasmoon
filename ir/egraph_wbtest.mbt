@@ -523,3 +523,107 @@ test "egraph: IR integration - EGraphBuilder" {
   // Check def_map
   inspect(builder.def_map.contains(0), content="true")
 }
+
+///|
+test "egraph: x * -1 = -x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let neg_one = eg.add_const(-1L)
+  let mul_neg_one = eg.add_mul(x, neg_one)
+  let neg_x = eg.add_neg(x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(mul_neg_one, neg_x), content="true")
+}
+
+///|
+test "egraph: -x * -y = x * y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let neg_x = eg.add_neg(x)
+  let neg_y = eg.add_neg(y)
+  let neg_mul = eg.add_mul(neg_x, neg_y)
+  let pos_mul = eg.add_mul(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(neg_mul, pos_mul), content="true")
+}
+
+///|
+test "egraph: (x - y) + y = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_sub_y = eg.add_sub(x, y)
+  let result = eg.add_add(x_sub_y, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: (x + y) - y = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_add_y = eg.add_add(x, y)
+  let result = eg.add_sub(x_add_y, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: (x + y) - x = y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_add_y = eg.add_add(x, y)
+  let result = eg.add_sub(x_add_y, x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, y), content="true")
+}
+
+///|
+test "egraph: (x - y) - x = -y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let x_sub_y = eg.add_sub(x, y)
+  let result = eg.add_sub(x_sub_y, x)
+  let neg_y = eg.add_neg(y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(result, neg_y), content="true")
+}
+
+///|
+test "egraph: x / -1 = -x (sdiv)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let neg_one = eg.add_const(-1L)
+  let div = eg.add({ op: Sdiv, children: [x, neg_one] })
+  let neg_x = eg.add_neg(x)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(div, neg_x), content="true")
+}
+
+///|
+test "egraph: x % -1 = 0 (srem)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let neg_one = eg.add_const(-1L)
+  let rem = eg.add({ op: Srem, children: [x, neg_one] })
+  let zero = eg.add_const(0L)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(rem, zero), content="true")
+}
+
+///|
+test "egraph: x * (1 << y) = x << y" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let one = eg.add_const(1L)
+  let shl_one = eg.add_shl(one, y)
+  let mul = eg.add_mul(x, shl_one)
+  let shl_x = eg.add_shl(x, y)
+  eg.saturate(standard_rules(), 10) |> ignore
+  inspect(eg.equiv(mul, shl_x), content="true")
+}
