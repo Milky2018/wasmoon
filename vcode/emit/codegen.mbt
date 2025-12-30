@@ -845,6 +845,48 @@ fn MachineCode::emit_instruction(
         }
       }
     }
+    SelectCmp(kind, is_64) => {
+      // SelectCmp: fused compare and select
+      // Uses: [cmp_lhs, cmp_rhs, true_val, false_val]
+      // Emits: CMP lhs, rhs; CSEL rd, true_val, false_val, cond
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      let true_val = reg_num(inst.uses[2])
+      let false_val = reg_num(inst.uses[3])
+      // Compare lhs with rhs
+      if is_64 {
+        self.emit_cmp_reg(lhs, rhs)
+      } else {
+        self.emit_cmp_reg32(lhs, rhs)
+      }
+      // Check register class to use appropriate select instruction
+      let reg_class = match inst.defs[0].reg {
+        Physical(preg) => preg.class
+        Virtual(_) => Int // Should not happen at emit time
+      }
+      let cond = cmp_kind_to_cond(kind)
+      match reg_class {
+        Float32 => self.emit_fcsel_s(rd, true_val, false_val, cond)
+        Float64 => self.emit_fcsel_d(rd, true_val, false_val, cond)
+        Int => self.emit_csel(rd, true_val, false_val, cond)
+        Vector => {
+          // Vector select with fused compare
+          // Step 1: CSET X16, cond
+          self.emit_cset(16, cond)
+          // Step 2: NEG X16, X16 (X16 = 0 or -1 for mask)
+          self.emit_sub_reg(16, 31, 16)
+          // Step 3: DUP V16.2D, X16 (broadcast to all bits)
+          Dup2D(16, 16).emit(self)
+          // Step 4: BSL V16.16B, Vtrue.16B, Vfalse.16B
+          Bsl16B(16, true_val, false_val).emit(self)
+          // Step 5: Move V16 to rd if needed
+          if rd != 16 {
+            Orr16B(rd, 16, 16).emit(self)
+          }
+        }
+      }
+    }
     Clz(is_64) => {
       // Count leading zeros
       let rd = wreg_num(inst.defs[0])

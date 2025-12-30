@@ -221,6 +221,11 @@ pub(all) enum VCodeOpcode {
   // Select: Xd = cond ? Xn : Xm
   // Uses: [cond, true_val, false_val], Defs: [result]
   Select
+  // SelectCmp: Fused compare and select
+  // SelectCmp(kind, is_64): CMP lhs, rhs; CSEL Xd, true_val, false_val, cond
+  // Uses: [cmp_lhs, cmp_rhs, true_val, false_val], Defs: [result]
+  // Saves one instruction compared to separate CMP + CSET + Select
+  SelectCmp(CmpKind, Bool)
   // Bit counting operations (Bool = true for 64-bit, false for 32-bit)
   Clz(Bool) // Count leading zeros with size
   Popcnt(Bool) // Population count with size
@@ -850,6 +855,12 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FDemote => "fdemote"
     Bitcast => "bitcast"
     Select => "select"
+    SelectCmp(kind, is_64) =>
+      if is_64 {
+        "select_cmp.\{kind}"
+      } else {
+        "select_cmp32.\{kind}"
+      }
     Clz(is_64) => if is_64 { "clz" } else { "clz32" }
     Popcnt(is_64) => if is_64 { "popcnt" } else { "popcnt32" }
     Rbit(is_64) => if is_64 { "rbit" } else { "rbit32" }

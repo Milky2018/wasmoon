@@ -301,6 +301,7 @@ fn lower_copy(
 ///|
 /// Lower select instruction (cond ? true_val : false_val)
 /// Uses AArch64 CSEL instruction: if cond != 0, select true_val, else false_val
+/// Optimizes to SelectCmp when condition comes from an Icmp instruction
 fn lower_select(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -308,16 +309,37 @@ fn lower_select(
 ) -> Unit {
   if inst.result is Some(result) {
     let dst = ctx.get_vreg(result)
-    let cond = ctx.get_vreg_for_use(inst.operands[0], block)
     let true_val = ctx.get_vreg_for_use(inst.operands[1], block)
     let false_val = ctx.get_vreg_for_use(inst.operands[2], block)
+    let cond_ir = inst.operands[0]
 
-    // Emit Select instruction: dst = cond != 0 ? true_val : false_val
-    let vcode_inst = @instr.VCodeInst::new(Select)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(cond))
-    vcode_inst.add_use(Virtual(true_val))
-    vcode_inst.add_use(Virtual(false_val))
-    block.add_inst(vcode_inst)
+    // Try to fuse with Icmp: Select(Icmp(cc, a, b), x, y) -> SelectCmp(cc, a, b, x, y)
+    if match_icmp_value(ctx, cond_ir) is Some((lhs, rhs, cc)) {
+      // Use SelectCmp to fuse the comparison with the select
+      let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+      let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
+      let kind = ir_intcc_to_cmp_kind(cc)
+      // Determine is_64 from comparison operand type
+      let is_64 = match lhs.ty {
+        @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+        _ => false
+      }
+      let vcode_inst = @instr.VCodeInst::new(SelectCmp(kind, is_64))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(lhs_vreg))
+      vcode_inst.add_use(Virtual(rhs_vreg))
+      vcode_inst.add_use(Virtual(true_val))
+      vcode_inst.add_use(Virtual(false_val))
+      block.add_inst(vcode_inst)
+    } else {
+      // Fall back to regular Select
+      let cond = ctx.get_vreg_for_use(cond_ir, block)
+      let vcode_inst = @instr.VCodeInst::new(Select)
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(cond))
+      vcode_inst.add_use(Virtual(true_val))
+      vcode_inst.add_use(Virtual(false_val))
+      block.add_inst(vcode_inst)
+    }
   }
 }
