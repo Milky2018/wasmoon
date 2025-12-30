@@ -52,6 +52,10 @@ pub fn merge_blocks(Function) -> OptResult
 
 pub fn optimize(Function) -> OptResult
 
+pub fn optimize_block(Block) -> Map[Int, (Int, ENode)]
+
+pub fn optimize_function(Function) -> Bool
+
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
 pub fn propagate_copies(Function) -> OptResult
@@ -141,6 +145,19 @@ pub fn EGraph::num_classes(Self) -> Int
 pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
 pub fn EGraph::saturate(Self, Array[RewriteRule], Int) -> Int
+
+pub(all) struct EGraphBuilder {
+  egraph : EGraph
+  value_map : Map[Int, EClassId]
+  def_map : Map[Int, Inst]
+}
+pub fn EGraphBuilder::add_value(Self, Value) -> EClassId
+pub fn EGraphBuilder::extract(Self, Value) -> (Int, ENode)?
+pub fn EGraphBuilder::get_egraph(Self) -> EGraph
+pub fn EGraphBuilder::get_simplified_opcode(Self, Value) -> Opcode?
+pub fn EGraphBuilder::new() -> Self
+pub fn EGraphBuilder::optimize(Self) -> Unit
+pub fn EGraphBuilder::register_def(Self, Inst) -> Unit
 
 pub(all) struct ENode {
   op : EOpcode

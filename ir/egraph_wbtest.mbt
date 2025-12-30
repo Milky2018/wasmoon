@@ -503,3 +503,23 @@ test "egraph: extraction prefers add over mul for x*3" {
   // Cost should be: shl(1) + add(1) = 2
   inspect(cost, content="2")
 }
+
+///|
+test "egraph: IR integration - EGraphBuilder" {
+  // Test the EGraphBuilder with a simple instruction
+  let builder = EGraphBuilder::new()
+
+  // Create a simple instruction: x + 0 = x
+  let inst : Inst = {
+    result: Some({ id: 0, ty: I64 }),
+    extra_results: [],
+    opcode: Iadd,
+    operands: [{ id: 1, ty: I64 }, { id: 2, ty: I64 }],
+  }
+
+  // Register definition
+  builder.register_def(inst)
+
+  // Check def_map
+  inspect(builder.def_map.contains(0), content="true")
+}
