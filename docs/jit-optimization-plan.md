@@ -54,11 +54,15 @@ Added `match_add_imm_value()` helper and immediate patterns in `lower_iadd`.
 
 Added `SubImm(Int, Bool)` to VCodeOpcode with 32/64-bit emit support.
 
-### B3: CmpImm for Comparisons with Constants
+### B3: CmpImm for Comparisons with Constants ✅
 
 **Goal**: Use `CMP Xn, #imm` instead of `CMP Xn, Xm` when comparing to constant.
 
-**Status**: Not yet implemented. Lower priority than branch optimization.
+**Status**: Implemented.
+
+Added `BranchCmpImm` terminator that uses `CMP Xn, #imm` directly instead of
+loading the constant into a register. Applies when comparing with constants
+in the valid 12-bit immediate range (0-4095).
 
 ---
 
@@ -127,6 +131,37 @@ by the fixup system. No further optimization needed.
 
 ---
 
+## Phase E: Select→CSEL Fusion ✅ DONE
+
+### E1: SelectCmp for Fused Compare and Select ✅
+
+**Goal**: Fuse `Icmp` + `Select` into a single `SelectCmp` operation.
+
+**Before**:
+```
+CMP lhs, rhs          ; from Icmp
+CSET cond_reg, cc     ; from Icmp
+CMP cond_reg, #0      ; from Select
+CSEL rd, true, false, NE
+```
+
+**After**:
+```
+CMP lhs, rhs          ; fused compare
+CSEL rd, true, false, cc  ; direct condition
+```
+
+**Status**: Implemented.
+
+Added `SelectCmp(CmpKind, Bool)` opcode that:
+- Detects when select condition comes from an Icmp instruction
+- Uses the Icmp operands directly for the comparison
+- Emits CSEL with the original condition code (not NE)
+
+**Result**: Saves 2 instructions when select condition comes from icmp.
+
+---
+
 ## Implementation Summary
 
 ### Completed ✅
@@ -134,16 +169,15 @@ by the fixup system. No further optimization needed.
 | Phase | Description | Impact |
 |-------|-------------|--------|
 | A | IR Optimization in JIT path | Baseline |
-| B1-B2 | AddImm/SubImm immediate operands | Medium |
-| C1-C5 | BranchCmp/BranchZero terminators | **High** |
+| B1-B3 | AddImm/SubImm/CmpImm immediate operands | Medium |
+| C1-C5 | BranchCmp/BranchCmpImm/BranchZero terminators | **High** |
 | D1 | Redundant move elimination | Low |
+| Select→CSEL | SelectCmp for fused compare and select | Medium |
 
 ### Future Work
 
 | Phase | Description | Impact |
 |-------|-------------|--------|
-| B3 | CmpImm for comparison with constants | Medium |
-| Select→CSEL | Conditional select fusion | Medium |
 | Addressing | Load/store address calculation folding | Medium |
 | Pattern consolidation | Integrate patterns.mbt with lowering | Tech debt |
 
@@ -151,11 +185,12 @@ by the fixup system. No further optimization needed.
 
 ## Files Modified
 
-- `vcode/instr/instr.mbt` - Added BranchCmp, BranchZero terminators; SubImm opcode
-- `vcode/lower/lower.mbt` - Branch optimization logic, helper functions
+- `vcode/instr/instr.mbt` - Added BranchCmp, BranchCmpImm, BranchZero terminators; SubImm, SelectCmp opcodes
+- `vcode/lower/lower.mbt` - Branch optimization logic, BranchCmpImm support
+- `vcode/lower/lower_convert.mbt` - SelectCmp fusion for select instruction
 - `vcode/lower/lower_numeric.mbt` - AddImm/SubImm patterns
 - `vcode/lower/regalloc.mbt` - Liveness tracking for new terminators
-- `vcode/emit/codegen.mbt` - Code generation for new terminators, peephole opt
+- `vcode/emit/codegen.mbt` - Code generation for new terminators/opcodes, peephole opt
 - `vcode/emit/instructions.mbt` - SubImm32 instruction
 
 ---
