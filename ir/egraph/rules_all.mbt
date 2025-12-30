@@ -1,0 +1,188 @@
+// Standard rules collection
+///|
+pub fn standard_rules() -> Array[RewriteRule] {
+  [
+    // Identity rules
+    rule_add_zero(),
+    rule_sub_zero(),
+    rule_mul_one(),
+    rule_mul_zero(),
+    rule_idempotent(),
+    rule_xor_self(),
+    rule_sub_self(),
+    // Bitwise identity
+    rule_and_zero(),
+    rule_or_zero(),
+    rule_xor_zero(),
+    rule_and_all_ones(),
+    rule_or_all_ones(),
+    // Shift identity
+    rule_shl_zero(),
+    rule_shr_zero(),
+    rule_shift_of_zero(),
+    rule_shl_shl(),
+    // Strength reduction
+    rule_mul_pow2(),
+    rule_double(),
+    rule_udiv_pow2(),
+    rule_urem_pow2(),
+    rule_mul_3(),
+    rule_mul_5(),
+    rule_mul_7(),
+    rule_mul_9(),
+    // Negation patterns
+    rule_neg_zero(),
+    rule_sub_neg(),
+    rule_add_neg(),
+    rule_mul_neg_one(),
+    rule_neg_mul_neg(),
+    rule_sdiv_neg_one(),
+    rule_srem_neg_one(),
+    // Division/Remainder by 1
+    rule_div_one(),
+    rule_rem_one(),
+    // Bnot patterns
+    rule_bnot_add_one(),
+    rule_bnot_sub_one(),
+    rule_bnot_add_neg_one(),
+    // Additional patterns
+    rule_or_add_neg(),
+    rule_add_sub_or_to_and(),
+    // Cancellation patterns
+    rule_sub_add_cancel(),
+    rule_add_sub_cancel(),
+    rule_sub_sub_cancel(),
+    // Additional strength reduction
+    rule_mul_shl_one(),
+    // Constant folding and reassociation
+    rule_const_fold(),
+    rule_reassoc_add_const(),
+    rule_reassoc_mul_const(),
+    rule_reassoc_sub_const(),
+    // Tree rebalancing (uses subsume to avoid infinite loops with commutativity)
+    rule_rebalance_add_right(),
+    rule_rebalance_add_left(),
+    rule_rebalance_mul_right(),
+    rule_rebalance_mul_left(),
+    rule_rebalance_and_right(),
+    rule_rebalance_and_left(),
+    rule_rebalance_xor_right(),
+    rule_rebalance_xor_left(),
+    // Add/Sub mixed rebalancing
+    rule_rebalance_sub_sub_sub(),
+    rule_rebalance_sub_sub_add(),
+    rule_rebalance_sub_add_sub(),
+    rule_rebalance_sub_add_add(),
+    rule_rebalance_add_sub_sub(),
+    rule_rebalance_add_sub_add(),
+    rule_rebalance_add_add_sub(),
+    rule_rebalance_left_sub_sub_sub(),
+    rule_rebalance_left_sub_sub_add(),
+    rule_rebalance_left_sub_add_sub(),
+    rule_rebalance_left_sub_add_add(),
+    rule_rebalance_left_add_sub_sub(),
+    rule_rebalance_left_add_sub_add(),
+    rule_rebalance_left_add_add_sub(),
+    // Commutativity (put last as they can cause explosion)
+    rule_add_comm(),
+    rule_mul_comm(),
+    rule_and_comm(),
+    rule_or_comm(),
+    rule_xor_comm(),
+  ]
+}
+
+///|
+/// Get all standard rewrite rules indexed by their matching opcodes
+pub fn standard_rules_indexed() -> IndexedRuleSet {
+  let rs = IndexedRuleSet::new()
+  // Identity rules - indexed by opcode
+  rs.add_rule(rule_add_zero(), [TAdd])
+  rs.add_rule(rule_sub_zero(), [TSub])
+  rs.add_rule(rule_mul_one(), [TMul])
+  rs.add_rule(rule_mul_zero(), [TMul])
+  rs.add_rule(rule_idempotent(), [TAnd, TOr])
+  rs.add_rule(rule_xor_self(), [TXor])
+  rs.add_rule(rule_sub_self(), [TSub])
+  // Bitwise identity
+  rs.add_rule(rule_and_zero(), [TAnd])
+  rs.add_rule(rule_or_zero(), [TOr])
+  rs.add_rule(rule_xor_zero(), [TXor])
+  rs.add_rule(rule_and_all_ones(), [TAnd])
+  rs.add_rule(rule_or_all_ones(), [TOr])
+  // Shift identity
+  rs.add_rule(rule_shl_zero(), [TShl])
+  rs.add_rule(rule_shr_zero(), [TSshr, TUshr])
+  rs.add_rule(rule_shift_of_zero(), [TShl, TSshr, TUshr])
+  rs.add_rule(rule_shl_shl(), [TShl])
+  // Strength reduction
+  rs.add_rule(rule_mul_pow2(), [TMul])
+  rs.add_rule(rule_double(), [TAdd])
+  rs.add_rule(rule_udiv_pow2(), [TUdiv])
+  rs.add_rule(rule_urem_pow2(), [TUrem])
+  rs.add_rule(rule_mul_3(), [TMul])
+  rs.add_rule(rule_mul_5(), [TMul])
+  rs.add_rule(rule_mul_7(), [TMul])
+  rs.add_rule(rule_mul_9(), [TMul])
+  // Negation patterns
+  rs.add_rule(rule_neg_zero(), [TNeg, TSub])
+  rs.add_rule(rule_sub_neg(), [TSub])
+  rs.add_rule(rule_add_neg(), [TAdd])
+  rs.add_rule(rule_mul_neg_one(), [TMul])
+  rs.add_rule(rule_neg_mul_neg(), [TMul])
+  rs.add_rule(rule_sdiv_neg_one(), [TSdiv])
+  rs.add_rule(rule_srem_neg_one(), [TSrem])
+  // Division/Remainder by 1
+  rs.add_rule(rule_div_one(), [TSdiv, TUdiv])
+  rs.add_rule(rule_rem_one(), [TSrem, TUrem])
+  // Bnot patterns
+  rs.add_rule(rule_bnot_add_one(), [TAdd])
+  rs.add_rule(rule_bnot_sub_one(), [TSub])
+  rs.add_rule(rule_bnot_add_neg_one(), [TAdd])
+  // Additional patterns
+  rs.add_rule(rule_or_add_neg(), [TAdd])
+  rs.add_rule(rule_add_sub_or_to_and(), [TAdd])
+  // Cancellation patterns
+  rs.add_rule(rule_sub_add_cancel(), [TSub])
+  rs.add_rule(rule_add_sub_cancel(), [TAdd])
+  rs.add_rule(rule_sub_sub_cancel(), [TSub])
+  // Additional strength reduction
+  rs.add_rule(rule_mul_shl_one(), [TMul])
+  // Constant folding - universal (operates on any opcode with const children)
+  rs.add_rule(rule_const_fold(), [])
+  // Reassociation
+  rs.add_rule(rule_reassoc_add_const(), [TAdd])
+  rs.add_rule(rule_reassoc_mul_const(), [TMul])
+  rs.add_rule(rule_reassoc_sub_const(), [TSub])
+  // Tree rebalancing
+  rs.add_rule(rule_rebalance_add_right(), [TAdd])
+  rs.add_rule(rule_rebalance_add_left(), [TAdd])
+  rs.add_rule(rule_rebalance_mul_right(), [TMul])
+  rs.add_rule(rule_rebalance_mul_left(), [TMul])
+  rs.add_rule(rule_rebalance_and_right(), [TAnd])
+  rs.add_rule(rule_rebalance_and_left(), [TAnd])
+  rs.add_rule(rule_rebalance_xor_right(), [TXor])
+  rs.add_rule(rule_rebalance_xor_left(), [TXor])
+  // Add/Sub mixed rebalancing
+  rs.add_rule(rule_rebalance_sub_sub_sub(), [TSub])
+  rs.add_rule(rule_rebalance_sub_sub_add(), [TAdd])
+  rs.add_rule(rule_rebalance_sub_add_sub(), [TSub])
+  rs.add_rule(rule_rebalance_sub_add_add(), [TAdd])
+  rs.add_rule(rule_rebalance_add_sub_sub(), [TSub])
+  rs.add_rule(rule_rebalance_add_sub_add(), [TAdd])
+  rs.add_rule(rule_rebalance_add_add_sub(), [TSub])
+  rs.add_rule(rule_rebalance_left_sub_sub_sub(), [TSub])
+  rs.add_rule(rule_rebalance_left_sub_sub_add(), [TAdd])
+  rs.add_rule(rule_rebalance_left_sub_add_sub(), [TSub])
+  rs.add_rule(rule_rebalance_left_sub_add_add(), [TAdd])
+  rs.add_rule(rule_rebalance_left_add_sub_sub(), [TSub])
+  rs.add_rule(rule_rebalance_left_add_sub_add(), [TAdd])
+  rs.add_rule(rule_rebalance_left_add_add_sub(), [TSub])
+  // Commutativity
+  rs.add_rule(rule_add_comm(), [TAdd])
+  rs.add_rule(rule_mul_comm(), [TMul])
+  rs.add_rule(rule_and_comm(), [TAnd])
+  rs.add_rule(rule_or_comm(), [TOr])
+  rs.add_rule(rule_xor_comm(), [TXor])
+  rs
+}

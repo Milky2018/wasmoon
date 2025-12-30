@@ -505,26 +505,6 @@ test "egraph: extraction prefers add over mul for x*3" {
 }
 
 ///|
-test "egraph: IR integration - EGraphBuilder" {
-  // Test the EGraphBuilder with a simple instruction
-  let builder = EGraphBuilder::new()
-
-  // Create a simple instruction: x + 0 = x
-  let inst : Inst = {
-    result: Some({ id: 0, ty: I64 }),
-    extra_results: [],
-    opcode: Iadd,
-    operands: [{ id: 1, ty: I64 }, { id: 2, ty: I64 }],
-  }
-
-  // Register definition
-  builder.register_def(inst)
-
-  // Check def_map
-  inspect(builder.def_map.contains(0), content="true")
-}
-
-///|
 test "egraph: x * -1 = -x" {
   let eg = EGraph::new()
   let x = eg.add_var(0)

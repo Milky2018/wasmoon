@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/ir"
 
 import(
+  "Milky2018/wasmoon/ir/egraph"
   "Milky2018/wasmoon/types"
 )
 
@@ -52,7 +53,7 @@ pub fn merge_blocks(Function) -> OptResult
 
 pub fn optimize(Function) -> OptResult
 
-pub fn optimize_block(Block) -> Map[Int, (Int, ENode)]
+pub fn optimize_block(Block) -> Map[Int, (Int, @egraph.ENode)]
 
 pub fn optimize_function(Function) -> Bool
 
@@ -63,8 +64,6 @@ pub fn propagate_copies(Function) -> OptResult
 pub fn reduce_strength(Function) -> OptResult
 
 pub fn simplify_branches(Function) -> OptResult
-
-pub fn standard_rules() -> Array[RewriteRule]
 
 pub fn thread_jumps(Function) -> OptResult
 
@@ -107,98 +106,18 @@ pub fn CFG::postorder(Self) -> Array[Int]
 pub fn CFG::reverse_postorder(Self) -> Array[Int]
 pub fn CFG::to_dot(Self, String) -> String
 
-type EClass
-
-pub(all) struct EClassId(Int)
-#deprecated
-pub fn EClassId::inner(Self) -> Int
-pub impl Compare for EClassId
-pub impl Eq for EClassId
-pub impl Hash for EClassId
-pub impl Show for EClassId
-
-pub(all) struct EGraph {
-  uf : UnionFind
-  classes : Map[Int, EClass]
-  mut hashcons : Map[ENode, EClassId]
-  mut worklist : Array[EClassId]
-  mut dirty : Bool
-}
-pub fn EGraph::add(Self, ENode) -> EClassId
-pub fn EGraph::add_add(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_and(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_binop(Self, EOpcode, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_bnot(Self, EClassId) -> EClassId
-pub fn EGraph::add_const(Self, Int64) -> EClassId
-pub fn EGraph::add_mul(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_neg(Self, EClassId) -> EClassId
-pub fn EGraph::add_or(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_sdiv(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_shl(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_srem(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_sshr(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_sub(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_udiv(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_urem(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_ushr(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_var(Self, Int) -> EClassId
-pub fn EGraph::add_xor(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::equiv(Self, EClassId, EClassId) -> Bool
-pub fn EGraph::extract(Self, EClassId) -> (Int, ENode)
-pub fn EGraph::find(Self, EClassId) -> EClassId
-pub fn EGraph::get_nodes(Self, EClassId) -> Array[ENode]
-pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::new() -> Self
-pub fn EGraph::num_classes(Self) -> Int
-pub fn EGraph::num_nodes(Self) -> Int
-pub fn EGraph::rebuild(Self) -> Unit
-pub fn EGraph::saturate(Self, Array[RewriteRule], Int) -> Int
-pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
-
 pub(all) struct EGraphBuilder {
-  egraph : EGraph
-  value_map : Map[Int, EClassId]
+  egraph : @egraph.EGraph
+  value_map : Map[Int, @egraph.EClassId]
   def_map : Map[Int, Inst]
 }
-pub fn EGraphBuilder::add_value(Self, Value) -> EClassId
-pub fn EGraphBuilder::extract(Self, Value) -> (Int, ENode)?
-pub fn EGraphBuilder::get_egraph(Self) -> EGraph
+pub fn EGraphBuilder::add_value(Self, Value) -> @egraph.EClassId
+pub fn EGraphBuilder::extract(Self, Value) -> (Int, @egraph.ENode)?
+pub fn EGraphBuilder::get_egraph(Self) -> @egraph.EGraph
 pub fn EGraphBuilder::get_simplified_opcode(Self, Value) -> Opcode?
 pub fn EGraphBuilder::new() -> Self
 pub fn EGraphBuilder::optimize(Self) -> Unit
 pub fn EGraphBuilder::register_def(Self, Inst) -> Unit
-
-pub(all) struct ENode {
-  op : EOpcode
-  children : Array[EClassId]
-}
-pub impl Eq for ENode
-pub impl Hash for ENode
-pub impl Show for ENode
-
-pub(all) enum EOpcode {
-  Const(Int64)
-  Add
-  Sub
-  Mul
-  Sdiv
-  Udiv
-  Srem
-  Urem
-  And
-  Or
-  Xor
-  Shl
-  Sshr
-  Ushr
-  Neg
-  Bnot
-  Cmp(Int)
-  Var(Int)
-}
-pub impl Eq for EOpcode
-pub impl Hash for EOpcode
-pub impl Show for EOpcode
 
 pub(all) enum FloatCC {
   Eq
@@ -831,11 +750,6 @@ pub(all) struct OptResult {
 pub fn OptResult::mark_changed(Self) -> Unit
 pub fn OptResult::new() -> Self
 
-pub(all) struct RewriteRule {
-  name : String
-  apply : (EGraph, EClassId) -> Bool
-}
-
 pub enum Terminator {
   Jump(Int, Array[Value])
   Brz(Value, Int, Int)
@@ -888,8 +802,6 @@ pub(all) enum Type {
 }
 pub fn Type::from_wasm(@types.ValueType) -> Self
 pub impl Show for Type
-
-type UnionFind
 
 pub(all) struct ValidationResult {
   mut valid : Bool
