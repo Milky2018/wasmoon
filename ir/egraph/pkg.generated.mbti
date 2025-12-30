@@ -44,6 +44,26 @@ pub fn EGraph::add_const(Self, Int64) -> EClassId
 pub fn EGraph::add_ctz(Self, EClassId) -> EClassId
 pub fn EGraph::add_eager(Self, ENode, IndexedRuleSet) -> EClassId
 pub fn EGraph::add_eq(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_fabs(Self, EClassId) -> EClassId
+pub fn EGraph::add_fadd(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_fceil(Self, EClassId) -> EClassId
+pub fn EGraph::add_fcmp(Self, Int, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_fconst(Self, UInt64) -> EClassId
+pub fn EGraph::add_fcopysign(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_fcvt_to_sint(Self, EClassId) -> EClassId
+pub fn EGraph::add_fcvt_to_uint(Self, EClassId) -> EClassId
+pub fn EGraph::add_fdemote(Self, EClassId) -> EClassId
+pub fn EGraph::add_fdiv(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_ffloor(Self, EClassId) -> EClassId
+pub fn EGraph::add_fmax(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_fmin(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_fmul(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_fnearest(Self, EClassId) -> EClassId
+pub fn EGraph::add_fneg(Self, EClassId) -> EClassId
+pub fn EGraph::add_fpromote(Self, EClassId) -> EClassId
+pub fn EGraph::add_fsqrt(Self, EClassId) -> EClassId
+pub fn EGraph::add_fsub(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_ftrunc(Self, EClassId) -> EClassId
 pub fn EGraph::add_icmp(Self, Int, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_ireduce(Self, EClassId) -> EClassId
 pub fn EGraph::add_mul(Self, EClassId, EClassId) -> EClassId
@@ -57,14 +77,18 @@ pub fn EGraph::add_sdiv(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_select(Self, EClassId, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sextend(Self, EClassId) -> EClassId
 pub fn EGraph::add_shl(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_sint_to_fcvt(Self, EClassId) -> EClassId
+pub fn EGraph::add_splat(Self, EClassId) -> EClassId
 pub fn EGraph::add_srem(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sshr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sub(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_udiv(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_uextend(Self, EClassId) -> EClassId
+pub fn EGraph::add_uint_to_fcvt(Self, EClassId) -> EClassId
 pub fn EGraph::add_urem(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_ushr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_var(Self, Int) -> EClassId
+pub fn EGraph::add_vconst(Self, Bytes) -> EClassId
 pub fn EGraph::add_xor(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::equiv(Self, EClassId, EClassId) -> Bool
 pub fn EGraph::extract(Self, EClassId) -> (Int, ENode)
@@ -89,6 +113,7 @@ pub impl Show for ENode
 
 pub(all) enum EOpcode {
   Const(Int64)
+  Fconst(UInt64)
   Add
   Sub
   Mul
@@ -119,6 +144,29 @@ pub(all) enum EOpcode {
   Ireduce
   Uextend
   Sextend
+  Fadd
+  Fsub
+  Fmul
+  Fdiv
+  Fmin
+  Fmax
+  Fcopysign
+  Fneg
+  Fabs
+  Fsqrt
+  Fceil
+  Ffloor
+  Ftrunc
+  Fnearest
+  Fcmp(Int)
+  Fpromote
+  Fdemote
+  FcvtToSint
+  FcvtToUint
+  SintToFcvt
+  UintToFcvt
+  Splat
+  Vconst(Bytes)
   Var(Int)
 }
 pub impl Eq for EOpcode
@@ -127,6 +175,7 @@ pub impl Show for EOpcode
 
 pub(all) enum EOpcodeTag {
   TConst
+  TFconst
   TAdd
   TSub
   TMul
@@ -157,6 +206,29 @@ pub(all) enum EOpcodeTag {
   TIreduce
   TUextend
   TSextend
+  TFadd
+  TFsub
+  TFmul
+  TFdiv
+  TFmin
+  TFmax
+  TFcopysign
+  TFneg
+  TFabs
+  TFsqrt
+  TFceil
+  TFfloor
+  TFtrunc
+  TFnearest
+  TFcmp
+  TFpromote
+  TFdemote
+  TFcvtToSint
+  TFcvtToUint
+  TSintToFcvt
+  TUintToFcvt
+  TSplat
+  TVconst
   TVar
 }
 pub impl Eq for EOpcodeTag

@@ -19,7 +19,10 @@ pub(all) struct EClassId(Int) derive(Eq, Hash, Show, Compare)
 /// Aligned with Cranelift IR opcodes for consistent optimization
 pub(all) enum EOpcode {
   // Constants
-  Const(Int64)
+  Const(Int64) // Integer constant
+  // Float constants (bits stored as UInt64, type indicated by context)
+  // F32 uses lower 32 bits, F64 uses all 64 bits
+  Fconst(UInt64) // Float constant (bit pattern)
 
   // Integer arithmetic (binary)
   Add
@@ -61,10 +64,44 @@ pub(all) enum EOpcode {
   Select // select(cond, a, b) = cond ? a : b
   Bmask // Boolean mask: 0 -> 0, nonzero -> -1
 
-  // Type conversions
+  // Type conversions (integer)
   Ireduce // Integer reduce (truncate to smaller type)
   Uextend // Unsigned extend to larger type
   Sextend // Signed extend to larger type
+
+  // Floating point arithmetic (binary)
+  Fadd // Float add
+  Fsub // Float subtract
+  Fmul // Float multiply
+  Fdiv // Float divide
+  Fmin // Float minimum
+  Fmax // Float maximum
+  Fcopysign // Copy sign from second operand to first
+
+  // Floating point unary
+  Fneg // Float negate
+  Fabs // Float absolute value
+  Fsqrt // Float square root
+  Fceil // Float ceiling
+  Ffloor // Float floor
+  Ftrunc // Float truncate toward zero
+  Fnearest // Float round to nearest
+
+  // Floating point comparison
+  // FloatCC: 0=ord, 1=uno, 2=eq, 3=ne, 4=lt, 5=le, 6=gt, 7=ge
+  Fcmp(Int) // Float compare with condition code
+
+  // Float-integer conversions
+  Fpromote // Promote f32 to f64
+  Fdemote // Demote f64 to f32
+  FcvtToSint // Float to signed int
+  FcvtToUint // Float to unsigned int
+  SintToFcvt // Signed int to float
+  UintToFcvt // Unsigned int to float
+
+  // Vector operations
+  Splat // Broadcast scalar to vector
+  Vconst(Bytes) // Vector constant (128-bit)
 
   // Variable reference (leaf node representing an IR value)
   Var(Int) // IR Value id
@@ -74,6 +111,7 @@ pub(all) enum EOpcode {
 /// E-opcode tag for indexing (ignores parameters like Const value)
 pub(all) enum EOpcodeTag {
   TConst
+  TFconst
   // Arithmetic
   TAdd
   TSub
@@ -107,10 +145,38 @@ pub(all) enum EOpcodeTag {
   // Conditional
   TSelect
   TBmask
-  // Type conversion
+  // Type conversion (integer)
   TIreduce
   TUextend
   TSextend
+  // Float arithmetic
+  TFadd
+  TFsub
+  TFmul
+  TFdiv
+  TFmin
+  TFmax
+  TFcopysign
+  // Float unary
+  TFneg
+  TFabs
+  TFsqrt
+  TFceil
+  TFfloor
+  TFtrunc
+  TFnearest
+  // Float comparison
+  TFcmp
+  // Float-integer conversion
+  TFpromote
+  TFdemote
+  TFcvtToSint
+  TFcvtToUint
+  TSintToFcvt
+  TUintToFcvt
+  // Vector
+  TSplat
+  TVconst
   // Variable
   TVar
 } derive(Eq, Hash, Show)
@@ -120,6 +186,7 @@ pub(all) enum EOpcodeTag {
 fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
   match self {
     Const(_) => TConst
+    Fconst(_) => TFconst
     // Arithmetic
     Add => TAdd
     Sub => TSub
@@ -153,10 +220,38 @@ fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
     // Conditional
     Select => TSelect
     Bmask => TBmask
-    // Type conversion
+    // Type conversion (integer)
     Ireduce => TIreduce
     Uextend => TUextend
     Sextend => TSextend
+    // Float arithmetic
+    Fadd => TFadd
+    Fsub => TFsub
+    Fmul => TFmul
+    Fdiv => TFdiv
+    Fmin => TFmin
+    Fmax => TFmax
+    Fcopysign => TFcopysign
+    // Float unary
+    Fneg => TFneg
+    Fabs => TFabs
+    Fsqrt => TFsqrt
+    Fceil => TFceil
+    Ffloor => TFfloor
+    Ftrunc => TFtrunc
+    Fnearest => TFnearest
+    // Float comparison
+    Fcmp(_) => TFcmp
+    // Float-integer conversion
+    Fpromote => TFpromote
+    Fdemote => TFdemote
+    FcvtToSint => TFcvtToSint
+    FcvtToUint => TFcvtToUint
+    SintToFcvt => TSintToFcvt
+    UintToFcvt => TUintToFcvt
+    // Vector
+    Splat => TSplat
+    Vconst(_) => TVconst
     // Variable
     Var(_) => TVar
   }
@@ -775,6 +870,191 @@ pub fn EGraph::add_sextend(self : EGraph, operand : EClassId) -> EClassId {
 }
 
 // ============================================================================
+// Floating point helper constructors
+// ============================================================================
+
+///|
+/// Add a float constant node (bits stored as UInt64)
+pub fn EGraph::add_fconst(self : EGraph, bits : UInt64) -> EClassId {
+  self.add({ op: Fconst(bits), children: [] })
+}
+
+///|
+/// Add a float add node
+pub fn EGraph::add_fadd(
+  self : EGraph,
+  left : EClassId,
+  right : EClassId,
+) -> EClassId {
+  self.add({ op: Fadd, children: [left, right] })
+}
+
+///|
+/// Add a float subtract node
+pub fn EGraph::add_fsub(
+  self : EGraph,
+  left : EClassId,
+  right : EClassId,
+) -> EClassId {
+  self.add({ op: Fsub, children: [left, right] })
+}
+
+///|
+/// Add a float multiply node
+pub fn EGraph::add_fmul(
+  self : EGraph,
+  left : EClassId,
+  right : EClassId,
+) -> EClassId {
+  self.add({ op: Fmul, children: [left, right] })
+}
+
+///|
+/// Add a float divide node
+pub fn EGraph::add_fdiv(
+  self : EGraph,
+  left : EClassId,
+  right : EClassId,
+) -> EClassId {
+  self.add({ op: Fdiv, children: [left, right] })
+}
+
+///|
+/// Add a float min node
+pub fn EGraph::add_fmin(
+  self : EGraph,
+  left : EClassId,
+  right : EClassId,
+) -> EClassId {
+  self.add({ op: Fmin, children: [left, right] })
+}
+
+///|
+/// Add a float max node
+pub fn EGraph::add_fmax(
+  self : EGraph,
+  left : EClassId,
+  right : EClassId,
+) -> EClassId {
+  self.add({ op: Fmax, children: [left, right] })
+}
+
+///|
+/// Add a float copysign node
+pub fn EGraph::add_fcopysign(
+  self : EGraph,
+  mag : EClassId,
+  sign : EClassId,
+) -> EClassId {
+  self.add({ op: Fcopysign, children: [mag, sign] })
+}
+
+///|
+/// Add a float negate node
+pub fn EGraph::add_fneg(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Fneg, children: [operand] })
+}
+
+///|
+/// Add a float absolute value node
+pub fn EGraph::add_fabs(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Fabs, children: [operand] })
+}
+
+///|
+/// Add a float square root node
+pub fn EGraph::add_fsqrt(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Fsqrt, children: [operand] })
+}
+
+///|
+/// Add a float ceiling node
+pub fn EGraph::add_fceil(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Fceil, children: [operand] })
+}
+
+///|
+/// Add a float floor node
+pub fn EGraph::add_ffloor(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Ffloor, children: [operand] })
+}
+
+///|
+/// Add a float truncate node
+pub fn EGraph::add_ftrunc(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Ftrunc, children: [operand] })
+}
+
+///|
+/// Add a float round to nearest node
+pub fn EGraph::add_fnearest(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Fnearest, children: [operand] })
+}
+
+///|
+/// Add a float compare node
+pub fn EGraph::add_fcmp(
+  self : EGraph,
+  cc : Int,
+  left : EClassId,
+  right : EClassId,
+) -> EClassId {
+  self.add({ op: Fcmp(cc), children: [left, right] })
+}
+
+///|
+/// Add a float promote (f32 -> f64) node
+pub fn EGraph::add_fpromote(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Fpromote, children: [operand] })
+}
+
+///|
+/// Add a float demote (f64 -> f32) node
+pub fn EGraph::add_fdemote(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: Fdemote, children: [operand] })
+}
+
+///|
+/// Add a float to signed int conversion node
+pub fn EGraph::add_fcvt_to_sint(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: FcvtToSint, children: [operand] })
+}
+
+///|
+/// Add a float to unsigned int conversion node
+pub fn EGraph::add_fcvt_to_uint(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: FcvtToUint, children: [operand] })
+}
+
+///|
+/// Add a signed int to float conversion node
+pub fn EGraph::add_sint_to_fcvt(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: SintToFcvt, children: [operand] })
+}
+
+///|
+/// Add an unsigned int to float conversion node
+pub fn EGraph::add_uint_to_fcvt(self : EGraph, operand : EClassId) -> EClassId {
+  self.add({ op: UintToFcvt, children: [operand] })
+}
+
+// ============================================================================
+// Vector helper constructors
+// ============================================================================
+
+///|
+/// Add a vector splat node (broadcast scalar to all lanes)
+pub fn EGraph::add_splat(self : EGraph, scalar : EClassId) -> EClassId {
+  self.add({ op: Splat, children: [scalar] })
+}
+
+///|
+/// Add a vector constant node
+pub fn EGraph::add_vconst(self : EGraph, bits : Bytes) -> EClassId {
+  self.add({ op: Vconst(bits), children: [] })
+}
+
+// ============================================================================
 // Cost model for extraction
 // ============================================================================
 
@@ -783,6 +1063,7 @@ pub fn EGraph::add_sextend(self : EGraph, operand : EClassId) -> EClassId {
 fn node_cost(node : ENode) -> Int {
   match node.op {
     Const(_) => 0 // Constants are free
+    Fconst(_) => 0 // Float constants are free
     Var(_) => 0 // Variables are free (already in registers)
     // Simple ALU ops
     Add | Sub => 1
@@ -800,12 +1081,31 @@ fn node_cost(node : ENode) -> Int {
     // Conditional
     Select => 2
     Bmask => 1
-    // Type conversion
+    // Type conversion (integer)
     Ireduce | Uextend | Sextend => 1
-    // Expensive ops
+    // Expensive integer ops
     Mul => 3
     Sdiv | Udiv => 10
     Srem | Urem => 10
+    // Float arithmetic (similar to integer on modern CPUs)
+    Fadd | Fsub => 2
+    Fmul => 3
+    Fdiv => 10
+    Fmin | Fmax => 2
+    Fcopysign => 1
+    // Float unary
+    Fneg | Fabs => 1
+    Fsqrt => 15 // Square root is expensive
+    Fceil | Ffloor | Ftrunc | Fnearest => 2
+    // Float comparison
+    Fcmp(_) => 2
+    // Float-integer conversion
+    Fpromote | Fdemote => 2
+    FcvtToSint | FcvtToUint => 3
+    SintToFcvt | UintToFcvt => 3
+    // Vector ops
+    Splat => 2
+    Vconst(_) => 0 // Vector constants are free
   }
 }
 

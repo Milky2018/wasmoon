@@ -93,6 +93,25 @@ pub fn standard_rules() -> Array[RewriteRule] {
     rule_reassoc_shl_const(),
     rule_reassoc_ushr_const(),
     rule_reassoc_sshr_const(),
+    // Select simplification
+    rule_select_const(),
+    // Sub negative constant
+    rule_sub_neg_const(),
+    // Tree rebalancing for constants
+    rule_rebalance_add_consts(),
+    rule_rebalance_mul_consts(),
+    rule_rebalance_and_consts(),
+    rule_rebalance_or_consts(),
+    rule_rebalance_xor_consts(),
+    // Float constant folding
+    rule_fconst_fold_binary(),
+    rule_fconst_fold_unary(),
+    rule_fneg_fneg(),
+    rule_fabs_fneg(),
+    rule_fabs_fabs(),
+    rule_fneg_fabs(),
+    // Vector constant folding
+    rule_splat_const(),
     // Tree rebalancing (uses subsume to avoid infinite loops with commutativity)
     rule_rebalance_add_right(),
     rule_rebalance_add_left(),
@@ -221,6 +240,41 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_reassoc_shl_const(), [TShl])
   rs.add_rule(rule_reassoc_ushr_const(), [TUshr])
   rs.add_rule(rule_reassoc_sshr_const(), [TSshr])
+  // Select simplification
+  rs.add_rule(rule_select_const(), [TSelect])
+  // Sub negative constant
+  rs.add_rule(rule_sub_neg_const(), [TSub])
+  // Tree rebalancing for constants
+  rs.add_rule(rule_rebalance_add_consts(), [TAdd])
+  rs.add_rule(rule_rebalance_mul_consts(), [TMul])
+  rs.add_rule(rule_rebalance_and_consts(), [TAnd])
+  rs.add_rule(rule_rebalance_or_consts(), [TOr])
+  rs.add_rule(rule_rebalance_xor_consts(), [TXor])
+  // Float constant folding
+  rs.add_rule(rule_fconst_fold_binary(), [
+    TFadd,
+    TFsub,
+    TFmul,
+    TFdiv,
+    TFmin,
+    TFmax,
+    TFcopysign,
+  ])
+  rs.add_rule(rule_fconst_fold_unary(), [
+    TFneg,
+    TFabs,
+    TFsqrt,
+    TFceil,
+    TFfloor,
+    TFtrunc,
+    TFnearest,
+  ])
+  rs.add_rule(rule_fneg_fneg(), [TFneg])
+  rs.add_rule(rule_fabs_fneg(), [TFabs])
+  rs.add_rule(rule_fabs_fabs(), [TFabs])
+  rs.add_rule(rule_fneg_fabs(), [TFneg])
+  // Vector constant folding
+  rs.add_rule(rule_splat_const(), [TSplat])
   // Tree rebalancing
   rs.add_rule(rule_rebalance_add_right(), [TAdd])
   rs.add_rule(rule_rebalance_add_left(), [TAdd])

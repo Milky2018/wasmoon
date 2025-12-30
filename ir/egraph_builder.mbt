@@ -190,6 +190,7 @@ pub fn optimize_block(block : Block) -> Map[Int, (Int, @egraph.ENode)] {
 fn eopcode_to_opcode(eop : @egraph.EOpcode) -> Opcode? {
   match eop {
     Const(c) => Some(Iconst(c))
+    Fconst(_) => None // Would need to convert bits to Fconst
     Add => Some(Iadd)
     Sub => Some(Isub)
     Mul => Some(Imul)
@@ -220,6 +221,31 @@ fn eopcode_to_opcode(eop : @egraph.EOpcode) -> Opcode? {
     Ireduce => Some(Ireduce)
     Uextend => Some(Uextend)
     Sextend => Some(Sextend)
+    // Float operations - map to IR float opcodes
+    Fadd => Some(Fadd)
+    Fsub => Some(Fsub)
+    Fmul => Some(Fmul)
+    Fdiv => Some(Fdiv)
+    Fmin => Some(Fmin)
+    Fmax => Some(Fmax)
+    Fcopysign => None // Not directly in IR
+    Fneg => Some(Fneg)
+    Fabs => Some(Fabs)
+    Fsqrt => Some(Fsqrt)
+    Fceil => Some(Fceil)
+    Ffloor => Some(Ffloor)
+    Ftrunc => Some(Ftrunc)
+    Fnearest => Some(Fnearest)
+    Fcmp(_) => None // Would need to reconstruct FloatCC
+    Fpromote => Some(Fpromote)
+    Fdemote => Some(Fdemote)
+    FcvtToSint => Some(FcvtToSint)
+    FcvtToUint => Some(FcvtToUint)
+    SintToFcvt => Some(SintToFcvt)
+    UintToFcvt => Some(UintToFcvt)
+    // Vector operations
+    Splat => None // Would need type info for IR Splat
+    Vconst(_) => None // Would need to convert to proper type
     Var(_) => None // Variable reference, not an instruction
   }
 }
