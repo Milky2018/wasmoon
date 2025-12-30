@@ -396,6 +396,9 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   for i, ir_block in ir_func.blocks {
     lower_block_body(ctx, ir_block, ctx.vcode_func.blocks[i])
   }
+
+  // Phase 5: Peephole optimization
+  optimize_vcode(ctx.vcode_func)
   ctx.vcode_func
 }
 

@@ -43,6 +43,8 @@ pub fn lower_inst_with_patterns(LoweringContext, @ir.Inst, @block.VCodeBlock, Ar
 
 pub fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
 
+pub fn optimize_vcode(VCodeFunction) -> Unit
+
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
 pub fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
