@@ -18,6 +18,8 @@ pub(all) struct LoweringContext {
   block_map : Map[Int, Int]
   // Map from IR Value id to stack param index (for params >= 8)
   stack_param_map : Map[Int, (Int, @abi.RegClass)]
+  // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
+  fused_icmps : @hashset.HashSet[Int]
 }
 
 ///|
@@ -28,7 +30,64 @@ pub fn LoweringContext::new(ir_func : @ir.Function) -> LoweringContext {
     value_map: {},
     block_map: {},
     stack_param_map: {},
+    fused_icmps: @hashset.new(),
   }
+}
+
+///|
+/// Compute which Icmp results are exclusively used by Select and can be fused.
+/// This allows lower_icmp to skip emitting redundant Cmp instructions.
+fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
+  // Step 1: Count uses of each value
+  let use_counts : Map[Int, Int] = {}
+  for block in ir_func.blocks {
+    for inst in block.instructions {
+      for op in inst.operands {
+        let count = use_counts.get(op.id).unwrap_or(0)
+        use_counts.set(op.id, count + 1)
+      }
+    }
+    // Also count uses in terminators
+    if block.terminator is Some(term) {
+      let term_uses = match term {
+        @ir.Terminator::Brz(cond, _, _) | @ir.Terminator::Brnz(cond, _, _) =>
+          [cond]
+        @ir.Terminator::BrTable(index, _, _) => [index]
+        @ir.Terminator::Jump(_, args) | @ir.Terminator::Return(args) => args
+        @ir.Terminator::Trap(_) => []
+      }
+      for v in term_uses {
+        let count = use_counts.get(v.id).unwrap_or(0)
+        use_counts.set(v.id, count + 1)
+      }
+    }
+  }
+
+  // Step 2: Find Icmp results that have exactly one use in a Select
+  let fused : @hashset.HashSet[Int] = @hashset.new()
+  for block in ir_func.blocks {
+    for inst in block.instructions {
+      // Check if this is a Select instruction
+      if inst.opcode is @ir.Opcode::Select {
+        let cond = inst.operands[0]
+        // Check if the condition is an Icmp result with exactly one use
+        if use_counts.get(cond.id).unwrap_or(0) == 1 {
+          // Find the defining instruction of the condition
+          for b in ir_func.blocks {
+            for i in b.instructions {
+              if i.result is Some(r) && r.id == cond.id {
+                // Check if it's an Icmp
+                if i.opcode is @ir.Opcode::Icmp(_) {
+                  fused.add(cond.id)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  fused
 }
 
 ///|
@@ -213,6 +272,12 @@ fn intcc_to_cond(cc : @ir.IntCC) -> @instr.Cond {
 /// Lower an entire IR function to VCode
 pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   let ctx = LoweringContext::new(ir_func)
+
+  // Phase 0: Pre-compute which Icmps can be fused with Select
+  let fused = compute_fused_icmps(ir_func)
+  for id in fused {
+    ctx.fused_icmps.add(id)
+  }
 
   // Phase 1: Create VCode blocks and set up block mapping
   for ir_block in ir_func.blocks {
@@ -1074,6 +1139,10 @@ fn lower_icmp(
   cc : @ir.IntCC,
 ) -> Unit {
   if inst.result is Some(result) {
+    // Skip if this Icmp will be fused with a Select (to avoid redundant Cmp)
+    if ctx.fused_icmps.contains(result.id) {
+      return
+    }
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)

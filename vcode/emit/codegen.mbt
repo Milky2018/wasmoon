@@ -383,12 +383,13 @@ fn MachineCode::emit_instruction(
         // - imm12 << 12 (multiples of 4096 up to 0xFFF000) when sh=1
         if imm <= 4095 {
           self.emit_add_imm(rd, rn, imm)
-        } else if (imm & 0xFFF) == 0 {
-          // Shifted form: the immediate is a multiple of 4096
+        } else if (imm & 0xFFF) == 0 && (imm >> 12) <= 4095 {
+          // Shifted form: the immediate is a multiple of 4096 and fits in 12 bits after shift
           self.emit_add_imm_shifted12(rd, rn, imm >> 12)
         } else {
-          // Should not happen - lowering should have rejected this
-          abort("AddImm immediate \{imm} cannot be encoded")
+          // Immediate too large or cannot be encoded - should not happen
+          // Lowering should have rejected immediates > 0xFFF000
+          abort("AddImm immediate \{imm} cannot be encoded (max 0xFFF000)")
         }
       } else {
         self.emit_add_imm32(rd, rn, imm)
