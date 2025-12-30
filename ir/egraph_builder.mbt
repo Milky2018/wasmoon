@@ -122,7 +122,7 @@ pub fn EGraphBuilder::add_value(
 ///|
 /// Run optimization on the e-graph
 pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
-  self.egraph.saturate(@egraph.standard_rules(), 10) |> ignore
+  self.egraph.saturate_indexed(@egraph.standard_rules_indexed(), 10) |> ignore
 }
 
 ///|

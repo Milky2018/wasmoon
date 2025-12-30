@@ -1,149 +1,4 @@
-// Standard rules collection
-
-///|
-pub fn standard_rules() -> Array[RewriteRule] {
-  [
-    // Identity rules
-    rule_add_zero(),
-    rule_sub_zero(),
-    rule_mul_one(),
-    rule_mul_zero(),
-    rule_idempotent(),
-    rule_xor_self(),
-    rule_sub_self(),
-    // Bitwise identity
-    rule_and_zero(),
-    rule_or_zero(),
-    rule_xor_zero(),
-    rule_and_all_ones(),
-    rule_or_all_ones(),
-    rule_or_self(),
-    rule_xor_all_ones(),
-    // Bitwise with not
-    rule_xor_not(),
-    rule_or_not(),
-    rule_and_not(),
-    rule_double_bnot(),
-    rule_demorgan_or(),
-    rule_demorgan_and(),
-    // Bitwise algebraic
-    rule_and_xor_xor(),
-    rule_or_xor_and(),
-    rule_and_or_absorb(),
-    rule_xor_xor_cancel(),
-    rule_factor_and_xor(),
-    rule_and_add_xor(),
-    rule_or_add_and(),
-    rule_or_and_not(),
-    rule_or_or_absorb(),
-    rule_and_and_absorb(),
-    rule_xor_not_and(),
-    rule_and_or_not(),
-    // Shift identity
-    rule_shl_zero(),
-    rule_shr_zero(),
-    rule_shift_of_zero(),
-    rule_shl_shl(),
-    // Strength reduction
-    rule_mul_pow2(),
-    rule_double(),
-    rule_udiv_pow2(),
-    rule_urem_pow2(),
-    rule_mul_3(),
-    rule_mul_5(),
-    rule_mul_7(),
-    rule_mul_9(),
-    // Negation patterns
-    rule_neg_zero(),
-    rule_sub_neg(),
-    rule_add_neg(),
-    rule_mul_neg_one(),
-    rule_neg_mul_neg(),
-    rule_sdiv_neg_one(),
-    rule_srem_neg_one(),
-    // Division/Remainder by 1
-    rule_div_one(),
-    rule_rem_one(),
-    // Bnot patterns
-    rule_bnot_add_one(),
-    rule_bnot_sub_one(),
-    rule_bnot_add_neg_one(),
-    // Additional patterns
-    rule_or_add_neg(),
-    rule_add_sub_or_to_and(),
-    // Cancellation patterns
-    rule_sub_add_cancel(),
-    rule_add_sub_cancel(),
-    rule_sub_sub_cancel(),
-    // Additional strength reduction
-    rule_mul_shl_one(),
-    // Constant folding and reassociation
-    rule_const_fold(),
-    rule_reassoc_add_const(),
-    rule_reassoc_mul_const(),
-    rule_reassoc_sub_const(),
-    rule_reassoc_or_const(),
-    rule_reassoc_and_const(),
-    rule_reassoc_xor_const(),
-    rule_reassoc_sub_add_const(),
-    rule_reassoc_add_sub_const(),
-    rule_reassoc_sub_sub_const_left(),
-    rule_reassoc_add_sub_const_left(),
-    // Shift reassociation for constant propagation
-    rule_reassoc_shl_const(),
-    rule_reassoc_ushr_const(),
-    rule_reassoc_sshr_const(),
-    // Select simplification
-    rule_select_const(),
-    // Sub negative constant
-    rule_sub_neg_const(),
-    // Tree rebalancing for constants
-    rule_rebalance_add_consts(),
-    rule_rebalance_mul_consts(),
-    rule_rebalance_and_consts(),
-    rule_rebalance_or_consts(),
-    rule_rebalance_xor_consts(),
-    // Float constant folding
-    rule_fconst_fold_binary(),
-    rule_fconst_fold_unary(),
-    rule_fneg_fneg(),
-    rule_fabs_fneg(),
-    rule_fabs_fabs(),
-    rule_fneg_fabs(),
-    // Vector constant folding
-    rule_splat_const(),
-    // Tree rebalancing (uses subsume to avoid infinite loops with commutativity)
-    rule_rebalance_add_right(),
-    rule_rebalance_add_left(),
-    rule_rebalance_mul_right(),
-    rule_rebalance_mul_left(),
-    rule_rebalance_and_right(),
-    rule_rebalance_and_left(),
-    rule_rebalance_xor_right(),
-    rule_rebalance_xor_left(),
-    // Add/Sub mixed rebalancing
-    rule_rebalance_sub_sub_sub(),
-    rule_rebalance_sub_sub_add(),
-    rule_rebalance_sub_add_sub(),
-    rule_rebalance_sub_add_add(),
-    rule_rebalance_add_sub_sub(),
-    rule_rebalance_add_sub_add(),
-    rule_rebalance_add_add_sub(),
-    rule_rebalance_left_sub_sub_sub(),
-    rule_rebalance_left_sub_sub_add(),
-    rule_rebalance_left_sub_add_sub(),
-    rule_rebalance_left_sub_add_add(),
-    rule_rebalance_left_add_sub_sub(),
-    rule_rebalance_left_add_sub_add(),
-    rule_rebalance_left_add_add_sub(),
-    // Commutativity (put last as they can cause explosion)
-    rule_add_comm(),
-    rule_mul_comm(),
-    rule_and_comm(),
-    rule_or_comm(),
-    rule_xor_comm(),
-  ]
-}
+// Standard rules collection (indexed for efficient application)
 
 ///|
 /// Get all standard rewrite rules indexed by their matching opcodes
@@ -218,8 +73,8 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_or_add_neg(), [TAdd])
   rs.add_rule(rule_add_sub_or_to_and(), [TAdd])
   // Cancellation patterns
-  rs.add_rule(rule_sub_add_cancel(), [TSub])
-  rs.add_rule(rule_add_sub_cancel(), [TAdd])
+  rs.add_rule(rule_sub_add_cancel(), [TAdd])
+  rs.add_rule(rule_add_sub_cancel(), [TSub])
   rs.add_rule(rule_sub_sub_cancel(), [TSub])
   // Additional strength reduction
   rs.add_rule(rule_mul_shl_one(), [TMul])
@@ -275,6 +130,24 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_fneg_fabs(), [TFneg])
   // Vector constant folding
   rs.add_rule(rule_splat_const(), [TSplat])
+  // Extend/reduce optimizations
+  rs.add_rule(rule_uextend_uextend(), [TUextend])
+  rs.add_rule(rule_sextend_sextend(), [TSextend])
+  rs.add_rule(rule_sextend_uextend(), [TSextend])
+  rs.add_rule(rule_sextend_icmp(), [TSextend])
+  rs.add_rule(rule_ireduce_uextend(), [TIreduce])
+  rs.add_rule(rule_ireduce_sextend(), [TIreduce])
+  rs.add_rule(rule_band_uextend(), [TAnd])
+  rs.add_rule(rule_bor_uextend(), [TOr])
+  rs.add_rule(rule_bxor_uextend(), [TXor])
+  rs.add_rule(rule_ireduce_ineg(), [TIreduce])
+  rs.add_rule(rule_ireduce_bnot(), [TIreduce])
+  rs.add_rule(rule_ireduce_iadd(), [TIreduce])
+  rs.add_rule(rule_ireduce_isub(), [TIreduce])
+  rs.add_rule(rule_ireduce_imul(), [TIreduce])
+  rs.add_rule(rule_ireduce_band(), [TIreduce])
+  rs.add_rule(rule_ireduce_bor(), [TIreduce])
+  rs.add_rule(rule_ireduce_bxor(), [TIreduce])
   // Tree rebalancing
   rs.add_rule(rule_rebalance_add_right(), [TAdd])
   rs.add_rule(rule_rebalance_add_left(), [TAdd])
