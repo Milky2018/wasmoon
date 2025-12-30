@@ -383,7 +383,7 @@ fn MachineCode::emit_instruction(
         // - imm12 << 12 (multiples of 4096 up to 0xFFF000) when sh=1
         if imm <= 4095 {
           self.emit_add_imm(rd, rn, imm)
-        } else if (imm & 0xFFF) == 0 && (imm >> 12) <= 4095 {
+        } else if (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
           // Shifted form: the immediate is a multiple of 4096 and fits in 12 bits after shift
           self.emit_add_imm_shifted12(rd, rn, imm >> 12)
         } else {

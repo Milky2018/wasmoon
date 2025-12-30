@@ -173,12 +173,12 @@ Added `SelectCmp(CmpKind, Bool)` opcode that:
 | C1-C5 | BranchCmp/BranchCmpImm/BranchZero terminators | **High** |
 | D1 | Redundant move elimination | Low |
 | Select→CSEL | SelectCmp for fused compare and select | Medium |
+| Addressing | Load/store address calculation folding | Medium |
 
 ### Future Work
 
 | Phase | Description | Impact |
 |-------|-------------|--------|
-| Addressing | Load/store address calculation folding | Medium |
 | Pattern consolidation | Integrate patterns.mbt with lowering | Tech debt |
 
 ---
@@ -197,9 +197,9 @@ Added `SelectCmp(CmpKind, Bool)` opcode that:
 
 ## Test Results
 
-- All 1160 unit tests pass
+- All unit tests pass
 - Interpreter: 62563 WAST tests pass (258/258 files)
-- JIT: 62561 WAST tests pass (257/258 files) - 1 pre-existing SIMD issue
+- JIT: 62563 WAST tests pass (258/258 files)
 
 ---
 
