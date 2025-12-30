@@ -730,6 +730,10 @@ fn MachineCode::emit_instruction(
     Move => {
       let rd = wreg_num(inst.defs[0])
       let rm = reg_num(inst.uses[0])
+      // Peephole: skip redundant mov (rd == rm)
+      if rd == rm {
+        return
+      }
       // Check register class to use appropriate move instruction
       let reg_class = match inst.defs[0].reg {
         Physical(preg) => preg.class
