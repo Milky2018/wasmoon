@@ -238,6 +238,45 @@ fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
 }
 
 ///|
+/// Check if a value is iadd(base, iconst(offset)) and return (base, offset) if matched
+/// Used for folding address calculations into load/store instructions
+fn match_iadd_const(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> (@ir.Value, Int64)? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Iadd {
+    // Check if second operand is a constant
+    if find_defining_inst(ctx, inst.operands[1]) is Some(const_inst) &&
+      const_inst.opcode is @ir.Opcode::Iconst(offset) {
+      return Some((inst.operands[0], offset))
+    }
+    // Also check first operand (iadd is commutative)
+    if find_defining_inst(ctx, inst.operands[0]) is Some(const_inst) &&
+      const_inst.opcode is @ir.Opcode::Iconst(offset) {
+      return Some((inst.operands[1], offset))
+    }
+  }
+  None
+}
+
+///|
+/// Check if an offset is valid for AArch64 LDR/STR unsigned immediate
+/// offset must be non-negative, aligned to access_size, and fit in 12-bit scaled
+fn is_valid_load_store_offset(offset : Int64, access_size : Int) -> Bool {
+  if offset < 0L {
+    return false
+  }
+  // Check alignment
+  if offset % access_size.to_int64() != 0L {
+    return false
+  }
+  // Check scaled offset fits in 12 bits (max 4095 * access_size)
+  let max_offset = 4095L * access_size.to_int64()
+  offset <= max_offset
+}
+
+///|
 /// Check if a value is the result of an Icmp instruction
 /// Returns (lhs, rhs, condition) if matched
 fn match_icmp_value(
@@ -1471,31 +1510,49 @@ fn lower_load_ptr(
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
-  // Get the base pointer and offset from operands
-  // operand 0 = base pointer (values_vec)
-  // operand 1 = offset constant (optional, if 2 operands)
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
-
-  // Check if we have an offset from a second operand (must be an iconst)
-  let offset = if inst.operands.length() > 1 {
-    // Try to extract constant offset
-    if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode is @ir.Opcode::Iconst(off) {
-      off.to_int()
-    } else {
-      // If not a constant, we'd need to add the offset separately
-      // For simplicity in trampolines, we assume constant offsets
-      0
-    }
-  } else {
-    0
+  // Convert IR type to VCode memory type and get access size
+  let mem_ty = ir_type_to_mem_type(ty)
+  let access_size = match ty {
+    @ir.Type::I32 | @ir.Type::F32 => 4
+    @ir.Type::I64 | @ir.Type::F64 | @ir.Type::FuncRef | @ir.Type::ExternRef => 8
+    @ir.Type::V128 => 16
   }
 
-  // Convert IR type to VCode memory type
-  let mem_ty = ir_type_to_mem_type(ty)
+  // Get the base pointer and offset from operands
+  // operand 0 = base pointer
+  // operand 1 = offset constant (optional)
+  let base_value = inst.operands[0]
+
+  // Check if we have an offset from a second operand (must be an iconst)
+  let explicit_offset = if inst.operands.length() > 1 {
+    if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
+      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      off
+    } else {
+      0L
+    }
+  } else {
+    0L
+  }
+
+  // Try to fold address calculation: if base is iadd(real_base, const),
+  // we can fold the const into the load offset
+  let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
+    is Some((real_base, addr_offset)) {
+    let combined = explicit_offset + addr_offset
+    if is_valid_load_store_offset(combined, access_size) {
+      (real_base, combined.to_int())
+    } else {
+      // Offset too large or unaligned, can't fold
+      (base_value, explicit_offset.to_int())
+    }
+  } else {
+    (base_value, explicit_offset.to_int())
+  }
+  let base = ctx.get_vreg_for_use(actual_base_value, block)
 
   // Create LoadPtr instruction
-  let load_inst = @instr.VCodeInst::new(LoadPtr(mem_ty, offset))
+  let load_inst = @instr.VCodeInst::new(LoadPtr(mem_ty, total_offset))
   load_inst.add_def({ reg: Virtual(result_vreg) })
   load_inst.add_use(Virtual(base))
   block.add_inst(load_inst)
@@ -1514,26 +1571,48 @@ fn lower_store_ptr(
   // operand 1 = value to store
   // operand 2 = offset constant (optional)
   guard inst.operands.length() >= 2 else { return }
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
-  let value = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Convert IR type to VCode memory type and get access size
+  let mem_ty = ir_type_to_mem_type(ty)
+  let access_size = match ty {
+    @ir.Type::I32 | @ir.Type::F32 => 4
+    @ir.Type::I64 | @ir.Type::F64 | @ir.Type::FuncRef | @ir.Type::ExternRef => 8
+    @ir.Type::V128 => 16
+  }
+  let base_value = inst.operands[0]
+  let store_value = inst.operands[1]
 
   // Check if we have an offset from a third operand
-  let offset = if inst.operands.length() > 2 {
+  let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
       def_inst.opcode is @ir.Opcode::Iconst(off) {
-      off.to_int()
+      off
     } else {
-      0
+      0L
     }
   } else {
-    0
+    0L
   }
 
-  // Convert IR type to VCode memory type
-  let mem_ty = ir_type_to_mem_type(ty)
+  // Try to fold address calculation: if base is iadd(real_base, const),
+  // we can fold the const into the store offset
+  let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
+    is Some((real_base, addr_offset)) {
+    let combined = explicit_offset + addr_offset
+    if is_valid_load_store_offset(combined, access_size) {
+      (real_base, combined.to_int())
+    } else {
+      // Offset too large or unaligned, can't fold
+      (base_value, explicit_offset.to_int())
+    }
+  } else {
+    (base_value, explicit_offset.to_int())
+  }
+  let base = ctx.get_vreg_for_use(actual_base_value, block)
+  let value = ctx.get_vreg_for_use(store_value, block)
 
   // Create StorePtr instruction
-  let store_inst = @instr.VCodeInst::new(StorePtr(mem_ty, offset))
+  let store_inst = @instr.VCodeInst::new(StorePtr(mem_ty, total_offset))
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)
@@ -1555,22 +1634,42 @@ fn lower_load_ptr_narrow(
   guard inst.operands.length() >= 1 else { return }
   guard inst.result is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Access size in bytes
+  let access_size = bits / 8
+  let base_value = inst.operands[0]
 
   // Check if we have an offset from a second operand
-  let offset = if inst.operands.length() > 1 {
+  let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
       def_inst.opcode is @ir.Opcode::Iconst(off) {
-      off.to_int()
+      off
     } else {
-      0
+      0L
     }
   } else {
-    0
+    0L
   }
 
+  // Try to fold address calculation: if base is iadd(real_base, const),
+  // we can fold the const into the load offset
+  let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
+    is Some((real_base, addr_offset)) {
+    let combined = explicit_offset + addr_offset
+    if is_valid_load_store_offset(combined, access_size) {
+      (real_base, combined.to_int())
+    } else {
+      (base_value, explicit_offset.to_int())
+    }
+  } else {
+    (base_value, explicit_offset.to_int())
+  }
+  let base = ctx.get_vreg_for_use(actual_base_value, block)
+
   // Create LoadPtrNarrow instruction
-  let load_inst = @instr.VCodeInst::new(LoadPtrNarrow(bits, signed, offset))
+  let load_inst = @instr.VCodeInst::new(
+    LoadPtrNarrow(bits, signed, total_offset),
+  )
   load_inst.add_def({ reg: Virtual(result_vreg) })
   load_inst.add_use(Virtual(base))
   block.add_inst(load_inst)
@@ -1589,23 +1688,42 @@ fn lower_store_ptr_narrow(
   // operand 1 = value to store
   // operand 2 = offset constant (optional)
   guard inst.operands.length() >= 2 else { return }
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
-  let value = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Access size in bytes
+  let access_size = bits / 8
+  let base_value = inst.operands[0]
+  let store_value = inst.operands[1]
 
   // Check if we have an offset from a third operand
-  let offset = if inst.operands.length() > 2 {
+  let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
       def_inst.opcode is @ir.Opcode::Iconst(off) {
-      off.to_int()
+      off
     } else {
-      0
+      0L
     }
   } else {
-    0
+    0L
   }
 
+  // Try to fold address calculation: if base is iadd(real_base, const),
+  // we can fold the const into the store offset
+  let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
+    is Some((real_base, addr_offset)) {
+    let combined = explicit_offset + addr_offset
+    if is_valid_load_store_offset(combined, access_size) {
+      (real_base, combined.to_int())
+    } else {
+      (base_value, explicit_offset.to_int())
+    }
+  } else {
+    (base_value, explicit_offset.to_int())
+  }
+  let base = ctx.get_vreg_for_use(actual_base_value, block)
+  let value = ctx.get_vreg_for_use(store_value, block)
+
   // Create StorePtrNarrow instruction
-  let store_inst = @instr.VCodeInst::new(StorePtrNarrow(bits, offset))
+  let store_inst = @instr.VCodeInst::new(StorePtrNarrow(bits, total_offset))
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)
