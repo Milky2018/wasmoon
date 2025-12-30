@@ -146,6 +146,7 @@ pub fn EGraph::num_classes(Self) -> Int
 pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
 pub fn EGraph::saturate(Self, Array[RewriteRule], Int) -> Int
+pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
 
 pub(all) struct EGraphBuilder {
   egraph : EGraph
