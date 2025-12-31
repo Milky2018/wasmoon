@@ -14,6 +14,8 @@ pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Ar
 
 pub fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
 
+pub fn allocate_registers_backtracking(VCodeFunction) -> VCodeFunction
+
 pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
 
 pub fn build_bundles_with_merging(VCodeFunction, LiveRangeSet) -> BundleSet

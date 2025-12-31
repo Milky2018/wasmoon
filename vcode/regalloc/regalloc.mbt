@@ -1986,15 +1986,11 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
 // ============ Convenience API ============
 
 ///|
-/// Allocate registers for a function using default AArch64 register set
-pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
-  // Step 0: Eliminate dead code first
-  let func = eliminate_dead_code(func)
-
+/// Build the register pools for AArch64 allocation
+fn build_aarch64_reg_pools(
+  func : VCodeFunction,
+) -> (Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) {
   // Check if function needs extra results buffer (uses X23)
-  // This is true if:
-  // 1. Function returns more than 2 values (needs_extra_results_ptr)
-  // 2. Function calls other functions that return more than 2 values (calls_multi_value_function)
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
   let needs_x23_reserved = needs_extra || calls_multi
@@ -2015,8 +2011,8 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
     int_regs.push(r)
     callee_saved_int_regs.push(r)
   }
+
   // Float regs pool: D0-D7 (caller-saved) + D8-D15 (callee-saved)
-  // This mirrors the int_regs structure which includes both scratch and callee-saved
   let float_regs : Array[@abi.PReg] = []
   for r in @abi.aapcs64_arg_fprs() {
     float_regs.push(r)
@@ -2025,11 +2021,24 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
     float_regs.push(r)
   }
   let callee_saved_float_regs = @abi.callee_saved_fprs()
+  (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs)
+}
+
+///|
+/// Allocate registers for a function using default AArch64 register set
+pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
+  // Step 0: Eliminate dead code first
+  let func = eliminate_dead_code(func)
+
+  // Build register pools
+  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
+    func,
+  )
 
   // Compute liveness
   let liveness = compute_liveness(func)
 
-  // Allocate
+  // Allocate using linear scan
   let allocator = LinearScanAllocator::new(
     int_regs,
     float_regs,
@@ -2039,10 +2048,38 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   let alloc_result = allocator.allocate(func, liveness)
 
   // Process constraints and generate RegMove edits
-  // Design: constraints are resolved after allocation
   process_constraints(func, alloc_result)
 
   // Apply allocation
-  let allocated_func = apply_allocation(func, alloc_result)
-  allocated_func
+  apply_allocation(func, alloc_result)
+}
+
+///|
+/// Allocate registers using the Ion-style backtracking allocator
+/// This allocator supports:
+/// - Bundle merging for copy coalescing
+/// - Priority-based allocation with eviction
+/// - Bundle splitting instead of immediate spilling
+pub fn allocate_registers_backtracking(func : VCodeFunction) -> VCodeFunction {
+  // Step 0: Eliminate dead code first
+  let func = eliminate_dead_code(func)
+
+  // Build register pools
+  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
+    func,
+  )
+
+  // Compute liveness (Phase 1)
+  let liveness = compute_liveness(func)
+
+  // Use backtracking allocator (Phases 2-4)
+  let alloc_result = allocate_backtracking(
+    func, liveness, int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs,
+  )
+
+  // Process constraints and generate RegMove edits
+  process_constraints(func, alloc_result)
+
+  // Apply allocation
+  apply_allocation(func, alloc_result)
 }

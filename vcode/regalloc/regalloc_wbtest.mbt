@@ -1623,3 +1623,162 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
     ),
   )
 }
+
+///|
+/// Test the backtracking allocator on a simple function
+test "regalloc: backtracking allocator simple" {
+  let func = VCodeFunction::new("backtrack_simple")
+  let a = func.add_param(@abi.Int)
+  let b = func.add_param(@abi.Int)
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+
+  // v2 = add v0, v1
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
+  let result_vreg = func.new_vreg(@abi.Int)
+  add_inst.add_def({ reg: @abi.Virtual(result_vreg) })
+  add_inst.add_use(@abi.Virtual(a))
+  add_inst.add_use(@abi.Virtual(b))
+  block.add_inst(add_inst)
+
+  // ret v2
+  block.set_terminator(@instr.Return([@abi.Virtual(result_vreg)]))
+
+  // Allocate using backtracking allocator
+  let allocated = allocate_registers_backtracking(func)
+
+  // Function should be valid
+  inspect(allocated.name, content="backtrack_simple")
+  inspect(allocated.params.length(), content="2")
+  inspect(allocated.blocks.length(), content="1")
+
+  // The result should use physical registers
+  let result_block = allocated.blocks[0]
+  inspect(result_block.insts.length(), content="1")
+}
+
+///|
+/// Test the backtracking allocator with bundle merging
+test "regalloc: backtracking allocator bundle merging" {
+  // Test that Move instructions result in merged bundles
+  let func = VCodeFunction::new("backtrack_merge")
+  let a = func.add_param(@abi.Int)
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+
+  // v1 = mov v0 (should be coalesced)
+  let mov_inst = @instr.VCodeInst::new(@instr.Move)
+  let v1 = func.new_vreg(@abi.Int)
+  mov_inst.add_def({ reg: @abi.Virtual(v1) })
+  mov_inst.add_use(@abi.Virtual(a))
+  block.add_inst(mov_inst)
+
+  // v2 = add v1, v1
+  let add_inst = @instr.VCodeInst::new(@instr.Add(true))
+  let v2 = func.new_vreg(@abi.Int)
+  add_inst.add_def({ reg: @abi.Virtual(v2) })
+  add_inst.add_use(@abi.Virtual(v1))
+  add_inst.add_use(@abi.Virtual(v1))
+  block.add_inst(add_inst)
+
+  // ret v2
+  block.set_terminator(@instr.Return([@abi.Virtual(v2)]))
+
+  // Allocate using backtracking allocator
+  let allocated = allocate_registers_backtracking(func)
+
+  // Should produce valid code
+  inspect(allocated.blocks.length(), content="1")
+
+  // The move instruction should still exist
+  // (In a fully optimized version, it could be eliminated if coalesced)
+  let result_block = allocated.blocks[0]
+  inspect(result_block.insts.length() >= 1, content="true")
+}
+
+///|
+/// Test the backtracking allocator with pressure requiring eviction
+test "regalloc: backtracking allocator with register pressure" {
+  // Create enough live values to require eviction decisions
+  let func = VCodeFunction::new("backtrack_pressure")
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+
+  // Create 5 values all live at the same time
+  let values : Array[@abi.VReg] = []
+  for i in 0..<5 {
+    let v = func.new_vreg(@abi.Int)
+    let inst = @instr.VCodeInst::new(@instr.LoadConst(i.to_int64()))
+    inst.add_def({ reg: @abi.Virtual(v) })
+    block.add_inst(inst)
+    values.push(v)
+  }
+
+  // Add them all together
+  let mut result = values[0]
+  for i in 1..<5 {
+    let new_result = func.new_vreg(@abi.Int)
+    let add_inst = @instr.VCodeInst::new(@instr.Add(true))
+    add_inst.add_def({ reg: @abi.Virtual(new_result) })
+    add_inst.add_use(@abi.Virtual(result))
+    add_inst.add_use(@abi.Virtual(values[i]))
+    block.add_inst(add_inst)
+    result = new_result
+  }
+  block.set_terminator(@instr.Return([@abi.Virtual(result)]))
+
+  // Allocate using backtracking allocator
+  let allocated = allocate_registers_backtracking(func)
+
+  // Should produce valid code even with pressure
+  inspect(allocated.blocks.length(), content="1")
+
+  // Should have more instructions due to potential spill/reload
+  let result_block = allocated.blocks[0]
+  inspect(result_block.insts.length() >= 9, content="true") // 5 loads + 4 adds
+}
+
+///|
+/// Test LiveRange data structures
+test "liverange: basic operations" {
+  let vreg : @abi.VReg = { id: 0, class: @abi.Int }
+  let range = LiveRange::new(0, vreg)
+
+  // Add a span
+  let start : ProgPoint = { block: 0, inst: 0, pos: After }
+  let end : ProgPoint = { block: 0, inst: 5, pos: Before }
+  range.add_range(ProgPointRange::new(start, end))
+  inspect(range.ranges.length(), content="1")
+  inspect(range.vreg.id, content="0")
+  inspect(range.allocation is Unallocated, content="true")
+}
+
+///|
+/// Test UnionFind operations
+test "union_find: basic operations" {
+  let uf = UnionFind::new(5)
+
+  // Initially all separate
+  inspect(uf.num_sets(), content="5")
+
+  // Union 0 and 1
+  inspect(uf.union(0, 1), content="true")
+  inspect(uf.num_sets(), content="4")
+
+  // Union 2 and 3
+  inspect(uf.union(2, 3), content="true")
+  inspect(uf.num_sets(), content="3")
+
+  // Union 1 and 3 (connects {0,1} with {2,3})
+  inspect(uf.union(1, 3), content="true")
+  inspect(uf.num_sets(), content="2")
+
+  // Check same_set
+  inspect(uf.same_set(0, 2), content="true")
+  inspect(uf.same_set(0, 4), content="false")
+
+  // Get set members
+  let set_0 = uf.get_set(0)
+  set_0.sort_by(fn(a, b) { a - b })
+  inspect(set_0, content="[0, 1, 2, 3]")
+}
