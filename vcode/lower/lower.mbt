@@ -11,7 +11,7 @@
 /// Lowering context - tracks state during IR to VCode conversion
 pub(all) struct LoweringContext {
   ir_func : @ir.Function
-  vcode_func : VCodeFunction
+  vcode_func : @regalloc.VCodeFunction
   // Map from IR Value id to @abi.VReg
   value_map : Map[Int, @abi.VReg]
   // Map from IR Block id to VCode block id
@@ -26,7 +26,7 @@ pub(all) struct LoweringContext {
 pub fn LoweringContext::new(ir_func : @ir.Function) -> LoweringContext {
   {
     ir_func,
-    vcode_func: VCodeFunction::new(ir_func.name),
+    vcode_func: @regalloc.VCodeFunction::new(ir_func.name),
     value_map: {},
     block_map: {},
     stack_param_map: {},
@@ -309,7 +309,7 @@ fn intcc_to_cond(cc : @ir.IntCC) -> @instr.Cond {
 
 ///|
 /// Lower an entire IR function to VCode
-pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
+pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
   let ctx = LoweringContext::new(ir_func)
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -1735,7 +1735,7 @@ fn lower_store_ptr_narrow(
 ///|
 /// Lower an IR function with e-graph optimization applied first
 /// This applies constant folding and algebraic simplifications before lowering
-pub fn lower_function_egraph(ir_func : @ir.Function) -> VCodeFunction {
+pub fn lower_function_egraph(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
   // Apply e-graph optimization (constant folding, strength reduction, etc.)
   @ir.optimize_function(ir_func) |> ignore
 

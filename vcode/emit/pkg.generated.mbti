@@ -3,7 +3,7 @@ package "Milky2018/wasmoon/vcode/emit"
 
 import(
   "Milky2018/wasmoon/vcode/instr"
-  "Milky2018/wasmoon/vcode/lower"
+  "Milky2018/wasmoon/vcode/regalloc"
 )
 
 // Values
@@ -19,7 +19,7 @@ pub const TYPE_V128 : Int = 4
 
 pub fn emit_entry_trampoline(Array[Int], Array[Int]) -> MachineCode
 
-pub fn emit_function(@lower.VCodeFunction) -> MachineCode
+pub fn emit_function(@regalloc.VCodeFunction) -> MachineCode
 
 // Errors
 

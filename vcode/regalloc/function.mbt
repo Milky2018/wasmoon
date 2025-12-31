@@ -2,7 +2,7 @@
 
 ///|
 /// VCode function - a complete function in VCode form
-struct VCodeFunction {
+pub(all) struct VCodeFunction {
   name : String
   params : Array[@abi.VReg] // Function parameters
   results : Array[@abi.RegClass] // Result types (for return value allocation)

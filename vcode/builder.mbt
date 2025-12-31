@@ -4,13 +4,13 @@
 ///|
 /// VCode builder for constructing VCode functions
 pub(all) struct VCodeBuilder {
-  func : @lower.VCodeFunction
+  func : @regalloc.VCodeFunction
   mut current_block : @block.VCodeBlock?
 }
 
 ///|
 pub fn VCodeBuilder::new(name : String) -> VCodeBuilder {
-  { func: @lower.VCodeFunction::new(name), current_block: None }
+  { func: @regalloc.VCodeFunction::new(name), current_block: None }
 }
 
 ///|
@@ -48,7 +48,9 @@ pub fn VCodeBuilder::current_block(self : VCodeBuilder) -> @block.VCodeBlock? {
 }
 
 ///|
-pub fn VCodeBuilder::get_function(self : VCodeBuilder) -> @lower.VCodeFunction {
+pub fn VCodeBuilder::get_function(
+  self : VCodeBuilder,
+) -> @regalloc.VCodeFunction {
   self.func
 }
 

@@ -58,14 +58,14 @@ pub(open) trait GcCompiler {
   /// type_idx: the struct type index
   /// field_vregs: virtual registers containing field values
   /// Returns: virtual register containing the new struct reference
-  gen_alloc_struct(Self, @lower.VCodeFunction, Int, Array[@abi.VReg]) -> @abi.VReg
+  gen_alloc_struct(Self, @regalloc.VCodeFunction, Int, Array[@abi.VReg]) -> @abi.VReg
 
   /// Generate code to allocate an array
   /// type_idx: the array type index
   /// len_vreg: virtual register containing array length
   /// init_vreg: virtual register containing initial element value (optional)
   /// Returns: virtual register containing the new array reference
-  gen_alloc_array(Self, @lower.VCodeFunction, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
+  gen_alloc_array(Self, @regalloc.VCodeFunction, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
 
   // === Barrier Code Generation ===
 
@@ -76,7 +76,7 @@ pub(open) trait GcCompiler {
   /// new_vreg: new reference value being stored
   gen_write_barrier_pre(
     Self,
-    @lower.VCodeFunction,
+    @regalloc.VCodeFunction,
     @abi.VReg,
     Int,
     @abi.VReg,
@@ -84,18 +84,18 @@ pub(open) trait GcCompiler {
   ) -> Unit
 
   /// Generate write barrier code AFTER a reference store
-  gen_write_barrier_post(Self, @lower.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
+  gen_write_barrier_post(Self, @regalloc.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
 
   /// Generate read barrier code before a reference load
   /// Returns: possibly updated reference after barrier
-  gen_read_barrier(Self, @lower.VCodeFunction, @abi.VReg) -> @abi.VReg
+  gen_read_barrier(Self, @regalloc.VCodeFunction, @abi.VReg) -> @abi.VReg
 
   // === Safepoint Generation ===
 
   /// Generate a safepoint poll
   /// This checks if GC wants to run and yields if needed
   /// Returns: label to continue after safepoint
-  gen_safepoint_poll(Self, @lower.VCodeFunction) -> Unit
+  gen_safepoint_poll(Self, @regalloc.VCodeFunction) -> Unit
 
   /// Record safepoint information for stack map
   /// code_offset: where in the code this safepoint is

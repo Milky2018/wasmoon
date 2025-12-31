@@ -24,7 +24,7 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 
 ///|
 fn collect_used_callee_saved(
-  func : @lower.VCodeFunction,
+  func : @regalloc.VCodeFunction,
   _needs_sret : Bool,
 ) -> Array[Int] {
   // v3 ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
@@ -72,7 +72,7 @@ fn collect_used_callee_saved(
 
 ///|
 /// Collect all callee-saved FPRs (D8-D15) that are defined in the function
-fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
+fn collect_used_callee_saved_fprs(func : @regalloc.VCodeFunction) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
   // Check param_pregs: float parameters that cross calls are moved to callee-saved FPRs
   // These are defined in the prologue via `fmov sN, wM` or `fmov dN, xM`
@@ -105,7 +105,7 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
 
 ///|
 /// Check if a function makes any calls
-fn func_has_calls(func : @lower.VCodeFunction) -> Bool {
+fn func_has_calls(func : @regalloc.VCodeFunction) -> Bool {
   for block in func.get_blocks() {
     for inst in block.insts {
       // Check if this instruction is a function call
@@ -123,7 +123,7 @@ fn func_has_calls(func : @lower.VCodeFunction) -> Bool {
 /// A function needs vmctx if:
 /// - It uses X19 as a physical register in any instruction
 /// - It uses X19 in any terminator
-fn func_uses_vmctx(func : @lower.VCodeFunction) -> Bool {
+fn func_uses_vmctx(func : @regalloc.VCodeFunction) -> Bool {
   for block in func.get_blocks() {
     // Check instructions for X19 usage
     for inst in block.insts {
@@ -374,7 +374,7 @@ fn MachineCode::emit_prologue(
 
 ///|
 /// Emit machine code for a VCode function
-pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
+pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
   let mc = MachineCode::new()
   // v3 ABI: Check if we need SRET (more than 8 int or 8 float returns)
   let needs_sret = func.needs_extra_results_ptr()

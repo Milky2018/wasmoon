@@ -69,7 +69,7 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   let vcode_func = @lower.lower_function(builder.get_function())
 
   // 2. Register allocation
-  let allocated_func = @lower.allocate_registers_aarch64(vcode_func)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode_func)
 
   // 3. Emit machine code
   let mc = @emit.emit_function(allocated_func)
@@ -545,7 +545,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|
     ),
   )
-  let allocated_func = @lower.allocate_registers_aarch64(vcode_func)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode_func)
 
   // Debug: print allocated VCode
   inspect(

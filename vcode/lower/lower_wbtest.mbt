@@ -921,7 +921,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   )
 
   // ============ Phase 2: Register Allocation ============
-  let allocated_func = allocate_registers_aarch64(vcode_func)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode_func)
 
   // Inspect the allocated VCode
   // Key observations:
@@ -1054,7 +1054,7 @@ test "minimal: dead float constant should not affect live values" {
   // Register allocation with DCE:
   // Dead code (f0 = ldf 1) is eliminated before register allocation
   // Only live values get registers: f1 -> d0, f2 -> d1
-  let allocated_func = allocate_registers_aarch64(vcode_func)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode_func)
   inspect(
     allocated_func.print(),
     content=(
