@@ -39,7 +39,7 @@ fn ProgPointRange::overlaps(
 
 ///|
 /// Check if a point is within this range
-fn ProgPointRange::contains(
+pub fn ProgPointRange::contains(
   self : ProgPointRange,
   point : ProgPoint,
   block_order : Map[Int, Int],
@@ -51,7 +51,7 @@ fn ProgPointRange::contains(
 
 ///|
 /// Kind of use at a program point
-pub enum UseKind {
+pub(all) enum UseKind {
   Def // Definition (value produced)
   Use // Use (value consumed)
   DefUse // Both def and use (e.g., tied operand)

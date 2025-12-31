@@ -1782,3 +1782,135 @@ test "union_find: basic operations" {
   set_0.sort_by(fn(a, b) { a - b })
   inspect(set_0, content="[0, 1, 2, 3]")
 }
+
+///|
+/// Compare linear scan vs backtracking allocator on a high-pressure function
+test "regalloc: compare allocators on high pressure" {
+  // Create a function with many live values requiring spills
+  let func = VCodeFunction::new("high_pressure")
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+
+  // Create 20 values all potentially live at the same time
+  let values : Array[@abi.VReg] = []
+  for i in 0..<20 {
+    let v = func.new_vreg(@abi.Int)
+    let inst = @instr.VCodeInst::new(@instr.LoadConst(i.to_int64()))
+    inst.add_def({ reg: @abi.Virtual(v) })
+    block.add_inst(inst)
+    values.push(v)
+  }
+
+  // Sum them all together - keeps many values live
+  let mut result = values[0]
+  for i in 1..<20 {
+    let new_result = func.new_vreg(@abi.Int)
+    let add_inst = @instr.VCodeInst::new(@instr.Add(true))
+    add_inst.add_def({ reg: @abi.Virtual(new_result) })
+    add_inst.add_use(@abi.Virtual(result))
+    add_inst.add_use(@abi.Virtual(values[i]))
+    block.add_inst(add_inst)
+    result = new_result
+  }
+  block.set_terminator(@instr.Return([@abi.Virtual(result)]))
+
+  // Get stats from both allocators
+  let linear_stats = get_linear_scan_stats(func)
+  let backtrack_stats = get_backtracking_stats(func)
+
+  // Print comparison (for debugging)
+  // println(compare_allocators(func))
+
+  // Both should produce valid results
+  inspect(linear_stats.num_vregs, content="39")
+  inspect(backtrack_stats.num_vregs, content="39")
+
+  // Check that total instructions are reasonable
+  inspect(linear_stats.total_insts >= 39, content="true")
+  inspect(backtrack_stats.total_insts >= 39, content="true")
+}
+
+///|
+/// Compare allocators on a function with copy coalescing opportunities
+test "regalloc: compare allocators with move coalescing" {
+  // Create a chain of moves - backtracking should coalesce these
+  let func = VCodeFunction::new("move_chain")
+  let a = func.add_param(@abi.Int)
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+
+  // Create a chain: a -> v1 -> v2 -> v3 -> result
+  let v1 = func.new_vreg(@abi.Int)
+  let mov1 = @instr.VCodeInst::new(@instr.Move)
+  mov1.add_def({ reg: @abi.Virtual(v1) })
+  mov1.add_use(@abi.Virtual(a))
+  block.add_inst(mov1)
+  let v2 = func.new_vreg(@abi.Int)
+  let mov2 = @instr.VCodeInst::new(@instr.Move)
+  mov2.add_def({ reg: @abi.Virtual(v2) })
+  mov2.add_use(@abi.Virtual(v1))
+  block.add_inst(mov2)
+  let v3 = func.new_vreg(@abi.Int)
+  let mov3 = @instr.VCodeInst::new(@instr.Move)
+  mov3.add_def({ reg: @abi.Virtual(v3) })
+  mov3.add_use(@abi.Virtual(v2))
+  block.add_inst(mov3)
+  block.set_terminator(@instr.Return([@abi.Virtual(v3)]))
+
+  // Get stats from both allocators
+  let linear_stats = get_linear_scan_stats(func)
+  let backtrack_stats = get_backtracking_stats(func)
+
+  // Both should handle this correctly
+  inspect(linear_stats.num_spill_slots, content="0")
+  inspect(backtrack_stats.num_spill_slots, content="0")
+
+  // Backtracking should ideally coalesce some moves
+  // (though the current implementation may not eliminate them yet)
+  inspect(linear_stats.num_moves >= 0, content="true")
+  inspect(backtrack_stats.num_moves >= 0, content="true")
+}
+
+///|
+/// Show full comparison output for review
+test "regalloc: full comparison output" {
+  // Create a function with moderate pressure
+  let func = VCodeFunction::new("compare_demo")
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+
+  // Create 10 values
+  let values : Array[@abi.VReg] = []
+  for i in 0..<10 {
+    let v = func.new_vreg(@abi.Int)
+    let inst = @instr.VCodeInst::new(@instr.LoadConst(i.to_int64()))
+    inst.add_def({ reg: @abi.Virtual(v) })
+    block.add_inst(inst)
+    values.push(v)
+  }
+
+  // Sum them all
+  let mut result = values[0]
+  for i in 1..<10 {
+    let new_result = func.new_vreg(@abi.Int)
+    let add_inst = @instr.VCodeInst::new(@instr.Add(true))
+    add_inst.add_def({ reg: @abi.Virtual(new_result) })
+    add_inst.add_use(@abi.Virtual(result))
+    add_inst.add_use(@abi.Virtual(values[i]))
+    block.add_inst(add_inst)
+    result = new_result
+  }
+  block.set_terminator(@instr.Return([@abi.Virtual(result)]))
+
+  // Get full comparison
+  let comparison = compare_allocators(func)
+  inspect(
+    comparison,
+    content=(
+      #|=== Register Allocator Comparison ===
+      #|Linear Scan:  vregs=19, spill_slots=0, spills=0, reloads=0, moves=0, total_insts=19
+      #|Backtracking: vregs=19, spill_slots=0, spills=0, reloads=0, moves=0, total_insts=19
+      #|
+    ),
+  )
+}

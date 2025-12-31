@@ -26,6 +26,8 @@ pub fn build_live_ranges(VCodeFunction, LivenessResult) -> LiveRangeSet
 
 pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
 
+pub fn compare_allocators(VCodeFunction) -> String
+
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
 pub fn compute_spill_weight(Bundle, LiveRangeSet, VCodeFunction) -> Double
@@ -33,6 +35,10 @@ pub fn compute_spill_weight(Bundle, LiveRangeSet, VCodeFunction) -> Double
 pub fn debug_liveness(LivenessResult) -> String
 
 pub fn eliminate_dead_code(VCodeFunction) -> VCodeFunction
+
+pub fn get_backtracking_stats(VCodeFunction) -> AllocStats
+
+pub fn get_linear_scan_stats(VCodeFunction) -> AllocStats
 
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
@@ -55,6 +61,16 @@ pub fn AArch64StackFrame::set_has_calls(Self) -> Unit
 pub fn AArch64StackFrame::setup(Self) -> Unit
 pub fn AArch64StackFrame::size(Self) -> Int
 pub impl Show for AArch64StackFrame
+
+pub(all) struct AllocStats {
+  mut num_vregs : Int
+  mut num_spill_slots : Int
+  num_spills : Int
+  num_reloads : Int
+  num_moves : Int
+  total_insts : Int
+}
+pub impl Show for AllocStats
 
 pub enum Allocation {
   Reg(@abi.PReg)
@@ -94,6 +110,7 @@ pub fn Bundle::get_fixed_reg(Self, LiveRangeSet) -> @abi.PReg?
 pub fn Bundle::has_fixed_constraint(Self, LiveRangeSet) -> Bool
 pub fn Bundle::new(Int, @abi.RegClass) -> Self
 pub fn Bundle::overlaps(Self, Self, LiveRangeSet) -> Bool
+pub fn Bundle::to_string(Self, LiveRangeSet) -> String
 pub fn Bundle::total_length(Self, LiveRangeSet) -> Int
 
 pub(all) struct BundleSet {
@@ -195,6 +212,7 @@ pub(all) struct ProgPointRange {
   start : ProgPoint
   end : ProgPoint
 }
+pub fn ProgPointRange::contains(Self, ProgPoint, Map[Int, Int]) -> Bool
 pub impl Show for ProgPointRange
 
 pub enum ProgPos {
@@ -296,7 +314,7 @@ pub(all) struct UseDefInfo {
   use_points : Array[ProgPoint]
 }
 
-pub enum UseKind {
+pub(all) enum UseKind {
   Def
   Use
   DefUse

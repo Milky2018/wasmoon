@@ -123,7 +123,7 @@ pub fn Bundle::crosses_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
 }
 
 ///|
-fn Bundle::to_string(self : Bundle, ranges : LiveRangeSet) -> String {
+pub fn Bundle::to_string(self : Bundle, _ranges : LiveRangeSet) -> String {
   let mut result = "Bundle\{self.id} (\{self.reg_class}): ["
   for i, range_id in self.range_ids {
     if i > 0 {
