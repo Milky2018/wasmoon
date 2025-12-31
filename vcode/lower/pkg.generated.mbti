@@ -89,6 +89,11 @@ pub fn AArch64StackFrame::setup(Self) -> Unit
 pub fn AArch64StackFrame::size(Self) -> Int
 pub impl Show for AArch64StackFrame
 
+pub(all) struct CoalescingInfo {
+  forward_hints : Map[Int, Int]
+  reverse_hints : Map[Int, Int]
+}
+
 pub(all) struct InstEdits {
   before : Array[RegMove]
   after : Array[RegMove]
@@ -113,7 +118,8 @@ pub(all) struct LiveInterval {
   start : ProgPoint
   mut end : ProgPoint
   uses : Array[ProgPoint]
-  hint : @abi.PReg?
+  mut hint : @abi.PReg?
+  mut hint_vreg : Int?
   mut assigned : @abi.PReg?
   mut spill_slot : Int?
   mut crosses_call : Bool
