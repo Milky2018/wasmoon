@@ -19,6 +19,7 @@
     "Milky2018/wasmoon/runtime",
     "Milky2018/wasmoon/jit",
     "Milky2018/wasmoon/vcode/lower",
+    "Milky2018/wasmoon/vcode/regalloc",
     "Milky2018/wasmoon/logger"
   ],
   "targets": {

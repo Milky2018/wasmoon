@@ -125,7 +125,7 @@ fn run_compile(
     let vcode_func = @lower.lower_function(ir_func)
 
     // Stage 4: Register allocation
-    let allocated = @lower.allocate_registers_aarch64(vcode_func)
+    let allocated = @regalloc.allocate_registers_aarch64(vcode_func)
 
     // Stage 5: Emit machine code
     let mc = @emit.emit_function(allocated)

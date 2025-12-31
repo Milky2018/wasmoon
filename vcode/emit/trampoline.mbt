@@ -39,7 +39,7 @@ pub fn emit_entry_trampoline(
 
   // Compile through the normal pipeline
   let vcode_func = @lower.lower_function(ir_func)
-  let allocated = @lower.allocate_registers_aarch64(vcode_func)
+  let allocated = @regalloc.allocate_registers_aarch64(vcode_func)
 
   // Emit machine code
   emit_function(allocated)

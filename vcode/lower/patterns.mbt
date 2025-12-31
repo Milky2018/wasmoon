@@ -608,7 +608,9 @@ pub fn lower_inst_with_patterns(
 
 ///|
 /// Lower a function with pattern matching optimizations enabled
-pub fn lower_function_optimized(ir_func : @ir.Function) -> VCodeFunction {
+pub fn lower_function_optimized(
+  ir_func : @ir.Function,
+) -> @regalloc.VCodeFunction {
   let ctx = LoweringContext::new(ir_func)
   let rules = get_optimization_rules()
 

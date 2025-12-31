@@ -211,7 +211,7 @@ test "division operations" {
 
 ///|
 test "regalloc: call result is not cross-call" {
-  let func = @lower.VCodeFunction::new("test_regalloc_call_result")
+  let func = @regalloc.VCodeFunction::new("test_regalloc_call_result")
   func.add_result(Int)
   let block = func.new_block()
 
@@ -239,7 +239,7 @@ test "regalloc: call result is not cross-call" {
   add_inst.add_use(@abi.Virtual(one))
   block.add_inst(add_inst)
   block.set_terminator(Return([@abi.Virtual(sum)]))
-  let liveness = @lower.compute_liveness(func)
+  let liveness = @regalloc.compute_liveness(func)
   let interval = liveness.intervals.get(call_result.id).unwrap()
   inspect(interval.crosses_call, content="false")
 }

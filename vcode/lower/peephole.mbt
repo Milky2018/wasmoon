@@ -95,7 +95,7 @@ fn collect_terminator_uses(
 /// Collect uses from block parameters (values that flow to successor blocks)
 fn collect_block_param_uses(
   block : @block.VCodeBlock,
-  func : VCodeFunction,
+  func : @regalloc.VCodeFunction,
   used : @hashset.HashSet[Int],
 ) -> Unit {
   // Get successor block IDs from terminator
@@ -132,7 +132,7 @@ fn collect_block_param_uses(
 /// Returns the number of instructions eliminated
 fn optimize_block(
   block : @block.VCodeBlock,
-  func : VCodeFunction,
+  func : @regalloc.VCodeFunction,
   state : PeepholeState,
 ) -> Int {
   // Phase 1: Collect all used vregs (for dead code elimination)
@@ -541,7 +541,7 @@ fn is_inplace_safe(opcode : @instr.VCodeOpcode) -> Bool {
 ///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
-pub fn optimize_vcode(func : VCodeFunction) -> Unit {
+pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   let mut total_eliminated = 0
   for block in func.blocks {
     // Create fresh state for each block (conservative approach)

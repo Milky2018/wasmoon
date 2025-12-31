@@ -56,7 +56,7 @@ test "i32 mul" {
       #|
     ),
   )
-  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(

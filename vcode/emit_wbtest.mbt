@@ -143,7 +143,7 @@ test "emit: comparison" {
 ///|
 test "emit: full function" {
   // Create a simple add function: add(a, b) -> a + b
-  let func = @lower.VCodeFunction::new("test_add")
+  let func = @regalloc.VCodeFunction::new("test_add")
   func.add_param(Int) |> ignore
   func.add_param(Int) |> ignore
   func.add_result(Int)
@@ -331,7 +331,7 @@ test "emit: complete function with control flow" {
   //   else:
   //     return b
 
-  let func = @lower.VCodeFunction::new("max")
+  let func = @regalloc.VCodeFunction::new("max")
   func.add_result(Int)
 
   // Create blocks
@@ -566,7 +566,7 @@ test "emit: complete VCode instruction emission" {
   // Test emit_instruction for various VCodeOpcode values
 
   // Create a simple function to test instruction emission
-  let func = @lower.VCodeFunction::new("test_insts")
+  let func = @regalloc.VCodeFunction::new("test_insts")
   func.add_result(Int)
   let block = func.new_block()
 
@@ -643,7 +643,7 @@ test "emit_mul encoding verification" {
 test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
   // Test CallPtr instruction emission with disassembly dump
   // This verifies that annotations are not duplicated
-  let func = @lower.VCodeFunction::new("test_call_ptr_c_3_1")
+  let func = @regalloc.VCodeFunction::new("test_call_ptr_c_3_1")
   func.add_result(Int)
   let block = func.new_block()
 
@@ -690,7 +690,7 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
-  let func = @lower.VCodeFunction::new("test_call_ptr_c_1_1")
+  let func = @regalloc.VCodeFunction::new("test_call_ptr_c_1_1")
   func.add_result(Int)
   let block = func.new_block()
   let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
@@ -733,7 +733,7 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
-  let func = @lower.VCodeFunction::new("test_call_ptr_c_4_0")
+  let func = @regalloc.VCodeFunction::new("test_call_ptr_c_4_0")
   let block = func.new_block()
   let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
   load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
@@ -775,7 +775,7 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (4 args, 0 result) 2" {
-  let func = @lower.VCodeFunction::new("test_call_ptr_c_4_0_2")
+  let func = @regalloc.VCodeFunction::new("test_call_ptr_c_4_0_2")
   let block = func.new_block()
   let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
   load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })

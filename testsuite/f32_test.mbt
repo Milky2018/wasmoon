@@ -56,7 +56,7 @@ test "f32 add" {
       #|
     ),
   )
-  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(
@@ -158,7 +158,7 @@ test "f64 add" {
       #|
     ),
   )
-  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(
@@ -258,7 +258,7 @@ test "f32 sub" {
       #|
     ),
   )
-  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(
@@ -361,7 +361,7 @@ test "f32 mul" {
       #|
     ),
   )
-  let allocated_func = @lower.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
   inspect(
     allocated_func.print(),
     content=(

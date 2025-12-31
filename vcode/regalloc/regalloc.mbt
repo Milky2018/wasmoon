@@ -1986,15 +1986,11 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
 // ============ Convenience API ============
 
 ///|
-/// Allocate registers for a function using default AArch64 register set
-pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
-  // Step 0: Eliminate dead code first
-  let func = eliminate_dead_code(func)
-
+/// Build the register pools for AArch64 allocation
+fn build_aarch64_reg_pools(
+  func : VCodeFunction,
+) -> (Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) {
   // Check if function needs extra results buffer (uses X23)
-  // This is true if:
-  // 1. Function returns more than 2 values (needs_extra_results_ptr)
-  // 2. Function calls other functions that return more than 2 values (calls_multi_value_function)
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
   let needs_x23_reserved = needs_extra || calls_multi
@@ -2015,8 +2011,8 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
     int_regs.push(r)
     callee_saved_int_regs.push(r)
   }
+
   // Float regs pool: D0-D7 (caller-saved) + D8-D15 (callee-saved)
-  // This mirrors the int_regs structure which includes both scratch and callee-saved
   let float_regs : Array[@abi.PReg] = []
   for r in @abi.aapcs64_arg_fprs() {
     float_regs.push(r)
@@ -2025,11 +2021,24 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
     float_regs.push(r)
   }
   let callee_saved_float_regs = @abi.callee_saved_fprs()
+  (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs)
+}
+
+///|
+/// Allocate registers for a function using default AArch64 register set
+pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
+  // Step 0: Eliminate dead code first
+  let func = eliminate_dead_code(func)
+
+  // Build register pools
+  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
+    func,
+  )
 
   // Compute liveness
   let liveness = compute_liveness(func)
 
-  // Allocate
+  // Allocate using linear scan
   let allocator = LinearScanAllocator::new(
     int_regs,
     float_regs,
@@ -2039,10 +2048,161 @@ pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
   let alloc_result = allocator.allocate(func, liveness)
 
   // Process constraints and generate RegMove edits
-  // Design: constraints are resolved after allocation
   process_constraints(func, alloc_result)
 
   // Apply allocation
-  let allocated_func = apply_allocation(func, alloc_result)
-  allocated_func
+  apply_allocation(func, alloc_result)
+}
+
+///|
+/// Allocate registers using the Ion-style backtracking allocator
+/// This allocator supports:
+/// - Bundle merging for copy coalescing
+/// - Priority-based allocation with eviction
+/// - Bundle splitting instead of immediate spilling
+pub fn allocate_registers_backtracking(func : VCodeFunction) -> VCodeFunction {
+  // Step 0: Eliminate dead code first
+  let func = eliminate_dead_code(func)
+
+  // Build register pools
+  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
+    func,
+  )
+
+  // Compute liveness (Phase 1)
+  let liveness = compute_liveness(func)
+
+  // Use backtracking allocator (Phases 2-4)
+  let alloc_result = allocate_backtracking(
+    func, liveness, int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs,
+  )
+
+  // Process constraints and generate RegMove edits
+  process_constraints(func, alloc_result)
+
+  // Apply allocation
+  apply_allocation(func, alloc_result)
+}
+
+///|
+/// Allocation statistics for comparison
+pub(all) struct AllocStats {
+  mut num_vregs : Int // Total virtual registers
+  mut num_spill_slots : Int // Number of spill slots used
+  num_spills : Int // Number of spill operations
+  num_reloads : Int // Number of reload operations
+  num_moves : Int // Number of move operations inserted
+  total_insts : Int // Total instructions after allocation
+}
+
+///|
+fn AllocStats::to_string(self : AllocStats) -> String {
+  "vregs=\{self.num_vregs}, spill_slots=\{self.num_spill_slots}, spills=\{self.num_spills}, reloads=\{self.num_reloads}, moves=\{self.num_moves}, total_insts=\{self.total_insts}"
+}
+
+///|
+pub impl Show for AllocStats with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// Count instructions by type in allocated function
+fn count_instructions(func : VCodeFunction) -> AllocStats {
+  let mut num_spills = 0
+  let mut num_reloads = 0
+  let mut num_moves = 0
+  let mut total_insts = 0
+  for block in func.blocks {
+    for inst in block.insts {
+      total_insts += 1
+      match inst.opcode {
+        @instr.StackStore(_) => num_spills += 1
+        @instr.StackLoad(_) => num_reloads += 1
+        @instr.Move => num_moves += 1
+        _ => ()
+      }
+    }
+  }
+  {
+    num_vregs: 0,
+    num_spill_slots: 0,
+    num_spills,
+    num_reloads,
+    num_moves,
+    total_insts,
+  }
+}
+
+///|
+/// Get allocation statistics using linear scan allocator
+pub fn get_linear_scan_stats(func : VCodeFunction) -> AllocStats {
+  let func = eliminate_dead_code(func)
+  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
+    func,
+  )
+  let liveness = compute_liveness(func)
+
+  // Count vregs
+  let num_vregs = liveness.intervals.length()
+  let allocator = LinearScanAllocator::new(
+    int_regs,
+    float_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs~,
+  )
+  let alloc_result = allocator.allocate(func, liveness)
+  process_constraints(func, alloc_result)
+  let allocated = apply_allocation(func, alloc_result)
+  let stats = count_instructions(allocated)
+  stats.num_vregs = num_vregs
+  stats.num_spill_slots = alloc_result.num_spill_slots
+  stats
+}
+
+///|
+/// Get allocation statistics using backtracking allocator
+pub fn get_backtracking_stats(func : VCodeFunction) -> AllocStats {
+  let func = eliminate_dead_code(func)
+  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
+    func,
+  )
+  let liveness = compute_liveness(func)
+
+  // Count vregs
+  let num_vregs = liveness.intervals.length()
+  let alloc_result = allocate_backtracking(
+    func, liveness, int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs,
+  )
+  process_constraints(func, alloc_result)
+  let allocated = apply_allocation(func, alloc_result)
+  let stats = count_instructions(allocated)
+  stats.num_vregs = num_vregs
+  stats.num_spill_slots = alloc_result.num_spill_slots
+  stats
+}
+
+///|
+/// Compare both allocators and return formatted comparison string
+pub fn compare_allocators(func : VCodeFunction) -> String {
+  let linear_stats = get_linear_scan_stats(func)
+  let backtrack_stats = get_backtracking_stats(func)
+  let mut result = "=== Register Allocator Comparison ===\n"
+  result = result + "Linear Scan:  \{linear_stats}\n"
+  result = result + "Backtracking: \{backtrack_stats}\n"
+
+  // Calculate improvements
+  let spill_diff = linear_stats.num_spill_slots -
+    backtrack_stats.num_spill_slots
+  let inst_diff = linear_stats.total_insts - backtrack_stats.total_insts
+  if spill_diff > 0 {
+    result = result + "Improvement: \{spill_diff} fewer spill slots\n"
+  } else if spill_diff < 0 {
+    result = result + "Regression: \{-spill_diff} more spill slots\n"
+  }
+  if inst_diff > 0 {
+    result = result + "Improvement: \{inst_diff} fewer instructions\n"
+  } else if inst_diff < 0 {
+    result = result + "Regression: \{-inst_diff} more instructions\n"
+  }
+  result
 }
