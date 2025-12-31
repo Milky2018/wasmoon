@@ -718,6 +718,60 @@ pub fn build_bundles_with_merging(
 }
 
 ///|
+/// Pre-assign function parameters to ABI registers
+/// This must be done before allocation to respect calling convention
+fn BacktrackingAllocator::preassign_params(
+  self : BacktrackingAllocator,
+  liveness : LivenessResult,
+) -> Unit {
+  let max_int_params = @abi.MAX_REG_PARAMS // 8
+  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let mut int_idx = 0
+  let mut float_idx = 0
+  for param in self.func.params {
+    // Determine which ABI register this param comes in
+    let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
+      @abi.Int =>
+        if int_idx < max_int_params {
+          (Some(@abi.PReg::{ index: int_idx, class: @abi.Int }), true)
+        } else {
+          (None, true) // Stack param
+        }
+      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        if float_idx < max_float_params {
+          (Some(@abi.PReg::{ index: float_idx, class: param.class }), false)
+        } else {
+          (None, false) // Stack param
+        }
+    }
+
+    // Update counters
+    if is_int {
+      int_idx = int_idx + 1
+    } else {
+      float_idx = float_idx + 1
+    }
+
+    // Skip stack params
+    guard preg_opt is Some(preg) else { continue }
+
+    // Check if param crosses a call - if so, don't pre-assign to caller-saved
+    let interval = liveness.intervals.get(param.id)
+    if interval is Some(iv) && iv.crosses_call {
+      continue
+    }
+
+    // Find the LiveRange for this param and get its bundle
+    let range = self.ranges.get_by_vreg(param.id)
+    if range is Some(lr) && lr.bundle_id >= 0 {
+      let bundle = self.bundles.bundles[lr.bundle_id]
+      // Use record_allocation to properly track occupancy
+      self.record_allocation(bundle, preg)
+    }
+  }
+}
+
+///|
 /// Main entry point for backtracking allocation
 pub fn allocate_backtracking(
   func : VCodeFunction,
@@ -737,6 +791,9 @@ pub fn allocate_backtracking(
   let allocator = BacktrackingAllocator::new(
     func, ranges, bundles, int_regs, float_regs, callee_saved_int, callee_saved_float,
   )
+
+  // Pre-assign function parameters to ABI registers (before main allocation)
+  allocator.preassign_params(liveness)
   allocator.allocate()
 
   // Generate result
