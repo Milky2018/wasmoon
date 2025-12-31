@@ -265,12 +265,21 @@ fn optimize_instruction(
       Some(inst)
     }
     // Move x, x → eliminate
+    // Move x, const → LoadConst x, value
     Move => {
       if inst.defs.length() > 0 && inst.uses.length() > 0 {
         let def = inst.defs[0]
         let use_ = inst.uses[0]
         if same_vreg(def.reg, use_) {
           return None
+        }
+        // If source is a known constant, replace with LoadConst
+        if get_vreg_id(use_) is Some(use_id) {
+          if state.constants.get(use_id) is Some(const_val) {
+            let new_inst = @instr.VCodeInst::new(LoadConst(const_val))
+            new_inst.add_def(def)
+            return Some(new_inst)
+          }
         }
       }
       Some(inst)

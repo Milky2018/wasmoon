@@ -337,16 +337,24 @@ pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
   mc.emit_prologue(stack_frame, func.get_params(), func.get_param_pregs())
 
   // Emit function body
-  for block in func.get_blocks() {
+  let blocks = func.get_blocks()
+  for i, block in blocks {
     mc.define_label(block.id)
     for inst in block.insts {
       mc.emit_instruction(inst, stack_frame)
     }
     if block.terminator is Some(term) {
+      // Pass next block ID for fall-through optimization
+      let next_block = if i + 1 < blocks.length() {
+        Some(blocks[i + 1].id)
+      } else {
+        None
+      }
       mc.emit_terminator_with_epilogue(
         term,
         stack_frame,
         func.get_result_types(),
+        next_block,
       )
     }
   }
@@ -2911,18 +2919,27 @@ fn MachineCode::emit_epilogue(
 
 ///|
 /// Emit terminator with epilogue for Return (v3 ABI using JITStackFrame)
+/// next_block: the ID of the physically next block, used for fall-through optimization
 fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
   term : @instr.VCodeTerminator,
   stack_frame : JITStackFrame,
   result_types : Array[@ir.Type],
+  next_block : Int?,
 ) -> Unit {
   match term {
-    Jump(target) => self.emit_b(target)
+    Jump(target) =>
+      // Skip jump if target is the next block (fall-through)
+      if next_block != Some(target) {
+        self.emit_b(target)
+      }
     Branch(cond, then_b, else_b) => {
       let rt = reg_num(cond)
       self.emit_cbnz(rt, then_b)
-      self.emit_b(else_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
+      }
     }
     BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
       // CMP lhs, rhs + B.cond then_b + B else_b
@@ -2935,7 +2952,10 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
       // Emit conditional branch based on condition
       self.emit_b_cond(cond.to_bits(), then_b)
-      self.emit_b(else_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
+      }
     }
     BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
       // CBZ/CBNZ reg, then_b + B else_b
@@ -2946,7 +2966,10 @@ fn MachineCode::emit_terminator_with_epilogue(
       } else {
         self.emit_cbz(rt, then_b)
       }
-      self.emit_b(else_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
+      }
     }
     BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
       // CMP lhs, #imm + B.cond then_b + B else_b
@@ -2958,7 +2981,10 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
       // Emit conditional branch based on condition
       self.emit_b_cond(cond.to_bits(), then_b)
-      self.emit_b(else_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
+      }
     }
     Return(values) => {
       // v3 ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7

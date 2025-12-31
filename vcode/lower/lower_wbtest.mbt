@@ -1127,7 +1127,7 @@ test "br_table with block arguments from WAT" {
       #|block2(v5:int, v6:int):
       #|    v10 = ldi 100
       #|    v3 = mov v5
-      #|    v4 = mov v10
+      #|    v4 = ldi 100
       #|    jump block1
       #|block3:
       #|    v5 = mov v2
