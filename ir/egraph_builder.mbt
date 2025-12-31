@@ -301,6 +301,9 @@ fn eopcode_to_opcode(eop : @egraph.EOpcode) -> Opcode? {
     Umax => None
     // Integer absolute value - would need special lowering
     Iabs => None
+    // Three-way comparison - would need special lowering
+    SpaceshipS => None
+    SpaceshipU => None
     Ireduce(_, _) => Some(Ireduce)
     Uextend(_, _) => Some(Uextend)
     Sextend(_, _) => Some(Sextend)

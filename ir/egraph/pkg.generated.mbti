@@ -10,6 +10,10 @@ pub fn remat_rules() -> Array[RewriteRule]
 
 pub fn select_rules() -> Array[RewriteRule]
 
+pub fn skeleton_rules() -> Array[RewriteRule]
+
+pub fn spaceship_rules() -> Array[RewriteRule]
+
 pub fn standard_rules_indexed() -> IndexedRuleSet
 
 pub fn ty_smax(Int) -> Int64
@@ -165,6 +169,8 @@ pub(all) enum EOpcode {
   Umin
   Umax
   Iabs
+  SpaceshipS
+  SpaceshipU
   Ireduce(Int, Int)
   Uextend(Int, Int)
   Sextend(Int, Int)
@@ -233,6 +239,8 @@ pub(all) enum EOpcodeTag {
   TUmin
   TUmax
   TIabs
+  TSpaceshipS
+  TSpaceshipU
   TIreduce
   TUextend
   TSextend

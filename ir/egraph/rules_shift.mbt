@@ -538,6 +538,197 @@ fn rule_ushr_ushr_overflow() -> RewriteRule {
 }
 
 ///|
+/// (rotl (rotl x y) z) = (rotl x (iadd y z))
+/// Combine consecutive rotations into single rotation with added amounts
+fn rule_rotl_rotl_combine() -> RewriteRule {
+  {
+    name: "rotl_rotl_combine",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Rotl && node.children.length() == 2 {
+          let z = node.children[1]
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Rotl && inner.children.length() == 2 {
+              let x = inner.children[0]
+              let y = inner.children[1]
+              // rotl(rotl(x, y), z) = rotl(x, y + z)
+              let sum = eg.add_add(y, z)
+              let new_node = eg.add({ op: Rotl, children: [x, sum] })
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// (rotr (rotr x y) z) = (rotr x (iadd y z))
+/// Combine consecutive rotations into single rotation with added amounts
+fn rule_rotr_rotr_combine() -> RewriteRule {
+  {
+    name: "rotr_rotr_combine",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Rotr && node.children.length() == 2 {
+          let z = node.children[1]
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Rotr && inner.children.length() == 2 {
+              let x = inner.children[0]
+              let y = inner.children[1]
+              // rotr(rotr(x, y), z) = rotr(x, y + z)
+              let sum = eg.add_add(y, z)
+              let new_node = eg.add({ op: Rotr, children: [x, sum] })
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// (rotr (rotl x y) z) = (rotl x (isub y z))
+/// Convert mixed rotation to single rotation with subtracted amounts
+fn rule_rotr_rotl_to_rotl() -> RewriteRule {
+  {
+    name: "rotr_rotl_to_rotl",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Rotr && node.children.length() == 2 {
+          let z = node.children[1]
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Rotl && inner.children.length() == 2 {
+              let x = inner.children[0]
+              let y = inner.children[1]
+              // rotr(rotl(x, y), z) = rotl(x, y - z)
+              let diff = eg.add_sub(y, z)
+              let new_node = eg.add({ op: Rotl, children: [x, diff] })
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// (rotl (rotr x y) z) = (rotr x (isub y z))
+/// Convert mixed rotation to single rotation with subtracted amounts
+fn rule_rotl_rotr_to_rotr() -> RewriteRule {
+  {
+    name: "rotl_rotr_to_rotr",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Rotl && node.children.length() == 2 {
+          let z = node.children[1]
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Rotr && inner.children.length() == 2 {
+              let x = inner.children[0]
+              let y = inner.children[1]
+              // rotl(rotr(x, y), z) = rotr(x, y - z)
+              let diff = eg.add_sub(y, z)
+              let new_node = eg.add({ op: Rotr, children: [x, diff] })
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// Remove uextend/sextend from shift amount: (ishl x (uextend y)) = (ishl x y)
+/// Shift operations only look at lower bits of shift amount
+fn rule_shift_extend_amount() -> RewriteRule {
+  {
+    name: "shift_extend_amount",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        // Match Shl, Ushr, Sshr, Rotl, Rotr with extended shift amount
+        if (
+            node.op is Shl ||
+            node.op is Ushr ||
+            node.op is Sshr ||
+            node.op is Rotl ||
+            node.op is Rotr
+          ) &&
+          node.children.length() == 2 {
+          let x = node.children[0]
+          for amount_node in eg.get_nodes(node.children[1]) {
+            // Check if shift amount is an extend operation
+            if amount_node.op is Uextend(_, _) ||
+              amount_node.op is Sextend(_, _) {
+              if amount_node.children.length() == 1 {
+                let y = amount_node.children[0]
+                let new_node = eg.add({ op: node.op, children: [x, y] })
+                let new_id = eg.merge(class_id, new_node)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// Remove ireduce from shift amount: (ishl x (ireduce y)) = (ishl x y)
+/// Shift operations only look at lower bits of shift amount
+fn rule_shift_reduce_amount() -> RewriteRule {
+  {
+    name: "shift_reduce_amount",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        // Match Shl, Ushr, Sshr, Rotl, Rotr with reduced shift amount
+        if (
+            node.op is Shl ||
+            node.op is Ushr ||
+            node.op is Sshr ||
+            node.op is Rotl ||
+            node.op is Rotr
+          ) &&
+          node.children.length() == 2 {
+          let x = node.children[0]
+          for amount_node in eg.get_nodes(node.children[1]) {
+            // Check if shift amount is an ireduce operation
+            if amount_node.op is Ireduce(_, _) {
+              if amount_node.children.length() == 1 {
+                let y = amount_node.children[0]
+                let new_node = eg.add({ op: node.op, children: [x, y] })
+                let new_id = eg.merge(class_id, new_node)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
 /// (shl x k1) | (ushr x k2) = rotl x k1  when k2 = bits - k1
 /// Convert shift pair to rotate left
 fn rule_shl_ushr_to_rotl() -> RewriteRule {

@@ -60,6 +60,14 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_neg_ushr_to_sshr(), [TNeg])
   rs.add_rule(rule_shl_shl_overflow(), [TShl])
   rs.add_rule(rule_ushr_ushr_overflow(), [TUshr])
+  // Rotation combining
+  rs.add_rule(rule_rotl_rotl_combine(), [TRotl])
+  rs.add_rule(rule_rotr_rotr_combine(), [TRotr])
+  rs.add_rule(rule_rotr_rotl_to_rotl(), [TRotr])
+  rs.add_rule(rule_rotl_rotr_to_rotr(), [TRotl])
+  // Shift amount extend/reduce removal
+  rs.add_rule(rule_shift_extend_amount(), [TShl, TUshr, TSshr, TRotl, TRotr])
+  rs.add_rule(rule_shift_reduce_amount(), [TShl, TUshr, TSshr, TRotl, TRotr])
   // Strength reduction
   rs.add_rule(rule_mul_pow2(), [TMul])
   rs.add_rule(rule_double(), [TAdd])
@@ -307,5 +315,26 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_remat_bnot(), [TBnot])
   rs.add_rule(rule_remat_iconst(), [TConst])
   rs.add_rule(rule_remat_fconst(), [TFconst])
+  // Skeleton rules (side-effect simplifications)
+  rs.add_rule(rule_udiv_select_pow2(), [TUdiv])
+  // Spaceship comparison simplification rules
+  rs.add_rule(rule_spaceship_eq_zero(), [TEq, TIcmp])
+  rs.add_rule(rule_spaceship_ne_zero(), [TNe, TIcmp])
+  rs.add_rule(rule_spaceship_s_lt_zero(), [TIcmp])
+  rs.add_rule(rule_spaceship_u_lt_zero(), [TIcmp])
+  rs.add_rule(rule_spaceship_s_le_zero(), [TIcmp])
+  rs.add_rule(rule_spaceship_u_le_zero(), [TIcmp])
+  rs.add_rule(rule_spaceship_s_gt_zero(), [TIcmp])
+  rs.add_rule(rule_spaceship_u_gt_zero(), [TIcmp])
+  rs.add_rule(rule_spaceship_s_ge_zero(), [TIcmp])
+  rs.add_rule(rule_spaceship_u_ge_zero(), [TIcmp])
+  rs.add_rule(rule_spaceship_s_eq_neg_one(), [TEq, TIcmp])
+  rs.add_rule(rule_spaceship_u_eq_neg_one(), [TEq, TIcmp])
+  rs.add_rule(rule_spaceship_s_ne_neg_one(), [TNe, TIcmp])
+  rs.add_rule(rule_spaceship_u_ne_neg_one(), [TNe, TIcmp])
+  rs.add_rule(rule_spaceship_s_eq_one(), [TEq, TIcmp])
+  rs.add_rule(rule_spaceship_u_eq_one(), [TEq, TIcmp])
+  rs.add_rule(rule_spaceship_s_ne_one(), [TNe, TIcmp])
+  rs.add_rule(rule_spaceship_u_ne_one(), [TNe, TIcmp])
   rs
 }

@@ -73,6 +73,10 @@ pub(all) enum EOpcode {
   // Integer absolute value (unary)
   Iabs // Integer absolute value
 
+  // Three-way comparison (spaceship operator, returns -1, 0, or 1)
+  SpaceshipS // Signed three-way comparison: (x > y) - (x < y)
+  SpaceshipU // Unsigned three-way comparison: (x > y) - (x < y)
+
   // Type conversions (integer) - with bit width info for type-aware optimizations
   // (from_bits, to_bits): e.g., Ireduce(64, 32) means i64 -> i32
   Ireduce(Int, Int) // Integer reduce (truncate to smaller type)
@@ -162,6 +166,9 @@ pub(all) enum EOpcodeTag {
   TUmax
   // Integer absolute value
   TIabs
+  // Three-way comparison
+  TSpaceshipS
+  TSpaceshipU
   // Type conversion (integer)
   TIreduce
   TUextend
@@ -244,6 +251,9 @@ pub fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
     Umax => TUmax
     // Integer absolute value
     Iabs => TIabs
+    // Three-way comparison
+    SpaceshipS => TSpaceshipS
+    SpaceshipU => TSpaceshipU
     // Type conversion (integer) - ignore bit width parameters for tagging
     Ireduce(_, _) => TIreduce
     Uextend(_, _) => TUextend
@@ -1287,6 +1297,8 @@ fn node_cost(node : ENode) -> Int {
     Smin | Smax | Umin | Umax => 2
     // Integer absolute value
     Iabs => 2
+    // Three-way comparison (two compares + subtract)
+    SpaceshipS | SpaceshipU => 3
     // Type conversion (integer) - ignore bit width parameters for cost
     Ireduce(_, _) | Uextend(_, _) | Sextend(_, _) => 1
     // Expensive integer ops
