@@ -104,6 +104,72 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
 }
 
 ///|
+/// Check if a function makes any calls
+fn func_has_calls(func : @lower.VCodeFunction) -> Bool {
+  for block in func.get_blocks() {
+    for inst in block.insts {
+      // Check if this instruction is a function call
+      match inst.opcode.call_type() {
+        @instr.Regular | @instr.TailCall => return true
+        _ => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Check if a function uses vmctx (x19)
+/// A function needs vmctx if:
+/// - It uses X19 as a physical register in any instruction
+/// - It uses X19 in any terminator
+fn func_uses_vmctx(func : @lower.VCodeFunction) -> Bool {
+  for block in func.get_blocks() {
+    // Check instructions for X19 usage
+    for inst in block.insts {
+      for use_ in inst.uses {
+        if use_ is Physical(preg) && preg.index == @abi.REG_VMCTX {
+          return true
+        }
+      }
+    }
+    // Check terminator for X19 usage
+    if block.terminator is Some(term) {
+      if terminator_uses_vmctx(term) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Check if a terminator uses vmctx (x19)
+fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
+  match term {
+    Return(values) => {
+      for v in values {
+        if v is Physical(preg) && preg.index == @abi.REG_VMCTX {
+          return true
+        }
+      }
+      false
+    }
+    Branch(cond, _, _) => cond is Physical(preg) && preg.index == @abi.REG_VMCTX
+    BranchCmp(lhs, rhs, _, _, _, _) =>
+      (lhs is Physical(preg) && preg.index == @abi.REG_VMCTX) ||
+      (rhs is Physical(preg2) && preg2.index == @abi.REG_VMCTX)
+    BranchZero(reg, _, _, _, _) =>
+      reg is Physical(preg) && preg.index == @abi.REG_VMCTX
+    BranchCmpImm(lhs, _, _, _, _, _) =>
+      lhs is Physical(preg) && preg.index == @abi.REG_VMCTX
+    BrTable(index, _, _) =>
+      index is Physical(preg) && preg.index == @abi.REG_VMCTX
+    Jump(_) | Trap(_) => false
+  }
+}
+
+///|
 /// Emit prologue for ABI v3
 ///
 /// Stack Frame Layout (from high to low address):
@@ -238,11 +304,13 @@ fn MachineCode::emit_prologue(
     self.emit_sp_adjust(-remaining_size)
   }
 
-  // Step 5: Cache vmctx to X19 (the only pinned register)
+  // Step 5: Cache vmctx to X19 (only if function uses vmctx)
   // Note: vmctx is params[0], passed in X0
   // All other values (memory_base, memory_size, func_table, table0_base) are
   // loaded on-demand from vmctx, on-demand.
-  self.emit_mov_reg(19, 0)
+  if stack_frame.needs_vmctx {
+    self.emit_mov_reg(19, 0)
+  }
 
   // Step 6: Move arguments from ABI registers to allocated registers
   // Note: all params use X0-X7 (int) or V0-V7 (float)
@@ -321,16 +389,21 @@ pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
   let clobbered_fprs = collect_used_callee_saved_fprs(func)
 
   // Build stack frame layout using JITStackFrame
-  // has_calls is true if function needs SRET, calls multi-value functions, or has outgoing args
-  let has_calls = needs_sret ||
-    calls_multi_value ||
-    func.get_max_outgoing_args_size() > 0
+  // has_calls is true if function makes any calls
+  let has_calls = func_has_calls(func)
+
+  // Check if function uses vmctx (x19)
+  // A function needs vmctx if:
+  // 1. It directly uses x19 in instructions/terminators
+  // 2. It makes any calls (wasm ABI requires passing vmctx to callees)
+  let needs_vmctx = has_calls || func_uses_vmctx(func)
   let stack_frame = JITStackFrame::build(
     clobbered,
     clobbered_fprs,
     func.get_num_spill_slots(),
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
+    needs_vmctx~,
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params

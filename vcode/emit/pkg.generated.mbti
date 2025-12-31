@@ -68,8 +68,9 @@ pub struct JITStackFrame {
   saved_gprs : Array[Int]
   saved_fprs : Array[Int]
   has_setup_area : Bool
+  needs_vmctx : Bool
 }
-pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int) -> Self
+pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool) -> Self
 pub fn JITStackFrame::get_fpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_gpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_outgoing_arg_offset(Self, Int) -> Int

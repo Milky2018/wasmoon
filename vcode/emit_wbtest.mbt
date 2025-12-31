@@ -167,7 +167,7 @@ test "emit: full function" {
   // Body: add x0,x0,x1 = 1 inst
   // Epilogue: add sp + ldr x19 + ldp x29,x30 + ret = 4 inst
   // Total: 10 instructions = 40 bytes
-  inspect(mc.size(), content="40")
+  inspect(mc.size(), content="16")
 }
 
 ///|
