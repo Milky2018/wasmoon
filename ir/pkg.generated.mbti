@@ -41,6 +41,8 @@ pub const WASM_PAGE_SIZE : Int = 65536
 
 pub fn eliminate_common_subexpressions(Function) -> OptResult
 
+pub fn eliminate_dead_block_params(Function) -> OptResult
+
 pub fn eliminate_dead_code(Function) -> OptResult
 
 pub fn eliminate_unreachable_code(Function) -> OptResult

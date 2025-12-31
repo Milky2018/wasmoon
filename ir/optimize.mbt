@@ -670,6 +670,12 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
+    // Dead block parameter elimination (crucial for unused locals)
+    let dbpe_result = eliminate_dead_block_params(func)
+    if dbpe_result.changed {
+      changed = true
+      result.mark_changed()
+    }
   }
   result
 }
@@ -702,6 +708,12 @@ pub fn optimize(func : Function) -> OptResult {
     }
     let dce_result = eliminate_dead_code(func)
     if dce_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    // Dead block parameter elimination (crucial for unused locals)
+    let dbpe_result = eliminate_dead_block_params(func)
+    if dbpe_result.changed {
       changed = true
       result.mark_changed()
     }
@@ -758,6 +770,144 @@ fn optimize_o3(func : Function) -> OptResult {
     result.mark_changed()
   }
   result
+}
+
+// ============ Dead Block Parameter Elimination ============
+
+///|
+/// Dead Block Parameter Elimination
+/// Removes block parameters that are never used
+/// This is crucial for eliminating unused locals that get SSA-converted to block params
+pub fn eliminate_dead_block_params(func : Function) -> OptResult {
+  let result = OptResult::new()
+
+  // Build use counts for values in each block
+  // A block parameter is "used" if it's referenced in instructions or passed to another used param
+  let used_params = compute_used_block_params(func)
+
+  // Track which parameter indices to keep for each block
+  let params_to_keep : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
+  for block in func.blocks {
+    let keep : Array[Int] = []
+    for i, param in block.params {
+      let (v, _) = param
+      if used_params.get(v.id).unwrap_or(false) {
+        keep.push(i)
+      }
+    }
+    params_to_keep.set(block.id, keep)
+  }
+
+  // Check if any parameters will be removed
+  let mut will_change = false
+  for block in func.blocks {
+    let keep = params_to_keep.get(block.id).unwrap_or([])
+    if keep.length() != block.params.length() {
+      will_change = true
+      break
+    }
+  }
+  if !will_change {
+    return result
+  }
+
+  // Update block parameters - remove unused ones
+  for block in func.blocks {
+    let keep = params_to_keep.get(block.id).unwrap_or([])
+    if keep.length() != block.params.length() {
+      let old_params = block.params.copy()
+      block.params.clear()
+      for idx in keep {
+        block.params.push(old_params[idx])
+      }
+      result.mark_changed()
+    }
+  }
+
+  // Update terminators - remove arguments corresponding to removed parameters
+  for block in func.blocks {
+    match block.terminator {
+      Some(Jump(target, args)) => {
+        let keep = params_to_keep.get(target).unwrap_or([])
+        if keep.length() != args.length() {
+          let new_args : Array[Value] = []
+          for idx in keep {
+            if idx < args.length() {
+              new_args.push(args[idx])
+            }
+          }
+          block.terminator = Some(Terminator::Jump(target, new_args))
+          result.mark_changed()
+        }
+      }
+      Some(Brz(_, _, _)) | Some(Brnz(_, _, _)) | Some(BrTable(_, _, _)) =>
+        // These don't pass arguments, nothing to update
+        ()
+      _ => ()
+    }
+  }
+  result
+}
+
+///|
+/// Compute which block parameters are actually used
+/// Uses iterative dataflow analysis
+fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
+  let used : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+
+  // Initialize: all function parameters are used (they come from caller)
+  for param in func.params {
+    let (v, _) = param
+    used.set(v.id, true)
+  }
+
+  // First pass: mark values used directly in instructions
+  for block in func.blocks {
+    for inst in block.instructions {
+      for op in inst.operands {
+        used.set(op.id, true)
+      }
+    }
+    // Also count uses in terminator conditions
+    if block.terminator is Some(term) {
+      for v in get_terminator_uses(term) {
+        used.set(v.id, true)
+      }
+    }
+  }
+
+  // Iterative dataflow: propagate "used" backwards through jump arguments
+  // If a block parameter is used, the corresponding jump argument is also used
+  let mut changed = true
+  while changed {
+    changed = false
+    for block in func.blocks {
+      match block.terminator {
+        Some(Jump(target, args)) =>
+          // Find target block and its parameters
+          for target_block in func.blocks {
+            if target_block.id == target {
+              // For each parameter-argument pair
+              for i, param in target_block.params {
+                let (param_v, _) = param
+                if i < args.length() {
+                  let arg = args[i]
+                  // If target param is used, mark the argument as used
+                  if used.get(param_v.id).unwrap_or(false) &&
+                    !used.get(arg.id).unwrap_or(false) {
+                    used.set(arg.id, true)
+                    changed = true
+                  }
+                }
+              }
+              break
+            }
+          }
+        _ => ()
+      }
+    }
+  }
+  used
 }
 
 // ============ Branch Simplification ============
