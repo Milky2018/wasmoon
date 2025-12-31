@@ -396,6 +396,9 @@ pub fn lower_function(ir_func : @ir.Function) -> VCodeFunction {
   for i, ir_block in ir_func.blocks {
     lower_block_body(ctx, ir_block, ctx.vcode_func.blocks[i])
   }
+
+  // Phase 5: Peephole optimization
+  optimize_vcode(ctx.vcode_func)
   ctx.vcode_func
 }
 
@@ -1727,4 +1730,15 @@ fn lower_store_ptr_narrow(
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)
+}
+
+///|
+/// Lower an IR function with e-graph optimization applied first
+/// This applies constant folding and algebraic simplifications before lowering
+pub fn lower_function_egraph(ir_func : @ir.Function) -> VCodeFunction {
+  // Apply e-graph optimization (constant folding, strength reduction, etc.)
+  @ir.optimize_function(ir_func) |> ignore
+
+  // Then do normal lowering
+  lower_function(ir_func)
 }

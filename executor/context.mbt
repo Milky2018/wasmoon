@@ -2,7 +2,7 @@
 
 ///|
 /// Maximum call stack depth to prevent stack overflow
-let max_call_stack_depth : Int = 1000
+const MAX_CALL_STACK_DEPTH : Int = 1000
 
 ///|
 /// Label info for tracking block arity during branching
@@ -89,7 +89,7 @@ fn ExecContext::push_frame(
   self : ExecContext,
   frame : @runtime.Frame,
 ) -> Unit raise @runtime.RuntimeError {
-  if self.frames.length() >= max_call_stack_depth {
+  if self.frames.length() >= MAX_CALL_STACK_DEPTH {
     raise @runtime.CallStackExhausted
   }
   self.frames.push(frame)

@@ -31,6 +31,10 @@ enum Instruction {
   Madd(Int, Int, Int, Int)
   Msub(Int, Int, Int, Int)
   Mneg(Int, Int, Int)
+  Umulh(Int, Int, Int) // Unsigned multiply high (64-bit)
+  Smulh(Int, Int, Int) // Signed multiply high (64-bit)
+  Umull(Int, Int, Int) // Unsigned 32x32->64 multiply
+  Smull(Int, Int, Int) // Signed 32x32->64 multiply
   Sdiv(Int, Int, Int)
   Udiv(Int, Int, Int)
   Sdiv32(Int, Int, Int) // 32-bit signed divide
@@ -518,6 +522,10 @@ fn Instruction::annotate(self : Instruction) -> String {
     Madd(rd, rn, rm, ra) => "madd x\{rd}, x\{rn}, x\{rm}, x\{ra}"
     Msub(rd, rn, rm, ra) => "msub x\{rd}, x\{rn}, x\{rm}, x\{ra}"
     Mneg(rd, rn, rm) => "mneg x\{rd}, x\{rn}, x\{rm}"
+    Umulh(rd, rn, rm) => "umulh x\{rd}, x\{rn}, x\{rm}"
+    Smulh(rd, rn, rm) => "smulh x\{rd}, x\{rn}, x\{rm}"
+    Umull(rd, rn, rm) => "umull x\{rd}, w\{rn}, w\{rm}"
+    Smull(rd, rn, rm) => "smull x\{rd}, w\{rn}, w\{rm}"
     Sdiv(rd, rn, rm) => "sdiv x\{rd}, x\{rn}, x\{rm}"
     Udiv(rd, rn, rm) => "udiv x\{rd}, x\{rn}, x\{rm}"
     Sdiv32(rd, rn, rm) => "sdiv w\{rd}, w\{rn}, w\{rm}"
@@ -1123,6 +1131,38 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       (b0, b1, b2, b3)
     }
     Mneg(rd, rn, rm) => Msub(rd, rn, rm, 31).instr_bytes()
+    Umulh(rd, rn, rm) => {
+      // UMULH: sf=1, op31=110, Ra=11111
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 0x7C // Ra=31, o0=0
+      let b2 = 0xC0 | (rm & 31) // op31=110
+      let b3 = 0x9B
+      (b0, b1, b2, b3)
+    }
+    Smulh(rd, rn, rm) => {
+      // SMULH: sf=1, op31=010, Ra=11111
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 0x7C // Ra=31, o0=0
+      let b2 = 0x40 | (rm & 31) // op31=010
+      let b3 = 0x9B
+      (b0, b1, b2, b3)
+    }
+    Umull(rd, rn, rm) => {
+      // UMULL = UMADDL with Ra=XZR: sf=1, op31=101, Ra=11111
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 0x7C // Ra=31, o0=0
+      let b2 = 0xA0 | (rm & 31) // op31=101
+      let b3 = 0x9B
+      (b0, b1, b2, b3)
+    }
+    Smull(rd, rn, rm) => {
+      // SMULL = SMADDL with Ra=XZR: sf=1, op31=001, Ra=11111
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | 0x7C // Ra=31, o0=0
+      let b2 = 0x20 | (rm & 31) // op31=001
+      let b3 = 0x9B
+      (b0, b1, b2, b3)
+    }
     Sdiv(rd, rn, rm) => {
       let b0 = (rd & 31) | ((rn & 7) << 5)
       let b1 = ((rn >> 3) & 3) | (3 << 2)
@@ -3558,6 +3598,50 @@ pub fn MachineCode::emit_mneg(
   rm : Int,
 ) -> Unit {
   Mneg(rd, rn, rm).emit(self)
+}
+
+///|
+/// UMULH Xd, Xn, Xm - Unsigned multiply high (64-bit)
+pub fn MachineCode::emit_umulh(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  Umulh(rd, rn, rm).emit(self)
+}
+
+///|
+/// SMULH Xd, Xn, Xm - Signed multiply high (64-bit)
+pub fn MachineCode::emit_smulh(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  Smulh(rd, rn, rm).emit(self)
+}
+
+///|
+/// UMULL Xd, Wn, Wm - Unsigned 32x32->64 multiply
+pub fn MachineCode::emit_umull(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  Umull(rd, rn, rm).emit(self)
+}
+
+///|
+/// SMULL Xd, Wn, Wm - Signed 32x32->64 multiply
+pub fn MachineCode::emit_smull(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  Smull(rd, rn, rm).emit(self)
 }
 
 ///|

@@ -37,11 +37,23 @@ pub fn is_valid_logical_imm(Int64) -> Bool
 
 pub fn lower_function(@ir.Function) -> VCodeFunction
 
+pub fn lower_function_egraph(@ir.Function) -> VCodeFunction
+
 pub fn lower_function_optimized(@ir.Function) -> VCodeFunction
 
 pub fn lower_inst_with_patterns(LoweringContext, @ir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool
 
+pub fn magic_s32(Int) -> MagicS32
+
+pub fn magic_s64(Int64) -> MagicS64
+
+pub fn magic_u32(UInt) -> MagicU32
+
+pub fn magic_u64(UInt64) -> MagicU64
+
 pub fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
+
+pub fn optimize_vcode(VCodeFunction) -> Unit
 
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
@@ -77,6 +89,11 @@ pub fn AArch64StackFrame::setup(Self) -> Unit
 pub fn AArch64StackFrame::size(Self) -> Int
 pub impl Show for AArch64StackFrame
 
+pub(all) struct CoalescingInfo {
+  forward_hints : Map[Int, Int]
+  reverse_hints : Map[Int, Int]
+}
+
 pub(all) struct InstEdits {
   before : Array[RegMove]
   after : Array[RegMove]
@@ -101,7 +118,8 @@ pub(all) struct LiveInterval {
   start : ProgPoint
   mut end : ProgPoint
   uses : Array[ProgPoint]
-  hint : @abi.PReg?
+  mut hint : @abi.PReg?
+  mut hint_vreg : Int?
   mut assigned : @abi.PReg?
   mut spill_slot : Int?
   mut crosses_call : Bool
@@ -126,6 +144,28 @@ pub(all) struct LoweringContext {
   fused_icmps : @hashset.HashSet[Int]
 }
 pub fn LoweringContext::new(@ir.Function) -> Self
+
+pub(all) struct MagicS32 {
+  mul_by : Int
+  shift_by : Int
+}
+
+pub(all) struct MagicS64 {
+  mul_by : Int64
+  shift_by : Int
+}
+
+pub(all) struct MagicU32 {
+  mul_by : UInt
+  do_add : Bool
+  shift_by : Int
+}
+
+pub(all) struct MagicU64 {
+  mul_by : UInt64
+  do_add : Bool
+  shift_by : Int
+}
 
 pub(all) struct MatchResult {
   values : Array[@ir.Value]

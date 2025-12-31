@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/ir"
 
 import(
+  "Milky2018/wasmoon/ir/egraph"
   "Milky2018/wasmoon/types"
 )
 
@@ -40,6 +41,8 @@ pub const WASM_PAGE_SIZE : Int = 65536
 
 pub fn eliminate_common_subexpressions(Function) -> OptResult
 
+pub fn eliminate_dead_block_params(Function) -> OptResult
+
 pub fn eliminate_dead_code(Function) -> OptResult
 
 pub fn eliminate_unreachable_code(Function) -> OptResult
@@ -51,6 +54,10 @@ pub fn hoist_loop_invariants(Function) -> OptResult
 pub fn merge_blocks(Function) -> OptResult
 
 pub fn optimize(Function) -> OptResult
+
+pub fn optimize_block(Block) -> Map[Int, (Int, @egraph.ENode)]
+
+pub fn optimize_function(Function) -> Bool
 
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
@@ -100,6 +107,20 @@ pub fn CFG::is_exit_block(Self, Int) -> Bool
 pub fn CFG::postorder(Self) -> Array[Int]
 pub fn CFG::reverse_postorder(Self) -> Array[Int]
 pub fn CFG::to_dot(Self, String) -> String
+
+pub(all) struct EGraphBuilder {
+  egraph : @egraph.EGraph
+  value_map : Map[Int, @egraph.EClassId]
+  def_map : Map[Int, Inst]
+  ruleset : @egraph.IndexedRuleSet
+}
+pub fn EGraphBuilder::add_value(Self, Value) -> @egraph.EClassId
+pub fn EGraphBuilder::extract(Self, Value) -> (Int, @egraph.ENode)?
+pub fn EGraphBuilder::get_egraph(Self) -> @egraph.EGraph
+pub fn EGraphBuilder::get_simplified_opcode(Self, Value) -> Opcode?
+pub fn EGraphBuilder::new() -> Self
+pub fn EGraphBuilder::optimize(Self) -> Unit
+pub fn EGraphBuilder::register_def(Self, Inst) -> Unit
 
 pub(all) enum FloatCC {
   Eq

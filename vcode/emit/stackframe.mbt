@@ -66,6 +66,7 @@ pub struct JITStackFrame {
   saved_fprs : Array[Int] // Callee-saved FPRs to save
   // Flags
   has_setup_area : Bool // Whether FP/LR are saved
+  needs_vmctx : Bool // Whether function uses vmctx (X19)
 }
 
 ///|
@@ -77,16 +78,18 @@ pub struct JITStackFrame {
 /// - num_spill_slots: Number of spill slots needed
 /// - has_calls: Whether function contains calls (requires FP/LR save)
 /// - outgoing_args_size: Stack space needed for outgoing call arguments
+/// - needs_vmctx: Whether function uses vmctx (X19)
 pub fn JITStackFrame::build(
   clobbered_gprs : Array[Int],
   clobbered_fprs : Array[Int],
   num_spill_slots : Int,
   has_calls? : Bool = false,
   outgoing_args_size? : Int = 0,
+  needs_vmctx? : Bool = true,
 ) -> JITStackFrame {
   // Build the list of GPRs to save
-  // In v3 ABI, we only save X19 (vmctx) and any clobbered callee-saved regs
-  let saved_gprs = build_gpr_save_list_v3(clobbered_gprs)
+  // In v3 ABI, we save X19 (vmctx) only if needed, and any clobbered callee-saved regs
+  let saved_gprs = build_gpr_save_list_v3(clobbered_gprs, needs_vmctx)
 
   // Determine if we need setup area (FP/LR)
   // Required if function has calls, has callee-saves, or has spills
@@ -135,6 +138,7 @@ pub fn JITStackFrame::build(
     saved_gprs,
     saved_fprs: clobbered_fprs.copy(),
     has_setup_area,
+    needs_vmctx,
   }
 }
 
@@ -196,16 +200,22 @@ pub fn JITStackFrame::get_fpr_save_offset(
 
 ///|
 /// Build the list of GPRs to save for ABI v3
-/// Only saves X19 (vmctx) and clobbered callee-saved registers
-fn build_gpr_save_list_v3(clobbered : Array[Int]) -> Array[Int] {
-  // In v3 ABI, only X19 is always saved (for vmctx caching)
-  // Other callee-saved regs (X20-X28) only saved if clobbered
-  let result : Array[Int] = [19] // X19 always saved for vmctx
+/// Saves X19 (vmctx) only if needed, and clobbered callee-saved registers
+fn build_gpr_save_list_v3(
+  clobbered : Array[Int],
+  needs_vmctx : Bool,
+) -> Array[Int] {
+  let result : Array[Int] = []
+
+  // X19 only saved if function uses vmctx
+  if needs_vmctx {
+    result.push(19)
+  }
 
   // Add clobbered callee-saved registers
   for reg in clobbered {
     // Only include callee-saved registers (X20-X28)
-    // X19 already included, X29/X30 handled separately in setup area
+    // X19 handled above, X29/X30 handled separately in setup area
     if reg >= 20 && reg <= 28 && !result.contains(reg) {
       result.push(reg)
     }

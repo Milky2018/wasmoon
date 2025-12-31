@@ -68,8 +68,9 @@ pub struct JITStackFrame {
   saved_gprs : Array[Int]
   saved_fprs : Array[Int]
   has_setup_area : Bool
+  needs_vmctx : Bool
 }
-pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int) -> Self
+pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool) -> Self
 pub fn JITStackFrame::get_fpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_gpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_outgoing_arg_offset(Self, Int) -> Int
@@ -214,6 +215,8 @@ pub fn MachineCode::emit_ror_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_scvtf(Self, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
 pub fn MachineCode::emit_sdiv(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sdiv32(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_smulh(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_smull(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_stp_d_offset(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_stp_d_pre(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_stp_offset(Self, Int, Int, Int, Int) -> Unit
@@ -241,6 +244,8 @@ pub fn MachineCode::emit_sxtw(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_ucvtf(Self, Int, Int, int64~ : Bool, double~ : Bool) -> Unit
 pub fn MachineCode::emit_udiv(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_udiv32(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_umulh(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_umull(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_uxtb_w(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_uxtb_x(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_uxth_w(Self, Int, Int) -> Unit

@@ -71,7 +71,9 @@ pub(all) struct LiveInterval {
   // Use positions within the interval (for spill cost calculation)
   uses : Array[ProgPoint]
   // Register hint (e.g., from a move instruction)
-  hint : @abi.PReg?
+  mut hint : @abi.PReg?
+  // Hint vreg: prefer to use the same register as this vreg (for copy coalescing)
+  mut hint_vreg : Int?
   // Assigned physical register (filled by allocator)
   mut assigned : @abi.PReg?
   // Spill slot if spilled (filled by allocator)
@@ -88,6 +90,7 @@ fn LiveInterval::new(vreg : @abi.VReg, start : ProgPoint) -> LiveInterval {
     end: start,
     uses: [start],
     hint: None,
+    hint_vreg: None,
     assigned: None,
     spill_slot: None,
     crosses_call: false,
@@ -654,6 +657,95 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   }
 }
 
+// ============ Copy Coalescing ============
+
+///|
+/// Coalescing pairs: maps vreg id -> list of vregs it wants to coalesce with
+/// Used for bidirectional hint propagation
+pub(all) struct CoalescingInfo {
+  // Forward hints: dst wants to use src's register (dst = mov src)
+  forward_hints : Map[Int, Int]
+  // Reverse hints: src wants to use dst's register (for cases where dst is allocated first)
+  reverse_hints : Map[Int, Int]
+}
+
+///|
+fn CoalescingInfo::new() -> CoalescingInfo {
+  { forward_hints: {}, reverse_hints: {} }
+}
+
+///|
+/// Collect coalescing hints from Move instructions
+/// For each `dst = mov src`, we want dst to use the same register as src
+/// Also tracks reverse hints for cases where dst is processed first
+fn collect_coalescing_hints(
+  func : VCodeFunction,
+  liveness : LivenessResult,
+) -> CoalescingInfo {
+  let info = CoalescingInfo::new()
+  for block in func.blocks {
+    for inst in block.insts {
+      // Check if this is a Move instruction with virtual registers
+      if inst.opcode is @instr.Move &&
+        inst.defs.length() == 1 &&
+        inst.uses.length() == 1 {
+        // Get source and destination vregs
+        let src_vreg_opt = match inst.uses[0] {
+          @abi.Virtual(vreg) => Some(vreg)
+          _ => None
+        }
+        let dst_vreg_opt = match inst.defs[0].reg {
+          @abi.Virtual(vreg) => Some(vreg)
+          _ => None
+        }
+        // Set hint on destination interval
+        if (src_vreg_opt, dst_vreg_opt) is (Some(src_vreg), Some(dst_vreg)) {
+          // Skip if same vreg (shouldn't happen but be safe)
+          if src_vreg.id == dst_vreg.id {
+            continue
+          }
+          // Set hint_vreg on destination's interval (forward hint)
+          if liveness.intervals.get(dst_vreg.id) is Some(dst_interval) {
+            dst_interval.hint_vreg = Some(src_vreg.id)
+          }
+          // Record forward and reverse hints for bidirectional coalescing
+          info.forward_hints.set(dst_vreg.id, src_vreg.id)
+          info.reverse_hints.set(src_vreg.id, dst_vreg.id)
+        }
+      }
+    }
+  }
+  info
+}
+
+///|
+/// Resolve vreg hints to physical register hints
+/// Called during allocation after some intervals have been assigned
+/// Supports bidirectional hints from coalescing
+fn resolve_vreg_hint(
+  interval : LiveInterval,
+  assignments : Map[Int, @abi.PReg],
+  coalescing : CoalescingInfo,
+) -> @abi.PReg? {
+  // First check if we have an explicit physical register hint
+  if interval.hint is Some(preg) {
+    return Some(preg)
+  }
+  // Check forward hint: we want to use the source's register (dst = mov src)
+  if interval.hint_vreg is Some(hint_vreg_id) {
+    if assignments.get(hint_vreg_id) is Some(preg) {
+      return Some(preg)
+    }
+  }
+  // Check reverse hint: src wants to use dst's register (dst = mov src, but dst allocated first)
+  if coalescing.reverse_hints.get(interval.vreg.id) is Some(dst_vreg_id) {
+    if assignments.get(dst_vreg_id) is Some(preg) {
+      return Some(preg)
+    }
+  }
+  None
+}
+
 // ============ Linear Scan Register Allocator ============
 
 ///|
@@ -983,6 +1075,9 @@ pub fn LinearScanAllocator::allocate(
     let (block_id, order) = entry
     self.block_order.set(block_id, order)
   }
+
+  // Step 1: Collect coalescing hints from Move instructions
+  let coalescing = collect_coalescing_hints(func, liveness)
   let result : RegAllocResult = {
     assignments: {},
     spill_slots: {},
@@ -1072,8 +1167,13 @@ pub fn LinearScanAllocator::allocate(
       self.float_regs
     }
 
-    // Try to allocate a register
-    let assigned = self.try_allocate_reg(interval, avail_regs)
+    // Try to allocate a register (pass assignments and coalescing info for hints)
+    let assigned = self.try_allocate_reg(
+      interval,
+      avail_regs,
+      result.assignments,
+      coalescing,
+    )
     if assigned is Some(preg) {
       let assigned_preg : @abi.PReg = {
         index: preg.index,
@@ -1150,6 +1250,8 @@ fn LinearScanAllocator::try_allocate_reg(
   self : LinearScanAllocator,
   interval : LiveInterval,
   avail_regs : Array[@abi.PReg],
+  assignments : Map[Int, @abi.PReg],
+  coalescing : CoalescingInfo,
 ) -> @abi.PReg? {
   // Build set of registers currently in use by active intervals
   let used : Set[Int] = Set::new()
@@ -1161,7 +1263,10 @@ fn LinearScanAllocator::try_allocate_reg(
   }
 
   // Try hint first if available and not reserved
-  if interval.hint is Some(hint) &&
+  // This supports copy coalescing: if dst = mov src, dst will try to use src's register
+  // Also supports reverse hints for cases where dst is allocated before src
+  let resolved_hint = resolve_vreg_hint(interval, assignments, coalescing)
+  if resolved_hint is Some(hint) &&
     !used.contains(hint.index) &&
     !self.is_reserved_in_range(hint, interval) {
     return Some(hint)

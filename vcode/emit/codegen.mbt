@@ -104,6 +104,72 @@ fn collect_used_callee_saved_fprs(func : @lower.VCodeFunction) -> Array[Int] {
 }
 
 ///|
+/// Check if a function makes any calls
+fn func_has_calls(func : @lower.VCodeFunction) -> Bool {
+  for block in func.get_blocks() {
+    for inst in block.insts {
+      // Check if this instruction is a function call
+      match inst.opcode.call_type() {
+        @instr.Regular | @instr.TailCall => return true
+        _ => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Check if a function uses vmctx (x19)
+/// A function needs vmctx if:
+/// - It uses X19 as a physical register in any instruction
+/// - It uses X19 in any terminator
+fn func_uses_vmctx(func : @lower.VCodeFunction) -> Bool {
+  for block in func.get_blocks() {
+    // Check instructions for X19 usage
+    for inst in block.insts {
+      for use_ in inst.uses {
+        if use_ is Physical(preg) && preg.index == @abi.REG_VMCTX {
+          return true
+        }
+      }
+    }
+    // Check terminator for X19 usage
+    if block.terminator is Some(term) {
+      if terminator_uses_vmctx(term) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Check if a terminator uses vmctx (x19)
+fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
+  match term {
+    Return(values) => {
+      for v in values {
+        if v is Physical(preg) && preg.index == @abi.REG_VMCTX {
+          return true
+        }
+      }
+      false
+    }
+    Branch(cond, _, _) => cond is Physical(preg) && preg.index == @abi.REG_VMCTX
+    BranchCmp(lhs, rhs, _, _, _, _) =>
+      (lhs is Physical(preg) && preg.index == @abi.REG_VMCTX) ||
+      (rhs is Physical(preg2) && preg2.index == @abi.REG_VMCTX)
+    BranchZero(reg, _, _, _, _) =>
+      reg is Physical(preg) && preg.index == @abi.REG_VMCTX
+    BranchCmpImm(lhs, _, _, _, _, _) =>
+      lhs is Physical(preg) && preg.index == @abi.REG_VMCTX
+    BrTable(index, _, _) =>
+      index is Physical(preg) && preg.index == @abi.REG_VMCTX
+    Jump(_) | Trap(_) => false
+  }
+}
+
+///|
 /// Emit prologue for ABI v3
 ///
 /// Stack Frame Layout (from high to low address):
@@ -238,11 +304,13 @@ fn MachineCode::emit_prologue(
     self.emit_sp_adjust(-remaining_size)
   }
 
-  // Step 5: Cache vmctx to X19 (the only pinned register)
+  // Step 5: Cache vmctx to X19 (only if function uses vmctx)
   // Note: vmctx is params[0], passed in X0
   // All other values (memory_base, memory_size, func_table, table0_base) are
   // loaded on-demand from vmctx, on-demand.
-  self.emit_mov_reg(19, 0)
+  if stack_frame.needs_vmctx {
+    self.emit_mov_reg(19, 0)
+  }
 
   // Step 6: Move arguments from ABI registers to allocated registers
   // Note: all params use X0-X7 (int) or V0-V7 (float)
@@ -321,32 +389,45 @@ pub fn emit_function(func : @lower.VCodeFunction) -> MachineCode {
   let clobbered_fprs = collect_used_callee_saved_fprs(func)
 
   // Build stack frame layout using JITStackFrame
-  // has_calls is true if function needs SRET, calls multi-value functions, or has outgoing args
-  let has_calls = needs_sret ||
-    calls_multi_value ||
-    func.get_max_outgoing_args_size() > 0
+  // has_calls is true if function makes any calls
+  let has_calls = func_has_calls(func)
+
+  // Check if function uses vmctx (x19)
+  // A function needs vmctx if:
+  // 1. It directly uses x19 in instructions/terminators
+  // 2. It makes any calls (wasm ABI requires passing vmctx to callees)
+  let needs_vmctx = has_calls || func_uses_vmctx(func)
   let stack_frame = JITStackFrame::build(
     clobbered,
     clobbered_fprs,
     func.get_num_spill_slots(),
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
+    needs_vmctx~,
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
   mc.emit_prologue(stack_frame, func.get_params(), func.get_param_pregs())
 
   // Emit function body
-  for block in func.get_blocks() {
+  let blocks = func.get_blocks()
+  for i, block in blocks {
     mc.define_label(block.id)
     for inst in block.insts {
       mc.emit_instruction(inst, stack_frame)
     }
     if block.terminator is Some(term) {
+      // Pass next block ID for fall-through optimization
+      let next_block = if i + 1 < blocks.length() {
+        Some(blocks[i + 1].id)
+      } else {
+        None
+      }
       mc.emit_terminator_with_epilogue(
         term,
         stack_frame,
         func.get_result_types(),
+        next_block,
       )
     }
   }
@@ -1194,6 +1275,34 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       self.emit_mneg(rd, rn, rm)
+    }
+    Umulh => {
+      // Xd = (Xn * Xm) >> 64 (unsigned), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_umulh(rd, rn, rm)
+    }
+    Smulh => {
+      // Xd = (Xn * Xm) >> 64 (signed), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_smulh(rd, rn, rm)
+    }
+    Umull => {
+      // Xd = Wn * Wm (unsigned 32x32->64), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_umull(rd, rn, rm)
+    }
+    Smull => {
+      // Xd = Wn * Wm (signed 32x32->64), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_smull(rd, rn, rm)
     }
     ReturnCallIndirect(_num_args, _num_results) => {
       // Tail call optimization
@@ -2883,18 +2992,27 @@ fn MachineCode::emit_epilogue(
 
 ///|
 /// Emit terminator with epilogue for Return (v3 ABI using JITStackFrame)
+/// next_block: the ID of the physically next block, used for fall-through optimization
 fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
   term : @instr.VCodeTerminator,
   stack_frame : JITStackFrame,
   result_types : Array[@ir.Type],
+  next_block : Int?,
 ) -> Unit {
   match term {
-    Jump(target) => self.emit_b(target)
+    Jump(target) =>
+      // Skip jump if target is the next block (fall-through)
+      if next_block != Some(target) {
+        self.emit_b(target)
+      }
     Branch(cond, then_b, else_b) => {
       let rt = reg_num(cond)
       self.emit_cbnz(rt, then_b)
-      self.emit_b(else_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
+      }
     }
     BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
       // CMP lhs, rhs + B.cond then_b + B else_b
@@ -2907,7 +3025,10 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
       // Emit conditional branch based on condition
       self.emit_b_cond(cond.to_bits(), then_b)
-      self.emit_b(else_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
+      }
     }
     BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
       // CBZ/CBNZ reg, then_b + B else_b
@@ -2918,7 +3039,10 @@ fn MachineCode::emit_terminator_with_epilogue(
       } else {
         self.emit_cbz(rt, then_b)
       }
-      self.emit_b(else_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
+      }
     }
     BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
       // CMP lhs, #imm + B.cond then_b + B else_b
@@ -2930,7 +3054,10 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
       // Emit conditional branch based on condition
       self.emit_b_cond(cond.to_bits(), then_b)
-      self.emit_b(else_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
+      }
     }
     Return(values) => {
       // v3 ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7

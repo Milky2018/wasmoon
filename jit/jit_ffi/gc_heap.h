@@ -38,14 +38,17 @@ extern "C" {
  * GC Object Header (16 bytes, aligned)
  *
  * Layout:
- *   [kind: u8][flags: u8][type_idx: u16][size: u32][reserved: u64]
+ *   [kind: u8][flags: u8][type_idx: u16][size: u32][field_count: u64]
+ *
+ * For structs: field_count stores the number of fields (to avoid scanning padding)
+ * For arrays: field_count is unused (length is stored in data area)
  */
 typedef struct GcHeader {
     uint8_t kind;       // GC_KIND_STRUCT or GC_KIND_ARRAY
     uint8_t flags;      // GC_FLAG_MARKED, etc.
     uint16_t type_idx;  // Type index in module
     uint32_t size;      // Total object size (including header)
-    uint64_t reserved;  // Reserved for alignment/future use
+    uint64_t reserved;  // For structs: field count; for arrays: unused
 } GcHeader;
 
 #define GC_HEADER_SIZE 16
