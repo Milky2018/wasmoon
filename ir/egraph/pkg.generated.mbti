@@ -6,7 +6,15 @@ import(
 )
 
 // Values
+pub fn remat_rules() -> Array[RewriteRule]
+
 pub fn standard_rules_indexed() -> IndexedRuleSet
+
+pub fn ty_smax(Int) -> Int64
+
+pub fn ty_smin(Int) -> Int64
+
+pub fn ty_umax(Int) -> Int64
 
 // Errors
 
@@ -29,6 +37,8 @@ pub(all) struct EGraph {
   mut dirty : Bool
   opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
   mut pending_rules : Array[(EClassId, EOpcodeTag)]
+  type_map : Map[Int, Int]
+  remat_set : @hashset.HashSet[Int]
 }
 pub fn EGraph::add(Self, ENode) -> EClassId
 pub fn EGraph::add_add(Self, EClassId, EClassId) -> EClassId
@@ -42,6 +52,7 @@ pub fn EGraph::add_clz(Self, EClassId) -> EClassId
 pub fn EGraph::add_const(Self, Int64) -> EClassId
 pub fn EGraph::add_ctz(Self, EClassId) -> EClassId
 pub fn EGraph::add_eager(Self, ENode, IndexedRuleSet) -> EClassId
+pub fn EGraph::add_eager_typed(Self, ENode, Int, IndexedRuleSet) -> EClassId
 pub fn EGraph::add_eq(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_fabs(Self, EClassId) -> EClassId
 pub fn EGraph::add_fadd(Self, EClassId, EClassId) -> EClassId
@@ -64,7 +75,7 @@ pub fn EGraph::add_fsqrt(Self, EClassId) -> EClassId
 pub fn EGraph::add_fsub(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_ftrunc(Self, EClassId) -> EClassId
 pub fn EGraph::add_icmp(Self, Int, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_ireduce(Self, EClassId) -> EClassId
+pub fn EGraph::add_ireduce(Self, EClassId, from_bits? : Int, to_bits? : Int) -> EClassId
 pub fn EGraph::add_mul(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_ne(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_neg(Self, EClassId) -> EClassId
@@ -74,15 +85,16 @@ pub fn EGraph::add_rotl(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_rotr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sdiv(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_select(Self, EClassId, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_sextend(Self, EClassId) -> EClassId
+pub fn EGraph::add_sextend(Self, EClassId, from_bits? : Int, to_bits? : Int) -> EClassId
 pub fn EGraph::add_shl(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sint_to_fcvt(Self, EClassId) -> EClassId
 pub fn EGraph::add_splat(Self, EClassId) -> EClassId
 pub fn EGraph::add_srem(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sshr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_sub(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::add_typed(Self, ENode, Int) -> EClassId
 pub fn EGraph::add_udiv(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::add_uextend(Self, EClassId) -> EClassId
+pub fn EGraph::add_uextend(Self, EClassId, from_bits? : Int, to_bits? : Int) -> EClassId
 pub fn EGraph::add_uint_to_fcvt(Self, EClassId) -> EClassId
 pub fn EGraph::add_urem(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_ushr(Self, EClassId, EClassId) -> EClassId
@@ -92,14 +104,20 @@ pub fn EGraph::add_xor(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::equiv(Self, EClassId, EClassId) -> Bool
 pub fn EGraph::extract(Self, EClassId) -> (Int, ENode)
 pub fn EGraph::find(Self, EClassId) -> EClassId
+pub fn EGraph::get_bits(Self, EClassId) -> Int?
 pub fn EGraph::get_nodes(Self, EClassId) -> Array[ENode]
+pub fn EGraph::is_marked_rematerializable(Self, EClassId) -> Bool
+pub fn EGraph::is_rematerializable(Self, EClassId) -> Bool
+pub fn EGraph::mark_rematerializable(Self, EClassId) -> Unit
 pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::new() -> Self
 pub fn EGraph::num_classes(Self) -> Int
 pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
+pub fn EGraph::remat_cost_bonus(Self, EClassId) -> Int
 pub fn EGraph::saturate(Self, Array[RewriteRule], Int) -> Int
 pub fn EGraph::saturate_indexed(Self, IndexedRuleSet, Int) -> Int
+pub fn EGraph::set_type(Self, EClassId, Int) -> Unit
 pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
 
 pub(all) struct ENode {
@@ -140,9 +158,9 @@ pub(all) enum EOpcode {
   Ne
   Select
   Bmask
-  Ireduce
-  Uextend
-  Sextend
+  Ireduce(Int, Int)
+  Uextend(Int, Int)
+  Sextend(Int, Int)
   Fadd
   Fsub
   Fmul
@@ -168,6 +186,7 @@ pub(all) enum EOpcode {
   Vconst(Bytes)
   Var(Int)
 }
+pub fn EOpcode::tag(Self) -> EOpcodeTag
 pub impl Eq for EOpcode
 pub impl Hash for EOpcode
 pub impl Show for EOpcode

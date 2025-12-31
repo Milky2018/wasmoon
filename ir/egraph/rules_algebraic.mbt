@@ -585,5 +585,29 @@ fn rule_mul_shl_one() -> RewriteRule {
 }
 
 ///|
+/// ineg(isub(y, x)) = isub(x, y)
+fn rule_neg_sub_swap() -> RewriteRule {
+  {
+    name: "neg_sub_swap",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Neg && node.children.length() == 1 {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Sub && inner.children.length() == 2 {
+              // ineg(isub(y, x)) = isub(x, y)
+              let new_sub = eg.add_sub(inner.children[1], inner.children[0])
+              let new_id = eg.subsume(class_id, new_sub)
+              changed = new_id != class_id || changed
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
 /// Tree rebalancing for iadd: (a + (b + (c + d))) => ((a + b) + (c + d))
 /// Uses subsume to avoid infinite loops with commutativity rules

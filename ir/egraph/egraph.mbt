@@ -64,10 +64,11 @@ pub(all) enum EOpcode {
   Select // select(cond, a, b) = cond ? a : b
   Bmask // Boolean mask: 0 -> 0, nonzero -> -1
 
-  // Type conversions (integer)
-  Ireduce // Integer reduce (truncate to smaller type)
-  Uextend // Unsigned extend to larger type
-  Sextend // Signed extend to larger type
+  // Type conversions (integer) - with bit width info for type-aware optimizations
+  // (from_bits, to_bits): e.g., Ireduce(64, 32) means i64 -> i32
+  Ireduce(Int, Int) // Integer reduce (truncate to smaller type)
+  Uextend(Int, Int) // Unsigned extend to larger type
+  Sextend(Int, Int) // Signed extend to larger type
 
   // Floating point arithmetic (binary)
   Fadd // Float add
@@ -183,7 +184,7 @@ pub(all) enum EOpcodeTag {
 
 ///|
 /// Get the tag of an opcode (for indexing)
-fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
+pub fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
   match self {
     Const(_) => TConst
     Fconst(_) => TFconst
@@ -220,10 +221,10 @@ fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
     // Conditional
     Select => TSelect
     Bmask => TBmask
-    // Type conversion (integer)
-    Ireduce => TIreduce
-    Uextend => TUextend
-    Sextend => TSextend
+    // Type conversion (integer) - ignore bit width parameters for tagging
+    Ireduce(_, _) => TIreduce
+    Uextend(_, _) => TUextend
+    Sextend(_, _) => TSextend
     // Float arithmetic
     Fadd => TFadd
     Fsub => TFsub
@@ -346,6 +347,10 @@ pub(all) struct EGraph {
   opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
   // Worklist of (class_id, opcode_tag) pairs pending rule application
   mut pending_rules : Array[(EClassId, EOpcodeTag)]
+  // Type information: maps canonical class id to bit width (8, 16, 32, 64, 128)
+  type_map : Map[Int, Int]
+  // Rematerialization set: classes that are cheap to recompute
+  remat_set : @hashset.HashSet[Int]
 }
 
 ///|
@@ -358,6 +363,8 @@ pub fn EGraph::new() -> EGraph {
     dirty: false,
     opcode_index: {},
     pending_rules: [],
+    type_map: {},
+    remat_set: @hashset.new(),
   }
 }
 
@@ -419,6 +426,109 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
   self.index_add(tag, id)
   // Queue for rule application (will be processed by add_eager)
   self.pending_rules.push((class_id, tag))
+  class_id
+}
+
+///|
+/// Add an e-node with type information
+/// bits: the bit width of the value (8, 16, 32, 64, 128)
+pub fn EGraph::add_typed(self : EGraph, node : ENode, bits : Int) -> EClassId {
+  let class_id = self.add(node)
+  self.set_type(class_id, bits)
+  class_id
+}
+
+///|
+/// Set the type (bit width) for an equivalence class
+pub fn EGraph::set_type(self : EGraph, id : EClassId, bits : Int) -> Unit {
+  let canonical = self.find(id).0
+  self.type_map.set(canonical, bits)
+}
+
+///|
+/// Get the type (bit width) for an equivalence class
+/// Returns None if no type information is available
+pub fn EGraph::get_bits(self : EGraph, id : EClassId) -> Int? {
+  let canonical = self.find(id).0
+  self.type_map.get(canonical)
+}
+
+///|
+/// Get the maximum unsigned value for a given bit width
+pub fn ty_umax(bits : Int) -> Int64 {
+  match bits {
+    8 => 0xFFL
+    16 => 0xFFFFL
+    32 => 0xFFFF_FFFFL
+    64 => -1L // 0xFFFF_FFFF_FFFF_FFFF
+    _ => -1L
+  }
+}
+
+///|
+/// Get the minimum signed value for a given bit width
+pub fn ty_smin(bits : Int) -> Int64 {
+  match bits {
+    8 => -128L
+    16 => -32768L
+    32 => -2147483648L
+    64 => -9223372036854775808L
+    _ => -9223372036854775808L
+  }
+}
+
+///|
+/// Get the maximum signed value for a given bit width
+pub fn ty_smax(bits : Int) -> Int64 {
+  match bits {
+    8 => 127L
+    16 => 32767L
+    32 => 2147483647L
+    64 => 9223372036854775807L
+    _ => 9223372036854775807L
+  }
+}
+
+// ============================================================================
+// Rematerialization support
+// ============================================================================
+
+///|
+/// Mark an equivalence class as rematerializable
+/// Rematerializable expressions are cheap to recompute at each use site
+pub fn EGraph::mark_rematerializable(self : EGraph, id : EClassId) -> Unit {
+  let canonical = self.find(id).0
+  self.remat_set.add(canonical)
+}
+
+///|
+/// Check if an equivalence class is marked as rematerializable
+pub fn EGraph::is_marked_rematerializable(self : EGraph, id : EClassId) -> Bool {
+  let canonical = self.find(id).0
+  self.remat_set.contains(canonical)
+}
+
+///|
+/// Get the rematerialization bonus for cost calculation
+/// Returns a negative value (cost reduction) if the class is rematerializable
+pub fn EGraph::remat_cost_bonus(self : EGraph, id : EClassId) -> Int {
+  if self.is_marked_rematerializable(id) {
+    -1 // Small bonus for rematerializable expressions
+  } else {
+    0
+  }
+}
+
+///|
+/// Add an e-node with type information and eagerly apply applicable rules
+pub fn EGraph::add_eager_typed(
+  self : EGraph,
+  node : ENode,
+  bits : Int,
+  ruleset : IndexedRuleSet,
+) -> EClassId {
+  let class_id = self.add_eager(node, ruleset)
+  self.set_type(class_id, bits)
   class_id
 }
 
@@ -490,6 +600,21 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   // For simplicity, just redirect a to b without merging nodes
   self.uf.union(a.0, b.0) |> ignore
 
+  // Transfer type information from a to b if b doesn't have it
+  if self.type_map.get(b.0) is None {
+    if self.type_map.get(a.0) is Some(bits) {
+      self.type_map.set(b.0, bits)
+    }
+  }
+  // Remove type entry for the subsumed class
+  self.type_map.remove(a.0)
+
+  // Transfer rematerialization flag: if either was rematerializable, result is
+  if self.remat_set.contains(a.0) {
+    self.remat_set.add(b.0)
+  }
+  self.remat_set.remove(a.0)
+
   // Remove the old class from opcode index before removing it
   if self.classes.get(a.0) is Some(old_class) {
     self.index_remove(a.0, old_class.nodes)
@@ -533,6 +658,20 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   let new_root = self.uf.union(a.0, b.0)
   let new_id = EClassId(new_root)
   let other_id = if new_root == a.0 { b } else { a }
+
+  // Merge type information: prefer existing type, or take from other class
+  match (self.type_map.get(new_id.0), self.type_map.get(other_id.0)) {
+    (None, Some(bits)) => self.type_map.set(new_id.0, bits)
+    _ => () // Keep new_id's type or both None
+  }
+  // Remove old type entry
+  self.type_map.remove(other_id.0)
+
+  // Merge rematerialization flag: if either was rematerializable, result is
+  if self.remat_set.contains(other_id.0) {
+    self.remat_set.add(new_id.0)
+  }
+  self.remat_set.remove(other_id.0)
 
   // Merge the e-class contents
   if self.classes.get(other_id.0) is Some(other_class) {
@@ -877,21 +1016,36 @@ pub fn EGraph::add_bmask(self : EGraph, operand : EClassId) -> EClassId {
 }
 
 ///|
-/// Add an integer reduce (truncate) node
-pub fn EGraph::add_ireduce(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Ireduce, children: [operand] })
+/// Add an integer reduce (truncate) node with type info
+pub fn EGraph::add_ireduce(
+  self : EGraph,
+  operand : EClassId,
+  from_bits? : Int = 64,
+  to_bits? : Int = 32,
+) -> EClassId {
+  self.add({ op: Ireduce(from_bits, to_bits), children: [operand] })
 }
 
 ///|
-/// Add an unsigned extend node
-pub fn EGraph::add_uextend(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Uextend, children: [operand] })
+/// Add an unsigned extend node with type info
+pub fn EGraph::add_uextend(
+  self : EGraph,
+  operand : EClassId,
+  from_bits? : Int = 32,
+  to_bits? : Int = 64,
+) -> EClassId {
+  self.add({ op: Uextend(from_bits, to_bits), children: [operand] })
 }
 
 ///|
-/// Add a signed extend node
-pub fn EGraph::add_sextend(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Sextend, children: [operand] })
+/// Add a signed extend node with type info
+pub fn EGraph::add_sextend(
+  self : EGraph,
+  operand : EClassId,
+  from_bits? : Int = 32,
+  to_bits? : Int = 64,
+) -> EClassId {
+  self.add({ op: Sextend(from_bits, to_bits), children: [operand] })
 }
 
 // ============================================================================
@@ -1106,8 +1260,8 @@ fn node_cost(node : ENode) -> Int {
     // Conditional
     Select => 2
     Bmask => 1
-    // Type conversion (integer)
-    Ireduce | Uextend | Sextend => 1
+    // Type conversion (integer) - ignore bit width parameters for cost
+    Ireduce(_, _) | Uextend(_, _) | Sextend(_, _) => 1
     // Expensive integer ops
     Mul => 3
     Sdiv | Udiv => 10

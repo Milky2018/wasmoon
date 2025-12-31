@@ -917,3 +917,504 @@ test "egraph: (x - 3) + 5 = x + 2 (add-sub reassociation)" {
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
   inspect(eg.equiv(result, expected), content="true")
 }
+
+// ============================================================================
+// New select rules tests
+// ============================================================================
+
+///|
+test "egraph: select(cond, x, x) = x" {
+  let eg = EGraph::new()
+  let cond = eg.add_var(0)
+  let x = eg.add_var(1)
+  let select = eg.add({ op: Select, children: [cond, x, x] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(select, x), content="true")
+}
+
+///|
+test "egraph: select(icmp, 1, 0) = icmp" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let one = eg.add_const(1L)
+  let zero = eg.add_const(0L)
+  // icmp(slt, x, y)
+  let cmp = eg.add({ op: Icmp(2), children: [x, y] })
+  let select = eg.add({ op: Select, children: [cmp, one, zero] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(select, cmp), content="true")
+}
+
+///|
+test "egraph: select(d, a, select(d, _, y)) = select(d, a, y)" {
+  let eg = EGraph::new()
+  let d = eg.add_var(0)
+  let a = eg.add_var(1)
+  let b = eg.add_var(2)
+  let y = eg.add_var(3)
+  // inner: select(d, b, y)
+  let inner = eg.add({ op: Select, children: [d, b, y] })
+  // outer: select(d, a, inner)
+  let outer = eg.add({ op: Select, children: [d, a, inner] })
+  // expected: select(d, a, y)
+  let expected = eg.add({ op: Select, children: [d, a, y] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(outer, expected), content="true")
+}
+
+///|
+test "egraph: select(d, select(d, x, _), a) = select(d, x, a)" {
+  let eg = EGraph::new()
+  let d = eg.add_var(0)
+  let x = eg.add_var(1)
+  let b = eg.add_var(2)
+  let a = eg.add_var(3)
+  // inner: select(d, x, b)
+  let inner = eg.add({ op: Select, children: [d, x, b] })
+  // outer: select(d, inner, a)
+  let outer = eg.add({ op: Select, children: [d, inner, a] })
+  // expected: select(d, x, a)
+  let expected = eg.add({ op: Select, children: [d, x, a] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(outer, expected), content="true")
+}
+
+// ============================================================================
+// New shift rules tests
+// ============================================================================
+
+///|
+test "egraph: x rotl 0 = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let result = eg.add({ op: Rotl, children: [x, zero] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: x rotr 0 = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let result = eg.add({ op: Rotr, children: [x, zero] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: (x >> 3) >> 2 = x >> 5 (ushr)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let two = eg.add_const(2L)
+  let three = eg.add_const(3L)
+  let five = eg.add_const(5L)
+  let inner = eg.add({ op: Ushr, children: [x, three] })
+  let outer = eg.add({ op: Ushr, children: [inner, two] })
+  let direct = eg.add({ op: Ushr, children: [x, five] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(outer, direct), content="true")
+}
+
+///|
+test "egraph: (x >> 3) >> 2 = x >> 5 (sshr)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let two = eg.add_const(2L)
+  let three = eg.add_const(3L)
+  let five = eg.add_const(5L)
+  let inner = eg.add({ op: Sshr, children: [x, three] })
+  let outer = eg.add({ op: Sshr, children: [inner, two] })
+  let direct = eg.add({ op: Sshr, children: [x, five] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(outer, direct), content="true")
+}
+
+///|
+test "egraph: rotl(rotr(x, y), y) = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let rotr_x = eg.add({ op: Rotr, children: [x, y] })
+  let result = eg.add({ op: Rotl, children: [rotr_x, y] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: rotr(rotl(x, y), y) = x" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let rotl_x = eg.add({ op: Rotl, children: [x, y] })
+  let result = eg.add({ op: Rotr, children: [rotl_x, y] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, x), content="true")
+}
+
+///|
+test "egraph: (x >> k) << k = x & mask (ushr/shl)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let k = eg.add_const(4L)
+  let ushr_x = eg.add({ op: Ushr, children: [x, k] })
+  let result = eg.add_shl(ushr_x, k)
+  // mask = ~((1 << 4) - 1) = ~15 = 0xFFFFFFFFFFFFFFF0
+  let mask = eg.add_const(-16L) // 0xFFFFFFFFFFFFFFF0
+  let expected = eg.add_and(x, mask)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: band(ishl(x, z), ishl(y, z)) = ishl(band(x, y), z)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let z = eg.add_var(2)
+  let shl_x = eg.add_shl(x, z)
+  let shl_y = eg.add_shl(y, z)
+  let result = eg.add_and(shl_x, shl_y)
+  let x_and_y = eg.add_and(x, y)
+  let expected = eg.add_shl(x_and_y, z)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: iadd(ishl(x, z), ishl(y, z)) = ishl(iadd(x, y), z)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let z = eg.add_var(2)
+  let shl_x = eg.add_shl(x, z)
+  let shl_y = eg.add_shl(y, z)
+  let result = eg.add_add(shl_x, shl_y)
+  let x_add_y = eg.add_add(x, y)
+  let expected = eg.add_shl(x_add_y, z)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: isub(ishl(x, z), ishl(y, z)) = ishl(isub(x, y), z)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let z = eg.add_var(2)
+  let shl_x = eg.add_shl(x, z)
+  let shl_y = eg.add_shl(y, z)
+  let result = eg.add_sub(shl_x, shl_y)
+  let x_sub_y = eg.add_sub(x, y)
+  let expected = eg.add_shl(x_sub_y, z)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: (x << 32) | (x >> 32) = rotl(x, 32)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let k = eg.add_const(32L)
+  let shl_x = eg.add_shl(x, k)
+  let ushr_x = eg.add({ op: Ushr, children: [x, k] })
+  let result = eg.add_or(shl_x, ushr_x)
+  let rotl_x = eg.add({ op: Rotl, children: [x, k] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, rotl_x), content="true")
+}
+
+// ============================================================================
+// Comparison reassociation tests
+// ============================================================================
+
+///|
+test "egraph: eq(x + 3, 10) = eq(x, 7)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c3 = eg.add_const(3L)
+  let c10 = eg.add_const(10L)
+  let c7 = eg.add_const(7L)
+  let x_add_3 = eg.add_add(x, c3)
+  let result = eg.add({ op: Eq, children: [x_add_3, c10] })
+  let expected = eg.add({ op: Eq, children: [x, c7] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: ne(x + 3, 10) = ne(x, 7)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c3 = eg.add_const(3L)
+  let c10 = eg.add_const(10L)
+  let c7 = eg.add_const(7L)
+  let x_add_3 = eg.add_add(x, c3)
+  let result = eg.add({ op: Ne, children: [x_add_3, c10] })
+  let expected = eg.add({ op: Ne, children: [x, c7] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: eq(x - 3, 10) = eq(x, 13)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c3 = eg.add_const(3L)
+  let c10 = eg.add_const(10L)
+  let c13 = eg.add_const(13L)
+  let x_sub_3 = eg.add_sub(x, c3)
+  let result = eg.add({ op: Eq, children: [x_sub_3, c10] })
+  let expected = eg.add({ op: Eq, children: [x, c13] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: ne(x - 3, 10) = ne(x, 13)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let c3 = eg.add_const(3L)
+  let c10 = eg.add_const(10L)
+  let c13 = eg.add_const(13L)
+  let x_sub_3 = eg.add_sub(x, c3)
+  let result = eg.add({ op: Ne, children: [x_sub_3, c10] })
+  let expected = eg.add({ op: Ne, children: [x, c13] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+// ============================================================================
+// New rules tests (Cranelift opts)
+// ============================================================================
+
+///|
+test "egraph: ineg(isub(y, x)) = isub(x, y)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let sub_yx = eg.add_sub(y, x)
+  let neg_sub = eg.add({ op: Neg, children: [sub_yx] })
+  let expected = eg.add_sub(x, y)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(neg_sub, expected), content="true")
+}
+
+///|
+test "egraph: ineg(ushr(x, 63)) = sshr(x, 63)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let k63 = eg.add_const(63L)
+  let ushr_x = eg.add({ op: Ushr, children: [x, k63] })
+  let neg_ushr = eg.add({ op: Neg, children: [ushr_x] })
+  let expected = eg.add({ op: Sshr, children: [x, k63] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(neg_ushr, expected), content="true")
+}
+
+///|
+test "egraph: (ishl (ishl x 40) 30) = 0 (shift overflow)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let k40 = eg.add_const(40L)
+  let k30 = eg.add_const(30L)
+  let shl1 = eg.add_shl(x, k40)
+  let shl2 = eg.add_shl(shl1, k30)
+  let zero = eg.add_const(0L)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(shl2, zero), content="true")
+}
+
+///|
+test "egraph: (ushr (ushr x 40) 30) = 0 (shift overflow)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let k40 = eg.add_const(40L)
+  let k30 = eg.add_const(30L)
+  let ushr1 = eg.add({ op: Ushr, children: [x, k40] })
+  let ushr2 = eg.add({ op: Ushr, children: [ushr1, k30] })
+  let zero = eg.add_const(0L)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(ushr2, zero), content="true")
+}
+
+///|
+test "egraph: iadd(select(c, 1, 2), 5) = select(c, 6, 7)" {
+  let eg = EGraph::new()
+  let c = eg.add_var(0)
+  let k1 = eg.add_const(1L)
+  let k2 = eg.add_const(2L)
+  let k5 = eg.add_const(5L)
+  let k6 = eg.add_const(6L)
+  let k7 = eg.add_const(7L)
+  let sel = eg.add({ op: Select, children: [c, k1, k2] })
+  let result = eg.add_add(sel, k5)
+  let expected = eg.add({ op: Select, children: [c, k6, k7] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: icmp(slt, 5, x) = icmp(sgt, x, 5) (swap const to right)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let k5 = eg.add_const(5L)
+  let cc_slt = 2
+  let cc_sgt = 4
+  let result = eg.add({ op: Icmp(cc_slt), children: [k5, x] })
+  let expected = eg.add({ op: Icmp(cc_sgt), children: [x, k5] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: eq(5, x) = eq(x, 5) (swap const to right)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let k5 = eg.add_const(5L)
+  let result = eg.add({ op: Eq, children: [k5, x] })
+  let expected = eg.add({ op: Eq, children: [x, k5] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: eq(x + 3, y + 5) = eq(x, y + 2)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let k3 = eg.add_const(3L)
+  let k5 = eg.add_const(5L)
+  let k2 = eg.add_const(2L)
+  let x_add_3 = eg.add_add(x, k3)
+  let y_add_5 = eg.add_add(y, k5)
+  let result = eg.add({ op: Eq, children: [x_add_3, y_add_5] })
+  let y_add_2 = eg.add_add(y, k2)
+  let expected = eg.add({ op: Eq, children: [x, y_add_2] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+///|
+test "egraph: ne(x + 3, y + 5) = ne(x, y + 2)" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let k3 = eg.add_const(3L)
+  let k5 = eg.add_const(5L)
+  let k2 = eg.add_const(2L)
+  let x_add_3 = eg.add_add(x, k3)
+  let y_add_5 = eg.add_add(y, k5)
+  let result = eg.add({ op: Ne, children: [x_add_3, y_add_5] })
+  let y_add_2 = eg.add_add(y, k2)
+  let expected = eg.add({ op: Ne, children: [x, y_add_2] })
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, expected), content="true")
+}
+
+// ============================================================================
+// Type-aware comparison rules tests
+// ============================================================================
+
+///|
+test "egraph: ugt(x, UMAX_32) = false with type info" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  eg.set_type(x, 32) // Mark x as 32-bit
+  let umax32 = eg.add_const(0xFFFF_FFFFL)
+  let cc_ugt = 8
+  let result = eg.add({ op: Icmp(cc_ugt), children: [x, umax32] })
+  let zero = eg.add_const(0L)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, zero), content="true")
+}
+
+///|
+test "egraph: ule(x, UMAX_32) = true with type info" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  eg.set_type(x, 32) // Mark x as 32-bit
+  let umax32 = eg.add_const(0xFFFF_FFFFL)
+  let cc_ule = 7
+  let result = eg.add({ op: Icmp(cc_ule), children: [x, umax32] })
+  let one = eg.add_const(1L)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, one), content="true")
+}
+
+///|
+test "egraph: sgt(x, SMAX_32) = false with type info" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  eg.set_type(x, 32) // Mark x as 32-bit
+  let smax32 = eg.add_const(2147483647L) // 0x7FFF_FFFF
+  let cc_sgt = 4
+  let result = eg.add({ op: Icmp(cc_sgt), children: [x, smax32] })
+  let zero = eg.add_const(0L)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, zero), content="true")
+}
+
+///|
+test "egraph: slt(x, SMIN_32) = false with type info" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  eg.set_type(x, 32) // Mark x as 32-bit
+  let smin32 = eg.add_const(-2147483648L) // 0x8000_0000
+  let cc_slt = 2
+  let result = eg.add({ op: Icmp(cc_slt), children: [x, smin32] })
+  let zero = eg.add_const(0L)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, zero), content="true")
+}
+
+///|
+test "egraph: sge(x, SMIN_32) = true with type info" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  eg.set_type(x, 32) // Mark x as 32-bit
+  let smin32 = eg.add_const(-2147483648L)
+  let cc_sge = 5
+  let result = eg.add({ op: Icmp(cc_sge), children: [x, smin32] })
+  let one = eg.add_const(1L)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, one), content="true")
+}
+
+///|
+test "egraph: sle(x, SMAX_32) = true with type info" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  eg.set_type(x, 32) // Mark x as 32-bit
+  let smax32 = eg.add_const(2147483647L)
+  let cc_sle = 3
+  let result = eg.add({ op: Icmp(cc_sle), children: [x, smax32] })
+  let one = eg.add_const(1L)
+  eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(result, one), content="true")
+}
+
+///|
+test "egraph: type info is preserved through merge" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  eg.set_type(x, 32)
+  // Merge x and y
+  eg.merge(x, y) |> ignore
+  eg.rebuild()
+  // Type should be preserved in merged class
+  inspect(eg.get_bits(y), content="Some(32)")
+}
+
+///|
+test "egraph: add_typed sets type correctly" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let k5 = eg.add_const(5L)
+  let result = eg.add_typed({ op: Add, children: [x, k5] }, 32)
+  inspect(eg.get_bits(result), content="Some(32)")
+}
+

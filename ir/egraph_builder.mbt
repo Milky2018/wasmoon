@@ -52,9 +52,23 @@ fn intcc_to_ordinal(cc : IntCC) -> Int {
 }
 
 ///|
+/// Get bit width from IR Type
+fn type_bits(ty : Type) -> Int {
+  match ty {
+    I32 => 32
+    I64 => 64
+    F32 => 32
+    F64 => 64
+    V128 => 128
+    FuncRef | ExternRef => 64 // Pointer-sized
+  }
+}
+
+///|
 /// Convert an IR Opcode to an EOpcode (if optimizable)
-fn opcode_to_eopcode(opcode : Opcode) -> @egraph.EOpcode? {
-  match opcode {
+/// Takes the instruction to extract type information for extend/reduce ops
+fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
+  match inst.opcode {
     Iconst(c) => Some(@egraph.EOpcode::Const(c))
     Iadd => Some(@egraph.EOpcode::Add)
     Isub => Some(@egraph.EOpcode::Sub)
@@ -77,9 +91,45 @@ fn opcode_to_eopcode(opcode : Opcode) -> @egraph.EOpcode? {
     Popcnt => Some(@egraph.EOpcode::Popcnt)
     Icmp(cc) => Some(@egraph.EOpcode::Icmp(intcc_to_ordinal(cc)))
     Select => Some(@egraph.EOpcode::Select)
-    Ireduce => Some(@egraph.EOpcode::Ireduce)
-    Uextend => Some(@egraph.EOpcode::Uextend)
-    Sextend => Some(@egraph.EOpcode::Sextend)
+    Ireduce => {
+      // ireduce: from_bits = operand type, to_bits = result type
+      let from_bits = if inst.operands.length() > 0 {
+        type_bits(inst.operands[0].ty)
+      } else {
+        64 // default
+      }
+      let to_bits = match inst.result {
+        Some(v) => type_bits(v.ty)
+        None => 32 // default
+      }
+      Some(@egraph.EOpcode::Ireduce(from_bits, to_bits))
+    }
+    Uextend => {
+      // uextend: from_bits = operand type, to_bits = result type
+      let from_bits = if inst.operands.length() > 0 {
+        type_bits(inst.operands[0].ty)
+      } else {
+        32 // default
+      }
+      let to_bits = match inst.result {
+        Some(v) => type_bits(v.ty)
+        None => 64 // default
+      }
+      Some(@egraph.EOpcode::Uextend(from_bits, to_bits))
+    }
+    Sextend => {
+      // sextend: from_bits = operand type, to_bits = result type
+      let from_bits = if inst.operands.length() > 0 {
+        type_bits(inst.operands[0].ty)
+      } else {
+        32 // default
+      }
+      let to_bits = match inst.result {
+        Some(v) => type_bits(v.ty)
+        None => 64 // default
+      }
+      Some(@egraph.EOpcode::Sextend(from_bits, to_bits))
+    }
     _ => None // Not optimizable via e-graph
   }
 }
@@ -97,28 +147,45 @@ pub fn EGraphBuilder::add_value(
     None => ()
   }
 
+  // Get the bit width from the value's type
+  let bits = type_bits(value.ty)
+
   // Look up the defining instruction
   let class_id = match self.def_map.get(value.id) {
-    None =>
+    None => {
       // No definition found - treat as a variable (parameter or external)
-      self.egraph.add_var(value.id)
+      let id = self.egraph.add_var(value.id)
+      self.egraph.set_type(id, bits)
+      id
+    }
     Some(inst) =>
-      // Try to convert the opcode
-      match opcode_to_eopcode(inst.opcode) {
-        None =>
+      // Try to convert the opcode (pass full instruction for type info)
+      match opcode_to_eopcode(inst) {
+        None => {
           // Not an optimizable opcode - treat as variable
-          self.egraph.add_var(value.id)
+          let id = self.egraph.add_var(value.id)
+          self.egraph.set_type(id, bits)
+          id
+        }
         Some(eop) =>
           match eop {
-            Const(c) => self.egraph.add_const(c)
+            Const(c) => {
+              let id = self.egraph.add_const(c)
+              self.egraph.set_type(id, bits)
+              id
+            }
             _ => {
               // Recursively add operands
               let children : Array[@egraph.EClassId] = []
               for operand in inst.operands {
                 children.push(self.add_value(operand))
               }
-              // Add the node with eager optimization
-              self.egraph.add_eager({ op: eop, children }, self.ruleset)
+              // Add the node with eager optimization and type info
+              self.egraph.add_eager_typed(
+                { op: eop, children },
+                bits,
+                self.ruleset,
+              )
             }
           }
       }
@@ -168,7 +235,7 @@ pub fn optimize_block(block : Block) -> Map[Int, (Int, @egraph.ENode)] {
     match inst.result {
       Some(v) =>
         // Only add if it's an optimizable operation
-        match opcode_to_eopcode(inst.opcode) {
+        match opcode_to_eopcode(inst) {
           Some(_) => builder.add_value(v) |> ignore
           None => ()
         }
@@ -227,9 +294,9 @@ fn eopcode_to_opcode(eop : @egraph.EOpcode) -> Opcode? {
     Ne => None // Shorthand for Icmp, not direct IR op
     Select => Some(Select)
     Bmask => None // Not in IR
-    Ireduce => Some(Ireduce)
-    Uextend => Some(Uextend)
-    Sextend => Some(Sextend)
+    Ireduce(_, _) => Some(Ireduce)
+    Uextend(_, _) => Some(Uextend)
+    Sextend(_, _) => Some(Sextend)
     // Float operations - map to IR float opcodes
     Fadd => Some(Fadd)
     Fsub => Some(Fsub)
@@ -278,11 +345,12 @@ pub fn EGraphBuilder::get_simplified_opcode(
           match self.def_map.get(value.id) {
             None => None
             Some(orig_inst) => {
-              let orig_eop = opcode_to_eopcode(orig_inst.opcode)
+              let orig_eop = opcode_to_eopcode(orig_inst)
               match orig_eop {
                 None => None
                 Some(orig) =>
-                  if orig != best_node.op {
+                  // Compare opcodes ignoring type parameters
+                  if orig.tag() != best_node.op.tag() {
                     eopcode_to_opcode(best_node.op)
                   } else {
                     None
@@ -312,7 +380,7 @@ pub fn optimize_function(func : Function) -> Bool {
     for inst in block.instructions {
       match inst.result {
         Some(v) =>
-          match opcode_to_eopcode(inst.opcode) {
+          match opcode_to_eopcode(inst) {
             Some(_) => builder.add_value(v) |> ignore
             None => ()
           }
