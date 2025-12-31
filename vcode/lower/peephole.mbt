@@ -400,6 +400,136 @@ fn update_state(inst : @instr.VCodeInst, state : PeepholeState) -> Unit {
 }
 
 ///|
+/// In-place update optimization
+/// Pattern: vA = op ... vB ...; vB = mov vA  →  vB = op ... vB ...
+/// This eliminates redundant moves when the result is only used to update
+/// the same operand.
+fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
+  let mut eliminated = 0
+
+  // Build def-use chains for vregs within this block
+  // def_inst[vreg_id] = instruction index that defines it
+  let def_inst : Map[Int, Int] = {}
+  // use_count[vreg_id] = number of uses within this block
+  let use_count : Map[Int, Int] = {}
+  for i, inst in block.insts {
+    // Track definitions
+    for def in inst.defs {
+      if get_def_vreg_id(def) is Some(def_id) {
+        def_inst.set(def_id, i)
+      }
+    }
+    // Track uses
+    for use_ in inst.uses {
+      if get_vreg_id(use_) is Some(use_id) {
+        let count = use_count.get(use_id).unwrap_or(0)
+        use_count.set(use_id, count + 1)
+      }
+    }
+  }
+
+  // Look for patterns: vA = op ... vB ...; vB = mov vA
+  // where vA is only used by the mov AND vB is not used between def and mov
+  let to_eliminate : @hashset.HashSet[Int] = @hashset.new()
+  let replace_def : Map[Int, Int] = {} // inst_idx -> new_def_vreg_id
+  for i, inst in block.insts {
+    if inst.opcode is Move && inst.defs.length() == 1 && inst.uses.length() == 1 {
+      let def_vreg = get_def_vreg_id(inst.defs[0])
+      let use_vreg = get_vreg_id(inst.uses[0])
+      if def_vreg is Some(dst_id) && use_vreg is Some(src_id) {
+        // This is: dst = mov src
+        // Check if src is defined in this block and has only 1 use (this mov)
+        if def_inst.get(src_id) is Some(def_idx) {
+          if use_count.get(src_id) == Some(1) {
+            // src is only used by this mov
+            let def_instr = block.insts[def_idx]
+            // Check if dst is an operand of the def instruction
+            let mut dst_is_operand = false
+            for use_ in def_instr.uses {
+              if get_vreg_id(use_) == Some(dst_id) {
+                dst_is_operand = true
+                break
+              }
+            }
+            if dst_is_operand && is_inplace_safe(def_instr.opcode) {
+              // Pattern matched! vA = op ... vB ...; vB = mov vA
+              // Now check that vB (dst_id) is not used between def and mov
+              let mut dst_used_between = false
+              for j = def_idx + 1; j < i; j = j + 1 {
+                for use_ in block.insts[j].uses {
+                  if get_vreg_id(use_) == Some(dst_id) {
+                    dst_used_between = true
+                    break
+                  }
+                }
+                if dst_used_between {
+                  break
+                }
+              }
+              if not(dst_used_between) {
+                // Safe to apply optimization
+                to_eliminate.add(i)
+                replace_def.set(def_idx, dst_id)
+                eliminated = eliminated + 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Apply transformations if any found
+  if eliminated > 0 {
+    let new_insts : Array[@instr.VCodeInst] = []
+    for i, inst in block.insts {
+      if to_eliminate.contains(i) {
+        // Skip this mov instruction
+        continue
+      }
+      if replace_def.get(i) is Some(new_def_id) {
+        // Replace the def vreg
+        if inst.defs.length() > 0 {
+          let old_def = inst.defs[0]
+          if old_def.reg is Virtual(old_vreg) {
+            let new_vreg : @abi.VReg = { id: new_def_id, class: old_vreg.class }
+            let new_writable : @abi.Writable = {
+              reg: @abi.Reg::Virtual(new_vreg),
+            }
+            inst.defs[0] = new_writable
+          }
+        }
+      }
+      new_insts.push(inst)
+    }
+    block.insts.clear()
+    for inst in new_insts {
+      block.insts.push(inst)
+    }
+  }
+  eliminated
+}
+
+///|
+/// Check if an instruction is safe for in-place update
+/// (reads operands before writing result)
+fn is_inplace_safe(opcode : @instr.VCodeOpcode) -> Bool {
+  match opcode {
+    // Arithmetic operations - all read before write
+    Add(_) | Sub(_) | Mul(_) => true
+    AddImm(_, _) | SubImm(_, _) => true
+    // Logical operations
+    And | Or | Xor | Shl(_) => true
+    // Moves are not safe (we're eliminating them, not transforming them)
+    Move => false
+    // Load/store have side effects
+    Load(_, _) | Store(_, _) => false
+    // Other complex operations - be conservative
+    _ => false
+  }
+}
+
+///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : VCodeFunction) -> Unit {
@@ -409,6 +539,11 @@ pub fn optimize_vcode(func : VCodeFunction) -> Unit {
     // TODO: Could use dataflow analysis for cross-block optimization
     let state = PeepholeState::new()
     total_eliminated = total_eliminated + optimize_block(block, func, state)
+  }
+
+  // Run in-place update optimization
+  for block in func.blocks {
+    total_eliminated = total_eliminated + optimize_inplace_updates(block)
   }
   // Optionally log statistics
   // if total_eliminated > 0 {
