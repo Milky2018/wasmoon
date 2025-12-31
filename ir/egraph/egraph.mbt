@@ -64,6 +64,15 @@ pub(all) enum EOpcode {
   Select // select(cond, a, b) = cond ? a : b
   Bmask // Boolean mask: 0 -> 0, nonzero -> -1
 
+  // Integer min/max (binary)
+  Smin // Signed minimum
+  Smax // Signed maximum
+  Umin // Unsigned minimum
+  Umax // Unsigned maximum
+
+  // Integer absolute value (unary)
+  Iabs // Integer absolute value
+
   // Type conversions (integer) - with bit width info for type-aware optimizations
   // (from_bits, to_bits): e.g., Ireduce(64, 32) means i64 -> i32
   Ireduce(Int, Int) // Integer reduce (truncate to smaller type)
@@ -146,6 +155,13 @@ pub(all) enum EOpcodeTag {
   // Conditional
   TSelect
   TBmask
+  // Integer min/max
+  TSmin
+  TSmax
+  TUmin
+  TUmax
+  // Integer absolute value
+  TIabs
   // Type conversion (integer)
   TIreduce
   TUextend
@@ -221,6 +237,13 @@ pub fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
     // Conditional
     Select => TSelect
     Bmask => TBmask
+    // Integer min/max
+    Smin => TSmin
+    Smax => TSmax
+    Umin => TUmin
+    Umax => TUmax
+    // Integer absolute value
+    Iabs => TIabs
     // Type conversion (integer) - ignore bit width parameters for tagging
     Ireduce(_, _) => TIreduce
     Uextend(_, _) => TUextend
@@ -1260,6 +1283,10 @@ fn node_cost(node : ENode) -> Int {
     // Conditional
     Select => 2
     Bmask => 1
+    // Integer min/max (same cost as select - typically implemented with compare+select)
+    Smin | Smax | Umin | Umax => 2
+    // Integer absolute value
+    Iabs => 2
     // Type conversion (integer) - ignore bit width parameters for cost
     Ireduce(_, _) | Uextend(_, _) | Sextend(_, _) => 1
     // Expensive integer ops

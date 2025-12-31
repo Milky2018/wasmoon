@@ -2,36 +2,25 @@
 // Implements Cranelift icmp.isle optimization rules
 
 // IntCC constants: 0=eq, 1=ne, 2=slt, 3=sle, 4=sgt, 5=sge, 6=ult, 7=ule, 8=ugt, 9=uge
+const CC_EQ : Int = 0
 
-///|
-let cc_eq : Int = 0
+const CC_NE : Int = 1
 
-///|
-let cc_ne : Int = 1
+const CC_SLT : Int = 2
 
-///|
-let cc_slt : Int = 2
+const CC_SLE : Int = 3
 
-///|
-let cc_sle : Int = 3
+const CC_SGT : Int = 4
 
-///|
-let cc_sgt : Int = 4
+const CC_SGE : Int = 5
 
-///|
-let cc_sge : Int = 5
+const CC_ULT : Int = 6
 
-///|
-let cc_ult : Int = 6
+const CC_ULE : Int = 7
 
-///|
-let cc_ule : Int = 7
+const CC_UGT : Int = 8
 
-///|
-let cc_ugt : Int = 8
-
-///|
-let cc_uge : Int = 9
+const CC_UGE : Int = 9
 
 ///|
 /// Get the complement of a comparison condition
@@ -491,7 +480,7 @@ fn rule_ult_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ult && node.children.length() == 2 {
+            if cc == CC_ULT && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(0L) {
                   let zero = eg.add_const(0L)
@@ -518,7 +507,7 @@ fn rule_ule_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ule && node.children.length() == 2 {
+            if cc == CC_ULE && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(0L) {
                   // ule(x, 0) = eq(x, 0)
@@ -549,7 +538,7 @@ fn rule_ugt_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ugt && node.children.length() == 2 {
+            if cc == CC_UGT && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(0L) {
                   // ugt(x, 0) = ne(x, 0)
@@ -580,7 +569,7 @@ fn rule_uge_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_uge && node.children.length() == 2 {
+            if cc == CC_UGE && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(0L) {
                   let one = eg.add_const(1L)
@@ -611,7 +600,7 @@ fn rule_uge_one_to_ne_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_uge && node.children.length() == 2 {
+            if cc == CC_UGE && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(1L) {
                   // uge(x, 1) = ne(x, 0)
@@ -643,7 +632,7 @@ fn rule_ult_one_to_eq_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ult && node.children.length() == 2 {
+            if cc == CC_ULT && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(1L) {
                   // ult(x, 1) = eq(x, 0)
@@ -675,13 +664,13 @@ fn rule_sge_one_to_sgt_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sge && node.children.length() == 2 {
+            if cc == CC_SGE && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(1L) {
                   // sge(x, 1) = sgt(x, 0)
                   let zero = eg.add_const(0L)
                   let new_node = eg.add({
-                    op: Icmp(cc_sgt),
+                    op: Icmp(CC_SGT),
                     children: [node.children[0], zero],
                   })
                   let new_id = eg.merge(class_id, new_node)
@@ -707,13 +696,13 @@ fn rule_slt_one_to_sle_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_slt && node.children.length() == 2 {
+            if cc == CC_SLT && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(1L) {
                   // slt(x, 1) = sle(x, 0)
                   let zero = eg.add_const(0L)
                   let new_node = eg.add({
-                    op: Icmp(cc_sle),
+                    op: Icmp(CC_SLE),
                     children: [node.children[0], zero],
                   })
                   let new_id = eg.merge(class_id, new_node)
@@ -739,13 +728,13 @@ fn rule_sgt_neg_one_to_sge_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sgt && node.children.length() == 2 {
+            if cc == CC_SGT && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(-1L) {
                   // sgt(x, -1) = sge(x, 0)
                   let zero = eg.add_const(0L)
                   let new_node = eg.add({
-                    op: Icmp(cc_sge),
+                    op: Icmp(CC_SGE),
                     children: [node.children[0], zero],
                   })
                   let new_id = eg.merge(class_id, new_node)
@@ -771,13 +760,13 @@ fn rule_sle_neg_one_to_slt_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sle && node.children.length() == 2 {
+            if cc == CC_SLE && node.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op == Const(-1L) {
                   // sle(x, -1) = slt(x, 0)
                   let zero = eg.add_const(0L)
                   let new_node = eg.add({
-                    op: Icmp(cc_slt),
+                    op: Icmp(CC_SLT),
                     children: [node.children[0], zero],
                   })
                   let new_id = eg.merge(class_id, new_node)
@@ -1065,7 +1054,7 @@ fn rule_ugt_sub_self() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ugt && node.children.length() == 2 {
+            if cc == CC_UGT && node.children.length() == 2 {
               let right_id = eg.find(node.children[1])
               for left in eg.get_nodes(node.children[0]) {
                 if left.op is Sub && left.children.length() == 2 {
@@ -1073,7 +1062,7 @@ fn rule_ugt_sub_self() -> RewriteRule {
                   if sub_left == right_id {
                     // ugt(x - y, x) = ugt(y, x)
                     let new_node = eg.add({
-                      op: Icmp(cc_ugt),
+                      op: Icmp(CC_UGT),
                       children: [left.children[1], node.children[1]],
                     })
                     let new_id = eg.merge(class_id, new_node)
@@ -1100,7 +1089,7 @@ fn rule_ule_sub_self() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ule && node.children.length() == 2 {
+            if cc == CC_ULE && node.children.length() == 2 {
               let right_id = eg.find(node.children[1])
               for left in eg.get_nodes(node.children[0]) {
                 if left.op is Sub && left.children.length() == 2 {
@@ -1108,7 +1097,7 @@ fn rule_ule_sub_self() -> RewriteRule {
                   if sub_left == right_id {
                     // ule(x - y, x) = ule(y, x)
                     let new_node = eg.add({
-                      op: Icmp(cc_ule),
+                      op: Icmp(CC_ULE),
                       children: [left.children[1], node.children[1]],
                     })
                     let new_id = eg.merge(class_id, new_node)
@@ -1139,14 +1128,14 @@ fn rule_ult_bnot_swap() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ult && node.children.length() == 2 {
+            if cc == CC_ULT && node.children.length() == 2 {
               for left in eg.get_nodes(node.children[0]) {
                 if left.op is Bnot && left.children.length() == 1 {
                   for right in eg.get_nodes(node.children[1]) {
                     if right.op is Bnot && right.children.length() == 1 {
                       // ult(bnot(x), bnot(y)) = ugt(x, y)
                       let new_node = eg.add({
-                        op: Icmp(cc_ugt),
+                        op: Icmp(CC_UGT),
                         children: [left.children[0], right.children[0]],
                       })
                       let new_id = eg.merge(class_id, new_node)
@@ -1174,14 +1163,14 @@ fn rule_slt_bnot_swap() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_slt && node.children.length() == 2 {
+            if cc == CC_SLT && node.children.length() == 2 {
               for left in eg.get_nodes(node.children[0]) {
                 if left.op is Bnot && left.children.length() == 1 {
                   for right in eg.get_nodes(node.children[1]) {
                     if right.op is Bnot && right.children.length() == 1 {
                       // slt(bnot(x), bnot(y)) = sgt(x, y)
                       let new_node = eg.add({
-                        op: Icmp(cc_sgt),
+                        op: Icmp(CC_SGT),
                         children: [left.children[0], right.children[0]],
                       })
                       let new_id = eg.merge(class_id, new_node)
@@ -1226,10 +1215,10 @@ fn rule_xor_cmp_to_ne() -> RewriteRule {
                           let r0 = eg.find(right.children[0])
                           let r1 = eg.find(right.children[1])
                           // Check if one is lt and other is gt on same operands
-                          let is_lt_gt = (cc1 == cc_slt && cc2 == cc_sgt) ||
-                            (cc1 == cc_sgt && cc2 == cc_slt) ||
-                            (cc1 == cc_ult && cc2 == cc_ugt) ||
-                            (cc1 == cc_ugt && cc2 == cc_ult)
+                          let is_lt_gt = (cc1 == CC_SLT && cc2 == CC_SGT) ||
+                            (cc1 == CC_SGT && cc2 == CC_SLT) ||
+                            (cc1 == CC_ULT && cc2 == CC_UGT) ||
+                            (cc1 == CC_UGT && cc2 == CC_ULT)
                           // Same operands in same order
                           if is_lt_gt && l0 == r0 && l1 == r1 {
                             let new_node = eg.add({
@@ -1240,10 +1229,10 @@ fn rule_xor_cmp_to_ne() -> RewriteRule {
                             changed = new_id != class_id || changed
                           }
                           // Swapped operands (e.g., sgt(x,y) xor sgt(y,x))
-                          let both_same = (cc1 == cc_sgt && cc2 == cc_sgt) ||
-                            (cc1 == cc_slt && cc2 == cc_slt) ||
-                            (cc1 == cc_ugt && cc2 == cc_ugt) ||
-                            (cc1 == cc_ult && cc2 == cc_ult)
+                          let both_same = (cc1 == CC_SGT && cc2 == CC_SGT) ||
+                            (cc1 == CC_SLT && cc2 == CC_SLT) ||
+                            (cc1 == CC_UGT && cc2 == CC_UGT) ||
+                            (cc1 == CC_ULT && cc2 == CC_ULT)
                           if both_same && l0 == r1 && l1 == r0 {
                             let new_node = eg.add({
                               op: Ne,
@@ -1297,11 +1286,11 @@ fn rule_band_contradictory_cmp() -> RewriteRule {
                           if l0 == r0 && l1 == r1 {
                             // Check for contradictory pairs
                             let is_contradictory = (
-                                cc1 == cc_sgt && cc2 == cc_slt
+                                cc1 == CC_SGT && cc2 == CC_SLT
                               ) ||
-                              (cc1 == cc_slt && cc2 == cc_sgt) ||
-                              (cc1 == cc_ugt && cc2 == cc_ult) ||
-                              (cc1 == cc_ult && cc2 == cc_ugt)
+                              (cc1 == CC_SLT && cc2 == CC_SGT) ||
+                              (cc1 == CC_UGT && cc2 == CC_ULT) ||
+                              (cc1 == CC_ULT && cc2 == CC_UGT)
                             if is_contradictory {
                               let zero = eg.add_const(0L)
                               let new_id = eg.merge(class_id, zero)
@@ -1653,7 +1642,7 @@ fn rule_ugt_umax() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ugt && node.children.length() == 2 {
+            if cc == CC_UGT && node.children.length() == 2 {
               // Get type info from operand
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let umax = ty_umax(bits)
@@ -1684,7 +1673,7 @@ fn rule_uge_umax() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_uge && node.children.length() == 2 {
+            if cc == CC_UGE && node.children.length() == 2 {
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let umax = ty_umax(bits)
                 if eg.find_const(node.children[1]) is Some(k) && k == umax {
@@ -1717,7 +1706,7 @@ fn rule_ule_umax() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_ule && node.children.length() == 2 {
+            if cc == CC_ULE && node.children.length() == 2 {
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let umax = ty_umax(bits)
                 if eg.find_const(node.children[1]) is Some(k) && k == umax {
@@ -1747,7 +1736,7 @@ fn rule_sgt_smax() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sgt && node.children.length() == 2 {
+            if cc == CC_SGT && node.children.length() == 2 {
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let smax = ty_smax(bits)
                 if eg.find_const(node.children[1]) is Some(k) && k == smax {
@@ -1777,7 +1766,7 @@ fn rule_sge_smax() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sge && node.children.length() == 2 {
+            if cc == CC_SGE && node.children.length() == 2 {
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let smax = ty_smax(bits)
                 if eg.find_const(node.children[1]) is Some(k) && k == smax {
@@ -1810,7 +1799,7 @@ fn rule_slt_smin() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_slt && node.children.length() == 2 {
+            if cc == CC_SLT && node.children.length() == 2 {
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let smin = ty_smin(bits)
                 if eg.find_const(node.children[1]) is Some(k) && k == smin {
@@ -1840,7 +1829,7 @@ fn rule_sle_smin() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sle && node.children.length() == 2 {
+            if cc == CC_SLE && node.children.length() == 2 {
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let smin = ty_smin(bits)
                 if eg.find_const(node.children[1]) is Some(k) && k == smin {
@@ -1873,7 +1862,7 @@ fn rule_sge_smin() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sge && node.children.length() == 2 {
+            if cc == CC_SGE && node.children.length() == 2 {
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let smin = ty_smin(bits)
                 if eg.find_const(node.children[1]) is Some(k) && k == smin {
@@ -1903,7 +1892,7 @@ fn rule_sle_smax() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sle && node.children.length() == 2 {
+            if cc == CC_SLE && node.children.length() == 2 {
               if eg.get_bits(node.children[0]) is Some(bits) {
                 let smax = ty_smax(bits)
                 if eg.find_const(node.children[1]) is Some(k) && k == smax {

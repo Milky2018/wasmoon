@@ -294,6 +294,13 @@ fn eopcode_to_opcode(eop : @egraph.EOpcode) -> Opcode? {
     Ne => None // Shorthand for Icmp, not direct IR op
     Select => Some(Select)
     Bmask => None // Not in IR
+    // Integer min/max - would need special lowering
+    Smin => None
+    Smax => None
+    Umin => None
+    Umax => None
+    // Integer absolute value - would need special lowering
+    Iabs => None
     Ireduce(_, _) => Some(Ireduce)
     Uextend(_, _) => Some(Uextend)
     Sextend(_, _) => Some(Sextend)

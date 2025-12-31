@@ -989,7 +989,7 @@ fn rule_slt_uextend_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_slt && node.children.length() == 2 {
+            if cc == CC_SLT && node.children.length() == 2 {
               // Check if left is uextend and right is zero
               for left in eg.get_nodes(node.children[0]) {
                 match left.op {
@@ -1025,7 +1025,7 @@ fn rule_sge_uextend_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         match node.op {
           Icmp(cc) =>
-            if cc == cc_sge && node.children.length() == 2 {
+            if cc == CC_SGE && node.children.length() == 2 {
               // Check if left is uextend and right is zero
               for left in eg.get_nodes(node.children[0]) {
                 match left.op {

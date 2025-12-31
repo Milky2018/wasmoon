@@ -2,6 +2,8 @@
 // Implements Cranelift selects.isle optimization rules
 // ============================================================================
 
+// Note: Condition codes (CC_SLT, CC_SLE, etc.) are defined in rules_icmp.mbt
+
 ///|
 /// select(_, x, x) = x
 /// When both branches are the same, the condition doesn't matter
@@ -262,4 +264,541 @@ fn rule_add_select_const() -> RewriteRule {
       changed
     },
   }
+}
+
+// ============================================================================
+// Select-to-min/max rules
+// ============================================================================
+
+///|
+/// select(sgt(x, y), x, y) = smax(x, y)
+/// select(sge(x, y), x, y) = smax(x, y)
+fn rule_select_to_smax() -> RewriteRule {
+  {
+    name: "select_to_smax",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          // Check if condition is icmp(sgt/sge, x, y) and select(cond, x, y)
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_SGT || cc == CC_SGE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              let y = cond_node.children[1]
+              // select(sgt(x, y), x, y) = smax(x, y)
+              if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
+                let smax = eg.add({ op: Smax, children: [x, y] })
+                let new_id = eg.merge(class_id, smax)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// select(slt(x, y), x, y) = smin(x, y)
+/// select(sle(x, y), x, y) = smin(x, y)
+fn rule_select_to_smin() -> RewriteRule {
+  {
+    name: "select_to_smin",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          // Check if condition is icmp(slt/sle, x, y) and select(cond, x, y)
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_SLT || cc == CC_SLE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              let y = cond_node.children[1]
+              // select(slt(x, y), x, y) = smin(x, y)
+              if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
+                let smin = eg.add({ op: Smin, children: [x, y] })
+                let new_id = eg.merge(class_id, smin)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// select(ugt(x, y), x, y) = umax(x, y)
+/// select(uge(x, y), x, y) = umax(x, y)
+fn rule_select_to_umax() -> RewriteRule {
+  {
+    name: "select_to_umax",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          // Check if condition is icmp(ugt/uge, x, y) and select(cond, x, y)
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_UGT || cc == CC_UGE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              let y = cond_node.children[1]
+              // select(ugt(x, y), x, y) = umax(x, y)
+              if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
+                let umax = eg.add({ op: Umax, children: [x, y] })
+                let new_id = eg.merge(class_id, umax)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// select(ult(x, y), x, y) = umin(x, y)
+/// select(ule(x, y), x, y) = umin(x, y)
+fn rule_select_to_umin() -> RewriteRule {
+  {
+    name: "select_to_umin",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          // Check if condition is icmp(ult/ule, x, y) and select(cond, x, y)
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_ULT || cc == CC_ULE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              let y = cond_node.children[1]
+              // select(ult(x, y), x, y) = umin(x, y)
+              if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
+                let umin = eg.add({ op: Umin, children: [x, y] })
+                let new_id = eg.merge(class_id, umin)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// Swapped select-to-min/max rules
+// select(slt(x, y), y, x) = smax(x, y) etc.
+// ============================================================================
+
+///|
+/// select(slt(x, y), y, x) = smax(x, y)
+/// select(sle(x, y), y, x) = smax(x, y)
+fn rule_select_to_smax_swapped() -> RewriteRule {
+  {
+    name: "select_to_smax_swapped",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_SLT || cc == CC_SLE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              let y = cond_node.children[1]
+              // select(slt(x, y), y, x) = smax(x, y)
+              if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
+                let smax = eg.add({ op: Smax, children: [x, y] })
+                let new_id = eg.merge(class_id, smax)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// select(sgt(x, y), y, x) = smin(x, y)
+/// select(sge(x, y), y, x) = smin(x, y)
+fn rule_select_to_smin_swapped() -> RewriteRule {
+  {
+    name: "select_to_smin_swapped",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_SGT || cc == CC_SGE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              let y = cond_node.children[1]
+              // select(sgt(x, y), y, x) = smin(x, y)
+              if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
+                let smin = eg.add({ op: Smin, children: [x, y] })
+                let new_id = eg.merge(class_id, smin)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// select(ult(x, y), y, x) = umax(x, y)
+/// select(ule(x, y), y, x) = umax(x, y)
+fn rule_select_to_umax_swapped() -> RewriteRule {
+  {
+    name: "select_to_umax_swapped",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_ULT || cc == CC_ULE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              let y = cond_node.children[1]
+              // select(ult(x, y), y, x) = umax(x, y)
+              if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
+                let umax = eg.add({ op: Umax, children: [x, y] })
+                let new_id = eg.merge(class_id, umax)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// select(ugt(x, y), y, x) = umin(x, y)
+/// select(uge(x, y), y, x) = umin(x, y)
+fn rule_select_to_umin_swapped() -> RewriteRule {
+  {
+    name: "select_to_umin_swapped",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_UGT || cc == CC_UGE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              let y = cond_node.children[1]
+              // select(ugt(x, y), y, x) = umin(x, y)
+              if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
+                let umin = eg.add({ op: Umin, children: [x, y] })
+                let new_id = eg.merge(class_id, umin)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// Select-to-iabs rules
+// ============================================================================
+
+///|
+/// select(sgt(x, 0), x, -x) = iabs(x)
+/// select(sge(x, 0), x, -x) = iabs(x)
+fn rule_select_to_iabs_positive() -> RewriteRule {
+  {
+    name: "select_to_iabs_positive",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_SGT || cc == CC_SGE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              // Check if comparing with 0
+              if eg.find_const(cond_node.children[1]) is Some(0L) {
+                // Check if true_val = x and false_val = -x
+                if eg.equiv(true_val, x) {
+                  for neg_node in eg.get_nodes(false_val) {
+                    if neg_node.op is Neg && neg_node.children.length() == 1 {
+                      if eg.equiv(neg_node.children[0], x) {
+                        let iabs = eg.add({ op: Iabs, children: [x] })
+                        let new_id = eg.subsume(class_id, iabs)
+                        changed = new_id != class_id || changed
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// select(slt(x, 0), -x, x) = iabs(x)
+/// select(sle(x, 0), -x, x) = iabs(x)
+fn rule_select_to_iabs_negative() -> RewriteRule {
+  {
+    name: "select_to_iabs_negative",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Select && node.children.length() == 3 {
+          let cond = node.children[0]
+          let true_val = node.children[1]
+          let false_val = node.children[2]
+          for cond_node in eg.get_nodes(cond) {
+            if cond_node.op is Icmp(cc) &&
+              (cc == CC_SLT || cc == CC_SLE) &&
+              cond_node.children.length() == 2 {
+              let x = cond_node.children[0]
+              // Check if comparing with 0
+              if eg.find_const(cond_node.children[1]) is Some(0L) {
+                // Check if true_val = -x and false_val = x
+                if eg.equiv(false_val, x) {
+                  for neg_node in eg.get_nodes(true_val) {
+                    if neg_node.op is Neg && neg_node.children.length() == 1 {
+                      if eg.equiv(neg_node.children[0], x) {
+                        let iabs = eg.add({ op: Iabs, children: [x] })
+                        let new_id = eg.subsume(class_id, iabs)
+                        changed = new_id != class_id || changed
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// Min/max comparison rules
+// ============================================================================
+
+///|
+/// sgt(smin(x, y), x) = 0  (min is never greater than x)
+/// sgt(smin(x, y), y) = 0  (min is never greater than y)
+fn rule_smin_never_greater() -> RewriteRule {
+  {
+    name: "smin_never_greater",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Icmp(cc) && cc == CC_SGT && node.children.length() == 2 {
+          let lhs = node.children[0]
+          let rhs = node.children[1]
+          // Check if lhs is smin(x, y) and rhs is x or y
+          for min_node in eg.get_nodes(lhs) {
+            if min_node.op is Smin && min_node.children.length() == 2 {
+              let x = min_node.children[0]
+              let y = min_node.children[1]
+              if eg.equiv(rhs, x) || eg.equiv(rhs, y) {
+                let zero = eg.add_const(0L)
+                let new_id = eg.subsume(class_id, zero)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// slt(x, smin(x, y)) = 0  (x is never less than min(x, y))
+/// slt(x, smin(y, x)) = 0
+fn rule_never_less_than_smin() -> RewriteRule {
+  {
+    name: "never_less_than_smin",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Icmp(cc) && cc == CC_SLT && node.children.length() == 2 {
+          let lhs = node.children[0]
+          let rhs = node.children[1]
+          // Check if rhs is smin(x, y) and lhs is x or y
+          for min_node in eg.get_nodes(rhs) {
+            if min_node.op is Smin && min_node.children.length() == 2 {
+              let x = min_node.children[0]
+              let y = min_node.children[1]
+              if eg.equiv(lhs, x) || eg.equiv(lhs, y) {
+                let zero = eg.add_const(0L)
+                let new_id = eg.subsume(class_id, zero)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ugt(umin(x, y), x) = 0  (min is never greater than x)
+/// ugt(umin(x, y), y) = 0  (min is never greater than y)
+fn rule_umin_never_greater() -> RewriteRule {
+  {
+    name: "umin_never_greater",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Icmp(cc) && cc == CC_UGT && node.children.length() == 2 {
+          let lhs = node.children[0]
+          let rhs = node.children[1]
+          // Check if lhs is umin(x, y) and rhs is x or y
+          for min_node in eg.get_nodes(lhs) {
+            if min_node.op is Umin && min_node.children.length() == 2 {
+              let x = min_node.children[0]
+              let y = min_node.children[1]
+              if eg.equiv(rhs, x) || eg.equiv(rhs, y) {
+                let zero = eg.add_const(0L)
+                let new_id = eg.subsume(class_id, zero)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// ult(x, umin(x, y)) = 0  (x is never less than min(x, y))
+/// ult(x, umin(y, x)) = 0
+fn rule_never_less_than_umin() -> RewriteRule {
+  {
+    name: "never_less_than_umin",
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        if node.op is Icmp(cc) && cc == CC_ULT && node.children.length() == 2 {
+          let lhs = node.children[0]
+          let rhs = node.children[1]
+          // Check if rhs is umin(x, y) and lhs is x or y
+          for min_node in eg.get_nodes(rhs) {
+            if min_node.op is Umin && min_node.children.length() == 2 {
+              let x = min_node.children[0]
+              let y = min_node.children[1]
+              if eg.equiv(lhs, x) || eg.equiv(lhs, y) {
+                let zero = eg.add_const(0L)
+                let new_id = eg.subsume(class_id, zero)
+                changed = new_id != class_id || changed
+              }
+            }
+          }
+        }
+      }
+      changed
+    },
+  }
+}
+
+// ============================================================================
+// Get all select rules
+// ============================================================================
+
+///|
+/// Get all select rules
+pub fn select_rules() -> Array[RewriteRule] {
+  [
+    rule_select_same(),
+    rule_select_icmp_one_zero(),
+    rule_select_icmp_zero_one(),
+    rule_select_nested_same_cond_right(),
+    rule_select_nested_same_cond_left(),
+    rule_select_uextend_cond(),
+    rule_add_select_const(),
+    // Select-to-min/max rules
+    rule_select_to_smax(),
+    rule_select_to_smin(),
+    rule_select_to_umax(),
+    rule_select_to_umin(),
+    // Swapped variants
+    rule_select_to_smax_swapped(),
+    rule_select_to_smin_swapped(),
+    rule_select_to_umax_swapped(),
+    rule_select_to_umin_swapped(),
+    // Select-to-iabs rules
+    rule_select_to_iabs_positive(),
+    rule_select_to_iabs_negative(),
+    // Min/max comparison rules
+    rule_smin_never_greater(),
+    rule_never_less_than_smin(),
+    rule_umin_never_greater(),
+    rule_never_less_than_umin(),
+  ]
 }

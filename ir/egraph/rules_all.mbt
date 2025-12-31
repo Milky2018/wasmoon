@@ -266,6 +266,23 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_select_nested_same_cond_left(), [TSelect])
   rs.add_rule(rule_select_uextend_cond(), [TSelect])
   rs.add_rule(rule_add_select_const(), [TAdd])
+  // Select-to-min/max rules
+  rs.add_rule(rule_select_to_smax(), [TSelect])
+  rs.add_rule(rule_select_to_smin(), [TSelect])
+  rs.add_rule(rule_select_to_umax(), [TSelect])
+  rs.add_rule(rule_select_to_umin(), [TSelect])
+  rs.add_rule(rule_select_to_smax_swapped(), [TSelect])
+  rs.add_rule(rule_select_to_smin_swapped(), [TSelect])
+  rs.add_rule(rule_select_to_umax_swapped(), [TSelect])
+  rs.add_rule(rule_select_to_umin_swapped(), [TSelect])
+  // Select-to-iabs rules
+  rs.add_rule(rule_select_to_iabs_positive(), [TSelect])
+  rs.add_rule(rule_select_to_iabs_negative(), [TSelect])
+  // Min/max comparison rules
+  rs.add_rule(rule_smin_never_greater(), [TIcmp])
+  rs.add_rule(rule_never_less_than_smin(), [TIcmp])
+  rs.add_rule(rule_umin_never_greater(), [TIcmp])
+  rs.add_rule(rule_never_less_than_umin(), [TIcmp])
   // Type-aware comparison rules (use type bounds UMAX, SMIN, SMAX)
   rs.add_rule(rule_ugt_umax(), [TIcmp])
   rs.add_rule(rule_uge_umax(), [TIcmp])
