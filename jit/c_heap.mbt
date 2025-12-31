@@ -21,10 +21,10 @@ pub(all) suberror CHeapError {
 // Object kinds (must match GC_KIND_* in gc_heap.h)
 
 ///|
-let gc_kind_struct : Int = 1
+const GC_KIND_STRUCT : Int = 1
 
 ///|
-let gc_kind_array : Int = 2
+const GC_KIND_ARRAY : Int = 2
 
 // ============================================================
 // CHeap Type
@@ -363,13 +363,13 @@ pub fn CHeap::get_kind(self : CHeap, idx : Int) -> Int {
 ///|
 /// Check if this is a struct
 pub fn CHeap::is_struct(self : CHeap, idx : Int) -> Bool {
-  self.get_kind(idx) == gc_kind_struct
+  self.get_kind(idx) == GC_KIND_STRUCT
 }
 
 ///|
 /// Check if this is an array
 pub fn CHeap::is_array(self : CHeap, idx : Int) -> Bool {
-  self.get_kind(idx) == gc_kind_array
+  self.get_kind(idx) == GC_KIND_ARRAY
 }
 
 ///|

@@ -8,6 +8,8 @@ import(
 // Values
 pub fn remat_rules() -> Array[RewriteRule]
 
+pub fn select_rules() -> Array[RewriteRule]
+
 pub fn standard_rules_indexed() -> IndexedRuleSet
 
 pub fn ty_smax(Int) -> Int64
@@ -158,6 +160,11 @@ pub(all) enum EOpcode {
   Ne
   Select
   Bmask
+  Smin
+  Smax
+  Umin
+  Umax
+  Iabs
   Ireduce(Int, Int)
   Uextend(Int, Int)
   Sextend(Int, Int)
@@ -221,6 +228,11 @@ pub(all) enum EOpcodeTag {
   TNe
   TSelect
   TBmask
+  TSmin
+  TSmax
+  TUmin
+  TUmax
+  TIabs
   TIreduce
   TUextend
   TSextend

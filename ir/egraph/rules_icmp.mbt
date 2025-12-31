@@ -2,24 +2,34 @@
 // Implements Cranelift icmp.isle optimization rules
 
 // IntCC constants: 0=eq, 1=ne, 2=slt, 3=sle, 4=sgt, 5=sge, 6=ult, 7=ule, 8=ugt, 9=uge
+///|
 const CC_EQ : Int = 0
 
+///|
 const CC_NE : Int = 1
 
+///|
 const CC_SLT : Int = 2
 
+///|
 const CC_SLE : Int = 3
 
+///|
 const CC_SGT : Int = 4
 
+///|
 const CC_SGE : Int = 5
 
+///|
 const CC_ULT : Int = 6
 
+///|
 const CC_ULE : Int = 7
 
+///|
 const CC_UGT : Int = 8
 
+///|
 const CC_UGE : Int = 9
 
 ///|

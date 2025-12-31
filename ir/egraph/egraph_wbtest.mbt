@@ -1417,4 +1417,3 @@ test "egraph: add_typed sets type correctly" {
   let result = eg.add_typed({ op: Add, children: [x, k5] }, 32)
   inspect(eg.get_bits(result), content="Some(32)")
 }
-
