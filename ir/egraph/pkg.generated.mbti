@@ -22,6 +22,8 @@ pub fn ty_smin(Int) -> Int64
 
 pub fn ty_umax(Int) -> Int64
 
+pub fn vector_rules() -> Array[RewriteRule]
+
 // Errors
 
 // Types and methods

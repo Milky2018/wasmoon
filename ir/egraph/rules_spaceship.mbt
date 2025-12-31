@@ -3,6 +3,7 @@
 // Canonicalizes various implementations to: (x > y) - (x < y)
 
 // Helper to check if a constant is -1
+
 ///|
 fn is_neg_one(v : Int64) -> Bool {
   v == -1L
