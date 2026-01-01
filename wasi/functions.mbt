@@ -944,3 +944,814 @@ fn read_string_from_memory(
   }
   buf.to_string()
 }
+
+// ============================================================================
+// Phase 1: Core file operations
+// ============================================================================
+
+///|
+/// fd_sync - Synchronize file to disk
+pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
+  // stdin, stdout, stderr
+  if fd < 3 {
+    return Errno::Inval.to_i32()
+  }
+  match ctx.get_file(fd) {
+    Some(file) =>
+      if native_fsync(file.native_fd) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// fd_datasync - Synchronize file data to disk
+pub fn fd_datasync_impl(ctx : WasiContext, fd : Int) -> Int {
+  if fd < 3 {
+    return Errno::Inval.to_i32()
+  }
+  match ctx.get_file(fd) {
+    Some(file) =>
+      if native_fdatasync(file.native_fd) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// path_unlink_file - Delete a file
+pub fn path_unlink_file_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  dir_fd : Int,
+  path_ptr : Int,
+  path_len : Int,
+) -> Int {
+  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let host_path = ctx.resolve_path(dir_fd, path)
+  match host_path {
+    Some(resolved) =>
+      if native_unlinkat(0, resolved, 0) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::NoEnt.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// path_remove_directory - Delete a directory
+pub fn path_remove_directory_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  dir_fd : Int,
+  path_ptr : Int,
+  path_len : Int,
+) -> Int {
+  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let host_path = ctx.resolve_path(dir_fd, path)
+  match host_path {
+    Some(resolved) =>
+      if native_unlinkat(0, resolved, AT_REMOVEDIR) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::NoEnt.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// path_rename - Rename a file or directory
+pub fn path_rename_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  old_fd : Int,
+  old_path_ptr : Int,
+  old_path_len : Int,
+  new_fd : Int,
+  new_path_ptr : Int,
+  new_path_len : Int,
+) -> Int {
+  let old_path = read_string_from_memory(mem, old_path_ptr, old_path_len)
+  let new_path = read_string_from_memory(mem, new_path_ptr, new_path_len)
+  let old_host_path = ctx.resolve_path(old_fd, old_path)
+  let new_host_path = ctx.resolve_path(new_fd, new_path)
+  match (old_host_path, new_host_path) {
+    (Some(old_resolved), Some(new_resolved)) =>
+      if native_renameat(0, old_resolved, 0, new_resolved) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    _ => Errno::Badf.to_i32()
+  }
+}
+
+// ============================================================================
+// Phase 2: File metadata operations
+// ============================================================================
+
+///|
+/// fd_filestat_get - Get file statistics via file descriptor
+pub fn fd_filestat_get_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  buf_ptr : Int,
+) -> Int {
+  // Handle special fds (stdin, stdout, stderr)
+  if fd < 3 {
+    // Write a minimal filestat for character devices
+    mem.write_i64(buf_ptr, 0L) // dev
+    mem.write_i64(buf_ptr + 8, 0L) // ino
+    mem.write_byte(buf_ptr + 16, b'\x02') // filetype = character_device
+    for i in 17..<24 {
+      mem.write_byte(buf_ptr + i, b'\x00')
+    }
+    mem.write_i64(buf_ptr + 24, 1L) // nlink
+    mem.write_i64(buf_ptr + 32, 0L) // size
+    mem.write_i64(buf_ptr + 40, 0L) // atim
+    mem.write_i64(buf_ptr + 48, 0L) // mtim
+    mem.write_i64(buf_ptr + 56, 0L) // ctim
+    return Errno::Success.to_i32()
+  }
+  match ctx.get_file(fd) {
+    Some(file) => {
+      let stat = native_fstat(file.native_fd)
+      match stat {
+        Some(s) => {
+          write_filestat(mem, buf_ptr, s)
+          Errno::Success.to_i32()
+        }
+        None => Errno::IO.to_i32()
+      }
+    }
+    None => {
+      // Check if it's a preopen directory
+      for preopen in ctx.preopens {
+        let (preopen_fd, _, _) = preopen
+        if preopen_fd.to_int() == fd {
+          // Return directory stat
+          mem.write_i64(buf_ptr, 0L) // dev
+          mem.write_i64(buf_ptr + 8, fd.to_int64()) // ino (use fd as fake inode)
+          mem.write_byte(buf_ptr + 16, b'\x03') // filetype = directory
+          for i in 17..<24 {
+            mem.write_byte(buf_ptr + i, b'\x00')
+          }
+          mem.write_i64(buf_ptr + 24, 1L) // nlink
+          mem.write_i64(buf_ptr + 32, 0L) // size
+          mem.write_i64(buf_ptr + 40, 0L) // atim
+          mem.write_i64(buf_ptr + 48, 0L) // mtim
+          mem.write_i64(buf_ptr + 56, 0L) // ctim
+          return Errno::Success.to_i32()
+        }
+      }
+      Errno::Badf.to_i32()
+    }
+  }
+}
+
+///|
+/// Helper: Write filestat to memory
+fn write_filestat(
+  mem : @runtime.Memory,
+  buf_ptr : Int,
+  stat : FileStat,
+) -> Unit {
+  mem.write_i64(buf_ptr, stat.dev.reinterpret_as_int64()) // dev
+  mem.write_i64(buf_ptr + 8, stat.ino.reinterpret_as_int64()) // ino
+  mem.write_byte(buf_ptr + 16, stat.filetype.to_byte()) // filetype
+  for i in 17..<24 {
+    mem.write_byte(buf_ptr + i, b'\x00') // padding
+  }
+  mem.write_i64(buf_ptr + 24, stat.nlink.reinterpret_as_int64()) // nlink
+  mem.write_i64(buf_ptr + 32, stat.size.reinterpret_as_int64()) // size
+  mem.write_i64(buf_ptr + 40, stat.atim.reinterpret_as_int64()) // atim
+  mem.write_i64(buf_ptr + 48, stat.mtim.reinterpret_as_int64()) // mtim
+  mem.write_i64(buf_ptr + 56, stat.ctim.reinterpret_as_int64()) // ctim
+}
+
+///|
+/// path_filestat_get - Get file statistics via path
+pub fn path_filestat_get_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  dir_fd : Int,
+  flags : Int,
+  path_ptr : Int,
+  path_len : Int,
+  buf_ptr : Int,
+) -> Int {
+  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let host_path = ctx.resolve_path(dir_fd, path)
+  match host_path {
+    Some(resolved) => {
+      // Convert WASI flags to native flags
+      let native_flags = if (flags & 0x01) != 0 {
+        0
+      } else {
+        AT_SYMLINK_NOFOLLOW
+      }
+      let stat = native_fstatat(0, resolved, native_flags)
+      match stat {
+        Some(s) => {
+          write_filestat(mem, buf_ptr, s)
+          Errno::Success.to_i32()
+        }
+        None => Errno::NoEnt.to_i32()
+      }
+    }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// fd_filestat_set_size - Set file size (truncate)
+pub fn fd_filestat_set_size_impl(
+  ctx : WasiContext,
+  fd : Int,
+  size : Int64,
+) -> Int {
+  if fd < 3 {
+    return Errno::Inval.to_i32()
+  }
+  match ctx.get_file(fd) {
+    Some(file) =>
+      if native_ftruncate(file.native_fd, size) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// fd_filestat_set_times - Set file times via fd
+pub fn fd_filestat_set_times_impl(
+  ctx : WasiContext,
+  fd : Int,
+  atim : Int64,
+  mtim : Int64,
+  fst_flags : Int,
+) -> Int {
+  if fd < 3 {
+    return Errno::Inval.to_i32()
+  }
+  match ctx.get_file(fd) {
+    Some(file) =>
+      if native_futimens(file.native_fd, atim, mtim, fst_flags) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// path_filestat_set_times - Set file times via path
+pub fn path_filestat_set_times_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  dir_fd : Int,
+  flags : Int,
+  path_ptr : Int,
+  path_len : Int,
+  atim : Int64,
+  mtim : Int64,
+  fst_flags : Int,
+) -> Int {
+  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let host_path = ctx.resolve_path(dir_fd, path)
+  match host_path {
+    Some(resolved) => {
+      let lookup_flags = if (flags & 0x01) != 0 {
+        0
+      } else {
+        AT_SYMLINK_NOFOLLOW
+      }
+      if native_utimensat(0, resolved, atim, mtim, fst_flags, lookup_flags) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+// ============================================================================
+// Phase 3: Auxiliary functions
+// ============================================================================
+
+///|
+/// fd_advise - Advise on file access patterns (no-op)
+pub fn fd_advise_impl(
+  _ctx : WasiContext,
+  _fd : Int,
+  _offset : Int64,
+  _len : Int64,
+  _advice : Int,
+) -> Int {
+  // Just return success - advice is optional
+  Errno::Success.to_i32()
+}
+
+///|
+/// fd_allocate - Allocate space for file
+pub fn fd_allocate_impl(
+  ctx : WasiContext,
+  fd : Int,
+  offset : Int64,
+  len : Int64,
+) -> Int {
+  if fd < 3 {
+    return Errno::Inval.to_i32()
+  }
+  match ctx.get_file(fd) {
+    Some(file) => {
+      // Use ftruncate as fallback (extend file if needed)
+      let stat = native_fstat(file.native_fd)
+      match stat {
+        Some(s) => {
+          let new_size = offset + len
+          if new_size > s.size.reinterpret_as_int64() {
+            if native_ftruncate(file.native_fd, new_size) {
+              Errno::Success.to_i32()
+            } else {
+              Errno::IO.to_i32()
+            }
+          } else {
+            Errno::Success.to_i32()
+          }
+        }
+        None => Errno::IO.to_i32()
+      }
+    }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// fd_fdstat_set_flags - Set file descriptor flags
+pub fn fd_fdstat_set_flags_impl(
+  ctx : WasiContext,
+  fd : Int,
+  flags : Int,
+) -> Int {
+  if fd < 3 {
+    return Errno::Inval.to_i32()
+  }
+  match ctx.get_file(fd) {
+    Some(file) => {
+      // Convert WASI fdflags to native flags
+      // WASI: 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC
+      let native_flags = native_fcntl_getfl(file.native_fd)
+      match native_flags {
+        Some(current) => {
+          let mut new_flags = current
+          // O_APPEND = 0x400 on Linux, 0x8 on macOS
+          if (flags & 0x01) != 0 {
+            new_flags = new_flags | 0x8 // O_APPEND
+          } else {
+            new_flags = new_flags & (0x8).lnot()
+          }
+          // O_NONBLOCK = 0x800 on Linux, 0x4 on macOS
+          if (flags & 0x04) != 0 {
+            new_flags = new_flags | 0x4 // O_NONBLOCK
+          } else {
+            new_flags = new_flags & (0x4).lnot()
+          }
+          if native_fcntl_setfl(file.native_fd, new_flags) {
+            Errno::Success.to_i32()
+          } else {
+            Errno::IO.to_i32()
+          }
+        }
+        None => Errno::IO.to_i32()
+      }
+    }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// fd_fdstat_set_rights - Set file descriptor rights (no-op)
+pub fn fd_fdstat_set_rights_impl(
+  _ctx : WasiContext,
+  _fd : Int,
+  _fs_rights_base : Int64,
+  _fs_rights_inheriting : Int64,
+) -> Int {
+  // Rights management is simplified - just return success
+  Errno::Success.to_i32()
+}
+
+///|
+/// fd_renumber - Renumber file descriptor
+pub fn fd_renumber_impl(ctx : WasiContext, from : Int, to : Int) -> Int {
+  if from < 3 || to < 3 {
+    return Errno::Inval.to_i32()
+  }
+  match ctx.get_file(from) {
+    Some(file) =>
+      if native_dup2(file.native_fd, to) {
+        // Close the old fd and update tracking
+        ctx.close_fd(from) |> ignore
+        // Note: In a real implementation, we'd also update ctx.open_files
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+// ============================================================================
+// Phase 4: Symlink operations
+// ============================================================================
+
+///|
+/// path_symlink - Create symbolic link
+pub fn path_symlink_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  old_path_ptr : Int,
+  old_path_len : Int,
+  dir_fd : Int,
+  new_path_ptr : Int,
+  new_path_len : Int,
+) -> Int {
+  let old_path = read_string_from_memory(mem, old_path_ptr, old_path_len)
+  let new_path = read_string_from_memory(mem, new_path_ptr, new_path_len)
+  let new_host_path = ctx.resolve_path(dir_fd, new_path)
+  match new_host_path {
+    Some(resolved) =>
+      if native_symlinkat(old_path, 0, resolved) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// path_readlink - Read symbolic link
+pub fn path_readlink_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  dir_fd : Int,
+  path_ptr : Int,
+  path_len : Int,
+  buf_ptr : Int,
+  buf_len : Int,
+  bufused_ptr : Int,
+) -> Int {
+  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let host_path = ctx.resolve_path(dir_fd, path)
+  match host_path {
+    Some(resolved) => {
+      let result = native_readlinkat(0, resolved, buf_len)
+      match result {
+        Some(link_target) => {
+          let to_write = @cmp.minimum(link_target.length(), buf_len)
+          for i in 0..<to_write {
+            mem.write_byte(buf_ptr + i, link_target.code_unit_at(i).to_byte())
+          }
+          mem.write_i32(bufused_ptr, to_write)
+          Errno::Success.to_i32()
+        }
+        None => Errno::NoEnt.to_i32()
+      }
+    }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// path_link - Create hard link
+pub fn path_link_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  old_fd : Int,
+  old_flags : Int,
+  old_path_ptr : Int,
+  old_path_len : Int,
+  new_fd : Int,
+  new_path_ptr : Int,
+  new_path_len : Int,
+) -> Int {
+  let old_path = read_string_from_memory(mem, old_path_ptr, old_path_len)
+  let new_path = read_string_from_memory(mem, new_path_ptr, new_path_len)
+  let old_host_path = ctx.resolve_path(old_fd, old_path)
+  let new_host_path = ctx.resolve_path(new_fd, new_path)
+  match (old_host_path, new_host_path) {
+    (Some(old_resolved), Some(new_resolved)) => {
+      let flags = if (old_flags & 0x01) != 0 { 0x1000 } else { 0 } // AT_SYMLINK_FOLLOW
+      if native_linkat(0, old_resolved, 0, new_resolved, flags) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    }
+    _ => Errno::Badf.to_i32()
+  }
+}
+
+// ============================================================================
+// Phase 5: Poll and socket operations
+// ============================================================================
+
+///|
+/// poll_oneoff - Wait for events on subscriptions
+///
+/// WASI subscription structure (48 bytes):
+/// - userdata: u64 (8 bytes)
+/// - u: union (40 bytes):
+///   - tag: u8 (1 byte) - 0=clock, 1=fd_read, 2=fd_write
+///   - For clock (tag=0):
+///     - padding: 7 bytes
+///     - id: u32 (4 bytes) - clock id
+///     - padding: 4 bytes
+///     - timeout: u64 (8 bytes) - absolute or relative time in ns
+///     - precision: u64 (8 bytes)
+///     - flags: u16 (2 bytes) - 0=relative, 1=absolute
+///   - For fd_read/fd_write (tag=1,2):
+///     - padding: 3 bytes
+///     - fd: u32 (4 bytes)
+///
+/// WASI event structure (32 bytes):
+/// - userdata: u64 (8 bytes)
+/// - error: u16 (2 bytes)
+/// - type: u8 (1 byte)
+/// - padding: 5 bytes
+/// - fd_readwrite: (16 bytes)
+///   - nbytes: u64 (8 bytes)
+///   - flags: u16 (2 bytes)
+pub fn poll_oneoff_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  in_ptr : Int,
+  out_ptr : Int,
+  nsubscriptions : Int,
+  nevents_ptr : Int,
+) -> Int {
+  if nsubscriptions == 0 {
+    mem.write_i32(nevents_ptr, 0)
+    return Errno::Success.to_i32()
+  }
+  let mut events_written = 0
+  let mut min_timeout_ns : Int64 = -1L
+  // First pass: find minimum clock timeout
+  for i in 0..<nsubscriptions {
+    let sub_ptr = in_ptr + i * 48
+    let tag = mem.read_byte(sub_ptr + 8).to_int()
+    if tag == 0 {
+      // Clock subscription
+      let timeout = mem.read_i64(sub_ptr + 24)
+      let flags = mem.read_byte(sub_ptr + 40).to_int()
+      let timeout_ns = if (flags & 0x01) != 0 {
+        // Absolute time - convert to relative
+        let now = native_clock_gettime_monotonic()
+        if timeout > now {
+          timeout - now
+        } else {
+          0L
+        }
+      } else {
+        timeout
+      }
+      if min_timeout_ns < 0L || timeout_ns < min_timeout_ns {
+        min_timeout_ns = timeout_ns
+      }
+    }
+  }
+  // Collect fd subscriptions
+  let fds : Array[Int] = []
+  let events : Array[Int] = []
+  let sub_indices : Array[Int] = []
+  for i in 0..<nsubscriptions {
+    let sub_ptr = in_ptr + i * 48
+    let tag = mem.read_byte(sub_ptr + 8).to_int()
+    if tag == 1 || tag == 2 {
+      // fd_read or fd_write
+      let fd = mem.read_i32(sub_ptr + 12)
+      // Get native fd
+      let native_fd = match ctx.get_file(fd) {
+        Some(file) => file.native_fd
+        None => -1
+      }
+      if native_fd >= 0 {
+        fds.push(native_fd)
+        // POLLIN = 0x01, POLLOUT = 0x04
+        events.push(if tag == 1 { 0x01 } else { 0x04 })
+        sub_indices.push(i)
+      }
+    }
+  }
+  // Calculate timeout in ms
+  let timeout_ms = if min_timeout_ns < 0L {
+    -1 // Infinite
+  } else if min_timeout_ns == 0L {
+    0
+  } else {
+    let ms = (min_timeout_ns / 1000000L).to_int()
+    if ms == 0 {
+      1
+    } else {
+      ms
+    }
+  }
+  // Do the poll
+  if fds.length() > 0 {
+    let poll_result = native_poll(fds, events, timeout_ms)
+    match poll_result {
+      Some(result) =>
+        // Write fd events
+        for i, sub_idx in sub_indices {
+          let revent = result.revents[i]
+          if revent != 0 {
+            let sub_ptr = in_ptr + sub_idx * 48
+            let userdata = mem.read_i64(sub_ptr)
+            let tag = mem.read_byte(sub_ptr + 8).to_int()
+            let event_ptr = out_ptr + events_written * 32
+            mem.write_i64(event_ptr, userdata)
+            mem.write_byte(event_ptr + 8, b'\x00') // error = success
+            mem.write_byte(event_ptr + 9, b'\x00')
+            mem.write_byte(event_ptr + 10, tag.to_byte()) // type
+            // padding
+            for j in 11..<16 {
+              mem.write_byte(event_ptr + j, b'\x00')
+            }
+            mem.write_i64(event_ptr + 16, 0L) // nbytes (unknown)
+            mem.write_byte(event_ptr + 24, b'\x00') // flags
+            mem.write_byte(event_ptr + 25, b'\x00')
+            // padding
+            for j in 26..<32 {
+              mem.write_byte(event_ptr + j, b'\x00')
+            }
+            events_written = events_written + 1
+          }
+        }
+      None => ()
+    }
+  } else if min_timeout_ns >= 0L {
+    // Just sleep
+    native_nanosleep(min_timeout_ns) |> ignore
+  }
+  // Write clock events (if timeout elapsed)
+  for i in 0..<nsubscriptions {
+    let sub_ptr = in_ptr + i * 48
+    let tag = mem.read_byte(sub_ptr + 8).to_int()
+    if tag == 0 {
+      // Clock subscription - always report as ready after poll/sleep
+      let userdata = mem.read_i64(sub_ptr)
+      let event_ptr = out_ptr + events_written * 32
+      mem.write_i64(event_ptr, userdata)
+      mem.write_byte(event_ptr + 8, b'\x00') // error = success
+      mem.write_byte(event_ptr + 9, b'\x00')
+      mem.write_byte(event_ptr + 10, b'\x00') // type = clock
+      // padding
+      for j in 11..<32 {
+        mem.write_byte(event_ptr + j, b'\x00')
+      }
+      events_written = events_written + 1
+    }
+  }
+  mem.write_i32(nevents_ptr, events_written)
+  Errno::Success.to_i32()
+}
+
+///|
+/// sock_recv - Receive data from socket
+pub fn sock_recv_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  ri_data_ptr : Int,
+  ri_data_len : Int,
+  ri_flags : Int,
+  ro_datalen_ptr : Int,
+  ro_flags_ptr : Int,
+) -> Int {
+  match ctx.get_file(fd) {
+    Some(file) => {
+      let mut total_read = 0L
+      for i in 0..<ri_data_len {
+        let iov_ptr = ri_data_ptr + i * 8
+        let buf_ptr = mem.read_i32(iov_ptr)
+        let buf_len = mem.read_i32(iov_ptr + 4)
+        if buf_len > 0 {
+          let buf = FixedArray::make(buf_len, b'\x00')
+          // Convert WASI flags to native flags
+          let native_flags = if (ri_flags & 0x01) != 0 { 0x02 } else { 0 } // MSG_PEEK
+          let n = native_recv(file.native_fd, buf, native_flags)
+          if n < 0L {
+            if total_read > 0L {
+              break
+            }
+            mem.write_i32(ro_datalen_ptr, 0)
+            mem.write_byte(ro_flags_ptr, b'\x00')
+            mem.write_byte(ro_flags_ptr + 1, b'\x00')
+            return Errno::IO.to_i32()
+          }
+          // Copy to WASM memory
+          for j in 0..<n.to_int() {
+            mem.write_byte(buf_ptr + j, buf[j])
+          }
+          total_read = total_read + n
+          if n < buf_len.to_int64() {
+            break
+          }
+        }
+      }
+      mem.write_i32(ro_datalen_ptr, total_read.to_int())
+      mem.write_byte(ro_flags_ptr, b'\x00')
+      mem.write_byte(ro_flags_ptr + 1, b'\x00')
+      Errno::Success.to_i32()
+    }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// sock_send - Send data to socket
+pub fn sock_send_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  si_data_ptr : Int,
+  si_data_len : Int,
+  _si_flags : Int,
+  so_datalen_ptr : Int,
+) -> Int {
+  match ctx.get_file(fd) {
+    Some(file) => {
+      let mut total_sent = 0L
+      for i in 0..<si_data_len {
+        let iov_ptr = si_data_ptr + i * 8
+        let buf_ptr = mem.read_i32(iov_ptr)
+        let buf_len = mem.read_i32(iov_ptr + 4)
+        if buf_len > 0 {
+          let buf = FixedArray::make(buf_len, b'\x00')
+          for j in 0..<buf_len {
+            buf[j] = mem.read_byte(buf_ptr + j)
+          }
+          let n = native_send(file.native_fd, buf, buf_len, 0)
+          if n < 0L {
+            if total_sent > 0L {
+              break
+            }
+            mem.write_i32(so_datalen_ptr, 0)
+            return Errno::IO.to_i32()
+          }
+          total_sent = total_sent + n
+          if n < buf_len.to_int64() {
+            break
+          }
+        }
+      }
+      mem.write_i32(so_datalen_ptr, total_sent.to_int())
+      Errno::Success.to_i32()
+    }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// sock_shutdown - Shutdown socket
+pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
+  match ctx.get_file(fd) {
+    Some(file) =>
+      // WASI: 0=RD, 1=WR, 2=RDWR
+      // POSIX: 0=SHUT_RD, 1=SHUT_WR, 2=SHUT_RDWR
+      if native_shutdown(file.native_fd, how) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
+      }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
+/// proc_raise - Send a signal to the process
+pub fn proc_raise_impl(signal : Int) -> Int {
+  // WASI signal codes (some common ones):
+  // 0 = none, 1 = HUP, 2 = INT, 3 = QUIT, 6 = ABRT, 9 = KILL, 15 = TERM
+  if native_raise(signal) {
+    Errno::Success.to_i32()
+  } else {
+    Errno::Inval.to_i32()
+  }
+}

@@ -406,3 +406,493 @@ pub fn native_read_to_memory(
   }
   Some(total_read)
 }
+
+// ============================================================================
+// Phase 1: Core file operations
+// ============================================================================
+
+///|
+/// Sync file to disk
+extern "c" fn c_fsync(fd : Int) -> Int = "wasmoon_wasi_fsync"
+
+///|
+/// Sync file data (not metadata) to disk
+extern "c" fn c_fdatasync(fd : Int) -> Int = "wasmoon_wasi_fdatasync"
+
+///|
+/// Unlink file or directory
+#borrow(path)
+extern "c" fn c_unlinkat(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  flags : Int,
+) -> Int = "wasmoon_wasi_unlinkat"
+
+///|
+/// Rename file or directory
+#borrow(old_path, new_path)
+extern "c" fn c_renameat(
+  old_dirfd : Int,
+  old_path : FixedArray[Byte],
+  new_dirfd : Int,
+  new_path : FixedArray[Byte],
+) -> Int = "wasmoon_wasi_renameat"
+
+///|
+/// Sync file to disk (returns 0 on success, -1 on error)
+pub fn native_fsync(fd : Int) -> Bool {
+  c_fsync(fd) == 0
+}
+
+///|
+/// Sync file data to disk (returns 0 on success, -1 on error)
+pub fn native_fdatasync(fd : Int) -> Bool {
+  c_fdatasync(fd) == 0
+}
+
+///|
+/// AT_REMOVEDIR flag for unlinkat
+pub const AT_REMOVEDIR : Int = 0x200
+
+///|
+/// Unlink file (returns 0 on success, -1 on error)
+pub fn native_unlinkat(dirfd : Int, path : String, flags : Int) -> Bool {
+  let path_bytes = string_to_cstring(path)
+  c_unlinkat(dirfd, path_bytes, flags) == 0
+}
+
+///|
+/// Rename file or directory
+pub fn native_renameat(
+  old_dirfd : Int,
+  old_path : String,
+  new_dirfd : Int,
+  new_path : String,
+) -> Bool {
+  let old_path_bytes = string_to_cstring(old_path)
+  let new_path_bytes = string_to_cstring(new_path)
+  c_renameat(old_dirfd, old_path_bytes, new_dirfd, new_path_bytes) == 0
+}
+
+// ============================================================================
+// Phase 2: File metadata operations
+// ============================================================================
+
+///|
+/// File stat result
+pub(all) struct FileStat {
+  dev : UInt64
+  ino : UInt64
+  filetype : Int
+  nlink : UInt64
+  size : UInt64
+  atim : UInt64
+  mtim : UInt64
+  ctim : UInt64
+}
+
+///|
+/// Get file stat via fd
+#borrow(dev, ino, filetype, nlink, size, atim, mtim, ctim)
+extern "c" fn c_fstat(
+  fd : Int,
+  dev : FixedArray[UInt64],
+  ino : FixedArray[UInt64],
+  filetype : FixedArray[Byte],
+  nlink : FixedArray[UInt64],
+  size : FixedArray[UInt64],
+  atim : FixedArray[UInt64],
+  mtim : FixedArray[UInt64],
+  ctim : FixedArray[UInt64],
+) -> Int = "wasmoon_wasi_fstat"
+
+///|
+/// Get file stat via path
+#borrow(path, dev, ino, filetype, nlink, size, atim, mtim, ctim)
+extern "c" fn c_fstatat(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  flags : Int,
+  dev : FixedArray[UInt64],
+  ino : FixedArray[UInt64],
+  filetype : FixedArray[Byte],
+  nlink : FixedArray[UInt64],
+  size : FixedArray[UInt64],
+  atim : FixedArray[UInt64],
+  mtim : FixedArray[UInt64],
+  ctim : FixedArray[UInt64],
+) -> Int = "wasmoon_wasi_fstatat"
+
+///|
+/// Truncate file
+extern "c" fn c_ftruncate(fd : Int, size : Int64) -> Int = "wasmoon_wasi_ftruncate"
+
+///|
+/// Set file times via fd
+extern "c" fn c_futimens(
+  fd : Int,
+  atim : Int64,
+  mtim : Int64,
+  fst_flags : Int,
+) -> Int = "wasmoon_wasi_futimens"
+
+///|
+/// Set file times via path
+#borrow(path)
+extern "c" fn c_utimensat(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  atim : Int64,
+  mtim : Int64,
+  fst_flags : Int,
+  lookup_flags : Int,
+) -> Int = "wasmoon_wasi_utimensat"
+
+///|
+/// Get file stat via fd
+pub fn native_fstat(fd : Int) -> FileStat? {
+  let dev = FixedArray::make(1, 0UL)
+  let ino = FixedArray::make(1, 0UL)
+  let filetype = FixedArray::make(1, b'\x00')
+  let nlink = FixedArray::make(1, 0UL)
+  let size = FixedArray::make(1, 0UL)
+  let atim = FixedArray::make(1, 0UL)
+  let mtim = FixedArray::make(1, 0UL)
+  let ctim = FixedArray::make(1, 0UL)
+  if c_fstat(fd, dev, ino, filetype, nlink, size, atim, mtim, ctim) == 0 {
+    Some({
+      dev: dev[0],
+      ino: ino[0],
+      filetype: filetype[0].to_int(),
+      nlink: nlink[0],
+      size: size[0],
+      atim: atim[0],
+      mtim: mtim[0],
+      ctim: ctim[0],
+    })
+  } else {
+    None
+  }
+}
+
+///|
+/// AT_SYMLINK_NOFOLLOW flag
+pub const AT_SYMLINK_NOFOLLOW : Int = 0x100
+
+///|
+/// Get file stat via path
+pub fn native_fstatat(dirfd : Int, path : String, flags : Int) -> FileStat? {
+  let path_bytes = string_to_cstring(path)
+  let dev = FixedArray::make(1, 0UL)
+  let ino = FixedArray::make(1, 0UL)
+  let filetype = FixedArray::make(1, b'\x00')
+  let nlink = FixedArray::make(1, 0UL)
+  let size = FixedArray::make(1, 0UL)
+  let atim = FixedArray::make(1, 0UL)
+  let mtim = FixedArray::make(1, 0UL)
+  let ctim = FixedArray::make(1, 0UL)
+  if c_fstatat(
+      dirfd, path_bytes, flags, dev, ino, filetype, nlink, size, atim, mtim, ctim,
+    ) ==
+    0 {
+    Some({
+      dev: dev[0],
+      ino: ino[0],
+      filetype: filetype[0].to_int(),
+      nlink: nlink[0],
+      size: size[0],
+      atim: atim[0],
+      mtim: mtim[0],
+      ctim: ctim[0],
+    })
+  } else {
+    None
+  }
+}
+
+///|
+/// Truncate file
+pub fn native_ftruncate(fd : Int, size : Int64) -> Bool {
+  c_ftruncate(fd, size) == 0
+}
+
+///|
+/// Set file times via fd
+pub fn native_futimens(
+  fd : Int,
+  atim : Int64,
+  mtim : Int64,
+  fst_flags : Int,
+) -> Bool {
+  c_futimens(fd, atim, mtim, fst_flags) == 0
+}
+
+///|
+/// Set file times via path
+pub fn native_utimensat(
+  dirfd : Int,
+  path : String,
+  atim : Int64,
+  mtim : Int64,
+  fst_flags : Int,
+  lookup_flags : Int,
+) -> Bool {
+  let path_bytes = string_to_cstring(path)
+  c_utimensat(dirfd, path_bytes, atim, mtim, fst_flags, lookup_flags) == 0
+}
+
+// ============================================================================
+// Phase 3: Auxiliary functions
+// ============================================================================
+
+///|
+/// Set fd flags
+extern "c" fn c_fcntl_setfl(fd : Int, flags : Int) -> Int = "wasmoon_wasi_fcntl_setfl"
+
+///|
+/// Get fd flags
+extern "c" fn c_fcntl_getfl(fd : Int) -> Int = "wasmoon_wasi_fcntl_getfl"
+
+///|
+/// Duplicate fd
+extern "c" fn c_dup2(oldfd : Int, newfd : Int) -> Int = "wasmoon_wasi_dup2"
+
+///|
+/// Set fd flags
+pub fn native_fcntl_setfl(fd : Int, flags : Int) -> Bool {
+  c_fcntl_setfl(fd, flags) >= 0
+}
+
+///|
+/// Get fd flags
+pub fn native_fcntl_getfl(fd : Int) -> Int? {
+  let result = c_fcntl_getfl(fd)
+  if result >= 0 {
+    Some(result)
+  } else {
+    None
+  }
+}
+
+///|
+/// Duplicate fd to specific number
+pub fn native_dup2(oldfd : Int, newfd : Int) -> Bool {
+  c_dup2(oldfd, newfd) >= 0
+}
+
+// ============================================================================
+// Phase 4: Symlink operations
+// ============================================================================
+
+///|
+/// Create symbolic link
+#borrow(target, linkpath)
+extern "c" fn c_symlinkat(
+  target : FixedArray[Byte],
+  dirfd : Int,
+  linkpath : FixedArray[Byte],
+) -> Int = "wasmoon_wasi_symlinkat"
+
+///|
+/// Read symbolic link
+#borrow(path, buf)
+extern "c" fn c_readlinkat(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  buf : FixedArray[Byte],
+  bufsize : Int64,
+) -> Int64 = "wasmoon_wasi_readlinkat"
+
+///|
+/// Create hard link
+#borrow(oldpath, newpath)
+extern "c" fn c_linkat(
+  olddirfd : Int,
+  oldpath : FixedArray[Byte],
+  newdirfd : Int,
+  newpath : FixedArray[Byte],
+  flags : Int,
+) -> Int = "wasmoon_wasi_linkat"
+
+///|
+/// Create symbolic link
+pub fn native_symlinkat(
+  target : String,
+  dirfd : Int,
+  linkpath : String,
+) -> Bool {
+  let target_bytes = string_to_cstring(target)
+  let linkpath_bytes = string_to_cstring(linkpath)
+  c_symlinkat(target_bytes, dirfd, linkpath_bytes) == 0
+}
+
+///|
+/// Read symbolic link
+pub fn native_readlinkat(dirfd : Int, path : String, bufsize : Int) -> String? {
+  let path_bytes = string_to_cstring(path)
+  let buf = FixedArray::make(bufsize, b'\x00')
+  let result = c_readlinkat(dirfd, path_bytes, buf, bufsize.to_int64())
+  if result < 0L {
+    None
+  } else {
+    let len = result.to_int()
+    let chars : Array[Char] = []
+    for i in 0..<len {
+      chars.push(buf[i].to_int().unsafe_to_char())
+    }
+    Some(String::from_array(chars))
+  }
+}
+
+///|
+/// Create hard link
+pub fn native_linkat(
+  olddirfd : Int,
+  oldpath : String,
+  newdirfd : Int,
+  newpath : String,
+  flags : Int,
+) -> Bool {
+  let oldpath_bytes = string_to_cstring(oldpath)
+  let newpath_bytes = string_to_cstring(newpath)
+  c_linkat(olddirfd, oldpath_bytes, newdirfd, newpath_bytes, flags) == 0
+}
+
+// ============================================================================
+// Phase 5: Poll and socket operations
+// ============================================================================
+
+///|
+/// Nanosleep
+extern "c" fn c_nanosleep(ns : Int64) -> Int = "wasmoon_wasi_nanosleep"
+
+///|
+/// Get monotonic time in nanoseconds
+extern "c" fn c_clock_gettime_monotonic() -> Int64 = "wasmoon_wasi_clock_gettime_monotonic"
+
+///|
+/// Get realtime in nanoseconds
+extern "c" fn c_clock_gettime_realtime() -> Int64 = "wasmoon_wasi_clock_gettime_realtime"
+
+///|
+/// Poll on file descriptors
+#borrow(fds, events, revents)
+extern "c" fn c_poll(
+  fds : FixedArray[Int],
+  events : FixedArray[Int],
+  revents : FixedArray[Int],
+  nfds : Int,
+  timeout_ms : Int,
+) -> Int = "wasmoon_wasi_poll"
+
+///|
+/// Socket recv
+#borrow(buf)
+extern "c" fn c_recv(
+  sockfd : Int,
+  buf : FixedArray[Byte],
+  len : Int64,
+  flags : Int,
+) -> Int64 = "wasmoon_wasi_recv"
+
+///|
+/// Socket send
+#borrow(buf)
+extern "c" fn c_send(
+  sockfd : Int,
+  buf : FixedArray[Byte],
+  len : Int64,
+  flags : Int,
+) -> Int64 = "wasmoon_wasi_send"
+
+///|
+/// Socket shutdown
+extern "c" fn c_shutdown(sockfd : Int, how : Int) -> Int = "wasmoon_wasi_shutdown"
+
+///|
+/// Raise signal
+extern "c" fn c_raise(sig : Int) -> Int = "wasmoon_wasi_raise"
+
+///|
+/// Nanosleep
+pub fn native_nanosleep(ns : Int64) -> Bool {
+  c_nanosleep(ns) == 0
+}
+
+///|
+/// Get monotonic time in nanoseconds
+pub fn native_clock_gettime_monotonic() -> Int64 {
+  c_clock_gettime_monotonic()
+}
+
+///|
+/// Get realtime in nanoseconds
+pub fn native_clock_gettime_realtime() -> Int64 {
+  c_clock_gettime_realtime()
+}
+
+///|
+/// Poll result
+pub(all) struct PollResult {
+  ready_count : Int
+  revents : Array[Int]
+}
+
+///|
+/// Poll on file descriptors
+pub fn native_poll(
+  fds : Array[Int],
+  events : Array[Int],
+  timeout_ms : Int,
+) -> PollResult? {
+  let nfds = fds.length()
+  if nfds == 0 || nfds != events.length() {
+    return None
+  }
+  let fds_arr = FixedArray::make(nfds, 0)
+  let events_arr = FixedArray::make(nfds, 0)
+  let revents_arr = FixedArray::make(nfds, 0)
+  for i in 0..<nfds {
+    fds_arr[i] = fds[i]
+    events_arr[i] = events[i]
+  }
+  let result = c_poll(fds_arr, events_arr, revents_arr, nfds, timeout_ms)
+  if result < 0 {
+    None
+  } else {
+    let revents : Array[Int] = []
+    for i in 0..<nfds {
+      revents.push(revents_arr[i])
+    }
+    Some({ ready_count: result, revents })
+  }
+}
+
+///|
+/// Socket recv
+pub fn native_recv(sockfd : Int, buf : FixedArray[Byte], flags : Int) -> Int64 {
+  c_recv(sockfd, buf, buf.length().to_int64(), flags)
+}
+
+///|
+/// Socket send
+pub fn native_send(
+  sockfd : Int,
+  buf : FixedArray[Byte],
+  len : Int,
+  flags : Int,
+) -> Int64 {
+  c_send(sockfd, buf, len.to_int64(), flags)
+}
+
+///|
+/// Socket shutdown
+pub fn native_shutdown(sockfd : Int, how : Int) -> Bool {
+  c_shutdown(sockfd, how) == 0
+}
+
+///|
+/// Raise signal
+pub fn native_raise(sig : Int) -> Bool {
+  c_raise(sig) == 0
+}

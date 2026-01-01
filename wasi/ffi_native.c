@@ -190,6 +190,479 @@ MOONBIT_FFI_EXPORT void wasmoon_putchar(int c) {
   fflush(stdout);
 }
 
+// ============================================================================
+// Phase 1: Core file operations
+// ============================================================================
+
+// Sync file to disk
+MOONBIT_FFI_EXPORT int wasmoon_wasi_fsync(int fd) {
+#ifdef _WIN32
+  return _commit(fd);
+#else
+  return fsync(fd);
+#endif
+}
+
+// Sync file data (not metadata) to disk
+MOONBIT_FFI_EXPORT int wasmoon_wasi_fdatasync(int fd) {
+#ifdef _WIN32
+  return _commit(fd);
+#elif defined(__APPLE__)
+  // macOS doesn't have fdatasync, use fsync
+  return fsync(fd);
+#else
+  return fdatasync(fd);
+#endif
+}
+
+// Unlink file or directory (with AT_REMOVEDIR flag)
+MOONBIT_FFI_EXPORT int wasmoon_wasi_unlinkat(int dirfd, moonbit_bytes_t path, int flags) {
+#ifdef _WIN32
+  (void)dirfd;
+  (void)flags;
+  // Windows: simple unlink for files, rmdir for directories
+  if (flags & 0x200) {  // AT_REMOVEDIR
+    return _rmdir((const char *)path);
+  } else {
+    return _unlink((const char *)path);
+  }
+#else
+  return unlinkat(dirfd, (const char *)path, flags);
+#endif
+}
+
+// Rename file or directory
+MOONBIT_FFI_EXPORT int wasmoon_wasi_renameat(int old_dirfd, moonbit_bytes_t old_path,
+                                              int new_dirfd, moonbit_bytes_t new_path) {
+#ifdef _WIN32
+  (void)old_dirfd;
+  (void)new_dirfd;
+  return rename((const char *)old_path, (const char *)new_path);
+#else
+  return renameat(old_dirfd, (const char *)old_path, new_dirfd, (const char *)new_path);
+#endif
+}
+
+// ============================================================================
+// Phase 2: File metadata operations
+// ============================================================================
+
+// Get file stat via fd
+MOONBIT_FFI_EXPORT int wasmoon_wasi_fstat(int fd,
+    uint64_t *dev, uint64_t *ino, uint8_t *filetype,
+    uint64_t *nlink, uint64_t *size,
+    uint64_t *atim, uint64_t *mtim, uint64_t *ctim) {
+  struct stat st;
+#ifdef _WIN32
+  if (_fstat64(fd, (struct __stat64 *)&st) != 0) {
+    return -1;
+  }
+#else
+  if (fstat(fd, &st) != 0) {
+    return -1;
+  }
+#endif
+  *dev = st.st_dev;
+  *ino = st.st_ino;
+  *nlink = st.st_nlink;
+  *size = st.st_size;
+
+  // Determine file type
+  if (S_ISDIR(st.st_mode)) {
+    *filetype = 3;  // directory
+  } else if (S_ISREG(st.st_mode)) {
+    *filetype = 4;  // regular_file
+  } else if (S_ISLNK(st.st_mode)) {
+    *filetype = 7;  // symbolic_link
+  } else if (S_ISCHR(st.st_mode)) {
+    *filetype = 2;  // character_device
+  } else if (S_ISBLK(st.st_mode)) {
+    *filetype = 1;  // block_device
+  } else {
+    *filetype = 0;  // unknown
+  }
+
+  // Convert timespec to nanoseconds
+#ifdef _WIN32
+  *atim = (uint64_t)st.st_atime * 1000000000ULL;
+  *mtim = (uint64_t)st.st_mtime * 1000000000ULL;
+  *ctim = (uint64_t)st.st_ctime * 1000000000ULL;
+#elif defined(__APPLE__)
+  *atim = (uint64_t)st.st_atimespec.tv_sec * 1000000000ULL + st.st_atimespec.tv_nsec;
+  *mtim = (uint64_t)st.st_mtimespec.tv_sec * 1000000000ULL + st.st_mtimespec.tv_nsec;
+  *ctim = (uint64_t)st.st_ctimespec.tv_sec * 1000000000ULL + st.st_ctimespec.tv_nsec;
+#else
+  *atim = (uint64_t)st.st_atim.tv_sec * 1000000000ULL + st.st_atim.tv_nsec;
+  *mtim = (uint64_t)st.st_mtim.tv_sec * 1000000000ULL + st.st_mtim.tv_nsec;
+  *ctim = (uint64_t)st.st_ctim.tv_sec * 1000000000ULL + st.st_ctim.tv_nsec;
+#endif
+  return 0;
+}
+
+// Get file stat via path (relative to dirfd)
+MOONBIT_FFI_EXPORT int wasmoon_wasi_fstatat(int dirfd, moonbit_bytes_t path, int flags,
+    uint64_t *dev, uint64_t *ino, uint8_t *filetype,
+    uint64_t *nlink, uint64_t *size,
+    uint64_t *atim, uint64_t *mtim, uint64_t *ctim) {
+  struct stat st;
+#ifdef _WIN32
+  (void)dirfd;
+  (void)flags;
+  if (_stat64((const char *)path, (struct __stat64 *)&st) != 0) {
+    return -1;
+  }
+#else
+  if (fstatat(dirfd, (const char *)path, &st, flags) != 0) {
+    return -1;
+  }
+#endif
+  *dev = st.st_dev;
+  *ino = st.st_ino;
+  *nlink = st.st_nlink;
+  *size = st.st_size;
+
+  // Determine file type
+  if (S_ISDIR(st.st_mode)) {
+    *filetype = 3;  // directory
+  } else if (S_ISREG(st.st_mode)) {
+    *filetype = 4;  // regular_file
+  } else if (S_ISLNK(st.st_mode)) {
+    *filetype = 7;  // symbolic_link
+  } else if (S_ISCHR(st.st_mode)) {
+    *filetype = 2;  // character_device
+  } else if (S_ISBLK(st.st_mode)) {
+    *filetype = 1;  // block_device
+  } else {
+    *filetype = 0;  // unknown
+  }
+
+  // Convert timespec to nanoseconds
+#ifdef _WIN32
+  *atim = (uint64_t)st.st_atime * 1000000000ULL;
+  *mtim = (uint64_t)st.st_mtime * 1000000000ULL;
+  *ctim = (uint64_t)st.st_ctime * 1000000000ULL;
+#elif defined(__APPLE__)
+  *atim = (uint64_t)st.st_atimespec.tv_sec * 1000000000ULL + st.st_atimespec.tv_nsec;
+  *mtim = (uint64_t)st.st_mtimespec.tv_sec * 1000000000ULL + st.st_mtimespec.tv_nsec;
+  *ctim = (uint64_t)st.st_ctimespec.tv_sec * 1000000000ULL + st.st_ctimespec.tv_nsec;
+#else
+  *atim = (uint64_t)st.st_atim.tv_sec * 1000000000ULL + st.st_atim.tv_nsec;
+  *mtim = (uint64_t)st.st_mtim.tv_sec * 1000000000ULL + st.st_mtim.tv_nsec;
+  *ctim = (uint64_t)st.st_ctim.tv_sec * 1000000000ULL + st.st_ctim.tv_nsec;
+#endif
+  return 0;
+}
+
+// Truncate file to specified size
+MOONBIT_FFI_EXPORT int wasmoon_wasi_ftruncate(int fd, int64_t size) {
+#ifdef _WIN32
+  return _chsize_s(fd, size);
+#else
+  return ftruncate(fd, size);
+#endif
+}
+
+// Set file times
+MOONBIT_FFI_EXPORT int wasmoon_wasi_futimens(int fd, int64_t atim, int64_t mtim, int fst_flags) {
+#ifdef _WIN32
+  (void)fd;
+  (void)atim;
+  (void)mtim;
+  (void)fst_flags;
+  // Not easily supported on Windows
+  return -1;
+#else
+  struct timespec times[2];
+
+  // fst_flags bits:
+  // 0x01 = SET_ATIM (use atim)
+  // 0x02 = SET_ATIM_NOW (use current time)
+  // 0x04 = SET_MTIM (use mtim)
+  // 0x08 = SET_MTIM_NOW (use current time)
+
+  if (fst_flags & 0x02) {
+    times[0].tv_nsec = UTIME_NOW;
+    times[0].tv_sec = 0;
+  } else if (fst_flags & 0x01) {
+    times[0].tv_sec = atim / 1000000000LL;
+    times[0].tv_nsec = atim % 1000000000LL;
+  } else {
+    times[0].tv_nsec = UTIME_OMIT;
+    times[0].tv_sec = 0;
+  }
+
+  if (fst_flags & 0x08) {
+    times[1].tv_nsec = UTIME_NOW;
+    times[1].tv_sec = 0;
+  } else if (fst_flags & 0x04) {
+    times[1].tv_sec = mtim / 1000000000LL;
+    times[1].tv_nsec = mtim % 1000000000LL;
+  } else {
+    times[1].tv_nsec = UTIME_OMIT;
+    times[1].tv_sec = 0;
+  }
+
+  return futimens(fd, times);
+#endif
+}
+
+// Set file times via path
+MOONBIT_FFI_EXPORT int wasmoon_wasi_utimensat(int dirfd, moonbit_bytes_t path,
+    int64_t atim, int64_t mtim, int fst_flags, int lookup_flags) {
+#ifdef _WIN32
+  (void)dirfd;
+  (void)path;
+  (void)atim;
+  (void)mtim;
+  (void)fst_flags;
+  (void)lookup_flags;
+  return -1;
+#else
+  struct timespec times[2];
+
+  if (fst_flags & 0x02) {
+    times[0].tv_nsec = UTIME_NOW;
+    times[0].tv_sec = 0;
+  } else if (fst_flags & 0x01) {
+    times[0].tv_sec = atim / 1000000000LL;
+    times[0].tv_nsec = atim % 1000000000LL;
+  } else {
+    times[0].tv_nsec = UTIME_OMIT;
+    times[0].tv_sec = 0;
+  }
+
+  if (fst_flags & 0x08) {
+    times[1].tv_nsec = UTIME_NOW;
+    times[1].tv_sec = 0;
+  } else if (fst_flags & 0x04) {
+    times[1].tv_sec = mtim / 1000000000LL;
+    times[1].tv_nsec = mtim % 1000000000LL;
+  } else {
+    times[1].tv_nsec = UTIME_OMIT;
+    times[1].tv_sec = 0;
+  }
+
+  return utimensat(dirfd, (const char *)path, times, lookup_flags);
+#endif
+}
+
+// ============================================================================
+// Phase 3: Auxiliary functions
+// ============================================================================
+
+// Set fd flags
+MOONBIT_FFI_EXPORT int wasmoon_wasi_fcntl_setfl(int fd, int flags) {
+#ifdef _WIN32
+  (void)fd;
+  (void)flags;
+  return -1;  // Not supported on Windows
+#else
+  return fcntl(fd, F_SETFL, flags);
+#endif
+}
+
+// Get fd flags
+MOONBIT_FFI_EXPORT int wasmoon_wasi_fcntl_getfl(int fd) {
+#ifdef _WIN32
+  (void)fd;
+  return -1;  // Not supported on Windows
+#else
+  return fcntl(fd, F_GETFL);
+#endif
+}
+
+// Duplicate fd to specific number
+MOONBIT_FFI_EXPORT int wasmoon_wasi_dup2(int oldfd, int newfd) {
+#ifdef _WIN32
+  return _dup2(oldfd, newfd);
+#else
+  return dup2(oldfd, newfd);
+#endif
+}
+
+// ============================================================================
+// Phase 4: Symlink operations
+// ============================================================================
+
+// Create symbolic link
+MOONBIT_FFI_EXPORT int wasmoon_wasi_symlinkat(moonbit_bytes_t target, int dirfd, moonbit_bytes_t linkpath) {
+#ifdef _WIN32
+  (void)target;
+  (void)dirfd;
+  (void)linkpath;
+  return -1;  // Symlinks require admin on Windows
+#else
+  return symlinkat((const char *)target, dirfd, (const char *)linkpath);
+#endif
+}
+
+// Read symbolic link
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_readlinkat(int dirfd, moonbit_bytes_t path,
+    moonbit_bytes_t buf, int64_t bufsize) {
+#ifdef _WIN32
+  (void)dirfd;
+  (void)path;
+  (void)buf;
+  (void)bufsize;
+  return -1;
+#else
+  return readlinkat(dirfd, (const char *)path, (char *)buf, bufsize);
+#endif
+}
+
+// Create hard link
+MOONBIT_FFI_EXPORT int wasmoon_wasi_linkat(int olddirfd, moonbit_bytes_t oldpath,
+    int newdirfd, moonbit_bytes_t newpath, int flags) {
+#ifdef _WIN32
+  (void)olddirfd;
+  (void)newdirfd;
+  (void)flags;
+  // Windows: CreateHardLink only works with absolute paths
+  return -1;
+#else
+  return linkat(olddirfd, (const char *)oldpath, newdirfd, (const char *)newpath, flags);
+#endif
+}
+
+// ============================================================================
+// Phase 5: Poll and socket operations
+// ============================================================================
+
+#ifndef _WIN32
+#include <poll.h>
+#include <sys/socket.h>
+#include <signal.h>
+#include <time.h>
+#endif
+
+// Nanosleep - sleep for specified nanoseconds
+// Returns 0 on success, -1 on error
+MOONBIT_FFI_EXPORT int wasmoon_wasi_nanosleep(int64_t ns) {
+#ifdef _WIN32
+  // Windows: use Sleep (milliseconds)
+  Sleep((DWORD)(ns / 1000000));
+  return 0;
+#else
+  struct timespec req;
+  req.tv_sec = ns / 1000000000LL;
+  req.tv_nsec = ns % 1000000000LL;
+  return nanosleep(&req, NULL);
+#endif
+}
+
+// Get current time in nanoseconds (monotonic clock)
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_clock_gettime_monotonic(void) {
+#ifdef _WIN32
+  // Windows: use QueryPerformanceCounter
+  LARGE_INTEGER freq, count;
+  QueryPerformanceFrequency(&freq);
+  QueryPerformanceCounter(&count);
+  return (int64_t)((double)count.QuadPart / freq.QuadPart * 1000000000.0);
+#else
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
+// Get current time in nanoseconds (realtime clock)
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_clock_gettime_realtime(void) {
+#ifdef _WIN32
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+  // Convert to nanoseconds since Unix epoch
+  uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+  t -= 116444736000000000ULL; // Windows epoch to Unix epoch
+  return t * 100;  // 100ns units to ns
+#else
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
+// Poll on file descriptors
+// fds_ptr: array of (fd, events) pairs
+// nfds: number of fds
+// timeout_ms: timeout in milliseconds (-1 for infinite)
+// Returns number of ready fds, or -1 on error
+MOONBIT_FFI_EXPORT int wasmoon_wasi_poll(int* fds_ptr, int16_t* events_ptr,
+    int16_t* revents_ptr, int nfds, int timeout_ms) {
+#ifdef _WIN32
+  (void)fds_ptr;
+  (void)events_ptr;
+  (void)revents_ptr;
+  (void)nfds;
+  (void)timeout_ms;
+  return -1;  // Not easily supported on Windows
+#else
+  if (nfds <= 0 || nfds > 256) return -1;
+
+  struct pollfd pfds[256];
+  for (int i = 0; i < nfds; i++) {
+    pfds[i].fd = fds_ptr[i];
+    pfds[i].events = events_ptr[i];
+    pfds[i].revents = 0;
+  }
+
+  int result = poll(pfds, nfds, timeout_ms);
+
+  for (int i = 0; i < nfds; i++) {
+    revents_ptr[i] = pfds[i].revents;
+  }
+
+  return result;
+#endif
+}
+
+// Socket recv
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_recv(int sockfd, moonbit_bytes_t buf,
+    int64_t len, int flags) {
+#ifdef _WIN32
+  (void)sockfd;
+  (void)buf;
+  (void)len;
+  (void)flags;
+  return -1;
+#else
+  return recv(sockfd, buf, len, flags);
+#endif
+}
+
+// Socket send
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_send(int sockfd, moonbit_bytes_t buf,
+    int64_t len, int flags) {
+#ifdef _WIN32
+  (void)sockfd;
+  (void)buf;
+  (void)len;
+  (void)flags;
+  return -1;
+#else
+  return send(sockfd, buf, len, flags);
+#endif
+}
+
+// Socket shutdown
+MOONBIT_FFI_EXPORT int wasmoon_wasi_shutdown(int sockfd, int how) {
+#ifdef _WIN32
+  (void)sockfd;
+  (void)how;
+  return -1;
+#else
+  return shutdown(sockfd, how);
+#endif
+}
+
+// Raise a signal
+MOONBIT_FFI_EXPORT int wasmoon_wasi_raise(int sig) {
+#ifdef _WIN32
+  return raise(sig);
+#else
+  return raise(sig);
+#endif
+}
+
 #ifdef __cplusplus
 }
 #endif

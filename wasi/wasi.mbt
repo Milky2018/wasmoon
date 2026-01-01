@@ -558,40 +558,654 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     func_type=make_func_type([i32, i32, i32, i64, i32], [i32]),
   )
 
-  // Stub functions that return ENOSYS (not implemented)
-  // Each tuple: (name, param_types)
-  let stub_funcs : Array[(String, Array[@types.ValueType])] = [
-    ("fd_advise", [i32, i64, i64, i32]), // fd, offset, len, advice
-    ("fd_allocate", [i32, i64, i64]), // fd, offset, len
-    ("fd_datasync", [i32]), // fd
-    ("fd_fdstat_set_flags", [i32, i32]), // fd, flags
-    ("fd_fdstat_set_rights", [i32, i64, i64]), // fd, fs_rights_base, fs_rights_inheriting
-    ("fd_filestat_get", [i32, i32]), // fd, buf
-    ("fd_filestat_set_size", [i32, i64]), // fd, size
-    ("fd_filestat_set_times", [i32, i64, i64, i32]), // fd, atim, mtim, fst_flags
-    ("fd_renumber", [i32, i32]), // fd, to
-    ("fd_sync", [i32]), // fd
-    ("path_filestat_get", [i32, i32, i32, i32, i32]), // fd, flags, path, path_len, buf
-    ("path_filestat_set_times", [i32, i32, i32, i32, i64, i64, i32]), // fd, flags, path, path_len, atim, mtim, fst_flags
-    ("path_link", [i32, i32, i32, i32, i32, i32, i32]), // old_fd, old_flags, old_path, old_path_len, new_fd, new_path, new_path_len
-    ("path_readlink", [i32, i32, i32, i32, i32, i32]), // fd, path, path_len, buf, buf_len, bufused
-    ("path_remove_directory", [i32, i32, i32]), // fd, path, path_len
-    ("path_rename", [i32, i32, i32, i32, i32, i32]), // fd, old_path, old_path_len, new_fd, new_path, new_path_len
-    ("path_symlink", [i32, i32, i32, i32, i32]), // old_path, old_path_len, fd, new_path, new_path_len
-    ("path_unlink_file", [i32, i32, i32]), // fd, path, path_len
-    ("poll_oneoff", [i32, i32, i32, i32]), // in, out, nsubscriptions, nevents
-    ("sock_accept", [i32, i32, i32]), // fd, flags, result_fd
-    ("sock_recv", [i32, i32, i32, i32, i32, i32]), // fd, ri_data, ri_data_len, ri_flags, ro_datalen, ro_flags
-    ("sock_send", [i32, i32, i32, i32, i32]), // fd, si_data, si_data_len, si_flags, so_datalen
-    ("sock_shutdown", [i32, i32]), // fd, how
-  ]
-  for stub in stub_funcs {
-    let (name, params) = stub
-    linker.add_host_func(
-      "wasi_snapshot_preview1",
-      name,
-      fn(_args) { [@types.Value::I32(Errno::NoSys.to_i32())] },
-      func_type=make_func_type(params, [i32]),
-    )
-  }
+  // ============================================================================
+  // Phase 1: Core file operations
+  // ============================================================================
+
+  // fd_sync(fd) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_sync",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_sync_impl(ctx, fd)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32], [i32]),
+  )
+
+  // fd_datasync(fd) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_datasync",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_datasync_impl(ctx, fd)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32], [i32]),
+  )
+
+  // path_unlink_file(fd, path, path_len) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "path_unlink_file",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_ptr = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_len = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = path_unlink_file_impl(ctx, mem, fd, path_ptr, path_len)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32], [i32]),
+  )
+
+  // path_remove_directory(fd, path, path_len) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "path_remove_directory",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_ptr = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_len = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = path_remove_directory_impl(ctx, mem, fd, path_ptr, path_len)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32], [i32]),
+  )
+
+  // path_rename(fd, old_path, old_path_len, new_fd, new_path, new_path_len) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "path_rename",
+    fn(args) {
+      let old_fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let old_path_ptr = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let old_path_len = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let new_fd = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let new_path_ptr = match args[4] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let new_path_len = match args[5] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = path_rename_impl(
+        ctx, mem, old_fd, old_path_ptr, old_path_len, new_fd, new_path_ptr, new_path_len,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32, i32, i32], [i32]),
+  )
+
+  // ============================================================================
+  // Phase 2: File metadata operations
+  // ============================================================================
+
+  // fd_filestat_get(fd, buf) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_filestat_get",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let buf_ptr = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = fd_filestat_get_impl(ctx, mem, fd, buf_ptr)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32], [i32]),
+  )
+
+  // path_filestat_get(fd, flags, path, path_len, buf) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "path_filestat_get",
+    fn(args) {
+      let dir_fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let flags = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_ptr = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_len = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let buf_ptr = match args[4] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = path_filestat_get_impl(
+        ctx, mem, dir_fd, flags, path_ptr, path_len, buf_ptr,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32, i32], [i32]),
+  )
+
+  // fd_filestat_set_size(fd, size) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_filestat_set_size",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let size = match args[1] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_filestat_set_size_impl(ctx, fd, size)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i64], [i32]),
+  )
+
+  // fd_filestat_set_times(fd, atim, mtim, fst_flags) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_filestat_set_times",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let atim = match args[1] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mtim = match args[2] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let fst_flags = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_filestat_set_times_impl(ctx, fd, atim, mtim, fst_flags)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i64, i64, i32], [i32]),
+  )
+
+  // path_filestat_set_times(fd, flags, path, path_len, atim, mtim, fst_flags) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "path_filestat_set_times",
+    fn(args) {
+      let dir_fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let flags = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_ptr = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_len = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let atim = match args[4] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mtim = match args[5] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let fst_flags = match args[6] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = path_filestat_set_times_impl(
+        ctx, mem, dir_fd, flags, path_ptr, path_len, atim, mtim, fst_flags,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32, i64, i64, i32], [i32]),
+  )
+
+  // ============================================================================
+  // Phase 3: Auxiliary functions
+  // ============================================================================
+
+  // fd_advise(fd, offset, len, advice) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_advise",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let offset = match args[1] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let len = match args[2] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let advice = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_advise_impl(ctx, fd, offset, len, advice)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i64, i64, i32], [i32]),
+  )
+
+  // fd_allocate(fd, offset, len) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_allocate",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let offset = match args[1] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let len = match args[2] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_allocate_impl(ctx, fd, offset, len)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i64, i64], [i32]),
+  )
+
+  // fd_fdstat_set_flags(fd, flags) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_fdstat_set_flags",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let flags = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_fdstat_set_flags_impl(ctx, fd, flags)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32], [i32]),
+  )
+
+  // fd_fdstat_set_rights(fd, fs_rights_base, fs_rights_inheriting) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_fdstat_set_rights",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let fs_rights_base = match args[1] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let fs_rights_inheriting = match args[2] {
+        I64(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_fdstat_set_rights_impl(
+        ctx, fd, fs_rights_base, fs_rights_inheriting,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i64, i64], [i32]),
+  )
+
+  // fd_renumber(from, to) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "fd_renumber",
+    fn(args) {
+      let from = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let to = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = fd_renumber_impl(ctx, from, to)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32], [i32]),
+  )
+
+  // ============================================================================
+  // Phase 4: Symlink operations
+  // ============================================================================
+
+  // path_symlink(old_path, old_path_len, fd, new_path, new_path_len) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "path_symlink",
+    fn(args) {
+      let old_path_ptr = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let old_path_len = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let dir_fd = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let new_path_ptr = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let new_path_len = match args[4] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = path_symlink_impl(
+        ctx, mem, old_path_ptr, old_path_len, dir_fd, new_path_ptr, new_path_len,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32, i32], [i32]),
+  )
+
+  // path_readlink(fd, path, path_len, buf, buf_len, bufused) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "path_readlink",
+    fn(args) {
+      let dir_fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_ptr = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let path_len = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let buf_ptr = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let buf_len = match args[4] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let bufused_ptr = match args[5] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = path_readlink_impl(
+        ctx, mem, dir_fd, path_ptr, path_len, buf_ptr, buf_len, bufused_ptr,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32, i32, i32], [i32]),
+  )
+
+  // path_link(old_fd, old_flags, old_path, old_path_len, new_fd, new_path, new_path_len) -> errno
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "path_link",
+    fn(args) {
+      let old_fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let old_flags = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let old_path_ptr = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let old_path_len = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let new_fd = match args[4] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let new_path_ptr = match args[5] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let new_path_len = match args[6] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = path_link_impl(
+        ctx, mem, old_fd, old_flags, old_path_ptr, old_path_len, new_fd, new_path_ptr,
+        new_path_len,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32, i32, i32, i32], [i32]),
+  )
+
+  // ============================================================================
+  // Phase 5: poll and socket
+  // ============================================================================
+
+  // poll_oneoff
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "poll_oneoff",
+    fn(args) {
+      let in_ptr = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let out_ptr = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let nsubscriptions = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let nevents_ptr = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = poll_oneoff_impl(
+        ctx, mem, in_ptr, out_ptr, nsubscriptions, nevents_ptr,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32], [i32]),
+  )
+
+  // sock_recv
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "sock_recv",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let ri_data_ptr = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let ri_data_len = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let ri_flags = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let ro_datalen_ptr = match args[4] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let ro_flags_ptr = match args[5] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = sock_recv_impl(
+        ctx, mem, fd, ri_data_ptr, ri_data_len, ri_flags, ro_datalen_ptr, ro_flags_ptr,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32, i32, i32], [i32]),
+  )
+
+  // sock_send
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "sock_send",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let si_data_ptr = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let si_data_len = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let si_flags = match args[3] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let so_datalen_ptr = match args[4] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = sock_send_impl(
+        ctx, mem, fd, si_data_ptr, si_data_len, si_flags, so_datalen_ptr,
+      )
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32, i32, i32, i32], [i32]),
+  )
+
+  // sock_shutdown
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "sock_shutdown",
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let how = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = sock_shutdown_impl(ctx, fd, how)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32, i32], [i32]),
+  )
+
+  // proc_raise
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "proc_raise",
+    fn(args) {
+      let signal = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result = proc_raise_impl(signal)
+      [@types.Value::I32(result)]
+    },
+    func_type=make_func_type([i32], [i32]),
+  )
+
+  // sock_accept is a WASI-sockets extension, not part of Preview1 core
+  // Keep as stub for compatibility
+  linker.add_host_func(
+    "wasi_snapshot_preview1",
+    "sock_accept",
+    fn(_args) { [@types.Value::I32(Errno::NoSys.to_i32())] },
+    func_type=make_func_type([i32, i32, i32], [i32]),
+  )
 }

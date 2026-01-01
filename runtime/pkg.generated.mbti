@@ -200,6 +200,7 @@ pub fn Memory::new(Int, Int?, is_memory64? : Bool) -> Self
 pub fn Memory::read_byte(Self, Int) -> Byte
 pub fn Memory::read_bytes(Self, Int, Int) -> Bytes
 pub fn Memory::read_i32(Self, Int) -> Int
+pub fn Memory::read_i64(Self, Int) -> Int64
 pub fn Memory::size_pages(Self) -> Int
 pub fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
 pub fn Memory::store_f32(Self, Int, Float) -> Unit raise RuntimeError

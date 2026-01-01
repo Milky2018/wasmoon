@@ -466,6 +466,19 @@ pub fn Memory::write_i32(self : Memory, addr : Int, value : Int) -> Unit {
 }
 
 ///|
+/// Read i64 from memory (non-raising version for WASI)
+pub fn Memory::read_i64(self : Memory, addr : Int) -> Int64 {
+  if addr < 0 || addr + 8 > self.data.length() {
+    return 0L
+  }
+  let mut result = 0L
+  for i in 0..<8 {
+    result = result | (self.data[addr + i].to_int64() << (i * 8))
+  }
+  result
+}
+
+///|
 /// Write i64 to memory (non-raising version for WASI)
 pub fn Memory::write_i64(self : Memory, addr : Int, value : Int64) -> Unit {
   if addr < 0 || addr + 8 > self.data.length() {
