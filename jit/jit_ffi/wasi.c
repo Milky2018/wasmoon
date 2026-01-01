@@ -893,6 +893,441 @@ static int64_t wasi_poll_oneoff_impl(
     return WASI_ESUCCESS;
 }
 
+// ============ Additional File Operations ============
+
+// fd_pread: Read from fd at offset without changing position
+static int32_t wasi_fd_pread_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t iovs_ptr, int32_t iovs_len, int64_t offset, int32_t nread_ptr
+) {
+    (void)caller_ctx;
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+#ifndef _WIN32
+    size_t total = 0;
+    for (int32_t i = 0; i < iovs_len; i++) {
+        int32_t buf_ptr = *(int32_t *)(mem + iovs_ptr + i * 8);
+        int32_t buf_len = *(int32_t *)(mem + iovs_ptr + i * 8 + 4);
+        ssize_t n = pread(native_fd, mem + buf_ptr, buf_len, offset + total);
+        if (n < 0) return errno_to_wasi(errno);
+        total += n;
+        if (n < buf_len) break;
+    }
+    *(int32_t *)(mem + nread_ptr) = (int32_t)total;
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// fd_pwrite: Write to fd at offset without changing position
+static int32_t wasi_fd_pwrite_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t iovs_ptr, int32_t iovs_len, int64_t offset, int32_t nwritten_ptr
+) {
+    (void)caller_ctx;
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+#ifndef _WIN32
+    size_t total = 0;
+    for (int32_t i = 0; i < iovs_len; i++) {
+        int32_t buf_ptr = *(int32_t *)(mem + iovs_ptr + i * 8);
+        int32_t buf_len = *(int32_t *)(mem + iovs_ptr + i * 8 + 4);
+        ssize_t n = pwrite(native_fd, mem + buf_ptr, buf_len, offset + total);
+        if (n < 0) return errno_to_wasi(errno);
+        total += n;
+        if (n < buf_len) break;
+    }
+    *(int32_t *)(mem + nwritten_ptr) = (int32_t)total;
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// fd_readdir: Read directory entries
+static int32_t wasi_fd_readdir_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t buf_ptr, int32_t buf_len, int64_t cookie, int32_t bufused_ptr
+) {
+    (void)caller_ctx;
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+#ifndef _WIN32
+    // For preopened directories, use opendir on the path
+    if (!is_preopen_fd(ctx, fd)) {
+        // Not a directory fd
+        return WASI_ENOTDIR;
+    }
+
+    const char *path = get_preopen_path(ctx, fd);
+    if (!path) return WASI_EBADF;
+
+    DIR *dir = opendir(path);
+    if (!dir) return errno_to_wasi(errno);
+
+    // Skip to cookie position
+    int64_t pos = 0;
+    struct dirent *entry;
+    while (pos < cookie && (entry = readdir(dir)) != NULL) {
+        pos++;
+    }
+
+    // Read entries into buffer
+    uint8_t *buf = mem + buf_ptr;
+    int32_t used = 0;
+
+    while ((entry = readdir(dir)) != NULL && used < buf_len) {
+        size_t name_len = strlen(entry->d_name);
+        size_t entry_size = 24 + name_len; // dirent header + name
+
+        if (used + entry_size > (size_t)buf_len) {
+            // Not enough space, but we've read some entries
+            break;
+        }
+
+        // Write dirent structure
+        // d_next: u64 (cookie for next entry)
+        *(uint64_t *)(buf + used) = pos + 1;
+        // d_ino: u64
+        *(uint64_t *)(buf + used + 8) = entry->d_ino;
+        // d_namlen: u32
+        *(uint32_t *)(buf + used + 16) = (uint32_t)name_len;
+        // d_type: u8
+        uint8_t wasi_type = WASI_FILETYPE_UNKNOWN;
+        switch (entry->d_type) {
+            case DT_REG: wasi_type = WASI_FILETYPE_REGULAR_FILE; break;
+            case DT_DIR: wasi_type = WASI_FILETYPE_DIRECTORY; break;
+            case DT_LNK: wasi_type = WASI_FILETYPE_SYMBOLIC_LINK; break;
+            case DT_CHR: wasi_type = WASI_FILETYPE_CHARACTER_DEVICE; break;
+            case DT_BLK: wasi_type = WASI_FILETYPE_BLOCK_DEVICE; break;
+            case DT_SOCK: wasi_type = WASI_FILETYPE_SOCKET_STREAM; break;
+        }
+        *(uint8_t *)(buf + used + 20) = wasi_type;
+        // Copy name
+        memcpy(buf + used + 24, entry->d_name, name_len);
+
+        used += entry_size;
+        pos++;
+    }
+
+    closedir(dir);
+    *(int32_t *)(mem + bufused_ptr) = used;
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// path_filestat_get: Get file stats by path
+static int32_t wasi_path_filestat_get_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len, int32_t buf_ptr
+) {
+    (void)caller_ctx;
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+#ifndef _WIN32
+    // Copy path from memory and null-terminate
+    char path_tmp[4096];
+    if (path_len >= (int32_t)sizeof(path_tmp)) return WASI_EINVAL;
+    memcpy(path_tmp, mem + path_ptr, path_len);
+    path_tmp[path_len] = '\0';
+
+    char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    if (!full_path) return WASI_EBADF;
+
+    struct stat st;
+    int result;
+    if (flags & 1) { // SYMLINK_FOLLOW
+        result = stat(full_path, &st);
+    } else {
+        result = lstat(full_path, &st);
+    }
+    free(full_path);
+    if (result != 0) return errno_to_wasi(errno);
+
+    // Write filestat structure (64 bytes)
+    *(uint64_t *)(mem + buf_ptr + 0) = st.st_dev;
+    *(uint64_t *)(mem + buf_ptr + 8) = st.st_ino;
+    *(uint8_t *)(mem + buf_ptr + 16) = mode_to_filetype(st.st_mode);
+    *(uint64_t *)(mem + buf_ptr + 24) = st.st_nlink;
+    *(uint64_t *)(mem + buf_ptr + 32) = st.st_size;
+#ifdef __APPLE__
+    *(uint64_t *)(mem + buf_ptr + 40) = st.st_atimespec.tv_sec * 1000000000ULL + st.st_atimespec.tv_nsec;
+    *(uint64_t *)(mem + buf_ptr + 48) = st.st_mtimespec.tv_sec * 1000000000ULL + st.st_mtimespec.tv_nsec;
+    *(uint64_t *)(mem + buf_ptr + 56) = st.st_ctimespec.tv_sec * 1000000000ULL + st.st_ctimespec.tv_nsec;
+#else
+    *(uint64_t *)(mem + buf_ptr + 40) = st.st_atim.tv_sec * 1000000000ULL + st.st_atim.tv_nsec;
+    *(uint64_t *)(mem + buf_ptr + 48) = st.st_mtim.tv_sec * 1000000000ULL + st.st_mtim.tv_nsec;
+    *(uint64_t *)(mem + buf_ptr + 56) = st.st_ctim.tv_sec * 1000000000ULL + st.st_ctim.tv_nsec;
+#endif
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// path_readlink: Read symbolic link
+static int32_t wasi_path_readlink_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t dir_fd, int32_t path_ptr, int32_t path_len,
+    int32_t buf_ptr, int32_t buf_len, int32_t bufused_ptr
+) {
+    (void)caller_ctx;
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+#ifndef _WIN32
+    // Copy path from memory and null-terminate
+    char path_tmp[4096];
+    if (path_len >= (int32_t)sizeof(path_tmp)) return WASI_EINVAL;
+    memcpy(path_tmp, mem + path_ptr, path_len);
+    path_tmp[path_len] = '\0';
+
+    char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    if (!full_path) return WASI_EBADF;
+
+    ssize_t n = readlink(full_path, (char *)(mem + buf_ptr), buf_len);
+    free(full_path);
+    if (n < 0) return errno_to_wasi(errno);
+
+    *(int32_t *)(mem + bufused_ptr) = (int32_t)n;
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// path_symlink: Create symbolic link
+static int32_t wasi_path_symlink_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t old_path_ptr, int32_t old_path_len,
+    int32_t dir_fd, int32_t new_path_ptr, int32_t new_path_len
+) {
+    (void)caller_ctx;
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+#ifndef _WIN32
+    // Get the target (old_path) - this is the content of the symlink
+    char old_path[4096];
+    if (old_path_len >= (int32_t)sizeof(old_path)) return WASI_EINVAL;
+    memcpy(old_path, mem + old_path_ptr, old_path_len);
+    old_path[old_path_len] = '\0';
+
+    // Copy new path from memory and null-terminate
+    char new_path_tmp[4096];
+    if (new_path_len >= (int32_t)sizeof(new_path_tmp)) return WASI_EINVAL;
+    memcpy(new_path_tmp, mem + new_path_ptr, new_path_len);
+    new_path_tmp[new_path_len] = '\0';
+
+    // Resolve the new path (where to create the symlink)
+    char *full_new_path = resolve_path(ctx, dir_fd, new_path_tmp);
+    if (!full_new_path) return WASI_EBADF;
+
+    int result = symlink(old_path, full_new_path);
+    free(full_new_path);
+    if (result != 0) {
+        return errno_to_wasi(errno);
+    }
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// path_link: Create hard link
+static int32_t wasi_path_link_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t old_fd, int32_t old_flags,
+    int32_t old_path_ptr, int32_t old_path_len,
+    int32_t new_fd, int32_t new_path_ptr, int32_t new_path_len
+) {
+    (void)caller_ctx;
+    (void)old_flags;
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+#ifndef _WIN32
+    // Copy old path from memory and null-terminate
+    char old_path_tmp[4096];
+    if (old_path_len >= (int32_t)sizeof(old_path_tmp)) return WASI_EINVAL;
+    memcpy(old_path_tmp, mem + old_path_ptr, old_path_len);
+    old_path_tmp[old_path_len] = '\0';
+
+    // Copy new path from memory and null-terminate
+    char new_path_tmp[4096];
+    if (new_path_len >= (int32_t)sizeof(new_path_tmp)) return WASI_EINVAL;
+    memcpy(new_path_tmp, mem + new_path_ptr, new_path_len);
+    new_path_tmp[new_path_len] = '\0';
+
+    char *full_old_path = resolve_path(ctx, old_fd, old_path_tmp);
+    if (!full_old_path) return WASI_EBADF;
+
+    char *full_new_path = resolve_path(ctx, new_fd, new_path_tmp);
+    if (!full_new_path) {
+        free(full_old_path);
+        return WASI_EBADF;
+    }
+
+    int result = link(full_old_path, full_new_path);
+    free(full_old_path);
+    free(full_new_path);
+    if (result != 0) {
+        return errno_to_wasi(errno);
+    }
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// fd_filestat_set_times: Set file timestamps
+static int32_t wasi_fd_filestat_set_times_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int64_t atim, int64_t mtim, int32_t fst_flags
+) {
+    (void)caller_ctx;
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+#ifndef _WIN32
+    struct timespec times[2];
+
+    // Access time
+    if (fst_flags & 2) { // SET_ATIM_NOW
+        times[0].tv_sec = 0;
+        times[0].tv_nsec = UTIME_NOW;
+    } else if (fst_flags & 1) { // SET_ATIM
+        times[0].tv_sec = atim / 1000000000LL;
+        times[0].tv_nsec = atim % 1000000000LL;
+    } else {
+        times[0].tv_sec = 0;
+        times[0].tv_nsec = UTIME_OMIT;
+    }
+
+    // Modification time
+    if (fst_flags & 8) { // SET_MTIM_NOW
+        times[1].tv_sec = 0;
+        times[1].tv_nsec = UTIME_NOW;
+    } else if (fst_flags & 4) { // SET_MTIM
+        times[1].tv_sec = mtim / 1000000000LL;
+        times[1].tv_nsec = mtim % 1000000000LL;
+    } else {
+        times[1].tv_sec = 0;
+        times[1].tv_nsec = UTIME_OMIT;
+    }
+
+    if (futimens(native_fd, times) != 0) {
+        return errno_to_wasi(errno);
+    }
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// path_filestat_set_times: Set file timestamps by path
+static int32_t wasi_path_filestat_set_times_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len,
+    int64_t atim, int64_t mtim, int32_t fst_flags
+) {
+    (void)caller_ctx;
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+#ifndef _WIN32
+    // Copy path from memory and null-terminate
+    char path_tmp[4096];
+    if (path_len >= (int32_t)sizeof(path_tmp)) return WASI_EINVAL;
+    memcpy(path_tmp, mem + path_ptr, path_len);
+    path_tmp[path_len] = '\0';
+
+    char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    if (!full_path) return WASI_EBADF;
+
+    struct timespec times[2];
+
+    // Access time
+    if (fst_flags & 2) { // SET_ATIM_NOW
+        times[0].tv_sec = 0;
+        times[0].tv_nsec = UTIME_NOW;
+    } else if (fst_flags & 1) { // SET_ATIM
+        times[0].tv_sec = atim / 1000000000LL;
+        times[0].tv_nsec = atim % 1000000000LL;
+    } else {
+        times[0].tv_sec = 0;
+        times[0].tv_nsec = UTIME_OMIT;
+    }
+
+    // Modification time
+    if (fst_flags & 8) { // SET_MTIM_NOW
+        times[1].tv_sec = 0;
+        times[1].tv_nsec = UTIME_NOW;
+    } else if (fst_flags & 4) { // SET_MTIM
+        times[1].tv_sec = mtim / 1000000000LL;
+        times[1].tv_nsec = mtim % 1000000000LL;
+    } else {
+        times[1].tv_sec = 0;
+        times[1].tv_nsec = UTIME_OMIT;
+    }
+
+    int at_flags = (flags & 1) ? 0 : AT_SYMLINK_NOFOLLOW;
+    int result = utimensat(AT_FDCWD, full_path, times, at_flags);
+    free(full_path);
+    if (result != 0) {
+        return errno_to_wasi(errno);
+    }
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// fd_advise: No-op (advice is optional)
+static int32_t wasi_fd_advise_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int64_t offset, int64_t len, int32_t advice
+) {
+    (void)caller_ctx;
+    (void)offset;
+    (void)len;
+    (void)advice;
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+    // Advisory only, always succeed
+    return WASI_ESUCCESS;
+}
+
+// fd_fdstat_set_rights: No-op (rights system simplified)
+static int32_t wasi_fd_fdstat_set_rights_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int64_t rights_base, int64_t rights_inheriting
+) {
+    (void)caller_ctx;
+    (void)rights_base;
+    (void)rights_inheriting;
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+    // Rights system not enforced, always succeed
+    return WASI_ESUCCESS;
+}
+
 // Stub functions for less common operations
 static int64_t wasi_stub_nosys(jit_context_t *ctx, jit_context_t *caller_ctx) {
     (void)ctx; (void)caller_ctx;
@@ -930,21 +1365,22 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_raise_ptr(void) { return (int64_
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sched_yield_ptr(void) { return (int64_t)wasi_sched_yield_impl; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_poll_oneoff_ptr(void) { return (int64_t)wasi_poll_oneoff_impl; }
 
+// Implemented functions
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_advise_ptr(void) { return (int64_t)wasi_fd_advise_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_pread_ptr(void) { return (int64_t)wasi_fd_pread_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_pwrite_ptr(void) { return (int64_t)wasi_fd_pwrite_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_readdir_ptr(void) { return (int64_t)wasi_fd_readdir_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_rights_ptr(void) { return (int64_t)wasi_fd_fdstat_set_rights_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_filestat_set_times_ptr(void) { return (int64_t)wasi_fd_filestat_set_times_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_get_ptr(void) { return (int64_t)wasi_path_filestat_get_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_set_times_ptr(void) { return (int64_t)wasi_path_filestat_set_times_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_link_ptr(void) { return (int64_t)wasi_path_link_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_readlink_ptr(void) { return (int64_t)wasi_path_readlink_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_symlink_ptr(void) { return (int64_t)wasi_path_symlink_impl; }
 // Stub exports for less common functions
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_advise_ptr(void) { return (int64_t)wasi_stub_nosys; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_allocate_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_pread_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_pwrite_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_readdir_ptr(void) { return (int64_t)wasi_stub_nosys; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_renumber_ptr(void) { return (int64_t)wasi_stub_nosys; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_rights_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_filestat_set_times_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_get_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_set_times_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_link_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_readlink_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_symlink_ptr(void) { return (int64_t)wasi_stub_nosys; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return (int64_t)wasi_stub_nosys; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_recv_ptr(void) { return (int64_t)wasi_stub_nosys; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_send_ptr(void) { return (int64_t)wasi_stub_nosys; }
