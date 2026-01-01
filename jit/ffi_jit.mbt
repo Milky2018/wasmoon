@@ -649,6 +649,30 @@ pub fn get_path_symlink_ptr() -> Int64 {
 }
 
 ///|
+/// Get sock_accept trampoline pointer (stub - returns ENOTSUP)
+pub fn get_sock_accept_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sock_accept_ptr()
+}
+
+///|
+/// Get sock_recv trampoline pointer (stub - returns ENOTSUP)
+pub fn get_sock_recv_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sock_recv_ptr()
+}
+
+///|
+/// Get sock_send trampoline pointer (stub - returns ENOTSUP)
+pub fn get_sock_send_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sock_send_ptr()
+}
+
+///|
+/// Get sock_shutdown trampoline pointer (stub - returns ENOTSUP)
+pub fn get_sock_shutdown_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sock_shutdown_ptr()
+}
+
+///|
 /// Get spectest print trampoline pointer
 pub fn get_spectest_print_ptr() -> Int64 {
   @jit_ffi.c_jit_get_spectest_print_ptr()

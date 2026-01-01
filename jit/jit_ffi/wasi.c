@@ -1463,6 +1463,38 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_allocate_ptr(void) { return (int64
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_renumber_ptr(void) { return (int64_t)wasi_fd_renumber_impl; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { return (int64_t)wasi_fd_fdstat_set_flags_impl; }
 
+// Socket stubs - WASI Preview1 includes these but they're rarely used
+// Return ENOTSUP (58) as sockets are not supported
+static int64_t wasi_sock_accept_stub(jit_context_t *ctx, jit_context_t *caller_ctx,
+    int64_t fd, int64_t flags, int64_t result_fd_ptr) {
+    (void)ctx; (void)caller_ctx; (void)fd; (void)flags; (void)result_fd_ptr;
+    return 58; // ENOTSUP
+}
+static int64_t wasi_sock_recv_stub(jit_context_t *ctx, jit_context_t *caller_ctx,
+    int64_t fd, int64_t ri_data, int64_t ri_data_len, int64_t ri_flags,
+    int64_t ro_datalen, int64_t ro_flags) {
+    (void)ctx; (void)caller_ctx; (void)fd; (void)ri_data; (void)ri_data_len;
+    (void)ri_flags; (void)ro_datalen; (void)ro_flags;
+    return 58; // ENOTSUP
+}
+static int64_t wasi_sock_send_stub(jit_context_t *ctx, jit_context_t *caller_ctx,
+    int64_t fd, int64_t si_data, int64_t si_data_len, int64_t si_flags,
+    int64_t so_datalen) {
+    (void)ctx; (void)caller_ctx; (void)fd; (void)si_data; (void)si_data_len;
+    (void)si_flags; (void)so_datalen;
+    return 58; // ENOTSUP
+}
+static int64_t wasi_sock_shutdown_stub(jit_context_t *ctx, jit_context_t *caller_ctx,
+    int64_t fd, int64_t how) {
+    (void)ctx; (void)caller_ctx; (void)fd; (void)how;
+    return 58; // ENOTSUP
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return (int64_t)wasi_sock_accept_stub; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_recv_ptr(void) { return (int64_t)wasi_sock_recv_stub; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_send_ptr(void) { return (int64_t)wasi_sock_send_stub; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_shutdown_ptr(void) { return (int64_t)wasi_sock_shutdown_stub; }
+
 // ============ Context Initialization ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds(int64_t ctx_ptr, int preopen_count) {
