@@ -34,6 +34,7 @@
 #define WASI_EIO          29
 #define WASI_EISDIR       31
 #define WASI_ENOENT       44
+#define WASI_ENOMEM       48
 #define WASI_ENOSYS       52
 #define WASI_ENOTDIR      54
 #define WASI_ENOTEMPTY    55
@@ -1463,37 +1464,168 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_allocate_ptr(void) { return (int64
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_renumber_ptr(void) { return (int64_t)wasi_fd_renumber_impl; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { return (int64_t)wasi_fd_fdstat_set_flags_impl; }
 
-// Socket stubs - WASI Preview1 includes these but they're rarely used
-// Return ENOTSUP (58) as sockets are not supported
-static int64_t wasi_sock_accept_stub(jit_context_t *ctx, jit_context_t *caller_ctx,
-    int64_t fd, int64_t flags, int64_t result_fd_ptr) {
-    (void)ctx; (void)caller_ctx; (void)fd; (void)flags; (void)result_fd_ptr;
-    return 58; // ENOTSUP
-}
-static int64_t wasi_sock_recv_stub(jit_context_t *ctx, jit_context_t *caller_ctx,
-    int64_t fd, int64_t ri_data, int64_t ri_data_len, int64_t ri_flags,
-    int64_t ro_datalen, int64_t ro_flags) {
-    (void)ctx; (void)caller_ctx; (void)fd; (void)ri_data; (void)ri_data_len;
-    (void)ri_flags; (void)ro_datalen; (void)ro_flags;
-    return 58; // ENOTSUP
-}
-static int64_t wasi_sock_send_stub(jit_context_t *ctx, jit_context_t *caller_ctx,
-    int64_t fd, int64_t si_data, int64_t si_data_len, int64_t si_flags,
-    int64_t so_datalen) {
-    (void)ctx; (void)caller_ctx; (void)fd; (void)si_data; (void)si_data_len;
-    (void)si_flags; (void)so_datalen;
-    return 58; // ENOTSUP
-}
-static int64_t wasi_sock_shutdown_stub(jit_context_t *ctx, jit_context_t *caller_ctx,
-    int64_t fd, int64_t how) {
-    (void)ctx; (void)caller_ctx; (void)fd; (void)how;
-    return 58; // ENOTSUP
+// ============ Socket Operations ============
+
+// sock_accept: Accept a connection on a socket
+// fd: The listening socket
+// flags: Desired flags for the accepted socket (currently unused)
+// result_fd_ptr: Where to store the new socket fd
+static int32_t wasi_sock_accept_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t flags, int32_t result_fd_ptr
+) {
+    (void)caller_ctx;
+    (void)flags; // WASI doesn't use flags for accept yet
+
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+#ifndef _WIN32
+    int new_fd = accept(native_fd, NULL, NULL);
+    if (new_fd < 0) return errno_to_wasi(errno);
+
+    // Allocate a WASI fd for the new socket
+    int wasi_fd = alloc_wasi_fd(ctx, new_fd);
+    if (wasi_fd < 0) {
+        close(new_fd);
+        return WASI_ENOMEM;
+    }
+
+    *(int32_t *)(mem + result_fd_ptr) = wasi_fd;
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return (int64_t)wasi_sock_accept_stub; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_recv_ptr(void) { return (int64_t)wasi_sock_recv_stub; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_send_ptr(void) { return (int64_t)wasi_sock_send_stub; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_shutdown_ptr(void) { return (int64_t)wasi_sock_shutdown_stub; }
+// sock_recv: Receive data from a socket
+// fd: Socket to receive from
+// ri_data: Pointer to iovec array for received data
+// ri_data_len: Number of iovecs
+// ri_flags: Message flags (PEEK=1, WAITALL=2)
+// ro_datalen_ptr: Where to store bytes received
+// ro_flags_ptr: Where to store output flags
+static int32_t wasi_sock_recv_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t ri_data, int32_t ri_data_len, int32_t ri_flags,
+    int32_t ro_datalen_ptr, int32_t ro_flags_ptr
+) {
+    (void)caller_ctx;
+
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+#ifndef _WIN32
+    // Convert WASI flags to native flags
+    int flags = 0;
+    if (ri_flags & 1) flags |= MSG_PEEK;
+    if (ri_flags & 2) flags |= MSG_WAITALL;
+
+    // Read into first iovec buffer (simplified implementation)
+    size_t total = 0;
+    for (int32_t i = 0; i < ri_data_len; i++) {
+        int32_t buf_ptr = *(int32_t *)(mem + ri_data + i * 8);
+        int32_t buf_len = *(int32_t *)(mem + ri_data + i * 8 + 4);
+
+        ssize_t n = recv(native_fd, mem + buf_ptr, buf_len, flags);
+        if (n < 0) {
+            if (total > 0) break; // Return what we have
+            return errno_to_wasi(errno);
+        }
+        total += n;
+        if (n < buf_len) break; // Short read
+    }
+
+    *(int32_t *)(mem + ro_datalen_ptr) = (int32_t)total;
+    *(int32_t *)(mem + ro_flags_ptr) = 0; // No output flags
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// sock_send: Send data on a socket
+// fd: Socket to send on
+// si_data: Pointer to iovec array of data to send
+// si_data_len: Number of iovecs
+// si_flags: Message flags (currently unused in WASI)
+// so_datalen_ptr: Where to store bytes sent
+static int32_t wasi_sock_send_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t si_data, int32_t si_data_len, int32_t si_flags,
+    int32_t so_datalen_ptr
+) {
+    (void)caller_ctx;
+    (void)si_flags; // WASI doesn't define send flags yet
+
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+    uint8_t *mem = ctx->memory_base;
+    if (!mem) return WASI_EINVAL;
+
+#ifndef _WIN32
+    size_t total = 0;
+    for (int32_t i = 0; i < si_data_len; i++) {
+        int32_t buf_ptr = *(int32_t *)(mem + si_data + i * 8);
+        int32_t buf_len = *(int32_t *)(mem + si_data + i * 8 + 4);
+
+        ssize_t n = send(native_fd, mem + buf_ptr, buf_len, 0);
+        if (n < 0) {
+            if (total > 0) break; // Return what we sent
+            return errno_to_wasi(errno);
+        }
+        total += n;
+        if (n < buf_len) break; // Short write
+    }
+
+    *(int32_t *)(mem + so_datalen_ptr) = (int32_t)total;
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// sock_shutdown: Shut down a socket
+// fd: Socket to shut down
+// how: 0=RD, 1=WR, 2=RDWR
+static int32_t wasi_sock_shutdown_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t how
+) {
+    (void)caller_ctx;
+
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+#ifndef _WIN32
+    int native_how;
+    switch (how) {
+        case 0: native_how = SHUT_RD; break;
+        case 1: native_how = SHUT_WR; break;
+        case 2: native_how = SHUT_RDWR; break;
+        default: return WASI_EINVAL;
+    }
+
+    if (shutdown(native_fd, native_how) < 0) {
+        return errno_to_wasi(errno);
+    }
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return (int64_t)wasi_sock_accept_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_recv_ptr(void) { return (int64_t)wasi_sock_recv_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_send_ptr(void) { return (int64_t)wasi_sock_send_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_shutdown_ptr(void) { return (int64_t)wasi_sock_shutdown_impl; }
 
 // ============ Context Initialization ============
 
