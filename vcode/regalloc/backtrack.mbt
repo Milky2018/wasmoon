@@ -226,18 +226,52 @@ fn BacktrackingAllocator::remove_allocation(
 }
 
 ///|
+/// Check if a register is callee-saved
+fn BacktrackingAllocator::is_callee_saved(
+  self : BacktrackingAllocator,
+  preg : @abi.PReg,
+) -> Bool {
+  match preg.class {
+    @abi.Int =>
+      for cs in self.callee_saved_int {
+        if cs.index == preg.index {
+          return true
+        }
+      }
+    @abi.Float32 | @abi.Float64 | @abi.Vector =>
+      for cs in self.callee_saved_float {
+        if cs.index == preg.index {
+          return true
+        }
+      }
+  }
+  false
+}
+
+///|
 /// Try to allocate a register for a bundle
 /// Returns the allocated register if successful
 fn BacktrackingAllocator::try_allocate(
   self : BacktrackingAllocator,
   bundle : Bundle,
 ) -> @abi.PReg? {
-  // First check for fixed constraint
+  // Check if bundle crosses a call - if so, need special handling
+  let crosses_call = bundle.crosses_call(self.ranges)
+
+  // Check for fixed constraint
   if bundle.get_fixed_reg(self.ranges) is Some(fixed_preg) {
-    if self.is_reg_free(fixed_preg, bundle) {
-      return Some(fixed_preg)
+    // If bundle crosses a call and the fixed register is caller-saved,
+    // we should NOT allocate to the fixed register. Instead, allocate to
+    // a callee-saved register and let process_constraints insert the move.
+    if crosses_call && not(self.is_callee_saved(fixed_preg)) {
+      // Fall through to normal allocation (will use callee-saved regs)
+      ()
+    } else {
+      if self.is_reg_free(fixed_preg, bundle) {
+        return Some(fixed_preg)
+      }
+      return None // Must use fixed reg but it's occupied
     }
-    return None // Must use fixed reg but it's occupied
   }
 
   // Try each available register
