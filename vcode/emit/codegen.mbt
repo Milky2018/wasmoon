@@ -1762,10 +1762,23 @@ fn MachineCode::emit_instruction(
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let c = reg_num(inst.uses[2]) // mask
-      // First copy mask to rd
-      OrrVec(rd, c).emit(self)
-      // Then do BSL: rd = (a & rd) | (b & ~rd)
-      Bsl16B(rd, a, b).emit(self)
+      // Handle case where rd aliases with a or b
+      // If rd == a or rd == b, use a different approach:
+      // Instead of BSL, use: rd = (a & c) | (b & ~c)
+      //   = AND v31, a, c   (temp = a & c)
+      //   = BIC rd, b, c    (rd = b & ~c)
+      //   = ORR rd, rd, v31 (rd = rd | temp)
+      if rd == a || rd == b {
+        // Use v31 as temp (it's the stack pointer alias but safe for SIMD)
+        let temp = 31
+        And16B(temp, a, c).emit(self) // temp = a & c
+        Bic16B(rd, b, c).emit(self) // rd = b & ~c
+        Orr16B(rd, rd, temp).emit(self) // rd = (a & c) | (b & ~c)
+      } else {
+        // Fast path: copy mask to rd, then BSL
+        OrrVec(rd, c).emit(self)
+        Bsl16B(rd, a, b).emit(self)
+      }
     }
     SIMDAnyTrue => {
       // v128.any_true: returns 1 if any bit is set, 0 otherwise
@@ -2763,13 +2776,30 @@ fn MachineCode::emit_instruction(
       let acc = reg_num(inst.uses[0])
       let rn = reg_num(inst.uses[1])
       let rm = reg_num(inst.uses[2])
-      // First copy accumulator to destination
-      OrrVec(rd, acc).emit(self)
-      // Then do FMLA
-      if is_f32 {
-        Fmla4S(rd, rn, rm).emit(self)
+      // Handle aliasing: if rd == rn or rd == rm, copying acc to rd
+      // would clobber the multiplicand. Copy the aliased operand first.
+      // We must always use FMLA for consistent rounding behavior.
+      let actual_rn = if rd == rn {
+        // Copy rn to temp before clobbering
+        OrrVec(31, rn).emit(self)
+        31
       } else {
-        Fmla2D(rd, rn, rm).emit(self)
+        rn
+      }
+      let actual_rm = if rd == rm {
+        // Copy rm to temp before clobbering (use v30 if v31 already used)
+        let temp = if rd == rn { 30 } else { 31 }
+        OrrVec(temp, rm).emit(self)
+        temp
+      } else {
+        rm
+      }
+      // Copy accumulator to rd, then FMLA
+      OrrVec(rd, acc).emit(self)
+      if is_f32 {
+        Fmla4S(rd, actual_rn, actual_rm).emit(self)
+      } else {
+        Fmla2D(rd, actual_rn, actual_rm).emit(self)
       }
     }
     SIMDFMls(is_f32) => {
@@ -2779,13 +2809,30 @@ fn MachineCode::emit_instruction(
       let acc = reg_num(inst.uses[0])
       let rn = reg_num(inst.uses[1])
       let rm = reg_num(inst.uses[2])
-      // First copy accumulator to destination
-      OrrVec(rd, acc).emit(self)
-      // Then do FMLS
-      if is_f32 {
-        Fmls4S(rd, rn, rm).emit(self)
+      // Handle aliasing: if rd == rn or rd == rm, copying acc to rd
+      // would clobber the multiplicand. Copy the aliased operand first.
+      // We must always use FMLS for consistent rounding behavior.
+      let actual_rn = if rd == rn {
+        // Copy rn to temp before clobbering
+        OrrVec(31, rn).emit(self)
+        31
       } else {
-        Fmls2D(rd, rn, rm).emit(self)
+        rn
+      }
+      let actual_rm = if rd == rm {
+        // Copy rm to temp before clobbering (use v30 if v31 already used)
+        let temp = if rd == rn { 30 } else { 31 }
+        OrrVec(temp, rm).emit(self)
+        temp
+      } else {
+        rm
+      }
+      // Copy accumulator to rd, then FMLS
+      OrrVec(rd, acc).emit(self)
+      if is_f32 {
+        Fmls4S(rd, actual_rn, actual_rm).emit(self)
+      } else {
+        Fmls2D(rd, actual_rn, actual_rm).emit(self)
       }
     }
     SIMDRelaxedDot8to16 => {
