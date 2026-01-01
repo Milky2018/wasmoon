@@ -443,22 +443,6 @@ pub extern "c" fn c_jit_get_path_readlink_ptr() -> Int64 = "wasmoon_jit_get_path
 /// Get path_symlink trampoline pointer (stub)
 pub extern "c" fn c_jit_get_path_symlink_ptr() -> Int64 = "wasmoon_jit_get_path_symlink_ptr"
 
-///|
-/// Get sock_accept trampoline pointer (stub)
-pub extern "c" fn c_jit_get_sock_accept_ptr() -> Int64 = "wasmoon_jit_get_sock_accept_ptr"
-
-///|
-/// Get sock_recv trampoline pointer (stub)
-pub extern "c" fn c_jit_get_sock_recv_ptr() -> Int64 = "wasmoon_jit_get_sock_recv_ptr"
-
-///|
-/// Get sock_send trampoline pointer (stub)
-pub extern "c" fn c_jit_get_sock_send_ptr() -> Int64 = "wasmoon_jit_get_sock_send_ptr"
-
-///|
-/// Get sock_shutdown trampoline pointer (stub)
-pub extern "c" fn c_jit_get_sock_shutdown_ptr() -> Int64 = "wasmoon_jit_get_sock_shutdown_ptr"
-
 // ============ WASI Context Initialization ============
 
 ///|

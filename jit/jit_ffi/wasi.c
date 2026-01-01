@@ -1328,10 +1328,92 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
     return WASI_ESUCCESS;
 }
 
-// Stub functions for less common operations
-static int64_t wasi_stub_nosys(jit_context_t *ctx, jit_context_t *caller_ctx) {
-    (void)ctx; (void)caller_ctx;
+// fd_allocate: Allocate space for a file
+static int32_t wasi_fd_allocate_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int64_t offset, int64_t len
+) {
+    (void)caller_ctx;
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+#ifdef __linux__
+    // Linux has posix_fallocate
+    int result = posix_fallocate(native_fd, offset, len);
+    if (result != 0) return errno_to_wasi(result);
+    return WASI_ESUCCESS;
+#elif defined(__APPLE__)
+    // macOS: use ftruncate as fallback if extending file
+    struct stat st;
+    if (fstat(native_fd, &st) != 0) return errno_to_wasi(errno);
+    int64_t new_size = offset + len;
+    if (new_size > st.st_size) {
+        if (ftruncate(native_fd, new_size) != 0) return errno_to_wasi(errno);
+    }
+    return WASI_ESUCCESS;
+#else
     return WASI_ENOSYS;
+#endif
+}
+
+// fd_renumber: Renumber a file descriptor
+static int32_t wasi_fd_renumber_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t to_fd
+) {
+    (void)caller_ctx;
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+    int native_to_fd = get_native_fd(ctx, to_fd);
+    if (native_to_fd < 0) return WASI_EBADF;
+
+#ifndef _WIN32
+    // dup2 atomically closes to_fd if open, then duplicates fd to to_fd
+    if (dup2(native_fd, native_to_fd) < 0) return errno_to_wasi(errno);
+    // Close the original fd
+    close(native_fd);
+    // Update fd table: to_fd now points to what fd pointed to, fd is closed
+    if (ctx->fd_table && fd < ctx->fd_table_size) {
+        ctx->fd_table[fd] = -1;
+    }
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
+}
+
+// fd_fdstat_set_flags: Set file descriptor flags
+static int32_t wasi_fd_fdstat_set_flags_impl(
+    jit_context_t *ctx, jit_context_t *caller_ctx,
+    int32_t fd, int32_t flags
+) {
+    (void)caller_ctx;
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+
+#ifndef _WIN32
+    int native_flags = 0;
+    // WASI fdflags:
+    // 0x01 = APPEND
+    // 0x02 = DSYNC
+    // 0x04 = NONBLOCK
+    // 0x08 = RSYNC
+    // 0x10 = SYNC
+    if (flags & 0x01) native_flags |= O_APPEND;
+#ifdef O_DSYNC
+    if (flags & 0x02) native_flags |= O_DSYNC;
+#endif
+    if (flags & 0x04) native_flags |= O_NONBLOCK;
+#ifdef O_SYNC
+    if (flags & 0x10) native_flags |= O_SYNC;
+#endif
+
+    if (fcntl(native_fd, F_SETFL, native_flags) < 0) return errno_to_wasi(errno);
+    return WASI_ESUCCESS;
+#else
+    return WASI_ENOSYS;
+#endif
 }
 
 // ============ FFI Export Functions ============
@@ -1377,14 +1459,9 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_set_times_ptr(void) { r
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_link_ptr(void) { return (int64_t)wasi_path_link_impl; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_readlink_ptr(void) { return (int64_t)wasi_path_readlink_impl; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_symlink_ptr(void) { return (int64_t)wasi_path_symlink_impl; }
-// Stub exports for less common functions
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_allocate_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_renumber_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_recv_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_send_ptr(void) { return (int64_t)wasi_stub_nosys; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_shutdown_ptr(void) { return (int64_t)wasi_stub_nosys; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_allocate_ptr(void) { return (int64_t)wasi_fd_allocate_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_renumber_ptr(void) { return (int64_t)wasi_fd_renumber_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { return (int64_t)wasi_fd_fdstat_set_flags_impl; }
 
 // ============ Context Initialization ============
 

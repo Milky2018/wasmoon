@@ -234,11 +234,6 @@ let import_trampolines : Map[String, Map[String, () -> Int64]] = {
     "sched_yield": get_sched_yield_ptr,
     // Poll
     "poll_oneoff": get_poll_oneoff_ptr,
-    // Socket (stubs)
-    "sock_accept": get_sock_accept_ptr,
-    "sock_recv": get_sock_recv_ptr,
-    "sock_send": get_sock_send_ptr,
-    "sock_shutdown": get_sock_shutdown_ptr,
   }
   // Spectest functions
   m["spectest"] = {

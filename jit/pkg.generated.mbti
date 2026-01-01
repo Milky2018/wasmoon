@@ -146,14 +146,6 @@ pub fn get_random_get_ptr() -> Int64
 
 pub fn get_sched_yield_ptr() -> Int64
 
-pub fn get_sock_accept_ptr() -> Int64
-
-pub fn get_sock_recv_ptr() -> Int64
-
-pub fn get_sock_send_ptr() -> Int64
-
-pub fn get_sock_shutdown_ptr() -> Int64
-
 pub fn get_spectest_print_char_ptr() -> Int64
 
 pub fn get_spectest_print_f32_ptr() -> Int64
