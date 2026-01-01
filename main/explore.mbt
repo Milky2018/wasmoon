@@ -182,7 +182,7 @@ fn run_explore(
     }
 
     // Stage 5: Register Allocation
-    let allocated = @regalloc.allocate_registers_aarch64(vcode_func)
+    let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
     let allocated_text = allocated.to_string()
     if !html_output && show_regalloc {
       println("")

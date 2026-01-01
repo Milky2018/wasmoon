@@ -14,6 +14,8 @@ Debug WebAssembly test files by reproducing issues, analyzing compilation stages
 Run the test to observe failures:
 
 ```bash
+./install.sh
+
 ./wasmoon test <wast_file_path>
 ```
 
@@ -105,6 +107,9 @@ lldb -- ./wasmoon test <file>.wast
 ## Command Reference
 
 ```bash
+# Build and install
+moon build && ./install.sh
+
 # Run WAST test
 ./wasmoon test spec/<file>.wast
 
@@ -116,9 +121,6 @@ lldb -- ./wasmoon test <file>.wast
 
 # Run single MoonBit test
 moon test -p testsuite -f <test>.mbt
-
-# Build and install
-moon build && ./install.sh
 
 # Debug with LLDB
 lldb -- ./wasmoon test <file>.wast

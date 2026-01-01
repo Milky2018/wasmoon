@@ -226,18 +226,52 @@ fn BacktrackingAllocator::remove_allocation(
 }
 
 ///|
+/// Check if a register is callee-saved
+fn BacktrackingAllocator::is_callee_saved(
+  self : BacktrackingAllocator,
+  preg : @abi.PReg,
+) -> Bool {
+  match preg.class {
+    @abi.Int =>
+      for cs in self.callee_saved_int {
+        if cs.index == preg.index {
+          return true
+        }
+      }
+    @abi.Float32 | @abi.Float64 | @abi.Vector =>
+      for cs in self.callee_saved_float {
+        if cs.index == preg.index {
+          return true
+        }
+      }
+  }
+  false
+}
+
+///|
 /// Try to allocate a register for a bundle
 /// Returns the allocated register if successful
 fn BacktrackingAllocator::try_allocate(
   self : BacktrackingAllocator,
   bundle : Bundle,
 ) -> @abi.PReg? {
-  // First check for fixed constraint
+  // Check if bundle crosses a call - if so, need special handling
+  let crosses_call = bundle.crosses_call(self.ranges)
+
+  // Check for fixed constraint
   if bundle.get_fixed_reg(self.ranges) is Some(fixed_preg) {
-    if self.is_reg_free(fixed_preg, bundle) {
-      return Some(fixed_preg)
+    // If bundle crosses a call and the fixed register is caller-saved,
+    // we should NOT allocate to the fixed register. Instead, allocate to
+    // a callee-saved register and let process_constraints insert the move.
+    if crosses_call && not(self.is_callee_saved(fixed_preg)) {
+      // Fall through to normal allocation (will use callee-saved regs)
+      ()
+    } else {
+      if self.is_reg_free(fixed_preg, bundle) {
+        return Some(fixed_preg)
+      }
+      return None // Must use fixed reg but it's occupied
     }
-    return None // Must use fixed reg but it's occupied
   }
 
   // Try each available register
@@ -285,11 +319,16 @@ fn BacktrackingAllocator::try_evict(
       continue // Should have been caught by try_allocate
     }
 
-    // Check if all conflicts have lower weight
+    // Check if all conflicts have lower weight and are not pinned
     let mut can_evict = true
     let mut total_conflict_weight = 0.0
     for conflict_id in conflicts {
       let conflict = self.bundles.get(conflict_id)
+      // Never evict pinned bundles (e.g., function parameters)
+      if conflict.is_pinned {
+        can_evict = false
+        break
+      }
       if conflict.spill_weight >= bundle.spill_weight {
         can_evict = false
         break
@@ -572,9 +611,102 @@ pub fn BacktrackingAllocator::generate_result(
   for i in 0..<self.ranges.length() {
     let range = self.ranges.get(i)
     match range.allocation {
-      Reg(preg) => result.assignments.set(range.vreg.id, preg)
+      Reg(preg) => {
+        // Ensure the preg class matches the vreg class
+        // This is important for float registers where the pool uses Float64
+        // but the vreg might be Float32
+        let corrected_preg : @abi.PReg = {
+          index: preg.index,
+          class: range.vreg.class,
+        }
+        result.assignments.set(range.vreg.id, corrected_preg)
+      }
       Spill(slot) => result.spill_slots.set(range.vreg.id, slot)
       Unallocated => () // Should not happen after allocation
+    }
+  }
+
+  // Generate moves for FixedReg constraints
+  // When a vreg is used/defined with a FixedReg constraint, we need to
+  // insert moves if the vreg is allocated to a different register
+  for block_idx, block in self.func.blocks {
+    for inst_idx, inst in block.insts {
+      // Skip if no constraints
+      if inst.use_constraints.is_empty() && inst.def_constraints.is_empty() {
+        continue
+      }
+      let edits = InstEdits::new()
+
+      // Process use constraints (moves before the instruction)
+      for i, constraint in inst.use_constraints {
+        if constraint is @abi.FixedReg(required_preg) {
+          let use_reg = inst.uses[i]
+          if use_reg is @abi.Virtual(vreg) {
+            // Check if already allocated to the required register
+            match result.assignments.get(vreg.id) {
+              Some(assigned_preg) =>
+                if assigned_preg.index != required_preg.index {
+                  // Need to move from assigned to required
+                  edits.before.push({
+                    from: assigned_preg,
+                    to: required_preg,
+                    class: vreg.class,
+                  })
+                }
+              // If already at required_preg, no move needed
+              None =>
+                // Spilled: need to reload to the required register
+                if result.spill_slots.get(vreg.id) is Some(slot) {
+                  // Encode spill slot as negative index in 'from'
+                  // The emit phase will interpret this as a reload
+                  let spilled_preg = @abi.PReg::spilled(slot, vreg.class)
+                  edits.before.push({
+                    from: spilled_preg,
+                    to: required_preg,
+                    class: vreg.class,
+                  })
+                }
+            }
+          }
+        }
+      }
+
+      // Process def constraints (moves after the instruction)
+      for i, constraint in inst.def_constraints {
+        if constraint is @abi.FixedReg(required_preg) {
+          let def = inst.defs[i]
+          if def.reg is @abi.Virtual(vreg) {
+            // Check if already allocated to the required register
+            match result.assignments.get(vreg.id) {
+              Some(assigned_preg) =>
+                if assigned_preg.index != required_preg.index {
+                  // Need to move from required to assigned
+                  // (the instruction produces in required_preg, we need to move to assigned)
+                  edits.after.push({
+                    from: required_preg,
+                    to: assigned_preg,
+                    class: vreg.class,
+                  })
+                }
+              None =>
+                // Spilled: need to store from required register to spill slot
+                if result.spill_slots.get(vreg.id) is Some(slot) {
+                  let spilled_preg = @abi.PReg::spilled(slot, vreg.class)
+                  edits.after.push({
+                    from: required_preg,
+                    to: spilled_preg,
+                    class: vreg.class,
+                  })
+                }
+            }
+          }
+        }
+      }
+
+      // Store edits if any
+      if not(edits.before.is_empty()) || not(edits.after.is_empty()) {
+        result.inst_edits.set((block_idx, inst_idx), edits)
+      }
     }
   }
   result
@@ -718,6 +850,91 @@ pub fn build_bundles_with_merging(
 }
 
 ///|
+/// Pre-assign function parameters to ABI registers
+/// This must be done before allocation to respect calling convention
+fn BacktrackingAllocator::preassign_params(
+  self : BacktrackingAllocator,
+  liveness : LivenessResult,
+) -> Unit {
+  let max_int_params = @abi.MAX_REG_PARAMS // 8
+  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let mut int_idx = 0
+  let mut float_idx = 0
+  let mut callee_saved_int_idx = 0
+  let mut callee_saved_float_idx = 0
+  for param in self.func.params {
+    // Determine which ABI register this param comes in
+    let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
+      @abi.Int =>
+        if int_idx < max_int_params {
+          (Some(@abi.PReg::{ index: int_idx, class: @abi.Int }), true)
+        } else {
+          (None, true) // Stack param
+        }
+      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        if float_idx < max_float_params {
+          (Some(@abi.PReg::{ index: float_idx, class: param.class }), false)
+        } else {
+          (None, false) // Stack param
+        }
+    }
+
+    // Update counters
+    if is_int {
+      int_idx = int_idx + 1
+    } else {
+      float_idx = float_idx + 1
+    }
+
+    // Skip stack params
+    guard preg_opt is Some(preg) else { continue }
+
+    // Check if param crosses a call - if so, allocate to callee-saved instead
+    let interval = liveness.intervals.get(param.id)
+    if interval is Some(iv) && iv.crosses_call {
+      // For params that cross calls, allocate to callee-saved registers
+      // This is critical because we can't spill params without generating
+      // a store in the prologue
+      let range = self.ranges.get_by_vreg(param.id)
+      if range is Some(lr) && lr.bundle_id >= 0 {
+        let bundle = self.bundles.bundles[lr.bundle_id]
+        // Find an available callee-saved register
+        let callee_saved_preg = if is_int {
+          if callee_saved_int_idx < self.callee_saved_int.length() {
+            let p = self.callee_saved_int[callee_saved_int_idx]
+            callee_saved_int_idx = callee_saved_int_idx + 1
+            Some(p)
+          } else {
+            None
+          }
+        } else if callee_saved_float_idx < self.callee_saved_float.length() {
+          let p = self.callee_saved_float[callee_saved_float_idx]
+          callee_saved_float_idx = callee_saved_float_idx + 1
+          Some(p)
+        } else {
+          None
+        }
+        if callee_saved_preg is Some(cs_preg) {
+          self.record_allocation(bundle, cs_preg)
+          bundle.is_pinned = true // Prevent eviction of param bundles
+        }
+        // If no callee-saved available, let normal allocation handle it
+        // (it will be spilled, which is broken for params, but rare)
+      }
+      continue
+    }
+
+    // Find the LiveRange for this param and get its bundle
+    let range = self.ranges.get_by_vreg(param.id)
+    if range is Some(lr) && lr.bundle_id >= 0 {
+      let bundle = self.bundles.bundles[lr.bundle_id]
+      // Use record_allocation to properly track occupancy
+      self.record_allocation(bundle, preg)
+    }
+  }
+}
+
+///|
 /// Main entry point for backtracking allocation
 pub fn allocate_backtracking(
   func : VCodeFunction,
@@ -737,6 +954,9 @@ pub fn allocate_backtracking(
   let allocator = BacktrackingAllocator::new(
     func, ranges, bundles, int_regs, float_regs, callee_saved_int, callee_saved_float,
   )
+
+  // Pre-assign function parameters to ABI registers (before main allocation)
+  allocator.preassign_params(liveness)
   allocator.allocate()
 
   // Generate result

@@ -103,6 +103,7 @@ pub(all) struct Bundle {
   mut spill_bundle_id : Int
   mut allocation : Allocation
   reg_class : @abi.RegClass
+  mut is_pinned : Bool
 }
 pub fn Bundle::contains_range(Self, Int) -> Bool
 pub fn Bundle::crosses_call(Self, LiveRangeSet) -> Bool

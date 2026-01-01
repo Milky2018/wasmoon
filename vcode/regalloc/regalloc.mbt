@@ -1550,6 +1550,17 @@ pub fn apply_allocation(
       // - X18: used for func_ptr
       // - X19+: allocatable callee-saved registers
 
+      // First, collect registers that are in use by non-spilled uses
+      // to avoid clobbering them with scratch register reloads
+      let used_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+      for use_reg in inst.uses {
+        if use_reg is @abi.Virtual(vreg) {
+          match alloc.assignments.get(vreg.id) {
+            Some(preg) => used_regs.add(preg.index) |> ignore
+            None => ()
+          }
+        }
+      }
       let mut inst_spill_idx = 0
       for i, use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) &&
@@ -1578,10 +1589,19 @@ pub fn apply_allocation(
               // Don't insert reload - emit code will load directly from spill slot
             } else {
               // Regular spilled uses (non-CallIndirect instructions)
-              // Use X16, X17 as scratch registers
-              let scratch_indices = [16, 17]
+              // Use X16, X17, X18 as scratch registers, but avoid registers
+              // that are already in use by other operands in this instruction
+              let scratch_candidates = [16, 17, 18]
+              let mut scratch_idx = inst_spill_idx % 3
+              // Find a scratch register that's not already in use
+              let mut attempts = 0
+              while used_regs.contains(scratch_candidates[scratch_idx]) &&
+                    attempts < 3 {
+                scratch_idx = (scratch_idx + 1) % 3
+                attempts += 1
+              }
               let scratch_preg : @abi.PReg = {
-                index: scratch_indices[inst_spill_idx % 2],
+                index: scratch_candidates[scratch_idx],
                 class: scratch_class,
               }
               inst_spill_idx = inst_spill_idx + 1

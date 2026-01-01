@@ -111,7 +111,7 @@ Ensure the fix doesn't break other functionality:
 
 ```bash
 moon test                    # All unit tests
-python3 scripts/run_all_wast.py  # All WAST tests (if applicable)
+python3 scripts/run_all_wast.py --rec  # All wast tests
 ```
 
 ### 6. Create Pull Request

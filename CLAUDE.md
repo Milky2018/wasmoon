@@ -48,7 +48,7 @@ moon build && ./install.sh    # Build and install wasmoon binary
 ./wasmoon test <file.wast>    # Run WAST tests
 ./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
 ./wasmoon explore <file.wat> --stage ir vcode mc  # View compilation stages
-python3 scripts/run_all_wast.py  # Run all WAST tests
+python3 scripts/run_all_wast.py --rec  # Run all WAST tests
 ```
 
 ## Testing
