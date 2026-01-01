@@ -810,6 +810,10 @@ extern "c" fn c_send(
 extern "c" fn c_shutdown(sockfd : Int, how : Int) -> Int = "wasmoon_wasi_shutdown"
 
 ///|
+/// Socket accept
+extern "c" fn c_accept(sockfd : Int) -> Int = "wasmoon_wasi_accept"
+
+///|
 /// Raise signal
 extern "c" fn c_raise(sig : Int) -> Int = "wasmoon_wasi_raise"
 
@@ -889,6 +893,12 @@ pub fn native_send(
 /// Socket shutdown
 pub fn native_shutdown(sockfd : Int, how : Int) -> Bool {
   c_shutdown(sockfd, how) == 0
+}
+
+///|
+/// Socket accept - returns new socket fd or -1 on error
+pub fn native_accept(sockfd : Int) -> Int {
+  c_accept(sockfd)
 }
 
 ///|

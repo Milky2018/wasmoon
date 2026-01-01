@@ -1745,6 +1745,37 @@ pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
 }
 
 ///|
+/// sock_accept - Accept a connection on a socket
+pub fn sock_accept_impl(
+  ctx : WasiContext,
+  mem : @runtime.Memory,
+  fd : Int,
+  _flags : Int,
+  result_fd_ptr : Int,
+) -> Int {
+  match ctx.get_file(fd) {
+    Some(file) => {
+      let new_fd = native_accept(file.native_fd)
+      if new_fd < 0 {
+        return Errno::IO.to_i32()
+      }
+      // Register the new socket in WASI context
+      let open_file : OpenFile = {
+        native_fd: new_fd,
+        file_type: CharacterDevice, // Use CharacterDevice for sockets
+        host_path: "<socket>",
+        position: 0L,
+        flags: 0,
+      }
+      let wasi_fd = ctx.alloc_fd(open_file)
+      mem.write_i32(result_fd_ptr, wasi_fd)
+      Errno::Success.to_i32()
+    }
+    None => Errno::Badf.to_i32()
+  }
+}
+
+///|
 /// proc_raise - Send a signal to the process
 pub fn proc_raise_impl(signal : Int) -> Int {
   // WASI signal codes (some common ones):

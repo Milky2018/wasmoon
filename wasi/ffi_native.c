@@ -654,6 +654,16 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_shutdown(int sockfd, int how) {
 #endif
 }
 
+// Socket accept
+MOONBIT_FFI_EXPORT int wasmoon_wasi_accept(int sockfd) {
+#ifdef _WIN32
+  (void)sockfd;
+  return -1;
+#else
+  return accept(sockfd, NULL, NULL);
+#endif
+}
+
 // Raise a signal
 MOONBIT_FFI_EXPORT int wasmoon_wasi_raise(int sig) {
 #ifdef _WIN32

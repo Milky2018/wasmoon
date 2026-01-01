@@ -1200,12 +1200,27 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     func_type=make_func_type([i32], [i32]),
   )
 
-  // sock_accept is a WASI-sockets extension, not part of Preview1 core
-  // Keep as stub for compatibility
+  // sock_accept
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "sock_accept",
-    fn(_args) { [@types.Value::I32(Errno::NoSys.to_i32())] },
+    fn(args) {
+      let fd = match args[0] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let flags = match args[1] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let result_fd_ptr = match args[2] {
+        I32(v) => v
+        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let mem = store.get_memory(0)
+      let result = sock_accept_impl(ctx, mem, fd, flags, result_fd_ptr)
+      [@types.Value::I32(result)]
+    },
     func_type=make_func_type([i32, i32, i32], [i32]),
   )
 }

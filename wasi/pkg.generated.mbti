@@ -67,6 +67,8 @@ pub fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
 pub fn is_valid_rights(Int64) -> Bool
 
+pub fn native_accept(Int) -> Int
+
 pub fn native_clock_gettime_monotonic() -> Int64
 
 pub fn native_clock_gettime_realtime() -> Int64
@@ -234,6 +236,8 @@ pub let right_sock_shutdown : Int64
 pub let rights_all_valid : Int64
 
 pub fn sched_yield() -> Int
+
+pub fn sock_accept_impl(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
 
 pub fn sock_recv_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int) -> Int
 
