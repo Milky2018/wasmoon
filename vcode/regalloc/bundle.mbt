@@ -12,6 +12,7 @@ pub(all) struct Bundle {
   mut spill_bundle_id : Int // SpillBundle ID for split bundles (-1 if none)
   mut allocation : Allocation // Current allocation
   reg_class : @abi.RegClass // Register class for this bundle
+  mut is_pinned : Bool // If true, cannot be evicted (e.g., function parameters)
 }
 
 ///|
@@ -23,6 +24,7 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     spill_bundle_id: -1,
     allocation: Unallocated,
     reg_class,
+    is_pinned: false,
   }
 }
 

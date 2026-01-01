@@ -786,7 +786,7 @@ fn compile_module_to_jit(
       @logger.info(vcode_func.print())
     }
     // Stage 4: Register allocation
-    let allocated = @regalloc.allocate_registers_aarch64(vcode_func)
+    let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
     // DEBUG: Print VCode after regalloc
     if @logger.is_debug_enabled() {
       @logger.debug("VCode after regalloc for \{func_name}:")

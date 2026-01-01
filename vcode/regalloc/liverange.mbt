@@ -380,11 +380,11 @@ pub fn build_live_ranges(
 
         // Add use positions
         if info.def_point is Some(def) {
-          let constraint = find_constraint_at(func, def)
+          let constraint = find_constraint_at_for_vreg(func, def, vreg_id)
           range.add_use(UsePosition::new(def, Def, constraint))
         }
         for use_point in info.use_points {
-          let constraint = find_constraint_at(func, use_point)
+          let constraint = find_constraint_at_for_vreg(func, use_point, vreg_id)
           range.add_use(UsePosition::new(use_point, Use, constraint))
         }
       }
@@ -396,10 +396,12 @@ pub fn build_live_ranges(
 }
 
 ///|
-/// Find operand constraint at a program point
-fn find_constraint_at(
+/// Find operand constraint at a program point for a specific vreg
+/// We need the vreg to match against the correct operand position
+fn find_constraint_at_for_vreg(
   func : VCodeFunction,
   point : ProgPoint,
+  vreg_id : Int,
 ) -> OperandConstraint {
   if point.block >= func.blocks.length() {
     return AnyReg
@@ -410,20 +412,32 @@ fn find_constraint_at(
   }
   let inst = block.insts[point.inst]
 
-  // Check use constraints
+  // Check use constraints - find the constraint that matches our vreg
   if point.pos is Before {
-    for constraint in inst.use_constraints {
-      if constraint is @abi.FixedReg(preg) {
-        return FixedReg(preg)
+    for i, use_reg in inst.uses {
+      if use_reg is @abi.Virtual(vreg) && vreg.id == vreg_id {
+        if i < inst.use_constraints.length() {
+          let constraint = inst.use_constraints[i]
+          if constraint is @abi.FixedReg(preg) {
+            return FixedReg(preg)
+          }
+        }
+        break
       }
     }
   }
 
-  // Check def constraints
+  // Check def constraints - find the constraint that matches our vreg
   if point.pos is After {
-    for constraint in inst.def_constraints {
-      if constraint is @abi.FixedReg(preg) {
-        return FixedReg(preg)
+    for i, def in inst.defs {
+      if def.reg is @abi.Virtual(vreg) && vreg.id == vreg_id {
+        if i < inst.def_constraints.length() {
+          let constraint = inst.def_constraints[i]
+          if constraint is @abi.FixedReg(preg) {
+            return FixedReg(preg)
+          }
+        }
+        break
       }
     }
   }

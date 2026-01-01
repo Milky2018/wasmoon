@@ -285,11 +285,16 @@ fn BacktrackingAllocator::try_evict(
       continue // Should have been caught by try_allocate
     }
 
-    // Check if all conflicts have lower weight
+    // Check if all conflicts have lower weight and are not pinned
     let mut can_evict = true
     let mut total_conflict_weight = 0.0
     for conflict_id in conflicts {
       let conflict = self.bundles.get(conflict_id)
+      // Never evict pinned bundles (e.g., function parameters)
+      if conflict.is_pinned {
+        can_evict = false
+        break
+      }
       if conflict.spill_weight >= bundle.spill_weight {
         can_evict = false
         break
@@ -572,9 +577,102 @@ pub fn BacktrackingAllocator::generate_result(
   for i in 0..<self.ranges.length() {
     let range = self.ranges.get(i)
     match range.allocation {
-      Reg(preg) => result.assignments.set(range.vreg.id, preg)
+      Reg(preg) => {
+        // Ensure the preg class matches the vreg class
+        // This is important for float registers where the pool uses Float64
+        // but the vreg might be Float32
+        let corrected_preg : @abi.PReg = {
+          index: preg.index,
+          class: range.vreg.class,
+        }
+        result.assignments.set(range.vreg.id, corrected_preg)
+      }
       Spill(slot) => result.spill_slots.set(range.vreg.id, slot)
       Unallocated => () // Should not happen after allocation
+    }
+  }
+
+  // Generate moves for FixedReg constraints
+  // When a vreg is used/defined with a FixedReg constraint, we need to
+  // insert moves if the vreg is allocated to a different register
+  for block_idx, block in self.func.blocks {
+    for inst_idx, inst in block.insts {
+      // Skip if no constraints
+      if inst.use_constraints.is_empty() && inst.def_constraints.is_empty() {
+        continue
+      }
+      let edits = InstEdits::new()
+
+      // Process use constraints (moves before the instruction)
+      for i, constraint in inst.use_constraints {
+        if constraint is @abi.FixedReg(required_preg) {
+          let use_reg = inst.uses[i]
+          if use_reg is @abi.Virtual(vreg) {
+            // Check if already allocated to the required register
+            match result.assignments.get(vreg.id) {
+              Some(assigned_preg) =>
+                if assigned_preg.index != required_preg.index {
+                  // Need to move from assigned to required
+                  edits.before.push({
+                    from: assigned_preg,
+                    to: required_preg,
+                    class: vreg.class,
+                  })
+                }
+              // If already at required_preg, no move needed
+              None =>
+                // Spilled: need to reload to the required register
+                if result.spill_slots.get(vreg.id) is Some(slot) {
+                  // Encode spill slot as negative index in 'from'
+                  // The emit phase will interpret this as a reload
+                  let spilled_preg = @abi.PReg::spilled(slot, vreg.class)
+                  edits.before.push({
+                    from: spilled_preg,
+                    to: required_preg,
+                    class: vreg.class,
+                  })
+                }
+            }
+          }
+        }
+      }
+
+      // Process def constraints (moves after the instruction)
+      for i, constraint in inst.def_constraints {
+        if constraint is @abi.FixedReg(required_preg) {
+          let def = inst.defs[i]
+          if def.reg is @abi.Virtual(vreg) {
+            // Check if already allocated to the required register
+            match result.assignments.get(vreg.id) {
+              Some(assigned_preg) =>
+                if assigned_preg.index != required_preg.index {
+                  // Need to move from required to assigned
+                  // (the instruction produces in required_preg, we need to move to assigned)
+                  edits.after.push({
+                    from: required_preg,
+                    to: assigned_preg,
+                    class: vreg.class,
+                  })
+                }
+              None =>
+                // Spilled: need to store from required register to spill slot
+                if result.spill_slots.get(vreg.id) is Some(slot) {
+                  let spilled_preg = @abi.PReg::spilled(slot, vreg.class)
+                  edits.after.push({
+                    from: required_preg,
+                    to: spilled_preg,
+                    class: vreg.class,
+                  })
+                }
+            }
+          }
+        }
+      }
+
+      // Store edits if any
+      if not(edits.before.is_empty()) || not(edits.after.is_empty()) {
+        result.inst_edits.set((block_idx, inst_idx), edits)
+      }
     }
   }
   result
@@ -728,6 +826,8 @@ fn BacktrackingAllocator::preassign_params(
   let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
   let mut int_idx = 0
   let mut float_idx = 0
+  let mut callee_saved_int_idx = 0
+  let mut callee_saved_float_idx = 0
   for param in self.func.params {
     // Determine which ABI register this param comes in
     let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
@@ -755,9 +855,38 @@ fn BacktrackingAllocator::preassign_params(
     // Skip stack params
     guard preg_opt is Some(preg) else { continue }
 
-    // Check if param crosses a call - if so, don't pre-assign to caller-saved
+    // Check if param crosses a call - if so, allocate to callee-saved instead
     let interval = liveness.intervals.get(param.id)
     if interval is Some(iv) && iv.crosses_call {
+      // For params that cross calls, allocate to callee-saved registers
+      // This is critical because we can't spill params without generating
+      // a store in the prologue
+      let range = self.ranges.get_by_vreg(param.id)
+      if range is Some(lr) && lr.bundle_id >= 0 {
+        let bundle = self.bundles.bundles[lr.bundle_id]
+        // Find an available callee-saved register
+        let callee_saved_preg = if is_int {
+          if callee_saved_int_idx < self.callee_saved_int.length() {
+            let p = self.callee_saved_int[callee_saved_int_idx]
+            callee_saved_int_idx = callee_saved_int_idx + 1
+            Some(p)
+          } else {
+            None
+          }
+        } else if callee_saved_float_idx < self.callee_saved_float.length() {
+          let p = self.callee_saved_float[callee_saved_float_idx]
+          callee_saved_float_idx = callee_saved_float_idx + 1
+          Some(p)
+        } else {
+          None
+        }
+        if callee_saved_preg is Some(cs_preg) {
+          self.record_allocation(bundle, cs_preg)
+          bundle.is_pinned = true // Prevent eviction of param bundles
+        }
+        // If no callee-saved available, let normal allocation handle it
+        // (it will be spilled, which is broken for params, but rare)
+      }
       continue
     }
 
