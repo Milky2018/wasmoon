@@ -54,6 +54,8 @@ pub fn c_gc_heap_struct_set(Int64, Int, Int, Int64) -> Unit
 
 pub fn c_gc_heap_sweep(Int64) -> Int
 
+pub fn c_jit_add_preopen(Int64, Int, FixedArray[Byte], FixedArray[Byte]) -> Unit
+
 pub fn c_jit_alloc_context_managed(Int) -> JITContext
 
 pub fn c_jit_alloc_exec(Int) -> Int64
@@ -108,6 +110,8 @@ pub fn c_jit_free_memory(Int64) -> Unit
 
 pub fn c_jit_free_shared_indirect_table(Int64) -> Unit
 
+pub fn c_jit_free_wasi_fds(Int64) -> Unit
+
 pub fn c_jit_gc_clear_cache() -> Unit
 
 pub fn c_jit_gc_clear_heap() -> Unit
@@ -127,6 +131,8 @@ pub fn c_jit_gc_set_type_cache(FixedArray[Int], Int) -> Unit
 pub fn c_jit_get_args_get_ptr() -> Int64
 
 pub fn c_jit_get_args_sizes_get_ptr() -> Int64
+
+pub fn c_jit_get_clock_res_get_ptr() -> Int64
 
 pub fn c_jit_get_clock_time_get_ptr() -> Int64
 
@@ -154,13 +160,45 @@ pub fn c_jit_get_exception_try_begin_ptr() -> Int64
 
 pub fn c_jit_get_exception_try_end_ptr() -> Int64
 
+pub fn c_jit_get_fd_advise_ptr() -> Int64
+
+pub fn c_jit_get_fd_allocate_ptr() -> Int64
+
 pub fn c_jit_get_fd_close_ptr() -> Int64
+
+pub fn c_jit_get_fd_datasync_ptr() -> Int64
 
 pub fn c_jit_get_fd_fdstat_get_ptr() -> Int64
 
+pub fn c_jit_get_fd_fdstat_set_flags_ptr() -> Int64
+
+pub fn c_jit_get_fd_fdstat_set_rights_ptr() -> Int64
+
+pub fn c_jit_get_fd_filestat_get_ptr() -> Int64
+
+pub fn c_jit_get_fd_filestat_set_size_ptr() -> Int64
+
+pub fn c_jit_get_fd_filestat_set_times_ptr() -> Int64
+
+pub fn c_jit_get_fd_pread_ptr() -> Int64
+
+pub fn c_jit_get_fd_prestat_dir_name_ptr() -> Int64
+
 pub fn c_jit_get_fd_prestat_get_ptr() -> Int64
 
+pub fn c_jit_get_fd_pwrite_ptr() -> Int64
+
 pub fn c_jit_get_fd_read_ptr() -> Int64
+
+pub fn c_jit_get_fd_readdir_ptr() -> Int64
+
+pub fn c_jit_get_fd_renumber_ptr() -> Int64
+
+pub fn c_jit_get_fd_seek_ptr() -> Int64
+
+pub fn c_jit_get_fd_sync_ptr() -> Int64
+
+pub fn c_jit_get_fd_tell_ptr() -> Int64
 
 pub fn c_jit_get_fd_write_ptr() -> Int64
 
@@ -204,11 +242,45 @@ pub fn c_jit_get_memory_size_ptr_v3() -> Int64
 
 pub fn c_jit_get_memory_size_ptr_v4() -> Int64
 
+pub fn c_jit_get_path_create_directory_ptr() -> Int64
+
+pub fn c_jit_get_path_filestat_get_ptr() -> Int64
+
+pub fn c_jit_get_path_filestat_set_times_ptr() -> Int64
+
+pub fn c_jit_get_path_link_ptr() -> Int64
+
+pub fn c_jit_get_path_open_ptr() -> Int64
+
+pub fn c_jit_get_path_readlink_ptr() -> Int64
+
+pub fn c_jit_get_path_remove_directory_ptr() -> Int64
+
+pub fn c_jit_get_path_rename_ptr() -> Int64
+
+pub fn c_jit_get_path_symlink_ptr() -> Int64
+
+pub fn c_jit_get_path_unlink_file_ptr() -> Int64
+
+pub fn c_jit_get_poll_oneoff_ptr() -> Int64
+
 pub fn c_jit_get_proc_exit_ptr() -> Int64
+
+pub fn c_jit_get_proc_raise_ptr() -> Int64
 
 pub fn c_jit_get_random_get_ptr() -> Int64
 
+pub fn c_jit_get_sched_yield_ptr() -> Int64
+
 pub fn c_jit_get_sigsetjmp_ptr() -> Int64
+
+pub fn c_jit_get_sock_accept_ptr() -> Int64
+
+pub fn c_jit_get_sock_recv_ptr() -> Int64
+
+pub fn c_jit_get_sock_send_ptr() -> Int64
+
+pub fn c_jit_get_sock_shutdown_ptr() -> Int64
 
 pub fn c_jit_get_spectest_print_char_ptr() -> Int64
 
@@ -232,6 +304,8 @@ pub fn c_jit_get_trap_code() -> Int
 
 pub fn c_jit_get_wasm_stack_top(Int64) -> Int64
 
+pub fn c_jit_init_wasi_fds(Int64, Int) -> Unit
+
 pub fn c_jit_memory_copy(Int, Int, Int) -> Unit
 
 pub fn c_jit_memory_fill(Int, Int, Int) -> Unit
@@ -239,6 +313,14 @@ pub fn c_jit_memory_fill(Int, Int, Int) -> Unit
 pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_read_i64(Int64) -> Int64
+
+pub fn c_jit_set_wasi_arg(Int64, Int, FixedArray[Byte]) -> Unit
+
+pub fn c_jit_set_wasi_args(Int64, Int) -> Unit
+
+pub fn c_jit_set_wasi_env(Int64, Int, FixedArray[Byte]) -> Unit
+
+pub fn c_jit_set_wasi_envs(Int64, Int) -> Unit
 
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
 

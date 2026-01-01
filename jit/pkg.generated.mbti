@@ -40,19 +40,53 @@ pub fn get_args_get_ptr() -> Int64
 
 pub fn get_args_sizes_get_ptr() -> Int64
 
+pub fn get_clock_res_get_ptr() -> Int64
+
 pub fn get_clock_time_get_ptr() -> Int64
 
 pub fn get_environ_get_ptr() -> Int64
 
 pub fn get_environ_sizes_get_ptr() -> Int64
 
+pub fn get_fd_advise_ptr() -> Int64
+
+pub fn get_fd_allocate_ptr() -> Int64
+
 pub fn get_fd_close_ptr() -> Int64
+
+pub fn get_fd_datasync_ptr() -> Int64
 
 pub fn get_fd_fdstat_get_ptr() -> Int64
 
+pub fn get_fd_fdstat_set_flags_ptr() -> Int64
+
+pub fn get_fd_fdstat_set_rights_ptr() -> Int64
+
+pub fn get_fd_filestat_get_ptr() -> Int64
+
+pub fn get_fd_filestat_set_size_ptr() -> Int64
+
+pub fn get_fd_filestat_set_times_ptr() -> Int64
+
+pub fn get_fd_pread_ptr() -> Int64
+
+pub fn get_fd_prestat_dir_name_ptr() -> Int64
+
 pub fn get_fd_prestat_get_ptr() -> Int64
 
+pub fn get_fd_pwrite_ptr() -> Int64
+
 pub fn get_fd_read_ptr() -> Int64
+
+pub fn get_fd_readdir_ptr() -> Int64
+
+pub fn get_fd_renumber_ptr() -> Int64
+
+pub fn get_fd_seek_ptr() -> Int64
+
+pub fn get_fd_sync_ptr() -> Int64
+
+pub fn get_fd_tell_ptr() -> Int64
 
 pub fn get_fd_write_ptr() -> Int64
 
@@ -82,9 +116,43 @@ pub fn get_gc_type_check_subtype_ptr() -> Int64
 
 pub fn get_import_trampoline(String, String) -> Int64?
 
+pub fn get_path_create_directory_ptr() -> Int64
+
+pub fn get_path_filestat_get_ptr() -> Int64
+
+pub fn get_path_filestat_set_times_ptr() -> Int64
+
+pub fn get_path_link_ptr() -> Int64
+
+pub fn get_path_open_ptr() -> Int64
+
+pub fn get_path_readlink_ptr() -> Int64
+
+pub fn get_path_remove_directory_ptr() -> Int64
+
+pub fn get_path_rename_ptr() -> Int64
+
+pub fn get_path_symlink_ptr() -> Int64
+
+pub fn get_path_unlink_file_ptr() -> Int64
+
+pub fn get_poll_oneoff_ptr() -> Int64
+
 pub fn get_proc_exit_ptr() -> Int64
 
+pub fn get_proc_raise_ptr() -> Int64
+
 pub fn get_random_get_ptr() -> Int64
+
+pub fn get_sched_yield_ptr() -> Int64
+
+pub fn get_sock_accept_ptr() -> Int64
+
+pub fn get_sock_recv_ptr() -> Int64
+
+pub fn get_sock_send_ptr() -> Int64
+
+pub fn get_sock_shutdown_ptr() -> Int64
 
 pub fn get_spectest_print_char_ptr() -> Int64
 
@@ -309,6 +377,7 @@ pub fn JITModule::get_func_table_ptr(Self) -> Int64
 pub fn JITModule::has_wasm_stack(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int, Int)]) -> Unit
+pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])]) -> Self?
 pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]]) -> Self?
 pub fn JITModule::new() -> Self

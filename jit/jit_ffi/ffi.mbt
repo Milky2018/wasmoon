@@ -323,6 +323,191 @@ pub extern "c" fn c_jit_get_fd_fdstat_get_ptr() -> Int64 = "wasmoon_jit_get_fd_f
 /// Get fd_prestat_get trampoline pointer
 pub extern "c" fn c_jit_get_fd_prestat_get_ptr() -> Int64 = "wasmoon_jit_get_fd_prestat_get_ptr"
 
+///|
+/// Get fd_prestat_dir_name trampoline pointer
+pub extern "c" fn c_jit_get_fd_prestat_dir_name_ptr() -> Int64 = "wasmoon_jit_get_fd_prestat_dir_name_ptr"
+
+///|
+/// Get fd_seek trampoline pointer
+pub extern "c" fn c_jit_get_fd_seek_ptr() -> Int64 = "wasmoon_jit_get_fd_seek_ptr"
+
+///|
+/// Get fd_tell trampoline pointer
+pub extern "c" fn c_jit_get_fd_tell_ptr() -> Int64 = "wasmoon_jit_get_fd_tell_ptr"
+
+///|
+/// Get fd_sync trampoline pointer
+pub extern "c" fn c_jit_get_fd_sync_ptr() -> Int64 = "wasmoon_jit_get_fd_sync_ptr"
+
+///|
+/// Get fd_datasync trampoline pointer
+pub extern "c" fn c_jit_get_fd_datasync_ptr() -> Int64 = "wasmoon_jit_get_fd_datasync_ptr"
+
+///|
+/// Get fd_filestat_get trampoline pointer
+pub extern "c" fn c_jit_get_fd_filestat_get_ptr() -> Int64 = "wasmoon_jit_get_fd_filestat_get_ptr"
+
+///|
+/// Get fd_filestat_set_size trampoline pointer
+pub extern "c" fn c_jit_get_fd_filestat_set_size_ptr() -> Int64 = "wasmoon_jit_get_fd_filestat_set_size_ptr"
+
+///|
+/// Get path_open trampoline pointer
+pub extern "c" fn c_jit_get_path_open_ptr() -> Int64 = "wasmoon_jit_get_path_open_ptr"
+
+///|
+/// Get path_create_directory trampoline pointer
+pub extern "c" fn c_jit_get_path_create_directory_ptr() -> Int64 = "wasmoon_jit_get_path_create_directory_ptr"
+
+///|
+/// Get path_unlink_file trampoline pointer
+pub extern "c" fn c_jit_get_path_unlink_file_ptr() -> Int64 = "wasmoon_jit_get_path_unlink_file_ptr"
+
+///|
+/// Get path_remove_directory trampoline pointer
+pub extern "c" fn c_jit_get_path_remove_directory_ptr() -> Int64 = "wasmoon_jit_get_path_remove_directory_ptr"
+
+///|
+/// Get path_rename trampoline pointer
+pub extern "c" fn c_jit_get_path_rename_ptr() -> Int64 = "wasmoon_jit_get_path_rename_ptr"
+
+///|
+/// Get clock_res_get trampoline pointer
+pub extern "c" fn c_jit_get_clock_res_get_ptr() -> Int64 = "wasmoon_jit_get_clock_res_get_ptr"
+
+///|
+/// Get sched_yield trampoline pointer
+pub extern "c" fn c_jit_get_sched_yield_ptr() -> Int64 = "wasmoon_jit_get_sched_yield_ptr"
+
+///|
+/// Get proc_raise trampoline pointer
+pub extern "c" fn c_jit_get_proc_raise_ptr() -> Int64 = "wasmoon_jit_get_proc_raise_ptr"
+
+///|
+/// Get poll_oneoff trampoline pointer
+pub extern "c" fn c_jit_get_poll_oneoff_ptr() -> Int64 = "wasmoon_jit_get_poll_oneoff_ptr"
+
+///|
+/// Get fd_advise trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_advise_ptr() -> Int64 = "wasmoon_jit_get_fd_advise_ptr"
+
+///|
+/// Get fd_allocate trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_allocate_ptr() -> Int64 = "wasmoon_jit_get_fd_allocate_ptr"
+
+///|
+/// Get fd_pread trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_pread_ptr() -> Int64 = "wasmoon_jit_get_fd_pread_ptr"
+
+///|
+/// Get fd_pwrite trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_pwrite_ptr() -> Int64 = "wasmoon_jit_get_fd_pwrite_ptr"
+
+///|
+/// Get fd_readdir trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_readdir_ptr() -> Int64 = "wasmoon_jit_get_fd_readdir_ptr"
+
+///|
+/// Get fd_renumber trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_renumber_ptr() -> Int64 = "wasmoon_jit_get_fd_renumber_ptr"
+
+///|
+/// Get fd_fdstat_set_flags trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_fdstat_set_flags_ptr() -> Int64 = "wasmoon_jit_get_fd_fdstat_set_flags_ptr"
+
+///|
+/// Get fd_fdstat_set_rights trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_fdstat_set_rights_ptr() -> Int64 = "wasmoon_jit_get_fd_fdstat_set_rights_ptr"
+
+///|
+/// Get fd_filestat_set_times trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_filestat_set_times_ptr() -> Int64 = "wasmoon_jit_get_fd_filestat_set_times_ptr"
+
+///|
+/// Get path_filestat_get trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_filestat_get_ptr() -> Int64 = "wasmoon_jit_get_path_filestat_get_ptr"
+
+///|
+/// Get path_filestat_set_times trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_filestat_set_times_ptr() -> Int64 = "wasmoon_jit_get_path_filestat_set_times_ptr"
+
+///|
+/// Get path_link trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_link_ptr() -> Int64 = "wasmoon_jit_get_path_link_ptr"
+
+///|
+/// Get path_readlink trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_readlink_ptr() -> Int64 = "wasmoon_jit_get_path_readlink_ptr"
+
+///|
+/// Get path_symlink trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_symlink_ptr() -> Int64 = "wasmoon_jit_get_path_symlink_ptr"
+
+///|
+/// Get sock_accept trampoline pointer (stub)
+pub extern "c" fn c_jit_get_sock_accept_ptr() -> Int64 = "wasmoon_jit_get_sock_accept_ptr"
+
+///|
+/// Get sock_recv trampoline pointer (stub)
+pub extern "c" fn c_jit_get_sock_recv_ptr() -> Int64 = "wasmoon_jit_get_sock_recv_ptr"
+
+///|
+/// Get sock_send trampoline pointer (stub)
+pub extern "c" fn c_jit_get_sock_send_ptr() -> Int64 = "wasmoon_jit_get_sock_send_ptr"
+
+///|
+/// Get sock_shutdown trampoline pointer (stub)
+pub extern "c" fn c_jit_get_sock_shutdown_ptr() -> Int64 = "wasmoon_jit_get_sock_shutdown_ptr"
+
+// ============ WASI Context Initialization ============
+
+///|
+/// Initialize WASI fd table and preopens
+pub extern "c" fn c_jit_init_wasi_fds(
+  ctx_ptr : Int64,
+  preopen_count : Int,
+) -> Unit = "wasmoon_jit_init_wasi_fds"
+
+///|
+/// Add a preopened directory
+#borrow(host_path, guest_path)
+pub extern "c" fn c_jit_add_preopen(
+  ctx_ptr : Int64,
+  idx : Int,
+  host_path : FixedArray[Byte],
+  guest_path : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_add_preopen"
+
+///|
+/// Free WASI resources
+pub extern "c" fn c_jit_free_wasi_fds(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_wasi_fds"
+
+///|
+/// Initialize args array
+pub extern "c" fn c_jit_set_wasi_args(ctx_ptr : Int64, argc : Int) -> Unit = "wasmoon_jit_set_wasi_args"
+
+///|
+/// Set a single arg
+#borrow(arg)
+pub extern "c" fn c_jit_set_wasi_arg(
+  ctx_ptr : Int64,
+  idx : Int,
+  arg : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_set_wasi_arg"
+
+///|
+/// Initialize env array
+pub extern "c" fn c_jit_set_wasi_envs(ctx_ptr : Int64, envc : Int) -> Unit = "wasmoon_jit_set_wasi_envs"
+
+///|
+/// Set a single env variable
+#borrow(env)
+pub extern "c" fn c_jit_set_wasi_env(
+  ctx_ptr : Int64,
+  idx : Int,
+  env : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_set_wasi_env"
+
 // ============ Spectest Trampolines ============
 
 ///|

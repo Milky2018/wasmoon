@@ -32,11 +32,10 @@ test "get_import_trampoline: supported functions" {
 }
 
 ///|
-test "get_import_trampoline: unsupported functions" {
-  let unsupported = ["fd_seek", "path_open", "fd_readdir", "fd_pread"]
-  for name in unsupported {
-    assert_true(get_import_trampoline("wasi_snapshot_preview1", name) is None)
-  }
+test "get_import_trampoline: unsupported modules" {
+  // All WASI functions are now supported (some as stubs returning ENOSYS)
+  // Only unknown modules should return None
+  assert_true(get_import_trampoline("unknown_module", "unknown_func") is None)
 }
 
 ///|

@@ -585,6 +585,9 @@ fn run_with_jit(
           // Allocate independent WASM stack with guard page (1MB)
           // This provides controlled stack overflow behavior
           let _ = jm.alloc_wasm_stack(1048576L)
+          // Initialize WASI context (args, env, preopens)
+          // For now, use basic initialization - can be extended later
+          jm.init_wasi([], [], [])
           // Initialize all memories (multi-memory support)
           if not(init_jit_memories(instance, store, jm)) {
             @logger.error("Failed to initialize JIT memories")

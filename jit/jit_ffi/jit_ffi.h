@@ -79,6 +79,19 @@ typedef struct {
     size_t wasm_stack_size;       // Total allocated size including guard page
     void *wasm_stack_guard;       // Guard page address (low end, triggers SIGSEGV on overflow)
     size_t guard_page_size;       // Size of guard page (typically one page)
+
+    // WASI file descriptor table
+    // fd 0-2 are stdin/stdout/stderr (mapped to native 0-2)
+    // fd 3+ are preopened directories and opened files
+    int *fd_table;                // Maps WASI fd -> native fd (-1 = not open)
+    int fd_table_size;            // Size of fd_table
+    int fd_next;                  // Next available fd slot
+
+    // Preopened directories
+    char **preopen_paths;         // Host paths for preopened dirs
+    char **preopen_guest_paths;   // Guest paths for preopened dirs
+    int preopen_count;            // Number of preopened dirs
+    int preopen_base_fd;          // First preopen fd (typically 3)
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

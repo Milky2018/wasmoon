@@ -184,20 +184,61 @@ pub fn JITModule::get_func_count(self : JITModule) -> Int {
 /// Trampoline registry - maps (module, field) to function pointer getter
 let import_trampolines : Map[String, Map[String, () -> Int64]] = {
   let m : Map[String, Map[String, () -> Int64]] = {}
-  // WASI functions
+  // WASI functions - full WASI Preview1 support
   m["wasi_snapshot_preview1"] = {
+    // File descriptor operations
     "fd_write": get_fd_write_ptr,
     "fd_read": get_fd_read_ptr,
     "fd_close": get_fd_close_ptr,
+    "fd_seek": get_fd_seek_ptr,
+    "fd_tell": get_fd_tell_ptr,
+    "fd_sync": get_fd_sync_ptr,
+    "fd_datasync": get_fd_datasync_ptr,
     "fd_fdstat_get": get_fd_fdstat_get_ptr,
+    "fd_fdstat_set_flags": get_fd_fdstat_set_flags_ptr,
+    "fd_fdstat_set_rights": get_fd_fdstat_set_rights_ptr,
     "fd_prestat_get": get_fd_prestat_get_ptr,
-    "proc_exit": get_proc_exit_ptr,
+    "fd_prestat_dir_name": get_fd_prestat_dir_name_ptr,
+    "fd_filestat_get": get_fd_filestat_get_ptr,
+    "fd_filestat_set_size": get_fd_filestat_set_size_ptr,
+    "fd_filestat_set_times": get_fd_filestat_set_times_ptr,
+    "fd_advise": get_fd_advise_ptr,
+    "fd_allocate": get_fd_allocate_ptr,
+    "fd_pread": get_fd_pread_ptr,
+    "fd_pwrite": get_fd_pwrite_ptr,
+    "fd_readdir": get_fd_readdir_ptr,
+    "fd_renumber": get_fd_renumber_ptr,
+    // Path operations
+    "path_open": get_path_open_ptr,
+    "path_create_directory": get_path_create_directory_ptr,
+    "path_unlink_file": get_path_unlink_file_ptr,
+    "path_remove_directory": get_path_remove_directory_ptr,
+    "path_rename": get_path_rename_ptr,
+    "path_filestat_get": get_path_filestat_get_ptr,
+    "path_filestat_set_times": get_path_filestat_set_times_ptr,
+    "path_link": get_path_link_ptr,
+    "path_readlink": get_path_readlink_ptr,
+    "path_symlink": get_path_symlink_ptr,
+    // Environment and arguments
     "args_sizes_get": get_args_sizes_get_ptr,
     "args_get": get_args_get_ptr,
     "environ_sizes_get": get_environ_sizes_get_ptr,
     "environ_get": get_environ_get_ptr,
+    // Clock and random
     "clock_time_get": get_clock_time_get_ptr,
+    "clock_res_get": get_clock_res_get_ptr,
     "random_get": get_random_get_ptr,
+    // Process
+    "proc_exit": get_proc_exit_ptr,
+    "proc_raise": get_proc_raise_ptr,
+    "sched_yield": get_sched_yield_ptr,
+    // Poll
+    "poll_oneoff": get_poll_oneoff_ptr,
+    // Socket (stubs)
+    "sock_accept": get_sock_accept_ptr,
+    "sock_recv": get_sock_recv_ptr,
+    "sock_send": get_sock_send_ptr,
+    "sock_shutdown": get_sock_shutdown_ptr,
   }
   // Spectest functions
   m["spectest"] = {
@@ -383,6 +424,22 @@ pub fn JITModule::has_wasm_stack(self : JITModule) -> Bool {
   match self.context {
     Some(ctx) => ctx.has_wasm_stack()
     None => false
+  }
+}
+
+///|
+/// Initialize WASI context for JIT execution
+/// args: command-line arguments
+/// env: environment variables (KEY=VALUE format)
+/// preopens: preopened directories as (host_path, guest_path) pairs
+pub fn JITModule::init_wasi(
+  self : JITModule,
+  args : Array[String],
+  env : Array[String],
+  preopens : Array[(String, String)],
+) -> Unit {
+  if self.context is Some(ctx) {
+    ctx.init_wasi(args, env, preopens)
   }
 }
 
