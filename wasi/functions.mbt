@@ -952,9 +952,9 @@ fn read_string_from_memory(
 ///|
 /// fd_sync - Synchronize file to disk
 pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
-  // stdin, stdout, stderr
+  // stdin, stdout, stderr - no-op, return success
   if fd < 3 {
-    return Errno::Inval.to_i32()
+    return Errno::Success.to_i32()
   }
   match ctx.get_file(fd) {
     Some(file) =>
@@ -970,8 +970,9 @@ pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
 ///|
 /// fd_datasync - Synchronize file data to disk
 pub fn fd_datasync_impl(ctx : WasiContext, fd : Int) -> Int {
+  // stdin, stdout, stderr - no-op, return success
   if fd < 3 {
-    return Errno::Inval.to_i32()
+    return Errno::Success.to_i32()
   }
   match ctx.get_file(fd) {
     Some(file) =>

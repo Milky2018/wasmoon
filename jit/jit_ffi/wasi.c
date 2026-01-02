@@ -289,6 +289,9 @@ static int64_t wasi_fd_sync_impl(
     (void)caller_ctx;
     if (!ctx) return WASI_EBADF;
 
+    // stdio fds - no-op, return success
+    if (fd >= 0 && fd < 3) return WASI_ESUCCESS;
+
     int native_fd = get_native_fd(ctx, (int)fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -306,6 +309,9 @@ static int64_t wasi_fd_datasync_impl(
 ) {
     (void)caller_ctx;
     if (!ctx) return WASI_EBADF;
+
+    // stdio fds - no-op, return success
+    if (fd >= 0 && fd < 3) return WASI_ESUCCESS;
 
     int native_fd = get_native_fd(ctx, (int)fd);
     if (native_fd < 0) return WASI_EBADF;
