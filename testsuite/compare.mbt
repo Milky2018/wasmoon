@@ -181,9 +181,13 @@ pub fn jit_results_to_values(
 }
 
 ///|
-/// Convert @types.Value to Int64 for JIT call
-/// Uses JIT encoding for GC types: i31=(val<<1)|1, struct/array=gc_ref<<1
-pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
+/// Convert @types.Value to Int64 for JIT call with type context
+/// Uses JIT encoding for GC types: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
+/// For funcref/externref: null=FUNCREF_NULL_SENTINEL
+pub fn value_to_jit_arg_typed(
+  value : @types.Value,
+  ty : @types.ValueType,
+) -> Int64 {
   match value {
     I32(n) => @types.ToInt64::to_int64_bits(n)
     I64(n) => @types.ToInt64::to_int64_bits(n)
@@ -196,11 +200,41 @@ pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
     ArrayRef(gc_ref) => gc_ref.to_int64() << 1 // gc_ref << 1
     StructRef(gc_ref) => gc_ref.to_int64() << 1 // gc_ref << 1
     I31(n) => (n.to_int64() << 1) | 1L // (value << 1) | 1
-    // Note: Null is ambiguous without type context. For funcref/externref,
-    // use FUNCREF_NULL_SENTINEL. For GC refs, decoder handles 0L.
-    Null => @types.FUNCREF_NULL_SENTINEL
+    Null =>
+      // Null encoding depends on the expected type
+      if is_gc_ref_type(ty) {
+        0L // GC null = 0
+      } else {
+        @types.FUNCREF_NULL_SENTINEL
+      } // funcref/externref null
     V128(_) => abort("V128 not yet supported in testsuite")
   }
+}
+
+///|
+/// Check if a ValueType is a GC reference type (uses 0 for null)
+fn is_gc_ref_type(ty : @types.ValueType) -> Bool {
+  match ty {
+    AnyRef
+    | NullRef
+    | RefAny
+    | RefEq
+    | RefNullEq
+    | RefI31
+    | RefNullI31
+    | RefStruct(_)
+    | RefNullStruct(_)
+    | RefArray(_)
+    | RefNullArray(_)
+    | RefNone => true
+    _ => false
+  }
+}
+
+///|
+/// Convert @types.Value to Int64 for JIT call (legacy, assumes non-GC null)
+pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
+  value_to_jit_arg_typed(value, @types.ValueType::I64)
 }
 
 ///|
@@ -248,13 +282,16 @@ pub fn compare_jit_interp(
   // Get function type
   let func_type_idx = mod_.funcs[idx]
   let func_type = mod_.get_func_type(func_type_idx)
+  let param_types = func_type.params
   let result_types = func_type.results
 
   // Run interpreter
   let interp_result = run_interp(mod_, func_name, args)
 
   // Run JIT
-  let jit_result = run_jit(mod_, func_name, idx, args, result_types)
+  let jit_result = run_jit(
+    mod_, func_name, idx, args, param_types, result_types,
+  )
 
   // Compare results
   let match_ = match (jit_result, interp_result) {
@@ -299,6 +336,7 @@ pub fn run_jit(
   func_name : String,
   func_idx : Int,
   args : Array[@types.Value],
+  param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> Result[Array[@types.Value], String] {
   ignore(func_idx)
@@ -418,7 +456,16 @@ pub fn run_jit(
       @jit.gc_teardown()
       return Err("Failed to get JIT function")
     }
-    let jit_args = args.map(value_to_jit_arg)
+    // Encode args with type context for correct null handling
+    let jit_args : Array[Int64] = []
+    for i, arg in args {
+      let ty = if i < param_types.length() {
+        param_types[i]
+      } else {
+        @types.ValueType::I64
+      }
+      jit_args.push(value_to_jit_arg_typed(arg, ty))
+    }
     let raw_results = jm.call_with_context(f, jit_args)
 
     // Tear down GC context after JIT call
@@ -428,7 +475,11 @@ pub fn run_jit(
     let values = jit_results_to_values(raw_results, result_types)
     Ok(values)
   } catch {
-    e => Err("JIT error: \{e}")
+    e => {
+      // Ensure GC teardown on error path
+      @jit.gc_teardown()
+      Err("JIT error: \{e}")
+    }
   }
 }
 
@@ -638,8 +689,11 @@ test "compare_jit_interp: i32 add" {
   let func_idx = 0
   let func_type_idx = mod_.funcs[func_idx]
   let func_type = mod_.get_func_type(func_type_idx)
+  let param_types = func_type.params
   let result_types = func_type.results
   let args = [@types.Value::I32(3), @types.Value::I32(5)]
-  let jit_result = run_jit(mod_, "add", func_idx, args, result_types)
+  let jit_result = run_jit(
+    mod_, "add", func_idx, args, param_types, result_types,
+  )
   inspect(jit_result, content="Ok([I32(8)])")
 }

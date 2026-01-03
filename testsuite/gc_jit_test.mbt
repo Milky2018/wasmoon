@@ -226,6 +226,20 @@ test "gc jit: ref.eq different structs" {
 }
 
 ///|
+test "gc jit: null struct arg is_null" {
+  // Test that null GC args are encoded correctly (P1 fix)
+  let source =
+    #|(module
+    #|  (type $point (struct (field i32)))
+    #|  (func (export "test") (param (ref null $point)) (result i32)
+    #|    (ref.is_null (local.get 0))
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "test", [@types.Value::Null])
+  inspect(result, content="matched")
+}
+
+///|
 test "gc jit: ref.eq null refs" {
   let source =
     #|(module
