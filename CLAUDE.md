@@ -85,3 +85,4 @@ lldb -- ./wasmoon test path/to/test.wast
 - Use `suberror` for error types, `raise` to throw, `try! func() |> ignore` to ignore errors
 - Use `func() |> ignore` not `let _ = func()`
 - Use `s.code_unit_at(i)` not `s[i]` (deprecated)
+- When using `inspect(value, content=expected_string)`, don't declare a separate `let expected = ...` variable - it causes unused variable warnings. Put the expected string directly in the `content=` parameter
