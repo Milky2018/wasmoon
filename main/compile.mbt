@@ -144,6 +144,29 @@ fn run_compile(
     }
   }
 
+  // Add memory definitions
+  for mem in mod_.memories {
+    precompiled.add_memory(
+      mem.limits.min.to_int(),
+      mem.limits.max.map(fn(m) { m.to_int() }),
+    )
+  }
+
+  // Add data segments (evaluate const expressions to get offsets)
+  for data in mod_.datas {
+    // Only include active data segments (those with offset expressions)
+    if data.offset.length() > 0 {
+      // Evaluate the offset expression (should be a simple i32.const)
+      let offset = eval_data_offset(data.offset)
+      // Convert Bytes to Array[Int]
+      let data_bytes : Array[Int] = []
+      for i in 0..<data.init.length() {
+        data_bytes.push(data.init[i].to_int())
+      }
+      precompiled.add_data_segment(data.memory_idx, offset, data_bytes)
+    }
+  }
+
   // Write IR file if requested
   if (emit_ir, ir_output) is (Some(ir_path), Some(buf)) {
     @fs.write_string_to_file(ir_path, buf.to_string()) catch {
@@ -183,11 +206,31 @@ fn run_compile(
     total_code_size = total_code_size + precompiled.functions[i].code.length()
   }
   println("Wrote precompiled module to \{out_path}")
-  println("  Format:    cwasm v3 (aarch64)")
+  println("  Format:    cwasm v4 (aarch64)")
   println("  Imports:   \{precompiled.import_count()}")
   println("  Functions: \{precompiled.function_count()}")
+  println("  Memories:  \{precompiled.memories.length()}")
+  println("  Data segs: \{precompiled.data_segments.length()}")
   println("  Code size: \{total_code_size} bytes")
   println("  File size: \{cwasm_bytes.length()} bytes")
+}
+
+///|
+/// Evaluate a data segment offset expression (simple const expr)
+fn eval_data_offset(instrs : Array[@types.Instruction]) -> Int {
+  // Data segment offsets are typically just i32.const N
+  for instr in instrs {
+    match instr {
+      I32Const(n) => return n
+      I64Const(n) => return n.to_int()
+      GlobalGet(_) => {
+        // Global offsets are rare; return 0 as fallback
+        return 0
+      }
+      _ => continue
+    }
+  }
+  0
 }
 
 ///|

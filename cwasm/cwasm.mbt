@@ -39,7 +39,8 @@ const CWASM_MAGIC_3 : Int = 0x73 // 's'
 /// v1: Initial format
 /// v2: Added num_params and num_results to function entries
 /// v3: Added import table for WASI/external function support
-const CWASM_VERSION : Int = 3
+/// v4: Added memory definitions and data segments
+const CWASM_VERSION : Int = 4
 
 // ============ Target Architecture ============
 
@@ -162,6 +163,61 @@ pub impl Show for CompiledEntry with output(self, logger) {
   logger.write_string(self.to_string())
 }
 
+// ============ Memory Definition ============
+
+///|
+/// Memory definition (min/max pages)
+pub(all) struct MemoryDef {
+  min_pages : Int
+  max_pages : Int? // None means no maximum
+}
+
+///|
+pub fn MemoryDef::new(min_pages : Int, max_pages : Int?) -> MemoryDef {
+  { min_pages, max_pages }
+}
+
+///|
+fn MemoryDef::to_string(self : MemoryDef) -> String {
+  match self.max_pages {
+    Some(max) => "Memory(\{self.min_pages}..\{max} pages)"
+    None => "Memory(\{self.min_pages}+ pages)"
+  }
+}
+
+///|
+pub impl Show for MemoryDef with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+// ============ Data Segment ============
+
+///|
+/// A data segment entry (active segments only, with evaluated offset)
+pub(all) struct DataEntry {
+  // Memory index (usually 0)
+  memory_idx : Int
+  // Offset in memory (evaluated from const expr)
+  offset : Int
+  // Data bytes
+  data : Array[Int]
+}
+
+///|
+pub fn DataEntry::new(memory_idx : Int, offset : Int, data : Array[Int]) -> DataEntry {
+  { memory_idx, offset, data }
+}
+
+///|
+fn DataEntry::to_string(self : DataEntry) -> String {
+  "Data(mem=\{self.memory_idx}, offset=\{self.offset}, \{self.data.length()} bytes)"
+}
+
+///|
+pub impl Show for DataEntry with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
 // ============ Precompiled Module ============
 
 ///|
@@ -175,11 +231,22 @@ pub(all) struct PrecompiledModule {
   imports : Array[ImportEntry]
   // Compiled functions
   functions : Array[CompiledEntry]
+  // Memory definitions
+  memories : Array[MemoryDef]
+  // Data segments (with evaluated offsets)
+  data_segments : Array[DataEntry]
 }
 
 ///|
 pub fn PrecompiledModule::new(target : TargetArch) -> PrecompiledModule {
-  { version: CWASM_VERSION, target, imports: [], functions: [] }
+  {
+    version: CWASM_VERSION,
+    target,
+    imports: [],
+    functions: [],
+    memories: [],
+    data_segments: [],
+  }
 }
 
 ///|
@@ -219,6 +286,27 @@ pub fn PrecompiledModule::add_function(
 }
 
 ///|
+/// Add a memory definition
+pub fn PrecompiledModule::add_memory(
+  self : PrecompiledModule,
+  min_pages : Int,
+  max_pages : Int?,
+) -> Unit {
+  self.memories.push(MemoryDef::new(min_pages, max_pages))
+}
+
+///|
+/// Add a data segment
+pub fn PrecompiledModule::add_data_segment(
+  self : PrecompiledModule,
+  memory_idx : Int,
+  offset : Int,
+  data : Array[Int],
+) -> Unit {
+  self.data_segments.push(DataEntry::new(memory_idx, offset, data))
+}
+
+///|
 /// Get number of imports
 pub fn PrecompiledModule::import_count(self : PrecompiledModule) -> Int {
   self.imports.length()
@@ -232,7 +320,7 @@ pub fn PrecompiledModule::function_count(self : PrecompiledModule) -> Int {
 
 ///|
 fn PrecompiledModule::to_string(self : PrecompiledModule) -> String {
-  "PrecompiledModule(v\{self.version}, \{self.target}, \{self.imports.length()} imports, \{self.functions.length()} functions)"
+  "PrecompiledModule(v\{self.version}, \{self.target}, \{self.imports.length()} imports, \{self.functions.length()} functions, \{self.memories.length()} memories, \{self.data_segments.length()} data segments)"
 }
 
 ///|
@@ -314,6 +402,32 @@ pub fn PrecompiledModule::serialize(self : PrecompiledModule) -> Array[Int] {
     write_u32(result, entry.num_params)
     write_u32(result, entry.num_results)
   }
+
+  // Write number of memories
+  write_u32(result, self.memories.length())
+
+  // Write each memory
+  for mem in self.memories {
+    write_u32(result, mem.min_pages)
+    // Write max_pages: -1 for None, otherwise the value
+    match mem.max_pages {
+      Some(max) => write_u32(result, max)
+      None => write_u32(result, -1)
+    }
+  }
+
+  // Write number of data segments
+  write_u32(result, self.data_segments.length())
+
+  // Write each data segment
+  for data in self.data_segments {
+    write_u32(result, data.memory_idx)
+    write_u32(result, data.offset)
+    write_u32(result, data.data.length())
+    for b in data.data {
+      result.push(b)
+    }
+  }
   result
 }
 
@@ -368,33 +482,31 @@ pub fn deserialize(
 
   // Read version
   let version = reader.read_u32()
-  if version != CWASM_VERSION && version != 2 {
+  if version != CWASM_VERSION {
     raise DeserializeError("Unsupported version: \{version}")
   }
 
   // Read target architecture
   let target = TargetArch::from_byte(reader.read_byte())
 
-  // Read imports (v3+)
+  // Read imports
   let imports : Array[ImportEntry] = []
-  if version >= 3 {
-    let import_count = reader.read_u32()
-    for _ in 0..<import_count {
-      // Module name
-      let module_name_len = reader.read_u32()
-      let module_name = reader.read_string(module_name_len)
+  let import_count = reader.read_u32()
+  for _ in 0..<import_count {
+    // Module name
+    let module_name_len = reader.read_u32()
+    let module_name = reader.read_string(module_name_len)
 
-      // Function name
-      let func_name_len = reader.read_u32()
-      let func_name = reader.read_string(func_name_len)
+    // Function name
+    let func_name_len = reader.read_u32()
+    let func_name = reader.read_string(func_name_len)
 
-      // Signature
-      let num_params = reader.read_u32()
-      let num_results = reader.read_u32()
-      imports.push(
-        ImportEntry::new(module_name, func_name, num_params, num_results),
-      )
-    }
+    // Signature
+    let num_params = reader.read_u32()
+    let num_results = reader.read_u32()
+    imports.push(
+      ImportEntry::new(module_name, func_name, num_params, num_results),
+    )
   }
 
   // Read number of functions
@@ -429,7 +541,28 @@ pub fn deserialize(
       ),
     )
   }
-  { version: CWASM_VERSION, target, imports, functions }
+
+  // Read memories
+  let memories : Array[MemoryDef] = []
+  let mem_count = reader.read_u32()
+  for _ in 0..<mem_count {
+    let min_pages = reader.read_u32()
+    let max_raw = reader.read_u32()
+    let max_pages : Int? = if max_raw == -1 { None } else { Some(max_raw) }
+    memories.push(MemoryDef::new(min_pages, max_pages))
+  }
+
+  // Read data segments
+  let data_segments : Array[DataEntry] = []
+  let data_count = reader.read_u32()
+  for _ in 0..<data_count {
+    let memory_idx = reader.read_u32()
+    let offset = reader.read_u32()
+    let data_len = reader.read_u32()
+    let data = reader.read_bytes(data_len)
+    data_segments.push(DataEntry::new(memory_idx, offset, data))
+  }
+  { version: CWASM_VERSION, target, imports, functions, memories, data_segments }
 }
 
 // ============ Byte Reader ============

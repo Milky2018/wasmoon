@@ -13,7 +13,7 @@ test "PrecompiledModule serialize and deserialize roundtrip" {
   inspect(serialized.length() > 0, content="true")
   // Deserialize
   let pcm2 = @cwasm.deserialize(serialized)
-  inspect(pcm2.version, content="3")
+  inspect(pcm2.version, content="4")
   inspect(pcm2.target, content="aarch64")
   inspect(pcm2.function_count(), content="1")
   inspect(pcm2.functions[0].num_params, content="2")

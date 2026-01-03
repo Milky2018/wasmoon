@@ -47,16 +47,35 @@ fn run_cwasm(
   let jit_module = @jit.JITModule::load(precompiled, func_signatures)
   match jit_module {
     Some(jm) => {
-      // Allocate linear memory (1 page = 64KB for now)
-      let mem_size = 65536L // 64KB
+      // Determine memory size from module definition or use default
+      let mem_pages = if precompiled.memories.length() > 0 {
+        precompiled.memories[0].min_pages
+      } else {
+        1 // Default to 1 page if no memory defined
+      }
+      let mem_size = mem_pages.to_int64() * 65536L // 64KB per page
       let mem_ptr = @jit.alloc_memory(mem_size)
       if mem_ptr == 0L {
         @logger.error("failed to allocate linear memory")
-        // NOTE: No need to manually free - GC handles cleanup
         return
       }
       // Set memory in JIT context
       jm.set_memory(mem_ptr, mem_size)
+
+      // Initialize data segments
+      for data in precompiled.data_segments {
+        // Convert Array[Int] to Bytes
+        let data_bytes = Bytes::from_iter(
+          data.data.iter().map(fn(b) { b.to_byte() }),
+        )
+        if not(@jit.memory_init(mem_ptr, data.offset.to_int64(), data_bytes)) {
+          @logger.error(
+            "failed to initialize data segment at offset \{data.offset}",
+          )
+          return
+        }
+      }
+
       // Determine which function to call
       let func_name = match invoke {
         Some(name) => name
@@ -72,7 +91,6 @@ fn run_cwasm(
             let n = @strconv.parse_int64(arg) catch {
               _ => {
                 @logger.error("invalid argument '\{arg}'")
-                // NOTE: Memory is freed by JITContext finalizer (GC-managed)
                 return
               }
             }
@@ -82,7 +100,6 @@ fn run_cwasm(
           let results = jm.call_with_context(f, args) catch {
             @jit.JITTrap(msg) => {
               @logger.error("JIT Trap: \{msg}")
-              // NOTE: Memory is freed by JITContext finalizer (GC-managed)
               return
             }
           }
@@ -93,7 +110,6 @@ fn run_cwasm(
         }
         None => @logger.error("function '\{func_name}' not found")
       }
-      // NOTE: Memory and JIT module are freed automatically by GC
     }
     None => @logger.error("failed to load JIT module")
   }
