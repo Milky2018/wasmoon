@@ -437,15 +437,6 @@ test "lower unconditional jump" {
   builder.return_([c])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode jump_test() -> int {
-    #|block0:
-    #|    v0 = ldi 42
-    #|    jump block1
-    #|block1:
-    #|    ret v0
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -523,14 +514,6 @@ test "lower add(x, mul(y, z)) to madd" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits both mul and madd (madd consumes mul pattern, mul becomes dead code)
-  let expected =
-    #|vcode madd_test(v0:int, v1:int, v2:int) -> int {
-    #|block0:
-    #|    v3 = mul v1, v2
-    #|    v4 = madd v0, v1, v2
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -561,14 +544,6 @@ test "lower sub(x, mul(y, z)) to msub" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits both mul and msub (msub consumes mul pattern)
-  let expected =
-    #|vcode msub_test(v0:int, v1:int, v2:int) -> int {
-    #|block0:
-    #|    v3 = mul v1, v2
-    #|    v4 = msub v0, v1, v2
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -599,15 +574,6 @@ test "lower sub(0, mul(x, y)) to mneg" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits both mul and mneg
-  let expected =
-    #|vcode mneg_test(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = ldi 0
-    #|    v3 = mul v0, v1
-    #|    v4 = mneg v0, v1
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -639,15 +605,6 @@ test "lower add(x, shl(y, n)) to add_shifted" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits shl and add_shifted (shl becomes dead code)
-  let expected =
-    #|vcode add_shifted_test(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = ldi 3
-    #|    v3 = shl v1, v2
-    #|    v4 = add.lsl #3 v0, v1
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -679,15 +636,6 @@ test "lower sub(x, shl(y, n)) to sub_shifted" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits shl and sub_shifted
-  let expected =
-    #|vcode sub_shifted_test(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = ldi 2
-    #|    v3 = shl v1, v2
-    #|    v4 = sub.lsl #2 v0, v1
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -719,15 +667,6 @@ test "lower and(x, shl(y, n)) to and_shifted" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits shl and and_shifted
-  let expected =
-    #|vcode and_shifted_test(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = ldi 4
-    #|    v3 = shl v1, v2
-    #|    v4 = and.lsl #4 v0, v1
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -759,15 +698,6 @@ test "lower or(x, shl(y, n)) to or_shifted" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits shl and or_shifted
-  let expected =
-    #|vcode or_shifted_test(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = ldi 5
-    #|    v3 = shl v1, v2
-    #|    v4 = or.lsl #5 v0, v1
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -799,15 +729,6 @@ test "lower xor(x, shl(y, n)) to xor_shifted" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits shl and xor_shifted
-  let expected =
-    #|vcode xor_shifted_test(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = ldi 1
-    #|    v3 = shl v1, v2
-    #|    v4 = xor.lsl #1 v0, v1
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -839,14 +760,6 @@ test "madd commutative: add(mul(x, y), z) to madd" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits both mul and madd (with z as accumulator)
-  let expected =
-    #|vcode madd_commutative(v0:int, v1:int, v2:int) -> int {
-    #|block0:
-    #|    v3 = mul v0, v1
-    #|    v4 = madd v2, v0, v1
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
@@ -877,15 +790,6 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // Emits shl and add_shifted with y as base (commutative)
-  let expected =
-    #|vcode add_shifted_commutative(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = ldi 3
-    #|    v3 = shl v0, v2
-    #|    v4 = add.lsl #3 v1, v0
-    #|    ret v4
-    #|}
-    #|
   inspect(
     output,
     content=(
