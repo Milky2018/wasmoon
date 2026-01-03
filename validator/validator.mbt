@@ -2880,8 +2880,8 @@ fn validate_instr(
     }
     ArrayLen => {
       // Pop array ref (any array type), push i32
-      // For now, accept any ref type and push i32
-      ignore(stack.pop_any())
+      // RefNullArray(-1) matches any nullable array reference
+      stack.pop(@types.ValueType::RefNullArray(-1))
       stack.push(@types.ValueType::I32)
     }
     ArrayFill(type_idx) => {
