@@ -226,7 +226,9 @@ fn is_gc_ref_type(ty : @types.ValueType) -> Bool {
     | RefNullStruct(_)
     | RefArray(_)
     | RefNullArray(_)
-    | RefNone => true
+    | RefNone
+    | ExnRef
+    | NullExnRef => true
     _ => false
   }
 }
