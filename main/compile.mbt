@@ -223,10 +223,9 @@ fn eval_data_offset(instrs : Array[@types.Instruction]) -> Int {
     match instr {
       I32Const(n) => return n
       I64Const(n) => return n.to_int()
-      GlobalGet(_) => {
+      GlobalGet(_) =>
         // Global offsets are rare; return 0 as fallback
         return 0
-      }
       _ => continue
     }
   }

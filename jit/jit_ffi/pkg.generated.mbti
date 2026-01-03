@@ -226,21 +226,13 @@ pub fn c_jit_get_gc_struct_set_ptr() -> Int64
 
 pub fn c_jit_get_gc_type_check_subtype_ptr() -> Int64
 
-pub fn c_jit_get_memory_copy_ptr_v3() -> Int64
+pub fn c_jit_get_memory_copy_ptr() -> Int64
 
-pub fn c_jit_get_memory_copy_ptr_v4() -> Int64
+pub fn c_jit_get_memory_fill_ptr() -> Int64
 
-pub fn c_jit_get_memory_fill_ptr_v3() -> Int64
+pub fn c_jit_get_memory_grow_ptr() -> Int64
 
-pub fn c_jit_get_memory_fill_ptr_v4() -> Int64
-
-pub fn c_jit_get_memory_grow_ptr_v3() -> Int64
-
-pub fn c_jit_get_memory_grow_ptr_v4() -> Int64
-
-pub fn c_jit_get_memory_size_ptr_v3() -> Int64
-
-pub fn c_jit_get_memory_size_ptr_v4() -> Int64
+pub fn c_jit_get_memory_size_ptr() -> Int64
 
 pub fn c_jit_get_path_create_directory_ptr() -> Int64
 
@@ -298,7 +290,7 @@ pub fn c_jit_get_spectest_print_i64_ptr() -> Int64
 
 pub fn c_jit_get_spectest_print_ptr() -> Int64
 
-pub fn c_jit_get_table_grow_ptr_v3() -> Int64
+pub fn c_jit_get_table_grow_ptr() -> Int64
 
 pub fn c_jit_get_trap_code() -> Int
 

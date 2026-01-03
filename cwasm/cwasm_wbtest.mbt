@@ -106,14 +106,13 @@ test "deserialize: unsupported version" {
   // Valid magic but wrong version (only v4 is supported)
   let v1_bytes : Array[Int] = [
     0x63, 0x77, 0x61, 0x73, // magic
-    0x01, 0x00, 0x00, 0x00, // version 1
-  ]
+     0x01, 0x00, 0x00, 0x00,
+  ] // version 1
   inspect(try? deserialize(v1_bytes), content="Err(Unsupported version: 1)")
-
   let v3_bytes : Array[Int] = [
     0x63, 0x77, 0x61, 0x73, // magic
-    0x03, 0x00, 0x00, 0x00, // version 3
-  ]
+     0x03, 0x00, 0x00, 0x00,
+  ] // version 3
   inspect(try? deserialize(v3_bytes), content="Err(Unsupported version: 3)")
 }
 
@@ -202,16 +201,16 @@ test "complete module: memory + data + function roundtrip" {
   // Add data segment at offset 64 - simulates initialized string data
   let msg_data : Array[Int] = [
     0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x20, // "Hello "
-    0x57, 0x6F, 0x72, 0x6C, 0x64, 0x21, // "World!"
-    0x0A, // newline
+     0x57, 0x6F, 0x72, 0x6C, 0x64, 0x21, // "World!"
+     0x0A, // newline
   ]
   mod.add_data_segment(0, 64, msg_data)
 
   // Add iovec-like structure at offset 0 (pointer=64, len=13)
   let iovec_data : Array[Int] = [
     64, 0, 0, 0, // pointer to string (little-endian u32)
-    13, 0, 0, 0, // length of string (little-endian u32)
-  ]
+     13, 0, 0, 0,
+  ] // length of string (little-endian u32)
   mod.add_data_segment(0, 0, iovec_data)
 
   // Add an import
@@ -279,7 +278,6 @@ test "memory definition: large pages" {
 
   // Add memory with large page counts (simulating real WASM modules)
   mod.add_memory(256, Some(65536)) // 16MB min, 4GB max
-
   let bytes = mod.serialize()
   let restored = deserialize(bytes) catch { _ => panic() }
   inspect(restored.memories[0].min_pages, content="256")

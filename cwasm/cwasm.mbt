@@ -204,7 +204,11 @@ pub(all) struct DataEntry {
 }
 
 ///|
-pub fn DataEntry::new(memory_idx : Int, offset : Int, data : Array[Int]) -> DataEntry {
+pub fn DataEntry::new(
+  memory_idx : Int,
+  offset : Int,
+  data : Array[Int],
+) -> DataEntry {
   { memory_idx, offset, data }
 }
 
@@ -562,7 +566,14 @@ pub fn deserialize(
     let data = reader.read_bytes(data_len)
     data_segments.push(DataEntry::new(memory_idx, offset, data))
   }
-  { version: CWASM_VERSION, target, imports, functions, memories, data_segments }
+  {
+    version: CWASM_VERSION,
+    target,
+    imports,
+    functions,
+    memories,
+    data_segments,
+  }
 }
 
 // ============ Byte Reader ============

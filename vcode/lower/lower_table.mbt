@@ -25,10 +25,10 @@ fn lower_table_grow(
     None => ctx.vcode_func.new_vreg(@abi.Int) // Create a temp vreg for the unused result
   }
 
-  // Lower to a C call (re-entrant v3 helper):
-  //   wasmoon_jit_table_grow_v3(vmctx, table_idx, delta, init_value) -> i32
+  // Lower to a C call:
+  //   wasmoon_jit_table_grow(vmctx, table_idx, delta, init_value) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(TableGrowV3))
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(TableGrow))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
