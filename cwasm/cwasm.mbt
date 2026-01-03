@@ -448,9 +448,49 @@ fn write_u32(buf : Array[Int], val : Int) -> Unit {
 /// Convert string to UTF-8 bytes
 fn string_to_bytes(s : String) -> Array[Int] {
   let result : Array[Int] = []
-  for i in 0..<s.length() {
-    // Simple ASCII encoding (for now)
-    result.push(s.code_unit_at(i).to_int() & 0xFF)
+  let len = s.length()
+  let mut i = 0
+  while i < len {
+    let c = s.code_unit_at(i).to_int()
+    if c < 0x80 {
+      // ASCII
+      result.push(c)
+      i += 1
+    } else if c < 0x800 {
+      // 2-byte UTF-8
+      result.push(0xC0 | (c >> 6))
+      result.push(0x80 | (c & 0x3F))
+      i += 1
+    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
+      // Surrogate pair - decode to full codepoint
+      let c2 = s.code_unit_at(i + 1).to_int()
+      if c2 >= 0xDC00 && c2 <= 0xDFFF {
+        let codepoint = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00)
+        result.push(0xF0 | (codepoint >> 18))
+        result.push(0x80 | ((codepoint >> 12) & 0x3F))
+        result.push(0x80 | ((codepoint >> 6) & 0x3F))
+        result.push(0x80 | (codepoint & 0x3F))
+        i += 2 // Skip both surrogates
+      } else {
+        // Invalid surrogate, encode as replacement char
+        result.push(0xEF)
+        result.push(0xBF)
+        result.push(0xBD)
+        i += 1
+      }
+    } else if c >= 0xDC00 && c <= 0xDFFF {
+      // Orphan low surrogate, encode as replacement char
+      result.push(0xEF)
+      result.push(0xBF)
+      result.push(0xBD)
+      i += 1
+    } else {
+      // 3-byte UTF-8 (BMP character)
+      result.push(0xE0 | (c >> 12))
+      result.push(0x80 | ((c >> 6) & 0x3F))
+      result.push(0x80 | (c & 0x3F))
+      i += 1
+    }
   }
   result
 }
@@ -622,10 +662,39 @@ fn ByteReader::read_bytes(self : ByteReader, count : Int) -> Array[Int] {
 ///|
 fn ByteReader::read_string(self : ByteReader, len : Int) -> String {
   let builder = StringBuilder::new()
-  for _ in 0..<len {
-    let b = self.read_byte()
-    // Simple ASCII decoding
-    builder.write_char(b.unsafe_to_char())
+  let end_pos = self.pos + len
+  while self.pos < end_pos {
+    let b1 = self.read_byte()
+    if b1 < 0x80 {
+      // ASCII
+      builder.write_char(b1.unsafe_to_char())
+    } else if b1 < 0xE0 {
+      // 2-byte UTF-8
+      let b2 = self.read_byte()
+      let codepoint = ((b1 & 0x1F) << 6) | (b2 & 0x3F)
+      builder.write_char(codepoint.unsafe_to_char())
+    } else if b1 < 0xF0 {
+      // 3-byte UTF-8
+      let b2 = self.read_byte()
+      let b3 = self.read_byte()
+      let codepoint = ((b1 & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
+      builder.write_char(codepoint.unsafe_to_char())
+    } else {
+      // 4-byte UTF-8 (supplementary plane)
+      let b2 = self.read_byte()
+      let b3 = self.read_byte()
+      let b4 = self.read_byte()
+      let codepoint = ((b1 & 0x07) << 18) |
+        ((b2 & 0x3F) << 12) |
+        ((b3 & 0x3F) << 6) |
+        (b4 & 0x3F)
+      // Encode as surrogate pair for JavaScript string
+      let adjusted = codepoint - 0x10000
+      let high = 0xD800 + (adjusted >> 10)
+      let low = 0xDC00 + (adjusted & 0x3FF)
+      builder.write_char(high.unsafe_to_char())
+      builder.write_char(low.unsafe_to_char())
+    }
   }
   builder.to_string()
 }

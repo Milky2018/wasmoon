@@ -97,6 +97,8 @@ pub fn native_get_errno() -> Int
 
 pub fn native_get_error_message() -> String
 
+pub fn native_getrandom(FixedArray[Byte], Int) -> Bool
+
 pub fn native_linkat(Int, String, Int, String, Int) -> Bool
 
 pub fn native_mkdir(String, Int) -> Bool
@@ -456,6 +458,10 @@ pub(all) struct WasiContextBuilder {
 pub fn WasiContextBuilder::args(Self, Array[String]) -> Self
 pub fn WasiContextBuilder::build(Self) -> WasiContext
 pub fn WasiContextBuilder::env(Self, String, String) -> Self
+pub fn WasiContextBuilder::inherit_stderr(Self) -> Self
+pub fn WasiContextBuilder::inherit_stdin(Self) -> Self
+pub fn WasiContextBuilder::inherit_stdio(Self) -> Self
+pub fn WasiContextBuilder::inherit_stdout(Self) -> Self
 pub fn WasiContextBuilder::new() -> Self
 pub fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
 pub fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
