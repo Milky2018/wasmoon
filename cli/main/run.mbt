@@ -20,6 +20,22 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 }
 
 ///|
+/// Decode JIT GC reference value to @types.Value
+/// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
+fn decode_gc_value(raw : Int64) -> @types.Value {
+  if raw == 0L {
+    @types.Value::Null
+  } else if (raw & 1L) == 1L {
+    // i31: (value << 1) | 1, decode by shifting right
+    @types.Value::I31((raw >> 1).to_int())
+  } else {
+    // Heap reference: gc_ref << 1, decode by shifting right
+    // Note: Could be struct or array, we use StructRef as default
+    @types.Value::StructRef((raw >> 1).to_int())
+  }
+}
+
+///|
 /// Run a WASM module
 /// If invoke is specified, call that function with args
 /// Otherwise, run the start function or _start export
@@ -691,15 +707,38 @@ fn run_with_jit(
                       } else {
                         @types.Value::ExternRef(r.to_int())
                       }
-                    // GC reference types - treat as null for now
-                    AnyRef | NullRef => @types.Value::Null
-                    ExnRef | NullExnRef => @types.Value::Null
+                    // GC reference types - decode using JIT encoding:
+                    // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
+                    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
+                      decode_gc_value(r)
+                    ExnRef | NullExnRef =>
+                      if r == @types.FUNCREF_NULL_SENTINEL {
+                        @types.Value::Null
+                      } else {
+                        @types.Value::ExnRef(r.to_int())
+                      }
                     V128 => @types.Value::I64(r) // Placeholder for V128
-                    // New GC reference types
-                    RefStruct(_) | RefNullStruct(_) => @types.Value::Null
-                    RefArray(_) | RefNullArray(_) => @types.Value::Null
-                    RefAny | RefEq | RefNullEq => @types.Value::Null
-                    RefI31 | RefNullI31 => @types.Value::Null
+                    // GC struct/array reference types
+                    RefStruct(_) | RefNullStruct(_) =>
+                      if r == 0L {
+                        @types.Value::Null
+                      } else {
+                        @types.Value::StructRef((r >> 1).to_int())
+                      }
+                    RefArray(_) | RefNullArray(_) =>
+                      if r == 0L {
+                        @types.Value::Null
+                      } else {
+                        @types.Value::ArrayRef((r >> 1).to_int())
+                      }
+                    RefI31 | RefNullI31 =>
+                      if r == 0L {
+                        @types.Value::Null
+                      } else if (r & 1L) == 1L {
+                        @types.Value::I31((r >> 1).to_int())
+                      } else {
+                        @types.Value::Null
+                      }
                     RefNone => @types.Value::Null
                   }
                   values.push(v)

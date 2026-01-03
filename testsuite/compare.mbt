@@ -1,4 +1,56 @@
 ///|
+/// Decode JIT GC reference value to @types.Value
+/// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
+fn decode_gc_ref(raw : Int64) -> @types.Value {
+  if raw == 0L {
+    @types.Value::Null
+  } else if (raw & 1L) == 1L {
+    // i31: (value << 1) | 1, decode by shifting right
+    @types.Value::I31((raw >> 1).to_int())
+  } else {
+    // Heap reference: gc_ref << 1, decode by shifting right
+    // Note: Could be struct or array, we use StructRef as default
+    @types.Value::StructRef((raw >> 1).to_int())
+  }
+}
+
+///|
+/// Decode JIT struct reference
+fn decode_struct_ref(raw : Int64) -> @types.Value {
+  if raw == 0L {
+    @types.Value::Null
+  } else {
+    // gc_ref = raw >> 1 (1-based)
+    @types.Value::StructRef((raw >> 1).to_int())
+  }
+}
+
+///|
+/// Decode JIT array reference
+fn decode_array_ref(raw : Int64) -> @types.Value {
+  if raw == 0L {
+    @types.Value::Null
+  } else {
+    // gc_ref = raw >> 1 (1-based)
+    @types.Value::ArrayRef((raw >> 1).to_int())
+  }
+}
+
+///|
+/// Decode JIT i31 reference
+fn decode_i31_ref(raw : Int64) -> @types.Value {
+  if raw == 0L {
+    @types.Value::Null
+  } else if (raw & 1L) == 1L {
+    // i31: (value << 1) | 1
+    @types.Value::I31((raw >> 1).to_int())
+  } else {
+    // Unexpected: non-i31 value in i31 slot
+    @types.Value::Null
+  }
+}
+
+///|
 /// Compare JIT and interpreter execution results
 /// Returns (jit_result, interp_result, match)
 
@@ -69,27 +121,37 @@ pub fn jit_results_to_values(
           ExternRef(raw.to_int())
         }
       }
-      // GC reference types - treat as null for now
-      AnyRef | NullRef | ExnRef | NullExnRef => {
+      // GC reference types - decode using JIT encoding:
+      // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
+      AnyRef | NullRef | RefAny | RefEq | RefNullEq => {
+        let raw = results[slot_idx]
         slot_idx += 1
-        Null
+        decode_gc_ref(raw)
       }
-      // New GC reference types
-      RefStruct(_) | RefNullStruct(_) => {
+      ExnRef | NullExnRef => {
+        let raw = results[slot_idx]
         slot_idx += 1
-        Null
+        if raw == 0L {
+          Null
+        } else {
+          ExnRef(raw.to_int())
+        }
+      }
+      // GC struct/array reference types
+      RefStruct(_) | RefNullStruct(_) => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        decode_struct_ref(raw)
       }
       RefArray(_) | RefNullArray(_) => {
+        let raw = results[slot_idx]
         slot_idx += 1
-        Null
-      }
-      RefAny | RefEq | RefNullEq => {
-        slot_idx += 1
-        Null
+        decode_array_ref(raw)
       }
       RefI31 | RefNullI31 => {
+        let raw = results[slot_idx]
         slot_idx += 1
-        Null
+        decode_i31_ref(raw)
       }
       RefNone => {
         slot_idx += 1
@@ -120,6 +182,7 @@ pub fn jit_results_to_values(
 
 ///|
 /// Convert @types.Value to Int64 for JIT call
+/// Uses JIT encoding for GC types: i31=(val<<1)|1, struct/array=gc_ref<<1
 pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
   match value {
     I32(n) => @types.ToInt64::to_int64_bits(n)
@@ -129,10 +192,13 @@ pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
     FuncRef(idx) => idx.to_int64()
     ExternRef(idx) => idx.to_int64()
     ExnRef(idx) => idx.to_int64()
-    ArrayRef(idx) => idx.to_int64()
-    StructRef(idx) => idx.to_int64()
-    I31(n) => n.to_int64()
-    Null => @types.FUNCREF_NULL_SENTINEL // null sentinel
+    // GC references: encode using JIT scheme
+    ArrayRef(gc_ref) => gc_ref.to_int64() << 1 // gc_ref << 1
+    StructRef(gc_ref) => gc_ref.to_int64() << 1 // gc_ref << 1
+    I31(n) => (n.to_int64() << 1) | 1L // (value << 1) | 1
+    // Note: Null is ambiguous without type context. For funcref/externref,
+    // use FUNCREF_NULL_SENTINEL. For GC refs, decoder handles 0L.
+    Null => @types.FUNCREF_NULL_SENTINEL
     V128(_) => abort("V128 not yet supported in testsuite")
   }
 }
@@ -339,12 +405,24 @@ pub fn run_jit(
     // Initialize indirect table for call_indirect support
     init_elem_segments(mod_, jm, [])
 
+    // Set up GC heap for GC operations (struct, array, i31)
+    let c_heap = @jit.CHeap::new()
+    let canonical_indices = @types.compute_canonical_type_indices(
+      mod_.types,
+      type_rec_groups=mod_.type_rec_groups,
+    )
+    @jit.gc_setup(c_heap, mod_.types, canonical_indices)
+
     // Call the target function
     guard jm.get_func_by_name(func_name) is Some(f) else {
+      @jit.gc_teardown()
       return Err("Failed to get JIT function")
     }
     let jit_args = args.map(value_to_jit_arg)
     let raw_results = jm.call_with_context(f, jit_args)
+
+    // Tear down GC context after JIT call
+    @jit.gc_teardown()
 
     // Convert to Values
     let values = jit_results_to_values(raw_results, result_types)
