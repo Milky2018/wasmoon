@@ -5,6 +5,7 @@
     "Milky2018/wasmoon/parser",
     "Milky2018/wasmoon/validator",
     "Milky2018/wasmoon/wat",
+    "Milky2018/wasmoon/cwasm",
     "moonbitlang/x/sys",
     "moonbitlang/x/fs",
     "TheWaWaR/clap"

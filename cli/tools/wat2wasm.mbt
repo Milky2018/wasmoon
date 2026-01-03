@@ -2,7 +2,7 @@
 fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
   // Parse WAT text
   let text = read_text_file(file)
-  let _mod = @wat.parse(text) catch {
+  let mod = @wat.parse(text) catch {
     e => {
       exit_error("parsing WAT: \{e}")
       panic()
@@ -10,7 +10,7 @@ fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
   }
 
   // Validate module
-  @validator.validate_module(_mod) catch {
+  @validator.validate_module(mod) catch {
     e => {
       exit_error("validation: \{@validator.format_validation_error(e)}")
       panic()
@@ -35,9 +35,10 @@ fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
       }
   }
 
-  // TODO: Implement binary WASM writer
-  // For now, show an error message
-  exit_error(
-    "wat2wasm is not yet implemented: binary WASM writer needed\nOutput would be written to: \{output_path}",
-  )
+  // Encode module to binary format
+  let bytes = @cwasm.encode(mod)
+
+  // Write to file
+  write_binary_file(output_path, bytes)
+  println("Wrote \{bytes.length()} bytes to \{output_path}")
 }
