@@ -1,6 +1,22 @@
 // JIT support functions for WAST runner
 
 ///|
+/// Decode JIT GC reference value to @types.Value
+/// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
+fn decode_gc_value(raw : Int64) -> @types.Value {
+  if raw == 0L {
+    @types.Value::Null
+  } else if (raw & 1L) == 1L {
+    // i31: (value << 1) | 1, decode by shifting right
+    @types.Value::I31((raw >> 1).to_int())
+  } else {
+    // Heap reference: gc_ref << 1, decode by shifting right
+    // Note: Could be struct or array, we use StructRef as default
+    @types.Value::StructRef((raw >> 1).to_int())
+  }
+}
+
+///|
 /// JIT compiler function type - compiles a module to JIT if possible
 /// Provided by the main package
 pub struct JITCompiler {
@@ -160,13 +176,36 @@ pub fn sync_jit_globals_to_store(
           } else {
             @types.Value::ExternRef(raw_value.to_int())
           }
-        // GC reference types - treat as null for now
-        AnyRef | NullRef => @types.Value::Null
-        ExnRef | NullExnRef => @types.Value::Null
-        RefStruct(_) | RefNullStruct(_) => @types.Value::Null
-        RefArray(_) | RefNullArray(_) => @types.Value::Null
-        RefAny | RefEq | RefNullEq => @types.Value::Null
-        RefI31 | RefNullI31 => @types.Value::Null
+        // GC reference types - decode using JIT encoding:
+        // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
+        AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
+          decode_gc_value(raw_value)
+        ExnRef | NullExnRef =>
+          if raw_value == FUNCREF_NULL_SENTINEL {
+            @types.Value::Null
+          } else {
+            @types.Value::ExnRef(raw_value.to_int())
+          }
+        RefStruct(_) | RefNullStruct(_) =>
+          if raw_value == 0L {
+            @types.Value::Null
+          } else {
+            @types.Value::StructRef((raw_value >> 1).to_int())
+          }
+        RefArray(_) | RefNullArray(_) =>
+          if raw_value == 0L {
+            @types.Value::Null
+          } else {
+            @types.Value::ArrayRef((raw_value >> 1).to_int())
+          }
+        RefI31 | RefNullI31 =>
+          if raw_value == 0L {
+            @types.Value::Null
+          } else if (raw_value & 1L) == 1L {
+            @types.Value::I31((raw_value >> 1).to_int())
+          } else {
+            @types.Value::Null
+          }
         RefNone => @types.Value::Null
         V128 => {
           // Read both 64-bit halves and construct V128

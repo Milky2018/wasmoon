@@ -1,6 +1,6 @@
 # "For Now" Comments Cleanup Plan
 
-Total: 34 items (5 fixed)
+Total: 34 items (8 fixed)
 
 ## Priority 1: Quick Fixes (可直接修复)
 
@@ -15,9 +15,9 @@ Total: 34 items (5 fixed)
 
 | # | File | Line | Issue | Action |
 |---|------|------|-------|--------|
-| 5 | `testsuite/compare.mbt` | 72 | GC refs treated as null | 实现 GC 引用比较 |
-| 6 | `wast/jit_support.mbt` | 163 | GC refs treated as null | 实现 GC 引用支持 |
-| 7 | `cli/main/run.mbt` | 687 | GC refs treated as null | 实现 GC 引用解析 |
+| ~~5~~ | ~~`testsuite/compare.mbt`~~ | ~~72~~ | ~~GC refs treated as null~~ | ~~实现 GC 引用比较~~ |
+| ~~6~~ | ~~`wast/jit_support.mbt`~~ | ~~163~~ | ~~GC refs treated as null~~ | ~~实现 GC 引用支持~~ |
+| ~~7~~ | ~~`cli/main/run.mbt`~~ | ~~687~~ | ~~GC refs treated as null~~ | ~~实现 GC 引用解析~~ |
 | ~~8~~ | ~~`wat/parser.mbt`~~ | ~~2382~~ | ~~Type index as FuncRef~~ | ~~正确解析类型索引~~ |
 
 ## Priority 3: JIT/VCode Improvements (编译器优化)
@@ -71,10 +71,13 @@ Total: 34 items (5 fixed)
 - [x] `cli/main/run.mbt:109,113` - inherit-stdin/stdout/stderr 实现
 - [x] `cwasm/cwasm.mbt:452` - 完整 UTF-8 编码/解码
 - [x] `wat/parser.mbt:2382` - 正确解析类型索引引用
+- [x] `testsuite/compare.mbt` - JIT GC 引用类型解码 (i31, struct, array)
+- [x] `wast/jit_support.mbt` - JIT GC 引用类型同步
+- [x] `cli/main/run.mbt` - JIT GC 引用类型结果解析
 
 ## Next Steps
 
-1. 先处理 Priority 1 的快速修复
-2. 统一处理 GC 引用类型问题
+1. ~~先处理 Priority 1 的快速修复~~ ✓
+2. ~~统一处理 GC 引用类型问题~~ ✓
 3. 逐步改进 JIT/VCode
 4. 其他根据需要处理

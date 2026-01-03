@@ -7,7 +7,7 @@ fn cmd_validate(file : String) -> Unit {
     e => {
       println("\{file}: invalid")
       println(@validator.format_validation_error(e))
-      @sys.exit(1)
+      native_exit(1)
     }
   }
   println("\{file}: valid")

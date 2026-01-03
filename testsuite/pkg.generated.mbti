@@ -20,7 +20,7 @@ pub fn run_assert_return(TestContext, String?, String, Array[TestValue], Array[T
 
 pub fn run_assert_trap(TestContext, String?, String, Array[TestValue], String) -> Bool
 
-pub fn run_jit(@types.Module, String, Int, Array[@types.Value], Array[@types.ValueType]) -> Result[Array[@types.Value], String]
+pub fn run_jit(@types.Module, String, Int, Array[@types.Value], Array[@types.ValueType], Array[@types.ValueType]) -> Result[Array[@types.Value], String]
 
 pub fn run_json_tests(String, String, (String) -> Bytes raise) -> TestResult raise TestRunnerError
 
@@ -29,6 +29,8 @@ pub fn run_test_command(TestContext, TestCommand, TestResult, String, (String) -
 pub fn run_test_command_with_line(TestContext, TestCommandWithLine, TestResult, String, (String) -> Bytes raise) -> Unit raise TestRunnerError
 
 pub fn value_to_jit_arg(@types.Value) -> Int64
+
+pub fn value_to_jit_arg_typed(@types.Value, @types.ValueType) -> Int64
 
 pub fn values_array_equal(Array[@types.Value], Array[@types.Value]) -> Bool
 
