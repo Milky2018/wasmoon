@@ -1,6 +1,6 @@
 # "For Now" Comments Cleanup Plan
 
-Total: 34 items (11 fixed)
+Total: 34 items (12 fixed)
 
 ## Priority 1: Quick Fixes (可直接修复)
 
@@ -54,7 +54,7 @@ Total: 34 items (11 fixed)
 |---|------|------|-------|--------|
 | 22 | `wasi/wasi.mbt` | 19 | Memory wrapper functions | 可能是最终设计 |
 | 23 | `runtime/linker.mbt` | 101 | Synthetic module workaround | 需要重新设计 |
-| 24 | `executor/instr_gc.mbt` | 314 | Packed field extension | 实现 packed 扩展 |
+| ~~24~~ | ~~`executor/instr_gc.mbt`~~ | ~~314~~ | ~~Packed field extension~~ | ~~实现 packed 扩展~~ |
 | 25 | `executor/executor_wbtest.mbt` | 1189 | table.grow test limitation | 改进测试 |
 | ~~26~~ | ~~`validator/validator.mbt`~~ | ~~2883~~ | ~~ref type validation~~ | ~~完善验证器~~ |
 | 27 | `wat/parser_defs.mbt` | 775 | Skip for assert_invalid | 可能是正确行为 |
@@ -77,6 +77,7 @@ Total: 34 items (11 fixed)
 - [x] `vcode/lower/lower_numeric.mbt` - 32-bit magic division optimization
 - [x] `vcode/lower/lower_exception.mbt` - Exception values already supported (outdated comments removed)
 - [x] `validator/validator.mbt` - ArrayLen validation uses proper array ref type check
+- [x] `executor/instr_gc.mbt` - array.get_u zero-extension for packed fields
 
 ## Next Steps
 

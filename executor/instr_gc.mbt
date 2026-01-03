@@ -311,8 +311,37 @@ fn ExecContext::exec_array_get_u(
   self : ExecContext,
   type_idx : Int,
 ) -> Unit raise {
-  // For now, same as array.get - packed field extension will be handled later
-  self.exec_array_get(type_idx)
+  let idx_val = self.stack.pop()
+  let ref_val = self.stack.pop()
+  let idx = match idx_val {
+    I32(n) => n
+    _ => raise @runtime.RuntimeError::TypeMismatch
+  }
+  match ref_val {
+    ArrayRef(ref_idx) => {
+      let value = self.store.array_get(ref_idx, idx)
+      // Zero-extend the value based on the packed type
+      let array_type = self.instance.get_array_type(type_idx)
+      let extended = match array_type.element.storage_type {
+        Packed(I8) =>
+          // Zero-extend from 8 bits (just mask, no sign extension)
+          match value {
+            I32(n) => @types.Value::I32(n & 0xff)
+            _ => value
+          }
+        Packed(I16) =>
+          // Zero-extend from 16 bits (just mask, no sign extension)
+          match value {
+            I32(n) => @types.Value::I32(n & 0xffff)
+            _ => value
+          }
+        _ => value // Non-packed types don't need extension
+      }
+      self.stack.push(extended)
+    }
+    Null => raise @runtime.RuntimeError::NullReference
+    _ => raise @runtime.RuntimeError::TypeMismatch
+  }
 }
 
 ///|
