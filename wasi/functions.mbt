@@ -370,17 +370,25 @@ pub fn fd_close(ctx : WasiContext, fd : Int) -> Int {
 }
 
 ///|
-/// random_get - Generate random bytes
+/// random_get - Generate random bytes using system entropy
 ///
 /// Returns: errno
 pub fn random_get(mem : @runtime.Memory, buf_ptr : Int, buf_len : Int) -> Int {
-  // Simple PRNG for now (not cryptographically secure)
-  let seed : Ref[Int] = { val: 12345 }
-  for i in 0..<buf_len {
-    seed.val = (seed.val * 1103515245 + 12345) & 0x7FFFFFFF
-    mem.write_byte(buf_ptr + i, (seed.val % 256).to_byte())
+  if buf_len <= 0 {
+    return Errno::Success.to_i32()
   }
-  Errno::Success.to_i32()
+  // Get random bytes from system
+  let buf = FixedArray::make(buf_len, b'\x00')
+  if native_getrandom(buf, buf_len) {
+    // Copy to WASM memory
+    for i in 0..<buf_len {
+      mem.write_byte(buf_ptr + i, buf[i])
+    }
+    Errno::Success.to_i32()
+  } else {
+    // System random failed
+    Errno::IO.to_i32()
+  }
 }
 
 ///|

@@ -906,3 +906,19 @@ pub fn native_accept(sockfd : Int) -> Int {
 pub fn native_raise(sig : Int) -> Bool {
   c_raise(sig) == 0
 }
+
+// ============================================================================
+// Random number generation
+// ============================================================================
+
+///|
+/// Get random bytes from system
+#borrow(buf)
+extern "c" fn c_getrandom(buf : FixedArray[Byte], len : Int) -> Int = "wasmoon_wasi_getrandom"
+
+///|
+/// Get random bytes from system
+/// Returns true on success
+pub fn native_getrandom(buf : FixedArray[Byte], len : Int) -> Bool {
+  c_getrandom(buf, len) == 0
+}

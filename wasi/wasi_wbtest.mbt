@@ -143,6 +143,28 @@ test "wasi: random_get" {
 }
 
 ///|
+test "wasi: random_get produces different results" {
+  let mem = @runtime.Memory::new(1, None)
+  // First call
+  let result1 = random_get(mem, 0, 16)
+  inspect(result1, content="0")
+  // Save first 16 bytes
+  let first = FixedArray::makei(16, fn(i) { mem.read_byte(i) })
+  // Second call
+  let result2 = random_get(mem, 0, 16)
+  inspect(result2, content="0")
+  // At least some bytes should be different (extremely unlikely to be same)
+  let any_different = for i in 0..<16 {
+    if mem.read_byte(i) != first[i] {
+      break true
+    }
+  } else {
+    false
+  }
+  inspect(any_different, content="true")
+}
+
+///|
 test "wasi: fd_read from opened file" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)

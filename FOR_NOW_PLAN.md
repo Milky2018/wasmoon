@@ -1,12 +1,12 @@
 # "For Now" Comments Cleanup Plan
 
-Total: 34 items (1 fixed)
+Total: 34 items (2 fixed)
 
 ## Priority 1: Quick Fixes (可直接修复)
 
 | # | File | Line | Issue | Action |
 |---|------|------|-------|--------|
-| 1 | `wasi/functions.mbt` | 377 | Simple PRNG (not cryptographically secure) | 改用系统随机源 |
+| ~~1~~ | ~~`wasi/functions.mbt`~~ | ~~377~~ | ~~Simple PRNG (not cryptographically secure)~~ | ~~改用系统随机源~~ |
 | 2 | `cli/main/run.mbt` | 109,113 | inherit-stdin not implemented | 实现 stdin 继承 |
 | 3 | `cli/tools/wat2wasm.mbt` | 39 | Binary writer not implemented | 实现 WASM 二进制写入 |
 | 4 | `cwasm/cwasm.mbt` | 452 | Simple ASCII encoding | 支持完整 UTF-8 |
@@ -67,6 +67,7 @@ Total: 34 items (1 fixed)
 ## Completed
 
 - [x] `wasi/functions.mbt:293` - clock_time_get 使用真实系统时间 (b93b644)
+- [x] `wasi/functions.mbt:377` - random_get 使用系统熵源
 
 ## Next Steps
 

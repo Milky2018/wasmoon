@@ -25,6 +25,10 @@ extern "C" {
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <stdlib.h>
+#if defined(__linux__) && defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25))
+#include <sys/random.h>
+#endif
 #endif
 
 #include "moonbit.h"
@@ -670,6 +674,44 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_raise(int sig) {
   return raise(sig);
 #else
   return raise(sig);
+#endif
+}
+
+// Get random bytes from system
+// Returns 0 on success, -1 on error
+MOONBIT_FFI_EXPORT int wasmoon_wasi_getrandom(uint8_t* buf, size_t len) {
+#ifdef _WIN32
+  // Windows: use RtlGenRandom (SystemFunction036)
+  // Available on Windows XP and later
+  extern BOOLEAN NTAPI SystemFunction036(PVOID, ULONG);
+  if (SystemFunction036(buf, (ULONG)len)) {
+    return 0;
+  }
+  return -1;
+#elif defined(__APPLE__)
+  // macOS: use arc4random_buf (always available, never fails)
+  arc4random_buf(buf, len);
+  return 0;
+#elif defined(__linux__)
+  // Linux: use getrandom if available, fallback to /dev/urandom
+  #if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25))
+    ssize_t ret = getrandom(buf, len, 0);
+    return (ret == (ssize_t)len) ? 0 : -1;
+  #else
+    // Fallback to /dev/urandom
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) return -1;
+    ssize_t ret = read(fd, buf, len);
+    close(fd);
+    return (ret == (ssize_t)len) ? 0 : -1;
+  #endif
+#else
+  // Other Unix: use /dev/urandom
+  int fd = open("/dev/urandom", O_RDONLY);
+  if (fd < 0) return -1;
+  ssize_t ret = read(fd, buf, len);
+  close(fd);
+  return (ret == (ssize_t)len) ? 0 : -1;
 #endif
 }
 
