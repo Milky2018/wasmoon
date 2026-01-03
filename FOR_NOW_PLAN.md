@@ -1,6 +1,6 @@
 # "For Now" Comments Cleanup Plan
 
-Total: 34 items (8 fixed)
+Total: 34 items (9 fixed)
 
 ## Priority 1: Quick Fixes (可直接修复)
 
@@ -24,7 +24,7 @@ Total: 34 items (8 fixed)
 
 | # | File | Line | Issue | Action |
 |---|------|------|-------|--------|
-| 9 | `vcode/lower/lower_numeric.mbt` | 259 | Only 64-bit optimized | 添加 32-bit 优化 |
+| ~~9~~ | ~~`vcode/lower/lower_numeric.mbt`~~ | ~~259~~ | ~~Only 64-bit optimized~~ | ~~添加 32-bit 优化~~ |
 | 10 | `vcode/lower/peephole.mbt` | 158 | DCE disabled | 实现跨块 DCE |
 | 11 | `vcode/lower/aarch64_patterns.mbt` | 58 | Simple cases only | 扩展模式匹配 |
 | 12 | `vcode/emit/instructions.mbt` | 3412 | Some instructions abort | 实现剩余指令 |
@@ -74,6 +74,7 @@ Total: 34 items (8 fixed)
 - [x] `testsuite/compare.mbt` - JIT GC 引用类型解码 (i31, struct, array)
 - [x] `wast/jit_support.mbt` - JIT GC 引用类型同步
 - [x] `cli/main/run.mbt` - JIT GC 引用类型结果解析
+- [x] `vcode/lower/lower_numeric.mbt` - 32-bit magic division optimization
 
 ## Next Steps
 
