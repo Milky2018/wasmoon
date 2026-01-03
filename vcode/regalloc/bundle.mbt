@@ -258,15 +258,50 @@ pub fn compute_spill_weight(
 }
 
 ///|
-/// Get loop depth for a block (simplified: use block index as proxy)
-/// A real implementation would use loop analysis
+/// Get loop depth for a block using simple backedge detection
+/// A block is considered in a loop if it has an incoming backedge
+/// (a predecessor with higher block index)
 fn get_loop_depth(func : VCodeFunction, block_id : Int) -> Int {
-  // Simple heuristic: blocks with higher indices that jump to lower
-  // blocks are likely loop bodies
-  // For now, return 0 (no loop info)
-  ignore(func)
-  ignore(block_id)
-  0
+  // Count incoming backedges to estimate loop nesting
+  let mut depth = 0
+  for i, block in func.blocks {
+    if block.terminator is Some(term) {
+      let successors = get_terminator_successors(term)
+      for succ in successors {
+        // A backedge is an edge from higher block to lower or equal block
+        if i > block_id && succ == block_id {
+          depth = depth + 1
+        }
+      }
+    }
+  }
+  // Cap at reasonable depth
+  if depth > 3 {
+    3
+  } else {
+    depth
+  }
+}
+
+///|
+/// Get successor block IDs from a terminator
+fn get_terminator_successors(term : @instr.VCodeTerminator) -> Array[Int] {
+  match term {
+    Jump(target) => [target]
+    Branch(_, then_b, else_b) => [then_b, else_b]
+    BranchCmp(_, _, _, _, then_b, else_b) => [then_b, else_b]
+    BranchZero(_, _, _, then_b, else_b) => [then_b, else_b]
+    BranchCmpImm(_, _, _, _, then_b, else_b) => [then_b, else_b]
+    BrTable(_, targets, default) => {
+      let result : Array[Int] = []
+      for t in targets {
+        result.push(t)
+      }
+      result.push(default)
+      result
+    }
+    Return(_) | Trap(_) => []
+  }
 }
 
 ///|
