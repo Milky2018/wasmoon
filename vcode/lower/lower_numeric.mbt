@@ -245,6 +245,200 @@ fn lower_magic_sdiv64(
 }
 
 ///|
+/// Lower unsigned 32-bit magic division
+/// q = (n * magic) >> 32 >> shift (with optional add correction)
+fn lower_magic_udiv32(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  dst : @abi.VReg,
+  lhs : @abi.VReg,
+  magic : MagicU32,
+) -> Unit {
+  // Load magic constant (32-bit, zero-extended to 64-bit for UMULL)
+  let magic_reg = ctx.new_vreg(@abi.Int)
+  let load_magic = @instr.VCodeInst::new(
+    LoadConst(magic.mul_by.reinterpret_as_int().to_int64() & 0xFFFFFFFFL),
+  )
+  load_magic.add_def({ reg: Virtual(magic_reg) })
+  block.add_inst(load_magic)
+
+  // q = UMULL(n, magic) - produces 64-bit result in X register
+  let q64_reg = ctx.new_vreg(@abi.Int)
+  let umull = @instr.VCodeInst::new(Umull)
+  umull.add_def({ reg: Virtual(q64_reg) })
+  umull.add_use(Virtual(lhs))
+  umull.add_use(Virtual(magic_reg))
+  block.add_inst(umull)
+
+  // Extract high 32 bits: q = q64 >> 32
+  let q_reg = ctx.new_vreg(@abi.Int)
+  let shift32_reg = ctx.new_vreg(@abi.Int)
+  let load_32 = @instr.VCodeInst::new(LoadConst(32L))
+  load_32.add_def({ reg: Virtual(shift32_reg) })
+  block.add_inst(load_32)
+  let lsr32 = @instr.VCodeInst::new(LShr(true)) // Use 64-bit shift
+  lsr32.add_def({ reg: Virtual(q_reg) })
+  lsr32.add_use(Virtual(q64_reg))
+  lsr32.add_use(Virtual(shift32_reg))
+  block.add_inst(lsr32)
+  if magic.do_add {
+    // t = n - q (32-bit)
+    let t1_reg = ctx.new_vreg(@abi.Int)
+    let sub1 = @instr.VCodeInst::new(Sub(false))
+    sub1.add_def({ reg: Virtual(t1_reg) })
+    sub1.add_use(Virtual(lhs))
+    sub1.add_use(Virtual(q_reg))
+    block.add_inst(sub1)
+
+    // t = t >> 1 (32-bit)
+    let t2_reg = ctx.new_vreg(@abi.Int)
+    let shr1 = @instr.VCodeInst::new(LShr(false))
+    shr1.add_def({ reg: Virtual(t2_reg) })
+    shr1.add_use(Virtual(t1_reg))
+    let one_reg = ctx.new_vreg(@abi.Int)
+    let load_one = @instr.VCodeInst::new(LoadConst(1L))
+    load_one.add_def({ reg: Virtual(one_reg) })
+    block.add_inst(load_one)
+    shr1.add_use(Virtual(one_reg))
+    block.add_inst(shr1)
+
+    // t = t + q (32-bit)
+    let t3_reg = ctx.new_vreg(@abi.Int)
+    let add1 = @instr.VCodeInst::new(Add(false))
+    add1.add_def({ reg: Virtual(t3_reg) })
+    add1.add_use(Virtual(t2_reg))
+    add1.add_use(Virtual(q_reg))
+    block.add_inst(add1)
+
+    // q = t >> (shift - 1) (32-bit)
+    let shift_reg = ctx.new_vreg(@abi.Int)
+    let load_shift = @instr.VCodeInst::new(
+      LoadConst((magic.shift_by - 1).to_int64()),
+    )
+    load_shift.add_def({ reg: Virtual(shift_reg) })
+    block.add_inst(load_shift)
+    let final_shr = @instr.VCodeInst::new(LShr(false))
+    final_shr.add_def({ reg: Virtual(dst) })
+    final_shr.add_use(Virtual(t3_reg))
+    final_shr.add_use(Virtual(shift_reg))
+    block.add_inst(final_shr)
+  } else if magic.shift_by > 0 {
+    // q = q >> shift (32-bit)
+    let shift_reg = ctx.new_vreg(@abi.Int)
+    let load_shift = @instr.VCodeInst::new(LoadConst(magic.shift_by.to_int64()))
+    load_shift.add_def({ reg: Virtual(shift_reg) })
+    block.add_inst(load_shift)
+    let final_shr = @instr.VCodeInst::new(LShr(false))
+    final_shr.add_def({ reg: Virtual(dst) })
+    final_shr.add_use(Virtual(q_reg))
+    final_shr.add_use(Virtual(shift_reg))
+    block.add_inst(final_shr)
+  } else {
+    // No shift needed, just move
+    let mov = @instr.VCodeInst::new(Move)
+    mov.add_def({ reg: Virtual(dst) })
+    mov.add_use(Virtual(q_reg))
+    block.add_inst(mov)
+  }
+}
+
+///|
+/// Lower signed 32-bit magic division
+fn lower_magic_sdiv32(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  dst : @abi.VReg,
+  lhs : @abi.VReg,
+  divisor : Int,
+  magic : MagicS32,
+) -> Unit {
+  // Load magic constant (sign-extended for SMULL)
+  let magic_reg = ctx.new_vreg(@abi.Int)
+  let load_magic = @instr.VCodeInst::new(LoadConst(magic.mul_by.to_int64()))
+  load_magic.add_def({ reg: Virtual(magic_reg) })
+  block.add_inst(load_magic)
+
+  // q = SMULL(n, magic) - produces 64-bit signed result
+  let q64_reg = ctx.new_vreg(@abi.Int)
+  let smull = @instr.VCodeInst::new(Smull)
+  smull.add_def({ reg: Virtual(q64_reg) })
+  smull.add_use(Virtual(lhs))
+  smull.add_use(Virtual(magic_reg))
+  block.add_inst(smull)
+
+  // Extract high 32 bits with sign: q = q64 >> 32 (arithmetic)
+  let q_reg = ctx.new_vreg(@abi.Int)
+  let shift32_reg = ctx.new_vreg(@abi.Int)
+  let load_32 = @instr.VCodeInst::new(LoadConst(32L))
+  load_32.add_def({ reg: Virtual(shift32_reg) })
+  block.add_inst(load_32)
+  let asr32 = @instr.VCodeInst::new(AShr(true)) // Arithmetic shift to preserve sign
+  asr32.add_def({ reg: Virtual(q_reg) })
+  asr32.add_use(Virtual(q64_reg))
+  asr32.add_use(Virtual(shift32_reg))
+  block.add_inst(asr32)
+
+  // Correction based on signs
+  let q2_reg = if divisor > 0 && magic.mul_by < 0 {
+    // q = q + n
+    let tmp = ctx.new_vreg(@abi.Int)
+    let add1 = @instr.VCodeInst::new(Add(false))
+    add1.add_def({ reg: Virtual(tmp) })
+    add1.add_use(Virtual(q_reg))
+    add1.add_use(Virtual(lhs))
+    block.add_inst(add1)
+    tmp
+  } else if divisor < 0 && magic.mul_by > 0 {
+    // q = q - n
+    let tmp = ctx.new_vreg(@abi.Int)
+    let sub1 = @instr.VCodeInst::new(Sub(false))
+    sub1.add_def({ reg: Virtual(tmp) })
+    sub1.add_use(Virtual(q_reg))
+    sub1.add_use(Virtual(lhs))
+    block.add_inst(sub1)
+    tmp
+  } else {
+    q_reg
+  }
+
+  // q = q >> shift (arithmetic, 32-bit)
+  let q3_reg = if magic.shift_by > 0 {
+    let shift_reg = ctx.new_vreg(@abi.Int)
+    let load_shift = @instr.VCodeInst::new(LoadConst(magic.shift_by.to_int64()))
+    load_shift.add_def({ reg: Virtual(shift_reg) })
+    block.add_inst(load_shift)
+    let tmp = ctx.new_vreg(@abi.Int)
+    let ashr = @instr.VCodeInst::new(AShr(false))
+    ashr.add_def({ reg: Virtual(tmp) })
+    ashr.add_use(Virtual(q2_reg))
+    ashr.add_use(Virtual(shift_reg))
+    block.add_inst(ashr)
+    tmp
+  } else {
+    q2_reg
+  }
+
+  // t = q >> 31 (extract sign bit, logical shift for 32-bit)
+  let t_reg = ctx.new_vreg(@abi.Int)
+  let shift31_reg = ctx.new_vreg(@abi.Int)
+  let load_31 = @instr.VCodeInst::new(LoadConst(31L))
+  load_31.add_def({ reg: Virtual(shift31_reg) })
+  block.add_inst(load_31)
+  let lshr31 = @instr.VCodeInst::new(LShr(false))
+  lshr31.add_def({ reg: Virtual(t_reg) })
+  lshr31.add_use(Virtual(q3_reg))
+  lshr31.add_use(Virtual(shift31_reg))
+  block.add_inst(lshr31)
+
+  // q = q + t (add 1 if negative to round toward zero)
+  let final_add = @instr.VCodeInst::new(Add(false))
+  final_add.add_def({ reg: Virtual(dst) })
+  final_add.add_use(Virtual(q3_reg))
+  final_add.add_use(Virtual(t_reg))
+  block.add_inst(final_add)
+}
+
+///|
 /// Lower division with proper 32/64-bit selection and trapping
 fn lower_div(
   ctx : LoweringContext,
@@ -256,28 +450,51 @@ fn lower_div(
   let is_64 = inst.operands[0].ty is @ir.Type::I64
 
   // Check if divisor is a constant suitable for magic division
-  // Only optimize 64-bit for now (most common case)
-  if is_64 && inst.result is Some(result) {
+  if inst.result is Some(result) {
     if get_const_value(ctx, lhs_val) is Some(divisor) {
-      // Check if magic division is applicable
-      let use_magic = if signed {
-        // For signed: |d| > 1 and d != -1
-        divisor > 1L || divisor < -1L
-      } else {
-        // For unsigned: d > 1
-        divisor > 1L
-      }
-      if use_magic {
-        let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-        let dst = ctx.get_vreg(result)
-        if signed {
-          let magic = magic_s64(divisor)
-          lower_magic_sdiv64(ctx, block, dst, lhs, divisor, magic)
+      if is_64 {
+        // 64-bit magic division
+        let use_magic = if signed {
+          // For signed: |d| > 1 and d != -1
+          divisor > 1L || divisor < -1L
         } else {
-          let magic = magic_u64(divisor.reinterpret_as_uint64())
-          lower_magic_udiv64(ctx, block, dst, lhs, magic)
+          // For unsigned: d > 1
+          divisor > 1L
         }
-        return
+        if use_magic {
+          let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+          let dst = ctx.get_vreg(result)
+          if signed {
+            let magic = magic_s64(divisor)
+            lower_magic_sdiv64(ctx, block, dst, lhs, divisor, magic)
+          } else {
+            let magic = magic_u64(divisor.reinterpret_as_uint64())
+            lower_magic_udiv64(ctx, block, dst, lhs, magic)
+          }
+          return
+        }
+      } else {
+        // 32-bit magic division
+        let divisor32 = divisor.to_int()
+        let use_magic = if signed {
+          // For signed: |d| > 1 and d != -1
+          divisor32 > 1 || divisor32 < -1
+        } else {
+          // For unsigned: d > 1
+          divisor32 > 1
+        }
+        if use_magic {
+          let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+          let dst = ctx.get_vreg(result)
+          if signed {
+            let magic = magic_s32(divisor32)
+            lower_magic_sdiv32(ctx, block, dst, lhs, divisor32, magic)
+          } else {
+            let magic = magic_u32(divisor32.reinterpret_as_uint())
+            lower_magic_udiv32(ctx, block, dst, lhs, magic)
+          }
+          return
+        }
       }
     }
   }
