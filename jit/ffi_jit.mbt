@@ -305,6 +305,38 @@ fn JITContext::init_wasi(
 }
 
 ///|
+/// Initialize WASI context with stdout/stderr redirected to /dev/null (for testing)
+fn JITContext::init_wasi_quiet(
+  self : JITContext,
+  args : Array[String],
+  env : Array[String],
+  preopens : Array[(String, String)],
+) -> Unit {
+  let ctx_ptr = self.ptr()
+  // Initialize fd table with quiet mode (stdout/stderr to /dev/null)
+  @jit_ffi.c_jit_init_wasi_fds_quiet(ctx_ptr, preopens.length())
+  // Set args
+  @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
+  for i, arg in args {
+    let cstr = string_to_cstring(arg)
+    @jit_ffi.c_jit_set_wasi_arg(ctx_ptr, i, cstr)
+  }
+  // Set env
+  @jit_ffi.c_jit_set_wasi_envs(ctx_ptr, env.length())
+  for i, e in env {
+    let cstr = string_to_cstring(e)
+    @jit_ffi.c_jit_set_wasi_env(ctx_ptr, i, cstr)
+  }
+  // Set preopens
+  for i, entry in preopens {
+    let (host, guest) = entry
+    let host_cstr = string_to_cstring(host)
+    let guest_cstr = string_to_cstring(guest)
+    @jit_ffi.c_jit_add_preopen(ctx_ptr, i, host_cstr, guest_cstr)
+  }
+}
+
+///|
 /// Allocate linear memory for WASM (returns 0 on failure)
 /// NOTE: If you set the memory to a JITContext (via set_memory), the context
 /// takes ownership and its finalizer will free the memory. Do NOT call

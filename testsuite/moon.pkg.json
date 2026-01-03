@@ -14,5 +14,8 @@
     "Milky2018/wasmoon/cwasm",
     "Milky2018/wasmoon/vcode/lower",
     "Milky2018/wasmoon/vcode/regalloc"
+  ],
+  "wbtest-import": [
+    "Milky2018/wasmoon/wasi"
   ]
 }

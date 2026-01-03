@@ -444,6 +444,19 @@ pub fn JITModule::init_wasi(
 }
 
 ///|
+/// Initialize WASI context with stdout/stderr redirected to /dev/null (for testing)
+pub fn JITModule::init_wasi_quiet(
+  self : JITModule,
+  args : Array[String],
+  env : Array[String],
+  preopens : Array[(String, String)],
+) -> Unit {
+  if self.context is Some(ctx) {
+    ctx.init_wasi_quiet(args, env, preopens)
+  }
+}
+
+///|
 /// Initialize indirect table for call_indirect.
 /// table_size: number of table elements
 /// elem_init: array of (table_idx, func_idx, type_idx) triples

@@ -306,6 +306,8 @@ pub fn c_jit_get_wasm_stack_top(Int64) -> Int64
 
 pub fn c_jit_init_wasi_fds(Int64, Int) -> Unit
 
+pub fn c_jit_init_wasi_fds_quiet(Int64, Int) -> Unit
+
 pub fn c_jit_memory_copy(Int, Int, Int) -> Unit
 
 pub fn c_jit_memory_fill(Int, Int, Int) -> Unit

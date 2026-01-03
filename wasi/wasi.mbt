@@ -44,8 +44,8 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      // Get memory from store (memory 0)
-      let mem = store.get_memory(0)
+      // Get memory from store (using WASI memory address)
+      let mem = store.get_wasi_memory()
       let result = fd_write(ctx, mem, fd, iovs, iovs_len, nwritten)
       [@types.Value::I32(result)]
     },
@@ -73,7 +73,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_read(ctx, mem, fd, iovs, iovs_len, nread)
       [@types.Value::I32(result)]
     },
@@ -93,7 +93,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = args_sizes_get(ctx, mem, argc_ptr, argv_buf_size_ptr)
       [@types.Value::I32(result)]
     },
@@ -113,7 +113,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = args_get(ctx, mem, argv_ptr, argv_buf_ptr)
       [@types.Value::I32(result)]
     },
@@ -133,7 +133,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = environ_sizes_get(
         ctx, mem, environc_ptr, environ_buf_size_ptr,
       )
@@ -155,7 +155,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = environ_get(ctx, mem, environ_ptr, environ_buf_ptr)
       [@types.Value::I32(result)]
     },
@@ -198,7 +198,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = clock_time_get(mem, clock_id, precision, time_ptr)
       [@types.Value::I32(result)]
     },
@@ -218,7 +218,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_prestat_get(ctx, mem, fd, prestat_ptr)
       [@types.Value::I32(result)]
     },
@@ -242,7 +242,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_prestat_dir_name(ctx, mem, fd, path_ptr, path_len)
       [@types.Value::I32(result)]
     },
@@ -277,7 +277,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = random_get(mem, buf_ptr, buf_len)
       [@types.Value::I32(result)]
     },
@@ -305,7 +305,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_seek(ctx, mem, fd, offset, whence, newoffset_ptr)
       [@types.Value::I32(result)]
     },
@@ -325,7 +325,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_tell(ctx, mem, fd, offset_ptr)
       [@types.Value::I32(result)]
     },
@@ -357,7 +357,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_pread(ctx, mem, fd, iovs, iovs_len, offset, nread_ptr)
       [@types.Value::I32(result)]
     },
@@ -389,7 +389,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_pwrite(ctx, mem, fd, iovs, iovs_len, offset, nwritten_ptr)
       [@types.Value::I32(result)]
     },
@@ -437,7 +437,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_open(
         ctx, mem, dir_fd, dirflags, path_ptr, path_len, oflags, fs_rights_base, fs_rights_inheriting,
         fdflags, opened_fd_ptr,
@@ -462,7 +462,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_fdstat_get(ctx, mem, fd, fdstat_ptr)
       [@types.Value::I32(result)]
     },
@@ -482,7 +482,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = clock_res_get(mem, clock_id, resolution_ptr)
       [@types.Value::I32(result)]
     },
@@ -517,7 +517,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_create_directory(ctx, mem, dir_fd, path_ptr, path_len)
       [@types.Value::I32(result)]
     },
@@ -549,7 +549,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_readdir(
         ctx, mem, fd, buf_ptr, buf_len, cookie, bufused_ptr,
       )
@@ -609,7 +609,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_unlink_file_impl(ctx, mem, fd, path_ptr, path_len)
       [@types.Value::I32(result)]
     },
@@ -633,7 +633,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_remove_directory_impl(ctx, mem, fd, path_ptr, path_len)
       [@types.Value::I32(result)]
     },
@@ -669,7 +669,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_rename_impl(
         ctx, mem, old_fd, old_path_ptr, old_path_len, new_fd, new_path_ptr, new_path_len,
       )
@@ -695,7 +695,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = fd_filestat_get_impl(ctx, mem, fd, buf_ptr)
       [@types.Value::I32(result)]
     },
@@ -727,7 +727,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_filestat_get_impl(
         ctx, mem, dir_fd, flags, path_ptr, path_len, buf_ptr,
       )
@@ -815,7 +815,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_filestat_set_times_impl(
         ctx, mem, dir_fd, flags, path_ptr, path_len, atim, mtim, fst_flags,
       )
@@ -970,7 +970,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_symlink_impl(
         ctx, mem, old_path_ptr, old_path_len, dir_fd, new_path_ptr, new_path_len,
       )
@@ -1008,7 +1008,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_readlink_impl(
         ctx, mem, dir_fd, path_ptr, path_len, buf_ptr, buf_len, bufused_ptr,
       )
@@ -1050,7 +1050,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = path_link_impl(
         ctx, mem, old_fd, old_flags, old_path_ptr, old_path_len, new_fd, new_path_ptr,
         new_path_len,
@@ -1085,7 +1085,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = poll_oneoff_impl(
         ctx, mem, in_ptr, out_ptr, nsubscriptions, nevents_ptr,
       )
@@ -1123,7 +1123,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = sock_recv_impl(
         ctx, mem, fd, ri_data_ptr, ri_data_len, ri_flags, ro_datalen_ptr, ro_flags_ptr,
       )
@@ -1157,7 +1157,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = sock_send_impl(
         ctx, mem, fd, si_data_ptr, si_data_len, si_flags, so_datalen_ptr,
       )
@@ -1217,7 +1217,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
-      let mem = store.get_memory(0)
+      let mem = store.get_wasi_memory()
       let result = sock_accept_impl(ctx, mem, fd, flags, result_fd_ptr)
       [@types.Value::I32(result)]
     },

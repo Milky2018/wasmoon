@@ -44,6 +44,9 @@ pub struct Store {
   // JIT tables corresponding to runtime tables (for cross-module sharing)
   // jit_tables[i] is the JIT table for tables[i], or None if not using JIT
   jit_tables : Array[@jit.JITTable?]
+  // Current WASI module's memory address (for interpreter mode WASI callbacks)
+  // WASI callbacks use this to access the correct memory instead of hardcoded index 0
+  mut wasi_mem_addr : Int?
 } derive(Show)
 
 ///|
@@ -67,6 +70,7 @@ pub fn Store::new() -> Store {
     func_owners: [],
     instances: [],
     jit_tables: [],
+    wasi_mem_addr: None,
   }
 }
 
@@ -92,6 +96,7 @@ pub fn Store::with_c_heap() -> Store {
     func_owners: [],
     instances: [],
     jit_tables: [],
+    wasi_mem_addr: None,
   }
 }
 
@@ -621,6 +626,23 @@ pub fn Store::get_memory(self : Store, idx : Int) -> Memory {
   } else {
     self.mems[idx]
   }
+}
+
+///|
+/// Get WASI module's memory
+/// Uses the stored wasi_mem_addr if set, otherwise falls back to index 0
+pub fn Store::get_wasi_memory(self : Store) -> Memory {
+  match self.wasi_mem_addr {
+    Some(addr) => self.get_memory(addr)
+    None => self.get_memory(0)
+  }
+}
+
+///|
+/// Set the current WASI module's memory address
+/// Should be called after instantiating a module that uses WASI
+pub fn Store::set_wasi_mem_addr(self : Store, addr : Int) -> Unit {
+  self.wasi_mem_addr = Some(addr)
 }
 
 ///|

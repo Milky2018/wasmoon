@@ -1309,39 +1309,41 @@ pub fn fd_fdstat_set_flags_impl(
   fd : Int,
   flags : Int,
 ) -> Int {
-  if fd < 3 {
-    return Errno::Inval.to_i32()
+  // Get the native file descriptor
+  let native_fd = if fd < 3 {
+    // stdin/stdout/stderr map directly to native 0/1/2
+    fd
+  } else {
+    match ctx.get_file(fd) {
+      Some(file) => file.native_fd
+      None => return Errno::Badf.to_i32()
+    }
   }
-  match ctx.get_file(fd) {
-    Some(file) => {
-      // Convert WASI fdflags to native flags
-      // WASI: 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC
-      let native_flags = native_fcntl_getfl(file.native_fd)
-      match native_flags {
-        Some(current) => {
-          let mut new_flags = current
-          // O_APPEND = 0x400 on Linux, 0x8 on macOS
-          if (flags & 0x01) != 0 {
-            new_flags = new_flags | 0x8 // O_APPEND
-          } else {
-            new_flags = new_flags & (0x8).lnot()
-          }
-          // O_NONBLOCK = 0x800 on Linux, 0x4 on macOS
-          if (flags & 0x04) != 0 {
-            new_flags = new_flags | 0x4 // O_NONBLOCK
-          } else {
-            new_flags = new_flags & (0x4).lnot()
-          }
-          if native_fcntl_setfl(file.native_fd, new_flags) {
-            Errno::Success.to_i32()
-          } else {
-            Errno::IO.to_i32()
-          }
-        }
-        None => Errno::IO.to_i32()
+  // Convert WASI fdflags to native flags
+  // WASI: 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC
+  let native_flags = native_fcntl_getfl(native_fd)
+  match native_flags {
+    Some(current) => {
+      let mut new_flags = current
+      // O_APPEND = 0x400 on Linux, 0x8 on macOS
+      if (flags & 0x01) != 0 {
+        new_flags = new_flags | 0x8 // O_APPEND
+      } else {
+        new_flags = new_flags & (0x8).lnot()
+      }
+      // O_NONBLOCK = 0x800 on Linux, 0x4 on macOS
+      if (flags & 0x04) != 0 {
+        new_flags = new_flags | 0x4 // O_NONBLOCK
+      } else {
+        new_flags = new_flags & (0x4).lnot()
+      }
+      if native_fcntl_setfl(native_fd, new_flags) {
+        Errno::Success.to_i32()
+      } else {
+        Errno::IO.to_i32()
       }
     }
-    None => Errno::Badf.to_i32()
+    None => Errno::IO.to_i32()
   }
 }
 

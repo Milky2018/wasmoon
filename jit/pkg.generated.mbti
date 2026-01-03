@@ -378,6 +378,7 @@ pub fn JITModule::has_wasm_stack(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int, Int)]) -> Unit
 pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
+pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])]) -> Self?
 pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]]) -> Self?
 pub fn JITModule::new() -> Self

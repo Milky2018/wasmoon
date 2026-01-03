@@ -1737,6 +1737,12 @@ pub fn instantiate_module_with_imports(
     mem_addrs.push(addr)
   }
 
+  // Set WASI memory address for interpreter mode WASI callbacks
+  // This allows WASI functions to access the correct memory instead of hardcoded index 0
+  if mem_addrs.length() > 0 {
+    store.set_wasi_mem_addr(mem_addrs[0])
+  }
+
   // First, collect instances for already-allocated globals (imports)
   // This is needed for table init expressions that reference imported globals
   let global_instances : Array[@runtime.GlobalInstance] = []

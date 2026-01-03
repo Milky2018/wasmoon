@@ -55,10 +55,12 @@
 // Get native fd from WASI fd
 static int get_native_fd(jit_context_t *ctx, int wasi_fd) {
     if (wasi_fd < 0) return -1;
-    // stdio fds map directly
-    if (wasi_fd < 3) return wasi_fd;
-    // Check fd table
-    if (!ctx->fd_table || wasi_fd >= ctx->fd_table_size) return -1;
+    // Check fd table for all fds (including stdio for quiet mode support)
+    if (!ctx->fd_table || wasi_fd >= ctx->fd_table_size) {
+        // Fallback: stdio fds map directly if no fd_table
+        if (wasi_fd < 3) return wasi_fd;
+        return -1;
+    }
     return ctx->fd_table[wasi_fd];
 }
 
@@ -658,6 +660,9 @@ static int64_t wasi_fd_filestat_set_size_impl(
     (void)caller_ctx;
     if (!ctx) return WASI_EBADF;
 
+    // stdio fds don't support truncation
+    if (fd >= 0 && fd < 3) return WASI_EINVAL;
+
     int native_fd = get_native_fd(ctx, (int)fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -911,6 +916,9 @@ static int32_t wasi_fd_pread_impl(
     uint8_t *mem = ctx->memory_base;
     if (!mem) return WASI_EINVAL;
 
+    // stdio fds are not seekable, so pread is not supported
+    if (fd >= 0 && fd < 3) return WASI_ESPIPE;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -939,6 +947,9 @@ static int32_t wasi_fd_pwrite_impl(
     (void)caller_ctx;
     uint8_t *mem = ctx->memory_base;
     if (!mem) return WASI_EINVAL;
+
+    // stdio fds are not seekable, so pwrite is not supported
+    if (fd >= 0 && fd < 3) return WASI_ESPIPE;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -1209,6 +1220,10 @@ static int32_t wasi_fd_filestat_set_times_impl(
     int32_t fd, int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
     (void)caller_ctx;
+
+    // stdio fds don't support setting timestamps
+    if (fd >= 0 && fd < 3) return WASI_EINVAL;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -1341,6 +1356,10 @@ static int32_t wasi_fd_allocate_impl(
     int32_t fd, int64_t offset, int64_t len
 ) {
     (void)caller_ctx;
+
+    // stdio fds don't support allocation
+    if (fd >= 0 && fd < 3) return WASI_EINVAL;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -1369,6 +1388,12 @@ static int32_t wasi_fd_renumber_impl(
     int32_t fd, int32_t to_fd
 ) {
     (void)caller_ctx;
+
+    // Cannot renumber stdio fds
+    if ((fd >= 0 && fd < 3) || (to_fd >= 0 && to_fd < 3)) {
+        return WASI_EINVAL;
+    }
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -1472,6 +1497,12 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { retur
 
 // ============ Socket Operations ============
 
+// Helper: Check if fd is a stdio fd (not a real socket)
+// Returns true if fd is stdin/stdout/stderr
+static inline int is_stdio_fd(int32_t fd) {
+    return fd >= 0 && fd <= 2;
+}
+
 // sock_accept: Accept a connection on a socket
 // fd: The listening socket
 // flags: Desired flags for the accepted socket (currently unused)
@@ -1482,6 +1513,9 @@ static int32_t wasi_sock_accept_impl(
 ) {
     (void)caller_ctx;
     (void)flags; // WASI doesn't use flags for accept yet
+
+    // stdio fds are not sockets - return EBADF to match interpreter
+    if (is_stdio_fd(fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -1520,6 +1554,9 @@ static int32_t wasi_sock_recv_impl(
     int32_t ro_datalen_ptr, int32_t ro_flags_ptr
 ) {
     (void)caller_ctx;
+
+    // stdio fds are not sockets - return EBADF to match interpreter
+    if (is_stdio_fd(fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -1570,6 +1607,9 @@ static int32_t wasi_sock_send_impl(
     (void)caller_ctx;
     (void)si_flags; // WASI doesn't define send flags yet
 
+    // stdio fds are not sockets - return EBADF to match interpreter
+    if (is_stdio_fd(fd)) return WASI_EBADF;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -1606,6 +1646,9 @@ static int32_t wasi_sock_shutdown_impl(
     int32_t fd, int32_t how
 ) {
     (void)caller_ctx;
+
+    // stdio fds are not sockets - return EBADF to match interpreter
+    if (is_stdio_fd(fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -1651,6 +1694,38 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds(int64_t ctx_ptr, int preopen_c
         ctx->fd_table[0] = 0;
         ctx->fd_table[1] = 1;
         ctx->fd_table[2] = 2;
+    }
+    ctx->fd_next = 3 + preopen_count;
+
+    if (preopen_count > 0) {
+        ctx->preopen_paths = malloc(preopen_count * sizeof(char*));
+        ctx->preopen_guest_paths = malloc(preopen_count * sizeof(char*));
+    }
+}
+
+// Quiet version: redirects stdout/stderr to /dev/null for testing
+MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds_quiet(int64_t ctx_ptr, int preopen_count) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+
+    ctx->preopen_base_fd = 3;
+    ctx->preopen_count = preopen_count;
+    ctx->fd_table_size = 64;
+    ctx->fd_table = malloc(ctx->fd_table_size * sizeof(int));
+    if (ctx->fd_table) {
+        for (int i = 0; i < ctx->fd_table_size; i++) {
+            ctx->fd_table[i] = -1;
+        }
+        // stdin from real stdin, stdout/stderr to /dev/null
+        ctx->fd_table[0] = 0;
+#ifndef _WIN32
+        int devnull = open("/dev/null", O_WRONLY);
+        ctx->fd_table[1] = devnull >= 0 ? devnull : 1;
+        ctx->fd_table[2] = devnull >= 0 ? devnull : 2;
+#else
+        ctx->fd_table[1] = 1;
+        ctx->fd_table[2] = 2;
+#endif
     }
     ctx->fd_next = 3 + preopen_count;
 

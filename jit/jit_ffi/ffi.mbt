@@ -469,6 +469,13 @@ pub extern "c" fn c_jit_init_wasi_fds(
 ) -> Unit = "wasmoon_jit_init_wasi_fds"
 
 ///|
+/// Initialize WASI fd table with stdout/stderr redirected to /dev/null (for testing)
+pub extern "c" fn c_jit_init_wasi_fds_quiet(
+  ctx_ptr : Int64,
+  preopen_count : Int,
+) -> Unit = "wasmoon_jit_init_wasi_fds_quiet"
+
+///|
 /// Add a preopened directory
 #borrow(host_path, guest_path)
 pub extern "c" fn c_jit_add_preopen(
