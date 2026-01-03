@@ -1,6 +1,6 @@
 # "For Now" Comments Cleanup Plan
 
-Total: 34 items (9 fixed)
+Total: 34 items (10 fixed)
 
 ## Priority 1: Quick Fixes (可直接修复)
 
@@ -38,7 +38,7 @@ Total: 34 items (9 fixed)
 
 | # | File | Line | Issue | Action |
 |---|------|------|-------|--------|
-| 18 | `vcode/lower/lower_exception.mbt` | 22,35 | Tag-only exceptions | 支持带值异常 |
+| ~~18~~ | ~~`vcode/lower/lower_exception.mbt`~~ | ~~22,35~~ | ~~Tag-only exceptions~~ | ~~支持带值异常~~ |
 | 19 | `jit/jit_ffi/exception.c` | 89 | exnref as packed value | 正确实现 exnref |
 
 ## Priority 5: Platform Support (平台支持)
@@ -75,6 +75,7 @@ Total: 34 items (9 fixed)
 - [x] `wast/jit_support.mbt` - JIT GC 引用类型同步
 - [x] `cli/main/run.mbt` - JIT GC 引用类型结果解析
 - [x] `vcode/lower/lower_numeric.mbt` - 32-bit magic division optimization
+- [x] `vcode/lower/lower_exception.mbt` - Exception values already supported (outdated comments removed)
 
 ## Next Steps
 

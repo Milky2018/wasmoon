@@ -19,7 +19,6 @@ fn emit_load_vmctx(
 ///|
 /// Lower Throw(tag_idx) instruction
 /// Calls exception_throw(ctx, tag_idx, values_ptr, count)
-/// Note: For now, we only support throwing without values (tag-only)
 fn lower_throw(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -32,8 +31,7 @@ fn lower_throw(
   // Materialize tag index
   let tag_idx_vreg = materialize_imm(ctx, block, tag_idx.to_int64())
 
-  // For now, we don't support exception values in throw
-  // TODO: Support exception values by allocating stack space and passing pointer
+  // Allocate stack space for exception values (if any)
   let num_operands = inst.operands.length()
   let (values_ptr_vreg, count_vreg) = if num_operands > 0 {
     // Allocate stack space for values (8 bytes each, aligned to 16)
