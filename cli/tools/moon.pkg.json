@@ -1,0 +1,12 @@
+{
+  "is-main": true,
+  "import": [
+    "Milky2018/wasmoon/types",
+    "Milky2018/wasmoon/parser",
+    "Milky2018/wasmoon/validator",
+    "Milky2018/wasmoon/wat",
+    "moonbitlang/x/sys",
+    "moonbitlang/x/fs",
+    "TheWaWaR/clap"
+  ]
+}

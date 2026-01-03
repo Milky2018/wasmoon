@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/main"
+package "Milky2018/wasmoon/cli/main"
 
 import(
   "Milky2018/wasmoon/types"
