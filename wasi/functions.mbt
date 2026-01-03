@@ -289,24 +289,16 @@ pub fn clock_time_get(
   if clock is None {
     return Errno::Inval.to_i32()
   }
-  // Get current time in nanoseconds
-  // For now, we return a monotonically increasing value based on a counter
-  // In a real implementation, this would call system time functions
-  let time_ns = get_current_time_ns()
+  // Get current time in nanoseconds using system clock
+  let time_ns = match clock.unwrap() {
+    Realtime => native_clock_gettime_realtime()
+    Monotonic => native_clock_gettime_monotonic()
+    // For process/thread CPU time, fall back to monotonic clock
+    // since we don't have platform-specific APIs for these yet
+    ProcessCPUTimeId | ThreadCPUTimeId => native_clock_gettime_monotonic()
+  }
   mem.write_i64(time_ptr, time_ns)
   Errno::Success.to_i32()
-}
-
-///|
-/// Simple time counter (placeholder for real system time)
-let time_counter : Ref[Int64] = { val: 0L }
-
-///|
-fn get_current_time_ns() -> Int64 {
-  // Increment counter to simulate time passing
-  // In real implementation, use platform-specific time APIs
-  time_counter.val = time_counter.val + 1000000L // 1ms increments
-  time_counter.val
 }
 
 ///|

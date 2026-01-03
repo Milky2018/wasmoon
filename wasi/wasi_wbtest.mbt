@@ -55,9 +55,9 @@ test "wasi: clock_time_get" {
   let mem = @runtime.Memory::new(1, None)
   let result = clock_time_get(mem, 0, 0L, 0) // Realtime clock
   inspect(result, content="0") // Success
-  // Check that time is non-zero (timestamp written to address 0)
-  let time = mem.read_i32(0)
-  inspect(time > 0, content="true")
+  // Check that time is non-zero (timestamp written to address 0 as i64)
+  let time = mem.read_i64(0)
+  inspect(time > 0L, content="true")
 }
 
 ///|
