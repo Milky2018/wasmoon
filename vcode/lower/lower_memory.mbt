@@ -94,10 +94,10 @@ fn lower_memory_grow(
   // Check if result type is I64 (memory64)
   let is_memory64 = result.ty is @ir.Type::I64
 
-  // Lower to a C call (v4 helper with memidx):
-  //   wasmoon_jit_memory_grow_v4(vmctx, memidx, delta, max_pages) -> i32
+  // Lower to a C call:
+  //   wasmoon_jit_memory_grow(vmctx, memidx, delta, max_pages) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryGrowV4))
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryGrow))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -150,10 +150,10 @@ fn lower_memory_size(
   // Check if result type is I64 (memory64)
   let is_memory64 = result.ty is @ir.Type::I64
 
-  // Lower to a C call (v4 helper with memidx):
-  //   wasmoon_jit_memory_size_v4(vmctx, memidx) -> i32
+  // Lower to a C call:
+  //   wasmoon_jit_memory_size(vmctx, memidx) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemorySizeV4))
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemorySize))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -203,10 +203,10 @@ fn lower_memory_fill(
   let val = ctx.get_vreg_for_use(inst.operands[1], block)
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
-  // Lower to a C call (v4 helper with memidx):
-  //   wasmoon_jit_memory_fill_v4(vmctx, memidx, dst, val, size)
+  // Lower to a C call:
+  //   wasmoon_jit_memory_fill(vmctx, memidx, dst, val, size)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryFillV4))
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryFill))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -242,10 +242,10 @@ fn lower_memory_copy(
   let src = ctx.get_vreg_for_use(inst.operands[1], block)
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
-  // Lower to a C call (v4 helper with memidx):
-  //   wasmoon_jit_memory_copy_v4(vmctx, dst_memidx, src_memidx, dst, src, size)
+  // Lower to a C call:
+  //   wasmoon_jit_memory_copy(vmctx, dst_memidx, src_memidx, dst, src, size)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryCopyV4))
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryCopy))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)

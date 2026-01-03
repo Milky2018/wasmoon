@@ -33,18 +33,13 @@ pub(all) enum GCLibcall {
 } derive(Eq, Show)
 
 ///|
-/// JIT runtime library calls (v3 ctx-passing helpers).
+/// JIT runtime library calls
 pub(all) enum JITLibcall {
-  MemoryGrowV3
-  MemorySizeV3
-  MemoryFillV3
-  MemoryCopyV3
-  TableGrowV3
-  // v4 helpers with memidx for multi-memory support
-  MemoryGrowV4
-  MemorySizeV4
-  MemoryFillV4
-  MemoryCopyV4
+  MemoryGrow
+  MemorySize
+  MemoryFill
+  MemoryCopy
+  TableGrow
 } derive(Eq, Show)
 
 ///|

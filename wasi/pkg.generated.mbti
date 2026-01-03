@@ -7,6 +7,10 @@ import(
 )
 
 // Values
+pub const AT_REMOVEDIR : Int = 0x200
+
+pub const AT_SYMLINK_NOFOLLOW : Int = 0x100
+
 pub fn args_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
 pub fn args_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
@@ -19,9 +23,25 @@ pub fn environ_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
 pub fn environ_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
 
+pub fn fd_advise_impl(WasiContext, Int, Int64, Int64, Int) -> Int
+
+pub fn fd_allocate_impl(WasiContext, Int, Int64, Int64) -> Int
+
 pub fn fd_close(WasiContext, Int) -> Int
 
+pub fn fd_datasync_impl(WasiContext, Int) -> Int
+
 pub fn fd_fdstat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+
+pub fn fd_fdstat_set_flags_impl(WasiContext, Int, Int) -> Int
+
+pub fn fd_fdstat_set_rights_impl(WasiContext, Int, Int64, Int64) -> Int
+
+pub fn fd_filestat_get_impl(WasiContext, @runtime.Memory, Int, Int) -> Int
+
+pub fn fd_filestat_set_size_impl(WasiContext, Int, Int64) -> Int
+
+pub fn fd_filestat_set_times_impl(WasiContext, Int, Int64, Int64, Int) -> Int
 
 pub fn fd_pread(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
 
@@ -35,7 +55,11 @@ pub fn fd_read(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
 pub fn fd_readdir(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
 
+pub fn fd_renumber_impl(WasiContext, Int, Int) -> Int
+
 pub fn fd_seek(WasiContext, @runtime.Memory, Int, Int64, Int, Int) -> Int
+
+pub fn fd_sync_impl(WasiContext, Int) -> Int
 
 pub fn fd_tell(WasiContext, @runtime.Memory, Int, Int) -> Int
 
@@ -43,13 +67,41 @@ pub fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
 pub fn is_valid_rights(Int64) -> Bool
 
+pub fn native_accept(Int) -> Int
+
+pub fn native_clock_gettime_monotonic() -> Int64
+
+pub fn native_clock_gettime_realtime() -> Int64
+
 pub fn native_close(Int) -> Bool
+
+pub fn native_dup2(Int, Int) -> Bool
+
+pub fn native_fcntl_getfl(Int) -> Int?
+
+pub fn native_fcntl_setfl(Int, Int) -> Bool
+
+pub fn native_fdatasync(Int) -> Bool
+
+pub fn native_fstat(Int) -> FileStat?
+
+pub fn native_fstatat(Int, String, Int) -> FileStat?
+
+pub fn native_fsync(Int) -> Bool
+
+pub fn native_ftruncate(Int, Int64) -> Bool
+
+pub fn native_futimens(Int, Int64, Int64, Int) -> Bool
 
 pub fn native_get_errno() -> Int
 
 pub fn native_get_error_message() -> String
 
+pub fn native_linkat(Int, String, Int, String, Int) -> Bool
+
 pub fn native_mkdir(String, Int) -> Bool
+
+pub fn native_nanosleep(Int64) -> Bool
 
 pub fn native_open(String, Array[OpenFlags], Int) -> Int?
 
@@ -57,25 +109,65 @@ pub fn native_open_read(String) -> Int?
 
 pub fn native_open_write(String) -> Int?
 
+pub fn native_poll(Array[Int], Array[Int], Int) -> PollResult?
+
+pub fn native_raise(Int) -> Bool
+
 pub fn native_read(Int, FixedArray[Byte], Int) -> Int?
 
 pub fn native_read_to_memory(Int, @runtime.Memory, Int, Int) -> Int?
 
 pub fn native_readdir(String) -> Array[(String, Bool)]?
 
+pub fn native_readlinkat(Int, String, Int) -> String?
+
+pub fn native_recv(Int, FixedArray[Byte], Int) -> Int64
+
+pub fn native_renameat(Int, String, Int, String) -> Bool
+
 pub fn native_seek(Int, Int64, Whence) -> Int64?
 
+pub fn native_send(Int, FixedArray[Byte], Int, Int) -> Int64
+
+pub fn native_shutdown(Int, Int) -> Bool
+
+pub fn native_symlinkat(String, Int, String) -> Bool
+
 pub fn native_tell(Int) -> Int64?
+
+pub fn native_unlinkat(Int, String, Int) -> Bool
+
+pub fn native_utimensat(Int, String, Int64, Int64, Int, Int) -> Bool
 
 pub fn native_write(Int, FixedArray[Byte], Int) -> Int?
 
 pub fn path_create_directory(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
 
+pub fn path_filestat_get_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int) -> Int
+
+pub fn path_filestat_set_times_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int64, Int64, Int) -> Int
+
+pub fn path_link_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int, Int) -> Int
+
 pub fn path_open(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int64, Int64, Int, Int) -> Int
+
+pub fn path_readlink_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int) -> Int
+
+pub fn path_remove_directory_impl(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+
+pub fn path_rename_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int) -> Int
+
+pub fn path_symlink_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int) -> Int
+
+pub fn path_unlink_file_impl(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+
+pub fn poll_oneoff_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
 
 pub fn print_string(String) -> Unit
 
 pub fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
+
+pub fn proc_raise_impl(Int) -> Int
 
 pub fn putchar(Int) -> Unit
 
@@ -144,6 +236,14 @@ pub let right_sock_shutdown : Int64
 pub let rights_all_valid : Int64
 
 pub fn sched_yield() -> Int
+
+pub fn sock_accept_impl(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+
+pub fn sock_recv_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int) -> Int
+
+pub fn sock_send_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int) -> Int
+
+pub fn sock_shutdown_impl(WasiContext, Int, Int) -> Int
 
 pub let stderr : Fd
 
@@ -264,6 +364,17 @@ pub fn FileSize::to_int64(Self) -> Int64
 pub impl Eq for FileSize
 pub impl Show for FileSize
 
+pub(all) struct FileStat {
+  dev : UInt64
+  ino : UInt64
+  filetype : Int
+  nlink : UInt64
+  size : UInt64
+  atim : UInt64
+  mtim : UInt64
+  ctim : UInt64
+}
+
 pub(all) enum FileType {
   RegularFile
   Directory
@@ -292,6 +403,11 @@ pub(all) enum OpenFlags {
   Append
   Exclusive
   Directory
+}
+
+pub(all) struct PollResult {
+  ready_count : Int
+  revents : Array[Int]
 }
 
 pub(all) struct Size(Int)

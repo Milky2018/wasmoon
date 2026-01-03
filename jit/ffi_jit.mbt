@@ -230,6 +230,112 @@ fn JITContext::has_wasm_stack(self : JITContext) -> Bool {
   @jit_ffi.c_jit_get_wasm_stack_top(self.ptr()) != 0L
 }
 
+// ============ WASI Initialization ============
+
+///|
+/// Convert String to null-terminated FixedArray[Byte] for C FFI (UTF-8 encoding)
+fn string_to_cstring(s : String) -> FixedArray[Byte] {
+  let len = s.length()
+  // First pass: calculate required size
+  let mut size = 0
+  for i in 0..<len {
+    let c = s.code_unit_at(i).to_int()
+    if c < 0x80 {
+      size += 1
+    } else if c < 0x800 {
+      size += 2
+    } else {
+      size += 3
+    }
+  }
+  // Allocate with null terminator
+  let result = FixedArray::make(size + 1, b'\x00')
+  // Second pass: encode UTF-8
+  let mut pos = 0
+  for i in 0..<len {
+    let c = s.code_unit_at(i).to_int()
+    if c < 0x80 {
+      result[pos] = c.to_byte()
+      pos += 1
+    } else if c < 0x800 {
+      result[pos] = (0xC0 | (c >> 6)).to_byte()
+      result[pos + 1] = (0x80 | (c & 0x3F)).to_byte()
+      pos += 2
+    } else {
+      result[pos] = (0xE0 | (c >> 12)).to_byte()
+      result[pos + 1] = (0x80 | ((c >> 6) & 0x3F)).to_byte()
+      result[pos + 2] = (0x80 | (c & 0x3F)).to_byte()
+      pos += 3
+    }
+  }
+  result[size] = b'\x00'
+  result
+}
+
+///|
+/// Initialize WASI context with args, env, and preopens
+fn JITContext::init_wasi(
+  self : JITContext,
+  args : Array[String],
+  env : Array[String],
+  preopens : Array[(String, String)],
+) -> Unit {
+  let ctx_ptr = self.ptr()
+  // Initialize fd table
+  @jit_ffi.c_jit_init_wasi_fds(ctx_ptr, preopens.length())
+  // Set args
+  @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
+  for i, arg in args {
+    let cstr = string_to_cstring(arg)
+    @jit_ffi.c_jit_set_wasi_arg(ctx_ptr, i, cstr)
+  }
+  // Set env
+  @jit_ffi.c_jit_set_wasi_envs(ctx_ptr, env.length())
+  for i, e in env {
+    let cstr = string_to_cstring(e)
+    @jit_ffi.c_jit_set_wasi_env(ctx_ptr, i, cstr)
+  }
+  // Set preopens
+  for i, entry in preopens {
+    let (host, guest) = entry
+    let host_cstr = string_to_cstring(host)
+    let guest_cstr = string_to_cstring(guest)
+    @jit_ffi.c_jit_add_preopen(ctx_ptr, i, host_cstr, guest_cstr)
+  }
+}
+
+///|
+/// Initialize WASI context with stdout/stderr redirected to /dev/null (for testing)
+fn JITContext::init_wasi_quiet(
+  self : JITContext,
+  args : Array[String],
+  env : Array[String],
+  preopens : Array[(String, String)],
+) -> Unit {
+  let ctx_ptr = self.ptr()
+  // Initialize fd table with quiet mode (stdout/stderr to /dev/null)
+  @jit_ffi.c_jit_init_wasi_fds_quiet(ctx_ptr, preopens.length())
+  // Set args
+  @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
+  for i, arg in args {
+    let cstr = string_to_cstring(arg)
+    @jit_ffi.c_jit_set_wasi_arg(ctx_ptr, i, cstr)
+  }
+  // Set env
+  @jit_ffi.c_jit_set_wasi_envs(ctx_ptr, env.length())
+  for i, e in env {
+    let cstr = string_to_cstring(e)
+    @jit_ffi.c_jit_set_wasi_env(ctx_ptr, i, cstr)
+  }
+  // Set preopens
+  for i, entry in preopens {
+    let (host, guest) = entry
+    let host_cstr = string_to_cstring(host)
+    let guest_cstr = string_to_cstring(guest)
+    @jit_ffi.c_jit_add_preopen(ctx_ptr, i, host_cstr, guest_cstr)
+  }
+}
+
 ///|
 /// Allocate linear memory for WASM (returns 0 on failure)
 /// NOTE: If you set the memory to a JITContext (via set_memory), the context
@@ -392,6 +498,210 @@ pub fn get_fd_fdstat_get_ptr() -> Int64 {
 /// Get fd_prestat_get trampoline pointer
 pub fn get_fd_prestat_get_ptr() -> Int64 {
   @jit_ffi.c_jit_get_fd_prestat_get_ptr()
+}
+
+///|
+/// Get fd_prestat_dir_name trampoline pointer
+pub fn get_fd_prestat_dir_name_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_prestat_dir_name_ptr()
+}
+
+///|
+/// Get fd_seek trampoline pointer
+pub fn get_fd_seek_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_seek_ptr()
+}
+
+///|
+/// Get fd_tell trampoline pointer
+pub fn get_fd_tell_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_tell_ptr()
+}
+
+///|
+/// Get fd_sync trampoline pointer
+pub fn get_fd_sync_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_sync_ptr()
+}
+
+///|
+/// Get fd_datasync trampoline pointer
+pub fn get_fd_datasync_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_datasync_ptr()
+}
+
+///|
+/// Get fd_filestat_get trampoline pointer
+pub fn get_fd_filestat_get_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_filestat_get_ptr()
+}
+
+///|
+/// Get fd_filestat_set_size trampoline pointer
+pub fn get_fd_filestat_set_size_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_filestat_set_size_ptr()
+}
+
+///|
+/// Get path_open trampoline pointer
+pub fn get_path_open_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_open_ptr()
+}
+
+///|
+/// Get path_create_directory trampoline pointer
+pub fn get_path_create_directory_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_create_directory_ptr()
+}
+
+///|
+/// Get path_unlink_file trampoline pointer
+pub fn get_path_unlink_file_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_unlink_file_ptr()
+}
+
+///|
+/// Get path_remove_directory trampoline pointer
+pub fn get_path_remove_directory_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_remove_directory_ptr()
+}
+
+///|
+/// Get path_rename trampoline pointer
+pub fn get_path_rename_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_rename_ptr()
+}
+
+///|
+/// Get clock_res_get trampoline pointer
+pub fn get_clock_res_get_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_clock_res_get_ptr()
+}
+
+///|
+/// Get sched_yield trampoline pointer
+pub fn get_sched_yield_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sched_yield_ptr()
+}
+
+///|
+/// Get proc_raise trampoline pointer
+pub fn get_proc_raise_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_proc_raise_ptr()
+}
+
+///|
+/// Get poll_oneoff trampoline pointer
+pub fn get_poll_oneoff_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_poll_oneoff_ptr()
+}
+
+///|
+/// Get fd_advise trampoline pointer (stub)
+pub fn get_fd_advise_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_advise_ptr()
+}
+
+///|
+/// Get fd_allocate trampoline pointer (stub)
+pub fn get_fd_allocate_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_allocate_ptr()
+}
+
+///|
+/// Get fd_pread trampoline pointer (stub)
+pub fn get_fd_pread_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_pread_ptr()
+}
+
+///|
+/// Get fd_pwrite trampoline pointer (stub)
+pub fn get_fd_pwrite_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_pwrite_ptr()
+}
+
+///|
+/// Get fd_readdir trampoline pointer (stub)
+pub fn get_fd_readdir_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_readdir_ptr()
+}
+
+///|
+/// Get fd_renumber trampoline pointer (stub)
+pub fn get_fd_renumber_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_renumber_ptr()
+}
+
+///|
+/// Get fd_fdstat_set_flags trampoline pointer (stub)
+pub fn get_fd_fdstat_set_flags_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_fdstat_set_flags_ptr()
+}
+
+///|
+/// Get fd_fdstat_set_rights trampoline pointer (stub)
+pub fn get_fd_fdstat_set_rights_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_fdstat_set_rights_ptr()
+}
+
+///|
+/// Get fd_filestat_set_times trampoline pointer (stub)
+pub fn get_fd_filestat_set_times_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_fd_filestat_set_times_ptr()
+}
+
+///|
+/// Get path_filestat_get trampoline pointer (stub)
+pub fn get_path_filestat_get_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_filestat_get_ptr()
+}
+
+///|
+/// Get path_filestat_set_times trampoline pointer (stub)
+pub fn get_path_filestat_set_times_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_filestat_set_times_ptr()
+}
+
+///|
+/// Get path_link trampoline pointer (stub)
+pub fn get_path_link_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_link_ptr()
+}
+
+///|
+/// Get path_readlink trampoline pointer (stub)
+pub fn get_path_readlink_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_readlink_ptr()
+}
+
+///|
+/// Get path_symlink trampoline pointer (stub)
+pub fn get_path_symlink_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_path_symlink_ptr()
+}
+
+///|
+/// Get sock_accept trampoline pointer (stub - returns ENOTSUP)
+pub fn get_sock_accept_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sock_accept_ptr()
+}
+
+///|
+/// Get sock_recv trampoline pointer (stub - returns ENOTSUP)
+pub fn get_sock_recv_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sock_recv_ptr()
+}
+
+///|
+/// Get sock_send trampoline pointer (stub - returns ENOTSUP)
+pub fn get_sock_send_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sock_send_ptr()
+}
+
+///|
+/// Get sock_shutdown trampoline pointer (stub - returns ENOTSUP)
+pub fn get_sock_shutdown_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_sock_shutdown_ptr()
 }
 
 ///|

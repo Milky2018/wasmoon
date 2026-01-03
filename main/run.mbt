@@ -68,13 +68,17 @@ fn run_wasm(
   }
 
   // Build WASI context with directory mappings and environment variables
+  // Also collect preopens and env for JIT mode
   let wasi_builder = @wasi.WasiContextBuilder::new()
+  let jit_preopens : Array[(String, String)] = []
+  let jit_envs : Array[String] = []
   for dir in dirs {
     let mapping = parse_dir_mapping(dir)
     match mapping {
       Some((host_path, guest_path)) => {
         @logger.debug("Preopen dir: \{host_path} -> \{guest_path}")
         wasi_builder.preopen_dir(host_path, guest_path) |> ignore
+        jit_preopens.push((host_path, guest_path))
       }
       None => {
         @logger.error(
@@ -90,6 +94,7 @@ fn run_wasm(
       Some((key, value)) => {
         @logger.debug("Environment: \{key}=\{value}")
         wasi_builder.env(key, value) |> ignore
+        jit_envs.push("\{key}=\{value}")
       }
       None => {
         @logger.error("invalid --env format '\{env_var}', expected NAME=VALUE")
@@ -198,8 +203,10 @@ fn run_wasm(
     }
     if can_use_jit {
       // JIT execution path
+      // Build WASI args: program name + any remaining args after --
+      let jit_args : Array[String] = [wasm_path]
       let jit_results = run_with_jit(
-        mod_, instance, store, func_name, args, debug,
+        mod_, instance, store, func_name, args, debug, jit_args, jit_envs, jit_preopens,
       )
       if jit_results.length() > 0 {
         // Print all results separated by spaces
@@ -550,6 +557,9 @@ fn run_with_jit(
   func_name : String,
   args : Array[@types.Value],
   debug : Bool,
+  wasi_args : Array[String],
+  wasi_envs : Array[String],
+  wasi_preopens : Array[(String, String)],
 ) -> Array[@types.Value] {
   ignore(debug)
   @logger.debug("JIT: Compiling module...")
@@ -585,6 +595,8 @@ fn run_with_jit(
           // Allocate independent WASM stack with guard page (1MB)
           // This provides controlled stack overflow behavior
           let _ = jm.alloc_wasm_stack(1048576L)
+          // Initialize WASI context with args, env, and preopens
+          jm.init_wasi(wasi_args, wasi_envs, wasi_preopens)
           // Initialize all memories (multi-memory support)
           if not(init_jit_memories(instance, store, jm)) {
             @logger.error("Failed to initialize JIT memories")

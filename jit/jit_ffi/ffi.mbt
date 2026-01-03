@@ -63,47 +63,31 @@ pub extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc
 pub extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory"
 
 ///|
-/// Get memory_grow v3 function pointer for JIT (ctx-passing)
-pub extern "c" fn c_jit_get_memory_grow_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_grow_ptr_v3"
-
-///|
-/// Get memory_size v3 function pointer for JIT (ctx-passing, returns pages)
-pub extern "c" fn c_jit_get_memory_size_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_size_ptr_v3"
-
-///|
-/// Get memory_fill v3 function pointer for JIT (ctx-passing)
-pub extern "c" fn c_jit_get_memory_fill_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_fill_ptr_v3"
-
-///|
-/// Get memory_copy v3 function pointer for JIT (ctx-passing)
-pub extern "c" fn c_jit_get_memory_copy_ptr_v3() -> Int64 = "wasmoon_jit_get_memory_copy_ptr_v3"
-
-///|
-/// Get table_grow v3 function pointer for JIT (ctx-passing)
+/// Get table_grow function pointer for JIT
 /// Signature: table_grow(ctx: *jit_context_t, table_idx: i32, delta: i64, init_value: i64) -> i32
-pub extern "c" fn c_jit_get_table_grow_ptr_v3() -> Int64 = "wasmoon_jit_get_table_grow_ptr_v3"
+pub extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_grow_ptr"
 
-// ============ Multi-Memory v4 Operations (with memidx) ============
+// ============ Multi-Memory Operations (with memidx) ============
 
 ///|
-/// Get memory_grow v4 function pointer for JIT (multi-memory)
+/// Get memory_grow function pointer for JIT (multi-memory)
 /// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i32, max_pages: i32) -> i32
-pub extern "c" fn c_jit_get_memory_grow_ptr_v4() -> Int64 = "wasmoon_jit_get_memory_grow_ptr_v4"
+pub extern "c" fn c_jit_get_memory_grow_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_ptr"
 
 ///|
-/// Get memory_size v4 function pointer for JIT (multi-memory)
+/// Get memory_size function pointer for JIT (multi-memory)
 /// Signature: memory_size(ctx: *jit_context_t, memidx: i32) -> i32
-pub extern "c" fn c_jit_get_memory_size_ptr_v4() -> Int64 = "wasmoon_jit_get_memory_size_ptr_v4"
+pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory_size_ptr"
 
 ///|
-/// Get memory_fill v4 function pointer for JIT (multi-memory)
+/// Get memory_fill function pointer for JIT (multi-memory)
 /// Signature: memory_fill(ctx: *jit_context_t, memidx: i32, dst: i32, val: i32, size: i32) -> void
-pub extern "c" fn c_jit_get_memory_fill_ptr_v4() -> Int64 = "wasmoon_jit_get_memory_fill_ptr_v4"
+pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_ptr"
 
 ///|
-/// Get memory_copy v4 function pointer for JIT (multi-memory)
+/// Get memory_copy function pointer for JIT (multi-memory)
 /// Signature: memory_copy(ctx: *jit_context_t, dst_memidx: i32, src_memidx: i32, dst: i32, src: i32, size: i32) -> void
-pub extern "c" fn c_jit_get_memory_copy_ptr_v4() -> Int64 = "wasmoon_jit_get_memory_copy_ptr_v4"
+pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
 
 ///|
 /// Configure JIT context with multiple memories (for multi-memory support)
@@ -322,6 +306,198 @@ pub extern "c" fn c_jit_get_fd_fdstat_get_ptr() -> Int64 = "wasmoon_jit_get_fd_f
 ///|
 /// Get fd_prestat_get trampoline pointer
 pub extern "c" fn c_jit_get_fd_prestat_get_ptr() -> Int64 = "wasmoon_jit_get_fd_prestat_get_ptr"
+
+///|
+/// Get fd_prestat_dir_name trampoline pointer
+pub extern "c" fn c_jit_get_fd_prestat_dir_name_ptr() -> Int64 = "wasmoon_jit_get_fd_prestat_dir_name_ptr"
+
+///|
+/// Get fd_seek trampoline pointer
+pub extern "c" fn c_jit_get_fd_seek_ptr() -> Int64 = "wasmoon_jit_get_fd_seek_ptr"
+
+///|
+/// Get fd_tell trampoline pointer
+pub extern "c" fn c_jit_get_fd_tell_ptr() -> Int64 = "wasmoon_jit_get_fd_tell_ptr"
+
+///|
+/// Get fd_sync trampoline pointer
+pub extern "c" fn c_jit_get_fd_sync_ptr() -> Int64 = "wasmoon_jit_get_fd_sync_ptr"
+
+///|
+/// Get fd_datasync trampoline pointer
+pub extern "c" fn c_jit_get_fd_datasync_ptr() -> Int64 = "wasmoon_jit_get_fd_datasync_ptr"
+
+///|
+/// Get fd_filestat_get trampoline pointer
+pub extern "c" fn c_jit_get_fd_filestat_get_ptr() -> Int64 = "wasmoon_jit_get_fd_filestat_get_ptr"
+
+///|
+/// Get fd_filestat_set_size trampoline pointer
+pub extern "c" fn c_jit_get_fd_filestat_set_size_ptr() -> Int64 = "wasmoon_jit_get_fd_filestat_set_size_ptr"
+
+///|
+/// Get path_open trampoline pointer
+pub extern "c" fn c_jit_get_path_open_ptr() -> Int64 = "wasmoon_jit_get_path_open_ptr"
+
+///|
+/// Get path_create_directory trampoline pointer
+pub extern "c" fn c_jit_get_path_create_directory_ptr() -> Int64 = "wasmoon_jit_get_path_create_directory_ptr"
+
+///|
+/// Get path_unlink_file trampoline pointer
+pub extern "c" fn c_jit_get_path_unlink_file_ptr() -> Int64 = "wasmoon_jit_get_path_unlink_file_ptr"
+
+///|
+/// Get path_remove_directory trampoline pointer
+pub extern "c" fn c_jit_get_path_remove_directory_ptr() -> Int64 = "wasmoon_jit_get_path_remove_directory_ptr"
+
+///|
+/// Get path_rename trampoline pointer
+pub extern "c" fn c_jit_get_path_rename_ptr() -> Int64 = "wasmoon_jit_get_path_rename_ptr"
+
+///|
+/// Get clock_res_get trampoline pointer
+pub extern "c" fn c_jit_get_clock_res_get_ptr() -> Int64 = "wasmoon_jit_get_clock_res_get_ptr"
+
+///|
+/// Get sched_yield trampoline pointer
+pub extern "c" fn c_jit_get_sched_yield_ptr() -> Int64 = "wasmoon_jit_get_sched_yield_ptr"
+
+///|
+/// Get proc_raise trampoline pointer
+pub extern "c" fn c_jit_get_proc_raise_ptr() -> Int64 = "wasmoon_jit_get_proc_raise_ptr"
+
+///|
+/// Get poll_oneoff trampoline pointer
+pub extern "c" fn c_jit_get_poll_oneoff_ptr() -> Int64 = "wasmoon_jit_get_poll_oneoff_ptr"
+
+///|
+/// Get fd_advise trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_advise_ptr() -> Int64 = "wasmoon_jit_get_fd_advise_ptr"
+
+///|
+/// Get fd_allocate trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_allocate_ptr() -> Int64 = "wasmoon_jit_get_fd_allocate_ptr"
+
+///|
+/// Get fd_pread trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_pread_ptr() -> Int64 = "wasmoon_jit_get_fd_pread_ptr"
+
+///|
+/// Get fd_pwrite trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_pwrite_ptr() -> Int64 = "wasmoon_jit_get_fd_pwrite_ptr"
+
+///|
+/// Get fd_readdir trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_readdir_ptr() -> Int64 = "wasmoon_jit_get_fd_readdir_ptr"
+
+///|
+/// Get fd_renumber trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_renumber_ptr() -> Int64 = "wasmoon_jit_get_fd_renumber_ptr"
+
+///|
+/// Get fd_fdstat_set_flags trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_fdstat_set_flags_ptr() -> Int64 = "wasmoon_jit_get_fd_fdstat_set_flags_ptr"
+
+///|
+/// Get fd_fdstat_set_rights trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_fdstat_set_rights_ptr() -> Int64 = "wasmoon_jit_get_fd_fdstat_set_rights_ptr"
+
+///|
+/// Get fd_filestat_set_times trampoline pointer (stub)
+pub extern "c" fn c_jit_get_fd_filestat_set_times_ptr() -> Int64 = "wasmoon_jit_get_fd_filestat_set_times_ptr"
+
+///|
+/// Get path_filestat_get trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_filestat_get_ptr() -> Int64 = "wasmoon_jit_get_path_filestat_get_ptr"
+
+///|
+/// Get path_filestat_set_times trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_filestat_set_times_ptr() -> Int64 = "wasmoon_jit_get_path_filestat_set_times_ptr"
+
+///|
+/// Get path_link trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_link_ptr() -> Int64 = "wasmoon_jit_get_path_link_ptr"
+
+///|
+/// Get path_readlink trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_readlink_ptr() -> Int64 = "wasmoon_jit_get_path_readlink_ptr"
+
+///|
+/// Get path_symlink trampoline pointer (stub)
+pub extern "c" fn c_jit_get_path_symlink_ptr() -> Int64 = "wasmoon_jit_get_path_symlink_ptr"
+
+///|
+/// Get sock_accept trampoline pointer (stub - returns ENOTSUP)
+pub extern "c" fn c_jit_get_sock_accept_ptr() -> Int64 = "wasmoon_jit_get_sock_accept_ptr"
+
+///|
+/// Get sock_recv trampoline pointer (stub - returns ENOTSUP)
+pub extern "c" fn c_jit_get_sock_recv_ptr() -> Int64 = "wasmoon_jit_get_sock_recv_ptr"
+
+///|
+/// Get sock_send trampoline pointer (stub - returns ENOTSUP)
+pub extern "c" fn c_jit_get_sock_send_ptr() -> Int64 = "wasmoon_jit_get_sock_send_ptr"
+
+///|
+/// Get sock_shutdown trampoline pointer (stub - returns ENOTSUP)
+pub extern "c" fn c_jit_get_sock_shutdown_ptr() -> Int64 = "wasmoon_jit_get_sock_shutdown_ptr"
+
+// ============ WASI Context Initialization ============
+
+///|
+/// Initialize WASI fd table and preopens
+pub extern "c" fn c_jit_init_wasi_fds(
+  ctx_ptr : Int64,
+  preopen_count : Int,
+) -> Unit = "wasmoon_jit_init_wasi_fds"
+
+///|
+/// Initialize WASI fd table with stdout/stderr redirected to /dev/null (for testing)
+pub extern "c" fn c_jit_init_wasi_fds_quiet(
+  ctx_ptr : Int64,
+  preopen_count : Int,
+) -> Unit = "wasmoon_jit_init_wasi_fds_quiet"
+
+///|
+/// Add a preopened directory
+#borrow(host_path, guest_path)
+pub extern "c" fn c_jit_add_preopen(
+  ctx_ptr : Int64,
+  idx : Int,
+  host_path : FixedArray[Byte],
+  guest_path : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_add_preopen"
+
+///|
+/// Free WASI resources
+pub extern "c" fn c_jit_free_wasi_fds(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_wasi_fds"
+
+///|
+/// Initialize args array
+pub extern "c" fn c_jit_set_wasi_args(ctx_ptr : Int64, argc : Int) -> Unit = "wasmoon_jit_set_wasi_args"
+
+///|
+/// Set a single arg
+#borrow(arg)
+pub extern "c" fn c_jit_set_wasi_arg(
+  ctx_ptr : Int64,
+  idx : Int,
+  arg : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_set_wasi_arg"
+
+///|
+/// Initialize env array
+pub extern "c" fn c_jit_set_wasi_envs(ctx_ptr : Int64, envc : Int) -> Unit = "wasmoon_jit_set_wasi_envs"
+
+///|
+/// Set a single env variable
+#borrow(env)
+pub extern "c" fn c_jit_set_wasi_env(
+  ctx_ptr : Int64,
+  idx : Int,
+  env : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_set_wasi_env"
 
 // ============ Spectest Trampolines ============
 

@@ -200,6 +200,7 @@ pub fn Memory::new(Int, Int?, is_memory64? : Bool) -> Self
 pub fn Memory::read_byte(Self, Int) -> Byte
 pub fn Memory::read_bytes(Self, Int, Int) -> Bytes
 pub fn Memory::read_i32(Self, Int) -> Int
+pub fn Memory::read_i64(Self, Int) -> Int64
 pub fn Memory::size_pages(Self) -> Int
 pub fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
 pub fn Memory::store_f32(Self, Int, Float) -> Unit raise RuntimeError
@@ -287,6 +288,7 @@ pub struct Store {
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
+  mut wasi_mem_addr : Int?
 }
 pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int
@@ -324,12 +326,14 @@ pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
 pub fn Store::get_tag_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_tag_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_tag_type_idx(Self, Int) -> Int
+pub fn Store::get_wasi_memory(Self) -> Memory
 pub fn Store::has_c_heap(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::new() -> Self
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit
+pub fn Store::set_wasi_mem_addr(Self, Int) -> Unit
 pub fn Store::should_collect(Self, threshold? : Double) -> Bool
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError

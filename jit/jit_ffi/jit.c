@@ -161,39 +161,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
     }
 }
 
-// ============ v3 ctx-passing Memory/Table Operations (re-entrant) ============
+// ============ Table Operations ============
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow_v3(
-    jit_context_t *ctx,
-    int32_t delta,
-    int32_t max_pages
-) {
-    return memory_grow_ctx_internal(ctx, delta, max_pages);
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size_v3(jit_context_t *ctx) {
-    return memory_size_ctx_internal(ctx);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v3(
-    jit_context_t *ctx,
-    int32_t dst,
-    int32_t val,
-    int32_t size
-) {
-    memory_fill_ctx_internal(ctx, dst, val, size);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v3(
-    jit_context_t *ctx,
-    int32_t dst,
-    int32_t src,
-    int32_t size
-) {
-    memory_copy_ctx_internal(ctx, dst, src, size);
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow_v3(
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow(
     jit_context_t *ctx,
     int32_t table_idx,
     int64_t delta,
@@ -202,29 +172,13 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow_v3(
     return table_grow_ctx_internal(ctx, table_idx, delta, init_value);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr_v3(void) {
-    return (int64_t)wasmoon_jit_memory_grow_v3;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr(void) {
+    return (int64_t)wasmoon_jit_table_grow;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr_v3(void) {
-    return (int64_t)wasmoon_jit_memory_size_v3;
-}
+// ============ Multi-Memory Operations (with memidx) ============
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr_v3(void) {
-    return (int64_t)wasmoon_jit_memory_fill_v3;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr_v3(void) {
-    return (int64_t)wasmoon_jit_memory_copy_v3;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr_v3(void) {
-    return (int64_t)wasmoon_jit_table_grow_v3;
-}
-
-// ============ v4 Multi-Memory Operations (with memidx) ============
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow_v4(
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(
     jit_context_t *ctx,
     int32_t memidx,
     int32_t delta,
@@ -233,11 +187,11 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow_v4(
     return memory_grow_indexed_internal(ctx, memidx, delta, max_pages);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size_v4(jit_context_t *ctx, int32_t memidx) {
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size(jit_context_t *ctx, int32_t memidx) {
     return memory_size_indexed_internal(ctx, memidx);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v4(
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill(
     jit_context_t *ctx,
     int32_t memidx,
     int32_t dst,
@@ -247,7 +201,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_v4(
     memory_fill_indexed_internal(ctx, memidx, dst, val, size);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v4(
+MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(
     jit_context_t *ctx,
     int32_t dst_memidx,
     int32_t src_memidx,
@@ -258,20 +212,20 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_v4(
     memory_copy_indexed_internal(ctx, dst_memidx, src_memidx, dst, src, size);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr_v4(void) {
-    return (int64_t)wasmoon_jit_memory_grow_v4;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_grow;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr_v4(void) {
-    return (int64_t)wasmoon_jit_memory_size_v4;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_size;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr_v4(void) {
-    return (int64_t)wasmoon_jit_memory_fill_v4;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_fill;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr_v4(void) {
-    return (int64_t)wasmoon_jit_memory_copy_v4;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
+    return (int64_t)wasmoon_jit_memory_copy;
 }
 
 // ============ Multi-Memory Array Setup ============

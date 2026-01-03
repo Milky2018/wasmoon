@@ -1,2 +1,3 @@
 *.cwasm
 *.html
+__pycache__

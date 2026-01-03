@@ -26,6 +26,14 @@ pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int) -> Self
 pub fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
 pub impl Show for CompiledEntry
 
+pub(all) struct DataEntry {
+  memory_idx : Int
+  offset : Int
+  data : Array[Int]
+}
+pub fn DataEntry::new(Int, Int, Array[Int]) -> Self
+pub impl Show for DataEntry
+
 pub(all) struct ImportEntry {
   module_name : String
   func_name : String
@@ -35,14 +43,25 @@ pub(all) struct ImportEntry {
 pub fn ImportEntry::new(String, String, Int, Int) -> Self
 pub impl Show for ImportEntry
 
+pub(all) struct MemoryDef {
+  min_pages : Int
+  max_pages : Int?
+}
+pub fn MemoryDef::new(Int, Int?) -> Self
+pub impl Show for MemoryDef
+
 pub(all) struct PrecompiledModule {
   version : Int
   target : TargetArch
   imports : Array[ImportEntry]
   functions : Array[CompiledEntry]
+  memories : Array[MemoryDef]
+  data_segments : Array[DataEntry]
 }
+pub fn PrecompiledModule::add_data_segment(Self, Int, Int, Array[Int]) -> Unit
 pub fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction, Int, Int) -> Unit
 pub fn PrecompiledModule::add_import(Self, String, String, Int, Int) -> Unit
+pub fn PrecompiledModule::add_memory(Self, Int, Int?) -> Unit
 pub fn PrecompiledModule::function_count(Self) -> Int
 pub fn PrecompiledModule::import_count(Self) -> Int
 pub fn PrecompiledModule::new(TargetArch) -> Self
