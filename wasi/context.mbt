@@ -171,6 +171,75 @@ pub fn WasiContextBuilder::stdin(
 }
 
 ///|
+/// Inherit stdin from host process
+pub fn WasiContextBuilder::inherit_stdin(
+  self : WasiContextBuilder,
+) -> WasiContextBuilder {
+  self.stdin_callback = Some(read_native_stdin)
+  self
+}
+
+///|
+/// Inherit stdout from host process
+pub fn WasiContextBuilder::inherit_stdout(
+  self : WasiContextBuilder,
+) -> WasiContextBuilder {
+  self.stdout_callback = Some(write_native_stdout)
+  self
+}
+
+///|
+/// Inherit stderr from host process
+pub fn WasiContextBuilder::inherit_stderr(
+  self : WasiContextBuilder,
+) -> WasiContextBuilder {
+  self.stderr_callback = Some(write_native_stderr)
+  self
+}
+
+///|
+/// Inherit all stdio (stdin, stdout, stderr) from host process
+pub fn WasiContextBuilder::inherit_stdio(
+  self : WasiContextBuilder,
+) -> WasiContextBuilder {
+  self.inherit_stdin().inherit_stdout().inherit_stderr()
+}
+
+///|
+/// Read from native stdin (fd 0)
+fn read_native_stdin() -> Bytes {
+  let buf = FixedArray::make(4096, b'\x00')
+  match native_read(0, buf, 4096) {
+    Some(n) if n > 0 => {
+      let result : Array[Byte] = Array::make(n, b'\x00')
+      for i in 0..<n {
+        result[i] = buf[i]
+      }
+      Bytes::from_array(result)
+    }
+    _ => b""
+  }
+}
+
+///|
+/// Write to native stdout (fd 1)
+fn write_native_stdout(bytes : Bytes) -> Unit {
+  if bytes.length() > 0 {
+    let buf = FixedArray::makei(bytes.length(), fn(i) { bytes[i] })
+    native_write(1, buf, bytes.length()) |> ignore
+  }
+}
+
+///|
+/// Write to native stderr (fd 2)
+fn write_native_stderr(bytes : Bytes) -> Unit {
+  if bytes.length() > 0 {
+    let buf = FixedArray::makei(bytes.length(), fn(i) { bytes[i] })
+    native_write(2, buf, bytes.length()) |> ignore
+  }
+}
+
+///|
 /// Build the WasiContext
 pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
   let preopens : Array[(Fd, String, String)] = []

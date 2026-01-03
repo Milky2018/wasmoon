@@ -109,12 +109,19 @@ fn run_wasm(
     // This would require a native FFI call. For now, we just note that it's requested.
     // In a full implementation, we would iterate over host env vars and add them.
   }
-  // Note: inherit-stdin/stdout/stderr would require modifying WasiContextBuilder
-  // to use native stdio instead of callbacks. For now, the default behavior
-  // already uses stdout/stderr for output.
-  ignore(inherit_stdin)
-  ignore(inherit_stdout)
-  ignore(inherit_stderr)
+  // Handle inherit-stdin/stdout/stderr options
+  if inherit_stdin {
+    @logger.debug("Inheriting stdin from host")
+    wasi_builder.inherit_stdin() |> ignore
+  }
+  if inherit_stdout {
+    @logger.debug("Inheriting stdout from host")
+    wasi_builder.inherit_stdout() |> ignore
+  }
+  if inherit_stderr {
+    @logger.debug("Inheriting stderr from host")
+    wasi_builder.inherit_stderr() |> ignore
+  }
   let wasi_ctx = wasi_builder.build()
 
   // Register WASI functions

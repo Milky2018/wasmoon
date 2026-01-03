@@ -458,6 +458,10 @@ pub(all) struct WasiContextBuilder {
 pub fn WasiContextBuilder::args(Self, Array[String]) -> Self
 pub fn WasiContextBuilder::build(Self) -> WasiContext
 pub fn WasiContextBuilder::env(Self, String, String) -> Self
+pub fn WasiContextBuilder::inherit_stderr(Self) -> Self
+pub fn WasiContextBuilder::inherit_stdin(Self) -> Self
+pub fn WasiContextBuilder::inherit_stdio(Self) -> Self
+pub fn WasiContextBuilder::inherit_stdout(Self) -> Self
 pub fn WasiContextBuilder::new() -> Self
 pub fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
 pub fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
