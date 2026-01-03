@@ -158,6 +158,29 @@ test "is_valid_add_imm: invalid immediates" {
 }
 
 ///|
+test "is_valid_logical_imm: valid patterns" {
+  // Simple consecutive ones (64-bit element)
+  inspect(is_valid_logical_imm(0x1L), content="true") // single bit
+  inspect(is_valid_logical_imm(0x3L), content="true") // 2 consecutive bits
+  inspect(is_valid_logical_imm(0xFFL), content="true") // 8 consecutive bits
+  inspect(is_valid_logical_imm(0xFF00L), content="true") // rotated pattern
+  // Repeating patterns (smaller elements)
+  inspect(is_valid_logical_imm(0x5555555555555555L), content="true") // 0101... (2-bit element)
+  inspect(is_valid_logical_imm(0xAAAAAAAAAAAAAAAAL), content="true") // 1010... (2-bit element)
+  inspect(is_valid_logical_imm(0x0F0F0F0F0F0F0F0FL), content="true") // 8-bit element
+  inspect(is_valid_logical_imm(0x00FF00FF00FF00FFL), content="true") // 16-bit element
+}
+
+///|
+test "is_valid_logical_imm: invalid patterns" {
+  // All zeros and all ones are invalid
+  inspect(is_valid_logical_imm(0L), content="false")
+  inspect(is_valid_logical_imm(-1L), content="false")
+  // Non-repeating patterns
+  inspect(is_valid_logical_imm(0x123456789ABCDEF0L), content="false")
+}
+
+///|
 test "is_consecutive_ones: valid patterns" {
   // Values with consecutive 1s
   inspect(is_consecutive_ones(0x1L), content="true") // 0001
