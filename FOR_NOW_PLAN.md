@@ -1,6 +1,6 @@
 # "For Now" Comments Cleanup Plan
 
-Total: 34 items (10 fixed)
+Total: 34 items (11 fixed)
 
 ## Priority 1: Quick Fixes (可直接修复)
 
@@ -56,7 +56,7 @@ Total: 34 items (10 fixed)
 | 23 | `runtime/linker.mbt` | 101 | Synthetic module workaround | 需要重新设计 |
 | 24 | `executor/instr_gc.mbt` | 314 | Packed field extension | 实现 packed 扩展 |
 | 25 | `executor/executor_wbtest.mbt` | 1189 | table.grow test limitation | 改进测试 |
-| 26 | `validator/validator.mbt` | 2883 | ref type validation | 完善验证器 |
+| ~~26~~ | ~~`validator/validator.mbt`~~ | ~~2883~~ | ~~ref type validation~~ | ~~完善验证器~~ |
 | 27 | `wat/parser_defs.mbt` | 775 | Skip for assert_invalid | 可能是正确行为 |
 | 28 | `testsuite/runner.mbt` | 492 | Skip trapping gets | 实现 trap 测试 |
 | 29 | `ir/egraph/rules_skeleton.mbt` | 99 | Pattern recognition | 扩展模式 |
@@ -76,6 +76,7 @@ Total: 34 items (10 fixed)
 - [x] `cli/main/run.mbt` - JIT GC 引用类型结果解析
 - [x] `vcode/lower/lower_numeric.mbt` - 32-bit magic division optimization
 - [x] `vcode/lower/lower_exception.mbt` - Exception values already supported (outdated comments removed)
+- [x] `validator/validator.mbt` - ArrayLen validation uses proper array ref type check
 
 ## Next Steps
 
