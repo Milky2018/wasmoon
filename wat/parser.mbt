@@ -2378,10 +2378,15 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       self.advance()
       @types.ValueType::RefNullEq
     }
-    Id(_) => {
-      // Type index like $t - treat as FuncRef for now
+    Id(name) => {
+      // Type index like $t - resolve to typed reference
+      let type_idx = match self.type_names.get(name) {
+        Some(idx) => idx
+        None =>
+          raise WatError::UnexpectedToken("unknown type $\{name}", self.loc())
+      }
       self.advance()
-      @types.ValueType::FuncRef
+      self.get_typed_ref(type_idx, true) // nullable heap type
     }
     _ =>
       raise WatError::UnexpectedToken(

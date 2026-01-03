@@ -1,6 +1,6 @@
 # "For Now" Comments Cleanup Plan
 
-Total: 34 items (4 fixed)
+Total: 34 items (5 fixed)
 
 ## Priority 1: Quick Fixes (可直接修复)
 
@@ -18,7 +18,7 @@ Total: 34 items (4 fixed)
 | 5 | `testsuite/compare.mbt` | 72 | GC refs treated as null | 实现 GC 引用比较 |
 | 6 | `wast/jit_support.mbt` | 163 | GC refs treated as null | 实现 GC 引用支持 |
 | 7 | `cli/main/run.mbt` | 687 | GC refs treated as null | 实现 GC 引用解析 |
-| 8 | `wat/parser.mbt` | 2382 | Type index as FuncRef | 正确解析类型索引 |
+| ~~8~~ | ~~`wat/parser.mbt`~~ | ~~2382~~ | ~~Type index as FuncRef~~ | ~~正确解析类型索引~~ |
 
 ## Priority 3: JIT/VCode Improvements (编译器优化)
 
@@ -70,6 +70,7 @@ Total: 34 items (4 fixed)
 - [x] `wasi/functions.mbt:377` - random_get 使用系统熵源
 - [x] `cli/main/run.mbt:109,113` - inherit-stdin/stdout/stderr 实现
 - [x] `cwasm/cwasm.mbt:452` - 完整 UTF-8 编码/解码
+- [x] `wat/parser.mbt:2382` - 正确解析类型索引引用
 
 ## Next Steps
 
