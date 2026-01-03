@@ -123,7 +123,9 @@ fn run_wasm(
     @logger.debug("Inheriting host environment variables")
     // TODO: Implement environ enumeration FFI in wasi/ffi_native.c to support this.
     // For now, use explicit --env NAME=VALUE flags to set environment variables.
-    @logger.warn("--inherit-env not yet implemented; use --env NAME=VALUE instead")
+    @logger.warn(
+      "--inherit-env not yet implemented; use --env NAME=VALUE instead",
+    )
   }
   // Handle inherit-stdin/stdout/stderr options
   if inherit_stdin {
