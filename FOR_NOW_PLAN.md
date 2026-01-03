@@ -1,6 +1,6 @@
 # "For Now" Comments Cleanup Plan
 
-Total: 34 items (3 fixed)
+Total: 34 items (4 fixed)
 
 ## Priority 1: Quick Fixes (可直接修复)
 
@@ -8,8 +8,8 @@ Total: 34 items (3 fixed)
 |---|------|------|-------|--------|
 | ~~1~~ | ~~`wasi/functions.mbt`~~ | ~~377~~ | ~~Simple PRNG (not cryptographically secure)~~ | ~~改用系统随机源~~ |
 | ~~2~~ | ~~`cli/main/run.mbt`~~ | ~~109,113~~ | ~~inherit-stdin not implemented~~ | ~~实现 stdin 继承~~ |
-| 3 | `cli/tools/wat2wasm.mbt` | 39 | Binary writer not implemented | 实现 WASM 二进制写入 |
-| 4 | `cwasm/cwasm.mbt` | 452 | Simple ASCII encoding | 支持完整 UTF-8 |
+| 3 | `cli/tools/wat2wasm.mbt` | 39 | Binary writer not implemented | 需要实现完整编码器 (复杂) |
+| ~~4~~ | ~~`cwasm/cwasm.mbt`~~ | ~~452~~ | ~~Simple ASCII encoding~~ | ~~支持完整 UTF-8~~ |
 
 ## Priority 2: GC Reference Types (统一处理)
 
@@ -69,6 +69,7 @@ Total: 34 items (3 fixed)
 - [x] `wasi/functions.mbt:293` - clock_time_get 使用真实系统时间 (b93b644)
 - [x] `wasi/functions.mbt:377` - random_get 使用系统熵源
 - [x] `cli/main/run.mbt:109,113` - inherit-stdin/stdout/stderr 实现
+- [x] `cwasm/cwasm.mbt:452` - 完整 UTF-8 编码/解码
 
 ## Next Steps
 
