@@ -446,7 +446,19 @@ test "lower unconditional jump" {
     #|    ret v0
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode jump_test() -> int {
+      #|block0:
+      #|    v0 = ldi 42
+      #|    jump block1
+      #|block1:
+      #|    ret v0
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -519,7 +531,18 @@ test "lower add(x, mul(y, z)) to madd" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode madd_test(v0:int, v1:int, v2:int) -> int {
+      #|block0:
+      #|    v3 = mul v1, v2
+      #|    v4 = madd v0, v1, v2
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -546,7 +569,18 @@ test "lower sub(x, mul(y, z)) to msub" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode msub_test(v0:int, v1:int, v2:int) -> int {
+      #|block0:
+      #|    v3 = mul v1, v2
+      #|    v4 = msub v0, v1, v2
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -574,7 +608,19 @@ test "lower sub(0, mul(x, y)) to mneg" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode mneg_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ldi 0
+      #|    v3 = mul v0, v1
+      #|    v4 = mneg v0, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -602,7 +648,19 @@ test "lower add(x, shl(y, n)) to add_shifted" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode add_shifted_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ldi 3
+      #|    v3 = shl v1, v2
+      #|    v4 = add.lsl #3 v0, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -630,7 +688,19 @@ test "lower sub(x, shl(y, n)) to sub_shifted" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode sub_shifted_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ldi 2
+      #|    v3 = shl v1, v2
+      #|    v4 = sub.lsl #2 v0, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -658,7 +728,19 @@ test "lower and(x, shl(y, n)) to and_shifted" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode and_shifted_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ldi 4
+      #|    v3 = shl v1, v2
+      #|    v4 = and.lsl #4 v0, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -686,7 +768,19 @@ test "lower or(x, shl(y, n)) to or_shifted" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode or_shifted_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ldi 5
+      #|    v3 = shl v1, v2
+      #|    v4 = or.lsl #5 v0, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -714,7 +808,19 @@ test "lower xor(x, shl(y, n)) to xor_shifted" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode xor_shifted_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ldi 1
+      #|    v3 = shl v1, v2
+      #|    v4 = xor.lsl #1 v0, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -741,7 +847,18 @@ test "madd commutative: add(mul(x, y), z) to madd" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode madd_commutative(v0:int, v1:int, v2:int) -> int {
+      #|block0:
+      #|    v3 = mul v0, v1
+      #|    v4 = madd v2, v0, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -769,7 +886,19 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
     #|    ret v4
     #|}
     #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode add_shifted_commutative(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ldi 3
+      #|    v3 = shl v0, v2
+      #|    v4 = add.lsl #3 v1, v0
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 // ============ br_table Pattern Test (f32_br_2locals reproduction) ============

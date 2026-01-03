@@ -121,9 +121,9 @@ fn run_wasm(
   // Handle inherit-env option
   if inherit_env {
     @logger.debug("Inheriting host environment variables")
-    // Note: MoonBit doesn't have direct access to host environment variables
-    // This would require a native FFI call. For now, we just note that it's requested.
-    // In a full implementation, we would iterate over host env vars and add them.
+    // TODO: Implement environ enumeration FFI in wasi/ffi_native.c to support this.
+    // For now, use explicit --env NAME=VALUE flags to set environment variables.
+    @logger.warn("--inherit-env not yet implemented; use --env NAME=VALUE instead")
   }
   // Handle inherit-stdin/stdout/stderr options
   if inherit_stdin {

@@ -85,13 +85,10 @@ void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
 }
 
 void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) {
-    // exnref encodes (tag_addr, exn_instance_index) or similar
-    // For now, treat exnref as a packed value:
-    // - Low 32 bits: exception instance index
-    // - We need to look up the stored exception from the runtime
-
-    // The exception values should already be stored in ctx from when it was caught
-    // Just re-throw with current exception state
+    // exnref encodes the exception reference from a catch_ref block.
+    // The exception values are already stored in ctx from when it was caught,
+    // so we just re-throw by jumping to the current handler.
+    (void)exnref; // exnref is implicit in ctx's exception state
     exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
     if (handler) {
         siglongjmp(handler->jmp_buf, handler->handler_id);
