@@ -32,10 +32,10 @@ fn BinaryWriter::write_array(self : BinaryWriter, bytes : Array[Int]) -> Unit {
 ///|
 /// Write unsigned LEB128
 fn BinaryWriter::write_u32(self : BinaryWriter, val : Int) -> Unit {
-  let mut v = val.land(0x7FFFFFFF) // Treat as unsigned
+  let mut v = val & 0x7FFFFFFF // Treat as unsigned
   if val < 0 {
     // For negative values treated as unsigned, we need special handling
-    self.write_u64(val.to_int64().land(0xFFFFFFFFL))
+    self.write_u64(val.to_int64() & 0xFFFFFFFFL)
     return
   }
   while true {
@@ -385,7 +385,7 @@ fn encode_memarg(
   offset : Int64,
 ) -> Unit {
   w.write_u32(align)
-  w.write_u64(offset.land(0xFFFFFFFFL))
+  w.write_u64(offset & 0xFFFFFFFFL)
 }
 
 ///|
@@ -1097,7 +1097,10 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
 
 ///|
 /// Encode a catch handler
-fn encode_catch_handler(w : BinaryWriter, handler : @types.CatchHandler) -> Unit {
+fn encode_catch_handler(
+  w : BinaryWriter,
+  handler : @types.CatchHandler,
+) -> Unit {
   match handler {
     Catch(tag_idx, label) => {
       w.write_byte(0x00)
@@ -1313,7 +1316,7 @@ fn encode_element_section(mod : @types.Module) -> Array[Int] {
   w.write_u32(mod.elems.length())
   for elem in mod.elems {
     match elem.mode {
-      Active(table_idx, offset_expr) => {
+      Active(table_idx, offset_expr) =>
         if table_idx == 0 && elem.type_ is @types.FuncRef {
           // Simplified encoding for table 0 with funcref
           w.write_byte(0x00)
@@ -1341,7 +1344,6 @@ fn encode_element_section(mod : @types.Module) -> Array[Int] {
             w.write_byte(0x0B) // end
           }
         }
-      }
       Passive => {
         w.write_byte(0x05) // passive with elem type and expr init
         encode_valtype(w, elem.type_)

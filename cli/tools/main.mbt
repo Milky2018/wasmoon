@@ -105,7 +105,7 @@ fn main {
 ///|
 /// Native exit function with correct void return type
 /// (moonbitlang/x/sys declares exit as returning int32, which causes a warning)
-extern "c" fn native_exit(code : Int) -> Unit = "wasmoon_exit"
+extern "c" fn native_exit(code : Int) = "exit"
 
 ///|
 fn exit_error(msg : String) -> Unit {

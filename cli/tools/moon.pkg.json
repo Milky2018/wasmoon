@@ -9,6 +9,5 @@
     "moonbitlang/x/sys",
     "moonbitlang/x/fs",
     "TheWaWaR/clap"
-  ],
-  "native-stub": ["ffi.c"]
+  ]
 }

@@ -2,11 +2,14 @@
 package "Milky2018/wasmoon/cwasm"
 
 import(
+  "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/vcode"
 )
 
 // Values
 pub fn deserialize(Array[Int]) -> PrecompiledModule raise DeserializeError
+
+pub fn encode(@types.Module) -> Array[Int]
 
 // Errors
 pub suberror DeserializeError String
