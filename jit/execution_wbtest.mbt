@@ -231,8 +231,9 @@ test "end-to-end: f32_br_2locals.wast from source" {
   // The function should have params, results, and multiple blocks
   inspect(ir_func.params.length(), content="3") // i32 param
   inspect(ir_func.results.length(), content="1") // f32 result
-  // WASM nested blocks produce 9 IR blocks (vs 5 in manual construction)
-  inspect(ir_func.blocks.length(), content="21")
+  // WASM nested blocks produce IR blocks. With shared trap block optimization,
+  // all 6 memory bounds checks share 1 trap block instead of creating 6 separate ones.
+  inspect(ir_func.blocks.length(), content="16")
 
   // Debug: print the IR to understand structure
   inspect(
@@ -258,7 +259,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v80:i64 = iconst 4
       #|    v81:i64 = iadd v79, v80
       #|    v82:i32 = icmp.ule v81, v76
-      #|    brnz v82, block18, block17
+      #|    brnz v82, block14, block9
       #|block3(v12:i32, v13:f32, v14:f32):
       #|    v45:i32 = iconst 0
       #|    v46:i64 = iconst 0
@@ -271,7 +272,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v53:i64 = iconst 4
       #|    v54:i64 = iadd v52, v53
       #|    v55:i32 = icmp.ule v54, v49
-      #|    brnz v55, block14, block13
+      #|    brnz v55, block12, block9
       #|block4(v15:i32, v16:f32, v17:f32):
       #|    v18:i32 = iconst 0
       #|    v19:i64 = iconst 0
@@ -310,17 +311,13 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v39:i64 = iconst 4
       #|    v40:i64 = iadd v38, v39
       #|    v41:i32 = icmp.ule v40, v35
-      #|    brnz v41, block12, block11
+      #|    brnz v41, block11, block9
       #|block11:
-      #|    trap "memory out of bounds"
-      #|block12:
       #|    v42:i64 = iadd v33, v38
       #|    v43:i64 = iconst 0
       #|    v44:f32 = load_ptr.F32 v42, v43
       #|    jump block1(v15, v16, v44)
-      #|block13:
-      #|    trap "memory out of bounds"
-      #|block14:
+      #|block12:
       #|    v56:i64 = iadd v47, v52
       #|    v57:i64 = iconst 0
       #|    store_ptr.F32 v56, v13, v57
@@ -335,17 +332,13 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v66:i64 = iconst 4
       #|    v67:i64 = iadd v65, v66
       #|    v68:i32 = icmp.ule v67, v62
-      #|    brnz v68, block16, block15
-      #|block15:
-      #|    trap "memory out of bounds"
-      #|block16:
+      #|    brnz v68, block13, block9
+      #|block13:
       #|    v69:i64 = iadd v60, v65
       #|    v70:i64 = iconst 0
       #|    v71:f32 = load_ptr.F32 v69, v70
       #|    jump block1(v12, v13, v71)
-      #|block17:
-      #|    trap "memory out of bounds"
-      #|block18:
+      #|block14:
       #|    v83:i64 = iadd v74, v79
       #|    v84:i64 = iconst 0
       #|    store_ptr.F32 v83, v10, v84
@@ -360,16 +353,15 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v93:i64 = iconst 4
       #|    v94:i64 = iadd v92, v93
       #|    v95:i32 = icmp.ule v94, v89
-      #|    brnz v95, block20, block19
-      #|block19:
-      #|    trap "memory out of bounds"
-      #|block20:
+      #|    brnz v95, block15, block9
+      #|block15:
       #|    v96:i64 = iadd v87, v92
       #|    v97:i64 = iconst 0
       #|    v98:f32 = load_ptr.F32 v96, v97
       #|    jump block1(v9, v10, v98)
       #|}
       #|
+
     ),
   )
 
@@ -387,7 +379,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    f17 = ldf 10
       #|    v19 = ldi 0
       #|    v18 = cmp32.eq v2, v19
-      #|    branch v18, block5, block21
+      #|    branch v18, block5, block16
       #|block1(v3:int, f4:float, f5:float):
       #|    ret f5
       #|block2(v6:int, f7:float, f8:float):
@@ -402,7 +394,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v32 = ldi 4
       #|    v33 = add #4 v31
       #|    v34 = cmp.ule v33, v28
-      #|    br_cmp.ls v33, v28, block18, block17
+      #|    br_cmp.ls v33, v28, block14, block9
       #|block3(v9:int, f10:float, f11:float):
       #|    v35 = ldi 0
       #|    v36 = ldi 0
@@ -415,7 +407,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v43 = ldi 4
       #|    v44 = add #4 v42
       #|    v45 = cmp.ule v44, v39
-      #|    br_cmp.ls v44, v39, block14, block13
+      #|    br_cmp.ls v44, v39, block12, block9
       #|block4(v12:int, f13:float, f14:float):
       #|    v46 = ldi 0
       #|    v47 = ldi 0
@@ -466,10 +458,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v67 = ldi 4
       #|    v68 = add #4 v66
       #|    v69 = cmp.ule v68, v63
-      #|    br_cmp.ls v68, v63, block12, block11
+      #|    br_cmp.ls v68, v63, block11, block9
       #|block11:
-      #|    trap "memory out of bounds"
-      #|block12:
       #|    v70 = add v61, v66
       #|    v71 = ldi 0
       #|    f72 = load_ptr.f32 +0 v70
@@ -477,9 +467,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    f4 = mov f13
       #|    f5 = mov f72
       #|    jump block1
-      #|block13:
-      #|    trap "memory out of bounds"
-      #|block14:
+      #|block12:
       #|    v73 = add v37, v42
       #|    v74 = ldi 0
       #|    store_ptr.f32 +0 v73, f10
@@ -494,10 +482,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v83 = ldi 4
       #|    v84 = add #4 v82
       #|    v85 = cmp.ule v84, v79
-      #|    br_cmp.ls v84, v79, block16, block15
-      #|block15:
-      #|    trap "memory out of bounds"
-      #|block16:
+      #|    br_cmp.ls v84, v79, block13, block9
+      #|block13:
       #|    v86 = add v77, v82
       #|    v87 = ldi 0
       #|    f88 = load_ptr.f32 +0 v86
@@ -505,9 +491,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    f4 = mov f10
       #|    f5 = mov f88
       #|    jump block1
-      #|block17:
-      #|    trap "memory out of bounds"
-      #|block18:
+      #|block14:
       #|    v89 = add v26, v31
       #|    v90 = ldi 0
       #|    store_ptr.f32 +0 v89, f7
@@ -522,10 +506,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v99 = ldi 4
       #|    v100 = add #4 v98
       #|    v101 = cmp.ule v100, v95
-      #|    br_cmp.ls v100, v95, block20, block19
-      #|block19:
-      #|    trap "memory out of bounds"
-      #|block20:
+      #|    br_cmp.ls v100, v95, block15, block9
+      #|block15:
       #|    v102 = add v93, v98
       #|    v103 = ldi 0
       #|    f104 = load_ptr.f32 +0 v102
@@ -533,16 +515,17 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    f4 = mov f7
       #|    f5 = mov f104
       #|    jump block1
-      #|block21:
+      #|block16:
       #|    v20 = ldi 1
       #|    v21 = cmp32.eq v2, v20
-      #|    branch v21, block6, block22
-      #|block22:
+      #|    branch v21, block6, block17
+      #|block17:
       #|    v22 = ldi 2
       #|    v23 = cmp32.eq v2, v22
       #|    branch v23, block7, block8
       #|}
       #|
+
     ),
   )
   let allocated_func = @regalloc.allocate_registers_aarch64(vcode_func)
@@ -557,7 +540,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    d1 = ldf 10
       #|    x8 = ldi 0
       #|    x9 = cmp32.eq x2, x8
-      #|    branch x9, block5, block21
+      #|    branch x9, block5, block16
       #|block1(v3:int, f4:float, f5:float):
       #|    ret d3
       #|block2(v6:int, f7:float, f8:float):
@@ -567,7 +550,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    x13 = extend.u32_64 x10
       #|    x14 = mov x13
       #|    x10 = add #4 x14
-      #|    br_cmp.ls x10, x12, block18, block17
+      #|    br_cmp.ls x10, x12, block14, block9
       #|block3(v9:int, f10:float, f11:float):
       #|    x10 = ldi 0
       #|    x11 = load_ptr.i64 +0 x0
@@ -575,7 +558,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    x13 = extend.u32_64 x10
       #|    x14 = mov x13
       #|    x10 = add #4 x14
-      #|    br_cmp.ls x10, x12, block14, block13
+      #|    br_cmp.ls x10, x12, block12, block9
       #|block4(v12:int, f13:float, f14:float):
       #|    x10 = ldi 0
       #|    x11 = load_ptr.i64 +0 x0
@@ -615,18 +598,31 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    x13 = extend.u32_64 x11
       #|    x14 = mov x13
       #|    x11 = add #4 x14
-      #|    br_cmp.ls x11, x12, block12, block11
+      #|    br_cmp.ls x11, x12, block11, block9
       #|block11:
-      #|    trap "memory out of bounds"
-      #|block12:
       #|    x11 = add x10, x14
       #|    d0 = load_ptr.f32 +0 x11
       #|    x8 = mov x9
       #|    d2 = mov d4
       #|    d3 = mov d0
       #|    jump block1
+      #|block12:
+      #|    x10 = add x11, x14
+      #|    store_ptr.f32 +0 x10, d4
+      #|    x11 = ldi 0
+      #|    x10 = load_ptr.i64 +0 x0
+      #|    x12 = load_ptr.i64 +8 x0
+      #|    x13 = extend.u32_64 x11
+      #|    x14 = mov x13
+      #|    x11 = add #4 x14
+      #|    br_cmp.ls x11, x12, block13, block9
       #|block13:
-      #|    trap "memory out of bounds"
+      #|    x11 = add x10, x14
+      #|    d5 = load_ptr.f32 +0 x11
+      #|    x8 = mov x9
+      #|    d2 = mov d4
+      #|    d3 = mov d5
+      #|    jump block1
       #|block14:
       #|    x10 = add x11, x14
       #|    store_ptr.f32 +0 x10, d4
@@ -636,47 +632,25 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    x13 = extend.u32_64 x11
       #|    x14 = mov x13
       #|    x11 = add #4 x14
-      #|    br_cmp.ls x11, x12, block16, block15
+      #|    br_cmp.ls x11, x12, block15, block9
       #|block15:
-      #|    trap "memory out of bounds"
+      #|    x11 = add x10, x14
+      #|    d5 = load_ptr.f32 +0 x11
+      #|    x8 = mov x9
+      #|    d2 = mov d4
+      #|    d3 = mov d5
+      #|    jump block1
       #|block16:
-      #|    x11 = add x10, x14
-      #|    d5 = load_ptr.f32 +0 x11
-      #|    x8 = mov x9
-      #|    d2 = mov d4
-      #|    d3 = mov d5
-      #|    jump block1
-      #|block17:
-      #|    trap "memory out of bounds"
-      #|block18:
-      #|    x10 = add x11, x14
-      #|    store_ptr.f32 +0 x10, d4
-      #|    x11 = ldi 0
-      #|    x10 = load_ptr.i64 +0 x0
-      #|    x12 = load_ptr.i64 +8 x0
-      #|    x13 = extend.u32_64 x11
-      #|    x14 = mov x13
-      #|    x11 = add #4 x14
-      #|    br_cmp.ls x11, x12, block20, block19
-      #|block19:
-      #|    trap "memory out of bounds"
-      #|block20:
-      #|    x11 = add x10, x14
-      #|    d5 = load_ptr.f32 +0 x11
-      #|    x8 = mov x9
-      #|    d2 = mov d4
-      #|    d3 = mov d5
-      #|    jump block1
-      #|block21:
       #|    x8 = ldi 1
       #|    x9 = cmp32.eq x2, x8
-      #|    branch x9, block6, block22
-      #|block22:
+      #|    branch x9, block6, block17
+      #|block17:
       #|    x8 = ldi 2
       #|    x9 = cmp32.eq x2, x8
       #|    branch x9, block7, block8
       #|}
       #|
+
     ),
   )
   let mc = @emit.emit_function(allocated_func)
@@ -694,7 +668,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  001c: 5f00086b  cmp w2, w8
       #|  0020: e9179f9a  cset x9, eq
       #|  0024: 090400b5  cbnz x9, block5
-      #|  0028: 65000014  b block21
+      #|  0028: 63000014  b block16
       #|block1:
       #|  002c: 6040201e  fmov s0, s3
       #|  0030: ff430091  add sp, sp, #16
@@ -707,8 +681,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  0048: ee030daa  mov x14, x13
       #|  004c: ca110091  add x10, x14, #4
       #|  0050: 5f010ceb  cmp x10, x12
-      #|  0054: 29090054  b.ls block18
-      #|  0058: 47000014  b block17
+      #|  0054: e9080054  b.ls block14
+      #|  0058: 23000014  b block9
       #|block3:
       #|  005c: 0a0080d2  movz x10, #0, lsl #0
       #|  0060: 0b0040f9  ldr x11, [x0, #0]
@@ -717,8 +691,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  006c: ee030daa  mov x14, x13
       #|  0070: ca110091  add x10, x14, #4
       #|  0074: 5f010ceb  cmp x10, x12
-      #|  0078: c9050054  b.ls block14
-      #|  007c: 2c000014  b block13
+      #|  0078: a9050054  b.ls block12
+      #|  007c: 1a000014  b block9
       #|block4:
       #|  0080: 0a0080d2  movz x10, #0, lsl #0
       #|  0084: 0b0040f9  ldr x11, [x0, #0]
@@ -759,62 +733,66 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  0100: ee030daa  mov x14, x13
       #|  0104: cb110091  add x11, x14, #4
       #|  0108: 7f010ceb  cmp x11, x12
-      #|  010c: 49000054  b.ls block12
-      #|block12:
+      #|  010c: 49000054  b.ls block11
+      #|  0110: f5ffff17  b block9
+      #|block11:
       #|  0114: 4b010e8b  add x11, x10, x14
       #|  0118: 600140bd  ldr s0, [x11, #0]
       #|  011c: e80309aa  mov x8, x9
       #|  0120: 8240201e  fmov s2, s4
       #|  0124: 0340201e  fmov s3, s0
       #|  0128: c1ffff17  b block1
+      #|block12:
+      #|  012c: 6a010e8b  add x10, x11, x14
+      #|  0130: 440100bd  str s4, [x10, #0]
+      #|  0134: 0b0080d2  movz x11, #0, lsl #0
+      #|  0138: 0a0040f9  ldr x10, [x0, #0]
+      #|  013c: 0c0440f9  ldr x12, [x0, #8]
+      #|  0140: ed030b2a  mov w13, w11
+      #|  0144: ee030daa  mov x14, x13
+      #|  0148: cb110091  add x11, x14, #4
+      #|  014c: 7f010ceb  cmp x11, x12
+      #|  0150: 49000054  b.ls block13
+      #|  0154: e4ffff17  b block9
+      #|block13:
+      #|  0158: 4b010e8b  add x11, x10, x14
+      #|  015c: 650140bd  ldr s5, [x11, #0]
+      #|  0160: e80309aa  mov x8, x9
+      #|  0164: 8240201e  fmov s2, s4
+      #|  0168: a340201e  fmov s3, s5
+      #|  016c: b0ffff17  b block1
       #|block14:
-      #|  0130: 6a010e8b  add x10, x11, x14
-      #|  0134: 440100bd  str s4, [x10, #0]
-      #|  0138: 0b0080d2  movz x11, #0, lsl #0
-      #|  013c: 0a0040f9  ldr x10, [x0, #0]
-      #|  0140: 0c0440f9  ldr x12, [x0, #8]
-      #|  0144: ed030b2a  mov w13, w11
-      #|  0148: ee030daa  mov x14, x13
-      #|  014c: cb110091  add x11, x14, #4
-      #|  0150: 7f010ceb  cmp x11, x12
-      #|  0154: 49000054  b.ls block16
+      #|  0170: 6a010e8b  add x10, x11, x14
+      #|  0174: 440100bd  str s4, [x10, #0]
+      #|  0178: 0b0080d2  movz x11, #0, lsl #0
+      #|  017c: 0a0040f9  ldr x10, [x0, #0]
+      #|  0180: 0c0440f9  ldr x12, [x0, #8]
+      #|  0184: ed030b2a  mov w13, w11
+      #|  0188: ee030daa  mov x14, x13
+      #|  018c: cb110091  add x11, x14, #4
+      #|  0190: 7f010ceb  cmp x11, x12
+      #|  0194: 49000054  b.ls block15
+      #|  0198: d3ffff17  b block9
+      #|block15:
+      #|  019c: 4b010e8b  add x11, x10, x14
+      #|  01a0: 650140bd  ldr s5, [x11, #0]
+      #|  01a4: e80309aa  mov x8, x9
+      #|  01a8: 8240201e  fmov s2, s4
+      #|  01ac: a340201e  fmov s3, s5
+      #|  01b0: 9fffff17  b block1
       #|block16:
-      #|  015c: 4b010e8b  add x11, x10, x14
-      #|  0160: 650140bd  ldr s5, [x11, #0]
-      #|  0164: e80309aa  mov x8, x9
-      #|  0168: 8240201e  fmov s2, s4
-      #|  016c: a340201e  fmov s3, s5
-      #|  0170: afffff17  b block1
-      #|block18:
-      #|  0178: 6a010e8b  add x10, x11, x14
-      #|  017c: 440100bd  str s4, [x10, #0]
-      #|  0180: 0b0080d2  movz x11, #0, lsl #0
-      #|  0184: 0a0040f9  ldr x10, [x0, #0]
-      #|  0188: 0c0440f9  ldr x12, [x0, #8]
-      #|  018c: ed030b2a  mov w13, w11
-      #|  0190: ee030daa  mov x14, x13
-      #|  0194: cb110091  add x11, x14, #4
-      #|  0198: 7f010ceb  cmp x11, x12
-      #|  019c: 49000054  b.ls block20
-      #|block20:
-      #|  01a4: 4b010e8b  add x11, x10, x14
-      #|  01a8: 650140bd  ldr s5, [x11, #0]
-      #|  01ac: e80309aa  mov x8, x9
-      #|  01b0: 8240201e  fmov s2, s4
-      #|  01b4: a340201e  fmov s3, s5
-      #|  01b8: 9dffff17  b block1
-      #|block21:
-      #|  01bc: 280080d2  movz x8, #1, lsl #0
-      #|  01c0: 5f00086b  cmp w2, w8
-      #|  01c4: e9179f9a  cset x9, eq
-      #|  01c8: 69f7ffb5  cbnz x9, block6
-      #|block22:
-      #|  01cc: 480080d2  movz x8, #2, lsl #0
-      #|  01d0: 5f00086b  cmp w2, w8
-      #|  01d4: e9179f9a  cset x9, eq
-      #|  01d8: 69f7ffb5  cbnz x9, block7
-      #|  01dc: beffff17  b block8
+      #|  01b4: 280080d2  movz x8, #1, lsl #0
+      #|  01b8: 5f00086b  cmp w2, w8
+      #|  01bc: e9179f9a  cset x9, eq
+      #|  01c0: a9f7ffb5  cbnz x9, block6
+      #|block17:
+      #|  01c4: 480080d2  movz x8, #2, lsl #0
+      #|  01c8: 5f00086b  cmp w2, w8
+      #|  01cc: e9179f9a  cset x9, eq
+      #|  01d0: a9f7ffb5  cbnz x9, block7
+      #|  01d4: c0ffff17  b block8
       #|
+
     ),
   )
 
