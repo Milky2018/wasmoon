@@ -324,6 +324,11 @@ fn lower_struct_new(
   for field_vreg in field_vregs {
     alloc_inst.add_use(Virtual(field_vreg))
   }
+
+  // Add clobbers for all caller-saved registers (X0-X17, D0-D7)
+  // This tells regalloc not to allocate field values to these registers
+  // since InlineAllocStruct uses them as scratch and makes a BLR call
+  add_call_clobbers(alloc_inst)
   block.add_inst(alloc_inst)
 
   // Deallocate stack space
