@@ -82,9 +82,11 @@ pub fn BacktrackingAllocator::new(
 /// Initialize the priority queue with all bundles
 fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   self.queue = []
+  // Pre-compute loop depths once (O(blocks + edges))
+  let loop_depths = compute_loop_depths(self.func)
   for i in 0..<self.bundles.length() {
     let bundle = self.bundles.get(i)
-    bundle.spill_weight = compute_spill_weight(bundle, self.ranges, self.func)
+    bundle.spill_weight = compute_spill_weight(bundle, self.ranges, loop_depths)
     self.queue.push({ bundle_id: i, weight: bundle.spill_weight })
   }
   // Sort by weight descending (highest priority first)

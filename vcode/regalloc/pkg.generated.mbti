@@ -30,7 +30,9 @@ pub fn compare_allocators(VCodeFunction) -> String
 
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
-pub fn compute_spill_weight(Bundle, LiveRangeSet, VCodeFunction) -> Double
+pub fn compute_loop_depths(VCodeFunction) -> Array[Int]
+
+pub fn compute_spill_weight(Bundle, LiveRangeSet, Array[Int]) -> Double
 
 pub fn debug_liveness(LivenessResult) -> String
 
