@@ -369,9 +369,12 @@ pub fn build_live_ranges(
     let range = LiveRange::new(next_id, info.vreg)
     next_id += 1
 
-    // Build ranges from def point to uses
-    // For now, use a single range from earliest to latest point
-    // TODO: Build precise multi-span ranges
+    // Build ranges from def point to uses.
+    // Currently uses a single conservative range from earliest to latest point.
+    // This is correct but may cause unnecessary register pressure.
+    // Multi-span ranges would require: (1) CFG-based liveness analysis to find holes,
+    // (2) block order respecting loop nesting for accurate range splitting.
+    // The current approach works correctly for all cases.
     let interval = liveness.intervals.get(vreg_id)
     match interval {
       Some(iv) => {

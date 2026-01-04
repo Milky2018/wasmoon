@@ -1185,16 +1185,56 @@ test "table operations: table.size" {
 
 ///|
 test "table operations: table.grow" {
-  // Module with a table, grow it and return new size
-  // Note: table.grow needs a reference value on stack. For now, we test via
-  // direct store manipulation since ref.null instruction is not implemented yet.
-  let store = @runtime.Store::new()
-  let table = @runtime.Table::new(@types.ValueType::FuncRef, 2, None)
-  store.alloc_table(table) |> ignore
-  // Grow the table directly
-  let old_size = table.grow(3, @types.Value::Null)
-  inspect(old_size, content="2") // old size was 2
-  inspect(table.size(), content="5") // new size is 5
+  // Test table.grow instruction with ref.null
+  // Creates module with:
+  // - table $t of 2 funcref
+  // - grow function: (ref.null func) (i32.const 3) (table.grow $t)
+  // - size function: (table.size $t)
+  let table_type : @types.TableType = {
+    elem_type: @types.ValueType::FuncRef,
+    limits: { min: 2, max: None },
+    is_table64: false,
+  }
+  let table : @types.Table = { type_: table_type, init: None }
+  // Function type: () -> i32
+  let func_type : @types.SubType = {
+    final_: true,
+    supertypes: [],
+    composite: Func({ params: [], results: [@types.ValueType::I32] }),
+  }
+  let mod : @types.Module = {
+    types: [func_type],
+    type_rec_groups: [0],
+    imports: [],
+    funcs: [0, 0], // two functions, both with type 0
+    tables: [table],
+    memories: [],
+    globals: [],
+    exports: [
+      { name: "grow", desc: @types.ExportDesc::Func(0) },
+      { name: "size", desc: @types.ExportDesc::Func(1) },
+    ],
+    start: None,
+    elems: [],
+    codes: [
+      // grow function: ref.null func, i32.const 3, table.grow 0
+      {
+        locals: [],
+        body: [RefNull(@types.ValueType::FuncRef), I32Const(3), TableGrow(0)],
+      },
+      // size function: table.size 0
+      { locals: [], body: [TableSize(0)] },
+    ],
+    datas: [],
+    tags: [],
+  }
+  let (store, instance) = instantiate_module(mod)
+  // Grow table by 3, should return old size (2)
+  let grow_result = call_exported_func(store, instance, "grow", [])
+  inspect(grow_result, content="[I32(2)]")
+  // New size should be 5
+  let size_result = call_exported_func(store, instance, "size", [])
+  inspect(size_result, content="[I32(5)]")
 }
 
 ///|

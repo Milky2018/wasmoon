@@ -111,6 +111,7 @@ pub fn CFG::to_dot(Self, String) -> String
 pub(all) struct EGraphBuilder {
   egraph : @egraph.EGraph
   value_map : Map[Int, @egraph.EClassId]
+  class_to_value : Map[Int, Value]
   def_map : Map[Int, Inst]
   ruleset : @egraph.IndexedRuleSet
 }
@@ -118,6 +119,7 @@ pub fn EGraphBuilder::add_value(Self, Value) -> @egraph.EClassId
 pub fn EGraphBuilder::extract(Self, Value) -> (Int, @egraph.ENode)?
 pub fn EGraphBuilder::get_egraph(Self) -> @egraph.EGraph
 pub fn EGraphBuilder::get_simplified_opcode(Self, Value) -> Opcode?
+pub fn EGraphBuilder::get_simplified_operand(Self, Value) -> Value?
 pub fn EGraphBuilder::new() -> Self
 pub fn EGraphBuilder::optimize(Self) -> Unit
 pub fn EGraphBuilder::register_def(Self, Inst) -> Unit

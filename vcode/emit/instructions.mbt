@@ -3409,9 +3409,9 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let enc = 0x0D008400 | (q << 30) | ((rd & 31) << 5) | (rn & 31)
       (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
     }
-    // Narrowing/extending and remaining instructions use abort for now
-    // They require more complex encoding
-    _ => abort("NEON instruction encoding not yet implemented")
+    // All expected instructions are implemented above. This catches
+    // any new instructions that haven't been added yet.
+    _ => abort("Instruction encoding not yet implemented")
   }
 }
 

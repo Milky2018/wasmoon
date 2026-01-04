@@ -94,12 +94,14 @@ fn rule_add_uextend_no_overflow() -> RewriteRule {
               break
             }
           }
-          // If both are uextends, the sum cannot overflow the extended type
-          // This information could be used by later passes
-          // For now, we just recognize the pattern
+          // If both are uextends, the sum cannot overflow the extended type.
+          // This is pattern recognition for potential future optimizations.
+          // Transformation would require e-graph node annotations (not yet supported).
+          // Example uses: nsw/nuw flags for LLVM-style optimizations,
+          // or marking additions as safe for strength reduction.
           if left_is_uextend && right_is_uextend {
-            // No transformation needed, but we could add metadata
-            // to indicate this addition is overflow-safe
+            // Pattern recognized but no transformation currently.
+            // Future: add AddNoOverflow(a, b) equivalent to egraph
             changed = changed
           }
         }

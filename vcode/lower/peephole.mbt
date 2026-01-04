@@ -155,20 +155,11 @@ fn optimize_block(
   let mut eliminated = 0
   let new_insts : Array[@instr.VCodeInst] = []
   for inst in block.insts {
-    // DCE disabled for now - needs more work on cross-block analysis
-    // let is_dead = if inst.defs.length() == 1 && is_pure_instruction(inst.opcode) {
-    //   if get_def_vreg_id(inst.defs[0]) is Some(def_id) {
-    //     not(used.contains(def_id))
-    //   } else {
-    //     false
-    //   }
-    // } else {
-    //   false
-    // }
-    // if is_dead {
-    //   eliminated = eliminated + 1
-    //   continue
-    // }
+    // NOTE: Intra-block DCE requires global liveness analysis.
+    // The `used` set only contains uses from THIS block, but a value defined
+    // here might be used in a different block. Proper DCE needs to know which
+    // vregs are live-out from each block, which requires cross-block analysis.
+    // For now, DCE is only done by the register allocator's dead code marking.
 
     let optimized = optimize_instruction(inst, state)
     match optimized {

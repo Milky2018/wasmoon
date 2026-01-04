@@ -48,7 +48,7 @@ moon build && ./install.sh    # Build and install wasmoon binary
 ./wasmoon test <file.wast>    # Run WAST tests
 ./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
 ./wasmoon explore <file.wat> --stage ir vcode mc  # View compilation stages
-python3 scripts/run_all_wast.py --rec  # Run all WAST tests
+python3 scripts/run_all_wast.py --rec  # Run all WAST tests (run ./install.sh first)
 ```
 
 ## Testing
@@ -85,3 +85,13 @@ lldb -- ./wasmoon test path/to/test.wast
 - Use `suberror` for error types, `raise` to throw, `try! func() |> ignore` to ignore errors
 - Use `func() |> ignore` not `let _ = func()`
 - Use `s.code_unit_at(i)` not `s[i]` (deprecated)
+- When using `inspect(value, content=expected_string)`, don't declare a separate `let expected = ...` variable - it causes unused variable warnings. Put the expected string directly in the `content=` parameter
+- Use `!condition` not `not(condition)`
+- Use `f(value)` not `f!(value)` (deprecated)
+- Use `for i in 0..<n` not C-style `for i = 0; i < n; i = i + 1`
+- Use `if opt is Pattern(v) { ... }` for single-branch matching, not `match opt {}`
+- Use `arr.clear()` not `while arr.length() > 0 { arr.pop() }`
+- Use `s.code_unit_at(i)` not `s[i]` (deprecated)
+- Use `pub(all) enum` not factory functions for simple enums
+- Use `let mut` only for reassignment, not for mutable containers like Array
+- Use `reinterpret_as_uint()` for unsigned ops, `to_int()` for numeric conversion

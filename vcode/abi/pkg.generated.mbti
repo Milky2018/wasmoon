@@ -36,6 +36,12 @@ pub const USER_PARAM_BASE_REG : Int = 2
 
 pub const VMCTX_FUNC_TABLE_OFFSET : Int = 16
 
+pub const VMCTX_GC_HEAP_LIMIT_OFFSET : Int = 120
+
+pub const VMCTX_GC_HEAP_OFFSET : Int = 128
+
+pub const VMCTX_GC_HEAP_PTR_OFFSET : Int = 112
+
 pub const VMCTX_GLOBALS_OFFSET : Int = 40
 
 pub const VMCTX_MEMORIES_OFFSET : Int = 80

@@ -130,6 +130,10 @@ pub(all) enum GCLibcall {
   ArrayFill
   ArrayCopy
   TypeCheckSubtype
+  RegisterStructInline
+  RegisterArrayInline
+  AllocStructSlow
+  AllocArraySlow
 }
 pub impl Eq for GCLibcall
 pub impl Show for GCLibcall

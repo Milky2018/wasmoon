@@ -9,6 +9,8 @@ pub(all) struct EGraphBuilder {
   egraph : @egraph.EGraph
   // Map from IR Value id to EClassId
   value_map : Map[Int, @egraph.EClassId]
+  // Reverse map from canonical EClassId to original Value (for operand rewriting)
+  class_to_value : Map[Int, Value]
   // Map from IR Value id to its defining instruction
   def_map : Map[Int, Inst]
   // Ruleset for eager optimization
@@ -20,6 +22,7 @@ pub fn EGraphBuilder::new() -> EGraphBuilder {
   {
     egraph: @egraph.EGraph::new(),
     value_map: {},
+    class_to_value: {},
     def_map: {},
     ruleset: @egraph.standard_rules_indexed(),
   }
@@ -191,6 +194,11 @@ pub fn EGraphBuilder::add_value(
       }
   }
   self.value_map.set(value.id, class_id)
+  // Update reverse map: canonical class_id -> first value that maps to it
+  let canonical = self.egraph.find(class_id)
+  if not(self.class_to_value.contains(canonical.0)) {
+    self.class_to_value.set(canonical.0, value)
+  }
   class_id
 }
 
@@ -374,6 +382,34 @@ pub fn EGraphBuilder::get_simplified_opcode(
 }
 
 ///|
+/// Get the simplified value for an operand (for operand rewriting)
+/// If the operand's e-class has a simpler representation that maps to
+/// an existing IR value, return that value; otherwise return None.
+pub fn EGraphBuilder::get_simplified_operand(
+  self : EGraphBuilder,
+  value : Value,
+) -> Value? {
+  match self.value_map.get(value.id) {
+    None => None
+    Some(class_id) => {
+      // Get the canonical class after optimization
+      let canonical = self.egraph.find(class_id)
+      // Check if this class maps to a different (simpler) value
+      match self.class_to_value.get(canonical.0) {
+        None => None
+        Some(simplified_value) =>
+          // Only return if it's different from the original
+          if simplified_value.id != value.id {
+            Some(simplified_value)
+          } else {
+            None
+          }
+      }
+    }
+  }
+}
+
+///|
 /// Apply e-graph optimization to a function
 /// Returns true if any optimization was applied
 pub fn optimize_function(func : Function) -> Bool {
@@ -401,8 +437,21 @@ pub fn optimize_function(func : Function) -> Bool {
     // Run saturation
     builder.optimize()
 
-    // Apply optimizations - for now, just constant folding
+    // Apply optimizations: constant folding and operand rewriting
     for inst in block.instructions {
+      // First, try to simplify operands (e.g., x + 0 -> x means operand can be simplified)
+      for i in 0..<inst.operands.length() {
+        let operand = inst.operands[i]
+        match builder.get_simplified_operand(operand) {
+          Some(simplified) => {
+            inst.operands[i] = simplified
+            changed = true
+          }
+          None => ()
+        }
+      }
+
+      // Then, try to simplify the result value
       match inst.result {
         Some(v) =>
           match builder.get_simplified_opcode(v) {
@@ -412,10 +461,11 @@ pub fn optimize_function(func : Function) -> Bool {
               inst.operands.clear()
               changed = true
             }
-            Some(_) =>
-              // Other optimizations would require operand rewriting
-              // For now, skip these
-              ()
+            Some(new_op) => {
+              // Opcode changed - update it
+              inst.opcode = new_op
+              changed = true
+            }
             None => ()
           }
         None => ()

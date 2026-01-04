@@ -736,6 +736,23 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_type_check_subtype_ptr(void) {
     return (int64_t)gc_type_check_subtype_impl;
 }
 
+// Inline allocation support (ctx-passing)
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_register_struct_inline_ptr(void) {
+    return (int64_t)gc_register_struct_inline;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_register_array_inline_ptr(void) {
+    return (int64_t)gc_register_array_inline;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_struct_slow_ptr(void) {
+    return (int64_t)gc_alloc_struct_slow;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_slow_ptr(void) {
+    return (int64_t)gc_alloc_array_slow;
+}
+
 // ============ Type Cache Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(int32_t *types_data, int num_types) {
@@ -770,4 +787,10 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_heap(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_gc_get_heap(void) {
     return (int64_t)(uintptr_t)g_gc_heap;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_gc_heap(int64_t ctx_ptr, int64_t heap_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    GcHeap *heap = (GcHeap *)(uintptr_t)heap_ptr;
+    ctx_set_gc_heap_internal(ctx, heap);
 }

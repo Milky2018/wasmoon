@@ -52,6 +52,11 @@ typedef struct {
     size_t *memory_max_sizes; // +96: Array of memory max sizes in pages (-1 = unlimited)
     int memory_count;         // +104: Number of memories
 
+    // GC heap for inline allocation (accessed by JIT code)
+    uint8_t *gc_heap_ptr;     // +112: Current allocation pointer (aligned to 8)
+    uint8_t *gc_heap_limit;   // +120: Allocation limit (triggers slow path when exceeded)
+    void *gc_heap;            // +128: GcHeap* pointer for slow path
+
     // Additional fields (not accessed by JIT code directly)
     int owns_indirect_table;  // Whether this context owns table0_base (should free it)
     char **args;              // WASI: command line arguments

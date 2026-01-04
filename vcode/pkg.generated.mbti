@@ -200,8 +200,8 @@ pub fn VCodeBuilder::udiv(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VRe
 // Traits
 pub(open) trait GcCompiler {
   config(Self) -> GcCompilerConfig
-  gen_alloc_struct(Self, @regalloc.VCodeFunction, Int, Array[@abi.VReg]) -> @abi.VReg
-  gen_alloc_array(Self, @regalloc.VCodeFunction, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
+  gen_alloc_struct(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, Array[@abi.VReg]) -> @abi.VReg
+  gen_alloc_array(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
   gen_write_barrier_pre(Self, @regalloc.VCodeFunction, @abi.VReg, Int, @abi.VReg, @abi.VReg) -> Unit
   gen_write_barrier_post(Self, @regalloc.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
   gen_read_barrier(Self, @regalloc.VCodeFunction, @abi.VReg) -> @abi.VReg

@@ -261,7 +261,7 @@ fn lower_ref_eq(
 
 ///|
 /// Lower struct.new: Allocate struct with field values
-/// Uses runtime libcall: gc_struct_new_impl(type_idx, fields_ptr, num_fields) -> struct_ref
+/// Uses runtime libcall: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields) -> struct_ref
 fn lower_struct_new(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -272,13 +272,20 @@ fn lower_struct_new(
   let dst = ctx.get_vreg(result)
   let num_fields = inst.operands.length()
 
+  // Load vmctx from REG_VMCTX (X19)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+
   // Materialize arguments
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   let num_fields_vreg = materialize_imm(ctx, block, num_fields.to_int64())
 
-  // Load function pointer
+  // Load function pointer for AllocStructSlow (ctx-passing version)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructNew))
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocStructSlow))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   if num_fields > 0 {
@@ -302,12 +309,12 @@ fn lower_struct_new(
     load_sp.add_def({ reg: Virtual(sp_vreg) })
     block.add_inst(load_sp)
 
-    // Call: gc_struct_new_impl(type_idx, fields_ptr, num_fields) -> result
+    // Call: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields) -> result
     lower_c_libcall(
       ctx,
       block,
       func_ptr_vreg,
-      [type_idx_vreg, sp_vreg, num_fields_vreg],
+      [vmctx_vreg, type_idx_vreg, sp_vreg, num_fields_vreg],
       Some(dst),
     )
 
@@ -317,12 +324,12 @@ fn lower_struct_new(
   } else {
     // No fields - pass null pointer
     let null_ptr = materialize_imm(ctx, block, 0L)
-    // Call: gc_struct_new_impl(type_idx, null, 0) -> result
+    // Call: gc_alloc_struct_slow(vmctx, type_idx, null, 0) -> result
     lower_c_libcall(
       ctx,
       block,
       func_ptr_vreg,
-      [type_idx_vreg, null_ptr, num_fields_vreg],
+      [vmctx_vreg, type_idx_vreg, null_ptr, num_fields_vreg],
       Some(dst),
     )
   }
@@ -330,7 +337,7 @@ fn lower_struct_new(
 
 ///|
 /// Lower struct.new_default: Allocate struct with default values
-/// Uses runtime libcall: gc_struct_new_impl(type_idx, null, 0) -> struct_ref
+/// Uses runtime libcall: gc_alloc_struct_slow(vmctx, type_idx, null, 0) -> struct_ref
 fn lower_struct_new_default(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -340,22 +347,29 @@ fn lower_struct_new_default(
   guard inst.result is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
+  // Load vmctx from REG_VMCTX (X19)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+
   // Materialize arguments
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   let zero_vreg = materialize_imm(ctx, block, 0L)
 
-  // Load function pointer
+  // Load function pointer for AllocStructSlow (ctx-passing version)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(StructNew))
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocStructSlow))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
 
-  // Call: gc_struct_new_impl(type_idx, null, 0) -> result
+  // Call: gc_alloc_struct_slow(vmctx, type_idx, null, 0) -> result
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [type_idx_vreg, zero_vreg, zero_vreg],
+    [vmctx_vreg, type_idx_vreg, zero_vreg, zero_vreg],
     Some(dst),
   )
 }
@@ -565,7 +579,7 @@ fn lower_struct_set(
 
 ///|
 /// Lower array.new: Allocate array with init value and length
-/// Uses runtime libcall: gc_array_new_impl(type_idx, length, init_value) -> array_ref
+/// Uses runtime libcall: gc_alloc_array_slow(vmctx, type_idx, length, init_value) -> array_ref
 fn lower_array_new(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -576,13 +590,23 @@ fn lower_array_new(
   let dst = ctx.get_vreg(result)
   let init_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let len_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+
+  // Load vmctx from REG_VMCTX (X19)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+
   // Materialize type_idx
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
-  // Load function pointer
+
+  // Load function pointer for AllocArraySlow (ctx-passing version)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNew))
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocArraySlow))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
+
   // Check if init value is float - C libcall expects int64, need bitcast
   let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
   let actual_init_vreg = if is_float {
@@ -595,19 +619,19 @@ fn lower_array_new(
   } else {
     init_vreg
   }
-  // Call: gc_array_new_impl(type_idx, length, init_value) -> result
+  // Call: gc_alloc_array_slow(vmctx, type_idx, length, init_value) -> result
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [type_idx_vreg, len_vreg, actual_init_vreg],
+    [vmctx_vreg, type_idx_vreg, len_vreg, actual_init_vreg],
     Some(dst),
   )
 }
 
 ///|
 /// Lower array.new_default: Allocate array with default values
-/// Uses runtime libcall: gc_array_new_impl(type_idx, length, init_value=0) -> array_ref
+/// Uses runtime libcall: gc_alloc_array_slow(vmctx, type_idx, length, init_value=0) -> array_ref
 fn lower_array_new_default(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -617,28 +641,38 @@ fn lower_array_new_default(
   guard inst.result is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let len_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+
+  // Load vmctx from REG_VMCTX (X19)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+
   // Load default value (0) for the init value
   let zero_vreg = materialize_imm(ctx, block, 0L)
   // Materialize type_idx
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
-  // Load function pointer
+
+  // Load function pointer for AllocArraySlow (ctx-passing version)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNew))
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocArraySlow))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
-  // Call: gc_array_new_impl(type_idx, length, init_value) -> result
+
+  // Call: gc_alloc_array_slow(vmctx, type_idx, length, init_value) -> result
   lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
-    [type_idx_vreg, len_vreg, zero_vreg],
+    [vmctx_vreg, type_idx_vreg, len_vreg, zero_vreg],
     Some(dst),
   )
 }
 
 ///|
 /// Lower array.new_fixed: Allocate fixed-size array with element values
-/// Uses runtime libcalls: gc_array_new_impl and gc_array_set_impl
+/// Uses runtime libcalls: gc_alloc_array_slow and gc_array_set_impl
 fn lower_array_new_fixed(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -648,24 +682,32 @@ fn lower_array_new_fixed(
 ) -> Unit {
   guard inst.result is Some(result) else { return }
   let dst = ctx.get_vreg(result)
+
+  // Load vmctx from REG_VMCTX (X19)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+
   // Materialize common values
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   let len_vreg = materialize_imm(ctx, block, len.to_int64())
 
-  // Load ArrayNew function pointer (we'll need it for the initial allocation)
+  // Load AllocArraySlow function pointer (ctx-passing version)
   let array_new_fp = ctx.vcode_func.new_vreg(Int)
-  let load_new_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNew))
+  let load_new_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocArraySlow))
   load_new_fp.add_def({ reg: Virtual(array_new_fp) })
   block.add_inst(load_new_fp)
   if len == 0 {
     // Empty array - use zero init and length 0
     let zero_vreg = materialize_imm(ctx, block, 0L)
-    // Call: gc_array_new_impl(type_idx, length=0, init_value=0) -> result
+    // Call: gc_alloc_array_slow(vmctx, type_idx, length=0, init_value=0) -> result
     lower_c_libcall(
       ctx,
       block,
       array_new_fp,
-      [type_idx_vreg, zero_vreg, zero_vreg],
+      [vmctx_vreg, type_idx_vreg, zero_vreg, zero_vreg],
       Some(dst),
     )
   } else {
@@ -683,12 +725,12 @@ fn lower_array_new_fixed(
     } else {
       first_vreg
     }
-    // Call: gc_array_new_impl(type_idx, length, init_value) -> result
+    // Call: gc_alloc_array_slow(vmctx, type_idx, length, init_value) -> result
     lower_c_libcall(
       ctx,
       block,
       array_new_fp,
-      [type_idx_vreg, len_vreg, actual_first],
+      [vmctx_vreg, type_idx_vreg, len_vreg, actual_first],
       Some(dst),
     )
     // Set remaining elements using gc_array_set_impl

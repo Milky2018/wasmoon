@@ -76,6 +76,20 @@ pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
 /// Offset of memory_count in VMContext (multi-memory support)
 pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
 
+// GC heap inline allocation offsets
+
+///|
+/// Offset of gc_heap_ptr in VMContext (current allocation pointer)
+pub const VMCTX_GC_HEAP_PTR_OFFSET : Int = 112
+
+///|
+/// Offset of gc_heap_limit in VMContext (allocation limit)
+pub const VMCTX_GC_HEAP_LIMIT_OFFSET : Int = 120
+
+///|
+/// Offset of gc_heap in VMContext (GcHeap* for slow path)
+pub const VMCTX_GC_HEAP_OFFSET : Int = 128
+
 // ============ Reserved Registers ============
 
 ///|

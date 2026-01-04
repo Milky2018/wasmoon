@@ -1,5 +1,6 @@
 {
   "import": [
+    "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/vcode",
     "Milky2018/wasmoon/vcode/emit"
   ]

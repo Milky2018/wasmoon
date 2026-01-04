@@ -1482,6 +1482,12 @@ fn MachineCode::emit_instruction(
         ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
         ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
         TypeCheckSubtype => @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
+        // Inline allocation support (ctx-passing)
+        RegisterStructInline =>
+          @jit_ffi.c_jit_get_gc_register_struct_inline_ptr()
+        RegisterArrayInline => @jit_ffi.c_jit_get_gc_register_array_inline_ptr()
+        AllocStructSlow => @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr()
+        AllocArraySlow => @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr()
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }

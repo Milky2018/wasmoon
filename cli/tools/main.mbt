@@ -105,7 +105,7 @@ fn main {
 ///|
 /// Native exit function with correct void return type
 /// (moonbitlang/x/sys declares exit as returning int32, which causes a warning)
-extern "c" fn native_exit(code : Int) -> Unit = "wasmoon_exit"
+extern "c" fn native_exit(code : Int) = "exit"
 
 ///|
 fn exit_error(msg : String) -> Unit {
@@ -126,6 +126,18 @@ fn read_file(path : String) -> Bytes {
 ///|
 fn write_text_file(path : String, content : String) -> Unit {
   @fs.write_string_to_file(path, content) catch {
+    e => exit_error("writing file '\{path}': \{e}")
+  }
+}
+
+///|
+fn write_binary_file(path : String, data : Array[Int]) -> Unit {
+  let byte_arr : Array[Byte] = []
+  for b in data {
+    byte_arr.push(b.to_byte())
+  }
+  let bytes = Bytes::from_array(byte_arr)
+  @fs.write_bytes_to_file(path, bytes) catch {
     e => exit_error("writing file '\{path}': \{e}")
   }
 }
