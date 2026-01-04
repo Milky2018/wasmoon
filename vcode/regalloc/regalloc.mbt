@@ -663,7 +663,6 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // This changes from O(V × B × contains) to O(total_live_in_entries + total_live_out_entries)
   let vreg_live_in_blocks : Map[Int, Array[Int]] = {}
   let vreg_live_out_blocks : Map[Int, Array[Int]] = {}
-
   for block_idx, live_in_set in result.live_in {
     for vreg_id in live_in_set {
       match vreg_live_in_blocks.get(vreg_id) {
@@ -672,7 +671,6 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
       }
     }
   }
-
   for block_idx, live_out_set in result.live_out {
     for vreg_id in live_out_set {
       match vreg_live_out_blocks.get(vreg_id) {
