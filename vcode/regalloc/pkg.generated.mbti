@@ -86,6 +86,8 @@ pub(all) struct BacktrackingAllocator {
   bundles : BundleSet
   int_reg_allocs : Map[Int, Array[ProgPointRange]]
   float_reg_allocs : Map[Int, Array[ProgPointRange]]
+  int_reg_bundles : Map[Int, @set.Set[Int]]
+  float_reg_bundles : Map[Int, @set.Set[Int]]
   mut queue : Array[QueueEntry]
   int_regs : Array[@abi.PReg]
   float_regs : Array[@abi.PReg]
