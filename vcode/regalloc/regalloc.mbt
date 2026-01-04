@@ -11,18 +11,20 @@
 
 ///|
 /// A program point - identifies a position in the VCode
+/// Using #valtype for stack allocation - this struct is created/compared frequently
+#valtype
 pub(all) struct ProgPoint {
   block : Int // Block index
   inst : Int // Instruction index within block (-1 for block params)
   pos : ProgPos // Before or after the instruction
-}
+} derive(Eq)
 
 ///|
 /// Position relative to an instruction
 pub enum ProgPos {
   Before // Before the instruction executes (uses happen here)
   After // After the instruction executes (defs happen here)
-}
+} derive(Eq)
 
 ///|
 /// Compare two program points using a block order array
@@ -31,7 +33,7 @@ pub enum ProgPos {
 fn ProgPoint::compare_with_order(
   self : ProgPoint,
   other : ProgPoint,
-  block_order : Array[Int],
+  block_order : FixedArray[Int],
 ) -> Int {
   if self.block != other.block {
     let self_order = block_order[self.block]
@@ -103,7 +105,7 @@ fn LiveInterval::new(vreg : @abi.VReg, start : ProgPoint) -> LiveInterval {
 fn LiveInterval::extend_with_order(
   self : LiveInterval,
   point : ProgPoint,
-  block_order : Array[Int],
+  block_order : FixedArray[Int],
 ) -> Unit {
   if point.compare_with_order(self.end, block_order) > 0 {
     self.end = point
@@ -290,34 +292,15 @@ pub(all) struct LivenessResult {
   // Block live-out sets (vregs live at block exit)
   live_out : Array[Set[Int]]
   // Block order: block_order[block_id] = linear position (O(1) lookup)
-  block_order : Array[Int]
+  block_order : FixedArray[Int]
   // Call points (block_idx, inst_idx) - instructions that clobber caller-saved registers
   call_points : Array[ProgPoint]
 }
 
 ///|
-fn LivenessResult::new(num_blocks : Int) -> LivenessResult {
-  let live_in : Array[Set[Int]] = []
-  let live_out : Array[Set[Int]] = []
-  let block_order : Array[Int] = Array::make(num_blocks, 0)
-  for _ in 0..<num_blocks {
-    live_in.push(Set::new())
-    live_out.push(Set::new())
-  }
-  {
-    intervals: {},
-    use_def: {},
-    live_in,
-    live_out,
-    block_order,
-    call_points: [],
-  }
-}
-
-///|
 /// Compute reverse postorder of blocks (for linearizing the CFG)
-/// Returns an Array where order[block_id] = position in reverse postorder
-fn compute_reverse_postorder(func : VCodeFunction) -> Array[Int] {
+/// Returns a FixedArray where order[block_id] = position in reverse postorder
+fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
   let n = func.blocks.length()
   let visited : Set[Int] = Set::new()
   let postorder : Array[Int] = []
@@ -385,7 +368,7 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Array[Int] {
   }
 
   // Reverse postorder: order[block_id] = position in reverse postorder
-  let order : Array[Int] = Array::make(n, 0)
+  let order : FixedArray[Int] = FixedArray::make(n, 0)
   let len = postorder.length()
   for i, block_id in postorder {
     order[block_id] = len - 1 - i
@@ -396,12 +379,22 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Array[Int] {
 ///|
 /// Compute liveness information for a VCode function
 pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
-  let result = LivenessResult::new(func.blocks.length())
-
-  // Compute block order for correct interval comparison
+  let num_blocks = func.blocks.length()
+  let live_in : Array[Set[Int]] = []
+  let live_out : Array[Set[Int]] = []
+  for _ in 0..<num_blocks {
+    live_in.push(Set::new())
+    live_out.push(Set::new())
+  }
+  // Compute block order directly as FixedArray
   let block_order = compute_reverse_postorder(func)
-  for block_id in 0..<func.blocks.length() {
-    result.block_order[block_id] = block_order[block_id]
+  let result : LivenessResult = {
+    intervals: {},
+    use_def: {},
+    live_in,
+    live_out,
+    block_order,
+    call_points: [],
   }
 
   // Phase 1: Collect definitions and uses
@@ -1027,7 +1020,7 @@ pub(all) struct LinearScanAllocator {
   mut next_spill_slot : Int
   // Block order for correct interval comparison in non-linear CFGs
   // block_order[block_id] = execution order (O(1) lookup)
-  mut block_order : Array[Int]
+  mut block_order : FixedArray[Int]
   // Reserved registers at each instruction point (for FixedReg constraints)
   // Key: (block_idx, inst_idx), Value: set of reserved register indices
   // Note: constraints must be respected during allocation
@@ -1049,7 +1042,7 @@ pub fn LinearScanAllocator::new(
     callee_saved_float_regs,
     active: [],
     next_spill_slot: 0,
-    block_order: [],
+    block_order: FixedArray::make(0, 0),
     reserved_int_regs: {},
     reserved_float_regs: {},
   }

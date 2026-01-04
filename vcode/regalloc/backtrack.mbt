@@ -52,7 +52,7 @@ pub(all) struct BacktrackingAllocator {
   callee_saved_float : Array[@abi.PReg]
 
   // Block order for comparison (O(1) lookup)
-  block_order : Array[Int]
+  block_order : FixedArray[Int]
 
   // Reference to function for constraint lookups
   func : VCodeFunction

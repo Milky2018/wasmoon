@@ -29,7 +29,7 @@ pub impl Show for ProgPointRange with output(self, logger) {
 fn ProgPointRange::overlaps(
   self : ProgPointRange,
   other : ProgPointRange,
-  block_order : Array[Int],
+  block_order : FixedArray[Int],
 ) -> Bool {
   // Ranges overlap if: self.start < other.end AND other.start < self.end
   let self_start_cmp = self.start.compare_with_order(other.end, block_order)
@@ -42,7 +42,7 @@ fn ProgPointRange::overlaps(
 pub fn ProgPointRange::contains(
   self : ProgPointRange,
   point : ProgPoint,
-  block_order : Array[Int],
+  block_order : FixedArray[Int],
 ) -> Bool {
   let start_cmp = self.start.compare_with_order(point, block_order)
   let end_cmp = point.compare_with_order(self.end, block_order)
@@ -215,7 +215,7 @@ pub fn LiveRange::get_fixed_reg(self : LiveRange) -> @abi.PReg? {
 pub fn LiveRange::overlaps(
   self : LiveRange,
   other : LiveRange,
-  block_order : Array[Int],
+  block_order : FixedArray[Int],
 ) -> Bool {
   for self_range in self.ranges {
     for other_range in other.ranges {
@@ -231,7 +231,7 @@ pub fn LiveRange::overlaps(
 /// Get the start point (earliest point in all ranges)
 pub fn LiveRange::start(
   self : LiveRange,
-  block_order : Array[Int],
+  block_order : FixedArray[Int],
 ) -> ProgPoint? {
   if self.ranges.is_empty() {
     return None
@@ -247,7 +247,10 @@ pub fn LiveRange::start(
 
 ///|
 /// Get the end point (latest point in all ranges)
-pub fn LiveRange::end(self : LiveRange, block_order : Array[Int]) -> ProgPoint? {
+pub fn LiveRange::end(
+  self : LiveRange,
+  block_order : FixedArray[Int],
+) -> ProgPoint? {
   if self.ranges.is_empty() {
     return None
   }
@@ -310,11 +313,11 @@ pub impl Show for LiveRange with output(self, logger) {
 pub(all) struct LiveRangeSet {
   ranges : Array[LiveRange]
   vreg_to_range : Map[Int, Int] // vreg.id -> range index
-  block_order : Array[Int] // Block execution order (O(1) lookup)
+  block_order : FixedArray[Int] // Block execution order (O(1) lookup)
 }
 
 ///|
-fn LiveRangeSet::new(block_order : Array[Int]) -> LiveRangeSet {
+fn LiveRangeSet::new(block_order : FixedArray[Int]) -> LiveRangeSet {
   { ranges: [], vreg_to_range: {}, block_order }
 }
 

@@ -280,7 +280,7 @@ test "progpoint: comparison" {
   let p2 : ProgPoint = { block: 0, inst: 0, pos: After }
   let p3 : ProgPoint = { block: 0, inst: 1, pos: Before }
   let p4 : ProgPoint = { block: 1, inst: 0, pos: Before }
-  let order : Array[Int] = [0, 1] // block_order[block_id] = order
+  let order : FixedArray[Int] = [0, 1] // block_order[block_id] = order
 
   // p1 < p2 (Before < After)
   inspect(p1.compare_with_order(p2, order) < 0, content="true")
