@@ -191,6 +191,7 @@ enum Instruction {
   Cbz(Int, Int)
   Cbnz(Int, Int)
   BCondOffset(Int, Int)
+  BOffset(Int) // Unconditional branch with byte offset
   CbnzOffset(Int, Bool, Int) // rt, is_64, offset_bytes - branch if not zero with immediate offset
   Brk(Int)
   Ret(Int)
@@ -760,6 +761,7 @@ fn Instruction::annotate(self : Instruction) -> String {
       let cond_name = cond_name_str(cond)
       "b.\{cond_name} .+\{offset_bytes}"
     }
+    BOffset(offset_bytes) => "b .+\{offset_bytes}"
     CbnzOffset(rt, is_64, offset_bytes) => {
       let reg = if is_64 { "x" } else { "w" }
       "cbnz \{reg}\{rt}, .+\{offset_bytes}"
@@ -2211,6 +2213,18 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
     BCondOffset(cond, offset_bytes) => {
       let imm19 = offset_bytes / 4
       let inst = 0x54000000 | ((imm19 & 0x7FFFF) << 5) | (cond & 0xF)
+      (
+        inst & 0xFF,
+        (inst >> 8) & 0xFF,
+        (inst >> 16) & 0xFF,
+        (inst >> 24) & 0xFF,
+      )
+    }
+    BOffset(offset_bytes) => {
+      // B imm26: 0b000101 | imm26
+      // Encoding: 0x14000000 | (imm26 & 0x3FFFFFF)
+      let imm26 = offset_bytes / 4
+      let inst = 0x14000000 | (imm26 & 0x3FFFFFF)
       (
         inst & 0xFF,
         (inst >> 8) & 0xFF,
@@ -4052,6 +4066,25 @@ pub fn MachineCode::emit_load_imm64(
 }
 
 ///|
+/// Load 64-bit immediate with fixed 4 instructions (MOVZ + 3 MOVKs or NOPs).
+/// Use this when you need a predictable instruction count for branch offset calculations.
+pub fn MachineCode::emit_load_imm64_fixed(
+  self : MachineCode,
+  rd : Int,
+  imm : Int64,
+) -> Unit {
+  let v0 = (imm & 0xFFFFL).to_int()
+  let v1 = ((imm >> 16) & 0xFFFFL).to_int()
+  let v2 = ((imm >> 32) & 0xFFFFL).to_int()
+  let v3 = ((imm >> 48) & 0xFFFFL).to_int()
+  // Always emit exactly 4 instructions
+  Movz(rd, v0, 0).emit(self)
+  Movk(rd, v1, 16).emit(self)
+  Movk(rd, v2, 32).emit(self)
+  Movk(rd, v3, 48).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_ldr_imm(
   self : MachineCode,
   rt : Int,
@@ -4319,6 +4352,11 @@ fn MachineCode::emit_b_cond_offset(
   offset_bytes : Int,
 ) -> Unit {
   BCondOffset(cond, offset_bytes).emit(self)
+}
+
+///|
+fn MachineCode::emit_b_offset(self : MachineCode, offset_bytes : Int) -> Unit {
+  BOffset(offset_bytes).emit(self)
 }
 
 ///|

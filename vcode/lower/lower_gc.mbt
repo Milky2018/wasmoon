@@ -261,7 +261,8 @@ fn lower_ref_eq(
 
 ///|
 /// Lower struct.new: Allocate struct with field values
-/// Uses runtime libcall: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields) -> struct_ref
+/// Uses InlineAllocStruct pseudo-instruction for inline allocation with fast/slow path
+/// Operand layout: uses[0]=vmctx, uses[1]=fields_ptr, uses[2+]=field_values
 fn lower_struct_new(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -272,66 +273,63 @@ fn lower_struct_new(
   let dst = ctx.get_vreg(result)
   let num_fields = inst.operands.length()
 
-  // Load vmctx from REG_VMCTX (X19)
-  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
-  let vmctx_mov = @instr.VCodeInst::new(Move)
-  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
-  block.add_inst(vmctx_mov)
+  // Calculate object size: header (16 bytes) + fields (8 bytes each)
+  let object_size = 16 + num_fields * 8
 
-  // Materialize arguments
-  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
-  let num_fields_vreg = materialize_imm(ctx, block, num_fields.to_int64())
+  // Collect field vregs first (before any stack manipulation)
+  let field_vregs : Array[@abi.VReg] = []
+  for i in 0..<num_fields {
+    field_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
+  }
 
-  // Load function pointer for AllocStructSlow (ctx-passing version)
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocStructSlow))
-  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
-  block.add_inst(load_fp)
-  if num_fields > 0 {
-    // Allocate stack space for fields (8 bytes each, aligned to 16)
-    let stack_space = (num_fields * 8 + 15) / 16 * 16
+  // For the slow path, we need fields stored on stack
+  // Allocate stack space for fields (8 bytes each, aligned to 16)
+  let stack_space = if num_fields > 0 {
+    (num_fields * 8 + 15) / 16 * 16
+  } else {
+    0
+  }
+  if stack_space > 0 {
     let alloc = @instr.VCodeInst::new(AdjustSP(-stack_space))
     block.add_inst(alloc)
 
     // Store each field value to stack
-    for i in 0..<num_fields {
-      let field_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+    for i, field_vreg in field_vregs {
       let offset = i * 8
       let store = @instr.VCodeInst::new(StoreToStack(offset))
       store.add_use(Virtual(field_vreg))
       block.add_inst(store)
     }
+  }
 
-    // Get current stack pointer as fields_ptr
-    let sp_vreg = ctx.vcode_func.new_vreg(Int)
-    let load_sp = @instr.VCodeInst::new(LoadSP)
-    load_sp.add_def({ reg: Virtual(sp_vreg) })
-    block.add_inst(load_sp)
+  // Get current stack pointer as fields_ptr (for slow path)
+  let sp_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_sp = @instr.VCodeInst::new(LoadSP)
+  load_sp.add_def({ reg: Virtual(sp_vreg) })
+  block.add_inst(load_sp)
 
-    // Call: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields) -> result
-    lower_c_libcall(
-      ctx,
-      block,
-      func_ptr_vreg,
-      [vmctx_vreg, type_idx_vreg, sp_vreg, num_fields_vreg],
-      Some(dst),
-    )
+  // Create InlineAllocStruct instruction
+  let alloc_inst = @instr.VCodeInst::new(
+    InlineAllocStruct(type_idx, num_fields, object_size),
+  )
+  alloc_inst.add_def({ reg: Virtual(dst) })
 
-    // Deallocate stack space
+  // Use 0: vmctx from REG_VMCTX (X19)
+  alloc_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+
+  // Use 1: fields_ptr (stack pointer with field values for slow path)
+  alloc_inst.add_use(Virtual(sp_vreg))
+
+  // Uses 2+: field values (for fast path direct writes)
+  for field_vreg in field_vregs {
+    alloc_inst.add_use(Virtual(field_vreg))
+  }
+  block.add_inst(alloc_inst)
+
+  // Deallocate stack space
+  if stack_space > 0 {
     let dealloc = @instr.VCodeInst::new(AdjustSP(stack_space))
     block.add_inst(dealloc)
-  } else {
-    // No fields - pass null pointer
-    let null_ptr = materialize_imm(ctx, block, 0L)
-    // Call: gc_alloc_struct_slow(vmctx, type_idx, null, 0) -> result
-    lower_c_libcall(
-      ctx,
-      block,
-      func_ptr_vreg,
-      [vmctx_vreg, type_idx_vreg, null_ptr, num_fields_vreg],
-      Some(dst),
-    )
   }
 }
 

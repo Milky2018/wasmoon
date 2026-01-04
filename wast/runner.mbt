@@ -693,6 +693,8 @@ pub fn invoke_action(
                     func_table_ptr=jit.jit_module.get_func_table_ptr(),
                     num_funcs=jit.jit_module.get_func_count(),
                   )
+                  // Set GC heap in VMContext for inline allocation
+                  jit.jit_module.set_gc_heap(heap.get_ptr())
                 }
                 None => ()
               }

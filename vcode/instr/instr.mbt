@@ -385,6 +385,19 @@ pub(all) enum VCodeOpcode {
   // Used for passing stack addresses to C functions
   LoadSP
 
+  // ============ Inline GC Allocation ============
+
+  // InlineAllocStruct: Inline struct allocation with fast/slow path
+  // Uses: [vmctx, type_idx, field0, field1, ...]
+  // Defs: [result (gc_ref)]
+  // Parameters: (type_idx, num_fields, object_size)
+  // Expands to:
+  //   1. Heap check (load heap_ptr, heap_limit, compare)
+  //   2. Fast path: bump pointer, write header/fields, call register function
+  //   3. Slow path: call gc_alloc_struct_slow
+  // Clobbers: x0-x18 (caller-saved registers)
+  InlineAllocStruct(Int, Int, Int)
+
   // ============ SIMD Instructions (AArch64 NEON) ============
 
   // V128 constant load - load 128-bit immediate
@@ -942,6 +955,9 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       }
     StoreToStack(offset) => "str [sp+\{offset}]"
     LoadSP => "mov rd, sp"
+    // Inline GC allocation
+    InlineAllocStruct(type_idx, num_fields, size) =>
+      "inline_alloc_struct type=\{type_idx} fields=\{num_fields} size=\{size}"
     // SIMD instructions
     LoadConstV128(_) => "ldi.v128"
     SIMDSplat(lane_size) => "dup.\{lane_size}"

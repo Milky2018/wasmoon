@@ -382,6 +382,7 @@ pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(Str
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])]) -> Self?
 pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]]) -> Self?
 pub fn JITModule::new() -> Self
+pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit

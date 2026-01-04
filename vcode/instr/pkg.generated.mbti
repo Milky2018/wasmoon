@@ -309,6 +309,7 @@ pub(all) enum VCodeOpcode {
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP
+  InlineAllocStruct(Int, Int, Int)
   LoadConstV128(Bytes)
   SIMDSplat(LaneSize)
   SIMDSplatF(Bool)

@@ -133,6 +133,13 @@ fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
 }
 
 ///|
+/// Set GC heap in the context for inline allocation
+/// This initializes gc_heap_ptr and gc_heap_limit in VMContext
+fn JITContext::set_gc_heap(self : JITContext, heap_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_ctx_set_gc_heap(self.ptr(), heap_ptr)
+}
+
+///|
 /// Get the function table base pointer
 fn JITContext::get_func_table_ptr(self : JITContext) -> Int64 {
   @jit_ffi.c_jit_ctx_get_func_table(self.ptr())

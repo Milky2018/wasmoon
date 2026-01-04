@@ -1581,6 +1581,167 @@ fn MachineCode::emit_instruction(
       let result_reg = wreg_num(inst.defs[0])
       self.emit_add_imm(result_reg, 31, 0)
     }
+    // ============ Inline GC Allocation ============
+    InlineAllocStruct(type_idx, num_fields, object_size) => {
+      // Inline struct allocation with fast/slow path
+      // Uses: [vmctx, fields_ptr, field0, field1, ...]
+      //   - vmctx: VMContext pointer
+      //   - fields_ptr: stack pointer where field values are stored (for slow path)
+      //   - field0...: field value registers (for fast path inline writes)
+      // Defs: [result (gc_ref)]
+      //
+      // Generated code:
+      //   LDR X16, [vmctx, #HEAP_PTR]      ; load current heap pointer
+      //   LDR X17, [vmctx, #HEAP_LIMIT]    ; load heap limit
+      //   ADD X8, X16, #object_size        ; new_ptr = ptr + size
+      //   CMP X8, X17                      ; check if enough space
+      //   B.HI slow_path                   ; if not enough, go slow
+      //   ; Fast path - inline allocation
+      //   STR X8, [vmctx, #HEAP_PTR]       ; commit bump pointer
+      //   <write header and fields>
+      //   call gc_register_struct_inline
+      //   B done
+      // slow_path:
+      //   call gc_alloc_struct_slow
+      // done:
+      //   MOV result, X0
+
+      let result_reg = wreg_num(inst.defs[0])
+      let vmctx_reg = reg_num(inst.uses[0])
+
+      // Use high temporary registers (caller-saved, avoid X0-X7 which may hold operands)
+      // X8 is often allocated by regalloc for operands, avoid it
+      let heap_ptr_reg = 16 // X16
+      let heap_limit_reg = 17 // X17
+      let new_ptr_reg = 18 // X18 (platform register, caller-saved)
+
+      // Step 1: Load heap_ptr and heap_limit from vmctx
+      self.emit_ldr_imm(heap_ptr_reg, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.emit_ldr_imm(
+        heap_limit_reg,
+        vmctx_reg,
+        @abi.VMCTX_GC_HEAP_LIMIT_OFFSET,
+      )
+
+      // Step 2: Calculate new_ptr = heap_ptr + object_size
+      self.emit_add_imm(new_ptr_reg, heap_ptr_reg, object_size)
+
+      // Step 3: Compare new_ptr with heap_limit
+      self.emit_cmp_reg(new_ptr_reg, heap_limit_reg)
+
+      // Step 4: Calculate instruction counts for branch offsets
+      // Fast path: 1 (STR heap_ptr) + 1 (MOVZ header) + 1 (MOVK or NOP) + 1 (STR W header)
+      //          + 1 (MOVZ size) + 1 (STR W size) + 4 (load_imm64_fixed field_count) + 1 (STR field_count)
+      //          + num_fields * 1 (field stores)
+      //          + 1 (MOV X0 or NOP) + 1 (MOV X1) + 1 (MOVZ X2) + 4 (load_imm64_fixed func ptr) + 1 (BLR) + 1 (B done)
+      // Total fast path: 20 + num_fields (all fixed-size)
+      let fast_path_instr_count = 20 + num_fields
+      let slow_path_start_offset = fast_path_instr_count * 4
+
+      // B.HI slow_path (condition code 8 = HI = unsigned higher)
+      self.emit_b_cond_offset(8, slow_path_start_offset)
+
+      // === Fast Path ===
+
+      // Store new heap pointer
+      self.emit_str_imm(new_ptr_reg, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+
+      // IMPORTANT: Store fields FIRST before using any temporary registers
+      // because the regalloc may have assigned field values to X9/X10
+      // Store fields at offset 16+
+      for i in 0..<num_fields {
+        let field_vreg = inst.uses[2 + i] // uses[0]=vmctx, uses[1]=fields_ptr, uses[2+]=fields
+        let field_reg = reg_num(field_vreg)
+        let field_offset = 16 + i * 8
+        self.emit_str_imm(field_reg, heap_ptr_reg, field_offset)
+      }
+
+      // Now we can safely use X9 and X10 for header/size
+      // Write header
+      // Header layout: [kind:8][flags:8][type_idx:16][size:32][reserved:64]
+      // kind = 1 (GC_KIND_STRUCT), flags = 0
+      // First 4 bytes: kind | (flags << 8) | (type_idx << 16)
+      let header_low = 1 | (type_idx << 16) // kind=1, flags=0, type_idx
+      let header_reg = 9
+      self.emit_movz(header_reg, header_low & 0xFFFF, 0)
+      if header_low >> 16 != 0 {
+        self.emit_movk(header_reg, (header_low >> 16) & 0xFFFF, 16)
+      } else {
+        self.emit_nop() // Keep instruction count consistent
+      }
+      // STR W9, [X16, #0]
+      self.emit_str_w_imm(header_reg, heap_ptr_reg, 0)
+
+      // Store size at offset 4
+      let size_reg = 10
+      self.emit_movz(size_reg, object_size & 0xFFFF, 0)
+      self.emit_str_w_imm(size_reg, heap_ptr_reg, 4)
+
+      // Store field_count (reserved) at offset 8
+      // Use fixed-size load (4 instructions) for predictable branch offsets
+      self.emit_load_imm64_fixed(size_reg, num_fields.to_int64())
+      self.emit_str_imm(size_reg, heap_ptr_reg, 8)
+
+      // Call gc_register_struct_inline(ctx, obj_ptr, total_size)
+      // Setup arguments: X0=ctx, X1=obj_ptr, X2=total_size
+      // Always emit MOV X0 (or NOP) to keep instruction count fixed
+      if vmctx_reg != 0 {
+        self.emit_mov_reg(0, vmctx_reg)
+      } else {
+        self.emit_nop() // vmctx already in X0
+      }
+      self.emit_mov_reg(1, heap_ptr_reg)
+      self.emit_movz(2, object_size & 0xFFFF, 0)
+
+      // Load function pointer for gc_register_struct_inline (4 instructions, fixed)
+      let register_func_ptr = @jit_ffi.c_jit_get_gc_register_struct_inline_ptr()
+      self.emit_load_imm64_fixed(8, register_func_ptr)
+      self.emit_blr(8)
+
+      // Result is in X0
+
+      // Slow path: 1 (MOV X0 or NOP) + 4 (load_imm64_fixed type_idx) + 1 (MOV X2 or NOP)
+      //          + 1 (MOVZ W3) + 4 (load_imm64_fixed func ptr) + 1 (BLR) + 1 (MOV result or NOP)
+      // Total slow path: 13 (fixed)
+      let slow_path_instr_count = 13
+      let done_offset = slow_path_instr_count * 4
+
+      // B done
+      self.emit_b_offset(done_offset)
+
+      // === Slow Path ===
+
+      // Call gc_alloc_struct_slow(ctx, type_idx, fields_ptr, num_fields)
+      // Always emit MOV X0 (or NOP) to keep instruction count fixed
+      if vmctx_reg != 0 {
+        self.emit_mov_reg(0, vmctx_reg)
+      } else {
+        self.emit_nop() // vmctx already in X0
+      }
+      // Load type_idx into X1 (4 instructions, fixed)
+      self.emit_load_imm64_fixed(1, type_idx.to_int64())
+      // Pass fields_ptr from uses[1] (may be NULL for 0-field structs)
+      let fields_ptr_reg = reg_num(inst.uses[1])
+      if fields_ptr_reg != 2 {
+        self.emit_mov_reg(2, fields_ptr_reg) // MOV X2, fields_ptr
+      } else {
+        self.emit_nop() // fields_ptr already in X2, keep instruction count
+      }
+      self.emit_movz(3, num_fields & 0xFFFF, 0) // MOV W3, num_fields
+
+      // Load function pointer for gc_alloc_struct_slow (4 instructions, fixed)
+      let slow_func_ptr = @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr()
+      self.emit_load_imm64_fixed(8, slow_func_ptr)
+      self.emit_blr(8)
+
+      // done: result is in X0
+      // Move to result_reg if different (always emit MOV or NOP for fixed count)
+      if result_reg != 0 {
+        self.emit_mov_reg(result_reg, 0)
+      } else {
+        self.emit_nop() // result already in X0
+      }
+    }
     // ============ SIMD Instructions ============
     LoadConstV128(bytes) => {
       // Load V128 constant using GPR + INS instructions

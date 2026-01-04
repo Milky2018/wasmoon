@@ -190,6 +190,7 @@ pub fn MachineCode::emit_ldrsh_w_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldrsh_x_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldrsw_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_load_imm64(Self, Int, Int64) -> Unit
+pub fn MachineCode::emit_load_imm64_fixed(Self, Int, Int64) -> Unit
 pub fn MachineCode::emit_lsl_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_lsl_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_lsr_reg(Self, Int, Int, Int) -> Unit
