@@ -346,6 +346,8 @@ pub(all) enum VCodeOpcode {
   SIMDShl(LaneSize)
   SIMDSshr(LaneSize)
   SIMDUshr(LaneSize)
+  SIMDBroadcastShift(LaneSize, Bool)
+  SIMDShiftByVec(LaneSize, Bool)
   SIMDCmp(LaneSize, SIMDCmpKind)
   SIMDNarrow(LaneSize, Bool)
   SIMDExtendLow(LaneSize, Bool)

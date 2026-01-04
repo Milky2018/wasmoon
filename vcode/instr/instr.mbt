@@ -572,6 +572,21 @@ pub(all) enum VCodeOpcode {
   // Uses: [vector, shift_amount], Defs: [result]
   SIMDUshr(LaneSize)
 
+  // Broadcast shift amount to vector (mask and DUP)
+  // SIMDBroadcastShift(lane_size, negate): mask scalar, optionally negate, DUP to all lanes
+  // Uses: [shift_scalar], Defs: [temp_gpr, shift_vec]
+  // temp_gpr: GPR for masked (and optionally negated) shift value
+  // shift_vec: FPR with shift amount broadcast to all lanes
+  // negate=true for right shifts (shift amount needs to be negated for SSHL/USHL)
+  SIMDBroadcastShift(LaneSize, Bool)
+
+  // Vector shift (input already broadcast)
+  // SIMDShiftByVec(lane_size, use_ushl): SSHL or USHL
+  // Uses: [input_vec, shift_vec], Defs: [result]
+  // use_ushl=false for SSHL (left shift, signed right shift)
+  // use_ushl=true for USHL (unsigned right shift)
+  SIMDShiftByVec(LaneSize, Bool)
+
   // Integer comparison
   // SIMDCmp(lane_size, cmp_kind): CMEQ/CMGT/CMGE/CMHI/CMHS Vd.T, Vn.T, Vm.T
   // Uses: [v1, v2], Defs: [result]
@@ -990,6 +1005,14 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     SIMDShl(lane_size) => "shl.\{lane_size}"
     SIMDSshr(lane_size) => "sshr.\{lane_size}"
     SIMDUshr(lane_size) => "ushr.\{lane_size}"
+    SIMDBroadcastShift(lane_size, negate) => {
+      let neg = if negate { ".neg" } else { "" }
+      "dup_shift\{neg}.\{lane_size}"
+    }
+    SIMDShiftByVec(lane_size, use_ushl) => {
+      let op = if use_ushl { "ushl" } else { "sshl" }
+      "\{op}.\{lane_size}"
+    }
     SIMDCmp(lane_size, kind) => "cmp.\{kind}.\{lane_size}"
     SIMDNarrow(lane_size, signed) => {
       let sign = if signed { "s" } else { "u" }

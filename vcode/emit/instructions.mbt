@@ -66,6 +66,9 @@ enum Instruction {
   LsrImm(Int, Int, Int)
   // Shift - Immediate (32-bit): LSR Wd, Wn, #shift
   LsrImm32(Int, Int, Int)
+  // Unsigned Bitfield Extract: UBFX Xd, Xn, #0, #width
+  // Extracts bits [0, width-1] from Xn to Xd (zero-extended)
+  UbfxWidth(Int, Int, Int)
   // Bit manipulation (64-bit)
   Clz(Int, Int)
   Rbit(Int, Int)
@@ -578,6 +581,7 @@ fn Instruction::annotate(self : Instruction) -> String {
     RorReg32(rd, rn, rm) => "ror w\{rd}, w\{rn}, w\{rm}"
     LsrImm(rd, rn, shift) => "lsr x\{rd}, x\{rn}, #\{shift}"
     LsrImm32(rd, rn, shift) => "lsr w\{rd}, w\{rn}, #\{shift}"
+    UbfxWidth(rd, rn, width) => "ubfx x\{rd}, x\{rn}, #0, #\{width}"
     Clz(rd, rn) => "clz x\{rd}, x\{rn}"
     Rbit(rd, rn) => "rbit x\{rd}, x\{rn}"
     Clz32(rd, rn) => "clz w\{rd}, w\{rn}"
@@ -1374,6 +1378,16 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = 0x7C | ((rn >> 3) & 3) // imms=31
       let b2 = shift & 31 // N=0, immr=shift
       let b3 = 0x53 // sf=0, opc=10, 100110
+      (b0, b1, b2, b3)
+    }
+    UbfxWidth(rd, rn, width) => {
+      // UBFX Xd, Xn, #0, #width = UBFM Xd, Xn, #0, #(width-1)
+      // Extracts bits [0, width-1] (i.e., mask by (1 << width) - 1)
+      let imms = width - 1
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (imms << 2) | ((rn >> 3) & 3)
+      let b2 = 0x40 // N=1, immr=0
+      let b3 = 0xD3 // sf=1, opc=10, 100110
       (b0, b1, b2, b3)
     }
     Clz(rd, rn) => {

@@ -749,19 +749,29 @@ fn lower_inst(
     @ir.Opcode::V128Neg64 => lower_v128_unary(ctx, inst, block, SIMDNeg(D64))
     @ir.Opcode::V128Popcnt8 => lower_v128_unary(ctx, inst, block, SIMDCnt)
 
-    // Shifts
-    @ir.Opcode::V128Shl8 => lower_v128_shift(ctx, inst, block, SIMDShl(B8))
-    @ir.Opcode::V128Shl16 => lower_v128_shift(ctx, inst, block, SIMDShl(H16))
-    @ir.Opcode::V128Shl32 => lower_v128_shift(ctx, inst, block, SIMDShl(S32))
-    @ir.Opcode::V128Shl64 => lower_v128_shift(ctx, inst, block, SIMDShl(D64))
-    @ir.Opcode::V128Shr8S => lower_v128_shift(ctx, inst, block, SIMDSshr(B8))
-    @ir.Opcode::V128Shr8U => lower_v128_shift(ctx, inst, block, SIMDUshr(B8))
-    @ir.Opcode::V128Shr16S => lower_v128_shift(ctx, inst, block, SIMDSshr(H16))
-    @ir.Opcode::V128Shr16U => lower_v128_shift(ctx, inst, block, SIMDUshr(H16))
-    @ir.Opcode::V128Shr32S => lower_v128_shift(ctx, inst, block, SIMDSshr(S32))
-    @ir.Opcode::V128Shr32U => lower_v128_shift(ctx, inst, block, SIMDUshr(S32))
-    @ir.Opcode::V128Shr64S => lower_v128_shift(ctx, inst, block, SIMDSshr(D64))
-    @ir.Opcode::V128Shr64U => lower_v128_shift(ctx, inst, block, SIMDUshr(D64))
+    // Shifts - split into SIMDBroadcastShift + SIMDShiftByVec
+    // lower_v128_shift(ctx, inst, block, lane_size, negate, use_ushl)
+    @ir.Opcode::V128Shl8 => lower_v128_shift(ctx, inst, block, B8, false, false)
+    @ir.Opcode::V128Shl16 =>
+      lower_v128_shift(ctx, inst, block, H16, false, false)
+    @ir.Opcode::V128Shl32 =>
+      lower_v128_shift(ctx, inst, block, S32, false, false)
+    @ir.Opcode::V128Shl64 =>
+      lower_v128_shift(ctx, inst, block, D64, false, false)
+    @ir.Opcode::V128Shr8S => lower_v128_shift(ctx, inst, block, B8, true, false)
+    @ir.Opcode::V128Shr8U => lower_v128_shift(ctx, inst, block, B8, true, true)
+    @ir.Opcode::V128Shr16S =>
+      lower_v128_shift(ctx, inst, block, H16, true, false)
+    @ir.Opcode::V128Shr16U =>
+      lower_v128_shift(ctx, inst, block, H16, true, true)
+    @ir.Opcode::V128Shr32S =>
+      lower_v128_shift(ctx, inst, block, S32, true, false)
+    @ir.Opcode::V128Shr32U =>
+      lower_v128_shift(ctx, inst, block, S32, true, true)
+    @ir.Opcode::V128Shr64S =>
+      lower_v128_shift(ctx, inst, block, D64, true, false)
+    @ir.Opcode::V128Shr64U =>
+      lower_v128_shift(ctx, inst, block, D64, true, true)
 
     // Comparisons
     @ir.Opcode::V128Eq8 => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, Eq))

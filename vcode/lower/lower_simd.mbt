@@ -277,30 +277,51 @@ fn lower_v128_ternary(
 /// Lower V128 shift operation (takes v128 and i32 shift amount)
 /// Allocates a temp FPR vreg for the shift broadcast vector.
 /// Instruction layout:
-///   defs[0] = temp FPR (for shift broadcast - written before input is read)
-///   defs[1] = result
-///   uses[0] = vector operand (read by SSHL after temp is written)
-///   uses[1] = scalar shift amount (GPR)
-/// The temp is used for DUP (shift broadcast), then SSHL reads input and temp.
-/// Since SSHL reads all inputs before writing result, rd==rn is safe.
+/// Lower V128 shift operations using split instructions:
+/// 1. SIMDBroadcastShift: mask scalar, optionally negate, broadcast to vector
+/// 2. SIMDShiftByVec: vector shift using SSHL or USHL
+///
+/// This split approach allows regalloc to properly allocate all registers
+/// without needing hardcoded scratch registers.
+///
+/// Parameters:
+/// - lane_size: the SIMD lane size
+/// - negate: true for right shifts (shift amount needs to be negated)
+/// - use_ushl: true for unsigned right shift (USHL), false for SSHL
 fn lower_v128_shift(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : @block.VCodeBlock,
-  opcode : @instr.VCodeOpcode,
+  lane_size : @instr.LaneSize,
+  negate : Bool,
+  use_ushl : Bool,
 ) -> Unit {
   if inst.result is Some(result) {
     let dst = ctx.get_vreg(result)
     let vec = ctx.get_vreg_for_use(inst.operands[0], block)
     let shift = ctx.get_vreg_for_use(inst.operands[1], block)
-    // Allocate temp vreg for shift broadcast vector (DUP writes here)
-    let temp_shift_vec = ctx.vcode_func.new_vreg(@abi.Vector)
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(temp_shift_vec) }) // defs[0] = temp for shift
-    vcode_inst.add_def({ reg: Virtual(dst) }) // defs[1] = result
-    vcode_inst.add_use(Virtual(vec)) // uses[0] = input vector
-    vcode_inst.add_use(Virtual(shift)) // uses[1] = shift amount
-    block.add_inst(vcode_inst)
+
+    // Allocate temp registers for broadcast shift
+    let temp_gpr = ctx.vcode_func.new_vreg(@abi.Int) // GPR for masked shift
+    let shift_vec = ctx.vcode_func.new_vreg(@abi.Vector) // FPR for broadcast
+
+    // Instruction 1: SIMDBroadcastShift
+    // Uses: [shift_scalar], Defs: [temp_gpr, shift_vec]
+    let broadcast_inst = @instr.VCodeInst::new(
+      SIMDBroadcastShift(lane_size, negate),
+    )
+    broadcast_inst.add_def({ reg: Virtual(temp_gpr) }) // defs[0] = temp GPR
+    broadcast_inst.add_def({ reg: Virtual(shift_vec) }) // defs[1] = shift vector
+    broadcast_inst.add_use(Virtual(shift)) // uses[0] = scalar shift amount
+    block.add_inst(broadcast_inst)
+
+    // Instruction 2: SIMDShiftByVec
+    // Uses: [input_vec, shift_vec], Defs: [result]
+    let shift_inst = @instr.VCodeInst::new(SIMDShiftByVec(lane_size, use_ushl))
+    shift_inst.add_def({ reg: Virtual(dst) }) // defs[0] = result
+    shift_inst.add_use(Virtual(vec)) // uses[0] = input vector
+    shift_inst.add_use(Virtual(shift_vec)) // uses[1] = shift vector
+    block.add_inst(shift_inst)
   }
 }
 
