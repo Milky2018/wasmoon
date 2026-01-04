@@ -428,8 +428,8 @@ pub(all) enum VCodeOpcode {
   SIMDInsertF(Bool, Int)
 
   // Shuffle - select lanes from two vectors using immediate indices
-  // SIMDShuffle(lane_indices): TBL Vd.16B, {Vn.16B, Vm.16B}, Vt.16B (indices in Vt)
-  // Uses: [v1, v2], Defs: [result]
+  // Uses two TBL1 calls to avoid consecutive register requirement
+  // Uses: [v1, v2], Defs: [result, temp1, temp2] (2 temp FPRs for TBL1 intermediates)
   SIMDShuffle(FixedArray[Int])
 
   // Swizzle - permute lanes based on indices vector
@@ -480,6 +480,7 @@ pub(all) enum VCodeOpcode {
   // Bitmask - extract sign bits to GPR
   // SIMDBitmask(lane_size): extract MSB of each lane
   // Uses: [vector], Defs: [result (i32)]
+  // For B8: Defs: [result, temp_weights, temp_shift, temp_work] (3 temp FPRs)
   SIMDBitmask(LaneSize)
 
   // Integer add
@@ -961,7 +962,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       } else {
         "ins.d[\{lane}]"
       }
-    SIMDShuffle(_) => "tbl2.16b"
+    SIMDShuffle(_) => "tbl1x2.16b"
     SIMDSwizzle => "tbl.16b"
     SIMDNot => "not.16b"
     SIMDAnd => "and.16b"

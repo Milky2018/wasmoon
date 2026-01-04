@@ -166,6 +166,19 @@ fn lower_v128_shuffle(
     let v2 = ctx.get_vreg_for_use(inst.operands[1], block)
     let vcode_inst = @instr.VCodeInst::new(SIMDShuffle(lanes))
     vcode_inst.add_def({ reg: Virtual(dst) })
+    // Add 2 temp FPR defs with fixed registers to ensure they're distinct.
+    // We use V16 and V17 from the scratch pool - regalloc will save/restore
+    // around calls if needed.
+    let temp1 = ctx.vcode_func.new_vreg(@abi.Vector)
+    let temp2 = ctx.vcode_func.new_vreg(@abi.Vector)
+    vcode_inst.add_def_fixed({ reg: Virtual(temp1) }, @abi.PReg::{
+      index: 16,
+      class: @abi.Vector,
+    })
+    vcode_inst.add_def_fixed({ reg: Virtual(temp2) }, @abi.PReg::{
+      index: 17,
+      class: @abi.Vector,
+    })
     vcode_inst.add_use(Virtual(v1))
     vcode_inst.add_use(Virtual(v2))
     block.add_inst(vcode_inst)
@@ -327,6 +340,7 @@ fn lower_v128_shift(
 
 ///|
 /// Lower V128 to i32 operation (any_true, all_true, bitmask)
+/// For SIMDBitmask(B8), we need 3 temp FPR defs for intermediate calculations.
 fn lower_v128_to_i32(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -338,6 +352,28 @@ fn lower_v128_to_i32(
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(opcode)
     vcode_inst.add_def({ reg: Virtual(dst) })
+    // SIMDBitmask(B8) needs 3 temp FPRs for weights, shift amount, and working register.
+    // Use fixed registers V16, V17, V18 to ensure they're distinct.
+    match opcode {
+      SIMDBitmask(B8) => {
+        let temp_weights = ctx.vcode_func.new_vreg(@abi.Vector)
+        let temp_shift = ctx.vcode_func.new_vreg(@abi.Vector)
+        let temp_work = ctx.vcode_func.new_vreg(@abi.Vector)
+        vcode_inst.add_def_fixed({ reg: Virtual(temp_weights) }, @abi.PReg::{
+          index: 16,
+          class: @abi.Vector,
+        })
+        vcode_inst.add_def_fixed({ reg: Virtual(temp_shift) }, @abi.PReg::{
+          index: 17,
+          class: @abi.Vector,
+        })
+        vcode_inst.add_def_fixed({ reg: Virtual(temp_work) }, @abi.PReg::{
+          index: 18,
+          class: @abi.Vector,
+        })
+      }
+      _ => ()
+    }
     vcode_inst.add_use(Virtual(src))
     block.add_inst(vcode_inst)
   }
@@ -624,6 +660,18 @@ fn lower_v128_fma(
     }
     let vcode_inst = @instr.VCodeInst::new(opcode)
     vcode_inst.add_def({ reg: Virtual(dst) })
+    // Allocate 2 temp FPRs with fixed registers for handling aliasing (rd == rn or rd == rm)
+    // Use V16 and V17 to ensure they're distinct from each other and from dst
+    let temp1 = ctx.vcode_func.new_vreg(@abi.Vector)
+    let temp2 = ctx.vcode_func.new_vreg(@abi.Vector)
+    vcode_inst.add_def_fixed({ reg: Virtual(temp1) }, @abi.PReg::{
+      index: 16,
+      class: @abi.Vector,
+    })
+    vcode_inst.add_def_fixed({ reg: Virtual(temp2) }, @abi.PReg::{
+      index: 17,
+      class: @abi.Vector,
+    })
     vcode_inst.add_use(Virtual(c)) // accumulator
     vcode_inst.add_use(Virtual(a)) // multiplicand 1
     vcode_inst.add_use(Virtual(b)) // multiplicand 2
