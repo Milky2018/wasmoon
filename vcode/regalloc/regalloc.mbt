@@ -659,6 +659,29 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Get block order for correct interval comparison
   let block_order = result.block_order
 
+  // Pre-compute vreg -> blocks mappings to avoid O(vregs × blocks) containment checks
+  // This changes from O(V × B × contains) to O(total_live_in_entries + total_live_out_entries)
+  let vreg_live_in_blocks : Map[Int, Array[Int]] = {}
+  let vreg_live_out_blocks : Map[Int, Array[Int]] = {}
+
+  for block_idx, live_in_set in result.live_in {
+    for vreg_id in live_in_set {
+      match vreg_live_in_blocks.get(vreg_id) {
+        Some(blocks) => blocks.push(block_idx)
+        None => vreg_live_in_blocks.set(vreg_id, [block_idx])
+      }
+    }
+  }
+
+  for block_idx, live_out_set in result.live_out {
+    for vreg_id in live_out_set {
+      match vreg_live_out_blocks.get(vreg_id) {
+        Some(blocks) => blocks.push(block_idx)
+        None => vreg_live_out_blocks.set(vreg_id, [block_idx])
+      }
+    }
+  }
+
   // For each vreg, create an interval spanning from def to last use
   for entry in result.use_def {
     let (vreg_id, info) = entry
@@ -677,22 +700,17 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
       interval.extend_with_order(use_point, block_order)
     }
 
-    // Extend to cover live-in blocks - the interval needs to span from
-    // block entry through all uses in that block
-    for block_idx, live_in_set in result.live_in {
-      if live_in_set.contains(vreg_id) {
-        // The vreg is live at the start of this block
-        // Extend from block entry
+    // Extend to cover live-in blocks - use pre-computed mapping
+    if vreg_live_in_blocks.get(vreg_id) is Some(blocks) {
+      for block_idx in blocks {
         let entry_point = { block: block_idx, inst: -1, pos: Before }
         interval.extend_with_order(entry_point, block_order)
-        // Also extend to end of block if live-out (already handled below)
       }
     }
 
-    // Extend to cover live-out of blocks where this vreg is live
-    for block_idx, live_out_set in result.live_out {
-      if live_out_set.contains(vreg_id) {
-        // The vreg is live at the end of this block
+    // Extend to cover live-out blocks - use pre-computed mapping
+    if vreg_live_out_blocks.get(vreg_id) is Some(blocks) {
+      for block_idx in blocks {
         let block = func.blocks[block_idx]
         let end_point = {
           block: block_idx,

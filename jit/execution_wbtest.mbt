@@ -361,7 +361,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    jump block1(v9, v10, v98)
       #|}
       #|
-
     ),
   )
 
@@ -525,7 +524,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    branch v23, block7, block8
       #|}
       #|
-
     ),
   )
   let allocated_func = @regalloc.allocate_registers_aarch64(vcode_func)
@@ -650,7 +648,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    branch x9, block7, block8
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)
@@ -792,7 +789,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  01d0: a9f7ffb5  cbnz x9, block7
       #|  01d4: c0ffff17  b block8
       #|
-
     ),
   )
 
