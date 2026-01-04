@@ -452,6 +452,8 @@ pub fn run_jit(
       type_rec_groups=mod_.type_rec_groups,
     )
     @jit.gc_setup(c_heap, mod_.types, canonical_indices)
+    // Set GC heap in VMContext for inline allocation
+    jm.set_gc_heap(c_heap.get_ptr())
 
     // Call the target function
     guard jm.get_func_by_name(func_name) is Some(f) else {

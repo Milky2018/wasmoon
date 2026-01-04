@@ -386,6 +386,15 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 }
 
 ///|
+/// Set GC heap in the JIT context for inline allocation
+/// This enables fast-path bump-pointer allocation in JIT-compiled code
+pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
+  if self.context is Some(ctx) {
+    ctx.set_gc_heap(heap_ptr)
+  }
+}
+
+///|
 /// Set multiple memories for the JIT context (multi-memory support)
 pub fn JITModule::set_memory_pointers(
   self : JITModule,

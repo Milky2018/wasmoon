@@ -11,30 +11,33 @@
 
 ///|
 /// A program point - identifies a position in the VCode
+/// Using #valtype for stack allocation - this struct is created/compared frequently
+#valtype
 pub(all) struct ProgPoint {
   block : Int // Block index
   inst : Int // Instruction index within block (-1 for block params)
   pos : ProgPos // Before or after the instruction
-}
+} derive(Eq)
 
 ///|
 /// Position relative to an instruction
 pub enum ProgPos {
   Before // Before the instruction executes (uses happen here)
   After // After the instruction executes (defs happen here)
-}
+} derive(Eq)
 
 ///|
-/// Compare two program points using a block order map
+/// Compare two program points using a block order array
 /// This is used by the register allocator to correctly order points in non-linear CFGs
+/// Note: block_order[block_id] = execution order (O(1) lookup vs O(log n) for Map)
 fn ProgPoint::compare_with_order(
   self : ProgPoint,
   other : ProgPoint,
-  block_order : Map[Int, Int],
+  block_order : FixedArray[Int],
 ) -> Int {
   if self.block != other.block {
-    let self_order = block_order.get(self.block).unwrap_or(self.block)
-    let other_order = block_order.get(other.block).unwrap_or(other.block)
+    let self_order = block_order[self.block]
+    let other_order = block_order[other.block]
     return self_order - other_order
   }
   if self.inst != other.inst {
@@ -102,7 +105,7 @@ fn LiveInterval::new(vreg : @abi.VReg, start : ProgPoint) -> LiveInterval {
 fn LiveInterval::extend_with_order(
   self : LiveInterval,
   point : ProgPoint,
-  block_order : Map[Int, Int],
+  block_order : FixedArray[Int],
 ) -> Unit {
   if point.compare_with_order(self.end, block_order) > 0 {
     self.end = point
@@ -145,6 +148,95 @@ fn UseDefInfo::new(vreg : @abi.VReg) -> UseDefInfo {
 }
 
 // ============ Liveness Analysis ============
+
+// ============ CFG Edges ============
+
+///|
+/// CFG edges for liveness analysis
+priv struct CFGEdges {
+  preds : Array[Array[Int]] // preds[block_id] = predecessor block IDs
+  succs : Array[Array[Int]] // succs[block_id] = successor block IDs
+}
+
+///|
+/// Build CFG edges once (O(B + E))
+fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
+  let n = func.blocks.length()
+  let preds : Array[Array[Int]] = []
+  let succs : Array[Array[Int]] = []
+
+  // Initialize arrays
+  for _ in 0..<n {
+    preds.push([])
+    succs.push([])
+  }
+
+  // Build edges from terminators
+  for block_idx, block in func.blocks {
+    if block.terminator is Some(term) {
+      let block_succs = get_terminator_succs(term)
+      succs[block_idx] = block_succs
+      for succ in block_succs {
+        preds[succ].push(block_idx)
+      }
+    }
+  }
+  { preds, succs }
+}
+
+///|
+/// Extract successor block IDs from terminator
+fn get_terminator_succs(term : @instr.VCodeTerminator) -> Array[Int] {
+  match term {
+    Jump(target) => [target]
+    Branch(_, then_b, else_b) => [then_b, else_b]
+    BranchCmp(_, _, _, _, then_b, else_b) => [then_b, else_b]
+    BranchCmpImm(_, _, _, _, then_b, else_b) => [then_b, else_b]
+    BranchZero(_, _, _, then_b, else_b) => [then_b, else_b]
+    BrTable(_, targets, default) => {
+      let result : Array[Int] = []
+      for t in targets {
+        result.push(t)
+      }
+      result.push(default)
+      result
+    }
+    Return(_) | Trap(_) => []
+  }
+}
+
+// ============ Worklist ============
+
+///|
+/// Worklist with O(1) membership check
+priv struct LivenessWorklist {
+  queue : Array[Int]
+  in_worklist : Array[Bool]
+}
+
+///|
+fn LivenessWorklist::new(size : Int) -> LivenessWorklist {
+  { queue: [], in_worklist: Array::make(size, false) }
+}
+
+///|
+fn LivenessWorklist::push(self : LivenessWorklist, block_id : Int) -> Unit {
+  if not(self.in_worklist[block_id]) {
+    self.queue.push(block_id)
+    self.in_worklist[block_id] = true
+  }
+}
+
+///|
+fn LivenessWorklist::pop(self : LivenessWorklist) -> Int? {
+  match self.queue.pop() {
+    Some(id) => {
+      self.in_worklist[id] = false
+      Some(id)
+    }
+    None => None
+  }
+}
 
 ///|
 /// Debug: print liveness info
@@ -199,33 +291,17 @@ pub(all) struct LivenessResult {
   live_in : Array[Set[Int]]
   // Block live-out sets (vregs live at block exit)
   live_out : Array[Set[Int]]
-  // Block order: maps block ID -> linear position (for correct interval comparison)
-  block_order : Map[Int, Int]
+  // Block order: block_order[block_id] = linear position (O(1) lookup)
+  block_order : FixedArray[Int]
   // Call points (block_idx, inst_idx) - instructions that clobber caller-saved registers
   call_points : Array[ProgPoint]
 }
 
 ///|
-fn LivenessResult::new(num_blocks : Int) -> LivenessResult {
-  let live_in : Array[Set[Int]] = []
-  let live_out : Array[Set[Int]] = []
-  for _ in 0..<num_blocks {
-    live_in.push(Set::new())
-    live_out.push(Set::new())
-  }
-  {
-    intervals: {},
-    use_def: {},
-    live_in,
-    live_out,
-    block_order: {},
-    call_points: [],
-  }
-}
-
-///|
 /// Compute reverse postorder of blocks (for linearizing the CFG)
-fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
+/// Returns a FixedArray where order[block_id] = position in reverse postorder
+fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
+  let n = func.blocks.length()
   let visited : Set[Int] = Set::new()
   let postorder : Array[Int] = []
 
@@ -280,7 +356,7 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
   }
 
   // Start DFS from block 0 (entry)
-  if func.blocks.length() > 0 {
+  if n > 0 {
     dfs(func, func.blocks[0].id, visited, postorder)
   }
 
@@ -291,12 +367,11 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
     }
   }
 
-  // Reverse postorder: reverse the postorder array
-  // Map block ID -> position in reverse postorder
-  let order : Map[Int, Int] = {}
-  let n = postorder.length()
+  // Reverse postorder: order[block_id] = position in reverse postorder
+  let order : FixedArray[Int] = FixedArray::make(n, 0)
+  let len = postorder.length()
   for i, block_id in postorder {
-    order.set(block_id, n - 1 - i)
+    order[block_id] = len - 1 - i
   }
   order
 }
@@ -304,13 +379,22 @@ fn compute_reverse_postorder(func : VCodeFunction) -> Map[Int, Int] {
 ///|
 /// Compute liveness information for a VCode function
 pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
-  let result = LivenessResult::new(func.blocks.length())
-
-  // Compute block order for correct interval comparison
+  let num_blocks = func.blocks.length()
+  let live_in : Array[Set[Int]] = []
+  let live_out : Array[Set[Int]] = []
+  for _ in 0..<num_blocks {
+    live_in.push(Set::new())
+    live_out.push(Set::new())
+  }
+  // Compute block order directly as FixedArray
   let block_order = compute_reverse_postorder(func)
-  for entry in block_order {
-    let (block_id, order) = entry
-    result.block_order.set(block_id, order)
+  let result : LivenessResult = {
+    intervals: {},
+    use_def: {},
+    live_in,
+    live_out,
+    block_order,
+    call_points: [],
   }
 
   // Phase 1: Collect definitions and uses
@@ -515,74 +599,48 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     block_def.push(def_set)
   }
 
-  // Get successors for each block
-  fn get_successors(func : VCodeFunction, block_idx : Int) -> Array[Int] {
-    let succs : Array[Int] = []
-    if func.blocks[block_idx].terminator is Some(term) {
-      match term {
-        Jump(target) => succs.push(target)
-        Branch(_, then_b, else_b) => {
-          succs.push(then_b)
-          succs.push(else_b)
-        }
-        BranchCmp(_, _, _, _, then_b, else_b) => {
-          succs.push(then_b)
-          succs.push(else_b)
-        }
-        BranchCmpImm(_, _, _, _, then_b, else_b) => {
-          succs.push(then_b)
-          succs.push(else_b)
-        }
-        BranchZero(_, _, _, then_b, else_b) => {
-          succs.push(then_b)
-          succs.push(else_b)
-        }
-        BrTable(_, targets, default) => {
-          for t in targets {
-            succs.push(t)
-          }
-          succs.push(default)
-        }
-        Return(_) | Trap(_) => ()
-      }
+  // Pre-compute CFG edges (O(B + E), only once)
+  let cfg = build_cfg_edges(func)
+
+  // Initialize live_in with use sets
+  for block_idx in 0..<func.blocks.length() {
+    for vreg_id in block_use[block_idx] {
+      result.live_in[block_idx].add(vreg_id)
     }
-    succs
   }
 
-  // Fixed-point iteration
-  let mut changed = true
-  while changed {
-    changed = false
-    // Process blocks in reverse order for faster convergence
-    for block_idx = func.blocks.length() - 1
-        block_idx >= 0
-        block_idx = block_idx - 1 {
-      // live_out[B] = ∪{S ∈ succ[B]} live_in[S]
-      let succs = get_successors(func, block_idx)
-      for succ in succs {
-        for vreg_id in result.live_in[succ] {
-          if !result.live_out[block_idx].contains(vreg_id) {
-            result.live_out[block_idx].add(vreg_id)
-            changed = true
-          }
-        }
-      }
+  // Worklist-based dataflow with incremental update
+  let worklist = LivenessWorklist::new(func.blocks.length())
 
-      // live_in[B] = use[B] ∪ (live_out[B] - def[B])
-      // First add all uses
-      for vreg_id in block_use[block_idx] {
-        if !result.live_in[block_idx].contains(vreg_id) {
-          result.live_in[block_idx].add(vreg_id)
-          changed = true
-        }
+  // Initialize worklist - push in forward order so pop() gives reverse order
+  // (pop removes from end, so queue [0,1,..,n-1] pops n-1, n-2, .., 0)
+  // For backward dataflow, we want to process successors before predecessors
+  for i in 0..<func.blocks.length() {
+    worklist.push(i)
+  }
+  while worklist.pop() is Some(block_idx) {
+    let old_live_in_size = result.live_in[block_idx].length()
+
+    // live_out[B] = ∪ live_in[S] for S in succs[B]
+    // Monotone: only adds, never removes
+    for succ in cfg.succs[block_idx] {
+      for vreg_id in result.live_in[succ] {
+        result.live_out[block_idx].add(vreg_id)
       }
-      // Then add live-out minus defs
-      for vreg_id in result.live_out[block_idx] {
-        if !block_def[block_idx].contains(vreg_id) &&
-          !result.live_in[block_idx].contains(vreg_id) {
-          result.live_in[block_idx].add(vreg_id)
-          changed = true
-        }
+    }
+
+    // live_in[B] = use[B] ∪ (live_out[B] - def[B])
+    // Incrementally add from live_out (use already added in init)
+    for vreg_id in result.live_out[block_idx] {
+      if !block_def[block_idx].contains(vreg_id) {
+        result.live_in[block_idx].add(vreg_id)
+      }
+    }
+
+    // If live_in grew, propagate to predecessors
+    if result.live_in[block_idx].length() > old_live_in_size {
+      for pred in cfg.preds[block_idx] {
+        worklist.push(pred)
       }
     }
   }
@@ -593,6 +651,27 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
 fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Get block order for correct interval comparison
   let block_order = result.block_order
+
+  // Pre-compute vreg -> blocks mappings to avoid O(vregs × blocks) containment checks
+  // This changes from O(V × B × contains) to O(total_live_in_entries + total_live_out_entries)
+  let vreg_live_in_blocks : Map[Int, Array[Int]] = {}
+  let vreg_live_out_blocks : Map[Int, Array[Int]] = {}
+  for block_idx, live_in_set in result.live_in {
+    for vreg_id in live_in_set {
+      match vreg_live_in_blocks.get(vreg_id) {
+        Some(blocks) => blocks.push(block_idx)
+        None => vreg_live_in_blocks.set(vreg_id, [block_idx])
+      }
+    }
+  }
+  for block_idx, live_out_set in result.live_out {
+    for vreg_id in live_out_set {
+      match vreg_live_out_blocks.get(vreg_id) {
+        Some(blocks) => blocks.push(block_idx)
+        None => vreg_live_out_blocks.set(vreg_id, [block_idx])
+      }
+    }
+  }
 
   // For each vreg, create an interval spanning from def to last use
   for entry in result.use_def {
@@ -612,22 +691,17 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
       interval.extend_with_order(use_point, block_order)
     }
 
-    // Extend to cover live-in blocks - the interval needs to span from
-    // block entry through all uses in that block
-    for block_idx, live_in_set in result.live_in {
-      if live_in_set.contains(vreg_id) {
-        // The vreg is live at the start of this block
-        // Extend from block entry
+    // Extend to cover live-in blocks - use pre-computed mapping
+    if vreg_live_in_blocks.get(vreg_id) is Some(blocks) {
+      for block_idx in blocks {
         let entry_point = { block: block_idx, inst: -1, pos: Before }
         interval.extend_with_order(entry_point, block_order)
-        // Also extend to end of block if live-out (already handled below)
       }
     }
 
-    // Extend to cover live-out of blocks where this vreg is live
-    for block_idx, live_out_set in result.live_out {
-      if live_out_set.contains(vreg_id) {
-        // The vreg is live at the end of this block
+    // Extend to cover live-out blocks - use pre-computed mapping
+    if vreg_live_out_blocks.get(vreg_id) is Some(blocks) {
+      for block_idx in blocks {
         let block = func.blocks[block_idx]
         let end_point = {
           block: block_idx,
@@ -945,7 +1019,8 @@ pub(all) struct LinearScanAllocator {
   mut active : Array[LiveInterval] // Intervals currently occupying registers
   mut next_spill_slot : Int
   // Block order for correct interval comparison in non-linear CFGs
-  block_order : Map[Int, Int]
+  // block_order[block_id] = execution order (O(1) lookup)
+  mut block_order : FixedArray[Int]
   // Reserved registers at each instruction point (for FixedReg constraints)
   // Key: (block_idx, inst_idx), Value: set of reserved register indices
   // Note: constraints must be respected during allocation
@@ -967,7 +1042,7 @@ pub fn LinearScanAllocator::new(
     callee_saved_float_regs,
     active: [],
     next_spill_slot: 0,
-    block_order: {},
+    block_order: FixedArray::make(0, 0),
     reserved_int_regs: {},
     reserved_float_regs: {},
   }
@@ -1070,11 +1145,8 @@ pub fn LinearScanAllocator::allocate(
   // This allows us to avoid constrained registers during allocation
   self.collect_constraints(func)
 
-  // Copy block order from liveness result
-  for entry in liveness.block_order {
-    let (block_id, order) = entry
-    self.block_order.set(block_id, order)
-  }
+  // Copy block order from liveness result (just reference the array)
+  self.block_order = liveness.block_order
 
   // Step 1: Collect coalescing hints from Move instructions
   let coalescing = collect_coalescing_hints(func, liveness)

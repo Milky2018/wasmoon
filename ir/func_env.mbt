@@ -70,13 +70,16 @@ pub const TABLE_ENTRY_STRIDE : Int = 16
 pub(all) struct FuncEnvironment {
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
+  // Shared trap block for memory out-of-bounds errors
+  // All bounds checks in the same function share this block to reduce CFG size
+  mut memory_trap_block : Block?
 }
 
 ///|
 pub fn FuncEnvironment::new(
   global_types : Array[@types.GlobalType],
 ) -> FuncEnvironment {
-  { global_types, }
+  { global_types, memory_trap_block: None }
 }
 
 // ============ Global Variable Operations ============
@@ -376,6 +379,35 @@ fn load_memory_base_and_size(
 }
 
 ///|
+/// Get or create a shared trap block for memory out-of-bounds errors.
+/// All bounds checks in the same function share this block to reduce CFG size.
+fn FuncEnvironment::get_or_create_memory_trap_block(
+  self : FuncEnvironment,
+  builder : IRBuilder,
+) -> Block {
+  match self.memory_trap_block {
+    Some(block) => block
+    None => {
+      let trap_block = builder.create_block()
+      let current = builder.current_block // save current position
+      builder.switch_to_block(trap_block)
+      builder.trap("memory out of bounds")
+      match current {
+        Some(block) => builder.switch_to_block(block) // restore position
+        None => ()
+      }
+      self.memory_trap_block = Some(trap_block)
+      trap_block
+    }
+  }
+}
+
+// Note: Memory base/size caching was considered but removed due to SSA dominance
+// issues. When memory accesses occur in different branches (e.g., br_table cases),
+// cached Values from one branch don't dominate other branches, causing SSA violations.
+// The shared trap block optimization is still effective and safe.
+
+///|
 /// Get the byte size for a type
 fn type_byte_size(ty : Type) -> Int {
   match ty {
@@ -392,7 +424,7 @@ fn type_byte_size(ty : Type) -> Int {
 /// Emit bounds check and return effective address for memory access
 /// This is a public helper for SIMD and other complex load operations
 pub fn FuncEnvironment::emit_bounds_check(
-  _self : FuncEnvironment,
+  self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
   memidx : Int,
@@ -415,13 +447,9 @@ pub fn FuncEnvironment::emit_bounds_check(
 
   // Bounds check: trap if end_addr > memory_size
   let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = builder.create_block()
+  let trap_block = self.get_or_create_memory_trap_block(builder)
   let continue_block = builder.create_block()
   builder.brnz(in_bounds, continue_block, trap_block)
-
-  // Trap block
-  builder.switch_to_block(trap_block)
-  builder.trap("memory out of bounds")
 
   // Continue block
   builder.switch_to_block(continue_block)
@@ -433,11 +461,11 @@ pub fn FuncEnvironment::emit_bounds_check(
 ///|
 /// Translate memory load to IR primitives:
 /// 1. Load memory_base and memory_size from vmctx
-/// 2. Bounds check: trap if addr + offset + size > memory_size
+/// 2. Bounds check: trap if addr + offset + size > memory_size (shared trap block)
 /// 3. Calculate effective address: memory_base + addr + offset
 /// 4. LoadPtr
 pub fn FuncEnvironment::translate_memory_load(
-  _self : FuncEnvironment,
+  self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
   memidx : Int,
@@ -462,13 +490,9 @@ pub fn FuncEnvironment::translate_memory_load(
 
   // Bounds check: trap if end_addr > memory_size
   let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = builder.create_block()
+  let trap_block = self.get_or_create_memory_trap_block(builder)
   let continue_block = builder.create_block()
   builder.brnz(in_bounds, continue_block, trap_block)
-
-  // Trap block
-  builder.switch_to_block(trap_block)
-  builder.trap("memory out of bounds")
 
   // Continue block: perform the load
   builder.switch_to_block(continue_block)
@@ -482,11 +506,11 @@ pub fn FuncEnvironment::translate_memory_load(
 ///|
 /// Translate memory store to IR primitives:
 /// 1. Load memory_base and memory_size from vmctx
-/// 2. Bounds check: trap if addr + offset + size > memory_size
+/// 2. Bounds check: trap if addr + offset + size > memory_size (shared trap block)
 /// 3. Calculate effective address: memory_base + addr + offset
 /// 4. StorePtr
 pub fn FuncEnvironment::translate_memory_store(
-  _self : FuncEnvironment,
+  self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
   memidx : Int,
@@ -512,13 +536,9 @@ pub fn FuncEnvironment::translate_memory_store(
 
   // Bounds check: trap if end_addr > memory_size
   let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = builder.create_block()
+  let trap_block = self.get_or_create_memory_trap_block(builder)
   let continue_block = builder.create_block()
   builder.brnz(in_bounds, continue_block, trap_block)
-
-  // Trap block
-  builder.switch_to_block(trap_block)
-  builder.trap("memory out of bounds")
 
   // Continue block: perform the store
   builder.switch_to_block(continue_block)
@@ -532,7 +552,7 @@ pub fn FuncEnvironment::translate_memory_store(
 ///|
 /// Translate narrow memory load (i32.load8_s, i32.load16_u, etc.) to IR primitives
 pub fn FuncEnvironment::translate_memory_load_narrow(
-  _self : FuncEnvironment,
+  self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
   memidx : Int,
@@ -559,13 +579,9 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
 
   // Bounds check
   let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = builder.create_block()
+  let trap_block = self.get_or_create_memory_trap_block(builder)
   let continue_block = builder.create_block()
   builder.brnz(in_bounds, continue_block, trap_block)
-
-  // Trap block
-  builder.switch_to_block(trap_block)
-  builder.trap("memory out of bounds")
 
   // Continue block: perform the load
   builder.switch_to_block(continue_block)
@@ -581,7 +597,7 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
 ///|
 /// Translate narrow memory store (i32.store8, i32.store16, etc.) to IR primitives
 pub fn FuncEnvironment::translate_memory_store_narrow(
-  _self : FuncEnvironment,
+  self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
   memidx : Int,
@@ -607,13 +623,9 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
 
   // Bounds check
   let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = builder.create_block()
+  let trap_block = self.get_or_create_memory_trap_block(builder)
   let continue_block = builder.create_block()
   builder.brnz(in_bounds, continue_block, trap_block)
-
-  // Trap block
-  builder.switch_to_block(trap_block)
-  builder.trap("memory out of bounds")
 
   // Continue block: perform the store
   builder.switch_to_block(continue_block)

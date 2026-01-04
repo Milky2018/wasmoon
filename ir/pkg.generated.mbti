@@ -136,6 +136,7 @@ pub impl Show for FloatCC
 
 pub(all) struct FuncEnvironment {
   global_types : Array[@types.GlobalType]
+  mut memory_trap_block : Block?
 }
 pub fn FuncEnvironment::emit_bounds_check(Self, IRBuilder, Value, Int, Value, Int64, Int) -> Value
 pub fn FuncEnvironment::new(Array[@types.GlobalType]) -> Self

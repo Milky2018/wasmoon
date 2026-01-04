@@ -62,6 +62,13 @@ enum Instruction {
   LsrReg32(Int, Int, Int)
   AsrReg32(Int, Int, Int)
   RorReg32(Int, Int, Int)
+  // Shift - Immediate (64-bit): LSR Xd, Xn, #shift
+  LsrImm(Int, Int, Int)
+  // Shift - Immediate (32-bit): LSR Wd, Wn, #shift
+  LsrImm32(Int, Int, Int)
+  // Unsigned Bitfield Extract: UBFX Xd, Xn, #0, #width
+  // Extracts bits [0, width-1] from Xn to Xd (zero-extended)
+  UbfxWidth(Int, Int, Int)
   // Bit manipulation (64-bit)
   Clz(Int, Int)
   Rbit(Int, Int)
@@ -191,6 +198,7 @@ enum Instruction {
   Cbz(Int, Int)
   Cbnz(Int, Int)
   BCondOffset(Int, Int)
+  BOffset(Int) // Unconditional branch with byte offset
   CbnzOffset(Int, Bool, Int) // rt, is_64, offset_bytes - branch if not zero with immediate offset
   Brk(Int)
   Ret(Int)
@@ -571,6 +579,9 @@ fn Instruction::annotate(self : Instruction) -> String {
     LsrReg32(rd, rn, rm) => "lsr w\{rd}, w\{rn}, w\{rm}"
     AsrReg32(rd, rn, rm) => "asr w\{rd}, w\{rn}, w\{rm}"
     RorReg32(rd, rn, rm) => "ror w\{rd}, w\{rn}, w\{rm}"
+    LsrImm(rd, rn, shift) => "lsr x\{rd}, x\{rn}, #\{shift}"
+    LsrImm32(rd, rn, shift) => "lsr w\{rd}, w\{rn}, #\{shift}"
+    UbfxWidth(rd, rn, width) => "ubfx x\{rd}, x\{rn}, #0, #\{width}"
     Clz(rd, rn) => "clz x\{rd}, x\{rn}"
     Rbit(rd, rn) => "rbit x\{rd}, x\{rn}"
     Clz32(rd, rn) => "clz w\{rd}, w\{rn}"
@@ -760,6 +771,7 @@ fn Instruction::annotate(self : Instruction) -> String {
       let cond_name = cond_name_str(cond)
       "b.\{cond_name} .+\{offset_bytes}"
     }
+    BOffset(offset_bytes) => "b .+\{offset_bytes}"
     CbnzOffset(rt, is_64, offset_bytes) => {
       let reg = if is_64 { "x" } else { "w" }
       "cbnz \{reg}\{rt}, .+\{offset_bytes}"
@@ -1350,6 +1362,32 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = ((rn >> 3) & 3) | (11 << 2)
       let b2 = 0xC0 | (rm & 31)
       let b3 = 0x1A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    LsrImm(rd, rn, shift) => {
+      // LSR Xd, Xn, #shift = UBFM Xd, Xn, #shift, #63
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = 0xFC | ((rn >> 3) & 3) // imms=63
+      let b2 = 0x40 | (shift & 63) // N=1, immr=shift
+      let b3 = 0xD3 // sf=1, opc=10, 100110
+      (b0, b1, b2, b3)
+    }
+    LsrImm32(rd, rn, shift) => {
+      // LSR Wd, Wn, #shift = UBFM Wd, Wn, #shift, #31
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = 0x7C | ((rn >> 3) & 3) // imms=31
+      let b2 = shift & 31 // N=0, immr=shift
+      let b3 = 0x53 // sf=0, opc=10, 100110
+      (b0, b1, b2, b3)
+    }
+    UbfxWidth(rd, rn, width) => {
+      // UBFX Xd, Xn, #0, #width = UBFM Xd, Xn, #0, #(width-1)
+      // Extracts bits [0, width-1] (i.e., mask by (1 << width) - 1)
+      let imms = width - 1
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (imms << 2) | ((rn >> 3) & 3)
+      let b2 = 0x40 // N=1, immr=0
+      let b3 = 0xD3 // sf=1, opc=10, 100110
       (b0, b1, b2, b3)
     }
     Clz(rd, rn) => {
@@ -2211,6 +2249,18 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
     BCondOffset(cond, offset_bytes) => {
       let imm19 = offset_bytes / 4
       let inst = 0x54000000 | ((imm19 & 0x7FFFF) << 5) | (cond & 0xF)
+      (
+        inst & 0xFF,
+        (inst >> 8) & 0xFF,
+        (inst >> 16) & 0xFF,
+        (inst >> 24) & 0xFF,
+      )
+    }
+    BOffset(offset_bytes) => {
+      // B imm26: 0b000101 | imm26
+      // Encoding: 0x14000000 | (imm26 & 0x3FFFFFF)
+      let imm26 = offset_bytes / 4
+      let inst = 0x14000000 | (imm26 & 0x3FFFFFF)
       (
         inst & 0xFF,
         (inst >> 8) & 0xFF,
@@ -3911,6 +3961,26 @@ pub fn MachineCode::emit_ror_reg32(
 }
 
 ///|
+pub fn MachineCode::emit_lsr_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  LsrImm(rd, rn, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_lsr_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  LsrImm32(rd, rn, shift).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_clz32(self : MachineCode, rd : Int, rn : Int) -> Unit {
   Clz32(rd, rn).emit(self)
 }
@@ -4049,6 +4119,25 @@ pub fn MachineCode::emit_load_imm64(
   imm : Int64,
 ) -> Unit {
   LoadImm64(rd, imm).emit(self)
+}
+
+///|
+/// Load 64-bit immediate with fixed 4 instructions (MOVZ + 3 MOVKs or NOPs).
+/// Use this when you need a predictable instruction count for branch offset calculations.
+pub fn MachineCode::emit_load_imm64_fixed(
+  self : MachineCode,
+  rd : Int,
+  imm : Int64,
+) -> Unit {
+  let v0 = (imm & 0xFFFFL).to_int()
+  let v1 = ((imm >> 16) & 0xFFFFL).to_int()
+  let v2 = ((imm >> 32) & 0xFFFFL).to_int()
+  let v3 = ((imm >> 48) & 0xFFFFL).to_int()
+  // Always emit exactly 4 instructions
+  Movz(rd, v0, 0).emit(self)
+  Movk(rd, v1, 16).emit(self)
+  Movk(rd, v2, 32).emit(self)
+  Movk(rd, v3, 48).emit(self)
 }
 
 ///|

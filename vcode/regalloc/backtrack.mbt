@@ -37,6 +37,11 @@ pub(all) struct BacktrackingAllocator {
   int_reg_allocs : Map[Int, Array[ProgPointRange]]
   float_reg_allocs : Map[Int, Array[ProgPointRange]]
 
+  // Index: preg.index -> set of bundle IDs allocated to this register
+  // Used for fast conflict lookup in find_conflicts
+  int_reg_bundles : Map[Int, Set[Int]]
+  float_reg_bundles : Map[Int, Set[Int]]
+
   // Priority queue of bundles to process
   mut queue : Array[QueueEntry]
 
@@ -46,8 +51,8 @@ pub(all) struct BacktrackingAllocator {
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
 
-  // Block order for comparison
-  block_order : Map[Int, Int]
+  // Block order for comparison (O(1) lookup)
+  block_order : FixedArray[Int]
 
   // Reference to function for constraint lookups
   func : VCodeFunction
@@ -68,6 +73,8 @@ pub fn BacktrackingAllocator::new(
     bundles,
     int_reg_allocs: {},
     float_reg_allocs: {},
+    int_reg_bundles: {},
+    float_reg_bundles: {},
     queue: [],
     int_regs,
     float_regs,
@@ -82,9 +89,11 @@ pub fn BacktrackingAllocator::new(
 /// Initialize the priority queue with all bundles
 fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   self.queue = []
+  // Pre-compute loop depths once (O(blocks + edges))
+  let loop_depths = compute_loop_depths(self.func)
   for i in 0..<self.bundles.length() {
     let bundle = self.bundles.get(i)
-    bundle.spill_weight = compute_spill_weight(bundle, self.ranges, self.func)
+    bundle.spill_weight = compute_spill_weight(bundle, self.ranges, loop_depths)
     self.queue.push({ bundle_id: i, weight: bundle.spill_weight })
   }
   // Sort by weight descending (highest priority first)
@@ -108,6 +117,18 @@ fn BacktrackingAllocator::get_reg_allocs(
   match class {
     @abi.Int => self.int_reg_allocs
     @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_reg_allocs
+  }
+}
+
+///|
+/// Get the bundle index map for a register class
+fn BacktrackingAllocator::get_reg_bundles(
+  self : BacktrackingAllocator,
+  class : @abi.RegClass,
+) -> Map[Int, Set[Int]] {
+  match class {
+    @abi.Int => self.int_reg_bundles
+    @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_reg_bundles
   }
 }
 
@@ -179,6 +200,13 @@ fn BacktrackingAllocator::record_allocation(
     range.allocation = Reg(preg)
   }
   bundle.allocation = Reg(preg)
+
+  // Update bundle index for fast conflict lookup
+  let bundle_index = self.get_reg_bundles(preg.class)
+  if bundle_index.get(preg.index) is None {
+    bundle_index.set(preg.index, Set::new())
+  }
+  bundle_index.get(preg.index).unwrap().add(bundle.id)
 }
 
 ///|
@@ -214,6 +242,12 @@ fn BacktrackingAllocator::remove_allocation(
         }
       }
       allocs.set(preg.index, new_occupied)
+    }
+
+    // Remove from bundle index
+    let bundle_index = self.get_reg_bundles(preg.class)
+    if bundle_index.get(preg.index) is Some(bundle_set) {
+      bundle_set.remove(bundle.id)
     }
 
     // Clear allocation
@@ -293,13 +327,14 @@ fn BacktrackingAllocator::find_conflicts(
 ) -> Array[Int] {
   let conflicts : Array[Int] = []
 
-  // Find all bundles allocated to this preg that overlap
-  for i in 0..<self.bundles.length() {
-    let other = self.bundles.get(i)
-    if other.allocation is Reg(other_preg) &&
-      other_preg.index == preg.index &&
-      bundle.overlaps(other, self.ranges) {
-      conflicts.push(i)
+  // Use bundle index for O(bundles_on_register) instead of O(all_bundles)
+  let bundle_index = self.get_reg_bundles(preg.class)
+  if bundle_index.get(preg.index) is Some(bundle_set) {
+    for other_id in bundle_set {
+      let other = self.bundles.get(other_id)
+      if bundle.overlaps(other, self.ranges) {
+        conflicts.push(other_id)
+      }
     }
   }
   conflicts

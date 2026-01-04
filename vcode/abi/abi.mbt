@@ -360,7 +360,7 @@ pub fn callee_saved_fprs() -> Array[PReg] {
 
 ///|
 /// Allocatable floating-point registers (caller-saved, no save/restore needed)
-/// V16-V31 are available for allocation
+/// V16-V31 are all available for allocation.
 pub fn allocatable_scratch_fprs() -> Array[PReg] {
   [
     { index: 16, class: Float64 },

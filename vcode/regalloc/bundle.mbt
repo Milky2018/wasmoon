@@ -217,12 +217,81 @@ fn BundleSet::get_or_create_spill_bundle(
 }
 
 ///|
-/// Compute spill weight for a bundle
+/// Pre-compute loop depths for all blocks (O(blocks + edges))
+/// Returns an array where loop_depths[block_id] = depth
+pub fn compute_loop_depths(func : VCodeFunction) -> Array[Int] {
+  let n = func.blocks.length()
+  let depths : Array[Int] = Array::make(n, 0)
+
+  // Count incoming backedges for each block
+  for i, block in func.blocks {
+    if block.terminator is Some(term) {
+      // Get successors without allocating
+      match term {
+        Jump(target) => if i > target { depths[target] = depths[target] + 1 }
+        Branch(_, then_b, else_b) => {
+          if i > then_b {
+            depths[then_b] = depths[then_b] + 1
+          }
+          if i > else_b {
+            depths[else_b] = depths[else_b] + 1
+          }
+        }
+        BranchCmp(_, _, _, _, then_b, else_b) => {
+          if i > then_b {
+            depths[then_b] = depths[then_b] + 1
+          }
+          if i > else_b {
+            depths[else_b] = depths[else_b] + 1
+          }
+        }
+        BranchZero(_, _, _, then_b, else_b) => {
+          if i > then_b {
+            depths[then_b] = depths[then_b] + 1
+          }
+          if i > else_b {
+            depths[else_b] = depths[else_b] + 1
+          }
+        }
+        BranchCmpImm(_, _, _, _, then_b, else_b) => {
+          if i > then_b {
+            depths[then_b] = depths[then_b] + 1
+          }
+          if i > else_b {
+            depths[else_b] = depths[else_b] + 1
+          }
+        }
+        BrTable(_, targets, default) => {
+          for t in targets {
+            if i > t {
+              depths[t] = depths[t] + 1
+            }
+          }
+          if i > default {
+            depths[default] = depths[default] + 1
+          }
+        }
+        Return(_) | Trap(_) => ()
+      }
+    }
+  }
+
+  // Cap depths at 3
+  for i in 0..<n {
+    if depths[i] > 3 {
+      depths[i] = 3
+    }
+  }
+  depths
+}
+
+///|
+/// Compute spill weight for a bundle using pre-computed loop depths
 /// Higher weight = more important to keep in register
 pub fn compute_spill_weight(
   bundle : Bundle,
   ranges : LiveRangeSet,
-  func : VCodeFunction,
+  loop_depths : Array[Int],
 ) -> Double {
   let mut weight = 0.0
   for range_id in bundle.range_ids {
@@ -236,7 +305,7 @@ pub fn compute_spill_weight(
       }
 
       // Loop depth multiplier (10x per nesting level)
-      let loop_depth = get_loop_depth(func, use_pos.point.block)
+      let loop_depth = loop_depths[use_pos.point.block]
       let depth_mult = @math.pow(10.0, loop_depth.to_double())
       weight += base * depth_mult
     }
@@ -255,53 +324,6 @@ pub fn compute_spill_weight(
   // Normalize by total length (shorter = higher priority per instruction)
   let length = bundle.total_length(ranges)
   weight / length.to_double()
-}
-
-///|
-/// Get loop depth for a block using simple backedge detection
-/// A block is considered in a loop if it has an incoming backedge
-/// (a predecessor with higher block index)
-fn get_loop_depth(func : VCodeFunction, block_id : Int) -> Int {
-  // Count incoming backedges to estimate loop nesting
-  let mut depth = 0
-  for i, block in func.blocks {
-    if block.terminator is Some(term) {
-      let successors = get_terminator_successors(term)
-      for succ in successors {
-        // A backedge is an edge from higher block to lower or equal block
-        if i > block_id && succ == block_id {
-          depth = depth + 1
-        }
-      }
-    }
-  }
-  // Cap at reasonable depth
-  if depth > 3 {
-    3
-  } else {
-    depth
-  }
-}
-
-///|
-/// Get successor block IDs from a terminator
-fn get_terminator_successors(term : @instr.VCodeTerminator) -> Array[Int] {
-  match term {
-    Jump(target) => [target]
-    Branch(_, then_b, else_b) => [then_b, else_b]
-    BranchCmp(_, _, _, _, then_b, else_b) => [then_b, else_b]
-    BranchZero(_, _, _, then_b, else_b) => [then_b, else_b]
-    BranchCmpImm(_, _, _, _, then_b, else_b) => [then_b, else_b]
-    BrTable(_, targets, default) => {
-      let result : Array[Int] = []
-      for t in targets {
-        result.push(t)
-      }
-      result.push(default)
-      result
-    }
-    Return(_) | Trap(_) => []
-  }
 }
 
 ///|

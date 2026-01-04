@@ -84,14 +84,16 @@ lldb -- ./wasmoon test path/to/test.wast
 
 - Use `suberror` for error types, `raise` to throw, `try! func() |> ignore` to ignore errors
 - Use `func() |> ignore` not `let _ = func()`
-- Use `s.code_unit_at(i)` not `s[i]` (deprecated)
 - When using `inspect(value, content=expected_string)`, don't declare a separate `let expected = ...` variable - it causes unused variable warnings. Put the expected string directly in the `content=` parameter
 - Use `!condition` not `not(condition)`
 - Use `f(value)` not `f!(value)` (deprecated)
 - Use `for i in 0..<n` not C-style `for i = 0; i < n; i = i + 1`
 - Use `if opt is Pattern(v) { ... }` for single-branch matching, not `match opt {}`
 - Use `arr.clear()` not `while arr.length() > 0 { arr.pop() }`
-- Use `s.code_unit_at(i)` not `s[i]` (deprecated)
+- Use `s.code_unit_at(i)` or `for c in s` not `s[i]` (deprecated)
 - Use `pub(all) enum` not factory functions for simple enums
+- Use `pub` not `pub(all)` when the constructor should not be exported 
+- Use default access control (without `pub`) for types and `pub` constructor functions if necessary
 - Use `let mut` only for reassignment, not for mutable containers like Array
 - Use `reinterpret_as_uint()` for unsigned ops, `to_int()` for numeric conversion
+- Use `Array::length()` not `Array::size()`

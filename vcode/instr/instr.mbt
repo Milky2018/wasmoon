@@ -428,8 +428,8 @@ pub(all) enum VCodeOpcode {
   SIMDInsertF(Bool, Int)
 
   // Shuffle - select lanes from two vectors using immediate indices
-  // SIMDShuffle(lane_indices): TBL Vd.16B, {Vn.16B, Vm.16B}, Vt.16B (indices in Vt)
-  // Uses: [v1, v2], Defs: [result]
+  // Uses two TBL1 calls to avoid consecutive register requirement
+  // Uses: [v1, v2], Defs: [result, temp1, temp2] (2 temp FPRs for TBL1 intermediates)
   SIMDShuffle(FixedArray[Int])
 
   // Swizzle - permute lanes based on indices vector
@@ -480,6 +480,7 @@ pub(all) enum VCodeOpcode {
   // Bitmask - extract sign bits to GPR
   // SIMDBitmask(lane_size): extract MSB of each lane
   // Uses: [vector], Defs: [result (i32)]
+  // For B8: Defs: [result, temp_weights, temp_shift, temp_work] (3 temp FPRs)
   SIMDBitmask(LaneSize)
 
   // Integer add
@@ -557,20 +558,20 @@ pub(all) enum VCodeOpcode {
   // Uses: [vector], Defs: [result]
   SIMDCnt
 
-  // Shift left (by scalar)
-  // SIMDShl(lane_size): SHL Vd.T, Vn.T, #imm or SSHL/USHL for variable
-  // Uses: [vector, shift_amount], Defs: [result]
-  SIMDShl(LaneSize)
+  // Broadcast shift amount to vector (mask and DUP)
+  // SIMDBroadcastShift(lane_size, negate): mask scalar, optionally negate, DUP to all lanes
+  // Uses: [shift_scalar], Defs: [temp_gpr, shift_vec]
+  // temp_gpr: GPR for masked (and optionally negated) shift value
+  // shift_vec: FPR with shift amount broadcast to all lanes
+  // negate=true for right shifts (shift amount needs to be negated for SSHL/USHL)
+  SIMDBroadcastShift(LaneSize, Bool)
 
-  // Shift right signed (by scalar)
-  // SIMDSshr(lane_size): SSHR Vd.T, Vn.T, #imm or SSHL with negative
-  // Uses: [vector, shift_amount], Defs: [result]
-  SIMDSshr(LaneSize)
-
-  // Shift right unsigned (by scalar)
-  // SIMDUshr(lane_size): USHR Vd.T, Vn.T, #imm or USHL with negative
-  // Uses: [vector, shift_amount], Defs: [result]
-  SIMDUshr(LaneSize)
+  // Vector shift (input already broadcast)
+  // SIMDShiftByVec(lane_size, use_ushl): SSHL or USHL
+  // Uses: [input_vec, shift_vec], Defs: [result]
+  // use_ushl=false for SSHL (left shift, signed right shift)
+  // use_ushl=true for USHL (unsigned right shift)
+  SIMDShiftByVec(LaneSize, Bool)
 
   // Integer comparison
   // SIMDCmp(lane_size, cmp_kind): CMEQ/CMGT/CMGE/CMHI/CMHS Vd.T, Vn.T, Vm.T
@@ -961,7 +962,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       } else {
         "ins.d[\{lane}]"
       }
-    SIMDShuffle(_) => "tbl2.16b"
+    SIMDShuffle(_) => "tbl1x2.16b"
     SIMDSwizzle => "tbl.16b"
     SIMDNot => "not.16b"
     SIMDAnd => "and.16b"
@@ -987,9 +988,14 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     SIMDAbs(lane_size) => "abs.\{lane_size}"
     SIMDNeg(lane_size) => "neg.\{lane_size}"
     SIMDCnt => "cnt.16b"
-    SIMDShl(lane_size) => "shl.\{lane_size}"
-    SIMDSshr(lane_size) => "sshr.\{lane_size}"
-    SIMDUshr(lane_size) => "ushr.\{lane_size}"
+    SIMDBroadcastShift(lane_size, negate) => {
+      let neg = if negate { ".neg" } else { "" }
+      "dup_shift\{neg}.\{lane_size}"
+    }
+    SIMDShiftByVec(lane_size, use_ushl) => {
+      let op = if use_ushl { "ushl" } else { "sshl" }
+      "\{op}.\{lane_size}"
+    }
     SIMDCmp(lane_size, kind) => "cmp.\{kind}.\{lane_size}"
     SIMDNarrow(lane_size, signed) => {
       let sign = if signed { "s" } else { "u" }

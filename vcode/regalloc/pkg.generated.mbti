@@ -30,7 +30,9 @@ pub fn compare_allocators(VCodeFunction) -> String
 
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
-pub fn compute_spill_weight(Bundle, LiveRangeSet, VCodeFunction) -> Double
+pub fn compute_loop_depths(VCodeFunction) -> Array[Int]
+
+pub fn compute_spill_weight(Bundle, LiveRangeSet, Array[Int]) -> Double
 
 pub fn debug_liveness(LivenessResult) -> String
 
@@ -84,12 +86,14 @@ pub(all) struct BacktrackingAllocator {
   bundles : BundleSet
   int_reg_allocs : Map[Int, Array[ProgPointRange]]
   float_reg_allocs : Map[Int, Array[ProgPointRange]]
+  int_reg_bundles : Map[Int, @set.Set[Int]]
+  float_reg_bundles : Map[Int, @set.Set[Int]]
   mut queue : Array[QueueEntry]
   int_regs : Array[@abi.PReg]
   float_regs : Array[@abi.PReg]
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
-  block_order : Map[Int, Int]
+  block_order : FixedArray[Int]
   func : VCodeFunction
 }
 pub fn BacktrackingAllocator::allocate(Self) -> Unit
@@ -140,7 +144,7 @@ pub(all) struct LinearScanAllocator {
   callee_saved_float_regs : Array[@abi.PReg]
   mut active : Array[LiveInterval]
   mut next_spill_slot : Int
-  block_order : Map[Int, Int]
+  mut block_order : FixedArray[Int]
   reserved_int_regs : Map[(Int, Int), @set.Set[Int]]
   reserved_float_regs : Map[(Int, Int), @set.Set[Int]]
 }
@@ -169,19 +173,19 @@ pub(all) struct LiveRange {
   mut allocation : Allocation
   mut crosses_call : Bool
 }
-pub fn LiveRange::end(Self, Map[Int, Int]) -> ProgPoint?
+pub fn LiveRange::end(Self, FixedArray[Int]) -> ProgPoint?
 pub fn LiveRange::get_fixed_reg(Self) -> @abi.PReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
 pub fn LiveRange::new(Int, @abi.VReg) -> Self
-pub fn LiveRange::overlaps(Self, Self, Map[Int, Int]) -> Bool
-pub fn LiveRange::start(Self, Map[Int, Int]) -> ProgPoint?
+pub fn LiveRange::overlaps(Self, Self, FixedArray[Int]) -> Bool
+pub fn LiveRange::start(Self, FixedArray[Int]) -> ProgPoint?
 pub fn LiveRange::total_length(Self) -> Int
 pub impl Show for LiveRange
 
 pub(all) struct LiveRangeSet {
   ranges : Array[LiveRange]
   vreg_to_range : Map[Int, Int]
-  block_order : Map[Int, Int]
+  block_order : FixedArray[Int]
 }
 pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, Int) -> LiveRange?
@@ -192,7 +196,7 @@ pub(all) struct LivenessResult {
   use_def : Map[Int, UseDefInfo]
   live_in : Array[@set.Set[Int]]
   live_out : Array[@set.Set[Int]]
-  block_order : Map[Int, Int]
+  block_order : FixedArray[Int]
   call_points : Array[ProgPoint]
 }
 
@@ -207,19 +211,21 @@ pub(all) struct ProgPoint {
   inst : Int
   pos : ProgPos
 }
+pub impl Eq for ProgPoint
 pub impl Show for ProgPoint
 
 pub(all) struct ProgPointRange {
   start : ProgPoint
   end : ProgPoint
 }
-pub fn ProgPointRange::contains(Self, ProgPoint, Map[Int, Int]) -> Bool
+pub fn ProgPointRange::contains(Self, ProgPoint, FixedArray[Int]) -> Bool
 pub impl Show for ProgPointRange
 
 pub enum ProgPos {
   Before
   After
 }
+pub impl Eq for ProgPos
 
 type QueueEntry
 pub impl Eq for QueueEntry

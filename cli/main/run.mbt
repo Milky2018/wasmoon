@@ -664,6 +664,8 @@ fn run_with_jit(
                     store.module_types,
                   )
                   @jit.gc_setup(heap, store.module_types, canonical)
+                  // Set GC heap in VMContext for inline allocation
+                  jm.set_gc_heap(heap.get_ptr())
                 }
                 None => ()
               }
