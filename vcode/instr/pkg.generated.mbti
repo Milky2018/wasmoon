@@ -343,9 +343,6 @@ pub(all) enum VCodeOpcode {
   SIMDAbs(LaneSize)
   SIMDNeg(LaneSize)
   SIMDCnt
-  SIMDShl(LaneSize)
-  SIMDSshr(LaneSize)
-  SIMDUshr(LaneSize)
   SIMDBroadcastShift(LaneSize, Bool)
   SIMDShiftByVec(LaneSize, Bool)
   SIMDCmp(LaneSize, SIMDCmpKind)

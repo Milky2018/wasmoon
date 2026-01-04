@@ -2137,10 +2137,6 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       Cnt16B(rd, rn).emit(self)
     }
-    // SIMDShl/SIMDSshr/SIMDUshr are deprecated - lowering now uses
-    // SIMDBroadcastShift + SIMDShiftByVec for proper register allocation
-    SIMDShl(_) | SIMDSshr(_) | SIMDUshr(_) =>
-      abort("Deprecated: use SIMDBroadcastShift + SIMDShiftByVec")
     SIMDBroadcastShift(lane_size, negate) => {
       // Mask scalar shift amount and broadcast to vector
       // Uses: [shift_scalar], Defs: [temp_gpr, shift_vec]

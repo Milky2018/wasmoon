@@ -557,21 +557,6 @@ pub(all) enum VCodeOpcode {
   // Uses: [vector], Defs: [result]
   SIMDCnt
 
-  // Shift left (by scalar)
-  // SIMDShl(lane_size): SHL Vd.T, Vn.T, #imm or SSHL/USHL for variable
-  // Uses: [vector, shift_amount], Defs: [result]
-  SIMDShl(LaneSize)
-
-  // Shift right signed (by scalar)
-  // SIMDSshr(lane_size): SSHR Vd.T, Vn.T, #imm or SSHL with negative
-  // Uses: [vector, shift_amount], Defs: [result]
-  SIMDSshr(LaneSize)
-
-  // Shift right unsigned (by scalar)
-  // SIMDUshr(lane_size): USHR Vd.T, Vn.T, #imm or USHL with negative
-  // Uses: [vector, shift_amount], Defs: [result]
-  SIMDUshr(LaneSize)
-
   // Broadcast shift amount to vector (mask and DUP)
   // SIMDBroadcastShift(lane_size, negate): mask scalar, optionally negate, DUP to all lanes
   // Uses: [shift_scalar], Defs: [temp_gpr, shift_vec]
@@ -1002,9 +987,6 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     SIMDAbs(lane_size) => "abs.\{lane_size}"
     SIMDNeg(lane_size) => "neg.\{lane_size}"
     SIMDCnt => "cnt.16b"
-    SIMDShl(lane_size) => "shl.\{lane_size}"
-    SIMDSshr(lane_size) => "sshr.\{lane_size}"
-    SIMDUshr(lane_size) => "ushr.\{lane_size}"
     SIMDBroadcastShift(lane_size, negate) => {
       let neg = if negate { ".neg" } else { "" }
       "dup_shift\{neg}.\{lane_size}"
