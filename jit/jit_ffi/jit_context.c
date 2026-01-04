@@ -38,6 +38,11 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->memory_max_sizes = NULL; // Array of memory max sizes
     ctx->memory_count = 0;
 
+    // GC heap for inline allocation
+    ctx->gc_heap_ptr = NULL;      // Current allocation pointer
+    ctx->gc_heap_limit = NULL;    // Allocation limit
+    ctx->gc_heap = NULL;          // GcHeap* pointer
+
     // Additional fields (not accessed by JIT code directly)
     ctx->owns_indirect_table = 0; // Default: does not own table0_base
     ctx->args = NULL;
@@ -247,4 +252,28 @@ void ctx_set_table_pointers_internal(
             ctx->table0_elements = table_sizes[0];
         }
     }
+}
+
+// ============ GC Heap Support ============
+
+void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap) {
+    if (!ctx) return;
+
+    ctx->gc_heap = heap;
+    if (heap) {
+        // Set up pointers for inline allocation
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
+    } else {
+        ctx->gc_heap_ptr = NULL;
+        ctx->gc_heap_limit = NULL;
+    }
+}
+
+void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx) {
+    if (!ctx || !ctx->gc_heap) return;
+
+    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    ctx->gc_heap_ptr = heap->data + heap->size;
+    ctx->gc_heap_limit = heap->data + heap->capacity;
 }

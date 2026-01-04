@@ -313,3 +313,161 @@ void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
 
     gc_heap_array_copy(g_gc_heap, dst_gc_ref, dst_offset, src_gc_ref, src_offset, count);
 }
+
+// ============ Inline Allocation Support ============
+
+// Register a struct that was allocated inline by JIT code
+// obj_ptr points to the object in the heap (header already initialized)
+// Returns encoded gc_ref
+int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size) {
+    if (!ctx || !ctx->gc_heap || !obj_ptr) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+
+    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+
+    // Ensure object table has capacity
+    if (heap->object_count >= heap->object_capacity) {
+        int32_t new_capacity = heap->object_capacity * 2;
+        int32_t *new_table = (int32_t *)realloc(heap->object_table,
+                                                  new_capacity * sizeof(int32_t));
+        if (!new_table) {
+            g_trap_code = 3;
+            if (g_trap_active) {
+                siglongjmp(g_trap_jmp_buf, 1);
+            }
+            return 0;
+        }
+        heap->object_table = new_table;
+        heap->object_capacity = new_capacity;
+    }
+
+    // Calculate offset and register object
+    int32_t offset = (int32_t)(obj_ptr - heap->data);
+    int32_t gc_ref = heap->object_count + 1;  // 1-based
+    heap->object_table[heap->object_count] = offset;
+    heap->object_count++;
+    heap->total_allocations++;
+
+    // Update heap size to match what JIT allocated
+    heap->size = (size_t)(ctx->gc_heap_ptr - heap->data);
+
+    // Encode: gc_ref << 1
+    return ((int64_t)gc_ref) << 1;
+}
+
+// Slow path for struct allocation - called when inline check fails
+// Triggers GC if needed, grows heap, and allocates
+int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
+                              int64_t *fields, int32_t num_fields) {
+    // Try ctx->gc_heap first, fall back to global g_gc_heap
+    GcHeap *heap = ctx ? (GcHeap *)ctx->gc_heap : NULL;
+    if (!heap) {
+        heap = g_gc_heap;
+    }
+    if (!heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+
+    // Handle struct.new_default: num_fields == 0 means use default values
+    int64_t *actual_fields = fields;
+    int32_t actual_num_fields = num_fields;
+    int64_t *default_fields = NULL;
+
+    if (num_fields == 0 && g_gc_type_cache && type_idx >= 0 && type_idx < g_gc_num_types) {
+        // Get actual field count from type cache
+        // Format: [super_idx, kind, num_fields] per type
+        actual_num_fields = g_gc_type_cache[type_idx * 3 + 2];
+        if (actual_num_fields > 0) {
+            // Allocate and zero-initialize default fields
+            default_fields = (int64_t *)calloc(actual_num_fields, sizeof(int64_t));
+            if (!default_fields) {
+                g_trap_code = 3;  // Allocation failed
+                if (g_trap_active) {
+                    siglongjmp(g_trap_jmp_buf, 1);
+                }
+                return 0;
+            }
+            actual_fields = default_fields;
+        }
+    }
+
+    // Try to allocate (this will grow heap if needed)
+    int32_t gc_ref = gc_heap_alloc_struct(heap, type_idx, actual_fields, actual_num_fields);
+
+    // Free temporary default fields buffer
+    if (default_fields) {
+        free(default_fields);
+    }
+
+    if (gc_ref == 0) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+
+    // Update VMContext heap pointers if ctx is available (heap may have grown)
+    // Also set ctx->gc_heap if we fell back to g_gc_heap, to keep VMContext in sync
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
+    }
+
+    // Encode: gc_ref << 1
+    return ((int64_t)gc_ref) << 1;
+}
+
+// Register an array that was allocated inline by JIT code
+int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size) {
+    // Same as struct registration - just register in object table
+    return gc_register_struct_inline(ctx, obj_ptr, total_size);
+}
+
+// Slow path for array allocation
+int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
+                             int32_t len, int64_t init_value) {
+    // Try ctx->gc_heap first, fall back to global g_gc_heap
+    GcHeap *heap = ctx ? (GcHeap *)ctx->gc_heap : NULL;
+    if (!heap) {
+        heap = g_gc_heap;
+    }
+    if (!heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+
+    // Try to allocate (this will grow heap if needed)
+    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, len, init_value);
+    if (gc_ref == 0) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+
+    // Update VMContext heap pointers if ctx is available (heap may have grown)
+    // Also set ctx->gc_heap if we fell back to g_gc_heap, to keep VMContext in sync
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
+    }
+
+    // Encode: gc_ref << 1
+    return ((int64_t)gc_ref) << 1;
+}

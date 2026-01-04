@@ -665,6 +665,26 @@ pub extern "c" fn c_jit_get_gc_array_copy_ptr() -> Int64 = "wasmoon_jit_get_gc_a
 pub extern "c" fn c_jit_get_gc_type_check_subtype_ptr() -> Int64 = "wasmoon_jit_get_gc_type_check_subtype_ptr"
 
 ///|
+/// Get gc_register_struct_inline function pointer for inline allocation
+/// Signature: int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size)
+pub extern "c" fn c_jit_get_gc_register_struct_inline_ptr() -> Int64 = "wasmoon_jit_get_gc_register_struct_inline_ptr"
+
+///|
+/// Get gc_register_array_inline function pointer for inline allocation
+/// Signature: int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size)
+pub extern "c" fn c_jit_get_gc_register_array_inline_ptr() -> Int64 = "wasmoon_jit_get_gc_register_array_inline_ptr"
+
+///|
+/// Get gc_alloc_struct_slow function pointer for slow path
+/// Signature: int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fields, int32_t num_fields)
+pub extern "c" fn c_jit_get_gc_alloc_struct_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_struct_slow_ptr"
+
+///|
+/// Get gc_alloc_array_slow function pointer for slow path
+/// Signature: int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, int64_t init_value)
+pub extern "c" fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_slow_ptr"
+
+///|
 /// Set type cache for GC operations
 /// types_data: array of [super_idx, kind] pairs per type
 #borrow(types_data)
@@ -711,6 +731,14 @@ pub extern "c" fn c_jit_gc_clear_heap() -> Unit = "wasmoon_jit_gc_clear_heap"
 ///|
 /// Get current GC heap pointer (for debugging)
 pub extern "c" fn c_jit_gc_get_heap() -> Int64 = "wasmoon_jit_gc_get_heap"
+
+///|
+/// Set GC heap pointer in VMContext for inline allocation
+/// This enables ctx-passing GC libcalls
+pub extern "c" fn c_jit_ctx_set_gc_heap(
+  ctx_ptr : Int64,
+  heap_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_set_gc_heap"
 
 // ============ C GC Heap ============
 

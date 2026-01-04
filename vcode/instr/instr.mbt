@@ -30,6 +30,11 @@ pub(all) enum GCLibcall {
   ArrayFill // gc_array_fill_impl
   ArrayCopy // gc_array_copy_impl
   TypeCheckSubtype // gc_type_check_subtype - checks subtyping for call_indirect
+  // Inline allocation support (ctx-passing)
+  RegisterStructInline // gc_register_struct_inline - register inline-allocated struct
+  RegisterArrayInline // gc_register_array_inline - register inline-allocated array
+  AllocStructSlow // gc_alloc_struct_slow - slow path for struct allocation
+  AllocArraySlow // gc_alloc_array_slow - slow path for array allocation
 } derive(Eq, Show)
 
 ///|

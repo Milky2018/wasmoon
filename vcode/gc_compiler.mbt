@@ -55,17 +55,34 @@ pub(open) trait GcCompiler {
   // === Allocation Code Generation ===
 
   /// Generate code to allocate a struct
+  /// func: the VCode function being compiled
+  /// block: the block to emit instructions into
   /// type_idx: the struct type index
   /// field_vregs: virtual registers containing field values
   /// Returns: virtual register containing the new struct reference
-  gen_alloc_struct(Self, @regalloc.VCodeFunction, Int, Array[@abi.VReg]) -> @abi.VReg
+  gen_alloc_struct(
+    Self,
+    @regalloc.VCodeFunction,
+    @block.VCodeBlock,
+    Int,
+    Array[@abi.VReg],
+  ) -> @abi.VReg
 
   /// Generate code to allocate an array
+  /// func: the VCode function being compiled
+  /// block: the block to emit instructions into
   /// type_idx: the array type index
   /// len_vreg: virtual register containing array length
   /// init_vreg: virtual register containing initial element value (optional)
   /// Returns: virtual register containing the new array reference
-  gen_alloc_array(Self, @regalloc.VCodeFunction, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
+  gen_alloc_array(
+    Self,
+    @regalloc.VCodeFunction,
+    @block.VCodeBlock,
+    Int,
+    @abi.VReg,
+    @abi.VReg?,
+  ) -> @abi.VReg
 
   // === Barrier Code Generation ===
 
@@ -142,23 +159,27 @@ pub impl GcCompiler for NoBarrierGcCompiler with config(_self) -> GcCompilerConf
 pub impl GcCompiler for NoBarrierGcCompiler with gen_alloc_struct(
   _self,
   _func,
+  _block,
   _type_idx,
   _field_vregs,
 ) -> @abi.VReg {
-  // TODO: Generate call to runtime alloc_struct
-  // For now, GC allocation is not supported in JIT
-  abort("GC allocation not yet implemented in JIT")
+  // Not used - lower_struct_new uses ctx-passing libcalls directly
+  // TODO: Future work - implement inline bump pointer allocation
+  abort("gen_alloc_struct not implemented - use libcalls")
 }
 
 ///|
 pub impl GcCompiler for NoBarrierGcCompiler with gen_alloc_array(
   _self,
   _func,
+  _block,
   _type_idx,
   _len_vreg,
   _init_vreg,
 ) -> @abi.VReg {
-  abort("GC allocation not yet implemented in JIT")
+  // Not used - lower_array_new uses ctx-passing libcalls directly
+  // TODO: Future work - implement inline bump pointer allocation
+  abort("gen_alloc_array not implemented - use libcalls")
 }
 
 ///|

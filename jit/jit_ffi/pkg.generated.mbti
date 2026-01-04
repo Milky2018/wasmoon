@@ -92,6 +92,8 @@ pub fn c_jit_ctx_get_func_table(Int64) -> Int64
 
 pub fn c_jit_ctx_set_func(Int64, Int, Int64) -> Unit
 
+pub fn c_jit_ctx_set_gc_heap(Int64, Int64) -> Unit
+
 pub fn c_jit_ctx_set_globals(Int64, Int64) -> Unit
 
 pub fn c_jit_ctx_set_indirect(Int64, Int, Int, Int) -> Unit
@@ -202,6 +204,10 @@ pub fn c_jit_get_fd_tell_ptr() -> Int64
 
 pub fn c_jit_get_fd_write_ptr() -> Int64
 
+pub fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64
+
+pub fn c_jit_get_gc_alloc_struct_slow_ptr() -> Int64
+
 pub fn c_jit_get_gc_array_copy_ptr() -> Int64
 
 pub fn c_jit_get_gc_array_fill_ptr() -> Int64
@@ -217,6 +223,10 @@ pub fn c_jit_get_gc_array_set_ptr() -> Int64
 pub fn c_jit_get_gc_ref_cast_ptr() -> Int64
 
 pub fn c_jit_get_gc_ref_test_ptr() -> Int64
+
+pub fn c_jit_get_gc_register_array_inline_ptr() -> Int64
+
+pub fn c_jit_get_gc_register_struct_inline_ptr() -> Int64
 
 pub fn c_jit_get_gc_struct_get_ptr() -> Int64
 

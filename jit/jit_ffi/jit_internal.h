@@ -81,6 +81,10 @@ void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_
 // Table operations
 int32_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t delta, int64_t init_value);
 
+// GC heap management
+void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
+void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
+
 // ============ GC Type Cache (gc_type_cache.c) ============
 
 // Abstract type indices (negative values)
@@ -174,5 +178,13 @@ int32_t gc_array_len_impl(int64_t ref);
 void gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t count);
 void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
                         int64_t src_ref, int32_t src_offset, int32_t count);
+
+// Inline allocation support (for JIT fast path)
+int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
+int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
+int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
+                              int64_t *fields, int32_t num_fields);
+int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
+                             int32_t len, int64_t init_value);
 
 #endif // JIT_INTERNAL_H
