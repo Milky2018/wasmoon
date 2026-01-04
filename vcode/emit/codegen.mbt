@@ -1855,15 +1855,16 @@ fn MachineCode::emit_instruction(
     }
     SIMDShuffle(lanes) => {
       // i8x16.shuffle: select lanes from two source vectors using constant indices
-      // TBL2 requires consecutive source registers, so we use scratch regs V16, V17
-      // Indices loaded into V18
+      // TBL2 requires consecutive source registers. We use reserved V30/V31 pair
+      // (post-regalloc fixup: V30-V31 excluded from allocatable pool in abi.mbt).
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0]) // first source
       let rm = reg_num(inst.uses[1]) // second source
-      // Step 1: Copy sources to consecutive scratch registers V16, V17
-      OrrVec(16, rn).emit(self) // V16 = source 1
-      OrrVec(17, rm).emit(self) // V17 = source 2
-      // Step 2: Load lane indices as V128 constant into V18
+      // Step 1: Copy sources to reserved consecutive pair V30, V31
+      let pair_start = @abi.CONSECUTIVE_FPR_PAIR_START // V30
+      OrrVec(pair_start, rn).emit(self) // V30 = source 1
+      OrrVec(pair_start + 1, rm).emit(self) // V31 = source 2
+      // Step 2: Load lane indices as V128 constant into rd (reuse result reg as temp)
       // Build two Int64 values from the 16 lane indices (little-endian)
       let mut low = 0L
       let mut high = 0L
@@ -1871,18 +1872,18 @@ fn MachineCode::emit_instruction(
         low = low | ((lanes[i].to_int64() & 0xFFL) << (i * 8))
         high = high | ((lanes[i + 8].to_int64() & 0xFFL) << (i * 8))
       }
-      // Load indices into V18
-      MoviZero(18).emit(self)
+      // Load indices into rd (result register, safe to use before TBL2 writes it)
+      MoviZero(rd).emit(self)
       if low != 0L {
-        self.emit_load_imm64(16, low) // Use X16 as scratch
-        InsD(18, 0, 16).emit(self)
+        self.emit_load_imm64(16, low) // X16 is reserved GPR scratch
+        InsD(rd, 0, 16).emit(self)
       }
       if high != 0L {
         self.emit_load_imm64(16, high)
-        InsD(18, 1, 16).emit(self)
+        InsD(rd, 1, 16).emit(self)
       }
-      // Step 3: Execute TBL2 with consecutive regs V16, V17 and indices V18
-      Tbl2(rd, 16, 17, 18).emit(self)
+      // Step 3: Execute TBL2 with consecutive regs V30, V31 and indices in rd
+      Tbl2(rd, pair_start, pair_start + 1, rd).emit(self)
     }
     SIMDSwizzle => {
       let rd = wreg_num(inst.defs[0])
@@ -2073,6 +2074,15 @@ fn MachineCode::emit_instruction(
         B8 => {
           // i8x16.bitmask: 16 lanes -> 16-bit result
           // Use weighted add approach for efficiency
+          // V16 = weights, V17 = shift amount, V18 = working register
+          // If input rn is V16 or V17, we'd clobber it before reading.
+          // Copy to emit scratch (V29) first if needed.
+          let actual_rn = if rn == 16 || rn == 17 {
+            OrrVec(@abi.EMIT_SCRATCH_FPR, rn).emit(self)
+            @abi.EMIT_SCRATCH_FPR
+          } else {
+            rn
+          }
           // Step 1: Load weights [1,2,4,8,16,32,64,128,1,2,4,8,16,32,64,128]
           // 0x8040201008040201 = weights for 8 bytes (little endian)
           LoadImm64(17, 0x8040201008040201L).emit(self)
@@ -2088,7 +2098,7 @@ fn MachineCode::emit_instruction(
           // But the shift amount in Vm is interpreted as signed byte per lane
           // 0xF9 = -7 in signed byte interpretation
           Dup16B(17, 17).emit(self) // V17.16B = all 0xF9 = -7
-          Sshl16B(18, rn, 17).emit(self) // V18 = signed shift right by 7
+          Sshl16B(18, actual_rn, 17).emit(self) // V18 = signed shift right by 7
           // Now V18 has 0x00 or 0xFF in each lane (all 0s or all 1s)
           // Step 3: AND with weights to get weighted bits
           And16B(18, 18, 16).emit(self) // V18 = weighted bits
@@ -2317,8 +2327,12 @@ fn MachineCode::emit_instruction(
       // Note: if temp_shift == rn (regalloc coalesced), we'd clobber input.
       // Workaround: check and use fallback if needed.
       let actual_shift = if temp_shift == rn {
-        // temp and input collided - use rd as temp if different, otherwise V31
-        if rd != rn { rd } else { 31 }
+        // temp and input collided - use rd as temp if different, otherwise emit scratch
+        if rd != rn {
+          rd
+        } else {
+          @abi.EMIT_SCRATCH_FPR
+        }
       } else {
         temp_shift
       }
@@ -2356,7 +2370,11 @@ fn MachineCode::emit_instruction(
       self.emit_sub_reg(16, 31, 16)
       // Broadcast to temp_shift, with fallback if collision
       let actual_shift = if temp_shift == rn {
-        if rd != rn { rd } else { 31 }
+        if rd != rn {
+          rd
+        } else {
+          @abi.EMIT_SCRATCH_FPR
+        }
       } else {
         temp_shift
       }
@@ -2394,7 +2412,11 @@ fn MachineCode::emit_instruction(
       self.emit_sub_reg(16, 31, 16)
       // Broadcast to temp_shift, with fallback if collision
       let actual_shift = if temp_shift == rn {
-        if rd != rn { rd } else { 31 }
+        if rd != rn {
+          rd
+        } else {
+          @abi.EMIT_SCRATCH_FPR
+        }
       } else {
         temp_shift
       }
@@ -2967,16 +2989,21 @@ fn MachineCode::emit_instruction(
       // Handle aliasing: if rd == rn or rd == rm, copying acc to rd
       // would clobber the multiplicand. Copy the aliased operand first.
       // We must always use FMLA for consistent rounding behavior.
+      // Use reserved registers: V29 (EMIT_SCRATCH_FPR), V30 if second needed
       let actual_rn = if rd == rn {
         // Copy rn to temp before clobbering
-        OrrVec(31, rn).emit(self)
-        31
+        OrrVec(@abi.EMIT_SCRATCH_FPR, rn).emit(self)
+        @abi.EMIT_SCRATCH_FPR
       } else {
         rn
       }
       let actual_rm = if rd == rm {
-        // Copy rm to temp before clobbering (use v30 if v31 already used)
-        let temp = if rd == rn { 30 } else { 31 }
+        // Copy rm to temp before clobbering (use V30 if V29 already used)
+        let temp = if rd == rn {
+          @abi.CONSECUTIVE_FPR_PAIR_START
+        } else {
+          @abi.EMIT_SCRATCH_FPR
+        }
         OrrVec(temp, rm).emit(self)
         temp
       } else {
@@ -3000,16 +3027,21 @@ fn MachineCode::emit_instruction(
       // Handle aliasing: if rd == rn or rd == rm, copying acc to rd
       // would clobber the multiplicand. Copy the aliased operand first.
       // We must always use FMLS for consistent rounding behavior.
+      // Use reserved registers: V29 (EMIT_SCRATCH_FPR), V30 if second needed
       let actual_rn = if rd == rn {
         // Copy rn to temp before clobbering
-        OrrVec(31, rn).emit(self)
-        31
+        OrrVec(@abi.EMIT_SCRATCH_FPR, rn).emit(self)
+        @abi.EMIT_SCRATCH_FPR
       } else {
         rn
       }
       let actual_rm = if rd == rm {
-        // Copy rm to temp before clobbering (use v30 if v31 already used)
-        let temp = if rd == rn { 30 } else { 31 }
+        // Copy rm to temp before clobbering (use V30 if V29 already used)
+        let temp = if rd == rn {
+          @abi.CONSECUTIVE_FPR_PAIR_START
+        } else {
+          @abi.EMIT_SCRATCH_FPR
+        }
         OrrVec(temp, rm).emit(self)
         temp
       } else {

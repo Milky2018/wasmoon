@@ -360,7 +360,9 @@ pub fn callee_saved_fprs() -> Array[PReg] {
 
 ///|
 /// Allocatable floating-point registers (caller-saved, no save/restore needed)
-/// V16-V31 are available for allocation
+/// V16-V29 are available for allocation.
+/// V30-V31 are reserved for emit-time consecutive register operations (e.g., TBL2)
+/// which require adjacent register pairs. This is a post-regalloc fixup strategy.
 pub fn allocatable_scratch_fprs() -> Array[PReg] {
   [
     { index: 16, class: Float64 },
@@ -377,10 +379,20 @@ pub fn allocatable_scratch_fprs() -> Array[PReg] {
     { index: 27, class: Float64 },
     { index: 28, class: Float64 },
     { index: 29, class: Float64 },
-    { index: 30, class: Float64 },
-    { index: 31, class: Float64 },
+    // V30-V31 reserved for consecutive register operations (TBL2, etc.)
   ]
 }
+
+///|
+/// Reserved consecutive FPR pair for emit-time fixups.
+/// Used by instructions like TBL2 that require adjacent registers.
+pub const CONSECUTIVE_FPR_PAIR_START : Int = 30 // V30, V31
+
+///|
+/// Emit-time scratch FPR for fallback cases (e.g., when regalloc coalesces
+/// temp with input and we need an alternative). V29 is in allocatable pool
+/// but rarely conflicts since emit uses it only as last resort.
+pub const EMIT_SCRATCH_FPR : Int = 29 // V29
 
 ///|
 /// Allocatable callee-saved floating-point registers (must be saved/restored)

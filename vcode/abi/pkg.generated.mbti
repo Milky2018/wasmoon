@@ -2,6 +2,10 @@
 package "Milky2018/wasmoon/vcode/abi"
 
 // Values
+pub const CONSECUTIVE_FPR_PAIR_START : Int = 30
+
+pub const EMIT_SCRATCH_FPR : Int = 29
+
 pub const FLOAT_PARAM_BASE_REG : Int = 0
 
 pub const MAX_FLOAT_REG_PARAMS : Int = 8
