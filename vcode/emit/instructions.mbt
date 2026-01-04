@@ -62,6 +62,10 @@ enum Instruction {
   LsrReg32(Int, Int, Int)
   AsrReg32(Int, Int, Int)
   RorReg32(Int, Int, Int)
+  // Shift - Immediate (64-bit): LSR Xd, Xn, #shift
+  LsrImm(Int, Int, Int)
+  // Shift - Immediate (32-bit): LSR Wd, Wn, #shift
+  LsrImm32(Int, Int, Int)
   // Bit manipulation (64-bit)
   Clz(Int, Int)
   Rbit(Int, Int)
@@ -572,6 +576,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     LsrReg32(rd, rn, rm) => "lsr w\{rd}, w\{rn}, w\{rm}"
     AsrReg32(rd, rn, rm) => "asr w\{rd}, w\{rn}, w\{rm}"
     RorReg32(rd, rn, rm) => "ror w\{rd}, w\{rn}, w\{rm}"
+    LsrImm(rd, rn, shift) => "lsr x\{rd}, x\{rn}, #\{shift}"
+    LsrImm32(rd, rn, shift) => "lsr w\{rd}, w\{rn}, #\{shift}"
     Clz(rd, rn) => "clz x\{rd}, x\{rn}"
     Rbit(rd, rn) => "rbit x\{rd}, x\{rn}"
     Clz32(rd, rn) => "clz w\{rd}, w\{rn}"
@@ -1352,6 +1358,22 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = ((rn >> 3) & 3) | (11 << 2)
       let b2 = 0xC0 | (rm & 31)
       let b3 = 0x1A // 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    LsrImm(rd, rn, shift) => {
+      // LSR Xd, Xn, #shift = UBFM Xd, Xn, #shift, #63
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = 0xFC | ((rn >> 3) & 3) // imms=63
+      let b2 = 0x40 | (shift & 63) // N=1, immr=shift
+      let b3 = 0xD3 // sf=1, opc=10, 100110
+      (b0, b1, b2, b3)
+    }
+    LsrImm32(rd, rn, shift) => {
+      // LSR Wd, Wn, #shift = UBFM Wd, Wn, #shift, #31
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = 0x7C | ((rn >> 3) & 3) // imms=31
+      let b2 = shift & 31 // N=0, immr=shift
+      let b3 = 0x53 // sf=0, opc=10, 100110
       (b0, b1, b2, b3)
     }
     Clz(rd, rn) => {
@@ -3925,6 +3947,26 @@ pub fn MachineCode::emit_ror_reg32(
 }
 
 ///|
+pub fn MachineCode::emit_lsr_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  LsrImm(rd, rn, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_lsr_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  LsrImm32(rd, rn, shift).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_clz32(self : MachineCode, rd : Int, rn : Int) -> Unit {
   Clz32(rd, rn).emit(self)
 }
@@ -4352,11 +4394,6 @@ fn MachineCode::emit_b_cond_offset(
   offset_bytes : Int,
 ) -> Unit {
   BCondOffset(cond, offset_bytes).emit(self)
-}
-
-///|
-fn MachineCode::emit_b_offset(self : MachineCode, offset_bytes : Int) -> Unit {
-  BOffset(offset_bytes).emit(self)
 }
 
 ///|
