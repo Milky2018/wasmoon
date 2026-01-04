@@ -488,9 +488,14 @@ fn run_test_command_internal(
             )
           }
         }
-        Get(_, field) =>
-          // Get that should trap - skip for now
-          result.add_skipped("assert_trap (get) not implemented: \{field}")
+        Get(_, field) => {
+          // assert_trap with get is not used in WebAssembly spec tests
+          // If this is triggered, the test file contains non-standard constructs
+          result.failed += 1
+          result.failures.push(
+            "\{line_prefix}assert_trap (get \{field}) is not supported",
+          )
+        }
       }
     AssertInvalid(filename, _msg) => {
       // Should fail to validate (parse succeeds, but validation fails)
