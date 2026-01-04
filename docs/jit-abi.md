@@ -29,7 +29,9 @@ Wasmoon uses a custom calling convention optimized for WebAssembly execution.
 |----------|-------|-------|
 | V0-V7 | Float parameters/returns | Caller |
 | V8-V15 | Callee-saved (low 64 bits) | Callee |
-| V16-V31 | Scratch (allocatable) | Caller |
+| V16-V28 | Scratch (allocatable) | Caller |
+| V29 | Reserved (emit-time scratch) | - |
+| V30-V31 | Reserved (consecutive pair ops) | - |
 
 ### Parameter Passing
 
