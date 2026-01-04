@@ -1623,19 +1623,24 @@ fn MachineCode::emit_instruction(
         @abi.VMCTX_GC_HEAP_LIMIT_OFFSET,
       )
 
-      // Step 2: Calculate new_ptr = heap_ptr + object_size
-      self.emit_add_imm(new_ptr_reg, heap_ptr_reg, object_size)
+      // Step 2: Load object_size into register and calculate new_ptr
+      // Use X11 for object_size (caller-saved, avoids X8-X10 used for other temps)
+      let size_imm_reg = 11 // X11 holds object_size for reuse in fast path
+      self.emit_load_imm64_fixed(size_imm_reg, object_size.to_int64())
+      self.emit_add_reg(new_ptr_reg, heap_ptr_reg, size_imm_reg)
 
       // Step 3: Compare new_ptr with heap_limit
       self.emit_cmp_reg(new_ptr_reg, heap_limit_reg)
 
       // Step 4: Calculate instruction counts for branch offsets
-      // Fast path: 1 (STR heap_ptr) + 1 (MOVZ header) + 1 (MOVK or NOP) + 1 (STR W header)
-      //          + 1 (MOVZ size) + 1 (STR W size) + 4 (load_imm64_fixed field_count) + 1 (STR field_count)
-      //          + num_fields * 1 (field stores)
-      //          + 1 (MOV X0 or NOP) + 1 (MOV X1) + 1 (MOVZ X2) + 4 (load_imm64_fixed func ptr) + 1 (BLR) + 1 (B done)
-      // Total fast path: 20 + num_fields (all fixed-size)
-      let fast_path_instr_count = 20 + num_fields
+      // Fast path: 1 (STR heap_ptr) + num_fields (field stores)
+      //          + 1 (MOVZ header) + 1 (MOVK or NOP) + 1 (STR W header) = 3
+      //          + 1 (STR W size using X11) = 1
+      //          + 4 (load_imm64_fixed field_count) + 1 (STR field_count) = 5
+      //          + 1 (MOV X0 or NOP) + 1 (MOV X1) + 1 (MOV X2 from X11) = 3
+      //          + 4 (load_imm64_fixed func ptr) + 1 (BLR) + 1 (B done) = 6
+      // Total fast path: 1 + num_fields + 3 + 1 + 5 + 3 + 6 = 19 + num_fields
+      let fast_path_instr_count = 19 + num_fields
       let slow_path_start_offset = fast_path_instr_count * 4
 
       // B.HI slow_path (condition code 8 = HI = unsigned higher)
@@ -1672,15 +1677,14 @@ fn MachineCode::emit_instruction(
       // STR W9, [X16, #0]
       self.emit_str_w_imm(header_reg, heap_ptr_reg, 0)
 
-      // Store size at offset 4
-      let size_reg = 10
-      self.emit_movz(size_reg, object_size & 0xFFFF, 0)
-      self.emit_str_w_imm(size_reg, heap_ptr_reg, 4)
+      // Store size at offset 4 (use X11 which already holds object_size)
+      self.emit_str_w_imm(size_imm_reg, heap_ptr_reg, 4)
 
       // Store field_count (reserved) at offset 8
       // Use fixed-size load (4 instructions) for predictable branch offsets
-      self.emit_load_imm64_fixed(size_reg, num_fields.to_int64())
-      self.emit_str_imm(size_reg, heap_ptr_reg, 8)
+      let field_count_reg = 10 // X10 for field_count
+      self.emit_load_imm64_fixed(field_count_reg, num_fields.to_int64())
+      self.emit_str_imm(field_count_reg, heap_ptr_reg, 8)
 
       // Call gc_register_struct_inline(ctx, obj_ptr, total_size)
       // Setup arguments: X0=ctx, X1=obj_ptr, X2=total_size
@@ -1691,7 +1695,7 @@ fn MachineCode::emit_instruction(
         self.emit_nop() // vmctx already in X0
       }
       self.emit_mov_reg(1, heap_ptr_reg)
-      self.emit_movz(2, object_size & 0xFFFF, 0)
+      self.emit_mov_reg(2, size_imm_reg) // Use X11 (full 64-bit object_size)
 
       // Load function pointer for gc_register_struct_inline (4 instructions, fixed)
       let register_func_ptr = @jit_ffi.c_jit_get_gc_register_struct_inline_ptr()
