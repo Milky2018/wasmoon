@@ -2299,12 +2299,12 @@ fn MachineCode::emit_instruction(
     SIMDShl(lane_size) => {
       // WebAssembly SIMD shift: vector operand in uses[0], scalar shift amount in uses[1]
       // NEON SSHL expects: vector in Vn, shift amount replicated in Vm (per lane)
-      // Shift amount is masked to valid range and broadcast to all lanes
-      let rd = wreg_num(inst.defs[0])
+      // Layout: defs[0]=temp_shift_vec, defs[1]=result, uses[0]=vec, uses[1]=shift
+      let temp_shift = wreg_num(inst.defs[0]) // Allocated by regalloc for shift broadcast
+      let rd = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1]) // scalar shift amount in GPR
-      // Mask shift amount to valid range using X16
-      // Load mask into X17, then AND X16 = rm & X17
+      // Mask shift amount to valid range using X16/X17 (linker scratch, safe)
       let mask = match lane_size {
         B8 => 7L
         H16 => 15L
@@ -2313,27 +2313,37 @@ fn MachineCode::emit_instruction(
       }
       self.emit_movz(17, mask.to_int(), 0) // X17 = mask
       self.emit_and_reg(16, rm, 17) // X16 = shift_amount & mask
-      // Broadcast shift amount to V16 using DUP
-      match lane_size {
-        B8 => Dup16B(16, 16).emit(self) // V16.16B = X16
-        H16 => Dup8H(16, 16).emit(self)
-        S32 => Dup4S(16, 16).emit(self)
-        D64 => Dup2D(16, 16).emit(self)
+      // Broadcast shift amount to temp_shift using DUP
+      // Note: if temp_shift == rn (regalloc coalesced), we'd clobber input.
+      // Workaround: check and use fallback if needed.
+      let actual_shift = if temp_shift == rn {
+        // temp and input collided - use rd as temp if different, otherwise V31
+        if rd != rn { rd } else { 31 }
+      } else {
+        temp_shift
       }
-      // Use SSHL with vector shift amounts
       match lane_size {
-        B8 => Sshl16B(rd, rn, 16).emit(self)
-        H16 => Sshl8H(rd, rn, 16).emit(self)
-        S32 => Sshl4S(rd, rn, 16).emit(self)
-        D64 => Sshl2D(rd, rn, 16).emit(self)
+        B8 => Dup16B(actual_shift, 16).emit(self)
+        H16 => Dup8H(actual_shift, 16).emit(self)
+        S32 => Dup4S(actual_shift, 16).emit(self)
+        D64 => Dup2D(actual_shift, 16).emit(self)
+      }
+      // Use SSHL: rd = SSHL(rn, actual_shift)
+      match lane_size {
+        B8 => Sshl16B(rd, rn, actual_shift).emit(self)
+        H16 => Sshl8H(rd, rn, actual_shift).emit(self)
+        S32 => Sshl4S(rd, rn, actual_shift).emit(self)
+        D64 => Sshl2D(rd, rn, actual_shift).emit(self)
       }
     }
     SIMDSshr(lane_size) => {
       // For signed right shift, negate the shift amount and use SSHL
-      let rd = wreg_num(inst.defs[0])
+      // Layout: defs[0]=temp_shift_vec, defs[1]=result, uses[0]=vec, uses[1]=shift
+      let temp_shift = wreg_num(inst.defs[0])
+      let rd = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      // Mask shift amount
+      // Mask shift amount using X16/X17 (linker scratch, safe)
       let mask = match lane_size {
         B8 => 7L
         H16 => 15L
@@ -2344,27 +2354,34 @@ fn MachineCode::emit_instruction(
       self.emit_and_reg(16, rm, 17)
       // Negate: X16 = -X16 (SUB X16, XZR, X16)
       self.emit_sub_reg(16, 31, 16)
-      // Broadcast to V16
+      // Broadcast to temp_shift, with fallback if collision
+      let actual_shift = if temp_shift == rn {
+        if rd != rn { rd } else { 31 }
+      } else {
+        temp_shift
+      }
       match lane_size {
-        B8 => Dup16B(16, 16).emit(self)
-        H16 => Dup8H(16, 16).emit(self)
-        S32 => Dup4S(16, 16).emit(self)
-        D64 => Dup2D(16, 16).emit(self)
+        B8 => Dup16B(actual_shift, 16).emit(self)
+        H16 => Dup8H(actual_shift, 16).emit(self)
+        S32 => Dup4S(actual_shift, 16).emit(self)
+        D64 => Dup2D(actual_shift, 16).emit(self)
       }
       // SSHL with negative shift = signed right shift
       match lane_size {
-        B8 => Sshl16B(rd, rn, 16).emit(self)
-        H16 => Sshl8H(rd, rn, 16).emit(self)
-        S32 => Sshl4S(rd, rn, 16).emit(self)
-        D64 => Sshl2D(rd, rn, 16).emit(self)
+        B8 => Sshl16B(rd, rn, actual_shift).emit(self)
+        H16 => Sshl8H(rd, rn, actual_shift).emit(self)
+        S32 => Sshl4S(rd, rn, actual_shift).emit(self)
+        D64 => Sshl2D(rd, rn, actual_shift).emit(self)
       }
     }
     SIMDUshr(lane_size) => {
       // For unsigned right shift, negate the shift amount and use USHL
-      let rd = wreg_num(inst.defs[0])
+      // Layout: defs[0]=temp_shift_vec, defs[1]=result, uses[0]=vec, uses[1]=shift
+      let temp_shift = wreg_num(inst.defs[0])
+      let rd = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      // Mask shift amount
+      // Mask shift amount using X16/X17 (linker scratch, safe)
       let mask = match lane_size {
         B8 => 7L
         H16 => 15L
@@ -2375,19 +2392,24 @@ fn MachineCode::emit_instruction(
       self.emit_and_reg(16, rm, 17)
       // Negate: X16 = -X16
       self.emit_sub_reg(16, 31, 16)
-      // Broadcast to V16
+      // Broadcast to temp_shift, with fallback if collision
+      let actual_shift = if temp_shift == rn {
+        if rd != rn { rd } else { 31 }
+      } else {
+        temp_shift
+      }
       match lane_size {
-        B8 => Dup16B(16, 16).emit(self)
-        H16 => Dup8H(16, 16).emit(self)
-        S32 => Dup4S(16, 16).emit(self)
-        D64 => Dup2D(16, 16).emit(self)
+        B8 => Dup16B(actual_shift, 16).emit(self)
+        H16 => Dup8H(actual_shift, 16).emit(self)
+        S32 => Dup4S(actual_shift, 16).emit(self)
+        D64 => Dup2D(actual_shift, 16).emit(self)
       }
       // USHL with negative shift = unsigned right shift
       match lane_size {
-        B8 => Ushl16B(rd, rn, 16).emit(self)
-        H16 => Ushl8H(rd, rn, 16).emit(self)
-        S32 => Ushl4S(rd, rn, 16).emit(self)
-        D64 => Ushl2D(rd, rn, 16).emit(self)
+        B8 => Ushl16B(rd, rn, actual_shift).emit(self)
+        H16 => Ushl8H(rd, rn, actual_shift).emit(self)
+        S32 => Ushl4S(rd, rn, actual_shift).emit(self)
+        D64 => Ushl2D(rd, rn, actual_shift).emit(self)
       }
     }
     SIMDCmp(lane_size, cmp_kind) => {

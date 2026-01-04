@@ -275,6 +275,14 @@ fn lower_v128_ternary(
 
 ///|
 /// Lower V128 shift operation (takes v128 and i32 shift amount)
+/// Allocates a temp FPR vreg for the shift broadcast vector.
+/// Instruction layout:
+///   defs[0] = temp FPR (for shift broadcast - written before input is read)
+///   defs[1] = result
+///   uses[0] = vector operand (read by SSHL after temp is written)
+///   uses[1] = scalar shift amount (GPR)
+/// The temp is used for DUP (shift broadcast), then SSHL reads input and temp.
+/// Since SSHL reads all inputs before writing result, rd==rn is safe.
 fn lower_v128_shift(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -285,10 +293,13 @@ fn lower_v128_shift(
     let dst = ctx.get_vreg(result)
     let vec = ctx.get_vreg_for_use(inst.operands[0], block)
     let shift = ctx.get_vreg_for_use(inst.operands[1], block)
+    // Allocate temp vreg for shift broadcast vector (DUP writes here)
+    let temp_shift_vec = ctx.vcode_func.new_vreg(@abi.Vector)
     let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(vec))
-    vcode_inst.add_use(Virtual(shift))
+    vcode_inst.add_def({ reg: Virtual(temp_shift_vec) }) // defs[0] = temp for shift
+    vcode_inst.add_def({ reg: Virtual(dst) }) // defs[1] = result
+    vcode_inst.add_use(Virtual(vec)) // uses[0] = input vector
+    vcode_inst.add_use(Virtual(shift)) // uses[1] = shift amount
     block.add_inst(vcode_inst)
   }
 }
