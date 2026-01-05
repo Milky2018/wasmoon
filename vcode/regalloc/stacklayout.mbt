@@ -11,7 +11,7 @@
 
 ///|
 /// A stack slot - a location on the stack
-pub(all) struct StackSlot {
+struct StackSlot {
   // Offset from frame pointer (negative = below FP, positive = above FP)
   offset : Int
   // Size in bytes
@@ -65,7 +65,7 @@ pub impl Show for StackSlot with output(self, logger) {
 
 ///|
 /// Stack frame layout for a function
-pub(all) struct StackFrame {
+struct StackFrame {
   // All stack slots
   slots : Array[StackSlot]
   // Total frame size (must be aligned)
@@ -78,8 +78,6 @@ pub(all) struct StackFrame {
   mut next_arg_offset : Int
   // Callee-saved registers used in this function
   callee_saved_regs : Array[@abi.PReg]
-  // Whether this function makes calls (affects stack layout)
-  mut has_calls : Bool
 }
 
 ///|
@@ -91,7 +89,6 @@ pub fn StackFrame::new(frame_align : Int) -> StackFrame {
     next_spill_offset: 0,
     next_arg_offset: 0,
     callee_saved_regs: [],
-    has_calls: false,
   }
 }
 
@@ -236,7 +233,7 @@ fn align_up(value : Int, align : Int) -> Int {
 
 ///|
 /// AArch64-specific stack frame configuration
-pub(all) struct AArch64StackFrame {
+struct AArch64StackFrame {
   frame : StackFrame
   // Whether to use frame pointer
   use_fp : Bool
@@ -283,12 +280,6 @@ pub fn AArch64StackFrame::alloc_spill(
     Vector => 16 // 128-bit SIMD vector
   }
   self.frame.alloc_spill_slot(vreg, size, size)
-}
-
-///|
-/// Mark that this function makes calls
-pub fn AArch64StackFrame::set_has_calls(self : AArch64StackFrame) -> Unit {
-  self.frame.has_calls = true
 }
 
 ///|
@@ -433,16 +424,6 @@ pub fn build_stack_layout_aarch64(
     }
   }
 
-  // Check if function makes any calls
-  for block in func.blocks {
-    for inst in block.insts {
-      if is_call_instruction(inst) {
-        frame.set_has_calls()
-        break
-      }
-    }
-  }
-
   // Finalize the frame
   frame.finalize()
   frame
@@ -467,12 +448,4 @@ fn find_vreg_by_id(func : VCodeFunction, id : Int) -> @abi.VReg? {
     }
   }
   None
-}
-
-///|
-fn is_call_instruction(inst : @instr.VCodeInst) -> Bool {
-  // For now, we don't have explicit call instructions in VCode
-  // This would be extended when we add call support
-  ignore(inst)
-  false
 }

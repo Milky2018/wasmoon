@@ -4,7 +4,7 @@
 
 ///|
 /// Union-Find data structure for grouping LiveRanges into Bundles
-pub(all) struct UnionFind {
+struct UnionFind {
   parent : Array[Int] // Parent pointer (or self if root)
   rank : Array[Int] // Rank for union by rank heuristic
 }

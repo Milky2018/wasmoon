@@ -5,7 +5,7 @@
 /// A Bundle groups related LiveRanges that should ideally be allocated
 /// to the same physical register. Bundles are formed by merging LiveRanges
 /// connected by Move instructions, block arguments, or tied operands.
-pub(all) struct Bundle {
+struct Bundle {
   id : Int
   range_ids : Array[Int] // Indices into LiveRangeSet
   mut spill_weight : Double // Priority for allocation (higher = more important)
@@ -141,7 +141,7 @@ pub fn Bundle::to_string(self : Bundle, _ranges : LiveRangeSet) -> String {
 /// A SpillBundle tracks a shared spill slot for split bundles.
 /// When a bundle is split, both parts share the same SpillBundle
 /// so they use the same stack slot.
-pub(all) struct SpillBundle {
+struct SpillBundle {
   id : Int
   slot : Int // Stack slot index
   bundle_ids : Array[Int] // Bundle IDs that share this spill slot
@@ -160,7 +160,7 @@ fn SpillBundle::add_bundle(self : SpillBundle, bundle_id : Int) -> Unit {
 
 ///|
 /// Collection of Bundles
-pub(all) struct BundleSet {
+struct BundleSet {
   bundles : Array[Bundle]
   spill_bundles : Array[SpillBundle]
   mut next_spill_slot : Int
@@ -301,7 +301,6 @@ pub fn compute_spill_weight(
       let base = match use_pos.kind {
         Def => 1.0
         Use => 1.0
-        DefUse => 2.0
       }
 
       // Loop depth multiplier (10x per nesting level)
