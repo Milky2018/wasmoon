@@ -1663,9 +1663,10 @@ test "bounds check elimination: combined addr and offset" {
 }
 
 ///|
-test "GVN: load CSE with same address" {
-  // Test that repeated loads from the same address are eliminated
-  let builder = IRBuilder::new("gvn_load_cse")
+test "GVN: loads are not CSE'd (can trap)" {
+  // LoadPtr has side effects (can trap on null pointer), so they are not CSE'd
+  // This is by design - a more sophisticated analysis would be needed to safely CSE loads
+  let builder = IRBuilder::new("gvn_load_no_cse")
   let ptr = builder.add_param(Type::I64)
   builder.add_result(Type::I32)
   let entry = builder.create_block()
@@ -1682,53 +1683,17 @@ test "GVN: load CSE with same address" {
   builder.return_([sum])
   let func = builder.get_function()
 
-  // Before GVN: iconst + two loads + iadd = 4 instructions
-  let before_count = func.blocks[0].instructions.length()
-
-  // Run GVN
-  let result = gvn_global(func)
-  assert_true(result.changed)
-
-  // After GVN: second load should be replaced with copy of first
-  let second_inst = func.blocks[0].instructions[2]
-  assert_true(second_inst.opcode is Opcode::Copy)
-  // The copy operand should reference the first load's result
-  assert_eq(second_inst.operands[0].id, load1.id)
-  inspect(before_count, content="4")
-}
-
-///|
-test "GVN: store invalidates load" {
-  // Test that a store invalidates pending load expressions
-  let builder = IRBuilder::new("gvn_store_invalidate")
-  let ptr = builder.add_param(Type::I64)
-  let val = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
-
-  // Offset for load/store
-  let offset = builder.iconst_i64(0L)
-
-  // Load, store to same memory, load again
-  let load1 = builder.load_ptr(Type::I32, ptr, offset)
-  builder.store_ptr(Type::I32, ptr, val, offset)
-  let load2 = builder.load_ptr(Type::I32, ptr, offset)
-  // Use both loads
-  let sum = builder.iadd(load1, load2)
-  builder.return_([sum])
-  let func = builder.get_function()
-
   // Run GVN
   let result = gvn_global(func)
 
-  // Should NOT have changed - store invalidates the load expression
-  // The second load cannot be replaced with the first
+  // Should NOT change - LoadPtr has side effects (can trap)
   assert_false(result.changed)
 
-  // Both loads should still be LoadPtr, not Copy
-  let third_inst = func.blocks[0].instructions[3]
-  assert_true(third_inst.opcode is Opcode::LoadPtr(_))
+  // Both instructions should still be LoadPtr
+  let first_load = func.blocks[0].instructions[1]
+  let second_load = func.blocks[0].instructions[2]
+  assert_true(first_load.opcode is Opcode::LoadPtr(_))
+  assert_true(second_load.opcode is Opcode::LoadPtr(_))
 }
 
 ///|

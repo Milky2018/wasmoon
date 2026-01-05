@@ -928,13 +928,21 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
   if inst.result is None {
     return false
   }
+  // Use the existing has_side_effects check - if it has side effects, skip it
+  if has_side_effects(inst) {
+    return false
+  }
+  // Instructions that write memory are handled by invalidation, not skipped
+  // But we still need to skip them as candidates
   match inst.opcode {
     // Division/remainder can trap, not suitable
     Sdiv | Udiv | Srem | Urem => false
     // Float-to-int can trap
     FcvtToSint | FcvtToUint => false
-    // Instructions with side effects
-    _ => !may_write_memory(inst.opcode)
+    // Memory writes are handled by may_write_memory, skip as candidates
+    StorePtr(_) | StorePtrNarrow(_) => false
+    // All other non-side-effect instructions are candidates
+    _ => true
   }
 }
 
