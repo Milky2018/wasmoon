@@ -91,9 +91,36 @@ lldb -- ./wasmoon test path/to/test.wast
 - Use `if opt is Pattern(v) { ... }` for single-branch matching, not `match opt {}`
 - Use `arr.clear()` not `while arr.length() > 0 { arr.pop() }`
 - Use `s.code_unit_at(i)` or `for c in s` not `s[i]` (deprecated)
-- Use `pub(all) enum` not factory functions for simple enums
-- Use `pub` not `pub(all)` when the constructor should not be exported 
-- Use default access control (without `pub`) for types and `pub` constructor functions if necessary
 - Use `let mut` only for reassignment, not for mutable containers like Array
 - Use `reinterpret_as_uint()` for unsigned ops, `to_int()` for numeric conversion
 - Use `Array::length()` not `Array::size()`
+
+### Access Control for Struct/Enum
+
+MoonBit has four visibility levels for struct/enum:
+
+| Modifier | Type Name | Fields | Construct | Modify |
+|----------|-----------|--------|-----------|--------|
+| `priv` | Hidden | Hidden | No | No |
+| (none) Abstract | Visible | Hidden | No | No |
+| `pub` Readonly | Visible | Readable | No | No |
+| `pub(all)` Full | Visible | Readable | Yes | Yes |
+
+**Guidelines:**
+- **Default to abstract** (no modifier) for internal types - only expose type name
+- **Use `pub struct`** when external code needs to read fields (e.g., `LivenessResult.intervals`)
+- **Use `pub(all) struct`** only when external code must construct instances
+- **Use `pub(all) enum`** for enums that external code pattern-matches on
+- **Use `pub enum`** when variants should be hidden (external code only holds values)
+
+**Example from regalloc:**
+```moonbit
+// Abstract - internal implementation detail
+struct LiveRange { ... }
+
+// Readonly - external code reads fields but doesn't construct
+pub struct LivenessResult { intervals: Map[Int, LiveInterval], ... }
+
+// Full access - external code constructs and pattern-matches
+pub(all) enum Allocation { Reg(PReg), Spill(Int), Unallocated }
+```
