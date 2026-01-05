@@ -153,18 +153,17 @@ test "cross_block_cse" {
       #|  0000: ff4300d1  sub sp, sp, #16
       #|block0:
       #|  0004: 4800030b  add w8, w2, w3
-      #|  0008: 420000b5  cbnz x2, block1
-      #|  000c: 04000014  b block2
+      #|  0008: 820000b4  cbz x2, block2
       #|block1:
-      #|  0010: 0a050011  add w10, w8, #1
-      #|  0014: e9030aaa  mov x9, x10
-      #|  0018: 02000014  b block3
+      #|  000c: 0a050011  add w10, w8, #1
+      #|  0010: e9030aaa  mov x9, x10
+      #|  0014: 02000014  b block3
       #|block2:
-      #|  001c: e90308aa  mov x9, x8
+      #|  0018: e90308aa  mov x9, x8
       #|block3:
-      #|  0020: e00309aa  mov x0, x9
-      #|  0024: ff430091  add sp, sp, #16
-      #|  0028: c0035fd6  ret
+      #|  001c: e00309aa  mov x0, x9
+      #|  0020: ff430091  add sp, sp, #16
+      #|  0024: c0035fd6  ret
       #|
     ),
   )

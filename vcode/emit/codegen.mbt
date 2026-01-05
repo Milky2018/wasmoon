@@ -3070,10 +3070,14 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
     Branch(cond, then_b, else_b) => {
       let rt = reg_num(cond)
-      self.emit_cbnz(rt, then_b)
-      // Skip else branch if it's the next block (fall-through)
-      if next_block != Some(else_b) {
-        self.emit_b(else_b)
+      // Branch inversion: if then_b is next block, use CBZ to else_b
+      if next_block == Some(then_b) {
+        self.emit_cbz(rt, else_b)
+      } else {
+        self.emit_cbnz(rt, then_b)
+        if next_block != Some(else_b) {
+          self.emit_b(else_b)
+        }
       }
     }
     BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
@@ -3085,25 +3089,37 @@ fn MachineCode::emit_terminator_with_epilogue(
       } else {
         self.emit_cmp_reg32(rn, rm)
       }
-      // Emit conditional branch based on condition
-      self.emit_b_cond(cond.to_bits(), then_b)
-      // Skip else branch if it's the next block (fall-through)
-      if next_block != Some(else_b) {
-        self.emit_b(else_b)
+      // Branch inversion: if then_b is next block, invert condition and branch to else_b
+      if next_block == Some(then_b) {
+        self.emit_b_cond(cond.invert().to_bits(), else_b)
+      } else {
+        self.emit_b_cond(cond.to_bits(), then_b)
+        if next_block != Some(else_b) {
+          self.emit_b(else_b)
+        }
       }
     }
     BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
       // CBZ/CBNZ reg, then_b + B else_b
       // Note: Using 64-bit CBZ/CBNZ - works correctly since i32 values are zero-extended
       let rt = reg_num(reg)
-      if is_nonzero {
-        self.emit_cbnz(rt, then_b)
+      // Branch inversion: if then_b is next block, invert condition and branch to else_b
+      if next_block == Some(then_b) {
+        // Invert: CBZ->CBNZ, CBNZ->CBZ
+        if is_nonzero {
+          self.emit_cbz(rt, else_b)
+        } else {
+          self.emit_cbnz(rt, else_b)
+        }
       } else {
-        self.emit_cbz(rt, then_b)
-      }
-      // Skip else branch if it's the next block (fall-through)
-      if next_block != Some(else_b) {
-        self.emit_b(else_b)
+        if is_nonzero {
+          self.emit_cbnz(rt, then_b)
+        } else {
+          self.emit_cbz(rt, then_b)
+        }
+        if next_block != Some(else_b) {
+          self.emit_b(else_b)
+        }
       }
     }
     BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
@@ -3114,11 +3130,17 @@ fn MachineCode::emit_terminator_with_epilogue(
       } else {
         self.emit_cmp_imm32(rn, imm)
       }
-      // Emit conditional branch based on condition
-      self.emit_b_cond(cond.to_bits(), then_b)
-      // Skip else branch if it's the next block (fall-through)
-      if next_block != Some(else_b) {
-        self.emit_b(else_b)
+      // Branch inversion: if then_b is next block, invert condition and branch to else_b
+      if next_block == Some(then_b) {
+        // Invert: B.cond then_b becomes B.!cond else_b, fall through to then_b
+        self.emit_b_cond(cond.invert().to_bits(), else_b)
+      } else {
+        // Normal: B.cond then_b, then handle else_b
+        self.emit_b_cond(cond.to_bits(), then_b)
+        // Skip else branch if it's the next block (fall-through)
+        if next_block != Some(else_b) {
+          self.emit_b(else_b)
+        }
       }
     }
     Return(values) => {
