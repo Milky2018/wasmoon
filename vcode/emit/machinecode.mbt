@@ -82,19 +82,25 @@ pub fn MachineCode::annotate(self : MachineCode, text : String) -> Unit {
 /// Dump disassembly with hex bytes
 pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
   let mut result = ""
-  // Build a map of offset -> label for block labels
-  let label_map : Map[Int, Int] = {}
+  // Build a map of offset -> labels (multiple blocks can share same offset)
+  let label_map : Map[Int, Array[Int]] = {}
   for entry in self.labels {
-    label_map.set(entry.1, entry.0)
+    let (block_id, offset) = entry
+    match label_map.get(offset) {
+      Some(ids) => ids.push(block_id)
+      None => label_map.set(offset, [block_id])
+    }
   }
   // Sort disasm by offset
   let sorted = self.disasm.copy()
   sorted.sort_by(fn(a, b) { a.0.compare(b.0) })
   for entry in sorted {
     let (offset, text) = entry
-    // Check if there's a label at this offset
-    if label_map.get(offset) is Some(block_id) {
-      result = result + "block\{block_id}:\n"
+    // Check if there are labels at this offset
+    if label_map.get(offset) is Some(block_ids) {
+      for block_id in block_ids {
+        result = result + "block\{block_id}:\n"
+      }
     }
     // Get the 4 bytes at this offset
     let b0 = if offset < self.bytes.length() { self.bytes[offset] } else { 0 }

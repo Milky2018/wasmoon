@@ -375,6 +375,9 @@ fn MachineCode::emit_prologue(
 ///|
 /// Emit machine code for a VCode function
 pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
+  // Optimize block layout for better branch prediction
+  // Loop rotation makes back edges fall through, reducing taken branches
+  let func = @layout.optimize_layout(func)
   let mc = MachineCode::new()
   // v3 ABI: Check if we need SRET (more than 8 int or 8 float returns)
   let needs_sret = func.needs_extra_results_ptr()
@@ -409,7 +412,7 @@ pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
   mc.emit_prologue(stack_frame, func.get_params(), func.get_param_pregs())
 
-  // Emit function body
+  // Emit function body (blocks now in optimized order)
   let blocks = func.get_blocks()
   for i, block in blocks {
     mc.define_label(block.id)
@@ -3067,19 +3070,10 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
     Branch(cond, then_b, else_b) => {
       let rt = reg_num(cond)
-      // Branch reversal optimization: if then_b is the next block,
-      // invert the condition and branch to else_b instead.
-      // This makes the hot path (loop body) a fall-through.
-      if next_block == Some(then_b) {
-        // Inverted: CBZ to else_b, fall-through to then_b
-        self.emit_cbz(rt, else_b)
-      } else {
-        // Normal: CBNZ to then_b
-        self.emit_cbnz(rt, then_b)
-        // Skip else branch if it's the next block (fall-through)
-        if next_block != Some(else_b) {
-          self.emit_b(else_b)
-        }
+      self.emit_cbnz(rt, then_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
       }
     }
     BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
@@ -3091,44 +3085,25 @@ fn MachineCode::emit_terminator_with_epilogue(
       } else {
         self.emit_cmp_reg32(rn, rm)
       }
-      // Branch reversal optimization: if then_b is the next block,
-      // invert the condition and branch to else_b instead.
-      if next_block == Some(then_b) {
-        // Inverted: B.!cond to else_b, fall-through to then_b
-        self.emit_b_cond(cond.invert().to_bits(), else_b)
-      } else {
-        // Normal: B.cond to then_b
-        self.emit_b_cond(cond.to_bits(), then_b)
-        // Skip else branch if it's the next block (fall-through)
-        if next_block != Some(else_b) {
-          self.emit_b(else_b)
-        }
+      // Emit conditional branch based on condition
+      self.emit_b_cond(cond.to_bits(), then_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
       }
     }
     BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
       // CBZ/CBNZ reg, then_b + B else_b
       // Note: Using 64-bit CBZ/CBNZ - works correctly since i32 values are zero-extended
       let rt = reg_num(reg)
-      // Branch reversal optimization: if then_b is the next block,
-      // invert the condition and branch to else_b instead.
-      if next_block == Some(then_b) {
-        // Inverted: use opposite CBZ/CBNZ to else_b, fall-through to then_b
-        if is_nonzero {
-          self.emit_cbz(rt, else_b) // was CBNZ, now CBZ
-        } else {
-          self.emit_cbnz(rt, else_b) // was CBZ, now CBNZ
-        }
+      if is_nonzero {
+        self.emit_cbnz(rt, then_b)
       } else {
-        // Normal path
-        if is_nonzero {
-          self.emit_cbnz(rt, then_b)
-        } else {
-          self.emit_cbz(rt, then_b)
-        }
-        // Skip else branch if it's the next block (fall-through)
-        if next_block != Some(else_b) {
-          self.emit_b(else_b)
-        }
+        self.emit_cbz(rt, then_b)
+      }
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
       }
     }
     BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
@@ -3139,18 +3114,11 @@ fn MachineCode::emit_terminator_with_epilogue(
       } else {
         self.emit_cmp_imm32(rn, imm)
       }
-      // Branch reversal optimization: if then_b is the next block,
-      // invert the condition and branch to else_b instead.
-      if next_block == Some(then_b) {
-        // Inverted: B.!cond to else_b, fall-through to then_b
-        self.emit_b_cond(cond.invert().to_bits(), else_b)
-      } else {
-        // Normal: B.cond to then_b
-        self.emit_b_cond(cond.to_bits(), then_b)
-        // Skip else branch if it's the next block (fall-through)
-        if next_block != Some(else_b) {
-          self.emit_b(else_b)
-        }
+      // Emit conditional branch based on condition
+      self.emit_b_cond(cond.to_bits(), then_b)
+      // Skip else branch if it's the next block (fall-through)
+      if next_block != Some(else_b) {
+        self.emit_b(else_b)
       }
     }
     Return(values) => {
