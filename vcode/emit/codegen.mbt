@@ -1697,6 +1697,18 @@ fn MachineCode::emit_instruction(
       let temp2 = wreg_num(inst.defs[2]) // temp for TBL1 from second source
       let rn = reg_num(inst.uses[0]) // first source (lanes 0-15)
       let rm = reg_num(inst.uses[1]) // second source (lanes 16-31)
+      // Aliasing analysis:
+      // - rn == temp1: must save before indices1 build destroys temp1
+      // - rn == temp2: safe (TBL1 reads rn before indices2 build touches temp2)
+      // - rm == temp1: must save before indices1 build destroys temp1
+      // - rm == temp2: must save before indices2 build destroys temp2
+      //
+      // Phase 1: Save temp1 if either input uses it
+      let temp1_has_input = rn == temp1 || rm == temp1
+      if temp1_has_input {
+        Orr16B(rd, temp1, temp1).emit(self) // Save temp1 to rd
+      }
+      let actual_rn = if rn == temp1 { rd } else { rn }
       // Build two index vectors at compile time:
       // indices1: lanes < 16 keep original, lanes >= 16 use 0x80 (out of range)
       // indices2: lanes >= 16 use lane-16, lanes < 16 use 0x80 (out of range)
@@ -1732,6 +1744,19 @@ fn MachineCode::emit_instruction(
         self.emit_load_imm64(16, high1)
         InsD(temp1, 1, 16).emit(self)
       }
+      // TBL1 for first source
+      Tbl1(temp1, actual_rn, temp1).emit(self) // temp1 = select from rn
+      // Phase 2: Handle rm aliasing
+      // - rm == temp1: already saved to rd in phase 1
+      // - rm == temp2: save now before indices2 build destroys it
+      let actual_rm = if rm == temp1 {
+        rd // Already saved before indices1 build
+      } else if rm == temp2 {
+        Orr16B(rd, rm, rm).emit(self) // Save temp2 to rd
+        rd
+      } else {
+        rm
+      }
       // Load indices2 into temp2
       MoviZero(temp2).emit(self)
       if low2 != 0L {
@@ -1742,9 +1767,8 @@ fn MachineCode::emit_instruction(
         self.emit_load_imm64(16, high2)
         InsD(temp2, 1, 16).emit(self)
       }
-      // TBL1 for each source: result is 0 for out-of-range indices
-      Tbl1(temp1, rn, temp1).emit(self) // temp1 = select from rn
-      Tbl1(temp2, rm, temp2).emit(self) // temp2 = select from rm
+      // TBL1 for second source
+      Tbl1(temp2, actual_rm, temp2).emit(self) // temp2 = select from rm
       // Combine results with ORR (0 | value = value)
       Orr16B(rd, temp1, temp2).emit(self)
     }
@@ -1937,6 +1961,15 @@ fn MachineCode::emit_instruction(
           let v_weights = wreg_num(inst.defs[1])
           let v_shift = wreg_num(inst.defs[2])
           let v_work = wreg_num(inst.defs[3])
+          // Check for aliasing: if rn aliases v_weights or v_shift, we must copy
+          // rn to v_work first before those temps are overwritten.
+          // (rn == v_work is safe because Sshl reads before writing)
+          let actual_rn = if rn == v_weights || rn == v_shift {
+            Orr16B(v_work, rn, rn).emit(self) // MOV v_work, rn
+            v_work
+          } else {
+            rn
+          }
           // Step 1: Load weights [1,2,4,8,16,32,64,128,1,2,4,8,16,32,64,128]
           // 0x8040201008040201 = weights for 8 bytes (little endian)
           // Use X16/X17 (linker scratch GPR) for loading immediate
@@ -1947,7 +1980,7 @@ fn MachineCode::emit_instruction(
           // Load -7 into all lanes (0xF9 = -7 in signed byte)
           self.emit_movz(17, 0xF9, 0) // X17 = 0xF9 = -7 as unsigned byte
           Dup16B(v_shift, 17).emit(self) // v_shift.16B = all 0xF9 = -7
-          Sshl16B(v_work, rn, v_shift).emit(self) // v_work = signed shift right by 7
+          Sshl16B(v_work, actual_rn, v_shift).emit(self) // v_work = signed shift right by 7
           // Now v_work has 0x00 or 0xFF in each lane (all 0s or all 1s)
           // Step 3: AND with weights to get weighted bits
           And16B(v_work, v_work, v_weights).emit(self) // v_work = weighted bits
