@@ -373,6 +373,10 @@ pub fn run_jit(
     // Build memory_is_64 array for memory64 support
     let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
 
+    // Calculate memory_mins (minimum guaranteed memory size in bytes)
+    // Used for bounds check elimination with constant addresses
+    let memory_mins = mod_.memories.map(fn(m) { m.limits.min * 65536L })
+
     // Compile each function in the module
     for i, code in mod_.codes {
       let f_idx = num_imports + i
@@ -395,6 +399,7 @@ pub fn run_jit(
         type_rec_groups=mod_.type_rec_groups,
         module_types=mod_.types,
         tags=mod_.tags,
+        memory_mins~,
       )
       let ir_func = translator.translate(code.body)
 

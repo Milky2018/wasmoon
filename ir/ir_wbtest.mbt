@@ -1269,3 +1269,395 @@ test "strength reduction: power of 2 detection" {
   assert_eq(log2_int(16), 4)
   assert_eq(log2_int(1024), 10)
 }
+
+///|
+test "bounds check elimination: constant address within min memory" {
+  // Test that bounds check is eliminated when address is a constant
+  // within the minimum guaranteed memory size
+  let builder = IRBuilder::new("bounds_elim")
+  let vmctx = builder.add_param(Type::I64) // vmctx
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Create a constant address
+  let addr = builder.iconst_i32(0) // address 0
+
+  // FuncEnvironment with 1 page (65536 bytes) minimum memory
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // Load from address 0 with offset 0, access_size 4 - within 1 page
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Count blocks - if bounds check is eliminated, we should have fewer blocks
+  // With bounds check: entry block + trap block + continue block = 3 blocks
+  // Without bounds check: only entry block = 1 block
+  inspect(func.blocks.length(), content="1")
+}
+
+///|
+test "bounds check elimination: constant address outside min memory" {
+  // Test that bounds check is NOT eliminated when address is outside
+  // the minimum guaranteed memory size
+  let builder = IRBuilder::new("bounds_not_elim")
+  let vmctx = builder.add_param(Type::I64) // vmctx
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Create a constant address at the edge of 1 page
+  let addr = builder.iconst_i32(65536) // exactly at page boundary
+
+  // FuncEnvironment with 1 page (65536 bytes) minimum memory
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // Load from address 65536 with access_size 4 - outside 1 page
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should have bounds check: entry + trap + continue = 3 blocks
+  inspect(func.blocks.length(), content="3")
+}
+
+///|
+test "bounds check elimination: non-constant address" {
+  // Test that bounds check is NOT eliminated when address is non-constant
+  let builder = IRBuilder::new("bounds_non_const")
+  let vmctx = builder.add_param(Type::I64) // vmctx
+  let addr = builder.add_param(Type::I32) // non-constant address
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // FuncEnvironment with 1 page minimum memory
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // Load with non-constant address - bounds check should NOT be eliminated
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should have bounds check: entry + trap + continue = 3 blocks
+  inspect(func.blocks.length(), content="3")
+}
+
+///|
+test "bounds check elimination: offset considered in calculation" {
+  // Test that offset is correctly considered in the bounds calculation
+  // addr=0, offset=65532, access_size=4 -> end=65536, within 1 page
+  let builder = IRBuilder::new("bounds_offset")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let addr = builder.iconst_i32(0)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // offset=65532, access_size=4 -> 0 + 65532 + 4 = 65536, exactly at boundary
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    addr,
+    65532L, // offset
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should eliminate: 0 + 65532 + 4 = 65536 <= 65536
+  inspect(func.blocks.length(), content="1")
+}
+
+///|
+test "bounds check elimination: offset causes overflow" {
+  // Test that large offset causes bounds check to be kept
+  // addr=0, offset=65533, access_size=4 -> end=65537, exceeds 1 page
+  let builder = IRBuilder::new("bounds_offset_overflow")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let addr = builder.iconst_i32(0)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // offset=65533, access_size=4 -> 0 + 65533 + 4 = 65537 > 65536
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    addr,
+    65533L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should NOT eliminate: exceeds min memory
+  inspect(func.blocks.length(), content="3")
+}
+
+///|
+test "bounds check elimination: store operation" {
+  // Test that bounds check elimination works for stores too
+  let builder = IRBuilder::new("bounds_store")
+  let vmctx = builder.add_param(Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let addr = builder.iconst_i32(100)
+  let value = builder.iconst_i32(42)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // Store at address 100, well within 1 page
+  func_env.translate_memory_store(builder, vmctx, 0, Type::I32, addr, value, 0L)
+  builder.return_([])
+  let func = builder.get_function()
+
+  // Should eliminate bounds check
+  inspect(func.blocks.length(), content="1")
+}
+
+///|
+test "bounds check elimination: narrow load i8" {
+  // Test bounds check elimination for narrow loads (1 byte)
+  let builder = IRBuilder::new("bounds_narrow_i8")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Load at address 65535 (last byte of first page)
+  let addr = builder.iconst_i32(65535)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // 1-byte load at 65535 -> end = 65536, within bounds
+  let loaded = func_env.translate_memory_load_narrow(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    8, // 8 bits = 1 byte
+    true, // signed
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should eliminate: 65535 + 0 + 1 = 65536 <= 65536
+  inspect(func.blocks.length(), content="1")
+}
+
+///|
+test "bounds check elimination: narrow store i16" {
+  // Test bounds check elimination for narrow stores (2 bytes)
+  let builder = IRBuilder::new("bounds_narrow_i16")
+  let vmctx = builder.add_param(Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Store at address 65534 (last 2 bytes of first page)
+  let addr = builder.iconst_i32(65534)
+  let value = builder.iconst_i32(0x1234)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // 2-byte store at 65534 -> end = 65536, within bounds
+  func_env.translate_memory_store_narrow(
+    builder, vmctx, 0, 16, // 16 bits = 2 bytes
+     addr, value, 0L,
+  )
+  builder.return_([])
+  let func = builder.get_function()
+
+  // Should eliminate: 65534 + 0 + 2 = 65536 <= 65536
+  inspect(func.blocks.length(), content="1")
+}
+
+///|
+test "bounds check elimination: i64 load" {
+  // Test bounds check elimination for 8-byte loads
+  let builder = IRBuilder::new("bounds_i64")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Load at address 65528 (last 8 bytes of first page)
+  let addr = builder.iconst_i32(65528)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // 8-byte load at 65528 -> end = 65536, within bounds
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I64,
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should eliminate: 65528 + 0 + 8 = 65536 <= 65536
+  inspect(func.blocks.length(), content="1")
+}
+
+///|
+test "bounds check elimination: i64 load exceeds" {
+  // Test that 8-byte load at wrong position is NOT eliminated
+  let builder = IRBuilder::new("bounds_i64_exceed")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Load at address 65529 -> end = 65537, exceeds 1 page
+  let addr = builder.iconst_i32(65529)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I64,
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should NOT eliminate: 65529 + 0 + 8 = 65537 > 65536
+  inspect(func.blocks.length(), content="3")
+}
+
+///|
+test "bounds check elimination: zero min memory" {
+  // Test that no optimization happens when min memory is 0
+  let builder = IRBuilder::new("bounds_zero_min")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let addr = builder.iconst_i32(0)
+  // Empty memory_mins array means no min memory known
+  let func_env = FuncEnvironment::new([], memory_mins=[])
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should NOT eliminate: no min memory info
+  inspect(func.blocks.length(), content="3")
+}
+
+///|
+test "bounds check elimination: multiple memories" {
+  // Test bounds check elimination with multiple memories
+  let builder = IRBuilder::new("bounds_multi_mem")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let addr = builder.iconst_i32(0)
+  // Memory 0 has 1 page, Memory 1 has 2 pages
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L, 131072L])
+
+  // Load from memory 1 at address 65536 (within 2 pages)
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    1, // memidx = 1
+    Type::I32,
+    addr,
+    65536L, // offset puts us in second page
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should eliminate: 0 + 65536 + 4 = 65540 <= 131072
+  inspect(func.blocks.length(), content="1")
+}
+
+///|
+test "bounds check elimination: memory index out of range" {
+  // Test that memidx beyond memory_mins array keeps bounds check
+  let builder = IRBuilder::new("bounds_memidx_oob")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let addr = builder.iconst_i32(0)
+  // Only memory 0 has min size info
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+
+  // Try to access memory 1 which has no min info
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    1, // memidx = 1, but only memory 0 has min info
+    Type::I32,
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should NOT eliminate: no min info for memory 1
+  inspect(func.blocks.length(), content="3")
+}
+
+///|
+test "bounds check elimination: combined addr and offset" {
+  // Test edge case: addr + offset combination
+  let builder = IRBuilder::new("bounds_combined")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // addr=1000, offset=64532 -> 1000 + 64532 + 4 = 65536
+  let addr = builder.iconst_i32(1000)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    addr,
+    64532L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Should eliminate: 1000 + 64532 + 4 = 65536 <= 65536
+  inspect(func.blocks.length(), content="1")
+}

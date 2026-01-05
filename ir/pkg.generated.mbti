@@ -137,7 +137,7 @@ pub impl Show for FloatCC
 
 type FuncEnvironment
 pub fn FuncEnvironment::emit_bounds_check(Self, IRBuilder, Value, Int, Value, Int64, Int) -> Value
-pub fn FuncEnvironment::new(Array[@types.GlobalType]) -> Self
+pub fn FuncEnvironment::new(Array[@types.GlobalType], memory_mins? : Array[Int64], memory_is_64? : Array[Bool]) -> Self
 pub fn FuncEnvironment::translate_global_get(Self, IRBuilder, Value, Int) -> Value
 pub fn FuncEnvironment::translate_global_set(Self, IRBuilder, Value, Int, Value) -> Unit
 pub fn FuncEnvironment::translate_memory_copy(Self, IRBuilder, Int, Int, Value, Value, Value) -> Unit
@@ -229,6 +229,7 @@ pub fn IRBuilder::fpromote(Self, Value) -> Value
 pub fn IRBuilder::fsqrt(Self, Value) -> Value
 pub fn IRBuilder::fsub(Self, Value, Value) -> Value
 pub fn IRBuilder::ftrunc(Self, Value) -> Value
+pub fn IRBuilder::get_const_value(Self, Value) -> Int64?
 pub fn IRBuilder::get_exception_tag(Self) -> Value
 pub fn IRBuilder::get_exception_value(Self, Int) -> Value
 pub fn IRBuilder::get_exception_value_count(Self) -> Value
@@ -762,7 +763,7 @@ pub enum Terminator {
 pub impl Show for Terminator
 
 type Translator
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType]) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {

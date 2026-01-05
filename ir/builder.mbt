@@ -96,6 +96,24 @@ fn IRBuilder::emit_void_inst(
 // ============ Constants ============
 
 ///|
+/// Get the constant value if a Value was defined by an Iconst instruction.
+/// Searches all blocks in the function to find the defining instruction.
+/// Returns None if the value is not a constant or not found.
+pub fn IRBuilder::get_const_value(self : IRBuilder, v : Value) -> Int64? {
+  for block in self.func.blocks {
+    for inst in block.instructions {
+      if inst.result is Some(r) && r.id == v.id {
+        if inst.opcode is Iconst(c) {
+          return Some(c)
+        }
+        return None // Found defining instruction but not a constant
+      }
+    }
+  }
+  None
+}
+
+///|
 /// Emit an integer constant
 pub fn IRBuilder::iconst(self : IRBuilder, ty : Type, value : Int64) -> Value {
   self.emit_inst(ty, Opcode::Iconst(value), [])

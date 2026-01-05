@@ -85,6 +85,7 @@ pub fn Translator::new(
   import_remap? : Array[Int] = [],
   module_types? : Array[@types.SubType] = [],
   tags? : Array[@types.TagType] = [],
+  memory_mins? : Array[Int64] = [],
 ) -> Translator {
   type_rec_groups |> ignore // Reserved for future canonical type indices
   let builder = IRBuilder::new(name)
@@ -96,7 +97,7 @@ pub fn Translator::new(
   builder.add_param(Type::I64) |> ignore // caller_vmctx
 
   // Create function environment for desugaring Wasm operations
-  let func_env = FuncEnvironment::new(global_types)
+  let func_env = FuncEnvironment::new(global_types, memory_mins~, memory_is_64~)
 
   // Add wasm function parameters (starting from params[2])
   let local_values : Array[Value] = []
