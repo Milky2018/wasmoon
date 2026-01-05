@@ -130,6 +130,15 @@ fn has_side_effects(inst : Inst) -> Bool {
     RefCast(_, _) => true
     // CallPtr can have side effects (calls arbitrary functions)
     CallPtr(_, _) => true
+    // Exception handling operations - TryTableBegin calls setjmp which returns
+    // different values on normal entry vs exception catch, so it's not pure
+    TryTableBegin(_) | TryTableEnd(_) => true
+    // Throw operations have control flow side effects
+    Throw(_) | ThrowRef => true
+    // GetExceptionTag reads global exception state
+    GetExceptionTag => true
+    // Spill/restore locals interact with exception handling state
+    SpillLocalsForThrow(_) | GetSpilledLocal(_) => true
     // Other instructions are pure
     _ => false
   }
@@ -795,6 +804,77 @@ fn compute_expression_signature(inst : Inst) -> String {
   result
 }
 
+///|
+/// Global Common Subexpression Elimination using dominance analysis
+/// Expressions in dominating blocks can be reused in dominated blocks
+pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() == 0 {
+    return result
+  }
+  // Build CFG and compute dominators
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  // Build block_id -> array_index mapping
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  // Expression environment: signature -> (value, defining_block_id)
+  // We use an array as a stack to track which expressions to pop on leaving a block
+  let expressions : @hashmap.HashMap[String, Value] = @hashmap.new()
+  // DFS the dominator tree
+  fn dfs(block_id : Int) {
+    let idx = block_idx.get(block_id).unwrap()
+    let block = func.blocks[idx]
+    // Track expressions added in this block (to pop later)
+    let local_sigs : Array[String] = []
+    // Process instructions
+    let mut i = 0
+    while i < block.instructions.length() {
+      let inst = block.instructions[i]
+      // Skip instructions with side effects or no result
+      if has_side_effects(inst) {
+        i = i + 1
+        continue
+      }
+      if inst.result is Some(result_val) {
+        let sig = compute_expression_signature(inst)
+        if expressions.get(sig) is Some(existing) {
+          // Replace this instruction with a copy to the existing value
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+          // Don't add this to expressions (it's now a copy)
+        } else {
+          // Record this expression as available
+          expressions.set(sig, result_val)
+          local_sigs.push(sig)
+        }
+      }
+      i = i + 1
+    }
+    // Recurse to dominated children
+    if block_id < domtree.length() {
+      for child in domtree[block_id] {
+        dfs(child)
+      }
+    }
+    // Pop this block's expressions from environment
+    for sig in local_sigs {
+      expressions.remove(sig)
+    }
+  }
+
+  // Start DFS from entry block (block 0)
+  if cfg.is_valid(0) {
+    dfs(0)
+  }
+  result
+}
+
 // ============ Run All Optimizations ============
 
 ///|
@@ -853,7 +933,7 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let cse_result = eliminate_common_subexpressions(func)
+    let cse_result = eliminate_common_subexpressions_global(func)
     if cse_result.changed {
       changed = true
       result.mark_changed()
@@ -894,7 +974,7 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let cse_result = eliminate_common_subexpressions(func)
+    let cse_result = eliminate_common_subexpressions_global(func)
     if cse_result.changed {
       changed = true
       result.mark_changed()

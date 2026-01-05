@@ -638,12 +638,44 @@ test "cross-block copy propagation" {
   let result = builder.iadd(copy, one) // uses copy from block0
   builder.return_([result])
   let func = builder.get_function()
+  // Print IR before
+  inspect(
+    func.print(),
+    content=(
+      #|function cross_block_cp(v0:i32) -> i32 {
+      #|block0:
+      #|    v1:i32 = copy v0
+      #|    jump block1
+      #|block1:
+      #|    v2:i32 = iconst 1
+      #|    v3:i32 = iadd v1, v2
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
   // Verify before propagation: iadd uses 'copy' (v1)
   let iadd_before = func.blocks[1].instructions[1]
   assert_eq(iadd_before.operands[0].id, copy.id)
   // Run cross-block copy propagation
   let cp_result = propagate_copies_global(func)
   assert_true(cp_result.changed)
+  // Print IR after
+  inspect(
+    func.print(),
+    content=(
+      #|function cross_block_cp(v0:i32) -> i32 {
+      #|block0:
+      #|    v1:i32 = copy v0
+      #|    jump block1
+      #|block1:
+      #|    v2:i32 = iconst 1
+      #|    v3:i32 = iadd v0, v2
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
   // After propagation: iadd should use p0 directly (cross-block!)
   let iadd_after = func.blocks[1].instructions[1]
   assert_eq(iadd_after.operands[0].id, p0.id)
@@ -726,6 +758,67 @@ test "common subexpression elimination" {
   let sum2_inst = block.instructions[1]
   match sum2_inst.opcode {
     Copy => assert_true(true) // Expected
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "cross-block common subexpression elimination" {
+  // Test that expression in block 0 can be reused in block 1 (dominated by block 0)
+  // Block 0: v2 = iadd p0, p1; jump block1
+  // Block 1: v3 = iadd p0, p1; return v3  <- should become copy of v2
+  let builder = IRBuilder::new("cross_block_cse")
+  let p0 = builder.add_param(Type::I32)
+  let p1 = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let block0 = builder.create_block()
+  let block1 = builder.create_block()
+  // Block 0: compute p0 + p1, jump to block1
+  builder.switch_to_block(block0)
+  let sum1 = builder.iadd(p0, p1)
+  builder.jump(block1, [])
+  // Block 1: compute same expression again
+  builder.switch_to_block(block1)
+  let sum2 = builder.iadd(p0, p1) // Should become copy of sum1
+  builder.return_([sum2])
+  let func = builder.get_function()
+  // Print IR before
+  inspect(
+    func.print(),
+    content=(
+      #|function cross_block_cse(v0:i32, v1:i32) -> i32 {
+      #|block0:
+      #|    v2:i32 = iadd v0, v1
+      #|    jump block1
+      #|block1:
+      #|    v3:i32 = iadd v0, v1
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
+  // Run global CSE
+  let cse_result = eliminate_common_subexpressions_global(func)
+  assert_true(cse_result.changed)
+  // Print IR after
+  inspect(
+    func.print(),
+    content=(
+      #|function cross_block_cse(v0:i32, v1:i32) -> i32 {
+      #|block0:
+      #|    v2:i32 = iadd v0, v1
+      #|    jump block1
+      #|block1:
+      #|    v3:i32 = copy v2
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
+  // After CSE, sum2 should become a copy of sum1
+  let sum2_inst = func.blocks[1].instructions[0]
+  match sum2_inst.opcode {
+    Copy => assert_eq(sum2_inst.operands[0].id, sum1.id)
     _ => assert_true(false)
   }
 }
