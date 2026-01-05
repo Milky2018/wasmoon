@@ -245,10 +245,11 @@ fn calc_fpr_save_size(num_fprs : Int) -> Int {
 }
 
 ///|
-/// Calculate spill slot area size (minimum 16 bytes for scratch space)
+/// Calculate spill slot area size
+/// Returns 0 for leaf functions with no spills (no unnecessary stack allocation)
 fn calc_spill_size(num_slots : Int) -> Int {
   if num_slots == 0 {
-    return MIN_SPILL_SIZE // Always have minimum for scratch
+    return 0 // Leaf functions without spills need no stack space
   }
   let raw_size = num_slots * SPILL_SLOT_SIZE
   let aligned_size = align_up(raw_size, SPILL_ALIGNMENT)

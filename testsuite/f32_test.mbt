@@ -378,16 +378,15 @@ test "f32 mul" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ff4300d1  sub sp, sp, #16
       #|block0:
-      #|  0004: 100080d2  movz x16, #0, lsl #0
-      #|  0008: 1004a8f2  movk x16, #16416, lsl #16
-      #|  000c: 0102271e  fmov s1, w16
-      #|  0010: 0208211e  fmul s2, s0, s1
-      #|  0014: 4040201e  fmov s0, s2
-      #|  0018: ff430091  add sp, sp, #16
-      #|  001c: c0035fd6  ret
+      #|  0000: 100080d2  movz x16, #0, lsl #0
+      #|  0004: 1004a8f2  movk x16, #16416, lsl #16
+      #|  0008: 0102271e  fmov s1, w16
+      #|  000c: 0208211e  fmul s2, s0, s1
+      #|  0010: 4040201e  fmov s0, s2
+      #|  0014: c0035fd6  ret
       #|
+
     ),
   )
   let code_bytes = mc.get_bytes()
