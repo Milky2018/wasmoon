@@ -737,97 +737,89 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
     return
   }
 
-  // Two-phase rebuild to avoid stale canonical_id after intra-rebuild unions
-  //
-  // Phase 1: Collect all canonical nodes and detect which classes need merging
-  // We don't add nodes to canonical_nodes yet - just record unions
-  let pending_unions : Array[(Int, Int)] = []
-  let all_canonical_nodes : Array[(Int, ENode)] = [] // (original_class_id, canonical_node)
-  for class_id, eclass in self.classes {
-    for node in eclass.nodes {
+  // Iterative rebuild: keep canonicalizing and merging until fixpoint
+  // This handles cascading merges where merging A and B causes C and D to collide
+  while true {
+    // Collect all nodes from all classes
+    let all_nodes : Array[(Int, ENode)] = []
+    for class_id, eclass in self.classes {
+      for node in eclass.nodes {
+        all_nodes.push((class_id, node))
+      }
+    }
+
+    // Canonicalize all nodes and detect collisions
+    let new_hashcons : Map[ENode, EClassId] = {}
+    let mut had_union = false
+    for i in 0..<all_nodes.length() {
+      let (class_id, node) = all_nodes[i]
       let canonical_node = self.canonicalize(node)
-      all_canonical_nodes.push((class_id, canonical_node))
-    }
-  }
-
-  // Build hashcons and detect collisions, recording unions
-  let new_hashcons : Map[ENode, EClassId] = {}
-  for i in 0..<all_canonical_nodes.length() {
-    let (class_id, canonical_node) = all_canonical_nodes[i]
-    let canonical_id = self.find(EClassId(class_id))
-    if new_hashcons.get(canonical_node) is Some(existing_id) {
-      let existing_canonical = self.find(existing_id)
-      if existing_canonical != canonical_id {
-        // Record this union for later
-        pending_unions.push((canonical_id.0, existing_canonical.0))
+      let canonical_id = self.find(EClassId(class_id))
+      if new_hashcons.get(canonical_node) is Some(existing_id) {
+        let existing_canonical = self.find(existing_id)
+        if existing_canonical != canonical_id {
+          // Merge the classes
+          self.uf.union(canonical_id.0, existing_canonical.0) |> ignore
+          had_union = true
+        }
+      } else {
+        new_hashcons.set(canonical_node, canonical_id)
       }
-    } else {
-      new_hashcons.set(canonical_node, canonical_id)
     }
-  }
 
-  // Apply all pending unions
-  for i in 0..<pending_unions.length() {
-    let (a, b) = pending_unions[i]
-    self.uf.union(a, b) |> ignore
-  }
+    // If no unions happened, we've reached fixpoint
+    if not(had_union) {
+      // Final pass: collect nodes by canonical class with fully canonical nodes
+      let canonical_nodes : Map[Int, Array[ENode]] = {}
+      let final_hashcons : Map[ENode, EClassId] = {}
+      for i in 0..<all_nodes.length() {
+        let (class_id, node) = all_nodes[i]
+        let canonical_node = self.canonicalize(node)
+        let final_canonical_id = self.find(EClassId(class_id))
 
-  // Phase 2: Now that all unions are done, collect nodes by their final canonical class
-  let canonical_nodes : Map[Int, Array[ENode]] = {}
-  for i in 0..<all_canonical_nodes.length() {
-    let (class_id, canonical_node) = all_canonical_nodes[i]
-    // Use fresh find() after all unions are applied
-    let final_canonical_id = self.find(EClassId(class_id))
-    match canonical_nodes.get(final_canonical_id.0) {
-      Some(nodes) => {
-        // Avoid duplicates (same canonical node from different original classes)
-        let mut found = false
-        for existing in nodes {
-          if existing == canonical_node {
-            found = true
-            break
+        // Add to hashcons
+        if final_hashcons.get(canonical_node) is None {
+          final_hashcons.set(canonical_node, final_canonical_id)
+        }
+
+        // Add to canonical_nodes, avoiding duplicates
+        match canonical_nodes.get(final_canonical_id.0) {
+          Some(nodes) => {
+            let mut found = false
+            for existing in nodes {
+              if existing == canonical_node {
+                found = true
+                break
+              }
+            }
+            if not(found) {
+              nodes.push(canonical_node)
+            }
           }
-        }
-        if not(found) {
-          nodes.push(canonical_node)
+          None => canonical_nodes.set(final_canonical_id.0, [canonical_node])
         }
       }
-      None => canonical_nodes.set(final_canonical_id.0, [canonical_node])
-    }
-  }
 
-  // Update hashcons with final canonical IDs
-  let final_hashcons : Map[ENode, EClassId] = {}
-  for node, _ in new_hashcons {
-    // Find the canonical node's final class
-    for i in 0..<all_canonical_nodes.length() {
-      let (class_id, canonical_node) = all_canonical_nodes[i]
-      if canonical_node == node {
-        let final_id = self.find(EClassId(class_id))
-        final_hashcons.set(node, final_id)
-        break
+      // Update each class with its canonical nodes
+      for class_id, eclass in self.classes {
+        let canonical_id = self.find(EClassId(class_id))
+        if class_id == canonical_id.0 {
+          match canonical_nodes.get(class_id) {
+            Some(nodes) => eclass.nodes = nodes
+            None => eclass.nodes = []
+          }
+        } else {
+          eclass.nodes = []
+        }
       }
+      self.hashcons = final_hashcons
+      self.worklist = []
+      self.pending_rules = []
+      self.dirty = false
+      break
     }
+    // Otherwise, continue iterating with updated union-find
   }
-
-  // Update each class with its canonical nodes
-  for class_id, eclass in self.classes {
-    let canonical_id = self.find(EClassId(class_id))
-    if class_id == canonical_id.0 {
-      // This is a canonical class - update its nodes
-      match canonical_nodes.get(class_id) {
-        Some(nodes) => eclass.nodes = nodes
-        None => eclass.nodes = []
-      }
-    } else {
-      // Non-canonical class - clear its nodes (they're in canonical class now)
-      eclass.nodes = []
-    }
-  }
-  self.hashcons = final_hashcons
-  self.worklist = []
-  self.pending_rules = [] // Clear pending rules (processed by saturate or add_eager)
-  self.dirty = false
 }
 
 ///|

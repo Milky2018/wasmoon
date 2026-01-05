@@ -1534,3 +1534,63 @@ test "rebuild: nodes preserved after intra-rebuild union" {
   inspect(has_sub, content="true")
   inspect(has_mul, content="true")
 }
+
+///|
+/// Test that rebuild re-canonicalizes nodes after applying unions.
+/// This tests the bug where nodes with children that get merged during rebuild
+/// are left with stale child class IDs.
+///
+/// Scenario:
+/// - Class 0: Var(0), Class 1: Var(1)
+/// - Class 2: Add(0, 0), Class 3: Add(1, 1)
+/// - Class 4: Mul(0, 2), Class 5: Mul(1, 3)
+/// - merge(0, 1) triggers rebuild
+///
+/// During rebuild:
+/// - Add(0,0) and Add(1,1) both canonicalize to Add(0,0), causing union(2,3)
+/// - Before the union is applied, Mul(1,3) canonicalizes to Mul(0,3)
+/// - After union(2,3), find(3)=2, so Mul(0,3) should become Mul(0,2)
+/// - But without re-canonicalization, Mul(0,3) has stale child reference
+test "rebuild: re-canonicalize nodes after unions" {
+  let eg = EGraph::new()
+
+  // Create two variables
+  let x = eg.add_var(0) // class 0
+  let y = eg.add_var(1) // class 1
+
+  // Create Add(x, x) and Add(y, y)
+  let add_xx = eg.add_add(x, x) // class 2
+  let add_yy = eg.add_add(y, y) // class 3
+
+  // Create Mul(x, Add(x,x)) and Mul(y, Add(y,y))
+  let mul_x_addxx = eg.add_mul(x, add_xx) // class 4
+  let mul_y_addyy = eg.add_mul(y, add_yy) // class 5
+
+  // Verify initial state - all are different
+  inspect(eg.equiv(add_xx, add_yy), content="false")
+  inspect(eg.equiv(mul_x_addxx, mul_y_addyy), content="false")
+
+  // Merge x and y - this will trigger a cascade:
+  // 1. Add(x,x) and Add(y,y) will canonicalize to same node
+  // 2. Thus Add classes should merge
+  // 3. Mul(x, Add(x,x)) and Mul(y, Add(y,y)) should also merge
+  eg.merge(x, y) |> ignore
+  eg.rebuild()
+
+  // After rebuild, Add(x,x) and Add(y,y) should be equivalent
+  inspect(eg.equiv(add_xx, add_yy), content="true")
+
+  // The Mul nodes should ALSO be equivalent because:
+  // - Their first child (x/y) are now equivalent
+  // - Their second child (Add(x,x)/Add(y,y)) are now equivalent
+  // This will FAIL if nodes aren't re-canonicalized after unions
+  inspect(eg.equiv(mul_x_addxx, mul_y_addyy), content="true")
+
+  // Verify hashcons consistency: looking up the canonical form should work
+  let mul_canonical = eg.canonicalize({
+    op: Mul,
+    children: [eg.find(x), eg.find(add_xx)],
+  })
+  let lookup_result = eg.hashcons.get(mul_canonical)
+  inspect(lookup_result is None, content="false")
+}
