@@ -39,6 +39,8 @@ pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
 
 pub const WASM_PAGE_SIZE : Int = 65536
 
+pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
+
 pub fn eliminate_common_subexpressions(Function) -> OptResult
 
 pub fn eliminate_dead_block_params(Function) -> OptResult
@@ -62,6 +64,8 @@ pub fn optimize_function(Function) -> Bool
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
 pub fn propagate_copies(Function) -> OptResult
+
+pub fn propagate_copies_global(Function) -> OptResult
 
 pub fn reduce_strength(Function) -> OptResult
 
@@ -88,9 +92,11 @@ pub fn Block::set_terminator(Self, Terminator) -> Unit
 pub impl Show for Block
 
 pub struct CFG {
+  size : Int
   num_blocks : Int
   successors : Array[Array[Int]]
   predecessors : Array[Array[Int]]
+  valid : Array[Bool]
 }
 pub fn CFG::build(Function) -> Self
 pub fn CFG::compute_dominators(Self) -> Array[Int]
@@ -102,6 +108,7 @@ pub fn CFG::get_predecessors(Self, Int) -> Array[Int]
 pub fn CFG::get_successors(Self, Int) -> Array[Int]
 pub fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
 pub fn CFG::is_exit_block(Self, Int) -> Bool
+pub fn CFG::is_valid(Self, Int) -> Bool
 pub fn CFG::postorder(Self) -> Array[Int]
 pub fn CFG::reverse_postorder(Self) -> Array[Int]
 pub fn CFG::to_dot(Self, String) -> String

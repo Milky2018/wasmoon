@@ -450,6 +450,199 @@ pub fn propagate_copies(func : Function) -> OptResult {
 }
 
 ///|
+/// Cross-basic-block copy propagation using dominance analysis
+/// A copy in block A can propagate to block B only if A dominates B
+pub fn propagate_copies_global(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() == 0 {
+    return result
+  }
+  // Build CFG and compute dominators
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  // Build block_id -> array_index mapping
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  // Collect all copies: (dest_id, source) pairs with defining block_id
+  // copies[dest_id] = (source_value, defining_block_id)
+  let copies : @hashmap.HashMap[Int, (Value, Int)] = @hashmap.new()
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.opcode is Copy &&
+        inst.result is Some(dest) &&
+        inst.operands.length() > 0 {
+        copies.set(dest.id, (inst.operands[0], block.id))
+      }
+    }
+  }
+  // DFS the dominator tree with copy environment
+  // env tracks which copy dest_ids are currently available
+  let env : Array[Int] = []
+  fn dfs(block_id : Int) {
+    // Get block from func.blocks using mapping
+    let idx = block_idx.get(block_id).unwrap()
+    let block = func.blocks[idx]
+    // Record which copies this block defines (to pop later)
+    let local_copies : Array[Int] = []
+    for inst in block.instructions {
+      if inst.opcode is Copy &&
+        inst.result is Some(dest) &&
+        inst.operands.length() > 0 {
+        local_copies.push(dest.id)
+        env.push(dest.id)
+      }
+    }
+    // Replace uses in this block's instructions
+    for inst in block.instructions {
+      for i, op in inst.operands {
+        if resolve_copy_global(op, copies, env) is Some(resolved) &&
+          resolved.id != op.id {
+          inst.operands[i] = resolved
+          result.mark_changed()
+        }
+      }
+    }
+    // Replace uses in terminator
+    if block.terminator is Some(term) {
+      let new_term = propagate_copies_in_terminator_global(
+        term, copies, env, result,
+      )
+      block.terminator = Some(new_term)
+    }
+    // Recurse to dominated children
+    if block_id < domtree.length() {
+      for child in domtree[block_id] {
+        dfs(child)
+      }
+    }
+    // Pop this block's copies from environment
+    for _ in local_copies {
+      env.pop() |> ignore
+    }
+  }
+
+  // Start DFS from entry block (block 0)
+  if cfg.is_valid(0) {
+    dfs(0)
+  }
+  result
+}
+
+///|
+/// Resolve a copy using global environment (only copies in dominating blocks)
+fn resolve_copy_global(
+  v : Value,
+  copies : @hashmap.HashMap[Int, (Value, Int)],
+  env : Array[Int],
+) -> Value? {
+  // Follow copy chain, but only if dest_id is in environment
+  let mut current = v
+  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  while true {
+    if visited.get(current.id).unwrap_or(false) {
+      break // Cycle detected
+    }
+    visited.set(current.id, true)
+    // Check if current.id is a copy dest that's in our environment
+    match copies.get(current.id) {
+      Some((source, _)) => {
+        // Only follow if this copy is available (dest in env)
+        let mut in_env = false
+        for dest_id in env {
+          if dest_id == current.id {
+            in_env = true
+            break
+          }
+        }
+        if in_env {
+          current = source
+        } else {
+          break
+        }
+      }
+      None => break
+    }
+  }
+  Some(current)
+}
+
+///|
+/// Propagate copies in terminator (global version)
+fn propagate_copies_in_terminator_global(
+  term : Terminator,
+  copies : @hashmap.HashMap[Int, (Value, Int)],
+  env : Array[Int],
+  result : OptResult,
+) -> Terminator {
+  match term {
+    Jump(target, args) => {
+      let new_args : Array[Value] = []
+      for arg in args {
+        match resolve_copy_global(arg, copies, env) {
+          Some(resolved) => {
+            if resolved.id != arg.id {
+              result.mark_changed()
+            }
+            new_args.push(resolved)
+          }
+          None => new_args.push(arg)
+        }
+      }
+      Terminator::Jump(target, new_args)
+    }
+    Brz(cond, then_t, else_t) =>
+      match resolve_copy_global(cond, copies, env) {
+        Some(resolved) => {
+          if resolved.id != cond.id {
+            result.mark_changed()
+          }
+          Terminator::Brz(resolved, then_t, else_t)
+        }
+        None => term
+      }
+    Brnz(cond, then_t, else_t) =>
+      match resolve_copy_global(cond, copies, env) {
+        Some(resolved) => {
+          if resolved.id != cond.id {
+            result.mark_changed()
+          }
+          Terminator::Brnz(resolved, then_t, else_t)
+        }
+        None => term
+      }
+    BrTable(index, targets, default_t) =>
+      match resolve_copy_global(index, copies, env) {
+        Some(resolved) => {
+          if resolved.id != index.id {
+            result.mark_changed()
+          }
+          Terminator::BrTable(resolved, targets, default_t)
+        }
+        None => term
+      }
+    Return(values) => {
+      let new_values : Array[Value] = []
+      for v in values {
+        match resolve_copy_global(v, copies, env) {
+          Some(resolved) => {
+            if resolved.id != v.id {
+              result.mark_changed()
+            }
+            new_values.push(resolved)
+          }
+          None => new_values.push(v)
+        }
+      }
+      Terminator::Return(new_values)
+    }
+    Trap(_) => term
+  }
+}
+
+///|
 /// Resolve a value through copy chain
 fn resolve_copy(v : Value, copies : @hashmap.HashMap[Int, Value]) -> Value? {
   // Follow copy chain (with cycle detection)
@@ -655,7 +848,7 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let cp_result = propagate_copies(func)
+    let cp_result = propagate_copies_global(func)
     if cp_result.changed {
       changed = true
       result.mark_changed()
@@ -696,7 +889,7 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let cp_result = propagate_copies(func)
+    let cp_result = propagate_copies_global(func)
     if cp_result.changed {
       changed = true
       result.mark_changed()
