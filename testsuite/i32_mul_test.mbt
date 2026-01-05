@@ -79,7 +79,6 @@ test "i32 mul" {
       #|  0008: e00309aa  mov x0, x9
       #|  000c: c0035fd6  ret
       #|
-
     ),
   )
   let code_bytes = mc.get_bytes()

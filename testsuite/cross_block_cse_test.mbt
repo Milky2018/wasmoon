@@ -163,7 +163,6 @@ test "cross_block_cse" {
       #|  0018: e00309aa  mov x0, x9
       #|  001c: c0035fd6  ret
       #|
-
     ),
   )
 }

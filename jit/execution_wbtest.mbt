@@ -784,7 +784,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  01bc: 09f8ffb5  cbnz x9, block7
       #|  01c0: c3ffff17  b block8
       #|
-
     ),
   )
 

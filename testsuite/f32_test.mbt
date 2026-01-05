@@ -386,7 +386,6 @@ test "f32 mul" {
       #|  0010: 4040201e  fmov s0, s2
       #|  0014: c0035fd6  ret
       #|
-
     ),
   )
   let code_bytes = mc.get_bytes()
