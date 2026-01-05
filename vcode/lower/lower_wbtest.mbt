@@ -42,12 +42,13 @@ test "lower integer arithmetic" {
   builder.return_([prod])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
+  // After e-graph optimization: sub(add(v0, v1), v0) = v1, so mul(v3, v1) = mul(v1, v1)
   let expected =
     #|vcode arith(v0:int, v1:int) -> int {
     #|block0:
     #|    v2 = add v0, v1
     #|    v3 = sub v2, v0
-    #|    v4 = mul v3, v1
+    #|    v4 = mul v1, v1
     #|    ret v4
     #|}
     #|
@@ -66,6 +67,7 @@ test "lower constants" {
   builder.return_([sum])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
+  // After e-graph optimization: add(10, 20) = 30 (constant folding)
   inspect(
     output,
     content=(
@@ -73,7 +75,7 @@ test "lower constants" {
       #|block0:
       #|    v0 = ldi 10
       #|    v1 = ldi 20
-      #|    v2 = add32 #20 v0
+      #|    v2 = ldi 30
       #|    ret v2
       #|}
       #|

@@ -23,8 +23,6 @@ pub fn is_valid_logical_imm(Int64) -> Bool
 
 pub fn lower_function(@ir.Function) -> @regalloc.VCodeFunction
 
-pub fn lower_function_egraph(@ir.Function) -> @regalloc.VCodeFunction
-
 pub fn lower_function_optimized(@ir.Function) -> @regalloc.VCodeFunction
 
 pub fn lower_inst_with_patterns(LoweringContext, @ir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool

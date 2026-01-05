@@ -740,9 +740,10 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
   // Process all nodes in all classes to re-canonicalize
   // This is a simplified rebuild - production e-graphs use more efficient algorithms
   let new_hashcons : Map[ENode, EClassId] = {}
+  // Collect nodes grouped by their canonical class
+  let canonical_nodes : Map[Int, Array[ENode]] = {}
   for class_id, eclass in self.classes {
     let canonical_id = self.find(EClassId(class_id))
-    let new_nodes : Array[ENode] = []
     for node in eclass.nodes {
       let canonical_node = self.canonicalize(node)
 
@@ -754,11 +755,29 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
           self.uf.union(canonical_id.0, existing_canonical.0) |> ignore
         }
       } else {
-        new_nodes.push(canonical_node)
+        // Add node to its canonical class
+        match canonical_nodes.get(canonical_id.0) {
+          Some(nodes) => nodes.push(canonical_node)
+          None => canonical_nodes.set(canonical_id.0, [canonical_node])
+        }
         new_hashcons.set(canonical_node, canonical_id)
       }
     }
-    eclass.nodes = new_nodes
+  }
+
+  // Update each class with its canonical nodes
+  for class_id, eclass in self.classes {
+    let canonical_id = self.find(EClassId(class_id))
+    if class_id == canonical_id.0 {
+      // This is a canonical class - update its nodes
+      match canonical_nodes.get(class_id) {
+        Some(nodes) => eclass.nodes = nodes
+        None => eclass.nodes = []
+      }
+    } else {
+      // Non-canonical class - clear its nodes (they're in canonical class now)
+      eclass.nodes = []
+    }
   }
   self.hashcons = new_hashcons
   self.worklist = []
@@ -1333,7 +1352,9 @@ fn node_cost(node : ENode) -> Int {
 pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   // Use memoization to avoid recomputing
   let memo : Map[Int, (Int, ENode)] = {}
-  self.extract_impl(id, memo)
+  // Track classes currently being processed to detect cycles
+  let in_progress : @hashset.HashSet[Int] = @hashset.new()
+  self.extract_impl(id, memo, in_progress)
 }
 
 ///|
@@ -1341,6 +1362,7 @@ fn EGraph::extract_impl(
   self : EGraph,
   id : EClassId,
   memo : Map[Int, (Int, ENode)],
+  in_progress : @hashset.HashSet[Int],
 ) -> (Int, ENode) {
   let canonical = self.find(id)
 
@@ -1349,21 +1371,47 @@ fn EGraph::extract_impl(
     return result
   }
 
+  // Check for cycle - if we're already processing this class, return high cost
+  // but don't return a fake Const(0) - the caller should handle this case
+  // by not choosing nodes that lead to cycles
+  if in_progress.contains(canonical.0) {
+    // Return a sentinel value that indicates "don't use this path"
+    // The caller will see the high cost and skip this node
+    return (@int.max_value / 2, { op: Var(-1), children: [] })
+  }
+
+  // Mark as in progress
+  in_progress.add(canonical.0)
+
   // Get all nodes in this class
   let nodes = self.get_nodes(canonical)
   if nodes.is_empty() {
-    // Should not happen in a well-formed e-graph
-    return (@int.max_value, { op: Const(0L), children: [] })
+    // Should not happen in a well-formed e-graph, but handle gracefully
+    in_progress.remove(canonical.0)
+    // Return a sentinel value
+    return (@int.max_value, { op: Var(-1), children: [] })
   }
 
   // Find the lowest cost node
   let mut best_cost = @int.max_value
   let mut best_node = nodes[0]
   for node in nodes {
+    // Skip nodes with cyclic children (child points to current class)
+    let mut has_cycle = false
+    for child in node.children {
+      if self.find(child).0 == canonical.0 {
+        has_cycle = true
+        break
+      }
+    }
+    if has_cycle {
+      continue // Skip this node, try others
+    }
+
     // Compute cost: node cost + sum of children costs
     let mut total_cost = node_cost(node)
     for child in node.children {
-      let (child_cost, _) = self.extract_impl(child, memo)
+      let (child_cost, _) = self.extract_impl(child, memo, in_progress)
       total_cost = total_cost + child_cost
       if total_cost >= best_cost {
         break // Pruning: no need to continue if already worse
@@ -1374,6 +1422,9 @@ fn EGraph::extract_impl(
       best_node = node
     }
   }
+
+  // Remove from in progress
+  in_progress.remove(canonical.0)
   let result = (best_cost, best_node)
   memo.set(canonical.0, result)
   result

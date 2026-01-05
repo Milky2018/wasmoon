@@ -345,8 +345,10 @@ fn eopcode_to_opcode(eop : @egraph.EOpcode) -> Opcode? {
 }
 
 ///|
-/// Check if the extracted expression is simpler than the original
-/// Returns Some(simplified_opcode) if optimization found, None otherwise
+/// Check if the extracted expression is a constant folding result
+/// Returns Some(Iconst(c)) if constant folding found, None otherwise
+/// NOTE: Only handles constant folding. Complex rewrites (like x*3 -> (x<<1)+x)
+/// are not handled because they would require operand reconstruction.
 pub fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
@@ -355,27 +357,11 @@ pub fn EGraphBuilder::get_simplified_opcode(
     None => None
     Some(class_id) => {
       let (_, best_node) = self.egraph.extract(class_id)
-      // Check if it's a constant folding result
+      // Only handle constant folding - returns Iconst if the result is a constant
       match best_node.op {
         Const(c) => Some(Iconst(c))
-        _ =>
-          // Check if the opcode changed
-          match self.def_map.get(value.id) {
-            None => None
-            Some(orig_inst) => {
-              let orig_eop = opcode_to_eopcode(orig_inst)
-              match orig_eop {
-                None => None
-                Some(orig) =>
-                  // Compare opcodes ignoring type parameters
-                  if orig.tag() != best_node.op.tag() {
-                    eopcode_to_opcode(best_node.op)
-                  } else {
-                    None
-                  }
-              }
-            }
-          }
+        // Don't change opcode for non-constant results - would need operand reconstruction
+        _ => None
       }
     }
   }

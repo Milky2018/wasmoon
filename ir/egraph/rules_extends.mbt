@@ -1464,3 +1464,77 @@ fn rule_ireduce_sextend_to_extend() -> RewriteRule {
     },
   }
 }
+
+///|
+/// uextend(const(c)) → const(c)
+/// Zero-extending a constant is just the constant itself (high bits are already zero)
+fn rule_uextend_const() -> RewriteRule {
+  {
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        match node.op {
+          Uextend(_, _) =>
+            if node.children.length() == 1 {
+              for inner in eg.get_nodes(node.children[0]) {
+                match inner.op {
+                  Const(c) => {
+                    // uextend(const(c)) = const(c)
+                    // For unsigned extension, the constant value stays the same
+                    let new_const = eg.add_const(c)
+                    let new_id = eg.merge(class_id, new_const)
+                    changed = new_id != class_id || changed
+                  }
+                  _ => ()
+                }
+              }
+            }
+          _ => ()
+        }
+      }
+      changed
+    },
+  }
+}
+
+///|
+/// sextend(const(c)) → const(sign_extended_c)
+/// Sign-extending a constant produces the sign-extended value
+fn rule_sextend_const() -> RewriteRule {
+  {
+    apply: fn(eg, class_id) {
+      let mut changed = false
+      for node in eg.get_nodes(class_id) {
+        match node.op {
+          Sextend(from_bits, _) =>
+            if node.children.length() == 1 {
+              for inner in eg.get_nodes(node.children[0]) {
+                match inner.op {
+                  Const(c) => {
+                    // sextend(const(c)) = const(sign_extended_c)
+                    // Sign-extend the constant from from_bits to 64 bits
+                    let sign_bit = 1L << (from_bits - 1)
+                    let mask = mask_for_bits(from_bits)
+                    let masked = c & mask
+                    let extended = if (masked & sign_bit) != 0L {
+                      // Negative: set all high bits
+                      masked | (-1L ^ mask)
+                    } else {
+                      // Positive: keep as is
+                      masked
+                    }
+                    let new_const = eg.add_const(extended)
+                    let new_id = eg.merge(class_id, new_const)
+                    changed = new_id != class_id || changed
+                  }
+                  _ => ()
+                }
+              }
+            }
+          _ => ()
+        }
+      }
+      changed
+    },
+  }
+}

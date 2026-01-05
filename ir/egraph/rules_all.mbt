@@ -210,6 +210,8 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_band_sextend_mask(), [TAnd])
   // Type-dependent extend/reduce rules (use bit width info)
   rs.add_rule(rule_ireduce_const(), [TIreduce])
+  rs.add_rule(rule_uextend_const(), [TUextend])
+  rs.add_rule(rule_sextend_const(), [TSextend])
   rs.add_rule(rule_uextend_identity(), [TUextend])
   rs.add_rule(rule_sextend_identity(), [TSextend])
   rs.add_rule(rule_ireduce_identity(), [TIreduce])

@@ -1417,3 +1417,56 @@ test "egraph: add_typed sets type correctly" {
   let result = eg.add_typed({ op: Add, children: [x, k5] }, 32)
   inspect(eg.get_bits(result), content="Some(32)")
 }
+
+///|
+/// Test that x + 0 = x extraction returns Var, not Const(0)
+test "egraph: x + 0 extract returns Var not Const" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let x_plus_zero = eg.add_add(x, zero)
+
+  // Debug: print initial class ids
+  inspect(x.0, content="0")
+  inspect(zero.0, content="1")
+  inspect(x_plus_zero.0, content="2")
+
+  // Before saturation - check initial nodes
+  let x_nodes_before = eg.get_nodes(x)
+  inspect(x_nodes_before.length(), content="1")
+  let add_nodes_before = eg.get_nodes(x_plus_zero)
+  inspect(add_nodes_before.length(), content="1")
+
+  // Before saturation
+  inspect(eg.equiv(x_plus_zero, x), content="false")
+
+  // Apply only add_zero rule
+  let rules = IndexedRuleSet::new()
+  rules.add_rule(rule_add_zero(), [TAdd])
+  eg.saturate_indexed(rules, 10) |> ignore
+
+  // After saturation, x + 0 should equal x
+  inspect(eg.equiv(x_plus_zero, x), content="true")
+
+  // Debug: check canonical ids
+  let x_canonical = eg.find(x)
+  let x_plus_zero_canonical = eg.find(x_plus_zero)
+  inspect(x_canonical.0, content="0")
+  inspect(x_plus_zero_canonical.0, content="0")
+
+  // Debug: check how many classes exist
+  inspect(eg.num_classes(), content="2")
+
+  // Debug: print all nodes in the merged class
+  let nodes = eg.get_nodes(x_plus_zero)
+  let opcodes : Array[String] = []
+  for node in nodes {
+    opcodes.push(node.op.to_string())
+  }
+  inspect(opcodes, content="[\"Var(0)\", \"Add\"]")
+
+  // Extract should return Var(0), not Const(0)
+  let (cost, node) = eg.extract(x_plus_zero)
+  inspect(node.op, content="Var(0)")
+  inspect(cost, content="0")
+}
