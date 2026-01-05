@@ -75,6 +75,8 @@ pub fn simplify_branches(Function) -> OptResult
 
 pub fn thread_jumps(Function) -> OptResult
 
+pub fn translate_function(@types.Module, Int, name? : String, memory_max_override? : Int?) -> Function
+
 pub fn unroll_loops(Function, Int) -> OptResult
 
 pub fn validate_function(Function) -> ValidationResult
@@ -763,6 +765,7 @@ pub enum Terminator {
 pub impl Show for Terminator
 
 type Translator
+pub fn Translator::from_module(@types.Module, Int, name? : String, memory_max_override? : Int?) -> Self
 pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 

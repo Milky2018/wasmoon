@@ -29,12 +29,9 @@ fn run_compile(
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
   let num_imports = count_func_imports(mod_.imports)
 
-  // Build import function type indices and record imports in precompiled module
-  let import_func_type_indices : Array[Int] = []
+  // Record imports in precompiled module
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
-      import_func_type_indices.push(type_idx)
-      // Record import in the precompiled module
       let func_type = mod_.get_func_type(type_idx)
       precompiled.add_import(
         imp.mod_name,
@@ -43,17 +40,6 @@ fn run_compile(
         func_type.results.length(),
       )
     }
-  }
-
-  // Build global types array (imports + module globals)
-  let global_types : Array[@types.GlobalType] = []
-  for imp in mod_.imports {
-    if imp.desc is Global(global_type) {
-      global_types.push(global_type)
-    }
-  }
-  for global in mod_.globals {
-    global_types.push(global.type_)
   }
 
   // IR output buffer (if requested)
@@ -68,44 +54,15 @@ fn run_compile(
   }
   println("Compiling \{mod_.codes.length()} functions...")
 
-  // Get memory max limit from module (if memory is defined)
-  let memory_max : Int? = if mod_.memories.length() > 0 {
-    mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
-  } else {
-    None
-  }
-
   // Compile each function
-  for i, code in mod_.codes {
+  for i, _ in mod_.codes {
     let func_idx = num_imports + i
     let type_idx = mod_.funcs[i]
     let func_type = mod_.get_func_type(type_idx)
     let func_name = get_func_name(mod_, func_idx)
 
-    // Build memory_is_64 array for memory64 support
-    let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
-    // Calculate memory_mins (minimum guaranteed memory size in bytes)
-    let memory_mins = mod_.memories.map(fn(m) { m.limits.min * 65536L })
-
-    // Stage 1: Translate WASM to IR
-    let translator = @ir.Translator::new(
-      func_name,
-      func_type,
-      code.locals,
-      @types.extract_func_types(mod_.types),
-      mod_.funcs,
-      num_imports,
-      import_func_type_indices,
-      memory_max~,
-      memory_is_64~,
-      tables=mod_.tables,
-      global_types~,
-      type_rec_groups=mod_.type_rec_groups,
-      module_types=mod_.types,
-      tags=mod_.tags,
-      memory_mins~,
-    )
-    let ir_func = translator.translate(code.body)
+    // Stage 1: Translate WASM to IR - use simplified from_module API
+    let ir_func = @ir.translate_function(mod_, i, name=func_name)
 
     // Record IR before optimization
     if ir_output is Some(buf) {
