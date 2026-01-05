@@ -4,7 +4,7 @@
 ///|
 /// IR Value - represents a virtual register in SSA form
 /// Each value is defined exactly once and can be used multiple times
-pub(all) struct Value {
+pub struct Value {
   id : Int // Unique identifier within a function
   ty : Type // The type of this value
 } derive(Show)
@@ -61,7 +61,7 @@ pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
 /// A basic block is a sequence of instructions with:
 /// - One entry point (the first instruction)
 /// - One exit point (the last instruction, a terminator)
-pub(all) struct Block {
+pub struct Block {
   id : Int // Unique block identifier
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
   instructions : Array[Inst] // Instructions in this block
@@ -93,7 +93,7 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 
 ///|
 /// Instruction - an SSA instruction that produces a value
-pub(all) struct Inst {
+pub struct Inst {
   result : Value? // The primary value produced (None for void instructions)
   extra_results : Array[Value] // Additional results for multi-value returns (e.g., call returning multiple values)
   mut opcode : Opcode // The operation
@@ -685,7 +685,7 @@ pub enum Terminator {
 
 ///|
 /// Function - a complete IR function
-pub(all) struct Function {
+pub struct Function {
   name : String
   params : Array[(Value, Type)] // Function parameters
   results : Array[Type] // Return types

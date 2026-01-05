@@ -29,7 +29,6 @@ fn EGraph::find_fconst(self : EGraph, id : EClassId) -> UInt64? {
 /// x + 0 = x
 fn rule_add_zero() -> RewriteRule {
   {
-    name: "add_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -55,7 +54,6 @@ fn rule_add_zero() -> RewriteRule {
 /// x - 0 = x
 fn rule_sub_zero() -> RewriteRule {
   {
-    name: "sub_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -76,7 +74,6 @@ fn rule_sub_zero() -> RewriteRule {
 /// x * 1 = x
 fn rule_mul_one() -> RewriteRule {
   {
-    name: "mul_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -99,7 +96,6 @@ fn rule_mul_one() -> RewriteRule {
 /// x * 0 = 0
 fn rule_mul_zero() -> RewriteRule {
   {
-    name: "mul_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -121,7 +117,6 @@ fn rule_mul_zero() -> RewriteRule {
 /// x & x = x, x | x = x
 fn rule_idempotent() -> RewriteRule {
   {
-    name: "idempotent",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -141,7 +136,6 @@ fn rule_idempotent() -> RewriteRule {
 /// x ^ x = 0
 fn rule_xor_self() -> RewriteRule {
   {
-    name: "xor_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -162,7 +156,6 @@ fn rule_xor_self() -> RewriteRule {
 /// x - x = 0
 fn rule_sub_self() -> RewriteRule {
   {
-    name: "sub_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

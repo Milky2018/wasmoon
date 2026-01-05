@@ -66,7 +66,7 @@ pub(all) enum ExceptionLibcall {
 ///|
 /// VCode instruction - a machine-level instruction with virtual registers
 /// Operand constraints for fixed register allocation
-pub(all) struct VCodeInst {
+pub struct VCodeInst {
   opcode : VCodeOpcode
   defs : Array[@abi.Writable] // Registers defined (written)
   uses : Array[@abi.Reg] // Registers used (read)

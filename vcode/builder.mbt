@@ -3,7 +3,7 @@
 
 ///|
 /// VCode builder for constructing VCode functions
-pub(all) struct VCodeBuilder {
+struct VCodeBuilder {
   func : @regalloc.VCodeFunction
   mut current_block : @block.VCodeBlock?
 }

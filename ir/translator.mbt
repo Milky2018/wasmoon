@@ -3,7 +3,7 @@
 
 ///|
 /// Translator state for converting a single WASM function to IR
-pub(all) struct Translator {
+struct Translator {
   builder : IRBuilder
   // Value stack - simulates WASM's operand stack
   value_stack : Array[Value]
@@ -31,21 +31,12 @@ pub(all) struct Translator {
   // Memory is 64-bit indexed (for memory64 proposal)
   // memory_is_64[i] = true if memory i uses 64-bit addresses
   memory_is_64 : Array[Bool]
-  // Table base offsets for multi-table support
-  // table_base_offsets[i] = starting index of table i in the flattened indirect_table
-  table_base_offsets : Array[Int]
   // Table sizes for bounds checking
   // table_sizes[i] = number of elements in table i
   table_sizes : Array[Int]
-  // Global variable types
-  // global_types[i] = type of global variable i
-  global_types : Array[@types.GlobalType]
   // Number of wasm function parameters (excludes vmctx params)
   // Used to distinguish params from locals in self.locals array
   num_wasm_params : Int
-  // Canonical type indices for structural type equivalence
-  // Structurally equivalent types map to the same canonical index
-  canonical_type_indices : Array[Int]
   // Cross-module support: base index for this module's functions
   // All function indices are offset by this value (default 0)
   func_base : Int
@@ -69,7 +60,7 @@ pub(all) struct Translator {
 
 ///|
 /// Block frame for tracking control flow constructs
-struct BlockFrame {
+priv struct BlockFrame {
   block : Block // The continuation block
   result_types : Array[Type]
   // Stack height at block entry
@@ -95,6 +86,7 @@ pub fn Translator::new(
   module_types? : Array[@types.SubType] = [],
   tags? : Array[@types.TagType] = [],
 ) -> Translator {
+  type_rec_groups |> ignore // Reserved for future canonical type indices
   let builder = IRBuilder::new(name)
   // Note: add vmctx as explicit params
   // - params[0] = callee_vmctx (X0)
@@ -131,31 +123,13 @@ pub fn Translator::new(
   }
   // Calculate table base offsets for multi-table support
   // All tables are flattened into a single indirect_table at runtime
-  // table_base_offsets[i] = starting index of table i in the flattened table
-  let table_base_offsets : Array[Int] = []
   let table_sizes : Array[Int] = []
   let table_is_64 : Array[Bool] = []
-  let mut offset = 0
   for table in tables {
     let size = table.type_.limits.min.to_int() // Tables always use 32-bit limits
-    table_base_offsets.push(offset)
     table_sizes.push(size)
     table_is_64.push(table.type_.is_table64)
-    offset = offset + size
   }
-  // Compute canonical type indices for structural type equivalence
-  // Structurally equivalent types will map to the same canonical index
-  // Use module_types if available (preserves finality and supertypes),
-  // otherwise fall back to converting func_types
-  let types_for_canonical = if module_types.length() > 0 {
-    module_types
-  } else {
-    @types.func_types_to_subtypes(func_types)
-  }
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    types_for_canonical,
-    type_rec_groups~,
-  )
   {
     builder,
     value_stack: [],
@@ -170,12 +144,9 @@ pub fn Translator::new(
     func_result_types,
     memory_max,
     memory_is_64,
-    table_base_offsets,
     table_sizes,
     table_is_64,
-    global_types,
     num_wasm_params: func_type.params.length(),
-    canonical_type_indices,
     func_base,
     import_remap,
     module_types,

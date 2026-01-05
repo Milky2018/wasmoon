@@ -8,7 +8,6 @@
 /// This helps recognize negation patterns
 fn rule_neg_zero() -> RewriteRule {
   {
-    name: "neg_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -31,7 +30,6 @@ fn rule_neg_zero() -> RewriteRule {
 /// x - (0 - y) = x + y
 fn rule_sub_neg() -> RewriteRule {
   {
-    name: "sub_neg",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -57,7 +55,6 @@ fn rule_sub_neg() -> RewriteRule {
 /// x + (0 - y) = x - y
 fn rule_add_neg() -> RewriteRule {
   {
-    name: "add_neg",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -87,7 +84,6 @@ fn rule_add_neg() -> RewriteRule {
 /// (a * c1) * c2 = a * (c1 * c2) - reassociate multiplication constants
 fn rule_reassoc_mul_const() -> RewriteRule {
   {
-    name: "reassoc_mul_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -116,7 +112,6 @@ fn rule_reassoc_mul_const() -> RewriteRule {
 /// (a - c1) - c2 = a - (c1 + c2)
 fn rule_reassoc_sub_const() -> RewriteRule {
   {
-    name: "reassoc_sub_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -145,7 +140,6 @@ fn rule_reassoc_sub_const() -> RewriteRule {
 /// x * -1 = -x
 fn rule_mul_neg_one() -> RewriteRule {
   {
-    name: "mul_neg_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -173,7 +167,6 @@ fn rule_mul_neg_one() -> RewriteRule {
 /// -x * -y = x * y
 fn rule_neg_mul_neg() -> RewriteRule {
   {
-    name: "neg_mul_neg",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -209,7 +202,6 @@ fn rule_neg_mul_neg() -> RewriteRule {
 /// (x - y) + y = x
 fn rule_sub_add_cancel() -> RewriteRule {
   {
-    name: "sub_add_cancel",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -245,7 +237,6 @@ fn rule_sub_add_cancel() -> RewriteRule {
 /// (x + y) - y = x, (x + y) - x = y
 fn rule_add_sub_cancel() -> RewriteRule {
   {
-    name: "add_sub_cancel",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -275,7 +266,6 @@ fn rule_add_sub_cancel() -> RewriteRule {
 /// (x - y) - x = -y
 fn rule_sub_sub_cancel() -> RewriteRule {
   {
-    name: "sub_sub_cancel",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -301,7 +291,6 @@ fn rule_sub_sub_cancel() -> RewriteRule {
 /// x / -1 = -x (signed division)
 fn rule_sdiv_neg_one() -> RewriteRule {
   {
-    name: "sdiv_neg_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -322,7 +311,6 @@ fn rule_sdiv_neg_one() -> RewriteRule {
 /// x % -1 = 0 (signed remainder)
 fn rule_srem_neg_one() -> RewriteRule {
   {
-    name: "srem_neg_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -343,7 +331,6 @@ fn rule_srem_neg_one() -> RewriteRule {
 /// x / 1 = x (signed and unsigned)
 fn rule_div_one() -> RewriteRule {
   {
-    name: "div_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -367,7 +354,6 @@ fn rule_div_one() -> RewriteRule {
 /// x % 1 = 0 (signed and unsigned)
 fn rule_rem_one() -> RewriteRule {
   {
-    name: "rem_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -392,7 +378,6 @@ fn rule_rem_one() -> RewriteRule {
 /// (!x) + 1 = -x (two's complement negation)
 fn rule_bnot_add_one() -> RewriteRule {
   {
-    name: "bnot_add_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -428,7 +413,6 @@ fn rule_bnot_add_one() -> RewriteRule {
 /// !(x - 1) = -x
 fn rule_bnot_sub_one() -> RewriteRule {
   {
-    name: "bnot_sub_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -453,7 +437,6 @@ fn rule_bnot_sub_one() -> RewriteRule {
 /// !(x + (-1)) = -x
 fn rule_bnot_add_neg_one() -> RewriteRule {
   {
-    name: "bnot_add_neg_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -478,7 +461,6 @@ fn rule_bnot_add_neg_one() -> RewriteRule {
 /// or(x, C) + (-C) = and(x, ~C)
 fn rule_or_add_neg() -> RewriteRule {
   {
-    name: "or_add_neg",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -509,7 +491,6 @@ fn rule_or_add_neg() -> RewriteRule {
 /// (x + y) - (x | y) = x & y
 fn rule_add_sub_or_to_and() -> RewriteRule {
   {
-    name: "add_sub_or_to_and",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -544,7 +525,6 @@ fn rule_add_sub_or_to_and() -> RewriteRule {
 /// x * (1 << y) = x << y
 fn rule_mul_shl_one() -> RewriteRule {
   {
-    name: "mul_shl_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -588,7 +568,6 @@ fn rule_mul_shl_one() -> RewriteRule {
 /// ineg(isub(y, x)) = isub(x, y)
 fn rule_neg_sub_swap() -> RewriteRule {
   {
-    name: "neg_sub_swap",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

@@ -4,7 +4,7 @@
 ///|
 /// IRBuilder - helps construct IR functions
 /// Tracks the current block and provides methods for emitting instructions
-pub(all) struct IRBuilder {
+struct IRBuilder {
   func : Function
   mut current_block : Block?
 }

@@ -5,7 +5,7 @@
 
 ///|
 /// Builder for constructing an EGraph from IR instructions
-pub(all) struct EGraphBuilder {
+struct EGraphBuilder {
   egraph : @egraph.EGraph
   // Map from IR Value id to EClassId
   value_map : Map[Int, @egraph.EClassId]

@@ -1,6 +1,6 @@
 ///|
 /// Exception instance - represents a caught exception
-pub(all) struct ExnInstance {
+pub struct ExnInstance {
   tag_addr : Int // Which tag was thrown
   values : Array[@types.Value] // Exception values
 } derive(Show)

@@ -3,7 +3,7 @@
 
 ///|
 /// Result of an optimization pass
-pub(all) struct OptResult {
+pub struct OptResult {
   mut changed : Bool // Whether the IR was modified
 }
 

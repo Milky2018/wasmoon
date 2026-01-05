@@ -4,7 +4,7 @@
 ///|
 /// CFG - Control Flow Graph for a function
 /// Provides predecessor/successor relationships for each block
-pub(all) struct CFG {
+pub struct CFG {
   // Number of blocks in the CFG
   num_blocks : Int
   // Successors for each block (indexed by block ID)
@@ -273,7 +273,7 @@ pub fn CFG::to_dot(self : CFG, func_name : String) -> String {
 
 ///|
 /// Loop - represents a natural loop in the CFG
-pub(all) struct Loop {
+pub struct Loop {
   header : Int // Loop header block (target of back edge)
   blocks : Array[Int] // All blocks in the loop body
   back_edges : Array[(Int, Int)] // Back edges (source, target) for this loop

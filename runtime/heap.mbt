@@ -33,7 +33,7 @@ pub struct MarkSweepHeap {
 
 ///|
 /// GC statistics
-pub(all) struct GCStats {
+pub struct GCStats {
   total_objects : Int // Total slots in heap
   live_objects : Int // Number of live objects
   free_slots : Int // Number of free slots

@@ -7,7 +7,6 @@
 /// x << 0 = x
 fn rule_shl_zero() -> RewriteRule {
   {
-    name: "shl_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -27,7 +26,6 @@ fn rule_shl_zero() -> RewriteRule {
 /// x >> 0 = x (both arithmetic and logical)
 fn rule_shr_zero() -> RewriteRule {
   {
-    name: "shr_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -47,7 +45,6 @@ fn rule_shr_zero() -> RewriteRule {
 /// 0 << x = 0, 0 >> x = 0
 fn rule_shift_of_zero() -> RewriteRule {
   {
-    name: "shift_of_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -69,7 +66,6 @@ fn rule_shift_of_zero() -> RewriteRule {
 /// (x << a) << b = x << (a + b) when a + b < 64
 fn rule_shl_shl() -> RewriteRule {
   {
-    name: "shl_shl",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -100,7 +96,6 @@ fn rule_shl_shl() -> RewriteRule {
 /// (x >> a) >> b = x >> (a + b) when a + b < 64 (unsigned)
 fn rule_ushr_ushr() -> RewriteRule {
   {
-    name: "ushr_ushr",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -134,7 +129,6 @@ fn rule_ushr_ushr() -> RewriteRule {
 /// (x >> a) >> b = x >> (a + b) when a + b < 64 (signed)
 fn rule_sshr_sshr() -> RewriteRule {
   {
-    name: "sshr_sshr",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -168,7 +162,6 @@ fn rule_sshr_sshr() -> RewriteRule {
 /// x rotl 0 = x, x rotr 0 = x
 fn rule_rot_zero() -> RewriteRule {
   {
-    name: "rot_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -188,7 +181,6 @@ fn rule_rot_zero() -> RewriteRule {
 /// rotl(rotr(x, y), y) = x
 fn rule_rotl_rotr_cancel() -> RewriteRule {
   {
-    name: "rotl_rotr_cancel",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -213,7 +205,6 @@ fn rule_rotl_rotr_cancel() -> RewriteRule {
 /// rotr(rotl(x, y), y) = x
 fn rule_rotr_rotl_cancel() -> RewriteRule {
   {
-    name: "rotr_rotl_cancel",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -238,7 +229,6 @@ fn rule_rotr_rotl_cancel() -> RewriteRule {
 /// (x >> k) << k = x & mask (masking off bottom k bits)
 fn rule_ushr_shl_mask() -> RewriteRule {
   {
-    name: "ushr_shl_mask",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -270,7 +260,6 @@ fn rule_ushr_shl_mask() -> RewriteRule {
 /// (x << k) >> k = x & mask (unsigned, masking off top k bits)
 fn rule_shl_ushr_mask() -> RewriteRule {
   {
-    name: "shl_ushr_mask",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -303,7 +292,6 @@ fn rule_shl_ushr_mask() -> RewriteRule {
 /// Distribute band through shifts with same amount
 fn rule_band_shl_shl() -> RewriteRule {
   {
-    name: "band_shl_shl",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -335,7 +323,6 @@ fn rule_band_shl_shl() -> RewriteRule {
 /// Distribute sub through shifts with same amount
 fn rule_sub_shl_shl() -> RewriteRule {
   {
-    name: "sub_shl_shl",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -367,7 +354,6 @@ fn rule_sub_shl_shl() -> RewriteRule {
 /// Distribute add through shifts with same amount
 fn rule_add_shl_shl() -> RewriteRule {
   {
-    name: "add_shl_shl",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -398,7 +384,6 @@ fn rule_add_shl_shl() -> RewriteRule {
 /// ushr(band(ishl(x, y), z), y) = band(x, ushr(z, y))
 fn rule_ushr_band_shl() -> RewriteRule {
   {
-    name: "ushr_band_shl",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -446,7 +431,6 @@ fn rule_ushr_band_shl() -> RewriteRule {
 /// Negating a logical right shift by (bits-1) equals arithmetic right shift
 fn rule_neg_ushr_to_sshr() -> RewriteRule {
   {
-    name: "neg_ushr_to_sshr",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -479,7 +463,6 @@ fn rule_neg_ushr_to_sshr() -> RewriteRule {
 /// Shift overflow becomes zero
 fn rule_shl_shl_overflow() -> RewriteRule {
   {
-    name: "shl_shl_overflow",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -511,7 +494,6 @@ fn rule_shl_shl_overflow() -> RewriteRule {
 /// Unsigned shift overflow becomes zero
 fn rule_ushr_ushr_overflow() -> RewriteRule {
   {
-    name: "ushr_ushr_overflow",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -542,7 +524,6 @@ fn rule_ushr_ushr_overflow() -> RewriteRule {
 /// Combine consecutive rotations into single rotation with added amounts
 fn rule_rotl_rotl_combine() -> RewriteRule {
   {
-    name: "rotl_rotl_combine",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -571,7 +552,6 @@ fn rule_rotl_rotl_combine() -> RewriteRule {
 /// Combine consecutive rotations into single rotation with added amounts
 fn rule_rotr_rotr_combine() -> RewriteRule {
   {
-    name: "rotr_rotr_combine",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -600,7 +580,6 @@ fn rule_rotr_rotr_combine() -> RewriteRule {
 /// Convert mixed rotation to single rotation with subtracted amounts
 fn rule_rotr_rotl_to_rotl() -> RewriteRule {
   {
-    name: "rotr_rotl_to_rotl",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -629,7 +608,6 @@ fn rule_rotr_rotl_to_rotl() -> RewriteRule {
 /// Convert mixed rotation to single rotation with subtracted amounts
 fn rule_rotl_rotr_to_rotr() -> RewriteRule {
   {
-    name: "rotl_rotr_to_rotr",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -658,7 +636,6 @@ fn rule_rotl_rotr_to_rotr() -> RewriteRule {
 /// Shift operations only look at lower bits of shift amount
 fn rule_shift_extend_amount() -> RewriteRule {
   {
-    name: "shift_extend_amount",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -696,7 +673,6 @@ fn rule_shift_extend_amount() -> RewriteRule {
 /// Shift operations only look at lower bits of shift amount
 fn rule_shift_reduce_amount() -> RewriteRule {
   {
-    name: "shift_reduce_amount",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -733,7 +709,6 @@ fn rule_shift_reduce_amount() -> RewriteRule {
 /// Convert shift pair to rotate left
 fn rule_shl_ushr_to_rotl() -> RewriteRule {
   {
-    name: "shl_ushr_to_rotl",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

@@ -27,7 +27,7 @@ pub(all) enum ExternVal {
 
 ///|
 /// Import object: maps (module_name, name) to external values
-pub(all) struct Imports {
+struct Imports {
   entries : Array[(String, String, ExternVal)]
 }
 

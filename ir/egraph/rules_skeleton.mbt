@@ -26,7 +26,6 @@ fn is_power_of_two(n : Int64) -> Int64? {
 /// Convert division by power-of-two select to shift by select
 fn rule_udiv_select_pow2() -> RewriteRule {
   {
-    name: "udiv_select_pow2",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -73,7 +72,6 @@ fn rule_udiv_select_pow2() -> RewriteRule {
 /// (In a full implementation, this would be used to remove overflow traps)
 fn rule_add_uextend_no_overflow() -> RewriteRule {
   {
-    name: "add_uextend_no_overflow",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

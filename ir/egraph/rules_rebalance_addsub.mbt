@@ -8,7 +8,6 @@
 /// a - (b - (c - d)) = (a - b) + (c - d)
 fn rule_rebalance_sub_sub_sub() -> RewriteRule {
   {
-    name: "rebalance_sub_sub_sub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -41,7 +40,6 @@ fn rule_rebalance_sub_sub_sub() -> RewriteRule {
 /// a - (b - (c + d)) = (a - b) + (c + d)
 fn rule_rebalance_sub_sub_add() -> RewriteRule {
   {
-    name: "rebalance_sub_sub_add",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -74,7 +72,6 @@ fn rule_rebalance_sub_sub_add() -> RewriteRule {
 /// a - (b + (c - d)) = (a - b) - (c - d)
 fn rule_rebalance_sub_add_sub() -> RewriteRule {
   {
-    name: "rebalance_sub_add_sub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -107,7 +104,6 @@ fn rule_rebalance_sub_add_sub() -> RewriteRule {
 /// a - (b + (c + d)) = (a - b) - (c + d)
 fn rule_rebalance_sub_add_add() -> RewriteRule {
   {
-    name: "rebalance_sub_add_add",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -140,7 +136,6 @@ fn rule_rebalance_sub_add_add() -> RewriteRule {
 /// a + (b - (c - d)) = (a + b) - (c - d)
 fn rule_rebalance_add_sub_sub() -> RewriteRule {
   {
-    name: "rebalance_add_sub_sub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -173,7 +168,6 @@ fn rule_rebalance_add_sub_sub() -> RewriteRule {
 /// a + (b - (c + d)) = (a + b) - (c + d)
 fn rule_rebalance_add_sub_add() -> RewriteRule {
   {
-    name: "rebalance_add_sub_add",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -206,7 +200,6 @@ fn rule_rebalance_add_sub_add() -> RewriteRule {
 /// a + (b + (c - d)) = (a + b) + (c - d)
 fn rule_rebalance_add_add_sub() -> RewriteRule {
   {
-    name: "rebalance_add_add_sub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -239,7 +232,6 @@ fn rule_rebalance_add_add_sub() -> RewriteRule {
 /// ((a - b) - c) - d = (a - b) - (c + d)
 fn rule_rebalance_left_sub_sub_sub() -> RewriteRule {
   {
-    name: "rebalance_left_sub_sub_sub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -272,7 +264,6 @@ fn rule_rebalance_left_sub_sub_sub() -> RewriteRule {
 /// ((a - b) - c) + d = (a - b) - (c - d)
 fn rule_rebalance_left_sub_sub_add() -> RewriteRule {
   {
-    name: "rebalance_left_sub_sub_add",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -305,7 +296,6 @@ fn rule_rebalance_left_sub_sub_add() -> RewriteRule {
 /// ((a - b) + c) - d = (a - b) + (c - d)
 fn rule_rebalance_left_sub_add_sub() -> RewriteRule {
   {
-    name: "rebalance_left_sub_add_sub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -338,7 +328,6 @@ fn rule_rebalance_left_sub_add_sub() -> RewriteRule {
 /// ((a - b) + c) + d = (a - b) + (c + d)
 fn rule_rebalance_left_sub_add_add() -> RewriteRule {
   {
-    name: "rebalance_left_sub_add_add",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -371,7 +360,6 @@ fn rule_rebalance_left_sub_add_add() -> RewriteRule {
 /// ((a + b) - c) - d = (a + b) - (c + d)
 fn rule_rebalance_left_add_sub_sub() -> RewriteRule {
   {
-    name: "rebalance_left_add_sub_sub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -404,7 +392,6 @@ fn rule_rebalance_left_add_sub_sub() -> RewriteRule {
 /// ((a + b) - c) + d = (a + b) - (c - d)
 fn rule_rebalance_left_add_sub_add() -> RewriteRule {
   {
-    name: "rebalance_left_add_sub_add",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -437,7 +424,6 @@ fn rule_rebalance_left_add_sub_add() -> RewriteRule {
 /// ((a + b) + c) - d = (a + b) + (c - d)
 fn rule_rebalance_left_add_add_sub() -> RewriteRule {
   {
-    name: "rebalance_left_add_add_sub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

@@ -6,7 +6,6 @@
 /// Chained unsigned extends can be collapsed
 fn rule_uextend_uextend() -> RewriteRule {
   {
-    name: "uextend_uextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -42,7 +41,6 @@ fn rule_uextend_uextend() -> RewriteRule {
 /// Chained signed extends can be collapsed
 fn rule_sextend_sextend() -> RewriteRule {
   {
-    name: "sextend_sextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -78,7 +76,6 @@ fn rule_sextend_sextend() -> RewriteRule {
 /// Once unsigned extended, sign-extending is the same as zero-extending
 fn rule_sextend_uextend() -> RewriteRule {
   {
-    name: "sextend_uextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -114,7 +111,6 @@ fn rule_sextend_uextend() -> RewriteRule {
 /// icmp results are 0 or 1, so sign-extending is the same as zero-extending
 fn rule_sextend_icmp() -> RewriteRule {
   {
-    name: "sextend_icmp",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -149,7 +145,6 @@ fn rule_sextend_icmp() -> RewriteRule {
 /// Reduction of an extend back to original type is identity
 fn rule_ireduce_uextend() -> RewriteRule {
   {
-    name: "ireduce_uextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -185,7 +180,6 @@ fn rule_ireduce_uextend() -> RewriteRule {
 /// Reduction of an extend back to original type is identity
 fn rule_ireduce_sextend() -> RewriteRule {
   {
-    name: "ireduce_sextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -220,7 +214,6 @@ fn rule_ireduce_sextend() -> RewriteRule {
 /// Bitwise AND can be pushed inside uextends
 fn rule_band_uextend() -> RewriteRule {
   {
-    name: "band_uextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -264,7 +257,6 @@ fn rule_band_uextend() -> RewriteRule {
 /// Bitwise OR can be pushed inside uextends
 fn rule_bor_uextend() -> RewriteRule {
   {
-    name: "bor_uextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -308,7 +300,6 @@ fn rule_bor_uextend() -> RewriteRule {
 /// Bitwise XOR can be pushed inside uextends
 fn rule_bxor_uextend() -> RewriteRule {
   {
-    name: "bxor_uextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -352,7 +343,6 @@ fn rule_bxor_uextend() -> RewriteRule {
 /// Reduction can be pushed inside negation
 fn rule_ireduce_ineg() -> RewriteRule {
   {
-    name: "ireduce_ineg",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -385,7 +375,6 @@ fn rule_ireduce_ineg() -> RewriteRule {
 /// Reduction can be pushed inside bitwise NOT
 fn rule_ireduce_bnot() -> RewriteRule {
   {
-    name: "ireduce_bnot",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -418,7 +407,6 @@ fn rule_ireduce_bnot() -> RewriteRule {
 /// Reduction can be pushed inside addition
 fn rule_ireduce_iadd() -> RewriteRule {
   {
-    name: "ireduce_iadd",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -458,7 +446,6 @@ fn rule_ireduce_iadd() -> RewriteRule {
 /// Reduction can be pushed inside subtraction
 fn rule_ireduce_isub() -> RewriteRule {
   {
-    name: "ireduce_isub",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -498,7 +485,6 @@ fn rule_ireduce_isub() -> RewriteRule {
 /// Reduction can be pushed inside multiplication
 fn rule_ireduce_imul() -> RewriteRule {
   {
-    name: "ireduce_imul",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -538,7 +524,6 @@ fn rule_ireduce_imul() -> RewriteRule {
 /// Reduction can be pushed inside bitwise AND
 fn rule_ireduce_band() -> RewriteRule {
   {
-    name: "ireduce_band",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -578,7 +563,6 @@ fn rule_ireduce_band() -> RewriteRule {
 /// Reduction can be pushed inside bitwise OR
 fn rule_ireduce_bor() -> RewriteRule {
   {
-    name: "ireduce_bor",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -618,7 +602,6 @@ fn rule_ireduce_bor() -> RewriteRule {
 /// Reduction can be pushed inside bitwise XOR
 fn rule_ireduce_bxor() -> RewriteRule {
   {
-    name: "ireduce_bxor",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -658,7 +641,6 @@ fn rule_ireduce_bxor() -> RewriteRule {
 /// Sign-extending can't change whether a number is zero
 fn rule_eq_sextend_zero() -> RewriteRule {
   {
-    name: "eq_sextend_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -716,7 +698,6 @@ fn rule_eq_sextend_zero() -> RewriteRule {
 /// Sign-extending can't change whether a number is zero
 fn rule_ne_sextend_zero() -> RewriteRule {
   {
-    name: "ne_sextend_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -781,7 +762,6 @@ fn is_signed_cc(cc : Int) -> Bool {
 /// Sign-extending doesn't change signed comparisons with zero
 fn rule_icmp_sextend_zero() -> RewriteRule {
   {
-    name: "icmp_sextend_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -822,7 +802,6 @@ fn rule_icmp_sextend_zero() -> RewriteRule {
 /// Chained reduces can be collapsed (use outermost from_bits and innermost to_bits)
 fn rule_ireduce_ireduce() -> RewriteRule {
   {
-    name: "ireduce_ireduce",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -859,7 +838,6 @@ fn rule_ireduce_ireduce() -> RewriteRule {
 /// Note: This is only valid when the result type is large enough to not overflow
 fn rule_iadd_uextend() -> RewriteRule {
   {
-    name: "iadd_uextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -903,7 +881,6 @@ fn rule_iadd_uextend() -> RewriteRule {
 /// Subtraction of uextended values produces a signed result
 fn rule_isub_uextend() -> RewriteRule {
   {
-    name: "isub_uextend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -947,7 +924,6 @@ fn rule_isub_uextend() -> RewriteRule {
 /// Shift amount doesn't need to be reduced, only the value being shifted
 fn rule_ireduce_ishl() -> RewriteRule {
   {
-    name: "ireduce_ishl",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -983,7 +959,6 @@ fn rule_ireduce_ishl() -> RewriteRule {
 /// Zero-extended values are always non-negative, so slt with 0 is always false
 fn rule_slt_uextend_zero() -> RewriteRule {
   {
-    name: "slt_uextend_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1019,7 +994,6 @@ fn rule_slt_uextend_zero() -> RewriteRule {
 /// Zero-extended values are always non-negative, so sge with 0 is always true
 fn rule_sge_uextend_zero() -> RewriteRule {
   {
-    name: "sge_uextend_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1061,7 +1035,6 @@ fn is_type_mask(c : Int64) -> Bool {
 /// If masking with 0xFF/0xFFFF/0xFFFFFFFF and value is uextended, mask is no-op
 fn rule_band_uextend_mask() -> RewriteRule {
   {
-    name: "band_uextend_mask",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1118,7 +1091,6 @@ fn rule_band_uextend_mask() -> RewriteRule {
 /// Masking out the sign-extended bits turns sextend into uextend
 fn rule_band_sextend_mask() -> RewriteRule {
   {
-    name: "band_sextend_mask",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1195,7 +1167,6 @@ fn mask_for_bits(bits : Int) -> Int64 {
 /// Constant folding through integer reduction - truncate constant to target width
 fn rule_ireduce_const() -> RewriteRule {
   {
-    name: "ireduce_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1229,7 +1200,6 @@ fn rule_ireduce_const() -> RewriteRule {
 /// Extending to the same width is a no-op
 fn rule_uextend_identity() -> RewriteRule {
   {
-    name: "uextend_identity",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1253,7 +1223,6 @@ fn rule_uextend_identity() -> RewriteRule {
 /// Extending to the same width is a no-op
 fn rule_sextend_identity() -> RewriteRule {
   {
-    name: "sextend_identity",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1277,7 +1246,6 @@ fn rule_sextend_identity() -> RewriteRule {
 /// Reducing to the same width is a no-op
 fn rule_ireduce_identity() -> RewriteRule {
   {
-    name: "ireduce_identity",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1301,7 +1269,6 @@ fn rule_ireduce_identity() -> RewriteRule {
 /// More precise version that uses actual bit width information
 fn rule_band_uextend_mask_precise() -> RewriteRule {
   {
-    name: "band_uextend_mask_precise",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1359,7 +1326,6 @@ fn rule_band_uextend_mask_precise() -> RewriteRule {
 /// If we're reducing to a size smaller than the original, skip the extend
 fn rule_ireduce_uextend_skip() -> RewriteRule {
   {
-    name: "ireduce_uextend_skip",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1396,7 +1362,6 @@ fn rule_ireduce_uextend_skip() -> RewriteRule {
 /// If we're reducing to a size smaller than the original, skip the extend
 fn rule_ireduce_sextend_skip() -> RewriteRule {
   {
-    name: "ireduce_sextend_skip",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1433,7 +1398,6 @@ fn rule_ireduce_sextend_skip() -> RewriteRule {
 /// If we're "reducing" to a larger size than the original, it's actually an extend
 fn rule_ireduce_uextend_to_extend() -> RewriteRule {
   {
-    name: "ireduce_uextend_to_extend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1470,7 +1434,6 @@ fn rule_ireduce_uextend_to_extend() -> RewriteRule {
 /// If we're "reducing" to a larger size than the original, it's actually a sign extend
 fn rule_ireduce_sextend_to_extend() -> RewriteRule {
   {
-    name: "ireduce_sextend_to_extend",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

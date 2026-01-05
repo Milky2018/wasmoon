@@ -123,7 +123,7 @@ pub(all) enum EOpcode {
 
 ///|
 /// E-opcode tag for indexing (ignores parameters like Const value)
-pub(all) enum EOpcodeTag {
+enum EOpcodeTag {
   TConst
   TFconst
   // Arithmetic
@@ -302,7 +302,7 @@ pub(all) struct ENode {
 ///|
 /// E-class: an equivalence class of e-nodes
 #warnings("-unused_field")
-struct EClass {
+priv struct EClass {
   id : EClassId
   mut nodes : Array[ENode] // All equivalent nodes in this class
   // For extraction: best node and its cost (lazily computed)
@@ -312,7 +312,7 @@ struct EClass {
 
 ///|
 /// Union-Find data structure for e-class merging
-struct UnionFind {
+priv struct UnionFind {
   // parent[i] = parent of i, or i if i is a root
   parent : Array[Int]
 }
@@ -365,7 +365,7 @@ let matches_limit : Int = 5 // Max rewrites per add_eager call
 
 ///|
 /// The main E-graph data structure
-pub(all) struct EGraph {
+struct EGraph {
   // Union-find for equivalence classes
   uf : UnionFind
   // All e-classes (indexed by canonical id)
@@ -1385,8 +1385,7 @@ fn EGraph::extract_impl(
 
 ///|
 /// A rewrite rule matches a pattern and produces equivalent expressions
-pub(all) struct RewriteRule {
-  name : String
+struct RewriteRule {
   apply : (EGraph, EClassId) -> Bool // Returns true if any changes were made
 }
 
@@ -1428,13 +1427,13 @@ pub fn EGraph::saturate(
 
 ///|
 /// An indexed rule with its RewriteRule
-struct IndexedRule {
+priv struct IndexedRule {
   rule : RewriteRule
 }
 
 ///|
 /// An indexed rule set for efficient rule application
-pub(all) struct IndexedRuleSet {
+struct IndexedRuleSet {
   // Rules indexed by the opcode they match
   by_opcode : Map[EOpcodeTag, Array[IndexedRule]]
   // Rules that match any opcode (e.g., constant folding)

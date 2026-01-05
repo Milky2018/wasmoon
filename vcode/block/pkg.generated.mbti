@@ -11,7 +11,7 @@ import(
 // Errors
 
 // Types and methods
-pub(all) struct VCodeBlock {
+pub struct VCodeBlock {
   id : Int
   insts : Array[@instr.VCodeInst]
   params : Array[@abi.VReg]

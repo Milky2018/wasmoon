@@ -62,7 +62,7 @@ fn CallStackEntry::to_string(self : CallStackEntry) -> String {
 
 ///|
 /// Runtime error with additional context for debugging
-pub(all) struct RuntimeErrorContext {
+pub struct RuntimeErrorContext {
   error : RuntimeError
   call_stack : Array[CallStackEntry]
   instruction : String? // The instruction that caused the error

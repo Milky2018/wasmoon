@@ -1,10 +1,6 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/ir/egraph"
 
-import(
-  "moonbitlang/core/hashset"
-)
-
 // Values
 pub fn remat_rules() -> Array[RewriteRule]
 
@@ -27,8 +23,6 @@ pub fn vector_rules() -> Array[RewriteRule]
 // Errors
 
 // Types and methods
-type EClass
-
 pub(all) struct EClassId(Int)
 #deprecated
 pub fn EClassId::inner(Self) -> Int
@@ -37,17 +31,7 @@ pub impl Eq for EClassId
 pub impl Hash for EClassId
 pub impl Show for EClassId
 
-pub(all) struct EGraph {
-  uf : UnionFind
-  classes : Map[Int, EClass]
-  mut hashcons : Map[ENode, EClassId]
-  mut worklist : Array[EClassId]
-  mut dirty : Bool
-  opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
-  mut pending_rules : Array[(EClassId, EOpcodeTag)]
-  type_map : Map[Int, Int]
-  remat_set : @hashset.HashSet[Int]
-}
+type EGraph
 pub fn EGraph::add(Self, ENode) -> EClassId
 pub fn EGraph::add_add(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_and(Self, EClassId, EClassId) -> EClassId
@@ -206,88 +190,14 @@ pub impl Eq for EOpcode
 pub impl Hash for EOpcode
 pub impl Show for EOpcode
 
-pub(all) enum EOpcodeTag {
-  TConst
-  TFconst
-  TAdd
-  TSub
-  TMul
-  TSdiv
-  TUdiv
-  TSrem
-  TUrem
-  TAnd
-  TOr
-  TXor
-  TShl
-  TSshr
-  TUshr
-  TRotl
-  TRotr
-  TNeg
-  TBnot
-  TClz
-  TCtz
-  TPopcnt
-  TBswap
-  TBitrev
-  TIcmp
-  TEq
-  TNe
-  TSelect
-  TBmask
-  TSmin
-  TSmax
-  TUmin
-  TUmax
-  TIabs
-  TSpaceshipS
-  TSpaceshipU
-  TIreduce
-  TUextend
-  TSextend
-  TFadd
-  TFsub
-  TFmul
-  TFdiv
-  TFmin
-  TFmax
-  TFcopysign
-  TFneg
-  TFabs
-  TFsqrt
-  TFceil
-  TFfloor
-  TFtrunc
-  TFnearest
-  TFcmp
-  TFpromote
-  TFdemote
-  TFcvtToSint
-  TFcvtToUint
-  TSintToFcvt
-  TUintToFcvt
-  TSplat
-  TVconst
-  TVar
-}
+type EOpcodeTag
 pub impl Eq for EOpcodeTag
 pub impl Hash for EOpcodeTag
 pub impl Show for EOpcodeTag
 
-type IndexedRule
+type IndexedRuleSet
 
-pub(all) struct IndexedRuleSet {
-  by_opcode : Map[EOpcodeTag, Array[IndexedRule]]
-  universal : Array[IndexedRule]
-}
-
-pub(all) struct RewriteRule {
-  name : String
-  apply : (EGraph, EClassId) -> Bool
-}
-
-type UnionFind
+type RewriteRule
 
 // Type aliases
 

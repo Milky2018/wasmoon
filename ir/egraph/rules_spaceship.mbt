@@ -14,7 +14,6 @@ fn is_neg_one(v : Int64) -> Bool {
 /// Three-way comparison equals zero means the operands are equal
 fn rule_spaceship_eq_zero() -> RewriteRule {
   {
-    name: "spaceship_eq_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -59,7 +58,6 @@ fn rule_spaceship_eq_zero() -> RewriteRule {
 /// Three-way comparison not equals zero means the operands are not equal
 fn rule_spaceship_ne_zero() -> RewriteRule {
   {
-    name: "spaceship_ne_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -101,7 +99,6 @@ fn rule_spaceship_ne_zero() -> RewriteRule {
 /// Signed spaceship less than zero means first operand is less
 fn rule_spaceship_s_lt_zero() -> RewriteRule {
   {
-    name: "spaceship_s_lt_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -129,7 +126,6 @@ fn rule_spaceship_s_lt_zero() -> RewriteRule {
 /// Unsigned spaceship less than zero means first operand is less
 fn rule_spaceship_u_lt_zero() -> RewriteRule {
   {
-    name: "spaceship_u_lt_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -156,7 +152,6 @@ fn rule_spaceship_u_lt_zero() -> RewriteRule {
 /// Simplify (a <=>_s b) <= 0 → a <=_s b
 fn rule_spaceship_s_le_zero() -> RewriteRule {
   {
-    name: "spaceship_s_le_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -183,7 +178,6 @@ fn rule_spaceship_s_le_zero() -> RewriteRule {
 /// Simplify (a <=>_u b) <= 0 → a <=_u b
 fn rule_spaceship_u_le_zero() -> RewriteRule {
   {
-    name: "spaceship_u_le_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -210,7 +204,6 @@ fn rule_spaceship_u_le_zero() -> RewriteRule {
 /// Simplify (a <=>_s b) > 0 → a >_s b
 fn rule_spaceship_s_gt_zero() -> RewriteRule {
   {
-    name: "spaceship_s_gt_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -237,7 +230,6 @@ fn rule_spaceship_s_gt_zero() -> RewriteRule {
 /// Simplify (a <=>_u b) > 0 → a >_u b
 fn rule_spaceship_u_gt_zero() -> RewriteRule {
   {
-    name: "spaceship_u_gt_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -264,7 +256,6 @@ fn rule_spaceship_u_gt_zero() -> RewriteRule {
 /// Simplify (a <=>_s b) >= 0 → a >=_s b
 fn rule_spaceship_s_ge_zero() -> RewriteRule {
   {
-    name: "spaceship_s_ge_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -291,7 +282,6 @@ fn rule_spaceship_s_ge_zero() -> RewriteRule {
 /// Simplify (a <=>_u b) >= 0 → a >=_u b
 fn rule_spaceship_u_ge_zero() -> RewriteRule {
   {
-    name: "spaceship_u_ge_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -318,7 +308,6 @@ fn rule_spaceship_u_ge_zero() -> RewriteRule {
 /// Simplify (a <=>_s b) == -1 → a <_s b
 fn rule_spaceship_s_eq_neg_one() -> RewriteRule {
   {
-    name: "spaceship_s_eq_neg_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -346,7 +335,6 @@ fn rule_spaceship_s_eq_neg_one() -> RewriteRule {
 /// Simplify (a <=>_u b) == -1 → a <_u b
 fn rule_spaceship_u_eq_neg_one() -> RewriteRule {
   {
-    name: "spaceship_u_eq_neg_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -374,7 +362,6 @@ fn rule_spaceship_u_eq_neg_one() -> RewriteRule {
 /// Simplify (a <=>_s b) != -1 → a >=_s b
 fn rule_spaceship_s_ne_neg_one() -> RewriteRule {
   {
-    name: "spaceship_s_ne_neg_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -402,7 +389,6 @@ fn rule_spaceship_s_ne_neg_one() -> RewriteRule {
 /// Simplify (a <=>_u b) != -1 → a >=_u b
 fn rule_spaceship_u_ne_neg_one() -> RewriteRule {
   {
-    name: "spaceship_u_ne_neg_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -430,7 +416,6 @@ fn rule_spaceship_u_ne_neg_one() -> RewriteRule {
 /// Simplify (a <=>_s b) == 1 → a >_s b
 fn rule_spaceship_s_eq_one() -> RewriteRule {
   {
-    name: "spaceship_s_eq_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -458,7 +443,6 @@ fn rule_spaceship_s_eq_one() -> RewriteRule {
 /// Simplify (a <=>_u b) == 1 → a >_u b
 fn rule_spaceship_u_eq_one() -> RewriteRule {
   {
-    name: "spaceship_u_eq_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -486,7 +470,6 @@ fn rule_spaceship_u_eq_one() -> RewriteRule {
 /// Simplify (a <=>_s b) != 1 → a <=_s b
 fn rule_spaceship_s_ne_one() -> RewriteRule {
   {
-    name: "spaceship_s_ne_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -514,7 +497,6 @@ fn rule_spaceship_s_ne_one() -> RewriteRule {
 /// Simplify (a <=>_u b) != 1 → a <=_u b
 fn rule_spaceship_u_ne_one() -> RewriteRule {
   {
-    name: "spaceship_u_ne_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

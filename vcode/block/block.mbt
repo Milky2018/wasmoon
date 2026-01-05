@@ -1,6 +1,6 @@
 ///|
 /// VCode block - a basic block in VCode
-pub(all) struct VCodeBlock {
+pub struct VCodeBlock {
   id : Int
   insts : Array[@instr.VCodeInst] // Instructions in this block
   params : Array[@abi.VReg] // Block parameters
