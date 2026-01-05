@@ -53,6 +53,10 @@ pub fn eliminate_unreachable_code(Function) -> OptResult
 
 pub fn fold_constants(Function) -> OptResult
 
+pub fn gvn(Function) -> OptResult
+
+pub fn gvn_global(Function) -> OptResult
+
 pub fn hoist_loop_invariants(Function) -> OptResult
 
 pub fn merge_blocks(Function) -> OptResult

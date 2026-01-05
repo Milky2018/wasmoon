@@ -1661,3 +1661,99 @@ test "bounds check elimination: combined addr and offset" {
   // Should eliminate: 1000 + 64532 + 4 = 65536 <= 65536
   inspect(func.blocks.length(), content="1")
 }
+
+///|
+test "GVN: load CSE with same address" {
+  // Test that repeated loads from the same address are eliminated
+  let builder = IRBuilder::new("gvn_load_cse")
+  let ptr = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Offset for load_ptr
+  let offset = builder.iconst_i64(0L)
+
+  // Two loads from the same pointer with same offset
+  let load1 = builder.load_ptr(Type::I32, ptr, offset)
+  let load2 = builder.load_ptr(Type::I32, ptr, offset)
+  // Use both
+  let sum = builder.iadd(load1, load2)
+  builder.return_([sum])
+  let func = builder.get_function()
+
+  // Before GVN: iconst + two loads + iadd = 4 instructions
+  let before_count = func.blocks[0].instructions.length()
+
+  // Run GVN
+  let result = gvn_global(func)
+  assert_true(result.changed)
+
+  // After GVN: second load should be replaced with copy of first
+  let second_inst = func.blocks[0].instructions[2]
+  assert_true(second_inst.opcode is Opcode::Copy)
+  // The copy operand should reference the first load's result
+  assert_eq(second_inst.operands[0].id, load1.id)
+  inspect(before_count, content="4")
+}
+
+///|
+test "GVN: store invalidates load" {
+  // Test that a store invalidates pending load expressions
+  let builder = IRBuilder::new("gvn_store_invalidate")
+  let ptr = builder.add_param(Type::I64)
+  let val = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Offset for load/store
+  let offset = builder.iconst_i64(0L)
+
+  // Load, store to same memory, load again
+  let load1 = builder.load_ptr(Type::I32, ptr, offset)
+  builder.store_ptr(Type::I32, ptr, val, offset)
+  let load2 = builder.load_ptr(Type::I32, ptr, offset)
+  // Use both loads
+  let sum = builder.iadd(load1, load2)
+  builder.return_([sum])
+  let func = builder.get_function()
+
+  // Run GVN
+  let result = gvn_global(func)
+
+  // Should NOT have changed - store invalidates the load expression
+  // The second load cannot be replaced with the first
+  assert_false(result.changed)
+
+  // Both loads should still be LoadPtr, not Copy
+  let third_inst = func.blocks[0].instructions[3]
+  assert_true(third_inst.opcode is Opcode::LoadPtr(_))
+}
+
+///|
+test "GVN: pure arithmetic CSE" {
+  // Test that GVN also handles pure arithmetic (same as CSE)
+  let builder = IRBuilder::new("gvn_pure_cse")
+  let p0 = builder.add_param(Type::I32)
+  let p1 = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  // Same add twice
+  let sum1 = builder.iadd(p0, p1)
+  let sum2 = builder.iadd(p0, p1)
+  // Multiply them
+  let product = builder.imul(sum1, sum2)
+  builder.return_([product])
+  let func = builder.get_function()
+
+  // Run GVN
+  let result = gvn_global(func)
+  assert_true(result.changed)
+
+  // Second add should be replaced with copy
+  let second_inst = func.blocks[0].instructions[1]
+  assert_true(second_inst.opcode is Opcode::Copy)
+}

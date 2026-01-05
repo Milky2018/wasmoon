@@ -875,6 +875,221 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
   result
 }
 
+// ============ Global Value Numbering with Load CSE ============
+
+///|
+/// Check if an instruction reads from memory
+fn reads_memory(opcode : Opcode) -> Bool {
+  match opcode {
+    LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
+    // GC struct/array gets read from memory
+    StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _) => true
+    ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) | ArrayLen => true
+    _ => false
+  }
+}
+
+///|
+/// Check if an instruction may write to memory or have other side effects
+/// that could invalidate memory-based expressions
+fn may_write_memory(opcode : Opcode) -> Bool {
+  match opcode {
+    // Direct memory writes
+    StorePtr(_) | StorePtrNarrow(_) => true
+    // Memory operations
+    MemoryGrow(_, _) | MemoryFill(_) | MemoryCopy(_, _) => true
+    // Calls may write memory
+    Call(_)
+    | CallIndirect(_, _)
+    | CallRef(_)
+    | ReturnCall(_)
+    | ReturnCallIndirect(_, _)
+    | ReturnCallRef(_)
+    | CallPtr(_, _) => true
+    // GC operations that modify memory
+    StructSet(_, _) | ArraySet(_) | ArrayFill(_) | ArrayCopy(_, _) => true
+    // GC allocations modify memory (the GC heap)
+    StructNew(_) | StructNewDefault(_) => true
+    ArrayNew(_) | ArrayNewDefault(_) | ArrayNewFixed(_, _) => true
+    // Table operations may involve memory
+    TableGrow(_) => true
+    // Exception handling can modify state
+    Throw(_) | ThrowRef => true
+    SpillLocalsForThrow(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Check if an instruction is suitable for GVN (can be CSE'd)
+/// This includes pure operations plus loads (which read but don't write)
+fn is_gvn_candidate(inst : Inst) -> Bool {
+  // Must have a result
+  if inst.result is None {
+    return false
+  }
+  match inst.opcode {
+    // Division/remainder can trap, not suitable
+    Sdiv | Udiv | Srem | Urem => false
+    // Float-to-int can trap
+    FcvtToSint | FcvtToUint => false
+    // Instructions with side effects
+    _ => !may_write_memory(inst.opcode)
+  }
+}
+
+///|
+/// Global Value Numbering with Load CSE
+/// Extends CSE to handle memory loads by tracking when stores invalidate loads
+pub fn gvn(func : Function) -> OptResult {
+  let result = OptResult::new()
+  for block in func.blocks {
+    // Value table: expression signature -> result value
+    let value_table : @hashmap.HashMap[String, Value] = @hashmap.new()
+    // Track which signatures read memory (for invalidation)
+    let memory_sigs : Array[String] = []
+    for inst in block.instructions {
+      // Check if this instruction may invalidate memory-based expressions
+      if may_write_memory(inst.opcode) {
+        // Invalidate all memory-reading expressions
+        for sig in memory_sigs {
+          value_table.remove(sig)
+        }
+        memory_sigs.clear()
+        continue
+      }
+      // Skip non-candidates
+      if !is_gvn_candidate(inst) {
+        continue
+      }
+      if inst.result is Some(result_val) {
+        let sig = compute_expression_signature(inst)
+        if value_table.get(sig) is Some(existing) {
+          // Already computed - replace with copy
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+        } else {
+          // Record in value table
+          value_table.set(sig, result_val)
+          // Track if this reads memory
+          if reads_memory(inst.opcode) {
+            memory_sigs.push(sig)
+          }
+        }
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Global Value Numbering with dominance analysis
+/// Expressions in dominating blocks can be reused in dominated blocks,
+/// with proper invalidation of memory-based expressions
+pub fn gvn_global(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() == 0 {
+    return result
+  }
+  // Build CFG and compute dominators
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  // Build block_id -> array_index mapping
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  // Expression environment: signature -> value
+  let value_table : @hashmap.HashMap[String, Value] = @hashmap.new()
+  // DFS the dominator tree
+  fn dfs(block_id : Int) {
+    let idx = block_idx.get(block_id).unwrap()
+    let block = func.blocks[idx]
+    // Track expressions added/modified in this block (to restore later)
+    let local_entries : Array[(String, Value?)] = []
+    // Track which memory signatures were added in this block
+    let local_memory_sigs : Array[String] = []
+    // Track all memory signatures currently active
+    let active_memory_sigs : Array[String] = []
+    // Collect existing memory signatures from parent
+    for entry in value_table.iter() {
+      let (sig, _) = entry
+      // Simple heuristic: signatures starting with "Load" read memory
+      if sig.has_prefix("LoadPtr") ||
+        sig.has_prefix("StructGet") ||
+        sig.has_prefix("ArrayGet") ||
+        sig.has_prefix("ArrayLen") {
+        active_memory_sigs.push(sig)
+      }
+    }
+    // Process instructions
+    for inst in block.instructions {
+      // Check if this instruction may invalidate memory-based expressions
+      if may_write_memory(inst.opcode) {
+        // Invalidate all memory-reading expressions
+        for sig in active_memory_sigs {
+          // Record for restoration
+          if value_table.get(sig) is Some(v) {
+            local_entries.push((sig, Some(v)))
+            value_table.remove(sig)
+          }
+        }
+        active_memory_sigs.clear()
+        local_memory_sigs.clear()
+        continue
+      }
+      // Skip non-candidates
+      if !is_gvn_candidate(inst) {
+        continue
+      }
+      if inst.result is Some(result_val) {
+        let sig = compute_expression_signature(inst)
+        if value_table.get(sig) is Some(existing) {
+          // Already computed - replace with copy
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+        } else {
+          // Record previous value (None if new)
+          let prev = value_table.get(sig)
+          local_entries.push((sig, prev))
+          // Add to value table
+          value_table.set(sig, result_val)
+          // Track if this reads memory
+          if reads_memory(inst.opcode) {
+            active_memory_sigs.push(sig)
+            local_memory_sigs.push(sig)
+          }
+        }
+      }
+    }
+    // Recurse to dominated children
+    if block_id < domtree.length() {
+      for child in domtree[block_id] {
+        dfs(child)
+      }
+    }
+    // Restore value table to state before this block
+    for entry in local_entries.rev_iter() {
+      let (sig, prev) = entry
+      match prev {
+        Some(v) => value_table.set(sig, v)
+        None => value_table.remove(sig)
+      }
+    }
+  }
+
+  // Start DFS from entry block (block 0)
+  if cfg.is_valid(0) {
+    dfs(0)
+  }
+  result
+}
+
 // ============ Run All Optimizations ============
 
 ///|
@@ -938,6 +1153,12 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
+    // GVN with load CSE (extends CSE to handle memory loads)
+    let gvn_result = gvn_global(func)
+    if gvn_result.changed {
+      changed = true
+      result.mark_changed()
+    }
     let dce_result = eliminate_dead_code(func)
     if dce_result.changed {
       changed = true
@@ -976,6 +1197,12 @@ pub fn optimize(func : Function) -> OptResult {
     }
     let cse_result = eliminate_common_subexpressions_global(func)
     if cse_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    // GVN with load CSE (extends CSE to handle memory loads)
+    let gvn_result = gvn_global(func)
+    if gvn_result.changed {
       changed = true
       result.mark_changed()
     }
