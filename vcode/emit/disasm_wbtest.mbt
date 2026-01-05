@@ -227,6 +227,11 @@ test "all emit functions disasm" {
       #|  0148: 6b000054  b.lt block4
       #|  014c: 400000b4  cbz x0, block5
       #|  0150: 210000b5  cbnz x1, block6
+      #|block1:
+      #|block2:
+      #|block3:
+      #|block4:
+      #|block5:
       #|block6:
       #|  0154: faffff97  bl block0
       #|  0158: 00023fd6  blr x16

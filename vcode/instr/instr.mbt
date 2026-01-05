@@ -1367,29 +1367,6 @@ pub fn Cond::to_bits(self : Cond) -> Int {
 }
 
 ///|
-/// Invert condition code (for branch reversal optimization)
-/// E.g., Eq -> Ne, Hs -> Lo, Ge -> Lt
-pub fn Cond::invert(self : Cond) -> Cond {
-  match self {
-    Eq => Ne
-    Ne => Eq
-    Hs => Lo
-    Lo => Hs
-    Mi => Pl
-    Pl => Mi
-    Vs => Vc
-    Vc => Vs
-    Hi => Ls
-    Ls => Hi
-    Ge => Lt
-    Lt => Ge
-    Gt => Le
-    Le => Gt
-    Al => Al // Always is its own inverse (never used in practice)
-  }
-}
-
-///|
 /// VCode terminator - how a block ends
 pub(all) enum VCodeTerminator {
   Jump(Int) // Unconditional jump to block

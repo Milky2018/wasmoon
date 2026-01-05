@@ -54,7 +54,6 @@ pub(all) enum Cond {
   Le
   Al
 }
-pub fn Cond::invert(Self) -> Self
 pub fn Cond::to_bits(Self) -> Int
 pub impl Show for Cond
 
