@@ -1470,3 +1470,67 @@ test "egraph: x + 0 extract returns Var not Const" {
   inspect(node.op, content="Var(0)")
   inspect(cost, content="0")
 }
+
+///|
+/// Test that rebuild preserves all nodes when unions happen mid-rebuild.
+/// This tests the bug where nodes can be lost if:
+/// 1. Class A (lower ID) has single node that will collide
+/// 2. Class B (higher ID) has multiple nodes [N1, N2] where N1 collides with A
+/// 3. During rebuild, when processing B, N1 causes collision and union
+/// 4. N2 is then added to canonical_nodes[B] using stale canonical_id
+/// 5. In the second pass, B is non-canonical, so nodes from canonical_nodes[B] are lost
+test "rebuild: nodes preserved after intra-rebuild union" {
+  let eg = EGraph::new()
+
+  // Create two variables - x will be the "winner" after merge
+  let x = eg.add_var(0) // class 0
+  let y = eg.add_var(1) // class 1
+
+  // Create Add(x, x) FIRST - this will be in class 2 (lower ID)
+  // This is the collision source that will be processed first during rebuild
+  let add_xx = eg.add_add(x, x)
+
+  // Create Add(y, y) - this will be in class 3 (higher ID)
+  let add_yy = eg.add_add(y, y)
+
+  // Create Sub(y, y) and Mul(y, y) to ensure we have multiple nodes
+  let sub_yy = eg.add_sub(y, y)
+  let mul_yy = eg.add_mul(y, y)
+
+  // Merge all y-based ops into one class
+  // After this, the class containing add_yy has nodes: [Add(y,y), Sub(y,y), Mul(y,y)]
+  eg.merge(add_yy, sub_yy) |> ignore
+  eg.merge(add_yy, mul_yy) |> ignore
+  eg.rebuild()
+
+  // Verify the class has 3 nodes
+  let nodes_before = eg.get_nodes(add_yy)
+  inspect(nodes_before.length(), content="3")
+
+  // Now merge x and y
+  // After rebuild, Add(y,y) will canonicalize to Add(x,x) and collide
+  eg.merge(x, y) |> ignore
+  eg.rebuild()
+
+  // All should be in the same class now
+  inspect(eg.equiv(add_xx, add_yy), content="true")
+  inspect(eg.equiv(add_xx, sub_yy), content="true")
+  inspect(eg.equiv(add_xx, mul_yy), content="true")
+
+  // The merged class should have Add, Sub, AND Mul nodes
+  let nodes_after = eg.get_nodes(add_xx)
+  let mut has_add = false
+  let mut has_sub = false
+  let mut has_mul = false
+  for node in nodes_after {
+    match node.op {
+      Add => has_add = true
+      Sub => has_sub = true
+      Mul => has_mul = true
+      _ => ()
+    }
+  }
+  inspect(has_add, content="true")
+  inspect(has_sub, content="true")
+  inspect(has_mul, content="true")
+}

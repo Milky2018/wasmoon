@@ -737,30 +737,75 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
     return
   }
 
-  // Process all nodes in all classes to re-canonicalize
-  // This is a simplified rebuild - production e-graphs use more efficient algorithms
-  let new_hashcons : Map[ENode, EClassId] = {}
-  // Collect nodes grouped by their canonical class
-  let canonical_nodes : Map[Int, Array[ENode]] = {}
+  // Two-phase rebuild to avoid stale canonical_id after intra-rebuild unions
+  //
+  // Phase 1: Collect all canonical nodes and detect which classes need merging
+  // We don't add nodes to canonical_nodes yet - just record unions
+  let pending_unions : Array[(Int, Int)] = []
+  let all_canonical_nodes : Array[(Int, ENode)] = [] // (original_class_id, canonical_node)
   for class_id, eclass in self.classes {
-    let canonical_id = self.find(EClassId(class_id))
     for node in eclass.nodes {
       let canonical_node = self.canonicalize(node)
+      all_canonical_nodes.push((class_id, canonical_node))
+    }
+  }
 
-      // Check if this canonical node already exists in another class
-      if new_hashcons.get(canonical_node) is Some(existing_id) {
-        let existing_canonical = self.find(existing_id)
-        if existing_canonical != canonical_id {
-          // Need to merge these classes
-          self.uf.union(canonical_id.0, existing_canonical.0) |> ignore
+  // Build hashcons and detect collisions, recording unions
+  let new_hashcons : Map[ENode, EClassId] = {}
+  for i in 0..<all_canonical_nodes.length() {
+    let (class_id, canonical_node) = all_canonical_nodes[i]
+    let canonical_id = self.find(EClassId(class_id))
+    if new_hashcons.get(canonical_node) is Some(existing_id) {
+      let existing_canonical = self.find(existing_id)
+      if existing_canonical != canonical_id {
+        // Record this union for later
+        pending_unions.push((canonical_id.0, existing_canonical.0))
+      }
+    } else {
+      new_hashcons.set(canonical_node, canonical_id)
+    }
+  }
+
+  // Apply all pending unions
+  for i in 0..<pending_unions.length() {
+    let (a, b) = pending_unions[i]
+    self.uf.union(a, b) |> ignore
+  }
+
+  // Phase 2: Now that all unions are done, collect nodes by their final canonical class
+  let canonical_nodes : Map[Int, Array[ENode]] = {}
+  for i in 0..<all_canonical_nodes.length() {
+    let (class_id, canonical_node) = all_canonical_nodes[i]
+    // Use fresh find() after all unions are applied
+    let final_canonical_id = self.find(EClassId(class_id))
+    match canonical_nodes.get(final_canonical_id.0) {
+      Some(nodes) => {
+        // Avoid duplicates (same canonical node from different original classes)
+        let mut found = false
+        for existing in nodes {
+          if existing == canonical_node {
+            found = true
+            break
+          }
         }
-      } else {
-        // Add node to its canonical class
-        match canonical_nodes.get(canonical_id.0) {
-          Some(nodes) => nodes.push(canonical_node)
-          None => canonical_nodes.set(canonical_id.0, [canonical_node])
+        if not(found) {
+          nodes.push(canonical_node)
         }
-        new_hashcons.set(canonical_node, canonical_id)
+      }
+      None => canonical_nodes.set(final_canonical_id.0, [canonical_node])
+    }
+  }
+
+  // Update hashcons with final canonical IDs
+  let final_hashcons : Map[ENode, EClassId] = {}
+  for node, _ in new_hashcons {
+    // Find the canonical node's final class
+    for i in 0..<all_canonical_nodes.length() {
+      let (class_id, canonical_node) = all_canonical_nodes[i]
+      if canonical_node == node {
+        let final_id = self.find(EClassId(class_id))
+        final_hashcons.set(node, final_id)
+        break
       }
     }
   }
@@ -779,7 +824,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       eclass.nodes = []
     }
   }
-  self.hashcons = new_hashcons
+  self.hashcons = final_hashcons
   self.worklist = []
   self.pending_rules = [] // Clear pending rules (processed by saturate or add_eager)
   self.dirty = false
