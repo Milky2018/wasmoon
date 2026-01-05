@@ -84,6 +84,8 @@ fn run_compile(
 
     // Build memory_is_64 array for memory64 support
     let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
+    // Calculate memory_mins (minimum guaranteed memory size in bytes)
+    let memory_mins = mod_.memories.map(fn(m) { m.limits.min * 65536L })
 
     // Stage 1: Translate WASM to IR
     let translator = @ir.Translator::new(
@@ -101,6 +103,7 @@ fn run_compile(
       type_rec_groups=mod_.type_rec_groups,
       module_types=mod_.types,
       tags=mod_.tags,
+      memory_mins~,
     )
     let ir_func = translator.translate(code.body)
 
