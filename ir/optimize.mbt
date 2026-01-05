@@ -882,6 +882,8 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
 fn reads_memory(opcode : Opcode) -> Bool {
   match opcode {
     LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
+    // MemorySize reads the current memory size (invalidated by MemoryGrow)
+    MemorySize(_) => true
     // GC struct/array gets read from memory
     StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _) => true
     ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) | ArrayLen => true
@@ -1025,8 +1027,9 @@ pub fn gvn_global(func : Function) -> OptResult {
     // Collect existing memory signatures from parent
     for entry in value_table.iter() {
       let (sig, _) = entry
-      // Simple heuristic: signatures starting with "Load" read memory
+      // Simple heuristic: signatures starting with memory-reading opcodes
       if sig.has_prefix("LoadPtr") ||
+        sig.has_prefix("MemorySize") ||
         sig.has_prefix("StructGet") ||
         sig.has_prefix("ArrayGet") ||
         sig.has_prefix("ArrayLen") {
