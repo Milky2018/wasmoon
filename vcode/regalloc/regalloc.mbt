@@ -13,7 +13,7 @@
 /// A program point - identifies a position in the VCode
 /// Using #valtype for stack allocation - this struct is created/compared frequently
 #valtype
-pub(all) struct ProgPoint {
+struct ProgPoint {
   block : Int // Block index
   inst : Int // Instruction index within block (-1 for block params)
   pos : ProgPos // Before or after the instruction
@@ -67,14 +67,14 @@ pub impl Show for ProgPoint with output(self, logger) {
 
 ///|
 /// A live interval - the range where a virtual register is live
-pub(all) struct LiveInterval {
+pub struct LiveInterval {
   vreg : @abi.VReg
   start : ProgPoint // First use or definition
   mut end : ProgPoint // Last use
   // Use positions within the interval (for spill cost calculation)
   uses : Array[ProgPoint]
   // Register hint (e.g., from a move instruction)
-  mut hint : @abi.PReg?
+  hint : @abi.PReg?
   // Hint vreg: prefer to use the same register as this vreg (for copy coalescing)
   mut hint_vreg : Int?
   // Assigned physical register (filled by allocator)
@@ -136,7 +136,7 @@ pub impl Show for LiveInterval with output(self, logger) {
 
 ///|
 /// Use-def information for a single vreg
-pub(all) struct UseDefInfo {
+struct UseDefInfo {
   vreg : @abi.VReg
   mut def_point : ProgPoint? // Where this vreg is defined
   use_points : Array[ProgPoint] // Where this vreg is used
@@ -282,7 +282,7 @@ pub fn debug_liveness(liveness : LivenessResult) -> String {
 
 ///|
 /// Liveness analysis result
-pub(all) struct LivenessResult {
+pub struct LivenessResult {
   // Live intervals for each vreg
   intervals : Map[Int, LiveInterval]
   // Use-def chains
@@ -736,7 +736,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
 ///|
 /// Coalescing pairs: maps vreg id -> list of vregs it wants to coalesce with
 /// Used for bidirectional hint propagation
-pub(all) struct CoalescingInfo {
+priv struct CoalescingInfo {
   // Forward hints: dst wants to use src's register (dst = mov src)
   forward_hints : Map[Int, Int]
   // Reverse hints: src wants to use dst's register (for cases where dst is allocated first)
@@ -825,7 +825,7 @@ fn resolve_vreg_hint(
 ///|
 /// A register move instruction (from regalloc constraint processing)
 /// Move operation between registers
-pub(all) struct RegMove {
+struct RegMove {
   from : @abi.PReg // Source register (or spill slot encoded as negative index)
   to : @abi.PReg // Destination register
   class : @abi.RegClass
@@ -844,7 +844,7 @@ pub impl Show for RegMove with output(self, logger) {
 ///|
 /// Edits to insert before/after an instruction
 /// Register constraint handling
-pub(all) struct InstEdits {
+struct InstEdits {
   before : Array[RegMove] // Moves to insert before the instruction
   after : Array[RegMove] // Moves to insert after the instruction
 }
@@ -973,41 +973,21 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
 ///|
 /// Register allocation result
-pub(all) struct RegAllocResult {
+pub struct RegAllocResult {
   // Map from vreg id to assigned physical register
   assignments : Map[Int, @abi.PReg]
   // Map from vreg id to spill slot (if spilled)
   spill_slots : Map[Int, Int]
   // Total number of spill slots used
   mut num_spill_slots : Int
-  // Instructions to insert (for spills/reloads)
-  spills : Array[SpillInfo]
-  reloads : Array[ReloadInfo]
   // Constraint edits: (block_idx, inst_idx) -> edits to insert
   // Fixed register constraint handling
   inst_edits : Map[(Int, Int), InstEdits]
 }
 
 ///|
-/// Information about a spill
-pub(all) struct SpillInfo {
-  vreg : @abi.VReg
-  slot : Int
-  point : ProgPoint
-}
-
-///|
-/// Information about a reload
-pub(all) struct ReloadInfo {
-  vreg : @abi.VReg
-  slot : Int
-  preg : @abi.PReg
-  point : ProgPoint
-}
-
-///|
 /// Linear scan register allocator
-pub(all) struct LinearScanAllocator {
+struct LinearScanAllocator {
   // Available physical registers by class
   int_regs : Array[@abi.PReg]
   float_regs : Array[@abi.PReg]
@@ -1154,8 +1134,6 @@ pub fn LinearScanAllocator::allocate(
     assignments: {},
     spill_slots: {},
     num_spill_slots: 0,
-    spills: [],
-    reloads: [],
     inst_edits: {},
   }
 
@@ -1368,29 +1346,8 @@ fn LinearScanAllocator::spill_interval(
   self.next_spill_slot = slot + 1
   interval.spill_slot = Some(slot)
   result.spill_slots.set(interval.vreg.id, slot)
-
-  // Record spill at definition point
-  if interval.start.pos is After {
-    result.spills.push({ vreg: interval.vreg, slot, point: interval.start })
-  }
-
-  // For each use, we need to reload into a temporary
-  // This is a simplified approach - a real allocator would be smarter
-  for use_point in interval.uses {
-    // Get a register for this reload (use first available)
-    let avail_regs = match interval.vreg.class {
-      @abi.Int => self.int_regs
-      @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_regs
-    }
-    if avail_regs.length() > 0 {
-      result.reloads.push({
-        vreg: interval.vreg,
-        slot,
-        preg: avail_regs[0],
-        point: use_point,
-      })
-    }
-  }
+  // Note: Actual spill/reload instruction insertion happens in apply_allocation
+  // by inspecting spill_slots and inserting StackLoad/StackStore as needed
 }
 
 // ============ Constraint Processing ============
@@ -2178,7 +2135,7 @@ pub fn allocate_registers_backtracking(func : VCodeFunction) -> VCodeFunction {
 
 ///|
 /// Allocation statistics for comparison
-pub(all) struct AllocStats {
+struct AllocStats {
   mut num_vregs : Int // Total virtual registers
   mut num_spill_slots : Int // Number of spill slots used
   num_spills : Int // Number of spill operations

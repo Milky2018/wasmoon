@@ -28,7 +28,7 @@ struct QueueEntry {
 
 ///|
 /// The backtracking register allocator
-pub(all) struct BacktrackingAllocator {
+struct BacktrackingAllocator {
   // Core data
   ranges : LiveRangeSet
   bundles : BundleSet
@@ -637,8 +637,6 @@ pub fn BacktrackingAllocator::generate_result(
     assignments: {},
     spill_slots: {},
     num_spill_slots: self.bundles.next_spill_slot,
-    spills: [],
-    reloads: [],
     inst_edits: {},
   }
 

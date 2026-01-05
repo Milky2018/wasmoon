@@ -47,31 +47,18 @@ pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 // Errors
 
 // Types and methods
-pub(all) struct AArch64StackFrame {
-  frame : StackFrame
-  use_fp : Bool
-  mut lr_slot : Int?
-  mut fp_slot : Int?
-}
+type AArch64StackFrame
 pub fn AArch64StackFrame::alloc_spill(Self, @abi.VReg) -> Int
 pub fn AArch64StackFrame::finalize(Self) -> Unit
 pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.VCodeInst]
 pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.VCodeInst]
 pub fn AArch64StackFrame::new() -> Self
 pub fn AArch64StackFrame::save_callee_reg(Self, @abi.PReg) -> Int
-pub fn AArch64StackFrame::set_has_calls(Self) -> Unit
 pub fn AArch64StackFrame::setup(Self) -> Unit
 pub fn AArch64StackFrame::size(Self) -> Int
 pub impl Show for AArch64StackFrame
 
-pub(all) struct AllocStats {
-  mut num_vregs : Int
-  mut num_spill_slots : Int
-  num_spills : Int
-  num_reloads : Int
-  num_moves : Int
-  total_insts : Int
-}
+type AllocStats
 pub impl Show for AllocStats
 
 pub enum Allocation {
@@ -81,34 +68,12 @@ pub enum Allocation {
 }
 pub impl Show for Allocation
 
-pub(all) struct BacktrackingAllocator {
-  ranges : LiveRangeSet
-  bundles : BundleSet
-  int_reg_allocs : Map[Int, Array[ProgPointRange]]
-  float_reg_allocs : Map[Int, Array[ProgPointRange]]
-  int_reg_bundles : Map[Int, @set.Set[Int]]
-  float_reg_bundles : Map[Int, @set.Set[Int]]
-  mut queue : Array[QueueEntry]
-  int_regs : Array[@abi.PReg]
-  float_regs : Array[@abi.PReg]
-  callee_saved_int : Array[@abi.PReg]
-  callee_saved_float : Array[@abi.PReg]
-  block_order : FixedArray[Int]
-  func : VCodeFunction
-}
+type BacktrackingAllocator
 pub fn BacktrackingAllocator::allocate(Self) -> Unit
 pub fn BacktrackingAllocator::generate_result(Self) -> RegAllocResult
 pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) -> Self
 
-pub(all) struct Bundle {
-  id : Int
-  range_ids : Array[Int]
-  mut spill_weight : Double
-  mut spill_bundle_id : Int
-  mut allocation : Allocation
-  reg_class : @abi.RegClass
-  mut is_pinned : Bool
-}
+type Bundle
 pub fn Bundle::contains_range(Self, Int) -> Bool
 pub fn Bundle::crosses_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::get_fixed_reg(Self, LiveRangeSet) -> @abi.PReg?
@@ -118,45 +83,23 @@ pub fn Bundle::overlaps(Self, Self, LiveRangeSet) -> Bool
 pub fn Bundle::to_string(Self, LiveRangeSet) -> String
 pub fn Bundle::total_length(Self, LiveRangeSet) -> Int
 
-pub(all) struct BundleSet {
-  bundles : Array[Bundle]
-  spill_bundles : Array[SpillBundle]
-  mut next_spill_slot : Int
-}
+type BundleSet
 pub fn BundleSet::get(Self, Int) -> Bundle
 pub fn BundleSet::length(Self) -> Int
 pub fn BundleSet::new() -> Self
 
-pub(all) struct CoalescingInfo {
-  forward_hints : Map[Int, Int]
-  reverse_hints : Map[Int, Int]
-}
+type InstEdits
 
-pub(all) struct InstEdits {
-  before : Array[RegMove]
-  after : Array[RegMove]
-}
-
-pub(all) struct LinearScanAllocator {
-  int_regs : Array[@abi.PReg]
-  float_regs : Array[@abi.PReg]
-  callee_saved_int_regs : Array[@abi.PReg]
-  callee_saved_float_regs : Array[@abi.PReg]
-  mut active : Array[LiveInterval]
-  mut next_spill_slot : Int
-  mut block_order : FixedArray[Int]
-  reserved_int_regs : Map[(Int, Int), @set.Set[Int]]
-  reserved_float_regs : Map[(Int, Int), @set.Set[Int]]
-}
+type LinearScanAllocator
 pub fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
 pub fn LinearScanAllocator::new(Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], callee_saved_float_regs? : Array[@abi.PReg]) -> Self
 
-pub(all) struct LiveInterval {
+pub struct LiveInterval {
   vreg : @abi.VReg
   start : ProgPoint
   mut end : ProgPoint
   uses : Array[ProgPoint]
-  mut hint : @abi.PReg?
+  hint : @abi.PReg?
   mut hint_vreg : Int?
   mut assigned : @abi.PReg?
   mut spill_slot : Int?
@@ -164,15 +107,7 @@ pub(all) struct LiveInterval {
 }
 pub impl Show for LiveInterval
 
-pub(all) struct LiveRange {
-  id : Int
-  vreg : @abi.VReg
-  ranges : Array[ProgPointRange]
-  uses : Array[UsePosition]
-  mut bundle_id : Int
-  mut allocation : Allocation
-  mut crosses_call : Bool
-}
+type LiveRange
 pub fn LiveRange::end(Self, FixedArray[Int]) -> ProgPoint?
 pub fn LiveRange::get_fixed_reg(Self) -> @abi.PReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
@@ -182,16 +117,12 @@ pub fn LiveRange::start(Self, FixedArray[Int]) -> ProgPoint?
 pub fn LiveRange::total_length(Self) -> Int
 pub impl Show for LiveRange
 
-pub(all) struct LiveRangeSet {
-  ranges : Array[LiveRange]
-  vreg_to_range : Map[Int, Int]
-  block_order : FixedArray[Int]
-}
+type LiveRangeSet
 pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, Int) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
 
-pub(all) struct LivenessResult {
+pub struct LivenessResult {
   intervals : Map[Int, LiveInterval]
   use_def : Map[Int, UseDefInfo]
   live_in : Array[@set.Set[Int]]
@@ -206,18 +137,11 @@ pub enum OperandConstraint {
 }
 pub impl Show for OperandConstraint
 
-pub(all) struct ProgPoint {
-  block : Int
-  inst : Int
-  pos : ProgPos
-}
+type ProgPoint
 pub impl Eq for ProgPoint
 pub impl Show for ProgPoint
 
-pub(all) struct ProgPointRange {
-  start : ProgPoint
-  end : ProgPoint
-}
+type ProgPointRange
 pub fn ProgPointRange::contains(Self, ProgPoint, FixedArray[Int]) -> Bool
 pub impl Show for ProgPointRange
 
@@ -230,51 +154,20 @@ pub impl Eq for ProgPos
 type QueueEntry
 pub impl Eq for QueueEntry
 
-pub(all) struct RegAllocResult {
+pub struct RegAllocResult {
   assignments : Map[Int, @abi.PReg]
   spill_slots : Map[Int, Int]
   mut num_spill_slots : Int
-  spills : Array[SpillInfo]
-  reloads : Array[ReloadInfo]
   inst_edits : Map[(Int, Int), InstEdits]
 }
 
-pub(all) struct RegMove {
-  from : @abi.PReg
-  to : @abi.PReg
-  class : @abi.RegClass
-}
+type RegMove
 pub impl Show for RegMove
 
-pub(all) struct ReloadInfo {
-  vreg : @abi.VReg
-  slot : Int
-  preg : @abi.PReg
-  point : ProgPoint
-}
-
-pub(all) struct SpillBundle {
-  id : Int
-  slot : Int
-  bundle_ids : Array[Int]
-}
+type SpillBundle
 pub fn SpillBundle::new(Int, Int) -> Self
 
-pub(all) struct SpillInfo {
-  vreg : @abi.VReg
-  slot : Int
-  point : ProgPoint
-}
-
-pub(all) struct StackFrame {
-  slots : Array[StackSlot]
-  mut frame_size : Int
-  frame_align : Int
-  mut next_spill_offset : Int
-  mut next_arg_offset : Int
-  callee_saved_regs : Array[@abi.PReg]
-  mut has_calls : Bool
-}
+type StackFrame
 pub fn StackFrame::add_callee_saved(Self, @abi.PReg) -> Int
 pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
 pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
@@ -286,12 +179,7 @@ pub fn StackFrame::print(Self) -> String
 pub fn StackFrame::size(Self) -> Int
 pub impl Show for StackFrame
 
-pub(all) struct StackSlot {
-  offset : Int
-  size : Int
-  align : Int
-  kind : StackSlotKind
-}
+type StackSlot
 pub impl Show for StackSlot
 
 pub enum StackSlotKind {
@@ -302,10 +190,7 @@ pub enum StackSlotKind {
 }
 pub impl Show for StackSlotKind
 
-pub(all) struct UnionFind {
-  parent : Array[Int]
-  rank : Array[Int]
-}
+type UnionFind
 pub fn UnionFind::find(Self, Int) -> Int
 pub fn UnionFind::get_all_sets(Self) -> Array[Array[Int]]
 pub fn UnionFind::get_set(Self, Int) -> Array[Int]
@@ -315,27 +200,15 @@ pub fn UnionFind::num_sets(Self) -> Int
 pub fn UnionFind::same_set(Self, Int, Int) -> Bool
 pub fn UnionFind::union(Self, Int, Int) -> Bool
 
-pub(all) struct UseDefInfo {
-  vreg : @abi.VReg
-  mut def_point : ProgPoint?
-  use_points : Array[ProgPoint]
-}
+type UseDefInfo
 
-pub(all) enum UseKind {
-  Def
-  Use
-  DefUse
-}
+type UseKind
 pub impl Show for UseKind
 
-pub(all) struct UsePosition {
-  point : ProgPoint
-  kind : UseKind
-  constraint : OperandConstraint
-}
+type UsePosition
 pub impl Show for UsePosition
 
-pub(all) struct VCodeFunction {
+pub struct VCodeFunction {
   name : String
   params : Array[@abi.VReg]
   results : Array[@abi.RegClass]

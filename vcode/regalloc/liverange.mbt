@@ -4,7 +4,7 @@
 
 ///|
 /// A contiguous program point range (start inclusive, end exclusive)
-pub(all) struct ProgPointRange {
+struct ProgPointRange {
   start : ProgPoint
   end : ProgPoint
 }
@@ -51,10 +51,11 @@ pub fn ProgPointRange::contains(
 
 ///|
 /// Kind of use at a program point
-pub(all) enum UseKind {
+/// Note: For tied operands (same reg as both def and use), add a DefUse variant
+/// when VCodeInst supports tied operand representation.
+enum UseKind {
   Def // Definition (value produced)
   Use // Use (value consumed)
-  DefUse // Both def and use (e.g., tied operand)
 }
 
 ///|
@@ -62,7 +63,6 @@ fn UseKind::to_string(self : UseKind) -> String {
   match self {
     Def => "def"
     Use => "use"
-    DefUse => "def+use"
   }
 }
 
@@ -93,7 +93,7 @@ pub impl Show for OperandConstraint with output(self, logger) {
 
 ///|
 /// A use position within a LiveRange
-pub(all) struct UsePosition {
+struct UsePosition {
   point : ProgPoint
   kind : UseKind
   constraint : OperandConstraint
@@ -143,7 +143,7 @@ pub impl Show for Allocation with output(self, logger) {
 ///|
 /// A LiveRange represents the liveness of a single virtual register
 /// with precise span information and use constraints.
-pub(all) struct LiveRange {
+struct LiveRange {
   id : Int
   vreg : @abi.VReg
   ranges : Array[ProgPointRange] // Multiple non-overlapping spans
@@ -310,7 +310,7 @@ pub impl Show for LiveRange with output(self, logger) {
 
 ///|
 /// Collection of LiveRanges built from liveness analysis
-pub(all) struct LiveRangeSet {
+struct LiveRangeSet {
   ranges : Array[LiveRange]
   vreg_to_range : Map[Int, Int] // vreg.id -> range index
   block_order : FixedArray[Int] // Block execution order (O(1) lookup)
