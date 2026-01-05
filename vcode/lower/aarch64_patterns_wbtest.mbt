@@ -208,7 +208,6 @@ test "apply_aarch64_rule: add_shifted" {
     values: [],
     int_consts: [3L], // shift by 3
     float_consts: [],
-    matched_inst: None,
   }
   // Create a minimal function to get a context
   let builder = @ir.IRBuilder::new("test")
@@ -235,12 +234,7 @@ test "apply_aarch64_rule: add_shifted" {
 
 ///|
 test "apply_aarch64_rule: madd" {
-  let result : MatchResult = {
-    values: [],
-    int_consts: [],
-    float_consts: [],
-    matched_inst: None,
-  }
+  let result : MatchResult = { values: [], int_consts: [], float_consts: [] }
   let builder = @ir.IRBuilder::new("test")
   builder.add_result(@ir.Type::I32)
   let entry = builder.create_block()

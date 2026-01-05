@@ -10,7 +10,7 @@
 
 ///|
 /// A compiled function ready for execution
-pub(all) struct CompiledFunction {
+pub struct CompiledFunction {
   // Function name or identifier
   name : String
   // The compiled machine code bytes
@@ -74,7 +74,7 @@ pub impl Show for CompiledFunction with output(self, logger) {
 
 ///|
 /// Cache for storing compiled functions
-pub(all) struct CodeCache {
+struct CodeCache {
   // Function index -> compiled function
   functions : Map[Int, CompiledFunction]
   // Total size of all cached code
@@ -227,7 +227,7 @@ pub impl Show for CodeCache with output(self, logger) {
 ///|
 /// Represents a region of memory that can hold executable code
 /// (Abstraction - actual executable memory requires platform-specific implementation)
-pub(all) struct ExecutableRegion {
+struct ExecutableRegion {
   // Identifier for this region
   id : Int
   // Base address (simulated)
@@ -325,7 +325,7 @@ pub impl Show for ExecutableRegion with output(self, logger) {
 
 ///|
 /// Manages executable memory regions
-pub(all) struct MemoryManager {
+struct MemoryManager {
   // All allocated regions
   regions : Array[ExecutableRegion]
   // Default region size
@@ -447,7 +447,7 @@ pub impl Show for MemoryManager with output(self, logger) {
 
 ///|
 /// Complete JIT runtime combining code cache and memory management
-pub(all) struct JITRuntime {
+struct JITRuntime {
   // Code cache
   cache : CodeCache
   // Memory manager

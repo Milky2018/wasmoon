@@ -7,7 +7,6 @@
 /// x & 0 = 0
 fn rule_and_zero() -> RewriteRule {
   {
-    name: "and_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -29,7 +28,6 @@ fn rule_and_zero() -> RewriteRule {
 /// x | 0 = x
 fn rule_or_zero() -> RewriteRule {
   {
-    name: "or_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -52,7 +50,6 @@ fn rule_or_zero() -> RewriteRule {
 /// x ^ 0 = x
 fn rule_xor_zero() -> RewriteRule {
   {
-    name: "xor_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -75,7 +72,6 @@ fn rule_xor_zero() -> RewriteRule {
 /// x & -1 = x (all bits set)
 fn rule_and_all_ones() -> RewriteRule {
   {
-    name: "and_all_ones",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -98,7 +94,6 @@ fn rule_and_all_ones() -> RewriteRule {
 /// x | -1 = -1
 fn rule_or_all_ones() -> RewriteRule {
   {
-    name: "or_all_ones",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -120,7 +115,6 @@ fn rule_or_all_ones() -> RewriteRule {
 /// x | x = x (or idempotent)
 fn rule_or_self() -> RewriteRule {
   {
-    name: "or_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -140,7 +134,6 @@ fn rule_or_self() -> RewriteRule {
 /// x ^ ~x = -1, ~x ^ x = -1
 fn rule_xor_not() -> RewriteRule {
   {
-    name: "xor_not",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -178,7 +171,6 @@ fn rule_xor_not() -> RewriteRule {
 /// x | ~x = -1, ~x | x = -1
 fn rule_or_not() -> RewriteRule {
   {
-    name: "or_not",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -216,7 +208,6 @@ fn rule_or_not() -> RewriteRule {
 /// x & ~x = 0, ~x & x = 0
 fn rule_and_not() -> RewriteRule {
   {
-    name: "and_not",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -254,7 +245,6 @@ fn rule_and_not() -> RewriteRule {
 /// ~~x = x (double negation)
 fn rule_double_bnot() -> RewriteRule {
   {
-    name: "double_bnot",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -276,7 +266,6 @@ fn rule_double_bnot() -> RewriteRule {
 /// DeMorgan: ~(x | y) = ~x & ~y
 fn rule_demorgan_or() -> RewriteRule {
   {
-    name: "demorgan_or",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -301,7 +290,6 @@ fn rule_demorgan_or() -> RewriteRule {
 /// DeMorgan: ~(x & y) = ~x | ~y
 fn rule_demorgan_and() -> RewriteRule {
   {
-    name: "demorgan_and",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -326,7 +314,6 @@ fn rule_demorgan_and() -> RewriteRule {
 /// x ^ -1 = ~x
 fn rule_xor_all_ones() -> RewriteRule {
   {
-    name: "xor_all_ones",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -351,7 +338,6 @@ fn rule_xor_all_ones() -> RewriteRule {
 /// (x & y) ^ (x ^ y) = x | y
 fn rule_and_xor_xor() -> RewriteRule {
   {
-    name: "and_xor_xor",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -413,7 +399,6 @@ fn rule_and_xor_xor() -> RewriteRule {
 /// (x | y) ^ (x & y) = x ^ y
 fn rule_or_xor_and() -> RewriteRule {
   {
-    name: "or_xor_and",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -475,7 +460,6 @@ fn rule_or_xor_and() -> RewriteRule {
 /// (x & y) | x = x (absorption)
 fn rule_and_or_absorb() -> RewriteRule {
   {
-    name: "and_or_absorb",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -513,7 +497,6 @@ fn rule_and_or_absorb() -> RewriteRule {
 /// (x ^ y) ^ y = x
 fn rule_xor_xor_cancel() -> RewriteRule {
   {
-    name: "xor_xor_cancel",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -555,7 +538,6 @@ fn rule_xor_xor_cancel() -> RewriteRule {
 /// (z & x) ^ (z & y) = z & (x ^ y)
 fn rule_factor_and_xor() -> RewriteRule {
   {
-    name: "factor_and_xor",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -599,7 +581,6 @@ fn rule_factor_and_xor() -> RewriteRule {
 /// (x & y) + (x ^ y) = x | y
 fn rule_and_add_xor() -> RewriteRule {
   {
-    name: "and_add_xor",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -661,7 +642,6 @@ fn rule_and_add_xor() -> RewriteRule {
 /// (x | y) + (x & y) = x + y
 fn rule_or_add_and() -> RewriteRule {
   {
-    name: "or_add_and",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -724,7 +704,6 @@ fn rule_or_add_and() -> RewriteRule {
 /// (x & y) | ~y = x | ~y
 fn rule_or_and_not() -> RewriteRule {
   {
-    name: "or_and_not",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -786,7 +765,6 @@ fn rule_or_and_not() -> RewriteRule {
 /// (x | y) | x = x | y (or absorption with nested or)
 fn rule_or_or_absorb() -> RewriteRule {
   {
-    name: "or_or_absorb",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -826,7 +804,6 @@ fn rule_or_or_absorb() -> RewriteRule {
 /// (x & y) & x = x & y (and absorption with nested and)
 fn rule_and_and_absorb() -> RewriteRule {
   {
-    name: "and_and_absorb",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -866,7 +843,6 @@ fn rule_and_and_absorb() -> RewriteRule {
 /// (x ^ ~y) & x = x & y
 fn rule_xor_not_and() -> RewriteRule {
   {
-    name: "xor_not_and",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -946,7 +922,6 @@ fn rule_xor_not_and() -> RewriteRule {
 /// (x & y) | ~x = y | ~x
 fn rule_and_or_not() -> RewriteRule {
   {
-    name: "and_or_not",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

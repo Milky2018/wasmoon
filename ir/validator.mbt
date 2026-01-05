@@ -3,7 +3,7 @@
 
 ///|
 /// Result of IR validation
-pub(all) struct ValidationResult {
+pub struct ValidationResult {
   mut valid : Bool
   errors : Array[String]
 }

@@ -9,7 +9,6 @@
 /// When both branches are the same, the condition doesn't matter
 fn rule_select_same() -> RewriteRule {
   {
-    name: "select_same",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -31,7 +30,6 @@ fn rule_select_same() -> RewriteRule {
 /// When selecting between 1 and 0 based on a comparison, just use the comparison result
 fn rule_select_icmp_one_zero() -> RewriteRule {
   {
-    name: "select_icmp_one_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -64,7 +62,6 @@ fn rule_select_icmp_one_zero() -> RewriteRule {
 /// Push zeroes to the right by complementing the condition
 fn rule_select_icmp_zero_one() -> RewriteRule {
   {
-    name: "select_icmp_zero_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -103,7 +100,6 @@ fn rule_select_icmp_zero_one() -> RewriteRule {
 /// Nested select with same condition - inner true branch is unreachable
 fn rule_select_nested_same_cond_right() -> RewriteRule {
   {
-    name: "select_nested_same_cond_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -136,7 +132,6 @@ fn rule_select_nested_same_cond_right() -> RewriteRule {
 /// Nested select with same condition - inner false branch is unreachable
 fn rule_select_nested_same_cond_left() -> RewriteRule {
   {
-    name: "select_nested_same_cond_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -169,7 +164,6 @@ fn rule_select_nested_same_cond_left() -> RewriteRule {
 /// Remove unnecessary uextend on condition
 fn rule_select_uextend_cond() -> RewriteRule {
   {
-    name: "select_uextend_cond",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -213,7 +207,6 @@ fn rule_select_uextend_cond() -> RewriteRule {
 /// Fold add into select branches
 fn rule_add_select_const() -> RewriteRule {
   {
-    name: "add_select_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -275,7 +268,6 @@ fn rule_add_select_const() -> RewriteRule {
 /// select(sge(x, y), x, y) = smax(x, y)
 fn rule_select_to_smax() -> RewriteRule {
   {
-    name: "select_to_smax",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -310,7 +302,6 @@ fn rule_select_to_smax() -> RewriteRule {
 /// select(sle(x, y), x, y) = smin(x, y)
 fn rule_select_to_smin() -> RewriteRule {
   {
-    name: "select_to_smin",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -345,7 +336,6 @@ fn rule_select_to_smin() -> RewriteRule {
 /// select(uge(x, y), x, y) = umax(x, y)
 fn rule_select_to_umax() -> RewriteRule {
   {
-    name: "select_to_umax",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -380,7 +370,6 @@ fn rule_select_to_umax() -> RewriteRule {
 /// select(ule(x, y), x, y) = umin(x, y)
 fn rule_select_to_umin() -> RewriteRule {
   {
-    name: "select_to_umin",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -420,7 +409,6 @@ fn rule_select_to_umin() -> RewriteRule {
 /// select(sle(x, y), y, x) = smax(x, y)
 fn rule_select_to_smax_swapped() -> RewriteRule {
   {
-    name: "select_to_smax_swapped",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -454,7 +442,6 @@ fn rule_select_to_smax_swapped() -> RewriteRule {
 /// select(sge(x, y), y, x) = smin(x, y)
 fn rule_select_to_smin_swapped() -> RewriteRule {
   {
-    name: "select_to_smin_swapped",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -488,7 +475,6 @@ fn rule_select_to_smin_swapped() -> RewriteRule {
 /// select(ule(x, y), y, x) = umax(x, y)
 fn rule_select_to_umax_swapped() -> RewriteRule {
   {
-    name: "select_to_umax_swapped",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -522,7 +508,6 @@ fn rule_select_to_umax_swapped() -> RewriteRule {
 /// select(uge(x, y), y, x) = umin(x, y)
 fn rule_select_to_umin_swapped() -> RewriteRule {
   {
-    name: "select_to_umin_swapped",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -560,7 +545,6 @@ fn rule_select_to_umin_swapped() -> RewriteRule {
 /// select(sge(x, 0), x, -x) = iabs(x)
 fn rule_select_to_iabs_positive() -> RewriteRule {
   {
-    name: "select_to_iabs_positive",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -602,7 +586,6 @@ fn rule_select_to_iabs_positive() -> RewriteRule {
 /// select(sle(x, 0), -x, x) = iabs(x)
 fn rule_select_to_iabs_negative() -> RewriteRule {
   {
-    name: "select_to_iabs_negative",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -648,7 +631,6 @@ fn rule_select_to_iabs_negative() -> RewriteRule {
 /// sgt(smin(x, y), y) = 0  (min is never greater than y)
 fn rule_smin_never_greater() -> RewriteRule {
   {
-    name: "smin_never_greater",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -679,7 +661,6 @@ fn rule_smin_never_greater() -> RewriteRule {
 /// slt(x, smin(y, x)) = 0
 fn rule_never_less_than_smin() -> RewriteRule {
   {
-    name: "never_less_than_smin",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -710,7 +691,6 @@ fn rule_never_less_than_smin() -> RewriteRule {
 /// ugt(umin(x, y), y) = 0  (min is never greater than y)
 fn rule_umin_never_greater() -> RewriteRule {
   {
-    name: "umin_never_greater",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -741,7 +721,6 @@ fn rule_umin_never_greater() -> RewriteRule {
 /// ult(x, umin(y, x)) = 0
 fn rule_never_less_than_umin() -> RewriteRule {
   {
-    name: "never_less_than_umin",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

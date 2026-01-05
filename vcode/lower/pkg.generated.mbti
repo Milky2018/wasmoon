@@ -3,11 +3,9 @@ package "Milky2018/wasmoon/vcode/lower"
 
 import(
   "Milky2018/wasmoon/ir"
-  "Milky2018/wasmoon/vcode/abi"
   "Milky2018/wasmoon/vcode/block"
   "Milky2018/wasmoon/vcode/instr"
   "Milky2018/wasmoon/vcode/regalloc"
-  "moonbitlang/core/hashset"
 )
 
 // Values
@@ -31,14 +29,6 @@ pub fn lower_function_optimized(@ir.Function) -> @regalloc.VCodeFunction
 
 pub fn lower_inst_with_patterns(LoweringContext, @ir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool
 
-pub fn magic_s32(Int) -> MagicS32
-
-pub fn magic_s64(Int64) -> MagicS64
-
-pub fn magic_u32(UInt) -> MagicU32
-
-pub fn magic_u64(UInt64) -> MagicU64
-
 pub fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
 
 pub fn optimize_vcode(@regalloc.VCodeFunction) -> Unit
@@ -58,44 +48,10 @@ pub enum AArch64RewriteResult {
   NoMatch
 }
 
-pub(all) struct LoweringContext {
-  ir_func : @ir.Function
-  vcode_func : @regalloc.VCodeFunction
-  value_map : Map[Int, @abi.VReg]
-  block_map : Map[Int, Int]
-  stack_param_map : Map[Int, (Int, @abi.RegClass)]
-  fused_icmps : @hashset.HashSet[Int]
-}
+type LoweringContext
 pub fn LoweringContext::new(@ir.Function) -> Self
 
-pub(all) struct MagicS32 {
-  mul_by : Int
-  shift_by : Int
-}
-
-pub(all) struct MagicS64 {
-  mul_by : Int64
-  shift_by : Int
-}
-
-pub(all) struct MagicU32 {
-  mul_by : UInt
-  do_add : Bool
-  shift_by : Int
-}
-
-pub(all) struct MagicU64 {
-  mul_by : UInt64
-  do_add : Bool
-  shift_by : Int
-}
-
-pub(all) struct MatchResult {
-  values : Array[@ir.Value]
-  int_consts : Array[Int64]
-  float_consts : Array[Double]
-  mut matched_inst : @ir.Inst?
-}
+type MatchResult
 
 pub enum Pattern {
   Any
@@ -137,11 +93,7 @@ pub enum RewriteResult {
   NoMatch
 }
 
-pub(all) struct RewriteRule {
-  name : String
-  pattern : Pattern
-  priority : Int
-}
+type RewriteRule
 
 // Type aliases
 

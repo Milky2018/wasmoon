@@ -106,7 +106,7 @@ pub fn PlatformABI::float_arg_regs(self : PlatformABI) -> Int {
 
 ///|
 /// AArch64 target ISA
-pub(all) struct AArch64 {
+struct AArch64 {
   name : String
 }
 
@@ -161,14 +161,12 @@ pub impl TargetISA for AArch64 with pointer_size(_self) -> Int {
 // ============ AArch64 Register Definitions ============
 
 ///|
-/// AArch64 register names and roles
-pub(all) struct AArch64Regs {
-  placeholder : Int // Placeholder field
-}
+/// AArch64 register names and roles (namespace for register constants)
+struct AArch64Regs {}
 
 ///|
 pub fn AArch64Regs::new() -> AArch64Regs {
-  { placeholder: 0 }
+  AArch64Regs::{  }
 }
 
 // General-purpose registers

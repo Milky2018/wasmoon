@@ -55,7 +55,6 @@ fn splat64(n : UInt64) -> Bytes {
 /// Converts splat of constant to vector constant
 fn rule_splat_const() -> RewriteRule {
   {
-    name: "splat_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -96,7 +95,6 @@ fn find_splat_child(eg : EGraph, class_id : EClassId) -> EClassId? {
 /// band(splat(x), splat(y)) -> splat(band(x, y))
 fn rule_band_splat_splat() -> RewriteRule {
   {
-    name: "band_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -120,7 +118,6 @@ fn rule_band_splat_splat() -> RewriteRule {
 /// bor(splat(x), splat(y)) -> splat(bor(x, y))
 fn rule_bor_splat_splat() -> RewriteRule {
   {
-    name: "bor_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -143,7 +140,6 @@ fn rule_bor_splat_splat() -> RewriteRule {
 /// bxor(splat(x), splat(y)) -> splat(bxor(x, y))
 fn rule_bxor_splat_splat() -> RewriteRule {
   {
-    name: "bxor_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -166,7 +162,6 @@ fn rule_bxor_splat_splat() -> RewriteRule {
 /// bnot(splat(x)) -> splat(bnot(x))
 fn rule_bnot_splat() -> RewriteRule {
   {
-    name: "bnot_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -188,7 +183,6 @@ fn rule_bnot_splat() -> RewriteRule {
 /// iadd(splat(x), splat(y)) -> splat(iadd(x, y))
 fn rule_iadd_splat_splat() -> RewriteRule {
   {
-    name: "iadd_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -211,7 +205,6 @@ fn rule_iadd_splat_splat() -> RewriteRule {
 /// isub(splat(x), splat(y)) -> splat(isub(x, y))
 fn rule_isub_splat_splat() -> RewriteRule {
   {
-    name: "isub_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -234,7 +227,6 @@ fn rule_isub_splat_splat() -> RewriteRule {
 /// imul(splat(x), splat(y)) -> splat(imul(x, y))
 fn rule_imul_splat_splat() -> RewriteRule {
   {
-    name: "imul_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -257,7 +249,6 @@ fn rule_imul_splat_splat() -> RewriteRule {
 /// ineg(splat(x)) -> splat(ineg(x))
 fn rule_ineg_splat() -> RewriteRule {
   {
-    name: "ineg_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -279,7 +270,6 @@ fn rule_ineg_splat() -> RewriteRule {
 /// iabs(splat(x)) -> splat(iabs(x))
 fn rule_iabs_splat() -> RewriteRule {
   {
-    name: "iabs_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -301,7 +291,6 @@ fn rule_iabs_splat() -> RewriteRule {
 /// popcnt(splat(x)) -> splat(popcnt(x))
 fn rule_popcnt_splat() -> RewriteRule {
   {
-    name: "popcnt_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -323,7 +312,6 @@ fn rule_popcnt_splat() -> RewriteRule {
 /// smin(splat(x), splat(y)) -> splat(smin(x, y))
 fn rule_smin_splat_splat() -> RewriteRule {
   {
-    name: "smin_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -346,7 +334,6 @@ fn rule_smin_splat_splat() -> RewriteRule {
 /// umin(splat(x), splat(y)) -> splat(umin(x, y))
 fn rule_umin_splat_splat() -> RewriteRule {
   {
-    name: "umin_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -369,7 +356,6 @@ fn rule_umin_splat_splat() -> RewriteRule {
 /// smax(splat(x), splat(y)) -> splat(smax(x, y))
 fn rule_smax_splat_splat() -> RewriteRule {
   {
-    name: "smax_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -392,7 +378,6 @@ fn rule_smax_splat_splat() -> RewriteRule {
 /// umax(splat(x), splat(y)) -> splat(umax(x, y))
 fn rule_umax_splat_splat() -> RewriteRule {
   {
-    name: "umax_splat_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -420,7 +405,6 @@ fn rule_umax_splat_splat() -> RewriteRule {
 /// rotl(splat(x), y) -> splat(rotl(x, y))
 fn rule_rotl_splat() -> RewriteRule {
   {
-    name: "rotl_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -443,7 +427,6 @@ fn rule_rotl_splat() -> RewriteRule {
 /// rotr(splat(x), y) -> splat(rotr(x, y))
 fn rule_rotr_splat() -> RewriteRule {
   {
-    name: "rotr_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -466,7 +449,6 @@ fn rule_rotr_splat() -> RewriteRule {
 /// ishl(splat(x), y) -> splat(ishl(x, y))
 fn rule_ishl_splat() -> RewriteRule {
   {
-    name: "ishl_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -489,7 +471,6 @@ fn rule_ishl_splat() -> RewriteRule {
 /// ushr(splat(x), y) -> splat(ushr(x, y))
 fn rule_ushr_splat() -> RewriteRule {
   {
-    name: "ushr_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -512,7 +493,6 @@ fn rule_ushr_splat() -> RewriteRule {
 /// sshr(splat(x), y) -> splat(sshr(x, y))
 fn rule_sshr_splat() -> RewriteRule {
   {
-    name: "sshr_splat",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

@@ -1,6 +1,6 @@
 ///|
 /// Linker for managing multiple module instances and their dependencies
-pub(all) struct Linker {
+struct Linker {
   store : Store
   modules : Array[(String, ModuleInstance)] // (name, instance) pairs
 }

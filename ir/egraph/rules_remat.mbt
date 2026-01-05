@@ -91,7 +91,6 @@ fn EGraph::has_const_child(self : EGraph, node : ENode) -> Bool {
 /// Mark iadd(iconst, x) as rematerializable
 fn rule_remat_iadd_iconst_left() -> RewriteRule {
   {
-    name: "remat_iadd_iconst_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -111,7 +110,6 @@ fn rule_remat_iadd_iconst_left() -> RewriteRule {
 /// Mark iadd(x, iconst) as rematerializable
 fn rule_remat_iadd_iconst_right() -> RewriteRule {
   {
-    name: "remat_iadd_iconst_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -131,7 +129,6 @@ fn rule_remat_iadd_iconst_right() -> RewriteRule {
 /// Mark isub(iconst, x) as rematerializable
 fn rule_remat_isub_iconst_left() -> RewriteRule {
   {
-    name: "remat_isub_iconst_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -151,7 +148,6 @@ fn rule_remat_isub_iconst_left() -> RewriteRule {
 /// Mark isub(x, iconst) as rematerializable
 fn rule_remat_isub_iconst_right() -> RewriteRule {
   {
-    name: "remat_isub_iconst_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -171,7 +167,6 @@ fn rule_remat_isub_iconst_right() -> RewriteRule {
 /// Mark band(iconst, x) as rematerializable
 fn rule_remat_band_iconst_left() -> RewriteRule {
   {
-    name: "remat_band_iconst_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -191,7 +186,6 @@ fn rule_remat_band_iconst_left() -> RewriteRule {
 /// Mark band(x, iconst) as rematerializable
 fn rule_remat_band_iconst_right() -> RewriteRule {
   {
-    name: "remat_band_iconst_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -211,7 +205,6 @@ fn rule_remat_band_iconst_right() -> RewriteRule {
 /// Mark bor(iconst, x) as rematerializable
 fn rule_remat_bor_iconst_left() -> RewriteRule {
   {
-    name: "remat_bor_iconst_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -231,7 +224,6 @@ fn rule_remat_bor_iconst_left() -> RewriteRule {
 /// Mark bor(x, iconst) as rematerializable
 fn rule_remat_bor_iconst_right() -> RewriteRule {
   {
-    name: "remat_bor_iconst_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -251,7 +243,6 @@ fn rule_remat_bor_iconst_right() -> RewriteRule {
 /// Mark bxor(iconst, x) as rematerializable
 fn rule_remat_bxor_iconst_left() -> RewriteRule {
   {
-    name: "remat_bxor_iconst_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -271,7 +262,6 @@ fn rule_remat_bxor_iconst_left() -> RewriteRule {
 /// Mark bxor(x, iconst) as rematerializable
 fn rule_remat_bxor_iconst_right() -> RewriteRule {
   {
-    name: "remat_bxor_iconst_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -291,7 +281,6 @@ fn rule_remat_bxor_iconst_right() -> RewriteRule {
 /// Mark bnot(x) as rematerializable
 fn rule_remat_bnot() -> RewriteRule {
   {
-    name: "remat_bnot",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -309,7 +298,6 @@ fn rule_remat_bnot() -> RewriteRule {
 /// Mark iconst as rematerializable
 fn rule_remat_iconst() -> RewriteRule {
   {
-    name: "remat_iconst",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -327,7 +315,6 @@ fn rule_remat_iconst() -> RewriteRule {
 /// Mark f32const/f64const as rematerializable
 fn rule_remat_fconst() -> RewriteRule {
   {
-    name: "remat_fconst",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

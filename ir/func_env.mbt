@@ -67,7 +67,7 @@ pub const TABLE_ENTRY_STRIDE : Int = 16
 ///|
 /// FuncEnvironment holds VMContext layout info used during IR translation to
 /// desugar Wasm operations.
-pub(all) struct FuncEnvironment {
+struct FuncEnvironment {
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
   // Shared trap block for memory out-of-bounds errors

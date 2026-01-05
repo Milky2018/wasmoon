@@ -3,7 +3,6 @@
 ///|
 fn rule_rebalance_add_right() -> RewriteRule {
   {
-    name: "rebalance_add_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -37,7 +36,6 @@ fn rule_rebalance_add_right() -> RewriteRule {
 /// Tree rebalancing for iadd: (((a + b) + c) + d) => ((a + b) + (c + d))
 fn rule_rebalance_add_left() -> RewriteRule {
   {
-    name: "rebalance_add_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -70,7 +68,6 @@ fn rule_rebalance_add_left() -> RewriteRule {
 /// Tree rebalancing for imul: (a * (b * (c * d))) => ((a * b) * (c * d))
 fn rule_rebalance_mul_right() -> RewriteRule {
   {
-    name: "rebalance_mul_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -103,7 +100,6 @@ fn rule_rebalance_mul_right() -> RewriteRule {
 /// Tree rebalancing for imul: (((a * b) * c) * d) => ((a * b) * (c * d))
 fn rule_rebalance_mul_left() -> RewriteRule {
   {
-    name: "rebalance_mul_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -136,7 +132,6 @@ fn rule_rebalance_mul_left() -> RewriteRule {
 /// Tree rebalancing for band: (a & (b & (c & d))) => ((a & b) & (c & d))
 fn rule_rebalance_and_right() -> RewriteRule {
   {
-    name: "rebalance_and_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -169,7 +164,6 @@ fn rule_rebalance_and_right() -> RewriteRule {
 /// Tree rebalancing for band: (((a & b) & c) & d) => ((a & b) & (c & d))
 fn rule_rebalance_and_left() -> RewriteRule {
   {
-    name: "rebalance_and_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -202,7 +196,6 @@ fn rule_rebalance_and_left() -> RewriteRule {
 /// Tree rebalancing for bxor: (a ^ (b ^ (c ^ d))) => ((a ^ b) ^ (c ^ d))
 fn rule_rebalance_xor_right() -> RewriteRule {
   {
-    name: "rebalance_xor_right",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -235,7 +228,6 @@ fn rule_rebalance_xor_right() -> RewriteRule {
 /// Tree rebalancing for bxor: (((a ^ b) ^ c) ^ d) => ((a ^ b) ^ (c ^ d))
 fn rule_rebalance_xor_left() -> RewriteRule {
   {
-    name: "rebalance_xor_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

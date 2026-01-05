@@ -17,15 +17,11 @@ pub fn dump_vcode(@regalloc.VCodeFunction, String) -> Unit
 // Errors
 
 // Types and methods
-pub(all) struct AArch64 {
-  name : String
-}
+type AArch64
 pub fn AArch64::new() -> Self
 pub impl TargetISA for AArch64
 
-pub(all) struct AArch64Regs {
-  placeholder : Int
-}
+type AArch64Regs
 pub fn AArch64Regs::d0(Self) -> @abi.PReg
 pub fn AArch64Regs::d1(Self) -> @abi.PReg
 pub fn AArch64Regs::d2(Self) -> @abi.PReg
@@ -46,13 +42,7 @@ pub fn AArch64Regs::x5(Self) -> @abi.PReg
 pub fn AArch64Regs::x6(Self) -> @abi.PReg
 pub fn AArch64Regs::x7(Self) -> @abi.PReg
 
-pub(all) struct CodeCache {
-  functions : Map[Int, CompiledFunction]
-  mut total_size : Int
-  max_size : Int
-  mut hits : Int
-  mut misses : Int
-}
+type CodeCache
 pub fn CodeCache::clear(Self) -> Unit
 pub fn CodeCache::contains(Self, Int) -> Bool
 pub fn CodeCache::get(Self, Int) -> CompiledFunction?
@@ -63,7 +53,7 @@ pub fn CodeCache::remove(Self, Int) -> Unit
 pub fn CodeCache::stats(Self) -> (Int, Int, Int, Int)
 pub impl Show for CodeCache
 
-pub(all) struct CompiledFunction {
+pub struct CompiledFunction {
   name : String
   code : @emit.MachineCode
   entry_offset : Int
@@ -77,14 +67,7 @@ pub fn CompiledFunction::is_valid(Self) -> Bool
 pub fn CompiledFunction::new(String, @emit.MachineCode, Int) -> Self
 pub impl Show for CompiledFunction
 
-pub(all) struct ExecutableRegion {
-  id : Int
-  base_addr : Int
-  size : Int
-  mut write_pos : Int
-  code : Array[Int]
-  mut finalized : Bool
-}
+type ExecutableRegion
 pub fn ExecutableRegion::address_at(Self, Int) -> Int
 pub fn ExecutableRegion::finalize(Self) -> Unit
 pub fn ExecutableRegion::new(Int, Int) -> Self
@@ -93,7 +76,7 @@ pub fn ExecutableRegion::remaining(Self) -> Int
 pub fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
 pub impl Show for ExecutableRegion
 
-pub(all) struct GcCompilerConfig {
+pub struct GcCompilerConfig {
   needs_write_barriers : Bool
   needs_read_barriers : Bool
   needs_safepoints : Bool
@@ -102,19 +85,14 @@ pub(all) struct GcCompilerConfig {
 }
 pub impl Show for GcCompilerConfig
 
-pub(all) struct GcSafepoint {
+pub struct GcSafepoint {
   code_offset : Int
   live_refs : Array[Int]
   metadata : Int64
 }
 pub impl Show for GcSafepoint
 
-pub(all) struct JITRuntime {
-  cache : CodeCache
-  memory : MemoryManager
-  mut compilations : Int
-  mut recompilations : Int
-}
+type JITRuntime
 pub fn JITRuntime::clear(Self) -> Unit
 pub fn JITRuntime::invalidate(Self, Int) -> Unit
 pub fn JITRuntime::lookup(Self, Int) -> CompiledFunction?
@@ -123,12 +101,7 @@ pub fn JITRuntime::register(Self, Int, CompiledFunction) -> Result[Int, String]
 pub fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
 pub impl Show for JITRuntime
 
-pub(all) struct MemoryManager {
-  regions : Array[ExecutableRegion]
-  default_region_size : Int
-  mut next_id : Int
-  mut current_region : Int?
-}
+type MemoryManager
 pub fn MemoryManager::alloc_region(Self, Int) -> ExecutableRegion
 pub fn MemoryManager::finalize_all(Self) -> Unit
 pub fn MemoryManager::get_current_region(Self) -> ExecutableRegion
@@ -156,10 +129,7 @@ pub fn PlatformABI::int_arg_regs(Self) -> Int
 pub fn PlatformABI::requires_16_byte_stack_align(Self) -> Bool
 pub impl Show for PlatformABI
 
-pub(all) struct VCodeBuilder {
-  func : @regalloc.VCodeFunction
-  mut current_block : @block.VCodeBlock?
-}
+type VCodeBuilder
 pub fn VCodeBuilder::add(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::add_param(Self, @abi.RegClass) -> @abi.VReg
 pub fn VCodeBuilder::add_result(Self, @abi.RegClass) -> Unit

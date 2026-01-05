@@ -77,7 +77,6 @@ fn intcc_swap(cc : Int) -> Int {
 /// eq(x, x) → 1
 fn rule_eq_self() -> RewriteRule {
   {
-    name: "eq_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -100,7 +99,6 @@ fn rule_eq_self() -> RewriteRule {
 /// ne(x, x) → 0
 fn rule_ne_self() -> RewriteRule {
   {
-    name: "ne_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -125,7 +123,6 @@ fn rule_ne_self() -> RewriteRule {
 /// Loose inequalities (sle, sge, ule, uge) are true
 fn rule_icmp_self() -> RewriteRule {
   {
-    name: "icmp_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -163,7 +160,6 @@ fn rule_icmp_self() -> RewriteRule {
 /// e.g. ne(ugt(x, y), 0) == ugt(x, y)
 fn rule_ne_icmp_zero() -> RewriteRule {
   {
-    name: "ne_icmp_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -229,7 +225,6 @@ fn rule_ne_icmp_zero() -> RewriteRule {
 /// e.g. eq(ugt(x, y), 0) == ule(x, y)
 fn rule_eq_icmp_zero() -> RewriteRule {
   {
-    name: "eq_icmp_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -319,7 +314,6 @@ fn rule_eq_icmp_zero() -> RewriteRule {
 /// e.g. ne(ugt(x, y), 1) == ule(x, y)
 fn rule_ne_icmp_one() -> RewriteRule {
   {
-    name: "ne_icmp_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -371,7 +365,6 @@ fn rule_ne_icmp_one() -> RewriteRule {
 /// e.g. eq(ugt(x, y), 1) == ugt(x, y)
 fn rule_eq_icmp_one() -> RewriteRule {
   {
-    name: "eq_icmp_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -414,7 +407,6 @@ fn rule_eq_icmp_one() -> RewriteRule {
 /// Masking comparison result with 1 is a no-op
 fn rule_band_icmp_one() -> RewriteRule {
   {
-    name: "band_icmp_one",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -485,7 +477,6 @@ fn rule_band_icmp_one() -> RewriteRule {
 /// ult(x, 0) → false
 fn rule_ult_zero() -> RewriteRule {
   {
-    name: "ult_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -512,7 +503,6 @@ fn rule_ult_zero() -> RewriteRule {
 /// ule(x, 0) → eq(x, 0)
 fn rule_ule_zero() -> RewriteRule {
   {
-    name: "ule_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -543,7 +533,6 @@ fn rule_ule_zero() -> RewriteRule {
 /// ugt(x, 0) → ne(x, 0)
 fn rule_ugt_zero() -> RewriteRule {
   {
-    name: "ugt_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -574,7 +563,6 @@ fn rule_ugt_zero() -> RewriteRule {
 /// uge(x, 0) → true
 fn rule_uge_zero() -> RewriteRule {
   {
-    name: "uge_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -605,7 +593,6 @@ fn rule_uge_zero() -> RewriteRule {
 /// uge(x, 1) → ne(x, 0)
 fn rule_uge_one_to_ne_zero() -> RewriteRule {
   {
-    name: "uge_one_to_ne_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -637,7 +624,6 @@ fn rule_uge_one_to_ne_zero() -> RewriteRule {
 /// ult(x, 1) → eq(x, 0)
 fn rule_ult_one_to_eq_zero() -> RewriteRule {
   {
-    name: "ult_one_to_eq_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -669,7 +655,6 @@ fn rule_ult_one_to_eq_zero() -> RewriteRule {
 /// sge(x, 1) → sgt(x, 0)
 fn rule_sge_one_to_sgt_zero() -> RewriteRule {
   {
-    name: "sge_one_to_sgt_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -701,7 +686,6 @@ fn rule_sge_one_to_sgt_zero() -> RewriteRule {
 /// slt(x, 1) → sle(x, 0)
 fn rule_slt_one_to_sle_zero() -> RewriteRule {
   {
-    name: "slt_one_to_sle_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -733,7 +717,6 @@ fn rule_slt_one_to_sle_zero() -> RewriteRule {
 /// sgt(x, -1) → sge(x, 0)
 fn rule_sgt_neg_one_to_sge_zero() -> RewriteRule {
   {
-    name: "sgt_neg_one_to_sge_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -765,7 +748,6 @@ fn rule_sgt_neg_one_to_sge_zero() -> RewriteRule {
 /// sle(x, -1) → slt(x, 0)
 fn rule_sle_neg_one_to_slt_zero() -> RewriteRule {
   {
-    name: "sle_neg_one_to_slt_zero",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -802,7 +784,6 @@ fn rule_sle_neg_one_to_slt_zero() -> RewriteRule {
 /// Adding same value to both sides doesn't change equality
 fn rule_eq_add_cancel() -> RewriteRule {
   {
-    name: "eq_add_cancel",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -861,7 +842,6 @@ fn rule_eq_add_cancel() -> RewriteRule {
 /// ne(a+k, b+k) → ne(a, b)
 fn rule_ne_add_cancel() -> RewriteRule {
   {
-    name: "ne_add_cancel",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -922,7 +902,6 @@ fn rule_ne_add_cancel() -> RewriteRule {
 /// eq(x, bxor(x, y)) → eq(y, 0)
 fn rule_eq_xor_self() -> RewriteRule {
   {
-    name: "eq_xor_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -989,7 +968,6 @@ fn rule_eq_xor_self() -> RewriteRule {
 /// ne(x, bxor(x, y)) → ne(y, 0)
 fn rule_ne_xor_self() -> RewriteRule {
   {
-    name: "ne_xor_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1059,7 +1037,6 @@ fn rule_ne_xor_self() -> RewriteRule {
 /// Unsigned overflow detection pattern
 fn rule_ugt_sub_self() -> RewriteRule {
   {
-    name: "ugt_sub_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1094,7 +1071,6 @@ fn rule_ugt_sub_self() -> RewriteRule {
 /// ule(x - y, x) → ule(y, x)
 fn rule_ule_sub_self() -> RewriteRule {
   {
-    name: "ule_sub_self",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1133,7 +1109,6 @@ fn rule_ule_sub_self() -> RewriteRule {
 /// ult(bnot(x), bnot(y)) → ugt(x, y)
 fn rule_ult_bnot_swap() -> RewriteRule {
   {
-    name: "ult_bnot_swap",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1168,7 +1143,6 @@ fn rule_ult_bnot_swap() -> RewriteRule {
 /// slt(bnot(x), bnot(y)) → sgt(x, y)
 fn rule_slt_bnot_swap() -> RewriteRule {
   {
-    name: "slt_bnot_swap",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1208,7 +1182,6 @@ fn rule_slt_bnot_swap() -> RewriteRule {
 /// a < b ^^ a > b => (a ≠ b)
 fn rule_xor_cmp_to_ne() -> RewriteRule {
   {
-    name: "xor_cmp_to_ne",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1276,7 +1249,6 @@ fn rule_xor_cmp_to_ne() -> RewriteRule {
 /// a < b && a > b = false
 fn rule_band_contradictory_cmp() -> RewriteRule {
   {
-    name: "band_contradictory_cmp",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1331,7 +1303,6 @@ fn rule_band_contradictory_cmp() -> RewriteRule {
 /// eq(x + k1, k2) → eq(x, k2 - k1)
 fn rule_eq_add_const() -> RewriteRule {
   {
-    name: "eq_add_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1363,7 +1334,6 @@ fn rule_eq_add_const() -> RewriteRule {
 /// ne(x + k1, k2) → ne(x, k2 - k1)
 fn rule_ne_add_const() -> RewriteRule {
   {
-    name: "ne_add_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1395,7 +1365,6 @@ fn rule_ne_add_const() -> RewriteRule {
 /// eq(x - k1, k2) → eq(x, k2 + k1)
 fn rule_eq_sub_const() -> RewriteRule {
   {
-    name: "eq_sub_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1427,7 +1396,6 @@ fn rule_eq_sub_const() -> RewriteRule {
 /// ne(x - k1, k2) → ne(x, k2 + k1)
 fn rule_ne_sub_const() -> RewriteRule {
   {
-    name: "ne_sub_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1463,7 +1431,6 @@ fn rule_ne_sub_const() -> RewriteRule {
 /// select(uextend(icmp(...)), x, y) → select(icmp(...), x, y)
 fn rule_select_uextend_icmp() -> RewriteRule {
   {
-    name: "select_uextend_icmp",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1507,7 +1474,6 @@ fn rule_select_uextend_icmp() -> RewriteRule {
 /// Canonical form: push constants to the right
 fn rule_icmp_swap_const() -> RewriteRule {
   {
-    name: "icmp_swap_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1567,7 +1533,6 @@ fn rule_icmp_swap_const() -> RewriteRule {
 /// eq(x + K1, y + K2) → eq(x, y + (K2 - K1))
 fn rule_eq_add_add_const() -> RewriteRule {
   {
-    name: "eq_add_add_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1604,7 +1569,6 @@ fn rule_eq_add_add_const() -> RewriteRule {
 /// ne(x + K1, y + K2) → ne(x, y + (K2 - K1))
 fn rule_ne_add_add_const() -> RewriteRule {
   {
-    name: "ne_add_add_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1647,7 +1611,6 @@ fn rule_ne_add_add_const() -> RewriteRule {
 /// Nothing can be greater than the maximum unsigned value
 fn rule_ugt_umax() -> RewriteRule {
   {
-    name: "ugt_umax",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1678,7 +1641,6 @@ fn rule_ugt_umax() -> RewriteRule {
 /// Only UMAX is >= UMAX
 fn rule_uge_umax() -> RewriteRule {
   {
-    name: "uge_umax",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1711,7 +1673,6 @@ fn rule_uge_umax() -> RewriteRule {
 /// Everything is <= UMAX
 fn rule_ule_umax() -> RewriteRule {
   {
-    name: "ule_umax",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1741,7 +1702,6 @@ fn rule_ule_umax() -> RewriteRule {
 /// Nothing can be greater than the maximum signed value
 fn rule_sgt_smax() -> RewriteRule {
   {
-    name: "sgt_smax",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1771,7 +1731,6 @@ fn rule_sgt_smax() -> RewriteRule {
 /// Only SMAX is >= SMAX
 fn rule_sge_smax() -> RewriteRule {
   {
-    name: "sge_smax",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1804,7 +1763,6 @@ fn rule_sge_smax() -> RewriteRule {
 /// Nothing can be less than the minimum signed value
 fn rule_slt_smin() -> RewriteRule {
   {
-    name: "slt_smin",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1834,7 +1792,6 @@ fn rule_slt_smin() -> RewriteRule {
 /// Only SMIN is <= SMIN
 fn rule_sle_smin() -> RewriteRule {
   {
-    name: "sle_smin",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1867,7 +1824,6 @@ fn rule_sle_smin() -> RewriteRule {
 /// Everything is >= SMIN
 fn rule_sge_smin() -> RewriteRule {
   {
-    name: "sge_smin",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -1897,7 +1853,6 @@ fn rule_sge_smin() -> RewriteRule {
 /// Everything is <= SMAX
 fn rule_sle_smax() -> RewriteRule {
   {
-    name: "sle_smax",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

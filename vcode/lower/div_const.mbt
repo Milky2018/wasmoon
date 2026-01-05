@@ -4,7 +4,7 @@
 
 ///|
 /// Magic numbers for unsigned 32-bit division
-pub(all) struct MagicU32 {
+priv struct MagicU32 {
   mul_by : UInt
   do_add : Bool
   shift_by : Int
@@ -12,7 +12,7 @@ pub(all) struct MagicU32 {
 
 ///|
 /// Magic numbers for unsigned 64-bit division
-pub(all) struct MagicU64 {
+priv struct MagicU64 {
   mul_by : UInt64
   do_add : Bool
   shift_by : Int
@@ -20,14 +20,14 @@ pub(all) struct MagicU64 {
 
 ///|
 /// Magic numbers for signed 32-bit division
-pub(all) struct MagicS32 {
+priv struct MagicS32 {
   mul_by : Int
   shift_by : Int
 }
 
 ///|
 /// Magic numbers for signed 64-bit division
-pub(all) struct MagicS64 {
+priv struct MagicS64 {
   mul_by : Int64
   shift_by : Int
 }
@@ -35,7 +35,7 @@ pub(all) struct MagicS64 {
 ///|
 /// Compute magic numbers for unsigned 32-bit division by constant d
 /// Requires: d != 0 && d != 1
-pub fn magic_u32(d : UInt) -> MagicU32 {
+fn magic_u32(d : UInt) -> MagicU32 {
   let mut do_add = false
   let mut p = 31
   // nc = (2^32 - 1) - (2^32 - 1) % d = largest multiple of d <= 2^32 - 1
@@ -77,7 +77,7 @@ pub fn magic_u32(d : UInt) -> MagicU32 {
 ///|
 /// Compute magic numbers for unsigned 64-bit division by constant d
 /// Requires: d != 0 && d != 1
-pub fn magic_u64(d : UInt64) -> MagicU64 {
+fn magic_u64(d : UInt64) -> MagicU64 {
   let mut do_add = false
   let mut p = 63
   let nc = 0xFFFFFFFFFFFFFFFFUL - (0UL - d) % d
@@ -118,7 +118,7 @@ pub fn magic_u64(d : UInt64) -> MagicU64 {
 ///|
 /// Compute magic numbers for signed 32-bit division by constant d
 /// Requires: d != -1 && d != 0 && d != 1
-pub fn magic_s32(d : Int) -> MagicS32 {
+fn magic_s32(d : Int) -> MagicS32 {
   let two31 = 0x80000000U
   let mut p = 31
   let ad = if d < 0 {
@@ -162,7 +162,7 @@ pub fn magic_s32(d : Int) -> MagicS32 {
 ///|
 /// Compute magic numbers for signed 64-bit division by constant d
 /// Requires: d != -1 && d != 0 && d != 1
-pub fn magic_s64(d : Int64) -> MagicS64 {
+fn magic_s64(d : Int64) -> MagicS64 {
   let two63 = 0x8000000000000000UL
   let mut p = 63
   let ad = if d < 0L {

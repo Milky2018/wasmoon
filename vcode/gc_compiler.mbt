@@ -20,7 +20,7 @@
 
 ///|
 /// Information about a GC safepoint in generated code
-pub(all) struct GcSafepoint {
+pub struct GcSafepoint {
   /// Offset in generated machine code where this safepoint is
   code_offset : Int
   /// Which virtual registers contain live GC references at this point
@@ -31,7 +31,7 @@ pub(all) struct GcSafepoint {
 
 ///|
 /// GC compiler capabilities - what features does this GC need?
-pub(all) struct GcCompilerConfig {
+pub struct GcCompilerConfig {
   /// Does this GC need write barriers?
   needs_write_barriers : Bool
   /// Does this GC need read barriers?

@@ -3,7 +3,6 @@
 ///|
 fn rule_mul_pow2() -> RewriteRule {
   {
-    name: "mul_pow2",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -37,7 +36,6 @@ fn rule_mul_pow2() -> RewriteRule {
 /// x + x = x * 2 = x << 1
 fn rule_double() -> RewriteRule {
   {
-    name: "double",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -60,7 +58,6 @@ fn rule_double() -> RewriteRule {
 /// Constant folding for binary and unary operations
 fn rule_const_fold() -> RewriteRule {
   {
-    name: "const_fold",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -223,7 +220,6 @@ fn bitrev64(x : Int64) -> Int64 {
 /// (a | c1) | c2 = a | (c1 | c2) - reassociate or constants
 fn rule_reassoc_or_const() -> RewriteRule {
   {
-    name: "reassoc_or_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -252,7 +248,6 @@ fn rule_reassoc_or_const() -> RewriteRule {
 /// (a & c1) & c2 = a & (c1 & c2) - reassociate and constants
 fn rule_reassoc_and_const() -> RewriteRule {
   {
-    name: "reassoc_and_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -281,7 +276,6 @@ fn rule_reassoc_and_const() -> RewriteRule {
 /// (a ^ c1) ^ c2 = a ^ (c1 ^ c2) - reassociate xor constants
 fn rule_reassoc_xor_const() -> RewriteRule {
   {
-    name: "reassoc_xor_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -310,7 +304,6 @@ fn rule_reassoc_xor_const() -> RewriteRule {
 /// (a + c1) + c2 = a + (c1 + c2) - reassociate constants
 fn rule_reassoc_add_const() -> RewriteRule {
   {
-    name: "reassoc_add_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -342,7 +335,6 @@ fn rule_reassoc_add_const() -> RewriteRule {
 /// (sub (add x k1) k2) = add x (k1 - k2) when k1 > k2
 fn rule_reassoc_sub_add_const() -> RewriteRule {
   {
-    name: "reassoc_sub_add_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -371,7 +363,6 @@ fn rule_reassoc_sub_add_const() -> RewriteRule {
 /// (add (sub x k1) k2) = add x (k2 - k1)
 fn rule_reassoc_add_sub_const() -> RewriteRule {
   {
-    name: "reassoc_add_sub_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -400,7 +391,6 @@ fn rule_reassoc_add_sub_const() -> RewriteRule {
 /// (sub (sub k1 x) k2) = sub (k1 - k2) x
 fn rule_reassoc_sub_sub_const_left() -> RewriteRule {
   {
-    name: "reassoc_sub_sub_const_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -429,7 +419,6 @@ fn rule_reassoc_sub_sub_const_left() -> RewriteRule {
 /// (add (sub k1 x) k2) = sub (k1 + k2) x
 fn rule_reassoc_add_sub_const_left() -> RewriteRule {
   {
-    name: "reassoc_add_sub_const_left",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -458,7 +447,6 @@ fn rule_reassoc_add_sub_const_left() -> RewriteRule {
 /// Shift reassociation: ((A shl b) shl C) => ((A shl C) shl b) when A is const
 fn rule_reassoc_shl_const() -> RewriteRule {
   {
-    name: "reassoc_shl_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -491,7 +479,6 @@ fn rule_reassoc_shl_const() -> RewriteRule {
 /// Shift reassociation: ((A ushr b) ushr C) => ((A ushr C) ushr b) when A is const
 fn rule_reassoc_ushr_const() -> RewriteRule {
   {
-    name: "reassoc_ushr_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -525,7 +512,6 @@ fn rule_reassoc_ushr_const() -> RewriteRule {
 /// Shift reassociation: ((A sshr b) sshr C) => ((A sshr C) sshr b) when A is const
 fn rule_reassoc_sshr_const() -> RewriteRule {
   {
-    name: "reassoc_sshr_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -560,7 +546,6 @@ fn rule_reassoc_sshr_const() -> RewriteRule {
 /// select(0, _, y) -> y
 fn rule_select_const() -> RewriteRule {
   {
-    name: "select_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -587,7 +572,6 @@ fn rule_select_const() -> RewriteRule {
 /// This helps simplify patterns like x - (-5) -> x + 5
 fn rule_sub_neg_const() -> RewriteRule {
   {
-    name: "sub_neg_const",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -613,7 +597,6 @@ fn rule_sub_neg_const() -> RewriteRule {
 /// where B and D are constants
 fn rule_rebalance_add_consts() -> RewriteRule {
   {
-    name: "rebalance_add_consts",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -647,7 +630,6 @@ fn rule_rebalance_add_consts() -> RewriteRule {
 /// Tree rebalancing for mul: ((a * B) * (c * D)) -> ((a * c) * (B * D))
 fn rule_rebalance_mul_consts() -> RewriteRule {
   {
-    name: "rebalance_mul_consts",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -680,7 +662,6 @@ fn rule_rebalance_mul_consts() -> RewriteRule {
 /// Tree rebalancing for and: ((a & B) & (c & D)) -> ((a & c) & (B & D))
 fn rule_rebalance_and_consts() -> RewriteRule {
   {
-    name: "rebalance_and_consts",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -713,7 +694,6 @@ fn rule_rebalance_and_consts() -> RewriteRule {
 /// Tree rebalancing for or: ((a | B) | (c | D)) -> ((a | c) | (B | D))
 fn rule_rebalance_or_consts() -> RewriteRule {
   {
-    name: "rebalance_or_consts",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -746,7 +726,6 @@ fn rule_rebalance_or_consts() -> RewriteRule {
 /// Tree rebalancing for xor: ((a ^ B) ^ (c ^ D)) -> ((a ^ c) ^ (B ^ D))
 fn rule_rebalance_xor_consts() -> RewriteRule {
   {
-    name: "rebalance_xor_consts",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

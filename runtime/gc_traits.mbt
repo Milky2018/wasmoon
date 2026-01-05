@@ -82,7 +82,7 @@ pub(open) trait GcHeap {
 
 ///|
 /// GC statistics
-pub(all) struct GcStats {
+pub struct GcStats {
   /// Total allocated objects (including freed slots)
   total_slots : Int
   /// Currently live objects

@@ -90,19 +90,17 @@ fn opcode_to_pattern(opcode : @ir.Opcode) -> PatternOpcode? {
 
 ///|
 /// Result of a pattern match - captured values and constants
-pub(all) struct MatchResult {
+struct MatchResult {
   // Captured IR values (in order of appearance in pattern)
   values : Array[@ir.Value]
   // Captured constants
   int_consts : Array[Int64]
   float_consts : Array[Double]
-  // The matched instruction
-  mut matched_inst : @ir.Inst?
 }
 
 ///|
 fn MatchResult::new() -> MatchResult {
-  { values: [], int_consts: [], float_consts: [], matched_inst: None }
+  { values: [], int_consts: [], float_consts: [] }
 }
 
 ///|
@@ -130,7 +128,6 @@ pub fn match_pattern(
   ctx : LoweringContext,
 ) -> MatchResult? {
   let result = MatchResult::new()
-  result.matched_inst = Some(inst)
   if match_pattern_impl(pattern, inst, ctx, result) {
     Some(result)
   } else {
@@ -346,7 +343,7 @@ fn is_power_of_2(val : Int64) -> Int? {
 
 ///|
 /// A rewrite rule - matches a pattern and produces optimized VCode
-pub(all) struct RewriteRule {
+struct RewriteRule {
   name : String
   pattern : Pattern
   // Priority - higher priority rules are tried first

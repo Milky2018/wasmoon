@@ -76,7 +76,7 @@ pub fn validate_function(Function) -> ValidationResult
 // Errors
 
 // Types and methods
-pub(all) struct Block {
+pub struct Block {
   id : Int
   params : Array[(Value, Type)]
   instructions : Array[Inst]
@@ -87,9 +87,7 @@ pub fn Block::add_param(Self, Value, Type) -> Unit
 pub fn Block::set_terminator(Self, Terminator) -> Unit
 pub impl Show for Block
 
-type BlockFrame
-
-pub(all) struct CFG {
+pub struct CFG {
   num_blocks : Int
   successors : Array[Array[Int]]
   predecessors : Array[Array[Int]]
@@ -108,13 +106,7 @@ pub fn CFG::postorder(Self) -> Array[Int]
 pub fn CFG::reverse_postorder(Self) -> Array[Int]
 pub fn CFG::to_dot(Self, String) -> String
 
-pub(all) struct EGraphBuilder {
-  egraph : @egraph.EGraph
-  value_map : Map[Int, @egraph.EClassId]
-  class_to_value : Map[Int, Value]
-  def_map : Map[Int, Inst]
-  ruleset : @egraph.IndexedRuleSet
-}
+type EGraphBuilder
 pub fn EGraphBuilder::add_value(Self, Value) -> @egraph.EClassId
 pub fn EGraphBuilder::extract(Self, Value) -> (Int, @egraph.ENode)?
 pub fn EGraphBuilder::get_egraph(Self) -> @egraph.EGraph
@@ -134,10 +126,7 @@ pub(all) enum FloatCC {
 }
 pub impl Show for FloatCC
 
-pub(all) struct FuncEnvironment {
-  global_types : Array[@types.GlobalType]
-  mut memory_trap_block : Block?
-}
+type FuncEnvironment
 pub fn FuncEnvironment::emit_bounds_check(Self, IRBuilder, Value, Int, Value, Int64, Int) -> Value
 pub fn FuncEnvironment::new(Array[@types.GlobalType]) -> Self
 pub fn FuncEnvironment::translate_global_get(Self, IRBuilder, Value, Int) -> Value
@@ -154,7 +143,7 @@ pub fn FuncEnvironment::translate_table_get(Self, IRBuilder, Value, Int, Value, 
 pub fn FuncEnvironment::translate_table_set(Self, IRBuilder, Value, Int, Value, Value, is_table64? : Bool) -> Unit
 pub fn FuncEnvironment::translate_table_size(Self, IRBuilder, Value, Int, is_table64? : Bool) -> Value
 
-pub(all) struct Function {
+pub struct Function {
   name : String
   params : Array[(Value, Type)]
   results : Array[Type]
@@ -170,10 +159,7 @@ pub fn Function::new_value(Self, Type) -> Value
 pub fn Function::print(Self) -> String
 pub impl Show for Function
 
-pub(all) struct IRBuilder {
-  func : Function
-  mut current_block : Block?
-}
+type IRBuilder
 pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
 pub fn IRBuilder::add_param(Self, Type) -> Value
 pub fn IRBuilder::add_result(Self, Type) -> Unit
@@ -347,7 +333,7 @@ pub fn IRBuilder::v128_to_i32(Self, Opcode, Value) -> Value
 pub fn IRBuilder::v128_unary(Self, Opcode, Value) -> Value
 pub fn IRBuilder::v128_xor(Self, Value, Value) -> Value
 
-pub(all) struct Inst {
+pub struct Inst {
   result : Value?
   extra_results : Array[Value]
   mut opcode : Opcode
@@ -371,7 +357,7 @@ pub(all) enum IntCC {
 }
 pub impl Show for IntCC
 
-pub(all) struct Loop {
+pub struct Loop {
   header : Int
   blocks : Array[Int]
   back_edges : Array[(Int, Int)]
@@ -750,7 +736,7 @@ pub enum OptLevel {
 }
 pub fn OptLevel::from_int(Int) -> Self
 
-pub(all) struct OptResult {
+pub struct OptResult {
   mut changed : Bool
 }
 pub fn OptResult::mark_changed(Self) -> Unit
@@ -766,34 +752,7 @@ pub enum Terminator {
 }
 pub impl Show for Terminator
 
-pub(all) struct Translator {
-  builder : IRBuilder
-  value_stack : Array[Value]
-  locals : Array[Value]
-  block_stack : Array[BlockFrame]
-  func_types : Array[@types.FuncType]
-  func_type_indices : Array[Int]
-  num_imports : Int
-  import_func_type_indices : Array[Int]
-  mut is_unreachable : Bool
-  mut return_continuation : Block?
-  func_result_types : Array[Type]
-  memory_max : Int?
-  memory_is_64 : Array[Bool]
-  table_base_offsets : Array[Int]
-  table_sizes : Array[Int]
-  global_types : Array[@types.GlobalType]
-  num_wasm_params : Int
-  canonical_type_indices : Array[Int]
-  func_base : Int
-  import_remap : Array[Int]
-  module_types : Array[@types.SubType]
-  vmctx : Value
-  func_env : FuncEnvironment
-  tags : Array[@types.TagType]
-  mut try_table_depth : Int
-  table_is_64 : Array[Bool]
-}
+type Translator
 pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
@@ -809,13 +768,13 @@ pub(all) enum Type {
 pub fn Type::from_wasm(@types.ValueType) -> Self
 pub impl Show for Type
 
-pub(all) struct ValidationResult {
+pub struct ValidationResult {
   mut valid : Bool
   errors : Array[String]
 }
 pub fn ValidationResult::new() -> Self
 
-pub(all) struct Value {
+pub struct Value {
   id : Int
   ty : Type
 }

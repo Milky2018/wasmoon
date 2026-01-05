@@ -6,7 +6,6 @@
 /// Only folds when the result is not NaN (except fneg/fabs/fcopysign)
 fn rule_fconst_fold_binary() -> RewriteRule {
   {
-    name: "fconst_fold_binary",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -89,7 +88,6 @@ fn rule_fconst_fold_binary() -> RewriteRule {
 /// Float constant folding for unary operations
 fn rule_fconst_fold_unary() -> RewriteRule {
   {
-    name: "fconst_fold_unary",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -159,7 +157,6 @@ fn rule_fconst_fold_unary() -> RewriteRule {
 /// fneg(fneg(x)) = x (double negation)
 fn rule_fneg_fneg() -> RewriteRule {
   {
-    name: "fneg_fneg",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -182,7 +179,6 @@ fn rule_fneg_fneg() -> RewriteRule {
 /// fabs(fneg(x)) = fabs(x)
 fn rule_fabs_fneg() -> RewriteRule {
   {
-    name: "fabs_fneg",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -206,7 +202,6 @@ fn rule_fabs_fneg() -> RewriteRule {
 /// fabs(fabs(x)) = fabs(x) (idempotent)
 fn rule_fabs_fabs() -> RewriteRule {
   {
-    name: "fabs_fabs",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -230,7 +225,6 @@ fn rule_fabs_fabs() -> RewriteRule {
 /// This is the reverse direction
 fn rule_fneg_fabs() -> RewriteRule {
   {
-    name: "fneg_fabs",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {

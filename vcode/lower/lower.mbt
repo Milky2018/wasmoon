@@ -9,7 +9,7 @@
 
 ///|
 /// Lowering context - tracks state during IR to VCode conversion
-pub(all) struct LoweringContext {
+struct LoweringContext {
   ir_func : @ir.Function
   vcode_func : @regalloc.VCodeFunction
   // Map from IR Value id to @abi.VReg

@@ -43,7 +43,7 @@ pub(all) struct CallStackEntry {
   func_name : String?
 }
 
-pub(all) struct ExnInstance {
+pub struct ExnInstance {
   tag_addr : Int
   values : Array[@types.Value]
 }
@@ -84,7 +84,7 @@ pub(all) enum GCObject {
 }
 pub impl Show for GCObject
 
-pub(all) struct GCStats {
+pub struct GCStats {
   total_objects : Int
   live_objects : Int
   free_slots : Int
@@ -92,7 +92,7 @@ pub(all) struct GCStats {
 }
 pub impl Show for GCStats
 
-pub(all) struct GcStats {
+pub struct GcStats {
   total_slots : Int
   live_objects : Int
   free_slots : Int
@@ -109,9 +109,7 @@ pub fn GlobalInstance::new(@types.GlobalType, @types.Value) -> Self
 pub fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
 pub impl Show for GlobalInstance
 
-pub(all) struct Imports {
-  entries : Array[(String, String, ExternVal)]
-}
+type Imports
 pub fn Imports::add_func(Self, String, String, Int) -> Unit
 pub fn Imports::add_global(Self, String, String, Int) -> Unit
 pub fn Imports::add_memory(Self, String, String, Int) -> Unit
@@ -120,10 +118,7 @@ pub fn Imports::add_tag(Self, String, String, Int) -> Unit
 pub fn Imports::new() -> Self
 pub fn Imports::resolve(Self, String, String) -> ExternVal?
 
-pub(all) struct Linker {
-  store : Store
-  modules : Array[(String, ModuleInstance)]
-}
+type Linker
 pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit
 pub fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit
 pub fn Linker::add_memory(Self, String, String, Memory) -> Unit
@@ -240,7 +235,7 @@ pub fn ModuleInstance::get_struct_type(Self, Int) -> @types.StructType
 pub fn ModuleInstance::new() -> Self
 pub impl Show for ModuleInstance
 
-pub(all) struct RuntimeErrorContext {
+pub struct RuntimeErrorContext {
   error : RuntimeError
   call_stack : Array[CallStackEntry]
   instruction : String?

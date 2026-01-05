@@ -8,7 +8,6 @@
 /// Note: This is only valid for unsigned division
 fn rule_udiv_pow2() -> RewriteRule {
   {
-    name: "udiv_pow2",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -32,7 +31,6 @@ fn rule_udiv_pow2() -> RewriteRule {
 /// x % 2^n = x & (2^n - 1) (for unsigned)
 fn rule_urem_pow2() -> RewriteRule {
   {
-    name: "urem_pow2",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -56,7 +54,6 @@ fn rule_urem_pow2() -> RewriteRule {
 /// x * 3 = (x << 1) + x
 fn rule_mul_3() -> RewriteRule {
   {
-    name: "mul_3",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -85,7 +82,6 @@ fn rule_mul_3() -> RewriteRule {
 /// x * 5 = (x << 2) + x
 fn rule_mul_5() -> RewriteRule {
   {
-    name: "mul_5",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -114,7 +110,6 @@ fn rule_mul_5() -> RewriteRule {
 /// x * 7 = (x << 3) - x
 fn rule_mul_7() -> RewriteRule {
   {
-    name: "mul_7",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
@@ -143,7 +138,6 @@ fn rule_mul_7() -> RewriteRule {
 /// x * 9 = (x << 3) + x
 fn rule_mul_9() -> RewriteRule {
   {
-    name: "mul_9",
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
