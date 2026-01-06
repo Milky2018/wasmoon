@@ -259,6 +259,18 @@ fn validate_instruction(
           "MemoryCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
         )
       }
+    MemoryInit(_, _) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "MemoryInit expects 3 operands (dst, src, size), got \{inst.operands.length()}",
+        )
+      }
+    DataDrop(_) =>
+      if inst.operands.length() != 0 {
+        result.add_error(
+          "DataDrop expects 0 operands, got \{inst.operands.length()}",
+        )
+      }
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
@@ -266,6 +278,30 @@ fn validate_instruction(
       if inst.operands.length() != 2 {
         result.add_error(
           "TableGrow expects 2 operands (delta, init_value), got \{inst.operands.length()}",
+        )
+      }
+    TableFill(_) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "TableFill expects 3 operands (dst, val, size), got \{inst.operands.length()}",
+        )
+      }
+    TableCopy(_, _) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "TableCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
+        )
+      }
+    TableInit(_, _) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "TableInit expects 3 operands (dst, src, size), got \{inst.operands.length()}",
+        )
+      }
+    ElemDrop(_) =>
+      if inst.operands.length() != 0 {
+        result.add_error(
+          "ElemDrop expects 0 operands, got \{inst.operands.length()}",
         )
       }
 
@@ -372,6 +408,30 @@ fn validate_instruction(
       if inst.operands.length() != 5 {
         result.add_error(
           "ArrayCopy expects 5 operands (dst, dst_offset, src, src_offset, count), got \{inst.operands.length()}",
+        )
+      }
+    ArrayNewData(_, _) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "ArrayNewData expects 2 operands (data_offset, length), got \{inst.operands.length()}",
+        )
+      }
+    ArrayNewElem(_, _) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "ArrayNewElem expects 2 operands (elem_offset, length), got \{inst.operands.length()}",
+        )
+      }
+    ArrayInitData(_, _) =>
+      if inst.operands.length() != 4 {
+        result.add_error(
+          "ArrayInitData expects 4 operands (arrayref, arr_offset, data_offset, length), got \{inst.operands.length()}",
+        )
+      }
+    ArrayInitElem(_, _) =>
+      if inst.operands.length() != 4 {
+        result.add_error(
+          "ArrayInitElem expects 4 operands (arrayref, arr_offset, elem_offset, length), got \{inst.operands.length()}",
         )
       }
 

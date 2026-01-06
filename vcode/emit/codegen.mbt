@@ -1484,6 +1484,10 @@ fn MachineCode::emit_instruction(
         ArrayLen => @jit_ffi.c_jit_get_gc_array_len_ptr()
         ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
         ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
+        ArrayNewData => @jit_ffi.c_jit_get_gc_array_new_data_ptr()
+        ArrayNewElem => @jit_ffi.c_jit_get_gc_array_new_elem_ptr()
+        ArrayInitData => @jit_ffi.c_jit_get_gc_array_init_data_ptr()
+        ArrayInitElem => @jit_ffi.c_jit_get_gc_array_init_elem_ptr()
         TypeCheckSubtype => @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
         // Inline allocation support (ctx-passing)
         RegisterStructInline =>
@@ -1503,7 +1507,13 @@ fn MachineCode::emit_instruction(
         MemorySize => @jit_ffi.c_jit_get_memory_size_ptr()
         MemoryFill => @jit_ffi.c_jit_get_memory_fill_ptr()
         MemoryCopy => @jit_ffi.c_jit_get_memory_copy_ptr()
+        MemoryInit => @jit_ffi.c_jit_get_memory_init_ptr()
+        DataDrop => @jit_ffi.c_jit_get_data_drop_ptr()
         TableGrow => @jit_ffi.c_jit_get_table_grow_ptr()
+        TableFill => @jit_ffi.c_jit_get_table_fill_ptr()
+        TableCopy => @jit_ffi.c_jit_get_table_copy_ptr()
+        TableInit => @jit_ffi.c_jit_get_table_init_ptr()
+        ElemDrop => @jit_ffi.c_jit_get_elem_drop_ptr()
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }

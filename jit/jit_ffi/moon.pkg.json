@@ -5,6 +5,7 @@
     "exec_mem.c",
     "jit_context.c",
     "memory_ops.c",
+    "segment_ops.c",
     "gc_type_cache.c",
     "gc_ops.c",
     "gc_heap.c",

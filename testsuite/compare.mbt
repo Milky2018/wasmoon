@@ -418,6 +418,13 @@ pub fn run_jit(
     // Initialize indirect table for call_indirect support
     init_elem_segments(mod_, jm, [])
 
+    // Set up data segments for memory.init and data.drop
+    @jit.setup_data_segments(mod_.datas)
+
+    // Set up element segment values for table.init and elem.drop
+    let elem_values = extract_elem_segment_values(mod_)
+    @jit.setup_elem_segments(elem_values)
+
     // Set up GC heap for GC operations (struct, array, i31)
     let c_heap = @jit.CHeap::new()
     let canonical_indices = @types.compute_canonical_type_indices(
@@ -431,6 +438,7 @@ pub fn run_jit(
     // Call the target function
     guard jm.get_func_by_name(func_name) is Some(f) else {
       @jit.gc_teardown()
+      @jit.clear_segments()
       return Err("Failed to get JIT function")
     }
     // Encode args with type context for correct null handling
@@ -445,19 +453,43 @@ pub fn run_jit(
     }
     let raw_results = jm.call_with_context(f, jit_args)
 
-    // Tear down GC context after JIT call
+    // Tear down GC context and segments after JIT call
     @jit.gc_teardown()
+    @jit.clear_segments()
 
     // Convert to Values
     let values = jit_results_to_values(raw_results, result_types)
     Ok(values)
   } catch {
     e => {
-      // Ensure GC teardown on error path
+      // Ensure GC teardown and segment cleanup on error path
       @jit.gc_teardown()
+      @jit.clear_segments()
       Err("JIT error: \{e}")
     }
   }
+}
+
+///|
+/// Extract element segment values for JIT segment setup
+/// Returns an array of Int64 arrays, one per element segment
+/// Each Int64 is a function index or -1 for null
+fn extract_elem_segment_values(mod_ : @types.Module) -> Array[Array[Int64]] {
+  let result : Array[Array[Int64]] = []
+  for elem in mod_.elems {
+    let values : Array[Int64] = []
+    for init_expr in elem.init {
+      let func_idx : Int64 = match init_expr {
+        [RefFunc(idx)] => idx.to_int64()
+        [I32Const(idx)] => idx.to_int64()
+        [RefNull(_)] => -1L // null reference
+        _ => -1L
+      }
+      values.push(func_idx)
+    }
+    result.push(values)
+  }
+  result
 }
 
 ///|
@@ -651,6 +683,28 @@ fn format_values(vals : Array[@types.Value]) -> String {
     parts.push(v.to_string())
   }
   parts.join(", ")
+}
+
+///|
+/// Helper to run interpreter only (no JIT comparison)
+/// Useful for testing instructions that JIT doesn't fully support yet
+pub fn run_interp_only(
+  source : String,
+  func_name : String,
+  args : Array[@types.Value],
+) -> Result[Array[@types.Value], String] {
+  try {
+    let mod_ = @wat.parse(source) catch {
+      e => return Err("Failed to parse WAT: \{e}")
+    }
+    let linker = @runtime.Linker::new()
+    let store = linker.get_store()
+    let instance = @executor.instantiate_with_linker(linker, "test", mod_)
+    let result = @executor.call_exported_func(store, instance, func_name, args)
+    Ok(result)
+  } catch {
+    e => Err("Interpreter error: \{e}")
+  }
 }
 
 ///|

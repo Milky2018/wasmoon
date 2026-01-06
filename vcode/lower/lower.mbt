@@ -522,11 +522,23 @@ fn lower_inst(
       lower_memory_fill(ctx, inst, block, memidx)
     @ir.Opcode::MemoryCopy(dst_memidx, src_memidx) =>
       lower_memory_copy(ctx, inst, block, dst_memidx, src_memidx)
+    @ir.Opcode::MemoryInit(memidx, data_idx) =>
+      lower_memory_init(ctx, inst, block, memidx, data_idx)
+    @ir.Opcode::DataDrop(data_idx) =>
+      lower_data_drop(ctx, inst, block, data_idx)
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
     @ir.Opcode::TableGrow(table_idx) =>
       lower_table_grow(ctx, inst, block, table_idx)
+    @ir.Opcode::TableFill(table_idx) =>
+      lower_table_fill(ctx, inst, block, table_idx)
+    @ir.Opcode::TableCopy(dst_table_idx, src_table_idx) =>
+      lower_table_copy(ctx, inst, block, dst_table_idx, src_table_idx)
+    @ir.Opcode::TableInit(table_idx, elem_idx) =>
+      lower_table_init(ctx, inst, block, table_idx, elem_idx)
+    @ir.Opcode::ElemDrop(elem_idx) =>
+      lower_elem_drop(ctx, inst, block, elem_idx)
 
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment at IR level
 
@@ -598,6 +610,14 @@ fn lower_inst(
       lower_array_fill(ctx, inst, block, type_idx)
     @ir.Opcode::ArrayCopy(dst_type, src_type) =>
       lower_array_copy(ctx, inst, block, dst_type, src_type)
+    @ir.Opcode::ArrayNewData(type_idx, data_idx) =>
+      lower_array_new_data(ctx, inst, block, type_idx, data_idx)
+    @ir.Opcode::ArrayNewElem(type_idx, elem_idx) =>
+      lower_array_new_elem(ctx, inst, block, type_idx, elem_idx)
+    @ir.Opcode::ArrayInitData(type_idx, data_idx) =>
+      lower_array_init_data(ctx, inst, block, type_idx, data_idx)
+    @ir.Opcode::ArrayInitElem(type_idx, elem_idx) =>
+      lower_array_init_elem(ctx, inst, block, type_idx, elem_idx)
     @ir.Opcode::RefTest(type_idx, nullable) =>
       lower_ref_test(ctx, inst, block, type_idx, nullable)
     @ir.Opcode::RefCast(type_idx, nullable) =>

@@ -773,6 +773,34 @@ fn Translator::translate_instruction(
       let d = self.pop() // destination
       self.builder.memory_copy(dst_memidx, src_memidx, d, s, n)
     }
+    MemoryInit(memidx, data_idx) => {
+      let n = self.pop() // size
+      let s = self.pop() // source offset in data segment
+      let d = self.pop() // destination offset in memory
+      self.builder.memory_init(memidx, data_idx, d, s, n)
+    }
+    DataDrop(data_idx) => self.builder.data_drop(data_idx)
+
+    // Table bulk operations
+    TableFill(table_idx) => {
+      let n = self.pop() // size
+      let val = self.pop() // value (ref)
+      let d = self.pop() // destination
+      self.builder.table_fill(table_idx, d, val, n)
+    }
+    TableCopy(dst_table_idx, src_table_idx) => {
+      let n = self.pop() // size
+      let s = self.pop() // source
+      let d = self.pop() // destination
+      self.builder.table_copy(dst_table_idx, src_table_idx, d, s, n)
+    }
+    TableInit(table_idx, elem_idx) => {
+      let n = self.pop() // size
+      let s = self.pop() // source offset in element segment
+      let d = self.pop() // destination offset in table
+      self.builder.table_init(table_idx, elem_idx, d, s, n)
+    }
+    ElemDrop(elem_idx) => self.builder.elem_drop(elem_idx)
 
     // Reference types
     RefNull(_ref_type) => {
@@ -1019,6 +1047,44 @@ fn Translator::translate_instruction(
       let dst = self.pop()
       self.builder.array_copy(
         dst_type_idx, src_type_idx, dst, dst_offset, src, src_offset, count,
+      )
+    }
+    ArrayNewData(type_idx, data_idx) => {
+      // Stack: [data_offset, length] -> [arrayref]
+      let length = self.pop()
+      let data_offset = self.pop()
+      let result = self.builder.array_new_data(
+        type_idx, data_idx, data_offset, length,
+      )
+      self.push(result)
+    }
+    ArrayNewElem(type_idx, elem_idx) => {
+      // Stack: [elem_offset, length] -> [arrayref]
+      let length = self.pop()
+      let elem_offset = self.pop()
+      let result = self.builder.array_new_elem(
+        type_idx, elem_idx, elem_offset, length,
+      )
+      self.push(result)
+    }
+    ArrayInitData(type_idx, data_idx) => {
+      // Stack: [arrayref, arr_offset, data_offset, length] -> []
+      let length = self.pop()
+      let data_offset = self.pop()
+      let arr_offset = self.pop()
+      let array_ref = self.pop()
+      self.builder.array_init_data(
+        type_idx, data_idx, array_ref, arr_offset, data_offset, length,
+      )
+    }
+    ArrayInitElem(type_idx, elem_idx) => {
+      // Stack: [arrayref, arr_offset, elem_offset, length] -> []
+      let length = self.pop()
+      let elem_offset = self.pop()
+      let arr_offset = self.pop()
+      let array_ref = self.pop()
+      self.builder.array_init_elem(
+        type_idx, elem_idx, array_ref, arr_offset, elem_offset, length,
       )
     }
 
@@ -2034,6 +2100,5 @@ fn Translator::translate_instruction(
       )
       self.push(result)
     }
-    inst => abort("unimplemented ir instruction \{inst}")
   }
 }

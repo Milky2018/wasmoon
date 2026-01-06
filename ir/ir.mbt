@@ -241,6 +241,8 @@ pub enum Opcode {
   MemorySize(Int) // Get current memory size in pages (memidx)
   MemoryFill(Int) // Fill memory region with a byte value (memidx) - operands: dst, val, size
   MemoryCopy(Int, Int) // Copy memory region (dst_memidx, src_memidx) - operands: dst, src, size
+  MemoryInit(Int, Int) // Initialize memory from data segment (memidx, data_idx) - operands: dst, src, size
+  DataDrop(Int) // Drop data segment (data_idx) - no operands
 
   // Misc
   Select // Conditional select (cond ? a : b)
@@ -249,6 +251,10 @@ pub enum Opcode {
   // Table operations (for reference types)
   // NOTE: TableGet, TableSet, TableSize are desugared at IR translation phase via FuncEnvironment
   TableGrow(Int) // Grow table, returns previous size or -1 (table index)
+  TableFill(Int) // Fill table region with value (table_idx) - operands: dst, val, size
+  TableCopy(Int, Int) // Copy table region (dst_table_idx, src_table_idx) - operands: dst, src, size
+  TableInit(Int, Int) // Initialize table from elem segment (table_idx, elem_idx) - operands: dst, src, size
+  ElemDrop(Int) // Drop element segment (elem_idx) - no operands
 
   // NOTE: GlobalGet, GlobalSet are desugared at IR translation phase via FuncEnvironment
 
@@ -295,6 +301,10 @@ pub enum Opcode {
   ArrayLen // Get array length - operand: arrayref
   ArrayFill(Int) // Fill array (type index) - operands: arrayref, offset, value, count
   ArrayCopy(Int, Int) // Copy array (dst_type_idx, src_type_idx) - operands: dst, dst_offset, src, src_offset, count
+  ArrayNewData(Int, Int) // Create array from data segment (type_idx, data_idx) - operands: data_offset, length
+  ArrayNewElem(Int, Int) // Create array from elem segment (type_idx, elem_idx) - operands: elem_offset, length
+  ArrayInitData(Int, Int) // Initialize array from data segment (type_idx, data_idx) - operands: arrayref, arr_offset, data_offset, length
+  ArrayInitElem(Int, Int) // Initialize array from elem segment (type_idx, elem_idx) - operands: arrayref, arr_offset, elem_offset, length
 
   // GC operations - i31
   I31New // Create i31 reference - operand: i32 value

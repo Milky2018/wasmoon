@@ -1034,3 +1034,165 @@ fn lower_array_copy(
     None,
   )
 }
+
+///|
+/// Lower array.new_data instruction
+/// Creates an array from a data segment
+fn lower_array_new_data(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  data_idx : Int,
+) -> Unit {
+  // Operands: data_offset, length
+  let data_off_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let length_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let result_vreg = match inst.first_result() {
+    Some(r) => ctx.get_vreg(r)
+    None => ctx.vcode_func.new_vreg(Int)
+  }
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNewData))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Get vmctx
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
+  // Call: gc_array_new_data_impl(vmctx, type_idx, data_idx, data_off, length) -> arrayref
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, type_idx_vreg, data_idx_vreg, data_off_vreg, length_vreg],
+    Some(result_vreg),
+  )
+}
+
+///|
+/// Lower array.new_elem instruction
+/// Creates an array from an element segment
+fn lower_array_new_elem(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  elem_idx : Int,
+) -> Unit {
+  // Operands: elem_offset, length
+  let elem_off_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let length_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let result_vreg = match inst.first_result() {
+    Some(r) => ctx.get_vreg(r)
+    None => ctx.vcode_func.new_vreg(Int)
+  }
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNewElem))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Get vmctx
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let elem_idx_vreg = materialize_imm(ctx, block, elem_idx.to_int64())
+  // Call: gc_array_new_elem_impl(vmctx, type_idx, elem_idx, elem_off, length) -> arrayref
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, type_idx_vreg, elem_idx_vreg, elem_off_vreg, length_vreg],
+    Some(result_vreg),
+  )
+}
+
+///|
+/// Lower array.init_data instruction
+/// Initializes array elements from a data segment
+fn lower_array_init_data(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  data_idx : Int,
+) -> Unit {
+  // Operands: arrayref, arr_offset, data_offset, length
+  let array_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let arr_off_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let data_off_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
+  let length_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayInitData))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Get vmctx
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
+  // Call: gc_array_init_data_impl(vmctx, type_idx, data_idx, arrayref, arr_off, data_off, length)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [
+      vmctx_vreg, type_idx_vreg, data_idx_vreg, array_ref_vreg, arr_off_vreg, data_off_vreg,
+      length_vreg,
+    ],
+    None,
+  )
+}
+
+///|
+/// Lower array.init_elem instruction
+/// Initializes array elements from an element segment
+fn lower_array_init_elem(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  elem_idx : Int,
+) -> Unit {
+  // Operands: arrayref, arr_offset, elem_offset, length
+  let array_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let arr_off_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let elem_off_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
+  let length_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayInitElem))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Get vmctx
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let elem_idx_vreg = materialize_imm(ctx, block, elem_idx.to_int64())
+  // Call: gc_array_init_elem_impl(vmctx, type_idx, elem_idx, arrayref, arr_off, elem_off, length)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [
+      vmctx_vreg, type_idx_vreg, elem_idx_vreg, array_ref_vreg, arr_off_vreg, elem_off_vreg,
+      length_vreg,
+    ],
+    None,
+  )
+}

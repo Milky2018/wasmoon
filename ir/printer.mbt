@@ -151,6 +151,9 @@ fn format_opcode(
     MemoryFill(memidx) => "memory_fill mem=\{memidx} \{ops}"
     MemoryCopy(dst_memidx, src_memidx) =>
       "memory_copy dst=\{dst_memidx} src=\{src_memidx} \{ops}"
+    MemoryInit(memidx, data_idx) =>
+      "memory_init mem=\{memidx} data=\{data_idx} \{ops}"
+    DataDrop(data_idx) => "data_drop data=\{data_idx}"
 
     // Misc
     Select => "select \{ops}"
@@ -159,6 +162,12 @@ fn format_opcode(
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment
     TableGrow(idx) => "table_grow \{idx} \{ops}"
+    TableFill(idx) => "table_fill \{idx} \{ops}"
+    TableCopy(dst_idx, src_idx) =>
+      "table_copy dst=\{dst_idx} src=\{src_idx} \{ops}"
+    TableInit(table_idx, elem_idx) =>
+      "table_init table=\{table_idx} elem=\{elem_idx} \{ops}"
+    ElemDrop(elem_idx) => "elem_drop elem=\{elem_idx}"
 
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment
 
@@ -210,6 +219,14 @@ fn format_opcode(
     ArrayFill(type_idx) => "array.fill \{type_idx} \{ops}"
     ArrayCopy(dst_type_idx, src_type_idx) =>
       "array.copy \{dst_type_idx} \{src_type_idx} \{ops}"
+    ArrayNewData(type_idx, data_idx) =>
+      "array.new_data \{type_idx} \{data_idx} \{ops}"
+    ArrayNewElem(type_idx, elem_idx) =>
+      "array.new_elem \{type_idx} \{elem_idx} \{ops}"
+    ArrayInitData(type_idx, data_idx) =>
+      "array.init_data \{type_idx} \{data_idx} \{ops}"
+    ArrayInitElem(type_idx, elem_idx) =>
+      "array.init_elem \{type_idx} \{elem_idx} \{ops}"
 
     // GC operations - i31
     I31New => "ref.i31 \{ops}"

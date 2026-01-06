@@ -29,6 +29,10 @@ pub(all) enum GCLibcall {
   ArrayLen // gc_array_len_impl
   ArrayFill // gc_array_fill_impl
   ArrayCopy // gc_array_copy_impl
+  ArrayNewData // gc_array_new_data_impl - create array from data segment
+  ArrayNewElem // gc_array_new_elem_impl - create array from elem segment
+  ArrayInitData // gc_array_init_data_impl - initialize array from data segment
+  ArrayInitElem // gc_array_init_elem_impl - initialize array from elem segment
   TypeCheckSubtype // gc_type_check_subtype - checks subtyping for call_indirect
   // Inline allocation support (ctx-passing)
   RegisterStructInline // gc_register_struct_inline - register inline-allocated struct
@@ -44,7 +48,13 @@ pub(all) enum JITLibcall {
   MemorySize
   MemoryFill
   MemoryCopy
+  MemoryInit
+  DataDrop
   TableGrow
+  TableFill
+  TableCopy
+  TableInit
+  ElemDrop
 } derive(Eq, Show)
 
 ///|

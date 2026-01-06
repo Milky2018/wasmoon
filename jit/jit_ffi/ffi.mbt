@@ -90,6 +90,36 @@ pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory
 pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
 
 ///|
+/// Get memory_init function pointer for JIT
+/// Signature: memory_init(ctx: *jit_context_t, memidx: i32, data_idx: i32, dst: i32, src: i32, size: i32) -> void
+pub extern "c" fn c_jit_get_memory_init_ptr() -> Int64 = "wasmoon_jit_get_memory_init_ptr"
+
+///|
+/// Get data_drop function pointer for JIT
+/// Signature: data_drop(ctx: *jit_context_t, data_idx: i32) -> void
+pub extern "c" fn c_jit_get_data_drop_ptr() -> Int64 = "wasmoon_jit_get_data_drop_ptr"
+
+///|
+/// Get table_fill function pointer for JIT
+/// Signature: table_fill(ctx: *jit_context_t, table_idx: i32, dst: i32, val: i64, size: i32) -> void
+pub extern "c" fn c_jit_get_table_fill_ptr() -> Int64 = "wasmoon_jit_get_table_fill_ptr"
+
+///|
+/// Get table_copy function pointer for JIT
+/// Signature: table_copy(ctx: *jit_context_t, dst_table_idx: i32, src_table_idx: i32, dst: i32, src: i32, size: i32) -> void
+pub extern "c" fn c_jit_get_table_copy_ptr() -> Int64 = "wasmoon_jit_get_table_copy_ptr"
+
+///|
+/// Get table_init function pointer for JIT
+/// Signature: table_init(ctx: *jit_context_t, table_idx: i32, elem_idx: i32, dst: i32, src: i32, size: i32) -> void
+pub extern "c" fn c_jit_get_table_init_ptr() -> Int64 = "wasmoon_jit_get_table_init_ptr"
+
+///|
+/// Get elem_drop function pointer for JIT
+/// Signature: elem_drop(ctx: *jit_context_t, elem_idx: i32) -> void
+pub extern "c" fn c_jit_get_elem_drop_ptr() -> Int64 = "wasmoon_jit_get_elem_drop_ptr"
+
+///|
 /// Configure JIT context with multiple memories (for multi-memory support)
 /// memory_ptrs: FixedArray of Int64 (memory base pointers)
 /// memory_sizes: FixedArray of Int64 (memory sizes in bytes)
@@ -659,6 +689,26 @@ pub extern "c" fn c_jit_get_gc_array_fill_ptr() -> Int64 = "wasmoon_jit_get_gc_a
 pub extern "c" fn c_jit_get_gc_array_copy_ptr() -> Int64 = "wasmoon_jit_get_gc_array_copy_ptr"
 
 ///|
+/// Get array.new_data libcall function pointer
+/// Signature: int64_t gc_array_new_data(ctx, type_idx, data_idx, data_offset, length) -> arrayref
+pub extern "c" fn c_jit_get_gc_array_new_data_ptr() -> Int64 = "wasmoon_jit_get_gc_array_new_data_ptr"
+
+///|
+/// Get array.new_elem libcall function pointer
+/// Signature: int64_t gc_array_new_elem(ctx, type_idx, elem_idx, elem_offset, length) -> arrayref
+pub extern "c" fn c_jit_get_gc_array_new_elem_ptr() -> Int64 = "wasmoon_jit_get_gc_array_new_elem_ptr"
+
+///|
+/// Get array.init_data libcall function pointer
+/// Signature: void gc_array_init_data(ctx, type_idx, data_idx, arrayref, arr_offset, data_offset, length)
+pub extern "c" fn c_jit_get_gc_array_init_data_ptr() -> Int64 = "wasmoon_jit_get_gc_array_init_data_ptr"
+
+///|
+/// Get array.init_elem libcall function pointer
+/// Signature: void gc_array_init_elem(ctx, type_idx, elem_idx, arrayref, arr_offset, elem_offset, length)
+pub extern "c" fn c_jit_get_gc_array_init_elem_ptr() -> Int64 = "wasmoon_jit_get_gc_array_init_elem_ptr"
+
+///|
 /// Get type check subtype libcall function pointer for call_indirect with subtyping
 /// Signature: void gc_type_check_subtype(int32_t actual_type, int32_t expected_type)
 /// Traps if actual_type is not a subtype of expected_type
@@ -750,6 +800,42 @@ pub extern "c" fn c_gc_heap_new(capacity : Int64) -> Int64 = "wasmoon_gc_heap_ne
 ///|
 /// Free a GC heap and all its memory
 pub extern "c" fn c_gc_heap_free(heap : Int64) -> Unit = "wasmoon_gc_heap_free"
+
+// ============ Segment Setup (for memory.init/data.drop/table.init/elem.drop) ============
+
+///|
+/// Initialize data segment storage with count segments
+pub extern "c" fn c_jit_init_data_segments(count : Int) -> Unit = "wasmoon_jit_init_data_segments"
+
+///|
+/// Add a single data segment - C takes ownership (no copy, uses pointer directly)
+/// idx: segment index, data: FixedArray[Byte] (ownership transferred to C)
+/// C will call moonbit_decref when clearing segments
+#owned(data)
+pub extern "c" fn c_jit_add_data_segment(
+  idx : Int,
+  data : FixedArray[Byte],
+  size : Int,
+) -> Unit = "wasmoon_jit_add_data_segment"
+
+///|
+/// Initialize element segment storage with count segments
+pub extern "c" fn c_jit_init_elem_segments(count : Int) -> Unit = "wasmoon_jit_init_elem_segments"
+
+///|
+/// Add a single element segment - C takes ownership (no copy, uses pointer directly)
+/// idx: segment index, data: FixedArray[Int64] (ownership transferred to C)
+/// C will call moonbit_decref when clearing segments
+#owned(data)
+pub extern "c" fn c_jit_add_elem_segment(
+  idx : Int,
+  data : FixedArray[Int64],
+  size : Int,
+) -> Unit = "wasmoon_jit_add_elem_segment"
+
+///|
+/// Clear all segment state after JIT execution
+pub extern "c" fn c_jit_clear_segments() -> Unit = "wasmoon_jit_clear_segments"
 
 // ============ Struct Operations ============
 

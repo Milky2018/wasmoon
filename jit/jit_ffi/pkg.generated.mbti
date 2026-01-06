@@ -54,6 +54,10 @@ pub fn c_gc_heap_struct_set(Int64, Int, Int, Int64) -> Unit
 
 pub fn c_gc_heap_sweep(Int64) -> Int
 
+pub fn c_jit_add_data_segment(Int, FixedArray[Byte], Int) -> Unit
+
+pub fn c_jit_add_elem_segment(Int, FixedArray[Int64], Int) -> Unit
+
 pub fn c_jit_add_preopen(Int64, Int, FixedArray[Byte], FixedArray[Byte]) -> Unit
 
 pub fn c_jit_alloc_context_managed(Int) -> JITContext
@@ -77,6 +81,8 @@ pub fn c_jit_call_trampoline_managed(JITContext, Int64, Int64, FixedArray[Int64]
 pub fn c_jit_call_with_stack_switch(Int64, Int64, Int64, FixedArray[Int64], Int) -> Int
 
 pub fn c_jit_call_with_stack_switch_managed(JITContext, Int64, Int64, FixedArray[Int64], Int) -> Int
+
+pub fn c_jit_clear_segments() -> Unit
 
 pub fn c_jit_clear_trap() -> Unit
 
@@ -137,6 +143,10 @@ pub fn c_jit_get_args_sizes_get_ptr() -> Int64
 pub fn c_jit_get_clock_res_get_ptr() -> Int64
 
 pub fn c_jit_get_clock_time_get_ptr() -> Int64
+
+pub fn c_jit_get_data_drop_ptr() -> Int64
+
+pub fn c_jit_get_elem_drop_ptr() -> Int64
 
 pub fn c_jit_get_environ_get_ptr() -> Int64
 
@@ -214,7 +224,15 @@ pub fn c_jit_get_gc_array_fill_ptr() -> Int64
 
 pub fn c_jit_get_gc_array_get_ptr() -> Int64
 
+pub fn c_jit_get_gc_array_init_data_ptr() -> Int64
+
+pub fn c_jit_get_gc_array_init_elem_ptr() -> Int64
+
 pub fn c_jit_get_gc_array_len_ptr() -> Int64
+
+pub fn c_jit_get_gc_array_new_data_ptr() -> Int64
+
+pub fn c_jit_get_gc_array_new_elem_ptr() -> Int64
 
 pub fn c_jit_get_gc_array_new_ptr() -> Int64
 
@@ -241,6 +259,8 @@ pub fn c_jit_get_memory_copy_ptr() -> Int64
 pub fn c_jit_get_memory_fill_ptr() -> Int64
 
 pub fn c_jit_get_memory_grow_ptr() -> Int64
+
+pub fn c_jit_get_memory_init_ptr() -> Int64
 
 pub fn c_jit_get_memory_size_ptr() -> Int64
 
@@ -300,11 +320,21 @@ pub fn c_jit_get_spectest_print_i64_ptr() -> Int64
 
 pub fn c_jit_get_spectest_print_ptr() -> Int64
 
+pub fn c_jit_get_table_copy_ptr() -> Int64
+
+pub fn c_jit_get_table_fill_ptr() -> Int64
+
 pub fn c_jit_get_table_grow_ptr() -> Int64
+
+pub fn c_jit_get_table_init_ptr() -> Int64
 
 pub fn c_jit_get_trap_code() -> Int
 
 pub fn c_jit_get_wasm_stack_top(Int64) -> Int64
+
+pub fn c_jit_init_data_segments(Int) -> Unit
+
+pub fn c_jit_init_elem_segments(Int) -> Unit
 
 pub fn c_jit_init_wasi_fds(Int64, Int) -> Unit
 
