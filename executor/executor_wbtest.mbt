@@ -606,6 +606,7 @@ test "function call: call instruction" {
     codes: [add_func, main_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "main", [])
@@ -651,6 +652,7 @@ test "function call: nested calls" {
     codes: [double_func, add_one_func, main_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "main", [I32(5)])
@@ -730,6 +732,7 @@ test "function call: call_indirect" {
     ],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -795,6 +798,7 @@ test "host function: simple call" {
     codes: [main_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
 
   // Set up imports
@@ -852,6 +856,7 @@ test "memory import: shared memory between modules" {
     codes: [read_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
 
   // Set up imports
@@ -901,6 +906,7 @@ test "memory import: write to imported memory" {
     codes: [write_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let imports = @runtime.Imports::new()
   imports.add_memory("env", "mem", mem_addr)
@@ -940,6 +946,7 @@ test "import validation: missing import raises error" {
     codes: [func],
     datas: [],
     tags: [],
+    func_names: {},
   }
 
   // Empty imports - should fail
@@ -1033,6 +1040,7 @@ test "table import: call_indirect with imported table" {
     codes: [apply_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let imports = @runtime.Imports::new()
   imports.add_table("env", "table", table_addr)
@@ -1227,6 +1235,7 @@ test "table operations: table.grow" {
     ],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module(mod)
   // Grow table by 3, should return old size (2)
@@ -1377,6 +1386,7 @@ test "module initialization: start function execution" {
     codes: [init_func, get_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1485,6 +1495,7 @@ test "module initialization: element segment" {
     codes: [func0, func1, call_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1698,6 +1709,7 @@ test "bulk memory: data.drop" {
     codes: [drop_func, init_zero_func, init_nonzero_func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1769,6 +1781,7 @@ test "bulk memory: elem.drop" {
     codes: [drop_func, dummy_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1807,6 +1820,7 @@ test "bulk memory: data.drop is idempotent" {
     codes: [drop_func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1876,6 +1890,7 @@ test "reference types: ref.func" {
     codes: [func0, func1],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1928,6 +1943,7 @@ test "reference types: ref.is_null with non-null value" {
     codes: [dummy_func, check_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -1982,6 +1998,7 @@ test "reference types: ref.func used with table.set" {
     codes: [target_func, test_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2087,6 +2104,7 @@ test "multi-value: call function with multi-value return" {
     codes: [swap_func, test_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2134,6 +2152,7 @@ test "multi-value: block returning two values" {
     codes: [func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -2183,6 +2202,7 @@ test "multi-value: if returning two values" {
     codes: [func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let (store, instance) = instantiate_module(mod)
 
@@ -2258,6 +2278,7 @@ test "module linking: basic import from another module" {
     codes: [func_a],
     datas: [],
     tags: [],
+    func_names: {},
   }
 
   // Instantiate module A
@@ -2283,6 +2304,7 @@ test "module linking: basic import from another module" {
     codes: [func_b],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let instance_b = instantiate_with_linker(linker, "mod_b", mod_b) catch {
     _ => fail("Failed to instantiate mod_b")
@@ -2323,6 +2345,7 @@ test "module linking: import memory from another module" {
     codes: [store_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let instance_a = instantiate_with_linker(linker, "mod_a", mod_a) catch {
     _ => fail("Failed to instantiate mod_a")
@@ -2362,6 +2385,7 @@ test "module linking: import memory from another module" {
     codes: [read_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let instance_b = instantiate_with_linker(linker, "mod_b", mod_b) catch {
     _ => fail("Failed to instantiate mod_b")
@@ -2403,6 +2427,7 @@ test "module linking: three modules chain" {
     codes: [add_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   (instantiate_with_linker(linker, "math", mod_a) catch {
     _ => fail("Failed to instantiate math")
@@ -2436,6 +2461,7 @@ test "module linking: three modules chain" {
     codes: [double_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   (instantiate_with_linker(linker, "utils", mod_b) catch {
     _ => fail("Failed to instantiate utils")
@@ -2463,6 +2489,7 @@ test "module linking: three modules chain" {
     codes: [quad_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let instance_c = instantiate_with_linker(linker, "app", mod_c) catch {
     _ => fail("Failed to instantiate app")
@@ -2516,6 +2543,7 @@ test "call_indirect with imports path" {
     codes: [func_code, test_code],
     datas: [],
     tags: [],
+    func_names: {},
   }
 
   // Use instantiate_module_with_imports (same path as run.mbt)
@@ -2587,6 +2615,7 @@ test "call_indirect with multiple funcs and explicit type" {
     codes: [dummy_func, test1_func, func_code, test_code],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let store = @runtime.Store::new()
   let imports = @runtime.Imports::new()
@@ -2660,6 +2689,7 @@ test "call_indirect type index bug reproduction" {
     codes: [dummy_func, func_code, test_code],
     datas: [],
     tags: [],
+    func_names: {},
   }
   let store = @runtime.Store::new()
   let imports = @runtime.Imports::new()

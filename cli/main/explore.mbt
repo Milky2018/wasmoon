@@ -73,21 +73,26 @@ fn run_explore(
     let type_idx = mod_.funcs[func_idx]
     let func_type = mod_.get_func_type(type_idx)
     let code = mod_.codes[func_idx]
-    // Find function name from exports (func_idx needs to account for imports)
+    // Find function name: prefer internal name, then export name, then anonymous
     let num_imports = count_func_imports(mod_.imports)
     let actual_func_idx = num_imports + func_idx
-    let func_name : String = {
-      let mut name = ""
-      for exp in mod_.exports {
-        if exp.desc is @types.ExportDesc::Func(idx) && idx == actual_func_idx {
-          name = exp.name
-          break
+    // First, check for internal name from WAT parsing (e.g., $some_func -> "some_func")
+    let func_name : String = match mod_.func_names.get(actual_func_idx) {
+      Some(name) => name
+      None => {
+        // Fall back to export name
+        let mut export_name = ""
+        for exp in mod_.exports {
+          if exp.desc is @types.ExportDesc::Func(idx) && idx == actual_func_idx {
+            export_name = exp.name
+            break
+          }
         }
-      }
-      if name == "" {
-        "func_\{func_idx}"
-      } else {
-        name
+        if export_name == "" {
+          "func_\{func_idx}"
+        } else {
+          export_name
+        }
       }
     }
     // Generate WAT source text for this function

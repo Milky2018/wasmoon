@@ -221,25 +221,30 @@ pub fn Translator::from_module(
   // Calculate memory_mins (minimum guaranteed memory size in bytes)
   let memory_mins = mod_.memories.map(fn(m) { m.limits.min * 65536L })
 
-  // Determine function name
+  // Determine function name: prefer internal name, then export name, then anonymous
   let func_idx = num_imports + func_local_idx
   let func_name = match name {
     Some(n) => n
-    None => {
-      // Look for exported name
-      let mut export_name = ""
-      for exp in mod_.exports {
-        if exp.desc is @types.ExportDesc::Func(idx) && idx == func_idx {
-          export_name = exp.name
-          break
+    None =>
+      // First check internal name from WAT parsing
+      match mod_.func_names.get(func_idx) {
+        Some(n) => n
+        None => {
+          // Fall back to export name
+          let mut export_name = ""
+          for exp in mod_.exports {
+            if exp.desc is @types.ExportDesc::Func(idx) && idx == func_idx {
+              export_name = exp.name
+              break
+            }
+          }
+          if export_name == "" {
+            "func_\{func_idx}"
+          } else {
+            export_name
+          }
         }
       }
-      if export_name == "" {
-        "func_\{func_idx}"
-      } else {
-        export_name
-      }
-    }
   }
 
   // Get function type and locals
