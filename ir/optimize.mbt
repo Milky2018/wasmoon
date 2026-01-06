@@ -757,7 +757,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
   for block in func.blocks {
     // Reset expressions map for each block to avoid cross-block CSE issues
     // (e.g., using values defined in sibling branches of if-else)
-    let expressions : @hashmap.HashMap[String, Value] = @hashmap.new()
+    let expressions : @hashmap.HashMap[Inst, Value] = @hashmap.new()
     let mut i = 0
     while i < block.instructions.length() {
       let inst = block.instructions[i]
@@ -767,8 +767,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
         continue
       }
       if inst.result is Some(result_val) {
-        let sig = compute_expression_signature(inst)
-        if expressions.get(sig) is Some(existing) {
+        if expressions.get(inst) is Some(existing) {
           // Replace this instruction with a copy
           inst.opcode = Opcode::Copy
           // Clear operands and add the existing value
@@ -777,32 +776,11 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
           result.mark_changed()
         } else {
           // Record this expression
-          expressions.set(sig, result_val)
+          expressions.set(inst, result_val)
         }
       }
       i = i + 1
     }
-  }
-  result
-}
-
-///|
-/// Compute a signature for an expression (opcode + operands)
-/// For Fconst, we use the raw bits to distinguish different float values
-/// (since f32 bit patterns stored as Double may print as "NaN" even for different values)
-fn compute_expression_signature(inst : Inst) -> String {
-  let sig = match inst.opcode {
-    Fconst(val) => {
-      // Use raw bits for float constants to distinguish different NaN payloads
-      // and f32 values stored as Double bit patterns
-      let bits = val.reinterpret_as_int64()
-      "Fconst_" + bits.to_string()
-    }
-    _ => inst.opcode.to_string()
-  }
-  let mut result = sig
-  for op in inst.operands {
-    result = result + "_v" + op.id.to_string()
   }
   result
 }
@@ -824,15 +802,15 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
-  // Expression environment: signature -> (value, defining_block_id)
+  // Expression environment: key -> value
   // We use an array as a stack to track which expressions to pop on leaving a block
-  let expressions : @hashmap.HashMap[String, Value] = @hashmap.new()
+  let expressions : @hashmap.HashMap[Inst, Value] = @hashmap.new()
   // DFS the dominator tree
   fn dfs(block_id : Int) {
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
     // Track expressions added in this block (to pop later)
-    let local_sigs : Array[String] = []
+    let local_keys : Array[Inst] = []
     // Process instructions
     let mut i = 0
     while i < block.instructions.length() {
@@ -843,8 +821,8 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
         continue
       }
       if inst.result is Some(result_val) {
-        let sig = compute_expression_signature(inst)
-        if expressions.get(sig) is Some(existing) {
+        let key = inst
+        if expressions.get(key) is Some(existing) {
           // Replace this instruction with a copy to the existing value
           inst.opcode = Opcode::Copy
           inst.operands.clear()
@@ -853,8 +831,8 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
           // Don't add this to expressions (it's now a copy)
         } else {
           // Record this expression as available
-          expressions.set(sig, result_val)
-          local_sigs.push(sig)
+          expressions.set(key, result_val)
+          local_keys.push(key)
         }
       }
       i = i + 1
@@ -866,8 +844,8 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
       }
     }
     // Pop this block's expressions from environment
-    for sig in local_sigs {
-      expressions.remove(sig)
+    for key in local_keys {
+      expressions.remove(key)
     }
   }
 
@@ -957,21 +935,21 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
 pub fn gvn(func : Function) -> OptResult {
   let result = OptResult::new()
   for block in func.blocks {
-    // Value table: expression signature -> (result value, reads_memory flag)
-    let value_table : @hashmap.HashMap[String, (Value, Bool)] = @hashmap.new()
+    // Value table: expression key -> (result value, reads_memory flag)
+    let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
     for inst in block.instructions {
       // Check if this instruction may invalidate memory-based expressions
       if may_write_memory(inst.opcode) {
         // Invalidate all memory-reading expressions
-        let to_remove : Array[String] = []
+        let to_remove : Array[Inst] = []
         for entry in value_table.iter() {
-          let (sig, (_, is_memory_read)) = entry
+          let (key, (_, is_memory_read)) = entry
           if is_memory_read {
-            to_remove.push(sig)
+            to_remove.push(key)
           }
         }
-        for sig in to_remove {
-          value_table.remove(sig)
+        for key in to_remove {
+          value_table.remove(key)
         }
         continue
       }
@@ -980,8 +958,8 @@ pub fn gvn(func : Function) -> OptResult {
         continue
       }
       if inst.result is Some(result_val) {
-        let sig = compute_expression_signature(inst)
-        if value_table.get(sig) is Some((existing, _)) {
+        let key = inst
+        if value_table.get(key) is Some((existing, _)) {
           // Already computed - replace with copy
           inst.opcode = Opcode::Copy
           inst.operands.clear()
@@ -990,7 +968,7 @@ pub fn gvn(func : Function) -> OptResult {
         } else {
           // Record in value table with memory-read flag
           let is_memory_read = reads_memory(inst.opcode)
-          value_table.set(sig, (result_val, is_memory_read))
+          value_table.set(key, (result_val, is_memory_read))
         }
       }
     }
@@ -1016,38 +994,33 @@ pub fn gvn_global(func : Function) -> OptResult {
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
-  // Expression environment: signature -> (value, reads_memory flag)
-  let value_table : @hashmap.HashMap[String, (Value, Bool)] = @hashmap.new()
+  // Expression environment: key -> (value, reads_memory flag)
+  let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
+  // Track memory-reading keys separately for O(1) invalidation lookup
+  let memory_keys : @hashset.HashSet[Inst] = @hashset.new()
   // DFS the dominator tree
   fn dfs(block_id : Int) {
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
     // Track expressions added/modified in this block (to restore later)
-    // Stores (signature, previous_entry) where previous_entry is None if new
-    let local_entries : Array[(String, (Value, Bool)?)] = []
+    // Stores (key, previous_entry) where previous_entry is None if new
+    let local_entries : Array[(Inst, (Value, Bool)?)] = []
     // Process instructions
     for inst in block.instructions {
       // Check if this instruction may invalidate memory-based expressions
       if may_write_memory(inst.opcode) {
-        // Invalidate all memory-reading expressions
-        for entry in value_table.iter() {
-          let (sig, (v, is_memory_read)) = entry
-          if is_memory_read {
-            // Record for restoration (with the original value)
-            local_entries.push((sig, Some((v, true))))
+        // Invalidate all memory-reading expressions using tracked set
+        for key in memory_keys {
+          if value_table.get(key) is Some((v, _)) {
+            // Record for restoration
+            local_entries.push((key, Some((v, true))))
           }
         }
-        // Now remove them
-        let to_remove : Array[String] = []
-        for entry in value_table.iter() {
-          let (sig, (_, is_memory_read)) = entry
-          if is_memory_read {
-            to_remove.push(sig)
-          }
+        // Remove all memory-reading expressions
+        for key in memory_keys {
+          value_table.remove(key)
         }
-        for sig in to_remove {
-          value_table.remove(sig)
-        }
+        memory_keys.clear()
         continue
       }
       // Skip non-candidates
@@ -1055,8 +1028,8 @@ pub fn gvn_global(func : Function) -> OptResult {
         continue
       }
       if inst.result is Some(result_val) {
-        let sig = compute_expression_signature(inst)
-        if value_table.get(sig) is Some((existing, _)) {
+        let key = inst
+        if value_table.get(key) is Some((existing, _)) {
           // Already computed - replace with copy
           inst.opcode = Opcode::Copy
           inst.operands.clear()
@@ -1064,11 +1037,14 @@ pub fn gvn_global(func : Function) -> OptResult {
           result.mark_changed()
         } else {
           // Record previous value (None if new)
-          let prev = value_table.get(sig)
-          local_entries.push((sig, prev))
+          let prev = value_table.get(key)
+          local_entries.push((key, prev))
           // Add to value table with memory-read flag
           let is_memory_read = reads_memory(inst.opcode)
-          value_table.set(sig, (result_val, is_memory_read))
+          value_table.set(key, (result_val, is_memory_read))
+          if is_memory_read {
+            memory_keys.add(key)
+          }
         }
       }
     }
@@ -1080,10 +1056,18 @@ pub fn gvn_global(func : Function) -> OptResult {
     }
     // Restore value table to state before this block
     for entry in local_entries.rev_iter() {
-      let (sig, prev) = entry
+      let (key, prev) = entry
       match prev {
-        Some(v) => value_table.set(sig, v)
-        None => value_table.remove(sig)
+        Some(v) => {
+          value_table.set(key, v)
+          if v.1 {
+            memory_keys.add(key)
+          }
+        }
+        None => {
+          value_table.remove(key)
+          memory_keys.remove(key)
+        }
       }
     }
   }

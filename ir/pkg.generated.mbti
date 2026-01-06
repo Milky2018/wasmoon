@@ -139,6 +139,8 @@ pub(all) enum FloatCC {
   Gt
   Ge
 }
+pub impl Eq for FloatCC
+pub impl Hash for FloatCC
 pub impl Show for FloatCC
 
 type FuncEnvironment
@@ -357,6 +359,8 @@ pub struct Inst {
 }
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::new_multi(Array[Value], Opcode, Array[Value]) -> Self
+pub impl Eq for Inst
+pub impl Hash for Inst
 pub impl Show for Inst
 
 pub(all) enum IntCC {
@@ -371,6 +375,8 @@ pub(all) enum IntCC {
   Ugt
   Uge
 }
+pub impl Eq for IntCC
+pub impl Hash for IntCC
 pub impl Show for IntCC
 
 pub struct Loop {
@@ -742,6 +748,8 @@ pub enum Opcode {
   V128RelaxedDot8to16S
   V128RelaxedDot8to32AddS
 }
+pub impl Eq for Opcode
+pub impl Hash for Opcode
 pub impl Show for Opcode
 
 pub enum OptLevel {
@@ -783,6 +791,8 @@ pub(all) enum Type {
   ExternRef
 }
 pub fn Type::from_wasm(@types.ValueType) -> Self
+pub impl Eq for Type
+pub impl Hash for Type
 pub impl Show for Type
 
 pub struct ValidationResult {

@@ -36,14 +36,17 @@ test "egraph: sub_self_to_zero" {
     #|    (i32.sub (local.get 0) (local.get 0))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
-    #|block0:
-    #|    v3:i32 = iconst 0
-    #|    return v3
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
+      #|block0:
+      #|    v3:i32 = iconst 0
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -55,14 +58,17 @@ test "egraph: xor_self_to_zero" {
     #|    (i32.xor (local.get 0) (local.get 0))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
-    #|block0:
-    #|    v3:i32 = iconst 0
-    #|    return v3
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
+      #|block0:
+      #|    v3:i32 = iconst 0
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -74,14 +80,17 @@ test "egraph: const_fold_add" {
     #|    (i32.add (i32.const 10) (i32.const 20))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 30
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 30
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -93,14 +102,17 @@ test "egraph: const_fold_sub" {
     #|    (i32.sub (i32.const 100) (i32.const 30))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 70
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 70
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -112,14 +124,17 @@ test "egraph: const_fold_mul" {
     #|    (i32.mul (i32.const 5) (i32.const 6))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 30
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 30
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -131,14 +146,17 @@ test "egraph: const_fold_and" {
     #|    (i32.and (i32.const 255) (i32.const 15))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v3:i32 = iconst 15
-    #|    return v3
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v3:i32 = iconst 15
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -150,14 +168,17 @@ test "egraph: const_fold_or" {
     #|    (i32.or (i32.const 240) (i32.const 15))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 255
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 255
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -169,14 +190,17 @@ test "egraph: const_fold_xor" {
     #|    (i32.xor (i32.const 255) (i32.const 240))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 15
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 15
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -188,14 +212,17 @@ test "egraph: const_fold_shl" {
     #|    (i32.shl (i32.const 1) (i32.const 4))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 16
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 16
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -207,14 +234,17 @@ test "egraph: const_fold_chain" {
     #|    (i32.mul (i32.add (i32.const 10) (i32.const 20)) (i32.const 2))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v6:i32 = iconst 60
-    #|    return v6
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v6:i32 = iconst 60
+      #|    return v6
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -226,14 +256,17 @@ test "egraph: const_fold_cmp_lt_true" {
     #|    (i32.lt_s (i32.const 5) (i32.const 10))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 1
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 1
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -245,14 +278,17 @@ test "egraph: const_fold_cmp_lt_false" {
     #|    (i32.lt_s (i32.const 10) (i32.const 5))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 0
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 0
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -264,12 +300,15 @@ test "egraph: const_fold_eq_true" {
     #|    (i32.eq (i32.const 42) (i32.const 42))
     #|  )
     #|)
-  inspect(compile_and_optimize(source), content=(
-    #|function test(v0:i64, v1:i64) -> i32 {
-    #|block0:
-    #|    v4:i32 = iconst 1
-    #|    return v4
-    #|}
-    #|
-  ))
+  inspect(
+    compile_and_optimize(source),
+    content=(
+      #|function test(v0:i64, v1:i64) -> i32 {
+      #|block0:
+      #|    v4:i32 = iconst 1
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
 }

@@ -24,7 +24,7 @@ pub(all) enum Type {
   V128 // SIMD 128-bit vector
   FuncRef
   ExternRef
-} derive(Show)
+} derive(Show, Eq, Hash)
 
 ///|
 /// Convert from WASM ValueType to IR Type
@@ -99,6 +99,32 @@ pub struct Inst {
   mut opcode : Opcode // The operation
   operands : Array[Value] // Input values
 } derive(Show)
+
+///|
+/// Hash for CSE/GVN - based on opcode and operand IDs (not result)
+pub impl Hash for Inst with hash_combine(self, hasher) {
+  self.opcode.hash_combine(hasher)
+  for op in self.operands {
+    op.id.hash_combine(hasher)
+  }
+}
+
+///|
+/// Eq for CSE/GVN - two instructions are equal if same opcode and operand IDs
+pub impl Eq for Inst with equal(self, other) {
+  if self.opcode != other.opcode {
+    return false
+  }
+  if self.operands.length() != other.operands.length() {
+    return false
+  }
+  for i in 0..<self.operands.length() {
+    if self.operands[i].id != other.operands[i].id {
+      return false
+    }
+  }
+  true
+}
 
 ///|
 fn Inst::new(result : Value?, opcode : Opcode, operands : Array[Value]) -> Inst {
@@ -635,7 +661,7 @@ pub enum Opcode {
   V128RelaxedQ15MulrS // v128, v128 -> v128
   V128RelaxedDot8to16S // v128, v128 -> v128
   V128RelaxedDot8to32AddS // v128, v128, v128 -> v128
-} derive(Show)
+} derive(Show, Eq, Hash)
 
 ///|
 /// Integer comparison condition codes
@@ -650,7 +676,7 @@ pub(all) enum IntCC {
   Ule // Unsigned less than or equal
   Ugt // Unsigned greater than
   Uge // Unsigned greater than or equal
-} derive(Show)
+} derive(Show, Eq, Hash)
 
 ///|
 /// Floating point comparison condition codes
@@ -661,7 +687,7 @@ pub(all) enum FloatCC {
   Le // Less than or equal (ordered)
   Gt // Greater than (ordered)
   Ge // Greater than or equal (ordered)
-} derive(Show)
+} derive(Show, Eq, Hash)
 
 ///|
 /// Terminator - how a basic block ends
