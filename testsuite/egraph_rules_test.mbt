@@ -27,7 +27,7 @@ fn compile_and_optimize(source : String) -> String {
   )
   let ir_func = translator.translate(func_code.body)
   @ir.optimize(ir_func) |> ignore
-  ir_func.to_string()
+  ir_func.print()
 }
 
 ///|
@@ -40,9 +40,9 @@ test "egraph: sub_self_to_zero" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should have Iconst(0) instead of Isub
-  inspect(ir.contains("Iconst(0)"), content="true")
-  inspect(ir.contains("Isub"), content="false")
+  // After optimization, should have "iconst 0" instead of "isub"
+  inspect(ir.contains("iconst 0"), content="true")
+  inspect(ir.contains("isub"), content="false")
 }
 
 ///|
@@ -55,9 +55,9 @@ test "egraph: xor_self_to_zero" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should have Iconst(0) instead of Bxor
-  inspect(ir.contains("Iconst(0)"), content="true")
-  inspect(ir.contains("Bxor"), content="false")
+  // After optimization, should have "iconst 0" instead of "bxor"
+  inspect(ir.contains("iconst 0"), content="true")
+  inspect(ir.contains("bxor"), content="false")
 }
 
 ///|
@@ -70,10 +70,10 @@ test "egraph: const_fold_add" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be a single Iconst(30)
-  inspect(ir.contains("Iconst(30)"), content="true")
+  // After optimization, should be a single "iconst 30"
+  inspect(ir.contains("iconst 30"), content="true")
   // Should NOT have separate constants or add
-  inspect(ir.contains("Iadd"), content="false")
+  inspect(ir.contains("iadd"), content="false")
 }
 
 ///|
@@ -86,9 +86,9 @@ test "egraph: const_fold_sub" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be a single Iconst(70)
-  inspect(ir.contains("Iconst(70)"), content="true")
-  inspect(ir.contains("Isub"), content="false")
+  // After optimization, should be a single "iconst 70"
+  inspect(ir.contains("iconst 70"), content="true")
+  inspect(ir.contains("isub"), content="false")
 }
 
 ///|
@@ -101,9 +101,9 @@ test "egraph: const_fold_mul" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be a single Iconst(30)
-  inspect(ir.contains("Iconst(30)"), content="true")
-  inspect(ir.contains("Imul"), content="false")
+  // After optimization, should be a single "iconst 30"
+  inspect(ir.contains("iconst 30"), content="true")
+  inspect(ir.contains("imul"), content="false")
 }
 
 ///|
@@ -116,9 +116,9 @@ test "egraph: const_fold_and" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be Iconst(15)
-  inspect(ir.contains("Iconst(15)"), content="true")
-  inspect(ir.contains("Band"), content="false")
+  // After optimization, should be "iconst 15"
+  inspect(ir.contains("iconst 15"), content="true")
+  inspect(ir.contains("band"), content="false")
 }
 
 ///|
@@ -131,9 +131,9 @@ test "egraph: const_fold_or" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be Iconst(255)
-  inspect(ir.contains("Iconst(255)"), content="true")
-  inspect(ir.contains("Bor"), content="false")
+  // After optimization, should be "iconst 255"
+  inspect(ir.contains("iconst 255"), content="true")
+  inspect(ir.contains("bor"), content="false")
 }
 
 ///|
@@ -146,9 +146,9 @@ test "egraph: const_fold_xor" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be Iconst(15)
-  inspect(ir.contains("Iconst(15)"), content="true")
-  inspect(ir.contains("Bxor"), content="false")
+  // After optimization, should be "iconst 15"
+  inspect(ir.contains("iconst 15"), content="true")
+  inspect(ir.contains("bxor"), content="false")
 }
 
 ///|
@@ -161,8 +161,8 @@ test "egraph: const_fold_shl" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be Iconst(16)
-  inspect(ir.contains("Iconst(16)"), content="true")
+  // After optimization, should be "iconst 16"
+  inspect(ir.contains("iconst 16"), content="true")
 }
 
 ///|
@@ -175,10 +175,10 @@ test "egraph: const_fold_chain" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be Iconst(60)
-  inspect(ir.contains("Iconst(60)"), content="true")
-  inspect(ir.contains("Iadd"), content="false")
-  inspect(ir.contains("Imul"), content="false")
+  // After optimization, should be "iconst 60"
+  inspect(ir.contains("iconst 60"), content="true")
+  inspect(ir.contains("iadd"), content="false")
+  inspect(ir.contains("imul"), content="false")
 }
 
 ///|
@@ -191,8 +191,8 @@ test "egraph: const_fold_cmp_lt_true" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be Iconst(1) for true
-  inspect(ir.contains("Iconst(1)"), content="true")
+  // After optimization, should be "iconst 1" for true
+  inspect(ir.contains("iconst 1"), content="true")
 }
 
 ///|
@@ -205,8 +205,8 @@ test "egraph: const_fold_cmp_lt_false" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be Iconst(0) for false
-  inspect(ir.contains("Iconst(0)"), content="true")
+  // After optimization, should be "iconst 0" for false
+  inspect(ir.contains("iconst 0"), content="true")
 }
 
 ///|
@@ -219,6 +219,6 @@ test "egraph: const_fold_eq_true" {
     #|  )
     #|)
   let ir = compile_and_optimize(source)
-  // After optimization, should be Iconst(1) for true
-  inspect(ir.contains("Iconst(1)"), content="true")
+  // After optimization, should be "iconst 1" for true
+  inspect(ir.contains("iconst 1"), content="true")
 }
