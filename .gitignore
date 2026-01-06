@@ -3,9 +3,5 @@ target/
 .mooncakes/
 .moonagent/
 wasmoon
-
-# Claude Code skills (packaged)
-*.skill
-TODO.md
 wasmoon-tools
-FOR_NOW_PLAN.md
+TODO.md
