@@ -70,6 +70,11 @@ pub const TABLE_ENTRY_STRIDE : Int = 16
 struct FuncEnvironment {
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
+  // Minimum guaranteed memory size in bytes for each memory index
+  // Used to eliminate bounds checks for constant addresses within this range
+  memory_mins : Array[Int64]
+  // Whether each memory uses 64-bit addressing (memory64 proposal)
+  memory_is_64 : Array[Bool]
   // Shared trap block for memory out-of-bounds errors
   // All bounds checks in the same function share this block to reduce CFG size
   mut memory_trap_block : Block?
@@ -78,8 +83,10 @@ struct FuncEnvironment {
 ///|
 pub fn FuncEnvironment::new(
   global_types : Array[@types.GlobalType],
+  memory_mins? : Array[Int64] = [],
+  memory_is_64? : Array[Bool] = [],
 ) -> FuncEnvironment {
-  { global_types, memory_trap_block: None }
+  { global_types, memory_mins, memory_is_64, memory_trap_block: None }
 }
 
 // ============ Global Variable Operations ============
@@ -421,6 +428,43 @@ fn type_byte_size(ty : Type) -> Int {
 }
 
 ///|
+/// Check if bounds check can be eliminated for a constant address access
+/// Returns true if the access is guaranteed to be within the minimum memory size
+fn FuncEnvironment::can_eliminate_bounds_check(
+  self : FuncEnvironment,
+  builder : IRBuilder,
+  memidx : Int,
+  wasm_addr : Value,
+  offset : Int64,
+  access_size : Int,
+) -> Bool {
+  // Get minimum memory size for this memory index
+  let memory_min = if memidx < self.memory_mins.length() {
+    self.memory_mins[memidx]
+  } else {
+    0L // No minimum known, cannot eliminate
+  }
+  if memory_min == 0L {
+    return false
+  }
+  // Check if wasm_addr is a constant
+  match builder.get_const_value(wasm_addr) {
+    None => false
+    Some(const_addr) => {
+      // Ensure const_addr is non-negative (valid wasm address)
+      if const_addr < 0L {
+        return false
+      }
+      // Check if const_addr + offset + access_size <= memory_min
+      // Use checked arithmetic to avoid overflow
+      let end_addr = const_addr + offset + access_size.to_int64()
+      // Also check for overflow (end_addr < const_addr would indicate overflow)
+      end_addr >= const_addr && end_addr <= memory_min
+    }
+  }
+}
+
+///|
 /// Emit bounds check and return effective address for memory access
 /// This is a public helper for SIMD and other complex load operations
 pub fn FuncEnvironment::emit_bounds_check(
@@ -432,27 +476,59 @@ pub fn FuncEnvironment::emit_bounds_check(
   offset : Int64,
   access_size : Int,
 ) -> Value {
+  // Check if bounds check can be eliminated for constant addresses
+  let skip_bounds_check = self.can_eliminate_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
   )
 
-  // Extend wasm_addr (i32) to i64
-  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+  // For memory64, address is already i64; for memory32, extend i32 to i64
+  let is_memory64 = memidx < self.memory_is_64.length() &&
+    self.memory_is_64[memidx]
+  let addr_i64 = if is_memory64 {
+    wasm_addr // Already i64
+  } else {
+    builder.uextend(Type::I64, wasm_addr)
+  }
 
-  // Calculate end address for bounds check: addr + offset + access_size
+  // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  let size_val = builder.iconst(Type::I64, access_size.to_int64())
-  let end_addr = builder.iadd(addr_plus_offset, size_val)
+  if not(skip_bounds_check) {
+    // Need runtime bounds check
+    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let end_addr = builder.iadd(addr_plus_offset, size_val)
 
-  // Bounds check: trap if end_addr > memory_size
-  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = self.get_or_create_memory_trap_block(builder)
-  let continue_block = builder.create_block()
-  builder.brnz(in_bounds, continue_block, trap_block)
+    // For memory64, we need overflow-safe bounds checking
+    let trap_block = self.get_or_create_memory_trap_block(builder)
+    let continue_block = builder.create_block()
+    if is_memory64 {
+      // Check for overflow in addr + offset
+      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let check1_block = builder.create_block()
+      builder.brnz(no_overflow1, check1_block, trap_block)
+      builder.switch_to_block(check1_block)
 
-  // Continue block
-  builder.switch_to_block(continue_block)
+      // Check for overflow in (addr + offset) + size
+      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let check2_block = builder.create_block()
+      builder.brnz(no_overflow2, check2_block, trap_block)
+      builder.switch_to_block(check2_block)
+
+      // Check end_addr <= memory_size
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    } else {
+      // For memory32, no overflow possible
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    }
+
+    // Continue block
+    builder.switch_to_block(continue_block)
+  }
 
   // Return effective address: memory_base + addr + offset
   builder.iadd(memory_base, addr_plus_offset)
@@ -462,6 +538,7 @@ pub fn FuncEnvironment::emit_bounds_check(
 /// Translate memory load to IR primitives:
 /// 1. Load memory_base and memory_size from vmctx
 /// 2. Bounds check: trap if addr + offset + size > memory_size (shared trap block)
+///    - Skip bounds check for constant addresses within minimum memory size
 /// 3. Calculate effective address: memory_base + addr + offset
 /// 4. LoadPtr
 pub fn FuncEnvironment::translate_memory_load(
@@ -473,29 +550,67 @@ pub fn FuncEnvironment::translate_memory_load(
   wasm_addr : Value,
   offset : Int64,
 ) -> Value {
+  let access_size = type_byte_size(ty)
+
+  // Check if bounds check can be eliminated for constant addresses
+  let skip_bounds_check = self.can_eliminate_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
   )
-  let access_size = type_byte_size(ty)
 
-  // Extend wasm_addr (i32) to i64
-  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+  // For memory64, address is already i64; for memory32, extend i32 to i64
+  let is_memory64 = memidx < self.memory_is_64.length() &&
+    self.memory_is_64[memidx]
+  let addr_i64 = if is_memory64 {
+    wasm_addr // Already i64
+  } else {
+    builder.uextend(Type::I64, wasm_addr)
+  }
 
-  // Calculate end address for bounds check: addr + offset + access_size
-  // offset is Int64 (supports memory64 64-bit offsets)
+  // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  let size_val = builder.iconst(Type::I64, access_size.to_int64())
-  let end_addr = builder.iadd(addr_plus_offset, size_val)
+  if not(skip_bounds_check) {
+    // Need runtime bounds check
+    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let end_addr = builder.iadd(addr_plus_offset, size_val)
 
-  // Bounds check: trap if end_addr > memory_size
-  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = self.get_or_create_memory_trap_block(builder)
-  let continue_block = builder.create_block()
-  builder.brnz(in_bounds, continue_block, trap_block)
+    // For memory64, we need overflow-safe bounds checking.
+    // u64 addition can wrap, so we must detect overflow:
+    // - overflow1: addr + offset overflowed if addr_plus_offset < addr
+    // - overflow2: (addr + offset) + size overflowed if end_addr < addr_plus_offset
+    // - in_range: end_addr <= memory_size
+    // Trap if overflow1 || overflow2 || !in_range
+    let trap_block = self.get_or_create_memory_trap_block(builder)
+    let continue_block = builder.create_block()
+    if is_memory64 {
+      // Check for overflow in addr + offset
+      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let check1_block = builder.create_block()
+      builder.brnz(no_overflow1, check1_block, trap_block)
+      builder.switch_to_block(check1_block)
 
-  // Continue block: perform the load
-  builder.switch_to_block(continue_block)
+      // Check for overflow in (addr + offset) + size
+      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let check2_block = builder.create_block()
+      builder.brnz(no_overflow2, check2_block, trap_block)
+      builder.switch_to_block(check2_block)
+
+      // Check end_addr <= memory_size
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    } else {
+      // For memory32, addr is u32 extended to u64, offset is u32, size is small
+      // No overflow possible, simple check suffices
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    }
+
+    // Continue block: perform the load
+    builder.switch_to_block(continue_block)
+  }
 
   // Calculate effective address: memory_base + addr + offset
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)
@@ -507,6 +622,7 @@ pub fn FuncEnvironment::translate_memory_load(
 /// Translate memory store to IR primitives:
 /// 1. Load memory_base and memory_size from vmctx
 /// 2. Bounds check: trap if addr + offset + size > memory_size (shared trap block)
+///    - Skip bounds check for constant addresses within minimum memory size
 /// 3. Calculate effective address: memory_base + addr + offset
 /// 4. StorePtr
 pub fn FuncEnvironment::translate_memory_store(
@@ -519,29 +635,61 @@ pub fn FuncEnvironment::translate_memory_store(
   value : Value,
   offset : Int64,
 ) -> Unit {
+  let access_size = type_byte_size(ty)
+
+  // Check if bounds check can be eliminated for constant addresses
+  let skip_bounds_check = self.can_eliminate_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
   )
-  let access_size = type_byte_size(ty)
 
-  // Extend wasm_addr (i32) to i64
-  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+  // For memory64, address is already i64; for memory32, extend i32 to i64
+  let is_memory64 = memidx < self.memory_is_64.length() &&
+    self.memory_is_64[memidx]
+  let addr_i64 = if is_memory64 {
+    wasm_addr // Already i64
+  } else {
+    builder.uextend(Type::I64, wasm_addr)
+  }
 
-  // Calculate end address for bounds check: addr + offset + access_size
-  // offset is Int64 (supports memory64 64-bit offsets)
+  // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  let size_val = builder.iconst(Type::I64, access_size.to_int64())
-  let end_addr = builder.iadd(addr_plus_offset, size_val)
+  if not(skip_bounds_check) {
+    // Need runtime bounds check
+    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let end_addr = builder.iadd(addr_plus_offset, size_val)
 
-  // Bounds check: trap if end_addr > memory_size
-  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = self.get_or_create_memory_trap_block(builder)
-  let continue_block = builder.create_block()
-  builder.brnz(in_bounds, continue_block, trap_block)
+    // For memory64, we need overflow-safe bounds checking
+    let trap_block = self.get_or_create_memory_trap_block(builder)
+    let continue_block = builder.create_block()
+    if is_memory64 {
+      // Check for overflow in addr + offset
+      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let check1_block = builder.create_block()
+      builder.brnz(no_overflow1, check1_block, trap_block)
+      builder.switch_to_block(check1_block)
 
-  // Continue block: perform the store
-  builder.switch_to_block(continue_block)
+      // Check for overflow in (addr + offset) + size
+      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let check2_block = builder.create_block()
+      builder.brnz(no_overflow2, check2_block, trap_block)
+      builder.switch_to_block(check2_block)
+
+      // Check end_addr <= memory_size
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    } else {
+      // For memory32, no overflow possible
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    }
+
+    // Continue block: perform the store
+    builder.switch_to_block(continue_block)
+  }
 
   // Calculate effective address: memory_base + addr + offset
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)
@@ -562,29 +710,61 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   wasm_addr : Value,
   offset : Int64,
 ) -> Value {
+  let access_size = narrow_bits / 8
+
+  // Check if bounds check can be eliminated for constant addresses
+  let skip_bounds_check = self.can_eliminate_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
   )
-  let access_size = narrow_bits / 8
 
-  // Extend wasm_addr (i32) to i64
-  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+  // For memory64, address is already i64; for memory32, extend i32 to i64
+  let is_memory64 = memidx < self.memory_is_64.length() &&
+    self.memory_is_64[memidx]
+  let addr_i64 = if is_memory64 {
+    wasm_addr // Already i64
+  } else {
+    builder.uextend(Type::I64, wasm_addr)
+  }
 
-  // Calculate end address for bounds check
-  // offset is Int64 (supports memory64 64-bit offsets)
+  // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  let size_val = builder.iconst(Type::I64, access_size.to_int64())
-  let end_addr = builder.iadd(addr_plus_offset, size_val)
+  if not(skip_bounds_check) {
+    // Need runtime bounds check
+    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let end_addr = builder.iadd(addr_plus_offset, size_val)
 
-  // Bounds check
-  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = self.get_or_create_memory_trap_block(builder)
-  let continue_block = builder.create_block()
-  builder.brnz(in_bounds, continue_block, trap_block)
+    // For memory64, we need overflow-safe bounds checking
+    let trap_block = self.get_or_create_memory_trap_block(builder)
+    let continue_block = builder.create_block()
+    if is_memory64 {
+      // Check for overflow in addr + offset
+      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let check1_block = builder.create_block()
+      builder.brnz(no_overflow1, check1_block, trap_block)
+      builder.switch_to_block(check1_block)
 
-  // Continue block: perform the load
-  builder.switch_to_block(continue_block)
+      // Check for overflow in (addr + offset) + size
+      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let check2_block = builder.create_block()
+      builder.brnz(no_overflow2, check2_block, trap_block)
+      builder.switch_to_block(check2_block)
+
+      // Check end_addr <= memory_size
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    } else {
+      // For memory32, no overflow possible
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    }
+
+    // Continue block: perform the load
+    builder.switch_to_block(continue_block)
+  }
 
   // Calculate effective address
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)
@@ -606,29 +786,61 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   value : Value,
   offset : Int64,
 ) -> Unit {
+  let access_size = narrow_bits / 8
+
+  // Check if bounds check can be eliminated for constant addresses
+  let skip_bounds_check = self.can_eliminate_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
   let (memory_base, memory_size) = load_memory_base_and_size(
     builder, vmctx, memidx,
   )
-  let access_size = narrow_bits / 8
 
-  // Extend wasm_addr (i32) to i64
-  let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+  // For memory64, address is already i64; for memory32, extend i32 to i64
+  let is_memory64 = memidx < self.memory_is_64.length() &&
+    self.memory_is_64[memidx]
+  let addr_i64 = if is_memory64 {
+    wasm_addr // Already i64
+  } else {
+    builder.uextend(Type::I64, wasm_addr)
+  }
 
-  // Calculate end address for bounds check
-  // offset is Int64 (supports memory64 64-bit offsets)
+  // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  let size_val = builder.iconst(Type::I64, access_size.to_int64())
-  let end_addr = builder.iadd(addr_plus_offset, size_val)
+  if not(skip_bounds_check) {
+    // Need runtime bounds check
+    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let end_addr = builder.iadd(addr_plus_offset, size_val)
 
-  // Bounds check
-  let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
-  let trap_block = self.get_or_create_memory_trap_block(builder)
-  let continue_block = builder.create_block()
-  builder.brnz(in_bounds, continue_block, trap_block)
+    // For memory64, we need overflow-safe bounds checking
+    let trap_block = self.get_or_create_memory_trap_block(builder)
+    let continue_block = builder.create_block()
+    if is_memory64 {
+      // Check for overflow in addr + offset
+      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let check1_block = builder.create_block()
+      builder.brnz(no_overflow1, check1_block, trap_block)
+      builder.switch_to_block(check1_block)
 
-  // Continue block: perform the store
-  builder.switch_to_block(continue_block)
+      // Check for overflow in (addr + offset) + size
+      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let check2_block = builder.create_block()
+      builder.brnz(no_overflow2, check2_block, trap_block)
+      builder.switch_to_block(check2_block)
+
+      // Check end_addr <= memory_size
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    } else {
+      // For memory32, no overflow possible
+      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      builder.brnz(in_bounds, continue_block, trap_block)
+    }
+
+    // Continue block: perform the store
+    builder.switch_to_block(continue_block)
+  }
 
   // Calculate effective address
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)

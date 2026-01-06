@@ -310,6 +310,8 @@ fn intcc_to_cond(cc : @ir.IntCC) -> @instr.Cond {
 ///|
 /// Lower an entire IR function to VCode
 pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
+  // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
+  @ir.optimize_function(ir_func) |> ignore
   let ctx = LoweringContext::new(ir_func)
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -1740,15 +1742,4 @@ fn lower_store_ptr_narrow(
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)
-}
-
-///|
-/// Lower an IR function with e-graph optimization applied first
-/// This applies constant folding and algebraic simplifications before lowering
-pub fn lower_function_egraph(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
-  // Apply e-graph optimization (constant folding, strength reduction, etc.)
-  @ir.optimize_function(ir_func) |> ignore
-
-  // Then do normal lowering
-  lower_function(ir_func)
 }

@@ -1,6 +1,5 @@
 // Magic number generation for division-by-constants optimization
 // Based on "Hacker's Delight" by Henry Warren, 2003
-// Ported from Cranelift's div_const.rs
 
 ///|
 /// Magic numbers for unsigned 32-bit division

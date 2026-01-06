@@ -39,7 +39,11 @@ pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
 
 pub const WASM_PAGE_SIZE : Int = 65536
 
+pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
+
 pub fn eliminate_common_subexpressions(Function) -> OptResult
+
+pub fn eliminate_common_subexpressions_global(Function) -> OptResult
 
 pub fn eliminate_dead_block_params(Function) -> OptResult
 
@@ -48,6 +52,10 @@ pub fn eliminate_dead_code(Function) -> OptResult
 pub fn eliminate_unreachable_code(Function) -> OptResult
 
 pub fn fold_constants(Function) -> OptResult
+
+pub fn gvn(Function) -> OptResult
+
+pub fn gvn_global(Function) -> OptResult
 
 pub fn hoist_loop_invariants(Function) -> OptResult
 
@@ -63,11 +71,15 @@ pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
 pub fn propagate_copies(Function) -> OptResult
 
+pub fn propagate_copies_global(Function) -> OptResult
+
 pub fn reduce_strength(Function) -> OptResult
 
 pub fn simplify_branches(Function) -> OptResult
 
 pub fn thread_jumps(Function) -> OptResult
+
+pub fn translate_function(@types.Module, Int, name? : String, memory_max_override? : Int?) -> Function
 
 pub fn unroll_loops(Function, Int) -> OptResult
 
@@ -88,9 +100,11 @@ pub fn Block::set_terminator(Self, Terminator) -> Unit
 pub impl Show for Block
 
 pub struct CFG {
+  size : Int
   num_blocks : Int
   successors : Array[Array[Int]]
   predecessors : Array[Array[Int]]
+  valid : Array[Bool]
 }
 pub fn CFG::build(Function) -> Self
 pub fn CFG::compute_dominators(Self) -> Array[Int]
@@ -102,6 +116,7 @@ pub fn CFG::get_predecessors(Self, Int) -> Array[Int]
 pub fn CFG::get_successors(Self, Int) -> Array[Int]
 pub fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
 pub fn CFG::is_exit_block(Self, Int) -> Bool
+pub fn CFG::is_valid(Self, Int) -> Bool
 pub fn CFG::postorder(Self) -> Array[Int]
 pub fn CFG::reverse_postorder(Self) -> Array[Int]
 pub fn CFG::to_dot(Self, String) -> String
@@ -124,11 +139,13 @@ pub(all) enum FloatCC {
   Gt
   Ge
 }
+pub impl Eq for FloatCC
+pub impl Hash for FloatCC
 pub impl Show for FloatCC
 
 type FuncEnvironment
 pub fn FuncEnvironment::emit_bounds_check(Self, IRBuilder, Value, Int, Value, Int64, Int) -> Value
-pub fn FuncEnvironment::new(Array[@types.GlobalType]) -> Self
+pub fn FuncEnvironment::new(Array[@types.GlobalType], memory_mins? : Array[Int64], memory_is_64? : Array[Bool]) -> Self
 pub fn FuncEnvironment::translate_global_get(Self, IRBuilder, Value, Int) -> Value
 pub fn FuncEnvironment::translate_global_set(Self, IRBuilder, Value, Int, Value) -> Unit
 pub fn FuncEnvironment::translate_memory_copy(Self, IRBuilder, Int, Int, Value, Value, Value) -> Unit
@@ -220,6 +237,7 @@ pub fn IRBuilder::fpromote(Self, Value) -> Value
 pub fn IRBuilder::fsqrt(Self, Value) -> Value
 pub fn IRBuilder::fsub(Self, Value, Value) -> Value
 pub fn IRBuilder::ftrunc(Self, Value) -> Value
+pub fn IRBuilder::get_const_value(Self, Value) -> Int64?
 pub fn IRBuilder::get_exception_tag(Self) -> Value
 pub fn IRBuilder::get_exception_value(Self, Int) -> Value
 pub fn IRBuilder::get_exception_value_count(Self) -> Value
@@ -341,6 +359,8 @@ pub struct Inst {
 }
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::new_multi(Array[Value], Opcode, Array[Value]) -> Self
+pub impl Eq for Inst
+pub impl Hash for Inst
 pub impl Show for Inst
 
 pub(all) enum IntCC {
@@ -355,6 +375,8 @@ pub(all) enum IntCC {
   Ugt
   Uge
 }
+pub impl Eq for IntCC
+pub impl Hash for IntCC
 pub impl Show for IntCC
 
 pub struct Loop {
@@ -726,6 +748,8 @@ pub enum Opcode {
   V128RelaxedDot8to16S
   V128RelaxedDot8to32AddS
 }
+pub impl Eq for Opcode
+pub impl Hash for Opcode
 pub impl Show for Opcode
 
 pub enum OptLevel {
@@ -753,7 +777,8 @@ pub enum Terminator {
 pub impl Show for Terminator
 
 type Translator
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType]) -> Self
+pub fn Translator::from_module(@types.Module, Int, name? : String, memory_max_override? : Int?) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {
@@ -766,6 +791,8 @@ pub(all) enum Type {
   ExternRef
 }
 pub fn Type::from_wasm(@types.ValueType) -> Self
+pub impl Eq for Type
+pub impl Hash for Type
 pub impl Show for Type
 
 pub struct ValidationResult {

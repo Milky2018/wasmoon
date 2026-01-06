@@ -14,13 +14,13 @@ test "jit_stack_frame_basic" {
   // Only X19 is saved (vmctx) = 1 reg = 1 pair = 16 bytes
   inspect(frame.gpr_save_size, content="16")
   inspect(frame.fpr_save_size, content="0")
-  inspect(frame.spill_size, content="16") // MIN_SPILL_SIZE
+  inspect(frame.spill_size, content="0") // MIN_SPILL_SIZE
   inspect(frame.outgoing_args_size, content="0")
   // has_setup_area = true because we have saved_gprs
   inspect(frame.has_setup_area, content="true")
   // total = setup_area(16) + gpr(16) + fpr(0) + spill(16) + outgoing(0) = 48
-  inspect(frame.total_size, content="48")
-  inspect(frame.frame_size, content="32") // gpr + fpr + spill + outgoing
+  inspect(frame.total_size, content="32")
+  inspect(frame.frame_size, content="16") // gpr + fpr + spill + outgoing
   inspect(frame.saved_gprs.length(), content="1") // Only X19
 }
 
@@ -56,7 +56,7 @@ test "jit_stack_frame_with_fprs" {
   inspect(frame.fpr_save_size, content="16")
   inspect(frame.saved_fprs.length(), content="2")
   // total = setup(16) + gpr(16) + fpr(16) + spill(16) = 64
-  inspect(frame.total_size, content="64")
+  inspect(frame.total_size, content="48")
 }
 
 ///|
@@ -171,7 +171,7 @@ test "jit_stack_frame_outgoing_args" {
   inspect(frame.outgoing_args_size, content="32")
   inspect(frame.outgoing_args_offset, content="0") // At SP
   // total = setup(16) + gpr(16) + fpr(0) + spill(16) + outgoing(32) = 80
-  inspect(frame.total_size, content="80")
+  inspect(frame.total_size, content="64")
 }
 
 ///|

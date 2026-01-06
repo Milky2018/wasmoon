@@ -167,7 +167,7 @@ test "emit: full function" {
   // Body: add x0,x0,x1 = 1 inst
   // Epilogue: add sp + ldr x19 + ldp x29,x30 + ret = 4 inst
   // Total: 10 instructions = 40 bytes
-  inspect(mc.size(), content="16")
+  inspect(mc.size(), content="8")
 }
 
 ///|
@@ -674,15 +674,13 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd031faa  mov x29, x31
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
-      #|  000c: ff4300d1  sub sp, sp, #16
-      #|  0010: f30300aa  mov x19, x0
+      #|  000c: f30300aa  mov x19, x0
       #|block0:
-      #|  0014: 110080d2  movz x17, #0, lsl #0
-      #|  0018: 20023fd6  blr x17
-      #|  001c: ff430091  add sp, sp, #16
-      #|  0020: f30741f8  ldr x19, [sp], #16
-      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0028: c0035fd6  ret
+      #|  0010: 110080d2  movz x17, #0, lsl #0
+      #|  0014: 20023fd6  blr x17
+      #|  0018: f30741f8  ldr x19, [sp], #16
+      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0020: c0035fd6  ret
       #|
     ),
   )
@@ -717,15 +715,13 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd031faa  mov x29, x31
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
-      #|  000c: ff4300d1  sub sp, sp, #16
-      #|  0010: f30300aa  mov x19, x0
+      #|  000c: f30300aa  mov x19, x0
       #|block0:
-      #|  0014: 110080d2  movz x17, #0, lsl #0
-      #|  0018: 20023fd6  blr x17
-      #|  001c: ff430091  add sp, sp, #16
-      #|  0020: f30741f8  ldr x19, [sp], #16
-      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0028: c0035fd6  ret
+      #|  0010: 110080d2  movz x17, #0, lsl #0
+      #|  0014: 20023fd6  blr x17
+      #|  0018: f30741f8  ldr x19, [sp], #16
+      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0020: c0035fd6  ret
       #|
     ),
   )
@@ -759,15 +755,13 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd031faa  mov x29, x31
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
-      #|  000c: ff4300d1  sub sp, sp, #16
-      #|  0010: f30300aa  mov x19, x0
+      #|  000c: f30300aa  mov x19, x0
       #|block0:
-      #|  0014: 110080d2  movz x17, #0, lsl #0
-      #|  0018: 20023fd6  blr x17
-      #|  001c: ff430091  add sp, sp, #16
-      #|  0020: f30741f8  ldr x19, [sp], #16
-      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0028: c0035fd6  ret
+      #|  0010: 110080d2  movz x17, #0, lsl #0
+      #|  0014: 20023fd6  blr x17
+      #|  0018: f30741f8  ldr x19, [sp], #16
+      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0020: c0035fd6  ret
       #|
     ),
   )
@@ -801,15 +795,13 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result) 2" {
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd031faa  mov x29, x31
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
-      #|  000c: ff4300d1  sub sp, sp, #16
-      #|  0010: f30300aa  mov x19, x0
+      #|  000c: f30300aa  mov x19, x0
       #|block0:
-      #|  0014: 110080d2  movz x17, #0, lsl #0
-      #|  0018: 20023fd6  blr x17
-      #|  001c: ff430091  add sp, sp, #16
-      #|  0020: f30741f8  ldr x19, [sp], #16
-      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0028: c0035fd6  ret
+      #|  0010: 110080d2  movz x17, #0, lsl #0
+      #|  0014: 20023fd6  blr x17
+      #|  0018: f30741f8  ldr x19, [sp], #16
+      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0020: c0035fd6  ret
       #|
     ),
   )

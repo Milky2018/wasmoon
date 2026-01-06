@@ -469,25 +469,29 @@ test "egraph: (a - 1) - 2 = a - 3" {
 }
 
 ///|
-test "egraph: commutativity - x + y equiv y + x" {
+// NOTE: Commutativity rules were intentionally removed to prevent infinite loops
+// (a+b -> b+a -> a+b -> ...). We use directional rules only.
+test "egraph: no commutativity - x + y not equiv y + x (by design)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let xy = eg.add_add(x, y)
   let yx = eg.add_add(y, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
-  inspect(eg.equiv(xy, yx), content="true")
+  // Commutativity is NOT applied - this is intentional
+  inspect(eg.equiv(xy, yx), content="false")
 }
 
 ///|
-test "egraph: commutativity - x * y equiv y * x" {
+test "egraph: no commutativity - x * y not equiv y * x (by design)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let xy = eg.add_mul(x, y)
   let yx = eg.add_mul(y, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
-  inspect(eg.equiv(xy, yx), content="true")
+  // Commutativity is NOT applied - this is intentional
+  inspect(eg.equiv(xy, yx), content="false")
 }
 
 ///|
@@ -1187,7 +1191,7 @@ test "egraph: ne(x - 3, 10) = ne(x, 13)" {
 }
 
 // ============================================================================
-// New rules tests (Cranelift opts)
+// Additional optimization rules tests
 // ============================================================================
 
 ///|
@@ -1416,4 +1420,181 @@ test "egraph: add_typed sets type correctly" {
   let k5 = eg.add_const(5L)
   let result = eg.add_typed({ op: Add, children: [x, k5] }, 32)
   inspect(eg.get_bits(result), content="Some(32)")
+}
+
+///|
+/// Test that x + 0 = x extraction returns Var, not Const(0)
+test "egraph: x + 0 extract returns Var not Const" {
+  let eg = EGraph::new()
+  let x = eg.add_var(0)
+  let zero = eg.add_const(0L)
+  let x_plus_zero = eg.add_add(x, zero)
+
+  // Debug: print initial class ids
+  inspect(x.0, content="0")
+  inspect(zero.0, content="1")
+  inspect(x_plus_zero.0, content="2")
+
+  // Before saturation - check initial nodes
+  let x_nodes_before = eg.get_nodes(x)
+  inspect(x_nodes_before.length(), content="1")
+  let add_nodes_before = eg.get_nodes(x_plus_zero)
+  inspect(add_nodes_before.length(), content="1")
+
+  // Before saturation
+  inspect(eg.equiv(x_plus_zero, x), content="false")
+
+  // Apply only add_zero rule
+  let rules = IndexedRuleSet::new()
+  rules.add_rule(rule_add_zero(), [TAdd])
+  eg.saturate_indexed(rules, 10) |> ignore
+
+  // After saturation, x + 0 should equal x
+  inspect(eg.equiv(x_plus_zero, x), content="true")
+
+  // Debug: check canonical ids
+  let x_canonical = eg.find(x)
+  let x_plus_zero_canonical = eg.find(x_plus_zero)
+  inspect(x_canonical.0, content="0")
+  inspect(x_plus_zero_canonical.0, content="0")
+
+  // Debug: check how many classes exist
+  inspect(eg.num_classes(), content="2")
+
+  // Debug: print all nodes in the merged class
+  let nodes = eg.get_nodes(x_plus_zero)
+  let opcodes : Array[String] = []
+  for node in nodes {
+    opcodes.push(node.op.to_string())
+  }
+  inspect(opcodes, content="[\"Var(0)\", \"Add\"]")
+
+  // Extract should return Var(0), not Const(0)
+  let (cost, node) = eg.extract(x_plus_zero)
+  inspect(node.op, content="Var(0)")
+  inspect(cost, content="0")
+}
+
+///|
+/// Test that rebuild preserves all nodes when unions happen mid-rebuild.
+/// This tests the bug where nodes can be lost if:
+/// 1. Class A (lower ID) has single node that will collide
+/// 2. Class B (higher ID) has multiple nodes [N1, N2] where N1 collides with A
+/// 3. During rebuild, when processing B, N1 causes collision and union
+/// 4. N2 is then added to canonical_nodes[B] using stale canonical_id
+/// 5. In the second pass, B is non-canonical, so nodes from canonical_nodes[B] are lost
+test "rebuild: nodes preserved after intra-rebuild union" {
+  let eg = EGraph::new()
+
+  // Create two variables - x will be the "winner" after merge
+  let x = eg.add_var(0) // class 0
+  let y = eg.add_var(1) // class 1
+
+  // Create Add(x, x) FIRST - this will be in class 2 (lower ID)
+  // This is the collision source that will be processed first during rebuild
+  let add_xx = eg.add_add(x, x)
+
+  // Create Add(y, y) - this will be in class 3 (higher ID)
+  let add_yy = eg.add_add(y, y)
+
+  // Create Sub(y, y) and Mul(y, y) to ensure we have multiple nodes
+  let sub_yy = eg.add_sub(y, y)
+  let mul_yy = eg.add_mul(y, y)
+
+  // Merge all y-based ops into one class
+  // After this, the class containing add_yy has nodes: [Add(y,y), Sub(y,y), Mul(y,y)]
+  eg.merge(add_yy, sub_yy) |> ignore
+  eg.merge(add_yy, mul_yy) |> ignore
+  eg.rebuild()
+
+  // Verify the class has 3 nodes
+  let nodes_before = eg.get_nodes(add_yy)
+  inspect(nodes_before.length(), content="3")
+
+  // Now merge x and y
+  // After rebuild, Add(y,y) will canonicalize to Add(x,x) and collide
+  eg.merge(x, y) |> ignore
+  eg.rebuild()
+
+  // All should be in the same class now
+  inspect(eg.equiv(add_xx, add_yy), content="true")
+  inspect(eg.equiv(add_xx, sub_yy), content="true")
+  inspect(eg.equiv(add_xx, mul_yy), content="true")
+
+  // The merged class should have Add, Sub, AND Mul nodes
+  let nodes_after = eg.get_nodes(add_xx)
+  let mut has_add = false
+  let mut has_sub = false
+  let mut has_mul = false
+  for node in nodes_after {
+    match node.op {
+      Add => has_add = true
+      Sub => has_sub = true
+      Mul => has_mul = true
+      _ => ()
+    }
+  }
+  inspect(has_add, content="true")
+  inspect(has_sub, content="true")
+  inspect(has_mul, content="true")
+}
+
+///|
+/// Test that rebuild re-canonicalizes nodes after applying unions.
+/// This tests the bug where nodes with children that get merged during rebuild
+/// are left with stale child class IDs.
+///
+/// Scenario:
+/// - Class 0: Var(0), Class 1: Var(1)
+/// - Class 2: Add(0, 0), Class 3: Add(1, 1)
+/// - Class 4: Mul(0, 2), Class 5: Mul(1, 3)
+/// - merge(0, 1) triggers rebuild
+///
+/// During rebuild:
+/// - Add(0,0) and Add(1,1) both canonicalize to Add(0,0), causing union(2,3)
+/// - Before the union is applied, Mul(1,3) canonicalizes to Mul(0,3)
+/// - After union(2,3), find(3)=2, so Mul(0,3) should become Mul(0,2)
+/// - But without re-canonicalization, Mul(0,3) has stale child reference
+test "rebuild: re-canonicalize nodes after unions" {
+  let eg = EGraph::new()
+
+  // Create two variables
+  let x = eg.add_var(0) // class 0
+  let y = eg.add_var(1) // class 1
+
+  // Create Add(x, x) and Add(y, y)
+  let add_xx = eg.add_add(x, x) // class 2
+  let add_yy = eg.add_add(y, y) // class 3
+
+  // Create Mul(x, Add(x,x)) and Mul(y, Add(y,y))
+  let mul_x_addxx = eg.add_mul(x, add_xx) // class 4
+  let mul_y_addyy = eg.add_mul(y, add_yy) // class 5
+
+  // Verify initial state - all are different
+  inspect(eg.equiv(add_xx, add_yy), content="false")
+  inspect(eg.equiv(mul_x_addxx, mul_y_addyy), content="false")
+
+  // Merge x and y - this will trigger a cascade:
+  // 1. Add(x,x) and Add(y,y) will canonicalize to same node
+  // 2. Thus Add classes should merge
+  // 3. Mul(x, Add(x,x)) and Mul(y, Add(y,y)) should also merge
+  eg.merge(x, y) |> ignore
+  eg.rebuild()
+
+  // After rebuild, Add(x,x) and Add(y,y) should be equivalent
+  inspect(eg.equiv(add_xx, add_yy), content="true")
+
+  // The Mul nodes should ALSO be equivalent because:
+  // - Their first child (x/y) are now equivalent
+  // - Their second child (Add(x,x)/Add(y,y)) are now equivalent
+  // This will FAIL if nodes aren't re-canonicalized after unions
+  inspect(eg.equiv(mul_x_addxx, mul_y_addyy), content="true")
+
+  // Verify hashcons consistency: looking up the canonical form should work
+  let mul_canonical = eg.canonicalize({
+    op: Mul,
+    children: [eg.find(x), eg.find(add_xx)],
+  })
+  let lookup_result = eg.hashcons.get(mul_canonical)
+  inspect(lookup_result is None, content="false")
 }

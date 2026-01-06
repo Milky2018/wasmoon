@@ -24,7 +24,7 @@ pub fn EGraphBuilder::new() -> EGraphBuilder {
     value_map: {},
     class_to_value: {},
     def_map: {},
-    ruleset: @egraph.standard_rules_indexed(),
+    ruleset: @egraph.get_global_ruleset(),
   }
 }
 
@@ -270,83 +270,10 @@ pub fn optimize_block(block : Block) -> Map[Int, (Int, @egraph.ENode)] {
 }
 
 ///|
-/// Convert EOpcode back to IR Opcode
-fn eopcode_to_opcode(eop : @egraph.EOpcode) -> Opcode? {
-  match eop {
-    Const(c) => Some(Iconst(c))
-    Fconst(_) => None // Would need to convert bits to Fconst
-    Add => Some(Iadd)
-    Sub => Some(Isub)
-    Mul => Some(Imul)
-    Sdiv => Some(Sdiv)
-    Udiv => Some(Udiv)
-    Srem => Some(Srem)
-    Urem => Some(Urem)
-    And => Some(Band)
-    Or => Some(Bor)
-    Xor => Some(Bxor)
-    Shl => Some(Ishl)
-    Sshr => Some(Sshr)
-    Ushr => Some(Ushr)
-    Rotl => Some(Rotl)
-    Rotr => Some(Rotr)
-    Neg => None // Neg is synthetic, not in IR
-    Bnot => Some(Bnot) // Bitwise NOT
-    Clz => Some(Clz)
-    Ctz => Some(Ctz)
-    Popcnt => Some(Popcnt)
-    Bswap => None // Not in IR
-    Bitrev => None // Not in IR
-    Icmp(_) => None // Would need to reconstruct IntCC
-    Eq => None // Shorthand for Icmp, not direct IR op
-    Ne => None // Shorthand for Icmp, not direct IR op
-    Select => Some(Select)
-    Bmask => None // Not in IR
-    // Integer min/max - would need special lowering
-    Smin => None
-    Smax => None
-    Umin => None
-    Umax => None
-    // Integer absolute value - would need special lowering
-    Iabs => None
-    // Three-way comparison - would need special lowering
-    SpaceshipS => None
-    SpaceshipU => None
-    Ireduce(_, _) => Some(Ireduce)
-    Uextend(_, _) => Some(Uextend)
-    Sextend(_, _) => Some(Sextend)
-    // Float operations - map to IR float opcodes
-    Fadd => Some(Fadd)
-    Fsub => Some(Fsub)
-    Fmul => Some(Fmul)
-    Fdiv => Some(Fdiv)
-    Fmin => Some(Fmin)
-    Fmax => Some(Fmax)
-    Fcopysign => None // Not directly in IR
-    Fneg => Some(Fneg)
-    Fabs => Some(Fabs)
-    Fsqrt => Some(Fsqrt)
-    Fceil => Some(Fceil)
-    Ffloor => Some(Ffloor)
-    Ftrunc => Some(Ftrunc)
-    Fnearest => Some(Fnearest)
-    Fcmp(_) => None // Would need to reconstruct FloatCC
-    Fpromote => Some(Fpromote)
-    Fdemote => Some(Fdemote)
-    FcvtToSint => Some(FcvtToSint)
-    FcvtToUint => Some(FcvtToUint)
-    SintToFcvt => Some(SintToFcvt)
-    UintToFcvt => Some(UintToFcvt)
-    // Vector operations
-    Splat => None // Would need type info for IR Splat
-    Vconst(_) => None // Would need to convert to proper type
-    Var(_) => None // Variable reference, not an instruction
-  }
-}
-
-///|
-/// Check if the extracted expression is simpler than the original
-/// Returns Some(simplified_opcode) if optimization found, None otherwise
+/// Check if the extracted expression is a constant folding result
+/// Returns Some(Iconst(c)) if constant folding found, None otherwise
+/// NOTE: Only handles constant folding. Complex rewrites (like x*3 -> (x<<1)+x)
+/// are not handled because they would require operand reconstruction.
 pub fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
@@ -355,27 +282,11 @@ pub fn EGraphBuilder::get_simplified_opcode(
     None => None
     Some(class_id) => {
       let (_, best_node) = self.egraph.extract(class_id)
-      // Check if it's a constant folding result
+      // Only handle constant folding - returns Iconst if the result is a constant
       match best_node.op {
         Const(c) => Some(Iconst(c))
-        _ =>
-          // Check if the opcode changed
-          match self.def_map.get(value.id) {
-            None => None
-            Some(orig_inst) => {
-              let orig_eop = opcode_to_eopcode(orig_inst)
-              match orig_eop {
-                None => None
-                Some(orig) =>
-                  // Compare opcodes ignoring type parameters
-                  if orig.tag() != best_node.op.tag() {
-                    eopcode_to_opcode(best_node.op)
-                  } else {
-                    None
-                  }
-              }
-            }
-          }
+        // Don't change opcode for non-constant results - would need operand reconstruction
+        _ => None
       }
     }
   }

@@ -75,12 +75,10 @@ pub struct LiveInterval {
   uses : Array[ProgPoint]
   // Register hint (e.g., from a move instruction)
   hint : @abi.PReg?
-  // Hint vreg: prefer to use the same register as this vreg (for copy coalescing)
-  mut hint_vreg : Int?
-  // Assigned physical register (filled by allocator)
-  mut assigned : @abi.PReg?
-  // Spill slot if spilled (filled by allocator)
-  mut spill_slot : Int?
+  // Assigned physical register (for display in debug output)
+  assigned : @abi.PReg?
+  // Spill slot if spilled (for display in debug output)
+  spill_slot : Int?
   // Whether this interval crosses a function call (cannot use caller-saved registers)
   mut crosses_call : Bool
 }
@@ -93,7 +91,6 @@ fn LiveInterval::new(vreg : @abi.VReg, start : ProgPoint) -> LiveInterval {
     end: start,
     uses: [start],
     hint: None,
-    hint_vreg: None,
     assigned: None,
     spill_slot: None,
     crosses_call: false,
@@ -731,96 +728,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   }
 }
 
-// ============ Copy Coalescing ============
-
-///|
-/// Coalescing pairs: maps vreg id -> list of vregs it wants to coalesce with
-/// Used for bidirectional hint propagation
-priv struct CoalescingInfo {
-  // Forward hints: dst wants to use src's register (dst = mov src)
-  forward_hints : Map[Int, Int]
-  // Reverse hints: src wants to use dst's register (for cases where dst is allocated first)
-  reverse_hints : Map[Int, Int]
-}
-
-///|
-fn CoalescingInfo::new() -> CoalescingInfo {
-  { forward_hints: {}, reverse_hints: {} }
-}
-
-///|
-/// Collect coalescing hints from Move instructions
-/// For each `dst = mov src`, we want dst to use the same register as src
-/// Also tracks reverse hints for cases where dst is processed first
-fn collect_coalescing_hints(
-  func : VCodeFunction,
-  liveness : LivenessResult,
-) -> CoalescingInfo {
-  let info = CoalescingInfo::new()
-  for block in func.blocks {
-    for inst in block.insts {
-      // Check if this is a Move instruction with virtual registers
-      if inst.opcode is @instr.Move &&
-        inst.defs.length() == 1 &&
-        inst.uses.length() == 1 {
-        // Get source and destination vregs
-        let src_vreg_opt = match inst.uses[0] {
-          @abi.Virtual(vreg) => Some(vreg)
-          _ => None
-        }
-        let dst_vreg_opt = match inst.defs[0].reg {
-          @abi.Virtual(vreg) => Some(vreg)
-          _ => None
-        }
-        // Set hint on destination interval
-        if (src_vreg_opt, dst_vreg_opt) is (Some(src_vreg), Some(dst_vreg)) {
-          // Skip if same vreg (shouldn't happen but be safe)
-          if src_vreg.id == dst_vreg.id {
-            continue
-          }
-          // Set hint_vreg on destination's interval (forward hint)
-          if liveness.intervals.get(dst_vreg.id) is Some(dst_interval) {
-            dst_interval.hint_vreg = Some(src_vreg.id)
-          }
-          // Record forward and reverse hints for bidirectional coalescing
-          info.forward_hints.set(dst_vreg.id, src_vreg.id)
-          info.reverse_hints.set(src_vreg.id, dst_vreg.id)
-        }
-      }
-    }
-  }
-  info
-}
-
-///|
-/// Resolve vreg hints to physical register hints
-/// Called during allocation after some intervals have been assigned
-/// Supports bidirectional hints from coalescing
-fn resolve_vreg_hint(
-  interval : LiveInterval,
-  assignments : Map[Int, @abi.PReg],
-  coalescing : CoalescingInfo,
-) -> @abi.PReg? {
-  // First check if we have an explicit physical register hint
-  if interval.hint is Some(preg) {
-    return Some(preg)
-  }
-  // Check forward hint: we want to use the source's register (dst = mov src)
-  if interval.hint_vreg is Some(hint_vreg_id) {
-    if assignments.get(hint_vreg_id) is Some(preg) {
-      return Some(preg)
-    }
-  }
-  // Check reverse hint: src wants to use dst's register (dst = mov src, but dst allocated first)
-  if coalescing.reverse_hints.get(interval.vreg.id) is Some(dst_vreg_id) {
-    if assignments.get(dst_vreg_id) is Some(preg) {
-      return Some(preg)
-    }
-  }
-  None
-}
-
-// ============ Linear Scan Register Allocator ============
+// ============ RegMove for Constraint Processing ============
 
 ///|
 /// A register move instruction (from regalloc constraint processing)
@@ -979,375 +887,121 @@ pub struct RegAllocResult {
   // Map from vreg id to spill slot (if spilled)
   spill_slots : Map[Int, Int]
   // Total number of spill slots used
-  mut num_spill_slots : Int
+  num_spill_slots : Int
   // Constraint edits: (block_idx, inst_idx) -> edits to insert
   // Fixed register constraint handling
   inst_edits : Map[(Int, Int), InstEdits]
 }
 
+// ============ Reload Coalescing ============
+
 ///|
-/// Linear scan register allocator
-struct LinearScanAllocator {
-  // Available physical registers by class
-  int_regs : Array[@abi.PReg]
-  float_regs : Array[@abi.PReg]
-  // Callee-saved registers for cross-call allocation (may exclude X23)
-  callee_saved_int_regs : Array[@abi.PReg]
-  // Callee-saved float registers for cross-call allocation (D8-D15)
-  callee_saved_float_regs : Array[@abi.PReg]
-  // Current state
-  mut active : Array[LiveInterval] // Intervals currently occupying registers
-  mut next_spill_slot : Int
-  // Block order for correct interval comparison in non-linear CFGs
-  // block_order[block_id] = execution order (O(1) lookup)
-  mut block_order : FixedArray[Int]
-  // Reserved registers at each instruction point (for FixedReg constraints)
-  // Key: (block_idx, inst_idx), Value: set of reserved register indices
-  // Note: constraints must be respected during allocation
-  reserved_int_regs : Map[(Int, Int), Set[Int]]
-  reserved_float_regs : Map[(Int, Int), Set[Int]]
+/// A reload interval tracks where a reloaded value can be kept alive
+/// to eliminate redundant loads from the same spill slot
+priv struct ReloadInterval {
+  vreg_class : @abi.RegClass // Register class
+  mut preg : @abi.PReg? // Allocated register (None = use scratch)
 }
 
 ///|
-pub fn LinearScanAllocator::new(
-  int_regs : Array[@abi.PReg],
-  float_regs : Array[@abi.PReg],
-  callee_saved_int_regs : Array[@abi.PReg],
-  callee_saved_float_regs? : Array[@abi.PReg] = [],
-) -> LinearScanAllocator {
-  {
-    int_regs,
-    float_regs,
-    callee_saved_int_regs,
-    callee_saved_float_regs,
-    active: [],
-    next_spill_slot: 0,
-    block_order: FixedArray::make(0, 0),
-    reserved_int_regs: {},
-    reserved_float_regs: {},
-  }
-}
-
-///|
-/// Collect FixedReg constraints from all instructions
-/// This must be called before allocation so that constrained registers
-/// can be avoided during the allocation process.
-/// Design: constraints are known before allocation.
-fn LinearScanAllocator::collect_constraints(
-  self : LinearScanAllocator,
+/// Compute reload intervals for spilled values in each block
+/// Returns a map: (block_idx, spill_slot) -> ReloadInterval
+fn compute_reload_intervals(
   func : VCodeFunction,
-) -> Unit {
+  alloc : RegAllocResult,
+) -> Map[(Int, Int), ReloadInterval] {
+  let intervals : Map[(Int, Int), ReloadInterval] = {}
   for block_idx, block in func.blocks {
+    // Track uses of spilled vregs in this block
+    // Key: spill_slot, Value: (first_inst, last_inst, vreg_class)
+    let slot_uses : Map[Int, (Int, Int, @abi.RegClass)] = {}
     for inst_idx, inst in block.insts {
-      // Collect use constraints
-      for constraint in inst.use_constraints {
-        if constraint is @abi.FixedReg(preg) {
-          let key = (block_idx, inst_idx)
-          match preg.class {
-            @abi.Int => {
-              if self.reserved_int_regs.get(key) is None {
-                self.reserved_int_regs.set(key, Set::new())
-              }
-              self.reserved_int_regs.get(key).unwrap().add(preg.index)
-            }
-            @abi.Float32 | @abi.Float64 | @abi.Vector => {
-              if self.reserved_float_regs.get(key) is None {
-                self.reserved_float_regs.set(key, Set::new())
-              }
-              self.reserved_float_regs.get(key).unwrap().add(preg.index)
-            }
-          }
-        }
-      }
-      // Collect def constraints
-      for constraint in inst.def_constraints {
-        if constraint is @abi.FixedReg(preg) {
-          let key = (block_idx, inst_idx)
-          match preg.class {
-            @abi.Int => {
-              if self.reserved_int_regs.get(key) is None {
-                self.reserved_int_regs.set(key, Set::new())
-              }
-              self.reserved_int_regs.get(key).unwrap().add(preg.index)
-            }
-            @abi.Float32 | @abi.Float64 | @abi.Vector => {
-              if self.reserved_float_regs.get(key) is None {
-                self.reserved_float_regs.set(key, Set::new())
-              }
-              self.reserved_float_regs.get(key).unwrap().add(preg.index)
+      for use_reg in inst.uses {
+        if use_reg is @abi.Virtual(vreg) {
+          if alloc.spill_slots.get(vreg.id) is Some(slot) {
+            match slot_uses.get(slot) {
+              Some((first, _, cls)) =>
+                slot_uses.set(slot, (first, inst_idx, cls))
+              None => slot_uses.set(slot, (inst_idx, inst_idx, vreg.class))
             }
           }
         }
       }
     }
+    // Create reload intervals for slots used multiple times
+    for slot, info in slot_uses {
+      let (first_inst, last_inst, vreg_class) = info
+      if last_inst > first_inst {
+        // Multiple uses - worth coalescing
+        intervals.set((block_idx, slot), { vreg_class, preg: None })
+      }
+    }
   }
+  intervals
 }
 
 ///|
-/// Check if a register is reserved at any point in an interval's live range
-fn LinearScanAllocator::is_reserved_in_range(
-  self : LinearScanAllocator,
-  preg : @abi.PReg,
-  interval : LiveInterval,
-) -> Bool {
-  let reserved_map = match preg.class {
-    @abi.Int => self.reserved_int_regs
-    @abi.Float32 | @abi.Float64 | @abi.Vector => self.reserved_float_regs
-  }
-  let block_order = self.block_order
-
-  // Check all reserved points to see if any overlap with this interval
-  for entry in reserved_map {
-    let ((block_idx, inst_idx), reserved_set) = entry
-    if !reserved_set.contains(preg.index) {
-      continue
-    }
-    // Check if this point is within the interval's live range
-    let point : ProgPoint = { block: block_idx, inst: inst_idx, pos: Before }
-    let start_cmp = interval.start.compare_with_order(point, block_order)
-    let end_cmp = interval.end.compare_with_order(point, block_order)
-    // interval.start <= point <= interval.end
-    if start_cmp <= 0 && end_cmp >= 0 {
-      return true
-    }
-  }
-  false
-}
-
-///|
-/// Allocate registers for a function
-pub fn LinearScanAllocator::allocate(
-  self : LinearScanAllocator,
+/// Try to allocate registers for reload intervals
+/// Uses callee-saved registers that aren't already in use
+fn allocate_reload_registers(
   func : VCodeFunction,
-  liveness : LivenessResult,
-) -> RegAllocResult {
-  // Step 0: Collect constraints from all instructions
-  // This allows us to avoid constrained registers during allocation
-  self.collect_constraints(func)
-
-  // Copy block order from liveness result (just reference the array)
-  self.block_order = liveness.block_order
-
-  // Step 1: Collect coalescing hints from Move instructions
-  let coalescing = collect_coalescing_hints(func, liveness)
-  let result : RegAllocResult = {
-    assignments: {},
-    spill_slots: {},
-    num_spill_slots: 0,
-    inst_edits: {},
+  alloc : RegAllocResult,
+  intervals : Map[(Int, Int), ReloadInterval],
+) -> Unit {
+  // Collect which callee-saved registers are already allocated
+  let used_int_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let used_float_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  for _, preg in alloc.assignments {
+    match preg.class {
+      @abi.Int => used_int_regs.add(preg.index) |> ignore
+      _ => used_float_regs.add(preg.index) |> ignore
+    }
   }
-
-  // Pre-assign function parameters to ABI registers
-  // Note: all params use X0-X7 (int) or V0-V7 (float)
-  // vmctx is an explicit param in the function signature, not special-cased here
-  // NOTE: Only pre-assign if the parameter doesn't cross a call, otherwise
-  // it will be handled by the normal allocation process (which will use callee-saved)
-  let max_int_params = @abi.MAX_REG_PARAMS // 8
-  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
-  let mut int_idx = 0
-  let mut float_idx = 0
-  for param in func.params {
-    if liveness.intervals.get(param.id) is Some(interval) {
-      // Determine which register this param comes in
-      let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
-        @abi.Int =>
-          if int_idx < max_int_params {
-            (Some(@abi.PReg::{ index: int_idx, class: @abi.Int }), true)
-          } else {
-            (None, true) // Stack param
+  // Available callee-saved registers for reloads (X19-X28 for int, D8-D15 for float)
+  // We use a subset to avoid conflicts with normal allocation
+  let reload_int_regs = [19, 20, 21, 22, 23]
+  let reload_float_regs = [8, 9, 10, 11, 12]
+  // Per-block allocation to avoid conflicts within a block
+  for block_idx, block in func.blocks {
+    // Track which reload registers are in use within this block
+    let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
+    let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
+    // Also track registers defined in this block (can't use them for reloads)
+    for inst in block.insts {
+      for def in inst.defs {
+        if def.reg is @abi.Virtual(vreg) {
+          match alloc.assignments.get(vreg.id) {
+            Some(preg) =>
+              match preg.class {
+                @abi.Int => block_int_used.add(preg.index) |> ignore
+                _ => block_float_used.add(preg.index) |> ignore
+              }
+            None => ()
           }
-        @abi.Float32 | @abi.Float64 | @abi.Vector =>
-          // Vector uses same Vn registers as Float
-          if float_idx < max_float_params {
-            (Some(@abi.PReg::{ index: float_idx, class: param.class }), false)
-          } else {
-            (None, false) // Stack param
-          }
+        }
       }
-      // Update counters
-      if is_int {
-        int_idx = int_idx + 1
-      } else {
-        float_idx = float_idx + 1
-      }
-      // Skip if crosses call or no register available
-      if interval.crosses_call || preg_opt is None {
+    }
+    // Allocate reload registers for intervals in this block
+    for key, interval in intervals {
+      let (b_idx, _) = key
+      if b_idx != block_idx {
         continue
       }
-      // Safe to pre-assign to ABI register
-      let preg = preg_opt.unwrap()
-      result.assignments.set(param.id, preg)
-      interval.assigned = Some(preg)
-      self.active.push(interval)
-    }
-  }
-
-  // Sort intervals by start point using block order
-  let intervals : Array[LiveInterval] = []
-  for entry in liveness.intervals {
-    let (_, interval) = entry
-    // Skip already-assigned parameters
-    if interval.assigned is Some(_) {
-      continue
-    }
-    intervals.push(interval)
-  }
-  let block_order = self.block_order
-  intervals.sort_by(fn(a, b) {
-    a.start.compare_with_order(b.start, block_order)
-  })
-
-  // Process intervals in order of start point
-  for interval in intervals {
-    // Expire old intervals that end before this one starts
-    self.expire_old_intervals(interval)
-
-    // Get available registers for this class
-    // If interval crosses a call, only use callee-saved registers
-    let avail_regs = if interval.crosses_call {
-      if interval.vreg.class is @abi.Int {
-        self.callee_saved_int_regs
-      } else {
-        // Use callee-saved FPRs (D8-D15) for floats that must survive across calls
-        self.callee_saved_float_regs
+      // Find an available register
+      let (candidates, used_set) = match interval.vreg_class {
+        @abi.Int => (reload_int_regs, block_int_used)
+        _ => (reload_float_regs, block_float_used)
       }
-    } else if interval.vreg.class is @abi.Int {
-      self.int_regs
-    } else {
-      self.float_regs
-    }
-
-    // Try to allocate a register (pass assignments and coalescing info for hints)
-    let assigned = self.try_allocate_reg(
-      interval,
-      avail_regs,
-      result.assignments,
-      coalescing,
-    )
-    if assigned is Some(preg) {
-      let assigned_preg : @abi.PReg = {
-        index: preg.index,
-        class: interval.vreg.class,
+      for idx in candidates {
+        if !used_set.contains(idx) {
+          // Found an available register
+          interval.preg = Some({ index: idx, class: interval.vreg_class })
+          used_set.add(idx) |> ignore
+          break
+        }
       }
-      interval.assigned = Some(assigned_preg)
-      self.active.push(interval)
-      result.assignments.set(interval.vreg.id, assigned_preg)
-    } else {
-      self.spill_interval(func, interval, result)
     }
   }
-  result.num_spill_slots = self.next_spill_slot
-  result
-}
-
-///|
-/// Remove intervals that have ended
-fn LinearScanAllocator::expire_old_intervals(
-  self : LinearScanAllocator,
-  current : LiveInterval,
-) -> Unit {
-  // Sort active by end point using block order, and remove those that end before current starts
-  let block_order = self.block_order
-  self.active.sort_by(fn(a, b) { a.end.compare_with_order(b.end, block_order) })
-  let new_active : Array[LiveInterval] = []
-  for interval in self.active {
-    // Check if interval ends before current starts
-    // CRITICAL FIX: In the same basic block, be conservative about register reuse.
-    // We require at least 2 instructions gap before expiring an interval.
-    // This prevents two issues:
-    // 1. Same instruction use-def: v25 = add x21, v22 cannot become x23 = add x21, x23
-    // 2. Adjacent definitions: dead values should not immediately share registers
-    //    with the next definition (e.g., d0 = ldf 1; d0 = ldf 2 is wrong)
-    let overlaps = if interval.end.block == current.start.block {
-      // Same block: require at least 2 instruction gap
-      // interval.end.inst >= current.start.inst - 1 means they're adjacent or same
-      interval.end.inst >= current.start.inst - 1
-    } else {
-      // Different blocks: use normal comparison
-      let cmp = interval.end.compare_with_order(current.start, block_order)
-      cmp >= 0
-    }
-    if overlaps {
-      new_active.push(interval)
-    }
-  }
-  self.active = new_active
-}
-
-///|
-/// Check if two register classes are compatible (can use same physical registers)
-fn reg_class_eq(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
-  match (a, b) {
-    (@abi.Int, @abi.Int) => true
-    // Float32, Float64, and Vector all use V0-V31 registers
-    (@abi.Float32, @abi.Float32)
-    | (@abi.Float32, @abi.Float64)
-    | (@abi.Float32, @abi.Vector)
-    | (@abi.Float64, @abi.Float32)
-    | (@abi.Float64, @abi.Float64)
-    | (@abi.Float64, @abi.Vector)
-    | (@abi.Vector, @abi.Float32)
-    | (@abi.Vector, @abi.Float64)
-    | (@abi.Vector, @abi.Vector) => true
-    _ => false
-  }
-}
-
-///|
-/// Try to allocate a physical register for an interval
-/// Note: avoid registers that are reserved by constraints
-fn LinearScanAllocator::try_allocate_reg(
-  self : LinearScanAllocator,
-  interval : LiveInterval,
-  avail_regs : Array[@abi.PReg],
-  assignments : Map[Int, @abi.PReg],
-  coalescing : CoalescingInfo,
-) -> @abi.PReg? {
-  // Build set of registers currently in use by active intervals
-  let used : Set[Int] = Set::new()
-  for active in self.active {
-    if active.assigned is Some(preg) &&
-      reg_class_eq(preg.class, interval.vreg.class) {
-      used.add(preg.index)
-    }
-  }
-
-  // Try hint first if available and not reserved
-  // This supports copy coalescing: if dst = mov src, dst will try to use src's register
-  // Also supports reverse hints for cases where dst is allocated before src
-  let resolved_hint = resolve_vreg_hint(interval, assignments, coalescing)
-  if resolved_hint is Some(hint) &&
-    !used.contains(hint.index) &&
-    !self.is_reserved_in_range(hint, interval) {
-    return Some(hint)
-  }
-
-  // Find a free register that is not reserved by any constraint
-  // in the interval's live range
-  for preg in avail_regs {
-    if !used.contains(preg.index) && !self.is_reserved_in_range(preg, interval) {
-      return Some(preg)
-    }
-  }
-  None
-}
-
-///|
-/// Spill an interval to memory
-fn LinearScanAllocator::spill_interval(
-  self : LinearScanAllocator,
-  func : VCodeFunction,
-  interval : LiveInterval,
-  result : RegAllocResult,
-) -> Unit {
-  ignore(func)
-  // Allocate a spill slot
-  let slot = self.next_spill_slot
-  self.next_spill_slot = slot + 1
-  interval.spill_slot = Some(slot)
-  result.spill_slots.set(interval.vreg.id, slot)
-  // Note: Actual spill/reload instruction insertion happens in apply_allocation
-  // by inspecting spill_slots and inserting StackLoad/StackStore as needed
 }
 
 // ============ Constraint Processing ============
@@ -1457,6 +1111,10 @@ pub fn apply_allocation(
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
 
+  // Compute reload intervals for spill coalescing
+  let reload_intervals = compute_reload_intervals(func, alloc)
+  allocate_reload_registers(func, alloc, reload_intervals)
+
   // Convert function parameters
   // Note: all params use X0-X7 (int) or V0-V7 (float)
   // vmctx is an explicit param in the function signature
@@ -1558,26 +1216,24 @@ pub fn apply_allocation(
     // Block-level scratch register counter to avoid aliasing across instructions
     let mut block_scratch_idx = 0
 
+    // Track which spill slots have been loaded into coalesced reload registers
+    // Key: spill_slot, Value: preg holding the reloaded value
+    let active_reloads : Map[Int, @abi.PReg] = {}
+
     // Process instructions
     for inst_idx, inst in block.insts {
       // First, insert reload instructions for any spilled uses
       // Track which scratch registers are used for each spilled vreg
       let spill_regs : Map[Int, @abi.PReg] = {}
 
-      // Check if this is a tail call instruction - needs special handling
-      // Note: CallPtr uses FixedReg constraints, so regalloc handles it normally
-      let is_call_indirect = inst.opcode is ReturnCallIndirect(_, _)
-
-      // For ReturnCallIndirect with many spilled args, we use a special strategy:
-      // - func_ptr (uses[0]): reload to X18
-      // - register args (uses[1-8]): if spilled, reload to X16/X17 (max 2)
-      // - stack args (uses[9+]): if spilled, use spilled register encoding (emit handles them)
-      //
       // X16, X17 are the only truly safe scratch registers because:
-      // - X3-X10: may hold function parameters
-      // - X11-X15: used by call marshalling
-      // - X18: used for func_ptr
+      // - X0-X7: parameter registers
+      // - X8-X15: caller-saved temporaries (may be in use)
+      // - X18: platform reserved (TLS on some platforms)
       // - X19+: allocatable callee-saved registers
+      //
+      // For uses with FixedReg constraints (e.g., CallPtr/ReturnCallIndirect args),
+      // constraint edits will handle the reload, so we skip normal spilled use handling.
 
       // First, collect registers that are in use by non-spilled uses
       // to avoid clobbering them with scratch register reloads
@@ -1602,31 +1258,35 @@ pub fn apply_allocation(
             }
 
             // Determine how to handle this spilled use
-            if is_call_indirect && i == 0 {
-              // CallIndirect's func_ptr (first use): reload directly to X18
-              let scratch_preg : @abi.PReg = { index: 18, class: scratch_class }
-              spill_regs.set(vreg.id, scratch_preg)
-              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
-              new_block.add_inst(reload_inst)
-            } else if is_call_indirect && i >= 1 {
-              // CallIndirect's args (all args, including register args 0-7 and stack args 8+)
-              // Use spilled register encoding - emit code will handle the load directly
-              // This avoids X16/X17 aliasing when many args are spilled
+            // Check FixedReg constraint first - constraint edits will handle the reload
+            if i < inst.use_constraints.length() &&
+              inst.use_constraints[i] is @abi.FixedReg(_) {
+              // This use has a FixedReg constraint - constraint edits will handle the reload
+              // Use spilled encoding so use rewriting puts the fixed register
               let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
               spill_regs.set(vreg.id, spilled_preg)
-              // Don't insert reload - emit code will load directly from spill slot
-            } else {
+            } else if active_reloads.get(slot) is Some(reload_preg) {
               // Regular spilled uses (non-CallIndirect instructions)
-              // Use X16, X17, X18 as scratch registers, but avoid registers
-              // that are already in use by other operands in this instruction
-              let scratch_candidates = [16, 17, 18]
-              let mut scratch_idx = inst_spill_idx % 3
+              // Check if we have a coalesced reload register for this slot
+              // Value already loaded - reuse the register (no new load needed)
+              spill_regs.set(vreg.id, reload_preg)
+            } else if reload_intervals.get((block_idx, slot)) is Some(interval) &&
+              interval.preg is Some(reload_preg) {
+              // First use of this slot in the interval - load into coalesced register
+              spill_regs.set(vreg.id, reload_preg)
+              active_reloads.set(slot, reload_preg)
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(reload_preg) })
+              new_block.add_inst(reload_inst)
+            } else {
+              // No coalescing available - use scratch registers X16, X17
+              let scratch_candidates = [16, 17]
+              let mut scratch_idx = inst_spill_idx % 2
               // Find a scratch register that's not already in use
               let mut attempts = 0
               while used_regs.contains(scratch_candidates[scratch_idx]) &&
-                    attempts < 3 {
-                scratch_idx = (scratch_idx + 1) % 3
+                    attempts < 2 {
+                scratch_idx = (scratch_idx + 1) % 2
                 attempts += 1
               }
               let scratch_preg : @abi.PReg = {
@@ -1711,7 +1371,7 @@ pub fn apply_allocation(
       }
 
       // Rewrite uses
-      for use_reg in inst.uses {
+      for i, use_reg in inst.uses {
         match use_reg {
           @abi.Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
@@ -1720,7 +1380,20 @@ pub fn apply_allocation(
                 // Spilled: use the scratch register we reloaded into
                 match spill_regs.get(vreg.id) {
                   Some(scratch_preg) =>
-                    new_inst.add_use(@abi.Physical(scratch_preg))
+                    // Check if scratch_preg is a spilled encoding (meaning FixedReg constraint)
+                    if scratch_preg.is_spilled() {
+                      // Use the fixed register from the constraint
+                      // Constraint edits will load the value there
+                      guard i < inst.use_constraints.length() else {
+                        abort("spilled encoding without constraint")
+                      }
+                      guard inst.use_constraints[i] is @abi.FixedReg(fixed_preg) else {
+                        abort("spilled encoding without FixedReg constraint")
+                      }
+                      new_inst.add_use(@abi.Physical(fixed_preg))
+                    } else {
+                      new_inst.add_use(@abi.Physical(scratch_preg))
+                    }
                   None => {
                     // Fallback: use X16 if somehow not in spill_regs
                     let scratch_preg : @abi.PReg = {
@@ -1740,13 +1413,24 @@ pub fn apply_allocation(
       // Use parallel move resolver to handle cyclic dependencies
       if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
         let resolved_moves = resolve_parallel_moves(edits.before)
+        // Track which spill slots have been reloaded in this batch for coalescing
+        let reloaded_slots : Map[Int, @abi.PReg] = {}
         for mv in resolved_moves {
           if mv.from.is_spilled() {
-            // Reload from spill slot to target register
             let slot = mv.from.get_spill_slot()
-            let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-            reload_inst.add_def({ reg: @abi.Physical(mv.to) })
-            new_block.add_inst(reload_inst)
+            if reloaded_slots.get(slot) is Some(source_preg) {
+              // This slot was already reloaded - use mov instead of another load
+              let move_inst = @instr.VCodeInst::new(Move)
+              move_inst.add_def({ reg: @abi.Physical(mv.to) })
+              move_inst.add_use(@abi.Physical(source_preg))
+              new_block.add_inst(move_inst)
+            } else {
+              // First reload of this slot - emit StackLoad and record
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(mv.to) })
+              new_block.add_inst(reload_inst)
+              reloaded_slots.set(slot, mv.to)
+            }
           } else {
             // Register to register move
             let move_inst = @instr.VCodeInst::new(Move)
@@ -2074,36 +1758,6 @@ fn build_aarch64_reg_pools(
 }
 
 ///|
-/// Allocate registers for a function using default AArch64 register set
-pub fn allocate_registers_aarch64(func : VCodeFunction) -> VCodeFunction {
-  // Step 0: Eliminate dead code first
-  let func = eliminate_dead_code(func)
-
-  // Build register pools
-  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
-    func,
-  )
-
-  // Compute liveness
-  let liveness = compute_liveness(func)
-
-  // Allocate using linear scan
-  let allocator = LinearScanAllocator::new(
-    int_regs,
-    float_regs,
-    callee_saved_int_regs,
-    callee_saved_float_regs~,
-  )
-  let alloc_result = allocator.allocate(func, liveness)
-
-  // Process constraints and generate RegMove edits
-  process_constraints(func, alloc_result)
-
-  // Apply allocation
-  apply_allocation(func, alloc_result)
-}
-
-///|
 /// Allocate registers using the Ion-style backtracking allocator
 /// This allocator supports:
 /// - Bundle merging for copy coalescing
@@ -2183,34 +1837,8 @@ fn count_instructions(func : VCodeFunction) -> AllocStats {
 }
 
 ///|
-/// Get allocation statistics using linear scan allocator
-pub fn get_linear_scan_stats(func : VCodeFunction) -> AllocStats {
-  let func = eliminate_dead_code(func)
-  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
-    func,
-  )
-  let liveness = compute_liveness(func)
-
-  // Count vregs
-  let num_vregs = liveness.intervals.length()
-  let allocator = LinearScanAllocator::new(
-    int_regs,
-    float_regs,
-    callee_saved_int_regs,
-    callee_saved_float_regs~,
-  )
-  let alloc_result = allocator.allocate(func, liveness)
-  process_constraints(func, alloc_result)
-  let allocated = apply_allocation(func, alloc_result)
-  let stats = count_instructions(allocated)
-  stats.num_vregs = num_vregs
-  stats.num_spill_slots = alloc_result.num_spill_slots
-  stats
-}
-
-///|
-/// Get allocation statistics using backtracking allocator
-pub fn get_backtracking_stats(func : VCodeFunction) -> AllocStats {
+/// Get allocation statistics
+pub fn get_alloc_stats(func : VCodeFunction) -> AllocStats {
   let func = eliminate_dead_code(func)
   let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
     func,
@@ -2228,30 +1856,4 @@ pub fn get_backtracking_stats(func : VCodeFunction) -> AllocStats {
   stats.num_vregs = num_vregs
   stats.num_spill_slots = alloc_result.num_spill_slots
   stats
-}
-
-///|
-/// Compare both allocators and return formatted comparison string
-pub fn compare_allocators(func : VCodeFunction) -> String {
-  let linear_stats = get_linear_scan_stats(func)
-  let backtrack_stats = get_backtracking_stats(func)
-  let mut result = "=== Register Allocator Comparison ===\n"
-  result = result + "Linear Scan:  \{linear_stats}\n"
-  result = result + "Backtracking: \{backtrack_stats}\n"
-
-  // Calculate improvements
-  let spill_diff = linear_stats.num_spill_slots -
-    backtrack_stats.num_spill_slots
-  let inst_diff = linear_stats.total_insts - backtrack_stats.total_insts
-  if spill_diff > 0 {
-    result = result + "Improvement: \{spill_diff} fewer spill slots\n"
-  } else if spill_diff < 0 {
-    result = result + "Regression: \{-spill_diff} more spill slots\n"
-  }
-  if inst_diff > 0 {
-    result = result + "Improvement: \{inst_diff} fewer instructions\n"
-  } else if inst_diff < 0 {
-    result = result + "Regression: \{-inst_diff} more instructions\n"
-  }
-  result
 }

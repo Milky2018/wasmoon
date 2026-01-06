@@ -1,5 +1,4 @@
-// Select optimization rules
-// Implements Cranelift selects.isle optimization rules
+// Select instruction optimization rules
 // ============================================================================
 
 // Note: Condition codes (CC_SLT, CC_SLE, etc.) are defined in rules_icmp.mbt

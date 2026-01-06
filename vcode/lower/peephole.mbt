@@ -7,6 +7,9 @@
 // 3. Redundant move elimination: mov x, x → nop
 // 4. Add(x, 0) / Sub(x, 0) with constant tracking
 // 5. Constant propagation for immediate operands
+// 6. Store merging: two adjacent store8 → store16, store16 → store32, etc.
+// 7. Load merging: two adjacent load8 → load16, load16 → load32, etc.
+// 8. Load-store forwarding: store followed by load from same address
 
 ///|
 /// State for tracking vreg values during peephole optimization
@@ -529,24 +532,400 @@ fn is_inplace_safe(opcode : @instr.VCodeOpcode) -> Bool {
   }
 }
 
+// ============ Store/Load Merging ============
+
+///|
+/// Info about a narrow memory operation for merging analysis
+priv struct MemOpInfo {
+  bits : Int // 8, 16, or 32
+  offset : Int // Memory offset
+  base_vreg_id : Int // Base address vreg id
+  value_vreg_id : Int // Value vreg id (for stores) or def vreg id (for loads)
+  is_store : Bool // true for store, false for load
+}
+
+///|
+/// Extract memory operation info from an instruction
+fn get_mem_op_info(inst : @instr.VCodeInst) -> MemOpInfo? {
+  match inst.opcode {
+    StorePtrNarrow(bits, offset) =>
+      if inst.uses.length() >= 2 {
+        let base_id = get_vreg_id(inst.uses[0])
+        let value_id = get_vreg_id(inst.uses[1])
+        match (base_id, value_id) {
+          (Some(b), Some(v)) =>
+            Some({
+              bits,
+              offset,
+              base_vreg_id: b,
+              value_vreg_id: v,
+              is_store: true,
+            })
+          _ => None
+        }
+      } else {
+        None
+      }
+    LoadPtrNarrow(bits, _, offset) =>
+      if inst.uses.length() >= 1 && inst.defs.length() >= 1 {
+        let base_id = get_vreg_id(inst.uses[0])
+        let def_id = get_def_vreg_id(inst.defs[0])
+        match (base_id, def_id) {
+          (Some(b), Some(d)) =>
+            Some({
+              bits,
+              offset,
+              base_vreg_id: b,
+              value_vreg_id: d,
+              is_store: false,
+            })
+          _ => None
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+/// Check if two memory ops can be merged (adjacent, same base, compatible sizes)
+fn can_merge_mem_ops(op1 : MemOpInfo, op2 : MemOpInfo) -> Bool {
+  // Must have same base address
+  if op1.base_vreg_id != op2.base_vreg_id {
+    return false
+  }
+  // Must be same type (both stores or both loads)
+  if op1.is_store != op2.is_store {
+    return false
+  }
+  // Must have same bit width
+  if op1.bits != op2.bits {
+    return false
+  }
+  // Must be adjacent (op2 immediately follows op1 in memory)
+  let expected_offset = op1.offset + op1.bits / 8
+  op2.offset == expected_offset
+}
+
+///|
+/// Merge stores optimization
+/// Pattern: store8 [base+off], val1; store8 [base+off+1], val2
+/// Becomes: combined = (val2 << 8) | val1; store16 [base+off], combined
+fn optimize_store_merging(
+  block : @block.VCodeBlock,
+  func : @regalloc.VCodeFunction,
+) -> Int {
+  if block.insts.length() < 2 {
+    return 0
+  }
+
+  // Track which instructions to remove and what to insert
+  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  let insertions : Array[(Int, Array[@instr.VCodeInst])] = []
+  let mut merged = 0
+
+  // Scan for consecutive store8 pairs
+  let mut i = 0
+  while i < block.insts.length() - 1 {
+    let op1 = get_mem_op_info(block.insts[i])
+    let op2 = get_mem_op_info(block.insts[i + 1])
+    match (op1, op2) {
+      (Some(s1), Some(s2)) =>
+        if s1.is_store &&
+          s2.is_store &&
+          s1.bits == 8 &&
+          can_merge_mem_ops(s1, s2) {
+          // Found adjacent store8 pair - merge into store16
+          let new_insts = create_merged_store(func, s1, s2, 16)
+          to_remove.add(i)
+          to_remove.add(i + 1)
+          insertions.push((i, new_insts))
+          merged = merged + 1
+          i = i + 2 // Skip the second store
+          continue
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+
+  // Apply transformations
+  if merged > 0 {
+    apply_block_transformations(block, to_remove, insertions)
+  }
+  merged
+}
+
+///|
+/// Create merged store instructions
+/// Combines two values: combined = val_lo | (val_hi << bits)
+fn create_merged_store(
+  func : @regalloc.VCodeFunction,
+  lo : MemOpInfo,
+  hi : MemOpInfo,
+  new_bits : Int,
+) -> Array[@instr.VCodeInst] {
+  let result : Array[@instr.VCodeInst] = []
+
+  // Use OrShifted to combine: combined = val_lo | (val_hi << 8)
+  // OrShifted(Lsl, 8) computes: Rd = Rn | (Rm << 8)
+  let combined_vreg = func.new_vreg(Int)
+  let shift_amount = lo.bits // Shift by lo.bits (8 for store8->store16)
+  let or_shifted_inst = @instr.VCodeInst::new(OrShifted(Lsl, shift_amount))
+  or_shifted_inst.add_def({ reg: Virtual(combined_vreg) })
+  or_shifted_inst.add_use(Virtual({ id: lo.value_vreg_id, class: Int })) // Rn = val_lo
+  or_shifted_inst.add_use(Virtual({ id: hi.value_vreg_id, class: Int })) // Rm = val_hi
+  result.push(or_shifted_inst)
+
+  // Create merged store: store16 [base+off], combined
+  let store_inst = @instr.VCodeInst::new(StorePtrNarrow(new_bits, lo.offset))
+  store_inst.add_use(Virtual({ id: lo.base_vreg_id, class: Int }))
+  store_inst.add_use(Virtual(combined_vreg))
+  result.push(store_inst)
+  result
+}
+
+///|
+/// Merge loads optimization
+/// Pattern: val1 = load8 [base+off]; val2 = load8 [base+off+1]
+/// If both values are only used for store8 to same relative offsets:
+/// Becomes: combined = load16 [base+off]; store16 [dst+off], combined
+fn optimize_load_merging(
+  block : @block.VCodeBlock,
+  func : @regalloc.VCodeFunction,
+) -> Int {
+  if block.insts.length() < 2 {
+    return 0
+  }
+  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  let insertions : Array[(Int, Array[@instr.VCodeInst])] = []
+  let mut merged = 0
+
+  // Build def-use map for this block
+  let def_map : Map[Int, Int] = {} // vreg_id -> instruction index
+  for i, inst in block.insts {
+    for def in inst.defs {
+      if get_def_vreg_id(def) is Some(id) {
+        def_map.set(id, i)
+      }
+    }
+  }
+
+  // Scan for load8 pairs that are used by store8 pairs
+  let mut i = 0
+  while i < block.insts.length() - 1 {
+    let op1 = get_mem_op_info(block.insts[i])
+    let op2 = get_mem_op_info(block.insts[i + 1])
+    match (op1, op2) {
+      (Some(l1), Some(l2)) =>
+        if !l1.is_store &&
+          !l2.is_store &&
+          l1.bits == 8 &&
+          can_merge_mem_ops(l1, l2) {
+          // Found adjacent load8 pair
+          // Check if they are used by adjacent store8 pair
+          match find_store_pair_for_loads(block, l1, l2, i + 2) {
+            Some((s1_idx, s2_idx, dst_base, dst_offset)) => {
+              // Can merge both load and store
+              let new_insts = create_merged_load_store(
+                func, l1, dst_base, dst_offset,
+              )
+              to_remove.add(i)
+              to_remove.add(i + 1)
+              to_remove.add(s1_idx)
+              to_remove.add(s2_idx)
+              insertions.push((i, new_insts))
+              merged = merged + 1
+              i = i + 2
+              continue
+            }
+            None => ()
+          }
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+  if merged > 0 {
+    apply_block_transformations(block, to_remove, insertions)
+  }
+  merged
+}
+
+///|
+/// Find store8 pair that uses the values from load8 pair
+fn find_store_pair_for_loads(
+  block : @block.VCodeBlock,
+  load1 : MemOpInfo,
+  load2 : MemOpInfo,
+  start_idx : Int,
+) -> (Int, Int, Int, Int)? {
+  // Look for: store8 [dst+off], load1_result; store8 [dst+off+1], load2_result
+  let mut found_s1 : (Int, Int, Int)? = None // (idx, base_vreg, offset)
+  for j = start_idx; j < block.insts.length(); j = j + 1 {
+    let op = get_mem_op_info(block.insts[j])
+    if op is Some(s) && s.is_store && s.bits == 8 {
+      if s.value_vreg_id == load1.value_vreg_id {
+        // Found store of load1 result
+        found_s1 = Some((j, s.base_vreg_id, s.offset))
+      } else if s.value_vreg_id == load2.value_vreg_id {
+        // Found store of load2 result - check if it matches
+        if found_s1 is Some((s1_idx, s1_base, s1_off)) {
+          if s.base_vreg_id == s1_base && s.offset == s1_off + 1 {
+            return Some((s1_idx, j, s1_base, s1_off))
+          }
+        }
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Create merged load + store instructions
+fn create_merged_load_store(
+  func : @regalloc.VCodeFunction,
+  load_info : MemOpInfo,
+  dst_base : Int,
+  dst_offset : Int,
+) -> Array[@instr.VCodeInst] {
+  let result : Array[@instr.VCodeInst] = []
+
+  // Create merged load: combined = load16u [src_base+off]
+  let combined_vreg = func.new_vreg(Int)
+  let load_inst = @instr.VCodeInst::new(
+    LoadPtrNarrow(16, false, load_info.offset),
+  )
+  load_inst.add_def({ reg: Virtual(combined_vreg) })
+  load_inst.add_use(Virtual({ id: load_info.base_vreg_id, class: Int }))
+  result.push(load_inst)
+
+  // Create merged store: store16 [dst_base+off], combined
+  let store_inst = @instr.VCodeInst::new(StorePtrNarrow(16, dst_offset))
+  store_inst.add_use(Virtual({ id: dst_base, class: Int }))
+  store_inst.add_use(Virtual(combined_vreg))
+  result.push(store_inst)
+  result
+}
+
+///|
+/// Load-store forwarding optimization
+/// Pattern: store [base+off], val; ... ; load [base+off] (no intervening store)
+/// Becomes: store [base+off], val; mov result, val
+fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
+  // Build a map of recent stores: (base_vreg, offset, bits) -> value_vreg
+  // Reset when we see a potentially aliasing store
+  let store_map : Map[String, Int] = {} // "base:offset:bits" -> value_vreg_id
+  let mut forwarded = 0
+  let to_replace : Array[(Int, @instr.VCodeInst)] = []
+  for i, inst in block.insts {
+    match inst.opcode {
+      StorePtrNarrow(bits, offset) =>
+        if inst.uses.length() >= 2 {
+          if get_vreg_id(inst.uses[0]) is Some(base) &&
+            get_vreg_id(inst.uses[1]) is Some(val) {
+            let key = "\{base}:\{offset}:\{bits}"
+            store_map.set(key, val)
+          }
+        }
+      LoadPtrNarrow(bits, signed, offset) =>
+        if inst.uses.length() >= 1 && inst.defs.length() >= 1 {
+          if get_vreg_id(inst.uses[0]) is Some(base) {
+            let key = "\{base}:\{offset}:\{bits}"
+            if store_map.get(key) is Some(val_vreg) {
+              // Can forward the stored value
+              if get_def_vreg_id(inst.defs[0]) is Some(_) {
+                let mov = @instr.VCodeInst::new(Move)
+                mov.add_def(inst.defs[0])
+                mov.add_use(Virtual({ id: val_vreg, class: Int }))
+                // Handle sign extension if needed
+                if signed && bits < 32 {
+                  // Need sign extension - skip forwarding for now
+                  // (would need additional extend instruction)
+                  continue
+                }
+                to_replace.push((i, mov))
+                forwarded = forwarded + 1
+              }
+            }
+          }
+        }
+      // Any other store invalidates the map (conservative)
+      Store(_, _) | StorePtr(_, _) => store_map.clear()
+      // Calls may have side effects
+      CallPtr(_, _, _) | ReturnCallIndirect(_, _) => store_map.clear()
+      _ => ()
+    }
+  }
+
+  // Apply replacements
+  for pair in to_replace {
+    let (idx, new_inst) = pair
+    block.insts[idx] = new_inst
+  }
+  forwarded
+}
+
+///|
+/// Apply block transformations (remove and insert instructions)
+fn apply_block_transformations(
+  block : @block.VCodeBlock,
+  to_remove : @hashset.HashSet[Int],
+  insertions : Array[(Int, Array[@instr.VCodeInst])],
+) -> Unit {
+  // Sort insertions by position (descending) to maintain indices
+  insertions.sort_by(fn(a, b) { b.0 - a.0 })
+  let new_insts : Array[@instr.VCodeInst] = []
+  let insert_map : Map[Int, Array[@instr.VCodeInst]] = {}
+  for pair in insertions {
+    insert_map.set(pair.0, pair.1)
+  }
+  for i, inst in block.insts {
+    // Insert new instructions before this position if any
+    if insert_map.get(i) is Some(new) {
+      for new_inst in new {
+        new_insts.push(new_inst)
+      }
+    }
+    // Skip removed instructions
+    if !to_remove.contains(i) {
+      new_insts.push(inst)
+    }
+  }
+  block.insts.clear()
+  for inst in new_insts {
+    block.insts.push(inst)
+  }
+}
+
 ///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
-  let mut total_eliminated = 0
+  // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {
-    // Create fresh state for each block (conservative approach)
-    // TODO: Could use dataflow analysis for cross-block optimization
     let state = PeepholeState::new()
-    total_eliminated = total_eliminated + optimize_block(block, func, state)
+    optimize_block(block, func, state) |> ignore
   }
 
-  // Run in-place update optimization
+  // Pass 2: In-place update optimization
   for block in func.blocks {
-    total_eliminated = total_eliminated + optimize_inplace_updates(block)
+    optimize_inplace_updates(block) |> ignore
   }
-  // Optionally log statistics
-  // if total_eliminated > 0 {
-  //   println("Peephole: eliminated \{total_eliminated} instructions")
-  // }
+
+  // Pass 3: Memory operation merging (store8+store8 -> store16, etc.)
+  for block in func.blocks {
+    optimize_store_merging(block, func) |> ignore
+  }
+
+  // Pass 4: Load-store pair merging (for memcpy-like patterns)
+  for block in func.blocks {
+    optimize_load_merging(block, func) |> ignore
+  }
+
+  // Pass 5: Load-store forwarding (store then load -> store then mov)
+  for block in func.blocks {
+    optimize_load_store_forwarding(block) |> ignore
+  }
 }

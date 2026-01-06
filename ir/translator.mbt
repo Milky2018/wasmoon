@@ -68,6 +68,9 @@ priv struct BlockFrame {
 }
 
 ///|
+/// Low-level constructor with explicit parameters.
+/// Prefer `Translator::from_module` for normal use - it extracts all
+/// parameters from the module automatically and is less error-prone.
 pub fn Translator::new(
   name : String,
   func_type : @types.FuncType,
@@ -85,6 +88,7 @@ pub fn Translator::new(
   import_remap? : Array[Int] = [],
   module_types? : Array[@types.SubType] = [],
   tags? : Array[@types.TagType] = [],
+  memory_mins? : Array[Int64] = [],
 ) -> Translator {
   type_rec_groups |> ignore // Reserved for future canonical type indices
   let builder = IRBuilder::new(name)
@@ -96,7 +100,7 @@ pub fn Translator::new(
   builder.add_param(Type::I64) |> ignore // caller_vmctx
 
   // Create function environment for desugaring Wasm operations
-  let func_env = FuncEnvironment::new(global_types)
+  let func_env = FuncEnvironment::new(global_types, memory_mins~, memory_is_64~)
 
   // Add wasm function parameters (starting from params[2])
   let local_values : Array[Value] = []
@@ -155,6 +159,131 @@ pub fn Translator::new(
     tags,
     try_table_depth: 0,
   }
+}
+
+///|
+/// Create a Translator from a module directly.
+/// This is the preferred factory method as it extracts all necessary
+/// information from the module automatically.
+///
+/// Parameters:
+/// - mod_: The WASM module
+/// - func_local_idx: Index of the function in mod_.codes (0-based, excludes imports)
+/// - name: Optional function name override (defaults to export name or "func_N")
+pub fn Translator::from_module(
+  mod_ : @types.Module,
+  func_local_idx : Int,
+  name? : String,
+  memory_max_override? : Int? = None,
+) -> Translator {
+  // Count function imports
+  let mut num_imports = 0
+  for imp in mod_.imports {
+    if imp.desc is Func(_) {
+      num_imports = num_imports + 1
+    }
+  }
+
+  // Build import function type indices
+  let import_func_type_indices : Array[Int] = []
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      import_func_type_indices.push(type_idx)
+    }
+  }
+
+  // Build global types array (imports + module globals)
+  let global_types : Array[@types.GlobalType] = []
+  for imp in mod_.imports {
+    if imp.desc is Global(global_type) {
+      global_types.push(global_type)
+    }
+  }
+  for global in mod_.globals {
+    global_types.push(global.type_)
+  }
+
+  // Get memory max limit - prefer override (for imported memories),
+  // otherwise fall back to module's declared memory limits
+  let memory_max : Int? = match memory_max_override {
+    Some(_) => memory_max_override
+    None =>
+      if mod_.memories.length() > 0 {
+        mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
+      } else {
+        None
+      }
+  }
+
+  // Build memory_is_64 array for memory64 support
+  let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
+
+  // Calculate memory_mins (minimum guaranteed memory size in bytes)
+  let memory_mins = mod_.memories.map(fn(m) { m.limits.min * 65536L })
+
+  // Determine function name
+  let func_idx = num_imports + func_local_idx
+  let func_name = match name {
+    Some(n) => n
+    None => {
+      // Look for exported name
+      let mut export_name = ""
+      for exp in mod_.exports {
+        if exp.desc is @types.ExportDesc::Func(idx) && idx == func_idx {
+          export_name = exp.name
+          break
+        }
+      }
+      if export_name == "" {
+        "func_\{func_idx}"
+      } else {
+        export_name
+      }
+    }
+  }
+
+  // Get function type and locals
+  let type_idx = mod_.funcs[func_local_idx]
+  let func_type = mod_.get_func_type(type_idx)
+  let code = mod_.codes[func_local_idx]
+
+  // Call the main constructor
+  Translator::new(
+    func_name,
+    func_type,
+    code.locals,
+    @types.extract_func_types(mod_.types),
+    mod_.funcs,
+    num_imports,
+    import_func_type_indices,
+    memory_max~,
+    memory_is_64~,
+    tables=mod_.tables,
+    global_types~,
+    type_rec_groups=mod_.type_rec_groups,
+    module_types=mod_.types,
+    tags=mod_.tags,
+    memory_mins~,
+  )
+}
+
+///|
+/// Translate a function body from a module.
+/// Convenience method that creates a Translator and translates in one step.
+pub fn translate_function(
+  mod_ : @types.Module,
+  func_local_idx : Int,
+  name? : String,
+  memory_max_override? : Int? = None,
+) -> Function {
+  let translator = Translator::from_module(
+    mod_,
+    func_local_idx,
+    name?,
+    memory_max_override~,
+  )
+  let code = mod_.codes[func_local_idx]
+  translator.translate(code.body)
 }
 
 ///|

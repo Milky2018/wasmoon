@@ -56,15 +56,15 @@ test "i32 mul" {
       #|
     ),
   )
-  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
   inspect(
     allocated_func.print(),
     content=(
       #|vcode test(v0:int, v1:int, v2:int) -> int {
       #|block0:
       #|    x8 = ldi 3
-      #|    x9 = mul32 x2, x8
-      #|    ret x9
+      #|    x8 = mul32 x2, x8
+      #|    ret x8
       #|}
       #|
     ),
@@ -73,13 +73,11 @@ test "i32 mul" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: ff4300d1  sub sp, sp, #16
       #|block0:
-      #|  0004: 680080d2  movz x8, #3, lsl #0
-      #|  0008: 497c081b  mul w9, w2, w8
-      #|  000c: e00309aa  mov x0, x9
-      #|  0010: ff430091  add sp, sp, #16
-      #|  0014: c0035fd6  ret
+      #|  0000: 680080d2  movz x8, #3, lsl #0
+      #|  0004: 487c081b  mul w8, w2, w8
+      #|  0008: e00308aa  mov x0, x8
+      #|  000c: c0035fd6  ret
       #|
     ),
   )

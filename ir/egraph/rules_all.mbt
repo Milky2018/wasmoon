@@ -1,8 +1,33 @@
 // Standard rules collection (indexed for efficient application)
 
 ///|
+/// Global singleton for indexed ruleset - built once, reused everywhere
+let global_indexed_ruleset : Ref[IndexedRuleSet?] = { val: None }
+
+///|
+/// Get the global indexed ruleset (singleton pattern for performance)
+pub fn get_global_ruleset() -> IndexedRuleSet {
+  match global_indexed_ruleset.val {
+    Some(rs) => rs
+    None => {
+      let rs = build_indexed_ruleset()
+      global_indexed_ruleset.val = Some(rs)
+      rs
+    }
+  }
+}
+
+///|
 /// Get all standard rewrite rules indexed by their matching opcodes
+/// Note: For production code, prefer get_global_ruleset() which caches the result.
+/// This function is kept for backwards compatibility with tests.
 pub fn standard_rules_indexed() -> IndexedRuleSet {
+  build_indexed_ruleset()
+}
+
+///|
+/// Build the indexed ruleset (internal, called once by get_global_ruleset)
+fn build_indexed_ruleset() -> IndexedRuleSet {
   let rs = IndexedRuleSet::new()
   // Identity rules - indexed by opcode
   rs.add_rule(rule_add_zero(), [TAdd])
@@ -210,6 +235,8 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_band_sextend_mask(), [TAnd])
   // Type-dependent extend/reduce rules (use bit width info)
   rs.add_rule(rule_ireduce_const(), [TIreduce])
+  rs.add_rule(rule_uextend_const(), [TUextend])
+  rs.add_rule(rule_sextend_const(), [TSextend])
   rs.add_rule(rule_uextend_identity(), [TUextend])
   rs.add_rule(rule_sextend_identity(), [TSextend])
   rs.add_rule(rule_ireduce_identity(), [TIreduce])
@@ -218,7 +245,15 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_ireduce_sextend_skip(), [TIreduce])
   rs.add_rule(rule_ireduce_uextend_to_extend(), [TIreduce])
   rs.add_rule(rule_ireduce_sextend_to_extend(), [TIreduce])
-  // Tree rebalancing
+  // Canonicalization rules (push constants to the right)
+  // Push constants to the right: (k + x) -> (x + k)
+  rs.add_rule(rule_canon_add(), [TAdd])
+  rs.add_rule(rule_canon_mul(), [TMul])
+  rs.add_rule(rule_canon_and(), [TAnd])
+  rs.add_rule(rule_canon_or(), [TOr])
+  rs.add_rule(rule_canon_xor(), [TXor])
+  // Tree rebalancing rules (improve ILP)
+  // Rebalance 4-deep chains: a op (b op (c op d)) -> (a op b) op (c op d)
   rs.add_rule(rule_rebalance_add_right(), [TAdd])
   rs.add_rule(rule_rebalance_add_left(), [TAdd])
   rs.add_rule(rule_rebalance_mul_right(), [TMul])
@@ -227,27 +262,21 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
   rs.add_rule(rule_rebalance_and_left(), [TAnd])
   rs.add_rule(rule_rebalance_xor_right(), [TXor])
   rs.add_rule(rule_rebalance_xor_left(), [TXor])
-  // Add/Sub mixed rebalancing
-  rs.add_rule(rule_rebalance_sub_sub_sub(), [TSub])
-  rs.add_rule(rule_rebalance_sub_sub_add(), [TAdd])
-  rs.add_rule(rule_rebalance_sub_add_sub(), [TSub])
-  rs.add_rule(rule_rebalance_sub_add_add(), [TAdd])
-  rs.add_rule(rule_rebalance_add_sub_sub(), [TSub])
-  rs.add_rule(rule_rebalance_add_sub_add(), [TAdd])
-  rs.add_rule(rule_rebalance_add_add_sub(), [TSub])
-  rs.add_rule(rule_rebalance_left_sub_sub_sub(), [TSub])
-  rs.add_rule(rule_rebalance_left_sub_sub_add(), [TAdd])
-  rs.add_rule(rule_rebalance_left_sub_add_sub(), [TSub])
-  rs.add_rule(rule_rebalance_left_sub_add_add(), [TAdd])
-  rs.add_rule(rule_rebalance_left_add_sub_sub(), [TSub])
-  rs.add_rule(rule_rebalance_left_add_sub_add(), [TAdd])
-  rs.add_rule(rule_rebalance_left_add_add_sub(), [TSub])
-  // Commutativity
-  rs.add_rule(rule_add_comm(), [TAdd])
-  rs.add_rule(rule_mul_comm(), [TMul])
-  rs.add_rule(rule_and_comm(), [TAnd])
-  rs.add_rule(rule_or_comm(), [TOr])
-  rs.add_rule(rule_xor_comm(), [TXor])
+  // Add/Sub mixed rebalancing rules
+  rs.add_rule(rule_sub_sub_sub_right(), [TSub])
+  rs.add_rule(rule_sub_sub_add_right(), [TSub])
+  rs.add_rule(rule_sub_add_sub_right(), [TSub])
+  rs.add_rule(rule_sub_add_add_right(), [TSub])
+  rs.add_rule(rule_add_sub_sub_right(), [TAdd])
+  rs.add_rule(rule_add_sub_add_right(), [TAdd])
+  rs.add_rule(rule_add_add_sub_right(), [TAdd])
+  rs.add_rule(rule_sub_sub_sub_left(), [TSub])
+  rs.add_rule(rule_sub_sub_add_left(), [TAdd])
+  rs.add_rule(rule_sub_add_sub_left(), [TSub])
+  rs.add_rule(rule_sub_add_add_left(), [TAdd])
+  rs.add_rule(rule_add_sub_sub_left(), [TSub])
+  rs.add_rule(rule_add_sub_add_left(), [TAdd])
+  rs.add_rule(rule_add_add_sub_left(), [TSub])
   // Integer comparison optimizations
   rs.add_rule(rule_eq_self(), [TEq])
   rs.add_rule(rule_ne_self(), [TNe])

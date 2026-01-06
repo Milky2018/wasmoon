@@ -16,7 +16,7 @@ pub(all) struct EClassId(Int) derive(Eq, Hash, Show, Compare)
 
 ///|
 /// E-node opcode for e-graph expressions
-/// Aligned with Cranelift IR opcodes for consistent optimization
+/// Standard IR opcodes for optimization
 pub(all) enum EOpcode {
   // Constants
   Const(Int64) // Integer constant
@@ -308,6 +308,9 @@ priv struct EClass {
   // For extraction: best node and its cost (lazily computed)
   mut best_node : ENode?
   mut best_cost : Int
+  // Cached constant values for O(1) lookup (instead of O(n) scan)
+  mut const_value : Int64?
+  mut fconst_value : UInt64?
 }
 
 ///|
@@ -358,10 +361,19 @@ fn UnionFind::union(self : UnionFind, a : Int, b : Int) -> Int {
   }
 }
 
-// Cranelift-style limits to prevent infinite rewriting
+// Hard limits to prevent infinite rewriting
 
 ///|
-let matches_limit : Int = 5 // Max rewrites per add_eager call
+/// Max nodes per e-class (prevents exponential blowup from commutativity/associativity)
+const ECLASS_NODE_LIMIT : Int = 5
+
+///|
+/// Max recursive rewrite depth (prevents rule application spiraling)
+const REWRITE_DEPTH_LIMIT : Int = 5
+
+///|
+/// Max rewrites per add_eager call
+const MATCHES_LIMIT : Int = 5
 
 ///|
 /// The main E-graph data structure
@@ -443,14 +455,25 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     return self.find(existing_id)
   }
 
-  // Create a new e-class
+  // Create a new e-class with cached constant values
   let id = self.uf.make_set()
   let class_id = EClassId(id)
+  // Extract constant value if this is a constant node
+  let const_val : Int64? = match node.op {
+    Const(v) => Some(v)
+    _ => None
+  }
+  let fconst_val : UInt64? = match node.op {
+    Fconst(bits) => Some(bits)
+    _ => None
+  }
   let eclass : EClass = {
     id: class_id,
     nodes: [node],
     best_node: None,
     best_cost: @int.max_value,
+    const_value: const_val,
+    fconst_value: fconst_val,
   }
   self.classes.set(id, eclass)
   self.hashcons.set(node, class_id)
@@ -574,11 +597,27 @@ pub fn EGraph::add_eager(
   node : ENode,
   ruleset : IndexedRuleSet,
 ) -> EClassId {
+  self.add_eager_with_depth(node, ruleset, 0)
+}
+
+///|
+/// Add an e-node with depth tracking for recursive rewrites
+/// Depth limit prevents rule application from spiraling out of control
+fn EGraph::add_eager_with_depth(
+  self : EGraph,
+  node : ENode,
+  ruleset : IndexedRuleSet,
+  depth : Int,
+) -> EClassId {
+  // Check depth limit - if exceeded, just add without rule application
+  if depth > REWRITE_DEPTH_LIMIT {
+    return self.add(node)
+  }
   let class_id = self.add(node)
   // Process all pending nodes with rule application
   // Rules may add new nodes which also get processed
   let mut rewrites = 0
-  while self.pending_rules.length() > 0 && rewrites < matches_limit {
+  while self.pending_rules.length() > 0 && rewrites < MATCHES_LIMIT {
     let (pending_id, tag) = self.pending_rules.pop().unwrap()
     let canonical_id = self.find(pending_id)
     // Apply rules matching this opcode
@@ -687,6 +726,14 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
     return a
   }
 
+  // Check combined size limit to prevent exponential blowup
+  let size_a = self.classes.get(a.0).map_or(0, fn(c) { c.nodes.length() })
+  let size_b = self.classes.get(b.0).map_or(0, fn(c) { c.nodes.length() })
+  if size_a + size_b > ECLASS_NODE_LIMIT {
+    // Don't merge - return the "better" one (lower ID = older = likely simpler)
+    return if a.0 < b.0 { a } else { b }
+  }
+
   // Union in the union-find
   let new_root = self.uf.union(a.0, b.0)
   let new_id = EClassId(new_root)
@@ -718,6 +765,13 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
       // Invalidate best node cache
       root_class.best_node = None
       root_class.best_cost = @int.max_value
+      // Merge constant caches: prefer non-None values
+      if root_class.const_value is None && other_class.const_value is Some(_) {
+        root_class.const_value = other_class.const_value
+      }
+      if root_class.fconst_value is None && other_class.fconst_value is Some(_) {
+        root_class.fconst_value = other_class.fconst_value
+      }
     }
     // Remove the merged class
     self.classes.remove(other_id.0)
@@ -737,33 +791,89 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
     return
   }
 
-  // Process all nodes in all classes to re-canonicalize
-  // This is a simplified rebuild - production e-graphs use more efficient algorithms
-  let new_hashcons : Map[ENode, EClassId] = {}
-  for class_id, eclass in self.classes {
-    let canonical_id = self.find(EClassId(class_id))
-    let new_nodes : Array[ENode] = []
-    for node in eclass.nodes {
-      let canonical_node = self.canonicalize(node)
+  // Iterative rebuild: keep canonicalizing and merging until fixpoint
+  // This handles cascading merges where merging A and B causes C and D to collide
+  while true {
+    // Collect all nodes from all classes
+    let all_nodes : Array[(Int, ENode)] = []
+    for class_id, eclass in self.classes {
+      for node in eclass.nodes {
+        all_nodes.push((class_id, node))
+      }
+    }
 
-      // Check if this canonical node already exists in another class
+    // Canonicalize all nodes and detect collisions
+    let new_hashcons : Map[ENode, EClassId] = {}
+    let mut had_union = false
+    for i in 0..<all_nodes.length() {
+      let (class_id, node) = all_nodes[i]
+      let canonical_node = self.canonicalize(node)
+      let canonical_id = self.find(EClassId(class_id))
       if new_hashcons.get(canonical_node) is Some(existing_id) {
         let existing_canonical = self.find(existing_id)
         if existing_canonical != canonical_id {
-          // Need to merge these classes
+          // Merge the classes
           self.uf.union(canonical_id.0, existing_canonical.0) |> ignore
+          had_union = true
         }
       } else {
-        new_nodes.push(canonical_node)
         new_hashcons.set(canonical_node, canonical_id)
       }
     }
-    eclass.nodes = new_nodes
+
+    // If no unions happened, we've reached fixpoint
+    if not(had_union) {
+      // Final pass: collect nodes by canonical class with fully canonical nodes
+      let canonical_nodes : Map[Int, Array[ENode]] = {}
+      let final_hashcons : Map[ENode, EClassId] = {}
+      for i in 0..<all_nodes.length() {
+        let (class_id, node) = all_nodes[i]
+        let canonical_node = self.canonicalize(node)
+        let final_canonical_id = self.find(EClassId(class_id))
+
+        // Add to hashcons
+        if final_hashcons.get(canonical_node) is None {
+          final_hashcons.set(canonical_node, final_canonical_id)
+        }
+
+        // Add to canonical_nodes, avoiding duplicates
+        match canonical_nodes.get(final_canonical_id.0) {
+          Some(nodes) => {
+            let mut found = false
+            for existing in nodes {
+              if existing == canonical_node {
+                found = true
+                break
+              }
+            }
+            if not(found) {
+              nodes.push(canonical_node)
+            }
+          }
+          None => canonical_nodes.set(final_canonical_id.0, [canonical_node])
+        }
+      }
+
+      // Update each class with its canonical nodes
+      for class_id, eclass in self.classes {
+        let canonical_id = self.find(EClassId(class_id))
+        if class_id == canonical_id.0 {
+          match canonical_nodes.get(class_id) {
+            Some(nodes) => eclass.nodes = nodes
+            None => eclass.nodes = []
+          }
+        } else {
+          eclass.nodes = []
+        }
+      }
+      self.hashcons = final_hashcons
+      self.worklist = []
+      self.pending_rules = []
+      self.dirty = false
+      break
+    }
+    // Otherwise, continue iterating with updated union-find
   }
-  self.hashcons = new_hashcons
-  self.worklist = []
-  self.pending_rules = [] // Clear pending rules (processed by saturate or add_eager)
-  self.dirty = false
 }
 
 ///|
@@ -774,6 +884,28 @@ pub fn EGraph::get_nodes(self : EGraph, id : EClassId) -> Array[ENode] {
     eclass.nodes
   } else {
     []
+  }
+}
+
+///|
+/// Get cached constant value for an e-class (O(1) lookup)
+pub fn EGraph::get_const(self : EGraph, id : EClassId) -> Int64? {
+  let canonical = self.find(id)
+  if self.classes.get(canonical.0) is Some(eclass) {
+    eclass.const_value
+  } else {
+    None
+  }
+}
+
+///|
+/// Get cached float constant value for an e-class (O(1) lookup)
+pub fn EGraph::get_fconst(self : EGraph, id : EClassId) -> UInt64? {
+  let canonical = self.find(id)
+  if self.classes.get(canonical.0) is Some(eclass) {
+    eclass.fconst_value
+  } else {
+    None
   }
 }
 
@@ -1333,7 +1465,9 @@ fn node_cost(node : ENode) -> Int {
 pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   // Use memoization to avoid recomputing
   let memo : Map[Int, (Int, ENode)] = {}
-  self.extract_impl(id, memo)
+  // Track classes currently being processed to detect cycles
+  let in_progress : @hashset.HashSet[Int] = @hashset.new()
+  self.extract_impl(id, memo, in_progress)
 }
 
 ///|
@@ -1341,6 +1475,7 @@ fn EGraph::extract_impl(
   self : EGraph,
   id : EClassId,
   memo : Map[Int, (Int, ENode)],
+  in_progress : @hashset.HashSet[Int],
 ) -> (Int, ENode) {
   let canonical = self.find(id)
 
@@ -1349,21 +1484,47 @@ fn EGraph::extract_impl(
     return result
   }
 
+  // Check for cycle - if we're already processing this class, return high cost
+  // but don't return a fake Const(0) - the caller should handle this case
+  // by not choosing nodes that lead to cycles
+  if in_progress.contains(canonical.0) {
+    // Return a sentinel value that indicates "don't use this path"
+    // The caller will see the high cost and skip this node
+    return (@int.max_value / 2, { op: Var(-1), children: [] })
+  }
+
+  // Mark as in progress
+  in_progress.add(canonical.0)
+
   // Get all nodes in this class
   let nodes = self.get_nodes(canonical)
   if nodes.is_empty() {
-    // Should not happen in a well-formed e-graph
-    return (@int.max_value, { op: Const(0L), children: [] })
+    // Should not happen in a well-formed e-graph, but handle gracefully
+    in_progress.remove(canonical.0)
+    // Return a sentinel value
+    return (@int.max_value, { op: Var(-1), children: [] })
   }
 
   // Find the lowest cost node
   let mut best_cost = @int.max_value
   let mut best_node = nodes[0]
   for node in nodes {
+    // Skip nodes with cyclic children (child points to current class)
+    let mut has_cycle = false
+    for child in node.children {
+      if self.find(child).0 == canonical.0 {
+        has_cycle = true
+        break
+      }
+    }
+    if has_cycle {
+      continue // Skip this node, try others
+    }
+
     // Compute cost: node cost + sum of children costs
     let mut total_cost = node_cost(node)
     for child in node.children {
-      let (child_cost, _) = self.extract_impl(child, memo)
+      let (child_cost, _) = self.extract_impl(child, memo, in_progress)
       total_cost = total_cost + child_cost
       if total_cost >= best_cost {
         break // Pruning: no need to continue if already worse
@@ -1374,6 +1535,9 @@ fn EGraph::extract_impl(
       best_node = node
     }
   }
+
+  // Remove from in progress
+  in_progress.remove(canonical.0)
   let result = (best_cost, best_node)
   memo.set(canonical.0, result)
   result

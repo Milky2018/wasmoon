@@ -111,6 +111,9 @@ fn has_side_effects(inst : Inst) -> Bool {
     | ReturnCallRef(_) => true
     // Memory operations that modify global state
     MemoryGrow(_, _) | MemoryFill(_) | MemoryCopy(_, _) => true
+    // MemorySize reads global state that can change (invalidated by MemoryGrow)
+    // Must not be CSE'd across MemoryGrow calls
+    MemorySize(_) => true
     // Table operations that modify global state
     TableGrow(_) => true
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment to LoadPtr/StorePtr
@@ -130,6 +133,15 @@ fn has_side_effects(inst : Inst) -> Bool {
     RefCast(_, _) => true
     // CallPtr can have side effects (calls arbitrary functions)
     CallPtr(_, _) => true
+    // Exception handling operations - TryTableBegin calls setjmp which returns
+    // different values on normal entry vs exception catch, so it's not pure
+    TryTableBegin(_) | TryTableEnd(_) => true
+    // Throw operations have control flow side effects
+    Throw(_) | ThrowRef => true
+    // GetExceptionTag reads global exception state
+    GetExceptionTag => true
+    // Spill/restore locals interact with exception handling state
+    SpillLocalsForThrow(_) | GetSpilledLocal(_) => true
     // Other instructions are pure
     _ => false
   }
@@ -450,6 +462,199 @@ pub fn propagate_copies(func : Function) -> OptResult {
 }
 
 ///|
+/// Cross-basic-block copy propagation using dominance analysis
+/// A copy in block A can propagate to block B only if A dominates B
+pub fn propagate_copies_global(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() == 0 {
+    return result
+  }
+  // Build CFG and compute dominators
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  // Build block_id -> array_index mapping
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  // Collect all copies: (dest_id, source) pairs with defining block_id
+  // copies[dest_id] = (source_value, defining_block_id)
+  let copies : @hashmap.HashMap[Int, (Value, Int)] = @hashmap.new()
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.opcode is Copy &&
+        inst.result is Some(dest) &&
+        inst.operands.length() > 0 {
+        copies.set(dest.id, (inst.operands[0], block.id))
+      }
+    }
+  }
+  // DFS the dominator tree with copy environment
+  // env tracks which copy dest_ids are currently available
+  let env : Array[Int] = []
+  fn dfs(block_id : Int) {
+    // Get block from func.blocks using mapping
+    let idx = block_idx.get(block_id).unwrap()
+    let block = func.blocks[idx]
+    // Record which copies this block defines (to pop later)
+    let local_copies : Array[Int] = []
+    for inst in block.instructions {
+      if inst.opcode is Copy &&
+        inst.result is Some(dest) &&
+        inst.operands.length() > 0 {
+        local_copies.push(dest.id)
+        env.push(dest.id)
+      }
+    }
+    // Replace uses in this block's instructions
+    for inst in block.instructions {
+      for i, op in inst.operands {
+        if resolve_copy_global(op, copies, env) is Some(resolved) &&
+          resolved.id != op.id {
+          inst.operands[i] = resolved
+          result.mark_changed()
+        }
+      }
+    }
+    // Replace uses in terminator
+    if block.terminator is Some(term) {
+      let new_term = propagate_copies_in_terminator_global(
+        term, copies, env, result,
+      )
+      block.terminator = Some(new_term)
+    }
+    // Recurse to dominated children
+    if block_id < domtree.length() {
+      for child in domtree[block_id] {
+        dfs(child)
+      }
+    }
+    // Pop this block's copies from environment
+    for _ in local_copies {
+      env.pop() |> ignore
+    }
+  }
+
+  // Start DFS from entry block (block 0)
+  if cfg.is_valid(0) {
+    dfs(0)
+  }
+  result
+}
+
+///|
+/// Resolve a copy using global environment (only copies in dominating blocks)
+fn resolve_copy_global(
+  v : Value,
+  copies : @hashmap.HashMap[Int, (Value, Int)],
+  env : Array[Int],
+) -> Value? {
+  // Follow copy chain, but only if dest_id is in environment
+  let mut current = v
+  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  while true {
+    if visited.get(current.id).unwrap_or(false) {
+      break // Cycle detected
+    }
+    visited.set(current.id, true)
+    // Check if current.id is a copy dest that's in our environment
+    match copies.get(current.id) {
+      Some((source, _)) => {
+        // Only follow if this copy is available (dest in env)
+        let mut in_env = false
+        for dest_id in env {
+          if dest_id == current.id {
+            in_env = true
+            break
+          }
+        }
+        if in_env {
+          current = source
+        } else {
+          break
+        }
+      }
+      None => break
+    }
+  }
+  Some(current)
+}
+
+///|
+/// Propagate copies in terminator (global version)
+fn propagate_copies_in_terminator_global(
+  term : Terminator,
+  copies : @hashmap.HashMap[Int, (Value, Int)],
+  env : Array[Int],
+  result : OptResult,
+) -> Terminator {
+  match term {
+    Jump(target, args) => {
+      let new_args : Array[Value] = []
+      for arg in args {
+        match resolve_copy_global(arg, copies, env) {
+          Some(resolved) => {
+            if resolved.id != arg.id {
+              result.mark_changed()
+            }
+            new_args.push(resolved)
+          }
+          None => new_args.push(arg)
+        }
+      }
+      Terminator::Jump(target, new_args)
+    }
+    Brz(cond, then_t, else_t) =>
+      match resolve_copy_global(cond, copies, env) {
+        Some(resolved) => {
+          if resolved.id != cond.id {
+            result.mark_changed()
+          }
+          Terminator::Brz(resolved, then_t, else_t)
+        }
+        None => term
+      }
+    Brnz(cond, then_t, else_t) =>
+      match resolve_copy_global(cond, copies, env) {
+        Some(resolved) => {
+          if resolved.id != cond.id {
+            result.mark_changed()
+          }
+          Terminator::Brnz(resolved, then_t, else_t)
+        }
+        None => term
+      }
+    BrTable(index, targets, default_t) =>
+      match resolve_copy_global(index, copies, env) {
+        Some(resolved) => {
+          if resolved.id != index.id {
+            result.mark_changed()
+          }
+          Terminator::BrTable(resolved, targets, default_t)
+        }
+        None => term
+      }
+    Return(values) => {
+      let new_values : Array[Value] = []
+      for v in values {
+        match resolve_copy_global(v, copies, env) {
+          Some(resolved) => {
+            if resolved.id != v.id {
+              result.mark_changed()
+            }
+            new_values.push(resolved)
+          }
+          None => new_values.push(v)
+        }
+      }
+      Terminator::Return(new_values)
+    }
+    Trap(_) => term
+  }
+}
+
+///|
 /// Resolve a value through copy chain
 fn resolve_copy(v : Value, copies : @hashmap.HashMap[Int, Value]) -> Value? {
   // Follow copy chain (with cycle detection)
@@ -552,7 +757,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
   for block in func.blocks {
     // Reset expressions map for each block to avoid cross-block CSE issues
     // (e.g., using values defined in sibling branches of if-else)
-    let expressions : @hashmap.HashMap[String, Value] = @hashmap.new()
+    let expressions : @hashmap.HashMap[Inst, Value] = @hashmap.new()
     let mut i = 0
     while i < block.instructions.length() {
       let inst = block.instructions[i]
@@ -562,8 +767,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
         continue
       }
       if inst.result is Some(result_val) {
-        let sig = compute_expression_signature(inst)
-        if expressions.get(sig) is Some(existing) {
+        if expressions.get(inst) is Some(existing) {
           // Replace this instruction with a copy
           inst.opcode = Opcode::Copy
           // Clear operands and add the existing value
@@ -572,7 +776,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
           result.mark_changed()
         } else {
           // Record this expression
-          expressions.set(sig, result_val)
+          expressions.set(inst, result_val)
         }
       }
       i = i + 1
@@ -582,22 +786,295 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
 }
 
 ///|
-/// Compute a signature for an expression (opcode + operands)
-/// For Fconst, we use the raw bits to distinguish different float values
-/// (since f32 bit patterns stored as Double may print as "NaN" even for different values)
-fn compute_expression_signature(inst : Inst) -> String {
-  let sig = match inst.opcode {
-    Fconst(val) => {
-      // Use raw bits for float constants to distinguish different NaN payloads
-      // and f32 values stored as Double bit patterns
-      let bits = val.reinterpret_as_int64()
-      "Fconst_" + bits.to_string()
-    }
-    _ => inst.opcode.to_string()
+/// Global Common Subexpression Elimination using dominance analysis
+/// Expressions in dominating blocks can be reused in dominated blocks
+pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() == 0 {
+    return result
   }
-  let mut result = sig
-  for op in inst.operands {
-    result = result + "_v" + op.id.to_string()
+  // Build CFG and compute dominators
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  // Build block_id -> array_index mapping
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  // Expression environment: key -> value
+  // We use an array as a stack to track which expressions to pop on leaving a block
+  let expressions : @hashmap.HashMap[Inst, Value] = @hashmap.new()
+  // DFS the dominator tree
+  fn dfs(block_id : Int) {
+    let idx = block_idx.get(block_id).unwrap()
+    let block = func.blocks[idx]
+    // Track expressions added in this block (to pop later)
+    let local_keys : Array[Inst] = []
+    // Process instructions
+    let mut i = 0
+    while i < block.instructions.length() {
+      let inst = block.instructions[i]
+      // Skip instructions with side effects or no result
+      if has_side_effects(inst) {
+        i = i + 1
+        continue
+      }
+      if inst.result is Some(result_val) {
+        let key = inst
+        if expressions.get(key) is Some(existing) {
+          // Replace this instruction with a copy to the existing value
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+          // Don't add this to expressions (it's now a copy)
+        } else {
+          // Record this expression as available
+          expressions.set(key, result_val)
+          local_keys.push(key)
+        }
+      }
+      i = i + 1
+    }
+    // Recurse to dominated children
+    if block_id < domtree.length() {
+      for child in domtree[block_id] {
+        dfs(child)
+      }
+    }
+    // Pop this block's expressions from environment
+    for key in local_keys {
+      expressions.remove(key)
+    }
+  }
+
+  // Start DFS from entry block (block 0)
+  if cfg.is_valid(0) {
+    dfs(0)
+  }
+  result
+}
+
+// ============ Global Value Numbering with Load CSE ============
+
+///|
+/// Check if an instruction reads from memory
+fn reads_memory(opcode : Opcode) -> Bool {
+  match opcode {
+    LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
+    // MemorySize reads the current memory size (invalidated by MemoryGrow)
+    MemorySize(_) => true
+    // GC struct/array gets read from memory
+    StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _) => true
+    ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) | ArrayLen => true
+    _ => false
+  }
+}
+
+///|
+/// Check if an instruction may write to memory or have other side effects
+/// that could invalidate memory-based expressions
+fn may_write_memory(opcode : Opcode) -> Bool {
+  match opcode {
+    // Direct memory writes
+    StorePtr(_) | StorePtrNarrow(_) => true
+    // Memory operations
+    MemoryGrow(_, _) | MemoryFill(_) | MemoryCopy(_, _) => true
+    // Calls may write memory
+    Call(_)
+    | CallIndirect(_, _)
+    | CallRef(_)
+    | ReturnCall(_)
+    | ReturnCallIndirect(_, _)
+    | ReturnCallRef(_)
+    | CallPtr(_, _) => true
+    // GC operations that modify memory
+    StructSet(_, _) | ArraySet(_) | ArrayFill(_) | ArrayCopy(_, _) => true
+    // GC allocations modify memory (the GC heap)
+    StructNew(_) | StructNewDefault(_) => true
+    ArrayNew(_) | ArrayNewDefault(_) | ArrayNewFixed(_, _) => true
+    // Table operations may involve memory
+    TableGrow(_) => true
+    // Exception handling can modify state
+    Throw(_) | ThrowRef => true
+    SpillLocalsForThrow(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Check if an instruction is suitable for GVN (can be CSE'd)
+/// This includes pure operations plus loads (which read but don't write)
+fn is_gvn_candidate(inst : Inst) -> Bool {
+  // Must have a result
+  if inst.result is None {
+    return false
+  }
+  // Use the existing has_side_effects check - if it has side effects, skip it
+  if has_side_effects(inst) {
+    return false
+  }
+  // Instructions that write memory are handled by invalidation, not skipped
+  // But we still need to skip them as candidates
+  match inst.opcode {
+    // Division/remainder can trap, not suitable
+    Sdiv | Udiv | Srem | Urem => false
+    // Float-to-int can trap
+    FcvtToSint | FcvtToUint => false
+    // Memory writes are handled by may_write_memory, skip as candidates
+    StorePtr(_) | StorePtrNarrow(_) => false
+    // All other non-side-effect instructions are candidates
+    _ => true
+  }
+}
+
+///|
+/// Global Value Numbering with Load CSE
+/// Extends CSE to handle memory loads by tracking when stores invalidate loads
+pub fn gvn(func : Function) -> OptResult {
+  let result = OptResult::new()
+  for block in func.blocks {
+    // Value table: expression key -> (result value, reads_memory flag)
+    let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
+    for inst in block.instructions {
+      // Check if this instruction may invalidate memory-based expressions
+      if may_write_memory(inst.opcode) {
+        // Invalidate all memory-reading expressions
+        let to_remove : Array[Inst] = []
+        for entry in value_table.iter() {
+          let (key, (_, is_memory_read)) = entry
+          if is_memory_read {
+            to_remove.push(key)
+          }
+        }
+        for key in to_remove {
+          value_table.remove(key)
+        }
+        continue
+      }
+      // Skip non-candidates
+      if !is_gvn_candidate(inst) {
+        continue
+      }
+      if inst.result is Some(result_val) {
+        let key = inst
+        if value_table.get(key) is Some((existing, _)) {
+          // Already computed - replace with copy
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+        } else {
+          // Record in value table with memory-read flag
+          let is_memory_read = reads_memory(inst.opcode)
+          value_table.set(key, (result_val, is_memory_read))
+        }
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Global Value Numbering with dominance analysis
+/// Expressions in dominating blocks can be reused in dominated blocks,
+/// with proper invalidation of memory-based expressions
+pub fn gvn_global(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() == 0 {
+    return result
+  }
+  // Build CFG and compute dominators
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  // Build block_id -> array_index mapping
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  // Expression environment: key -> (value, reads_memory flag)
+  let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
+  // Track memory-reading keys separately for O(1) invalidation lookup
+  let memory_keys : @hashset.HashSet[Inst] = @hashset.new()
+  // DFS the dominator tree
+  fn dfs(block_id : Int) {
+    let idx = block_idx.get(block_id).unwrap()
+    let block = func.blocks[idx]
+    // Track expressions added/modified in this block (to restore later)
+    // Stores (key, previous_entry) where previous_entry is None if new
+    let local_entries : Array[(Inst, (Value, Bool)?)] = []
+    // Process instructions
+    for inst in block.instructions {
+      // Check if this instruction may invalidate memory-based expressions
+      if may_write_memory(inst.opcode) {
+        // Invalidate all memory-reading expressions using tracked set
+        for key in memory_keys {
+          if value_table.get(key) is Some((v, _)) {
+            // Record for restoration
+            local_entries.push((key, Some((v, true))))
+          }
+        }
+        // Remove all memory-reading expressions
+        for key in memory_keys {
+          value_table.remove(key)
+        }
+        memory_keys.clear()
+        continue
+      }
+      // Skip non-candidates
+      if !is_gvn_candidate(inst) {
+        continue
+      }
+      if inst.result is Some(result_val) {
+        let key = inst
+        if value_table.get(key) is Some((existing, _)) {
+          // Already computed - replace with copy
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+        } else {
+          // Record previous value (None if new)
+          let prev = value_table.get(key)
+          local_entries.push((key, prev))
+          // Add to value table with memory-read flag
+          let is_memory_read = reads_memory(inst.opcode)
+          value_table.set(key, (result_val, is_memory_read))
+          if is_memory_read {
+            memory_keys.add(key)
+          }
+        }
+      }
+    }
+    // Recurse to dominated children
+    if block_id < domtree.length() {
+      for child in domtree[block_id] {
+        dfs(child)
+      }
+    }
+    // Restore value table to state before this block
+    for entry in local_entries.rev_iter() {
+      let (key, prev) = entry
+      match prev {
+        Some(v) => {
+          value_table.set(key, v)
+          if v.1 {
+            memory_keys.add(key)
+          }
+        }
+        None => {
+          value_table.remove(key)
+          memory_keys.remove(key)
+        }
+      }
+    }
+  }
+
+  // Start DFS from entry block (block 0)
+  if cfg.is_valid(0) {
+    dfs(0)
   }
   result
 }
@@ -649,19 +1126,30 @@ fn optimize_o1(func : Function) -> OptResult {
   while changed && iterations < max_iterations {
     changed = false
     iterations = iterations + 1
+    // E-graph based optimization (constant folding + algebraic simplification)
+    if optimize_function(func) {
+      changed = true
+      result.mark_changed()
+    }
     // Basic optimizations only
     let cf_result = fold_constants(func)
     if cf_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cp_result = propagate_copies(func)
+    let cp_result = propagate_copies_global(func)
     if cp_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cse_result = eliminate_common_subexpressions(func)
+    let cse_result = eliminate_common_subexpressions_global(func)
     if cse_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    // GVN with load CSE (extends CSE to handle memory loads)
+    let gvn_result = gvn_global(func)
+    if gvn_result.changed {
       changed = true
       result.mark_changed()
     }
@@ -690,19 +1178,30 @@ pub fn optimize(func : Function) -> OptResult {
   while changed && iterations < max_iterations {
     changed = false
     iterations = iterations + 1
+    // E-graph based optimization (constant folding + algebraic simplification)
+    if optimize_function(func) {
+      changed = true
+      result.mark_changed()
+    }
     // Run each optimization pass
     let cf_result = fold_constants(func)
     if cf_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cp_result = propagate_copies(func)
+    let cp_result = propagate_copies_global(func)
     if cp_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cse_result = eliminate_common_subexpressions(func)
+    let cse_result = eliminate_common_subexpressions_global(func)
     if cse_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    // GVN with load CSE (extends CSE to handle memory loads)
+    let gvn_result = gvn_global(func)
+    if gvn_result.changed {
       changed = true
       result.mark_changed()
     }
