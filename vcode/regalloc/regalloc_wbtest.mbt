@@ -1036,3 +1036,182 @@ test "union_find: basic operations" {
   set_0.sort_by(fn(a, b) { a - b })
   inspect(set_0, content="[0, 1, 2, 3]")
 }
+
+///|
+/// Test constraint reload coalescing - when same spill slot is needed in
+/// multiple registers, should load once and use moves
+test "constraint_reload_coalescing" {
+  // Create InstEdits with two reloads from the same spill slot
+  let edits = InstEdits::new()
+  let slot = 0
+  let spilled_preg = @abi.PReg::spilled(slot, @abi.Int)
+
+  // Two constraints need the same spilled value in different registers
+  edits.before.push({
+    from: spilled_preg,
+    to: { index: 16, class: @abi.Int },
+    class: @abi.Int,
+  })
+  edits.before.push({
+    from: spilled_preg,
+    to: { index: 3, class: @abi.Int },
+    class: @abi.Int,
+  })
+
+  // Resolve the moves
+  let resolved = resolve_parallel_moves(edits.before)
+
+  // Check: both moves should still have spilled source (resolve_parallel_moves doesn't change spilled sources)
+  inspect(resolved.length(), content="2")
+  inspect(resolved[0].from.is_spilled(), content="true")
+  inspect(resolved[1].from.is_spilled(), content="true")
+  inspect(resolved[0].from.get_spill_slot(), content="0")
+  inspect(resolved[1].from.get_spill_slot(), content="0")
+}
+
+///|
+/// Test that coalescing logic works for constraint reloads from same spill slot
+test "constraint_reload_coalescing_logic" {
+  // Simulate what happens in apply_allocation when processing constraint edits
+  // with two reloads from the same spill slot
+  let slot = 0
+  let spilled_preg = @abi.PReg::spilled(slot, @abi.Int)
+
+  // Create moves as they would appear in inst_edits.before
+  let moves : Array[RegMove] = [
+    { from: spilled_preg, to: { index: 16, class: @abi.Int }, class: @abi.Int },
+    { from: spilled_preg, to: { index: 3, class: @abi.Int }, class: @abi.Int },
+  ]
+
+  // Resolve moves (this shouldn't change spilled sources)
+  let resolved = resolve_parallel_moves(moves)
+
+  // Now simulate the coalescing logic from apply_allocation
+  let reloaded_slots : Map[Int, @abi.PReg] = {}
+  let operations : Array[String] = []
+  for mv in resolved {
+    if mv.from.is_spilled() {
+      let s = mv.from.get_spill_slot()
+      if reloaded_slots.get(s) is Some(source_preg) {
+        // Already reloaded - use Move
+        operations.push("Move from X\{source_preg.index} to X\{mv.to.index}")
+      } else {
+        // First reload - use StackLoad
+        operations.push("StackLoad slot \{s} to X\{mv.to.index}")
+        reloaded_slots.set(s, mv.to)
+      }
+    } else {
+      operations.push("Move from X\{mv.from.index} to X\{mv.to.index}")
+    }
+  }
+
+  // Should see: StackLoad + Move (not StackLoad + StackLoad)
+  inspect(
+    operations,
+    content=(
+      #|["StackLoad slot 0 to X16", "Move from X16 to X3"]
+    ),
+  )
+}
+
+///|
+test "reload coalescing: call with spilled arg used twice" {
+  // Reproduce the benchmark bug: a spilled value is used twice as call args
+  // Expected: one StackLoad + one Move, not two StackLoads
+  let func = VCodeFunction::new("test")
+
+  // Create a value that will be spilled: v0 (vmctx pointer, callee-saved across calls)
+  let vmctx = func.add_param(@abi.Int)
+  // Create additional live values to cause register pressure
+  let live_values : Array[@abi.VReg] = []
+  for i in 0..<15 {
+    live_values.push(func.new_vreg(@abi.Int))
+  }
+  let block0 = func.new_block()
+
+  // Load many values to fill up registers
+  for i, v in live_values {
+    let load = @instr.VCodeInst::new(@instr.LoadConst(i.to_int64()))
+    load.add_def({ reg: @abi.Virtual(v) })
+    block0.add_inst(load)
+  }
+
+  // Now create a call that uses vmctx (which should be spilled due to pressure)
+  // and uses it twice in the call args
+  // CallPtr(num_args, num_results, call_conv)
+  let call_inst = @instr.VCodeInst::new(@instr.CallPtr(4, 0, @instr.Wasm))
+  call_inst.add_use(@abi.Virtual(vmctx)) // callee vmctx
+  call_inst.add_use(@abi.Virtual(vmctx)) // caller vmctx (same value used twice!)
+  call_inst.add_use(@abi.Virtual(live_values[0]))
+  call_inst.add_use(@abi.Virtual(live_values[1]))
+  block0.add_inst(call_inst)
+
+  // Use remaining live values after call to keep them live across the call
+  let mut sum = live_values[2]
+  for i in 3..<15 {
+    let new_sum = func.new_vreg(@abi.Int)
+    let add = @instr.VCodeInst::new(@instr.Add(true))
+    add.add_use(@abi.Virtual(sum))
+    add.add_use(@abi.Virtual(live_values[i]))
+    add.add_def({ reg: @abi.Virtual(new_sum) })
+    block0.add_inst(add)
+    sum = new_sum
+  }
+  func.add_result(@abi.Int)
+  block0.set_terminator(@instr.Return([@abi.Virtual(sum)]))
+
+  // Run register allocation
+  let result = allocate_registers_backtracking(func)
+
+  // Format the result to see what instructions were generated
+  let output = StringBuilder::new()
+  for block in result.blocks {
+    output.write_string("block\{block.id}:\n")
+    for inst in block.insts {
+      output.write_string("  \{inst.to_string()}\n")
+    }
+  }
+  inspect(
+    output.to_string(),
+    content=(
+      #|block0:
+      #|  x9 = ldi 0
+      #|  x8 = ldi 1
+      #|  x16 = ldi 2
+      #|  stack_store [sp+24] x16
+      #|  x23 = ldi 3
+      #|  x24 = ldi 4
+      #|  x25 = ldi 5
+      #|  x20 = ldi 6
+      #|  x27 = ldi 7
+      #|  x28 = ldi 8
+      #|  x17 = ldi 9
+      #|  stack_store [sp+0] x17
+      #|  x16 = ldi 10
+      #|  stack_store [sp+8] x16
+      #|  x17 = ldi 11
+      #|  stack_store [sp+16] x17
+      #|  x21 = ldi 12
+      #|  x26 = ldi 13
+      #|  x22 = ldi 14
+      #|  call_ptr[Wasm](4) -> 0 results x0
+      #|  x16 = stack_load [sp+24]
+      #|  x8 = add x16, x23
+      #|  x8 = add x8, x24
+      #|  x8 = add x8, x25
+      #|  x8 = add x8, x20
+      #|  x8 = add x8, x27
+      #|  x8 = add x8, x28
+      #|  x16 = stack_load [sp+0]
+      #|  x8 = add x8, x16
+      #|  x16 = stack_load [sp+8]
+      #|  x8 = add x8, x16
+      #|  x16 = stack_load [sp+16]
+      #|  x8 = add x8, x16
+      #|  x8 = add x8, x21
+      #|  x8 = add x8, x26
+      #|  x8 = add x8, x22
+      #|
+    ),
+  )
+}

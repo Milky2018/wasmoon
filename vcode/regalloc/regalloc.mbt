@@ -1278,6 +1278,12 @@ pub fn apply_allocation(
               let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
               spill_regs.set(vreg.id, spilled_preg)
               // Don't insert reload - emit code will load directly from spill slot
+            } else if i < inst.use_constraints.length() &&
+              inst.use_constraints[i] is @abi.FixedReg(_) {
+              // This use has a FixedReg constraint - constraint edits will handle the reload
+              // Use spilled encoding so use rewriting puts the fixed register
+              let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
+              spill_regs.set(vreg.id, spilled_preg)
             } else if active_reloads.get(slot) is Some(reload_preg) {
               // Regular spilled uses (non-CallIndirect instructions)
               // Check if we have a coalesced reload register for this slot
@@ -1386,7 +1392,7 @@ pub fn apply_allocation(
       }
 
       // Rewrite uses
-      for use_reg in inst.uses {
+      for i, use_reg in inst.uses {
         match use_reg {
           @abi.Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
@@ -1395,7 +1401,20 @@ pub fn apply_allocation(
                 // Spilled: use the scratch register we reloaded into
                 match spill_regs.get(vreg.id) {
                   Some(scratch_preg) =>
-                    new_inst.add_use(@abi.Physical(scratch_preg))
+                    // Check if scratch_preg is a spilled encoding (meaning FixedReg constraint)
+                    if scratch_preg.is_spilled() {
+                      // Use the fixed register from the constraint
+                      // Constraint edits will load the value there
+                      guard i < inst.use_constraints.length() else {
+                        abort("spilled encoding without constraint")
+                      }
+                      guard inst.use_constraints[i] is @abi.FixedReg(fixed_preg) else {
+                        abort("spilled encoding without FixedReg constraint")
+                      }
+                      new_inst.add_use(@abi.Physical(fixed_preg))
+                    } else {
+                      new_inst.add_use(@abi.Physical(scratch_preg))
+                    }
                   None => {
                     // Fallback: use X16 if somehow not in spill_regs
                     let scratch_preg : @abi.PReg = {
@@ -1415,13 +1434,24 @@ pub fn apply_allocation(
       // Use parallel move resolver to handle cyclic dependencies
       if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
         let resolved_moves = resolve_parallel_moves(edits.before)
+        // Track which spill slots have been reloaded in this batch for coalescing
+        let reloaded_slots : Map[Int, @abi.PReg] = {}
         for mv in resolved_moves {
           if mv.from.is_spilled() {
-            // Reload from spill slot to target register
             let slot = mv.from.get_spill_slot()
-            let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-            reload_inst.add_def({ reg: @abi.Physical(mv.to) })
-            new_block.add_inst(reload_inst)
+            if reloaded_slots.get(slot) is Some(source_preg) {
+              // This slot was already reloaded - use mov instead of another load
+              let move_inst = @instr.VCodeInst::new(Move)
+              move_inst.add_def({ reg: @abi.Physical(mv.to) })
+              move_inst.add_use(@abi.Physical(source_preg))
+              new_block.add_inst(move_inst)
+            } else {
+              // First reload of this slot - emit StackLoad and record
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(mv.to) })
+              new_block.add_inst(reload_inst)
+              reloaded_slots.set(slot, mv.to)
+            }
           } else {
             // Register to register move
             let move_inst = @instr.VCodeInst::new(Move)
