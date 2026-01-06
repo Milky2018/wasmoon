@@ -954,18 +954,22 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
 pub fn gvn(func : Function) -> OptResult {
   let result = OptResult::new()
   for block in func.blocks {
-    // Value table: expression signature -> result value
-    let value_table : @hashmap.HashMap[String, Value] = @hashmap.new()
-    // Track which signatures read memory (for invalidation)
-    let memory_sigs : Array[String] = []
+    // Value table: expression signature -> (result value, reads_memory flag)
+    let value_table : @hashmap.HashMap[String, (Value, Bool)] = @hashmap.new()
     for inst in block.instructions {
       // Check if this instruction may invalidate memory-based expressions
       if may_write_memory(inst.opcode) {
         // Invalidate all memory-reading expressions
-        for sig in memory_sigs {
+        let to_remove : Array[String] = []
+        for entry in value_table.iter() {
+          let (sig, (_, is_memory_read)) = entry
+          if is_memory_read {
+            to_remove.push(sig)
+          }
+        }
+        for sig in to_remove {
           value_table.remove(sig)
         }
-        memory_sigs.clear()
         continue
       }
       // Skip non-candidates
@@ -974,19 +978,16 @@ pub fn gvn(func : Function) -> OptResult {
       }
       if inst.result is Some(result_val) {
         let sig = compute_expression_signature(inst)
-        if value_table.get(sig) is Some(existing) {
+        if value_table.get(sig) is Some((existing, _)) {
           // Already computed - replace with copy
           inst.opcode = Opcode::Copy
           inst.operands.clear()
           inst.operands.push(existing)
           result.mark_changed()
         } else {
-          // Record in value table
-          value_table.set(sig, result_val)
-          // Track if this reads memory
-          if reads_memory(inst.opcode) {
-            memory_sigs.push(sig)
-          }
+          // Record in value table with memory-read flag
+          let is_memory_read = reads_memory(inst.opcode)
+          value_table.set(sig, (result_val, is_memory_read))
         }
       }
     }
@@ -1012,44 +1013,38 @@ pub fn gvn_global(func : Function) -> OptResult {
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
-  // Expression environment: signature -> value
-  let value_table : @hashmap.HashMap[String, Value] = @hashmap.new()
+  // Expression environment: signature -> (value, reads_memory flag)
+  let value_table : @hashmap.HashMap[String, (Value, Bool)] = @hashmap.new()
   // DFS the dominator tree
   fn dfs(block_id : Int) {
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
     // Track expressions added/modified in this block (to restore later)
-    let local_entries : Array[(String, Value?)] = []
-    // Track which memory signatures were added in this block
-    let local_memory_sigs : Array[String] = []
-    // Track all memory signatures currently active
-    let active_memory_sigs : Array[String] = []
-    // Collect existing memory signatures from parent
-    for entry in value_table.iter() {
-      let (sig, _) = entry
-      // Simple heuristic: signatures starting with memory-reading opcodes
-      if sig.has_prefix("LoadPtr") ||
-        sig.has_prefix("MemorySize") ||
-        sig.has_prefix("StructGet") ||
-        sig.has_prefix("ArrayGet") ||
-        sig.has_prefix("ArrayLen") {
-        active_memory_sigs.push(sig)
-      }
-    }
+    // Stores (signature, previous_entry) where previous_entry is None if new
+    let local_entries : Array[(String, (Value, Bool)?)] = []
     // Process instructions
     for inst in block.instructions {
       // Check if this instruction may invalidate memory-based expressions
       if may_write_memory(inst.opcode) {
         // Invalidate all memory-reading expressions
-        for sig in active_memory_sigs {
-          // Record for restoration
-          if value_table.get(sig) is Some(v) {
-            local_entries.push((sig, Some(v)))
-            value_table.remove(sig)
+        for entry in value_table.iter() {
+          let (sig, (v, is_memory_read)) = entry
+          if is_memory_read {
+            // Record for restoration (with the original value)
+            local_entries.push((sig, Some((v, true))))
           }
         }
-        active_memory_sigs.clear()
-        local_memory_sigs.clear()
+        // Now remove them
+        let to_remove : Array[String] = []
+        for entry in value_table.iter() {
+          let (sig, (_, is_memory_read)) = entry
+          if is_memory_read {
+            to_remove.push(sig)
+          }
+        }
+        for sig in to_remove {
+          value_table.remove(sig)
+        }
         continue
       }
       // Skip non-candidates
@@ -1058,7 +1053,7 @@ pub fn gvn_global(func : Function) -> OptResult {
       }
       if inst.result is Some(result_val) {
         let sig = compute_expression_signature(inst)
-        if value_table.get(sig) is Some(existing) {
+        if value_table.get(sig) is Some((existing, _)) {
           // Already computed - replace with copy
           inst.opcode = Opcode::Copy
           inst.operands.clear()
@@ -1068,13 +1063,9 @@ pub fn gvn_global(func : Function) -> OptResult {
           // Record previous value (None if new)
           let prev = value_table.get(sig)
           local_entries.push((sig, prev))
-          // Add to value table
-          value_table.set(sig, result_val)
-          // Track if this reads memory
-          if reads_memory(inst.opcode) {
-            active_memory_sigs.push(sig)
-            local_memory_sigs.push(sig)
-          }
+          // Add to value table with memory-read flag
+          let is_memory_read = reads_memory(inst.opcode)
+          value_table.set(sig, (result_val, is_memory_read))
         }
       }
     }

@@ -99,3 +99,4 @@ lldb -- ./wasmoon test path/to/test.wast
 - Use `reinterpret_as_uint()` for unsigned ops, `to_int()` for numeric conversion
 - Use `Array::length()` not `Array::size()`
 - In moon.pkg.json, use "import", "test-import" and "wbtest-import" to manage package importing for ".mbt", "_test.mbt" and "_wbtest.mbt"
+- Use `Option::unwrap_or` not `Option::or`
