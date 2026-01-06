@@ -1226,20 +1226,14 @@ pub fn apply_allocation(
       // Track which scratch registers are used for each spilled vreg
       let spill_regs : Map[Int, @abi.PReg] = {}
 
-      // Check if this is a tail call instruction - needs special handling
-      // Note: CallPtr uses FixedReg constraints, so regalloc handles it normally
-      let is_call_indirect = inst.opcode is ReturnCallIndirect(_, _)
-
-      // For ReturnCallIndirect with many spilled args, we use a special strategy:
-      // - func_ptr (uses[0]): reload to X18
-      // - register args (uses[1-8]): if spilled, reload to X16/X17 (max 2)
-      // - stack args (uses[9+]): if spilled, use spilled register encoding (emit handles them)
-      //
       // X16, X17 are the only truly safe scratch registers because:
-      // - X3-X10: may hold function parameters
-      // - X11-X15: used by call marshalling
-      // - X18: used for func_ptr
+      // - X0-X7: parameter registers
+      // - X8-X15: caller-saved temporaries (may be in use)
+      // - X18: platform reserved (TLS on some platforms)
       // - X19+: allocatable callee-saved registers
+      //
+      // For uses with FixedReg constraints (e.g., CallPtr/ReturnCallIndirect args),
+      // constraint edits will handle the reload, so we skip normal spilled use handling.
 
       // First, collect registers that are in use by non-spilled uses
       // to avoid clobbering them with scratch register reloads
@@ -1264,21 +1258,8 @@ pub fn apply_allocation(
             }
 
             // Determine how to handle this spilled use
-            if is_call_indirect && i == 0 {
-              // CallIndirect's func_ptr (first use): reload directly to X18
-              let scratch_preg : @abi.PReg = { index: 18, class: scratch_class }
-              spill_regs.set(vreg.id, scratch_preg)
-              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
-              new_block.add_inst(reload_inst)
-            } else if is_call_indirect && i >= 1 {
-              // CallIndirect's args (all args, including register args 0-7 and stack args 8+)
-              // Use spilled register encoding - emit code will handle the load directly
-              // This avoids X16/X17 aliasing when many args are spilled
-              let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
-              spill_regs.set(vreg.id, spilled_preg)
-              // Don't insert reload - emit code will load directly from spill slot
-            } else if i < inst.use_constraints.length() &&
+            // Check FixedReg constraint first - constraint edits will handle the reload
+            if i < inst.use_constraints.length() &&
               inst.use_constraints[i] is @abi.FixedReg(_) {
               // This use has a FixedReg constraint - constraint edits will handle the reload
               // Use spilled encoding so use rewriting puts the fixed register
@@ -1298,16 +1279,14 @@ pub fn apply_allocation(
               reload_inst.add_def({ reg: @abi.Physical(reload_preg) })
               new_block.add_inst(reload_inst)
             } else {
-              // No coalescing available - use scratch registers
-              // Use X16, X17, X18 as scratch registers, but avoid registers
-              // that are already in use by other operands in this instruction
-              let scratch_candidates = [16, 17, 18]
-              let mut scratch_idx = inst_spill_idx % 3
+              // No coalescing available - use scratch registers X16, X17
+              let scratch_candidates = [16, 17]
+              let mut scratch_idx = inst_spill_idx % 2
               // Find a scratch register that's not already in use
               let mut attempts = 0
               while used_regs.contains(scratch_candidates[scratch_idx]) &&
-                    attempts < 3 {
-                scratch_idx = (scratch_idx + 1) % 3
+                    attempts < 2 {
+                scratch_idx = (scratch_idx + 1) % 2
                 attempts += 1
               }
               let scratch_preg : @abi.PReg = {
