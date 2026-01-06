@@ -1066,10 +1066,6 @@ fn lower_inst(
       lower_v128_unary(ctx, inst, block, SIMDPromoteLowF32ToF64)
 
     // Memory operations
-    @ir.Opcode::V128Load(_, _, offset) =>
-      lower_v128_load(ctx, inst, block, offset.to_int())
-    @ir.Opcode::V128Store(_, _, offset) =>
-      lower_v128_store(ctx, inst, block, offset.to_int())
     @ir.Opcode::V128Load8x8S(_, _, offset) =>
       lower_v128_load_extend(ctx, inst, block, 8, true, offset.to_int())
     @ir.Opcode::V128Load8x8U(_, _, offset) =>

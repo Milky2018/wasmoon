@@ -612,8 +612,6 @@ pub enum Opcode {
   V128PromoteLowF32toF64
 
   // Memory operations (memidx, align, offset)
-  V128Load(Int, Int, Int64)
-  V128Store(Int, Int, Int64)
   V128Load8x8S(Int, Int, Int64)
   V128Load8x8U(Int, Int, Int64)
   V128Load16x4S(Int, Int, Int64)

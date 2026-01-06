@@ -1087,8 +1087,6 @@ pub impl Show for VCodeOpcode with output(self, logger) {
 ///|
 /// Memory type for load/store
 pub(all) enum MemType {
-  I8
-  I16
   I32
   I64
   F32
@@ -1099,8 +1097,6 @@ pub(all) enum MemType {
 ///|
 fn MemType::to_string(self : MemType) -> String {
   match self {
-    I8 => "i8"
-    I16 => "i16"
     I32 => "i32"
     I64 => "i64"
     F32 => "f32"

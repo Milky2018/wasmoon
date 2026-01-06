@@ -661,8 +661,6 @@ fn validate_instruction(
     | V128ConvertLowI32toF64U
     | V128DemoteF64toF32Zero
     | V128PromoteLowF32toF64
-    | V128Load(_, _, _)
-    | V128Store(_, _, _)
     | V128Load8x8S(_, _, _)
     | V128Load8x8U(_, _, _)
     | V128Load16x4S(_, _, _)

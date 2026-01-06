@@ -170,8 +170,6 @@ pub(all) enum LaneSize {
 pub impl Show for LaneSize
 
 pub(all) enum MemType {
-  I8
-  I16
   I32
   I64
   F32

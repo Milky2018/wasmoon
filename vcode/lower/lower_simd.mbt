@@ -380,44 +380,6 @@ fn lower_v128_to_i32(
 }
 
 ///|
-/// Lower V128 load
-/// Note: offset is ignored as the effective address already includes it from emit_bounds_check
-fn lower_v128_load(
-  ctx : LoweringContext,
-  inst : @ir.Inst,
-  block : @block.VCodeBlock,
-  _offset : Int,
-) -> Unit {
-  if inst.first_result() is Some(result) {
-    let dst = ctx.get_vreg(result)
-    let base = ctx.get_vreg_for_use(inst.operands[0], block)
-    // offset=0 since effective_addr already includes the offset
-    let vcode_inst = @instr.VCodeInst::new(SIMDLoad(0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(base))
-    block.add_inst(vcode_inst)
-  }
-}
-
-///|
-/// Lower V128 store
-/// Note: offset is ignored as the effective address already includes it from emit_bounds_check
-fn lower_v128_store(
-  ctx : LoweringContext,
-  inst : @ir.Inst,
-  block : @block.VCodeBlock,
-  _offset : Int,
-) -> Unit {
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
-  let value = ctx.get_vreg_for_use(inst.operands[1], block)
-  // offset=0 since effective_addr already includes the offset
-  let vcode_inst = @instr.VCodeInst::new(SIMDStore(0))
-  vcode_inst.add_use(Virtual(base))
-  vcode_inst.add_use(Virtual(value))
-  block.add_inst(vcode_inst)
-}
-
-///|
 /// Lower V128 load splat
 /// Note: offset is ignored as the effective address already includes it from emit_bounds_check
 fn lower_v128_load_splat(

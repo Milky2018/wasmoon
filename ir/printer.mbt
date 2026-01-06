@@ -464,10 +464,6 @@ fn format_opcode(
     V128ConvertLowI32toF64U => "f64x2.convert_low_i32x4_u \{ops}"
     V128DemoteF64toF32Zero => "f32x4.demote_f64x2_zero \{ops}"
     V128PromoteLowF32toF64 => "f64x2.promote_low_f32x4 \{ops}"
-    V128Load(memidx, align, offset) =>
-      "v128.load mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Store(memidx, align, offset) =>
-      "v128.store mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
     V128Load8x8S(memidx, align, offset) =>
       "v128.load8x8_s mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
     V128Load8x8U(memidx, align, offset) =>

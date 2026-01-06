@@ -2896,8 +2896,6 @@ fn MachineCode::emit_load(
   offset : Int,
 ) -> Unit {
   match ty {
-    I8 => self.emit_ldrb_imm(rt, rn, offset)
-    I16 => self.emit_ldrh_imm(rt, rn, offset)
     I32 => self.emit_ldr_w_imm(rt, rn, offset)
     I64 => self.emit_ldr_imm(rt, rn, offset)
     F32 => self.emit_ldr_s_imm(rt, rn, offset)
@@ -2915,8 +2913,6 @@ fn MachineCode::emit_store(
   offset : Int,
 ) -> Unit {
   match ty {
-    I8 => self.emit_strb_imm(rt, rn, offset)
-    I16 => self.emit_strh_imm(rt, rn, offset)
     I32 => self.emit_str_w_imm(rt, rn, offset)
     I64 => self.emit_str_imm(rt, rn, offset)
     F32 => self.emit_str_s_imm(rt, rn, offset)

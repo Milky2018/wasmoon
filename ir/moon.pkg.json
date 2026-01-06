@@ -2,6 +2,5 @@
   "import": [
     "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/ir/egraph"
-  ],
-  "warn-list": "-6"
+  ]
 }
