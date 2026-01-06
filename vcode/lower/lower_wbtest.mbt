@@ -956,7 +956,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   )
 
   // ============ Phase 2: Register Allocation ============
-  let allocated_func = @regalloc.allocate_registers_aarch64(vcode_func)
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode_func)
 
   // Inspect the allocated VCode
   // Key observations:
@@ -968,36 +968,36 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     content=(
       #|vcode test(v0:int) -> float {
       #|block0:
-      #|    d0 = ldf 10
+      #|    d2 = ldf 10
       #|    x8 = ldi 0
       #|    x9 = ldi 0
-      #|    x10 = cmp32.eq x0, x9
-      #|    branch x10, block1, block5
+      #|    x9 = cmp32.eq x0, x9
+      #|    branch x9, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x8, d0
-      #|    d1 = load_ptr.f32 +0 x8
-      #|    d2 = mov d1
+      #|    store_ptr.f32 +0 x8, d2
+      #|    d0 = load_ptr.f32 +0 x8
+      #|    d1 = mov d0
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x8, d0
-      #|    d1 = load_ptr.f32 +0 x8
-      #|    d2 = mov d1
+      #|    store_ptr.f32 +0 x8, d2
+      #|    d0 = load_ptr.f32 +0 x8
+      #|    d1 = mov d0
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x8, d0
+      #|    store_ptr.f32 +0 x8, d2
       #|    d1 = load_ptr.f32 +0 x8
-      #|    d2 = mov d1
+      #|    d1 = mov d1
       #|    jump block4
       #|block4(f1:float):
-      #|    ret d2
+      #|    ret d1
       #|block5:
       #|    x9 = ldi 1
-      #|    x10 = cmp32.eq x0, x9
-      #|    branch x10, block2, block6
+      #|    x9 = cmp32.eq x0, x9
+      #|    branch x9, block2, block6
       #|block6:
       #|    x9 = ldi 2
-      #|    x10 = cmp32.eq x0, x9
-      #|    branch x10, block3, block4
+      #|    x9 = cmp32.eq x0, x9
+      #|    branch x9, block3, block4
       #|}
       #|
     ),
@@ -1026,21 +1026,21 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   let block1_last = allocated_func.blocks[1].insts.last().unwrap()
   inspect(block1_last.opcode, content="mov")
   match block1_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Physical(preg) => inspect(preg.to_string(), content="d1")
     Virtual(_) => fail("block1_last is virtual")
   }
 
   // Check block2's last instruction defines d2
   let block2_last = allocated_func.blocks[2].insts.last().unwrap()
   match block2_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Physical(preg) => inspect(preg.to_string(), content="d1")
     Virtual(_) => fail("block2_last is virtual")
   }
 
   // Check block3's last instruction defines d2
   let block3_last = allocated_func.blocks[3].insts.last().unwrap()
   match block3_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d2")
+    Physical(preg) => inspect(preg.to_string(), content="d1")
     Virtual(_) => fail("block3_last is virtual")
   }
 }
@@ -1089,17 +1089,17 @@ test "minimal: dead float constant should not affect live values" {
   // Register allocation with DCE:
   // Dead code (f0 = ldf 1) is eliminated before register allocation
   // Only live values get registers: f1 -> d0, f2 -> d1
-  let allocated_func = @regalloc.allocate_registers_aarch64(vcode_func)
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode_func)
   inspect(
     allocated_func.print(),
     content=(
       #|vcode dead_fconst_test() -> float {
       #|block0:
-      #|    d0 = ldf 2
-      #|    d1 = ldf 10
+      #|    d1 = ldf 2
+      #|    d0 = ldf 10
       #|    x8 = ldi 0
-      #|    store_ptr.f32 +0 x8, d1
-      #|    ret d0
+      #|    store_ptr.f32 +0 x8, d0
+      #|    ret d1
       #|}
       #|
     ),

@@ -175,7 +175,7 @@ fn run_wasi_jit_quiet(
       )
       let ir_func = translator.translate(code.body)
       let vcode = @lower.lower_function(ir_func)
-      let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
+      let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
       let mc = @emit.emit_function(allocated_func)
       let compiled = @vcode.CompiledFunction::new(f_name, mc, 0)
       precompiled.add_function(

@@ -375,7 +375,7 @@ pub fn run_jit(
       let vcode = @lower.lower_function(ir_func)
 
       // Register allocation
-      let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
+      let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
 
       // Emit machine code
       let mc = @emit.emit_function(allocated_func)

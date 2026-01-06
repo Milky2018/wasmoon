@@ -12,8 +12,6 @@ import(
 // Values
 pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) -> RegAllocResult
 
-pub fn allocate_registers_aarch64(VCodeFunction) -> VCodeFunction
-
 pub fn allocate_registers_backtracking(VCodeFunction) -> VCodeFunction
 
 pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
@@ -26,8 +24,6 @@ pub fn build_live_ranges(VCodeFunction, LivenessResult) -> LiveRangeSet
 
 pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
 
-pub fn compare_allocators(VCodeFunction) -> String
-
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
 pub fn compute_loop_depths(VCodeFunction) -> Array[Int]
@@ -38,9 +34,7 @@ pub fn debug_liveness(LivenessResult) -> String
 
 pub fn eliminate_dead_code(VCodeFunction) -> VCodeFunction
 
-pub fn get_backtracking_stats(VCodeFunction) -> AllocStats
-
-pub fn get_linear_scan_stats(VCodeFunction) -> AllocStats
+pub fn get_alloc_stats(VCodeFunction) -> AllocStats
 
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
@@ -90,19 +84,14 @@ pub fn BundleSet::new() -> Self
 
 type InstEdits
 
-type LinearScanAllocator
-pub fn LinearScanAllocator::allocate(Self, VCodeFunction, LivenessResult) -> RegAllocResult
-pub fn LinearScanAllocator::new(Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], callee_saved_float_regs? : Array[@abi.PReg]) -> Self
-
 pub struct LiveInterval {
   vreg : @abi.VReg
   start : ProgPoint
   mut end : ProgPoint
   uses : Array[ProgPoint]
   hint : @abi.PReg?
-  mut hint_vreg : Int?
-  mut assigned : @abi.PReg?
-  mut spill_slot : Int?
+  assigned : @abi.PReg?
+  spill_slot : Int?
   mut crosses_call : Bool
 }
 pub impl Show for LiveInterval
@@ -157,7 +146,7 @@ pub impl Eq for QueueEntry
 pub struct RegAllocResult {
   assignments : Map[Int, @abi.PReg]
   spill_slots : Map[Int, Int]
-  mut num_spill_slots : Int
+  num_spill_slots : Int
   inst_edits : Map[(Int, Int), InstEdits]
 }
 

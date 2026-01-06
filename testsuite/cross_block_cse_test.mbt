@@ -122,7 +122,7 @@ test "cross_block_cse" {
       #|
     ),
   )
-  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
   inspect(
     allocated_func.print(),
     content=(
@@ -131,8 +131,8 @@ test "cross_block_cse" {
       #|    x8 = add32 x2, x3
       #|    cbnz x2, block1, block2
       #|block1:
-      #|    x10 = add32 #1 x8
-      #|    x9 = mov x10
+      #|    x8 = add32 #1 x8
+      #|    x9 = mov x8
       #|    jump block3
       #|block2:
       #|    x9 = mov x8
@@ -154,8 +154,8 @@ test "cross_block_cse" {
       #|  0000: 4800030b  add w8, w2, w3
       #|  0004: 820000b4  cbz x2, block2
       #|block1:
-      #|  0008: 0a050011  add w10, w8, #1
-      #|  000c: e9030aaa  mov x9, x10
+      #|  0008: 08050011  add w8, w8, #1
+      #|  000c: e90308aa  mov x9, x8
       #|  0010: 02000014  b block3
       #|block2:
       #|  0014: e90308aa  mov x9, x8

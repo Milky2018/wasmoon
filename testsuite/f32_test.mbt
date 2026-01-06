@@ -56,15 +56,15 @@ test "f32 add" {
       #|
     ),
   )
-  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
   inspect(
     allocated_func.print(),
     content=(
       #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
       #|    d1 = ldf 15.5
-      #|    d2 = fadd.s d0, d1
-      #|    ret d2
+      #|    d0 = fadd.s d0, d1
+      #|    ret d0
       #|}
       #|
     ),
@@ -158,15 +158,15 @@ test "f64 add" {
       #|
     ),
   )
-  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
   inspect(
     allocated_func.print(),
     content=(
       #|vcode test(v0:int, v1:int, f2:double) -> double {
       #|block0:
       #|    d1 = ldf 15.5
-      #|    d2 = fadd.d d0, d1
-      #|    ret d2
+      #|    d0 = fadd.d d0, d1
+      #|    ret d0
       #|}
       #|
     ),
@@ -258,15 +258,15 @@ test "f32 sub" {
       #|
     ),
   )
-  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
   inspect(
     allocated_func.print(),
     content=(
       #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
       #|    d1 = ldf 3.5
-      #|    d2 = fsub.s d0, d1
-      #|    ret d2
+      #|    d0 = fsub.s d0, d1
+      #|    ret d0
       #|}
       #|
     ),
@@ -361,15 +361,15 @@ test "f32 mul" {
       #|
     ),
   )
-  let allocated_func = @regalloc.allocate_registers_aarch64(vcode)
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
   inspect(
     allocated_func.print(),
     content=(
       #|vcode test(v0:int, v1:int, f2:float) -> float {
       #|block0:
       #|    d1 = ldf 2.5
-      #|    d2 = fmul.s d0, d1
-      #|    ret d2
+      #|    d0 = fmul.s d0, d1
+      #|    ret d0
       #|}
       #|
     ),
@@ -382,9 +382,8 @@ test "f32 mul" {
       #|  0000: 100080d2  movz x16, #0, lsl #0
       #|  0004: 1004a8f2  movk x16, #16416, lsl #16
       #|  0008: 0102271e  fmov s1, w16
-      #|  000c: 0208211e  fmul s2, s0, s1
-      #|  0010: 4040201e  fmov s0, s2
-      #|  0014: c0035fd6  ret
+      #|  000c: 0008211e  fmul s0, s0, s1
+      #|  0010: c0035fd6  ret
       #|
     ),
   )
