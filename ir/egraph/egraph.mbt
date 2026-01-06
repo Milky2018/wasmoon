@@ -365,15 +365,15 @@ fn UnionFind::union(self : UnionFind, a : Int, b : Int) -> Int {
 
 ///|
 /// Max nodes per e-class (prevents exponential blowup from commutativity/associativity)
-let eclass_node_limit : Int = 5
+const ECLASS_NODE_LIMIT : Int = 5
 
 ///|
 /// Max recursive rewrite depth (prevents rule application spiraling)
-let rewrite_depth_limit : Int = 5
+const REWRITE_DEPTH_LIMIT : Int = 5
 
 ///|
 /// Max rewrites per add_eager call
-let matches_limit : Int = 5
+const MATCHES_LIMIT : Int = 5
 
 ///|
 /// The main E-graph data structure
@@ -610,14 +610,14 @@ fn EGraph::add_eager_with_depth(
   depth : Int,
 ) -> EClassId {
   // Check depth limit - if exceeded, just add without rule application
-  if depth > rewrite_depth_limit {
+  if depth > REWRITE_DEPTH_LIMIT {
     return self.add(node)
   }
   let class_id = self.add(node)
   // Process all pending nodes with rule application
   // Rules may add new nodes which also get processed
   let mut rewrites = 0
-  while self.pending_rules.length() > 0 && rewrites < matches_limit {
+  while self.pending_rules.length() > 0 && rewrites < MATCHES_LIMIT {
     let (pending_id, tag) = self.pending_rules.pop().unwrap()
     let canonical_id = self.find(pending_id)
     // Apply rules matching this opcode
@@ -729,7 +729,7 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   // Check combined size limit to prevent exponential blowup
   let size_a = self.classes.get(a.0).map_or(0, fn(c) { c.nodes.length() })
   let size_b = self.classes.get(b.0).map_or(0, fn(c) { c.nodes.length() })
-  if size_a + size_b > eclass_node_limit {
+  if size_a + size_b > ECLASS_NODE_LIMIT {
     // Don't merge - return the "better" one (lower ID = older = likely simpler)
     return if a.0 < b.0 { a } else { b }
   }
