@@ -6,7 +6,7 @@ fn lower_i31_new(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -48,7 +48,7 @@ fn lower_i31_get_s(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -101,7 +101,7 @@ fn lower_i31_get_u(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -149,7 +149,7 @@ fn lower_gc_convert(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   // Just move the value - the representation is the same
@@ -169,7 +169,7 @@ fn lower_ref_test(
   type_idx : Int,
   nullable : Bool,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -208,7 +208,7 @@ fn lower_ref_cast(
   type_idx : Int,
   nullable : Bool,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -245,7 +245,7 @@ fn lower_ref_eq(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref1_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let ref2_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -268,7 +268,7 @@ fn lower_struct_new(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let num_fields = inst.operands.length()
 
@@ -344,7 +344,7 @@ fn lower_struct_new_default(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Load vmctx from REG_VMCTX (X19)
@@ -384,7 +384,7 @@ fn lower_struct_get(
   type_idx : Int,
   field_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -435,7 +435,7 @@ fn lower_struct_get_s(
   field_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -490,7 +490,7 @@ fn lower_struct_get_u(
   field_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -586,7 +586,7 @@ fn lower_array_new(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let init_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let len_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -638,7 +638,7 @@ fn lower_array_new_default(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let len_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -680,7 +680,7 @@ fn lower_array_new_fixed(
   type_idx : Int,
   len : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Load vmctx from REG_VMCTX (X19)
@@ -775,7 +775,7 @@ fn lower_array_get(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -825,7 +825,7 @@ fn lower_array_get_s(
   type_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -874,7 +874,7 @@ fn lower_array_get_u(
   type_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -963,7 +963,7 @@ fn lower_array_len(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Load function pointer
@@ -1031,6 +1031,168 @@ fn lower_array_copy(
     block,
     func_ptr_vreg,
     [dst_ref_vreg, dst_off_vreg, src_ref_vreg, src_off_vreg, count_vreg],
+    None,
+  )
+}
+
+///|
+/// Lower array.new_data instruction
+/// Creates an array from a data segment
+fn lower_array_new_data(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  data_idx : Int,
+) -> Unit {
+  // Operands: data_offset, length
+  let data_off_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let length_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let result_vreg = match inst.first_result() {
+    Some(r) => ctx.get_vreg(r)
+    None => ctx.vcode_func.new_vreg(Int)
+  }
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNewData))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Get vmctx
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
+  // Call: gc_array_new_data_impl(vmctx, type_idx, data_idx, data_off, length) -> arrayref
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, type_idx_vreg, data_idx_vreg, data_off_vreg, length_vreg],
+    Some(result_vreg),
+  )
+}
+
+///|
+/// Lower array.new_elem instruction
+/// Creates an array from an element segment
+fn lower_array_new_elem(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  elem_idx : Int,
+) -> Unit {
+  // Operands: elem_offset, length
+  let elem_off_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let length_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let result_vreg = match inst.first_result() {
+    Some(r) => ctx.get_vreg(r)
+    None => ctx.vcode_func.new_vreg(Int)
+  }
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayNewElem))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Get vmctx
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let elem_idx_vreg = materialize_imm(ctx, block, elem_idx.to_int64())
+  // Call: gc_array_new_elem_impl(vmctx, type_idx, elem_idx, elem_off, length) -> arrayref
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, type_idx_vreg, elem_idx_vreg, elem_off_vreg, length_vreg],
+    Some(result_vreg),
+  )
+}
+
+///|
+/// Lower array.init_data instruction
+/// Initializes array elements from a data segment
+fn lower_array_init_data(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  data_idx : Int,
+) -> Unit {
+  // Operands: arrayref, arr_offset, data_offset, length
+  let array_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let arr_off_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let data_off_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
+  let length_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayInitData))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Get vmctx
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
+  // Call: gc_array_init_data_impl(vmctx, type_idx, data_idx, arrayref, arr_off, data_off, length)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [
+      vmctx_vreg, type_idx_vreg, data_idx_vreg, array_ref_vreg, arr_off_vreg, data_off_vreg,
+      length_vreg,
+    ],
+    None,
+  )
+}
+
+///|
+/// Lower array.init_elem instruction
+/// Initializes array elements from an element segment
+fn lower_array_init_elem(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  type_idx : Int,
+  elem_idx : Int,
+) -> Unit {
+  // Operands: arrayref, arr_offset, elem_offset, length
+  let array_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let arr_off_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
+  let elem_off_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
+  let length_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
+  // Load function pointer
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArrayInitElem))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  // Get vmctx
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let elem_idx_vreg = materialize_imm(ctx, block, elem_idx.to_int64())
+  // Call: gc_array_init_elem_impl(vmctx, type_idx, elem_idx, arrayref, arr_off, elem_off, length)
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [
+      vmctx_vreg, type_idx_vreg, elem_idx_vreg, array_ref_vreg, arr_off_vreg, elem_off_vreg,
+      length_vreg,
+    ],
     None,
   )
 }

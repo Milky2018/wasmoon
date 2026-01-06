@@ -127,24 +127,12 @@ pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
 
 ///|
 fn hex2(n : Int) -> String {
-  let hi = (n >> 4) & 0xF
-  let lo = n & 0xF
-  let hi_c = if hi < 10 {
-    (hi + 48).unsafe_to_char().to_string()
-  } else {
-    (hi - 10 + 97).unsafe_to_char().to_string()
-  }
-  let lo_c = if lo < 10 {
-    (lo + 48).unsafe_to_char().to_string()
-  } else {
-    (lo - 10 + 97).unsafe_to_char().to_string()
-  }
-  hi_c + lo_c
+  @types.to_hex_byte(n)
 }
 
 ///|
 fn to_hex4(n : Int) -> String {
-  hex2((n >> 8) & 0xFF) + hex2(n & 0xFF)
+  @types.to_hex_u16(n)
 }
 
 ///|

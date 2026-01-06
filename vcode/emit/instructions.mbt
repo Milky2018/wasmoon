@@ -198,7 +198,6 @@ enum Instruction {
   Cbz(Int, Int)
   Cbnz(Int, Int)
   BCondOffset(Int, Int)
-  BOffset(Int) // Unconditional branch with byte offset
   CbnzOffset(Int, Bool, Int) // rt, is_64, offset_bytes - branch if not zero with immediate offset
   Brk(Int)
   Ret(Int)
@@ -255,7 +254,6 @@ enum Instruction {
   Bsl16B(Int, Int, Int) // BSL Vd.16B, Vn.16B, Vm.16B
   // Swizzle/Shuffle
   Tbl1(Int, Int, Int) // TBL Vd.16B, {Vn.16B}, Vm.16B
-  Tbl2(Int, Int, Int, Int) // TBL Vd.16B, {Vn.16B, Vn+1.16B}, Vm.16B
   // Integer arithmetic (16 lanes, 8-bit)
   Add16B(Int, Int, Int) // ADD Vd.16B, Vn.16B, Vm.16B
   Sub16B(Int, Int, Int) // SUB Vd.16B, Vn.16B, Vm.16B
@@ -392,7 +390,6 @@ enum Instruction {
   // Pairwise add
   Saddlp8H(Int, Int) // SADDLP Vd.8H, Vn.16B
   Saddlp4S(Int, Int) // SADDLP Vd.4S, Vn.8H
-  Saddlp2D(Int, Int) // SADDLP Vd.2D, Vn.4S
   Uaddlp8H(Int, Int) // UADDLP Vd.8H, Vn.16B
   Uaddlp4S(Int, Int) // UADDLP Vd.4S, Vn.8H
   Uaddlp2D(Int, Int) // UADDLP Vd.2D, Vn.4S
@@ -414,10 +411,6 @@ enum Instruction {
   Fmin2D(Int, Int, Int) // FMIN Vd.2D, Vn.2D, Vm.2D
   Fmax4S(Int, Int, Int) // FMAX Vd.4S, Vn.4S, Vm.4S
   Fmax2D(Int, Int, Int) // FMAX Vd.2D, Vn.2D, Vm.2D
-  Fminnm4S(Int, Int, Int) // FMINNM Vd.4S, Vn.4S, Vm.4S
-  Fminnm2D(Int, Int, Int) // FMINNM Vd.2D, Vn.2D, Vm.2D
-  Fmaxnm4S(Int, Int, Int) // FMAXNM Vd.4S, Vn.4S, Vm.4S
-  Fmaxnm2D(Int, Int, Int) // FMAXNM Vd.2D, Vn.2D, Vm.2D
   // Fused multiply-add (relaxed SIMD)
   Fmla4S(Int, Int, Int) // FMLA Vd.4S, Vn.4S, Vm.4S: Vd = Vd + Vn * Vm
   Fmla2D(Int, Int, Int) // FMLA Vd.2D, Vn.2D, Vm.2D
@@ -477,14 +470,10 @@ enum Instruction {
   Uminv16B(Int, Int) // UMINV Bd, Vn.16B
   Uminv8H(Int, Int) // UMINV Hd, Vn.8H
   Uminv4S(Int, Int) // UMINV Sd, Vn.4S
-  // ADDV for bitmask
-  Addv16B(Int, Int) // ADDV Bd, Vn.16B
   // MOVI for zeroing
   MoviZero(Int) // MOVI Vd.2D, #0
   // Orr for move
   OrrVec(Int, Int) // ORR Vd.16B, Vn.16B, Vn.16B (move)
-  // Load extending (8/16/32 -> 16/32/64)
-  Ld1_8B(Int, Int) // LD1 {Vd.8B}, [Xn]
   // For i64x2.mul emulation
   Rev64_4S(Int, Int) // REV64 Vd.4S, Vn.4S (swap 32-bit halves within 64-bit lanes)
   ShlImm2D(Int, Int, Int) // SHL Vd.2D, Vn.2D, #imm
@@ -771,7 +760,6 @@ fn Instruction::annotate(self : Instruction) -> String {
       let cond_name = cond_name_str(cond)
       "b.\{cond_name} .+\{offset_bytes}"
     }
-    BOffset(offset_bytes) => "b .+\{offset_bytes}"
     CbnzOffset(rt, is_64, offset_bytes) => {
       let reg = if is_64 { "x" } else { "w" }
       "cbnz \{reg}\{rt}, .+\{offset_bytes}"
@@ -820,8 +808,6 @@ fn Instruction::annotate(self : Instruction) -> String {
     Bic16B(rd, rn, rm) => "bic v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
     Bsl16B(rd, rn, rm) => "bsl v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
     Tbl1(rd, rn, rm) => "tbl v\{rd}.16b, {v\{rn}.16b}, v\{rm}.16b"
-    Tbl2(rd, rn1, rn2, rm) =>
-      "tbl v\{rd}.16b, {v\{rn1}.16b, v\{rn2}.16b}, v\{rm}.16b"
     Add16B(rd, rn, rm) => "add v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
     Sub16B(rd, rn, rm) => "sub v\{rd}.16b, v\{rn}.16b, v\{rm}.16b"
     Add8H(rd, rn, rm) => "add v\{rd}.8h, v\{rn}.8h, v\{rm}.8h"
@@ -937,7 +923,6 @@ fn Instruction::annotate(self : Instruction) -> String {
     Umull2_2D(rd, rn, rm) => "umull2 v\{rd}.2d, v\{rn}.4s, v\{rm}.4s"
     Saddlp8H(rd, rn) => "saddlp v\{rd}.8h, v\{rn}.16b"
     Saddlp4S(rd, rn) => "saddlp v\{rd}.4s, v\{rn}.8h"
-    Saddlp2D(rd, rn) => "saddlp v\{rd}.2d, v\{rn}.4s"
     Uaddlp8H(rd, rn) => "uaddlp v\{rd}.8h, v\{rn}.16b"
     Uaddlp4S(rd, rn) => "uaddlp v\{rd}.4s, v\{rn}.8h"
     Uaddlp2D(rd, rn) => "uaddlp v\{rd}.2d, v\{rn}.4s"
@@ -956,10 +941,6 @@ fn Instruction::annotate(self : Instruction) -> String {
     Fmin2D(rd, rn, rm) => "fmin v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
     Fmax4S(rd, rn, rm) => "fmax v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
     Fmax2D(rd, rn, rm) => "fmax v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
-    Fminnm4S(rd, rn, rm) => "fminnm v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
-    Fminnm2D(rd, rn, rm) => "fminnm v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
-    Fmaxnm4S(rd, rn, rm) => "fmaxnm v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
-    Fmaxnm2D(rd, rn, rm) => "fmaxnm v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
     Fmla4S(rd, rn, rm) => "fmla v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
     Fmla2D(rd, rn, rm) => "fmla v\{rd}.2d, v\{rn}.2d, v\{rm}.2d"
     Fmls4S(rd, rn, rm) => "fmls v\{rd}.4s, v\{rn}.4s, v\{rm}.4s"
@@ -1010,10 +991,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     Uminv16B(rd, rn) => "uminv b\{rd}, v\{rn}.16b"
     Uminv8H(rd, rn) => "uminv h\{rd}, v\{rn}.8h"
     Uminv4S(rd, rn) => "uminv s\{rd}, v\{rn}.4s"
-    Addv16B(rd, rn) => "addv b\{rd}, v\{rn}.16b"
     MoviZero(rd) => "movi v\{rd}.2d, #0"
     OrrVec(rd, rn) => "orr v\{rd}.16b, v\{rn}.16b, v\{rn}.16b"
-    Ld1_8B(rd, rn) => "ld1 {v\{rd}.8b}, [x\{rn}]"
     Rev64_4S(rd, rn) => "rev64 v\{rd}.4s, v\{rn}.4s"
     ShlImm2D(rd, rn, imm) => "shl v\{rd}.2d, v\{rn}.2d, #\{imm}"
   }
@@ -2256,18 +2235,6 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (inst >> 24) & 0xFF,
       )
     }
-    BOffset(offset_bytes) => {
-      // B imm26: 0b000101 | imm26
-      // Encoding: 0x14000000 | (imm26 & 0x3FFFFFF)
-      let imm26 = offset_bytes / 4
-      let inst = 0x14000000 | (imm26 & 0x3FFFFFF)
-      (
-        inst & 0xFF,
-        (inst >> 8) & 0xFF,
-        (inst >> 16) & 0xFF,
-        (inst >> 24) & 0xFF,
-      )
-    }
     CbnzOffset(rt, is_64, offset_bytes) => {
       // CBNZ Xt: 0xB5000000 | (imm19 << 5) | Rt
       // CBNZ Wt: 0x35000000 | (imm19 << 5) | Rt
@@ -2507,11 +2474,6 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
     Tbl1(rd, rn, rm) => {
       // TBL Vd.16B, {Vn.16B}, Vm.16B: 0x4E000000 | (Rm << 16) | (Rn << 5) | Rd
       let enc = 0x4E000000 | ((rm & 31) << 16) | ((rn & 31) << 5) | (rd & 31)
-      (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
-    }
-    Tbl2(rd, rn1, _rn2, rm) => {
-      // TBL Vd.16B, {Vn.16B, Vn+1.16B}, Vm.16B: 0x4E002000 | (Rm << 16) | (Rn << 5) | Rd
-      let enc = 0x4E002000 | ((rm & 31) << 16) | ((rn1 & 31) << 5) | (rd & 31)
       (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
     }
     Add16B(rd, rn, rm) => {
@@ -3459,9 +3421,6 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let enc = 0x0D008400 | (q << 30) | ((rd & 31) << 5) | (rn & 31)
       (enc & 0xFF, (enc >> 8) & 0xFF, (enc >> 16) & 0xFF, (enc >> 24) & 0xFF)
     }
-    // All expected instructions are implemented above. This catches
-    // any new instructions that haven't been added yet.
-    _ => abort("Instruction encoding not yet implemented")
   }
 }
 

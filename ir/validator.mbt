@@ -41,7 +41,7 @@ pub fn validate_function(func : Function) -> ValidationResult {
     for inst in block.instructions {
       validate_instruction(inst, defined_values, result)
       // Add result to defined values
-      if inst.result is Some(v) {
+      if inst.first_result() is Some(v) {
         defined_values.set(v.id, v.ty)
       }
     }
@@ -133,7 +133,7 @@ fn validate_instruction(
         )
       }
       // Result should be i32
-      match inst.result {
+      match inst.first_result() {
         Some(r) =>
           if !types_match(r.ty, Type::I32) {
             result.add_error("Icmp result should be i32, got \{r.ty}")
@@ -169,7 +169,7 @@ fn validate_instruction(
         )
       }
       // Result should be i32
-      match inst.result {
+      match inst.first_result() {
         Some(r) =>
           if !types_match(r.ty, Type::I32) {
             result.add_error("Fcmp result should be i32, got \{r.ty}")
@@ -259,6 +259,18 @@ fn validate_instruction(
           "MemoryCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
         )
       }
+    MemoryInit(_, _) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "MemoryInit expects 3 operands (dst, src, size), got \{inst.operands.length()}",
+        )
+      }
+    DataDrop(_) =>
+      if inst.operands.length() != 0 {
+        result.add_error(
+          "DataDrop expects 0 operands, got \{inst.operands.length()}",
+        )
+      }
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
@@ -266,6 +278,30 @@ fn validate_instruction(
       if inst.operands.length() != 2 {
         result.add_error(
           "TableGrow expects 2 operands (delta, init_value), got \{inst.operands.length()}",
+        )
+      }
+    TableFill(_) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "TableFill expects 3 operands (dst, val, size), got \{inst.operands.length()}",
+        )
+      }
+    TableCopy(_, _) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "TableCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
+        )
+      }
+    TableInit(_, _) =>
+      if inst.operands.length() != 3 {
+        result.add_error(
+          "TableInit expects 3 operands (dst, src, size), got \{inst.operands.length()}",
+        )
+      }
+    ElemDrop(_) =>
+      if inst.operands.length() != 0 {
+        result.add_error(
+          "ElemDrop expects 0 operands, got \{inst.operands.length()}",
         )
       }
 
@@ -374,6 +410,30 @@ fn validate_instruction(
           "ArrayCopy expects 5 operands (dst, dst_offset, src, src_offset, count), got \{inst.operands.length()}",
         )
       }
+    ArrayNewData(_, _) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "ArrayNewData expects 2 operands (data_offset, length), got \{inst.operands.length()}",
+        )
+      }
+    ArrayNewElem(_, _) =>
+      if inst.operands.length() != 2 {
+        result.add_error(
+          "ArrayNewElem expects 2 operands (elem_offset, length), got \{inst.operands.length()}",
+        )
+      }
+    ArrayInitData(_, _) =>
+      if inst.operands.length() != 4 {
+        result.add_error(
+          "ArrayInitData expects 4 operands (arrayref, arr_offset, data_offset, length), got \{inst.operands.length()}",
+        )
+      }
+    ArrayInitElem(_, _) =>
+      if inst.operands.length() != 4 {
+        result.add_error(
+          "ArrayInitElem expects 4 operands (arrayref, arr_offset, elem_offset, length), got \{inst.operands.length()}",
+        )
+      }
 
     // GC operations - i31
     I31New =>
@@ -422,28 +482,28 @@ fn validate_instruction(
         )
       }
     TryTableBegin(_handler_id) =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error(
           "TryTableBegin must have a result (setjmp return value)",
         )
       }
     TryTableEnd(_handler_id) => ()
     GetExceptionTag =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error("GetExceptionTag must have a result")
       }
     GetExceptionValue(_idx) =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error("GetExceptionValue must have a result")
       }
     GetExceptionValueCount =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error("GetExceptionValueCount must have a result")
       }
     Delegate(_depth) => ()
     SpillLocalsForThrow(_count) => () // Void instruction, no result
     GetSpilledLocal(_idx) =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error("GetSpilledLocal must have a result")
       }
     // SIMD operations - basic validation (TODO: add detailed type checking)
@@ -661,8 +721,6 @@ fn validate_instruction(
     | V128ConvertLowI32toF64U
     | V128DemoteF64toF32Zero
     | V128PromoteLowF32toF64
-    | V128Load(_, _, _)
-    | V128Store(_, _, _)
     | V128Load8x8S(_, _, _)
     | V128Load8x8U(_, _, _)
     | V128Load16x4S(_, _, _)

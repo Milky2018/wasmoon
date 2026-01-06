@@ -2488,10 +2488,6 @@ pub enum WastValue {
 ///|
 /// Lane value for V128 pattern matching
 pub enum WastLaneValue {
-  I8(Int)
-  I16(Int)
-  I32(Int)
-  I64(Int64)
   F32(Float)
   F64(Double)
   F32CanonicalNan

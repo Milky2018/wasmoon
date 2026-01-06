@@ -9,7 +9,7 @@ fn lower_v128_const(
   block : @block.VCodeBlock,
   bytes : Bytes,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let vcode_inst = @instr.VCodeInst::new(LoadConstV128(bytes))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -25,7 +25,7 @@ fn lower_v128_splat(
   block : @block.VCodeBlock,
   lane_size : @instr.LaneSize,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(SIMDSplat(lane_size))
@@ -43,7 +43,7 @@ fn lower_v128_splat_f(
   block : @block.VCodeBlock,
   is_f32 : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(SIMDSplatF(is_f32))
@@ -62,7 +62,7 @@ fn lower_v128_extract_u(
   lane_size : @instr.LaneSize,
   lane : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(SIMDExtractU(lane_size, lane))
@@ -81,7 +81,7 @@ fn lower_v128_extract_s(
   lane_size : @instr.LaneSize,
   lane : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(SIMDExtractS(lane_size, lane))
@@ -100,7 +100,7 @@ fn lower_v128_extract_f(
   is_f32 : Bool,
   lane : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(SIMDExtractF(is_f32, lane))
@@ -119,7 +119,7 @@ fn lower_v128_replace(
   lane_size : @instr.LaneSize,
   lane : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let vec = ctx.get_vreg_for_use(inst.operands[0], block)
     let val = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -140,7 +140,7 @@ fn lower_v128_replace_f(
   is_f32 : Bool,
   lane : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let vec = ctx.get_vreg_for_use(inst.operands[0], block)
     let val = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -160,7 +160,7 @@ fn lower_v128_shuffle(
   block : @block.VCodeBlock,
   lanes : FixedArray[Int],
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let v1 = ctx.get_vreg_for_use(inst.operands[0], block)
     let v2 = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -192,7 +192,7 @@ fn lower_v128_swizzle(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let values = ctx.get_vreg_for_use(inst.operands[0], block)
     let indices = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -212,7 +212,7 @@ fn lower_v128_unary(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(opcode)
@@ -230,7 +230,7 @@ fn lower_v128_binary(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -251,7 +251,7 @@ fn lower_v128_binary_swap(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -272,7 +272,7 @@ fn lower_v128_ternary(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let a = ctx.get_vreg_for_use(inst.operands[0], block)
     let b = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -309,7 +309,7 @@ fn lower_v128_shift(
   negate : Bool,
   use_ushl : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let vec = ctx.get_vreg_for_use(inst.operands[0], block)
     let shift = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -347,7 +347,7 @@ fn lower_v128_to_i32(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(opcode)
@@ -380,44 +380,6 @@ fn lower_v128_to_i32(
 }
 
 ///|
-/// Lower V128 load
-/// Note: offset is ignored as the effective address already includes it from emit_bounds_check
-fn lower_v128_load(
-  ctx : LoweringContext,
-  inst : @ir.Inst,
-  block : @block.VCodeBlock,
-  _offset : Int,
-) -> Unit {
-  if inst.result is Some(result) {
-    let dst = ctx.get_vreg(result)
-    let base = ctx.get_vreg_for_use(inst.operands[0], block)
-    // offset=0 since effective_addr already includes the offset
-    let vcode_inst = @instr.VCodeInst::new(SIMDLoad(0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(base))
-    block.add_inst(vcode_inst)
-  }
-}
-
-///|
-/// Lower V128 store
-/// Note: offset is ignored as the effective address already includes it from emit_bounds_check
-fn lower_v128_store(
-  ctx : LoweringContext,
-  inst : @ir.Inst,
-  block : @block.VCodeBlock,
-  _offset : Int,
-) -> Unit {
-  let base = ctx.get_vreg_for_use(inst.operands[0], block)
-  let value = ctx.get_vreg_for_use(inst.operands[1], block)
-  // offset=0 since effective_addr already includes the offset
-  let vcode_inst = @instr.VCodeInst::new(SIMDStore(0))
-  vcode_inst.add_use(Virtual(base))
-  vcode_inst.add_use(Virtual(value))
-  block.add_inst(vcode_inst)
-}
-
-///|
 /// Lower V128 load splat
 /// Note: offset is ignored as the effective address already includes it from emit_bounds_check
 fn lower_v128_load_splat(
@@ -427,7 +389,7 @@ fn lower_v128_load_splat(
   lane_size : @instr.LaneSize,
   _offset : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let base = ctx.get_vreg_for_use(inst.operands[0], block)
     // offset=0 since effective_addr already includes the offset
@@ -449,7 +411,7 @@ fn lower_v128_load_extend(
   signed : Bool,
   _offset : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let base = ctx.get_vreg_for_use(inst.operands[0], block)
     // offset=0 since effective_addr already includes the offset
@@ -470,7 +432,7 @@ fn lower_v128_load_zero(
   is_64 : Bool,
   _offset : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let base = ctx.get_vreg_for_use(inst.operands[0], block)
     // offset=0 since effective_addr already includes the offset
@@ -492,7 +454,7 @@ fn lower_v128_load_lane(
   lane : Int,
   _offset : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let base = ctx.get_vreg_for_use(inst.operands[0], block)
     let vec = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -533,7 +495,7 @@ fn lower_v128_cmp_ne(
   block : @block.VCodeBlock,
   lane_size : @instr.LaneSize,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -561,7 +523,7 @@ fn lower_v128_cmp_lt(
   lane_size : @instr.LaneSize,
   signed : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -584,7 +546,7 @@ fn lower_v128_cmp_le(
   lane_size : @instr.LaneSize,
   signed : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -606,7 +568,7 @@ fn lower_v128_fcmp_ne(
   block : @block.VCodeBlock,
   is_f32 : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -639,7 +601,7 @@ fn lower_v128_fma(
   is_f32 : Bool,
   is_sub : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     // WebAssembly relaxed_madd: (a, b, c) -> a * b + c
     // WebAssembly relaxed_nmadd: (a, b, c) -> -(a * b) + c = c - a * b
@@ -686,7 +648,7 @@ fn lower_v128_relaxed_dot_add(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let a = ctx.get_vreg_for_use(inst.operands[0], block)
     let b = ctx.get_vreg_for_use(inst.operands[1], block)

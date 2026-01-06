@@ -102,7 +102,7 @@ fn IRBuilder::emit_void_inst(
 pub fn IRBuilder::get_const_value(self : IRBuilder, v : Value) -> Int64? {
   for block in self.func.blocks {
     for inst in block.instructions {
-      if inst.result is Some(r) && r.id == v.id {
+      if inst.first_result() is Some(r) && r.id == v.id {
         if inst.opcode is Iconst(c) {
           return Some(c)
         }
@@ -607,6 +607,30 @@ pub fn IRBuilder::memory_copy(
   ])
 }
 
+///|
+/// Initialize memory from data segment
+/// memidx: memory index, data_idx: data segment index
+/// Operands: dst (memory offset), src (data offset), size
+/// No return value
+pub fn IRBuilder::memory_init(
+  self : IRBuilder,
+  memidx : Int,
+  data_idx : Int,
+  dst : Value,
+  src : Value,
+  size : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::MemoryInit(memidx, data_idx), [dst, src, size])
+}
+
+///|
+/// Drop data segment (mark as dropped)
+/// data_idx: data segment index
+/// No operands, no return value
+pub fn IRBuilder::data_drop(self : IRBuilder, data_idx : Int) -> Unit {
+  self.emit_void_inst(Opcode::DataDrop(data_idx), [])
+}
+
 // ============ Table Operations ============
 // NOTE: table_get, table_set, table_size are desugared at IR translation phase via FuncEnvironment
 // Use FuncEnvironment::translate_table_get/set/size instead
@@ -621,6 +645,63 @@ pub fn IRBuilder::table_grow(
   init_value : Value,
 ) -> Value {
   self.emit_inst(Type::I32, Opcode::TableGrow(table_idx), [delta, init_value])
+}
+
+///|
+/// Fill table region with a value
+/// table_idx: table index
+/// Operands: dst (table offset), val (ref value), size
+/// No return value
+pub fn IRBuilder::table_fill(
+  self : IRBuilder,
+  table_idx : Int,
+  dst : Value,
+  val : Value,
+  size : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::TableFill(table_idx), [dst, val, size])
+}
+
+///|
+/// Copy table region
+/// dst_table_idx, src_table_idx: destination and source table indices
+/// Operands: dst (table offset), src (table offset), size
+/// No return value
+pub fn IRBuilder::table_copy(
+  self : IRBuilder,
+  dst_table_idx : Int,
+  src_table_idx : Int,
+  dst : Value,
+  src : Value,
+  size : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::TableCopy(dst_table_idx, src_table_idx), [
+    dst, src, size,
+  ])
+}
+
+///|
+/// Initialize table from element segment
+/// table_idx: table index, elem_idx: element segment index
+/// Operands: dst (table offset), src (elem offset), size
+/// No return value
+pub fn IRBuilder::table_init(
+  self : IRBuilder,
+  table_idx : Int,
+  elem_idx : Int,
+  dst : Value,
+  src : Value,
+  size : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::TableInit(table_idx, elem_idx), [dst, src, size])
+}
+
+///|
+/// Drop element segment (mark as dropped)
+/// elem_idx: element segment index
+/// No operands, no return value
+pub fn IRBuilder::elem_drop(self : IRBuilder, elem_idx : Int) -> Unit {
+  self.emit_void_inst(Opcode::ElemDrop(elem_idx), [])
 }
 
 ///|
@@ -1208,6 +1289,78 @@ pub fn IRBuilder::array_copy(
 ) -> Unit {
   self.emit_void_inst(Opcode::ArrayCopy(dst_type_idx, src_type_idx), [
     dst, dst_offset, src, src_offset, count,
+  ])
+}
+
+///|
+/// Create array from data segment
+/// type_idx: array type index, data_idx: data segment index
+/// Operands: data_offset, length
+/// Returns: array reference (i64)
+pub fn IRBuilder::array_new_data(
+  self : IRBuilder,
+  type_idx : Int,
+  data_idx : Int,
+  data_offset : Value,
+  length : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ArrayNewData(type_idx, data_idx), [
+    data_offset, length,
+  ])
+}
+
+///|
+/// Create array from element segment
+/// type_idx: array type index, elem_idx: element segment index
+/// Operands: elem_offset, length
+/// Returns: array reference (i64)
+pub fn IRBuilder::array_new_elem(
+  self : IRBuilder,
+  type_idx : Int,
+  elem_idx : Int,
+  elem_offset : Value,
+  length : Value,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::ArrayNewElem(type_idx, elem_idx), [
+    elem_offset, length,
+  ])
+}
+
+///|
+/// Initialize array from data segment
+/// type_idx: array type index, data_idx: data segment index
+/// Operands: arrayref, arr_offset, data_offset, length
+/// No return value
+pub fn IRBuilder::array_init_data(
+  self : IRBuilder,
+  type_idx : Int,
+  data_idx : Int,
+  array_ref : Value,
+  arr_offset : Value,
+  data_offset : Value,
+  length : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::ArrayInitData(type_idx, data_idx), [
+    array_ref, arr_offset, data_offset, length,
+  ])
+}
+
+///|
+/// Initialize array from element segment
+/// type_idx: array type index, elem_idx: element segment index
+/// Operands: arrayref, arr_offset, elem_offset, length
+/// No return value
+pub fn IRBuilder::array_init_elem(
+  self : IRBuilder,
+  type_idx : Int,
+  elem_idx : Int,
+  array_ref : Value,
+  arr_offset : Value,
+  elem_offset : Value,
+  length : Value,
+) -> Unit {
+  self.emit_void_inst(Opcode::ArrayInitElem(type_idx, elem_idx), [
+    array_ref, arr_offset, elem_offset, length,
   ])
 }
 

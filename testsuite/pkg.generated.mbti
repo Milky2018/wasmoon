@@ -20,6 +20,8 @@ pub fn run_assert_return(TestContext, String?, String, Array[TestValue], Array[T
 
 pub fn run_assert_trap(TestContext, String?, String, Array[TestValue], String) -> Bool
 
+pub fn run_interp_only(String, String, Array[@types.Value]) -> Result[Array[@types.Value], String]
+
 pub fn run_jit(@types.Module, String, Int, Array[@types.Value], Array[@types.ValueType], Array[@types.ValueType]) -> Result[Array[@types.Value], String]
 
 pub fn run_json_tests(String, String, (String) -> Bytes raise) -> TestResult raise TestRunnerError

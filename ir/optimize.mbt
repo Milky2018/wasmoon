@@ -36,7 +36,7 @@ pub fn eliminate_dead_code(func : Function) -> OptResult {
       let mut i = block.instructions.length() - 1
       while i >= 0 {
         let inst = block.instructions[i]
-        if inst.result is Some(v) {
+        if inst.first_result() is Some(v) {
           // If the result is never used and the instruction has no side effects
           if use_counts.get(v.id).unwrap_or(0) == 0 && !has_side_effects(inst) {
             // Remove this instruction
@@ -161,7 +161,7 @@ pub fn fold_constants(func : Function) -> OptResult {
       // First, record any constant instruction
       match inst.opcode {
         Iconst(v) =>
-          match inst.result {
+          match inst.first_result() {
             Some(r) =>
               if r.ty is I32 {
                 constants.set(r.id, ConstValue::I32(v.to_int()))
@@ -171,7 +171,7 @@ pub fn fold_constants(func : Function) -> OptResult {
             None => ()
           }
         Fconst(v) =>
-          match inst.result {
+          match inst.first_result() {
             Some(r) =>
               if r.ty is F32 {
                 // F32 bits are packed in the lower 32 bits of the Double's bit representation
@@ -190,7 +190,7 @@ pub fn fold_constants(func : Function) -> OptResult {
       }
       // Then try to fold the instruction
       if try_fold_constant(inst, constants) is Some(const_val) &&
-        inst.result is Some(v) {
+        inst.first_result() is Some(v) {
         constants.set(v.id, const_val)
         // Replace instruction with constant
         inst.opcode = const_val.to_opcode()
@@ -438,7 +438,7 @@ pub fn propagate_copies(func : Function) -> OptResult {
     // First pass: collect copy instructions in this block
     for inst in block.instructions {
       if inst.opcode is Copy &&
-        inst.result is Some(dest) &&
+        inst.first_result() is Some(dest) &&
         inst.operands.length() > 0 {
         copies.set(dest.id, inst.operands[0])
       }
@@ -484,7 +484,7 @@ pub fn propagate_copies_global(func : Function) -> OptResult {
   for block in func.blocks {
     for inst in block.instructions {
       if inst.opcode is Copy &&
-        inst.result is Some(dest) &&
+        inst.first_result() is Some(dest) &&
         inst.operands.length() > 0 {
         copies.set(dest.id, (inst.operands[0], block.id))
       }
@@ -501,7 +501,7 @@ pub fn propagate_copies_global(func : Function) -> OptResult {
     let local_copies : Array[Int] = []
     for inst in block.instructions {
       if inst.opcode is Copy &&
-        inst.result is Some(dest) &&
+        inst.first_result() is Some(dest) &&
         inst.operands.length() > 0 {
         local_copies.push(dest.id)
         env.push(dest.id)
@@ -766,7 +766,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
         i = i + 1
         continue
       }
-      if inst.result is Some(result_val) {
+      if inst.first_result() is Some(result_val) {
         if expressions.get(inst) is Some(existing) {
           // Replace this instruction with a copy
           inst.opcode = Opcode::Copy
@@ -820,7 +820,7 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
         i = i + 1
         continue
       }
-      if inst.result is Some(result_val) {
+      if inst.first_result() is Some(result_val) {
         let key = inst
         if expressions.get(key) is Some(existing) {
           // Replace this instruction with a copy to the existing value
@@ -908,7 +908,7 @@ fn may_write_memory(opcode : Opcode) -> Bool {
 /// This includes pure operations plus loads (which read but don't write)
 fn is_gvn_candidate(inst : Inst) -> Bool {
   // Must have a result
-  if inst.result is None {
+  if inst.first_result() is None {
     return false
   }
   // Use the existing has_side_effects check - if it has side effects, skip it
@@ -957,7 +957,7 @@ pub fn gvn(func : Function) -> OptResult {
       if !is_gvn_candidate(inst) {
         continue
       }
-      if inst.result is Some(result_val) {
+      if inst.first_result() is Some(result_val) {
         let key = inst
         if value_table.get(key) is Some((existing, _)) {
           // Already computed - replace with copy
@@ -1027,7 +1027,7 @@ pub fn gvn_global(func : Function) -> OptResult {
       if !is_gvn_candidate(inst) {
         continue
       }
-      if inst.result is Some(result_val) {
+      if inst.first_result() is Some(result_val) {
         let key = inst
         if value_table.get(key) is Some((existing, _)) {
           // Already computed - replace with copy
@@ -1420,7 +1420,7 @@ pub fn simplify_branches(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.new()
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode is Iconst(v) && inst.result is Some(r) {
+      if inst.opcode is Iconst(v) && inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, ConstValue::I32(v.to_int()))
         } else {
@@ -1727,7 +1727,7 @@ pub fn hoist_loop_invariants(func : Function) -> OptResult {
     }
     // Instruction results
     for inst in block.instructions {
-      if inst.result is Some(v) {
+      if inst.first_result() is Some(v) {
         value_to_block.set(v.id, block.id)
       }
     }
@@ -1825,14 +1825,14 @@ fn hoist_from_loop(
             let inst = block.instructions[i]
 
             // Skip if already marked or has no result
-            let already_invariant = match inst.result {
+            let already_invariant = match inst.first_result() {
               Some(v) => invariant_values.get(v.id).unwrap_or(false)
               None => true
             }
             if !already_invariant &&
               is_loop_invariant(inst, loop_, value_to_block, invariant_values) {
               // Mark result as invariant
-              if inst.result is Some(v) {
+              if inst.first_result() is Some(v) {
                 invariant_values.set(v.id, true)
               }
 
@@ -1841,7 +1841,7 @@ fn hoist_from_loop(
               preheader.instructions.push(inst)
 
               // Update value_to_block
-              if inst.result is Some(v) {
+              if inst.first_result() is Some(v) {
                 value_to_block.set(v.id, preheader.id)
               }
               any_hoisted = true
@@ -1933,31 +1933,17 @@ pub fn unroll_loops(func : Function, unroll_factor : Int) -> OptResult {
 ///|
 /// Clone an instruction with a fresh result value
 fn clone_instruction(inst : Inst, func : Function) -> Inst {
-  let new_result = match inst.result {
-    Some(v) => {
-      let new_id = func.next_value_id
-      func.next_value_id = new_id + 1
-      Some({ id: new_id, ty: v.ty })
-    }
-    None => None
+  let new_results : Array[Value] = []
+  for v in inst.results {
+    let new_id = func.next_value_id
+    func.next_value_id = new_id + 1
+    new_results.push({ id: new_id, ty: v.ty })
   }
   let new_operands : Array[Value] = []
   for op in inst.operands {
     new_operands.push(op)
   }
-  // Clone extra_results too
-  let new_extra_results : Array[Value] = []
-  for v in inst.extra_results {
-    let new_id = func.next_value_id
-    func.next_value_id = new_id + 1
-    new_extra_results.push({ id: new_id, ty: v.ty })
-  }
-  {
-    opcode: inst.opcode,
-    operands: new_operands,
-    result: new_result,
-    extra_results: new_extra_results,
-  }
+  { results: new_results, opcode: inst.opcode, operands: new_operands }
 }
 
 // ============ Strength Reduction ============
@@ -1973,7 +1959,7 @@ pub fn reduce_strength(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.new()
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode is Iconst(v) && inst.result is Some(r) {
+      if inst.opcode is Iconst(v) && inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, ConstValue::I32(v.to_int()))
         } else {

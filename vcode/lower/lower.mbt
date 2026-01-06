@@ -75,7 +75,7 @@ fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
           // Find the defining instruction of the condition
           for b in ir_func.blocks {
             for i in b.instructions {
-              if i.result is Some(r) && r.id == cond.id {
+              if i.first_result() is Some(r) && r.id == cond.id {
                 // Check if it's an Icmp
                 if i.opcode is @ir.Opcode::Icmp(_) {
                   fused.add(cond.id)
@@ -522,11 +522,23 @@ fn lower_inst(
       lower_memory_fill(ctx, inst, block, memidx)
     @ir.Opcode::MemoryCopy(dst_memidx, src_memidx) =>
       lower_memory_copy(ctx, inst, block, dst_memidx, src_memidx)
+    @ir.Opcode::MemoryInit(memidx, data_idx) =>
+      lower_memory_init(ctx, inst, block, memidx, data_idx)
+    @ir.Opcode::DataDrop(data_idx) =>
+      lower_data_drop(ctx, inst, block, data_idx)
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
     @ir.Opcode::TableGrow(table_idx) =>
       lower_table_grow(ctx, inst, block, table_idx)
+    @ir.Opcode::TableFill(table_idx) =>
+      lower_table_fill(ctx, inst, block, table_idx)
+    @ir.Opcode::TableCopy(dst_table_idx, src_table_idx) =>
+      lower_table_copy(ctx, inst, block, dst_table_idx, src_table_idx)
+    @ir.Opcode::TableInit(table_idx, elem_idx) =>
+      lower_table_init(ctx, inst, block, table_idx, elem_idx)
+    @ir.Opcode::ElemDrop(elem_idx) =>
+      lower_elem_drop(ctx, inst, block, elem_idx)
 
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment at IR level
 
@@ -598,6 +610,14 @@ fn lower_inst(
       lower_array_fill(ctx, inst, block, type_idx)
     @ir.Opcode::ArrayCopy(dst_type, src_type) =>
       lower_array_copy(ctx, inst, block, dst_type, src_type)
+    @ir.Opcode::ArrayNewData(type_idx, data_idx) =>
+      lower_array_new_data(ctx, inst, block, type_idx, data_idx)
+    @ir.Opcode::ArrayNewElem(type_idx, elem_idx) =>
+      lower_array_new_elem(ctx, inst, block, type_idx, elem_idx)
+    @ir.Opcode::ArrayInitData(type_idx, data_idx) =>
+      lower_array_init_data(ctx, inst, block, type_idx, data_idx)
+    @ir.Opcode::ArrayInitElem(type_idx, elem_idx) =>
+      lower_array_init_elem(ctx, inst, block, type_idx, elem_idx)
     @ir.Opcode::RefTest(type_idx, nullable) =>
       lower_ref_test(ctx, inst, block, type_idx, nullable)
     @ir.Opcode::RefCast(type_idx, nullable) =>
@@ -1066,10 +1086,6 @@ fn lower_inst(
       lower_v128_unary(ctx, inst, block, SIMDPromoteLowF32ToF64)
 
     // Memory operations
-    @ir.Opcode::V128Load(_, _, offset) =>
-      lower_v128_load(ctx, inst, block, offset.to_int())
-    @ir.Opcode::V128Store(_, _, offset) =>
-      lower_v128_store(ctx, inst, block, offset.to_int())
     @ir.Opcode::V128Load8x8S(_, _, offset) =>
       lower_v128_load_extend(ctx, inst, block, 8, true, offset.to_int())
     @ir.Opcode::V128Load8x8U(_, _, offset) =>
@@ -1192,7 +1208,7 @@ fn lower_icmp(
   block : @block.VCodeBlock,
   cc : @ir.IntCC,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     // Skip if this Icmp will be fused with a Select (to avoid redundant Cmp)
     if ctx.fused_icmps.contains(result.id) {
       return
@@ -1236,7 +1252,7 @@ fn lower_fcmp(
   block : @block.VCodeBlock,
   cc : @ir.FloatCC,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -1522,7 +1538,7 @@ fn lower_load_ptr(
   block : @block.VCodeBlock,
   ty : @ir.Type,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Convert IR type to VCode memory type and get access size
@@ -1647,7 +1663,7 @@ fn lower_load_ptr_narrow(
   // operand 0 = base pointer
   // operand 1 = offset constant
   guard inst.operands.length() >= 1 else { return }
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Access size in bytes

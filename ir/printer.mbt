@@ -151,6 +151,9 @@ fn format_opcode(
     MemoryFill(memidx) => "memory_fill mem=\{memidx} \{ops}"
     MemoryCopy(dst_memidx, src_memidx) =>
       "memory_copy dst=\{dst_memidx} src=\{src_memidx} \{ops}"
+    MemoryInit(memidx, data_idx) =>
+      "memory_init mem=\{memidx} data=\{data_idx} \{ops}"
+    DataDrop(data_idx) => "data_drop data=\{data_idx}"
 
     // Misc
     Select => "select \{ops}"
@@ -159,6 +162,12 @@ fn format_opcode(
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment
     TableGrow(idx) => "table_grow \{idx} \{ops}"
+    TableFill(idx) => "table_fill \{idx} \{ops}"
+    TableCopy(dst_idx, src_idx) =>
+      "table_copy dst=\{dst_idx} src=\{src_idx} \{ops}"
+    TableInit(table_idx, elem_idx) =>
+      "table_init table=\{table_idx} elem=\{elem_idx} \{ops}"
+    ElemDrop(elem_idx) => "elem_drop elem=\{elem_idx}"
 
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment
 
@@ -210,6 +219,14 @@ fn format_opcode(
     ArrayFill(type_idx) => "array.fill \{type_idx} \{ops}"
     ArrayCopy(dst_type_idx, src_type_idx) =>
       "array.copy \{dst_type_idx} \{src_type_idx} \{ops}"
+    ArrayNewData(type_idx, data_idx) =>
+      "array.new_data \{type_idx} \{data_idx} \{ops}"
+    ArrayNewElem(type_idx, elem_idx) =>
+      "array.new_elem \{type_idx} \{elem_idx} \{ops}"
+    ArrayInitData(type_idx, data_idx) =>
+      "array.init_data \{type_idx} \{data_idx} \{ops}"
+    ArrayInitElem(type_idx, elem_idx) =>
+      "array.init_elem \{type_idx} \{elem_idx} \{ops}"
 
     // GC operations - i31
     I31New => "ref.i31 \{ops}"
@@ -464,10 +481,6 @@ fn format_opcode(
     V128ConvertLowI32toF64U => "f64x2.convert_low_i32x4_u \{ops}"
     V128DemoteF64toF32Zero => "f32x4.demote_f64x2_zero \{ops}"
     V128PromoteLowF32toF64 => "f64x2.promote_low_f32x4 \{ops}"
-    V128Load(memidx, align, offset) =>
-      "v128.load mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Store(memidx, align, offset) =>
-      "v128.store mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
     V128Load8x8S(memidx, align, offset) =>
       "v128.load8x8_s mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
     V128Load8x8U(memidx, align, offset) =>
@@ -537,22 +550,21 @@ fn format_opcode(
 ///|
 /// Print an instruction
 fn format_inst(inst : Inst) -> String {
-  let result_ty = inst.result.map(v => v.ty)
+  let result_ty = inst.first_result().map(fn(v) { v.ty })
   let opcode_str = format_opcode(inst.opcode, inst.operands, result_ty)
-  if inst.result is Some(r) {
-    // Check for extra results (multi-value returns)
-    if inst.extra_results.length() > 0 {
-      let all_results = [format_value(r) + ":" + format_type(r.ty)]
-      for extra in inst.extra_results {
-        all_results.push(format_value(extra) + ":" + format_type(extra.ty))
-      }
-      let results_str = all_results.join(", ")
-      "(\{results_str}) = \{opcode_str}"
-    } else {
-      "\{format_value(r)}:\{format_type(r.ty)} = \{opcode_str}"
-    }
-  } else {
+  if inst.results.length() == 0 {
     opcode_str
+  } else if inst.results.length() == 1 {
+    let r = inst.results[0]
+    "\{format_value(r)}:\{format_type(r.ty)} = \{opcode_str}"
+  } else {
+    // Multi-value returns
+    let all_results : Array[String] = []
+    for r in inst.results {
+      all_results.push(format_value(r) + ":" + format_type(r.ty))
+    }
+    let results_str = all_results.join(", ")
+    "(\{results_str}) = \{opcode_str}"
   }
 }
 

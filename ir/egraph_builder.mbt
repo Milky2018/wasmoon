@@ -31,7 +31,7 @@ pub fn EGraphBuilder::new() -> EGraphBuilder {
 ///|
 /// Register an instruction's definition
 pub fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
-  match inst.result {
+  match inst.first_result() {
     Some(v) => self.def_map.set(v.id, inst)
     None => ()
   }
@@ -101,7 +101,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
       } else {
         64 // default
       }
-      let to_bits = match inst.result {
+      let to_bits = match inst.first_result() {
         Some(v) => type_bits(v.ty)
         None => 32 // default
       }
@@ -114,7 +114,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
       } else {
         32 // default
       }
-      let to_bits = match inst.result {
+      let to_bits = match inst.first_result() {
         Some(v) => type_bits(v.ty)
         None => 64 // default
       }
@@ -127,7 +127,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
       } else {
         32 // default
       }
-      let to_bits = match inst.result {
+      let to_bits = match inst.first_result() {
         Some(v) => type_bits(v.ty)
         None => 64 // default
       }
@@ -240,7 +240,7 @@ pub fn optimize_block(block : Block) -> Map[Int, (Int, @egraph.ENode)] {
 
   // Second pass: add all arithmetic values to e-graph
   for inst in block.instructions {
-    match inst.result {
+    match inst.first_result() {
       Some(v) =>
         // Only add if it's an optimizable operation
         match opcode_to_eopcode(inst) {
@@ -257,7 +257,7 @@ pub fn optimize_block(block : Block) -> Map[Int, (Int, @egraph.ENode)] {
   // Extract optimized results
   let results : Map[Int, (Int, @egraph.ENode)] = {}
   for inst in block.instructions {
-    match inst.result {
+    match inst.first_result() {
       Some(v) =>
         match builder.extract(v) {
           Some(result) => results.set(v.id, result)
@@ -335,7 +335,7 @@ pub fn optimize_function(func : Function) -> Bool {
 
     // Add all values to e-graph
     for inst in block.instructions {
-      match inst.result {
+      match inst.first_result() {
         Some(v) =>
           match opcode_to_eopcode(inst) {
             Some(_) => builder.add_value(v) |> ignore
@@ -363,7 +363,7 @@ pub fn optimize_function(func : Function) -> Bool {
       }
 
       // Then, try to simplify the result value
-      match inst.result {
+      match inst.first_result() {
         Some(v) =>
           match builder.get_simplified_opcode(v) {
             Some(Iconst(c)) => {

@@ -57,10 +57,6 @@ pub enum WastCommand {
 pub impl Show for WastCommand
 
 pub enum WastLaneValue {
-  I8(Int)
-  I16(Int)
-  I32(Int)
-  I64(Int64)
   F32(Float)
   F64(Double)
   F32CanonicalNan

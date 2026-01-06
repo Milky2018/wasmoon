@@ -65,51 +65,7 @@ fn rule_udiv_select_pow2() -> RewriteRule {
 }
 
 ///|
-/// uadd_overflow optimization: (a:uextend) + (b:uextend) cannot overflow
-/// If both operands are zero-extended from smaller types, their sum won't overflow
-/// This rule recognizes Add of two uextend values and marks them as safe
-/// (In a full implementation, this would be used to remove overflow traps)
-fn rule_add_uextend_no_overflow() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Add && node.children.length() == 2 {
-          let mut left_is_uextend = false
-          let mut right_is_uextend = false
-          // Check if left operand is uextend
-          for left in eg.get_nodes(node.children[0]) {
-            if left.op is Uextend(_, _) {
-              left_is_uextend = true
-              break
-            }
-          }
-          // Check if right operand is uextend
-          for right in eg.get_nodes(node.children[1]) {
-            if right.op is Uextend(_, _) {
-              right_is_uextend = true
-              break
-            }
-          }
-          // If both are uextends, the sum cannot overflow the extended type.
-          // This is pattern recognition for potential future optimizations.
-          // Transformation would require e-graph node annotations (not yet supported).
-          // Example uses: nsw/nuw flags for LLVM-style optimizations,
-          // or marking additions as safe for strength reduction.
-          if left_is_uextend && right_is_uextend {
-            // Pattern recognized but no transformation currently.
-            // Future: add AddNoOverflow(a, b) equivalent to egraph
-            changed = changed
-          }
-        }
-      }
-      changed
-    },
-  }
-}
-
-///|
 /// Collect all skeleton rules
 pub fn skeleton_rules() -> Array[RewriteRule] {
-  [rule_udiv_select_pow2(), rule_add_uextend_no_overflow()]
+  [rule_udiv_select_pow2()]
 }

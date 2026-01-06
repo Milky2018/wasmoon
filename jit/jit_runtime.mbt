@@ -482,6 +482,73 @@ pub fn JITModule::init_indirect_table(
   }
 }
 
+// ============ Segment Setup/Teardown ============
+// For memory.init, data.drop, table.init, elem.drop instructions
+
+///|
+/// Set up data segments before JIT execution.
+/// This must be called before running code that uses memory.init or data.drop.
+/// The segments are stored globally and accessed by libcalls.
+pub fn setup_data_segments(datas : Array[@types.Data]) -> Unit {
+  if datas.is_empty() {
+    return
+  }
+  let count = datas.length()
+  // Initialize storage for all segments
+  @jit_ffi.c_jit_init_data_segments(count)
+  // Add each segment one by one - C copies immediately during each call
+  for i, data in datas {
+    let bytes = data.init
+    let size = bytes.length()
+    if size > 0 {
+      // Create FixedArray and copy bytes
+      let buf = FixedArray::make(size, b'\x00')
+      for j in 0..<size {
+        buf[j] = bytes[j]
+      }
+      // C copies immediately during this call, so buf can be GC'd after
+      @jit_ffi.c_jit_add_data_segment(i, buf, size)
+    }
+    // Empty segments are handled by init (initialized to NULL)
+  }
+}
+
+///|
+/// Set up element segments before JIT execution.
+/// This must be called before running code that uses table.init or elem.drop.
+/// The segments are stored globally and accessed by libcalls.
+/// elem_values: Array of Int64 arrays, one per element segment
+///   Each Int64 represents a function reference (func_idx) or null (-1)
+pub fn setup_elem_segments(elem_values : Array[Array[Int64]]) -> Unit {
+  if elem_values.is_empty() {
+    return
+  }
+  let count = elem_values.length()
+  // Initialize storage for all segments
+  @jit_ffi.c_jit_init_elem_segments(count)
+  // Add each segment one by one - C copies immediately during each call
+  for i, values in elem_values {
+    let size = values.length()
+    if size > 0 {
+      // Create FixedArray and copy values
+      let buf = FixedArray::make(size, 0L)
+      for j in 0..<size {
+        buf[j] = values[j]
+      }
+      // C copies immediately during this call, so buf can be GC'd after
+      @jit_ffi.c_jit_add_elem_segment(i, buf, size)
+    }
+    // Empty segments are handled by init (initialized to NULL)
+  }
+}
+
+///|
+/// Clear segment state after JIT execution.
+/// Call this after JIT execution completes to release global segment storage.
+pub fn clear_segments() -> Unit {
+  @jit_ffi.c_jit_clear_segments()
+}
+
 ///|
 /// Initialize shared tables from Store (for multi-table support with table imports/exports).
 /// jit_tables: Array of JITTable from Store (one per runtime table)

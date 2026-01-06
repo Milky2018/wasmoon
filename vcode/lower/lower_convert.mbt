@@ -6,7 +6,7 @@ fn lower_extend(
   block : @block.VCodeBlock,
   signed~ : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     // Determine the extend kind based on source and destination types
@@ -29,7 +29,7 @@ fn lower_sextend_inplace(
   block : @block.VCodeBlock,
   from_bits~ : Int,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let dst_ty = result.ty
@@ -72,7 +72,7 @@ fn lower_truncate(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(Truncate)
@@ -102,7 +102,7 @@ fn lower_float_to_int(
   block : @block.VCodeBlock,
   signed~ : Bool,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   let src_ty = inst.operands[0].ty
@@ -234,7 +234,7 @@ fn lower_float_to_int_sat(
   block : @block.VCodeBlock,
   signed~ : Bool,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   let src_ty = inst.operands[0].ty
@@ -257,7 +257,7 @@ fn lower_int_to_float(
   block : @block.VCodeBlock,
   signed~ : Bool,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     // Determine conversion kind based on source/dest types and signedness
@@ -288,7 +288,7 @@ fn lower_copy(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(Move)
@@ -307,7 +307,7 @@ fn lower_select(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let true_val = ctx.get_vreg_for_use(inst.operands[1], block)
     let false_val = ctx.get_vreg_for_use(inst.operands[2], block)

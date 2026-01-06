@@ -130,6 +130,10 @@ pub(all) enum GCLibcall {
   ArrayLen
   ArrayFill
   ArrayCopy
+  ArrayNewData
+  ArrayNewElem
+  ArrayInitData
+  ArrayInitElem
   TypeCheckSubtype
   RegisterStructInline
   RegisterArrayInline
@@ -156,7 +160,13 @@ pub(all) enum JITLibcall {
   MemorySize
   MemoryFill
   MemoryCopy
+  MemoryInit
+  DataDrop
   TableGrow
+  TableFill
+  TableCopy
+  TableInit
+  ElemDrop
 }
 pub impl Eq for JITLibcall
 pub impl Show for JITLibcall
@@ -170,8 +180,6 @@ pub(all) enum LaneSize {
 pub impl Show for LaneSize
 
 pub(all) enum MemType {
-  I8
-  I16
   I32
   I64
   F32

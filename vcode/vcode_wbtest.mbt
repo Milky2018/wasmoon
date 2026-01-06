@@ -446,8 +446,7 @@ test "memory types" {
   builder.add_result(Int)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  builder.load(I8, addr, 0) |> ignore
-  builder.load(I16, addr, 1) |> ignore
+  builder.load(I32, addr, 0) |> ignore
   builder.load(I64, addr, 2) |> ignore
   builder.load(F32, addr, 3) |> ignore
   let result = builder.load(F64, addr, 4)

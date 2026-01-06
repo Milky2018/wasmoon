@@ -44,7 +44,7 @@ fn lower_get_func_ref(
   block : @block.VCodeBlock,
   func_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Step 1: Load func_table pointer from vmctx
@@ -88,7 +88,7 @@ fn lower_memory_grow(
   let delta_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Get the result vreg
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Check if result type is I64 (memory64)
@@ -144,7 +144,7 @@ fn lower_memory_size(
   memidx : Int,
 ) -> Unit {
   // Get the result vreg
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Check if result type is I64 (memory64)
@@ -262,4 +262,68 @@ fn lower_memory_copy(
     [vmctx_vreg, dst_memidx_vreg, src_memidx_vreg, dst, src, size],
     None,
   )
+}
+
+///|
+/// Lower memory.init instruction
+/// memory.init copies data from a data segment to memory
+/// memidx: memory index, data_idx: data segment index
+fn lower_memory_init(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  memidx : Int,
+  data_idx : Int,
+) -> Unit {
+  // Get the operands: dst, src, size
+  guard inst.operands.length() >= 3 else { return }
+  let dst = ctx.get_vreg_for_use(inst.operands[0], block)
+  let src = ctx.get_vreg_for_use(inst.operands[1], block)
+  let size = ctx.get_vreg_for_use(inst.operands[2], block)
+
+  // Lower to a C call:
+  //   wasmoon_jit_memory_init(vmctx, memidx, data_idx, dst, src, size)
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryInit))
+  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_ptr)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
+  let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
+  lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, memidx_vreg, data_idx_vreg, dst, src, size],
+    None,
+  )
+}
+
+///|
+/// Lower data.drop instruction
+/// data.drop marks a data segment as dropped
+/// data_idx: data segment index
+fn lower_data_drop(
+  ctx : LoweringContext,
+  _inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  data_idx : Int,
+) -> Unit {
+  // Lower to a C call:
+  //   wasmoon_jit_data_drop(vmctx, data_idx)
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(DataDrop))
+  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_ptr)
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  block.add_inst(vmctx_mov)
+  let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
+  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, data_idx_vreg], None)
 }

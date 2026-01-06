@@ -20,6 +20,12 @@ pub fn func_types_to_subtypes(Array[FuncType]) -> Array[SubType]
 
 pub fn get_rec_group_info(Array[Int], Int) -> (Int, Int)
 
+pub fn int_to_hex(Int) -> String
+
+pub fn to_hex_byte(Int) -> String
+
+pub fn to_hex_u16(Int) -> String
+
 // Errors
 
 // Types and methods

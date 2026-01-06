@@ -1,5 +1,6 @@
 {
   "import": [
+    "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/vcode/abi",
     "Milky2018/wasmoon/vcode/emit",
     "Milky2018/wasmoon/vcode/regalloc",
