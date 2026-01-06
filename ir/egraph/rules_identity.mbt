@@ -5,24 +5,16 @@
 
 ///|
 /// Helper to check if an e-class contains a specific integer constant
+/// Uses cached value for O(1) lookup
 fn EGraph::find_const(self : EGraph, id : EClassId) -> Int64? {
-  for node in self.get_nodes(id) {
-    if node.op is Const(v) {
-      return Some(v)
-    }
-  }
-  None
+  self.get_const(id)
 }
 
 ///|
 /// Helper to check if an e-class contains a specific float constant (as bits)
+/// Uses cached value for O(1) lookup
 fn EGraph::find_fconst(self : EGraph, id : EClassId) -> UInt64? {
-  for node in self.get_nodes(id) {
-    if node.op is Fconst(bits) {
-      return Some(bits)
-    }
-  }
-  None
+  self.get_fconst(id)
 }
 
 ///|

@@ -308,6 +308,9 @@ priv struct EClass {
   // For extraction: best node and its cost (lazily computed)
   mut best_node : ENode?
   mut best_cost : Int
+  // Cached constant values for O(1) lookup (instead of O(n) scan)
+  mut const_value : Int64?
+  mut fconst_value : UInt64?
 }
 
 ///|
@@ -361,7 +364,16 @@ fn UnionFind::union(self : UnionFind, a : Int, b : Int) -> Int {
 // Cranelift-style limits to prevent infinite rewriting
 
 ///|
-let matches_limit : Int = 5 // Max rewrites per add_eager call
+/// Max nodes per e-class (prevents exponential blowup from commutativity/associativity)
+let eclass_node_limit : Int = 5
+
+///|
+/// Max recursive rewrite depth (prevents rule application spiraling)
+let rewrite_depth_limit : Int = 5
+
+///|
+/// Max rewrites per add_eager call
+let matches_limit : Int = 5
 
 ///|
 /// The main E-graph data structure
@@ -443,14 +455,25 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     return self.find(existing_id)
   }
 
-  // Create a new e-class
+  // Create a new e-class with cached constant values
   let id = self.uf.make_set()
   let class_id = EClassId(id)
+  // Extract constant value if this is a constant node
+  let const_val : Int64? = match node.op {
+    Const(v) => Some(v)
+    _ => None
+  }
+  let fconst_val : UInt64? = match node.op {
+    Fconst(bits) => Some(bits)
+    _ => None
+  }
   let eclass : EClass = {
     id: class_id,
     nodes: [node],
     best_node: None,
     best_cost: @int.max_value,
+    const_value: const_val,
+    fconst_value: fconst_val,
   }
   self.classes.set(id, eclass)
   self.hashcons.set(node, class_id)
@@ -574,6 +597,22 @@ pub fn EGraph::add_eager(
   node : ENode,
   ruleset : IndexedRuleSet,
 ) -> EClassId {
+  self.add_eager_with_depth(node, ruleset, 0)
+}
+
+///|
+/// Add an e-node with depth tracking for recursive rewrites
+/// Depth limit prevents rule application from spiraling out of control
+fn EGraph::add_eager_with_depth(
+  self : EGraph,
+  node : ENode,
+  ruleset : IndexedRuleSet,
+  depth : Int,
+) -> EClassId {
+  // Check depth limit - if exceeded, just add without rule application
+  if depth > rewrite_depth_limit {
+    return self.add(node)
+  }
   let class_id = self.add(node)
   // Process all pending nodes with rule application
   // Rules may add new nodes which also get processed
@@ -687,6 +726,14 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
     return a
   }
 
+  // Check combined size limit to prevent exponential blowup
+  let size_a = self.classes.get(a.0).map_or(0, fn(c) { c.nodes.length() })
+  let size_b = self.classes.get(b.0).map_or(0, fn(c) { c.nodes.length() })
+  if size_a + size_b > eclass_node_limit {
+    // Don't merge - return the "better" one (lower ID = older = likely simpler)
+    return if a.0 < b.0 { a } else { b }
+  }
+
   // Union in the union-find
   let new_root = self.uf.union(a.0, b.0)
   let new_id = EClassId(new_root)
@@ -718,6 +765,13 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
       // Invalidate best node cache
       root_class.best_node = None
       root_class.best_cost = @int.max_value
+      // Merge constant caches: prefer non-None values
+      if root_class.const_value is None && other_class.const_value is Some(_) {
+        root_class.const_value = other_class.const_value
+      }
+      if root_class.fconst_value is None && other_class.fconst_value is Some(_) {
+        root_class.fconst_value = other_class.fconst_value
+      }
     }
     // Remove the merged class
     self.classes.remove(other_id.0)
@@ -830,6 +884,28 @@ pub fn EGraph::get_nodes(self : EGraph, id : EClassId) -> Array[ENode] {
     eclass.nodes
   } else {
     []
+  }
+}
+
+///|
+/// Get cached constant value for an e-class (O(1) lookup)
+pub fn EGraph::get_const(self : EGraph, id : EClassId) -> Int64? {
+  let canonical = self.find(id)
+  if self.classes.get(canonical.0) is Some(eclass) {
+    eclass.const_value
+  } else {
+    None
+  }
+}
+
+///|
+/// Get cached float constant value for an e-class (O(1) lookup)
+pub fn EGraph::get_fconst(self : EGraph, id : EClassId) -> UInt64? {
+  let canonical = self.find(id)
+  if self.classes.get(canonical.0) is Some(eclass) {
+    eclass.fconst_value
+  } else {
+    None
   }
 }
 

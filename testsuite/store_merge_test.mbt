@@ -68,7 +68,6 @@ test "store_merging_peephole" {
       #|    ret
       #|}
       #|
-
     ),
   )
 }

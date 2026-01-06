@@ -24,7 +24,7 @@ pub fn EGraphBuilder::new() -> EGraphBuilder {
     value_map: {},
     class_to_value: {},
     def_map: {},
-    ruleset: @egraph.standard_rules_indexed(),
+    ruleset: @egraph.get_global_ruleset(),
   }
 }
 

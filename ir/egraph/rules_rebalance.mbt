@@ -1,6 +1,65 @@
-// Tree rebalancing rules for associative operations
+// Tree rebalancing rules (Cranelift-style)
+// ============================================================================
+// Rebalance expression trees to increase instruction-level parallelism (ILP)
+// and canonicalize into shallow-and-wide form for reassociating constants.
+//
+// Pattern: (a op (b op (c op d))) => ((a op b) op (c op d))
+// Pattern: (((a op b) op c) op d) => ((a op b) op (c op d))
+//
+// Key points from Cranelift (arithmetic.isle lines 199-235):
+// 1. Use subsume to avoid exponential e-node blow up
+// 2. Match the FULL pattern directly (no iterative matching)
+// 3. Write rules for both left-skewed and right-skewed trees
+//
+// Our implementation checks child nodes directly (O(n) not O(n³))
+// ============================================================================
 
 ///|
+/// Helper: check if a class has an Add node and return its operands
+fn get_add_operands(eg : EGraph, id : EClassId) -> (EClassId, EClassId)? {
+  for node in eg.get_nodes(id) {
+    if node.op is Add && node.children.length() == 2 {
+      return Some((node.children[0], node.children[1]))
+    }
+  }
+  None
+}
+
+///|
+/// Helper: check if a class has a Mul node and return its operands
+fn get_mul_operands(eg : EGraph, id : EClassId) -> (EClassId, EClassId)? {
+  for node in eg.get_nodes(id) {
+    if node.op is Mul && node.children.length() == 2 {
+      return Some((node.children[0], node.children[1]))
+    }
+  }
+  None
+}
+
+///|
+/// Helper: check if a class has an And node and return its operands
+fn get_and_operands(eg : EGraph, id : EClassId) -> (EClassId, EClassId)? {
+  for node in eg.get_nodes(id) {
+    if node.op is And && node.children.length() == 2 {
+      return Some((node.children[0], node.children[1]))
+    }
+  }
+  None
+}
+
+///|
+/// Helper: check if a class has a Xor node and return its operands
+fn get_xor_operands(eg : EGraph, id : EClassId) -> (EClassId, EClassId)? {
+  for node in eg.get_nodes(id) {
+    if node.op is Xor && node.children.length() == 2 {
+      return Some((node.children[0], node.children[1]))
+    }
+  }
+  None
+}
+
+///|
+/// Rebalance right-skewed add: a + (b + (c + d)) -> (a + b) + (c + d)
 fn rule_rebalance_add_right() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -8,21 +67,15 @@ fn rule_rebalance_add_right() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Add && node.children.length() == 2 {
           let a = node.children[0]
-          for mid in eg.get_nodes(node.children[1]) {
-            if mid.op is Add && mid.children.length() == 2 {
-              let b = mid.children[0]
-              for inner in eg.get_nodes(mid.children[1]) {
-                if inner.op is Add && inner.children.length() == 2 {
-                  let c = inner.children[0]
-                  let d = inner.children[1]
-                  let ab = eg.add_add(a, b)
-                  let cd = eg.add_add(c, d)
-                  let balanced = eg.add_add(ab, cd)
-                  // Use subsume instead of merge to avoid infinite loops
-                  let new_id = eg.subsume(class_id, balanced)
-                  changed = new_id != class_id || changed
-                }
-              }
+          // Check pattern: a + (b + (c + d))
+          if get_add_operands(eg, node.children[1]) is Some((b, inner)) {
+            if get_add_operands(eg, inner) is Some((c, d)) {
+              // Rebalance: (a + b) + (c + d)
+              let ab = eg.add_add(a, b)
+              let cd = eg.add_add(c, d)
+              let result = eg.add_add(ab, cd)
+              let new_id = eg.subsume(class_id, result)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -33,7 +86,7 @@ fn rule_rebalance_add_right() -> RewriteRule {
 }
 
 ///|
-/// Tree rebalancing for iadd: (((a + b) + c) + d) => ((a + b) + (c + d))
+/// Rebalance left-skewed add: ((a + b) + c) + d -> (a + b) + (c + d)
 fn rule_rebalance_add_left() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -41,20 +94,15 @@ fn rule_rebalance_add_left() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Add && node.children.length() == 2 {
           let d = node.children[1]
-          for mid in eg.get_nodes(node.children[0]) {
-            if mid.op is Add && mid.children.length() == 2 {
-              let c = mid.children[1]
-              for inner in eg.get_nodes(mid.children[0]) {
-                if inner.op is Add && inner.children.length() == 2 {
-                  let a = inner.children[0]
-                  let b = inner.children[1]
-                  let ab = eg.add_add(a, b)
-                  let cd = eg.add_add(c, d)
-                  let balanced = eg.add_add(ab, cd)
-                  let new_id = eg.subsume(class_id, balanced)
-                  changed = new_id != class_id || changed
-                }
-              }
+          // Check pattern: ((a + b) + c) + d
+          if get_add_operands(eg, node.children[0]) is Some((inner, c)) {
+            if get_add_operands(eg, inner) is Some((a, b)) {
+              // Rebalance: (a + b) + (c + d)
+              let ab = eg.add_add(a, b)
+              let cd = eg.add_add(c, d)
+              let result = eg.add_add(ab, cd)
+              let new_id = eg.subsume(class_id, result)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -65,7 +113,7 @@ fn rule_rebalance_add_left() -> RewriteRule {
 }
 
 ///|
-/// Tree rebalancing for imul: (a * (b * (c * d))) => ((a * b) * (c * d))
+/// Rebalance right-skewed mul: a * (b * (c * d)) -> (a * b) * (c * d)
 fn rule_rebalance_mul_right() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -73,20 +121,13 @@ fn rule_rebalance_mul_right() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Mul && node.children.length() == 2 {
           let a = node.children[0]
-          for mid in eg.get_nodes(node.children[1]) {
-            if mid.op is Mul && mid.children.length() == 2 {
-              let b = mid.children[0]
-              for inner in eg.get_nodes(mid.children[1]) {
-                if inner.op is Mul && inner.children.length() == 2 {
-                  let c = inner.children[0]
-                  let d = inner.children[1]
-                  let ab = eg.add_mul(a, b)
-                  let cd = eg.add_mul(c, d)
-                  let balanced = eg.add_mul(ab, cd)
-                  let new_id = eg.subsume(class_id, balanced)
-                  changed = new_id != class_id || changed
-                }
-              }
+          if get_mul_operands(eg, node.children[1]) is Some((b, inner)) {
+            if get_mul_operands(eg, inner) is Some((c, d)) {
+              let ab = eg.add_mul(a, b)
+              let cd = eg.add_mul(c, d)
+              let result = eg.add_mul(ab, cd)
+              let new_id = eg.subsume(class_id, result)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -97,7 +138,7 @@ fn rule_rebalance_mul_right() -> RewriteRule {
 }
 
 ///|
-/// Tree rebalancing for imul: (((a * b) * c) * d) => ((a * b) * (c * d))
+/// Rebalance left-skewed mul: ((a * b) * c) * d -> (a * b) * (c * d)
 fn rule_rebalance_mul_left() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -105,20 +146,13 @@ fn rule_rebalance_mul_left() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Mul && node.children.length() == 2 {
           let d = node.children[1]
-          for mid in eg.get_nodes(node.children[0]) {
-            if mid.op is Mul && mid.children.length() == 2 {
-              let c = mid.children[1]
-              for inner in eg.get_nodes(mid.children[0]) {
-                if inner.op is Mul && inner.children.length() == 2 {
-                  let a = inner.children[0]
-                  let b = inner.children[1]
-                  let ab = eg.add_mul(a, b)
-                  let cd = eg.add_mul(c, d)
-                  let balanced = eg.add_mul(ab, cd)
-                  let new_id = eg.subsume(class_id, balanced)
-                  changed = new_id != class_id || changed
-                }
-              }
+          if get_mul_operands(eg, node.children[0]) is Some((inner, c)) {
+            if get_mul_operands(eg, inner) is Some((a, b)) {
+              let ab = eg.add_mul(a, b)
+              let cd = eg.add_mul(c, d)
+              let result = eg.add_mul(ab, cd)
+              let new_id = eg.subsume(class_id, result)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -129,7 +163,7 @@ fn rule_rebalance_mul_left() -> RewriteRule {
 }
 
 ///|
-/// Tree rebalancing for band: (a & (b & (c & d))) => ((a & b) & (c & d))
+/// Rebalance right-skewed and: a & (b & (c & d)) -> (a & b) & (c & d)
 fn rule_rebalance_and_right() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -137,20 +171,13 @@ fn rule_rebalance_and_right() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is And && node.children.length() == 2 {
           let a = node.children[0]
-          for mid in eg.get_nodes(node.children[1]) {
-            if mid.op is And && mid.children.length() == 2 {
-              let b = mid.children[0]
-              for inner in eg.get_nodes(mid.children[1]) {
-                if inner.op is And && inner.children.length() == 2 {
-                  let c = inner.children[0]
-                  let d = inner.children[1]
-                  let ab = eg.add_and(a, b)
-                  let cd = eg.add_and(c, d)
-                  let balanced = eg.add_and(ab, cd)
-                  let new_id = eg.subsume(class_id, balanced)
-                  changed = new_id != class_id || changed
-                }
-              }
+          if get_and_operands(eg, node.children[1]) is Some((b, inner)) {
+            if get_and_operands(eg, inner) is Some((c, d)) {
+              let ab = eg.add_and(a, b)
+              let cd = eg.add_and(c, d)
+              let result = eg.add_and(ab, cd)
+              let new_id = eg.subsume(class_id, result)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -161,7 +188,7 @@ fn rule_rebalance_and_right() -> RewriteRule {
 }
 
 ///|
-/// Tree rebalancing for band: (((a & b) & c) & d) => ((a & b) & (c & d))
+/// Rebalance left-skewed and: ((a & b) & c) & d -> (a & b) & (c & d)
 fn rule_rebalance_and_left() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -169,20 +196,13 @@ fn rule_rebalance_and_left() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is And && node.children.length() == 2 {
           let d = node.children[1]
-          for mid in eg.get_nodes(node.children[0]) {
-            if mid.op is And && mid.children.length() == 2 {
-              let c = mid.children[1]
-              for inner in eg.get_nodes(mid.children[0]) {
-                if inner.op is And && inner.children.length() == 2 {
-                  let a = inner.children[0]
-                  let b = inner.children[1]
-                  let ab = eg.add_and(a, b)
-                  let cd = eg.add_and(c, d)
-                  let balanced = eg.add_and(ab, cd)
-                  let new_id = eg.subsume(class_id, balanced)
-                  changed = new_id != class_id || changed
-                }
-              }
+          if get_and_operands(eg, node.children[0]) is Some((inner, c)) {
+            if get_and_operands(eg, inner) is Some((a, b)) {
+              let ab = eg.add_and(a, b)
+              let cd = eg.add_and(c, d)
+              let result = eg.add_and(ab, cd)
+              let new_id = eg.subsume(class_id, result)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -193,7 +213,7 @@ fn rule_rebalance_and_left() -> RewriteRule {
 }
 
 ///|
-/// Tree rebalancing for bxor: (a ^ (b ^ (c ^ d))) => ((a ^ b) ^ (c ^ d))
+/// Rebalance right-skewed xor: a ^ (b ^ (c ^ d)) -> (a ^ b) ^ (c ^ d)
 fn rule_rebalance_xor_right() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -201,20 +221,13 @@ fn rule_rebalance_xor_right() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Xor && node.children.length() == 2 {
           let a = node.children[0]
-          for mid in eg.get_nodes(node.children[1]) {
-            if mid.op is Xor && mid.children.length() == 2 {
-              let b = mid.children[0]
-              for inner in eg.get_nodes(mid.children[1]) {
-                if inner.op is Xor && inner.children.length() == 2 {
-                  let c = inner.children[0]
-                  let d = inner.children[1]
-                  let ab = eg.add_xor(a, b)
-                  let cd = eg.add_xor(c, d)
-                  let balanced = eg.add_xor(ab, cd)
-                  let new_id = eg.subsume(class_id, balanced)
-                  changed = new_id != class_id || changed
-                }
-              }
+          if get_xor_operands(eg, node.children[1]) is Some((b, inner)) {
+            if get_xor_operands(eg, inner) is Some((c, d)) {
+              let ab = eg.add_xor(a, b)
+              let cd = eg.add_xor(c, d)
+              let result = eg.add_xor(ab, cd)
+              let new_id = eg.subsume(class_id, result)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -225,7 +238,7 @@ fn rule_rebalance_xor_right() -> RewriteRule {
 }
 
 ///|
-/// Tree rebalancing for bxor: (((a ^ b) ^ c) ^ d) => ((a ^ b) ^ (c ^ d))
+/// Rebalance left-skewed xor: ((a ^ b) ^ c) ^ d -> (a ^ b) ^ (c ^ d)
 fn rule_rebalance_xor_left() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -233,20 +246,13 @@ fn rule_rebalance_xor_left() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Xor && node.children.length() == 2 {
           let d = node.children[1]
-          for mid in eg.get_nodes(node.children[0]) {
-            if mid.op is Xor && mid.children.length() == 2 {
-              let c = mid.children[1]
-              for inner in eg.get_nodes(mid.children[0]) {
-                if inner.op is Xor && inner.children.length() == 2 {
-                  let a = inner.children[0]
-                  let b = inner.children[1]
-                  let ab = eg.add_xor(a, b)
-                  let cd = eg.add_xor(c, d)
-                  let balanced = eg.add_xor(ab, cd)
-                  let new_id = eg.subsume(class_id, balanced)
-                  changed = new_id != class_id || changed
-                }
-              }
+          if get_xor_operands(eg, node.children[0]) is Some((inner, c)) {
+            if get_xor_operands(eg, inner) is Some((a, b)) {
+              let ab = eg.add_xor(a, b)
+              let cd = eg.add_xor(c, d)
+              let result = eg.add_xor(ab, cd)
+              let new_id = eg.subsume(class_id, result)
+              changed = new_id != class_id || changed
             }
           }
         }

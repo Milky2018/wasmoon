@@ -469,25 +469,29 @@ test "egraph: (a - 1) - 2 = a - 3" {
 }
 
 ///|
-test "egraph: commutativity - x + y equiv y + x" {
+// NOTE: Commutativity rules were intentionally removed to prevent infinite loops
+// (a+b -> b+a -> a+b -> ...). Cranelift-style e-graphs use directional rules only.
+test "egraph: no commutativity - x + y not equiv y + x (by design)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let xy = eg.add_add(x, y)
   let yx = eg.add_add(y, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
-  inspect(eg.equiv(xy, yx), content="true")
+  // Commutativity is NOT applied - this is intentional
+  inspect(eg.equiv(xy, yx), content="false")
 }
 
 ///|
-test "egraph: commutativity - x * y equiv y * x" {
+test "egraph: no commutativity - x * y not equiv y * x (by design)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let xy = eg.add_mul(x, y)
   let yx = eg.add_mul(y, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
-  inspect(eg.equiv(xy, yx), content="true")
+  // Commutativity is NOT applied - this is intentional
+  inspect(eg.equiv(xy, yx), content="false")
 }
 
 ///|

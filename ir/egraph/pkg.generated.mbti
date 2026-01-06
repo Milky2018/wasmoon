@@ -2,6 +2,8 @@
 package "Milky2018/wasmoon/ir/egraph"
 
 // Values
+pub fn get_global_ruleset() -> IndexedRuleSet
+
 pub fn remat_rules() -> Array[RewriteRule]
 
 pub fn select_rules() -> Array[RewriteRule]
@@ -97,6 +99,8 @@ pub fn EGraph::equiv(Self, EClassId, EClassId) -> Bool
 pub fn EGraph::extract(Self, EClassId) -> (Int, ENode)
 pub fn EGraph::find(Self, EClassId) -> EClassId
 pub fn EGraph::get_bits(Self, EClassId) -> Int?
+pub fn EGraph::get_const(Self, EClassId) -> Int64?
+pub fn EGraph::get_fconst(Self, EClassId) -> UInt64?
 pub fn EGraph::get_nodes(Self, EClassId) -> Array[ENode]
 pub fn EGraph::is_marked_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::is_rematerializable(Self, EClassId) -> Bool
