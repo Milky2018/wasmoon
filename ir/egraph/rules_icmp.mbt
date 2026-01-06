@@ -1,5 +1,4 @@
 // Integer comparison optimization rules
-// Implements Cranelift icmp.isle optimization rules
 
 // IntCC constants: 0=eq, 1=ne, 2=slt, 3=sle, 4=sgt, 5=sge, 6=ult, 7=ule, 8=ugt, 9=uge
 

@@ -1,4 +1,4 @@
-// Tree rebalancing rules (Cranelift-style)
+// Tree rebalancing rules
 // ============================================================================
 // Rebalance expression trees to increase instruction-level parallelism (ILP)
 // and canonicalize into shallow-and-wide form for reassociating constants.
@@ -6,12 +6,10 @@
 // Pattern: (a op (b op (c op d))) => ((a op b) op (c op d))
 // Pattern: (((a op b) op c) op d) => ((a op b) op (c op d))
 //
-// Key points from Cranelift (arithmetic.isle lines 199-235):
+// Key points:
 // 1. Use subsume to avoid exponential e-node blow up
 // 2. Match the FULL pattern directly (no iterative matching)
 // 3. Write rules for both left-skewed and right-skewed trees
-//
-// Our implementation checks child nodes directly (O(n) not O(n³))
 // ============================================================================
 
 ///|

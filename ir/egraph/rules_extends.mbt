@@ -1,5 +1,4 @@
-// Extend/Reduce optimization rules
-// Implements Cranelift extends.isle optimization rules
+// Sign/zero extension optimization rules
 
 ///|
 /// uextend(uextend(x)) → uextend(x)

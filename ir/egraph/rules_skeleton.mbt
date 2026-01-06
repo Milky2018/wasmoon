@@ -1,5 +1,4 @@
-// Skeleton rules - Side-effectful instruction simplifications
-// These are pure simplifications extracted from Cranelift's skeleton.isle
+// Skeleton rules: pure simplifications for algebraic identities
 
 ///|
 /// Check if a value is a power of two and return its log2

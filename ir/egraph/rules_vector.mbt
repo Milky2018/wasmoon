@@ -1,5 +1,4 @@
-// Vector splat rules for EGraph optimization
-// Implements Cranelift cprop.isle vector optimization rules
+// SIMD vector optimization rules
 
 ///|
 /// Helper to create splat8 pattern: replicate byte 16 times

@@ -1,4 +1,4 @@
-// Canonicalization rules (Cranelift-style)
+// Canonicalization rules
 // ============================================================================
 // Push constants to the right side of commutative operations.
 // This enables other rules to only match patterns like `x + k` instead of
@@ -8,8 +8,6 @@
 // 1. Only fires when left operand IS a constant and right IS NOT
 // 2. Does NOT use subsume - adds equivalent form (both forms remain valid)
 // 3. Targeted at enabling constant folding and other optimizations
-//
-// Reference: Cranelift cprop.isle lines 112-136
 // ============================================================================
 
 ///|

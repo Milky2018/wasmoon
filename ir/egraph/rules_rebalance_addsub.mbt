@@ -1,7 +1,6 @@
-// Add/Sub mixed rebalancing rules (Cranelift-style)
+// Add/Sub mixed rebalancing rules
 // ============================================================================
 // These rules handle mixed add/sub patterns to improve ILP.
-// Reference: Cranelift arithmetic.isle lines 238-296
 //
 // Key patterns (all use subsume to avoid exponential blow-up):
 // - a - (b - (c - d)) -> (a - b) + (c - d)

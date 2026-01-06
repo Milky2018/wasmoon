@@ -1,5 +1,4 @@
-// Float constant folding rules
-// Implements Cranelift cprop.isle float optimization rules
+// Floating-point optimization rules
 
 ///|
 /// Float constant folding for binary operations

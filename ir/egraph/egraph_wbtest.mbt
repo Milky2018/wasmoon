@@ -470,7 +470,7 @@ test "egraph: (a - 1) - 2 = a - 3" {
 
 ///|
 // NOTE: Commutativity rules were intentionally removed to prevent infinite loops
-// (a+b -> b+a -> a+b -> ...). Cranelift-style e-graphs use directional rules only.
+// (a+b -> b+a -> a+b -> ...). We use directional rules only.
 test "egraph: no commutativity - x + y not equiv y + x (by design)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
@@ -1191,7 +1191,7 @@ test "egraph: ne(x - 3, 10) = ne(x, 13)" {
 }
 
 // ============================================================================
-// New rules tests (Cranelift opts)
+// Additional optimization rules tests
 // ============================================================================
 
 ///|

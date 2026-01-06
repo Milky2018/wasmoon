@@ -16,7 +16,7 @@ pub(all) struct EClassId(Int) derive(Eq, Hash, Show, Compare)
 
 ///|
 /// E-node opcode for e-graph expressions
-/// Aligned with Cranelift IR opcodes for consistent optimization
+/// Standard IR opcodes for optimization
 pub(all) enum EOpcode {
   // Constants
   Const(Int64) // Integer constant
@@ -361,7 +361,7 @@ fn UnionFind::union(self : UnionFind, a : Int, b : Int) -> Int {
   }
 }
 
-// Cranelift-style limits to prevent infinite rewriting
+// Hard limits to prevent infinite rewriting
 
 ///|
 /// Max nodes per e-class (prevents exponential blowup from commutativity/associativity)

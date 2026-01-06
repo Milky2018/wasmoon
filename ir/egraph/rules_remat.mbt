@@ -1,5 +1,4 @@
-// Rematerialization rules
-// Implements Cranelift remat.isle optimization rules
+// Rematerialization optimization rules
 //
 // Rematerialization marks expressions that are cheap to recompute at each use
 // site rather than being spilled to memory when register pressure is high.
