@@ -550,20 +550,5 @@ pub impl Show for JITRuntime with output(self, logger) {
 ///|
 /// Convert an integer to hex string
 fn Int::to_hex(self : Int) -> String {
-  if self == 0 {
-    return "0"
-  }
-  let mut result = ""
-  let mut n = self
-  while n > 0 {
-    let digit = n & 15
-    let c = if digit < 10 {
-      (digit + 48).unsafe_to_char() // '0' = 48
-    } else {
-      (digit - 10 + 97).unsafe_to_char() // 'a' = 97
-    }
-    result = c.to_string() + result
-    n = n >> 4
-  }
-  result
+  @types.int_to_hex(self)
 }

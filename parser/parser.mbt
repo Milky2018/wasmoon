@@ -64,25 +64,7 @@ const LIMITS_64_SHARED : Int = 0x07 // shared, has max, 64-bit (memory only)
 ///|
 /// Convert int to hex string
 fn int_to_hex(n : Int) -> String {
-  if n == 0 {
-    return "0"
-  }
-  let digits = "0123456789abcdef"
-  let buf = StringBuilder::new()
-  let mut val = n
-  while val > 0 {
-    let digit = val % 16
-    buf.write_char(digits.code_unit_at(digit).unsafe_to_char())
-    val = val / 16
-  }
-  // Reverse the string
-  let s = buf.to_string()
-  let len = s.length()
-  let result = StringBuilder::new()
-  for i in 0..<len {
-    result.write_char(s.code_unit_at(len - 1 - i).unsafe_to_char())
-  }
-  result.to_string()
+  @types.int_to_hex(n)
 }
 
 ///|

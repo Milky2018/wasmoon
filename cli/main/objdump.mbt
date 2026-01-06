@@ -84,9 +84,5 @@ fn run_objdump(cwasm_path : String) -> Unit {
 
 ///|
 fn to_hex_byte(b : Int) -> String {
-  let hex_chars = "0123456789abcdef"
-  let high = (b >> 4) & 0xF
-  let low = b & 0xF
-  String::make(1, hex_chars.code_unit_at(high).unsafe_to_char()) +
-  String::make(1, hex_chars.code_unit_at(low).unsafe_to_char())
+  @types.to_hex_byte(b)
 }
