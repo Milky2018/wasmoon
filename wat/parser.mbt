@@ -1179,6 +1179,11 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
     }
   }
   self.expect_rparen()
+  // Populate func_names with reverse mapping (index -> name)
+  for entry in self.func_names {
+    let (name, idx) = entry
+    mod_.func_names.set(idx, name)
+  }
   mod_
 }
 

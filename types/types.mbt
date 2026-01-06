@@ -1122,6 +1122,9 @@ pub(all) struct Module {
   codes : Array[FunctionCode]
   datas : Array[Data]
   tags : Array[TagType] // exception tags
+  /// Function index -> internal name (e.g., 0 -> "some_func" from $some_func)
+  /// Populated from WAT parsing, empty for binary modules without name section
+  func_names : Map[Int, String]
 } derive(Show)
 
 ///|
@@ -1141,6 +1144,7 @@ pub fn Module::empty() -> Module {
     codes: [],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -1168,6 +1172,7 @@ pub fn Module::simple(
     codes: [{ locals: [], body }],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -1245,6 +1250,7 @@ pub fn Module::new() -> Module {
     codes: [],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 

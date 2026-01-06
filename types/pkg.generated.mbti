@@ -689,6 +689,7 @@ pub(all) struct Module {
   codes : Array[FunctionCode]
   datas : Array[Data]
   tags : Array[TagType]
+  func_names : Map[Int, String]
 }
 pub fn Module::empty() -> Self
 pub fn Module::get_array_type(Self, Int) -> ArrayType

@@ -60,6 +60,7 @@ fn create_i64_arithmetic_module() -> @types.Module {
     ],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -294,6 +295,7 @@ fn create_i64_bitwise_module() -> @types.Module {
     ],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -435,6 +437,7 @@ fn create_i64_unary_module() -> @types.Module {
     ],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 

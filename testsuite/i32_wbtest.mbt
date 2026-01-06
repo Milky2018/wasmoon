@@ -27,6 +27,7 @@ fn create_i32_add_module() -> @types.Module {
     codes: [add_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -130,6 +131,7 @@ fn create_i32_arithmetic_module() -> @types.Module {
     ],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -368,6 +370,7 @@ fn create_i32_bitwise_module() -> @types.Module {
     ],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -540,6 +543,7 @@ fn create_i32_cmp_module() -> @types.Module {
     ],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -655,6 +659,7 @@ fn create_i32_unary_module() -> @types.Module {
     codes: [clz_func, ctz_func, popcnt_func, extend8_s_func, extend16_s_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 
@@ -817,6 +822,7 @@ fn create_i32_rotate_module() -> @types.Module {
     codes: [rotl_func, rotr_func],
     datas: [],
     tags: [],
+    func_names: {},
   }
 }
 

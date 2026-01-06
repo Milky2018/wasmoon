@@ -304,6 +304,11 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
       _ => raise WatError::UnexpectedToken("expected '(' in module", self.loc())
     }
   }
+  // Populate func_names with reverse mapping (index -> name)
+  for entry in self.func_names {
+    let (name, idx) = entry
+    mod_.func_names.set(idx, name)
+  }
   mod_
 }
 
