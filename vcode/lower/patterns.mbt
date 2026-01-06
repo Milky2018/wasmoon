@@ -145,7 +145,7 @@ fn match_pattern_impl(
   match pattern {
     Any => {
       // Any pattern always matches, capture the result value
-      if inst.result is Some(v) {
+      if inst.first_result() is Some(v) {
         result.add_value(v)
       }
       true
@@ -162,7 +162,7 @@ fn match_pattern_impl(
       if inst.opcode is @ir.Opcode::Fconst(val) {
         // For F32, bits are packed in the lower 32 bits of the Double
         // For F64, the Double is the actual value
-        if inst.result is Some(r) && r.ty is @ir.Type::F32 {
+        if inst.first_result() is Some(r) && r.ty is @ir.Type::F32 {
           let stored_bits = val.reinterpret_as_int64().to_int()
           let expected_bits = Float::from_double(expected).reinterpret_as_int()
           stored_bits == expected_bits
@@ -224,7 +224,7 @@ fn match_pattern_impl(
               Some(def) =>
                 if def.opcode is @ir.Opcode::Fconst(val) {
                   // For F32, bits are packed in the lower 32 bits of the Double
-                  let matches = if def.result is Some(r) &&
+                  let matches = if def.first_result() is Some(r) &&
                     r.ty is @ir.Type::F32 {
                     let stored_bits = val.reinterpret_as_int64().to_int()
                     let expected_bits = Float::from_double(expected).reinterpret_as_int()
@@ -269,7 +269,7 @@ fn match_pattern_impl(
         }
       }
       // Capture the result value
-      if inst.result is Some(v) {
+      if inst.first_result() is Some(v) {
         result.add_value(v)
       }
       true
@@ -311,7 +311,7 @@ fn find_defining_inst(ctx : LoweringContext, value : @ir.Value) -> @ir.Inst? {
   // Search through all blocks and instructions to find the definition
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
-      if inst.result is Some(result) && result.id == value.id {
+      if inst.first_result() is Some(result) && result.id == value.id {
         return Some(inst)
       }
     }
@@ -531,7 +531,7 @@ pub fn lower_inst_with_patterns(
   match rewrite_result {
     Identity(operand_idx) =>
       // Emit a move from the identity operand to the result
-      if inst.result is Some(result) {
+      if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
         let vcode_inst = @instr.VCodeInst::new(@instr.Move)
@@ -544,7 +544,7 @@ pub fn lower_inst_with_patterns(
       }
     Constant(val) =>
       // Emit a load constant
-      if inst.result is Some(result) {
+      if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let vcode_inst = @instr.VCodeInst::new(@instr.LoadConst(val))
         vcode_inst.add_def({ reg: @abi.Virtual(dst) })
@@ -555,7 +555,7 @@ pub fn lower_inst_with_patterns(
       }
     ShiftLeft(operand_idx, shift_amount) =>
       // Strength reduction: mul by power of 2 -> shift left
-      if inst.result is Some(result) {
+      if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
         // Load shift amount as constant
@@ -578,7 +578,7 @@ pub fn lower_inst_with_patterns(
       }
     ShiftRight(operand_idx, shift_amount) =>
       // Strength reduction: unsigned div by power of 2 -> logical shift right
-      if inst.result is Some(result) {
+      if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
         // Load shift amount as constant

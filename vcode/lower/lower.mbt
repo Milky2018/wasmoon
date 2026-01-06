@@ -75,7 +75,7 @@ fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
           // Find the defining instruction of the condition
           for b in ir_func.blocks {
             for i in b.instructions {
-              if i.result is Some(r) && r.id == cond.id {
+              if i.first_result() is Some(r) && r.id == cond.id {
                 // Check if it's an Icmp
                 if i.opcode is @ir.Opcode::Icmp(_) {
                   fused.add(cond.id)
@@ -1192,7 +1192,7 @@ fn lower_icmp(
   block : @block.VCodeBlock,
   cc : @ir.IntCC,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     // Skip if this Icmp will be fused with a Select (to avoid redundant Cmp)
     if ctx.fused_icmps.contains(result.id) {
       return
@@ -1236,7 +1236,7 @@ fn lower_fcmp(
   block : @block.VCodeBlock,
   cc : @ir.FloatCC,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -1522,7 +1522,7 @@ fn lower_load_ptr(
   block : @block.VCodeBlock,
   ty : @ir.Type,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Convert IR type to VCode memory type and get access size
@@ -1647,7 +1647,7 @@ fn lower_load_ptr_narrow(
   // operand 0 = base pointer
   // operand 1 = offset constant
   guard inst.operands.length() >= 1 else { return }
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Access size in bytes

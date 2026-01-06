@@ -44,7 +44,7 @@ fn lower_get_func_ref(
   block : @block.VCodeBlock,
   func_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Step 1: Load func_table pointer from vmctx
@@ -88,7 +88,7 @@ fn lower_memory_grow(
   let delta_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Get the result vreg
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Check if result type is I64 (memory64)
@@ -144,7 +144,7 @@ fn lower_memory_size(
   memidx : Int,
 ) -> Unit {
   // Get the result vreg
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Check if result type is I64 (memory64)

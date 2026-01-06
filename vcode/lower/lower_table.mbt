@@ -20,7 +20,7 @@ fn lower_table_grow(
 
   // Get or create the result vreg
   // Note: We must emit the call even if result is unused because table_grow has side effects
-  let result_vreg = match inst.result {
+  let result_vreg = match inst.first_result() {
     Some(result) => ctx.get_vreg(result)
     None => ctx.vcode_func.new_vreg(@abi.Int) // Create a temp vreg for the unused result
   }

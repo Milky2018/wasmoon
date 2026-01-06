@@ -41,7 +41,7 @@ pub fn validate_function(func : Function) -> ValidationResult {
     for inst in block.instructions {
       validate_instruction(inst, defined_values, result)
       // Add result to defined values
-      if inst.result is Some(v) {
+      if inst.first_result() is Some(v) {
         defined_values.set(v.id, v.ty)
       }
     }
@@ -133,7 +133,7 @@ fn validate_instruction(
         )
       }
       // Result should be i32
-      match inst.result {
+      match inst.first_result() {
         Some(r) =>
           if !types_match(r.ty, Type::I32) {
             result.add_error("Icmp result should be i32, got \{r.ty}")
@@ -169,7 +169,7 @@ fn validate_instruction(
         )
       }
       // Result should be i32
-      match inst.result {
+      match inst.first_result() {
         Some(r) =>
           if !types_match(r.ty, Type::I32) {
             result.add_error("Fcmp result should be i32, got \{r.ty}")
@@ -422,28 +422,28 @@ fn validate_instruction(
         )
       }
     TryTableBegin(_handler_id) =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error(
           "TryTableBegin must have a result (setjmp return value)",
         )
       }
     TryTableEnd(_handler_id) => ()
     GetExceptionTag =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error("GetExceptionTag must have a result")
       }
     GetExceptionValue(_idx) =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error("GetExceptionValue must have a result")
       }
     GetExceptionValueCount =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error("GetExceptionValueCount must have a result")
       }
     Delegate(_depth) => ()
     SpillLocalsForThrow(_count) => () // Void instruction, no result
     GetSpilledLocal(_idx) =>
-      if inst.result is None {
+      if inst.first_result() is None {
         result.add_error("GetSpilledLocal must have a result")
       }
     // SIMD operations - basic validation (TODO: add detailed type checking)

@@ -352,12 +352,12 @@ pub fn IRBuilder::v128_unary(Self, Opcode, Value) -> Value
 pub fn IRBuilder::v128_xor(Self, Value, Value) -> Value
 
 pub struct Inst {
-  result : Value?
-  extra_results : Array[Value]
+  results : Array[Value]
   mut opcode : Opcode
   operands : Array[Value]
 }
 pub fn Inst::all_results(Self) -> Array[Value]
+pub fn Inst::first_result(Self) -> Value?
 pub fn Inst::new_multi(Array[Value], Opcode, Array[Value]) -> Self
 pub impl Eq for Inst
 pub impl Hash for Inst

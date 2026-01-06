@@ -117,7 +117,7 @@ fn lower_try_table_begin(
   block : @block.VCodeBlock,
   handler_id : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Get vmctx
@@ -204,7 +204,7 @@ fn lower_get_exception_tag(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Get vmctx
@@ -229,7 +229,7 @@ fn lower_get_exception_value(
   block : @block.VCodeBlock,
   idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Get vmctx
@@ -256,7 +256,7 @@ fn lower_get_exception_value_count(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Get vmctx
@@ -384,7 +384,7 @@ fn lower_get_spilled_local(
   block : @block.VCodeBlock,
   idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Get vmctx

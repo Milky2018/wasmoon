@@ -6,7 +6,7 @@ fn lower_i31_new(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -48,7 +48,7 @@ fn lower_i31_get_s(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -101,7 +101,7 @@ fn lower_i31_get_u(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -149,7 +149,7 @@ fn lower_gc_convert(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   // Just move the value - the representation is the same
@@ -169,7 +169,7 @@ fn lower_ref_test(
   type_idx : Int,
   nullable : Bool,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -208,7 +208,7 @@ fn lower_ref_cast(
   type_idx : Int,
   nullable : Bool,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -245,7 +245,7 @@ fn lower_ref_eq(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref1_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let ref2_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -268,7 +268,7 @@ fn lower_struct_new(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let num_fields = inst.operands.length()
 
@@ -344,7 +344,7 @@ fn lower_struct_new_default(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Load vmctx from REG_VMCTX (X19)
@@ -384,7 +384,7 @@ fn lower_struct_get(
   type_idx : Int,
   field_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -435,7 +435,7 @@ fn lower_struct_get_s(
   field_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -490,7 +490,7 @@ fn lower_struct_get_u(
   field_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -586,7 +586,7 @@ fn lower_array_new(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let init_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let len_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -638,7 +638,7 @@ fn lower_array_new_default(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let len_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -680,7 +680,7 @@ fn lower_array_new_fixed(
   type_idx : Int,
   len : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
   // Load vmctx from REG_VMCTX (X19)
@@ -775,7 +775,7 @@ fn lower_array_get(
   block : @block.VCodeBlock,
   type_idx : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -825,7 +825,7 @@ fn lower_array_get_s(
   type_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -874,7 +874,7 @@ fn lower_array_get_u(
   type_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -963,7 +963,7 @@ fn lower_array_len(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Load function pointer

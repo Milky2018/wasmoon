@@ -6,7 +6,7 @@ fn lower_iconst(
   block : @block.VCodeBlock,
   val : Int64,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let vreg = ctx.get_vreg(result)
     let vcode_inst = @instr.VCodeInst::new(LoadConst(val))
     vcode_inst.add_def({ reg: Virtual(vreg) })
@@ -22,7 +22,7 @@ fn lower_fconst(
   block : @block.VCodeBlock,
   val : Double,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let vreg = ctx.get_vreg(result)
     // Determine if this is an F32 or F64 constant based on the result type
     let opcode = match result.ty {
@@ -52,7 +52,7 @@ fn lower_binary_int(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -450,7 +450,7 @@ fn lower_div(
   let is_64 = inst.operands[0].ty is @ir.Type::I64
 
   // Check if divisor is a constant suitable for magic division
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     if get_const_value(ctx, lhs_val) is Some(divisor) {
       if is_64 {
         // 64-bit magic division
@@ -519,7 +519,7 @@ fn lower_div(
   }
 
   // Only emit division if result is used
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let opcode : @instr.VCodeOpcode = if signed {
       @instr.VCodeOpcode::SDiv(is_64)
@@ -542,7 +542,7 @@ fn lower_shift(
   block : @block.VCodeBlock,
   make_opcode : (Bool) -> @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -563,7 +563,7 @@ fn lower_bitcount(
   block : @block.VCodeBlock,
   make_opcode : (Bool) -> @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let is_64 = result.ty is @ir.Type::I64
@@ -588,7 +588,7 @@ fn lower_iadd(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
@@ -685,7 +685,7 @@ fn lower_imul(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -708,7 +708,7 @@ fn lower_isub(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
@@ -781,7 +781,7 @@ fn lower_band(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
@@ -827,7 +827,7 @@ fn lower_bor(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
@@ -873,7 +873,7 @@ fn lower_bxor(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
@@ -929,7 +929,7 @@ fn lower_rotl(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   let amount = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -970,7 +970,7 @@ fn lower_ctz(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  guard inst.result is Some(result) else { return }
+  guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   let is_64 = result.ty is @ir.Type::I64
@@ -996,7 +996,7 @@ fn lower_binary_float(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -1027,7 +1027,7 @@ fn lower_unary_float(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     // Determine if this is f32 based on result type
@@ -1057,7 +1057,7 @@ fn lower_promote(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(FPromote)
@@ -1074,7 +1074,7 @@ fn lower_demote(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(FDemote)
@@ -1092,7 +1092,7 @@ fn lower_unary_int(
   block : @block.VCodeBlock,
   opcode : @instr.VCodeOpcode,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(opcode)
@@ -1130,7 +1130,7 @@ fn lower_rem(
   block.add_inst(trap_zero)
 
   // Only emit remainder computation if result is used
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
 
     // Step 1: Compute quotient = a / b
@@ -1165,7 +1165,7 @@ fn lower_bitcast(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
-  if inst.result is Some(result) {
+  if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let vcode_inst = @instr.VCodeInst::new(Bitcast)

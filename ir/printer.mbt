@@ -537,22 +537,21 @@ fn format_opcode(
 ///|
 /// Print an instruction
 fn format_inst(inst : Inst) -> String {
-  let result_ty = inst.result.map(v => v.ty)
+  let result_ty = inst.first_result().map(fn(v) { v.ty })
   let opcode_str = format_opcode(inst.opcode, inst.operands, result_ty)
-  if inst.result is Some(r) {
-    // Check for extra results (multi-value returns)
-    if inst.extra_results.length() > 0 {
-      let all_results = [format_value(r) + ":" + format_type(r.ty)]
-      for extra in inst.extra_results {
-        all_results.push(format_value(extra) + ":" + format_type(extra.ty))
-      }
-      let results_str = all_results.join(", ")
-      "(\{results_str}) = \{opcode_str}"
-    } else {
-      "\{format_value(r)}:\{format_type(r.ty)} = \{opcode_str}"
-    }
-  } else {
+  if inst.results.length() == 0 {
     opcode_str
+  } else if inst.results.length() == 1 {
+    let r = inst.results[0]
+    "\{format_value(r)}:\{format_type(r.ty)} = \{opcode_str}"
+  } else {
+    // Multi-value returns
+    let all_results : Array[String] = []
+    for r in inst.results {
+      all_results.push(format_value(r) + ":" + format_type(r.ty))
+    }
+    let results_str = all_results.join(", ")
+    "(\{results_str}) = \{opcode_str}"
   }
 }
 

@@ -102,7 +102,7 @@ fn IRBuilder::emit_void_inst(
 pub fn IRBuilder::get_const_value(self : IRBuilder, v : Value) -> Int64? {
   for block in self.func.blocks {
     for inst in block.instructions {
-      if inst.result is Some(r) && r.id == v.id {
+      if inst.first_result() is Some(r) && r.id == v.id {
         if inst.opcode is Iconst(c) {
           return Some(c)
         }

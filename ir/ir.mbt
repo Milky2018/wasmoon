@@ -94,8 +94,7 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 ///|
 /// Instruction - an SSA instruction that produces a value
 pub struct Inst {
-  result : Value? // The primary value produced (None for void instructions)
-  extra_results : Array[Value] // Additional results for multi-value returns (e.g., call returning multiple values)
+  results : Array[Value] // Values produced (empty for void instructions)
   mut opcode : Opcode // The operation
   operands : Array[Value] // Input values
 } derive(Show)
@@ -128,7 +127,11 @@ pub impl Eq for Inst with equal(self, other) {
 
 ///|
 fn Inst::new(result : Value?, opcode : Opcode, operands : Array[Value]) -> Inst {
-  { result, extra_results: [], opcode, operands }
+  let results = match result {
+    Some(v) => [v]
+    None => []
+  }
+  { results, opcode, operands }
 }
 
 ///|
@@ -138,29 +141,23 @@ pub fn Inst::new_multi(
   opcode : Opcode,
   operands : Array[Value],
 ) -> Inst {
-  let (result, extra_results) = if results.length() == 0 {
-    (None, [])
+  { results, opcode, operands }
+}
+
+///|
+/// Get primary result of this instruction (first result or None)
+pub fn Inst::first_result(self : Inst) -> Value? {
+  if self.results.length() > 0 {
+    Some(self.results[0])
   } else {
-    let extra : Array[Value] = []
-    for i in 1..<results.length() {
-      extra.push(results[i])
-    }
-    (Some(results[0]), extra)
+    None
   }
-  { result, extra_results, opcode, operands }
 }
 
 ///|
 /// Get all results of this instruction
 pub fn Inst::all_results(self : Inst) -> Array[Value] {
-  let results : Array[Value] = []
-  if self.result is Some(v) {
-    results.push(v)
-  }
-  for v in self.extra_results {
-    results.push(v)
-  }
-  results
+  self.results
 }
 
 ///|
