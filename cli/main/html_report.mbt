@@ -111,7 +111,6 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|      background: var(--code-bg);
       #|      border: 1px solid var(--border);
       #|      border-radius: 6px;
-      #|      overflow: hidden;
       #|    }
       #|    .column.hidden { display: none; }
       #|    .column-header {
@@ -126,13 +125,12 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|    }
       #|    .column-content {
       #|      padding: 10px;
-      #|      overflow: auto;
-      #|      max-height: calc(100vh - 150px);
       #|    }
       #|    pre {
       #|      font-size: 11px;
       #|      line-height: 1.4;
-      #|      white-space: pre;
+      #|      white-space: pre-wrap;
+      #|      word-break: break-all;
       #|      margin: 0;
       #|    }
       #|  </style>
