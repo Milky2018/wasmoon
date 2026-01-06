@@ -1142,6 +1142,11 @@ fn optimize_o1(func : Function) -> OptResult {
   while changed && iterations < max_iterations {
     changed = false
     iterations = iterations + 1
+    // E-graph based optimization (constant folding + algebraic simplification)
+    if optimize_function(func) {
+      changed = true
+      result.mark_changed()
+    }
     // Basic optimizations only
     let cf_result = fold_constants(func)
     if cf_result.changed {
@@ -1189,6 +1194,11 @@ pub fn optimize(func : Function) -> OptResult {
   while changed && iterations < max_iterations {
     changed = false
     iterations = iterations + 1
+    // E-graph based optimization (constant folding + algebraic simplification)
+    if optimize_function(func) {
+      changed = true
+      result.mark_changed()
+    }
     // Run each optimization pass
     let cf_result = fold_constants(func)
     if cf_result.changed {

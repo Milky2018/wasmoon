@@ -45,31 +45,30 @@ test "store_merging_peephole" {
       #|    v6 = load_ptr.i64 +0 v0
       #|    v7 = ldi 8
       #|    v8 = load_ptr.i64 +8 v0
-      #|    v9 = extend.u32_64 v4
-      #|    v10 = mov v4
-      #|    v11 = ldi 1
-      #|    v12 = add #1 v4
-      #|    v13 = cmp.ule v12, v8
-      #|    br_cmp.ls v12, v8, block2, block1
+      #|    v9 = mov v4
+      #|    v10 = ldi 1
+      #|    v11 = add #1 v4
+      #|    v12 = cmp.ule v11, v8
+      #|    br_cmp.ls v11, v8, block2, block1
       #|block1:
       #|    trap "memory out of bounds"
       #|block2:
-      #|    v14 = add v6, v10
-      #|    store_ptr8 +0 v14, v2
-      #|    v15 = ldi 201
-      #|    v16 = load_ptr.i64 +0 v0
-      #|    v17 = load_ptr.i64 +8 v0
-      #|    v18 = ldi 201
-      #|    v19 = mov v15
-      #|    v20 = add #1 v19
-      #|    v21 = cmp.ule v20, v17
-      #|    br_cmp.ls v20, v17, block3, block1
+      #|    v13 = add v6, v9
+      #|    store_ptr8 +0 v13, v2
+      #|    v14 = ldi 201
+      #|    v15 = load_ptr.i64 +0 v0
+      #|    v16 = load_ptr.i64 +8 v0
+      #|    v17 = mov v14
+      #|    v18 = add #1 v14
+      #|    v19 = cmp.ule v18, v16
+      #|    br_cmp.ls v18, v16, block3, block1
       #|block3:
-      #|    v22 = add v16, v19
-      #|    store_ptr8 +0 v22, v3
+      #|    v20 = add v15, v17
+      #|    store_ptr8 +0 v20, v3
       #|    ret
       #|}
       #|
+
     ),
   )
 }
