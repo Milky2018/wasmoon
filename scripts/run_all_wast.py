@@ -3,6 +3,7 @@
 
 import argparse
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -197,6 +198,19 @@ def main() -> None:
                 print(f"    - {name}")
             if len(jit_regressions) > 10:
                 print(f"    ... and {len(jit_regressions) - 10} more")
+
+    # Exit with non-zero code if any tests failed or had errors
+    total_failed = 0
+    total_errors = 0
+    if interp_results:
+        total_failed += interp_results['total_failed']
+        total_errors += len(interp_results['has_errors'])
+    if jit_results:
+        total_failed += jit_results['total_failed']
+        total_errors += len(jit_results['has_errors'])
+
+    if total_failed > 0 or total_errors > 0:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

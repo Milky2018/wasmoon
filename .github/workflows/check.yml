@@ -35,3 +35,13 @@ jobs:
         run: |
           moon fmt && git diff --exit-code
           moon info && git diff --exit-code
+
+      - name: build wasmoon
+        run: |
+          moon build --target native
+          ./install.sh
+
+      - name: run wast spec tests
+        timeout-minutes: 5
+        run: |
+          python3 scripts/run_all_wast.py --dir spec --rec
