@@ -1,9 +1,6 @@
 ///|
 /// E2E tests to verify egraph optimization rules are applied correctly
-/// These tests check the IR output after optimization to confirm rules fired
-///
-/// Note: Currently only constant-producing rules are verified because
-/// get_simplified_opcode only applies constant results back to the IR.
+/// These tests snapshot the IR output after optimization to confirm rules fired
 
 ///|
 /// Helper function to compile WAT to optimized IR and return the IR string
@@ -39,10 +36,14 @@ test "egraph: sub_self_to_zero" {
     #|    (i32.sub (local.get 0) (local.get 0))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should have "iconst 0" instead of "isub"
-  inspect(ir.contains("iconst 0"), content="true")
-  inspect(ir.contains("isub"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
+    #|block0:
+    #|    v3:i32 = iconst 0
+    #|    return v3
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -54,10 +55,14 @@ test "egraph: xor_self_to_zero" {
     #|    (i32.xor (local.get 0) (local.get 0))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should have "iconst 0" instead of "bxor"
-  inspect(ir.contains("iconst 0"), content="true")
-  inspect(ir.contains("bxor"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
+    #|block0:
+    #|    v3:i32 = iconst 0
+    #|    return v3
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -69,11 +74,14 @@ test "egraph: const_fold_add" {
     #|    (i32.add (i32.const 10) (i32.const 20))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be a single "iconst 30"
-  inspect(ir.contains("iconst 30"), content="true")
-  // Should NOT have separate constants or add
-  inspect(ir.contains("iadd"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 30
+    #|    return v4
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -85,10 +93,14 @@ test "egraph: const_fold_sub" {
     #|    (i32.sub (i32.const 100) (i32.const 30))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be a single "iconst 70"
-  inspect(ir.contains("iconst 70"), content="true")
-  inspect(ir.contains("isub"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 70
+    #|    return v4
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -100,10 +112,14 @@ test "egraph: const_fold_mul" {
     #|    (i32.mul (i32.const 5) (i32.const 6))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be a single "iconst 30"
-  inspect(ir.contains("iconst 30"), content="true")
-  inspect(ir.contains("imul"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 30
+    #|    return v4
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -115,10 +131,14 @@ test "egraph: const_fold_and" {
     #|    (i32.and (i32.const 255) (i32.const 15))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be "iconst 15"
-  inspect(ir.contains("iconst 15"), content="true")
-  inspect(ir.contains("band"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v3:i32 = iconst 15
+    #|    return v3
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -130,10 +150,14 @@ test "egraph: const_fold_or" {
     #|    (i32.or (i32.const 240) (i32.const 15))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be "iconst 255"
-  inspect(ir.contains("iconst 255"), content="true")
-  inspect(ir.contains("bor"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 255
+    #|    return v4
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -145,10 +169,14 @@ test "egraph: const_fold_xor" {
     #|    (i32.xor (i32.const 255) (i32.const 240))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be "iconst 15"
-  inspect(ir.contains("iconst 15"), content="true")
-  inspect(ir.contains("bxor"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 15
+    #|    return v4
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -160,9 +188,14 @@ test "egraph: const_fold_shl" {
     #|    (i32.shl (i32.const 1) (i32.const 4))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be "iconst 16"
-  inspect(ir.contains("iconst 16"), content="true")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 16
+    #|    return v4
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -174,11 +207,14 @@ test "egraph: const_fold_chain" {
     #|    (i32.mul (i32.add (i32.const 10) (i32.const 20)) (i32.const 2))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be "iconst 60"
-  inspect(ir.contains("iconst 60"), content="true")
-  inspect(ir.contains("iadd"), content="false")
-  inspect(ir.contains("imul"), content="false")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v6:i32 = iconst 60
+    #|    return v6
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -190,9 +226,14 @@ test "egraph: const_fold_cmp_lt_true" {
     #|    (i32.lt_s (i32.const 5) (i32.const 10))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be "iconst 1" for true
-  inspect(ir.contains("iconst 1"), content="true")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 1
+    #|    return v4
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -204,9 +245,14 @@ test "egraph: const_fold_cmp_lt_false" {
     #|    (i32.lt_s (i32.const 10) (i32.const 5))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be "iconst 0" for false
-  inspect(ir.contains("iconst 0"), content="true")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 0
+    #|    return v4
+    #|}
+    #|
+  ))
 }
 
 ///|
@@ -218,7 +264,12 @@ test "egraph: const_fold_eq_true" {
     #|    (i32.eq (i32.const 42) (i32.const 42))
     #|  )
     #|)
-  let ir = compile_and_optimize(source)
-  // After optimization, should be "iconst 1" for true
-  inspect(ir.contains("iconst 1"), content="true")
+  inspect(compile_and_optimize(source), content=(
+    #|function test(v0:i64, v1:i64) -> i32 {
+    #|block0:
+    #|    v4:i32 = iconst 1
+    #|    return v4
+    #|}
+    #|
+  ))
 }
