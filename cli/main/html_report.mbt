@@ -24,7 +24,7 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|    }
       #|    * { box-sizing: border-box; margin: 0; padding: 0; }
       #|    body {
-      #|      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      #|      font-family: 'Fira Code', 'Consolas', 'Monaco', 'SF Mono', monospace;
       #|      background: var(--bg);
       #|      color: var(--fg);
       #|      line-height: 1.5;
@@ -33,9 +33,10 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|    .sidebar {
       #|      width: 220px;
       #|      background: var(--nav-bg);
-      #|      border-right: 1px solid var(--border);
+      #|      border-left: 1px solid var(--border);
       #|      padding: 15px;
       #|      position: fixed;
+      #|      right: 0;
       #|      height: 100vh;
       #|      overflow-y: auto;
       #|    }
@@ -61,11 +62,11 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|    }
       #|    .sidebar a:hover { background: var(--header-bg); }
       #|    .sidebar a.active { background: var(--accent); color: #fff; }
-      #|    .sidebar code { font-size: 10px; color: #888; display: block; }
+      #|    .sidebar .func-sig { font-size: 10px; color: #888; display: block; }
       #|    .stage-toggles {
-      #|      margin-top: 20px;
-      #|      padding-top: 15px;
-      #|      border-top: 1px solid var(--border);
+      #|      margin-bottom: 20px;
+      #|      padding-bottom: 15px;
+      #|      border-bottom: 1px solid var(--border);
       #|    }
       #|    .stage-toggles label {
       #|      display: flex;
@@ -80,7 +81,7 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|    }
       #|    .main {
       #|      flex: 1;
-      #|      margin-left: 220px;
+      #|      margin-right: 220px;
       #|      padding: 15px;
       #|    }
       #|    .func-section {
@@ -90,15 +91,15 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|    .func-header {
       #|      color: var(--accent);
       #|      font-size: 14px;
+      #|      font-weight: 600;
       #|      padding: 8px 0;
       #|      border-bottom: 1px solid var(--accent);
       #|      margin-bottom: 10px;
       #|    }
-      #|    .func-header code {
-      #|      background: var(--code-bg);
-      #|      padding: 2px 6px;
-      #|      border-radius: 3px;
+      #|    .func-header .func-sig {
+      #|      font-weight: 400;
       #|      font-size: 12px;
+      #|      color: var(--fg);
       #|    }
       #|    .columns {
       #|      display: flex;
@@ -129,7 +130,6 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|      max-height: calc(100vh - 150px);
       #|    }
       #|    pre {
-      #|      font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
       #|      font-size: 11px;
       #|      line-height: 1.4;
       #|      white-space: pre;
@@ -139,34 +139,6 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|</head>
       #|<body>
       #|  <div class="layout">
-      #|    <nav class="sidebar">
-      #|      <h2>Functions</h2>
-      #|      <ul>
-      #|
-    ),
-  )
-  // Generate sidebar links
-  for i, func in funcs {
-    sb.write_string("        <li><a href=\"#func-\{i}\">")
-    sb.write_string(html_escape(func.name))
-    sb.write_string("<code>")
-    sb.write_string(html_escape(func.type_str))
-    sb.write_string("</code></a></li>\n")
-  }
-  // Stage toggles
-  sb.write_string(
-    (
-      #|      </ul>
-      #|      <div class="stage-toggles">
-      #|        <h2>Stages</h2>
-      #|        <label><input type="checkbox" id="toggle-source" checked onchange="toggleStage('source')"> WAT Source</label>
-      #|        <label><input type="checkbox" id="toggle-ir" onchange="toggleStage('ir')"> IR (SSA)</label>
-      #|        <label><input type="checkbox" id="toggle-opt" onchange="toggleStage('opt')"> Optimized IR</label>
-      #|        <label><input type="checkbox" id="toggle-vcode" checked onchange="toggleStage('vcode')"> VCode</label>
-      #|        <label><input type="checkbox" id="toggle-reg" onchange="toggleStage('reg')"> Reg Alloc</label>
-      #|        <label><input type="checkbox" id="toggle-mc" checked onchange="toggleStage('mc')"> Machine Code</label>
-      #|      </div>
-      #|    </nav>
       #|    <main class="main">
       #|
     ),
@@ -177,9 +149,9 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
     sb.write_string("      <section class=\"func-section\" id=\"\{id}\">\n")
     sb.write_string("        <div class=\"func-header\">")
     sb.write_string(html_escape(func.name))
-    sb.write_string(" <code>")
+    sb.write_string(" <span class=\"func-sig\">")
     sb.write_string(html_escape(func.type_str))
-    sb.write_string("</code></div>\n")
+    sb.write_string("</span></div>\n")
     sb.write_string("        <div class=\"columns\">\n")
     // WAT Source column
     sb.write_string(
@@ -220,10 +192,38 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
     sb.write_string("        </div>\n")
     sb.write_string("      </section>\n\n")
   }
-  // Footer with JavaScript
+  // Close main, add sidebar
   sb.write_string(
     (
       #|    </main>
+      #|    <nav class="sidebar">
+      #|      <h2>Stages</h2>
+      #|      <div class="stage-toggles">
+      #|        <label><input type="checkbox" id="toggle-source" checked onchange="toggleStage('source')"> WAT Source</label>
+      #|        <label><input type="checkbox" id="toggle-ir" onchange="toggleStage('ir')"> IR (SSA)</label>
+      #|        <label><input type="checkbox" id="toggle-opt" onchange="toggleStage('opt')"> Optimized IR</label>
+      #|        <label><input type="checkbox" id="toggle-vcode" checked onchange="toggleStage('vcode')"> VCode</label>
+      #|        <label><input type="checkbox" id="toggle-reg" onchange="toggleStage('reg')"> Reg Alloc</label>
+      #|        <label><input type="checkbox" id="toggle-mc" checked onchange="toggleStage('mc')"> Machine Code</label>
+      #|      </div>
+      #|      <h2>Functions</h2>
+      #|      <ul>
+      #|
+    ),
+  )
+  // Generate sidebar links
+  for i, func in funcs {
+    sb.write_string("        <li><a href=\"#func-\{i}\">")
+    sb.write_string(html_escape(func.name))
+    sb.write_string("<span class=\"func-sig\">")
+    sb.write_string(html_escape(func.type_str))
+    sb.write_string("</span></a></li>\n")
+  }
+  // Footer with JavaScript
+  sb.write_string(
+    (
+      #|      </ul>
+      #|    </nav>
       #|  </div>
       #|  <script>
       #|    function toggleStage(stage) {
