@@ -1,9 +1,5 @@
 // Copyright 2025
 // Segment operations for bulk memory/table instructions
-// Follows Wasmtime/Cranelift ABI pattern:
-// - Segment data stored globally (set before JIT execution)
-// - Dropped state tracked per-module
-// - Libcalls access segments through global state
 
 #include "jit_internal.h"
 #include <string.h>
