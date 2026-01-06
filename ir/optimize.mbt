@@ -111,6 +111,9 @@ fn has_side_effects(inst : Inst) -> Bool {
     | ReturnCallRef(_) => true
     // Memory operations that modify global state
     MemoryGrow(_, _) | MemoryFill(_) | MemoryCopy(_, _) => true
+    // MemorySize reads global state that can change (invalidated by MemoryGrow)
+    // Must not be CSE'd across MemoryGrow calls
+    MemorySize(_) => true
     // Table operations that modify global state
     TableGrow(_) => true
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment to LoadPtr/StorePtr
