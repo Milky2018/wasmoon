@@ -155,10 +155,16 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 
     if (g_trap_active) {
         void *fault_addr = info->si_addr;
-
-        // First, check for WASM stack guard page access
-        // This has priority over native stack overflow detection
         jit_context_t *ctx = get_current_jit_context();
+
+        // Check for memory guard page access (bounds check elimination)
+        // This converts out-of-bounds memory access to a proper trap
+        if (ctx && is_memory_guard_page_access(ctx, fault_addr)) {
+            g_trap_code = 1;  // out of bounds memory access
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+
+        // Check for WASM stack guard page access
         if (ctx && is_wasm_guard_page_access(ctx, fault_addr)) {
             // WASM stack overflow - hit the guard page
             g_trap_code = 2;  // call stack exhausted

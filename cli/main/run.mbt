@@ -854,6 +854,7 @@ fn copy_interp_memory_to_jit_indexed(
 
 ///|
 /// Initialize all JIT memories from interpreter memories (multi-memory support)
+/// Uses guarded memory allocation for memory 0 to enable bounds check elimination
 /// Returns true on success, false on failure
 fn init_jit_memories(
   instance : @runtime.ModuleInstance,
@@ -865,12 +866,20 @@ fn init_jit_memories(
   }
   let memories : Array[@jit.MemoryInfo] = []
   // Allocate and copy each memory
-  for mem_addr in instance.mem_addrs {
+  for i, mem_addr in instance.mem_addrs {
     let mem = store.get_mem(mem_addr) catch { _ => return false }
-    let size = mem.size_pages().to_int64() * 65536L
+    let pages = mem.size_pages()
+    let size = pages.to_int64() * 65536L
     let (_, max) = mem.get_limits()
-    // Allocate JIT memory
-    let mem_ptr = @jit.alloc_memory(size)
+    // Allocate JIT memory - use guarded memory for memory 0 (memory32 only)
+    let mem_ptr = if i == 0 && not(mem.is_memory64()) {
+      // Use guarded memory allocation with mmap + guard pages.
+      // This enables bounds check elimination in JIT code for memory32.
+      jm.alloc_guarded_memory(pages, max)
+    } else {
+      // Regular allocation for memory64 and non-zero memories.
+      @jit.alloc_memory(size)
+    }
     if mem_ptr == 0L && size > 0L {
       return false // Allocation failed
     }

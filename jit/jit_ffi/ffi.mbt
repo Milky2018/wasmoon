@@ -59,6 +59,21 @@ pub extern "c" fn c_jit_ctx_set_memory(
 pub extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_memory"
 
 ///|
+/// Allocate guarded memory with mmap for bounds check elimination
+/// Memory is allocated with guard pages (PROT_NONE) after the accessible region
+/// Access to guard pages triggers SIGSEGV which is caught and converted to a trap
+/// Parameters:
+///   ctx_ptr: JIT context pointer
+///   initial_pages: Initial memory size in WASM pages (64KB each)
+///   max_pages: Maximum memory size in WASM pages (-1 or 0 for default 4GB reservation)
+/// Returns: memory pointer on success, 0 on failure
+pub extern "c" fn c_jit_ctx_alloc_guarded_memory(
+  ctx_ptr : Int64,
+  initial_pages : Int64,
+  max_pages : Int64,
+) -> Int64 = "wasmoon_jit_ctx_alloc_guarded_memory"
+
+///|
 /// Free linear memory
 pub extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory"
 

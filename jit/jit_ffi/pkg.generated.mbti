@@ -90,6 +90,8 @@ pub fn c_jit_context_ptr(JITContext) -> Int64
 
 pub fn c_jit_copy_code(Int64, FixedArray[Byte], Int) -> Int
 
+pub fn c_jit_ctx_alloc_guarded_memory(Int64, Int64, Int64) -> Int64
+
 pub fn c_jit_ctx_alloc_indirect_table(Int64, Int) -> Int
 
 pub fn c_jit_ctx_get_func_count(Int64) -> Int

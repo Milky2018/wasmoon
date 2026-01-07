@@ -52,6 +52,13 @@ typedef struct {
     size_t *memory_max_sizes; // +96: Array of memory max sizes in pages (-1 = unlimited)
     int memory_count;         // +104: Number of memories
 
+    // Memory guard pages (for bounds check elimination)
+    // Memory is allocated with mmap, with guard pages after the accessible region
+    // Access to guard pages triggers SIGSEGV -> trap
+    void *memory0_alloc_base;   // Base of mmap allocation (includes guard region)
+    size_t memory0_alloc_size;  // Total mmap allocation size
+    size_t memory0_guard_start; // Offset where guard region starts (= memory_size)
+
     // GC heap for inline allocation (accessed by JIT code)
     uint8_t *gc_heap_ptr;     // +112: Current allocation pointer (aligned to 8)
     uint8_t *gc_heap_limit;   // +120: Allocation limit (triggers slow path when exceeded)

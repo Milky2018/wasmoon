@@ -195,13 +195,29 @@ fn run_wasi_jit_quiet(
     // Initialize WASI for JIT with quiet mode (stdout/stderr to /dev/null)
     jm.init_wasi_quiet([], [], [])
 
-    // Allocate memory
-    let mem_size = 65536L
-    let mem_ptr = @jit.alloc_memory(mem_size)
-    if mem_ptr == 0L {
+    // Allocate memory (guarded for memory32 memory 0)
+    let mem_pages = if mod_.memories.length() > 0 {
+      mod_.memories[0].limits.min.to_int()
+    } else {
+      0
+    }
+    let mem_size = mem_pages.to_int64() * 65536L
+    let max_pages = if mod_.memories.length() > 0 {
+      mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
+    } else {
+      None
+    }
+    let mem_ptr = if mem_pages > 0 && not(mod_.memories[0].is_memory64) {
+      jm.alloc_guarded_memory(mem_pages, max_pages)
+    } else if mem_size > 0L {
+      @jit.alloc_memory(mem_size)
+    } else {
+      0L
+    }
+    if mem_ptr == 0L && mem_size > 0L {
       return Err("Failed to allocate memory")
     }
-    let memories = [@jit.MemoryInfo::new(mem_ptr, mem_size, None)]
+    let memories = [@jit.MemoryInfo::new(mem_ptr, mem_size, max_pages)]
     jm.set_memory_pointers(memories)
     jm.set_memory(mem_ptr, mem_size)
 

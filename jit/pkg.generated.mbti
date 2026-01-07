@@ -369,6 +369,7 @@ pub struct JITFunction {
 }
 
 type JITModule
+pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError

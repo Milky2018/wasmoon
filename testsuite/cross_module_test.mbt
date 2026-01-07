@@ -297,10 +297,11 @@ fn run_cross_module_jit(
     raise CrossModuleError("Failed to create merged JIT module")
   }
 
-  // Allocate memory
-  let mem_size = 65536L
-  let mem_ptr = @jit.alloc_memory(mem_size)
-  if mem_ptr == 0L {
+  // Allocate memory (guarded for memory32 memory 0)
+  let mem_pages = 1
+  let mem_size = mem_pages.to_int64() * 65536L
+  let mem_ptr = jm.alloc_guarded_memory(mem_pages, None)
+  if mem_ptr == 0L && mem_size > 0L {
     raise CrossModuleError("Failed to allocate memory")
   }
   jm.set_memory(mem_ptr, mem_size)

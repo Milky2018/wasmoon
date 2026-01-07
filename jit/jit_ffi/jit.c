@@ -384,6 +384,14 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
 
 typedef int (*entry_trampoline_fn)(jit_context_t *vmctx, int64_t *values_vec, void *func_ptr);
 
+// Global pointer to current JIT context for guard page detection in signal handler
+// This is set before JIT execution and cleared after
+static __thread jit_context_t *g_current_jit_context = NULL;
+
+jit_context_t *get_current_jit_context(void) {
+    return g_current_jit_context;
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     int64_t trampoline_ptr,
     int64_t ctx_ptr,
@@ -400,9 +408,11 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     g_trap_active = 1;
 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    g_current_jit_context = ctx;  // Set for guard page detection
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
+        g_current_jit_context = NULL;
         return (int)g_trap_code;
     }
 
@@ -410,6 +420,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     int result = trampoline(ctx, values_vec, (void *)func_ptr);
 
     g_trap_active = 0;
+    g_current_jit_context = NULL;
 
     if (g_trap_code != 0) {
         return (int)g_trap_code;
@@ -442,14 +453,6 @@ extern int stack_switch_call(
     void *func_ptr
 );
 #endif
-
-// Global pointer to current JIT context for guard page detection in signal handler
-// This is set before JIT execution and cleared after
-static __thread jit_context_t *g_current_jit_context = NULL;
-
-jit_context_t *get_current_jit_context(void) {
-    return g_current_jit_context;
-}
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
     int64_t trampoline_ptr,
@@ -606,6 +609,49 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_char_ptr(void) {
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory(int64_t size) {
     if (size <= 0) return 0;
     void *mem = calloc(1, (size_t)size);
+    return (int64_t)mem;
+}
+
+// Allocate guarded memory directly into JIT context
+// This allocates memory using mmap with guard pages for bounds check elimination
+// Returns memory pointer on success, 0 on failure
+extern uint8_t *alloc_guarded_memory_external(jit_context_t *ctx, size_t initial_size, size_t max_size);
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
+    int64_t ctx_ptr,
+    int64_t initial_pages,
+    int64_t max_pages
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) {
+        return 0;
+    }
+
+    // Guarded memory is used for memory32 bounds-check elimination.
+    // Clamp to the memory32 architectural limit (4GB = 65536 pages).
+    if (initial_pages < 0 || initial_pages > 65536) {
+        return 0;
+    }
+    if (max_pages > 65536) {
+        max_pages = 65536;
+    }
+
+    // Convert pages to bytes (WASM page = 64KB)
+    size_t initial_size = (size_t)initial_pages * WASM_PAGE_SIZE;
+    // max_pages is currently unused by alloc_guarded_memory (fixed reservation),
+    // but keep the parameter for future extensions.
+    size_t max_size = (max_pages <= 0) ? 0 : (size_t)max_pages * WASM_PAGE_SIZE;
+
+    uint8_t *mem = alloc_guarded_memory_external(ctx, initial_size, max_size);
+
+    if (!mem && initial_size > 0) {
+        return 0;
+    }
+
+    // Set memory_base and memory_size in context
+    ctx->memory_base = mem;
+    ctx->memory_size = initial_size;
+
     return (int64_t)mem;
 }
 

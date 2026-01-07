@@ -4,6 +4,147 @@
 
 #include "jit_internal.h"
 
+// ============ Guard Page Memory Allocation ============
+// Uses mmap to allocate memory with guard pages for bounds check elimination.
+// Strategy: allocate max_pages worth of virtual address space, but only make
+// the first current_pages accessible. Access beyond memory_size hits guard pages
+// (PROT_NONE), triggering SIGSEGV which is caught and converted to a trap.
+
+// WebAssembly memory32 uses 32-bit addresses plus a 32-bit static offset.
+// The effective address can be up to:
+//   (2^32 - 1) + (2^32 - 1) + (access_size - 1) < 2^33
+// Reserve 8GB (+ one WASM page as slack) so any out-of-bounds access reliably
+// lands in a PROT_NONE region within the same mapping and traps via SIGSEGV.
+#define WASM32_MAX_MEMORY (4ULL * 1024 * 1024 * 1024)
+#define WASM32_GUARD_RESERVATION (WASM32_MAX_MEMORY * 2ULL + WASM_PAGE_SIZE)
+
+// Allocate memory with guard pages using mmap
+// Returns memory base on success, NULL on failure
+static uint8_t *alloc_guarded_memory(jit_context_t *ctx, size_t initial_size, size_t max_size) {
+    if (!ctx) return NULL;
+
+    // Reserve a large, fixed virtual range for memory32 guard pages regardless of
+    // the module's declared maximum. This avoids OOB accesses escaping the mapping
+    // (e.g. addr + offset >= max_size) when bounds checks are eliminated.
+    (void)max_size;  // reserved for future memory64 support
+    size_t reserve_size = (size_t)WASM32_GUARD_RESERVATION;
+
+    // Align to page size
+    size_t page_size = (size_t)getpagesize();
+    reserve_size = (reserve_size + page_size - 1) & ~(page_size - 1);
+    initial_size = (initial_size + page_size - 1) & ~(page_size - 1);
+
+#ifdef _WIN32
+    // Windows: use VirtualAlloc with MEM_RESERVE, then MEM_COMMIT for used pages
+    void *mem = VirtualAlloc(NULL, reserve_size, MEM_RESERVE, PAGE_NOACCESS);
+    if (mem == NULL) return NULL;
+
+    // Commit the initial pages
+    if (initial_size > 0) {
+        void *committed = VirtualAlloc(mem, initial_size, MEM_COMMIT, PAGE_READWRITE);
+        if (committed == NULL) {
+            VirtualFree(mem, 0, MEM_RELEASE);
+            return NULL;
+        }
+    }
+#else
+    // POSIX: use mmap with PROT_NONE, then mprotect for used pages
+    void *mem = mmap(NULL, reserve_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mem == MAP_FAILED) return NULL;
+
+    // Make the initial pages accessible
+    if (initial_size > 0) {
+        if (mprotect(mem, initial_size, PROT_READ | PROT_WRITE) != 0) {
+            munmap(mem, reserve_size);
+            return NULL;
+        }
+        // Zero-initialize (mmap with MAP_ANONYMOUS should already be zero, but be safe)
+        memset(mem, 0, initial_size);
+    }
+#endif
+
+    // Store allocation info in context
+    ctx->memory0_alloc_base = mem;
+    ctx->memory0_alloc_size = reserve_size;
+    ctx->memory0_guard_start = initial_size;
+
+    return (uint8_t *)mem;
+}
+
+// Grow guarded memory by changing protection
+static int grow_guarded_memory(jit_context_t *ctx, size_t old_size, size_t new_size) {
+    if (!ctx || !ctx->memory0_alloc_base) return -1;
+    if (new_size > ctx->memory0_alloc_size) return -1;  // Would exceed reservation
+
+    size_t page_size = (size_t)getpagesize();
+    old_size = (old_size + page_size - 1) & ~(page_size - 1);
+    new_size = (new_size + page_size - 1) & ~(page_size - 1);
+
+    if (new_size <= old_size) return 0;  // Nothing to do
+
+    uint8_t *base = (uint8_t *)ctx->memory0_alloc_base;
+    size_t grow_size = new_size - old_size;
+
+#ifdef _WIN32
+    // Windows: commit new pages
+    void *committed = VirtualAlloc(base + old_size, grow_size, MEM_COMMIT, PAGE_READWRITE);
+    if (committed == NULL) return -1;
+#else
+    // POSIX: mprotect new pages
+    if (mprotect(base + old_size, grow_size, PROT_READ | PROT_WRITE) != 0) {
+        return -1;
+    }
+#endif
+
+    // Zero-initialize new pages
+    memset(base + old_size, 0, grow_size);
+    ctx->memory0_guard_start = new_size;
+
+    return 0;
+}
+
+// Free guarded memory
+static void free_guarded_memory(jit_context_t *ctx) {
+    if (!ctx || !ctx->memory0_alloc_base) return;
+
+#ifdef _WIN32
+    VirtualFree(ctx->memory0_alloc_base, 0, MEM_RELEASE);
+#else
+    munmap(ctx->memory0_alloc_base, ctx->memory0_alloc_size);
+#endif
+
+    ctx->memory0_alloc_base = NULL;
+    ctx->memory0_alloc_size = 0;
+    ctx->memory0_guard_start = 0;
+}
+
+// Non-static version for external use (called from jit_context.c)
+void free_guarded_memory_if_allocated(jit_context_t *ctx) {
+    free_guarded_memory(ctx);
+    if (ctx) {
+        ctx->memory_base = NULL;
+        ctx->memory_size = 0;
+    }
+}
+
+// External version of alloc_guarded_memory (called from jit.c)
+uint8_t *alloc_guarded_memory_external(jit_context_t *ctx, size_t initial_size, size_t max_size) {
+    return alloc_guarded_memory(ctx, initial_size, max_size);
+}
+
+// Check if address is in memory guard region
+int is_memory_guard_page_access(jit_context_t *ctx, void *addr) {
+    if (!ctx || !ctx->memory0_alloc_base) return 0;
+
+    uintptr_t alloc_base = (uintptr_t)ctx->memory0_alloc_base;
+    uintptr_t alloc_end = alloc_base + ctx->memory0_alloc_size;
+    uintptr_t guard_start = alloc_base + ctx->memory0_guard_start;
+    uintptr_t fault_addr = (uintptr_t)addr;
+
+    // Check if fault is in the guard region (after accessible memory, within allocation)
+    return (fault_addr >= guard_start && fault_addr < alloc_end);
+}
+
 // ============ Linear Memory Operations ============
 
 int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_pages) {
@@ -122,7 +263,17 @@ int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t
     // No change needed if delta is 0
     if (delta == 0) return current_pages;
 
-    // Reallocate memory
+    // Check if guarded memory is in use (memory 0 only)
+    if (memidx == 0 && ctx->memory0_alloc_base) {
+        // Use mprotect to grow guarded memory
+        if (grow_guarded_memory(ctx, current_size, new_size) != 0) {
+            return -1;
+        }
+        ctx->memory_size = new_size;
+        return current_pages;
+    }
+
+    // Fall back to realloc for non-guarded memory
     uint8_t *new_mem = (uint8_t *)realloc(mem_base, new_size);
     if (!new_mem) return -1;
 
