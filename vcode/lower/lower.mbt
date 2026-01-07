@@ -181,6 +181,9 @@ fn ir_type_to_mem_type(ty : @ir.Type) -> @instr.MemType {
 ///|
 /// Check if a value is defined by a shift-left instruction with a constant
 /// Returns (shifted_value, shift_amount) if matched
+/// The shift amount is masked according to WebAssembly semantics:
+/// - i32: amount & 31
+/// - i64: amount & 63
 fn match_shl_const_value(
   ctx : LoweringContext,
   value : @ir.Value,
@@ -191,10 +194,12 @@ fn match_shl_const_value(
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
       shift_inst.opcode is @ir.Opcode::Iconst(amount) {
-      let shift_val = amount.to_int()
-      if shift_val >= 0 && shift_val <= 63 {
-        return Some((inst.operands[0], shift_val))
-      }
+      // Determine mask based on value type (i32 uses 31, i64 uses 63)
+      let is_64 = value.ty is @ir.Type::I64
+      let mask = if is_64 { 63 } else { 31 }
+      let shift_val = amount.to_int() & mask
+      // shift_val is now guaranteed to be in valid range after masking
+      return Some((inst.operands[0], shift_val))
     }
   }
   None
@@ -454,7 +459,8 @@ fn lower_inst(
     @ir.Opcode::Ushr => lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) })
     @ir.Opcode::Rotl => lower_rotl(ctx, inst, block)
     @ir.Opcode::Rotr => lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) })
-    @ir.Opcode::Bnot => lower_unary_int(ctx, inst, block, Not)
+    @ir.Opcode::Bnot =>
+      lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
 
     // Integer comparisons
     @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)

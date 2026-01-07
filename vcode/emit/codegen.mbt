@@ -198,7 +198,7 @@ fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
 ///
 /// Handles any size by using:
 /// - ADD/SUB with imm12 for values <= 4095
-/// - Load constant to X16 + ADD/SUB reg for larger values
+/// - ADD/SUB with imm12<<12 (4KB steps) for larger values
 fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
@@ -208,20 +208,46 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   } else {
     (amount, false)
   }
-  if abs_amount <= 4095 {
-    // Use immediate form
-    if is_sub {
+  let step = 4096
+  if is_sub {
+    // Stack allocation: touch stack pages so a guard page can't be skipped by a
+    // single large SP adjustment (e.g. large frames on the independent WASM stack).
+    //
+    // We probe in 4KB steps (<= minimum common page size), then do the remainder.
+    // This guarantees that if we cross into a PROT_NONE guard page, we fault while
+    // the faulting address is within the guard region (so the signal handler can
+    // classify it as "call stack exhausted").
+    if abs_amount <= 4095 {
       self.emit_sub_imm(31, 31, abs_amount)
-    } else {
-      self.emit_add_imm(31, 31, abs_amount)
+      // Touch at the new SP to fault immediately on overflow.
+      self.emit_str_imm(31, 31, 0)
+      return
     }
+    // abs_amount >= 4096
+    let mut remaining = abs_amount
+    while remaining >= step {
+      self.emit_sub_imm_shifted12(31, 31, 1)
+      self.emit_str_imm(31, 31, 0)
+      remaining = remaining - step
+    }
+    if remaining > 0 {
+      // remaining < step, so it fits in imm12
+      self.emit_sub_imm(31, 31, remaining)
+      self.emit_str_imm(31, 31, 0)
+    }
+    return
+  }
+  // Stack deallocation (or other upward adjustment): no probing needed.
+  if abs_amount <= 4095 {
+    self.emit_add_imm(31, 31, abs_amount)
   } else {
-    // Load constant to X16, then use register form
-    self.emit_load_imm64(16, abs_amount.to_int64())
-    if is_sub {
-      self.emit_sub_reg(31, 31, 16)
-    } else {
-      self.emit_add_reg(31, 31, 16)
+    let mut remaining = abs_amount
+    while remaining >= step {
+      self.emit_add_imm_shifted12(31, 31, 1)
+      remaining = remaining - step
+    }
+    if remaining > 0 {
+      self.emit_add_imm(31, 31, remaining)
     }
   }
 }
@@ -624,10 +650,14 @@ fn MachineCode::emit_instruction(
         self.emit_ror_reg32(rd, rn, rm)
       }
     }
-    Not => {
+    Not(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      self.emit_mvn(rd, rn)
+      if is_64 {
+        self.emit_mvn(rd, rn)
+      } else {
+        self.emit_mvn32(rd, rn)
+      }
     }
     Bitcast => {
       // Reinterpret bits between int and float
@@ -3143,23 +3173,35 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
     }
-    BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
+    BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
       // CBZ/CBNZ reg, then_b + B else_b
-      // Note: Using 64-bit CBZ/CBNZ - works correctly since i32 values are zero-extended
+      // Use 32-bit CBZ/CBNZ for i32 to only check low 32 bits
       let rt = reg_num(reg)
       // Branch inversion: if then_b is next block, invert condition and branch to else_b
       if next_block == Some(then_b) {
         // Invert: CBZ->CBNZ, CBNZ->CBZ
         if is_nonzero {
-          self.emit_cbz(rt, else_b)
-        } else {
+          if is_64 {
+            self.emit_cbz(rt, else_b)
+          } else {
+            self.emit_cbz32(rt, else_b)
+          }
+        } else if is_64 {
           self.emit_cbnz(rt, else_b)
+        } else {
+          self.emit_cbnz32(rt, else_b)
         }
       } else {
         if is_nonzero {
-          self.emit_cbnz(rt, then_b)
-        } else {
+          if is_64 {
+            self.emit_cbnz(rt, then_b)
+          } else {
+            self.emit_cbnz32(rt, then_b)
+          }
+        } else if is_64 {
           self.emit_cbz(rt, then_b)
+        } else {
+          self.emit_cbz32(rt, then_b)
         }
         if next_block != Some(else_b) {
           self.emit_b(else_b)

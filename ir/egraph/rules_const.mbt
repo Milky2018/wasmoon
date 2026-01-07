@@ -72,39 +72,91 @@ fn rule_const_fold() -> RewriteRule {
                 And => Some(lhs & rhs)
                 Or => Some(lhs | rhs)
                 Xor => Some(lhs ^ rhs)
-                Shl =>
-                  if rhs >= 0L && rhs < 64L {
-                    Some(lhs << rhs.to_int())
+                Shl => {
+                  // Check bit width: default to 64 if unknown
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  if bits == 32 {
+                    let amt = (rhs & 31L).to_int()
+                    let result = (lhs << amt) & 0xFFFFFFFFL
+                    Some(result)
                   } else {
-                    None
+                    let amt = (rhs & 63L).to_int()
+                    Some(lhs << amt)
                   }
-                Sshr =>
-                  if rhs >= 0L && rhs < 64L {
-                    Some(lhs >> rhs.to_int())
+                }
+                Sshr => {
+                  // Check bit width: default to 64 if unknown
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  if bits == 32 {
+                    let amt = (rhs & 31L).to_int()
+                    // Sign-extend 32-bit value, then shift, then mask
+                    let slhs = lhs << 32 >> 32 // sign-extend low 32 bits
+                    let result = (slhs >> amt) & 0xFFFFFFFFL
+                    Some(result)
                   } else {
-                    None
+                    let amt = (rhs & 63L).to_int()
+                    Some(lhs >> amt)
                   }
+                }
                 Ushr => {
-                  let ulhs = lhs.reinterpret_as_uint64()
-                  if rhs >= 0L && rhs < 64L {
-                    Some((ulhs >> rhs.to_int()).reinterpret_as_int64())
+                  // Check bit width: default to 64 if unknown
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  if bits == 32 {
+                    let amt = (rhs & 31L).to_int()
+                    let ulhs = (lhs & 0xFFFFFFFFL).reinterpret_as_uint64()
+                    let result = (ulhs >> amt).reinterpret_as_int64()
+                    Some(result)
                   } else {
-                    None
+                    let amt = (rhs & 63L).to_int()
+                    let ulhs = lhs.reinterpret_as_uint64()
+                    Some((ulhs >> amt).reinterpret_as_int64())
                   }
                 }
                 Rotl => {
-                  let amt = (rhs & 63L).to_int()
-                  let ulhs = lhs.reinterpret_as_uint64()
-                  Some(
-                    ((ulhs << amt) | (ulhs >> (64 - amt))).reinterpret_as_int64(),
-                  )
+                  // Check bit width: default to 64 if unknown
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  if bits == 32 {
+                    let amt = (rhs & 31L).to_int()
+                    let ulhs = (lhs & 0xFFFFFFFFL).reinterpret_as_uint64()
+                    let rotated = if amt == 0 {
+                      ulhs
+                    } else {
+                      (ulhs << amt) | (ulhs >> (32 - amt))
+                    }
+                    Some((rotated & 0xFFFFFFFFUL).reinterpret_as_int64())
+                  } else {
+                    let amt = (rhs & 63L).to_int()
+                    let ulhs = lhs.reinterpret_as_uint64()
+                    let rotated = if amt == 0 {
+                      ulhs
+                    } else {
+                      (ulhs << amt) | (ulhs >> (64 - amt))
+                    }
+                    Some(rotated.reinterpret_as_int64())
+                  }
                 }
                 Rotr => {
-                  let amt = (rhs & 63L).to_int()
-                  let ulhs = lhs.reinterpret_as_uint64()
-                  Some(
-                    ((ulhs >> amt) | (ulhs << (64 - amt))).reinterpret_as_int64(),
-                  )
+                  // Check bit width: default to 64 if unknown
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  if bits == 32 {
+                    let amt = (rhs & 31L).to_int()
+                    let ulhs = (lhs & 0xFFFFFFFFL).reinterpret_as_uint64()
+                    let rotated = if amt == 0 {
+                      ulhs
+                    } else {
+                      (ulhs >> amt) | (ulhs << (32 - amt))
+                    }
+                    Some((rotated & 0xFFFFFFFFUL).reinterpret_as_int64())
+                  } else {
+                    let amt = (rhs & 63L).to_int()
+                    let ulhs = lhs.reinterpret_as_uint64()
+                    let rotated = if amt == 0 {
+                      ulhs
+                    } else {
+                      (ulhs >> amt) | (ulhs << (64 - amt))
+                    }
+                    Some(rotated.reinterpret_as_int64())
+                  }
                 }
                 Sdiv => if rhs != 0L { Some(lhs / rhs) } else { None }
                 Udiv => {

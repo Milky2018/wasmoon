@@ -577,15 +577,21 @@ pub fn EGraph::remat_cost_bonus(self : EGraph, id : EClassId) -> Int {
 
 ///|
 /// Add an e-node with type information and eagerly apply applicable rules
+/// IMPORTANT: Type must be set BEFORE rules are applied, so rules can see type info
 pub fn EGraph::add_eager_typed(
   self : EGraph,
   node : ENode,
   bits : Int,
   ruleset : IndexedRuleSet,
 ) -> EClassId {
-  let class_id = self.add_eager(node, ruleset)
+  // First add the node (this populates pending_rules but doesn't process them)
+  let class_id = self.add(node)
+  // Set type BEFORE processing pending rules, so rules can see type info
   self.set_type(class_id, bits)
-  class_id
+  // Now process pending rules with depth 0
+  self.process_pending_rules(ruleset, 0)
+  // Return the (possibly merged) class
+  self.find(class_id)
 }
 
 ///|
@@ -601,21 +607,16 @@ pub fn EGraph::add_eager(
 }
 
 ///|
-/// Add an e-node with depth tracking for recursive rewrites
-/// Depth limit prevents rule application from spiraling out of control
-fn EGraph::add_eager_with_depth(
+/// Process pending rules (used by add_eager_typed to process after type is set)
+fn EGraph::process_pending_rules(
   self : EGraph,
-  node : ENode,
   ruleset : IndexedRuleSet,
   depth : Int,
-) -> EClassId {
-  // Check depth limit - if exceeded, just add without rule application
+) -> Unit {
   if depth > REWRITE_DEPTH_LIMIT {
-    return self.add(node)
+    self.pending_rules.clear()
+    return
   }
-  let class_id = self.add(node)
-  // Process all pending nodes with rule application
-  // Rules may add new nodes which also get processed
   let mut rewrites = 0
   while self.pending_rules.length() > 0 && rewrites < MATCHES_LIMIT {
     let (pending_id, tag) = self.pending_rules.pop().unwrap()
@@ -637,6 +638,24 @@ fn EGraph::add_eager_with_depth(
   }
   // Clear any remaining pending (hit limit)
   self.pending_rules.clear()
+}
+
+///|
+/// Add an e-node with depth tracking for recursive rewrites
+/// Depth limit prevents rule application from spiraling out of control
+fn EGraph::add_eager_with_depth(
+  self : EGraph,
+  node : ENode,
+  ruleset : IndexedRuleSet,
+  depth : Int,
+) -> EClassId {
+  // Check depth limit - if exceeded, just add without rule application
+  if depth > REWRITE_DEPTH_LIMIT {
+    return self.add(node)
+  }
+  let class_id = self.add(node)
+  // Process pending rules
+  self.process_pending_rules(ruleset, depth)
   // Return the (possibly merged) canonical class id
   self.find(class_id)
 }

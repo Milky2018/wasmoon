@@ -152,7 +152,7 @@ test "cross_block_cse" {
     content=(
       #|block0:
       #|  0000: 4800030b  add w8, w2, w3
-      #|  0004: 820000b4  cbz x2, block2
+      #|  0004: 82000034  cbz w2, block2
       #|block1:
       #|  0008: 08050011  add w8, w8, #1
       #|  000c: e90308aa  mov x9, x8
@@ -163,6 +163,7 @@ test "cross_block_cse" {
       #|  0018: e00309aa  mov x0, x9
       #|  001c: c0035fd6  ret
       #|
+
     ),
   )
 }
