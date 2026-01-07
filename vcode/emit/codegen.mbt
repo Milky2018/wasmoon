@@ -416,8 +416,46 @@ pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
   let blocks = func.get_blocks()
   for i, block in blocks {
     mc.define_label(block.id)
-    for inst in block.insts {
+    let mut inst_idx = 0
+    while inst_idx < block.insts.length() {
+      let inst = block.insts[inst_idx]
+      // Peephole: fold u32->u64 zero-extend into following 64-bit add.
+      //   extend.u32_64 r = x  ; (mov wR, wX)
+      //   add r = add base, r ; => add r, base, wX, uxtw
+      if inst.opcode is Extend(Unsigned32To64) &&
+        inst.defs.length() == 1 &&
+        inst.uses.length() == 1 &&
+        inst_idx + 1 < block.insts.length() {
+        let next = block.insts[inst_idx + 1]
+        if next.opcode is Add(true) &&
+          next.defs.length() == 1 &&
+          next.uses.length() == 2 {
+          let ext_dst = wreg_num(inst.defs[0])
+          let ext_src = reg_num(inst.uses[0])
+          let add_dst = wreg_num(next.defs[0])
+          let add_op0 = reg_num(next.uses[0])
+          let add_op1 = reg_num(next.uses[1])
+          if add_dst == ext_dst {
+            let base = if add_op0 == ext_dst {
+              Some(add_op1)
+            } else if add_op1 == ext_dst {
+              Some(add_op0)
+            } else {
+              None
+            }
+            match base {
+              Some(rn) => {
+                mc.emit_add_uxtw(add_dst, rn, ext_src, 0)
+                inst_idx = inst_idx + 2
+                continue
+              }
+              None => ()
+            }
+          }
+        }
+      }
       mc.emit_instruction(inst, stack_frame)
+      inst_idx = inst_idx + 1
     }
     if block.terminator is Some(term) {
       // Pass next block ID for fall-through optimization
