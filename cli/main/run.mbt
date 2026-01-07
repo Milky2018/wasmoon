@@ -574,6 +574,61 @@ fn init_jit_globals(
 }
 
 ///|
+/// Initialize JIT tables from runtime table state.
+/// This is required for call_indirect and table operations in JIT mode.
+fn init_jit_tables(
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+  jm : @jit.JITModule,
+) -> Unit {
+  if instance.table_addrs.is_empty() {
+    return
+  }
+  // Collect JIT tables in module table index order
+  let jit_tables : Array[@jit.JITTable?] = []
+  for table_addr in instance.table_addrs {
+    jit_tables.push(store.get_jit_table(table_addr))
+  }
+  // Build store func address -> module func index map
+  let func_addr_to_idx : Map[Int, Int] = {}
+  for i, addr in instance.func_addrs {
+    func_addr_to_idx.set(addr, i)
+  }
+  // Copy table contents into JIT tables as (func_ptr, type_idx) pairs
+  let elem_init : Array[(Int, Int, Int, Int)] = []
+  for table_idx, table_addr in instance.table_addrs {
+    let runtime_table = store.get_table(table_addr) catch { _ => continue }
+    // Avoid writing past the allocated JIT table size (JIT tables are sized at instantiation).
+    let max_entries = match jit_tables[table_idx] {
+      Some(t) => t.get_size()
+      None => 0
+    }
+    let size = runtime_table.size().min(max_entries)
+    for elem_idx in 0..<size {
+      let value = runtime_table.get(elem_idx) catch { _ => continue }
+      match value {
+        FuncRef(store_addr) => {
+          let func_idx = match func_addr_to_idx.get(store_addr) {
+            Some(idx) => idx
+            None => -1
+          }
+          let type_idx = if func_idx >= 0 &&
+            func_idx < instance.func_type_indices.length() {
+            instance.func_type_indices[func_idx]
+          } else {
+            -1
+          }
+          elem_init.push((table_idx, elem_idx, func_idx, type_idx))
+        }
+        // Null and non-funcref entries are written as null to keep shared tables consistent.
+        _ => elem_init.push((table_idx, elem_idx, -1, -1))
+      }
+    }
+  }
+  jm.init_shared_tables(jit_tables, elem_init)
+}
+
+///|
 /// Run a function using JIT compilation
 fn run_with_jit(
   mod_ : @types.Module,
@@ -617,9 +672,15 @@ fn run_with_jit(
           return []
         }
         Some(jm) => {
-          // Allocate independent WASM stack with guard page (1MB)
-          // This provides controlled stack overflow behavior
-          let _ = jm.alloc_wasm_stack(1048576L)
+          // Allocate independent WASM stack with guard page.
+          // Use a larger default than 1MB since real-world programs can have
+          // large native frames after register allocation.
+          let wasm_stack_ok = jm.alloc_wasm_stack(16L * 1024L * 1024L)
+          if not(wasm_stack_ok) {
+            @logger.warn(
+              "failed to allocate WASM stack; falling back to host stack",
+            )
+          }
           // Initialize WASI context with args, env, and preopens
           jm.init_wasi(wasi_args, wasi_envs, wasi_preopens)
           // Initialize all memories (multi-memory support)
@@ -632,6 +693,8 @@ fn run_with_jit(
           if globals_ptr != 0L {
             jm.set_globals(globals_ptr)
           }
+          // Initialize tables for call_indirect and table operations
+          init_jit_tables(instance, store, jm)
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {

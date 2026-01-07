@@ -4,18 +4,12 @@ test "wat_printer: element segments" {
   mod_.elems.push({
     mode: @types.ElemMode::Passive,
     type_: @types.ValueType::FuncRef,
-    init: [
-      [@types.Instruction::RefFunc(0)],
-      [@types.Instruction::RefFunc(1)],
-    ],
+    init: [[@types.Instruction::RefFunc(0)], [@types.Instruction::RefFunc(1)]],
   })
   mod_.elems.push({
     mode: @types.ElemMode::Active(0, [@types.Instruction::I32Const(0)]),
     type_: @types.ValueType::FuncRef,
-    init: [
-      [@types.Instruction::RefFunc(0)],
-      [@types.Instruction::RefFunc(1)],
-    ],
+    init: [[@types.Instruction::RefFunc(0)], [@types.Instruction::RefFunc(1)]],
   })
   mod_.elems.push({
     mode: @types.ElemMode::Declarative,
@@ -32,4 +26,3 @@ test "wat_printer: element segments" {
     #|
   inspect(output, content=expected)
 }
-

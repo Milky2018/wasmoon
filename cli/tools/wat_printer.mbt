@@ -187,33 +187,33 @@ fn module_to_wat(mod_ : @types.Module) -> String {
     None => ()
   }
 
-	  // Elements section
-	  for i, elem in mod_.elems {
-	    sb.write_string("  (elem (;")
-	    sb.write_string(i.to_string())
-	    sb.write_string(";) ")
-	    match elem.mode {
-	      Passive => ()
-	      Declarative => sb.write_string("declare ")
-	      Active(table_idx, offset) => {
-	        if table_idx != 0 {
-	          sb.write_string("(table ")
-	          sb.write_string(table_idx.to_string())
-	          sb.write_string(") ")
-	        }
-	        sb.write_string("(")
-	        sb.write_string(instrs_to_wat_inline(offset))
-	        sb.write_string(") ")
-	      }
-	    }
-	    sb.write_string(value_type_to_wat(elem.type_))
-	    for init in elem.init {
-	      sb.write_string(" (")
-	      sb.write_string(instrs_to_wat_inline(init))
-	      sb.write_string(")")
-	    }
-	    sb.write_string(")\n")
-	  }
+  // Elements section
+  for i, elem in mod_.elems {
+    sb.write_string("  (elem (;")
+    sb.write_string(i.to_string())
+    sb.write_string(";) ")
+    match elem.mode {
+      Passive => ()
+      Declarative => sb.write_string("declare ")
+      Active(table_idx, offset) => {
+        if table_idx != 0 {
+          sb.write_string("(table ")
+          sb.write_string(table_idx.to_string())
+          sb.write_string(") ")
+        }
+        sb.write_string("(")
+        sb.write_string(instrs_to_wat_inline(offset))
+        sb.write_string(") ")
+      }
+    }
+    sb.write_string(value_type_to_wat(elem.type_))
+    for init in elem.init {
+      sb.write_string(" (")
+      sb.write_string(instrs_to_wat_inline(init))
+      sb.write_string(")")
+    }
+    sb.write_string(")\n")
+  }
 
   // Functions section (code)
   for i, code in mod_.codes {

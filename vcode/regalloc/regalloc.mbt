@@ -948,7 +948,10 @@ fn allocate_reload_registers(
   alloc : RegAllocResult,
   intervals : Map[(Int, Int), ReloadInterval],
 ) -> Unit {
-  // Collect which callee-saved registers are already allocated
+  // Collect which registers are already allocated to virtual registers.
+  // Reload coalescing must NOT clobber any register that the allocator uses
+  // (including live-ins like vmctx), otherwise a StackLoad can overwrite a
+  // still-live value and cause memory corruption / traps.
   let used_int_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
   let used_float_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
   for _, preg in alloc.assignments {
@@ -957,48 +960,55 @@ fn allocate_reload_registers(
       _ => used_float_regs.add(preg.index) |> ignore
     }
   }
-  // Available callee-saved registers for reloads (X19-X28 for int, D8-D15 for float)
-  // We use a subset to avoid conflicts with normal allocation
-  let reload_int_regs = [19, 20, 21, 22, 23]
-  let reload_float_regs = [8, 9, 10, 11, 12]
+
+  // Reserve special registers that are not part of the allocator pool but are
+  // used by the ABI / codegen.
+  // - X19 is reserved for vmctx caching in the prologue when needed.
+  used_int_regs.add(19) |> ignore
+  // - X23 is reserved for extra_results_buffer when needed.
+  let calls_multi = func.calls_multi_value_function()
+  let needs_extra = func.needs_extra_results_ptr()
+  let needs_x23_reserved = needs_extra || calls_multi
+  if needs_x23_reserved {
+    used_int_regs.add(23) |> ignore
+  }
+
+  // Candidate callee-saved registers for reload coalescing.
+  // Only use registers that are NOT allocated to any vreg to avoid clobbering
+  // live values (including parameters that may stay live across a block).
+  let reload_int_regs = [20, 21, 22, 23, 24, 25, 26, 27, 28]
+  let reload_float_regs = [8, 9, 10, 11, 12, 13, 14, 15]
+
   // Per-block allocation to avoid conflicts within a block
   for block_idx, block in func.blocks {
     // Track which reload registers are in use within this block
     let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
     let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
-    // Also track registers defined in this block (can't use them for reloads)
-    for inst in block.insts {
-      for def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) {
-          match alloc.assignments.get(vreg.id) {
-            Some(preg) =>
-              match preg.class {
-                @abi.Int => block_int_used.add(preg.index) |> ignore
-                _ => block_float_used.add(preg.index) |> ignore
-              }
-            None => ()
-          }
-        }
-      }
-    }
     // Allocate reload registers for intervals in this block
     for key, interval in intervals {
       let (b_idx, _) = key
       if b_idx != block_idx {
         continue
       }
-      // Find an available register
-      let (candidates, used_set) = match interval.vreg_class {
-        @abi.Int => (reload_int_regs, block_int_used)
-        _ => (reload_float_regs, block_float_used)
-      }
-      for idx in candidates {
-        if !used_set.contains(idx) {
-          // Found an available register
-          interval.preg = Some({ index: idx, class: interval.vreg_class })
-          used_set.add(idx) |> ignore
-          break
-        }
+      match interval.vreg_class {
+        @abi.Int =>
+          for idx in reload_int_regs {
+            if used_int_regs.contains(idx) || block_int_used.contains(idx) {
+              continue
+            }
+            interval.preg = Some({ index: idx, class: interval.vreg_class })
+            block_int_used.add(idx) |> ignore
+            break
+          }
+        _ =>
+          for idx in reload_float_regs {
+            if used_float_regs.contains(idx) || block_float_used.contains(idx) {
+              continue
+            }
+            interval.preg = Some({ index: idx, class: interval.vreg_class })
+            block_float_used.add(idx) |> ignore
+            break
+          }
       }
     }
   }

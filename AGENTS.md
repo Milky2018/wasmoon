@@ -10,35 +10,71 @@ Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `m
 - Tests: `testsuite/` (MoonBit tests) and `spec/` (upstream WAST scripts used by the CLI runner).
 - Build artifacts: `target/`; `install.sh` copies the built executable to `./wasmoon`.
 
-## Build, Test, and Development Commands
+## Development Commands
 
-- `moon update`: fetch/update MoonBit dependencies.
-- `moon check --target native`: type-check + lint (CI runs this).
-- `moon test --target native`: run MoonBit tests.
-- `moon test --update`: update snapshots after intentional behavior changes.
-- `moon info && moon fmt`: update `.mbti` interfaces and format code (CI expects a clean diff).
-- `moon build --target native --release && ./install.sh`: build and install the CLI locally.
-- CLI usage: `./wasmoon test spec/i32.wast` (add `--no-jit` to force the interpreter).
+- `moon check` - Lint and type-check (runs in pre-commit hook)
+- `moon test` - Run all tests
+- `moon test -p <package> -f <file>` - Run specific tests
+- `moon fmt` - Format code
+- `moon info` - Update `.mbti` interface files
+- `moon info && moon fmt` - Standard workflow before committing
 
-## Coding Style & Naming Conventions
+## Building and Running
 
-- Use MoonBit “block style”: separate top-level blocks with `///|`.
-- Naming: functions `snake_case`, types/constructors `PascalCase`, constants `SCREAMING_SNAKE_CASE`.
-- Prefer `expr |> ignore` over `let _ = expr`; use `suberror`/`raise`/`try` patterns for errors.
-- Keep deprecated APIs in `deprecated.mbt` within the relevant package.
+```bash
+moon build && ./install.sh    # Build and install wasmoon binary
+./wasmoon test <file.wast>    # Run WAST tests
+./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
+./wasmoon explore <file.wat> --stage ir vcode mc  # View compilation stages
+python3 scripts/run_all_wast.py --rec  # Run all WAST tests (run ./install.sh first)
+```
 
-## Testing Guidelines
+## Testing
 
-- Test naming: blackbox `*_test.mbt`, whitebox `*_wbtest.mbt`.
-- Prefer snapshot assertions via `inspect(...)` (avoid `println`); use `assert_eq` for loops/parameterized cases.
-- JIT regressions: prefer `compare_jit_interp(wat_string)` in `testsuite/`.
-- WAST regression: `./wasmoon test spec/<name>.wast` or `python3 scripts/run_all_wast.py`.
+- Prefer `inspect` for tests; run `moon test --update` to update snapshots
+- Never batch use `--update`. Treat snapshot errors seriously
+- Don't use `println` in tests. Use `inspect(expr)` and update snapshots, then read the file
+- Use `compare_jit_interp(wat_string)` in `testsuite/` for JIT regression tests
 
-## Commit & Pull Request Guidelines
+## Debugging
 
-- Use Conventional Commits: `feat(scope): ...`, `fix: ...`, `refactor: ...`, `docs: ...`, `test: ...`, `chore: ...`, `style: ...`.
-- PRs should include rationale, linked issues, exact test commands + target, and note any snapshot updates.
+For crashes (e.g., Exit Code 134), use lldb:
+```bash
+lldb -- ./wasmoon test path/to/test.wast
+(lldb) run
+(lldb) bt  # stack trace after crash
+```
 
-## Security Note
+## Project Structure
 
-This project is AI-assisted and not thoroughly audited; avoid production/security-sensitive use.
+- Each directory is a MoonBit package with `moon.pkg.json`
+- Test files: `*_test.mbt` (blackbox), `*_wbtest.mbt` (whitebox)
+- `.mbti` files - Generated interfaces (check diffs to verify API changes)
+- Code organized in **block style** separated by `///|`
+
+## Git Conventions
+
+- **NEVER commit or push directly to main branch** - always create a feature branch and merge via PR
+- Write commit messages in English
+- Create a new branch for each change, merge via PR
+- Don't use `commit --amend` or `push --force`, use new commits instead
+
+## MoonBit Notes
+
+- Use `suberror` for error types, `raise` to throw, `try! func() |> ignore` to ignore errors
+- Use `func() |> ignore` not `let _ = func()`
+- When using `inspect(value, content=expected_string)`, don't declare a separate `let expected = ...` variable - it causes unused variable warnings. Put the expected string directly in the `content=` parameter
+- Use `!condition` not `not(condition)`
+- Use `f(value)` not `f!(value)` (deprecated)
+- Use `for i in 0..<n` not C-style `for i = 0; i < n; i = i + 1`
+- Use `if opt is Pattern(v) { ... }` for single-branch matching, not `match opt {}`
+- Use `arr.clear()` not `while arr.length() > 0 { arr.pop() }`
+- Use `s.code_unit_at(i)` or `for c in s` not `s[i]` (deprecated)
+- Struct/enum visibility: `priv` (hidden) < (none)/abstract (type only) < `pub` (readonly) < `pub(all)` (full)
+- Default to abstract (no modifier) for internal types; use `pub struct` when external code reads fields
+- Use `pub(all) enum` for enums that external code pattern-matches on
+- Use `let mut` only for reassignment, not for mutable containers like Array
+- Use `reinterpret_as_uint()` for unsigned ops, `to_int()` for numeric conversion
+- Use `Array::length()` not `Array::size()`
+- In moon.pkg.json, use "import", "test-import" and "wbtest-import" to manage package importing for ".mbt", "_test.mbt" and "_wbtest.mbt"
+- Use `Option::unwrap_or` not `Option::or`
