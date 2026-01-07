@@ -427,7 +427,8 @@ pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
         inst.uses.length() == 1 &&
         inst_idx + 1 < block.insts.length() {
         let next = block.insts[inst_idx + 1]
-        if next.opcode is Add(true) && next.defs.length() == 1 &&
+        if next.opcode is Add(true) &&
+          next.defs.length() == 1 &&
           next.uses.length() == 2 {
           let ext_dst = wreg_num(inst.defs[0])
           let ext_src = reg_num(inst.uses[0])
