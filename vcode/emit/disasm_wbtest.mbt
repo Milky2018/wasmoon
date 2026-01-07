@@ -245,6 +245,21 @@ test "all emit functions disasm" {
 }
 
 ///|
+test "emit add.uxtw disasm" {
+  let mc = MachineCode::new()
+  mc.emit_add_uxtw(8, 10, 8, 0)
+  mc.emit_add_uxtw(8, 10, 8, 2)
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 4841288b  add x8, x10, w8, uxtw
+      #|  0004: 4849288b  add x8, x10, w8, uxtw #2
+      #|
+    ),
+  )
+}
+
+///|
 test "emit_str_imm" {
   let mc = MachineCode::new()
   mc.emit_ldr_imm(0, 1, 8) // LDR X0, [X1, #8]

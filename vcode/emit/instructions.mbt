@@ -22,6 +22,8 @@ enum Instruction {
   // Arithmetic - Register
   AddReg(Int, Int, Int)
   AddShifted(Int, Int, Int, @instr.ShiftType, Int)
+  // Add with extended register operand: ADD Xd, Xn, Wm, UXTW #shift
+  AddExtUxtw(Int, Int, Int, Int) // rd, rn, rm, shift (0-4)
   AddImm(Int, Int, Int)
   AddImmShifted12(Int, Int, Int) // ADD with immediate shifted left by 12
   SubReg(Int, Int, Int)
@@ -490,6 +492,10 @@ fn Instruction::annotate(self : Instruction) -> String {
         Asr => "asr"
       }
       "add x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
+    }
+    AddExtUxtw(rd, rn, rm, shift) => {
+      let suffix = if shift == 0 { "uxtw" } else { "uxtw #\{shift}" }
+      "add x\{rd}, x\{rn}, w\{rm}, \{suffix}"
     }
     AddImm(rd, rn, imm12) => {
       let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
@@ -1042,6 +1048,25 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b2 = (rm & 31) | ((shift_bits & 3) << 6)
       let b3 = 139
       (b0, b1, b2, b3)
+    }
+    AddExtUxtw(rd, rn, rm, shift) => {
+      // ADD (extended register): sf=1 (64-bit), op=0 (add), S=0, option=UXTW (010)
+      // Encoding:  sf op S 01011 00 1 Rm option imm3 Rn Rd
+      // See ARM ARM "Add/subtract (extended register)".
+      let imm3 = shift & 7
+      let option_uxtw = 2 // 010 = UXTW
+      let inst = (0b1 << 31) |
+        (0 << 30) |
+        (0 << 29) |
+        (0b01011 << 24) |
+        (0 << 22) |
+        (0b1 << 21) |
+        ((rm & 31) << 16) |
+        ((option_uxtw & 7) << 13) |
+        ((imm3 & 7) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
     AddImm(rd, rn, imm12) => {
       let imm = imm12 & 0xFFF
@@ -3527,6 +3552,17 @@ pub fn MachineCode::emit_add_shifted(
   amount : Int,
 ) -> Unit {
   AddShifted(rd, rn, rm, shift, amount).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_add_uxtw(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  AddExtUxtw(rd, rn, rm, shift).emit(self)
 }
 
 ///|
