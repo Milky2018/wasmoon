@@ -38,7 +38,7 @@
   (global (;0;) (mut i32) (i32.const 1048576))
   (export "memory" (memory 0))
   (export "_start" (func 9))
-  (elem (;0;) (i32.const 1) funcref (ref.func 18 ref.func 19 ref.func 8 ref.func 20 ref.func 14 ref.func 22 ref.func 24 ref.func 25 ref.func 26 ref.func 31 ref.func 36 ref.func 41 ref.func 42 ref.func 43 ref.func 44 ref.func 45 ref.func 48 ref.func 46 ref.func 49 ref.func 50))
+  (elem (;0;) (i32.const 1) funcref (ref.func 18) (ref.func 19) (ref.func 8) (ref.func 20) (ref.func 14) (ref.func 22) (ref.func 24) (ref.func 25) (ref.func 26) (ref.func 31) (ref.func 36) (ref.func 41) (ref.func 42) (ref.func 43) (ref.func 44) (ref.func 45) (ref.func 48) (ref.func 46) (ref.func 49) (ref.func 50))
   (func (;8;) (type 2)
     nop
   )
