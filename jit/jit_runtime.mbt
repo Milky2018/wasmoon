@@ -131,12 +131,22 @@ pub fn JITModule::from_single_function(
   match context {
     None => return None
     Some(ctx) => {
-      // Allocate memory
-      let mem_ptr = alloc_memory(mem_size)
-      if mem_ptr == 0L {
+      // Allocate memory (guarded for memory32 bounds-check elimination)
+      let pages = if mem_size <= 0L {
+        0
+      } else {
+        ((mem_size + 65535L) / 65536L).to_int()
+      }
+      let actual_size = pages.to_int64() * 65536L
+      let mem_ptr = if pages > 0 {
+        ctx.alloc_guarded_memory(pages, None)
+      } else {
+        0L
+      }
+      if mem_ptr == 0L && actual_size > 0L {
         return None
       }
-      ctx.set_memory(mem_ptr, mem_size)
+      ctx.set_memory(mem_ptr, actual_size)
       // Create executable code
       let exec_code = ExecCode::new(code_bytes)
       match exec_code {
@@ -391,6 +401,28 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
   if self.context is Some(ctx) {
     ctx.set_gc_heap(heap_ptr)
+  }
+}
+
+///|
+/// Allocate guarded memory with mmap for bounds check elimination
+/// Memory is allocated with guard pages (PROT_NONE) after the accessible region
+/// Access to guard pages triggers SIGSEGV which is caught and converted to a trap
+/// This enables eliminating explicit bounds checks in JIT-compiled code
+///
+/// Parameters:
+///   initial_pages: Initial memory size in WASM pages (64KB each)
+///   max_pages: Maximum memory size in WASM pages (None = default 4GB reservation)
+///
+/// Returns: memory pointer on success, 0 on failure
+pub fn JITModule::alloc_guarded_memory(
+  self : JITModule,
+  initial_pages : Int,
+  max_pages : Int?,
+) -> Int64 {
+  match self.context {
+    Some(ctx) => ctx.alloc_guarded_memory(initial_pages, max_pages)
+    None => 0L
   }
 }
 

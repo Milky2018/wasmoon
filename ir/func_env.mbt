@@ -345,6 +345,30 @@ pub fn FuncEnvironment::translate_table_set(
 // ============ Memory Operations ============
 
 ///|
+/// Helper to load memory base for a given memidx
+/// For memidx 0: use fast path (direct vmctx field)
+/// For memidx > 0: load from memories array
+fn load_memory_base(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
+  if memidx == 0 {
+    // Fast path for memory 0
+    let base_offset = builder.iconst(
+      Type::I64,
+      VMCTX_MEMORY_BASE_OFFSET.to_int64(),
+    )
+    builder.load_ptr(Type::I64, vmctx, base_offset)
+  } else {
+    // General path: load from memories array
+    let memories_offset = builder.iconst(
+      Type::I64,
+      VMCTX_MEMORIES_OFFSET.to_int64(),
+    )
+    let memories_ptr = builder.load_ptr(Type::I64, vmctx, memories_offset)
+    let idx_offset = builder.iconst(Type::I64, (memidx * 8).to_int64())
+    builder.load_ptr(Type::I64, memories_ptr, idx_offset)
+  }
+}
+
+///|
 /// Helper to load memory base and size for a given memidx
 /// For memidx 0: use fast path (direct vmctx fields)
 /// For memidx > 0: load from memories/memory_sizes arrays
@@ -383,6 +407,21 @@ fn load_memory_base_and_size(
     let size = builder.load_ptr(Type::I64, sizes_ptr, idx_offset)
     (base, size)
   }
+}
+
+///|
+/// Whether JIT should rely on guard pages (no explicit bounds checks) for memory access.
+/// Currently only enabled for memory 0 and memory32.
+fn FuncEnvironment::use_guard_pages(
+  self : FuncEnvironment,
+  memidx : Int,
+) -> Bool {
+  if memidx != 0 {
+    return false
+  }
+  let is_memory64 = memidx < self.memory_is_64.length() &&
+    self.memory_is_64[memidx]
+  not(is_memory64)
 }
 
 ///|
@@ -476,6 +515,15 @@ pub fn FuncEnvironment::emit_bounds_check(
   offset : Int64,
   access_size : Int,
 ) -> Value {
+  if self.use_guard_pages(memidx) {
+    // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
+    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+    return builder.iadd(memory_base, addr_plus_offset)
+  }
+
   // Check if bounds check can be eliminated for constant addresses
   let skip_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
@@ -551,6 +599,16 @@ pub fn FuncEnvironment::translate_memory_load(
   offset : Int64,
 ) -> Value {
   let access_size = type_byte_size(ty)
+  if self.use_guard_pages(memidx) {
+    // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
+    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+    let effective_addr = builder.iadd(memory_base, addr_plus_offset)
+    let zero_offset = builder.iconst(Type::I64, 0L)
+    return builder.load_ptr(ty, effective_addr, zero_offset)
+  }
 
   // Check if bounds check can be eliminated for constant addresses
   let skip_bounds_check = self.can_eliminate_bounds_check(
@@ -636,6 +694,16 @@ pub fn FuncEnvironment::translate_memory_store(
   offset : Int64,
 ) -> Unit {
   let access_size = type_byte_size(ty)
+  if self.use_guard_pages(memidx) {
+    // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
+    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+    let effective_addr = builder.iadd(memory_base, addr_plus_offset)
+    let zero_offset = builder.iconst(Type::I64, 0L)
+    return builder.store_ptr(ty, effective_addr, value, zero_offset)
+  }
 
   // Check if bounds check can be eliminated for constant addresses
   let skip_bounds_check = self.can_eliminate_bounds_check(
@@ -711,6 +779,18 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   offset : Int64,
 ) -> Value {
   let access_size = narrow_bits / 8
+  if self.use_guard_pages(memidx) {
+    // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
+    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+    let effective_addr = builder.iadd(memory_base, addr_plus_offset)
+    let zero_offset = builder.iconst(Type::I64, 0L)
+    return builder.load_ptr_narrow(
+      result_ty, narrow_bits, signed, effective_addr, zero_offset,
+    )
+  }
 
   // Check if bounds check can be eliminated for constant addresses
   let skip_bounds_check = self.can_eliminate_bounds_check(
@@ -787,6 +867,18 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   offset : Int64,
 ) -> Unit {
   let access_size = narrow_bits / 8
+  if self.use_guard_pages(memidx) {
+    // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
+    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
+    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+    let effective_addr = builder.iadd(memory_base, addr_plus_offset)
+    let zero_offset = builder.iconst(Type::I64, 0L)
+    return builder.store_ptr_narrow(
+      narrow_bits, effective_addr, value, zero_offset,
+    )
+  }
 
   // Check if bounds check can be eliminated for constant addresses
   let skip_bounds_check = self.can_eliminate_bounds_check(

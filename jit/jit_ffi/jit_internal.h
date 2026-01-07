@@ -64,6 +64,11 @@ void free_context_internal(jit_context_t *ctx);
 
 #define WASM_PAGE_SIZE 65536
 
+// Guard page memory allocation (for bounds check elimination)
+uint8_t *alloc_guarded_memory_external(jit_context_t *ctx, size_t initial_size, size_t max_size);
+void free_guarded_memory_if_allocated(jit_context_t *ctx);
+int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
+
 // v3 ctx-passing (re-entrant) variants (internal implementations)
 // These operate on memory 0 (fast path, backward compatible)
 int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_pages);

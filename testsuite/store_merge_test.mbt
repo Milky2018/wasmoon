@@ -43,28 +43,12 @@ test "store_merging_peephole" {
       #|    v4 = ldi 200
       #|    v5 = ldi 0
       #|    v6 = load_ptr.i64 +0 v0
-      #|    v7 = ldi 8
-      #|    v8 = load_ptr.i64 +8 v0
-      #|    v9 = mov v4
-      #|    v10 = ldi 1
-      #|    v11 = add #1 v4
-      #|    v12 = cmp.ule v11, v8
-      #|    br_cmp.ls v11, v8, block2, block1
-      #|block1:
-      #|    trap "memory out of bounds"
-      #|block2:
-      #|    v13 = add v6, v9
-      #|    store_ptr8 +0 v13, v2
-      #|    v14 = ldi 201
-      #|    v15 = load_ptr.i64 +0 v0
-      #|    v16 = load_ptr.i64 +8 v0
-      #|    v17 = mov v14
-      #|    v18 = add #1 v14
-      #|    v19 = cmp.ule v18, v16
-      #|    br_cmp.ls v18, v16, block3, block1
-      #|block3:
-      #|    v20 = add v15, v17
-      #|    store_ptr8 +0 v20, v3
+      #|    v7 = add #200 v6
+      #|    store_ptr8 +200 v6, v2
+      #|    v8 = ldi 201
+      #|    v9 = load_ptr.i64 +0 v0
+      #|    v10 = add #201 v9
+      #|    store_ptr8 +201 v9, v3
       #|    ret
       #|}
       #|

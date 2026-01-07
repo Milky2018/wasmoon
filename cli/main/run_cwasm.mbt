@@ -53,9 +53,15 @@ fn run_cwasm(
       } else {
         1 // Default to 1 page if no memory defined
       }
+      let max_pages = if precompiled.memories.length() > 0 {
+        precompiled.memories[0].max_pages
+      } else {
+        None
+      }
       let mem_size = mem_pages.to_int64() * 65536L // 64KB per page
-      let mem_ptr = @jit.alloc_memory(mem_size)
-      if mem_ptr == 0L {
+      // Use guarded allocation to support bounds-check elimination in JIT code.
+      let mem_ptr = jm.alloc_guarded_memory(mem_pages, max_pages)
+      if mem_ptr == 0L && mem_size > 0L {
         @logger.error("failed to allocate linear memory")
         return
       }

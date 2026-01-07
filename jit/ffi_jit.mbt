@@ -140,6 +140,24 @@ fn JITContext::set_gc_heap(self : JITContext, heap_ptr : Int64) -> Unit {
 }
 
 ///|
+/// Allocate guarded memory with mmap for bounds check elimination
+/// Memory is allocated with guard pages (PROT_NONE) after the accessible region
+/// Access to guard pages triggers SIGSEGV which is caught and converted to a trap
+/// Returns: memory pointer on success, 0 on failure
+fn JITContext::alloc_guarded_memory(
+  self : JITContext,
+  initial_pages : Int,
+  max_pages : Int?,
+) -> Int64 {
+  let max_pages_val = max_pages.unwrap_or(-1).to_int64()
+  @jit_ffi.c_jit_ctx_alloc_guarded_memory(
+    self.ptr(),
+    initial_pages.to_int64(),
+    max_pages_val,
+  )
+}
+
+///|
 /// Get the function table base pointer
 fn JITContext::get_func_table_ptr(self : JITContext) -> Int64 {
   @jit_ffi.c_jit_ctx_get_func_table(self.ptr())

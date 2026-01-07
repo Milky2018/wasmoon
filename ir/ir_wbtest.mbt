@@ -1271,6 +1271,32 @@ test "strength reduction: power of 2 detection" {
 }
 
 ///|
+test "memory guard pages: memory0 has no explicit bounds check" {
+  // In JIT, memory 0 (memory32) relies on guard pages for trapping, so IR
+  // should not emit explicit bounds checks for load/store.
+  let builder = IRBuilder::new("guard_pages_mem0")
+  let vmctx = builder.add_param(Type::I64) // vmctx
+  let addr = builder.add_param(Type::I32) // non-constant address
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    0,
+    Type::I32,
+    addr,
+    0L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // No bounds check blocks: only entry block.
+  inspect(func.blocks.length(), content="1")
+}
+
+///|
 test "bounds check elimination: constant address within min memory" {
   // Test that bounds check is eliminated when address is a constant
   // within the minimum guaranteed memory size
@@ -1284,13 +1310,14 @@ test "bounds check elimination: constant address within min memory" {
   let addr = builder.iconst_i32(0) // address 0
 
   // FuncEnvironment with 1 page (65536 bytes) minimum memory
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  // Use memidx=1 to exercise explicit bounds-check lowering (memidx=0 uses guard pages)
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // Load from address 0 with offset 0, access_size 4 - within 1 page
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I32,
     addr,
     0L,
@@ -1318,13 +1345,13 @@ test "bounds check elimination: constant address outside min memory" {
   let addr = builder.iconst_i32(65536) // exactly at page boundary
 
   // FuncEnvironment with 1 page (65536 bytes) minimum memory
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // Load from address 65536 with access_size 4 - outside 1 page
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I32,
     addr,
     0L,
@@ -1347,13 +1374,13 @@ test "bounds check elimination: non-constant address" {
   builder.switch_to_block(entry)
 
   // FuncEnvironment with 1 page minimum memory
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // Load with non-constant address - bounds check should NOT be eliminated
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I32,
     addr,
     0L,
@@ -1375,13 +1402,13 @@ test "bounds check elimination: offset considered in calculation" {
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(0)
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // offset=65532, access_size=4 -> 0 + 65532 + 4 = 65536, exactly at boundary
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I32,
     addr,
     65532L, // offset
@@ -1403,13 +1430,13 @@ test "bounds check elimination: offset causes overflow" {
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(0)
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // offset=65533, access_size=4 -> 0 + 65533 + 4 = 65537 > 65536
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I32,
     addr,
     65533L,
@@ -1430,10 +1457,10 @@ test "bounds check elimination: store operation" {
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(100)
   let value = builder.iconst_i32(42)
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // Store at address 100, well within 1 page
-  func_env.translate_memory_store(builder, vmctx, 0, Type::I32, addr, value, 0L)
+  func_env.translate_memory_store(builder, vmctx, 1, Type::I32, addr, value, 0L)
   builder.return_([])
   let func = builder.get_function()
 
@@ -1452,13 +1479,13 @@ test "bounds check elimination: narrow load i8" {
 
   // Load at address 65535 (last byte of first page)
   let addr = builder.iconst_i32(65535)
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // 1-byte load at 65535 -> end = 65536, within bounds
   let loaded = func_env.translate_memory_load_narrow(
     builder,
     vmctx,
-    0,
+    1,
     Type::I32,
     8, // 8 bits = 1 byte
     true, // signed
@@ -1483,11 +1510,11 @@ test "bounds check elimination: narrow store i16" {
   // Store at address 65534 (last 2 bytes of first page)
   let addr = builder.iconst_i32(65534)
   let value = builder.iconst_i32(0x1234)
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // 2-byte store at 65534 -> end = 65536, within bounds
   func_env.translate_memory_store_narrow(
-    builder, vmctx, 0, 16, // 16 bits = 2 bytes
+    builder, vmctx, 1, 16, // 16 bits = 2 bytes
      addr, value, 0L,
   )
   builder.return_([])
@@ -1508,13 +1535,13 @@ test "bounds check elimination: i64 load" {
 
   // Load at address 65528 (last 8 bytes of first page)
   let addr = builder.iconst_i32(65528)
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // 8-byte load at 65528 -> end = 65536, within bounds
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I64,
     addr,
     0L,
@@ -1537,11 +1564,11 @@ test "bounds check elimination: i64 load exceeds" {
 
   // Load at address 65529 -> end = 65537, exceeds 1 page
   let addr = builder.iconst_i32(65529)
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I64,
     addr,
     0L,
@@ -1567,7 +1594,7 @@ test "bounds check elimination: zero min memory" {
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I32,
     addr,
     0L,
@@ -1575,7 +1602,7 @@ test "bounds check elimination: zero min memory" {
   builder.return_([loaded])
   let func = builder.get_function()
 
-  // Should NOT eliminate: no min memory info
+  // Should NOT eliminate: no min memory info for memidx=1
   inspect(func.blocks.length(), content="3")
 }
 
@@ -1646,11 +1673,11 @@ test "bounds check elimination: combined addr and offset" {
 
   // addr=1000, offset=64532 -> 1000 + 64532 + 4 = 65536
   let addr = builder.iconst_i32(1000)
-  let func_env = FuncEnvironment::new([], memory_mins=[65536L])
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
   let loaded = func_env.translate_memory_load(
     builder,
     vmctx,
-    0,
+    1,
     Type::I32,
     addr,
     64532L,

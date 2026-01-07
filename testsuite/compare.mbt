@@ -403,17 +403,28 @@ pub fn run_jit(
     // This provides controlled stack overflow behavior
     let _ = jm.alloc_wasm_stack(1048576L)
 
-    // Allocate memory - support multi-memory by using the array-based API
-    let mem_size = 65536L // 64KB (1 page)
-    let mem_ptr = @jit.alloc_memory(mem_size)
-    if mem_ptr == 0L {
-      return Err("Failed to allocate memory")
+    // Allocate linear memories.
+    // Memory 0 (memory32) uses guarded allocation to support bounds-check elimination.
+    let memories : Array[@jit.MemoryInfo] = []
+    for i, mem_ty in mod_.memories {
+      let pages = mem_ty.limits.min.to_int()
+      let size = pages.to_int64() * 65536L
+      let max_pages = mem_ty.limits.max.map(fn(m) { m.to_int() })
+      let mem_ptr = if i == 0 && not(mem_ty.is_memory64) {
+        jm.alloc_guarded_memory(pages, max_pages)
+      } else {
+        @jit.alloc_memory(size)
+      }
+      if mem_ptr == 0L && size > 0L {
+        return Err("Failed to allocate memory")
+      }
+      memories.push(@jit.MemoryInfo::new(mem_ptr, size, max_pages))
     }
-    // Set up multi-memory array (single memory at index 0)
-    let memories = [@jit.MemoryInfo::new(mem_ptr, mem_size, None)]
-    jm.set_memory_pointers(memories)
-    // Also set fast path for memory 0 (backward compatibility)
-    jm.set_memory(mem_ptr, mem_size)
+    if not(memories.is_empty()) {
+      jm.set_memory_pointers(memories)
+      // Also set fast path for memory 0 (backward compatibility)
+      jm.set_memory(memories[0].ptr, memories[0].size)
+    }
 
     // Initialize indirect table for call_indirect support
     init_elem_segments(mod_, jm, [])

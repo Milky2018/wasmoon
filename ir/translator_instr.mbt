@@ -370,7 +370,9 @@ fn Translator::translate_instruction(
       self.push(result)
     }
 
-    // Memory operations (desugared via FuncEnvironment to LoadPtr with explicit bounds check)
+    // Memory operations (desugared via FuncEnvironment)
+    // - memory 0 (memory32): relies on guard pages (no explicit bounds checks)
+    // - others: use explicit bounds checks
     I32Load(memidx, _, offset) => {
       let addr = self.pop()
       let result = self.func_env.translate_memory_load(

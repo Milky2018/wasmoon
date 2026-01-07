@@ -38,6 +38,11 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->memory_max_sizes = NULL; // Array of memory max sizes
     ctx->memory_count = 0;
 
+    // Memory guard pages (for bounds check elimination)
+    ctx->memory0_alloc_base = NULL;
+    ctx->memory0_alloc_size = 0;
+    ctx->memory0_guard_start = 0;
+
     // GC heap for inline allocation
     ctx->gc_heap_ptr = NULL;      // Current allocation pointer
     ctx->gc_heap_limit = NULL;    // Allocation limit
@@ -72,6 +77,9 @@ jit_context_t *alloc_context_internal(int func_count) {
 
 // ============ Context Free ============
 
+// Forward declaration from memory_ops.c
+extern void free_guarded_memory_if_allocated(jit_context_t *ctx);
+
 void free_context_internal(jit_context_t *ctx) {
     if (!ctx) return;
 
@@ -82,7 +90,12 @@ void free_context_internal(jit_context_t *ctx) {
     // Only free table0_base if we own it (allocated via alloc_indirect_table)
     // Borrowed tables (from set_table_pointers) are managed by JITTable's GC
     if (ctx->table0_base && ctx->owns_indirect_table) free(ctx->table0_base);
-    if (ctx->memory_base) free(ctx->memory_base);
+    // Free memory: use munmap for guarded memory, free for regular
+    if (ctx->memory0_alloc_base) {
+        free_guarded_memory_if_allocated(ctx);
+    } else if (ctx->memory_base) {
+        free(ctx->memory_base);
+    }
     if (ctx->globals) free(ctx->globals);
 
     // Free multi-memory arrays (but not the memory data itself - managed by caller)
