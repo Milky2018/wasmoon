@@ -342,8 +342,11 @@ static int64_t wasi_fd_fdstat_get_impl(
 
     // Determine file type
     uint8_t filetype;
+    uint16_t flags = 0;
     if (wasi_fd < 3) {
         filetype = WASI_FILETYPE_CHARACTER_DEVICE;
+        // Match interpreter: stdout/stderr are append-capable.
+        if (wasi_fd == 1 || wasi_fd == 2) flags = 1;
     } else if (is_preopen_fd(ctx, wasi_fd)) {
         filetype = WASI_FILETYPE_DIRECTORY;
     } else {
@@ -361,7 +364,7 @@ static int64_t wasi_fd_fdstat_get_impl(
     // fdstat: filetype(1) + pad(1) + flags(2) + pad(4) + rights_base(8) + rights_inheriting(8)
     mem[fdstat_ptr] = filetype;
     mem[fdstat_ptr + 1] = 0;
-    *(uint16_t *)(mem + fdstat_ptr + 2) = 0;
+    *(uint16_t *)(mem + fdstat_ptr + 2) = flags;
     *(uint32_t *)(mem + fdstat_ptr + 4) = 0;
     *(uint64_t *)(mem + fdstat_ptr + 8) = 0x1FFFFFFFULL; // all rights
     *(uint64_t *)(mem + fdstat_ptr + 16) = 0x1FFFFFFFULL;

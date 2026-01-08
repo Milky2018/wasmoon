@@ -87,6 +87,8 @@ fn run_wasm(
   // Build WASI context with directory mappings and environment variables
   // Also collect preopens and env for JIT mode
   let wasi_builder = @wasi.WasiContextBuilder::new()
+  // Keep interpreter behavior consistent with JIT: argv[0] is the module path.
+  wasi_builder.args([wasm_path]) |> ignore
   let jit_preopens : Array[(String, String)] = []
   let jit_envs : Array[String] = []
   for dir in dirs {

@@ -58,31 +58,10 @@ pub fn WasiContext::new() -> WasiContext {
     preopens: [],
     next_fd: 3, // 0=stdin, 1=stdout, 2=stderr
     open_files: @hashmap.new(),
-    stdout_callback: fn(bytes) { print_bytes(bytes) },
-    stderr_callback: fn(bytes) { print_bytes(bytes) },
+    stdout_callback: write_native_stdout,
+    stderr_callback: write_native_stderr,
     stdin_callback: fn() { b"" },
   }
-}
-
-///|
-fn print_bytes(bytes : Bytes) -> Unit {
-  // Convert bytes to string and print
-  let buf = StringBuilder::new()
-  for i in 0..<bytes.length() {
-    let c = bytes[i].to_int()
-    if c >= 32 && c < 127 {
-      buf.write_char(c.unsafe_to_char())
-    } else if c == 10 {
-      buf.write_char('\n')
-    } else if c == 13 {
-      buf.write_char('\r')
-    } else if c == 9 {
-      buf.write_char('\t')
-    } else {
-      buf.write_char('?')
-    }
-  }
-  print_string(buf.to_string())
 }
 
 ///|
@@ -268,12 +247,8 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
     preopens,
     next_fd: fd,
     open_files,
-    stdout_callback: self.stdout_callback.unwrap_or(fn(bytes) {
-      print_bytes(bytes)
-    }),
-    stderr_callback: self.stderr_callback.unwrap_or(fn(bytes) {
-      print_bytes(bytes)
-    }),
+    stdout_callback: self.stdout_callback.unwrap_or(write_native_stdout),
+    stderr_callback: self.stderr_callback.unwrap_or(write_native_stderr),
     stdin_callback: self.stdin_callback.unwrap_or(fn() { b"" }),
   }
 }

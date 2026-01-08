@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-WASI Preview1 Comprehensive Test Suite
+WASI Preview1 CLI integration smoke tests.
 
-Tests all 46 WASI functions for correctness in both JIT and interpreter modes.
+Runs a curated set of WAT modules under both JIT and interpreter modes via
+`./wasmoon run` and checks output + exit status.
+
 WAT test files are stored in examples/wasi_tests/ directory.
 """
 
@@ -14,87 +16,99 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 WAT_DIR = os.path.join(SCRIPT_DIR, "wasi_tests")
 
-def run_wat_file(wat_file, use_jit=True, expected_output=None):
+def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None):
     """Run a WAT file and check results."""
     wat_path = os.path.join(WAT_DIR, wat_file)
 
     try:
+        # NOTE: wasmoon currently expects FILE before some options like --env.
         cmd = ['./wasmoon', 'run', wat_path]
         if not use_jit:
-            cmd.insert(2, '--no-jit')
+            cmd.append('--no-jit')
+        if extra_run_args:
+            cmd.extend(extra_run_args)
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
-        if expected_output is not None:
-            if expected_output not in result.stdout:
-                return False, f"Expected output '{expected_output}' not found in '{result.stdout}'"
+        if result.returncode != 0:
+            return False, f"Non-zero exit code {result.returncode}: {result.stderr or result.stdout}"
 
-        return True, result.stdout
+        if expected is not None:
+            if isinstance(expected, tuple):
+                stream, needle = expected
+                haystack = result.stdout if stream == "stdout" else result.stderr
+                if needle not in haystack:
+                    return False, f"Expected {stream} to contain '{needle}', got stdout='{result.stdout}' stderr='{result.stderr}'"
+            else:
+                if expected not in result.stdout:
+                    return False, f"Expected stdout to contain '{expected}', got '{result.stdout}'"
+
+        return True, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
         return False, "Timeout"
     except Exception as e:
         return False, str(e)
 
-# Test definitions: (name, wat_file, expected_output)
-# expected_output=None means just check it runs without error
+# Test definitions: (name, wat_file, expected, extra_run_args)
+# expected=None means just check it runs without error (and exits 0)
 TESTS = [
     # Basic I/O tests
-    ("fd_write", "fd_write.wat", "Hello from fd_write!"),
-    ("fd_write (stderr)", "fd_write_stderr.wat", None),
-    ("fd_write (multiple iovecs)", "fd_write_multiple_iovecs.wat", "Hello World!"),
+    ("fd_write", "fd_write.wat", "Hello from fd_write!", None),
+    ("fd_write (stderr)", "fd_write_stderr.wat", ("stderr", "Hello stderr!"), None),
+    ("fd_write (multiple iovecs)", "fd_write_multiple_iovecs.wat", "Hello World!", None),
     # Clock tests
-    ("clock_time_get", "clock_time_get.wat", "clock_time_get: OK"),
-    ("clock_time_get (monotonic)", "clock_time_get_monotonic.wat", "clock monotonic: OK"),
-    ("clock_time_get (invalid)", "clock_time_get_invalid.wat", "clock invalid: OK"),
-    ("clock_res_get", "clock_res_get.wat", "clock_res_get: OK"),
-    ("clock_res_get (invalid)", "clock_res_get_invalid.wat", "clock_res invalid: OK"),
+    ("clock_time_get", "clock_time_get.wat", "clock_time_get: OK", None),
+    ("clock_time_get (monotonic)", "clock_time_get_monotonic.wat", "clock monotonic: OK", None),
+    ("clock_time_get (invalid)", "clock_time_get_invalid.wat", "clock invalid: OK", None),
+    ("clock_res_get", "clock_res_get.wat", "clock_res_get: OK", None),
+    ("clock_res_get (invalid)", "clock_res_get_invalid.wat", "clock_res invalid: OK", None),
     # Random
-    ("random_get", "random_get.wat", "random_get: OK"),
+    ("random_get", "random_get.wat", "random_get: OK", None),
     # Args and environ
-    ("args_sizes_get", "args_sizes_get.wat", "args_sizes_get: OK"),
-    ("args_get", "args_get.wat", "args_get: OK"),
-    ("environ_sizes_get", "environ_sizes_get.wat", "environ_sizes_get: OK"),
-    ("environ_get", "environ_get.wat", "environ_get: OK"),
+    ("args_sizes_get", "args_sizes_get.wat", "args_sizes_get: OK", None),
+    ("args_get", "args_get.wat", "args_get: OK", None),
+    ("environ_sizes_get", "environ_sizes_get.wat", "environ_sizes_get: OK", ["--env", "WASMOON_TEST=1"]),
+    ("environ_get", "environ_get.wat", "environ_get: OK", ["--env", "WASMOON_TEST=1"]),
     # File descriptor operations
-    ("fd_fdstat_get", "fd_fdstat_get.wat", "fd_fdstat_get: OK"),
-    ("fd_filestat_get", "fd_filestat_get.wat", "fd_filestat_get: OK"),
-    ("fd_fdstat_set_rights", "fd_fdstat_set_rights.wat", "fd_fdstat_set_rights: OK"),
-    ("fd_fdstat_set_flags", "fd_fdstat_set_flags.wat", "fd_fdstat_set_flags: OK"),
+    ("fd_fdstat_get", "fd_fdstat_get.wat", "fd_fdstat_get: OK", None),
+    ("fd_filestat_get", "fd_filestat_get.wat", "fd_filestat_get: OK", None),
+    ("fd_fdstat_set_rights", "fd_fdstat_set_rights.wat", "fd_fdstat_set_rights: OK", None),
+    ("fd_fdstat_set_flags", "fd_fdstat_set_flags.wat", "fd_fdstat_set_flags: OK", None),
     # Seek and tell
-    ("fd_seek (stdout fails)", "fd_seek_stdout_fails.wat", "fd_seek stdout: OK"),
-    ("fd_tell (stdout fails)", "fd_tell_stdout_fails.wat", "fd_tell stdout: OK"),
-    ("fd_seek (invalid)", "fd_seek_invalid.wat", "fd_seek invalid: OK"),
+    ("fd_seek (stdout fails)", "fd_seek_stdout_fails.wat", "fd_seek stdout: OK", None),
+    ("fd_tell (stdout fails)", "fd_tell_stdout_fails.wat", "fd_tell stdout: OK", None),
+    ("fd_seek (invalid)", "fd_seek_invalid.wat", "fd_seek invalid: OK", None),
     # pread/pwrite
-    ("fd_pread (invalid)", "fd_pread_invalid.wat", "fd_pread invalid: OK"),
-    ("fd_pwrite (invalid)", "fd_pwrite_invalid.wat", "fd_pwrite invalid: OK"),
-    ("fd_pread (stdin fails)", "fd_pread_stdin_fails.wat", "fd_pread stdin: OK"),
-    ("fd_pwrite (stdout fails)", "fd_pwrite_stdout_fails.wat", "fd_pwrite stdout: OK"),
+    ("fd_pread (invalid)", "fd_pread_invalid.wat", "fd_pread invalid: OK", None),
+    ("fd_pwrite (invalid)", "fd_pwrite_invalid.wat", "fd_pwrite invalid: OK", None),
+    ("fd_pread (stdin fails)", "fd_pread_stdin_fails.wat", "fd_pread stdin: OK", None),
+    ("fd_pwrite (stdout fails)", "fd_pwrite_stdout_fails.wat", "fd_pwrite stdout: OK", None),
     # Sync
-    ("fd_sync", "fd_sync.wat", "fd_sync: OK"),
-    ("fd_datasync", "fd_datasync.wat", "fd_datasync: OK"),
-    ("fd_advise", "fd_advise.wat", "fd_advise: OK"),
+    ("fd_sync", "fd_sync.wat", "fd_sync: OK", None),
+    ("fd_datasync", "fd_datasync.wat", "fd_datasync: OK", None),
+    ("fd_advise", "fd_advise.wat", "fd_advise: OK", None),
     # Scheduler
-    ("sched_yield", "sched_yield.wat", "sched_yield: OK"),
+    ("sched_yield", "sched_yield.wat", "sched_yield: OK", None),
     # Poll
-    ("poll_oneoff (clock)", "poll_oneoff_clock.wat", "poll_oneoff: OK"),
-    ("poll_oneoff (zero)", "poll_oneoff_zero.wat", "poll_oneoff zero: OK"),
+    ("poll_oneoff (clock)", "poll_oneoff_clock.wat", "poll_oneoff: OK", None),
+    ("poll_oneoff (zero)", "poll_oneoff_zero.wat", "poll_oneoff zero: OK", None),
     # Directory
-    ("fd_readdir (invalid)", "fd_readdir_invalid.wat", "fd_readdir invalid: OK"),
-    ("path_open (invalid)", "path_open_invalid.wat", "path_open invalid: OK"),
+    ("fd_readdir (invalid)", "fd_readdir_invalid.wat", "fd_readdir invalid: OK", None),
+    ("path_open (invalid)", "path_open_invalid.wat", "path_open invalid: OK", None),
     # File metadata
-    ("fd_filestat_set_size (invalid)", "fd_filestat_set_size_invalid.wat", "fd_filestat_set_size: OK"),
-    ("fd_filestat_set_times (invalid)", "fd_filestat_set_times_invalid.wat", "fd_filestat_set_times: OK"),
-    ("fd_allocate (invalid)", "fd_allocate_invalid.wat", "fd_allocate: OK"),
-    ("fd_renumber (invalid)", "fd_renumber_invalid.wat", "fd_renumber invalid: OK"),
+    ("fd_filestat_set_size (invalid)", "fd_filestat_set_size_invalid.wat", "fd_filestat_set_size: OK", None),
+    ("fd_filestat_set_times (invalid)", "fd_filestat_set_times_invalid.wat", "fd_filestat_set_times: OK", None),
+    ("fd_allocate (invalid)", "fd_allocate_invalid.wat", "fd_allocate: OK", None),
+    ("fd_renumber (invalid)", "fd_renumber_invalid.wat", "fd_renumber invalid: OK", None),
     # Error handling tests
-    ("fd_close (invalid)", "fd_close_invalid.wat", "fd_close invalid: OK"),
-    ("fd_read (invalid)", "fd_read_invalid.wat", "fd_read invalid: OK"),
-    ("fd_prestat_get (invalid)", "fd_prestat_get_invalid.wat", "fd_prestat_get invalid: OK"),
+    ("fd_close (invalid)", "fd_close_invalid.wat", "fd_close invalid: OK", None),
+    ("fd_read (invalid)", "fd_read_invalid.wat", "fd_read invalid: OK", None),
+    ("fd_prestat_get (invalid)", "fd_prestat_get_invalid.wat", "fd_prestat_get invalid: OK", None),
     # Socket tests
-    ("sock_accept (invalid)", "sock_accept_invalid.wat", "sock_accept invalid: OK"),
-    ("sock_recv (invalid)", "sock_recv_invalid.wat", "sock_recv invalid: OK"),
-    ("sock_send (invalid)", "sock_send_invalid.wat", "sock_send invalid: OK"),
-    ("sock_shutdown (invalid)", "sock_shutdown_invalid.wat", "sock_shutdown invalid: OK"),
+    ("sock_accept (invalid)", "sock_accept_invalid.wat", "sock_accept invalid: OK", None),
+    ("sock_recv (invalid)", "sock_recv_invalid.wat", "sock_recv invalid: OK", None),
+    ("sock_send (invalid)", "sock_send_invalid.wat", "sock_send invalid: OK", None),
+    ("sock_shutdown (invalid)", "sock_shutdown_invalid.wat", "sock_shutdown invalid: OK", None),
 ]
 
 def run_all_tests():
@@ -113,8 +127,13 @@ def run_all_tests():
         mode_passed = 0
         mode_failed = 0
 
-        for name, wat_file, expected_output in TESTS:
-            success, msg = run_wat_file(wat_file, use_jit=use_jit, expected_output=expected_output)
+        for name, wat_file, expected, extra_run_args in TESTS:
+            success, msg = run_wat_file(
+                wat_file,
+                use_jit=use_jit,
+                expected=expected,
+                extra_run_args=extra_run_args,
+            )
 
             if success:
                 print(f"  [PASS] {name}")
