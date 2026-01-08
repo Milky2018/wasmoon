@@ -11,6 +11,8 @@ volatile sig_atomic_t g_trap_code = 0;
 volatile sig_atomic_t g_trap_active = 0;
 volatile sig_atomic_t g_trap_signal = 0;
 volatile uintptr_t g_trap_pc = 0;
+volatile uintptr_t g_trap_lr = 0;
+volatile uintptr_t g_trap_frame_lr = 0;
 volatile uintptr_t g_trap_fault_addr = 0;
 volatile sig_atomic_t g_trap_brk_imm = -1;
 volatile sig_atomic_t g_trap_func_idx = -1;
@@ -98,6 +100,32 @@ static void install_alt_stack(void) {
 
 #ifndef _WIN32
 
+// BRK encoding: 0xD4200000 | (imm16 << 5)
+// Match fixed bits [31:21] and [4:0].
+#define BRK_MASK 0xFFE0001FU
+#define BRK_BASE 0xD4200000U
+
+static int decode_brk_imm(uintptr_t pc, uintptr_t *out_brk_pc, int *out_imm) {
+    if (!out_brk_pc || !out_imm) return 0;
+    // On some platforms, the ucontext PC points to the BRK instruction; on others it points
+    // to the next instruction. Probe both `pc` and `pc-4` and validate the encoding.
+    uint32_t instr = *(uint32_t *)pc;
+    if ((instr & BRK_MASK) == BRK_BASE) {
+        *out_brk_pc = pc;
+        *out_imm = (int)((instr >> 5) & 0xFFFF);
+        return 1;
+    }
+    if (pc >= 4) {
+        uint32_t instr_prev = *(uint32_t *)(pc - 4);
+        if ((instr_prev & BRK_MASK) == BRK_BASE) {
+            *out_brk_pc = pc - 4;
+            *out_imm = (int)((instr_prev >> 5) & 0xFFFF);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // Signal handler for SIGTRAP (triggered by BRK instruction)
 // Uses SA_SIGINFO to get ucontext and extract BRK immediate
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
@@ -113,6 +141,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_signal = sig;
         g_trap_fault_addr = 0;
         g_trap_pc = 0;
+        g_trap_lr = 0;
+        g_trap_frame_lr = 0;
         g_trap_brk_imm = -1;
         g_trap_func_idx = -1;
         if (ctx) {
@@ -123,12 +153,16 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         // On macOS ARM64, extract PC from ucontext and read BRK immediate
         ucontext_t *uc = (ucontext_t *)ucontext;
         uint64_t pc = uc->uc_mcontext->__ss.__pc;
-        // PC points to the instruction after BRK, so read at PC-4
-        uint32_t instr = *(uint32_t *)(pc - 4);
-        // BRK encoding: 0xD4200000 | (imm16 << 5)
-        // Extract imm16: (instr >> 5) & 0xFFFF
-        brk_imm = (instr >> 5) & 0xFFFF;
-        trap_pc = (uintptr_t)(pc - 4);
+        g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
+        // If the function uses the standard prologue, the caller return address
+        // is saved in the frame record at [fp + 8].
+        uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+        if (fp) {
+            g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+        }
+        if (!decode_brk_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
+            trap_pc = (uintptr_t)pc;
+        }
 
         // Map BRK immediate to trap code
         switch (brk_imm) {
@@ -144,9 +178,14 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         // On Linux ARM64
         ucontext_t *uc = (ucontext_t *)ucontext;
         uint64_t pc = uc->uc_mcontext.pc;
-        uint32_t instr = *(uint32_t *)(pc - 4);
-        brk_imm = (instr >> 5) & 0xFFFF;
-        trap_pc = (uintptr_t)(pc - 4);
+        g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
+        uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
+        if (fp) {
+            g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+        }
+        if (!decode_brk_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
+            trap_pc = (uintptr_t)pc;
+        }
 
         switch (brk_imm) {
             case 0: trap_code = 3; break;   // unreachable
@@ -188,11 +227,21 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         if (ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
             pc = (uintptr_t)uc->uc_mcontext->__ss.__pc;
+            g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
+            uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+            if (fp) {
+                g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+            }
         }
 #elif defined(__linux__) && defined(__aarch64__)
         if (ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
             pc = (uintptr_t)uc->uc_mcontext.pc;
+            g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
+            uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
+            if (fp) {
+                g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+            }
         }
 #endif
         g_trap_pc = pc;

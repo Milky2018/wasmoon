@@ -70,17 +70,32 @@ fn JITFunction::new(
 }
 
 ///|
+/// Address range for PC-to-function mapping (sorted by start address)
+struct AddressRange {
+  start : Int64 // Function start address
+  end : Int64 // Function end address (start + code_size)
+  func_idx : Int // Wasm function index
+} derive(Show)
+
+///|
 /// Loaded precompiled module with executable functions
 struct JITModule {
   functions : Map[Int, JITFunction]
   by_name : Map[String, Int]
+  address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
   mut debug_db : JITDebugDB?
 }
 
 ///|
 pub fn JITModule::new() -> JITModule {
-  { functions: Map::new(), by_name: Map::new(), context: None, debug_db: None }
+  {
+    functions: Map::new(),
+    by_name: Map::new(),
+    address_ranges: [],
+    context: None,
+    debug_db: None,
+  }
 }
 
 ///|
@@ -165,6 +180,14 @@ pub fn JITModule::load_with_imports(
       // Store context in module
       jit_module.context = Some(ctx)
       jit_module.debug_db = debug_db
+
+      // Build sorted address_ranges for binary search in find_func_by_pc
+      for func_idx, f in jit_module.functions {
+        let start = f.exec_code.ptr()
+        let end_ = start + f.code_size.to_int64()
+        jit_module.address_ranges.push({ start, end: end_, func_idx })
+      }
+      jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
     }
   }
   Some(jit_module)
@@ -222,6 +245,10 @@ pub fn JITModule::from_single_function(
           jit_module.functions.set(0, jit_func)
           jit_module.by_name.set(func_name, 0)
           jit_module.context = Some(ctx)
+          // Build address_ranges for this single function
+          let start = ec.ptr()
+          let end_ = start + code_bytes.length().to_int64()
+          jit_module.address_ranges.push({ start, end: end_, func_idx: 0 })
           Some(jit_module)
         }
       }
@@ -374,22 +401,39 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
 ///|
 /// Find the compiled wasm function that contains `pc` (best-effort), returning:
 /// (func_idx, function, offset_in_function_bytes)
+/// Uses binary search on sorted address_ranges for O(log n) lookup.
 pub fn JITModule::find_func_by_pc(
   self : JITModule,
   pc : Int64,
 ) -> (Int, JITFunction, Int)? {
-  if pc == 0L {
+  if pc == 0L || self.address_ranges.is_empty() {
     return None
   }
-  for func_idx, f in self.functions {
-    let start = f.exec_code.ptr()
-    let end = start + f.code_size.to_int64()
-    if pc >= start && pc < end {
-      let offset = (pc - start).to_int()
-      return Some((func_idx, f, offset))
+  // Binary search: find the last range where start <= pc
+  let mut lo = 0
+  let mut hi = self.address_ranges.length()
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    if self.address_ranges[mid].start <= pc {
+      lo = mid + 1
+    } else {
+      hi = mid
     }
   }
-  None
+  // lo-1 is the last index where start <= pc
+  if lo == 0 {
+    return None
+  }
+  let range = self.address_ranges[lo - 1]
+  if pc < range.end {
+    let offset = (pc - range.start).to_int()
+    match self.functions.get(range.func_idx) {
+      Some(f) => Some((range.func_idx, f, offset))
+      None => None
+    }
+  } else {
+    None // PC is not within any known function range
+  }
 }
 
 ///|
@@ -467,6 +511,12 @@ fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
   if details.pc != 0L {
     fields.push("pc=\{to_hex_u64(details.pc)}")
   }
+  if details.lr != 0L {
+    fields.push("lr=\{to_hex_u64(details.lr)}")
+  }
+  if details.frame_lr != 0L {
+    fields.push("frame_lr=\{to_hex_u64(details.frame_lr)}")
+  }
   if details.fault_addr != 0L {
     fields.push("addr=\{to_hex_u64(details.fault_addr)}")
   }
@@ -498,6 +548,31 @@ fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
     None => ()
   }
 
+  // Best-effort caller mapping via the saved LR in the frame record.
+  let mut caller : (Int, JITFunction, Int, Int64)? = None
+  if details.frame_lr != 0L {
+    match self.find_func_by_pc(details.frame_lr) {
+      Some((func_idx, f, offset)) =>
+        caller = Some((func_idx, f, offset, details.frame_lr))
+      None =>
+        if details.frame_lr >= 4L {
+          let lr_prev = details.frame_lr - 4L
+          match self.find_func_by_pc(lr_prev) {
+            Some((func_idx, f, offset)) =>
+              caller = Some((func_idx, f, offset, lr_prev))
+            None => ()
+          }
+        }
+    }
+  }
+  match caller {
+    Some((func_idx, f, offset, _)) =>
+      fields.push(
+        "caller=\{func_idx} '\{f.name}'+0x\{@types.int_to_hex(offset)}",
+      )
+    None => ()
+  }
+
   // Dump-on-trap (optional): write a single per-trap file for the resolved function.
   match (resolved_func_idx, self.debug_db) {
     (Some(func_idx), Some(db)) =>
@@ -512,6 +587,8 @@ fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
             "name: \{name}\n" +
             "signal: \{details.signal}\n" +
             "pc: \{to_hex_u64(details.pc)}\n" +
+            "lr: \{to_hex_u64(details.lr)}\n" +
+            "frame_lr: \{to_hex_u64(details.frame_lr)}\n" +
             "fault_addr: \{to_hex_u64(details.fault_addr)}\n" +
             "brk_imm: \{details.brk_imm}\n\n" +
             "== IR ==\n" +
@@ -526,6 +603,31 @@ fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
             "== Machine Code ==\n" +
             dbg.machine_code +
             "\n"
+          let content = match caller {
+            Some((caller_idx, caller_func, _caller_off, caller_pc)) =>
+              match db.get(caller_idx) {
+                Some(cdbg) =>
+                  content +
+                  "\n== Caller ==\n" +
+                  "caller_func_idx: \{caller_idx}\n" +
+                  "caller_name: \{caller_func.name}\n" +
+                  "caller_pc: \{to_hex_u64(caller_pc)}\n\n" +
+                  "== Caller IR ==\n" +
+                  cdbg.ir +
+                  "\n\n" +
+                  "== Caller VCode (before regalloc) ==\n" +
+                  cdbg.vcode_before_regalloc +
+                  "\n\n" +
+                  "== Caller VCode (after regalloc) ==\n" +
+                  cdbg.vcode_after_regalloc +
+                  "\n\n" +
+                  "== Caller Machine Code ==\n" +
+                  cdbg.machine_code +
+                  "\n"
+                None => content
+              }
+            None => content
+          }
           @fs.write_string_to_file(path, content) catch {
             _ => ()
           }

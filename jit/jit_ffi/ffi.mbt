@@ -21,6 +21,14 @@ pub extern "c" fn c_jit_get_trap_signal() -> Int = "wasmoon_jit_get_trap_signal"
 pub extern "c" fn c_jit_get_trap_pc() -> Int64 = "wasmoon_jit_get_trap_pc"
 
 ///|
+/// Get last trap LR (return address), or 0 if unavailable
+pub extern "c" fn c_jit_get_trap_lr() -> Int64 = "wasmoon_jit_get_trap_lr"
+
+///|
+/// Get caller return address from the frame record ([fp + 8]), or 0 if unavailable
+pub extern "c" fn c_jit_get_trap_frame_lr() -> Int64 = "wasmoon_jit_get_trap_frame_lr"
+
+///|
 /// Get last trap fault address (SIGSEGV/SIGBUS si_addr), or 0 if N/A
 pub extern "c" fn c_jit_get_trap_fault_addr() -> Int64 = "wasmoon_jit_get_trap_fault_addr"
 

@@ -22,6 +22,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_pc(void) {
     return (int64_t)g_trap_pc;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_lr(void) {
+    return (int64_t)g_trap_lr;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_lr(void) {
+    return (int64_t)g_trap_frame_lr;
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fault_addr(void) {
     return (int64_t)g_trap_fault_addr;
 }
@@ -427,6 +435,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     g_trap_code = 0;
     g_trap_signal = 0;
     g_trap_pc = 0;
+    g_trap_lr = 0;
+    g_trap_frame_lr = 0;
     g_trap_fault_addr = 0;
     g_trap_brk_imm = -1;
     g_trap_func_idx = -1;
@@ -503,6 +513,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
     g_trap_code = 0;
     g_trap_signal = 0;
     g_trap_pc = 0;
+    g_trap_lr = 0;
+    g_trap_frame_lr = 0;
     g_trap_fault_addr = 0;
     g_trap_brk_imm = -1;
     g_trap_func_idx = -1;

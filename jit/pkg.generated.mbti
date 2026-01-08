@@ -210,6 +210,9 @@ pub suberror PolycallError {
 }
 
 // Types and methods
+type AddressRange
+pub impl Show for AddressRange
+
 pub struct CHeap {
   ptr : Int64
 }
@@ -463,6 +466,8 @@ pub fn TieredConfig::eager() -> Self
 pub struct TrapDetails {
   signal : Int
   pc : Int64
+  lr : Int64
+  frame_lr : Int64
   fault_addr : Int64
   brk_imm : Int
   func_idx : Int

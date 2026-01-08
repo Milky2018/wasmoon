@@ -16,6 +16,8 @@ pub suberror JITTrap String derive(Show)
 pub struct TrapDetails {
   signal : Int
   pc : Int64
+  lr : Int64
+  frame_lr : Int64
   fault_addr : Int64
   brk_imm : Int
   func_idx : Int
@@ -28,6 +30,8 @@ pub fn get_last_trap_details() -> TrapDetails {
   {
     signal: @jit_ffi.c_jit_get_trap_signal(),
     pc: @jit_ffi.c_jit_get_trap_pc(),
+    lr: @jit_ffi.c_jit_get_trap_lr(),
+    frame_lr: @jit_ffi.c_jit_get_trap_frame_lr(),
     fault_addr: @jit_ffi.c_jit_get_trap_fault_addr(),
     brk_imm: @jit_ffi.c_jit_get_trap_brk_imm(),
     func_idx: @jit_ffi.c_jit_get_trap_func_idx(),

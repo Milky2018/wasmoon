@@ -20,12 +20,12 @@ Command:
 
 Observed output (abridged):
 - `Assertion failed: (size_t) found_message_len == message_len (…/libsodium/…/aead_aegis128l.c: …)`
-- `Error: JIT Trap: unknown trap`
+- `Error: JIT Trap: unreachable (...)`
 
 Notes:
 - This looks like the module is miscomputing the AEAD test vector, hits a libsodium assert, and then traps.
 - Interpreter mode (`--no-jit`) is extremely slow for this workload and should be avoided for iteration.
-- Reconfirmed on current HEAD: still hits the same libsodium assertion and ends in `JIT Trap: unknown trap`.
+- Reconfirmed on current HEAD: still hits the same libsodium assertion and ends in `JIT Trap: unreachable` (the trap is the assert failure path).
 
 ### Debug run
 
@@ -117,11 +117,8 @@ Progress:
 - Added `testsuite/i32_shifted_pattern_test.mbt` to cover:
   - i32 shift-amount masking with `shift=32` under `add`/`and` (pattern must not use raw `#32`)
   - i32 boolean via `br_if` where upper 32-bit garbage would flip `CBNZ` decisions
-- Current result: `moon test -p testsuite -f i32_shifted_pattern_test.mbt` fails on the `shift=32` cases:
-  - `i32.add(10, (1 << 32))`: JIT returns `I32(10)`, interpreter returns `I32(11)`
-  - `i32.and(255, (1 << 32))`: JIT returns `I32(0)`, interpreter returns `I32(1)`
-  - This strongly suggests the `AddShifted`/`AndShifted` pattern path is using the raw shift immediate (`#32`)
-    instead of applying WebAssembly’s i32 masking semantics (`amount & 31`, so `32 -> 0`).
+- Current result: `moon test -p testsuite -f i32_shifted_pattern_test.mbt` passes.
+- The libsodium `aead_aegis128l.wasm` failure still reproduces, so the root cause is likely elsewhere (or in an uncovered pattern).
 
 ## 5) Next concrete steps (planned)
 
@@ -140,3 +137,130 @@ Goal: make `JIT Trap: unknown trap` actionable by reporting signal/PC/fault addr
 
 Plan doc:
 - `docs/jit-trap-diagnostics-plan.md`
+
+## 7) Trap diagnostics improvements (implemented + findings)
+
+### 7.1 Fixed SIGTRAP BRK decoding
+
+Originally `SIGTRAP` traps were reported as `unknown trap` with a bogus `brk_imm=8` because the signal handler assumed
+`ucontext.pc` points to the instruction *after* `BRK` on AArch64/macOS, and was reading `pc-4`.
+
+After changing the handler to probe both `pc` and `pc-4` and validate the `BRK` encoding before decoding the immediate:
+
+- The libsodium reproducer now reports: `JIT Trap: unreachable (sig=SIGTRAP(5), brk_imm=0, ...)`
+- The reported `pc` now points at the actual `BRK` instruction address, so the `+0x...` offset matches the `trap "unreachable"` site.
+
+### 7.2 What the trap actually is in `aead_aegis128l.wasm`
+
+With `--dump-on-trap`, the trap maps to wasm func 62 (`func_62`) at the function’s `trap "unreachable"` terminator.
+This is the **assert-failure path**, not the underlying miscompile:
+
+- wasm `func 62` is a “report assert + trap” helper:
+  - It is called with `(msg_ptr, line_no)` and ends in `unreachable`.
+  - It hardcodes `tv` and the file path `/Users/j/src/libsodium/test/default/aead_aegis128l.c` from data segment 0.
+- The failing assertion is in `_start` (wasm func 9), which contains multiple `call 62; unreachable` sites.
+  - The specific message pointer for the failing one decodes to:
+    - `"(size_t) found_message_len == message_len"` at address `1048694`
+    - line number `628`
+
+So the remaining task is still: find the JIT miscompile that makes the AEAD test vector mismatch, which then triggers this assert.
+
+Additional oddity observed in the JIT path:
+- The assert output should include the integer line number (`%d`), but the final field prints as raw bytes (`:\\xfe\\xbe`), not digits.
+  - This suggests the printf/formatting path inside the wasm libc is also misbehaving under JIT (e.g. `%d` handling or varargs frame decoding),
+    which may be another symptom of the underlying miscompile.
+
+## 8) Fixed function index mapping bug in trap handler
+
+### Problem
+When trap occurred, `find_func_by_pc` could report wrong function/offset because it iterated `Map[Int, JITFunction]` which has undefined order (by key, not by memory address).
+
+### Fix implemented in `jit/jit_runtime.mbt`
+1. Added `AddressRange` struct to store function address ranges with func_idx
+2. Added `address_ranges: Array[AddressRange]` field to `JITModule`, sorted by start address
+3. Rewrote `find_func_by_pc` to use binary search (O(log n) instead of O(n))
+4. Populated address_ranges in `load_with_imports` and `from_single_function`
+
+### Result
+- Trap messages now correctly identify function and offset
+- Example: `wasm=62 'func_62'+0xd8` now verified correct (offset matches trap instruction position)
+
+## 9) Current investigation status
+
+### Verified working patterns
+- Large i64 constants loading (tested with AEGIS constants)
+- i64.shr_u + i32.wrap_i64 patterns
+- i64 bit set patterns (1 << extend_i32_u(x))
+- i64 comparisons (lt_u, ge_u)
+
+### Still failing
+- `./wasmoon run examples/aead_aegis128l.wasm`
+- Assertion: `(size_t) found_message_len == message_len` at line 628
+- The bug is NOT related to recent changes
+
+### Tested patterns (all pass)
+- i64 arithmetic (mul, div_u)
+- Shifts and rotations (rotl, rotr, shr_u)
+- Memory operations with offsets
+- select instruction
+- Global variables
+- call_indirect
+- Many local variables (25 i32 + 10 i64)
+- Bit set patterns (1 << extend_i32_u(x))
+- i64 comparisons (lt_u, ge_u)
+
+### Module characteristics
+- 63 functions, 8 WASI imports
+- _start (func_9) has 25 i32 + 10 i64 locals
+- Uses i32.rotl (AES S-box implementation)
+- Has deeply nested loops for test vector validation
+- All 62563 WAST spec tests pass
+
+### Next investigation directions
+- Need to find the actual miscomputed value
+- Consider adding tracing/logging to key functions
+- May need to compare JIT vs interpreter output for specific functions
+- The bug is in a pattern not covered by existing WAST tests
+- Possible approach: Extract specific AEGIS functions and test in isolation
+- Consider binary search on test vectors to find minimal failing case
+
+## 10) Previous progress: fixed i32 MSUB/MADD issues (partial improvement)
+
+### 8.1 Root cause: AArch64 `Madd/Msub/Mneg` VCode opcodes are 64-bit only
+
+- Our `Madd/Msub/Mneg` encodings are 64-bit AArch64 instructions (`madd/msub/mneg x…`), and are **not safe for i32 values** unless we can
+  *prove* both operands are correctly zero/sign-extended.
+- These patterns were being used in i32 lowering:
+  - `lower_iadd`: `add(x, mul(y, z)) -> Madd`
+  - `lower_isub`: `sub(x, mul(y, z)) -> Msub`, `sub(0, mul(x, y)) -> Mneg`
+  - `lower_rem` used `Msub` unconditionally for remainder expansion (including `i32.rem_u` in this module).
+
+### 8.2 Fix implemented
+
+Changes:
+- `vcode/lower/lower_numeric.mbt`
+  - Restrict `Madd/Msub/Mneg` patterns to `i64` only.
+  - For `i32` remainder lowering, replace `MSUB` with `Mul(false)` + `Sub(false)` so the computation stays in 32-bit semantics and the result is a clean `W`-write.
+
+### 8.3 Observable effect on the reproducer
+
+Command:
+`./wasmoon run examples/aead_aegis128l.wasm`
+
+Now prints the correct line number in the assertion (no raw bytes):
+- `Assertion failed: (size_t) found_message_len == message_len (... aead_aegis128l.c: tv: 628)`
+
+Status:
+- The module still fails the AEAD test vector and traps on the assert path (`func_62`), so there is still at least one remaining miscompile.
+
+### 8.4 Precompiled `.cwasm` status (still failing, now a hard crash)
+
+Commands:
+- `./wasmoon compile --O 0 --output /tmp/aead0.cwasm examples/aead_aegis128l.wasm`
+- `./wasmoon run /tmp/aead0.cwasm`
+- `./wasmoon compile --O 2 --output /tmp/aead2.cwasm examples/aead_aegis128l.wasm`
+- `./wasmoon run /tmp/aead2.cwasm`
+
+Observed:
+- Both `O0` and `O2` precompiled runs now crash with `SIGSEGV` in `_start` (wasm func 9) at different offsets.
+  - This likely indicates a separate memory safety bug in the JIT/precompiled execution path (distinct from the assert miscompile in the normal JIT run).

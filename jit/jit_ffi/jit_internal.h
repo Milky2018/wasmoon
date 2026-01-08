@@ -47,6 +47,8 @@ extern volatile sig_atomic_t g_trap_code;
 extern volatile sig_atomic_t g_trap_active;
 extern volatile sig_atomic_t g_trap_signal;
 extern volatile uintptr_t g_trap_pc;
+extern volatile uintptr_t g_trap_lr;
+extern volatile uintptr_t g_trap_frame_lr;
 extern volatile uintptr_t g_trap_fault_addr;
 extern volatile sig_atomic_t g_trap_brk_imm;
 extern volatile sig_atomic_t g_trap_func_idx;

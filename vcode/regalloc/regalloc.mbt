@@ -980,7 +980,7 @@ fn allocate_reload_registers(
   let reload_float_regs = [8, 9, 10, 11, 12, 13, 14, 15]
 
   // Per-block allocation to avoid conflicts within a block
-  for block_idx, block in func.blocks {
+  for block_idx, _block in func.blocks {
     // Track which reload registers are in use within this block
     let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
     let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet::new()

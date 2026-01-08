@@ -593,8 +593,9 @@ fn lower_iadd(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
 
-  // Pattern: add(x, mul(y, z)) -> MADD
-  if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+  // Pattern: add(x, mul(y, z)) -> MADD (i64 only; 32-bit would pollute upper bits)
+  if result.ty is @ir.Type::I64 &&
+    match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(lhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
@@ -607,8 +608,9 @@ fn lower_iadd(
     return
   }
 
-  // Pattern: add(mul(x, y), z) -> MADD (commutative)
-  if match_mul_value(ctx, lhs_val) is Some((mul_lhs, mul_rhs)) {
+  // Pattern: add(mul(x, y), z) -> MADD (commutative, i64 only)
+  if result.ty is @ir.Type::I64 &&
+    match_mul_value(ctx, lhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(rhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
@@ -715,8 +717,9 @@ fn lower_isub(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
 
-  // Pattern: sub(0, mul(x, y)) -> MNEG
-  if is_const_zero_value(ctx, lhs_val) &&
+  // Pattern: sub(0, mul(x, y)) -> MNEG (i64 only; 32-bit would pollute upper bits)
+  if result.ty is @ir.Type::I64 &&
+    is_const_zero_value(ctx, lhs_val) &&
     match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
@@ -728,8 +731,9 @@ fn lower_isub(
     return
   }
 
-  // Pattern: sub(x, mul(y, z)) -> MSUB
-  if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+  // Pattern: sub(x, mul(y, z)) -> MSUB (i64 only; 32-bit would pollute upper bits)
+  if result.ty is @ir.Type::I64 &&
+    match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(lhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
@@ -1156,15 +1160,32 @@ fn lower_rem(
     div_inst.add_use(Virtual(rhs))
     block.add_inst(div_inst)
 
-    // Step 2: Compute remainder = a - quotient * b using MSUB
-    // MSUB rd, rn, rm, ra computes: ra - rn * rm
-    // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
-    let msub_inst = @instr.VCodeInst::new(Msub)
-    msub_inst.add_def({ reg: Virtual(dst) })
-    msub_inst.add_use(Virtual(lhs)) // accumulator (a)
-    msub_inst.add_use(Virtual(quotient)) // multiplicand
-    msub_inst.add_use(Virtual(rhs)) // multiplier (b)
-    block.add_inst(msub_inst)
+    // Step 2: Compute remainder = a - quotient * b
+    // - For i64, use MSUB (single instruction): a - quotient*b
+    // - For i32, avoid MSUB because our MSUB opcode is 64-bit (X regs) and
+    //   would mis-handle signed values by zero-extending w-reg results.
+    if is_64 {
+      // MSUB rd, rn, rm, ra computes: ra - rn * rm
+      // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
+      let msub_inst = @instr.VCodeInst::new(Msub)
+      msub_inst.add_def({ reg: Virtual(dst) })
+      msub_inst.add_use(Virtual(lhs)) // accumulator (a)
+      msub_inst.add_use(Virtual(quotient)) // multiplicand
+      msub_inst.add_use(Virtual(rhs)) // multiplier (b)
+      block.add_inst(msub_inst)
+    } else {
+      let product = ctx.vcode_func.new_vreg(Int)
+      let mul_inst = @instr.VCodeInst::new(Mul(false))
+      mul_inst.add_def({ reg: Virtual(product) })
+      mul_inst.add_use(Virtual(quotient))
+      mul_inst.add_use(Virtual(rhs))
+      block.add_inst(mul_inst)
+      let sub_inst = @instr.VCodeInst::new(Sub(false))
+      sub_inst.add_def({ reg: Virtual(dst) })
+      sub_inst.add_use(Virtual(lhs))
+      sub_inst.add_use(Virtual(product))
+      block.add_inst(sub_inst)
+    }
   }
 }
 
