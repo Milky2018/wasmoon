@@ -470,6 +470,9 @@ pub fn emit_function(
       // Peephole: fold u32->u64 zero-extend into following 64-bit add.
       //   extend.u32_64 r = x  ; (mov wR, wX)
       //   add r = add base, r ; => add r, base, wX, uxtw
+      // IMPORTANT: Only apply if the extend result is not used by any other
+      // instruction. Otherwise we'd skip the extend and later uses would
+      // read garbage.
       if inst.opcode is Extend(Unsigned32To64) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
@@ -484,20 +487,40 @@ pub fn emit_function(
           let add_op0 = reg_num(next.uses[0])
           let add_op1 = reg_num(next.uses[1])
           if add_dst == ext_dst {
-            let base = if add_op0 == ext_dst {
-              Some(add_op1)
-            } else if add_op1 == ext_dst {
-              Some(add_op0)
-            } else {
-              None
-            }
-            match base {
-              Some(rn) => {
-                mc.emit_add_uxtw(add_dst, rn, ext_src, 0)
-                inst_idx = inst_idx + 2
-                continue
+            // Check that ext_dst is used exactly once (only in the Add)
+            // If both operands are ext_dst (ext + ext), don't apply peephole
+            let ext_use_count = (if add_op0 == ext_dst { 1 } else { 0 }) +
+              (if add_op1 == ext_dst { 1 } else { 0 })
+            // Also check that ext_dst is not used in remaining instructions
+            let mut has_other_use = ext_use_count != 1
+            if !has_other_use {
+              for j in (inst_idx + 2)..<block.insts.length() {
+                let later_inst = block.insts[j]
+                for use_ in later_inst.uses {
+                  if reg_num(use_) == ext_dst {
+                    has_other_use = true
+                    break
+                  }
+                }
+                if has_other_use {
+                  break
+                }
               }
-              None => ()
+            }
+            if !has_other_use {
+              let base = if add_op0 == ext_dst {
+                Some(add_op1)
+              } else {
+                Some(add_op0)
+              }
+              match base {
+                Some(rn) => {
+                  mc.emit_add_uxtw(add_dst, rn, ext_src, 0)
+                  inst_idx = inst_idx + 2
+                  continue
+                }
+                None => ()
+              }
             }
           }
         }
