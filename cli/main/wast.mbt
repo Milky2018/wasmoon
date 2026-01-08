@@ -93,14 +93,15 @@ fn try_compile_jit(
     None
   }
   // Compile module to JIT
-  let precompiled = compile_module_to_jit(
+  let compiled = compile_module_to_jit(
     mod_,
     false, // debug mode off for wast tests
+    false, // dump-on-trap off for wast tests
     actual_memory_max~,
   )
-  match precompiled {
+  match compiled {
     None => None
-    Some(pc) => {
+    Some((pc, _)) => {
       // Build func_signatures array for JIT module
       let func_signatures = @wast.build_func_signatures(mod_)
       // Load JIT module

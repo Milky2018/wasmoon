@@ -149,7 +149,10 @@ fn run_explore(
     }
 
     // Stage 6: Machine Code
-    let mc = @emit.emit_function(allocated)
+    let mc = @emit.emit_function(
+      allocated,
+      debug_func_idx=Some(actual_func_idx),
+    )
     let mc_text = mc.dump_disasm()
     if !html_output && show_mc {
       println("")

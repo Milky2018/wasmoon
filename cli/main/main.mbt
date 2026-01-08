@@ -38,6 +38,9 @@ fn main {
           help="WASI option (e.g., inherit-env, inherit-stdin)",
         ),
         "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
+        "dump-on-trap": @clap.Arg::flag(
+          help="On JIT trap, dump IR/VCode/MC for the failing function",
+        ),
         "no-jit": @clap.Arg::flag(
           help="Disable JIT compilation (use interpreter)",
         ),
@@ -159,6 +162,7 @@ fn main {
                 }
                 // Get debug flag
                 let debug = sub.flags.get("debug") is Some(true)
+                let dump_on_trap = sub.flags.get("dump-on-trap") is Some(true)
                 // Check if it's a .cwasm file
                 if file_path.has_suffix(".cwasm") {
                   run_cwasm(file_path, invoke_opt, func_args, debug)
@@ -191,7 +195,7 @@ fn main {
                   }
                   run_wasm(
                     file_path, invoke_opt, func_args, preloads, dirs, envs, wasi_options,
-                    debug, use_jit,
+                    debug, dump_on_trap, use_jit,
                   )
                 }
               } else {

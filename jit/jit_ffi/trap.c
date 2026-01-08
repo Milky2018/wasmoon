@@ -9,6 +9,11 @@
 sigjmp_buf g_trap_jmp_buf;
 volatile sig_atomic_t g_trap_code = 0;
 volatile sig_atomic_t g_trap_active = 0;
+volatile sig_atomic_t g_trap_signal = 0;
+volatile uintptr_t g_trap_pc = 0;
+volatile uintptr_t g_trap_fault_addr = 0;
+volatile sig_atomic_t g_trap_brk_imm = -1;
+volatile sig_atomic_t g_trap_func_idx = -1;
 
 // Alternate signal stack for handling stack overflow
 #define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
@@ -96,11 +101,23 @@ static void install_alt_stack(void) {
 // Signal handler for SIGTRAP (triggered by BRK instruction)
 // Uses SA_SIGINFO to get ucontext and extract BRK immediate
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
-    (void)sig;
     (void)info;
 
     if (g_trap_active) {
         int trap_code = 99;  // Default to unknown
+        uintptr_t trap_pc = 0;
+        int brk_imm = -1;
+
+        jit_context_t *ctx = get_current_jit_context();
+
+        g_trap_signal = sig;
+        g_trap_fault_addr = 0;
+        g_trap_pc = 0;
+        g_trap_brk_imm = -1;
+        g_trap_func_idx = -1;
+        if (ctx) {
+            g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
+        }
 
 #if defined(__APPLE__) && defined(__aarch64__)
         // On macOS ARM64, extract PC from ucontext and read BRK immediate
@@ -110,7 +127,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         uint32_t instr = *(uint32_t *)(pc - 4);
         // BRK encoding: 0xD4200000 | (imm16 << 5)
         // Extract imm16: (instr >> 5) & 0xFFFF
-        int brk_imm = (instr >> 5) & 0xFFFF;
+        brk_imm = (instr >> 5) & 0xFFFF;
+        trap_pc = (uintptr_t)(pc - 4);
 
         // Map BRK immediate to trap code
         switch (brk_imm) {
@@ -127,7 +145,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         ucontext_t *uc = (ucontext_t *)ucontext;
         uint64_t pc = uc->uc_mcontext.pc;
         uint32_t instr = *(uint32_t *)(pc - 4);
-        int brk_imm = (instr >> 5) & 0xFFFF;
+        brk_imm = (instr >> 5) & 0xFFFF;
+        trap_pc = (uintptr_t)(pc - 4);
 
         switch (brk_imm) {
             case 0: trap_code = 3; break;   // unreachable
@@ -144,18 +163,39 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 #endif
 
         g_trap_code = trap_code;
+        g_trap_pc = trap_pc;
+        g_trap_brk_imm = brk_imm;
         siglongjmp(g_trap_jmp_buf, 1);
     }
 }
 
 // Signal handler for SIGSEGV (triggered by stack overflow or invalid memory access)
 static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
-    (void)sig;
-    (void)ucontext;
-
     if (g_trap_active) {
         void *fault_addr = info->si_addr;
         jit_context_t *ctx = get_current_jit_context();
+        uintptr_t pc = 0;
+
+        g_trap_signal = sig;
+        g_trap_fault_addr = (uintptr_t)fault_addr;
+        g_trap_brk_imm = -1;
+        g_trap_func_idx = -1;
+        if (ctx) {
+            g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
+        }
+
+#if defined(__APPLE__) && defined(__aarch64__)
+        if (ucontext) {
+            ucontext_t *uc = (ucontext_t *)ucontext;
+            pc = (uintptr_t)uc->uc_mcontext->__ss.__pc;
+        }
+#elif defined(__linux__) && defined(__aarch64__)
+        if (ucontext) {
+            ucontext_t *uc = (ucontext_t *)ucontext;
+            pc = (uintptr_t)uc->uc_mcontext.pc;
+        }
+#endif
+        g_trap_pc = pc;
 
         // Check for memory guard page access (bounds check elimination)
         // This converts out-of-bounds memory access to a proper trap

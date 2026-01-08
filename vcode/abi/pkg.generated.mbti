@@ -34,6 +34,8 @@ pub const SCRATCH_REG_2 : Int = 17
 
 pub const USER_PARAM_BASE_REG : Int = 2
 
+pub const VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET : Int = 108
+
 pub const VMCTX_FUNC_TABLE_OFFSET : Int = 16
 
 pub const VMCTX_GC_HEAP_LIMIT_OFFSET : Int = 120

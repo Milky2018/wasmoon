@@ -12,6 +12,26 @@ pub extern "c" fn c_jit_get_trap_code() -> Int = "wasmoon_jit_get_trap_code"
 /// Clear trap code
 pub extern "c" fn c_jit_clear_trap() -> Unit = "wasmoon_jit_clear_trap"
 
+///|
+/// Get last trap signal number (e.g. SIGSEGV/SIGBUS/SIGTRAP), or 0 if none
+pub extern "c" fn c_jit_get_trap_signal() -> Int = "wasmoon_jit_get_trap_signal"
+
+///|
+/// Get last trap PC (instruction address), or 0 if unavailable
+pub extern "c" fn c_jit_get_trap_pc() -> Int64 = "wasmoon_jit_get_trap_pc"
+
+///|
+/// Get last trap fault address (SIGSEGV/SIGBUS si_addr), or 0 if N/A
+pub extern "c" fn c_jit_get_trap_fault_addr() -> Int64 = "wasmoon_jit_get_trap_fault_addr"
+
+///|
+/// Get BRK immediate decoded for SIGTRAP, or -1 if N/A
+pub extern "c" fn c_jit_get_trap_brk_imm() -> Int = "wasmoon_jit_get_trap_brk_imm"
+
+///|
+/// Get best-effort wasm func_idx at trap time, or -1 if unknown
+pub extern "c" fn c_jit_get_trap_func_idx() -> Int = "wasmoon_jit_get_trap_func_idx"
+
 // ============ GC-managed JITContext ============
 
 ///|

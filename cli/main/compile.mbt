@@ -88,7 +88,7 @@ fn run_compile(
     let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
 
     // Stage 5: Emit machine code
-    let mc = @emit.emit_function(allocated)
+    let mc = @emit.emit_function(allocated, debug_func_idx=Some(func_idx))
 
     // Stage 6: Create compiled function and add to module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)

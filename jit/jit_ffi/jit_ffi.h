@@ -52,6 +52,11 @@ typedef struct {
     size_t *memory_max_sizes; // +96: Array of memory max sizes in pages (-1 = unlimited)
     int memory_count;         // +104: Number of memories
 
+    // Debug: current wasm function index (best-effort)
+    // Placed in the natural 4-byte padding after memory_count to keep all existing
+    // VMContext offsets stable (next pointer field remains 8-byte aligned at +112).
+    int32_t debug_current_func_idx; // +108: Currently executing wasm func_idx (-1 = unknown)
+
     // Memory guard pages (for bounds check elimination)
     // Memory is allocated with mmap, with guard pages after the accessible region
     // Access to guard pages triggers SIGSEGV -> trap

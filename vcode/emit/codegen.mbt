@@ -258,6 +258,7 @@ fn MachineCode::emit_prologue(
   stack_frame : JITStackFrame,
   params : Array[@abi.VReg],
   param_pregs : Array[@abi.PReg?],
+  debug_func_idx : Int?,
 ) -> Unit {
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
@@ -274,6 +275,19 @@ fn MachineCode::emit_prologue(
     self.emit_stp_pre(29, 30, 31, -16)
     // mov x29, sp (set frame pointer)
     self.emit_mov_reg(29, 31)
+  }
+
+  // Best-effort: record current wasm func_idx for trap diagnostics.
+  match debug_func_idx {
+    Some(idx) => {
+      self.emit_load_imm64(16, idx.to_int64())
+      self.emit_str_w_imm(
+        16,
+        @abi.REG_CALLEE_VMCTX,
+        @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+      )
+    }
+    None => ()
   }
 
   // Step 2: Save callee-saved GPRs with pre-indexed pushes (Standard style)
@@ -400,7 +414,10 @@ fn MachineCode::emit_prologue(
 
 ///|
 /// Emit machine code for a VCode function
-pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
+pub fn emit_function(
+  func : @regalloc.VCodeFunction,
+  debug_func_idx? : Int? = None,
+) -> MachineCode {
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
@@ -436,7 +453,12 @@ pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
-  mc.emit_prologue(stack_frame, func.get_params(), func.get_param_pregs())
+  mc.emit_prologue(
+    stack_frame,
+    func.get_params(),
+    func.get_param_pregs(),
+    debug_func_idx,
+  )
 
   // Emit function body (blocks now in optimized order)
   let blocks = func.get_blocks()

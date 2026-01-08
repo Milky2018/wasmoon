@@ -76,6 +76,10 @@ pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
 /// Offset of memory_count in VMContext (multi-memory support)
 pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
 
+///|
+/// Offset of debug_current_func_idx in VMContext (best-effort current wasm func_idx)
+pub const VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET : Int = 108
+
 // GC heap inline allocation offsets
 
 ///|

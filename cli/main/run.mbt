@@ -48,6 +48,7 @@ fn run_wasm(
   envs : Array[String],
   wasi_options : Array[String],
   debug : Bool,
+  dump_on_trap : Bool,
   use_jit : Bool,
 ) -> Unit {
   if debug {
@@ -231,7 +232,8 @@ fn run_wasm(
       // Build WASI args: program name + any remaining args after --
       let jit_args : Array[String] = [wasm_path]
       let jit_results = run_with_jit(
-        mod_, instance, store, func_name, args, debug, jit_args, jit_envs, jit_preopens,
+        mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
+        jit_preopens,
       )
       if jit_results.length() > 0 {
         // Print all results separated by spaces
@@ -637,6 +639,7 @@ fn run_with_jit(
   func_name : String,
   args : Array[@types.Value],
   debug : Bool,
+  dump_on_trap : Bool,
   wasi_args : Array[String],
   wasi_envs : Array[String],
   wasi_preopens : Array[(String, String)],
@@ -655,17 +658,22 @@ fn run_with_jit(
     None
   }
   // Compile module to precompiled format in memory
-  let precompiled = compile_module_to_jit(mod_, debug, actual_memory_max~)
-  match precompiled {
+  let compiled = compile_module_to_jit(
+    mod_,
+    debug,
+    dump_on_trap,
+    actual_memory_max~,
+  )
+  match compiled {
     None => {
       @logger.error("JIT compilation failed")
       return []
     }
-    Some(pc) => {
+    Some((pc, debug_db)) => {
       // Build func_signatures array for JITModule::load
       let func_signatures = build_jit_func_signatures(mod_)
       // Load JIT module
-      let jit_module = @jit.JITModule::load(pc, func_signatures)
+      let jit_module = @jit.JITModule::load(pc, func_signatures, debug_db~)
       match jit_module {
         None => {
           @logger.error("Failed to load JIT module")
@@ -831,9 +839,15 @@ fn run_with_jit(
 fn compile_module_to_jit(
   mod_ : @types.Module,
   _debug : Bool,
+  dump_on_trap : Bool,
   actual_memory_max? : Int? = None,
-) -> @cwasm.PrecompiledModule? {
+) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let debug_db : @jit.JITDebugDB? = if dump_on_trap {
+    Some(@jit.JITDebugDB::new())
+  } else {
+    None
+  }
   let num_imports = count_func_imports(mod_.imports)
   // Record imports in precompiled module
   for imp in mod_.imports {
@@ -862,27 +876,43 @@ fn compile_module_to_jit(
     )
     // Stage 2: Optimize IR (O2 level)
     @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
-    // DEBUG: Print IR
-    if @logger.is_debug_enabled() {
-      @logger.debug("IR for \{func_name}:")
-      @logger.info(ir_func.print())
+    let mut ir_dump : String? = None
+    if @logger.is_debug_enabled() || debug_db is Some(_) {
+      let text = ir_func.print()
+      if @logger.is_debug_enabled() {
+        @logger.debug("IR for \{func_name}:")
+        @logger.info(text)
+      }
+      ir_dump = Some(text)
     }
     // Stage 3: Lower to VCode
     let vcode_func = @lower.lower_function(ir_func)
-    // DEBUG: Print VCode before regalloc
-    if @logger.is_debug_enabled() {
-      @logger.debug("VCode before regalloc for \{func_name}:")
-      @logger.info(vcode_func.print())
+    let mut vcode_before_dump : String? = None
+    if @logger.is_debug_enabled() || debug_db is Some(_) {
+      let text = vcode_func.print()
+      if @logger.is_debug_enabled() {
+        @logger.debug("VCode before regalloc for \{func_name}:")
+        @logger.info(text)
+      }
+      vcode_before_dump = Some(text)
     }
     // Stage 4: Register allocation
     let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
-    // DEBUG: Print VCode after regalloc
-    if @logger.is_debug_enabled() {
-      @logger.debug("VCode after regalloc for \{func_name}:")
-      @logger.info(allocated.print())
+    let mut vcode_after_dump : String? = None
+    if @logger.is_debug_enabled() || debug_db is Some(_) {
+      let text = allocated.print()
+      if @logger.is_debug_enabled() {
+        @logger.debug("VCode after regalloc for \{func_name}:")
+        @logger.info(text)
+      }
+      vcode_after_dump = Some(text)
     }
     // Stage 5: Emit machine code
-    let mc = @emit.emit_function(allocated)
+    let mc = @emit.emit_function(allocated, debug_func_idx=Some(func_idx))
+    let mut mc_dump : String? = None
+    if debug_db is Some(_) {
+      mc_dump = Some(mc.dump_disasm())
+    }
     // Stage 6: Add to precompiled module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
     let num_params = func_type.params.length()
@@ -890,13 +920,27 @@ fn compile_module_to_jit(
     precompiled.add_function(
       func_idx, func_name, compiled, num_params, num_results,
     )
+    match debug_db {
+      Some(db) =>
+        // Store best-effort dumps (empty string if unavailable for a stage).
+        db.set(
+          func_idx,
+          @jit.JITFunctionDebug::new(
+            ir_dump.unwrap_or(""),
+            vcode_before_dump.unwrap_or(""),
+            vcode_after_dump.unwrap_or(""),
+            mc_dump.unwrap_or(""),
+          ),
+        )
+      None => ()
+    }
     if @logger.is_debug_enabled() &&
       mod_.codes.length() > 10 &&
       (i + 1) % 10 == 0 {
       @logger.debug("JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
     }
   }
-  Some(precompiled)
+  Some((precompiled, debug_db))
 }
 
 ///|

@@ -30,6 +30,7 @@ test "run_with_jit: initializes tables for call_indirect" {
     "call",
     [@types.Value::I32(42)],
     false,
+    false,
     ["test.wasm"],
     [],
     [],

@@ -118,6 +118,8 @@ pub fn get_gc_type_check_subtype_ptr() -> Int64
 
 pub fn get_import_trampoline(String, String) -> Int64?
 
+pub fn get_last_trap_details() -> TrapDetails
+
 pub fn get_path_create_directory_ptr() -> Int64
 
 pub fn get_path_filestat_get_ptr() -> Int64
@@ -341,6 +343,13 @@ pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
 pub fn HotThreshold::default() -> Self
 
+pub struct JITDebugDB {
+  entries : Map[Int, JITFunctionDebug]
+}
+pub fn JITDebugDB::get(Self, Int) -> JITFunctionDebug?
+pub fn JITDebugDB::new() -> Self
+pub fn JITDebugDB::set(Self, Int, JITFunctionDebug) -> Unit
+
 pub(all) struct JITEngine {
   strategy : CompilationStrategy
   runtime : @vcode.JITRuntime
@@ -362,11 +371,20 @@ pub fn JITEngine::stats(Self) -> (Int, Int, Int, Int, Int)
 pub impl Show for JITEngine
 
 pub struct JITFunction {
+  func_idx : Int
   name : String
   param_types : Array[@types.ValueType]
   result_types : Array[@types.ValueType]
   // private fields
 }
+
+pub struct JITFunctionDebug {
+  ir : String
+  vcode_before_regalloc : String
+  vcode_after_regalloc : String
+  machine_code : String
+}
+pub fn JITFunctionDebug::new(String, String, String, String) -> Self
 
 type JITModule
 pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
@@ -374,6 +392,7 @@ pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
+pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
@@ -386,8 +405,8 @@ pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int, Int)]) -> Unit
 pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
-pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])]) -> Self?
-pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]]) -> Self?
+pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self?
+pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : JITDebugDB?) -> Self?
 pub fn JITModule::new() -> Self
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
@@ -440,6 +459,14 @@ pub(all) struct TieredConfig {
 pub fn TieredConfig::default() -> Self
 pub fn TieredConfig::deferred() -> Self
 pub fn TieredConfig::eager() -> Self
+
+pub struct TrapDetails {
+  signal : Int
+  pc : Int64
+  fault_addr : Int64
+  brk_imm : Int
+  func_idx : Int
+}
 
 // Type aliases
 

@@ -5,20 +5,68 @@
 ///|
 /// JIT-compiled function ready for execution
 pub struct JITFunction {
+  func_idx : Int
   name : String
   priv exec_code : ExecCode
+  priv code_size : Int
   param_types : Array[@types.ValueType] // Parameter types for proper register allocation
   result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
 }
 
 ///|
+/// Per-function compilation dumps captured for dump-on-trap.
+pub struct JITFunctionDebug {
+  ir : String
+  vcode_before_regalloc : String
+  vcode_after_regalloc : String
+  machine_code : String
+}
+
+///|
+pub fn JITFunctionDebug::new(
+  ir : String,
+  vcode_before_regalloc : String,
+  vcode_after_regalloc : String,
+  machine_code : String,
+) -> JITFunctionDebug {
+  { ir, vcode_before_regalloc, vcode_after_regalloc, machine_code }
+}
+
+///|
+/// Optional in-memory database of per-function debug dumps.
+pub struct JITDebugDB {
+  entries : Map[Int, JITFunctionDebug]
+}
+
+///|
+pub fn JITDebugDB::new() -> JITDebugDB {
+  { entries: Map::new() }
+}
+
+///|
+pub fn JITDebugDB::set(
+  self : JITDebugDB,
+  func_idx : Int,
+  debug : JITFunctionDebug,
+) -> Unit {
+  self.entries.set(func_idx, debug)
+}
+
+///|
+pub fn JITDebugDB::get(self : JITDebugDB, func_idx : Int) -> JITFunctionDebug? {
+  self.entries.get(func_idx)
+}
+
+///|
 fn JITFunction::new(
+  func_idx : Int,
   name : String,
   exec_code : ExecCode,
+  code_size : Int,
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> JITFunction {
-  { name, exec_code, param_types, result_types }
+  { func_idx, name, exec_code, code_size, param_types, result_types }
 }
 
 ///|
@@ -27,11 +75,12 @@ struct JITModule {
   functions : Map[Int, JITFunction]
   by_name : Map[String, Int]
   mut context : JITContext?
+  mut debug_db : JITDebugDB?
 }
 
 ///|
 pub fn JITModule::new() -> JITModule {
-  { functions: Map::new(), by_name: Map::new(), context: None }
+  { functions: Map::new(), by_name: Map::new(), context: None, debug_db: None }
 }
 
 ///|
@@ -40,8 +89,9 @@ pub fn JITModule::new() -> JITModule {
 pub fn JITModule::load(
   precompiled : @cwasm.PrecompiledModule,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
+  debug_db? : JITDebugDB? = None,
 ) -> JITModule? {
-  JITModule::load_with_imports(precompiled, func_signatures, {})
+  JITModule::load_with_imports(precompiled, func_signatures, {}, debug_db~)
 }
 
 ///|
@@ -52,6 +102,7 @@ pub fn JITModule::load_with_imports(
   precompiled : @cwasm.PrecompiledModule,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   external_imports : Map[String, Map[String, Int64]],
+  debug_db? : JITDebugDB? = None,
 ) -> JITModule? {
   let jit_module = JITModule::new()
   let num_imports = precompiled.imports.length()
@@ -95,8 +146,10 @@ pub fn JITModule::load_with_imports(
               ([], [])
             }
             let jit_func = JITFunction::new(
+              entry.func_idx,
               entry.name,
               ec,
+              entry.code.length(),
               param_types,
               result_types,
             )
@@ -111,6 +164,7 @@ pub fn JITModule::load_with_imports(
 
       // Store context in module
       jit_module.context = Some(ctx)
+      jit_module.debug_db = debug_db
     }
   }
   Some(jit_module)
@@ -156,7 +210,12 @@ pub fn JITModule::from_single_function(
           ctx.set_func(0, ec.ptr())
           // Create JIT function
           let jit_func = JITFunction::new(
-            func_name, ec, param_types, result_types,
+            0,
+            func_name,
+            ec,
+            code_bytes.length(),
+            param_types,
+            result_types,
           )
           // Create module
           let jit_module = JITModule::new()
@@ -313,6 +372,27 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
 }
 
 ///|
+/// Find the compiled wasm function that contains `pc` (best-effort), returning:
+/// (func_idx, function, offset_in_function_bytes)
+pub fn JITModule::find_func_by_pc(
+  self : JITModule,
+  pc : Int64,
+) -> (Int, JITFunction, Int)? {
+  if pc == 0L {
+    return None
+  }
+  for func_idx, f in self.functions {
+    let start = f.exec_code.ptr()
+    let end = start + f.code_size.to_int64()
+    if pc >= start && pc < end {
+      let offset = (pc - start).to_int()
+      return Some((func_idx, f, offset))
+    }
+  }
+  None
+}
+
+///|
 /// Get function pointer by name
 /// Returns the executable code pointer for the function, or 0 if not found
 pub fn JITModule::get_func_ptr_by_name(
@@ -368,10 +448,149 @@ pub fn JITModule::call_with_context(
         func.param_types,
         results,
         func.result_types,
-      )
+      ) catch {
+        JITTrap(msg) => raise JITTrap(self.enrich_trap_message(msg))
+      }
       results
     }
     None => [] // No context, cannot call
+  }
+}
+
+///|
+fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
+  let details = get_last_trap_details()
+  let fields : Array[String] = []
+  if details.signal != 0 {
+    fields.push("sig=\{format_signal(details.signal)}")
+  }
+  if details.pc != 0L {
+    fields.push("pc=\{to_hex_u64(details.pc)}")
+  }
+  if details.fault_addr != 0L {
+    fields.push("addr=\{to_hex_u64(details.fault_addr)}")
+  }
+  if details.brk_imm >= 0 {
+    fields.push("brk_imm=\{details.brk_imm}")
+  }
+
+  // Prefer PC-range mapping; fall back to current-func tracking.
+  let mut resolved_func_idx : Int? = None
+  let mut func_desc : String? = None
+  match self.find_func_by_pc(details.pc) {
+    Some((func_idx, f, offset)) => {
+      resolved_func_idx = Some(func_idx)
+      func_desc = Some(
+        "wasm=\{func_idx} '\{f.name}'+0x\{@types.int_to_hex(offset)}",
+      )
+    }
+    None =>
+      if details.func_idx >= 0 {
+        resolved_func_idx = Some(details.func_idx)
+        match self.functions.get(details.func_idx) {
+          Some(f) => func_desc = Some("wasm=\{details.func_idx} '\{f.name}'")
+          None => func_desc = Some("wasm=\{details.func_idx}")
+        }
+      }
+  }
+  match func_desc {
+    Some(s) => fields.push(s)
+    None => ()
+  }
+
+  // Dump-on-trap (optional): write a single per-trap file for the resolved function.
+  match (resolved_func_idx, self.debug_db) {
+    (Some(func_idx), Some(db)) =>
+      match db.get(func_idx) {
+        Some(dbg) => {
+          let name = match self.functions.get(func_idx) {
+            Some(f) => f.name
+            None => "func\{func_idx}"
+          }
+          let path = "target/jit-trap-\{func_idx}-\{sanitize_filename(name)}.log"
+          let content = "func_idx: \{func_idx}\n" +
+            "name: \{name}\n" +
+            "signal: \{details.signal}\n" +
+            "pc: \{to_hex_u64(details.pc)}\n" +
+            "fault_addr: \{to_hex_u64(details.fault_addr)}\n" +
+            "brk_imm: \{details.brk_imm}\n\n" +
+            "== IR ==\n" +
+            dbg.ir +
+            "\n\n" +
+            "== VCode (before regalloc) ==\n" +
+            dbg.vcode_before_regalloc +
+            "\n\n" +
+            "== VCode (after regalloc) ==\n" +
+            dbg.vcode_after_regalloc +
+            "\n\n" +
+            "== Machine Code ==\n" +
+            dbg.machine_code +
+            "\n"
+          @fs.write_string_to_file(path, content) catch {
+            _ => ()
+          }
+          fields.push("dump=\{path}")
+        }
+        None => ()
+      }
+    _ => ()
+  }
+  if fields.is_empty() {
+    msg
+  } else {
+    msg + " (" + fields.join(", ") + ")"
+  }
+}
+
+///|
+fn format_signal(sig : Int) -> String {
+  match sig {
+    5 => "SIGTRAP(5)"
+    10 => "SIGBUS(10)"
+    11 => "SIGSEGV(11)"
+    7 => "SIGBUS(7)"
+    _ => "SIG(\{sig})"
+  }
+}
+
+///|
+fn to_hex_u64(v : Int64) -> String {
+  let u = v.reinterpret_as_uint64()
+  let b7 = (u >> 56).reinterpret_as_int64().to_int() & 0xFF
+  let b6 = (u >> 48).reinterpret_as_int64().to_int() & 0xFF
+  let b5 = (u >> 40).reinterpret_as_int64().to_int() & 0xFF
+  let b4 = (u >> 32).reinterpret_as_int64().to_int() & 0xFF
+  let b3 = (u >> 24).reinterpret_as_int64().to_int() & 0xFF
+  let b2 = (u >> 16).reinterpret_as_int64().to_int() & 0xFF
+  let b1 = (u >> 8).reinterpret_as_int64().to_int() & 0xFF
+  let b0 = u.reinterpret_as_int64().to_int() & 0xFF
+  "0x" +
+  @types.to_hex_byte(b7) +
+  @types.to_hex_byte(b6) +
+  @types.to_hex_byte(b5) +
+  @types.to_hex_byte(b4) +
+  @types.to_hex_byte(b3) +
+  @types.to_hex_byte(b2) +
+  @types.to_hex_byte(b1) +
+  @types.to_hex_byte(b0)
+}
+
+///|
+fn sanitize_filename(s : String) -> String {
+  let mut out = ""
+  for c in s {
+    let ok = (c >= 'a' && c <= 'z') ||
+      (c >= 'A' && c <= 'Z') ||
+      (c >= '0' && c <= '9') ||
+      c == '_' ||
+      c == '-' ||
+      c == '.'
+    out = out + (if ok { c.to_string() } else { "_" })
+  }
+  if out.is_empty() {
+    "unknown"
+  } else {
+    out
   }
 }
 
