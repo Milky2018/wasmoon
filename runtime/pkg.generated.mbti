@@ -284,6 +284,7 @@ pub struct Store {
   instances : Array[ModuleInstance]
   jit_tables : Array[@jit.JITTable?]
   mut wasi_mem_addr : Int?
+  mut wasi_ctx_handle : Int
 }
 pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int
@@ -321,6 +322,7 @@ pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
 pub fn Store::get_tag_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_tag_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_tag_type_idx(Self, Int) -> Int
+pub fn Store::get_wasi_ctx_handle(Self) -> Int
 pub fn Store::get_wasi_memory(Self) -> Memory
 pub fn Store::has_c_heap(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
@@ -328,6 +330,7 @@ pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], thres
 pub fn Store::new() -> Self
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit
+pub fn Store::set_wasi_ctx_handle(Self, Int) -> Unit
 pub fn Store::set_wasi_mem_addr(Self, Int) -> Unit
 pub fn Store::should_collect(Self, threshold? : Double) -> Bool
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError

@@ -111,6 +111,8 @@ pub struct WastContext {
   use_jit : Bool
   // JIT compiler callback (provided by main package)
   jit_compiler : JITCompiler?
+  // WASI context (for WASI function support in tests)
+  wasi_ctx : @wasi.WasiContext
 }
 
 ///|
@@ -124,10 +126,31 @@ pub fn WastContext::new(
   } else {
     @runtime.Store::new()
   }
+
+  // Create WASI context with default configuration for tests
+  let wasi_builder = @wasi.WasiContextBuilder::new()
+  wasi_builder.inherit_stdin() |> ignore
+  wasi_builder.inherit_stdout() |> ignore
+  wasi_builder.inherit_stderr() |> ignore
+  let wasi_ctx = wasi_builder.build()
+
   // Create spectest module with standard test functions/values
   let spectest_instance = create_spectest_module(store)
+
+  // Create WASI module using Linker (to reuse wasi::register_wasi)
+  let linker = @runtime.Linker::with_store(store)
+  // Register spectest with linker so WASI functions can use it if needed
+  linker.register("spectest", spectest_instance)
+  // Register all WASI functions - this creates the wasi_snapshot_preview1 module
+  @wasi.register_wasi(linker, wasi_ctx)
+  // Get the WASI module instance that was created by register_wasi
+  let wasi_instance = match linker.get_module("wasi_snapshot_preview1") {
+    Some(instance) => instance
+    None => @runtime.ModuleInstance::new() // Fallback: shouldn't happen
+  }
   let registered_modules : Map[String, @runtime.ModuleInstance] = Map::new()
   registered_modules.set("spectest", spectest_instance)
+  registered_modules.set("wasi_snapshot_preview1", wasi_instance)
   WastContext::{
     store,
     current_module: None,
@@ -138,6 +161,7 @@ pub fn WastContext::new(
     current_jit: None,
     use_jit,
     jit_compiler,
+    wasi_ctx,
   }
 }
 

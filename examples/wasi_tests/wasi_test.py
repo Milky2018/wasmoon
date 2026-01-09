@@ -9,12 +9,13 @@ Runs a curated set of WAT modules under both JIT and interpreter modes via
 import os
 import subprocess
 import sys
+import tempfile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 WAT_DIR = SCRIPT_DIR
 
 
-def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None):
+def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None, tmpdir=None):
     """Run a WAT file and check results."""
     wat_path = os.path.join(WAT_DIR, wat_file)
 
@@ -24,7 +25,13 @@ def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None):
         if not use_jit:
             cmd.append("--no-jit")
         if extra_run_args:
-            cmd.extend(extra_run_args)
+            expanded = []
+            for arg in extra_run_args:
+                if tmpdir is not None:
+                    expanded.append(arg.replace("{tmpdir}", tmpdir))
+                else:
+                    expanded.append(arg)
+            cmd.extend(expanded)
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
@@ -107,6 +114,19 @@ TESTS = [
     # Poll
     ("poll_oneoff (clock)", "poll_oneoff_clock.wat", "poll_oneoff: OK", None),
     ("poll_oneoff (zero)", "poll_oneoff_zero.wat", "poll_oneoff zero: OK", None),
+    # Real filesystem I/O (requires --dir)
+    (
+        "path_open + fd_write/fd_read",
+        "path_open_create_write_read.wat",
+        "path_open create/read: OK",
+        ["--dir", "{tmpdir}::/sandbox"],
+    ),
+    (
+        "fd_pwrite/fd_pread on file",
+        "fd_pwrite_pread_file.wat",
+        "fd_pwrite/pread: OK",
+        ["--dir", "{tmpdir}::/sandbox"],
+    ),
     # Directory
     ("fd_readdir (invalid)", "fd_readdir_invalid.wat", "fd_readdir invalid: OK", None),
     ("path_open (invalid)", "path_open_invalid.wat", "path_open invalid: OK", None),
@@ -152,21 +172,22 @@ def run_all_tests():
 
         mode_passed = 0
         mode_failed = 0
+        with tempfile.TemporaryDirectory(prefix="wasmoon_wasip1_") as tmpdir:
+            for name, wat_file, expected, extra_run_args in TESTS:
+                success, msg = run_wat_file(
+                    wat_file,
+                    use_jit=use_jit,
+                    expected=expected,
+                    extra_run_args=extra_run_args,
+                    tmpdir=tmpdir,
+                )
 
-        for name, wat_file, expected, extra_run_args in TESTS:
-            success, msg = run_wat_file(
-                wat_file,
-                use_jit=use_jit,
-                expected=expected,
-                extra_run_args=extra_run_args,
-            )
-
-            if success:
-                print(f"  [PASS] {name}")
-                mode_passed += 1
-            else:
-                print(f"  [FAIL] {name}: {msg}")
-                mode_failed += 1
+                if success:
+                    print(f"  [PASS] {name}")
+                    mode_passed += 1
+                else:
+                    print(f"  [FAIL] {name}: {msg}")
+                    mode_failed += 1
 
         print(f"\n  {mode} Results: {mode_passed} passed, {mode_failed} failed")
         passed += mode_passed
@@ -186,4 +207,3 @@ if __name__ == "__main__":
 
     success = run_all_tests()
     sys.exit(0 if success else 1)
-

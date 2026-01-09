@@ -5,6 +5,7 @@ import(
   "Milky2018/wasmoon/jit"
   "Milky2018/wasmoon/runtime"
   "Milky2018/wasmoon/types"
+  "Milky2018/wasmoon/wasi"
   "Milky2018/wasmoon/wat"
 )
 
@@ -83,6 +84,7 @@ pub struct WastContext {
   mut current_jit : JITModuleContext?
   use_jit : Bool
   jit_compiler : JITCompiler?
+  wasi_ctx : @wasi.WasiContext
 }
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
 pub fn WastContext::get_store(Self) -> @runtime.Store

@@ -47,6 +47,9 @@ pub struct Store {
   // Current WASI module's memory address (for interpreter mode WASI callbacks)
   // WASI callbacks use this to access the correct memory instead of hardcoded index 0
   mut wasi_mem_addr : Int?
+  // Opaque WASI context handle (for WAST runner to store WASI context)
+  // This avoids circular dependency between runtime and wasi packages
+  mut wasi_ctx_handle : Int
 } derive(Show)
 
 ///|
@@ -71,6 +74,7 @@ pub fn Store::new() -> Store {
     instances: [],
     jit_tables: [],
     wasi_mem_addr: None,
+    wasi_ctx_handle: 0,
   }
 }
 
@@ -97,6 +101,7 @@ pub fn Store::with_c_heap() -> Store {
     instances: [],
     jit_tables: [],
     wasi_mem_addr: None,
+    wasi_ctx_handle: 0,
   }
 }
 
@@ -643,6 +648,18 @@ pub fn Store::get_wasi_memory(self : Store) -> Memory {
 /// Should be called after instantiating a module that uses WASI
 pub fn Store::set_wasi_mem_addr(self : Store, addr : Int) -> Unit {
   self.wasi_mem_addr = Some(addr)
+}
+
+///|
+/// Get the WASI context handle (for WAST runner to retrieve WASI context)
+pub fn Store::get_wasi_ctx_handle(self : Store) -> Int {
+  self.wasi_ctx_handle
+}
+
+///|
+/// Set the WASI context handle (for WAST runner to store WASI context)
+pub fn Store::set_wasi_ctx_handle(self : Store, handle : Int) -> Unit {
+  self.wasi_ctx_handle = handle
 }
 
 ///|
