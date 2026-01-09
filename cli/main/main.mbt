@@ -173,22 +173,24 @@ fn main {
                 // Get debug flag
                 let debug = sub.flags.get("debug") is Some(true)
                 let dump_on_trap = sub.flags.get("dump-on-trap") is Some(true)
+                // Get directory mappings from --dir option
+                let dirs : Array[String] = match sub.args.get("dir") {
+                  Some(arr) => arr
+                  None => []
+                }
+                // Get environment variables from --env option
+                let envs : Array[String] = match sub.args.get("env") {
+                  Some(arr) => arr
+                  None => []
+                }
                 // Check if it's a .cwasm file
                 if file_path.has_suffix(".cwasm") {
-                  run_cwasm(file_path, invoke_opt, func_args, wasm_args, debug)
+                  run_cwasm(
+                    file_path, invoke_opt, func_args, wasm_args, dirs, envs, debug,
+                  )
                 } else {
                   // Get preload modules from --preload option
                   let preloads : Array[String] = match sub.args.get("preload") {
-                    Some(arr) => arr
-                    None => []
-                  }
-                  // Get directory mappings from --dir option
-                  let dirs : Array[String] = match sub.args.get("dir") {
-                    Some(arr) => arr
-                    None => []
-                  }
-                  // Get environment variables from --env option
-                  let envs : Array[String] = match sub.args.get("env") {
                     Some(arr) => arr
                     None => []
                   }

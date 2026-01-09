@@ -4,7 +4,9 @@ fn run_cwasm(
   cwasm_path : String,
   invoke : String?,
   func_args : Array[String],
-  _wasm_args : Array[String],
+  wasm_args : Array[String],
+  dirs : Array[String],
+  envs : Array[String],
   _debug : Bool,
 ) -> Unit {
   // Read the .cwasm file
@@ -27,97 +29,107 @@ fn run_cwasm(
     }
   }
   // Build func_signatures array from the precompiled module
-  // For .cwasm files, we don't have full type info, so use default types
-  let func_signatures : Array[
-    (Array[@types.ValueType], Array[@types.ValueType]),
-  ] = []
+  let func_signatures = build_cwasm_signatures(precompiled)
+  // Parse WASI configuration
+  let program_name = get_basename(cwasm_path)
+  let wasi_args = [program_name] + wasm_args
+  let wasi_preopens : Array[(String, String)] = []
+  for dir in dirs {
+    let mapping = parse_dir_mapping(dir)
+    match mapping {
+      Some((host_path, guest_path)) =>
+        wasi_preopens.push((host_path, guest_path))
+      None => {
+        @logger.error(
+          "invalid --dir format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
+        )
+        return
+      }
+    }
+  }
+  let wasi_envs : Array[String] = []
+  for env_var in envs {
+    let parsed = parse_env_var(env_var)
+    match parsed {
+      Some((key, value)) => wasi_envs.push("\{key}=\{value}")
+      None => {
+        @logger.error("invalid --env format '\{env_var}', expected NAME=VALUE")
+        return
+      }
+    }
+  }
+  // Build JITConfig
+  let config = JITConfig::new()
+    .with_wasi(wasi_args, wasi_envs, wasi_preopens)
+    .with_memories(precompiled.memories, precompiled.data_segments)
+    .with_signatures(func_signatures)
+  // Create JITRunner from precompiled module
+  let runner = match JITRunner::from_precompiled(precompiled, config) {
+    Some(r) => r
+    None => {
+      @logger.error("failed to load JIT module")
+      return
+    }
+  }
+  // Initialize JIT runtime
+  if not(runner.alloc_wasm_stack()) {
+    @logger.warn("failed to allocate WASM stack; falling back to host stack")
+  }
+  runner.init_wasi(config.wasi_args, config.wasi_envs, config.wasi_preopens)
+  if not(runner.init_memories_from_config()) {
+    @logger.error("failed to initialize linear memory")
+    return
+  }
+  // Determine which function to call
+  let func_name = match invoke {
+    Some(name) => name
+    None => "_start"
+  }
+  // Parse arguments (currently only support i64)
+  let args : Array[@types.Value] = []
+  for arg in func_args {
+    let n = @strconv.parse_int64(arg) catch {
+      _ => {
+        @logger.error("invalid argument '\{arg}'")
+        return
+      }
+    }
+    args.push(@types.Value::I64(n))
+  }
+  // Call the function using JITRunner
+  let results = runner.call(func_name, args) catch {
+    @jit.JITTrap(msg) => {
+      @logger.error("JIT Trap: \{msg}")
+      return
+    }
+  }
+  if results is Some(values) {
+    if values.length() > 0 {
+      let strs = values.map(format_value)
+      println(strs.join(" "))
+    }
+  } else {
+    @logger.error("function '\{func_name}' not found")
+  }
+}
+
+///|
+/// Build function signatures from precompiled module
+/// For .cwasm files, we default all types to I64 since full type info is not available
+fn build_cwasm_signatures(
+  precompiled : @cwasm.PrecompiledModule,
+) -> Array[(Array[@types.ValueType], Array[@types.ValueType])] {
+  let signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])] = []
   for entry in precompiled.functions {
-    // Create param_types array - default to I64 for all params
     let param_types : Array[@types.ValueType] = []
     for _ in 0..<entry.num_params {
       param_types.push(@types.ValueType::I64)
     }
-    // Create result_types array - default to I64 for all results
     let result_types : Array[@types.ValueType] = []
     for _ in 0..<entry.num_results {
       result_types.push(@types.ValueType::I64)
     }
-    func_signatures.push((param_types, result_types))
+    signatures.push((param_types, result_types))
   }
-  // Load the JIT module
-  let jit_module = @jit.JITModule::load(precompiled, func_signatures)
-  match jit_module {
-    Some(jm) => {
-      // Determine memory size from module definition or use default
-      let mem_pages = if precompiled.memories.length() > 0 {
-        precompiled.memories[0].min_pages
-      } else {
-        1 // Default to 1 page if no memory defined
-      }
-      let max_pages = if precompiled.memories.length() > 0 {
-        precompiled.memories[0].max_pages
-      } else {
-        None
-      }
-      let mem_size = mem_pages.to_int64() * 65536L // 64KB per page
-      // Use guarded allocation to support bounds-check elimination in JIT code.
-      let mem_ptr = jm.alloc_guarded_memory(mem_pages, max_pages)
-      if mem_ptr == 0L && mem_size > 0L {
-        @logger.error("failed to allocate linear memory")
-        return
-      }
-      // Set memory in JIT context
-      jm.set_memory(mem_ptr, mem_size)
-
-      // Initialize data segments
-      for data in precompiled.data_segments {
-        // Convert Array[Int] to Bytes
-        let data_bytes = Bytes::from_iter(
-          data.data.iter().map(fn(b) { b.to_byte() }),
-        )
-        if not(@jit.memory_init(mem_ptr, data.offset.to_int64(), data_bytes)) {
-          @logger.error(
-            "failed to initialize data segment at offset \{data.offset}",
-          )
-          return
-        }
-      }
-
-      // Determine which function to call
-      let func_name = match invoke {
-        Some(name) => name
-        None => "_start"
-      }
-      // Find and call the function
-      let jit_func = jm.get_func_by_name(func_name)
-      match jit_func {
-        Some(f) => {
-          // Parse arguments (currently only support i64)
-          let args : Array[Int64] = []
-          for arg in func_args {
-            let n = @strconv.parse_int64(arg) catch {
-              _ => {
-                @logger.error("invalid argument '\{arg}'")
-                return
-              }
-            }
-            args.push(n)
-          }
-          // Call the function using context (for proper inter-function calls)
-          let results = jm.call_with_context(f, args) catch {
-            @jit.JITTrap(msg) => {
-              @logger.error("JIT Trap: \{msg}")
-              return
-            }
-          }
-          if results.length() > 0 {
-            let strs = results.map(fn(r) { r.to_string() })
-            println(strs.join(" "))
-          }
-        }
-        None => @logger.error("function '\{func_name}' not found")
-      }
-    }
-    None => @logger.error("failed to load JIT module")
-  }
+  signatures
 }

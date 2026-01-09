@@ -13,6 +13,10 @@ pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@type
 // Types and methods
 type CompiledFunc
 
+type JITConfig
+
+type JITRunner
+
 // Type aliases
 
 // Traits

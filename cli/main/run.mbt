@@ -20,22 +20,6 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 }
 
 ///|
-/// Decode JIT GC reference value to @types.Value
-/// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
-fn decode_gc_value(raw : Int64) -> @types.Value {
-  if raw == 0L {
-    @types.Value::Null
-  } else if (raw & 1L) == 1L {
-    // i31: (value << 1) | 1, decode by shifting right
-    @types.Value::I31((raw >> 1).to_int())
-  } else {
-    // Heap reference: gc_ref << 1, decode by shifting right
-    // Note: Could be struct or array, we use StructRef as default
-    @types.Value::StructRef((raw >> 1).to_int())
-  }
-}
-
-///|
 /// Run a WASM module
 /// If invoke is specified, call that function with args
 /// Otherwise, run the start function or _start export
@@ -89,25 +73,7 @@ fn run_wasm(
   // Also collect preopens and env for JIT mode
   let wasi_builder = @wasi.WasiContextBuilder::new()
   // argv[0] is the basename of the wasm file (like wasmtime), followed by wasm_args
-  let program_name : String = {
-    let mut last_slash = -1
-    for i in 0..<wasm_path.length() {
-      if wasm_path.code_unit_at(i) == '/' {
-        last_slash = i
-      }
-    }
-    if last_slash >= 0 {
-      // Build the basename string using StringBuilder
-      let builder = StringBuilder::new()
-      for i in (last_slash + 1)..<wasm_path.length() {
-        builder.write_char(wasm_path.code_unit_at(i).unsafe_to_char())
-      }
-      builder.to_string()
-    } else {
-      wasm_path
-    }
-  }
-  // Convert StringView array to String array for wasi_args
+  let program_name = get_basename(wasm_path)
   let wasi_args = [program_name] + wasm_args
   wasi_builder.args(wasi_args) |> ignore
   let jit_preopens : Array[(String, String)] = []
@@ -335,37 +301,6 @@ fn parse_env_var(s : String) -> (String, String)? {
     value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   Some((name_builder.to_string(), value_builder.to_string()))
-}
-
-///|
-/// Format a WASM value for display
-fn format_value(v : @types.Value) -> String {
-  match v {
-    I32(n) => n.to_string()
-    I64(n) => n.to_string()
-    F32(n) => n.to_string()
-    F64(n) => n.to_string()
-    Null => "null"
-    FuncRef(idx) => "funcref(\{idx})"
-    ExternRef(idx) => "externref(\{idx})"
-    ExnRef(idx) => "exnref(\{idx})"
-    ArrayRef(idx) => "arrayref(\{idx})"
-    StructRef(idx) => "structref(\{idx})"
-    I31(n) => "i31(\{n})"
-    V128(bytes) => {
-      let hex_chars = "0123456789abcdef"
-      let hex = StringBuilder::new()
-      for i in 0..<bytes.length() {
-        if i > 0 {
-          hex.write_string(" ")
-        }
-        let b = bytes[i].to_int()
-        hex.write_char(hex_chars.code_unit_at(b / 16).unsafe_to_char())
-        hex.write_char(hex_chars.code_unit_at(b % 16).unsafe_to_char())
-      }
-      "v128(\{hex.to_string()})"
-    }
-  }
 }
 
 ///|
@@ -730,25 +665,8 @@ fn run_with_jit(
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {
             Some(f) => {
-              // Convert args to Int64
-              let i64_args : Array[Int64] = []
-              for arg in args {
-                let v = match arg {
-                  I32(n) => @types.ToInt64::to_int64_bits(n)
-                  I64(n) => @types.ToInt64::to_int64_bits(n)
-                  F32(n) => @types.ToInt64::to_int64_bits(n)
-                  F64(n) => @types.ToInt64::to_int64_bits(n)
-                  FuncRef(idx) => idx.to_int64()
-                  ExternRef(idx) => idx.to_int64()
-                  ExnRef(idx) => idx.to_int64()
-                  ArrayRef(idx) => idx.to_int64()
-                  StructRef(idx) => idx.to_int64()
-                  I31(n) => n.to_int64()
-                  Null => @types.FUNCREF_NULL_SENTINEL // Sentinel value for null reference
-                  V128(_) => abort("V128 args not yet supported in JIT")
-                }
-                i64_args.push(v)
-              }
+              // Convert args to Int64 using shared helper
+              let i64_args = convert_args_to_jit(args)
               @logger.debug("JIT: Calling function '\{func_name}'")
               // Set up GC heap for JIT execution if c_heap is available
               match store.c_heap {
@@ -773,75 +691,8 @@ fn run_with_jit(
               }
               // Tear down GC context after JIT call
               @jit.gc_teardown()
-              // Convert Int64 results to Value based on result types
-              let values : Array[@types.Value] = []
-              for i, r in results {
-                if i < f.result_types.length() {
-                  @logger.debug(
-                    "result[\{i}] type: \{f.result_types[i]}, raw value: \{r}",
-                  )
-                  let v = match f.result_types[i] {
-                    I32 =>
-                      @types.Value::I32(@types.FromInt64::from_int64_bits(r))
-                    I64 =>
-                      @types.Value::I64(@types.FromInt64::from_int64_bits(r))
-                    F32 =>
-                      @types.Value::F32(@types.FromInt64::from_int64_bits(r))
-                    F64 =>
-                      @types.Value::F64(@types.FromInt64::from_int64_bits(r))
-                    FuncRef
-                    | RefFunc
-                    | RefFuncTyped(_)
-                    | RefNullFuncTyped(_)
-                    | NullFuncRef =>
-                      if r == @types.FUNCREF_NULL_SENTINEL {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::FuncRef(r.to_int())
-                      }
-                    ExternRef | RefExtern | NullExternRef =>
-                      if r == @types.FUNCREF_NULL_SENTINEL {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::ExternRef(r.to_int())
-                      }
-                    // GC reference types - decode using JIT encoding:
-                    // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
-                    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
-                      decode_gc_value(r)
-                    ExnRef | NullExnRef =>
-                      if r == @types.FUNCREF_NULL_SENTINEL {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::ExnRef(r.to_int())
-                      }
-                    V128 => @types.Value::I64(r) // Placeholder for V128
-                    // GC struct/array reference types
-                    RefStruct(_) | RefNullStruct(_) =>
-                      if r == 0L {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::StructRef((r >> 1).to_int())
-                      }
-                    RefArray(_) | RefNullArray(_) =>
-                      if r == 0L {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::ArrayRef((r >> 1).to_int())
-                      }
-                    RefI31 | RefNullI31 =>
-                      if r == 0L {
-                        @types.Value::Null
-                      } else if (r & 1L) == 1L {
-                        @types.Value::I31((r >> 1).to_int())
-                      } else {
-                        @types.Value::Null
-                      }
-                    RefNone => @types.Value::Null
-                  }
-                  values.push(v)
-                }
-              }
+              // Convert Int64 results to Value using shared helper
+              let values = convert_jit_results(results, f.result_types)
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)
               values
             }
