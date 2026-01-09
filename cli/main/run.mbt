@@ -43,6 +43,7 @@ fn run_wasm(
   wasm_path : String,
   invoke : String?,
   func_args : Array[String],
+  wasm_args : Array[String],
   preloads : Array[String],
   dirs : Array[String],
   envs : Array[String],
@@ -87,8 +88,28 @@ fn run_wasm(
   // Build WASI context with directory mappings and environment variables
   // Also collect preopens and env for JIT mode
   let wasi_builder = @wasi.WasiContextBuilder::new()
-  // Keep interpreter behavior consistent with JIT: argv[0] is the module path.
-  wasi_builder.args([wasm_path]) |> ignore
+  // argv[0] is the basename of the wasm file (like wasmtime), followed by wasm_args
+  let program_name : String = {
+    let mut last_slash = -1
+    for i in 0..<wasm_path.length() {
+      if wasm_path.code_unit_at(i) == '/' {
+        last_slash = i
+      }
+    }
+    if last_slash >= 0 {
+      // Build the basename string using StringBuilder
+      let builder = StringBuilder::new()
+      for i in (last_slash + 1)..<wasm_path.length() {
+        builder.write_char(wasm_path.code_unit_at(i).unsafe_to_char())
+      }
+      builder.to_string()
+    } else {
+      wasm_path
+    }
+  }
+  // Convert StringView array to String array for wasi_args
+  let wasi_args = [program_name] + wasm_args
+  wasi_builder.args(wasi_args) |> ignore
   let jit_preopens : Array[(String, String)] = []
   let jit_envs : Array[String] = []
   for dir in dirs {
@@ -232,7 +253,7 @@ fn run_wasm(
     if can_use_jit {
       // JIT execution path
       // Build WASI args: program name + any remaining args after --
-      let jit_args : Array[String] = [wasm_path]
+      let jit_args : Array[String] = wasi_args
       let jit_results = run_with_jit(
         mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
         jit_preopens,

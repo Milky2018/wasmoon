@@ -146,6 +146,16 @@ fn main {
               let positional = sub.positional_args
               if positional.length() > 0 {
                 let file_path = positional[0]
+                // Extract WASI program args (all positional args after the file)
+                let wasm_args : Array[String] = if positional.length() > 1 {
+                  let mut result = []
+                  for i in 1..<positional.length() {
+                    result = result + [positional[i]]
+                  }
+                  result
+                } else {
+                  []
+                }
                 let invoke_opt : String? = match sub.args.get("invoke") {
                   Some(arr) =>
                     if arr.length() > 0 {
@@ -155,7 +165,7 @@ fn main {
                     }
                   None => None
                 }
-                // Get function arguments from --arg option
+                // Get function arguments from --arg option (for invoked function)
                 let func_args : Array[String] = match sub.args.get("arg") {
                   Some(arr) => arr
                   None => []
@@ -165,7 +175,7 @@ fn main {
                 let dump_on_trap = sub.flags.get("dump-on-trap") is Some(true)
                 // Check if it's a .cwasm file
                 if file_path.has_suffix(".cwasm") {
-                  run_cwasm(file_path, invoke_opt, func_args, debug)
+                  run_cwasm(file_path, invoke_opt, func_args, wasm_args, debug)
                 } else {
                   // Get preload modules from --preload option
                   let preloads : Array[String] = match sub.args.get("preload") {
@@ -194,8 +204,8 @@ fn main {
                     _ => true
                   }
                   run_wasm(
-                    file_path, invoke_opt, func_args, preloads, dirs, envs, wasi_options,
-                    debug, dump_on_trap, use_jit,
+                    file_path, invoke_opt, func_args, wasm_args, preloads, dirs,
+                    envs, wasi_options, debug, dump_on_trap, use_jit,
                   )
                 }
               } else {

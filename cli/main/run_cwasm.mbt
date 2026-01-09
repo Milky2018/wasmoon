@@ -4,6 +4,7 @@ fn run_cwasm(
   cwasm_path : String,
   invoke : String?,
   func_args : Array[String],
+  _wasm_args : Array[String],
   _debug : Bool,
 ) -> Unit {
   // Read the .cwasm file
