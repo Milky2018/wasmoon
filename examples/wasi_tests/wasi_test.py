@@ -4,17 +4,15 @@ WASI Preview1 CLI integration smoke tests.
 
 Runs a curated set of WAT modules under both JIT and interpreter modes via
 `./wasmoon run` and checks output + exit status.
-
-WAT test files are stored in examples/wasi_tests/ directory.
 """
 
-import subprocess
 import os
+import subprocess
 import sys
 
-# Directory containing WAT test files
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-WAT_DIR = os.path.join(SCRIPT_DIR, "wasi_tests")
+WAT_DIR = SCRIPT_DIR
+
 
 def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None):
     """Run a WAT file and check results."""
@@ -22,23 +20,29 @@ def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None):
 
     try:
         # NOTE: wasmoon currently expects FILE before some options like --env.
-        cmd = ['./wasmoon', 'run', wat_path]
+        cmd = ["./wasmoon", "run", wat_path]
         if not use_jit:
-            cmd.append('--no-jit')
+            cmd.append("--no-jit")
         if extra_run_args:
             cmd.extend(extra_run_args)
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
         if result.returncode != 0:
-            return False, f"Non-zero exit code {result.returncode}: {result.stderr or result.stdout}"
+            return (
+                False,
+                f"Non-zero exit code {result.returncode}: {result.stderr or result.stdout}",
+            )
 
         if expected is not None:
             if isinstance(expected, tuple):
                 stream, needle = expected
                 haystack = result.stdout if stream == "stdout" else result.stderr
                 if needle not in haystack:
-                    return False, f"Expected {stream} to contain '{needle}', got stdout='{result.stdout}' stderr='{result.stderr}'"
+                    return (
+                        False,
+                        f"Expected {stream} to contain '{needle}', got stdout='{result.stdout}' stderr='{result.stderr}'",
+                    )
             else:
                 if expected not in result.stdout:
                     return False, f"Expected stdout to contain '{expected}', got '{result.stdout}'"
@@ -48,6 +52,7 @@ def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None):
         return False, "Timeout"
     except Exception as e:
         return False, str(e)
+
 
 # Test definitions: (name, wat_file, expected, extra_run_args)
 # expected=None means just check it runs without error (and exits 0)
@@ -67,8 +72,18 @@ TESTS = [
     # Args and environ
     ("args_sizes_get", "args_sizes_get.wat", "args_sizes_get: OK", None),
     ("args_get", "args_get.wat", "args_get: OK", None),
-    ("environ_sizes_get", "environ_sizes_get.wat", "environ_sizes_get: OK", ["--env", "WASMOON_TEST=1"]),
-    ("environ_get", "environ_get.wat", "environ_get: OK", ["--env", "WASMOON_TEST=1"]),
+    (
+        "environ_sizes_get",
+        "environ_sizes_get.wat",
+        "environ_sizes_get: OK",
+        ["--env", "WASMOON_TEST=1"],
+    ),
+    (
+        "environ_get",
+        "environ_get.wat",
+        "environ_get: OK",
+        ["--env", "WASMOON_TEST=1"],
+    ),
     # File descriptor operations
     ("fd_fdstat_get", "fd_fdstat_get.wat", "fd_fdstat_get: OK", None),
     ("fd_filestat_get", "fd_filestat_get.wat", "fd_filestat_get: OK", None),
@@ -96,8 +111,18 @@ TESTS = [
     ("fd_readdir (invalid)", "fd_readdir_invalid.wat", "fd_readdir invalid: OK", None),
     ("path_open (invalid)", "path_open_invalid.wat", "path_open invalid: OK", None),
     # File metadata
-    ("fd_filestat_set_size (invalid)", "fd_filestat_set_size_invalid.wat", "fd_filestat_set_size: OK", None),
-    ("fd_filestat_set_times (invalid)", "fd_filestat_set_times_invalid.wat", "fd_filestat_set_times: OK", None),
+    (
+        "fd_filestat_set_size (invalid)",
+        "fd_filestat_set_size_invalid.wat",
+        "fd_filestat_set_size: OK",
+        None,
+    ),
+    (
+        "fd_filestat_set_times (invalid)",
+        "fd_filestat_set_times_invalid.wat",
+        "fd_filestat_set_times: OK",
+        None,
+    ),
     ("fd_allocate (invalid)", "fd_allocate_invalid.wat", "fd_allocate: OK", None),
     ("fd_renumber (invalid)", "fd_renumber_invalid.wat", "fd_renumber invalid: OK", None),
     # Error handling tests
@@ -111,6 +136,7 @@ TESTS = [
     ("sock_shutdown (invalid)", "sock_shutdown_invalid.wat", "sock_shutdown invalid: OK", None),
 ]
 
+
 def run_all_tests():
     """Run all tests and report results."""
     passed = 0
@@ -121,7 +147,7 @@ def run_all_tests():
     print("=" * 60)
 
     for mode in ["JIT", "Interpreter"]:
-        use_jit = (mode == "JIT")
+        use_jit = mode == "JIT"
         print(f"\n--- {mode} Mode ---\n")
 
         mode_passed = 0
@@ -152,11 +178,12 @@ def run_all_tests():
 
     return failed == 0
 
+
 if __name__ == "__main__":
-    # Check if wasmoon binary exists
     if not os.path.exists("./wasmoon"):
         print("Error: ./wasmoon not found. Run 'moon build && ./install.sh' first.")
         sys.exit(1)
 
     success = run_all_tests()
     sys.exit(0 if success else 1)
+

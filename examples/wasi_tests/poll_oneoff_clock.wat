@@ -20,8 +20,9 @@
   ;; flags (2 bytes): 0 = relative
   (data (i32.const 40) "\00\00")
 
-  ;; Event output at 100 (32 bytes)
-  ;; nevents output at 200
+  ;; Event output at 96 (32 bytes, 8-byte aligned)
+  ;; nevents output at 200 (initialized to sentinel)
+  (data (i32.const 200) "\ff\ff\ff\ff")
 
   ;; Success message
   (data (i32.const 300) "poll_oneoff: OK\n")
@@ -29,12 +30,24 @@
   (data (i32.const 404) "\0f\00\00\00")  ;; len = 15
 
   (func (export "_start")
-    (if (i32.eqz (call $poll_oneoff
-      (i32.const 0)    ;; in (subscriptions)
-      (i32.const 100)  ;; out (events)
-      (i32.const 1)    ;; nsubscriptions
-      (i32.const 200))) ;; nevents out
-      (then
-        ;; Check that nevents == 1
-        (if (i32.eq (i32.load (i32.const 200)) (i32.const 1))
-          (then (drop (call $fd_write (i32.const 1) (i32.const 400) (i32.const 1) (i32.const 408)))))))))
+    (local $errno i32)
+    (local $out i32)
+    (local.set $out (i32.const 96))
+    (local.set $errno (call $poll_oneoff
+      (i32.const 0)          ;; in (subscriptions)
+      (local.get $out)       ;; out (events)
+      (i32.const 1)          ;; nsubscriptions
+      (i32.const 200)))      ;; nevents out
+    (if (i32.ne (local.get $errno) (i32.const 0)) (then unreachable))
+    ;; Check nevents == 1
+    (if (i32.ne (i32.load (i32.const 200)) (i32.const 1)) (then unreachable))
+    ;; event.userdata == 0x12345678
+    (if (i64.ne (i64.load (local.get $out)) (i64.const 305419896)) (then unreachable))
+    ;; event.error == 0
+    (if (i32.ne (i32.load8_u (i32.add (local.get $out) (i32.const 8))) (i32.const 0)) (then unreachable))
+    (if (i32.ne (i32.load8_u (i32.add (local.get $out) (i32.const 9))) (i32.const 0)) (then unreachable))
+    ;; event.type == clock (0)
+    (if (i32.ne (i32.load8_u (i32.add (local.get $out) (i32.const 10))) (i32.const 0)) (then unreachable))
+    ;; clock event payload is zeroed (nbytes at +16)
+    (if (i64.ne (i64.load (i32.add (local.get $out) (i32.const 16))) (i64.const 0)) (then unreachable))
+    (drop (call $fd_write (i32.const 1) (i32.const 400) (i32.const 1) (i32.const 408)))))
