@@ -96,7 +96,7 @@
 )
 (assert_return (invoke "test") (i32.const 0))
 
-;; Test 3: clock_time_get with invalid clock_id (should return ENOSYS=38)
+;; Test 3: clock_time_get with invalid clock_id (should return EINVAL=28)
 (module
   (import "wasi_snapshot_preview1" "clock_time_get" (func $clock_time_get (param i32 i64 i32) (result i32)))
   (memory 1)
@@ -106,7 +106,7 @@
     (call $clock_time_get (i32.const 3) (i64.const 1000) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 38))
+(assert_return (invoke "test") (i32.const 28))
 
 ;; Test 4: clock_res_get with realtime clock (clock_id=0)
 (module
@@ -132,7 +132,7 @@
 )
 (assert_return (invoke "test") (i32.const 0))
 
-;; Test 6: clock_res_get with invalid clock_id (should return ENOSYS=38)
+;; Test 6: clock_res_get with invalid clock_id (should return EINVAL=28)
 (module
   (import "wasi_snapshot_preview1" "clock_res_get" (func $clock_res_get (param i32 i32) (result i32)))
   (memory 1)
@@ -142,4 +142,4 @@
     (call $clock_res_get (i32.const 5) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 38))
+(assert_return (invoke "test") (i32.const 28))
