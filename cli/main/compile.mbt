@@ -127,6 +127,51 @@ fn run_compile(
     }
   }
 
+  // v5: Add type signatures (full param/result types)
+  for sub_type in mod_.types {
+    // SubType contains CompositeType which can be Func, Struct, or Array
+    if sub_type.composite is Func(func_type) {
+      let param_codes = func_type.params.map(value_type_to_code)
+      let result_codes = func_type.results.map(value_type_to_code)
+      precompiled.add_type(param_codes, result_codes)
+    } else {
+      // For non-function types (struct, array), add empty entry as placeholder
+      precompiled.add_type([], [])
+    }
+  }
+
+  // v5: Add global definitions
+  for global in mod_.globals {
+    let type_code = value_type_to_code(global.type_.value_type)
+    let init_value = eval_global_init(global.init)
+    precompiled.add_global(type_code, global.type_.mutable, init_value)
+  }
+
+  // v5: Add table definitions
+  for table in mod_.tables {
+    let elem_type_code = value_type_to_code(table.type_.elem_type)
+    let min_size = table.type_.limits.min.to_int()
+    let max_size = table.type_.limits.max.map(fn(m) { m.to_int() })
+    precompiled.add_table(elem_type_code, min_size, max_size)
+  }
+
+  // v5: Add element segments (active only)
+  for elem in mod_.elems {
+    match elem.mode {
+      Active(table_idx, offset_expr) => {
+        let offset = eval_elem_offset(offset_expr)
+        let func_indices = eval_elem_funcs(elem.init)
+        precompiled.add_element(table_idx, offset, func_indices)
+      }
+      _ => continue // Skip passive/declarative segments
+    }
+  }
+
+  // v5: Set start function if present
+  if mod_.start is Some(start_idx) {
+    precompiled.set_start_func(start_idx)
+  }
+
   // Write IR file if requested
   if (emit_ir, ir_output) is (Some(ir_path), Some(buf)) {
     @fs.write_string_to_file(ir_path, buf.to_string()) catch {
@@ -166,9 +211,13 @@ fn run_compile(
     total_code_size = total_code_size + precompiled.functions[i].code.length()
   }
   println("Wrote precompiled module to \{out_path}")
-  println("  Format:    cwasm v4 (aarch64)")
+  println("  Format:    cwasm v5 (aarch64)")
   println("  Imports:   \{precompiled.import_count()}")
   println("  Functions: \{precompiled.function_count()}")
+  println("  Types:     \{precompiled.types.length()}")
+  println("  Globals:   \{precompiled.globals.length()}")
+  println("  Tables:    \{precompiled.tables.length()}")
+  println("  Elements:  \{precompiled.elements.length()}")
   println("  Memories:  \{precompiled.memories.length()}")
   println("  Data segs: \{precompiled.data_segments.length()}")
   println("  Code size: \{total_code_size} bytes")
@@ -190,6 +239,84 @@ fn eval_data_offset(instrs : Array[@types.Instruction]) -> Int {
     }
   }
   0
+}
+
+///|
+/// Convert ValueType to integer code for serialization
+/// Encoding: 0=I32, 1=I64, 2=F32, 3=F64, 4=FuncRef, 5=ExternRef
+fn value_type_to_code(vt : @types.ValueType) -> Int {
+  match vt {
+    I32 => 0
+    I64 => 1
+    F32 => 2
+    F64 => 3
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => 4
+    ExternRef | RefExtern | NullExternRef => 5
+    AnyRef | RefAny => 6
+    ExnRef | NullExnRef => 7
+    RefStruct(_) | RefNullStruct(_) => 8
+    RefArray(_) | RefNullArray(_) => 9
+    RefEq | RefNullEq => 10
+    RefI31 | RefNullI31 => 11
+    RefNone | NullRef => 12
+    V128 => 13
+  }
+}
+
+///|
+/// Evaluate a global init expression to get its initial value as Int64 bits
+fn eval_global_init(instrs : Array[@types.Instruction]) -> Int64 {
+  for instr in instrs {
+    match instr {
+      I32Const(n) => return n.to_int64()
+      I64Const(n) => return n
+      F32Const(f) => return f.reinterpret_as_uint().to_int64()
+      F64Const(f) => return f.reinterpret_as_int64()
+      RefNull(_) => return -1L // Null reference sentinel
+      RefFunc(idx) => return idx.to_int64()
+      GlobalGet(_) => return 0L // Can't evaluate at compile time
+      _ => continue
+    }
+  }
+  0L
+}
+
+///|
+/// Evaluate an element offset expression
+fn eval_elem_offset(instrs : Array[@types.Instruction]) -> Int {
+  for instr in instrs {
+    match instr {
+      I32Const(n) => return n
+      I64Const(n) => return n.to_int()
+      GlobalGet(_) => return 0 // Can't evaluate at compile time
+      _ => continue
+    }
+  }
+  0
+}
+
+///|
+/// Evaluate element init expressions to get function indices
+fn eval_elem_funcs(init : Array[Array[@types.Instruction]]) -> Array[Int] {
+  let result : Array[Int] = []
+  for expr in init {
+    let mut func_idx = -1 // -1 for null
+    for instr in expr {
+      match instr {
+        RefFunc(idx) => {
+          func_idx = idx
+          break
+        }
+        RefNull(_) => {
+          func_idx = -1
+          break
+        }
+        _ => continue
+      }
+    }
+    result.push(func_idx)
+  }
+  result
 }
 
 ///|

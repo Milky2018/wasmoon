@@ -37,6 +37,22 @@ pub(all) struct DataEntry {
 pub fn DataEntry::new(Int, Int, Array[Int]) -> Self
 pub impl Show for DataEntry
 
+pub(all) struct ElemEntry {
+  table_idx : Int
+  offset : Int
+  func_indices : Array[Int]
+}
+pub fn ElemEntry::new(Int, Int, Array[Int]) -> Self
+pub impl Show for ElemEntry
+
+pub(all) struct GlobalDef {
+  value_type : Int
+  mutable : Bool
+  init_value : Int64
+}
+pub fn GlobalDef::new(Int, Bool, Int64) -> Self
+pub impl Show for GlobalDef
+
 pub(all) struct ImportEntry {
   module_name : String
   func_name : String
@@ -60,16 +76,34 @@ pub(all) struct PrecompiledModule {
   functions : Array[CompiledEntry]
   memories : Array[MemoryDef]
   data_segments : Array[DataEntry]
+  types : Array[TypeEntry]
+  globals : Array[GlobalDef]
+  tables : Array[TableDef]
+  elements : Array[ElemEntry]
+  mut start_func : Int?
 }
 pub fn PrecompiledModule::add_data_segment(Self, Int, Int, Array[Int]) -> Unit
+pub fn PrecompiledModule::add_element(Self, Int, Int, Array[Int]) -> Unit
 pub fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction, Int, Int) -> Unit
+pub fn PrecompiledModule::add_global(Self, Int, Bool, Int64) -> Unit
 pub fn PrecompiledModule::add_import(Self, String, String, Int, Int) -> Unit
 pub fn PrecompiledModule::add_memory(Self, Int, Int?) -> Unit
+pub fn PrecompiledModule::add_table(Self, Int, Int, Int?) -> Unit
+pub fn PrecompiledModule::add_type(Self, Array[Int], Array[Int]) -> Unit
 pub fn PrecompiledModule::function_count(Self) -> Int
 pub fn PrecompiledModule::import_count(Self) -> Int
 pub fn PrecompiledModule::new(TargetArch) -> Self
 pub fn PrecompiledModule::serialize(Self) -> Array[Int]
+pub fn PrecompiledModule::set_start_func(Self, Int) -> Unit
 pub impl Show for PrecompiledModule
+
+pub(all) struct TableDef {
+  elem_type : Int
+  min_size : Int
+  max_size : Int?
+}
+pub fn TableDef::new(Int, Int, Int?) -> Self
+pub impl Show for TableDef
 
 pub(all) enum TargetArch {
   Unknown
@@ -77,6 +111,13 @@ pub(all) enum TargetArch {
   AArch64
 }
 pub impl Show for TargetArch
+
+pub(all) struct TypeEntry {
+  param_types : Array[Int]
+  result_types : Array[Int]
+}
+pub fn TypeEntry::new(Array[Int], Array[Int]) -> Self
+pub impl Show for TypeEntry
 
 // Type aliases
 
