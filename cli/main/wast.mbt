@@ -112,6 +112,9 @@ fn try_compile_jit(
           // Allocate independent WASM stack with guard page (1MB)
           // This provides controlled stack overflow behavior
           let _ = jm.alloc_wasm_stack(1048576L)
+          // Initialize WASI for JIT (fd_table, args, env, preopens)
+          // Use quiet mode to redirect stdout/stderr to /dev/null for testing
+          jm.init_wasi_quiet([], [], [])
           // Initialize all memories (multi-memory support)
           if not(init_jit_memories(instance, store, jm)) {
             return None
