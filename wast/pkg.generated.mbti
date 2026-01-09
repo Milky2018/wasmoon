@@ -7,6 +7,7 @@ import(
   "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/wasi"
   "Milky2018/wasmoon/wat"
+  "moonbitlang/core/hashset"
 )
 
 // Values
@@ -19,6 +20,8 @@ pub const FUNCREF_TAG : Int64 = 0x2000000000000000
 pub const NULL_REF : Int64 = 0
 
 pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], Array[@types.ValueType])]
+
+pub fn builtin_jit_modules() -> Array[String]
 
 pub fn count_func_imports(Array[@types.Import]) -> Int
 
@@ -80,6 +83,7 @@ pub struct WastContext {
   named_modules : Map[String, @runtime.ModuleInstance]
   module_definitions : Map[String, @types.Module]
   registered_modules : Map[String, @runtime.ModuleInstance]
+  overridden_builtin_modules : @hashset.HashSet[String]
   jit_modules : Map[String, JITModuleContext]
   mut current_jit : JITModuleContext?
   use_jit : Bool

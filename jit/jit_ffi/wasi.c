@@ -775,15 +775,19 @@ static int64_t wasi_clock_time_get_impl(
     if (!ctx || !ctx->memory_base) return WASI_EBADF;
 
     int64_t time_ns = 0;
-    if (clock_id == 0 || clock_id == 1) {
+    // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID
+    if (clock_id >= 0 && clock_id <= 3) {
 #ifdef _WIN32
         FILETIME ft;
         GetSystemTimeAsFileTime(&ft);
         uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
         time_ns = (int64_t)((t - 116444736000000000ULL) * 100);
 #else
+        // For CPU time clocks (2 and 3), fall back to monotonic clock
+        // since we don't have platform-specific APIs for these yet
         struct timespec ts;
-        clock_gettime(clock_id == 0 ? CLOCK_REALTIME : CLOCK_MONOTONIC, &ts);
+        clockid_t clk = (clock_id == 0) ? CLOCK_REALTIME : CLOCK_MONOTONIC;
+        clock_gettime(clk, &ts);
         time_ns = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 #endif
     } else {
@@ -802,7 +806,8 @@ static int64_t wasi_clock_res_get_impl(
     (void)caller_ctx;
     if (!ctx || !ctx->memory_base) return WASI_EBADF;
 
-    if (clock_id != 0 && clock_id != 1) return WASI_EINVAL;
+    // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID
+    if (clock_id < 0 || clock_id > 3) return WASI_EINVAL;
 
     *(int64_t *)(ctx->memory_base + resolution_ptr) = 1000000; // 1ms
     return WASI_ESUCCESS;
