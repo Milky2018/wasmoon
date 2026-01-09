@@ -1,4 +1,196 @@
 ///|
+/// Get the basename from a file path (last component after /)
+fn get_basename(path : String) -> String {
+  // Find last '/' character
+  let mut last_slash = -1
+  for i in 0..<path.length() {
+    if path.code_unit_at(i) == '/' {
+      last_slash = i
+    }
+  }
+  if last_slash == -1 {
+    path
+  } else if last_slash == path.length() - 1 {
+    // Trailing slash, find previous
+    let mut prev_slash = -1
+    for i in 0..<last_slash {
+      if path.code_unit_at(i) == '/' {
+        prev_slash = i
+      }
+    }
+    try! path[prev_slash + 1:last_slash].to_string()
+  } else {
+    try! path[last_slash + 1:].to_string()
+  }
+}
+
+///|
+/// Format a Value for output
+fn format_value(v : @types.Value) -> String {
+  match v {
+    I32(n) => n.to_string()
+    I64(n) => n.to_string()
+    F32(f) => f.to_string()
+    F64(d) => d.to_string()
+    FuncRef(idx) => "funcref:\{idx}"
+    ExternRef(idx) => "externref:\{idx}"
+    V128(bytes) => {
+      let mut hex = "v128:"
+      for i in 0..<bytes.length() {
+        hex = hex + @types.to_hex_byte(bytes[i].to_int())
+      }
+      hex
+    }
+    Null => "null"
+    StructRef(idx) => "struct:\{idx}"
+    ArrayRef(idx) => "array:\{idx}"
+    I31(n) => "i31:\{n}"
+    ExnRef(idx) => "exn:\{idx}"
+  }
+}
+
+///|
+/// Convert Value array to Int64 array for JIT call
+fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
+  args.map(fn(v) {
+    match v {
+      I32(n) => n.to_int64()
+      I64(n) => n
+      F32(f) => f.reinterpret_as_int().to_int64()
+      F64(d) => d.reinterpret_as_int64()
+      FuncRef(idx) => idx.to_int64()
+      ExternRef(idx) => idx.to_int64()
+      Null => @types.FUNCREF_NULL_SENTINEL
+      V128(_) => abort("V128 args not yet supported")
+      StructRef(idx) => idx.to_int64() << 1
+      ArrayRef(idx) => idx.to_int64() << 1
+      I31(n) => (n.to_int64() << 1) | 1L
+      ExnRef(idx) => idx.to_int64()
+    }
+  })
+}
+
+///|
+/// Convert JIT Int64 results to Value array using result types
+fn convert_jit_results(
+  results : Array[Int64],
+  result_types : Array[@types.ValueType],
+) -> Array[@types.Value] {
+  let values : Array[@types.Value] = []
+  let mut slot_idx = 0
+  for ty in result_types {
+    let value : @types.Value = match ty {
+      I32 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        I32(raw.to_int())
+      }
+      I64 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        I64(raw)
+      }
+      F32 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        F32(Float::reinterpret_from_int(raw.to_int()))
+      }
+      F64 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        F64(raw.reinterpret_as_double())
+      }
+      FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == @types.FUNCREF_NULL_SENTINEL {
+          Null
+        } else {
+          FuncRef(raw.to_int())
+        }
+      }
+      ExternRef | RefExtern | NullExternRef => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == @types.FUNCREF_NULL_SENTINEL {
+          Null
+        } else {
+          ExternRef(raw.to_int())
+        }
+      }
+      AnyRef | NullRef | RefAny | RefEq | RefNullEq => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else if (raw & 1L) == 1L {
+          I31((raw >> 1).to_int())
+        } else {
+          StructRef((raw >> 1).to_int())
+        }
+      }
+      ExnRef | NullExnRef => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else {
+          ExnRef(raw.to_int())
+        }
+      }
+      RefStruct(_) | RefNullStruct(_) => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else {
+          StructRef((raw >> 1).to_int())
+        }
+      }
+      RefArray(_) | RefNullArray(_) => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else {
+          ArrayRef((raw >> 1).to_int())
+        }
+      }
+      RefI31 | RefNullI31 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else if (raw & 1L) == 1L {
+          I31((raw >> 1).to_int())
+        } else {
+          Null
+        }
+      }
+      RefNone => {
+        slot_idx += 1
+        Null
+      }
+      V128 => {
+        let low = results[slot_idx]
+        let high = results[slot_idx + 1]
+        slot_idx += 2
+        let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+        for i in 0..<8 {
+          buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
+        }
+        for i in 0..<8 {
+          buf.write_byte(((high >> (i * 8)) & 0xFFL).to_byte())
+        }
+        V128(buf.contents())
+      }
+    }
+    values.push(value)
+  }
+  values
+}
+
+///|
 /// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
 fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
   let b0 = bytes[offset].to_int64() & 0xFFL

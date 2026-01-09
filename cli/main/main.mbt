@@ -45,24 +45,6 @@ fn main {
           help="Disable JIT compilation (use interpreter)",
         ),
       }),
-      "compile": @clap.SubCommand::new(
-        help="Compile WASM to precompiled format",
-        args={
-          "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-          "output": @clap.Arg::named(
-            nargs=@clap.Nargs::AtMost(1),
-            help="Output path (default: input.cwasm)",
-          ),
-          "emit-ir": @clap.Arg::named(
-            nargs=@clap.Nargs::AtMost(1),
-            help="Emit IR to specified path",
-          ),
-          "O": @clap.Arg::named(
-            nargs=@clap.Nargs::AtMost(1),
-            help="Optimization level (0-3, default: 2)",
-          ),
-        },
-      ),
       "test": @clap.SubCommand::new(
         help="Run WebAssembly test script (.wast format)",
         args={
@@ -103,9 +85,6 @@ fn main {
           "html": @clap.Arg::flag(help="Output HTML report"),
         },
       ),
-      "objdump": @clap.SubCommand::new(help="Inspect precompiled .cwasm file", args={
-        "file": @clap.Arg::positional(help="Path to .cwasm file"),
-      }),
       "settings": @clap.SubCommand::new(
         help="Display available compiler settings",
       ),
@@ -183,73 +162,27 @@ fn main {
                   Some(arr) => arr
                   None => []
                 }
-                // Check if it's a .cwasm file
-                if file_path.has_suffix(".cwasm") {
-                  run_cwasm(
-                    file_path, invoke_opt, func_args, wasm_args, dirs, envs, debug,
-                  )
-                } else {
-                  // Get preload modules from --preload option
-                  let preloads : Array[String] = match sub.args.get("preload") {
-                    Some(arr) => arr
-                    None => []
-                  }
-                  // Get WASI options from -S flag
-                  let wasi_options : Array[String] = match
-                    sub.args.get("wasi") {
-                    Some(arr) => arr
-                    None => []
-                  }
-                  // Check if JIT is disabled (default: enabled)
-                  let use_jit = match sub.flags.get("no-jit") {
-                    Some(true) => false
-                    _ => true
-                  }
-                  run_wasm(
-                    file_path, invoke_opt, func_args, wasm_args, preloads, dirs,
-                    envs, wasi_options, debug, dump_on_trap, use_jit,
-                  )
+                // Get preload modules from --preload option
+                let preloads : Array[String] = match sub.args.get("preload") {
+                  Some(arr) => arr
+                  None => []
                 }
+                // Get WASI options from -S flag
+                let wasi_options : Array[String] = match sub.args.get("wasi") {
+                  Some(arr) => arr
+                  None => []
+                }
+                // Check if JIT is disabled (default: enabled)
+                let use_jit = match sub.flags.get("no-jit") {
+                  Some(true) => false
+                  _ => true
+                }
+                run_wasm(
+                  file_path, invoke_opt, func_args, wasm_args, preloads, dirs, envs,
+                  wasi_options, debug, dump_on_trap, use_jit,
+                )
               } else {
                 abort("missing file argument")
-              }
-            }
-            "compile" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                let output_opt : String? = match sub.args.get("output") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      Some(arr[0])
-                    } else {
-                      None
-                    }
-                  None => None
-                }
-                let emit_ir_opt : String? = match sub.args.get("emit-ir") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      Some(arr[0])
-                    } else {
-                      None
-                    }
-                  None => None
-                }
-                let opt_level : Int = match sub.args.get("O") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      @strconv.parse_int(arr[0]) catch {
-                        _ => 2
-                      }
-                    } else {
-                      2
-                    }
-                  None => 2
-                }
-                let config = CompilerConfig::from_level(opt_level)
-                run_compile(positional[0], output_opt, emit_ir_opt, config)
-              } else {
-                println("Error: missing file argument")
               }
             }
             "test" => {
@@ -318,14 +251,6 @@ fn main {
                   stages,
                   html_output,
                 )
-              } else {
-                println("Error: missing file argument")
-              }
-            }
-            "objdump" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                run_objdump(positional[0])
               } else {
                 println("Error: missing file argument")
               }
