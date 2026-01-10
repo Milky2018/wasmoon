@@ -48,34 +48,40 @@ fn run_explore(
       return
     }
   }
+  // Count imports to convert between absolute and local function indices
+  // Absolute index = num_imports + local_index (matches JIT error messages)
+  let num_imports = count_func_imports(mod_.imports)
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
   }
 
   // Determine which functions to explore
+  // User provides absolute WebAssembly function index (including imports)
+  // This matches the indices shown in JIT error messages (wasm=N)
   let func_indices : Array[Int] = match func_index {
-    Some(idx) => {
-      if idx >= mod_.codes.length() {
+    Some(abs_idx) => {
+      // Convert absolute index to local index
+      let local_idx = abs_idx - num_imports
+      if local_idx < 0 || local_idx >= mod_.codes.length() {
         println(
-          "Error: function index \{idx} out of range (0..\{mod_.codes.length()})",
+          "Error: function index \{abs_idx} out of range (\{num_imports}..\{num_imports + mod_.codes.length() - 1})",
         )
         return
       }
-      [idx]
+      [local_idx]
     }
     None => Array::makei(mod_.codes.length(), fn(i) { i })
   }
 
   // Compile each function
   let compiled_funcs : Array[CompiledFunc] = []
-  for func_idx in func_indices {
-    let type_idx = mod_.funcs[func_idx]
+  for local_idx in func_indices {
+    let type_idx = mod_.funcs[local_idx]
     let func_type = mod_.get_func_type(type_idx)
-    let code = mod_.codes[func_idx]
+    let code = mod_.codes[local_idx]
     // Find function name: prefer internal name, then export name, then anonymous
-    let num_imports = count_func_imports(mod_.imports)
-    let actual_func_idx = num_imports + func_idx
+    let actual_func_idx = num_imports + local_idx
     // First, check for internal name from WAT parsing (e.g., $some_func -> "some_func")
     let func_name : String = match mod_.func_names.get(actual_func_idx) {
       Some(name) => name
@@ -89,7 +95,7 @@ fn run_explore(
           }
         }
         if export_name == "" {
-          "func_\{func_idx}"
+          "func_\{actual_func_idx}"
         } else {
           export_name
         }
@@ -112,7 +118,7 @@ fn run_explore(
     }
 
     // Stage 2: IR (SSA form) - use simplified from_module API
-    let ir_func = @ir.translate_function(mod_, func_idx)
+    let ir_func = @ir.translate_function(mod_, local_idx)
     let ir_text = ir_func.print()
     if !html_output && show_ir {
       println("")
