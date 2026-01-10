@@ -12,7 +12,9 @@ pub fn deserialize(Array[Int]) -> PrecompiledModule raise DeserializeError
 pub fn encode(@types.Module) -> Array[Int]
 
 // Errors
-pub suberror DeserializeError String
+pub suberror DeserializeError {
+  DeserializeError(String)
+}
 pub impl Show for DeserializeError
 
 // Types and methods

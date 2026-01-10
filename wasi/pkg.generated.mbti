@@ -254,7 +254,9 @@ pub let stdin : Fd
 pub let stdout : Fd
 
 // Errors
-pub(all) suberror WasiExit Int
+pub(all) suberror WasiExit {
+  WasiExit(Int)
+}
 
 // Types and methods
 pub(all) struct CIoVec {

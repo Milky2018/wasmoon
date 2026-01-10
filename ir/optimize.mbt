@@ -240,38 +240,17 @@ fn try_fold_constant(
     Iadd => fold_binary_int(inst, constants, fn(a, b) { a + b })
     Isub => fold_binary_int(inst, constants, fn(a, b) { a - b })
     Imul => fold_binary_int(inst, constants, fn(a, b) { a * b })
-    // Avoid division by zero
-    Sdiv =>
-      fold_binary_int_checked(inst, constants, fn(a, b) {
-        if b != 0L {
-          Some(a / b)
-        } else {
-          None
-        }
-      })
-    Udiv =>
-      fold_binary_int_checked(inst, constants, fn(a, b) {
-        if b != 0L {
-          Some(
-            a
-            .reinterpret_as_uint64()
-            .div(b.reinterpret_as_uint64())
-            .reinterpret_as_int64(),
-          )
-        } else {
-          None
-        }
-      })
+    Sdiv => fold_sdiv(inst, constants)
+    Udiv => fold_udiv(inst, constants)
     // Bitwise operations
     Band => fold_binary_int(inst, constants, fn(a, b) { a & b })
     Bor => fold_binary_int(inst, constants, fn(a, b) { a | b })
     Bxor => fold_binary_int(inst, constants, fn(a, b) { a ^ b })
-    Ishl =>
-      fold_binary_int(inst, constants, fn(a, b) { a << (b.to_int() % 64) })
-    Sshr =>
-      fold_binary_int(inst, constants, fn(a, b) {
-        (a.reinterpret_as_uint64() >> (b.to_int() % 64)).reinterpret_as_int64()
-      })
+    Ishl => fold_ishl(inst, constants)
+    Sshr => fold_sshr(inst, constants)
+    Ushr => fold_ushr(inst, constants)
+    Srem => fold_srem(inst, constants)
+    Urem => fold_urem(inst, constants)
     // Float operations
     Fadd => fold_binary_float(inst, constants, fn(a, b) { a + b })
     Fsub => fold_binary_float(inst, constants, fn(a, b) { a - b })
@@ -308,33 +287,6 @@ fn fold_binary_int(
     (Some(I32(va)), Some(I32(vb))) =>
       Some(ConstValue::I32(op(va.to_int64(), vb.to_int64()).to_int()))
     (Some(I64(va)), Some(I64(vb))) => Some(ConstValue::I64(op(va, vb)))
-    _ => None
-  }
-}
-
-///|
-/// Fold binary integer operation with checked result
-fn fold_binary_int_checked(
-  inst : Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
-  op : (Int64, Int64) -> Int64?,
-) -> ConstValue? {
-  if inst.operands.length() != 2 {
-    return None
-  }
-  let a = get_const(inst.operands[0], constants)
-  let b = get_const(inst.operands[1], constants)
-  match (a, b) {
-    (Some(I32(va)), Some(I32(vb))) =>
-      match op(va.to_int64(), vb.to_int64()) {
-        Some(r) => Some(ConstValue::I32(r.to_int()))
-        None => None
-      }
-    (Some(I64(va)), Some(I64(vb))) =>
-      match op(va, vb) {
-        Some(r) => Some(ConstValue::I64(r))
-        None => None
-      }
     _ => None
   }
 }
@@ -384,6 +336,202 @@ fn fold_icmp(
       let result = eval_icmp_i64(cc, va, vb)
       Some(ConstValue::I32(if result { 1 } else { 0 }))
     }
+    _ => None
+  }
+}
+
+///|
+fn fold_ishl(
+  inst : Inst,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> ConstValue? {
+  if inst.operands.length() != 2 {
+    return None
+  }
+  match
+    (
+      get_const(inst.operands[0], constants),
+      get_const(inst.operands[1], constants),
+    ) {
+    (Some(I32(a)), Some(I32(b))) => Some(ConstValue::I32(a << (b % 32)))
+    (Some(I64(a)), Some(I64(b))) =>
+      Some(ConstValue::I64(a << (b.to_int() % 64)))
+    _ => None
+  }
+}
+
+///|
+fn fold_sshr(
+  inst : Inst,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> ConstValue? {
+  if inst.operands.length() != 2 {
+    return None
+  }
+  match
+    (
+      get_const(inst.operands[0], constants),
+      get_const(inst.operands[1], constants),
+    ) {
+    (Some(I32(a)), Some(I32(b))) => Some(ConstValue::I32(a >> (b % 32)))
+    (Some(I64(a)), Some(I64(b))) =>
+      Some(ConstValue::I64(a >> (b.to_int() % 64)))
+    _ => None
+  }
+}
+
+///|
+fn fold_ushr(
+  inst : Inst,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> ConstValue? {
+  if inst.operands.length() != 2 {
+    return None
+  }
+  match
+    (
+      get_const(inst.operands[0], constants),
+      get_const(inst.operands[1], constants),
+    ) {
+    (Some(I32(a)), Some(I32(b))) => {
+      let shift = b % 32
+      let result = (a.reinterpret_as_uint() >> shift)
+        |> UInt::reinterpret_as_int
+      Some(ConstValue::I32(result))
+    }
+    (Some(I64(a)), Some(I64(b))) => {
+      let shift = b.to_int() % 64
+      let result = (a.reinterpret_as_uint64() >> shift).reinterpret_as_int64()
+      Some(ConstValue::I64(result))
+    }
+    _ => None
+  }
+}
+
+///|
+fn fold_sdiv(
+  inst : Inst,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> ConstValue? {
+  if inst.operands.length() != 2 {
+    return None
+  }
+  match
+    (
+      get_const(inst.operands[0], constants),
+      get_const(inst.operands[1], constants),
+    ) {
+    (Some(I32(a)), Some(I32(b))) =>
+      if b == 0 {
+        None
+      } else if a == -2147483648 && b == -1 {
+        None
+      } else {
+        Some(ConstValue::I32(a / b))
+      }
+    (Some(I64(a)), Some(I64(b))) =>
+      if b == 0L {
+        None
+      } else if a == -9223372036854775808L && b == -1L {
+        None
+      } else {
+        Some(ConstValue::I64(a / b))
+      }
+    _ => None
+  }
+}
+
+///|
+fn fold_udiv(
+  inst : Inst,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> ConstValue? {
+  if inst.operands.length() != 2 {
+    return None
+  }
+  match
+    (
+      get_const(inst.operands[0], constants),
+      get_const(inst.operands[1], constants),
+    ) {
+    (Some(I32(a)), Some(I32(b))) =>
+      if b == 0 {
+        None
+      } else {
+        let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint())
+          |> UInt::reinterpret_as_int
+        Some(ConstValue::I32(result))
+      }
+    (Some(I64(a)), Some(I64(b))) =>
+      if b == 0L {
+        None
+      } else {
+        let result = (a.reinterpret_as_uint64() / b.reinterpret_as_uint64())
+          |> UInt64::reinterpret_as_int64
+        Some(ConstValue::I64(result))
+      }
+    _ => None
+  }
+}
+
+///|
+fn fold_srem(
+  inst : Inst,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> ConstValue? {
+  if inst.operands.length() != 2 {
+    return None
+  }
+  match
+    (
+      get_const(inst.operands[0], constants),
+      get_const(inst.operands[1], constants),
+    ) {
+    (Some(I32(a)), Some(I32(b))) =>
+      if b == 0 {
+        None
+      } else {
+        Some(ConstValue::I32(a % b))
+      }
+    (Some(I64(a)), Some(I64(b))) =>
+      if b == 0L {
+        None
+      } else {
+        Some(ConstValue::I64(a % b))
+      }
+    _ => None
+  }
+}
+
+///|
+fn fold_urem(
+  inst : Inst,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> ConstValue? {
+  if inst.operands.length() != 2 {
+    return None
+  }
+  match
+    (
+      get_const(inst.operands[0], constants),
+      get_const(inst.operands[1], constants),
+    ) {
+    (Some(I32(a)), Some(I32(b))) =>
+      if b == 0 {
+        None
+      } else {
+        let result = (a.reinterpret_as_uint() % b.reinterpret_as_uint())
+          |> UInt::reinterpret_as_int
+        Some(ConstValue::I32(result))
+      }
+    (Some(I64(a)), Some(I64(b))) =>
+      if b == 0L {
+        None
+      } else {
+        let result = (a.reinterpret_as_uint64() % b.reinterpret_as_uint64())
+          |> UInt64::reinterpret_as_int64
+        Some(ConstValue::I64(result))
+      }
     _ => None
   }
 }

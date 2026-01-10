@@ -1,6 +1,16 @@
 // Constant folding and strength reduction rules
 
 ///|
+fn sign_extend(x : Int64, bits : Int) -> Int64 {
+  if bits >= 64 {
+    x
+  } else {
+    let shift = 64 - bits
+    x << shift >> shift
+  }
+}
+
+///|
 fn rule_mul_pow2() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -158,49 +168,83 @@ fn rule_const_fold() -> RewriteRule {
                     Some(rotated.reinterpret_as_int64())
                   }
                 }
-                Sdiv => if rhs != 0L { Some(lhs / rhs) } else { None }
-                Udiv => {
-                  let ulhs = lhs.reinterpret_as_uint64()
-                  let urhs = rhs.reinterpret_as_uint64()
-                  if urhs != 0UL {
-                    Some((ulhs / urhs).reinterpret_as_int64())
-                  } else {
+                Sdiv => {
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  let slhs = sign_extend(lhs, bits)
+                  let srhs = sign_extend(rhs, bits)
+                  if srhs == 0L {
                     None
+                  } else if slhs == ty_smin(bits) && srhs == -1L {
+                    None
+                  } else {
+                    Some(slhs / srhs)
                   }
                 }
-                Srem => if rhs != 0L { Some(lhs % rhs) } else { None }
-                Urem => {
-                  let ulhs = lhs.reinterpret_as_uint64()
-                  let urhs = rhs.reinterpret_as_uint64()
-                  if urhs != 0UL {
-                    Some((ulhs % urhs).reinterpret_as_int64())
-                  } else {
+                Udiv => {
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  let mask = ty_umax(bits)
+                  let ulhs = (lhs & mask).reinterpret_as_uint64()
+                  let urhs = (rhs & mask).reinterpret_as_uint64()
+                  if urhs == 0UL {
                     None
+                  } else {
+                    Some((ulhs / urhs).reinterpret_as_int64())
+                  }
+                }
+                Srem => {
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  let slhs = sign_extend(lhs, bits)
+                  let srhs = sign_extend(rhs, bits)
+                  if srhs == 0L {
+                    None
+                  } else {
+                    Some(slhs % srhs)
+                  }
+                }
+                Urem => {
+                  let bits = eg.get_bits(class_id).unwrap_or(64)
+                  let mask = ty_umax(bits)
+                  let ulhs = (lhs & mask).reinterpret_as_uint64()
+                  let urhs = (rhs & mask).reinterpret_as_uint64()
+                  if urhs == 0UL {
+                    None
+                  } else {
+                    Some((ulhs % urhs).reinterpret_as_int64())
                   }
                 }
                 // icmp constant folding
                 Icmp(cc) => {
+                  let bits = eg.get_bits(node.children[0]).unwrap_or(64)
+                  let mask = ty_umax(bits)
+                  let slhs = sign_extend(lhs, bits)
+                  let srhs = sign_extend(rhs, bits)
+                  let ulhs = (lhs & mask).reinterpret_as_uint64()
+                  let urhs = (rhs & mask).reinterpret_as_uint64()
                   let result = match cc {
-                    0 => lhs == rhs // eq
-                    1 => lhs != rhs // ne
-                    2 => lhs < rhs // slt
-                    3 => lhs <= rhs // sle
-                    4 => lhs > rhs // sgt
-                    5 => lhs >= rhs // sge
-                    6 =>
-                      lhs.reinterpret_as_uint64() < rhs.reinterpret_as_uint64() // ult
-                    7 =>
-                      lhs.reinterpret_as_uint64() <= rhs.reinterpret_as_uint64() // ule
-                    8 =>
-                      lhs.reinterpret_as_uint64() > rhs.reinterpret_as_uint64() // ugt
-                    9 =>
-                      lhs.reinterpret_as_uint64() >= rhs.reinterpret_as_uint64() // uge
+                    0 => (lhs & mask) == (rhs & mask) // eq
+                    1 => (lhs & mask) != (rhs & mask) // ne
+                    2 => slhs < srhs // slt
+                    3 => slhs <= srhs // sle
+                    4 => slhs > srhs // sgt
+                    5 => slhs >= srhs // sge
+                    6 => ulhs < urhs // ult
+                    7 => ulhs <= urhs // ule
+                    8 => ulhs > urhs // ugt
+                    9 => ulhs >= urhs // uge
                     _ => false
                   }
                   Some(if result { 1L } else { 0L })
                 }
-                Eq => Some(if lhs == rhs { 1L } else { 0L })
-                Ne => Some(if lhs != rhs { 1L } else { 0L })
+                Eq => {
+                  let bits = eg.get_bits(node.children[0]).unwrap_or(64)
+                  let mask = ty_umax(bits)
+                  Some(if (lhs & mask) == (rhs & mask) { 1L } else { 0L })
+                }
+                Ne => {
+                  let bits = eg.get_bits(node.children[0]).unwrap_or(64)
+                  let mask = ty_umax(bits)
+                  Some(if (lhs & mask) != (rhs & mask) { 1L } else { 0L })
+                }
                 _ => None
               }
               if result is Some(r) {

@@ -4,7 +4,9 @@
 
 ///|
 /// Error type for WASI process exit
-pub(all) suberror WasiExit Int
+pub(all) suberror WasiExit {
+  WasiExit(Int)
+}
 
 ///|
 /// fd_write - Write data to a file descriptor using scatter/gather I/O

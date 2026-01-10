@@ -16,6 +16,11 @@ fn main {
       "run": @clap.SubCommand::new(help="Run a WebAssembly module", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
         "invoke": @clap.Arg::named(nargs=AtMost(1), help="Function to invoke"),
+        "optmize": @clap.Arg::named(
+          short='O',
+          nargs=@clap.Nargs::AtMost(1),
+          help="Optimization level (0-3, default: 2)",
+        ),
         "arg": @clap.Arg::named(
           nargs=@clap.Nargs::Any,
           help="Arguments to pass to the function (can be repeated)",
@@ -72,7 +77,8 @@ fn main {
             nargs=@clap.Nargs::AtMost(1),
             help="Function index to explore (default: 0)",
           ),
-          "O": @clap.Arg::named(
+          "optmize": @clap.Arg::named(
+            short='O',
             nargs=@clap.Nargs::AtMost(1),
             help="Optimization level (0-3, default: 2)",
           ),
@@ -144,6 +150,17 @@ fn main {
                     }
                   None => None
                 }
+                let opt_level : Int = match sub.args.get("optmize") {
+                  Some(arr) =>
+                    if arr.length() > 0 {
+                      @strconv.parse_int(arr[0]) catch {
+                        _ => 2
+                      }
+                    } else {
+                      2
+                    }
+                  None => 2
+                }
                 // Get function arguments from --arg option (for invoked function)
                 let func_args : Array[String] = match sub.args.get("arg") {
                   Some(arr) => arr
@@ -179,7 +196,7 @@ fn main {
                 }
                 run_wasm(
                   file_path, invoke_opt, func_args, wasm_args, preloads, dirs, envs,
-                  wasi_options, debug, dump_on_trap, use_jit,
+                  wasi_options, debug, dump_on_trap, use_jit, opt_level,
                 )
               } else {
                 abort("missing file argument")
@@ -228,7 +245,7 @@ fn main {
                     }
                   None => None
                 }
-                let opt_level : Int = match sub.args.get("O") {
+                let opt_level : Int = match sub.args.get("optmize") {
                   Some(arr) =>
                     if arr.length() > 0 {
                       @strconv.parse_int(arr[0]) catch {

@@ -227,6 +227,7 @@ fn run_wasm(
   debug : Bool,
   dump_on_trap : Bool,
   use_jit : Bool,
+  opt_level : Int,
 ) -> Unit {
   if debug {
     @logger.enable_debug()
@@ -414,7 +415,7 @@ fn run_wasm(
       let jit_args : Array[String] = wasi_args
       let jit_results = run_with_jit(
         mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
-        jit_preopens,
+        jit_preopens, opt_level,
       )
       if jit_results.length() > 0 {
         // Print all results separated by spaces
@@ -793,6 +794,7 @@ fn run_with_jit(
   wasi_args : Array[String],
   wasi_envs : Array[String],
   wasi_preopens : Array[(String, String)],
+  opt_level : Int,
 ) -> Array[@types.Value] {
   ignore(debug)
   @logger.debug("JIT: Compiling module...")
@@ -813,6 +815,7 @@ fn run_with_jit(
     debug,
     dump_on_trap,
     actual_memory_max~,
+    opt_level,
   )
   match compiled {
     None => {
@@ -907,6 +910,7 @@ fn compile_module_to_jit(
   _debug : Bool,
   dump_on_trap : Bool,
   actual_memory_max? : Int? = None,
+  opt_level : Int,
 ) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
   let debug_db : @jit.JITDebugDB? = if dump_on_trap {
@@ -940,38 +944,34 @@ fn compile_module_to_jit(
       name=func_name,
       memory_max_override=actual_memory_max,
     )
-    // Stage 2: Optimize IR (O2 level)
-    @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
+    // Stage 2: Optimize IR (configurable level)
+    let normalized_opt_level = if opt_level < 0 {
+      0
+    } else if opt_level > 3 {
+      3
+    } else {
+      opt_level
+    }
+    @ir.optimize_with_level(
+      ir_func,
+      @ir.OptLevel::from_int(normalized_opt_level),
+    )
+    |> ignore
     let mut ir_dump : String? = None
-    if @logger.is_debug_enabled() || debug_db is Some(_) {
-      let text = ir_func.print()
-      if @logger.is_debug_enabled() {
-        @logger.debug("IR for \{func_name}:")
-        @logger.info(text)
-      }
-      ir_dump = Some(text)
+    if debug_db is Some(_) {
+      ir_dump = Some(ir_func.print())
     }
     // Stage 3: Lower to VCode
     let vcode_func = @lower.lower_function(ir_func)
     let mut vcode_before_dump : String? = None
-    if @logger.is_debug_enabled() || debug_db is Some(_) {
-      let text = vcode_func.print()
-      if @logger.is_debug_enabled() {
-        @logger.debug("VCode before regalloc for \{func_name}:")
-        @logger.info(text)
-      }
-      vcode_before_dump = Some(text)
+    if debug_db is Some(_) {
+      vcode_before_dump = Some(vcode_func.print())
     }
     // Stage 4: Register allocation
     let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
     let mut vcode_after_dump : String? = None
-    if @logger.is_debug_enabled() || debug_db is Some(_) {
-      let text = allocated.print()
-      if @logger.is_debug_enabled() {
-        @logger.debug("VCode after regalloc for \{func_name}:")
-        @logger.info(text)
-      }
-      vcode_after_dump = Some(text)
+    if debug_db is Some(_) {
+      vcode_after_dump = Some(allocated.print())
     }
     // Stage 5: Emit machine code
     let mc = @emit.emit_function(allocated, debug_func_idx=Some(func_idx))

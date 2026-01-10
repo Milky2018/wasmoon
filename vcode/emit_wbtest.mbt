@@ -728,6 +728,33 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
 }
 
 ///|
+test "emit: select uses 32-bit condition compare" {
+  let func = @regalloc.VCodeFunction::new("test_select_cmp32")
+  func.add_result(Int)
+  let block = func.new_block()
+  let load_cond = @instr.VCodeInst::new(LoadConst(0L))
+  load_cond.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  block.add_inst(load_cond)
+  let load_true = @instr.VCodeInst::new(LoadConst(1L))
+  load_true.add_def({ reg: @abi.Physical({ index: 1, class: Int }) })
+  block.add_inst(load_true)
+  let load_false = @instr.VCodeInst::new(LoadConst(2L))
+  load_false.add_def({ reg: @abi.Physical({ index: 2, class: Int }) })
+  block.add_inst(load_false)
+  let select_inst = @instr.VCodeInst::new(Select)
+  select_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  select_inst.add_use(@abi.Physical({ index: 0, class: Int }))
+  select_inst.add_use(@abi.Physical({ index: 1, class: Int }))
+  select_inst.add_use(@abi.Physical({ index: 2, class: Int }))
+  block.add_inst(select_inst)
+  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  let mc = @emit.emit_function(func)
+  let disasm = mc.dump_disasm()
+  inspect(disasm.contains("cmp w0, #0"), content="true")
+  inspect(!disasm.contains("cmp x0, #0"), content="true")
+}
+
+///|
 test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
   let func = @regalloc.VCodeFunction::new("test_call_ptr_c_4_0")
   let block = func.new_block()

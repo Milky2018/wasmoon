@@ -2748,7 +2748,7 @@ test "i64.trunc_f64_u: large value near 2^64" {
     "trunc",
   )
   let (store, instance) = instantiate_module(mod)
-  let pow2_63 = 2.0.pow(63.0)
+  let pow2_63 = @math.pow(2.0, 63.0)
   let results = call_exported_func(store, instance, "trunc", [F64(pow2_63)])
   match results[0] {
     I64(n) => inspect(n, content="-9223372036854775808")
@@ -2765,7 +2765,7 @@ test "i64.trunc_sat_f64_u: large value saturates correctly" {
     "trunc_sat",
   )
   let (store, instance) = instantiate_module(mod)
-  let pow2_64 = 2.0.pow(64.0)
+  let pow2_64 = @math.pow(2.0, 64.0)
   let results = call_exported_func(store, instance, "trunc_sat", [F64(pow2_64)])
   match results[0] {
     I64(n) => inspect(n, content="-1")
@@ -2782,7 +2782,7 @@ test "i64.trunc_sat_f64_u: value in range converts correctly" {
     "trunc_sat",
   )
   let (store, instance) = instantiate_module(mod)
-  let pow2_63 = 2.0.pow(63.0)
+  let pow2_63 = @math.pow(2.0, 63.0)
   let results = call_exported_func(store, instance, "trunc_sat", [F64(pow2_63)])
   match results[0] {
     I64(n) => inspect(n, content="-9223372036854775808")

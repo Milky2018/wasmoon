@@ -567,6 +567,72 @@ test "constant folding basic" {
 }
 
 ///|
+test "constant folding: i32 shift amount masked" {
+  let builder = IRBuilder::new("const_fold_i32_shl_mask")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let one = builder.iconst_i32(1)
+  let thirty_two = builder.iconst_i32(32)
+  let shifted = builder.ishl(one, thirty_two)
+  builder.return_([shifted])
+  let func = builder.get_function()
+  let result = fold_constants(func)
+  assert_true(result.changed)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iconst(1L))
+}
+
+///|
+test "constant folding: i32 shr_s is arithmetic" {
+  let builder = IRBuilder::new("const_fold_i32_sshr")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let a = builder.iconst_i32(-4)
+  let b = builder.iconst_i32(1)
+  let shifted = builder.sshr(a, b)
+  builder.return_([shifted])
+  let func = builder.get_function()
+  let result = fold_constants(func)
+  assert_true(result.changed)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iconst(-2L))
+}
+
+///|
+test "constant folding: i32 div_u uses 32-bit" {
+  let builder = IRBuilder::new("const_fold_i32_udiv")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let a = builder.iconst_i32(-1)
+  let b = builder.iconst_i32(2)
+  let q = builder.udiv(a, b)
+  builder.return_([q])
+  let func = builder.get_function()
+  let result = fold_constants(func)
+  assert_true(result.changed)
+  assert_true(
+    func.blocks[0].instructions[2].opcode is Opcode::Iconst(2147483647L),
+  )
+}
+
+///|
+test "constant folding: i32 div_s overflow not folded" {
+  let builder = IRBuilder::new("const_fold_i32_sdiv_overflow")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let a = builder.iconst_i32(-2147483648)
+  let b = builder.iconst_i32(-1)
+  let q = builder.sdiv(a, b)
+  builder.return_([q])
+  let func = builder.get_function()
+  let result = fold_constants(func)
+  assert_false(result.changed)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Sdiv)
+}
+
+///|
 test "dead code elimination" {
   let builder = IRBuilder::new("dce_test")
   builder.add_result(Type::I32)

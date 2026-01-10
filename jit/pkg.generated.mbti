@@ -200,7 +200,9 @@ pub(all) suberror CHeapError {
   NullReference
 }
 
-pub suberror JITTrap String
+pub suberror JITTrap {
+  JITTrap(String)
+}
 pub impl Show for JITTrap
 
 pub suberror PolycallError {

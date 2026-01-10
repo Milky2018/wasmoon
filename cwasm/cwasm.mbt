@@ -761,7 +761,9 @@ fn string_to_bytes(s : String) -> Array[Int] {
 
 ///|
 /// Error during deserialization
-pub suberror DeserializeError String
+pub suberror DeserializeError {
+  DeserializeError(String)
+}
 
 ///|
 pub impl Show for DeserializeError with output(self, logger) {

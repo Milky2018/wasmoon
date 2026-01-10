@@ -9,7 +9,9 @@ pub using @jit_ffi {c_jit_write_i64, c_jit_read_i64}
 
 ///|
 /// Error for JIT trap
-pub suberror JITTrap String derive(Show)
+pub suberror JITTrap {
+  JITTrap(String)
+} derive(Show)
 
 ///|
 /// Low-level trap detail captured by the JIT signal handlers (best-effort).

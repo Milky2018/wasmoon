@@ -1,7 +1,8 @@
 .DS_Store
-target/
+target
 .mooncakes/
 .moonagent/
 wasmoon
 wasmoon-tools
 TODO.md
+_build
