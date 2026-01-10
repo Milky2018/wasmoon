@@ -26,7 +26,7 @@ test "compiled entry: creation" {
 ///|
 test "precompiled module: creation" {
   let mod = PrecompiledModule::new(AArch64)
-  inspect(mod.version, content="4")
+  inspect(mod.version, content="5")
   inspect(mod.target.to_string(), content="aarch64")
   inspect(mod.function_count(), content="0")
 }
@@ -62,7 +62,7 @@ test "serialize and deserialize: roundtrip" {
 
   // Deserialize
   let restored = deserialize(bytes) catch { _ => panic() }
-  inspect(restored.version, content="4")
+  inspect(restored.version, content="5")
   inspect(restored.target.to_string(), content="aarch64")
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].func_idx, content="42")
@@ -231,7 +231,7 @@ test "complete module: memory + data + function roundtrip" {
   let restored = deserialize(bytes) catch { _ => panic() }
 
   // Check version
-  inspect(restored.version, content="4")
+  inspect(restored.version, content="5")
 
   // Check memory
   inspect(restored.memories.length(), content="1")
