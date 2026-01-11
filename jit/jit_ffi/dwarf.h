@@ -37,9 +37,10 @@ void wasmoon_dwarf_add_function(
  * Register the DWARF debug info with the debugger.
  * This generates a Mach-O/ELF object file in memory and
  * registers it with LLDB/GDB via the JIT interface.
- * @param dwarf  Builder handle
+ * @param dwarf    Builder handle
+ * @param verbose  If non-zero, print debug info to stderr
  */
-void wasmoon_dwarf_register(void *dwarf);
+void wasmoon_dwarf_register(void *dwarf, int verbose);
 
 /**
  * Unregister DWARF debug info from the debugger.

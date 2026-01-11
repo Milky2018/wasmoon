@@ -848,7 +848,7 @@ fn run_with_jit(
           // Register DWARF debug info with debugger if enabled
           // The DWARF info must stay registered for the duration of JIT execution
           let dwarf_builder : @jit.DWARFBuilder? = if enable_dwarf {
-            Some(jm.register_dwarf())
+            Some(jm.register_dwarf(verbose=@logger.is_debug_enabled()))
           } else {
             None
           }

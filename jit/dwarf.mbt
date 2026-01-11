@@ -52,8 +52,12 @@ pub fn DWARFBuilder::add_function(
 /// and registers it with LLDB/GDB via the standard JIT interface.
 /// After calling this, function names will appear in stack traces.
 /// Also sets this builder as the active one for backtrace lookups.
-pub fn DWARFBuilder::register(self : DWARFBuilder) -> Unit {
-  @jit_ffi.c_dwarf_register(self.handle)
+/// verbose: if true, print debug info to stderr
+pub fn DWARFBuilder::register(
+  self : DWARFBuilder,
+  verbose? : Bool = false,
+) -> Unit {
+  @jit_ffi.c_dwarf_register(self.handle, if verbose { 1 } else { 0 })
   // Set as active for backtrace lookups
   @jit_ffi.c_dwarf_set_active(self.handle)
 }

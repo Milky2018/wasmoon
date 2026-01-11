@@ -1141,7 +1141,8 @@ pub extern "c" fn c_dwarf_add_function(
 /// Register the DWARF debug info with the debugger (LLDB/GDB)
 /// This generates an in-memory Mach-O/ELF object and registers it
 /// via the GDB JIT interface
-pub extern "c" fn c_dwarf_register(dwarf : Int64) -> Unit = "wasmoon_dwarf_register"
+/// verbose: if true, print debug info to stderr
+pub extern "c" fn c_dwarf_register(dwarf : Int64, verbose : Int) -> Unit = "wasmoon_dwarf_register"
 
 ///|
 /// Unregister DWARF debug info from the debugger

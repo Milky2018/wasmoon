@@ -334,7 +334,7 @@ pub fn DWARFBuilder::destroy(Self) -> Unit
 pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
 pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
 pub fn DWARFBuilder::new() -> Self
-pub fn DWARFBuilder::register(Self) -> Unit
+pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
 
 pub struct ExecCode(@jit_ffi.ExecCode)
@@ -438,7 +438,7 @@ pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(Str
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self?
 pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : JITDebugDB?) -> Self?
 pub fn JITModule::new() -> Self
-pub fn JITModule::register_dwarf(Self) -> DWARFBuilder
+pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit

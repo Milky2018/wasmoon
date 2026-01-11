@@ -551,7 +551,7 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_add_function(
     }
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf) {
+MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose) {
     dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
 
     if (builder->num_functions == 0) {
@@ -593,20 +593,22 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf) {
 
     builder->code_entry = entry;
 
-    // Debug output only when WASMOON_DEBUG is set
-    if (getenv("WASMOON_DEBUG")) {
+    // Debug output only when verbose flag is set
+    if (verbose) {
         fprintf(stderr, "[DWARF] Registered %d functions with debugger (low_pc=0x%llx, high_pc=0x%llx)\n",
                 builder->num_functions, builder->low_pc, builder->high_pc);
     }
 
-    // Debug: dump object file for inspection
+    // Debug: dump object file for inspection (still uses env var)
     const char *dump_path = getenv("WASMOON_DWARF_DUMP");
     if (dump_path) {
         FILE *f = fopen(dump_path, "wb");
         if (f) {
             fwrite(builder->object_buffer, 1, builder->object_size, f);
             fclose(f);
-            fprintf(stderr, "[DWARF] Dumped object to %s (%zu bytes)\n", dump_path, builder->object_size);
+            if (verbose) {
+                fprintf(stderr, "[DWARF] Dumped object to %s (%zu bytes)\n", dump_path, builder->object_size);
+            }
         }
     }
 }

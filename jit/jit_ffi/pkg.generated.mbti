@@ -16,7 +16,7 @@ pub fn c_dwarf_format_backtrace(Int64, FixedArray[Int64], Int, FixedArray[Byte],
 
 pub fn c_dwarf_lookup_address(Int64, Int64, FixedArray[Byte], Int, FixedArray[Int], FixedArray[Int64]) -> Int
 
-pub fn c_dwarf_register(Int64) -> Unit
+pub fn c_dwarf_register(Int64, Int) -> Unit
 
 pub fn c_dwarf_set_active(Int64) -> Unit
 
