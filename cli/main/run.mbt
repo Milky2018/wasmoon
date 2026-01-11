@@ -847,7 +847,7 @@ fn run_with_jit(
           }
           // Register DWARF debug info with debugger if enabled
           // The DWARF info must stay registered for the duration of JIT execution
-          let _dwarf_builder : @jit.DWARFBuilder? = if enable_dwarf {
+          let dwarf_builder : @jit.DWARFBuilder? = if enable_dwarf {
             Some(jm.register_dwarf())
           } else {
             None
@@ -889,7 +889,26 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   @jit.gc_teardown()
-                  @logger.error("JIT Trap: \{msg}")
+                  // Capture and display backtrace if DWARF is enabled
+                  match dwarf_builder {
+                    Some(dwarf) => {
+                      let frames = dwarf.capture_backtrace()
+                      if frames.length() > 0 {
+                        @logger.error("JIT Trap: \{msg}")
+                        @logger.error("Backtrace:")
+                        let bt = dwarf.format_backtrace(frames)
+                        // Print backtrace lines without the logger prefix
+                        for line in bt.split("\n") {
+                          if line.length() > 0 {
+                            println(line)
+                          }
+                        }
+                      } else {
+                        @logger.error("JIT Trap: \{msg}")
+                      }
+                    }
+                    None => @logger.error("JIT Trap: \{msg}")
+                  }
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
                   return []
                 }

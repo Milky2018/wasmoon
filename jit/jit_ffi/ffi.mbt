@@ -25,6 +25,10 @@ pub extern "c" fn c_jit_get_trap_pc() -> Int64 = "wasmoon_jit_get_trap_pc"
 pub extern "c" fn c_jit_get_trap_lr() -> Int64 = "wasmoon_jit_get_trap_lr"
 
 ///|
+/// Get last trap FP (frame pointer), or 0 if unavailable
+pub extern "c" fn c_jit_get_trap_fp() -> Int64 = "wasmoon_jit_get_trap_fp"
+
+///|
 /// Get caller return address from the frame record ([fp + 8]), or 0 if unavailable
 pub extern "c" fn c_jit_get_trap_frame_lr() -> Int64 = "wasmoon_jit_get_trap_frame_lr"
 
@@ -1147,3 +1151,59 @@ pub extern "c" fn c_dwarf_unregister(dwarf : Int64) -> Unit = "wasmoon_dwarf_unr
 /// Destroy the DWARF builder and free resources
 /// Also unregisters debug info if registered
 pub extern "c" fn c_dwarf_destroy(dwarf : Int64) -> Unit = "wasmoon_dwarf_destroy"
+
+///|
+/// Set the active DWARF builder for address lookups
+/// This is used for backtrace symbolication
+pub extern "c" fn c_dwarf_set_active(dwarf : Int64) -> Unit = "wasmoon_dwarf_set_active"
+
+///|
+/// Lookup an address in the DWARF debug info
+/// Returns 1 if found, 0 if not found
+/// If found, writes results to the provided arrays
+#borrow(name_out, func_idx_out, offset_out)
+pub extern "c" fn c_dwarf_lookup_address(
+  dwarf : Int64,
+  addr : Int64,
+  name_out : FixedArray[Byte],
+  name_size : Int,
+  func_idx_out : FixedArray[Int],
+  offset_out : FixedArray[Int64],
+) -> Int = "wasmoon_dwarf_lookup_address"
+
+///|
+/// Capture a backtrace starting from the given PC and FP
+/// Returns the number of frames captured
+/// frames_out contains alternating (pc, fp) pairs
+#borrow(frames_out)
+pub extern "c" fn c_dwarf_capture_backtrace(
+  initial_pc : Int64,
+  initial_fp : Int64,
+  frames_out : FixedArray[Int64],
+  max_frames : Int,
+) -> Int = "wasmoon_dwarf_capture_backtrace"
+
+///|
+/// Capture a backtrace with LR fallback (for when FP is 0)
+/// Returns the number of frames captured
+/// frames_out contains alternating (pc, fp) pairs
+#borrow(frames_out)
+pub extern "c" fn c_dwarf_capture_backtrace_ex(
+  initial_pc : Int64,
+  initial_fp : Int64,
+  initial_lr : Int64,
+  frames_out : FixedArray[Int64],
+  max_frames : Int,
+) -> Int = "wasmoon_dwarf_capture_backtrace_ex"
+
+///|
+/// Format a backtrace as a string
+/// Returns the number of bytes written (excluding null terminator)
+#borrow(frames, buffer)
+pub extern "c" fn c_dwarf_format_backtrace(
+  dwarf : Int64,
+  frames : FixedArray[Int64],
+  frame_count : Int,
+  buffer : FixedArray[Byte],
+  buffer_size : Int,
+) -> Int = "wasmoon_dwarf_format_backtrace"

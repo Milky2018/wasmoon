@@ -92,11 +92,11 @@ pub fn JITStackFrame::build(
   let saved_gprs = build_gpr_save_list_v3(clobbered_gprs, needs_vmctx)
 
   // Determine if we need setup area (FP/LR)
-  // Required if function has calls, has callee-saves, or has spills
-  let has_setup_area = has_calls ||
-    saved_gprs.length() > 0 ||
-    clobbered_fprs.length() > 0 ||
-    num_spill_slots > 0
+  // Always set up frame pointer for proper debugging/backtrace support.
+  // The minor performance cost is worth it for debuggability.
+  // Previously: only if has_calls || saved_gprs || clobbered_fprs || spills
+  let _ = has_calls // suppress unused warning
+  let has_setup_area = true
 
   // Calculate size of each region
   let setup_area_size = if has_setup_area { SETUP_AREA_SIZE } else { 0 }

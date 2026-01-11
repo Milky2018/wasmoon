@@ -12,6 +12,7 @@ volatile sig_atomic_t g_trap_active = 0;
 volatile sig_atomic_t g_trap_signal = 0;
 volatile uintptr_t g_trap_pc = 0;
 volatile uintptr_t g_trap_lr = 0;
+volatile uintptr_t g_trap_fp = 0;
 volatile uintptr_t g_trap_frame_lr = 0;
 volatile uintptr_t g_trap_fault_addr = 0;
 volatile sig_atomic_t g_trap_brk_imm = -1;
@@ -142,6 +143,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_fault_addr = 0;
         g_trap_pc = 0;
         g_trap_lr = 0;
+        g_trap_fp = 0;
         g_trap_frame_lr = 0;
         g_trap_brk_imm = -1;
         g_trap_func_idx = -1;
@@ -154,9 +156,11 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         ucontext_t *uc = (ucontext_t *)ucontext;
         uint64_t pc = uc->uc_mcontext->__ss.__pc;
         g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
+        // Capture frame pointer for stack walking
+        uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+        g_trap_fp = fp;
         // If the function uses the standard prologue, the caller return address
         // is saved in the frame record at [fp + 8].
-        uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
         if (fp) {
             g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
         }
@@ -179,7 +183,9 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         ucontext_t *uc = (ucontext_t *)ucontext;
         uint64_t pc = uc->uc_mcontext.pc;
         g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
+        // Capture frame pointer for stack walking
         uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
+        g_trap_fp = fp;
         if (fp) {
             g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
         }
@@ -229,6 +235,7 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             pc = (uintptr_t)uc->uc_mcontext->__ss.__pc;
             g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
             uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+            g_trap_fp = fp;
             if (fp) {
                 g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
             }
@@ -239,6 +246,7 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             pc = (uintptr_t)uc->uc_mcontext.pc;
             g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
             uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
+            g_trap_fp = fp;
             if (fp) {
                 g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
             }

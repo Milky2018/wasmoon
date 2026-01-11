@@ -26,6 +26,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_lr(void) {
     return (int64_t)g_trap_lr;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fp(void) {
+    return (int64_t)g_trap_fp;
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_lr(void) {
     return (int64_t)g_trap_frame_lr;
 }

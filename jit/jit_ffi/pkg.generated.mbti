@@ -4,11 +4,21 @@ package "Milky2018/wasmoon/jit/jit_ffi"
 // Values
 pub fn c_dwarf_add_function(Int64, Bytes, Int64, Int, Int) -> Unit
 
+pub fn c_dwarf_capture_backtrace(Int64, Int64, FixedArray[Int64], Int) -> Int
+
+pub fn c_dwarf_capture_backtrace_ex(Int64, Int64, Int64, FixedArray[Int64], Int) -> Int
+
 pub fn c_dwarf_create() -> Int64
 
 pub fn c_dwarf_destroy(Int64) -> Unit
 
+pub fn c_dwarf_format_backtrace(Int64, FixedArray[Int64], Int, FixedArray[Byte], Int) -> Int
+
+pub fn c_dwarf_lookup_address(Int64, Int64, FixedArray[Byte], Int, FixedArray[Int], FixedArray[Int64]) -> Int
+
 pub fn c_dwarf_register(Int64) -> Unit
+
+pub fn c_dwarf_set_active(Int64) -> Unit
 
 pub fn c_dwarf_unregister(Int64) -> Unit
 
@@ -345,6 +355,8 @@ pub fn c_jit_get_trap_brk_imm() -> Int
 pub fn c_jit_get_trap_code() -> Int
 
 pub fn c_jit_get_trap_fault_addr() -> Int64
+
+pub fn c_jit_get_trap_fp() -> Int64
 
 pub fn c_jit_get_trap_frame_lr() -> Int64
 
