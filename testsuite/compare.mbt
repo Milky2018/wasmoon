@@ -582,7 +582,7 @@ fn eval_elem_offset_expr(
 
 ///|
 /// Initialize element segments for call_indirect support
-fn init_elem_segments(
+pub fn init_elem_segments(
   mod_ : @types.Module,
   jm : @jit.JITModule,
   globals : Array[@runtime.GlobalInstance],

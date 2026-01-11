@@ -593,8 +593,11 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf) {
 
     builder->code_entry = entry;
 
-    fprintf(stderr, "[DWARF] Registered %d functions with debugger (low_pc=0x%llx, high_pc=0x%llx)\n",
-            builder->num_functions, builder->low_pc, builder->high_pc);
+    // Debug output only when WASMOON_DEBUG is set
+    if (getenv("WASMOON_DEBUG")) {
+        fprintf(stderr, "[DWARF] Registered %d functions with debugger (low_pc=0x%llx, high_pc=0x%llx)\n",
+                builder->num_functions, builder->low_pc, builder->high_pc);
+    }
 
     // Debug: dump object file for inspection
     const char *dump_path = getenv("WASMOON_DWARF_DUMP");

@@ -940,7 +940,7 @@ fn compile_module_to_jit(
   dump_on_trap : Bool,
   actual_memory_max? : Int? = None,
   opt_level : Int,
-  _enable_dwarf : Bool,
+  enable_dwarf : Bool,
 ) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
   let debug_db : @jit.JITDebugDB? = if dump_on_trap {
@@ -1004,7 +1004,11 @@ fn compile_module_to_jit(
       vcode_after_dump = Some(allocated.print())
     }
     // Stage 5: Emit machine code
-    let mc = @emit.emit_function(allocated, debug_func_idx=Some(func_idx))
+    let mc = @emit.emit_function(
+      allocated,
+      debug_func_idx=Some(func_idx),
+      force_frame_setup=enable_dwarf,
+    )
     let mut mc_dump : String? = None
     if debug_db is Some(_) {
       mc_dump = Some(mc.dump_disasm())

@@ -31,6 +31,8 @@ pub fn eval_elem_offset_expr(Array[@types.Instruction], Array[@runtime.GlobalIns
 
 pub fn exports_shared_resources(@types.Module) -> Bool
 
+pub fn get_func_name(@types.Module, Int) -> String
+
 pub fn has_cross_module_imports(@types.Module) -> Bool
 
 pub fn has_unsupported_instructions(@types.Module) -> Bool

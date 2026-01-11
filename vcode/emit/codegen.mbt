@@ -417,6 +417,7 @@ fn MachineCode::emit_prologue(
 pub fn emit_function(
   func : @regalloc.VCodeFunction,
   debug_func_idx? : Int? = None,
+  force_frame_setup? : Bool = false,
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
@@ -450,6 +451,7 @@ pub fn emit_function(
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
+    force_frame_setup~,
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
