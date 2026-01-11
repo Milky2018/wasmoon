@@ -27,6 +27,9 @@
     "c_heap.mbt": [
       "native"
     ],
+    "dwarf.mbt": [
+      "native"
+    ],
     "execution_wbtest.mbt": [
       "native"
     ]

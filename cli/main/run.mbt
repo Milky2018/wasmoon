@@ -228,6 +228,7 @@ fn run_wasm(
   dump_on_trap : Bool,
   use_jit : Bool,
   opt_level : Int,
+  enable_dwarf : Bool,
 ) -> Unit {
   if debug {
     @logger.enable_debug()
@@ -415,7 +416,7 @@ fn run_wasm(
       let jit_args : Array[String] = wasi_args
       let jit_results = run_with_jit(
         mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
-        jit_preopens, opt_level,
+        jit_preopens, opt_level, enable_dwarf,
       )
       if jit_results.length() > 0 {
         // Print all results separated by spaces
@@ -795,6 +796,7 @@ fn run_with_jit(
   wasi_envs : Array[String],
   wasi_preopens : Array[(String, String)],
   opt_level : Int,
+  enable_dwarf : Bool,
 ) -> Array[@types.Value] {
   ignore(debug)
   @logger.debug("JIT: Compiling module...")
@@ -816,6 +818,7 @@ fn run_with_jit(
     dump_on_trap,
     actual_memory_max~,
     opt_level,
+    enable_dwarf,
   )
   match compiled {
     None => {
@@ -841,6 +844,13 @@ fn run_with_jit(
             @logger.warn(
               "failed to allocate WASM stack; falling back to host stack",
             )
+          }
+          // Register DWARF debug info with debugger if enabled
+          // The DWARF info must stay registered for the duration of JIT execution
+          let _dwarf_builder : @jit.DWARFBuilder? = if enable_dwarf {
+            Some(jm.register_dwarf())
+          } else {
+            None
           }
           // Initialize WASI context with args, env, and preopens
           jm.init_wasi(wasi_args, wasi_envs, wasi_preopens)
@@ -911,6 +921,7 @@ fn compile_module_to_jit(
   dump_on_trap : Bool,
   actual_memory_max? : Int? = None,
   opt_level : Int,
+  _enable_dwarf : Bool,
 ) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
   let debug_db : @jit.JITDebugDB? = if dump_on_trap {

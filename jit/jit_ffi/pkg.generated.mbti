@@ -2,6 +2,16 @@
 package "Milky2018/wasmoon/jit/jit_ffi"
 
 // Values
+pub fn c_dwarf_add_function(Int64, Bytes, Int64, Int, Int) -> Unit
+
+pub fn c_dwarf_create() -> Int64
+
+pub fn c_dwarf_destroy(Int64) -> Unit
+
+pub fn c_dwarf_register(Int64) -> Unit
+
+pub fn c_dwarf_unregister(Int64) -> Unit
+
 pub fn c_gc_heap_alloc_array(Int64, Int, Int, Int64) -> Int
 
 pub fn c_gc_heap_alloc_array_from_values(Int64, Int, FixedArray[Int64], Int) -> Int

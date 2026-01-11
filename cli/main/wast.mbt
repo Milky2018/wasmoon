@@ -99,6 +99,7 @@ fn try_compile_jit(
     false, // dump-on-trap off for wast tests
     actual_memory_max~,
     2,
+    false, // DWARF off for wast tests
   )
   match compiled {
     None => None

@@ -1108,3 +1108,42 @@ pub extern "c" fn c_jit_get_exception_spill_locals_ptr() -> Int64 = "wasmoon_jit
 /// Signature: get_spilled_local(ctx: *jit_context_t, idx: i32) -> i64
 /// Gets a spilled local value for catch handlers
 pub extern "c" fn c_jit_get_exception_get_spilled_local_ptr() -> Int64 = "wasmoon_jit_get_exception_get_spilled_local_ptr"
+
+// ============ DWARF Debug Info ============
+
+///|
+/// Create a new DWARF debug info builder
+/// Returns an opaque handle to pass to other DWARF functions
+pub extern "c" fn c_dwarf_create() -> Int64 = "wasmoon_dwarf_create"
+
+///|
+/// Add a function to the DWARF debug info
+/// Parameters:
+///   dwarf: Handle from c_dwarf_create()
+///   name: Function name (null-terminated bytes)
+///   addr: Function start address
+///   size: Function size in bytes
+///   func_idx: WebAssembly function index
+#borrow(name)
+pub extern "c" fn c_dwarf_add_function(
+  dwarf : Int64,
+  name : Bytes,
+  addr : Int64,
+  size : Int,
+  func_idx : Int,
+) -> Unit = "wasmoon_dwarf_add_function"
+
+///|
+/// Register the DWARF debug info with the debugger (LLDB/GDB)
+/// This generates an in-memory Mach-O/ELF object and registers it
+/// via the GDB JIT interface
+pub extern "c" fn c_dwarf_register(dwarf : Int64) -> Unit = "wasmoon_dwarf_register"
+
+///|
+/// Unregister DWARF debug info from the debugger
+pub extern "c" fn c_dwarf_unregister(dwarf : Int64) -> Unit = "wasmoon_dwarf_unregister"
+
+///|
+/// Destroy the DWARF builder and free resources
+/// Also unregisters debug info if registered
+pub extern "c" fn c_dwarf_destroy(dwarf : Int64) -> Unit = "wasmoon_dwarf_destroy"

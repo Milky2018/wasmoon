@@ -46,6 +46,10 @@ fn main {
         "dump-on-trap": @clap.Arg::flag(
           help="On JIT trap, dump IR/VCode/MC for the failing function",
         ),
+        "dwarf": @clap.Arg::flag(
+          short='W',
+          help="Generate DWARF debug info for JIT code (enables LLDB stack traces)",
+        ),
         "no-jit": @clap.Arg::flag(
           help="Disable JIT compilation (use interpreter)",
         ),
@@ -169,6 +173,7 @@ fn main {
                 // Get debug flag
                 let debug = sub.flags.get("debug") is Some(true)
                 let dump_on_trap = sub.flags.get("dump-on-trap") is Some(true)
+                let enable_dwarf = sub.flags.get("dwarf") is Some(true)
                 // Get directory mappings from --dir option
                 let dirs : Array[String] = match sub.args.get("dir") {
                   Some(arr) => arr
@@ -196,7 +201,7 @@ fn main {
                 }
                 run_wasm(
                   file_path, invoke_opt, func_args, wasm_args, preloads, dirs, envs,
-                  wasi_options, debug, dump_on_trap, use_jit, opt_level,
+                  wasi_options, debug, dump_on_trap, use_jit, opt_level, enable_dwarf,
                 )
               } else {
                 abort("missing file argument")

@@ -318,6 +318,15 @@ pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> 
 pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
 pub impl Show for CompilationStrategy
 
+pub struct DWARFBuilder {
+  // private fields
+}
+pub fn DWARFBuilder::add_function(Self, String, Int64, Int, Int) -> Unit
+pub fn DWARFBuilder::destroy(Self) -> Unit
+pub fn DWARFBuilder::new() -> Self
+pub fn DWARFBuilder::register(Self) -> Unit
+pub fn DWARFBuilder::unregister(Self) -> Unit
+
 pub struct ExecCode(@jit_ffi.ExecCode)
 #deprecated
 pub fn ExecCode::inner(Self) -> @jit_ffi.ExecCode
@@ -413,6 +422,7 @@ pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(Str
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self?
 pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : JITDebugDB?) -> Self?
 pub fn JITModule::new() -> Self
+pub fn JITModule::register_dwarf(Self) -> DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit

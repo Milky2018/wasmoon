@@ -944,3 +944,17 @@ pub fn JITModule::init_shared_tables(
     jit_table.set(elem_idx, funcref_value, type_hash)
   }
 }
+
+///|
+/// Register DWARF debug info with the debugger (LLDB/GDB)
+/// This enables stack traces to show WebAssembly function names
+/// Returns the DWARFBuilder handle (call destroy() when done)
+pub fn JITModule::register_dwarf(self : JITModule) -> DWARFBuilder {
+  let dwarf = DWARFBuilder::new()
+  for func_idx, func in self.functions {
+    let addr = self.get_func_ptr(func_idx)
+    dwarf.add_function(func.name, addr, func.code_size, func_idx)
+  }
+  dwarf.register()
+  dwarf
+}
