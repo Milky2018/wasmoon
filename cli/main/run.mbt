@@ -1015,6 +1015,12 @@ fn compile_module_to_jit(
     }
     // Stage 6: Add to precompiled module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
+    // DEBUG: Check MC sizes
+    if func_name == "_start" || func_idx == 9 {
+      @logger.debug(
+        "[COMPILE] \{func_name} (func_\{func_idx}): mc.size()=\{mc.size()}, mc.get_bytes().length()=\{mc.get_bytes().length()}, compiled.code_size=\{compiled.code_size}, get_code().length()=\{compiled.get_code().length()}",
+      )
+    }
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(
@@ -1036,7 +1042,7 @@ fn compile_module_to_jit(
     }
     if @logger.is_debug_enabled() &&
       mod_.codes.length() > 10 &&
-      (i + 1) % 10 == 0 {
+      ((i + 1) % 10 == 0 || i + 1 == mod_.codes.length()) {
       @logger.debug("JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
     }
   }
