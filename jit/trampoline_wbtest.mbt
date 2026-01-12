@@ -91,7 +91,7 @@ test "entry trampoline: no params, i32 result" {
     mc.dump_disasm(),
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f353bfa9  stp x19, x20, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|  0010: f40301aa  mov x20, x1
@@ -121,7 +121,7 @@ test "entry trampoline: i32 param, i32 result" {
     mc.dump_disasm(),
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f353bfa9  stp x19, x20, [sp, #-16]!
       #|  000c: ff4300d1  sub sp, sp, #16
       #|  0010: ff0300f9  str x31, [x31, #0]
@@ -157,7 +157,7 @@ test "entry trampoline: no params, no result" {
     mc.dump_disasm(),
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:
@@ -184,7 +184,7 @@ test "entry trampoline: f64 param, f64 result" {
     mc.dump_disasm(),
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f353bfa9  stp x19, x20, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|  0010: f40301aa  mov x20, x1
@@ -217,7 +217,7 @@ test "entry trampoline: multiple params" {
     mc.dump_disasm(),
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f353bfa9  stp x19, x20, [sp, #-16]!
       #|  000c: ff4300d1  sub sp, sp, #16
       #|  0010: ff0300f9  str x31, [x31, #0]
@@ -258,7 +258,7 @@ test "entry trampoline: 8 f64 params" {
     mc.dump_disasm(),
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f353bfa9  stp x19, x20, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|  0010: f40301aa  mov x20, x1
@@ -299,7 +299,7 @@ test "entry trampoline: 20 i64 params (debug)" {
     mc.dump_disasm(),
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f96bbfa9  stp x25, x26, [sp, #-16]!
       #|  000c: f763bfa9  stp x23, x24, [sp, #-16]!
       #|  0010: f55bbfa9  stp x21, x22, [sp, #-16]!

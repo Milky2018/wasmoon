@@ -667,12 +667,12 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
     }
   }
   // If there are duplicate annotations, this will fail
-  inspect(blr_count, content="1")
+  assert_eq(blr_count, 1)
   inspect(
     disasm,
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:
@@ -708,12 +708,12 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
       blr_count = blr_count + 1
     }
   }
-  inspect(blr_count, content="1")
+  assert_eq(blr_count, 1)
   inspect(
     disasm,
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:
@@ -775,12 +775,12 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
       blr_count = blr_count + 1
     }
   }
-  inspect(blr_count, content="1")
+  assert_eq(blr_count, 1)
   inspect(
     disasm,
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:
@@ -820,7 +820,7 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result) 2" {
     disasm,
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:

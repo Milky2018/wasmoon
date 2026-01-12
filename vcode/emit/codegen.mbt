@@ -274,7 +274,9 @@ fn MachineCode::emit_prologue(
   if stack_frame.has_setup_area {
     self.emit_stp_pre(29, 30, 31, -16)
     // mov x29, sp (set frame pointer)
-    self.emit_mov_reg(29, 31)
+    // Use ADD X29, SP, #0 because MOV with SP register has encoding issues
+    // (x31 as source is XZR, not SP, in ORR-based MOV)
+    self.emit_add_imm(29, 31, 0)
   }
 
   // Best-effort: record current wasm func_idx for trap diagnostics.

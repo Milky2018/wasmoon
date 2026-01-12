@@ -665,6 +665,21 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_set_active(void *dwarf) {
     g_active_dwarf = (dwarf_builder_t *)dwarf;
 }
 
+// Get JIT code address range (for frame walking boundary detection)
+MOONBIT_FFI_EXPORT uint64_t wasmoon_dwarf_get_low_pc(void) {
+    if (g_active_dwarf) {
+        return g_active_dwarf->low_pc;
+    }
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT uint64_t wasmoon_dwarf_get_high_pc(void) {
+    if (g_active_dwarf) {
+        return g_active_dwarf->high_pc;
+    }
+    return 0;
+}
+
 // Lookup an address in the DWARF builder
 // Returns: 1 if found, 0 if not found
 // If found, fills in name (up to name_size bytes), func_idx, and offset
@@ -714,8 +729,8 @@ typedef struct {
     uint64_t fp;        // Frame pointer
 } backtrace_frame_t;
 
-// Capture a backtrace starting from the given frame pointer and PC
-// Also takes LR (link register) as fallback when FP is 0
+// Capture a backtrace using pre-captured frames from signal handler
+// The frame chain was captured in the signal handler while the WASM stack was still valid
 // Returns the number of frames captured
 // frames_out should point to an array of at least MAX_BACKTRACE_DEPTH * 2 int64s
 // (alternating pc, fp pairs)
@@ -726,6 +741,10 @@ MOONBIT_FFI_EXPORT int wasmoon_dwarf_capture_backtrace_ex(
     int64_t *frames_out,
     int max_frames
 ) {
+    (void)initial_pc;
+    (void)initial_fp;
+    (void)initial_lr;
+
     if (!frames_out || max_frames <= 0) {
         return 0;
     }
@@ -733,66 +752,21 @@ MOONBIT_FFI_EXPORT int wasmoon_dwarf_capture_backtrace_ex(
         max_frames = MAX_BACKTRACE_DEPTH;
     }
 
+    // Use pre-captured frames from signal handler
+    extern volatile uintptr_t g_trap_frames_pc[];
+    extern volatile uintptr_t g_trap_frames_fp[];
+    extern volatile int g_trap_frame_count;
+
     int count = 0;
-    uint64_t pc = initial_pc;
-    uint64_t fp = initial_fp;
-
-
-    // First frame is the trap location
-    if (count < max_frames) {
-        frames_out[count * 2] = (int64_t)pc;
-        frames_out[count * 2 + 1] = (int64_t)fp;
-        count++;
+    int captured = g_trap_frame_count;
+    if (captured > max_frames) {
+        captured = max_frames;
     }
 
-    // If FP is 0 but we have LR, use LR as the second frame
-    // This happens when JIT code doesn't set up frame pointers
-    if (fp == 0 && initial_lr != 0 && count < max_frames) {
-        frames_out[count * 2] = (int64_t)initial_lr;
-        frames_out[count * 2 + 1] = 0;
+    for (int i = 0; i < captured; i++) {
+        frames_out[count * 2] = (int64_t)g_trap_frames_pc[i];
+        frames_out[count * 2 + 1] = (int64_t)g_trap_frames_fp[i];
         count++;
-    }
-
-    // Walk the frame pointer chain
-    // On AArch64, the frame record is: [fp] = previous_fp, [fp+8] = return_address
-    while (fp != 0 && count < max_frames) {
-        // Read previous frame pointer and return address
-        // We need to be careful not to crash on invalid memory
-        uint64_t *frame_ptr = (uint64_t *)fp;
-
-        // Basic sanity check - fp should be 16-byte aligned on AArch64
-        if ((fp & 0xF) != 0) {
-            break;
-        }
-
-        // Try to read the frame record
-        // This could fault if fp is invalid, but we're already in a signal handler context
-        // so we rely on the caller to only pass valid frame pointers
-        uint64_t prev_fp = frame_ptr[0];
-        uint64_t ret_addr = frame_ptr[1];
-
-        // Stop if we've reached the end of the chain
-        if (ret_addr == 0) {
-            break;
-        }
-
-        // Add this frame
-        frames_out[count * 2] = (int64_t)ret_addr;
-        frames_out[count * 2 + 1] = (int64_t)prev_fp;
-        count++;
-
-        // Check for stack corruption before moving to next frame
-        // On AArch64, stack grows down, so as we unwind:
-        // - prev_fp should be greater than current fp (higher address = older frame)
-        // - Or prev_fp should be 0 (end of chain)
-        if (prev_fp != 0 && prev_fp <= fp) {
-            // prev_fp should be higher than current fp
-            // If it's lower or equal, we have stack corruption
-            break;
-        }
-
-        // Move to next frame
-        fp = prev_fp;
     }
 
     return count;

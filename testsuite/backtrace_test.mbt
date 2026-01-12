@@ -197,10 +197,9 @@ test "backtrace: simple unreachable" {
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: unreachable
-      #|frames: 2
+      #|frames: 1
       #|  #0 test (func_idx=0)
-      #|  #1 <unknown>
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -222,10 +221,9 @@ test "backtrace: unreachable after some ops" {
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: unreachable
-      #|frames: 2
+      #|frames: 1
       #|  #0 test (func_idx=0)
-      #|  #1 <unknown>
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -248,7 +246,7 @@ test "backtrace: two-level call - callee traps" {
       #|frames: 2
       #|  #0 func_0 (func_idx=0)
       #|  #1 test (func_idx=1)
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -266,15 +264,15 @@ test "backtrace: three-level call - deepest traps" {
     #|)
   let result = run_jit_with_backtrace(source, "test", [])
   guard result is Err(info) else { return fail("Expected trap, got success") }
-  // BUG: Only 2 frames captured because FP=0, should show func_0 -> func_1 -> test
   inspect(
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: unreachable
-      #|frames: 2
+      #|frames: 3
       #|  #0 func_0 (func_idx=0)
       #|  #1 func_1 (func_idx=1)
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|  #2 test (func_idx=2)
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -292,15 +290,17 @@ test "backtrace: recursive call" {
     #|)
   let result = run_jit_with_backtrace(source, "test", [])
   guard result is Err(info) else { return fail("Expected trap, got success") }
-  // BUG: Only 2 frames, should show 4x func_0 + test (recursion depth 3)
   inspect(
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: unreachable
-      #|frames: 2
+      #|frames: 5
       #|  #0 func_0 (func_idx=0)
       #|  #1 func_0 (func_idx=0)
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|  #2 func_0 (func_idx=0)
+      #|  #3 func_0 (func_idx=0)
+      #|  #4 test (func_idx=1)
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -323,10 +323,9 @@ test "backtrace: call_indirect trap" {
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: unreachable
-      #|frames: 2
+      #|frames: 1
       #|  #0 test (func_idx=1)
-      #|  #1 <unknown>
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -346,10 +345,9 @@ test "backtrace: out of bounds memory access" {
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: unknown
-      #|frames: 2
+      #|frames: 1
       #|  #0 test (func_idx=0)
-      #|  #1 <unknown>
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -367,10 +365,9 @@ test "backtrace: divide by zero" {
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: integer
-      #|frames: 2
+      #|frames: 1
       #|  #0 test (func_idx=0)
-      #|  #1 <unknown>
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -389,15 +386,15 @@ test "backtrace: call chain with args" {
     #|)
   let result = run_jit_with_backtrace(source, "test", [])
   guard result is Err(info) else { return fail("Expected trap, got success") }
-  // BUG: Only 2 frames, should show func_0 -> func_1 -> test
   inspect(
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: unreachable
-      #|frames: 2
+      #|frames: 3
       #|  #0 func_0 (func_idx=0)
       #|  #1 func_1 (func_idx=1)
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|  #2 test (func_idx=2)
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }
@@ -417,10 +414,9 @@ test "backtrace: trap in conditional branch" {
     format_backtrace_for_snapshot(info),
     content=(
       #|trap_type: unreachable
-      #|frames: 2
+      #|frames: 1
       #|  #0 test (func_idx=0)
-      #|  #1 <unknown>
-      #|debug: fp=0, lr=nonzero, frame_lr=0
+      #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
     ),
   )
 }

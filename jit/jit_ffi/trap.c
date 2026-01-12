@@ -18,6 +18,16 @@ volatile uintptr_t g_trap_fault_addr = 0;
 volatile sig_atomic_t g_trap_brk_imm = -1;
 volatile sig_atomic_t g_trap_func_idx = -1;
 
+// WASM stack bounds for frame walking validation
+volatile uintptr_t g_trap_wasm_stack_base = 0;
+volatile uintptr_t g_trap_wasm_stack_top = 0;
+
+// Pre-captured frame chain (captured in signal handler while stack is still valid)
+#define MAX_TRAP_FRAMES 32
+volatile uintptr_t g_trap_frames_pc[MAX_TRAP_FRAMES];
+volatile uintptr_t g_trap_frames_fp[MAX_TRAP_FRAMES];
+volatile int g_trap_frame_count = 0;
+
 // Alternate signal stack for handling stack overflow
 #define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
 static char g_sigstack[SIGSTACK_SIZE];
@@ -127,6 +137,68 @@ static int decode_brk_imm(uintptr_t pc, uintptr_t *out_brk_pc, int *out_imm) {
     return 0;
 }
 
+// External functions to get JIT code range (from dwarf.c)
+extern uint64_t wasmoon_dwarf_get_low_pc(void);
+extern uint64_t wasmoon_dwarf_get_high_pc(void);
+
+// Walk the frame pointer chain and capture frames
+// Must be called from signal handler while WASM stack is still valid
+static void capture_frame_chain(uintptr_t initial_pc, uintptr_t initial_fp,
+                                 uintptr_t stack_base, uintptr_t stack_top) {
+    g_trap_frame_count = 0;
+
+    // Get JIT code range for boundary detection
+    uint64_t jit_low_pc = wasmoon_dwarf_get_low_pc();
+    uint64_t jit_high_pc = wasmoon_dwarf_get_high_pc();
+
+    // Capture first frame (trap location)
+    if (g_trap_frame_count < MAX_TRAP_FRAMES) {
+        g_trap_frames_pc[g_trap_frame_count] = initial_pc;
+        g_trap_frames_fp[g_trap_frame_count] = initial_fp;
+        g_trap_frame_count++;
+    }
+
+    // Walk the frame pointer chain
+    uintptr_t fp = initial_fp;
+    uintptr_t guard_size = 16 * 1024;  // Skip guard page region
+    uintptr_t valid_low = stack_base + guard_size;
+
+    while (fp != 0 && g_trap_frame_count < MAX_TRAP_FRAMES) {
+        // Validate FP is within WASM stack bounds
+        if (fp < valid_low || fp >= stack_top || (fp & 0xF) != 0) {
+            break;
+        }
+
+        // Read frame record: [fp] = prev_fp, [fp+8] = return_address
+        uintptr_t *frame_ptr = (uintptr_t *)fp;
+        uintptr_t prev_fp = frame_ptr[0];
+        uintptr_t return_addr = frame_ptr[1];
+
+        if (return_addr == 0) {
+            break;  // End of chain
+        }
+
+        // Stop if return address is outside JIT code range
+        // This means we've reached the runtime boundary (trampoline)
+        if (jit_low_pc != 0 && jit_high_pc != 0) {
+            if (return_addr < jit_low_pc || return_addr >= jit_high_pc) {
+                break;  // Left JIT code region
+            }
+        }
+
+        // Add this frame
+        g_trap_frames_pc[g_trap_frame_count] = return_addr;
+        g_trap_frames_fp[g_trap_frame_count] = prev_fp;
+        g_trap_frame_count++;
+
+        // Move to previous frame (FP should grow upward as we unwind)
+        if (prev_fp != 0 && prev_fp <= fp) {
+            break;  // Invalid chain
+        }
+        fp = prev_fp;
+    }
+}
+
 // Signal handler for SIGTRAP (triggered by BRK instruction)
 // Uses SA_SIGINFO to get ucontext and extract BRK immediate
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
@@ -147,8 +219,13 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_frame_lr = 0;
         g_trap_brk_imm = -1;
         g_trap_func_idx = -1;
+        g_trap_wasm_stack_base = 0;
+        g_trap_wasm_stack_top = 0;
         if (ctx) {
             g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
+            // Save WASM stack bounds for frame walking validation
+            g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
+            g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
         }
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -210,6 +287,15 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_code = trap_code;
         g_trap_pc = trap_pc;
         g_trap_brk_imm = brk_imm;
+
+        // Capture frame chain while WASM stack is still accessible
+        if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+            capture_frame_chain(trap_pc, g_trap_fp,
+                               g_trap_wasm_stack_base, g_trap_wasm_stack_top);
+        } else {
+            g_trap_frame_count = 0;
+        }
+
         siglongjmp(g_trap_jmp_buf, 1);
     }
 }
@@ -225,8 +311,13 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_fault_addr = (uintptr_t)fault_addr;
         g_trap_brk_imm = -1;
         g_trap_func_idx = -1;
+        g_trap_wasm_stack_base = 0;
+        g_trap_wasm_stack_top = 0;
         if (ctx) {
             g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
+            // Save WASM stack bounds for frame walking validation
+            g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
+            g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
         }
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -253,6 +344,14 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         }
 #endif
         g_trap_pc = pc;
+
+        // Capture frame chain while WASM stack is still accessible
+        if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+            capture_frame_chain(pc, g_trap_fp,
+                               g_trap_wasm_stack_base, g_trap_wasm_stack_top);
+        } else {
+            g_trap_frame_count = 0;
+        }
 
         // Check for memory guard page access (bounds check elimination)
         // This converts out-of-bounds memory access to a proper trap

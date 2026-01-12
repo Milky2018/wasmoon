@@ -46,6 +46,32 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_func_idx(void) {
     return (int)g_trap_func_idx;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_wasm_stack_base(void) {
+    return (int64_t)g_trap_wasm_stack_base;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_wasm_stack_top(void) {
+    return (int64_t)g_trap_wasm_stack_top;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_frame_count(void) {
+    return g_trap_frame_count;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_pc(int idx) {
+    if (idx >= 0 && idx < g_trap_frame_count) {
+        return (int64_t)g_trap_frames_pc[idx];
+    }
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_fp(int idx) {
+    if (idx >= 0 && idx < g_trap_frame_count) {
+        return (int64_t)g_trap_frames_fp[idx];
+    }
+    return 0;
+}
+
 // ============ Context Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
