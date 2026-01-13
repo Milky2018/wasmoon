@@ -133,7 +133,6 @@ pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
   result
 }
 
-
 ///|
 fn hex2(n : Int) -> String {
   @types.to_hex_byte(n)
@@ -148,7 +147,6 @@ fn to_hex_offset(n : Int, width : Int) -> String {
     "0".repeat(width - hex.length()) + hex
   }
 }
-
 
 ///|
 /// Define a label at the current position
