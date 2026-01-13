@@ -96,6 +96,12 @@ pub fn JITModuleContext::new(
 }
 
 ///|
+/// Modules that have built-in JIT trampolines
+pub fn builtin_jit_modules() -> Array[String] {
+  ["spectest", "wasi_snapshot_preview1"]
+}
+
+///|
 /// WAST execution context
 pub struct WastContext {
   store : @runtime.Store
@@ -105,12 +111,17 @@ pub struct WastContext {
   module_definitions : Map[String, @types.Module]
   // Registered modules for imports (module_name -> exports)
   registered_modules : Map[String, @runtime.ModuleInstance]
+  // Built-in modules that have been overridden by Register command
+  // JIT cannot use trampolines for these since they've been replaced
+  overridden_builtin_modules : @hashset.HashSet[String]
   // JIT support
   jit_modules : Map[String, JITModuleContext]
   mut current_jit : JITModuleContext?
   use_jit : Bool
   // JIT compiler callback (provided by main package)
   jit_compiler : JITCompiler?
+  // WASI context (for WASI function support in tests)
+  wasi_ctx : @wasi.WasiContext
 }
 
 ///|
@@ -124,20 +135,43 @@ pub fn WastContext::new(
   } else {
     @runtime.Store::new()
   }
+
+  // Create WASI context with default configuration for tests
+  let wasi_builder = @wasi.WasiContextBuilder::new()
+  wasi_builder.inherit_stdin() |> ignore
+  wasi_builder.inherit_stdout() |> ignore
+  wasi_builder.inherit_stderr() |> ignore
+  let wasi_ctx = wasi_builder.build()
+
   // Create spectest module with standard test functions/values
   let spectest_instance = create_spectest_module(store)
+
+  // Create WASI module using Linker (to reuse wasi::register_wasi)
+  let linker = @runtime.Linker::with_store(store)
+  // Register spectest with linker so WASI functions can use it if needed
+  linker.register("spectest", spectest_instance)
+  // Register all WASI functions - this creates the wasi_snapshot_preview1 module
+  @wasi.register_wasi(linker, wasi_ctx)
+  // Get the WASI module instance that was created by register_wasi
+  let wasi_instance = match linker.get_module("wasi_snapshot_preview1") {
+    Some(instance) => instance
+    None => @runtime.ModuleInstance::new() // Fallback: shouldn't happen
+  }
   let registered_modules : Map[String, @runtime.ModuleInstance] = Map::new()
   registered_modules.set("spectest", spectest_instance)
+  registered_modules.set("wasi_snapshot_preview1", wasi_instance)
   WastContext::{
     store,
     current_module: None,
     named_modules: Map::new(),
     module_definitions: Map::new(),
     registered_modules,
+    overridden_builtin_modules: @hashset.new(),
     jit_modules: Map::new(),
     current_jit: None,
     use_jit,
     jit_compiler,
+    wasi_ctx,
   }
 }
 
@@ -154,6 +188,13 @@ fn WastContext::try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
 ) -> JITModuleContext? {
+  // Check if module imports from any overridden built-in modules
+  // JIT cannot use these since the built-in trampolines don't match the overridden implementation
+  for imp in mod_.imports {
+    if self.overridden_builtin_modules.contains(imp.mod_name) {
+      return None // Fall back to interpreter for overridden modules
+    }
+  }
   match self.jit_compiler {
     Some(compiler) => (compiler.compile_fn)(mod_, instance, self.store)
     None => None
@@ -509,6 +550,13 @@ pub fn run_wast_command(
         ctx.registered_modules.set(name, i)
         // Also add to named_modules for later reference
         ctx.named_modules.set(name, i)
+        // Track if this overrides a built-in JIT module
+        // JIT cannot use built-in trampolines for overridden modules
+        for builtin in builtin_jit_modules() {
+          if name == builtin {
+            ctx.overridden_builtin_modules.add(name)
+          }
+        }
       }
     }
     Action(action) =>

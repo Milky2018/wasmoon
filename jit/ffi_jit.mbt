@@ -9,7 +9,52 @@ pub using @jit_ffi {c_jit_write_i64, c_jit_read_i64}
 
 ///|
 /// Error for JIT trap
-pub suberror JITTrap String derive(Show)
+pub suberror JITTrap {
+  JITTrap(String)
+} derive(Show)
+
+///|
+/// Low-level trap detail captured by the JIT signal handlers (best-effort).
+pub struct TrapDetails {
+  signal : Int
+  pc : Int64
+  lr : Int64
+  fp : Int64
+  frame_lr : Int64
+  fault_addr : Int64
+  brk_imm : Int
+  func_idx : Int
+}
+
+///|
+pub fn TrapDetails::new() -> TrapDetails {
+  {
+    signal: 0,
+    pc: 0L,
+    lr: 0L,
+    fp: 0L,
+    frame_lr: 0L,
+    fault_addr: 0L,
+    brk_imm: 0,
+    func_idx: -1,
+  }
+}
+
+///|
+/// Get the last captured trap details (best-effort).
+/// These fields are reset at the start of each JIT call.
+pub fn get_last_trap_details() -> TrapDetails {
+  {
+    signal: @jit_ffi.c_jit_get_trap_signal(),
+    pc: @jit_ffi.c_jit_get_trap_pc(),
+    lr: @jit_ffi.c_jit_get_trap_lr(),
+    fp: @jit_ffi.c_jit_get_trap_fp(),
+    frame_lr: @jit_ffi.c_jit_get_trap_frame_lr(),
+    fault_addr: @jit_ffi.c_jit_get_trap_fault_addr(),
+    brk_imm: @jit_ffi.c_jit_get_trap_brk_imm(),
+    func_idx: @jit_ffi.c_jit_get_trap_func_idx(),
+  }
+}
 
 ///|
 /// Check if trap occurred and raise error if so

@@ -82,6 +82,14 @@ pub fn MachineCode::annotate(self : MachineCode, text : String) -> Unit {
 /// Dump disassembly with hex bytes
 pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
   let mut result = ""
+  let max_offset = if self.pos > 0 { self.pos - 1 } else { 0 }
+  let width = if max_offset <= 0xFFFF {
+    4
+  } else if max_offset <= 0xFFFFFF {
+    6
+  } else {
+    8
+  }
   // Build a map of offset -> labels (multiple blocks can share same offset)
   let label_map : Map[Int, Array[Int]] = {}
   for entry in self.labels {
@@ -120,7 +128,7 @@ pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
       0
     }
     let hex = hex2(b0) + hex2(b1) + hex2(b2) + hex2(b3)
-    result = result + "  \{to_hex4(offset)}: \{hex}  \{text}\n"
+    result = result + "  \{to_hex_offset(offset, width)}: \{hex}  \{text}\n"
   }
   result
 }
@@ -131,8 +139,13 @@ fn hex2(n : Int) -> String {
 }
 
 ///|
-fn to_hex4(n : Int) -> String {
-  @types.to_hex_u16(n)
+fn to_hex_offset(n : Int, width : Int) -> String {
+  let hex = @types.int_to_hex(n)
+  if hex.length() >= width {
+    hex
+  } else {
+    "0".repeat(width - hex.length()) + hex
+  }
 }
 
 ///|

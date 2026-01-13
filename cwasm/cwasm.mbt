@@ -40,7 +40,8 @@ const CWASM_MAGIC_3 : Int = 0x73 // 's'
 /// v2: Added num_params and num_results to function entries
 /// v3: Added import table for WASI/external function support
 /// v4: Added memory definitions and data segments
-const CWASM_VERSION : Int = 4
+/// v5: Added type signatures, globals, tables, and element segments
+const CWASM_VERSION : Int = 5
 
 // ============ Target Architecture ============
 
@@ -222,6 +223,134 @@ pub impl Show for DataEntry with output(self, logger) {
   logger.write_string(self.to_string())
 }
 
+// ============ Type Entry (v5) ============
+
+///|
+/// A type entry with full parameter and result types
+/// ValueType encoding: 0=I32, 1=I64, 2=F32, 3=F64, 4=FuncRef, 5=ExternRef, etc.
+pub(all) struct TypeEntry {
+  param_types : Array[Int]
+  result_types : Array[Int]
+}
+
+///|
+pub fn TypeEntry::new(
+  param_types : Array[Int],
+  result_types : Array[Int],
+) -> TypeEntry {
+  { param_types, result_types }
+}
+
+///|
+fn TypeEntry::to_string(self : TypeEntry) -> String {
+  "Type([\{self.param_types.length()}] -> [\{self.result_types.length()}])"
+}
+
+///|
+pub impl Show for TypeEntry with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+// ============ Global Definition (v5) ============
+
+///|
+/// A global variable definition with initial value
+pub(all) struct GlobalDef {
+  // ValueType code (0=I32, 1=I64, 2=F32, 3=F64, etc.)
+  value_type : Int
+  // Whether the global is mutable
+  mutable : Bool
+  // Initial value as raw Int64 bits
+  init_value : Int64
+}
+
+///|
+pub fn GlobalDef::new(
+  value_type : Int,
+  mutable : Bool,
+  init_value : Int64,
+) -> GlobalDef {
+  { value_type, mutable, init_value }
+}
+
+///|
+fn GlobalDef::to_string(self : GlobalDef) -> String {
+  let mutability = if self.mutable { "mut" } else { "const" }
+  "Global(\{mutability} type=\{self.value_type})"
+}
+
+///|
+pub impl Show for GlobalDef with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+// ============ Table Definition (v5) ============
+
+///|
+/// A table definition
+pub(all) struct TableDef {
+  // Element type (4=FuncRef, 5=ExternRef)
+  elem_type : Int
+  // Minimum size
+  min_size : Int
+  // Maximum size (None = unlimited)
+  max_size : Int?
+}
+
+///|
+pub fn TableDef::new(
+  elem_type : Int,
+  min_size : Int,
+  max_size : Int?,
+) -> TableDef {
+  { elem_type, min_size, max_size }
+}
+
+///|
+fn TableDef::to_string(self : TableDef) -> String {
+  match self.max_size {
+    Some(max) => "Table(type=\{self.elem_type}, \{self.min_size}..\{max})"
+    None => "Table(type=\{self.elem_type}, \{self.min_size}+)"
+  }
+}
+
+///|
+pub impl Show for TableDef with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+// ============ Element Segment (v5) ============
+
+///|
+/// An element segment for table initialization
+pub(all) struct ElemEntry {
+  // Table index
+  table_idx : Int
+  // Offset in table
+  offset : Int
+  // Function indices (-1 for null)
+  func_indices : Array[Int]
+}
+
+///|
+pub fn ElemEntry::new(
+  table_idx : Int,
+  offset : Int,
+  func_indices : Array[Int],
+) -> ElemEntry {
+  { table_idx, offset, func_indices }
+}
+
+///|
+fn ElemEntry::to_string(self : ElemEntry) -> String {
+  "Elem(table=\{self.table_idx}, offset=\{self.offset}, \{self.func_indices.length()} entries)"
+}
+
+///|
+pub impl Show for ElemEntry with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
 // ============ Precompiled Module ============
 
 ///|
@@ -239,6 +368,16 @@ pub(all) struct PrecompiledModule {
   memories : Array[MemoryDef]
   // Data segments (with evaluated offsets)
   data_segments : Array[DataEntry]
+  // v5: Type signatures (full param/result types)
+  types : Array[TypeEntry]
+  // v5: Global definitions
+  globals : Array[GlobalDef]
+  // v5: Table definitions
+  tables : Array[TableDef]
+  // v5: Element segments
+  elements : Array[ElemEntry]
+  // v5: Start function index (None if no start function)
+  mut start_func : Int?
 }
 
 ///|
@@ -250,6 +389,11 @@ pub fn PrecompiledModule::new(target : TargetArch) -> PrecompiledModule {
     functions: [],
     memories: [],
     data_segments: [],
+    types: [],
+    globals: [],
+    tables: [],
+    elements: [],
+    start_func: None,
   }
 }
 
@@ -308,6 +452,58 @@ pub fn PrecompiledModule::add_data_segment(
   data : Array[Int],
 ) -> Unit {
   self.data_segments.push(DataEntry::new(memory_idx, offset, data))
+}
+
+///|
+/// Add a type entry (v5)
+pub fn PrecompiledModule::add_type(
+  self : PrecompiledModule,
+  param_types : Array[Int],
+  result_types : Array[Int],
+) -> Unit {
+  self.types.push(TypeEntry::new(param_types, result_types))
+}
+
+///|
+/// Add a global definition (v5)
+pub fn PrecompiledModule::add_global(
+  self : PrecompiledModule,
+  value_type : Int,
+  mutable : Bool,
+  init_value : Int64,
+) -> Unit {
+  self.globals.push(GlobalDef::new(value_type, mutable, init_value))
+}
+
+///|
+/// Add a table definition (v5)
+pub fn PrecompiledModule::add_table(
+  self : PrecompiledModule,
+  elem_type : Int,
+  min_size : Int,
+  max_size : Int?,
+) -> Unit {
+  self.tables.push(TableDef::new(elem_type, min_size, max_size))
+}
+
+///|
+/// Add an element segment (v5)
+pub fn PrecompiledModule::add_element(
+  self : PrecompiledModule,
+  table_idx : Int,
+  offset : Int,
+  func_indices : Array[Int],
+) -> Unit {
+  self.elements.push(ElemEntry::new(table_idx, offset, func_indices))
+}
+
+///|
+/// Set the start function (v5)
+pub fn PrecompiledModule::set_start_func(
+  self : PrecompiledModule,
+  func_idx : Int,
+) -> Unit {
+  self.start_func = Some(func_idx)
 }
 
 ///|
@@ -432,6 +628,59 @@ pub fn PrecompiledModule::serialize(self : PrecompiledModule) -> Array[Int] {
       result.push(b)
     }
   }
+
+  // v5: Write number of types
+  write_u32(result, self.types.length())
+  // Write each type
+  for t in self.types {
+    write_u32(result, t.param_types.length())
+    for p in t.param_types {
+      write_u32(result, p)
+    }
+    write_u32(result, t.result_types.length())
+    for r in t.result_types {
+      write_u32(result, r)
+    }
+  }
+
+  // v5: Write number of globals
+  write_u32(result, self.globals.length())
+  // Write each global
+  for g in self.globals {
+    write_u32(result, g.value_type)
+    result.push(if g.mutable { 1 } else { 0 })
+    write_i64(result, g.init_value)
+  }
+
+  // v5: Write number of tables
+  write_u32(result, self.tables.length())
+  // Write each table
+  for t in self.tables {
+    write_u32(result, t.elem_type)
+    write_u32(result, t.min_size)
+    match t.max_size {
+      Some(max) => write_u32(result, max)
+      None => write_u32(result, -1)
+    }
+  }
+
+  // v5: Write number of elements
+  write_u32(result, self.elements.length())
+  // Write each element
+  for e in self.elements {
+    write_u32(result, e.table_idx)
+    write_u32(result, e.offset)
+    write_u32(result, e.func_indices.length())
+    for idx in e.func_indices {
+      write_u32(result, idx)
+    }
+  }
+
+  // v5: Write start function (-1 for None)
+  match self.start_func {
+    Some(idx) => write_u32(result, idx)
+    None => write_u32(result, -1)
+  }
   result
 }
 
@@ -442,6 +691,19 @@ fn write_u32(buf : Array[Int], val : Int) -> Unit {
   buf.push((val >> 8) & 0xFF)
   buf.push((val >> 16) & 0xFF)
   buf.push((val >> 24) & 0xFF)
+}
+
+///|
+/// Write an i64 in little-endian format
+fn write_i64(buf : Array[Int], val : Int64) -> Unit {
+  buf.push((val & 0xFFL).to_int())
+  buf.push(((val >> 8) & 0xFFL).to_int())
+  buf.push(((val >> 16) & 0xFFL).to_int())
+  buf.push(((val >> 24) & 0xFFL).to_int())
+  buf.push(((val >> 32) & 0xFFL).to_int())
+  buf.push(((val >> 40) & 0xFFL).to_int())
+  buf.push(((val >> 48) & 0xFFL).to_int())
+  buf.push(((val >> 56) & 0xFFL).to_int())
 }
 
 ///|
@@ -499,7 +761,9 @@ fn string_to_bytes(s : String) -> Array[Int] {
 
 ///|
 /// Error during deserialization
-pub suberror DeserializeError String
+pub suberror DeserializeError {
+  DeserializeError(String)
+}
 
 ///|
 pub impl Show for DeserializeError with output(self, logger) {
@@ -524,9 +788,9 @@ pub fn deserialize(
     }
   }
 
-  // Read version
+  // Read version (support v4 and v5)
   let version = reader.read_u32()
-  if version != CWASM_VERSION {
+  if version != 4 && version != 5 {
     raise DeserializeError("Unsupported version: \{version}")
   }
 
@@ -606,6 +870,66 @@ pub fn deserialize(
     let data = reader.read_bytes(data_len)
     data_segments.push(DataEntry::new(memory_idx, offset, data))
   }
+
+  // v5 sections (only present if version >= 5)
+  let types : Array[TypeEntry] = []
+  let globals : Array[GlobalDef] = []
+  let tables : Array[TableDef] = []
+  let elements : Array[ElemEntry] = []
+  let mut start_func : Int? = None
+  if version >= 5 {
+    // Read types
+    let type_count = reader.read_u32()
+    for _ in 0..<type_count {
+      let param_count = reader.read_u32()
+      let param_types : Array[Int] = []
+      for _ in 0..<param_count {
+        param_types.push(reader.read_u32())
+      }
+      let result_count = reader.read_u32()
+      let result_types : Array[Int] = []
+      for _ in 0..<result_count {
+        result_types.push(reader.read_u32())
+      }
+      types.push(TypeEntry::new(param_types, result_types))
+    }
+
+    // Read globals
+    let global_count = reader.read_u32()
+    for _ in 0..<global_count {
+      let value_type = reader.read_u32()
+      let mutable = reader.read_byte() != 0
+      let init_value = reader.read_i64()
+      globals.push(GlobalDef::new(value_type, mutable, init_value))
+    }
+
+    // Read tables
+    let table_count = reader.read_u32()
+    for _ in 0..<table_count {
+      let elem_type = reader.read_u32()
+      let min_size = reader.read_u32()
+      let max_raw = reader.read_u32()
+      let max_size : Int? = if max_raw == -1 { None } else { Some(max_raw) }
+      tables.push(TableDef::new(elem_type, min_size, max_size))
+    }
+
+    // Read elements
+    let elem_count = reader.read_u32()
+    for _ in 0..<elem_count {
+      let table_idx = reader.read_u32()
+      let offset = reader.read_u32()
+      let func_count = reader.read_u32()
+      let func_indices : Array[Int] = []
+      for _ in 0..<func_count {
+        func_indices.push(reader.read_u32())
+      }
+      elements.push(ElemEntry::new(table_idx, offset, func_indices))
+    }
+
+    // Read start function
+    let start_raw = reader.read_u32()
+    start_func = if start_raw == -1 { None } else { Some(start_raw) }
+  }
   {
     version: CWASM_VERSION,
     target,
@@ -613,6 +937,11 @@ pub fn deserialize(
     functions,
     memories,
     data_segments,
+    types,
+    globals,
+    tables,
+    elements,
+    start_func,
   }
 }
 
@@ -648,6 +977,26 @@ fn ByteReader::read_u32(self : ByteReader) -> Int {
   let b2 = self.read_byte()
   let b3 = self.read_byte()
   b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+}
+
+///|
+fn ByteReader::read_i64(self : ByteReader) -> Int64 {
+  let b0 = self.read_byte().to_int64()
+  let b1 = self.read_byte().to_int64()
+  let b2 = self.read_byte().to_int64()
+  let b3 = self.read_byte().to_int64()
+  let b4 = self.read_byte().to_int64()
+  let b5 = self.read_byte().to_int64()
+  let b6 = self.read_byte().to_int64()
+  let b7 = self.read_byte().to_int64()
+  b0 |
+  (b1 << 8) |
+  (b2 << 16) |
+  (b3 << 24) |
+  (b4 << 32) |
+  (b5 << 40) |
+  (b6 << 48) |
+  (b7 << 56)
 }
 
 ///|

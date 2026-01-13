@@ -45,6 +45,22 @@
 extern sigjmp_buf g_trap_jmp_buf;
 extern volatile sig_atomic_t g_trap_code;
 extern volatile sig_atomic_t g_trap_active;
+extern volatile sig_atomic_t g_trap_signal;
+extern volatile uintptr_t g_trap_pc;
+extern volatile uintptr_t g_trap_lr;
+extern volatile uintptr_t g_trap_fp;
+extern volatile uintptr_t g_trap_frame_lr;
+extern volatile uintptr_t g_trap_fault_addr;
+extern volatile sig_atomic_t g_trap_brk_imm;
+extern volatile sig_atomic_t g_trap_func_idx;
+extern volatile uintptr_t g_trap_wasm_stack_base;
+extern volatile uintptr_t g_trap_wasm_stack_top;
+
+// Pre-captured frame chain (captured in signal handler)
+#define MAX_TRAP_FRAMES 32
+extern volatile uintptr_t g_trap_frames_pc[MAX_TRAP_FRAMES];
+extern volatile uintptr_t g_trap_frames_fp[MAX_TRAP_FRAMES];
+extern volatile int g_trap_frame_count;
 
 void install_trap_handler(void);
 

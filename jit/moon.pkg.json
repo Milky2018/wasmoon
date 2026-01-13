@@ -4,7 +4,8 @@
     "Milky2018/wasmoon/vcode",
     "Milky2018/wasmoon/vcode/emit",
     "Milky2018/wasmoon/cwasm",
-    "Milky2018/wasmoon/types"
+    "Milky2018/wasmoon/types",
+    "moonbitlang/x/fs"
   ],
   "wbtest-import": [
     "Milky2018/wasmoon/ir",
@@ -24,6 +25,9 @@
       "native"
     ],
     "c_heap.mbt": [
+      "native"
+    ],
+    "dwarf.mbt": [
       "native"
     ],
     "execution_wbtest.mbt": [

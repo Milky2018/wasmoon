@@ -86,14 +86,20 @@ pub fn JITStackFrame::build(
   has_calls? : Bool = false,
   outgoing_args_size? : Int = 0,
   needs_vmctx? : Bool = true,
+  force_frame_setup? : Bool = false,
 ) -> JITStackFrame {
   // Build the list of GPRs to save
   // In v3 ABI, we save X19 (vmctx) only if needed, and any clobbered callee-saved regs
   let saved_gprs = build_gpr_save_list_v3(clobbered_gprs, needs_vmctx)
 
   // Determine if we need setup area (FP/LR)
-  // Required if function has calls, has callee-saves, or has spills
-  let has_setup_area = has_calls ||
+  // Required when:
+  // - Function makes calls (need to save LR)
+  // - Function has callee-saved registers to save
+  // - Function has spill slots (need frame reference)
+  // - force_frame_setup is true (for DWARF/backtrace support)
+  let has_setup_area = force_frame_setup ||
+    has_calls ||
     saved_gprs.length() > 0 ||
     clobbered_fprs.length() > 0 ||
     num_spill_slots > 0

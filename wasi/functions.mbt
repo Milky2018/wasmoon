@@ -4,7 +4,9 @@
 
 ///|
 /// Error type for WASI process exit
-pub(all) suberror WasiExit Int
+pub(all) suberror WasiExit {
+  WasiExit(Int)
+}
 
 ///|
 /// fd_write - Write data to a file descriptor using scatter/gather I/O
@@ -1257,12 +1259,19 @@ pub fn path_filestat_set_times_impl(
 ///|
 /// fd_advise - Advise on file access patterns (no-op)
 pub fn fd_advise_impl(
-  _ctx : WasiContext,
-  _fd : Int,
+  ctx : WasiContext,
+  fd : Int,
   _offset : Int64,
   _len : Int64,
   _advice : Int,
 ) -> Int {
+  // Check fd validity - stdio fds are valid, others must be in file table
+  if fd >= 3 {
+    match ctx.get_file(fd) {
+      Some(_) => ()
+      None => return Errno::Badf.to_i32()
+    }
+  }
   // Just return success - advice is optional
   Errno::Success.to_i32()
 }

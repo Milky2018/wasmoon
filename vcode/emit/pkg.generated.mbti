@@ -19,7 +19,7 @@ pub const TYPE_V128 : Int = 4
 
 pub fn emit_entry_trampoline(Array[Int], Array[Int]) -> MachineCode
 
-pub fn emit_function(@regalloc.VCodeFunction) -> MachineCode
+pub fn emit_function(@regalloc.VCodeFunction, debug_func_idx? : Int?, force_frame_setup? : Bool) -> MachineCode
 
 // Errors
 
@@ -70,7 +70,7 @@ pub struct JITStackFrame {
   has_setup_area : Bool
   needs_vmctx : Bool
 }
-pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool) -> Self
+pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool, force_frame_setup? : Bool) -> Self
 pub fn JITStackFrame::get_fpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_gpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_outgoing_arg_offset(Self, Int) -> Int
@@ -111,7 +111,9 @@ pub fn MachineCode::emit_blr(Self, Int) -> Unit
 pub fn MachineCode::emit_br(Self, Int) -> Unit
 pub fn MachineCode::emit_byte(Self, Int) -> Unit
 pub fn MachineCode::emit_cbnz(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_cbnz32(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_cbz(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_cbz32(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_clz(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_clz32(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_cmp_imm(Self, Int, Int) -> Unit
@@ -208,6 +210,7 @@ pub fn MachineCode::emit_msub(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mul(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mul32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mvn(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_mvn32(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_nop(Self) -> Unit
 pub fn MachineCode::emit_orr_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_orr_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit

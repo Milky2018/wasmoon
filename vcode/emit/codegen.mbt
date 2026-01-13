@@ -198,7 +198,7 @@ fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
 ///
 /// Handles any size by using:
 /// - ADD/SUB with imm12 for values <= 4095
-/// - Load constant to X16 + ADD/SUB reg for larger values
+/// - ADD/SUB with imm12<<12 (4KB steps) for larger values
 fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
@@ -208,20 +208,46 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   } else {
     (amount, false)
   }
-  if abs_amount <= 4095 {
-    // Use immediate form
-    if is_sub {
+  let step = 4096
+  if is_sub {
+    // Stack allocation: touch stack pages so a guard page can't be skipped by a
+    // single large SP adjustment (e.g. large frames on the independent WASM stack).
+    //
+    // We probe in 4KB steps (<= minimum common page size), then do the remainder.
+    // This guarantees that if we cross into a PROT_NONE guard page, we fault while
+    // the faulting address is within the guard region (so the signal handler can
+    // classify it as "call stack exhausted").
+    if abs_amount <= 4095 {
       self.emit_sub_imm(31, 31, abs_amount)
-    } else {
-      self.emit_add_imm(31, 31, abs_amount)
+      // Touch at the new SP to fault immediately on overflow.
+      self.emit_str_imm(31, 31, 0)
+      return
     }
+    // abs_amount >= 4096
+    let mut remaining = abs_amount
+    while remaining >= step {
+      self.emit_sub_imm_shifted12(31, 31, 1)
+      self.emit_str_imm(31, 31, 0)
+      remaining = remaining - step
+    }
+    if remaining > 0 {
+      // remaining < step, so it fits in imm12
+      self.emit_sub_imm(31, 31, remaining)
+      self.emit_str_imm(31, 31, 0)
+    }
+    return
+  }
+  // Stack deallocation (or other upward adjustment): no probing needed.
+  if abs_amount <= 4095 {
+    self.emit_add_imm(31, 31, abs_amount)
   } else {
-    // Load constant to X16, then use register form
-    self.emit_load_imm64(16, abs_amount.to_int64())
-    if is_sub {
-      self.emit_sub_reg(31, 31, 16)
-    } else {
-      self.emit_add_reg(31, 31, 16)
+    let mut remaining = abs_amount
+    while remaining >= step {
+      self.emit_add_imm_shifted12(31, 31, 1)
+      remaining = remaining - step
+    }
+    if remaining > 0 {
+      self.emit_add_imm(31, 31, remaining)
     }
   }
 }
@@ -232,6 +258,7 @@ fn MachineCode::emit_prologue(
   stack_frame : JITStackFrame,
   params : Array[@abi.VReg],
   param_pregs : Array[@abi.PReg?],
+  debug_func_idx : Int?,
 ) -> Unit {
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
@@ -247,7 +274,22 @@ fn MachineCode::emit_prologue(
   if stack_frame.has_setup_area {
     self.emit_stp_pre(29, 30, 31, -16)
     // mov x29, sp (set frame pointer)
-    self.emit_mov_reg(29, 31)
+    // Use ADD X29, SP, #0 because MOV with SP register has encoding issues
+    // (x31 as source is XZR, not SP, in ORR-based MOV)
+    self.emit_add_imm(29, 31, 0)
+  }
+
+  // Best-effort: record current wasm func_idx for trap diagnostics.
+  match debug_func_idx {
+    Some(idx) => {
+      self.emit_load_imm64(16, idx.to_int64())
+      self.emit_str_w_imm(
+        16,
+        @abi.REG_CALLEE_VMCTX,
+        @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+      )
+    }
+    None => ()
   }
 
   // Step 2: Save callee-saved GPRs with pre-indexed pushes (Standard style)
@@ -374,7 +416,11 @@ fn MachineCode::emit_prologue(
 
 ///|
 /// Emit machine code for a VCode function
-pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
+pub fn emit_function(
+  func : @regalloc.VCodeFunction,
+  debug_func_idx? : Int? = None,
+  force_frame_setup? : Bool = false,
+) -> MachineCode {
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
@@ -407,10 +453,16 @@ pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
+    force_frame_setup~,
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
-  mc.emit_prologue(stack_frame, func.get_params(), func.get_param_pregs())
+  mc.emit_prologue(
+    stack_frame,
+    func.get_params(),
+    func.get_param_pregs(),
+    debug_func_idx,
+  )
 
   // Emit function body (blocks now in optimized order)
   let blocks = func.get_blocks()
@@ -422,6 +474,9 @@ pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
       // Peephole: fold u32->u64 zero-extend into following 64-bit add.
       //   extend.u32_64 r = x  ; (mov wR, wX)
       //   add r = add base, r ; => add r, base, wX, uxtw
+      // IMPORTANT: Only apply if the extend result is not used by any other
+      // instruction. Otherwise we'd skip the extend and later uses would
+      // read garbage.
       if inst.opcode is Extend(Unsigned32To64) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
@@ -436,20 +491,40 @@ pub fn emit_function(func : @regalloc.VCodeFunction) -> MachineCode {
           let add_op0 = reg_num(next.uses[0])
           let add_op1 = reg_num(next.uses[1])
           if add_dst == ext_dst {
-            let base = if add_op0 == ext_dst {
-              Some(add_op1)
-            } else if add_op1 == ext_dst {
-              Some(add_op0)
-            } else {
-              None
-            }
-            match base {
-              Some(rn) => {
-                mc.emit_add_uxtw(add_dst, rn, ext_src, 0)
-                inst_idx = inst_idx + 2
-                continue
+            // Check that ext_dst is used exactly once (only in the Add)
+            // If both operands are ext_dst (ext + ext), don't apply peephole
+            let ext_use_count = (if add_op0 == ext_dst { 1 } else { 0 }) +
+              (if add_op1 == ext_dst { 1 } else { 0 })
+            // Also check that ext_dst is not used in remaining instructions
+            let mut has_other_use = ext_use_count != 1
+            if !has_other_use {
+              for j in (inst_idx + 2)..<block.insts.length() {
+                let later_inst = block.insts[j]
+                for use_ in later_inst.uses {
+                  if reg_num(use_) == ext_dst {
+                    has_other_use = true
+                    break
+                  }
+                }
+                if has_other_use {
+                  break
+                }
               }
-              None => ()
+            }
+            if !has_other_use {
+              let base = if add_op0 == ext_dst {
+                Some(add_op1)
+              } else {
+                Some(add_op0)
+              }
+              match base {
+                Some(rn) => {
+                  mc.emit_add_uxtw(add_dst, rn, ext_src, 0)
+                  inst_idx = inst_idx + 2
+                  continue
+                }
+                None => ()
+              }
             }
           }
         }
@@ -624,10 +699,14 @@ fn MachineCode::emit_instruction(
         self.emit_ror_reg32(rd, rn, rm)
       }
     }
-    Not => {
+    Not(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      self.emit_mvn(rd, rn)
+      if is_64 {
+        self.emit_mvn(rd, rn)
+      } else {
+        self.emit_mvn32(rd, rn)
+      }
     }
     Bitcast => {
       // Reinterpret bits between int and float
@@ -943,8 +1022,8 @@ fn MachineCode::emit_instruction(
       let cond_reg = reg_num(inst.uses[0])
       let true_val = reg_num(inst.uses[1])
       let false_val = reg_num(inst.uses[2])
-      // Compare cond with 0: CMP cond, #0
-      self.emit_cmp_imm(cond_reg, 0)
+      // Compare cond with 0 (Wasm select condition is i32): CMP Wcond, #0
+      self.emit_cmp_imm32(cond_reg, 0)
       // Check register class to use appropriate select instruction
       let reg_class = match inst.defs[0].reg {
         Physical(preg) => preg.class
@@ -3143,23 +3222,35 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
     }
-    BranchZero(reg, is_nonzero, _is_64, then_b, else_b) => {
+    BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
       // CBZ/CBNZ reg, then_b + B else_b
-      // Note: Using 64-bit CBZ/CBNZ - works correctly since i32 values are zero-extended
+      // Use 32-bit CBZ/CBNZ for i32 to only check low 32 bits
       let rt = reg_num(reg)
       // Branch inversion: if then_b is next block, invert condition and branch to else_b
       if next_block == Some(then_b) {
         // Invert: CBZ->CBNZ, CBNZ->CBZ
         if is_nonzero {
-          self.emit_cbz(rt, else_b)
-        } else {
+          if is_64 {
+            self.emit_cbz(rt, else_b)
+          } else {
+            self.emit_cbz32(rt, else_b)
+          }
+        } else if is_64 {
           self.emit_cbnz(rt, else_b)
+        } else {
+          self.emit_cbnz32(rt, else_b)
         }
       } else {
         if is_nonzero {
-          self.emit_cbnz(rt, then_b)
-        } else {
+          if is_64 {
+            self.emit_cbnz(rt, then_b)
+          } else {
+            self.emit_cbnz32(rt, then_b)
+          }
+        } else if is_64 {
           self.emit_cbz(rt, then_b)
+        } else {
+          self.emit_cbz32(rt, then_b)
         }
         if next_block != Some(else_b) {
           self.emit_b(else_b)

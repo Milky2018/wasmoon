@@ -9,7 +9,8 @@
   (data (i32.const 100) "\c8\00\00\00")
   (data (i32.const 104) "\15\00\00\00")
   (func (export "_start")
-    (if (i32.eq (call $path_open
+    (local $errno i32)
+    (local.set $errno (call $path_open
       (i32.const 999)  ;; invalid dir_fd
       (i32.const 0)    ;; dirflags
       (i32.const 0)    ;; path
@@ -18,6 +19,6 @@
       (i64.const 0)    ;; rights_base
       (i64.const 0)    ;; rights_inheriting
       (i32.const 0)    ;; fdflags
-      (i32.const 50))  ;; opened_fd
-      (i32.const 8))   ;; EBADF
-      (then (drop (call $fd_write (i32.const 1) (i32.const 100) (i32.const 1) (i32.const 108)))))))
+      (i32.const 50)))  ;; opened_fd
+    (if (i32.ne (local.get $errno) (i32.const 8)) (then unreachable)) ;; EBADF
+    (drop (call $fd_write (i32.const 1) (i32.const 100) (i32.const 1) (i32.const 108)))))

@@ -29,6 +29,7 @@ enum Instruction {
   SubReg(Int, Int, Int)
   SubShifted(Int, Int, Int, @instr.ShiftType, Int)
   SubImm(Int, Int, Int)
+  SubImmShifted12(Int, Int, Int) // SUB with immediate shifted left by 12
   Mul(Int, Int, Int)
   Madd(Int, Int, Int, Int)
   Msub(Int, Int, Int, Int)
@@ -54,6 +55,7 @@ enum Instruction {
   EorReg(Int, Int, Int)
   EorShifted(Int, Int, Int, @instr.ShiftType, Int)
   Mvn(Int, Int)
+  Mvn32(Int, Int) // 32-bit bitwise NOT
   // Shift/Rotate - Register (64-bit)
   LslReg(Int, Int, Int)
   LsrReg(Int, Int, Int)
@@ -197,8 +199,10 @@ enum Instruction {
   // Branch
   B(Int)
   BCond(Int, Int)
-  Cbz(Int, Int)
-  Cbnz(Int, Int)
+  Cbz(Int, Int) // 64-bit CBZ
+  Cbnz(Int, Int) // 64-bit CBNZ
+  Cbz32(Int, Int) // 32-bit CBZ
+  Cbnz32(Int, Int) // 32-bit CBNZ
   BCondOffset(Int, Int)
   CbnzOffset(Int, Bool, Int) // rt, is_64, offset_bytes - branch if not zero with immediate offset
   Brk(Int)
@@ -521,6 +525,11 @@ fn Instruction::annotate(self : Instruction) -> String {
       let rd_name = if rd == 31 { "sp" } else { "x\{rd}" }
       "sub \{rd_name}, \{rn_name}, #\{imm12}"
     }
+    SubImmShifted12(rd, rn, imm12) => {
+      let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
+      let rd_name = if rd == 31 { "sp" } else { "x\{rd}" }
+      "sub \{rd_name}, \{rn_name}, #\{imm12}, lsl #12"
+    }
     Mul(rd, rn, rm) => "mul x\{rd}, x\{rn}, x\{rm}"
     Madd(rd, rn, rm, ra) => "madd x\{rd}, x\{rn}, x\{rm}, x\{ra}"
     Msub(rd, rn, rm, ra) => "msub x\{rd}, x\{rn}, x\{rm}, x\{ra}"
@@ -566,6 +575,7 @@ fn Instruction::annotate(self : Instruction) -> String {
       "eor x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
     }
     Mvn(rd, rm) => "mvn x\{rd}, x\{rm}"
+    Mvn32(rd, rm) => "mvn w\{rd}, w\{rm}"
     LslReg(rd, rn, rm) => "lsl x\{rd}, x\{rn}, x\{rm}"
     LsrReg(rd, rn, rm) => "lsr x\{rd}, x\{rn}, x\{rm}"
     AsrReg(rd, rn, rm) => "asr x\{rd}, x\{rn}, x\{rm}"
@@ -762,6 +772,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     }
     Cbz(rt, target_block) => "cbz x\{rt}, block\{target_block}"
     Cbnz(rt, target_block) => "cbnz x\{rt}, block\{target_block}"
+    Cbz32(rt, target_block) => "cbz w\{rt}, block\{target_block}"
+    Cbnz32(rt, target_block) => "cbnz w\{rt}, block\{target_block}"
     BCondOffset(cond, offset_bytes) => {
       let cond_name = cond_name_str(cond)
       "b.\{cond_name} .+\{offset_bytes}"
@@ -1125,6 +1137,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (rd & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
+    SubImmShifted12(rd, rn, imm12) => {
+      // Same as SubImm but with sh=1 (bit 22)
+      let imm = imm12 & 0xFFF
+      let inst = (0b1 << 31) |
+        (1 << 30) |
+        (0 << 29) |
+        (0b100010 << 23) |
+        (1 << 22) | // sh=1: shift imm12 left by 12
+        (imm << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     Mul(rd, rn, rm) => {
       let b0 = (rd & 0x1f) | ((rn & 0x7) << 5)
       let b1 = ((rn >> 3) & 0x3) | 0x7C
@@ -1309,7 +1334,14 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b0 = (rd & 31) | ((31 & 7) << 5)
       let b1 = (31 >> 3) & 3
       let b2 = (rm & 31) | 32
-      let b3 = 170
+      let b3 = 170 // 0xAA for 64-bit ORN
+      (b0, b1, b2, b3)
+    }
+    Mvn32(rd, rm) => {
+      let b0 = (rd & 31) | ((31 & 7) << 5)
+      let b1 = (31 >> 3) & 3
+      let b2 = (rm & 31) | 32
+      let b3 = 42 // 0x2A for 32-bit ORN (sf=0)
       (b0, b1, b2, b3)
     }
     LslReg(rd, rn, rm) => {
@@ -2248,8 +2280,10 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
     }
     B(_) => (0, 0, 0, 20)
     BCond(cond, _) => (cond & 15, 0, 0, 84)
-    Cbz(rt, _) => (rt & 31, 0, 0, 180)
-    Cbnz(rt, _) => (rt & 31, 0, 0, 181)
+    Cbz(rt, _) => (rt & 31, 0, 0, 180) // 0xB4 - 64-bit
+    Cbnz(rt, _) => (rt & 31, 0, 0, 181) // 0xB5 - 64-bit
+    Cbz32(rt, _) => (rt & 31, 0, 0, 52) // 0x34 - 32-bit
+    Cbnz32(rt, _) => (rt & 31, 0, 0, 53) // 0x35 - 32-bit
     BCondOffset(cond, offset_bytes) => {
       let imm19 = offset_bytes / 4
       let inst = 0x54000000 | ((imm19 & 0x7FFFF) << 5) | (cond & 0xF)
@@ -3516,6 +3550,18 @@ pub fn Instruction::emit(self : Instruction, mc : MachineCode) -> Unit {
       mc.emit_inst(b0, b1, b2, b3)
       mc.add_fixup(target_block, FixupKind::Branch19)
     }
+    Cbz32(_, target_block) => {
+      mc.annotate(self.annotate())
+      let (b0, b1, b2, b3) = self.instr_bytes()
+      mc.emit_inst(b0, b1, b2, b3)
+      mc.add_fixup(target_block, FixupKind::Branch19)
+    }
+    Cbnz32(_, target_block) => {
+      mc.annotate(self.annotate())
+      let (b0, b1, b2, b3) = self.instr_bytes()
+      mc.emit_inst(b0, b1, b2, b3)
+      mc.add_fixup(target_block, FixupKind::Branch19)
+    }
     Bl(target_block) => {
       mc.annotate(self.annotate())
       let (b0, b1, b2, b3) = self.instr_bytes()
@@ -3711,6 +3757,16 @@ pub fn MachineCode::emit_add_imm_shifted12(
 }
 
 ///|
+fn MachineCode::emit_sub_imm_shifted12(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  SubImmShifted12(rd, rn, imm12).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_sub_reg(
   self : MachineCode,
   rd : Int,
@@ -3833,6 +3889,11 @@ pub fn MachineCode::emit_ror_reg(
 ///|
 pub fn MachineCode::emit_mvn(self : MachineCode, rd : Int, rm : Int) -> Unit {
   Mvn(rd, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_mvn32(self : MachineCode, rd : Int, rm : Int) -> Unit {
+  Mvn32(rd, rm).emit(self)
 }
 
 ///|
@@ -4394,6 +4455,24 @@ pub fn MachineCode::emit_cbnz(
   target_block : Int,
 ) -> Unit {
   Cbnz(rt, target_block).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_cbz32(
+  self : MachineCode,
+  rt : Int,
+  target_block : Int,
+) -> Unit {
+  Cbz32(rt, target_block).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_cbnz32(
+  self : MachineCode,
+  rt : Int,
+  target_block : Int,
+) -> Unit {
+  Cbnz32(rt, target_block).emit(self)
 }
 
 ///|

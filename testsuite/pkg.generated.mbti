@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/testsuite"
 
 import(
+  "Milky2018/wasmoon/jit"
   "Milky2018/wasmoon/runtime"
   "Milky2018/wasmoon/types"
   "moonbitlang/core/json"
@@ -9,6 +10,8 @@ import(
 
 // Values
 pub fn compare_jit_interp(String, String, Array[@types.Value]) -> CompareResult
+
+pub fn init_elem_segments(@types.Module, @jit.JITModule, Array[@runtime.GlobalInstance]) -> Unit
 
 pub fn jit_results_to_values(Array[Int64], Array[@types.ValueType]) -> Array[@types.Value]
 

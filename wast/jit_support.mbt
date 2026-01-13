@@ -128,6 +128,17 @@ pub fn exports_shared_resources(mod_ : @types.Module) -> Bool {
 }
 
 ///|
+/// Get function name from exports or generate default name "func_N"
+pub fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
+  for exp in mod_.exports {
+    if exp.desc is Func(idx) && idx == func_idx {
+      return exp.name
+    }
+  }
+  "func_\{func_idx}"
+}
+
+///|
 /// Sync JIT globals back to the store after a JIT function call
 /// This ensures that global changes made by JIT are visible to the interpreter
 pub fn sync_jit_globals_to_store(

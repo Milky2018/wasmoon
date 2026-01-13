@@ -93,14 +93,17 @@ fn try_compile_jit(
     None
   }
   // Compile module to JIT
-  let precompiled = compile_module_to_jit(
+  let compiled = compile_module_to_jit(
     mod_,
     false, // debug mode off for wast tests
+    false, // dump-on-trap off for wast tests
     actual_memory_max~,
+    2,
+    false, // DWARF off for wast tests
   )
-  match precompiled {
+  match compiled {
     None => None
-    Some(pc) => {
+    Some((pc, _)) => {
       // Build func_signatures array for JIT module
       let func_signatures = @wast.build_func_signatures(mod_)
       // Load JIT module
@@ -111,6 +114,9 @@ fn try_compile_jit(
           // Allocate independent WASM stack with guard page (1MB)
           // This provides controlled stack overflow behavior
           let _ = jm.alloc_wasm_stack(1048576L)
+          // Initialize WASI for JIT (fd_table, args, env, preopens)
+          // Use quiet mode to redirect stdout/stderr to /dev/null for testing
+          jm.init_wasi_quiet([], [], [])
           // Initialize all memories (multi-memory support)
           if not(init_jit_memories(instance, store, jm)) {
             return None

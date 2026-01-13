@@ -240,7 +240,7 @@ pub(all) enum VCodeOpcode {
   AShr(Bool)
   LShr(Bool)
   Rotr(Bool)
-  Not
+  Not(Bool)
   FAdd(Bool)
   FSub(Bool)
   FMul(Bool)

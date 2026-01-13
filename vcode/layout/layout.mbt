@@ -144,6 +144,7 @@ pub fn reorder_blocks(
 
   // Create new function with reordered blocks
   let new_func = func.clone_base()
+  new_func.set_num_spill_slots(func.get_num_spill_slots())
 
   // Copy params
   for param in func.get_params() {

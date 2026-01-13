@@ -37,6 +37,7 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->memory_sizes = NULL;     // Array of memory sizes
     ctx->memory_max_sizes = NULL; // Array of memory max sizes
     ctx->memory_count = 0;
+    ctx->debug_current_func_idx = -1;
 
     // Memory guard pages (for bounds check elimination)
     ctx->memory0_alloc_base = NULL;

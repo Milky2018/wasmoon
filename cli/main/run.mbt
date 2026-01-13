@@ -1,4 +1,196 @@
 ///|
+/// Get the basename from a file path (last component after /)
+fn get_basename(path : String) -> String {
+  // Find last '/' character
+  let mut last_slash = -1
+  for i in 0..<path.length() {
+    if path.code_unit_at(i) == '/' {
+      last_slash = i
+    }
+  }
+  if last_slash == -1 {
+    path
+  } else if last_slash == path.length() - 1 {
+    // Trailing slash, find previous
+    let mut prev_slash = -1
+    for i in 0..<last_slash {
+      if path.code_unit_at(i) == '/' {
+        prev_slash = i
+      }
+    }
+    try! path[prev_slash + 1:last_slash].to_string()
+  } else {
+    try! path[last_slash + 1:].to_string()
+  }
+}
+
+///|
+/// Format a Value for output
+fn format_value(v : @types.Value) -> String {
+  match v {
+    I32(n) => n.to_string()
+    I64(n) => n.to_string()
+    F32(f) => f.to_string()
+    F64(d) => d.to_string()
+    FuncRef(idx) => "funcref:\{idx}"
+    ExternRef(idx) => "externref:\{idx}"
+    V128(bytes) => {
+      let mut hex = "v128:"
+      for i in 0..<bytes.length() {
+        hex = hex + @types.to_hex_byte(bytes[i].to_int())
+      }
+      hex
+    }
+    Null => "null"
+    StructRef(idx) => "struct:\{idx}"
+    ArrayRef(idx) => "array:\{idx}"
+    I31(n) => "i31:\{n}"
+    ExnRef(idx) => "exn:\{idx}"
+  }
+}
+
+///|
+/// Convert Value array to Int64 array for JIT call
+fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
+  args.map(fn(v) {
+    match v {
+      I32(n) => n.to_int64()
+      I64(n) => n
+      F32(f) => f.reinterpret_as_int().to_int64()
+      F64(d) => d.reinterpret_as_int64()
+      FuncRef(idx) => idx.to_int64()
+      ExternRef(idx) => idx.to_int64()
+      Null => @types.FUNCREF_NULL_SENTINEL
+      V128(_) => abort("V128 args not yet supported")
+      StructRef(idx) => idx.to_int64() << 1
+      ArrayRef(idx) => idx.to_int64() << 1
+      I31(n) => (n.to_int64() << 1) | 1L
+      ExnRef(idx) => idx.to_int64()
+    }
+  })
+}
+
+///|
+/// Convert JIT Int64 results to Value array using result types
+fn convert_jit_results(
+  results : Array[Int64],
+  result_types : Array[@types.ValueType],
+) -> Array[@types.Value] {
+  let values : Array[@types.Value] = []
+  let mut slot_idx = 0
+  for ty in result_types {
+    let value : @types.Value = match ty {
+      I32 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        I32(raw.to_int())
+      }
+      I64 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        I64(raw)
+      }
+      F32 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        F32(Float::reinterpret_from_int(raw.to_int()))
+      }
+      F64 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        F64(raw.reinterpret_as_double())
+      }
+      FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == @types.FUNCREF_NULL_SENTINEL {
+          Null
+        } else {
+          FuncRef(raw.to_int())
+        }
+      }
+      ExternRef | RefExtern | NullExternRef => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == @types.FUNCREF_NULL_SENTINEL {
+          Null
+        } else {
+          ExternRef(raw.to_int())
+        }
+      }
+      AnyRef | NullRef | RefAny | RefEq | RefNullEq => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else if (raw & 1L) == 1L {
+          I31((raw >> 1).to_int())
+        } else {
+          StructRef((raw >> 1).to_int())
+        }
+      }
+      ExnRef | NullExnRef => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else {
+          ExnRef(raw.to_int())
+        }
+      }
+      RefStruct(_) | RefNullStruct(_) => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else {
+          StructRef((raw >> 1).to_int())
+        }
+      }
+      RefArray(_) | RefNullArray(_) => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else {
+          ArrayRef((raw >> 1).to_int())
+        }
+      }
+      RefI31 | RefNullI31 => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        if raw == 0L {
+          Null
+        } else if (raw & 1L) == 1L {
+          I31((raw >> 1).to_int())
+        } else {
+          Null
+        }
+      }
+      RefNone => {
+        slot_idx += 1
+        Null
+      }
+      V128 => {
+        let low = results[slot_idx]
+        let high = results[slot_idx + 1]
+        slot_idx += 2
+        let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+        for i in 0..<8 {
+          buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
+        }
+        for i in 0..<8 {
+          buf.write_byte(((high >> (i * 8)) & 0xFFL).to_byte())
+        }
+        V128(buf.contents())
+      }
+    }
+    values.push(value)
+  }
+  values
+}
+
+///|
 /// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
 fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
   let b0 = bytes[offset].to_int64() & 0xFFL
@@ -20,22 +212,6 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 }
 
 ///|
-/// Decode JIT GC reference value to @types.Value
-/// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
-fn decode_gc_value(raw : Int64) -> @types.Value {
-  if raw == 0L {
-    @types.Value::Null
-  } else if (raw & 1L) == 1L {
-    // i31: (value << 1) | 1, decode by shifting right
-    @types.Value::I31((raw >> 1).to_int())
-  } else {
-    // Heap reference: gc_ref << 1, decode by shifting right
-    // Note: Could be struct or array, we use StructRef as default
-    @types.Value::StructRef((raw >> 1).to_int())
-  }
-}
-
-///|
 /// Run a WASM module
 /// If invoke is specified, call that function with args
 /// Otherwise, run the start function or _start export
@@ -43,12 +219,16 @@ fn run_wasm(
   wasm_path : String,
   invoke : String?,
   func_args : Array[String],
+  wasm_args : Array[String],
   preloads : Array[String],
   dirs : Array[String],
   envs : Array[String],
   wasi_options : Array[String],
   debug : Bool,
+  dump_on_trap : Bool,
   use_jit : Bool,
+  opt_level : Int,
+  enable_dwarf : Bool,
 ) -> Unit {
   if debug {
     @logger.enable_debug()
@@ -86,6 +266,10 @@ fn run_wasm(
   // Build WASI context with directory mappings and environment variables
   // Also collect preopens and env for JIT mode
   let wasi_builder = @wasi.WasiContextBuilder::new()
+  // argv[0] is the basename of the wasm file (like wasmtime), followed by wasm_args
+  let program_name = get_basename(wasm_path)
+  let wasi_args = [program_name] + wasm_args
+  wasi_builder.args(wasi_args) |> ignore
   let jit_preopens : Array[(String, String)] = []
   let jit_envs : Array[String] = []
   for dir in dirs {
@@ -229,9 +413,10 @@ fn run_wasm(
     if can_use_jit {
       // JIT execution path
       // Build WASI args: program name + any remaining args after --
-      let jit_args : Array[String] = [wasm_path]
+      let jit_args : Array[String] = wasi_args
       let jit_results = run_with_jit(
-        mod_, instance, store, func_name, args, debug, jit_args, jit_envs, jit_preopens,
+        mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
+        jit_preopens, opt_level, enable_dwarf,
       )
       if jit_results.length() > 0 {
         // Print all results separated by spaces
@@ -310,37 +495,6 @@ fn parse_env_var(s : String) -> (String, String)? {
     value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
   Some((name_builder.to_string(), value_builder.to_string()))
-}
-
-///|
-/// Format a WASM value for display
-fn format_value(v : @types.Value) -> String {
-  match v {
-    I32(n) => n.to_string()
-    I64(n) => n.to_string()
-    F32(n) => n.to_string()
-    F64(n) => n.to_string()
-    Null => "null"
-    FuncRef(idx) => "funcref(\{idx})"
-    ExternRef(idx) => "externref(\{idx})"
-    ExnRef(idx) => "exnref(\{idx})"
-    ArrayRef(idx) => "arrayref(\{idx})"
-    StructRef(idx) => "structref(\{idx})"
-    I31(n) => "i31(\{n})"
-    V128(bytes) => {
-      let hex_chars = "0123456789abcdef"
-      let hex = StringBuilder::new()
-      for i in 0..<bytes.length() {
-        if i > 0 {
-          hex.write_string(" ")
-        }
-        let b = bytes[i].to_int()
-        hex.write_char(hex_chars.code_unit_at(b / 16).unsafe_to_char())
-        hex.write_char(hex_chars.code_unit_at(b % 16).unsafe_to_char())
-      }
-      "v128(\{hex.to_string()})"
-    }
-  }
 }
 
 ///|
@@ -574,6 +728,61 @@ fn init_jit_globals(
 }
 
 ///|
+/// Initialize JIT tables from runtime table state.
+/// This is required for call_indirect and table operations in JIT mode.
+fn init_jit_tables(
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+  jm : @jit.JITModule,
+) -> Unit {
+  if instance.table_addrs.is_empty() {
+    return
+  }
+  // Collect JIT tables in module table index order
+  let jit_tables : Array[@jit.JITTable?] = []
+  for table_addr in instance.table_addrs {
+    jit_tables.push(store.get_jit_table(table_addr))
+  }
+  // Build store func address -> module func index map
+  let func_addr_to_idx : Map[Int, Int] = {}
+  for i, addr in instance.func_addrs {
+    func_addr_to_idx.set(addr, i)
+  }
+  // Copy table contents into JIT tables as (func_ptr, type_idx) pairs
+  let elem_init : Array[(Int, Int, Int, Int)] = []
+  for table_idx, table_addr in instance.table_addrs {
+    let runtime_table = store.get_table(table_addr) catch { _ => continue }
+    // Avoid writing past the allocated JIT table size (JIT tables are sized at instantiation).
+    let max_entries = match jit_tables[table_idx] {
+      Some(t) => t.get_size()
+      None => 0
+    }
+    let size = runtime_table.size().min(max_entries)
+    for elem_idx in 0..<size {
+      let value = runtime_table.get(elem_idx) catch { _ => continue }
+      match value {
+        FuncRef(store_addr) => {
+          let func_idx = match func_addr_to_idx.get(store_addr) {
+            Some(idx) => idx
+            None => -1
+          }
+          let type_idx = if func_idx >= 0 &&
+            func_idx < instance.func_type_indices.length() {
+            instance.func_type_indices[func_idx]
+          } else {
+            -1
+          }
+          elem_init.push((table_idx, elem_idx, func_idx, type_idx))
+        }
+        // Null and non-funcref entries are written as null to keep shared tables consistent.
+        _ => elem_init.push((table_idx, elem_idx, -1, -1))
+      }
+    }
+  }
+  jm.init_shared_tables(jit_tables, elem_init)
+}
+
+///|
 /// Run a function using JIT compilation
 fn run_with_jit(
   mod_ : @types.Module,
@@ -582,9 +791,12 @@ fn run_with_jit(
   func_name : String,
   args : Array[@types.Value],
   debug : Bool,
+  dump_on_trap : Bool,
   wasi_args : Array[String],
   wasi_envs : Array[String],
   wasi_preopens : Array[(String, String)],
+  opt_level : Int,
+  enable_dwarf : Bool,
 ) -> Array[@types.Value] {
   ignore(debug)
   @logger.debug("JIT: Compiling module...")
@@ -600,26 +812,46 @@ fn run_with_jit(
     None
   }
   // Compile module to precompiled format in memory
-  let precompiled = compile_module_to_jit(mod_, debug, actual_memory_max~)
-  match precompiled {
+  let compiled = compile_module_to_jit(
+    mod_,
+    debug,
+    dump_on_trap,
+    actual_memory_max~,
+    opt_level,
+    enable_dwarf,
+  )
+  match compiled {
     None => {
       @logger.error("JIT compilation failed")
       return []
     }
-    Some(pc) => {
+    Some((pc, debug_db)) => {
       // Build func_signatures array for JITModule::load
       let func_signatures = build_jit_func_signatures(mod_)
       // Load JIT module
-      let jit_module = @jit.JITModule::load(pc, func_signatures)
+      let jit_module = @jit.JITModule::load(pc, func_signatures, debug_db~)
       match jit_module {
         None => {
           @logger.error("Failed to load JIT module")
           return []
         }
         Some(jm) => {
-          // Allocate independent WASM stack with guard page (1MB)
-          // This provides controlled stack overflow behavior
-          let _ = jm.alloc_wasm_stack(1048576L)
+          // Allocate independent WASM stack with guard page.
+          // Use a larger default than 1MB since real-world programs can have
+          // large native frames after register allocation.
+          let wasm_stack_ok = jm.alloc_wasm_stack(16L * 1024L * 1024L)
+          if not(wasm_stack_ok) {
+            @logger.warn(
+              "failed to allocate WASM stack; falling back to host stack",
+            )
+          }
+          // Register DWARF debug info with debugger if enabled
+          // The DWARF info must stay registered for the duration of JIT execution
+          let dwarf_builder : @jit.DWARFBuilder? = if enable_dwarf {
+            Some(jm.register_dwarf(verbose=@logger.is_debug_enabled()))
+          } else {
+            None
+          }
           // Initialize WASI context with args, env, and preopens
           jm.init_wasi(wasi_args, wasi_envs, wasi_preopens)
           // Initialize all memories (multi-memory support)
@@ -632,29 +864,14 @@ fn run_with_jit(
           if globals_ptr != 0L {
             jm.set_globals(globals_ptr)
           }
+          // Initialize tables for call_indirect and table operations
+          init_jit_tables(instance, store, jm)
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {
             Some(f) => {
-              // Convert args to Int64
-              let i64_args : Array[Int64] = []
-              for arg in args {
-                let v = match arg {
-                  I32(n) => @types.ToInt64::to_int64_bits(n)
-                  I64(n) => @types.ToInt64::to_int64_bits(n)
-                  F32(n) => @types.ToInt64::to_int64_bits(n)
-                  F64(n) => @types.ToInt64::to_int64_bits(n)
-                  FuncRef(idx) => idx.to_int64()
-                  ExternRef(idx) => idx.to_int64()
-                  ExnRef(idx) => idx.to_int64()
-                  ArrayRef(idx) => idx.to_int64()
-                  StructRef(idx) => idx.to_int64()
-                  I31(n) => n.to_int64()
-                  Null => @types.FUNCREF_NULL_SENTINEL // Sentinel value for null reference
-                  V128(_) => abort("V128 args not yet supported in JIT")
-                }
-                i64_args.push(v)
-              }
+              // Convert args to Int64 using shared helper
+              let i64_args = convert_args_to_jit(args)
               @logger.debug("JIT: Calling function '\{func_name}'")
               // Set up GC heap for JIT execution if c_heap is available
               match store.c_heap {
@@ -672,82 +889,34 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   @jit.gc_teardown()
-                  @logger.error("JIT Trap: \{msg}")
+                  // Capture and display backtrace if DWARF is enabled
+                  match dwarf_builder {
+                    Some(dwarf) => {
+                      let frames = dwarf.capture_backtrace()
+                      if frames.length() > 0 {
+                        @logger.error("JIT Trap: \{msg}")
+                        @logger.error("Backtrace:")
+                        let bt = dwarf.format_backtrace(frames)
+                        // Print backtrace lines without the logger prefix
+                        for line in bt.split("\n") {
+                          if line.length() > 0 {
+                            println(line)
+                          }
+                        }
+                      } else {
+                        @logger.error("JIT Trap: \{msg}")
+                      }
+                    }
+                    None => @logger.error("JIT Trap: \{msg}")
+                  }
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
                   return []
                 }
               }
               // Tear down GC context after JIT call
               @jit.gc_teardown()
-              // Convert Int64 results to Value based on result types
-              let values : Array[@types.Value] = []
-              for i, r in results {
-                if i < f.result_types.length() {
-                  @logger.debug(
-                    "result[\{i}] type: \{f.result_types[i]}, raw value: \{r}",
-                  )
-                  let v = match f.result_types[i] {
-                    I32 =>
-                      @types.Value::I32(@types.FromInt64::from_int64_bits(r))
-                    I64 =>
-                      @types.Value::I64(@types.FromInt64::from_int64_bits(r))
-                    F32 =>
-                      @types.Value::F32(@types.FromInt64::from_int64_bits(r))
-                    F64 =>
-                      @types.Value::F64(@types.FromInt64::from_int64_bits(r))
-                    FuncRef
-                    | RefFunc
-                    | RefFuncTyped(_)
-                    | RefNullFuncTyped(_)
-                    | NullFuncRef =>
-                      if r == @types.FUNCREF_NULL_SENTINEL {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::FuncRef(r.to_int())
-                      }
-                    ExternRef | RefExtern | NullExternRef =>
-                      if r == @types.FUNCREF_NULL_SENTINEL {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::ExternRef(r.to_int())
-                      }
-                    // GC reference types - decode using JIT encoding:
-                    // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
-                    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
-                      decode_gc_value(r)
-                    ExnRef | NullExnRef =>
-                      if r == @types.FUNCREF_NULL_SENTINEL {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::ExnRef(r.to_int())
-                      }
-                    V128 => @types.Value::I64(r) // Placeholder for V128
-                    // GC struct/array reference types
-                    RefStruct(_) | RefNullStruct(_) =>
-                      if r == 0L {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::StructRef((r >> 1).to_int())
-                      }
-                    RefArray(_) | RefNullArray(_) =>
-                      if r == 0L {
-                        @types.Value::Null
-                      } else {
-                        @types.Value::ArrayRef((r >> 1).to_int())
-                      }
-                    RefI31 | RefNullI31 =>
-                      if r == 0L {
-                        @types.Value::Null
-                      } else if (r & 1L) == 1L {
-                        @types.Value::I31((r >> 1).to_int())
-                      } else {
-                        @types.Value::Null
-                      }
-                    RefNone => @types.Value::Null
-                  }
-                  values.push(v)
-                }
-              }
+              // Convert Int64 results to Value using shared helper
+              let values = convert_jit_results(results, f.result_types)
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)
               values
             }
@@ -768,9 +937,17 @@ fn run_with_jit(
 fn compile_module_to_jit(
   mod_ : @types.Module,
   _debug : Bool,
+  dump_on_trap : Bool,
   actual_memory_max? : Int? = None,
-) -> @cwasm.PrecompiledModule? {
+  opt_level : Int,
+  enable_dwarf : Bool,
+) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
   let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let debug_db : @jit.JITDebugDB? = if dump_on_trap {
+    Some(@jit.JITDebugDB::new())
+  } else {
+    None
+  }
   let num_imports = count_func_imports(mod_.imports)
   // Record imports in precompiled module
   for imp in mod_.imports {
@@ -797,43 +974,79 @@ fn compile_module_to_jit(
       name=func_name,
       memory_max_override=actual_memory_max,
     )
-    // Stage 2: Optimize IR (O2 level)
-    @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
-    // DEBUG: Print IR
-    if @logger.is_debug_enabled() {
-      @logger.debug("IR for \{func_name}:")
-      @logger.info(ir_func.print())
+    // Stage 2: Optimize IR (configurable level)
+    let normalized_opt_level = if opt_level < 0 {
+      0
+    } else if opt_level > 3 {
+      3
+    } else {
+      opt_level
+    }
+    @ir.optimize_with_level(
+      ir_func,
+      @ir.OptLevel::from_int(normalized_opt_level),
+    )
+    |> ignore
+    let mut ir_dump : String? = None
+    if debug_db is Some(_) {
+      ir_dump = Some(ir_func.print())
     }
     // Stage 3: Lower to VCode
     let vcode_func = @lower.lower_function(ir_func)
-    // DEBUG: Print VCode before regalloc
-    if @logger.is_debug_enabled() {
-      @logger.debug("VCode before regalloc for \{func_name}:")
-      @logger.info(vcode_func.print())
+    let mut vcode_before_dump : String? = None
+    if debug_db is Some(_) {
+      vcode_before_dump = Some(vcode_func.print())
     }
     // Stage 4: Register allocation
     let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
-    // DEBUG: Print VCode after regalloc
-    if @logger.is_debug_enabled() {
-      @logger.debug("VCode after regalloc for \{func_name}:")
-      @logger.info(allocated.print())
+    let mut vcode_after_dump : String? = None
+    if debug_db is Some(_) {
+      vcode_after_dump = Some(allocated.print())
     }
     // Stage 5: Emit machine code
-    let mc = @emit.emit_function(allocated)
+    let mc = @emit.emit_function(
+      allocated,
+      debug_func_idx=Some(func_idx),
+      force_frame_setup=enable_dwarf,
+    )
+    let mut mc_dump : String? = None
+    if debug_db is Some(_) {
+      mc_dump = Some(mc.dump_disasm())
+    }
     // Stage 6: Add to precompiled module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
+    // DEBUG: Check MC sizes
+    if func_name == "_start" || func_idx == 9 {
+      @logger.debug(
+        "[COMPILE] \{func_name} (func_\{func_idx}): mc.size()=\{mc.size()}, mc.get_bytes().length()=\{mc.get_bytes().length()}, compiled.code_size=\{compiled.code_size}, get_code().length()=\{compiled.get_code().length()}",
+      )
+    }
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(
       func_idx, func_name, compiled, num_params, num_results,
     )
+    match debug_db {
+      Some(db) =>
+        // Store best-effort dumps (empty string if unavailable for a stage).
+        db.set(
+          func_idx,
+          @jit.JITFunctionDebug::new(
+            ir_dump.unwrap_or(""),
+            vcode_before_dump.unwrap_or(""),
+            vcode_after_dump.unwrap_or(""),
+            mc_dump.unwrap_or(""),
+          ),
+        )
+      None => ()
+    }
     if @logger.is_debug_enabled() &&
       mod_.codes.length() > 10 &&
-      (i + 1) % 10 == 0 {
+      ((i + 1) % 10 == 0 || i + 1 == mod_.codes.length()) {
       @logger.debug("JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
     }
   }
-  Some(precompiled)
+  Some((precompiled, debug_db))
 }
 
 ///|

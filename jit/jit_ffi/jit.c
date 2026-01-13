@@ -14,6 +14,64 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_trap(void) {
     g_trap_code = 0;
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_signal(void) {
+    return (int)g_trap_signal;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_pc(void) {
+    return (int64_t)g_trap_pc;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_lr(void) {
+    return (int64_t)g_trap_lr;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fp(void) {
+    return (int64_t)g_trap_fp;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_lr(void) {
+    return (int64_t)g_trap_frame_lr;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fault_addr(void) {
+    return (int64_t)g_trap_fault_addr;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_brk_imm(void) {
+    return (int)g_trap_brk_imm;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_func_idx(void) {
+    return (int)g_trap_func_idx;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_wasm_stack_base(void) {
+    return (int64_t)g_trap_wasm_stack_base;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_wasm_stack_top(void) {
+    return (int64_t)g_trap_wasm_stack_top;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_frame_count(void) {
+    return g_trap_frame_count;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_pc(int idx) {
+    if (idx >= 0 && idx < g_trap_frame_count) {
+        return (int64_t)g_trap_frames_pc[idx];
+    }
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_fp(int idx) {
+    if (idx >= 0 && idx < g_trap_frame_count) {
+        return (int64_t)g_trap_frames_fp[idx];
+    }
+    return 0;
+}
+
 // ============ Context Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
@@ -405,6 +463,13 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
 
     install_trap_handler();
     g_trap_code = 0;
+    g_trap_signal = 0;
+    g_trap_pc = 0;
+    g_trap_lr = 0;
+    g_trap_frame_lr = 0;
+    g_trap_fault_addr = 0;
+    g_trap_brk_imm = -1;
+    g_trap_func_idx = -1;
     g_trap_active = 1;
 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
@@ -476,6 +541,13 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
 #if defined(__aarch64__) || defined(_M_ARM64)
     install_trap_handler();
     g_trap_code = 0;
+    g_trap_signal = 0;
+    g_trap_pc = 0;
+    g_trap_lr = 0;
+    g_trap_frame_lr = 0;
+    g_trap_fault_addr = 0;
+    g_trap_brk_imm = -1;
+    g_trap_func_idx = -1;
     g_trap_active = 1;
     g_current_jit_context = ctx;  // Set for guard page detection
 

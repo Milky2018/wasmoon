@@ -911,3 +911,36 @@ test "wasi: poll_oneoff with zero subscriptions" {
   let nevents = mem.read_i32(100)
   inspect(nevents, content="0")
 }
+
+///|
+test "wasi: register_wasi creates 46 exports" {
+  let linker = @runtime.Linker::new()
+  let ctx = WasiContextBuilder::new().build()
+  register_wasi(linker, ctx)
+  let instance = match linker.get_module("wasi_snapshot_preview1") {
+    Some(instance) => instance
+    None =>
+      // Create a dummy empty instance for test failure
+      @runtime.ModuleInstance::new()
+  }
+  inspect(instance.exports.length(), content="46")
+}
+
+///|
+test "wasi: fd_prestat_get is exported" {
+  let linker = @runtime.Linker::new()
+  let ctx = WasiContextBuilder::new().build()
+  register_wasi(linker, ctx)
+  let instance = match linker.get_module("wasi_snapshot_preview1") {
+    Some(instance) => instance
+    None => @runtime.ModuleInstance::new()
+  }
+  // Check if fd_prestat_get is in exports
+  let mut found = false
+  for exp in instance.exports {
+    if exp.name == "fd_prestat_get" {
+      found = true
+    }
+  }
+  inspect(found, content="true")
+}

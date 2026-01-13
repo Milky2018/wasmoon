@@ -9,10 +9,10 @@ let pow2_32 : Double = 4294967296.0 // 2^32, exactly representable
 let pow2_31 : Double = 2147483648.0 // 2^31, exactly representable
 
 ///|
-let pow2_63 : Double = 2.0.pow(63.0) // 2^63, exactly representable
+let pow2_63 : Double = @math.pow(2.0, 63.0) // 2^63, exactly representable
 
 ///|
-let pow2_64 : Double = 2.0.pow(64.0) // 2^64, exactly representable
+let pow2_64 : Double = @math.pow(2.0, 64.0) // 2^64, exactly representable
 
 ///|
 /// Execute conversion instruction

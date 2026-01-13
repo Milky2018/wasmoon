@@ -4,7 +4,9 @@
 
 ///|
 /// Error type for cross-module JIT operations
-pub suberror CrossModuleError String
+pub suberror CrossModuleError {
+  CrossModuleError(String)
+}
 
 ///|
 /// Test: simple cross-module function call

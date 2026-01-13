@@ -504,9 +504,9 @@ fn lower_return_call_ref(
   let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
-  // func_ptr = func_ref & 0x1FFFFFFFFFFFFFFF (clear bit 61)
+  // func_ptr = func_ref & 0xDFFFFFFFFFFFFFFF (clear bit 61)
   let mask_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_mask = @instr.VCodeInst::new(LoadConst(0x1FFFFFFFFFFFFFFFL))
+  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask_vreg) })
   block.add_inst(load_mask)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -783,9 +783,9 @@ fn lower_call_ref(
   }
 
   // Step 1: Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
-  // func_ptr = func_ref & 0x1FFFFFFFFFFFFFFF (clear bit 61)
+  // func_ptr = func_ref & 0xDFFFFFFFFFFFFFFF (clear bit 61)
   let mask_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_mask = @instr.VCodeInst::new(LoadConst(0x1FFFFFFFFFFFFFFFL))
+  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask_vreg) })
   block.add_inst(load_mask)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)

@@ -1465,22 +1465,25 @@ fn rule_ireduce_sextend_to_extend() -> RewriteRule {
 }
 
 ///|
-/// uextend(const(c)) → const(c)
-/// Zero-extending a constant is just the constant itself (high bits are already zero)
+/// uextend(const(c)) → const(c & mask)
+/// Zero-extending a constant requires masking to from_bits width
+/// (IR stores constants as Int64, so we must clear any sign-extended bits)
 fn rule_uextend_const() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
         match node.op {
-          Uextend(_, _) =>
+          Uextend(from_bits, _) =>
             if node.children.length() == 1 {
               for inner in eg.get_nodes(node.children[0]) {
                 match inner.op {
                   Const(c) => {
-                    // uextend(const(c)) = const(c)
-                    // For unsigned extension, the constant value stays the same
-                    let new_const = eg.add_const(c)
+                    // uextend(const(c)) = const(c & mask)
+                    // Must mask to from_bits width for proper zero-extension
+                    let mask = mask_for_bits(from_bits)
+                    let masked_c = c & mask
+                    let new_const = eg.add_const(masked_c)
                     let new_id = eg.merge(class_id, new_const)
                     changed = new_id != class_id || changed
                   }

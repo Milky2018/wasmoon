@@ -5,7 +5,9 @@ import(
   "Milky2018/wasmoon/jit"
   "Milky2018/wasmoon/runtime"
   "Milky2018/wasmoon/types"
+  "Milky2018/wasmoon/wasi"
   "Milky2018/wasmoon/wat"
+  "moonbitlang/core/hashset"
 )
 
 // Values
@@ -19,6 +21,8 @@ pub const NULL_REF : Int64 = 0
 
 pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], Array[@types.ValueType])]
 
+pub fn builtin_jit_modules() -> Array[String]
+
 pub fn count_func_imports(Array[@types.Import]) -> Int
 
 pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance
@@ -26,6 +30,8 @@ pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance
 pub fn eval_elem_offset_expr(Array[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int
 
 pub fn exports_shared_resources(@types.Module) -> Bool
+
+pub fn get_func_name(@types.Module, Int) -> String
 
 pub fn has_cross_module_imports(@types.Module) -> Bool
 
@@ -79,10 +85,12 @@ pub struct WastContext {
   named_modules : Map[String, @runtime.ModuleInstance]
   module_definitions : Map[String, @types.Module]
   registered_modules : Map[String, @runtime.ModuleInstance]
+  overridden_builtin_modules : @hashset.HashSet[String]
   jit_modules : Map[String, JITModuleContext]
   mut current_jit : JITModuleContext?
   use_jit : Bool
   jit_compiler : JITCompiler?
+  wasi_ctx : @wasi.WasiContext
 }
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
 pub fn WastContext::get_store(Self) -> @runtime.Store

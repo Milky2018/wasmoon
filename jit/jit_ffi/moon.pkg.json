@@ -12,6 +12,7 @@
     "exception.c",
     "wasi.c",
     "wasm_stack.c",
-    "stack_switch_aarch64.S"
+    "stack_switch_aarch64.S",
+    "dwarf.c"
   ]
 }

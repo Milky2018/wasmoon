@@ -8,5 +8,9 @@
   (data (i32.const 100) "\c8\00\00\00")
   (data (i32.const 104) "\11\00\00\00")
   (func (export "_start")
-    (if (i32.eqz (call $clock_res_get (i32.const 0) (i32.const 0)))
-      (then (drop (call $fd_write (i32.const 1) (i32.const 100) (i32.const 1) (i32.const 108)))))))
+    (local $errno i32)
+    (local.set $errno (call $clock_res_get (i32.const 0) (i32.const 0)))
+    (if (i32.ne (local.get $errno) (i32.const 0)) (then unreachable))
+    ;; resolution (i64 at 0) must be > 0
+    (if (i64.eqz (i64.load (i32.const 0))) (then unreachable))
+    (drop (call $fd_write (i32.const 1) (i32.const 100) (i32.const 1) (i32.const 108)))))

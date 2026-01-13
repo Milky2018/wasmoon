@@ -21,8 +21,5 @@
     "Milky2018/wasmoon/vcode/lower",
     "Milky2018/wasmoon/vcode/regalloc",
     "Milky2018/wasmoon/logger"
-  ],
-  "targets": {
-    "run_cwasm.mbt": ["native"]
-  }
+  ]
 }

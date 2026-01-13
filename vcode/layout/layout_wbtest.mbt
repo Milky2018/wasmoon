@@ -144,6 +144,18 @@ test "reorder_blocks: applies new order" {
 }
 
 ///|
+test "reorder_blocks: preserves spill slot count" {
+  let func = @regalloc.VCodeFunction::new("test_reorder_spills")
+  func.set_num_spill_slots(123)
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+  block0.set_terminator(@instr.Jump(block1.id))
+  block1.set_terminator(@instr.Return([]))
+  let reordered = reorder_blocks(func, [1, 0])
+  inspect(reordered.get_num_spill_slots(), content="123")
+}
+
+///|
 test "layout: loop with exit chain" {
   // Test case matching fib structure:
   // block0 (entry): jump to block2

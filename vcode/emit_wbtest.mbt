@@ -667,12 +667,12 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
     }
   }
   // If there are duplicate annotations, this will fail
-  inspect(blr_count, content="1")
+  assert_eq(blr_count, 1)
   inspect(
     disasm,
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:
@@ -708,12 +708,12 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
       blr_count = blr_count + 1
     }
   }
-  inspect(blr_count, content="1")
+  assert_eq(blr_count, 1)
   inspect(
     disasm,
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:
@@ -725,6 +725,33 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
       #|
     ),
   )
+}
+
+///|
+test "emit: select uses 32-bit condition compare" {
+  let func = @regalloc.VCodeFunction::new("test_select_cmp32")
+  func.add_result(Int)
+  let block = func.new_block()
+  let load_cond = @instr.VCodeInst::new(LoadConst(0L))
+  load_cond.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  block.add_inst(load_cond)
+  let load_true = @instr.VCodeInst::new(LoadConst(1L))
+  load_true.add_def({ reg: @abi.Physical({ index: 1, class: Int }) })
+  block.add_inst(load_true)
+  let load_false = @instr.VCodeInst::new(LoadConst(2L))
+  load_false.add_def({ reg: @abi.Physical({ index: 2, class: Int }) })
+  block.add_inst(load_false)
+  let select_inst = @instr.VCodeInst::new(Select)
+  select_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  select_inst.add_use(@abi.Physical({ index: 0, class: Int }))
+  select_inst.add_use(@abi.Physical({ index: 1, class: Int }))
+  select_inst.add_use(@abi.Physical({ index: 2, class: Int }))
+  block.add_inst(select_inst)
+  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  let mc = @emit.emit_function(func)
+  let disasm = mc.dump_disasm()
+  inspect(disasm.contains("cmp w0, #0"), content="true")
+  inspect(!disasm.contains("cmp x0, #0"), content="true")
 }
 
 ///|
@@ -748,12 +775,12 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
       blr_count = blr_count + 1
     }
   }
-  inspect(blr_count, content="1")
+  assert_eq(blr_count, 1)
   inspect(
     disasm,
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:
@@ -793,7 +820,7 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result) 2" {
     disasm,
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd031faa  mov x29, x31
+      #|  0004: fd030091  add x29, sp, #0
       #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f30300aa  mov x19, x0
       #|block0:

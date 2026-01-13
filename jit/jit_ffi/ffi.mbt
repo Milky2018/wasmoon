@@ -12,6 +12,38 @@ pub extern "c" fn c_jit_get_trap_code() -> Int = "wasmoon_jit_get_trap_code"
 /// Clear trap code
 pub extern "c" fn c_jit_clear_trap() -> Unit = "wasmoon_jit_clear_trap"
 
+///|
+/// Get last trap signal number (e.g. SIGSEGV/SIGBUS/SIGTRAP), or 0 if none
+pub extern "c" fn c_jit_get_trap_signal() -> Int = "wasmoon_jit_get_trap_signal"
+
+///|
+/// Get last trap PC (instruction address), or 0 if unavailable
+pub extern "c" fn c_jit_get_trap_pc() -> Int64 = "wasmoon_jit_get_trap_pc"
+
+///|
+/// Get last trap LR (return address), or 0 if unavailable
+pub extern "c" fn c_jit_get_trap_lr() -> Int64 = "wasmoon_jit_get_trap_lr"
+
+///|
+/// Get last trap FP (frame pointer), or 0 if unavailable
+pub extern "c" fn c_jit_get_trap_fp() -> Int64 = "wasmoon_jit_get_trap_fp"
+
+///|
+/// Get caller return address from the frame record ([fp + 8]), or 0 if unavailable
+pub extern "c" fn c_jit_get_trap_frame_lr() -> Int64 = "wasmoon_jit_get_trap_frame_lr"
+
+///|
+/// Get last trap fault address (SIGSEGV/SIGBUS si_addr), or 0 if N/A
+pub extern "c" fn c_jit_get_trap_fault_addr() -> Int64 = "wasmoon_jit_get_trap_fault_addr"
+
+///|
+/// Get BRK immediate decoded for SIGTRAP, or -1 if N/A
+pub extern "c" fn c_jit_get_trap_brk_imm() -> Int = "wasmoon_jit_get_trap_brk_imm"
+
+///|
+/// Get best-effort wasm func_idx at trap time, or -1 if unknown
+pub extern "c" fn c_jit_get_trap_func_idx() -> Int = "wasmoon_jit_get_trap_func_idx"
+
 // ============ GC-managed JITContext ============
 
 ///|
@@ -1080,3 +1112,99 @@ pub extern "c" fn c_jit_get_exception_spill_locals_ptr() -> Int64 = "wasmoon_jit
 /// Signature: get_spilled_local(ctx: *jit_context_t, idx: i32) -> i64
 /// Gets a spilled local value for catch handlers
 pub extern "c" fn c_jit_get_exception_get_spilled_local_ptr() -> Int64 = "wasmoon_jit_get_exception_get_spilled_local_ptr"
+
+// ============ DWARF Debug Info ============
+
+///|
+/// Create a new DWARF debug info builder
+/// Returns an opaque handle to pass to other DWARF functions
+pub extern "c" fn c_dwarf_create() -> Int64 = "wasmoon_dwarf_create"
+
+///|
+/// Add a function to the DWARF debug info
+/// Parameters:
+///   dwarf: Handle from c_dwarf_create()
+///   name: Function name (null-terminated bytes)
+///   addr: Function start address
+///   size: Function size in bytes
+///   func_idx: WebAssembly function index
+#borrow(name)
+pub extern "c" fn c_dwarf_add_function(
+  dwarf : Int64,
+  name : Bytes,
+  addr : Int64,
+  size : Int,
+  func_idx : Int,
+) -> Unit = "wasmoon_dwarf_add_function"
+
+///|
+/// Register the DWARF debug info with the debugger (LLDB/GDB)
+/// This generates an in-memory Mach-O/ELF object and registers it
+/// via the GDB JIT interface
+/// verbose: if true, print debug info to stderr
+pub extern "c" fn c_dwarf_register(dwarf : Int64, verbose : Int) -> Unit = "wasmoon_dwarf_register"
+
+///|
+/// Unregister DWARF debug info from the debugger
+pub extern "c" fn c_dwarf_unregister(dwarf : Int64) -> Unit = "wasmoon_dwarf_unregister"
+
+///|
+/// Destroy the DWARF builder and free resources
+/// Also unregisters debug info if registered
+pub extern "c" fn c_dwarf_destroy(dwarf : Int64) -> Unit = "wasmoon_dwarf_destroy"
+
+///|
+/// Set the active DWARF builder for address lookups
+/// This is used for backtrace symbolication
+pub extern "c" fn c_dwarf_set_active(dwarf : Int64) -> Unit = "wasmoon_dwarf_set_active"
+
+///|
+/// Lookup an address in the DWARF debug info
+/// Returns 1 if found, 0 if not found
+/// If found, writes results to the provided arrays
+#borrow(name_out, func_idx_out, offset_out)
+pub extern "c" fn c_dwarf_lookup_address(
+  dwarf : Int64,
+  addr : Int64,
+  name_out : FixedArray[Byte],
+  name_size : Int,
+  func_idx_out : FixedArray[Int],
+  offset_out : FixedArray[Int64],
+) -> Int = "wasmoon_dwarf_lookup_address"
+
+///|
+/// Capture a backtrace starting from the given PC and FP
+/// Returns the number of frames captured
+/// frames_out contains alternating (pc, fp) pairs
+#borrow(frames_out)
+pub extern "c" fn c_dwarf_capture_backtrace(
+  initial_pc : Int64,
+  initial_fp : Int64,
+  frames_out : FixedArray[Int64],
+  max_frames : Int,
+) -> Int = "wasmoon_dwarf_capture_backtrace"
+
+///|
+/// Capture a backtrace with LR fallback (for when FP is 0)
+/// Returns the number of frames captured
+/// frames_out contains alternating (pc, fp) pairs
+#borrow(frames_out)
+pub extern "c" fn c_dwarf_capture_backtrace_ex(
+  initial_pc : Int64,
+  initial_fp : Int64,
+  initial_lr : Int64,
+  frames_out : FixedArray[Int64],
+  max_frames : Int,
+) -> Int = "wasmoon_dwarf_capture_backtrace_ex"
+
+///|
+/// Format a backtrace as a string
+/// Returns the number of bytes written (excluding null terminator)
+#borrow(frames, buffer)
+pub extern "c" fn c_dwarf_format_backtrace(
+  dwarf : Int64,
+  frames : FixedArray[Int64],
+  frame_count : Int,
+  buffer : FixedArray[Byte],
+  buffer_size : Int,
+) -> Int = "wasmoon_dwarf_format_backtrace"
