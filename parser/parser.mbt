@@ -144,12 +144,13 @@ struct Parser {
   data : Bytes
   mut pos : Int
   mut has_data_count : Bool // true if data count section was seen
+  types : Array[@types.SubType]
 } derive(Show)
 
 ///|
 /// Create a new parser from bytes
 pub fn Parser::new(data : Bytes) -> Parser {
-  { data, pos: 0, has_data_count: false }
+  { data, pos: 0, has_data_count: false, types: [] }
 }
 
 ///|
@@ -538,6 +539,41 @@ fn decode_utf8_validated(bytes : Bytes) -> String raise ParserError {
 
 ///|
 fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError {
+  fn resolve_typed_ref(type_idx : Int, nullable : Bool) -> @types.ValueType {
+    if type_idx < 0 || type_idx >= self.types.length() {
+      if nullable { @types.ValueType::NullRef } else { @types.ValueType::RefNone }
+    } else {
+      match self.types[type_idx].composite {
+        Func(_) =>
+          if nullable {
+            @types.ValueType::RefNullFuncTyped(type_idx)
+          } else {
+            @types.ValueType::RefFuncTyped(type_idx)
+          }
+        Struct(_) =>
+          if nullable { @types.ValueType::RefNullStruct(type_idx) } else { @types.ValueType::RefStruct(type_idx) }
+        Array(_) =>
+          if nullable { @types.ValueType::RefNullArray(type_idx) } else { @types.ValueType::RefArray(type_idx) }
+      }
+    }
+  }
+
+  fn resolve_abstract_heap(heap_type : Int, nullable : Bool) -> @types.ValueType {
+    match heap_type {
+      -16 => if nullable { @types.ValueType::FuncRef } else { @types.ValueType::RefFunc }
+      -17 => if nullable { @types.ValueType::ExternRef } else { @types.ValueType::RefExtern }
+      -18 => if nullable { @types.ValueType::AnyRef } else { @types.ValueType::RefAny }
+      -19 => if nullable { @types.ValueType::RefNullEq } else { @types.ValueType::RefEq }
+      -20 => if nullable { @types.ValueType::RefNullI31 } else { @types.ValueType::RefI31 }
+      -23 => @types.ValueType::ExnRef
+      -15 => if nullable { @types.ValueType::NullRef } else { @types.ValueType::RefNone }
+      -14 => @types.ValueType::NullExternRef
+      -13 => @types.ValueType::NullFuncRef
+      -12 => @types.ValueType::NullExnRef
+      _ => if nullable { @types.ValueType::NullRef } else { @types.ValueType::RefNone }
+    }
+  }
+
   let byte = self.read_byte()
   match byte {
     0x7F => I32
@@ -545,32 +581,39 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
     0x7D => F32
     0x7C => F64
     0x7B => V128
+
+    // Reference shorthands
     0x70 => FuncRef
     0x6F => ExternRef
-    // Some reference types are encoded as single-byte shorthands in wasm binaries.
-    // Accept them here to stay compatible with `wasm-tools`/wasmparser.
+    0x6E => AnyRef
+    0x6D => RefNullEq
+    0x6C => RefNullI31
+    0x69 => ExnRef
+    0x71 => NullRef
     0x72 => NullExternRef
     0x73 => NullFuncRef
     0x74 => NullExnRef
-    0x69 => ExnRef
+
+    // ref heaptype
     0x64 => {
-      // Non-null reference type: (ref heaptype)
       let heap_type = self.read_heap_type()
-      match heap_type {
-        0x70 => RefFunc // (ref func)
-        0x6F => RefExtern // (ref extern)
-        _ => RefFunc // Default to RefFunc for typed references
+      if heap_type < 0 {
+        resolve_abstract_heap(heap_type, false)
+      } else {
+        resolve_typed_ref(heap_type, false)
       }
     }
+
+    // ref null heaptype
     0x63 => {
-      // Nullable reference type: (ref null heaptype)
       let heap_type = self.read_heap_type()
-      match heap_type {
-        0x70 => FuncRef // (ref null func) = funcref
-        0x6F => ExternRef // (ref null extern) = externref
-        _ => FuncRef // Default to FuncRef
+      if heap_type < 0 {
+        resolve_abstract_heap(heap_type, true)
+      } else {
+        resolve_typed_ref(heap_type, true)
       }
     }
+
     _ => raise InvalidValueType(byte)
   }
 }
@@ -990,6 +1033,16 @@ fn Parser::read_instruction(
       let table_idx = self.read_u32()
       CallIndirect(type_idx, table_idx)
     }
+    // Tail-call proposal
+    0x12 => ReturnCall(self.read_u32())
+    0x13 => {
+      let type_idx = self.read_u32()
+      let table_idx = self.read_u32()
+      ReturnCallIndirect(type_idx, table_idx)
+    }
+    // WasmGC typed call_ref/return_call_ref
+    0x14 => CallRef(self.read_u32())
+    0x15 => ReturnCallRef(self.read_u32())
     // Parametric instructions
     0x1A => Drop
     0x1B => Select
@@ -1351,12 +1404,124 @@ fn Parser::read_instruction(
         _ => raise UnknownOpcode(0xFC00 + subopcode)
       }
     }
+    // GC instructions (0xFB prefix)
+    0xFB => {
+      let subopcode = self.read_u32()
+      self.parse_gc_instruction(subopcode)
+    }
     // SIMD instructions (0xFD prefix)
     0xFD => {
       let subopcode = self.read_u32()
       self.parse_simd_instruction(subopcode)
     }
+    // Atomics instructions (0xFE prefix)
+    0xFE => {
+      let subopcode = self.read_u32()
+      if subopcode == 3 {
+        // atomic.fence has a reserved 0x00 byte
+        let reserved = self.read_byte()
+        if reserved != 0x00 {
+          raise ParseError("malformed atomic.fence")
+        }
+        Atomic(subopcode, 0, 0, 0L)
+      } else {
+        let (memidx, align, offset) = self.read_memarg()
+        Atomic(subopcode, memidx, align, offset)
+      }
+    }
     _ => raise UnknownOpcode(opcode)
+  }
+}
+
+///|
+/// Parse GC instruction given the subopcode after 0xFB prefix
+fn Parser::parse_gc_instruction(
+  self : Parser,
+  subopcode : Int,
+) -> @types.Instruction raise ParserError {
+  match subopcode {
+    0 => StructNew(self.read_u32())
+    1 => StructNewDefault(self.read_u32())
+    2 => {
+      let type_idx = self.read_u32()
+      let field_idx = self.read_u32()
+      StructGet(type_idx, field_idx)
+    }
+    3 => {
+      let type_idx = self.read_u32()
+      let field_idx = self.read_u32()
+      StructGetS(type_idx, field_idx)
+    }
+    4 => {
+      let type_idx = self.read_u32()
+      let field_idx = self.read_u32()
+      StructGetU(type_idx, field_idx)
+    }
+    5 => {
+      let type_idx = self.read_u32()
+      let field_idx = self.read_u32()
+      StructSet(type_idx, field_idx)
+    }
+    6 => ArrayNew(self.read_u32())
+    7 => ArrayNewDefault(self.read_u32())
+    8 => {
+      let type_idx = self.read_u32()
+      let len = self.read_u32()
+      ArrayNewFixed(type_idx, len)
+    }
+    9 => {
+      let type_idx = self.read_u32()
+      let data_idx = self.read_u32()
+      ArrayNewData(type_idx, data_idx)
+    }
+    10 => {
+      let type_idx = self.read_u32()
+      let elem_idx = self.read_u32()
+      ArrayNewElem(type_idx, elem_idx)
+    }
+    11 => ArrayGet(self.read_u32())
+    12 => ArrayGetS(self.read_u32())
+    13 => ArrayGetU(self.read_u32())
+    14 => ArraySet(self.read_u32())
+    15 => ArrayLen
+    16 => ArrayFill(self.read_u32())
+    17 => {
+      let dst = self.read_u32()
+      let src = self.read_u32()
+      ArrayCopy(dst, src)
+    }
+    18 => {
+      let type_idx = self.read_u32()
+      let data_idx = self.read_u32()
+      ArrayInitData(type_idx, data_idx)
+    }
+    19 => {
+      let type_idx = self.read_u32()
+      let elem_idx = self.read_u32()
+      ArrayInitElem(type_idx, elem_idx)
+    }
+    20 => RefTest(self.read_value_type())
+    21 => RefTestNull(self.read_value_type())
+    22 => RefCast(self.read_value_type())
+    23 => RefCastNull(self.read_value_type())
+    24 => {
+      let label = self.read_u32()
+      let from_t = self.read_value_type()
+      let to_t = self.read_value_type()
+      BrOnCast(label, from_t, to_t)
+    }
+    25 => {
+      let label = self.read_u32()
+      let from_t = self.read_value_type()
+      let to_t = self.read_value_type()
+      BrOnCastFail(label, from_t, to_t)
+    }
+    26 => RefI31
+    27 => I31GetS
+    28 => I31GetU
+    29 => AnyConvertExtern
+    30 => ExternConvertAny
+    _ => raise UnknownOpcode(0xFB00 + subopcode)
   }
 }
 
@@ -1875,7 +2040,9 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         for _ in 0..<count {
           let type_idx = mod.types.length()
           let func_type = parser.read_func_type()
-          mod.types.push(@types.SubType::from_func(func_type))
+          let subtype = @types.SubType::from_func(func_type)
+          mod.types.push(subtype)
+          parser.types.push(subtype)
           // Each type is its own rec group (binary rec groups not yet supported)
           mod.type_rec_groups.push(type_idx)
         }

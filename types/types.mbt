@@ -280,6 +280,11 @@ pub(all) enum Instruction {
   MemoryFill(Int) // memidx
   ElemDrop(Int) // element segment index
 
+  // Atomic instructions (0xFE prefix)
+  // subopcode: wasm threads/atomics subopcode
+  // memarg: (memidx, align, offset)
+  Atomic(Int, Int, Int, Int64)
+
   // Reference type instructions
   RefNull(ValueType) // ref.null: push null reference of given type
   RefIsNull // ref.is_null: test if reference is null

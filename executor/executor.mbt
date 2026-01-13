@@ -501,7 +501,8 @@ fn ExecContext::exec_instr(
     | DataDrop(_)
     | MemoryCopy(_, _)
     | MemoryFill(_)
-    | ElemDrop(_) => self.exec_memory_misc(instr)
+    | ElemDrop(_)
+    | Atomic(_, _, _, _) => self.exec_memory_misc(instr)
 
     // Control flow operations
     Block(_, _)

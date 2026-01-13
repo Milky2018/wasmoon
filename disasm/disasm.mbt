@@ -736,6 +736,18 @@ fn write_instruction_simple(
       buf.write_string(idx.to_string())
     }
 
+    Atomic(subop, memidx, align, offset) => {
+      buf.write_string("atomic.")
+      buf.write_string(subop.to_string())
+      buf.write_string(" (mem ")
+      buf.write_string(memidx.to_string())
+      buf.write_string(" align=")
+      buf.write_string(align.to_string())
+      buf.write_string(" offset=")
+      buf.write_string(offset.to_string())
+      buf.write_string(")")
+    }
+
     // Reference instructions
     RefNull(vt) => {
       buf.write_string("ref.null ")

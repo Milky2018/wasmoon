@@ -559,22 +559,22 @@ fn ExecContext::exec_memory_misc(
     MemoryFill(memidx) => {
       let mem_addr = self.instance.mem_addrs[memidx]
       let mem = self.store.get_mem(mem_addr)
-      // For memory64: n and d are i64, val is always i32
-      let (n64, val, d64) = if mem.is_memory64() {
-        let n = self.stack.pop_i64()
-        let v = self.stack.pop_i32()
-        let d = self.stack.pop_i64()
-        (n, v, d)
-      } else {
-        let n = self.stack.pop_i32()
-        let v = self.stack.pop_i32()
-        let d = self.stack.pop_i32()
-        (n.to_int64() & 0xFFFF_FFFFL, v, d.to_int64() & 0xFFFF_FFFFL)
+      let n = self.stack.pop_i32()
+      let val = self.stack.pop_i32()
+      let dst = self.pop_mem_addr(mem)
+      let effective_dst = compute_effective_addr(dst, 0L, mem.is_memory64())
+      if is_mem_oob(effective_dst, n.to_int64(), mem) {
+        raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.fill(d64.to_int(), val.land(0xFF).to_byte(), n64.to_int())
+      mem.fill(effective_dst.to_int(), val.to_byte(), n)
     }
     // elem.drop: mark element segment as dropped
     ElemDrop(elem_idx) => self.instance.dropped_elems[elem_idx] = true
+
+    Atomic(subop, memidx, align, offset) => {
+      self.exec_atomic(subop, memidx, align, offset)
+    }
+
     _ => raise @runtime.RuntimeError::Unreachable
   }
 }

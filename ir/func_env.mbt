@@ -78,6 +78,8 @@ struct FuncEnvironment {
   // Shared trap block for memory out-of-bounds errors
   // All bounds checks in the same function share this block to reduce CFG size
   mut memory_trap_block : Block?
+  // Shared trap block for atomic unaligned accesses
+  mut atomic_unaligned_trap_block : Block?
 }
 
 ///|
@@ -86,7 +88,13 @@ pub fn FuncEnvironment::new(
   memory_mins? : Array[Int64] = [],
   memory_is_64? : Array[Bool] = [],
 ) -> FuncEnvironment {
-  { global_types, memory_mins, memory_is_64, memory_trap_block: None }
+  {
+    global_types,
+    memory_mins,
+    memory_is_64,
+    memory_trap_block: None,
+    atomic_unaligned_trap_block: None,
+  }
 }
 
 // ============ Global Variable Operations ============
@@ -446,6 +454,60 @@ fn FuncEnvironment::get_or_create_memory_trap_block(
       trap_block
     }
   }
+}
+
+///|
+/// Get or create a shared trap block for unaligned atomic accesses.
+fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
+  self : FuncEnvironment,
+  builder : IRBuilder,
+) -> Block {
+  match self.atomic_unaligned_trap_block {
+    Some(block) => block
+    None => {
+      let trap_block = builder.create_block()
+      let current = builder.current_block
+      builder.switch_to_block(trap_block)
+      builder.trap("unaligned atomic")
+      match current {
+        Some(block) => builder.switch_to_block(block)
+        None => ()
+      }
+      self.atomic_unaligned_trap_block = Some(trap_block)
+      trap_block
+    }
+  }
+}
+
+///|
+/// Emit an atomic alignment check. Atomics trap on misalignment.
+///
+/// The check is performed on the linear memory effective address (addr + offset).
+pub fn FuncEnvironment::emit_atomic_alignment_check(
+  self : FuncEnvironment,
+  builder : IRBuilder,
+  memidx : Int,
+  wasm_addr : Value,
+  offset : Int64,
+  access_size : Int,
+) -> Unit {
+  if access_size <= 1 {
+    return
+  }
+  let is_memory64 = memidx < self.memory_is_64.length() && self.memory_is_64[memidx]
+  let addr_i64 = if is_memory64 { wasm_addr } else { builder.uextend(Type::I64, wasm_addr) }
+  let offset_val = builder.iconst(Type::I64, offset)
+  let addr_plus_offset = builder.iadd(addr_i64, offset_val)
+
+  let mask = builder.iconst(Type::I64, (access_size - 1).to_int64())
+  let masked = builder.band(addr_plus_offset, mask)
+  let zero = builder.iconst(Type::I64, 0L)
+  let is_aligned = builder.icmp(IntCC::Eq, masked, zero)
+
+  let trap_block = self.get_or_create_atomic_unaligned_trap_block(builder)
+  let continue_block = builder.create_block()
+  builder.brnz(is_aligned, continue_block, trap_block)
+  builder.switch_to_block(continue_block)
 }
 
 // Note: Memory base/size caching was considered but removed due to SSA dominance
