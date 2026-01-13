@@ -246,6 +246,16 @@ test "parse data segment with offset keyword" {
   inspect(mod_.datas[0].init.length(), content="4")
 }
 
+///|
+test "reject trailing tokens after module" {
+  let wat = "(module))"
+  let result = try? parse(wat)
+  match result {
+    Err(_) => ()
+    Ok(_) => fail("expected parse error but parsing succeeded")
+  }
+}
+
 // ============================================================
 // Error Formatting Tests
 // ============================================================

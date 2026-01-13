@@ -685,7 +685,11 @@ fn count_tag_imports(imports : Array[@types.Import]) -> Int {
 /// Parse a WAT module from string
 pub fn parse(input : String) -> @types.Module raise WatError {
   let parser = Parser::new(input)
-  parser.parse_module()
+  let mod_ = parser.parse_module()
+  if parser.current.token != Eof {
+    raise WatError::UnexpectedToken("unexpected trailing tokens", parser.loc())
+  }
+  mod_
 }
 
 ///|
