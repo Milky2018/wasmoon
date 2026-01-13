@@ -1,4 +1,12 @@
 ///|
+extern "c" fn native_exit(code : Int) = "exit"
+
+///|
+fn exit_failure() -> Unit {
+  native_exit(1)
+}
+
+///|
 /// Get the basename from a file path (last component after /)
 fn get_basename(path : String) -> String {
   // Find last '/' character
@@ -284,6 +292,7 @@ fn run_wasm(
         @logger.error(
           "invalid --dir format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
         )
+        exit_failure()
         return
       }
     }
@@ -298,6 +307,7 @@ fn run_wasm(
       }
       None => {
         @logger.error("invalid --env format '\{env_var}', expected NAME=VALUE")
+        exit_failure()
         return
       }
     }
@@ -340,6 +350,7 @@ fn run_wasm(
         let preload_mod = load_module_from_path(path) catch {
           e => {
             @logger.error("loading preload module '\{name}': \{e}")
+            exit_failure()
             return
           }
         }
@@ -348,6 +359,7 @@ fn run_wasm(
         ) catch {
           e => {
             @logger.error("instantiating preload module '\{name}': \{e}")
+            exit_failure()
             return
           }
         }
@@ -355,6 +367,7 @@ fn run_wasm(
       }
       None => {
         @logger.error("invalid preload format '\{preload}', expected NAME=PATH")
+        exit_failure()
         return
       }
     }
@@ -363,6 +376,7 @@ fn run_wasm(
   let mod_ = load_module_from_path(wasm_path) catch {
     e => {
       @logger.error("loading main module: \{e}")
+      exit_failure()
       return
     }
   }
@@ -383,6 +397,7 @@ fn run_wasm(
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
     e => {
       @logger.error("instantiating module: \{e}")
+      exit_failure()
       return
     }
   }
@@ -400,6 +415,7 @@ fn run_wasm(
     let args = parse_func_args(ft.params, func_args) catch {
       e => {
         @logger.error("parsing arguments: \{e}")
+        exit_failure()
         return
       }
     }
@@ -430,6 +446,7 @@ fn run_wasm(
       ) catch {
         e => {
           @logger.error("\{e}")
+          exit_failure()
           return
         }
       }
@@ -442,6 +459,7 @@ fn run_wasm(
     // No exported function found, check if there's a start function
   } else if invoke is Some(name) {
     @logger.error("function '\{name}' not found")
+    exit_failure()
   }
 }
 

@@ -1,7 +1,7 @@
 ///|
 /// Load a module from file path (supports both .wasm and .wat)
 fn load_module_from_path(path : String) -> @types.Module raise CliError {
-  let is_wat = path.has_suffix(".wat")
+  let is_wat = path.has_suffix(".wat") || path.has_suffix(".wast")
   if is_wat {
     let content = @fs.read_file_to_string(path) catch {
       IOError(_e) => raise FileNotFound(path)
