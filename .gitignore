@@ -6,3 +6,6 @@ wasmoon
 wasmoon-tools
 TODO.md
 _build
+
+# wasm-smith differential runs
+scripts/smith_diff/out/
