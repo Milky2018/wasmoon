@@ -31,6 +31,11 @@ moon add Milky2018/wasmoon
 
 ## CLI Usage
 
+Quick differential testing vs Wasmtime (wasm-smith):
+```bash
+python3 scripts/smith_diff/run.py run --count 1000
+```
+
 ```bash
 # Run with default _start function
 wasmoon run hello.wat

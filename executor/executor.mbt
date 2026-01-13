@@ -1728,8 +1728,9 @@ pub fn instantiate_module_with_imports(
 
   // Allocate memories (after imported memories)
   for mem_type in mod.memories {
+    let min_pages = mem_type.limits.min.to_int()
     let mem = @runtime.Memory::new(
-      mem_type.limits.min.to_int(),
+      min_pages,
       mem_type.limits.max.map(fn(m) { m.to_int() }),
       is_memory64=mem_type.is_memory64,
     )
@@ -1773,9 +1774,10 @@ pub fn instantiate_module_with_imports(
         )
       None => @types.Value::Null
     }
+    let min_elems = table_def.type_.limits.min.to_int()
     let table = @runtime.Table::new(
       table_def.type_.elem_type,
-      table_def.type_.limits.min.to_int(),
+      min_elems,
       table_def.type_.limits.max.map(fn(m) { m.to_int() }),
       init_value~,
       is_table64=table_def.type_.is_table64,

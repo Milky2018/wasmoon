@@ -266,6 +266,7 @@ fn ExecContext::call_wasm_func_with_instance(
           F64 => F64(0.0)
           FuncRef => Null
           ExternRef => Null
+          V128 => V128(Bytes::make(16, b'\x00'))
           _ => Null
         },
       )

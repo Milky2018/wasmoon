@@ -2,8 +2,9 @@
 extern "c" fn native_exit(code : Int) = "exit"
 
 ///|
-fn exit_failure() -> Unit {
+fn[T] exit_failure() -> T {
   native_exit(1)
+  panic()
 }
 
 ///|
@@ -841,7 +842,7 @@ fn run_with_jit(
   match compiled {
     None => {
       @logger.error("JIT compilation failed")
-      return []
+      return exit_failure()
     }
     Some((pc, debug_db)) => {
       // Build func_signatures array for JITModule::load
@@ -851,7 +852,7 @@ fn run_with_jit(
       match jit_module {
         None => {
           @logger.error("Failed to load JIT module")
-          return []
+          return exit_failure()
         }
         Some(jm) => {
           // Allocate independent WASM stack with guard page.
@@ -875,7 +876,7 @@ fn run_with_jit(
           // Initialize all memories (multi-memory support)
           if not(init_jit_memories(instance, store, jm)) {
             @logger.error("Failed to initialize JIT memories")
-            return []
+            return exit_failure()
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
@@ -928,7 +929,7 @@ fn run_with_jit(
                     None => @logger.error("JIT Trap: \{msg}")
                   }
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
-                  return []
+                  return exit_failure()
                 }
               }
               // Tear down GC context after JIT call
@@ -940,7 +941,7 @@ fn run_with_jit(
             }
             None => {
               @logger.error("Function '\{func_name}' not found in JIT module")
-              []
+              return exit_failure()
             }
           }
         }
@@ -1076,10 +1077,12 @@ fn copy_interp_memory_to_jit_indexed(
   jit_mem_ptr : Int64,
 ) -> Unit {
   let mem = store.get_memory(mem_addr)
-  let size = mem.size_pages() * 65536 // Convert pages to bytes
-  if size > 0 {
-    let data = mem.read_bytes(0, size)
-    @jit.memory_init(jit_mem_ptr, 0L, data) |> ignore
+  // Copy only the pages that were actually touched/initialized.
+  // Untouched pages are implicitly zero.
+  for entry in mem.allocated_pages() {
+    let (page_idx, page_bytes) = entry
+    let off = page_idx.to_int64() * 65536L
+    @jit.memory_init(jit_mem_ptr, off, page_bytes) |> ignore
   }
 }
 
