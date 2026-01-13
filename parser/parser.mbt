@@ -547,6 +547,12 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
     0x7B => V128
     0x70 => FuncRef
     0x6F => ExternRef
+    // Some reference types are encoded as single-byte shorthands in wasm binaries.
+    // Accept them here to stay compatible with `wasm-tools`/wasmparser.
+    0x72 => NullExternRef
+    0x73 => NullFuncRef
+    0x74 => NullExnRef
+    0x69 => ExnRef
     0x64 => {
       // Non-null reference type: (ref heaptype)
       let heap_type = self.read_heap_type()
@@ -1243,12 +1249,22 @@ fn Parser::read_instruction(
     0xC4 => I64Extend32S
     // Reference type instructions
     0xD0 => {
-      // ref.null: read reftype (0x70 = funcref, 0x6F = externref)
-      let reftype = self.read_byte()
-      match reftype {
-        0x70 => RefNull(@types.ValueType::FuncRef)
-        0x6F => RefNull(@types.ValueType::ExternRef)
-        _ => raise UnknownOpcode(0xD000 + reftype)
+      // ref.null: heaptype immediate (signed LEB)
+      let heap_type = self.read_heap_type()
+      // Abstract heap types are encoded as negative values.
+      // Type indices are non-negative.
+      if heap_type < 0 {
+        // Map common abstract heap types based on their signed values.
+        // -16 = func, -17 = extern
+        // Other abstract heap types are accepted as a generic null reference.
+        match heap_type {
+          -16 => RefNull(@types.ValueType::FuncRef)
+          -17 => RefNull(@types.ValueType::ExternRef)
+          _ => RefNull(@types.ValueType::NullRef)
+        }
+      } else {
+        // Typed null reference (ref.null <typeidx>)
+        RefNull(@types.ValueType::NullRef)
       }
     }
     0xD1 => RefIsNull
