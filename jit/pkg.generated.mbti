@@ -20,13 +20,27 @@ pub fn check_trap() -> Unit raise JITTrap
 
 pub fn clear_segments() -> Unit
 
+pub fn decode_externref(Int64) -> Int?
+
+pub fn decode_funcref_idx(Int64) -> Int?
+
+pub fn decode_gc_heap_ref(Int64) -> Int?
+
 pub fn decode_heap_ref(Int64) -> Int
 
 pub fn decode_i31(Int64) -> Int
 
+pub fn encode_externref(Int) -> Int64
+
+pub fn encode_funcref_idx(Int) -> Int64
+
+pub fn encode_gc_heap_ref(Int) -> Int64
+
 pub fn encode_heap_ref(Int) -> Int64
 
 pub fn encode_i31(Int) -> Int64
+
+pub fn encode_null_ref() -> Int64
 
 pub fn free_memory(Int64) -> Unit
 
@@ -178,11 +192,15 @@ pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
+pub fn is_funcref_ptr(Int64) -> Bool
+
 pub fn is_i31(Int64) -> Bool
 
 pub fn is_jit_supported_module(String) -> Bool
 
 pub fn is_null(Int64) -> Bool
+
+pub fn is_null_ref(Int64) -> Bool
 
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
@@ -191,6 +209,10 @@ pub fn setup_data_segments(Array[@types.Data]) -> Unit
 pub fn setup_elem_segments(Array[Array[Int64]]) -> Unit
 
 pub fn setup_type_cache_from_types(Array[@types.SubType], Array[Int]) -> Unit
+
+pub fn tag_funcref_ptr(Int64) -> Int64
+
+pub fn untag_funcref_ptr(Int64) -> Int64
 
 pub fn value_to_i64(@types.Value) -> Int64
 
@@ -432,7 +454,7 @@ pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
 pub fn JITModule::get_func_table_ptr(Self) -> Int64
 pub fn JITModule::has_wasm_stack(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
-pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int, Int)]) -> Unit
+pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
 pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self?

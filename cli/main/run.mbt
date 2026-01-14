@@ -68,7 +68,7 @@ fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
       F32(f) => f.reinterpret_as_int().to_int64()
       F64(d) => d.reinterpret_as_int64()
       FuncRef(idx) => idx.to_int64()
-      ExternRef(idx) => idx.to_int64()
+      ExternRef(idx) => @jit.encode_externref(idx)
       Null => @types.NULL_REF
       V128(_) => abort("V128 args not yet supported")
       StructRef(idx) => idx.to_int64() << 1
@@ -126,7 +126,10 @@ fn convert_jit_results(
         if raw == @types.NULL_REF {
           Null
         } else {
-          ExternRef(raw.to_int())
+          match @jit.decode_externref(raw) {
+            Some(idx) => ExternRef(idx)
+            None => ExternRef(raw.to_int())
+          }
         }
       }
       AnyRef | NullRef | RefAny | RefEq | RefNullEq => {
@@ -662,20 +665,18 @@ fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
 
 ///|
 /// Convert a store function address to module function index
-/// Returns -1 if not found (for null reference sentinel)
 fn store_addr_to_module_func_idx(
   store_addr : Int,
   instance : @runtime.ModuleInstance,
-) -> Int {
+) -> Int? {
   // Search for the store address in the instance's func_addrs
   for i, addr in instance.func_addrs {
     if addr == store_addr {
-      return i
+      return Some(i)
     }
   }
-  // Not found - this shouldn't happen for valid function references
-  // Return -1 to trigger a null reference trap
-  -1
+  // Not found - treat as null
+  None
 }
 
 ///|
@@ -698,8 +699,6 @@ fn init_jit_globals(
   if globals_ptr == 0L {
     return 0L
   }
-  // FUNCREF_TAG: bit 61 set for tagged function pointers (same as lower_get_func_ref)
-  let funcref_tag = 0x2000000000000000L
   // Write each global value to the array
   for i in 0..<num_globals {
     let global_addr = instance.global_addrs[i]
@@ -713,17 +712,18 @@ fn init_jit_globals(
       I64(n) => @types.ToInt64::to_int64_bits(n)
       F32(f) => @types.ToInt64::to_int64_bits(f)
       F64(d) => @types.ToInt64::to_int64_bits(d)
-      FuncRef(store_addr) => {
-        // Convert store address to module function index
-        let func_idx = store_addr_to_module_func_idx(store_addr, instance)
-        // Get function pointer from JIT module and tag it
-        let func_ptr = jit_module.get_func_ptr(func_idx)
-        if func_ptr == 0L {
-          @types.NULL_REF
-        } else { // null funcref
-          func_ptr | funcref_tag // Tagged function pointer
+      FuncRef(store_addr) =>
+        match store_addr_to_module_func_idx(store_addr, instance) {
+          Some(func_idx) => {
+            let func_ptr = jit_module.get_func_ptr(func_idx)
+            if func_ptr == 0L {
+              @types.NULL_REF
+            } else {
+              @jit.tag_funcref_ptr(func_ptr)
+            }
+          }
+          None => @types.NULL_REF
         }
-      }
       ExternRef(idx) => idx.to_int64()
       ExnRef(idx) => idx.to_int64()
       ArrayRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
@@ -769,8 +769,8 @@ fn init_jit_tables(
   for i, addr in instance.func_addrs {
     func_addr_to_idx.set(addr, i)
   }
-  // Copy table contents into JIT tables as (func_ptr, type_idx) pairs
-  let elem_init : Array[(Int, Int, Int, Int)] = []
+  // Copy table contents into JIT tables as (funcref?, type_idx) pairs
+  let elem_init : Array[(Int, Int, Int?, Int)] = []
   for table_idx, table_addr in instance.table_addrs {
     let runtime_table = store.get_table(table_addr) catch { _ => continue }
     // Avoid writing past the allocated JIT table size (JIT tables are sized at instantiation).
@@ -783,20 +783,20 @@ fn init_jit_tables(
       let value = runtime_table.get(elem_idx) catch { _ => continue }
       match value {
         FuncRef(store_addr) => {
-          let func_idx = match func_addr_to_idx.get(store_addr) {
-            Some(idx) => idx
+          let func_idx = func_addr_to_idx.get(store_addr)
+          let type_idx = match func_idx {
+            Some(idx) =>
+              if idx >= 0 && idx < instance.func_type_indices.length() {
+                instance.func_type_indices[idx]
+              } else {
+                -1
+              }
             None => -1
-          }
-          let type_idx = if func_idx >= 0 &&
-            func_idx < instance.func_type_indices.length() {
-            instance.func_type_indices[func_idx]
-          } else {
-            -1
           }
           elem_init.push((table_idx, elem_idx, func_idx, type_idx))
         }
         // Null and non-funcref entries are written as null to keep shared tables consistent.
-        _ => elem_init.push((table_idx, elem_idx, -1, -1))
+        _ => elem_init.push((table_idx, elem_idx, None, -1))
       }
     }
   }

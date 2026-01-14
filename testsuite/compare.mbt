@@ -120,7 +120,10 @@ pub fn jit_results_to_values(
         if raw == 0L {
           Null
         } else {
-          ExternRef(raw.to_int())
+          match @jit.decode_externref(raw) {
+            Some(idx) => ExternRef(idx)
+            None => ExternRef(raw.to_int())
+          }
         }
       }
       // GC reference types - decode using JIT encoding:
@@ -202,19 +205,18 @@ pub fn value_to_jit_arg_typed(
         | RefFunc
         | RefFuncTyped(_)
         | RefNullFuncTyped(_)
-        | NullFuncRef => -(idx.to_int64() + 1L)
+        | NullFuncRef => @jit.encode_funcref_idx(idx)
         _ => idx.to_int64()
       }
     ExternRef(idx) =>
       match ty {
-        ExternRef | RefExtern | NullExternRef =>
-          @types.EXTERNREF_TAG | (idx.to_int64() << 1)
+        ExternRef | RefExtern | NullExternRef => @jit.encode_externref(idx)
         _ => idx.to_int64()
       }
     ExnRef(idx) => idx.to_int64()
     // GC references: encoding uses 0 for null
-    ArrayRef(gc_ref) => (gc_ref.to_int64() + 1L) << 1
-    StructRef(gc_ref) => (gc_ref.to_int64() + 1L) << 1
+    ArrayRef(gc_ref) => @jit.encode_gc_heap_ref(gc_ref)
+    StructRef(gc_ref) => @jit.encode_gc_heap_ref(gc_ref)
     I31(n) => (n.to_int64() << 1) | 1L
     Null => 0L
     V128(_) => abort("V128 not yet supported in testsuite")
@@ -619,8 +621,8 @@ pub fn init_elem_segments(
     }
   }
 
-  // Process elem segments: build (table_idx, elem_idx, func_idx, type_hash) tuples
-  let elem_init : Array[(Int, Int, Int, Int)] = []
+  // Process elem segments: build (table_idx, elem_idx, func_idx?, type_hash) tuples
+  let elem_init : Array[(Int, Int, Int?, Int)] = []
   for table_idx, _table in mod_.tables {
     // Process elem segments for this table
     for elem in mod_.elems {
@@ -629,16 +631,19 @@ pub fn init_elem_segments(
         let offset = eval_elem_offset_expr(offset_expr, globals)
         for i, init_expr in elem.init {
           let func_idx = match init_expr {
-            [RefFunc(idx)] => idx
-            [I32Const(idx)] => idx
-            [RefNull(_)] => -1 // Use -1 to represent null reference
+            [RefFunc(idx)] => Some(idx)
+            [I32Const(idx)] => Some(idx)
+            [RefNull(_)] => None
             _ => continue
           }
-          let canonical_type_idx = if func_idx >= 0 &&
-            func_idx < func_canonical_types.length() {
-            func_canonical_types[func_idx]
-          } else {
-            0
+          let canonical_type_idx = match func_idx {
+            Some(idx) =>
+              if idx >= 0 && idx < func_canonical_types.length() {
+                func_canonical_types[idx]
+              } else {
+                0
+              }
+            None => 0
           }
           // Element index within this specific table
           let elem_idx = offset + i

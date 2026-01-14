@@ -680,10 +680,8 @@ pub fn invoke_action(
                     )
                   RefNull(_) => i64_args.push(NULL_REF)
                   // Externref uses special encoding: EXTERNREF_TAG | (host_idx << 1)
-                  RefExtern(n) =>
-                    i64_args.push(EXTERNREF_TAG | (n.to_int64() << 1))
-                  RefHost(n) =>
-                    i64_args.push(EXTERNREF_TAG | (n.to_int64() << 1))
+                  RefExtern(n) => i64_args.push(@jit.encode_externref(n))
+                  RefHost(n) => i64_args.push(@jit.encode_externref(n))
                   RefFunc => i64_args.push(NULL_REF) // placeholder
                   RefExternAny => i64_args.push(NULL_REF) // placeholder
                   // GC reference types - these shouldn't appear as args but handle them
@@ -872,7 +870,10 @@ fn convert_jit_result(
       if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::ExternRef((v >> 1).to_int())
+        match @jit.decode_externref(v) {
+          Some(idx) => @types.Value::ExternRef(idx)
+          None => @types.Value::ExternRef(v.to_int())
+        }
       }
     // GC reference types - decode using c_heap encoding
     // Encoding: StructRef/ArrayRef = (gc_ref - 1) << 1 (even), i31 = (value << 1) | 1 (odd), null = NULL_REF
@@ -882,8 +883,10 @@ fn convert_jit_result(
         @types.Value::Null
       } else if (v & EXTERNREF_TAG) != 0L {
         // Host externref that was converted to anyref via any.convert_extern
-        // Decode by shifting right to get the original host_idx
-        @types.Value::ExternRef((v >> 1).to_int())
+        match @jit.decode_externref(v) {
+          Some(idx) => @types.Value::ExternRef(idx)
+          None => @types.Value::ExternRef(v.to_int())
+        }
       } else if (v & 1L) == 1L {
         // i31 (odd)
         @types.Value::I31((v >> 1).to_int())
