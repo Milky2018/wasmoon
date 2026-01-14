@@ -740,6 +740,46 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_memory_init(int64_t mem_ptr, int64_t offset, 
     return 0;
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_jit_memory_read(int64_t mem_ptr, int64_t offset, moonbit_bytes_t out, int size) {
+    if (!mem_ptr || !out || size <= 0) return -1;
+    uint8_t *mem = (uint8_t *)mem_ptr;
+    memcpy(out, mem + offset, (size_t)size);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_ptr(int64_t ctx_ptr, int memidx) {
+    if (!ctx_ptr || memidx < 0) return 0;
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+
+    // Memory 0 fast-path is authoritative.
+    if (memidx == 0) {
+        return (int64_t)ctx->memory_base;
+    }
+
+    // Multi-memory pointers.
+    if (ctx->memories && ctx->memory_count > 0 && memidx < ctx->memory_count) {
+        return (int64_t)ctx->memories[memidx];
+    }
+
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_size(int64_t ctx_ptr, int memidx) {
+    if (!ctx_ptr || memidx < 0) return 0;
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+
+    // Memory 0 fast-path is authoritative and updated by memory.grow.
+    if (memidx == 0) {
+        return (int64_t)ctx->memory_size;
+    }
+
+    if (ctx->memory_sizes && ctx->memory_count > 0 && memidx < ctx->memory_count) {
+        return (int64_t)ctx->memory_sizes[memidx];
+    }
+
+    return 0;
+}
+
 // ============ Executable Memory FFI Exports ============
 
 static void finalize_exec_code(void *self) {

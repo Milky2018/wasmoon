@@ -709,6 +709,24 @@ pub fn JITModule::set_memory(
 }
 
 ///|
+/// Get current memory base pointer for memidx
+pub fn JITModule::get_memory_ptr(self : JITModule, memidx : Int) -> Int64 {
+  match self.context {
+    Some(ctx) => ctx.get_memory_ptr(memidx)
+    None => 0L
+  }
+}
+
+///|
+/// Get current memory size in bytes for memidx
+pub fn JITModule::get_memory_size(self : JITModule, memidx : Int) -> Int64 {
+  match self.context {
+    Some(ctx) => ctx.get_memory_size(memidx)
+    None => 0L
+  }
+}
+
+///|
 /// Set globals array for the JIT context
 pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
   if self.context is Some(ctx) {

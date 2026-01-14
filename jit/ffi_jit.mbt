@@ -281,6 +281,16 @@ fn JITContext::set_memory_pointers(
 }
 
 ///|
+fn JITContext::get_memory_ptr(self : JITContext, memidx : Int) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_memory_ptr(self.ptr(), memidx)
+}
+
+///|
+fn JITContext::get_memory_size(self : JITContext, memidx : Int) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_memory_size(self.ptr(), memidx)
+}
+
+///|
 /// Allocate an independent WASM stack with guard page protection.
 /// This provides controlled stack overflow behavior - when WASM code
 /// overflows the stack, it hits the guard page and triggers a
@@ -435,6 +445,24 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
     bytes[i] = data[i]
   }
   @jit_ffi.c_jit_memory_init(mem_ptr, offset, bytes, size) == 0
+}
+
+///|
+/// Read `size` bytes from linear memory at offset
+pub fn memory_read(mem_ptr : Int64, offset : Int64, size : Int) -> Bytes {
+  if mem_ptr == 0L || size <= 0 {
+    return b""
+  }
+  let out = FixedArray::make(size, b'\x00')
+  let rc = @jit_ffi.c_jit_memory_read(mem_ptr, offset, out, size)
+  if rc != 0 {
+    return b""
+  }
+  let arr : Array[Byte] = Array::make(size, b'\x00')
+  for i in 0..<size {
+    arr[i] = out[i]
+  }
+  Bytes::from_array(arr)
 }
 
 // NOTE: No free() method needed - GC handles cleanup automatically!

@@ -79,12 +79,36 @@ pub extern "c" fn c_jit_memory_init(
 ) -> Int = "wasmoon_jit_memory_init"
 
 ///|
+/// Copy data from linear memory at offset into `out`
+#borrow(out)
+pub extern "c" fn c_jit_memory_read(
+  mem_ptr : Int64,
+  offset : Int64,
+  out : FixedArray[Byte],
+  size : Int,
+) -> Int = "wasmoon_jit_memory_read"
+
+///|
 /// Set memory in the context
 pub extern "c" fn c_jit_ctx_set_memory(
   ctx_ptr : Int64,
   mem_ptr : Int64,
   mem_size : Int64,
 ) -> Unit = "wasmoon_jit_ctx_set_memory"
+
+///|
+/// Get memory base pointer for memidx
+pub extern "c" fn c_jit_ctx_get_memory_ptr(
+  ctx_ptr : Int64,
+  memidx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_memory_ptr"
+
+///|
+/// Get memory size in bytes for memidx
+pub extern "c" fn c_jit_ctx_get_memory_size(
+  ctx_ptr : Int64,
+  memidx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_memory_size"
 
 ///|
 /// Allocate linear memory for WASM
