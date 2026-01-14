@@ -1608,8 +1608,14 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
   let ref_val = self.pop()
   let idx = self.block_stack.length() - 1 - depth
 
-  // Check if reference is null (GC refs use NULL_REF for null)
-  let null_sentinel = self.builder.iconst(Type::I64, @types.NULL_REF)
+  // Check if reference is null.
+  // - funcref/externref use FUNCREF_NULL_SENTINEL
+  // - GC refs use NULL_REF
+  let null_const = match ref_val.ty {
+    FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
+    _ => @types.NULL_REF
+  }
+  let null_sentinel = self.builder.iconst(ref_val.ty, null_const)
   let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
   // For br_on_null, we need a fallthrough block and a taken block (critical edge split)
@@ -1672,8 +1678,14 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
   let ref_val = self.pop()
   let idx = self.block_stack.length() - 1 - depth
 
-  // Check if reference is null (GC refs use NULL_REF for null)
-  let null_sentinel = self.builder.iconst(Type::I64, @types.NULL_REF)
+  // Check if reference is null.
+  // - funcref/externref use FUNCREF_NULL_SENTINEL
+  // - GC refs use NULL_REF
+  let null_const = match ref_val.ty {
+    FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
+    _ => @types.NULL_REF
+  }
+  let null_sentinel = self.builder.iconst(ref_val.ty, null_const)
   let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
   // For br_on_non_null, we need a fallthrough block and a taken block
