@@ -118,7 +118,8 @@ fn try_compile_jit(
           // Use quiet mode to redirect stdout/stderr to /dev/null for testing
           jm.init_wasi_quiet([], [], [])
           // Initialize all memories (multi-memory support)
-          guard init_jit_memories(instance, store, jm) is Some(_) else {
+          guard @wast.init_jit_memories_from_store(instance, store, jm)
+            is Some(_) else {
             return None
           }
           // Initialize globals (pass jm for tagged funcref pointers)

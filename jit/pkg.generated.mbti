@@ -454,6 +454,8 @@ pub fn JITModule::get_func_count(Self) -> Int
 pub fn JITModule::get_func_ptr(Self, Int) -> Int64
 pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
 pub fn JITModule::get_func_table_ptr(Self) -> Int64
+pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
+pub fn JITModule::get_memory_size(Self, Int) -> Int64
 pub fn JITModule::has_wasm_stack(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit

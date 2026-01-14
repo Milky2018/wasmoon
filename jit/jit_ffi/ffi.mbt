@@ -97,6 +97,20 @@ pub extern "c" fn c_jit_ctx_set_memory(
 ) -> Unit = "wasmoon_jit_ctx_set_memory"
 
 ///|
+/// Get memory base pointer for memidx
+pub extern "c" fn c_jit_ctx_get_memory_ptr(
+  ctx_ptr : Int64,
+  memidx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_memory_ptr"
+
+///|
+/// Get memory size in bytes for memidx
+pub extern "c" fn c_jit_ctx_get_memory_size(
+  ctx_ptr : Int64,
+  memidx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_memory_size"
+
+///|
 /// Allocate linear memory for WASM
 pub extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_memory"
 

@@ -118,6 +118,10 @@ pub fn c_jit_ctx_get_func_count(Int64) -> Int
 
 pub fn c_jit_ctx_get_func_table(Int64) -> Int64
 
+pub fn c_jit_ctx_get_memory_ptr(Int64, Int) -> Int64
+
+pub fn c_jit_ctx_get_memory_size(Int64, Int) -> Int64
+
 pub fn c_jit_ctx_set_func(Int64, Int, Int64) -> Unit
 
 pub fn c_jit_ctx_set_gc_heap(Int64, Int64) -> Unit

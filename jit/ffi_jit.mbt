@@ -281,6 +281,16 @@ fn JITContext::set_memory_pointers(
 }
 
 ///|
+fn JITContext::get_memory_ptr(self : JITContext, memidx : Int) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_memory_ptr(self.ptr(), memidx)
+}
+
+///|
+fn JITContext::get_memory_size(self : JITContext, memidx : Int) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_memory_size(self.ptr(), memidx)
+}
+
+///|
 /// Allocate an independent WASM stack with guard page protection.
 /// This provides controlled stack overflow behavior - when WASM code
 /// overflows the stack, it hits the guard page and triggers a

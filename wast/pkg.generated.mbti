@@ -37,6 +37,8 @@ pub fn has_unsupported_instructions(@types.Module) -> Bool
 
 pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
 
+pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@jit.MemoryInfo]?
+
 pub fn invoke_action(WastContext, @wat.WastAction) -> Array[@types.Value] raise WastRunnerError
 
 pub fn parse(String) -> @wat.WastScript raise @wat.WatError
@@ -46,6 +48,8 @@ pub fn run_wast_command(WastContext, @wat.WastCommand, Int, WastResult, String, 
 pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, jit_compiler? : JITCompiler?) -> WastResult
 
 pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
+
+pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
 pub fn sync_table_to_jit(@runtime.Table, @jit.JITTable, @jit.JITModule) -> Unit
 
