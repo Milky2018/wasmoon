@@ -257,7 +257,8 @@ fn ExecContext::exec_instr(
     Drop => self.stack.pop() |> ignore
 
     // Reference type instructions
-    RefNull(ref_type) =>
+    RefNull(ref_type) => {
+      @logger.debug("exec ref.null: \{ref_type}")
       match ref_type {
         FuncRef
         | ExternRef
@@ -276,12 +277,15 @@ fn ExecContext::exec_instr(
         | RefEq
         | RefNullI31
         | RefI31
+        | StructRef
+        | ArrayRef
         | RefNullStruct(_)
         | RefStruct(_)
         | RefNullArray(_)
         | RefArray(_) => self.stack.push(Null)
         _ => raise @runtime.RuntimeError::TypeMismatch
       }
+    }
     RefIsNull => {
       let value = self.stack.pop()
       match value {

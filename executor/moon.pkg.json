@@ -1,6 +1,7 @@
 {
   "import": [
     "Milky2018/wasmoon/types",
-    "Milky2018/wasmoon/runtime"
+    "Milky2018/wasmoon/runtime",
+    "Milky2018/wasmoon/logger"
   ]
 }

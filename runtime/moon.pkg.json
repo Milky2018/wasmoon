@@ -1,6 +1,7 @@
 {
   "import": [
     "Milky2018/wasmoon/types",
-    "Milky2018/wasmoon/jit"
+    "Milky2018/wasmoon/jit",
+    "Milky2018/wasmoon/logger"
   ]
 }
