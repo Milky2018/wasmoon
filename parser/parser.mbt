@@ -144,18 +144,13 @@ struct Parser {
   data : Bytes
   mut pos : Int
   mut has_data_count : Bool // true if data count section was seen
+  types : Array[@types.SubType]
 } derive(Show)
 
 ///|
 /// Create a new parser from bytes
 pub fn Parser::new(data : Bytes) -> Parser {
-  { data, pos: 0, has_data_count: false }
-}
-
-///|
-/// Generic error with position info
-fn[A] Parser::error(self : Parser, msg : String) -> A raise ParserError {
-  raise ParseError("\{msg} at position \{self.pos}")
+  { data, pos: 0, has_data_count: false, types: [] }
 }
 
 ///|
@@ -538,6 +533,96 @@ fn decode_utf8_validated(bytes : Bytes) -> String raise ParserError {
 
 ///|
 fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError {
+  fn resolve_typed_ref(
+    type_idx : Int,
+    nullable : Bool,
+  ) -> @types.ValueType raise ParserError {
+    if type_idx < 0 || type_idx >= self.types.length() {
+      raise ParseError("invalid heap type")
+    }
+    match self.types[type_idx].composite {
+      Func(_) =>
+        if nullable {
+          @types.ValueType::RefNullFuncTyped(type_idx)
+        } else {
+          @types.ValueType::RefFuncTyped(type_idx)
+        }
+      Struct(_) =>
+        if nullable {
+          @types.ValueType::RefNullStruct(type_idx)
+        } else {
+          @types.ValueType::RefStruct(type_idx)
+        }
+      Array(_) =>
+        if nullable {
+          @types.ValueType::RefNullArray(type_idx)
+        } else {
+          @types.ValueType::RefArray(type_idx)
+        }
+    }
+  }
+
+  fn resolve_abstract_heap(
+    heap_type : Int,
+    nullable : Bool,
+  ) -> @types.ValueType raise ParserError {
+    match heap_type {
+      -16 =>
+        if nullable {
+          @types.ValueType::FuncRef
+        } else {
+          @types.ValueType::RefFunc
+        }
+      -17 =>
+        if nullable {
+          @types.ValueType::ExternRef
+        } else {
+          @types.ValueType::RefExtern
+        }
+      -18 =>
+        if nullable {
+          @types.ValueType::AnyRef
+        } else {
+          @types.ValueType::RefAny
+        }
+      -19 =>
+        if nullable {
+          @types.ValueType::RefNullEq
+        } else {
+          @types.ValueType::RefEq
+        }
+      -20 =>
+        if nullable {
+          @types.ValueType::RefNullI31
+        } else {
+          @types.ValueType::RefI31
+        }
+      -21 =>
+        if nullable {
+          @types.ValueType::StructRef
+        } else {
+          @types.ValueType::RefStructAbs
+        }
+      -22 =>
+        if nullable {
+          @types.ValueType::ArrayRef
+        } else {
+          @types.ValueType::RefArrayAbs
+        }
+      -23 => @types.ValueType::ExnRef
+      -15 =>
+        if nullable {
+          @types.ValueType::NullRef
+        } else {
+          @types.ValueType::RefNone
+        }
+      -14 => @types.ValueType::NullExternRef
+      -13 => @types.ValueType::NullFuncRef
+      -12 => @types.ValueType::NullExnRef
+      _ => raise ParseError("invalid heap type")
+    }
+  }
+
   let byte = self.read_byte()
   match byte {
     0x7F => I32
@@ -545,24 +630,50 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
     0x7D => F32
     0x7C => F64
     0x7B => V128
+
+    // Reference shorthands
     0x70 => FuncRef
     0x6F => ExternRef
+    0x6E => AnyRef
+    0x6D => RefNullEq
+    0x6C => RefNullI31
+    0x6B => StructRef
+    0x6A => ArrayRef
+    0x69 => ExnRef
+    0x71 => NullRef
+    0x72 => NullExternRef
+    0x73 => NullFuncRef
+    0x74 => NullExnRef
+
+    // ref heaptype
     0x64 => {
-      // Non-null reference type: (ref heaptype)
       let heap_type = self.read_heap_type()
-      match heap_type {
-        0x70 => RefFunc // (ref func)
-        0x6F => RefExtern // (ref extern)
-        _ => RefFunc // Default to RefFunc for typed references
+      if heap_type < 0 {
+        resolve_abstract_heap(heap_type, false)
+      } else {
+        resolve_typed_ref(heap_type, false)
       }
     }
+
+    // ref shared heaptype (shared reference types proposal)
+    0x65 => {
+      self.read_heap_type() |> ignore
+      raise ParseError("shared reference types not supported")
+    }
+
+    // ref null shared heaptype (shared reference types proposal)
+    0x62 => {
+      self.read_heap_type() |> ignore
+      raise ParseError("shared reference types not supported")
+    }
+
+    // ref null heaptype
     0x63 => {
-      // Nullable reference type: (ref null heaptype)
       let heap_type = self.read_heap_type()
-      match heap_type {
-        0x70 => FuncRef // (ref null func) = funcref
-        0x6F => ExternRef // (ref null extern) = externref
-        _ => FuncRef // Default to FuncRef
+      if heap_type < 0 {
+        resolve_abstract_heap(heap_type, true)
+      } else {
+        resolve_typed_ref(heap_type, true)
       }
     }
     _ => raise InvalidValueType(byte)
@@ -589,9 +700,137 @@ fn Parser::read_block_type(self : Parser) -> @types.BlockType raise ParserError 
       self.skip(1)
       Empty
     }
-    0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F | 0x64 | 0x63 =>
-      Value(self.read_value_type())
+    0x7F
+    | 0x7E
+    | 0x7D
+    | 0x7C
+    | 0x7B
+    | 0x70
+    | 0x6F
+    | 0x6E
+    | 0x6D
+    | 0x6C
+    | 0x6B
+    | 0x6A
+    | 0x69
+    | 0x71
+    | 0x72
+    | 0x73
+    | 0x74
+    | 0x64
+    | 0x65
+    | 0x63
+    | 0x62 => Value(self.read_value_type())
     _ => TypeIndex(self.read_i32())
+  }
+}
+
+// ============================================================
+// Recursive Group Type Parsing (WasmGC)
+// ============================================================
+
+///|
+fn Parser::read_field_type(self : Parser) -> @types.FieldType raise ParserError {
+  let storage_type : @types.StorageType = match self.peek_byte() {
+    0x78 => {
+      self.skip(1)
+      @types.StorageType::Packed(@types.PackedType::I8)
+    }
+    0x77 => {
+      self.skip(1)
+      @types.StorageType::Packed(@types.PackedType::I16)
+    }
+    _ => @types.StorageType::Val(self.read_value_type())
+  }
+  let mutability = self.read_byte()
+  if mutability != 0x00 && mutability != 0x01 {
+    raise MalformedMutability(mutability)
+  }
+  { storage_type, mutable: mutability == 0x01 }
+}
+
+///|
+fn Parser::read_struct_type(
+  self : Parser,
+) -> @types.StructType raise ParserError {
+  let fields = self.read_vec(fn() { self.read_field_type() })
+  { fields, }
+}
+
+///|
+fn Parser::read_array_type(self : Parser) -> @types.ArrayType raise ParserError {
+  let element = self.read_field_type()
+  { element, }
+}
+
+///|
+fn Parser::read_composite_type(
+  self : Parser,
+) -> @types.CompositeType raise ParserError {
+  let tag = self.read_byte()
+  match tag {
+    0x60 => {
+      let params = self.read_vec(fn() { self.read_value_type() })
+      let results = self.read_vec(fn() { self.read_value_type() })
+      @types.CompositeType::Func({ params, results })
+    }
+    0x5f => @types.CompositeType::Struct(self.read_struct_type())
+    0x5e => @types.CompositeType::Array(self.read_array_type())
+    _ => raise ParseError("unknown composite type tag: \{tag}")
+  }
+}
+
+///|
+fn Parser::read_subtype(self : Parser) -> @types.SubType raise ParserError {
+  // WasmGC binary subtype encoding:
+  // - 0x50: subtype header with flags + optional supertype
+  // - otherwise: implicit final subtype without supertypes
+  let tag = self.peek_byte()
+  if tag == 0x50 {
+    self.skip(1)
+    let flags = self.read_byte()
+    let final_ = (flags & 0x01) != 0
+    let has_supertype = (flags & 0x02) != 0
+    if (flags & 0xFC) != 0 {
+      raise ParseError("malformed subtype flags")
+    }
+    let supertypes : Array[Int] = if has_supertype {
+      [self.read_u32()]
+    } else {
+      []
+    }
+    let composite = self.read_composite_type()
+    { final_, supertypes, composite }
+  } else {
+    // Implicit final subtype
+    let composite = self.read_composite_type()
+    { final_: true, supertypes: [], composite }
+  }
+}
+
+///|
+/// Read a rec group entry in the type section.
+/// The type section is a vec of rec groups; each entry is either:
+/// - 0x4e <vec subtype>  (explicit rec group)
+/// - subtype             (implicit singleton group)
+fn Parser::read_rec_group(
+  self : Parser,
+) -> Array[@types.SubType] raise ParserError {
+  let tag = self.peek_byte()
+  if tag == 0x4e {
+    self.skip(1)
+    let n = self.read_u32()
+    let defs : Array[@types.SubType] = []
+    for _ in 0..<n {
+      let subtype = self.read_subtype()
+      defs.push(subtype)
+      self.types.push(subtype)
+    }
+    defs
+  } else {
+    let subtype = self.read_subtype()
+    self.types.push(subtype)
+    [subtype]
   }
 }
 
@@ -615,17 +854,6 @@ fn[T] Parser::read_vec(
         continue (acc, i + 1)
       }
   }
-}
-
-///|
-fn Parser::read_func_type(self : Parser) -> @types.FuncType raise ParserError {
-  let tag = self.read_byte()
-  if tag != 0x60 {
-    self.error("expected function type tag 0x60, got \{tag}")
-  }
-  let params = self.read_vec(fn() { self.read_value_type() })
-  let results = self.read_vec(fn() { self.read_value_type() })
-  { params, results }
 }
 
 // ============================================================
@@ -713,10 +941,15 @@ fn Parser::read_memory_type(
   // Bit 0: has max (0x01)
   // Bit 1: shared (0x02) - only valid with has max
   // Bit 2: memory64 (0x04)
-  // Valid combinations: 0x00, 0x01, 0x03, 0x04, 0x05, 0x07
+  // Bit 3: custom-page-sizes (0x08)
+  // Valid combinations (wasm-tools/wasmparser):
+  // - memory32: 0x00, 0x01, 0x03 and +0x08 variants
+  // - memory64: 0x04, 0x05, 0x07 and +0x08 variants
   let flags = self.read_byte()
   let has_max = (flags & LIMITS_HAS_MAX) != 0
   let is_memory64 = (flags & LIMITS_64_NO_MAX) != 0
+  let has_custom_page_size = (flags & 0x08) != 0
+
   // Validate flags
   let valid_memory_flags : FixedArray[Int] = [
     LIMITS_NO_MAX,
@@ -725,10 +958,17 @@ fn Parser::read_memory_type(
     LIMITS_64_NO_MAX,
     LIMITS_64_HAS_MAX,
     LIMITS_64_SHARED,
+    0x08,
+    0x09,
+    0x0B,
+    0x0C,
+    0x0D,
+    0x0F,
   ]
   if not(valid_memory_flags.contains(flags)) {
     raise MalformedLimitsFlags(flags)
   }
+
   // Read limits - for memory64, use u64; for memory32, use u32
   let min = if is_memory64 {
     self.read_u64()
@@ -740,7 +980,17 @@ fn Parser::read_memory_type(
   } else {
     None
   }
-  { limits: { min, max }, is_memory64 }
+  let page_size_log2 = if has_custom_page_size {
+    // custom-page-sizes proposal encodes a page size log2 after max (or min if no max).
+    let l2 = self.read_u32()
+    if l2 < 0 || l2 > 30 {
+      raise ParseError("invalid memory page size")
+    }
+    l2
+  } else {
+    16
+  }
+  { limits: { min, max }, is_memory64, page_size_log2 }
 }
 
 ///|
@@ -802,29 +1052,10 @@ fn Parser::read_elem_segment(
   let has_reftype = flags == 5 || flags == 6 || flags == 7
   let elem_type : @types.ValueType = if has_reftype {
     // flags 5, 6, 7: has explicit reftype
-    let type_byte = self.read_byte()
-    match type_byte {
-      0x70 => @types.ValueType::FuncRef
-      0x6F => @types.ValueType::ExternRef
-      0x64 => {
-        // Non-null reference type: (ref heaptype)
-        let heap_type = self.read_heap_type()
-        match heap_type {
-          0x70 => @types.ValueType::RefFunc
-          0x6F => @types.ValueType::RefExtern
-          _ => @types.ValueType::RefFunc
-        }
-      }
-      0x63 => {
-        // Nullable reference type: (ref null heaptype)
-        let heap_type = self.read_heap_type()
-        match heap_type {
-          0x70 => @types.ValueType::FuncRef
-          0x6F => @types.ValueType::ExternRef
-          _ => @types.ValueType::FuncRef
-        }
-      }
-      _ => raise MalformedReferenceType(type_byte)
+    let vt = self.read_value_type()
+    match vt {
+      I32 | I64 | F32 | F64 | V128 => raise MalformedReferenceType(0)
+      _ => vt
     }
   } else if has_elemkind {
     // flags 1, 2, 3: has elemkind
@@ -984,6 +1215,16 @@ fn Parser::read_instruction(
       let table_idx = self.read_u32()
       CallIndirect(type_idx, table_idx)
     }
+    // Tail-call proposal
+    0x12 => ReturnCall(self.read_u32())
+    0x13 => {
+      let type_idx = self.read_u32()
+      let table_idx = self.read_u32()
+      ReturnCallIndirect(type_idx, table_idx)
+    }
+    // WasmGC typed call_ref/return_call_ref
+    0x14 => CallRef(self.read_u32())
+    0x15 => ReturnCallRef(self.read_u32())
     // Parametric instructions
     0x1A => Drop
     0x1B => Select
@@ -1243,12 +1484,35 @@ fn Parser::read_instruction(
     0xC4 => I64Extend32S
     // Reference type instructions
     0xD0 => {
-      // ref.null: read reftype (0x70 = funcref, 0x6F = externref)
-      let reftype = self.read_byte()
-      match reftype {
-        0x70 => RefNull(@types.ValueType::FuncRef)
-        0x6F => RefNull(@types.ValueType::ExternRef)
-        _ => raise UnknownOpcode(0xD000 + reftype)
+      // ref.null: heaptype immediate (signed LEB)
+      let heap_type = self.read_heap_type()
+      if heap_type < 0 {
+        let nullable_ref_ty = match heap_type {
+          -16 => @types.ValueType::FuncRef
+          -17 => @types.ValueType::ExternRef
+          -18 => @types.ValueType::AnyRef
+          -19 => @types.ValueType::RefNullEq
+          -20 => @types.ValueType::RefNullI31
+          -21 => @types.ValueType::StructRef
+          -22 => @types.ValueType::ArrayRef
+          -23 => @types.ValueType::ExnRef
+          -15 => @types.ValueType::NullRef
+          -14 => @types.ValueType::NullExternRef
+          -13 => @types.ValueType::NullFuncRef
+          -12 => @types.ValueType::NullExnRef
+          _ => raise ParseError("invalid heap type")
+        }
+        RefNull(nullable_ref_ty)
+      } else {
+        if heap_type >= self.types.length() {
+          raise ParseError("invalid heap type")
+        }
+        let nullable_ref_ty = match self.types[heap_type].composite {
+          Func(_) => @types.ValueType::RefNullFuncTyped(heap_type)
+          Struct(_) => @types.ValueType::RefNullStruct(heap_type)
+          Array(_) => @types.ValueType::RefNullArray(heap_type)
+        }
+        RefNull(nullable_ref_ty)
       }
     }
     0xD1 => RefIsNull
@@ -1257,6 +1521,9 @@ fn Parser::read_instruction(
       let func_idx = self.read_u32()
       RefFunc(func_idx)
     }
+    0xD4 => RefAsNonNull
+    0xD5 => BrOnNull(self.read_u32())
+    0xD6 => BrOnNonNull(self.read_u32())
     // Saturating truncation instructions (0xFC prefix)
     0xFC => {
       let subopcode = self.read_u32()
@@ -1335,12 +1602,124 @@ fn Parser::read_instruction(
         _ => raise UnknownOpcode(0xFC00 + subopcode)
       }
     }
+    // GC instructions (0xFB prefix)
+    0xFB => {
+      let subopcode = self.read_u32()
+      self.parse_gc_instruction(subopcode)
+    }
     // SIMD instructions (0xFD prefix)
     0xFD => {
       let subopcode = self.read_u32()
       self.parse_simd_instruction(subopcode)
     }
+    // Atomics instructions (0xFE prefix)
+    0xFE => {
+      let subopcode = self.read_u32()
+      if subopcode == 3 {
+        // atomic.fence has a reserved 0x00 byte
+        let reserved = self.read_byte()
+        if reserved != 0x00 {
+          raise ParseError("malformed atomic.fence")
+        }
+        Atomic(subopcode, 0, 0, 0L)
+      } else {
+        let (memidx, align, offset) = self.read_memarg()
+        Atomic(subopcode, memidx, align, offset)
+      }
+    }
     _ => raise UnknownOpcode(opcode)
+  }
+}
+
+///|
+/// Parse GC instruction given the subopcode after 0xFB prefix
+fn Parser::parse_gc_instruction(
+  self : Parser,
+  subopcode : Int,
+) -> @types.Instruction raise ParserError {
+  match subopcode {
+    0 => StructNew(self.read_u32())
+    1 => StructNewDefault(self.read_u32())
+    2 => {
+      let type_idx = self.read_u32()
+      let field_idx = self.read_u32()
+      StructGet(type_idx, field_idx)
+    }
+    3 => {
+      let type_idx = self.read_u32()
+      let field_idx = self.read_u32()
+      StructGetS(type_idx, field_idx)
+    }
+    4 => {
+      let type_idx = self.read_u32()
+      let field_idx = self.read_u32()
+      StructGetU(type_idx, field_idx)
+    }
+    5 => {
+      let type_idx = self.read_u32()
+      let field_idx = self.read_u32()
+      StructSet(type_idx, field_idx)
+    }
+    6 => ArrayNew(self.read_u32())
+    7 => ArrayNewDefault(self.read_u32())
+    8 => {
+      let type_idx = self.read_u32()
+      let len = self.read_u32()
+      ArrayNewFixed(type_idx, len)
+    }
+    9 => {
+      let type_idx = self.read_u32()
+      let data_idx = self.read_u32()
+      ArrayNewData(type_idx, data_idx)
+    }
+    10 => {
+      let type_idx = self.read_u32()
+      let elem_idx = self.read_u32()
+      ArrayNewElem(type_idx, elem_idx)
+    }
+    11 => ArrayGet(self.read_u32())
+    12 => ArrayGetS(self.read_u32())
+    13 => ArrayGetU(self.read_u32())
+    14 => ArraySet(self.read_u32())
+    15 => ArrayLen
+    16 => ArrayFill(self.read_u32())
+    17 => {
+      let dst = self.read_u32()
+      let src = self.read_u32()
+      ArrayCopy(dst, src)
+    }
+    18 => {
+      let type_idx = self.read_u32()
+      let data_idx = self.read_u32()
+      ArrayInitData(type_idx, data_idx)
+    }
+    19 => {
+      let type_idx = self.read_u32()
+      let elem_idx = self.read_u32()
+      ArrayInitElem(type_idx, elem_idx)
+    }
+    20 => RefTest(self.read_value_type())
+    21 => RefTestNull(self.read_value_type())
+    22 => RefCast(self.read_value_type())
+    23 => RefCastNull(self.read_value_type())
+    24 => {
+      let label = self.read_u32()
+      let from_t = self.read_value_type()
+      let to_t = self.read_value_type()
+      BrOnCast(label, from_t, to_t)
+    }
+    25 => {
+      let label = self.read_u32()
+      let from_t = self.read_value_type()
+      let to_t = self.read_value_type()
+      BrOnCastFail(label, from_t, to_t)
+    }
+    26 => RefI31
+    27 => I31GetS
+    28 => I31GetU
+    29 => AnyConvertExtern
+    30 => ExternConvertAny
+    _ => raise UnknownOpcode(0xFB00 + subopcode)
   }
 }
 
@@ -1855,13 +2234,14 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
     match section_id {
       1 => {
         // Type section
-        let count = parser.read_u32()
-        for _ in 0..<count {
-          let type_idx = mod.types.length()
-          let func_type = parser.read_func_type()
-          mod.types.push(@types.SubType::from_func(func_type))
-          // Each type is its own rec group (binary rec groups not yet supported)
-          mod.type_rec_groups.push(type_idx)
+        // The binary type section is a vec of rec groups (WasmGC).
+        let group_count = parser.read_u32()
+        for group_id in 0..<group_count {
+          let group = parser.read_rec_group()
+          for subtype in group {
+            mod.types.push(subtype)
+            mod.type_rec_groups.push(group_id)
+          }
         }
       }
       2 => {

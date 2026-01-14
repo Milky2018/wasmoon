@@ -501,7 +501,8 @@ fn ExecContext::exec_instr(
     | DataDrop(_)
     | MemoryCopy(_, _)
     | MemoryFill(_)
-    | ElemDrop(_) => self.exec_memory_misc(instr)
+    | ElemDrop(_)
+    | Atomic(_, _, _, _) => self.exec_memory_misc(instr)
 
     // Control flow operations
     Block(_, _)
@@ -994,6 +995,7 @@ pub fn instantiate_module(
       mem_type.limits.min.to_int(),
       mem_type.limits.max.map(fn(m) { m.to_int() }),
       is_memory64=mem_type.is_memory64,
+      page_size_log2=mem_type.page_size_log2,
     )
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
@@ -1728,10 +1730,12 @@ pub fn instantiate_module_with_imports(
 
   // Allocate memories (after imported memories)
   for mem_type in mod.memories {
+    let min_pages = mem_type.limits.min.to_int()
     let mem = @runtime.Memory::new(
-      mem_type.limits.min.to_int(),
+      min_pages,
       mem_type.limits.max.map(fn(m) { m.to_int() }),
       is_memory64=mem_type.is_memory64,
+      page_size_log2=mem_type.page_size_log2,
     )
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
@@ -1773,9 +1777,10 @@ pub fn instantiate_module_with_imports(
         )
       None => @types.Value::Null
     }
+    let min_elems = table_def.type_.limits.min.to_int()
     let table = @runtime.Table::new(
       table_def.type_.elem_type,
-      table_def.type_.limits.min.to_int(),
+      min_elems,
       table_def.type_.limits.max.map(fn(m) { m.to_int() }),
       init_value~,
       is_table64=table_def.type_.is_table64,

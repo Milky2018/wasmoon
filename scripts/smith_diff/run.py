@@ -53,7 +53,36 @@ def _run(
         return Outcome(kind="ok", rc=0, stdout=stdout, stderr=stderr)
 
     lowered = (stderr + "\n" + stdout).lower()
-    if "trap" in lowered or "unreachable" in lowered or "stack overflow" in lowered:
+
+    # Classify traps heuristically across runtimes.
+    # Wasmoon often formats traps as `Error: <trap reason>`.
+    trap_markers = [
+        "wasm trap",
+        "trap:",
+        "unreachable",
+        "stack overflow",
+        "out of bounds",
+        "memory fault",
+        "division by zero",
+        "integer divide by zero",
+        "integer overflow",
+        "invalid conversion to integer",
+        "undefined element",
+        "uninitialized element",
+        "indirect call type mismatch",
+        "null reference",
+    ]
+
+    parse_markers = [
+        "parse wasm module error",
+        "parse wat file error",
+        "parsing wasm",
+        "parsing wat",
+    ]
+
+    if any(m in lowered for m in parse_markers):
+        kind = "error"
+    elif any(m in lowered for m in trap_markers):
         kind = "trap"
     else:
         kind = "error"

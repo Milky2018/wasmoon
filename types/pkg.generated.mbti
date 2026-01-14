@@ -222,6 +222,7 @@ pub(all) enum Instruction {
   MemoryCopy(Int, Int)
   MemoryFill(Int)
   ElemDrop(Int)
+  Atomic(Int, Int, Int, Int64)
   RefNull(ValueType)
   RefIsNull
   RefFunc(Int)
@@ -670,6 +671,7 @@ pub impl Show for Limits
 pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool
+  page_size_log2 : Int
 }
 pub fn MemoryType::addr_type(Self) -> ValueType
 pub impl Eq for MemoryType
@@ -813,6 +815,8 @@ pub(all) enum ValueType {
   RefNullFuncTyped(Int)
   AnyRef
   ExnRef
+  StructRef
+  ArrayRef
   RefStruct(Int)
   RefNullStruct(Int)
   RefArray(Int)
@@ -822,6 +826,8 @@ pub(all) enum ValueType {
   RefNullEq
   RefI31
   RefNullI31
+  RefStructAbs
+  RefArrayAbs
   RefNone
   NullRef
   NullFuncRef

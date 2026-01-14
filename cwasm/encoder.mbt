@@ -156,6 +156,8 @@ fn encode_valtype(w : BinaryWriter, vt : @types.ValueType) -> Unit {
       w.write_byte(0x63) // ref null
       w.write_byte(0x6E) // any
     }
+    StructRef => w.write_byte(0x6B)
+    ArrayRef => w.write_byte(0x6A)
     RefAny => {
       w.write_byte(0x64) // ref
       w.write_byte(0x6E) // any
@@ -175,6 +177,14 @@ fn encode_valtype(w : BinaryWriter, vt : @types.ValueType) -> Unit {
     RefNullI31 => {
       w.write_byte(0x63) // ref null
       w.write_byte(0x6C) // i31
+    }
+    RefStructAbs => {
+      w.write_byte(0x64) // ref
+      w.write_byte(0x6B) // struct
+    }
+    RefArrayAbs => {
+      w.write_byte(0x64) // ref
+      w.write_byte(0x6A) // array
     }
     RefFunc => {
       w.write_byte(0x64) // ref

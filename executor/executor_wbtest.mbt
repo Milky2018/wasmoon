@@ -239,7 +239,9 @@ test "memory: i32.store and i32.load" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -264,7 +266,9 @@ test "memory: i64.store and i64.load" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -289,7 +293,9 @@ test "memory: f32.store and f32.load" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -317,7 +323,9 @@ test "memory: load with offset" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -342,7 +350,9 @@ test "memory: i32.load8_s sign extension" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -367,7 +377,9 @@ test "memory: i32.load8_u zero extension" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -386,7 +398,9 @@ test "memory: memory.size and memory.grow" {
       [MemorySize(0), Drop, I32Const(2), MemoryGrow(0), Drop, MemorySize(0)],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -843,7 +857,11 @@ test "memory import: shared memory between modules" {
       {
         mod_name: "env",
         name: "memory",
-        desc: Memory({ limits: { min: 1, max: None }, is_memory64: false }),
+        desc: Memory({
+          limits: { min: 1, max: None },
+          is_memory64: false,
+          page_size_log2: 16,
+        }),
       },
     ],
     funcs: [0],
@@ -893,7 +911,11 @@ test "memory import: write to imported memory" {
       {
         mod_name: "env",
         name: "mem",
-        desc: Memory({ limits: { min: 1, max: None }, is_memory64: false }),
+        desc: Memory({
+          limits: { min: 1, max: None },
+          is_memory64: false,
+          page_size_log2: 16,
+        }),
       },
     ],
     funcs: [0],
@@ -1409,7 +1431,9 @@ test "module initialization: data segment" {
       [I32Const(0), I32Load(0, 2, 0)],
       "read",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
@@ -1432,7 +1456,9 @@ test "module initialization: data segment with offset" {
       [I32Const(100), I32Load(0, 2, 0)],
       "read",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     datas: [{ memory_idx: 0, offset: [I32Const(100)], init: data_bytes }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
@@ -1530,7 +1556,9 @@ test "bulk memory: memory.fill" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1559,7 +1587,9 @@ test "bulk memory: memory.copy non-overlapping" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1588,7 +1618,9 @@ test "bulk memory: memory.copy overlapping backward" {
       ],
       "test",
     ),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -1613,7 +1645,9 @@ test "bulk memory: memory.init from data segment" {
   let data_bytes = Bytes::from_array([b'\xEF', b'\xBE', b'\xAD', b'\xDE'])
   let mod = {
     ..@types.Module::simple([], [@types.ValueType::I32], body, "test"),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
@@ -1641,7 +1675,9 @@ test "bulk memory: memory.init with offset" {
   let data_bytes = Bytes::from_array([b'\x11', b'\x22', b'\x33', b'\x44'])
   let mod = {
     ..@types.Module::simple([], [@types.ValueType::I32], body, "test"),
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
@@ -1697,7 +1733,9 @@ test "bulk memory: data.drop" {
     imports: [],
     funcs: [0, 1, 1], // drop has type 0, init funcs have type 1
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [
       { name: "drop", desc: @types.ExportDesc::Func(0) },
@@ -1812,7 +1850,9 @@ test "bulk memory: data.drop is idempotent" {
     imports: [],
     funcs: [0],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [{ name: "drop", desc: @types.ExportDesc::Func(0) }],
     start: None,
@@ -2334,7 +2374,9 @@ test "module linking: import memory from another module" {
     imports: [],
     funcs: [0],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [
       { name: "mem", desc: @types.ExportDesc::Memory(0) },
@@ -2372,6 +2414,7 @@ test "module linking: import memory from another module" {
         desc: @types.ImportDesc::Memory({
           limits: { min: 1, max: None },
           is_memory64: false,
+          page_size_log2: 16,
         }),
       },
     ],

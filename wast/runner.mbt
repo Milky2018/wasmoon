@@ -6,9 +6,6 @@
 pub const NULL_REF : Int64 = @types.NULL_REF
 
 ///|
-pub const FUNCREF_NULL_SENTINEL : Int64 = @types.FUNCREF_NULL_SENTINEL
-
-///|
 pub const EXTERNREF_TAG : Int64 = @types.EXTERNREF_TAG
 
 ///|
@@ -664,7 +661,8 @@ pub fn invoke_action(
           // Find and call JIT function
           match jit.jit_module.get_func_by_name(func_name) {
             Some(f) => {
-              // Convert args to Int64 (V128 uses two slots: low 8 bytes, then high 8 bytes)
+              // Convert args to Int64.
+              // V128 uses two slots: low 8 bytes, then high 8 bytes.
               let i64_args : Array[Int64] = []
               for arg in args {
                 match arg {
@@ -686,26 +684,21 @@ pub fn invoke_action(
                     i64_args.push(EXTERNREF_TAG | (n.to_int64() << 1))
                   RefHost(n) =>
                     i64_args.push(EXTERNREF_TAG | (n.to_int64() << 1))
-                  RefFunc => i64_args.push(NULL_REF) // func ref (placeholder)
-                  RefExternAny => i64_args.push(NULL_REF) // any extern ref (placeholder)
+                  RefFunc => i64_args.push(NULL_REF) // placeholder
+                  RefExternAny => i64_args.push(NULL_REF) // placeholder
                   // GC reference types - these shouldn't appear as args but handle them
                   RefArray | RefStruct | RefEq | RefI31 | RefAny =>
                     i64_args.push(NULL_REF)
                   // V128: push 16 bytes as two Int64 (low then high) in little-endian
                   V128(bytes) => {
-                    // Low 8 bytes
                     let low = bytes_to_int64_le(bytes, 0)
                     i64_args.push(low)
-                    // High 8 bytes
                     let high = bytes_to_int64_le(bytes, 8)
                     i64_args.push(high)
                   }
                   V128Pattern(_) =>
-                    // For pattern matching, we shouldn't be passing these as args
                     abort("V128Pattern not valid as JIT argument")
-                  Either(_) =>
-                    // Either is for expected results, not arguments
-                    abort("Either not valid as JIT argument")
+                  Either(_) => abort("Either not valid as JIT argument")
                 }
               }
               // Set up GC heap for JIT execution if c_heap is available
@@ -861,21 +854,24 @@ fn convert_jit_result(
     I64 => @types.Value::I64(@types.FromInt64::from_int64_bits(v))
     F32 => @types.Value::F32(@types.FromInt64::from_int64_bits(v))
     F64 => @types.Value::F64(@types.FromInt64::from_int64_bits(v))
-    // Reference types: JIT uses NULL_REF (0L) for null references
+    // Reference types: JIT null is 0.
+    // Funcref may be IR-encoded as negative: value = -(func_idx + 1).
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       if v == NULL_REF {
         @types.Value::Null
+      } else if v < 0L {
+        let func_idx = (-(v + 1L)).to_int()
+        @types.Value::FuncRef(func_idx)
       } else {
-        // FuncRef is tagged with FUNCREF_TAG (bit 61), extract the actual function index
+        // Tagged pointer funcref (bit 61 set) - keep previous decoding fallback.
         let func_idx = (v & 0x1FFFFFFFFFFFFFFFL).to_int()
         @types.Value::FuncRef(func_idx)
       }
     ExternRef | RefExtern | NullExternRef =>
-      // Externref encoding: null=NULL_REF, non-null=EXTERNREF_TAG | (host_idx << 1)
+      // Externref encoding: null=0, non-null=EXTERNREF_TAG | (host_idx << 1)
       if v == NULL_REF {
         @types.Value::Null
       } else {
-        // Decode by shifting right to get the original host_idx
         @types.Value::ExternRef((v >> 1).to_int())
       }
     // GC reference types - decode using c_heap encoding
@@ -909,17 +905,19 @@ fn convert_jit_result(
             @types.Value::StructRef(heap_idx)
         }
       }
-    RefStruct(_) | RefNullStruct(_) =>
+    StructRef | RefStructAbs | RefStruct(_) | RefNullStruct(_) =>
       if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::StructRef((v >> 1).to_int())
+        let gc_ref = (v >> 1).to_int()
+        @types.Value::StructRef(gc_ref - 1)
       }
-    RefArray(_) | RefNullArray(_) =>
+    ArrayRef | RefArrayAbs | RefArray(_) | RefNullArray(_) =>
       if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::ArrayRef((v >> 1).to_int())
+        let gc_ref = (v >> 1).to_int()
+        @types.Value::ArrayRef(gc_ref - 1)
       }
     RefI31 | RefNullI31 =>
       if v == NULL_REF {

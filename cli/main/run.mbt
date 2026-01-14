@@ -2,8 +2,9 @@
 extern "c" fn native_exit(code : Int) = "exit"
 
 ///|
-fn exit_failure() -> Unit {
+fn[T] exit_failure() -> T {
   native_exit(1)
+  panic()
 }
 
 ///|
@@ -68,7 +69,7 @@ fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
       F64(d) => d.reinterpret_as_int64()
       FuncRef(idx) => idx.to_int64()
       ExternRef(idx) => idx.to_int64()
-      Null => @types.FUNCREF_NULL_SENTINEL
+      Null => @types.NULL_REF
       V128(_) => abort("V128 args not yet supported")
       StructRef(idx) => idx.to_int64() << 1
       ArrayRef(idx) => idx.to_int64() << 1
@@ -111,8 +112,10 @@ fn convert_jit_results(
       FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => {
         let raw = results[slot_idx]
         slot_idx += 1
-        if raw == @types.FUNCREF_NULL_SENTINEL {
+        if raw == @types.NULL_REF {
           Null
+        } else if raw < 0L {
+          FuncRef((-(raw + 1L)).to_int())
         } else {
           FuncRef(raw.to_int())
         }
@@ -120,7 +123,7 @@ fn convert_jit_results(
       ExternRef | RefExtern | NullExternRef => {
         let raw = results[slot_idx]
         slot_idx += 1
-        if raw == @types.FUNCREF_NULL_SENTINEL {
+        if raw == @types.NULL_REF {
           Null
         } else {
           ExternRef(raw.to_int())
@@ -146,7 +149,7 @@ fn convert_jit_results(
           ExnRef(raw.to_int())
         }
       }
-      RefStruct(_) | RefNullStruct(_) => {
+      RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs => {
         let raw = results[slot_idx]
         slot_idx += 1
         if raw == 0L {
@@ -155,7 +158,7 @@ fn convert_jit_results(
           StructRef((raw >> 1).to_int())
         }
       }
-      RefArray(_) | RefNullArray(_) => {
+      RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs => {
         let raw = results[slot_idx]
         slot_idx += 1
         if raw == 0L {
@@ -841,7 +844,7 @@ fn run_with_jit(
   match compiled {
     None => {
       @logger.error("JIT compilation failed")
-      return []
+      return exit_failure()
     }
     Some((pc, debug_db)) => {
       // Build func_signatures array for JITModule::load
@@ -851,7 +854,7 @@ fn run_with_jit(
       match jit_module {
         None => {
           @logger.error("Failed to load JIT module")
-          return []
+          return exit_failure()
         }
         Some(jm) => {
           // Allocate independent WASM stack with guard page.
@@ -875,7 +878,7 @@ fn run_with_jit(
           // Initialize all memories (multi-memory support)
           if not(init_jit_memories(instance, store, jm)) {
             @logger.error("Failed to initialize JIT memories")
-            return []
+            return exit_failure()
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
@@ -928,7 +931,7 @@ fn run_with_jit(
                     None => @logger.error("JIT Trap: \{msg}")
                   }
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
-                  return []
+                  return exit_failure()
                 }
               }
               // Tear down GC context after JIT call
@@ -940,7 +943,7 @@ fn run_with_jit(
             }
             None => {
               @logger.error("Function '\{func_name}' not found in JIT module")
-              []
+              return exit_failure()
             }
           }
         }
@@ -1076,10 +1079,12 @@ fn copy_interp_memory_to_jit_indexed(
   jit_mem_ptr : Int64,
 ) -> Unit {
   let mem = store.get_memory(mem_addr)
-  let size = mem.size_pages() * 65536 // Convert pages to bytes
-  if size > 0 {
-    let data = mem.read_bytes(0, size)
-    @jit.memory_init(jit_mem_ptr, 0L, data) |> ignore
+  // Copy only the pages that were actually touched/initialized.
+  // Untouched pages are implicitly zero.
+  for entry in mem.allocated_pages() {
+    let (page_idx, page_bytes) = entry
+    let off = page_idx.to_int64() * 65536L
+    @jit.memory_init(jit_mem_ptr, off, page_bytes) |> ignore
   }
 }
 
@@ -1099,14 +1104,23 @@ fn init_jit_memories(
   // Allocate and copy each memory
   for i, mem_addr in instance.mem_addrs {
     let mem = store.get_mem(mem_addr) catch { _ => return false }
-    let pages = mem.size_pages()
-    let size = pages.to_int64() * 65536L
+    let size = mem.byte_len()
     let (_, max) = mem.get_limits()
+    fn bytes_to_64k_pages(bytes : Int64) -> Int {
+      ((bytes + 65535L) / 65536L).to_int()
+    }
+
+    let cur_pages_64k = bytes_to_64k_pages(size)
+    let max_pages_64k = max.map(fn(m) {
+      let max_bytes = m.to_int64() * mem.page_size_bytes()
+      bytes_to_64k_pages(max_bytes)
+    })
+
     // Allocate JIT memory - use guarded memory for memory 0 (memory32 only)
     let mem_ptr = if i == 0 && not(mem.is_memory64()) {
       // Use guarded memory allocation with mmap + guard pages.
       // This enables bounds check elimination in JIT code for memory32.
-      jm.alloc_guarded_memory(pages, max)
+      jm.alloc_guarded_memory(cur_pages_64k, max_pages_64k)
     } else {
       // Regular allocation for memory64 and non-zero memories.
       @jit.alloc_memory(size)
@@ -1116,7 +1130,7 @@ fn init_jit_memories(
     }
     // Copy interpreter memory data to JIT memory
     copy_interp_memory_to_jit_indexed(store, mem_addr, mem_ptr)
-    memories.push(@jit.MemoryInfo::new(mem_ptr, size, max))
+    memories.push(@jit.MemoryInfo::new(mem_ptr, size, max_pages_64k))
   }
   // Set up multi-memory in JIT context
   jm.set_memory_pointers(memories)

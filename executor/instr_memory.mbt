@@ -41,8 +41,16 @@ fn is_mem_oob(
   access_size : Int64,
   mem : @runtime.Memory,
 ) -> Bool {
-  let mem_size = mem.size_pages().to_int64() * 65536L
-  effective_addr < 0L || effective_addr + access_size > mem_size
+  // Treat addresses/lengths as unsigned for bounds purposes.
+  // Negative values represent large unsigned values and are always OOB.
+  if effective_addr < 0L || access_size < 0L {
+    return true
+  }
+  let mem_size = mem.byte_len()
+  if access_size > mem_size {
+    return true
+  }
+  effective_addr > mem_size - access_size
 }
 
 ///|
@@ -493,8 +501,7 @@ fn ExecContext::exec_memory_misc(
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
       // 2. Check memory bounds
-      let mem_size_bytes = mem.size_pages().to_int64() * 65536L
-      if d64 + n64 > mem_size_bytes {
+      if is_mem_oob(d64, n64, mem) {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
       // 3. If n=0, no-op
@@ -536,9 +543,7 @@ fn ExecContext::exec_memory_misc(
         self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
       // Bounds check for both source and destination (even when n == 0)
-      let src_size = src_mem.size_pages().to_int64() * 65536L
-      let dst_size = dst_mem.size_pages().to_int64() * 65536L
-      if s64 + n64 > src_size || d64 + n64 > dst_size {
+      if is_mem_oob(s64, n64, src_mem) || is_mem_oob(d64, n64, dst_mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
       if n64 == 0L {
@@ -559,22 +564,26 @@ fn ExecContext::exec_memory_misc(
     MemoryFill(memidx) => {
       let mem_addr = self.instance.mem_addrs[memidx]
       let mem = self.store.get_mem(mem_addr)
-      // For memory64: n and d are i64, val is always i32
-      let (n64, val, d64) = if mem.is_memory64() {
-        let n = self.stack.pop_i64()
-        let v = self.stack.pop_i32()
-        let d = self.stack.pop_i64()
-        (n, v, d)
+      let n64 = if mem.is_memory64() {
+        self.stack.pop_i64()
       } else {
-        let n = self.stack.pop_i32()
-        let v = self.stack.pop_i32()
-        let d = self.stack.pop_i32()
-        (n.to_int64() & 0xFFFF_FFFFL, v, d.to_int64() & 0xFFFF_FFFFL)
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
-      mem.fill(d64.to_int(), val.land(0xFF).to_byte(), n64.to_int())
+      let val = self.stack.pop_i32()
+      let dst = self.pop_mem_addr(mem)
+      let effective_dst = compute_effective_addr(dst, 0L, mem.is_memory64())
+      if is_mem_oob(effective_dst, n64, mem) {
+        raise @runtime.OutOfBoundsMemoryAccess
+      }
+      if n64 == 0L {
+        return
+      }
+      mem.fill(effective_dst.to_int(), val.to_byte(), n64.to_int())
     }
     // elem.drop: mark element segment as dropped
     ElemDrop(elem_idx) => self.instance.dropped_elems[elem_idx] = true
+    Atomic(subop, memidx, align, offset) =>
+      self.exec_atomic(subop, memidx, align, offset)
     _ => raise @runtime.RuntimeError::Unreachable
   }
 }

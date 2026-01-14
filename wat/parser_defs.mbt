@@ -96,7 +96,11 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Memory({ limits: { min, max }, is_memory64 }),
+          desc: @types.ImportDesc::Memory({
+            limits: { min, max },
+            is_memory64,
+            page_size_log2: 16,
+          }),
         }
         return MemoryDefResult::MemoryImport(imp, export_names)
       }
@@ -202,6 +206,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                 desc: @types.ImportDesc::Memory({
                   limits: { min, max },
                   is_memory64,
+                  page_size_log2: 16,
                 }),
               }
               return MemoryDefResult::MemoryImport(imp, export_names)
@@ -244,7 +249,11 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
           min_pages
         }).to_int64()
         return MemoryDefResult::MemoryWithData(
-          { limits: { min, max: Some(min) }, is_memory64: false },
+          {
+            limits: { min, max: Some(min) },
+            is_memory64: false,
+            page_size_log2: 16,
+          },
           export_names,
           Bytes::from_array(init_bytes),
         )
@@ -302,7 +311,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         min_pages
       }).to_int64()
       return MemoryDefResult::MemoryWithData(
-        { limits: { min, max: Some(min) }, is_memory64 },
+        { limits: { min, max: Some(min) }, is_memory64, page_size_log2: 16 },
         export_names,
         Bytes::from_array(init_bytes),
       )
@@ -336,7 +345,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   }
   self.expect_rparen()
   MemoryDefResult::MemoryDef(
-    { limits: { min, max }, is_memory64 },
+    { limits: { min, max }, is_memory64, page_size_log2: 16 },
     export_names,
   )
 }
@@ -1242,7 +1251,11 @@ fn Parser::parse_import_def(
           )
         _ => None
       }
-      @types.ImportDesc::Memory({ limits: { min, max }, is_memory64 })
+      @types.ImportDesc::Memory({
+        limits: { min, max },
+        is_memory64,
+        page_size_log2: 16,
+      })
     }
     Keyword("table") => {
       self.advance()

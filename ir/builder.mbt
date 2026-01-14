@@ -708,7 +708,7 @@ pub fn IRBuilder::elem_drop(self : IRBuilder, elem_idx : Int) -> Unit {
 /// Get function reference (tagged function pointer) for storing in tables
 /// The pointer is tagged with FUNCREF_TAG (bit 61) for ref.test detection
 pub fn IRBuilder::get_func_ref(self : IRBuilder, func_idx : Int) -> Value {
-  self.emit_inst(Type::I64, Opcode::GetFuncRef(func_idx), [])
+  self.emit_inst(Type::FuncRef, Opcode::GetFuncRef(func_idx), [])
 }
 
 // NOTE: global_get, global_set are desugared at IR translation phase via FuncEnvironment

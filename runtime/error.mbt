@@ -17,6 +17,7 @@ pub(all) suberror RuntimeError {
   UnknownImport(String, String) // Import not found: (module_name, field_name)
   LinkError // Import type mismatch during linking
   NullReference // Null exception reference (null exnref thrown)
+  UnalignedAtomic
 }
 
 ///|
@@ -41,6 +42,7 @@ pub impl Show for RuntimeError with output(self, logger) {
       "unknown import: \{mod_name}.\{field_name}"
     LinkError => "link error"
     NullReference => "null reference"
+    UnalignedAtomic => "unaligned atomic"
   }
   logger.write_string(msg)
 }

@@ -332,6 +332,8 @@ fn value_type_to_wat(t : @types.ValueType) -> String {
     RefNullFuncTyped(idx) => "(ref null \{idx})"
     AnyRef => "anyref"
     ExnRef => "exnref"
+    StructRef => "structref"
+    ArrayRef => "arrayref"
     RefStruct(idx) => "(ref \{idx})"
     RefNullStruct(idx) => "(ref null \{idx})"
     RefArray(idx) => "(ref \{idx})"
@@ -341,6 +343,8 @@ fn value_type_to_wat(t : @types.ValueType) -> String {
     RefNullEq => "(ref null eq)"
     RefI31 => "(ref i31)"
     RefNullI31 => "(ref null i31)"
+    RefStructAbs => "(ref struct)"
+    RefArrayAbs => "(ref array)"
     RefNone => "(ref none)"
     NullRef => "nullref"
     NullFuncRef => "nullfuncref"
@@ -485,6 +489,131 @@ fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
 
 ///|
 fn instr_to_wat(instr : @types.Instruction) -> String {
+  fn atomic_instr(
+    subop : Int,
+    mem : Int,
+    align : Int,
+    offset : Int64,
+  ) -> String {
+    let name = match subop {
+      0 => "memory.atomic.notify"
+      1 => "memory.atomic.wait32"
+      2 => "memory.atomic.wait64"
+      3 => "atomic.fence"
+      4 => "i32.atomic.load"
+      5 => "i64.atomic.load"
+      6 => "i32.atomic.load8_u"
+      7 => "i32.atomic.load16_u"
+      8 => "i64.atomic.load8_u"
+      9 => "i64.atomic.load16_u"
+      10 => "i64.atomic.load32_u"
+      11 => "i32.atomic.store"
+      12 => "i64.atomic.store"
+      13 => "i32.atomic.store8"
+      14 => "i32.atomic.store16"
+      15 => "i64.atomic.store8"
+      16 => "i64.atomic.store16"
+      17 => "i64.atomic.store32"
+      18 => "i32.atomic.rmw.add"
+      19 => "i64.atomic.rmw.add"
+      20 => "i32.atomic.rmw8.add_u"
+      21 => "i32.atomic.rmw16.add_u"
+      22 => "i64.atomic.rmw8.add_u"
+      23 => "i64.atomic.rmw16.add_u"
+      24 => "i64.atomic.rmw32.add_u"
+      25 => "i32.atomic.rmw.sub"
+      26 => "i64.atomic.rmw.sub"
+      27 => "i32.atomic.rmw8.sub_u"
+      28 => "i32.atomic.rmw16.sub_u"
+      29 => "i64.atomic.rmw8.sub_u"
+      30 => "i64.atomic.rmw16.sub_u"
+      31 => "i64.atomic.rmw32.sub_u"
+      32 => "i32.atomic.rmw.and"
+      33 => "i64.atomic.rmw.and"
+      34 => "i32.atomic.rmw8.and_u"
+      35 => "i32.atomic.rmw16.and_u"
+      36 => "i64.atomic.rmw8.and_u"
+      37 => "i64.atomic.rmw16.and_u"
+      38 => "i64.atomic.rmw32.and_u"
+      39 => "i32.atomic.rmw.or"
+      40 => "i64.atomic.rmw.or"
+      41 => "i32.atomic.rmw8.or_u"
+      42 => "i32.atomic.rmw16.or_u"
+      43 => "i64.atomic.rmw8.or_u"
+      44 => "i64.atomic.rmw16.or_u"
+      45 => "i64.atomic.rmw32.or_u"
+      46 => "i32.atomic.rmw.xor"
+      47 => "i64.atomic.rmw.xor"
+      48 => "i32.atomic.rmw8.xor_u"
+      49 => "i32.atomic.rmw16.xor_u"
+      50 => "i64.atomic.rmw8.xor_u"
+      51 => "i64.atomic.rmw16.xor_u"
+      52 => "i64.atomic.rmw32.xor_u"
+      53 => "i32.atomic.rmw.xchg"
+      54 => "i64.atomic.rmw.xchg"
+      55 => "i32.atomic.rmw8.xchg_u"
+      56 => "i32.atomic.rmw16.xchg_u"
+      57 => "i64.atomic.rmw8.xchg_u"
+      58 => "i64.atomic.rmw16.xchg_u"
+      59 => "i64.atomic.rmw32.xchg_u"
+      60 => "i32.atomic.rmw.cmpxchg"
+      61 => "i64.atomic.rmw.cmpxchg"
+      62 => "i32.atomic.rmw8.cmpxchg_u"
+      63 => "i32.atomic.rmw16.cmpxchg_u"
+      64 => "i64.atomic.rmw8.cmpxchg_u"
+      65 => "i64.atomic.rmw16.cmpxchg_u"
+      66 => "i64.atomic.rmw32.cmpxchg_u"
+      _ => "atomic.unknown"
+    }
+    let natural_align = match subop {
+      0 | 1 | 4 | 10 | 11 | 18 | 25 | 32 | 39 | 46 | 53 | 60 => 2
+      2 | 5 | 12 | 19 | 26 | 33 | 40 | 47 | 54 | 61 => 3
+      6
+      | 8
+      | 13
+      | 15
+      | 20
+      | 22
+      | 27
+      | 29
+      | 34
+      | 36
+      | 41
+      | 43
+      | 48
+      | 50
+      | 55
+      | 57
+      | 62
+      | 64 => 0
+      7
+      | 9
+      | 14
+      | 16
+      | 21
+      | 23
+      | 28
+      | 30
+      | 35
+      | 37
+      | 42
+      | 44
+      | 49
+      | 51
+      | 56
+      | 58
+      | 63
+      | 65 => 1
+      17 | 24 | 31 | 38 | 45 | 52 | 59 | 66 => 2
+      _ => 0
+    }
+    if subop == 3 {
+      name
+    } else {
+      mem_instr(name, mem, align, offset, natural_align)
+    }
+  }
+
   match instr {
     Unreachable => "unreachable"
     Nop => "nop"
@@ -599,6 +728,7 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
         "memory.fill \{mem}"
       }
     ElemDrop(idx) => "elem.drop \{idx}"
+    Atomic(subop, mem, align, offset) => atomic_instr(subop, mem, align, offset)
     RefNull(t) => "ref.null \{ref_type_to_wat(t)}"
     RefIsNull => "ref.is_null"
     RefFunc(idx) => "ref.func \{idx}"

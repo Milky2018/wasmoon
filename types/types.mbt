@@ -46,6 +46,8 @@ pub(all) enum ValueType {
   AnyRef // nullable any reference (ref null any)
   ExnRef // nullable exception reference (ref null exn)
   // GC struct/array references
+  StructRef // nullable struct reference (ref null struct)
+  ArrayRef // nullable array reference (ref null array)
   RefStruct(Int) // non-null typed struct reference (ref $t)
   RefNullStruct(Int) // nullable typed struct reference (ref null $t)
   RefArray(Int) // non-null typed array reference (ref $t)
@@ -56,6 +58,8 @@ pub(all) enum ValueType {
   RefNullEq // nullable eq reference (ref null eq)
   RefI31 // non-null i31 reference (ref i31)
   RefNullI31 // nullable i31 reference (ref null i31)
+  RefStructAbs // non-null struct reference (ref struct)
+  RefArrayAbs // non-null array reference (ref array)
   RefNone // non-null none (ref none) - bottom type
   // Bottom reference types
   NullRef // bottom type (ref null none) - subtype of all nullable refs
@@ -69,12 +73,19 @@ pub(all) enum ValueType {
 pub fn ValueType::is_nullable(self : ValueType) -> Bool {
   match self {
     // Nullable reference types
-    FuncRef | ExternRef | AnyRef | ExnRef => true
+    FuncRef | ExternRef | AnyRef | ExnRef | StructRef | ArrayRef => true
     RefNullFuncTyped(_) | RefNullStruct(_) | RefNullArray(_) => true
     RefNullEq | RefNullI31 => true
     NullRef | NullFuncRef | NullExnRef | NullExternRef => true
     // Non-nullable reference types
-    RefFunc | RefExtern | RefAny | RefEq | RefI31 | RefNone => false
+    RefFunc
+    | RefExtern
+    | RefAny
+    | RefEq
+    | RefI31
+    | RefStructAbs
+    | RefArrayAbs
+    | RefNone => false
     RefFuncTyped(_) | RefStruct(_) | RefArray(_) => false
     // Value types (not references)
     I32 | I64 | F32 | F64 | V128 => false
@@ -279,6 +290,11 @@ pub(all) enum Instruction {
   MemoryCopy(Int, Int) // dest memidx, src memidx
   MemoryFill(Int) // memidx
   ElemDrop(Int) // element segment index
+
+  // Atomic instructions (0xFE prefix)
+  // subopcode: wasm threads/atomics subopcode
+  // memarg: (memidx, align, offset)
+  Atomic(Int, Int, Int, Int64)
 
   // Reference type instructions
   RefNull(ValueType) // ref.null: push null reference of given type
@@ -876,6 +892,10 @@ fn ValueType::type_code(self : ValueType) -> Int {
     RefI31 => 18
     RefNullI31 => 19
     RefNone => 20
+    StructRef => 21
+    ArrayRef => 22
+    RefStructAbs => 23
+    RefArrayAbs => 24
   }
 }
 
@@ -945,7 +965,11 @@ fn ValueType::structurally_equal(
     | (RefNullEq, RefNullEq)
     | (RefI31, RefI31)
     | (RefNullI31, RefNullI31)
-    | (RefNone, RefNone) => true
+    | (RefNone, RefNone)
+    | (StructRef, StructRef)
+    | (ArrayRef, ArrayRef)
+    | (RefStructAbs, RefStructAbs)
+    | (RefArrayAbs, RefArrayAbs) => true
     // Typed function references: check if both are self-references or same external ref
     (RefFuncTyped(idx1), RefFuncTyped(idx2)) =>
       // Both self-references, or both reference the same external type
@@ -986,6 +1010,7 @@ pub(all) struct Limits {
 pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool // true for i64-indexed memory (memory64 proposal)
+  page_size_log2 : Int // custom-page-sizes proposal (default: 16 for 64KiB)
 } derive(Eq, Show)
 
 ///|
