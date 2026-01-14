@@ -871,7 +871,7 @@ pub fn setup_data_segments(datas : Array[@types.Data]) -> Unit {
 /// This must be called before running code that uses table.init or elem.drop.
 /// The segments are stored globally and accessed by libcalls.
 /// elem_values: Array of Int64 arrays, one per element segment
-///   Each Int64 represents a function reference (func_idx) or null (-1)
+///   Each Int64 represents an encoded funcref table entry (tagged func ptr) or null (0)
 pub fn setup_elem_segments(elem_values : Array[Array[Int64]]) -> Unit {
   if elem_values.is_empty() {
     return
@@ -905,11 +905,11 @@ pub fn clear_segments() -> Unit {
 ///|
 /// Initialize shared tables from Store (for multi-table support with table imports/exports).
 /// jit_tables: Array of JITTable from Store (one per runtime table)
-/// elem_init: Array of (table_idx, elem_idx, func_idx, type_hash) tuples
+/// elem_init: Array of (table_idx, elem_idx, func_idx?, type_hash) tuples
 pub fn JITModule::init_shared_tables(
   self : JITModule,
   jit_tables : Array[JITTable?],
-  elem_init : Array[(Int, Int, Int, Int)],
+  elem_init : Array[(Int, Int, Int?, Int)],
 ) -> Unit {
   if self.context is None {
     return
@@ -931,15 +931,11 @@ pub fn JITModule::init_shared_tables(
       Some(tbl) => tbl
       None => continue
     }
-    // Get function pointer and encode as funcref
-    // func_idx = -1 represents ref.null (null reference sentinel)
-    let funcref_value = if func_idx == -1 {
-      @types.NULL_REF
-    } else { // Use NULL_REF for null reference
-      // Tag function pointer with FUNCREF_TAG (bit 61) for ref.test detection
-      // FUNCREF_TAG = 0x2000000000000000
-      self.get_func_ptr(func_idx) | 0x2000000000000000L
+    let funcref_value = match func_idx {
+      Some(idx) => tag_funcref_ptr(self.get_func_ptr(idx))
+      None => @types.NULL_REF
     }
+
     // Set the table entry (including null references)
     jit_table.set(elem_idx, funcref_value, type_hash)
   }

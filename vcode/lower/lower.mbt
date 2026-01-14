@@ -171,7 +171,7 @@ fn ir_type_to_mem_type(ty : @ir.Type) -> @instr.MemType {
     @ir.Type::F32 => F32
     @ir.Type::F64 => F64
     @ir.Type::V128 => V128
-    // Reference types use 64-bit storage (-1L as null sentinel)
+    // Reference types use 64-bit storage (0 as null)
     @ir.Type::FuncRef | @ir.Type::ExternRef => I64
   }
 }

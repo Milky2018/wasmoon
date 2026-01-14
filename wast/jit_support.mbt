@@ -187,7 +187,10 @@ pub fn sync_jit_globals_to_store(
           if raw_value == 0L {
             @types.Value::Null
           } else if (raw_value & EXTERNREF_TAG) != 0L {
-            @types.Value::ExternRef((raw_value >> 1).to_int())
+            match @jit.decode_externref(raw_value) {
+              Some(idx) => @types.Value::ExternRef(idx)
+              None => @types.Value::ExternRef(raw_value.to_int())
+            }
           } else {
             // Fallback: treat as raw host index
             @types.Value::ExternRef(raw_value.to_int())
@@ -379,23 +382,26 @@ pub fn init_elem_segments(
     jit_tables.push(jit_table)
   }
 
-  // Initialize elements: (table_idx, elem_idx, func_idx, canonical_type_idx)
-  let elem_init : Array[(Int, Int, Int, Int)] = []
+  // Initialize elements: (table_idx, elem_idx, func_idx?, canonical_type_idx)
+  let elem_init : Array[(Int, Int, Int?, Int)] = []
   for elem in mod_.elems {
     if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
       let offset = eval_elem_offset_expr(offset_expr, globals)
       for i, init_expr in elem.init {
         let func_idx = match init_expr {
-          [RefFunc(idx)] => idx
-          [I32Const(idx)] => idx
-          [RefNull(_)] => -1 // Use -1 to represent null reference
+          [RefFunc(idx)] => Some(idx)
+          [I32Const(idx)] => Some(idx)
+          [RefNull(_)] => None
           _ => continue
         }
-        let canonical_type_idx = if func_idx >= 0 &&
-          func_idx < func_canonical_types.length() {
-          func_canonical_types[func_idx]
-        } else {
-          0
+        let canonical_type_idx = match func_idx {
+          Some(idx) =>
+            if idx >= 0 && idx < func_canonical_types.length() {
+              func_canonical_types[idx]
+            } else {
+              0
+            }
+          None => 0
         }
         // No flattening: use actual table_idx and elem_idx
         let elem_idx = offset + i

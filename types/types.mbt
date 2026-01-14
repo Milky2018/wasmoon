@@ -8,11 +8,17 @@
 // They must match the encoding in jit/jit_ffi/jit.c
 
 ///|
-/// Null reference value for GC types and externref (used in JIT)
+/// Null reference value in JIT/reference encodings.
+///
+/// This is also used by GC encodings to avoid collisions with non-null refs.
 pub const NULL_REF : Int64 = 0L
 
 ///|
-/// Null reference sentinel for funcref in interpreter mode
+/// Legacy constant kept for compatibility.
+///
+/// Do not use this as a "null reference" value.
+/// JIT/reference encodings use `NULL_REF` (=0) for null, and `-1` is commonly
+/// used by the JIT ABI to encode funcref index 0 as `-(idx+1)`.
 pub const FUNCREF_NULL_SENTINEL : Int64 = -1L
 
 ///|
