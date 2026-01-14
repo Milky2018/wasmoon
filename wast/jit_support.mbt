@@ -169,22 +169,27 @@ pub fn sync_jit_globals_to_store(
         | RefFuncTyped(_)
         | RefNullFuncTyped(_)
         | NullFuncRef =>
-          if raw_value == FUNCREF_NULL_SENTINEL {
+          if raw_value == 0L {
             @types.Value::Null
-          } else {
-            // Convert module function index back to store address
-            let mod_func_idx = raw_value.to_int()
+          } else if raw_value < 0L {
+            // IR-encoded funcref: value = -(func_idx + 1)
+            let mod_func_idx = (-(raw_value + 1L)).to_int()
             if mod_func_idx >= 0 && mod_func_idx < jit_ctx.func_addrs.length() {
               @types.Value::FuncRef(jit_ctx.func_addrs[mod_func_idx])
             } else {
-              // Invalid index - treat as null
               @types.Value::Null
             }
+          } else {
+            // Tagged pointer funcref is not convertible here.
+            @types.Value::Null
           }
         ExternRef | RefExtern | NullExternRef =>
-          if raw_value == FUNCREF_NULL_SENTINEL {
+          if raw_value == 0L {
             @types.Value::Null
+          } else if (raw_value & EXTERNREF_TAG) != 0L {
+            @types.Value::ExternRef((raw_value >> 1).to_int())
           } else {
+            // Fallback: treat as raw host index
             @types.Value::ExternRef(raw_value.to_int())
           }
         // GC reference types - decode using JIT encoding:
@@ -192,7 +197,7 @@ pub fn sync_jit_globals_to_store(
         AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
           decode_gc_value(raw_value)
         ExnRef | NullExnRef =>
-          if raw_value == FUNCREF_NULL_SENTINEL {
+          if raw_value == 0L {
             @types.Value::Null
           } else {
             @types.Value::ExnRef(raw_value.to_int())

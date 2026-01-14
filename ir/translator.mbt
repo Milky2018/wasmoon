@@ -605,8 +605,7 @@ pub fn Translator::translate(
         I64 => self.builder.iconst_i64(0L)
         F32 => self.builder.fconst_f32(0.0)
         F64 => self.builder.fconst_f64(0.0)
-        FuncRef | ExternRef =>
-          self.builder.iconst(loc.ty, @types.FUNCREF_NULL_SENTINEL)
+        FuncRef | ExternRef => self.builder.iconst(loc.ty, @types.NULL_REF)
         V128 => {
           let z = self.builder.iconst(Type::I64, 0L)
           self.builder.v128_splat64(z)
@@ -1609,13 +1608,7 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
   let idx = self.block_stack.length() - 1 - depth
 
   // Check if reference is null.
-  // - funcref/externref use FUNCREF_NULL_SENTINEL
-  // - GC refs use NULL_REF
-  let null_const = match ref_val.ty {
-    FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
-    _ => @types.NULL_REF
-  }
-  let null_sentinel = self.builder.iconst(ref_val.ty, null_const)
+  let null_sentinel = self.builder.iconst(ref_val.ty, @types.NULL_REF)
   let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
   // For br_on_null, we need a fallthrough block and a taken block (critical edge split)
@@ -1679,13 +1672,7 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
   let idx = self.block_stack.length() - 1 - depth
 
   // Check if reference is null.
-  // - funcref/externref use FUNCREF_NULL_SENTINEL
-  // - GC refs use NULL_REF
-  let null_const = match ref_val.ty {
-    FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
-    _ => @types.NULL_REF
-  }
-  let null_sentinel = self.builder.iconst(ref_val.ty, null_const)
+  let null_sentinel = self.builder.iconst(ref_val.ty, @types.NULL_REF)
   let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
   // For br_on_non_null, we need a fallthrough block and a taken block
@@ -2100,11 +2087,8 @@ fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
     // Pop the function reference
     let func_ref = self.pop()
 
-    // Null check: if func_ref == FUNCREF_NULL_SENTINEL, trap
-    let null_sentinel = self.builder.iconst(
-      func_ref.ty,
-      @types.FUNCREF_NULL_SENTINEL,
-    )
+    // Null check: JIT null reference is NULL_REF (0)
+    let null_sentinel = self.builder.iconst(func_ref.ty, @types.NULL_REF)
     let is_null = self.builder.icmp_eq(func_ref, null_sentinel)
 
     // Create trap block and continuation block
@@ -2220,11 +2204,8 @@ fn Translator::translate_return_call_ref(
     // Pop the function reference
     let func_ref = self.pop()
 
-    // Null check: if func_ref == FUNCREF_NULL_SENTINEL, trap
-    let null_sentinel = self.builder.iconst(
-      func_ref.ty,
-      @types.FUNCREF_NULL_SENTINEL,
-    )
+    // Null check: JIT null reference is NULL_REF (0)
+    let null_sentinel = self.builder.iconst(func_ref.ty, @types.NULL_REF)
     let is_null = self.builder.icmp_eq(func_ref, null_sentinel)
 
     // Create trap block and continuation block

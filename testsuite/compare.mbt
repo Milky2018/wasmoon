@@ -102,12 +102,14 @@ pub fn jit_results_to_values(
         slot_idx += 1
         F64(@types.FromInt64::from_int64_bits(raw))
       }
-      // Reference types: FUNCREF_NULL_SENTINEL is null sentinel
+      // Reference types: JIT null is 0
       FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => {
         let raw = results[slot_idx]
         slot_idx += 1
-        if raw == @types.FUNCREF_NULL_SENTINEL {
+        if raw == 0L {
           Null
+        } else if raw < 0L {
+          FuncRef((-(raw + 1L)).to_int())
         } else {
           FuncRef(raw.to_int())
         }
@@ -115,7 +117,7 @@ pub fn jit_results_to_values(
       ExternRef | RefExtern | NullExternRef => {
         let raw = results[slot_idx]
         slot_idx += 1
-        if raw == @types.FUNCREF_NULL_SENTINEL {
+        if raw == 0L {
           Null
         } else {
           ExternRef(raw.to_int())
@@ -183,7 +185,7 @@ pub fn jit_results_to_values(
 ///|
 /// Convert @types.Value to Int64 for JIT call with type context
 /// Uses JIT encoding for GC types: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
-/// For funcref/externref: null=FUNCREF_NULL_SENTINEL
+/// For funcref/externref: null=0
 pub fn value_to_jit_arg_typed(
   value : @types.Value,
   ty : @types.ValueType,
@@ -193,48 +195,30 @@ pub fn value_to_jit_arg_typed(
     I64(n) => @types.ToInt64::to_int64_bits(n)
     F32(f) => @types.ToInt64::to_int64_bits(f)
     F64(d) => @types.ToInt64::to_int64_bits(d)
-    FuncRef(idx) => idx.to_int64()
-    ExternRef(idx) => idx.to_int64()
+    // Reference types
+    FuncRef(idx) =>
+      match ty {
+        FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
+          -(idx.to_int64() + 1L)
+        _ => idx.to_int64()
+      }
+    ExternRef(idx) =>
+      match ty {
+        ExternRef | RefExtern | NullExternRef => @types.EXTERNREF_TAG | (idx.to_int64() << 1)
+        _ => idx.to_int64()
+      }
     ExnRef(idx) => idx.to_int64()
-    // GC references: encode using JIT scheme
-    ArrayRef(gc_ref) => gc_ref.to_int64() << 1 // gc_ref << 1
-    StructRef(gc_ref) => gc_ref.to_int64() << 1 // gc_ref << 1
-    I31(n) => (n.to_int64() << 1) | 1L // (value << 1) | 1
-    Null =>
-      // Null encoding depends on the expected type
-      if is_gc_ref_type(ty) {
-        0L // GC null = 0
-      } else {
-        @types.FUNCREF_NULL_SENTINEL
-      } // funcref/externref null
+    // GC references: encoding uses 0 for null
+    ArrayRef(gc_ref) => (gc_ref.to_int64() + 1L) << 1
+    StructRef(gc_ref) => (gc_ref.to_int64() + 1L) << 1
+    I31(n) => (n.to_int64() << 1) | 1L
+    Null => 0L
     V128(_) => abort("V128 not yet supported in testsuite")
   }
 }
 
 ///|
-/// Check if a ValueType is a GC reference type (uses 0 for null)
-fn is_gc_ref_type(ty : @types.ValueType) -> Bool {
-  match ty {
-    AnyRef
-    | NullRef
-    | RefAny
-    | RefEq
-    | RefNullEq
-    | RefI31
-    | RefNullI31
-    | RefStruct(_)
-    | RefNullStruct(_)
-    | RefArray(_)
-    | RefNullArray(_)
-    | RefNone
-    | ExnRef
-    | NullExnRef => true
-    _ => false
-  }
-}
-
-///|
-/// Convert @types.Value to Int64 for JIT call (legacy, assumes non-GC null)
+/// Convert @types.Value to Int64 for JIT call (legacy)
 pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
   value_to_jit_arg_typed(value, @types.ValueType::I64)
 }
@@ -484,7 +468,7 @@ pub fn run_jit(
 ///|
 /// Extract element segment values for JIT segment setup
 /// Returns an array of Int64 arrays, one per element segment
-/// Each Int64 is a function index or -1 for null
+/// Each Int64 is a function index or 0 for null
 fn extract_elem_segment_values(mod_ : @types.Module) -> Array[Array[Int64]] {
   let result : Array[Array[Int64]] = []
   for elem in mod_.elems {
@@ -493,8 +477,8 @@ fn extract_elem_segment_values(mod_ : @types.Module) -> Array[Array[Int64]] {
       let func_idx : Int64 = match init_expr {
         [RefFunc(idx)] => idx.to_int64()
         [I32Const(idx)] => idx.to_int64()
-        [RefNull(_)] => -1L // null reference
-        _ => -1L
+        [RefNull(_)] => 0L // null reference
+        _ => 0L
       }
       values.push(func_idx)
     }

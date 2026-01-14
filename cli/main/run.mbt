@@ -69,7 +69,7 @@ fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
       F64(d) => d.reinterpret_as_int64()
       FuncRef(idx) => idx.to_int64()
       ExternRef(idx) => idx.to_int64()
-      Null => @types.FUNCREF_NULL_SENTINEL
+      Null => @types.NULL_REF
       V128(_) => abort("V128 args not yet supported")
       StructRef(idx) => idx.to_int64() << 1
       ArrayRef(idx) => idx.to_int64() << 1
@@ -112,8 +112,10 @@ fn convert_jit_results(
       FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => {
         let raw = results[slot_idx]
         slot_idx += 1
-        if raw == @types.FUNCREF_NULL_SENTINEL {
+        if raw == @types.NULL_REF {
           Null
+        } else if raw < 0L {
+          FuncRef((-(raw + 1L)).to_int())
         } else {
           FuncRef(raw.to_int())
         }
@@ -121,7 +123,7 @@ fn convert_jit_results(
       ExternRef | RefExtern | NullExternRef => {
         let raw = results[slot_idx]
         slot_idx += 1
-        if raw == @types.FUNCREF_NULL_SENTINEL {
+        if raw == @types.NULL_REF {
           Null
         } else {
           ExternRef(raw.to_int())

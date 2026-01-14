@@ -809,22 +809,14 @@ fn Translator::translate_instruction(
 
     // Reference types
     RefNull(ref_type) => {
-      // Preserve reference kind in IR, so null checks remain type-correct.
+      // JIT/reference encoding uses 0 for null.
       let result_ty = Type::from_wasm(ref_type)
-      let null_const = match result_ty {
-        FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
-        _ => @types.NULL_REF
-      }
-      let result = self.builder.iconst(result_ty, null_const)
+      let result = self.builder.iconst(result_ty, @types.NULL_REF)
       self.push(result)
     }
     RefIsNull => {
       let ref_val = self.pop()
-      let null_const = match ref_val.ty {
-        FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
-        _ => @types.NULL_REF
-      }
-      let null_sentinel = self.builder.iconst(ref_val.ty, null_const)
+      let null_sentinel = self.builder.iconst(ref_val.ty, @types.NULL_REF)
       let result = self.builder.icmp_eq(ref_val, null_sentinel)
       self.push(result)
     }
@@ -838,11 +830,7 @@ fn Translator::translate_instruction(
       // ref.as_non_null: convert nullable ref to non-null ref
       // Pop the reference, check if null, trap if so, otherwise push back
       let ref_val = self.pop()
-      let null_const = match ref_val.ty {
-        FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
-        _ => @types.NULL_REF
-      }
-      let null_sentinel = self.builder.iconst(ref_val.ty, null_const)
+      let null_sentinel = self.builder.iconst(ref_val.ty, @types.NULL_REF)
       let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
       // Create trap block and continuation block
