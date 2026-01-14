@@ -532,7 +532,11 @@ fn decode_utf8_validated(bytes : Bytes) -> String raise ParserError {
 // ============================================================
 
 ///|
-fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError {
+fn Parser::resolve_heap_type_as_ref_value_type(
+  self : Parser,
+  heap_type : Int,
+  nullable : Bool,
+) -> @types.ValueType raise ParserError {
   fn resolve_typed_ref(
     type_idx : Int,
     nullable : Bool,
@@ -621,6 +625,29 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
       -12 => @types.ValueType::NullExnRef
       _ => raise ParseError("invalid heap type")
     }
+  }
+
+  if heap_type < 0 {
+    resolve_abstract_heap(heap_type, nullable)
+  } else {
+    resolve_typed_ref(heap_type, nullable)
+  }
+}
+
+///|
+fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError {
+  fn resolve_typed_ref(
+    type_idx : Int,
+    nullable : Bool,
+  ) -> @types.ValueType raise ParserError {
+    self.resolve_heap_type_as_ref_value_type(type_idx, nullable)
+  }
+
+  fn resolve_abstract_heap(
+    heap_type : Int,
+    nullable : Bool,
+  ) -> @types.ValueType raise ParserError {
+    self.resolve_heap_type_as_ref_value_type(heap_type, nullable)
   }
 
   let byte = self.read_byte()
@@ -784,13 +811,14 @@ fn Parser::read_composite_type(
 fn Parser::read_subtype(self : Parser) -> @types.SubType raise ParserError {
   // WasmGC binary subtype encoding:
   // - 0x50: subtype header with flags + optional supertype
+  // - 0x4f: final subtype header with optional supertype
   // - otherwise: implicit final subtype without supertypes
   let tag = self.peek_byte()
   if tag == 0x50 {
     self.skip(1)
     let flags = self.read_byte()
-    let final_ = (flags & 0x01) != 0
-    let has_supertype = (flags & 0x02) != 0
+    let has_supertype = (flags & 0x01) != 0
+    let final_ = (flags & 0x02) != 0
     if (flags & 0xFC) != 0 {
       raise ParseError("malformed subtype flags")
     }
@@ -801,6 +829,20 @@ fn Parser::read_subtype(self : Parser) -> @types.SubType raise ParserError {
     }
     let composite = self.read_composite_type()
     { final_, supertypes, composite }
+  } else if tag == 0x4f {
+    self.skip(1)
+    let flags = self.read_byte()
+    let has_supertype = (flags & 0x01) != 0
+    if (flags & 0xFE) != 0 {
+      raise ParseError("malformed subtype flags")
+    }
+    let supertypes : Array[Int] = if has_supertype {
+      [self.read_u32()]
+    } else {
+      []
+    }
+    let composite = self.read_composite_type()
+    { final_: true, supertypes, composite }
   } else {
     // Implicit final subtype
     let composite = self.read_composite_type()
@@ -1599,6 +1641,8 @@ fn Parser::read_instruction(
           let table_idx = self.read_u32()
           TableFill(table_idx)
         }
+        21 => I64MulWideS
+        22 => I64MulWideU
         _ => raise UnknownOpcode(0xFC00 + subopcode)
       }
     }
@@ -1698,10 +1742,22 @@ fn Parser::parse_gc_instruction(
       let elem_idx = self.read_u32()
       ArrayInitElem(type_idx, elem_idx)
     }
-    20 => RefTest(self.read_value_type())
-    21 => RefTestNull(self.read_value_type())
-    22 => RefCast(self.read_value_type())
-    23 => RefCastNull(self.read_value_type())
+    20 =>
+      RefTest(
+        self.resolve_heap_type_as_ref_value_type(self.read_heap_type(), false),
+      )
+    21 =>
+      RefTestNull(
+        self.resolve_heap_type_as_ref_value_type(self.read_heap_type(), true),
+      )
+    22 =>
+      RefCast(
+        self.resolve_heap_type_as_ref_value_type(self.read_heap_type(), false),
+      )
+    23 =>
+      RefCastNull(
+        self.resolve_heap_type_as_ref_value_type(self.read_heap_type(), true),
+      )
     24 => {
       let label = self.read_u32()
       let from_t = self.read_value_type()

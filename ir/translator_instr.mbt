@@ -118,6 +118,22 @@ fn Translator::translate_instruction(
     I64Add => self.translate_binary_i64(fn(b, a, v) { b.iadd(a, v) })
     I64Sub => self.translate_binary_i64(fn(b, a, v) { b.isub(a, v) })
     I64Mul => self.translate_binary_i64(fn(b, a, v) { b.imul(a, v) })
+    I64MulWideU => {
+      let b = self.pop()
+      let a = self.pop()
+      let lo = self.builder.imul(a, b)
+      let hi = self.builder.umulh(a, b)
+      self.push(lo)
+      self.push(hi)
+    }
+    I64MulWideS => {
+      let b = self.pop()
+      let a = self.pop()
+      let lo = self.builder.imul(a, b)
+      let hi = self.builder.smulh(a, b)
+      self.push(lo)
+      self.push(hi)
+    }
     I64DivS => self.translate_binary_i64(fn(b, a, v) { b.sdiv(a, v) })
     I64DivU => self.translate_binary_i64(fn(b, a, v) { b.udiv(a, v) })
     I64RemS => self.translate_binary_i64(fn(b, a, v) { b.srem(a, v) })

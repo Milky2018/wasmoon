@@ -445,6 +445,8 @@ fn lower_inst(
     @ir.Opcode::Iadd => lower_iadd(ctx, inst, block)
     @ir.Opcode::Isub => lower_isub(ctx, inst, block)
     @ir.Opcode::Imul => lower_imul(ctx, inst, block)
+    @ir.Opcode::Umulh => lower_umulh(ctx, inst, block)
+    @ir.Opcode::Smulh => lower_smulh(ctx, inst, block)
     @ir.Opcode::Sdiv => lower_div(ctx, inst, block, signed=true)
     @ir.Opcode::Udiv => lower_div(ctx, inst, block, signed=false)
     @ir.Opcode::Srem => lower_rem(ctx, inst, block, true)

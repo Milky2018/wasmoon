@@ -300,6 +300,7 @@ pub fn IRBuilder::sextend16(Self, Type, Value) -> Value
 pub fn IRBuilder::sextend32(Self, Value) -> Value
 pub fn IRBuilder::sextend8(Self, Type, Value) -> Value
 pub fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
+pub fn IRBuilder::smulh(Self, Value, Value) -> Value
 pub fn IRBuilder::spill_locals_for_throw(Self, Array[Value]) -> Unit
 pub fn IRBuilder::srem(Self, Value, Value) -> Value
 pub fn IRBuilder::sshr(Self, Value, Value) -> Value
@@ -322,6 +323,7 @@ pub fn IRBuilder::try_table_end(Self, Int) -> Unit
 pub fn IRBuilder::udiv(Self, Value, Value) -> Value
 pub fn IRBuilder::uextend(Self, Type, Value) -> Value
 pub fn IRBuilder::uint_to_fcvt(Self, Type, Value) -> Value
+pub fn IRBuilder::umulh(Self, Value, Value) -> Value
 pub fn IRBuilder::urem(Self, Value, Value) -> Value
 pub fn IRBuilder::ushr(Self, Value, Value) -> Value
 pub fn IRBuilder::v128_and(Self, Value, Value) -> Value
@@ -403,6 +405,8 @@ pub enum Opcode {
   Iadd
   Isub
   Imul
+  Umulh
+  Smulh
   Sdiv
   Udiv
   Srem

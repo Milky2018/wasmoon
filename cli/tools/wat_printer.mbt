@@ -788,6 +788,8 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I64Add => "i64.add"
     I64Sub => "i64.sub"
     I64Mul => "i64.mul"
+    I64MulWideS => "i64.mul_wide_s"
+    I64MulWideU => "i64.mul_wide_u"
     I64DivS => "i64.div_s"
     I64DivU => "i64.div_u"
     I64RemS => "i64.rem_s"

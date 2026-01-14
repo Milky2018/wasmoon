@@ -1579,6 +1579,14 @@ fn validate_instr(
     }
 
     // i64 binary operations
+    I64MulWideS | I64MulWideU => {
+      stack.pop(@types.ValueType::I64)
+      stack.pop(@types.ValueType::I64)
+      stack.push(@types.ValueType::I64)
+      stack.push(@types.ValueType::I64)
+    }
+
+    // i64 binary operations
     I64Add
     | I64Sub
     | I64Mul

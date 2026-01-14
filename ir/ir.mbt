@@ -170,6 +170,8 @@ pub enum Opcode {
   Iadd // Integer add
   Isub // Integer subtract
   Imul // Integer multiply
+  Umulh // Unsigned multiply high
+  Smulh // Signed multiply high
   Sdiv // Signed divide
   Udiv // Unsigned divide
   Srem // Signed remainder

@@ -174,6 +174,18 @@ pub fn IRBuilder::imul(self : IRBuilder, a : Value, b : Value) -> Value {
 }
 
 ///|
+/// Unsigned multiply high (i64 only)
+pub fn IRBuilder::umulh(self : IRBuilder, a : Value, b : Value) -> Value {
+  self.emit_inst(a.ty, Opcode::Umulh, [a, b])
+}
+
+///|
+/// Signed multiply high (i64 only)
+pub fn IRBuilder::smulh(self : IRBuilder, a : Value, b : Value) -> Value {
+  self.emit_inst(a.ty, Opcode::Smulh, [a, b])
+}
+
+///|
 /// Signed integer divide
 pub fn IRBuilder::sdiv(self : IRBuilder, a : Value, b : Value) -> Value {
   self.emit_inst(a.ty, Opcode::Sdiv, [a, b])

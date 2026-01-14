@@ -77,6 +77,8 @@ fn validate_instruction(
     Iadd
     | Isub
     | Imul
+    | Umulh
+    | Smulh
     | Sdiv
     | Udiv
     | Srem
@@ -106,6 +108,13 @@ fn validate_instruction(
           result.add_error(
             "Binary op operands have mismatched types: \{a.ty} vs \{b.ty}",
           )
+        }
+
+        // mulhi ops are only defined for i64
+        if inst.opcode is Umulh || inst.opcode is Smulh {
+          if !types_match(a.ty, Type::I64) {
+            result.add_error("mulhi expects i64 operands, got \{a.ty}")
+          }
         }
       }
 
