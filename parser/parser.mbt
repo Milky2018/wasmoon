@@ -1563,6 +1563,7 @@ fn Parser::read_instruction(
       let func_idx = self.read_u32()
       RefFunc(func_idx)
     }
+    0xD3 => RefEqInstr
     0xD4 => RefAsNonNull
     0xD5 => BrOnNull(self.read_u32())
     0xD6 => BrOnNonNull(self.read_u32())

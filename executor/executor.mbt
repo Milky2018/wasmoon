@@ -308,6 +308,9 @@ fn ExecContext::exec_instr(
       let v1 = self.stack.pop()
       let equal = match (v1, v2) {
         (Null, Null) => true
+        (FuncRef(a), FuncRef(b)) => a == b
+        (ExternRef(a), ExternRef(b)) => a == b
+        (ExnRef(a), ExnRef(b)) => a == b
         (I31(a), I31(b)) => a == b
         (StructRef(a), StructRef(b)) => a == b
         (ArrayRef(a), ArrayRef(b)) => a == b
