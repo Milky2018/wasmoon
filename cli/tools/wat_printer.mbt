@@ -332,6 +332,8 @@ fn value_type_to_wat(t : @types.ValueType) -> String {
     RefNullFuncTyped(idx) => "(ref null \{idx})"
     AnyRef => "anyref"
     ExnRef => "exnref"
+    StructRef => "structref"
+    ArrayRef => "arrayref"
     RefStruct(idx) => "(ref \{idx})"
     RefNullStruct(idx) => "(ref null \{idx})"
     RefArray(idx) => "(ref \{idx})"
@@ -341,6 +343,8 @@ fn value_type_to_wat(t : @types.ValueType) -> String {
     RefNullEq => "(ref null eq)"
     RefI31 => "(ref i31)"
     RefNullI31 => "(ref null i31)"
+    RefStructAbs => "(ref struct)"
+    RefArrayAbs => "(ref array)"
     RefNone => "(ref none)"
     NullRef => "nullref"
     NullFuncRef => "nullfuncref"
@@ -485,7 +489,12 @@ fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
 
 ///|
 fn instr_to_wat(instr : @types.Instruction) -> String {
-  fn atomic_instr(subop : Int, mem : Int, align : Int, offset : Int64) -> String {
+  fn atomic_instr(
+    subop : Int,
+    mem : Int,
+    align : Int,
+    offset : Int64,
+  ) -> String {
     let name = match subop {
       0 => "memory.atomic.notify"
       1 => "memory.atomic.wait32"
@@ -559,8 +568,42 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     let natural_align = match subop {
       0 | 1 | 4 | 10 | 11 | 18 | 25 | 32 | 39 | 46 | 53 | 60 => 2
       2 | 5 | 12 | 19 | 26 | 33 | 40 | 47 | 54 | 61 => 3
-      6 | 8 | 13 | 15 | 20 | 22 | 27 | 29 | 34 | 36 | 41 | 43 | 48 | 50 | 55 | 57 | 62 | 64 => 0
-      7 | 9 | 14 | 16 | 21 | 23 | 28 | 30 | 35 | 37 | 42 | 44 | 49 | 51 | 56 | 58 | 63 | 65 => 1
+      6
+      | 8
+      | 13
+      | 15
+      | 20
+      | 22
+      | 27
+      | 29
+      | 34
+      | 36
+      | 41
+      | 43
+      | 48
+      | 50
+      | 55
+      | 57
+      | 62
+      | 64 => 0
+      7
+      | 9
+      | 14
+      | 16
+      | 21
+      | 23
+      | 28
+      | 30
+      | 35
+      | 37
+      | 42
+      | 44
+      | 49
+      | 51
+      | 56
+      | 58
+      | 63
+      | 65 => 1
       17 | 24 | 31 | 38 | 45 | 52 | 59 | 66 => 2
       _ => 0
     }
@@ -685,9 +728,7 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
         "memory.fill \{mem}"
       }
     ElemDrop(idx) => "elem.drop \{idx}"
-
     Atomic(subop, mem, align, offset) => atomic_instr(subop, mem, align, offset)
-
     RefNull(t) => "ref.null \{ref_type_to_wat(t)}"
     RefIsNull => "ref.is_null"
     RefFunc(idx) => "ref.func \{idx}"

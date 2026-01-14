@@ -494,16 +494,19 @@ pub fn FuncEnvironment::emit_atomic_alignment_check(
   if access_size <= 1 {
     return
   }
-  let is_memory64 = memidx < self.memory_is_64.length() && self.memory_is_64[memidx]
-  let addr_i64 = if is_memory64 { wasm_addr } else { builder.uextend(Type::I64, wasm_addr) }
+  let is_memory64 = memidx < self.memory_is_64.length() &&
+    self.memory_is_64[memidx]
+  let addr_i64 = if is_memory64 {
+    wasm_addr
+  } else {
+    builder.uextend(Type::I64, wasm_addr)
+  }
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-
   let mask = builder.iconst(Type::I64, (access_size - 1).to_int64())
   let masked = builder.band(addr_plus_offset, mask)
   let zero = builder.iconst(Type::I64, 0L)
   let is_aligned = builder.icmp(IntCC::Eq, masked, zero)
-
   let trap_block = self.get_or_create_atomic_unaligned_trap_block(builder)
   let continue_block = builder.create_block()
   builder.brnz(is_aligned, continue_block, trap_block)

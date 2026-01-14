@@ -197,13 +197,13 @@ pub fn sync_jit_globals_to_store(
           } else {
             @types.Value::ExnRef(raw_value.to_int())
           }
-        RefStruct(_) | RefNullStruct(_) =>
+        RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
           if raw_value == 0L {
             @types.Value::Null
           } else {
             @types.Value::StructRef((raw_value >> 1).to_int())
           }
-        RefArray(_) | RefNullArray(_) =>
+        RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
           if raw_value == 0L {
             @types.Value::Null
           } else {

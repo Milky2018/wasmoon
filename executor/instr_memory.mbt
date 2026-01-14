@@ -570,11 +570,8 @@ fn ExecContext::exec_memory_misc(
     }
     // elem.drop: mark element segment as dropped
     ElemDrop(elem_idx) => self.instance.dropped_elems[elem_idx] = true
-
-    Atomic(subop, memidx, align, offset) => {
+    Atomic(subop, memidx, align, offset) =>
       self.exec_atomic(subop, memidx, align, offset)
-    }
-
     _ => raise @runtime.RuntimeError::Unreachable
   }
 }

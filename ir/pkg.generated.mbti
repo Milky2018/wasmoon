@@ -144,6 +144,7 @@ pub impl Hash for FloatCC
 pub impl Show for FloatCC
 
 type FuncEnvironment
+pub fn FuncEnvironment::emit_atomic_alignment_check(Self, IRBuilder, Int, Value, Int64, Int) -> Unit
 pub fn FuncEnvironment::emit_bounds_check(Self, IRBuilder, Value, Int, Value, Int64, Int) -> Value
 pub fn FuncEnvironment::new(Array[@types.GlobalType], memory_mins? : Array[Int64], memory_is_64? : Array[Bool]) -> Self
 pub fn FuncEnvironment::translate_global_get(Self, IRBuilder, Value, Int) -> Value

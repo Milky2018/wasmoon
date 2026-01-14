@@ -1015,6 +1015,10 @@ fn value_type_to_code(ty : @types.ValueType) -> Int {
     | RefNullEq
     | RefI31
     | RefNullI31
+    | RefStructAbs
+    | RefArrayAbs
+    | StructRef
+    | ArrayRef
     | RefNone => 1
   }
 }

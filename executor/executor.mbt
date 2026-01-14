@@ -995,6 +995,7 @@ pub fn instantiate_module(
       mem_type.limits.min.to_int(),
       mem_type.limits.max.map(fn(m) { m.to_int() }),
       is_memory64=mem_type.is_memory64,
+      page_size_log2=mem_type.page_size_log2,
     )
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
@@ -1734,6 +1735,7 @@ pub fn instantiate_module_with_imports(
       min_pages,
       mem_type.limits.max.map(fn(m) { m.to_int() }),
       is_memory64=mem_type.is_memory64,
+      page_size_log2=mem_type.page_size_log2,
     )
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)

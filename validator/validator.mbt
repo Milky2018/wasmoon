@@ -2027,7 +2027,6 @@ fn validate_instr(
       stack.pop(@types.ValueType::I32) // val (always i32)
       stack.pop(addr_type) // d
     }
-
     Atomic(subop, memidx, align, offset) => {
       // Atomics use memarg except atomic.fence (subop=3).
       if subop != 3 {
@@ -2041,10 +2040,14 @@ fn validate_instr(
       } else {
         @types.ValueType::I32
       }
-
-      fn check_align(natural : Int, name : String) -> Unit raise ValidationError {
+      fn check_align(
+        natural : Int,
+        name : String,
+      ) -> Unit raise ValidationError {
         if align > natural {
-          raise InvalidAlignment("\{name} alignment \{align} exceeds natural alignment \{natural}")
+          raise InvalidAlignment(
+            "\{name} alignment \{align} exceeds natural alignment \{natural}",
+          )
         }
       }
 
@@ -2070,7 +2073,6 @@ fn validate_instr(
           stack.push(@types.ValueType::I32)
         }
         3 => () // atomic.fence
-
         4 | 6 | 7 => {
           // i32.atomic.load / load8_u / load16_u
           let natural = if subop == 4 { 2 } else if subop == 6 { 0 } else { 1 }
@@ -2080,32 +2082,81 @@ fn validate_instr(
         }
         5 | 8 | 9 | 10 => {
           // i64.atomic.load / load8_u / load16_u / load32_u
-          let natural = if subop == 5 { 3 } else if subop == 8 { 0 } else if subop == 9 { 1 } else { 2 }
+          let natural = if subop == 5 {
+            3
+          } else if subop == 8 {
+            0
+          } else if subop == 9 {
+            1
+          } else {
+            2
+          }
           check_align(natural, "i64.atomic.load")
           stack.pop(addr_type)
           stack.push(@types.ValueType::I64)
         }
         11 | 13 | 14 => {
           // i32.atomic.store / store8 / store16
-          let natural = if subop == 11 { 2 } else if subop == 13 { 0 } else { 1 }
+          let natural = if subop == 11 {
+            2
+          } else if subop == 13 {
+            0
+          } else {
+            1
+          }
           check_align(natural, "i32.atomic.store")
           stack.pop(@types.ValueType::I32)
           stack.pop(addr_type)
         }
         12 | 15 | 16 | 17 => {
           // i64.atomic.store / store8 / store16 / store32
-          let natural = if subop == 12 { 3 } else if subop == 15 { 0 } else if subop == 16 { 1 } else { 2 }
+          let natural = if subop == 12 {
+            3
+          } else if subop == 15 {
+            0
+          } else if subop == 16 {
+            1
+          } else {
+            2
+          }
           check_align(natural, "i64.atomic.store")
           stack.pop(@types.ValueType::I64)
           stack.pop(addr_type)
         }
 
         // RMW add/sub/and/or/xor/xchg
-        18 | 20 | 21 | 25 | 27 | 28 | 32 | 34 | 35 | 39 | 41 | 42 | 46 | 48 | 49 | 53 | 55 | 56 => {
+        18
+        | 20
+        | 21
+        | 25
+        | 27
+        | 28
+        | 32
+        | 34
+        | 35
+        | 39
+        | 41
+        | 42
+        | 46
+        | 48
+        | 49
+        | 53
+        | 55
+        | 56 => {
           // i32 variants (32/8/16)
-          let natural = if subop == 18 || subop == 25 || subop == 32 || subop == 39 || subop == 46 || subop == 53 {
+          let natural = if subop == 18 ||
+            subop == 25 ||
+            subop == 32 ||
+            subop == 39 ||
+            subop == 46 ||
+            subop == 53 {
             2
-          } else if subop == 20 || subop == 27 || subop == 34 || subop == 41 || subop == 48 || subop == 55 {
+          } else if subop == 20 ||
+            subop == 27 ||
+            subop == 34 ||
+            subop == 41 ||
+            subop == 48 ||
+            subop == 55 {
             0
           } else {
             1
@@ -2115,13 +2166,51 @@ fn validate_instr(
           stack.pop(addr_type)
           stack.push(@types.ValueType::I32)
         }
-        19 | 22 | 23 | 24 | 26 | 29 | 30 | 31 | 33 | 36 | 37 | 38 | 40 | 43 | 44 | 45 | 47 | 50 | 51 | 52 | 54 | 57 | 58 | 59 => {
+        19
+        | 22
+        | 23
+        | 24
+        | 26
+        | 29
+        | 30
+        | 31
+        | 33
+        | 36
+        | 37
+        | 38
+        | 40
+        | 43
+        | 44
+        | 45
+        | 47
+        | 50
+        | 51
+        | 52
+        | 54
+        | 57
+        | 58
+        | 59 => {
           // i64 variants (64/8/16/32)
-          let natural = if subop == 19 || subop == 26 || subop == 33 || subop == 40 || subop == 47 || subop == 54 {
+          let natural = if subop == 19 ||
+            subop == 26 ||
+            subop == 33 ||
+            subop == 40 ||
+            subop == 47 ||
+            subop == 54 {
             3
-          } else if subop == 22 || subop == 29 || subop == 36 || subop == 43 || subop == 50 || subop == 57 {
+          } else if subop == 22 ||
+            subop == 29 ||
+            subop == 36 ||
+            subop == 43 ||
+            subop == 50 ||
+            subop == 57 {
             0
-          } else if subop == 23 || subop == 30 || subop == 37 || subop == 44 || subop == 51 || subop == 58 {
+          } else if subop == 23 ||
+            subop == 30 ||
+            subop == 37 ||
+            subop == 44 ||
+            subop == 51 ||
+            subop == 58 {
             1
           } else {
             2
@@ -2135,7 +2224,13 @@ fn validate_instr(
         // cmpxchg
         60 | 62 | 63 => {
           // i32 cmpxchg + 8/16
-          let natural = if subop == 60 { 2 } else if subop == 62 { 0 } else { 1 }
+          let natural = if subop == 60 {
+            2
+          } else if subop == 62 {
+            0
+          } else {
+            1
+          }
           check_align(natural, "i32.atomic.rmw.cmpxchg")
           stack.pop(@types.ValueType::I32) // replacement
           stack.pop(@types.ValueType::I32) // expected
@@ -2144,14 +2239,21 @@ fn validate_instr(
         }
         61 | 64 | 65 | 66 => {
           // i64 cmpxchg + 8/16/32
-          let natural = if subop == 61 { 3 } else if subop == 64 { 0 } else if subop == 65 { 1 } else { 2 }
+          let natural = if subop == 61 {
+            3
+          } else if subop == 64 {
+            0
+          } else if subop == 65 {
+            1
+          } else {
+            2
+          }
           check_align(natural, "i64.atomic.rmw.cmpxchg")
           stack.pop(@types.ValueType::I64) // replacement
           stack.pop(@types.ValueType::I64) // expected
           stack.pop(addr_type)
           stack.push(@types.ValueType::I64)
         }
-
         _ => raise TypeMismatch("unsupported atomic subopcode \{subop}")
       }
     }

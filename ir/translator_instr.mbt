@@ -21,9 +21,8 @@ fn Translator::translate_instruction(
     return
   }
   match instr {
-    Atomic(subopcode, memidx, _, offset) => {
+    Atomic(subopcode, memidx, _, offset) =>
       self.translate_atomic(subopcode, memidx, offset)
-    }
 
     // Constants
     I32Const(n) => {
@@ -2165,7 +2164,10 @@ fn Translator::translate_atomic(
     self.builder.store_ptr_narrow(bits, ptr, value, zero)
   }
 
-  match subopcode {
+  // NOTE: wasm-tools/wasmparser encodes most atomic subopcodes starting at 0x10.
+  // The IR lowering table is indexed starting at 0x04, so shift accordingly.
+  let op = if subopcode >= 4 { subopcode - 12 } else { subopcode }
+  match op {
     // memory.atomic.notify
     0 => {
       let _count = self.pop()
@@ -2290,12 +2292,39 @@ fn Translator::translate_atomic(
     }
 
     // i32 RMW operations
-    18 | 20 | 21 | 25 | 27 | 28 | 32 | 34 | 35 | 39 | 41 | 42 | 46 | 48 | 49 | 53 | 55 | 56 => {
+    18
+    | 20
+    | 21
+    | 25
+    | 27
+    | 28
+    | 32
+    | 34
+    | 35
+    | 39
+    | 41
+    | 42
+    | 46
+    | 48
+    | 49
+    | 53
+    | 55
+    | 56 => {
       let value = self.pop()
       let addr = self.pop()
-      let bits = if subopcode == 18 || subopcode == 25 || subopcode == 32 || subopcode == 39 || subopcode == 46 || subopcode == 53 {
+      let bits = if subopcode == 18 ||
+        subopcode == 25 ||
+        subopcode == 32 ||
+        subopcode == 39 ||
+        subopcode == 46 ||
+        subopcode == 53 {
         32
-      } else if subopcode == 20 || subopcode == 27 || subopcode == 34 || subopcode == 41 || subopcode == 48 || subopcode == 55 {
+      } else if subopcode == 20 ||
+        subopcode == 27 ||
+        subopcode == 34 ||
+        subopcode == 41 ||
+        subopcode == 48 ||
+        subopcode == 55 {
         8
       } else {
         16
@@ -2309,10 +2338,18 @@ fn Translator::translate_atomic(
       } else {
         self.builder.load_ptr_narrow(Type::I32, bits, false, ptr, zero)
       }
-      let mask = if bits == 32 { self.builder.iconst_i32(-1) }
-      else if bits == 16 { self.builder.iconst_i32(0xFFFF) }
-      else { self.builder.iconst_i32(0xFF) }
-      let v_masked = if bits == 32 { value } else { self.builder.band(value, mask) }
+      let mask = if bits == 32 {
+        self.builder.iconst_i32(-1)
+      } else if bits == 16 {
+        self.builder.iconst_i32(0xFFFF)
+      } else {
+        self.builder.iconst_i32(0xFF)
+      }
+      let v_masked = if bits == 32 {
+        value
+      } else {
+        self.builder.band(value, mask)
+      }
       let computed = match subopcode {
         18 | 20 | 21 => self.builder.iadd(old, v_masked)
         25 | 27 | 28 => self.builder.isub(old, v_masked)
@@ -2322,7 +2359,11 @@ fn Translator::translate_atomic(
         53 | 55 | 56 => v_masked
         _ => old
       }
-      let new = if bits == 32 { computed } else { self.builder.band(computed, mask) }
+      let new = if bits == 32 {
+        computed
+      } else {
+        self.builder.band(computed, mask)
+      }
       if bits == 32 {
         self.builder.store_ptr(Type::I32, ptr, new, zero)
       } else {
@@ -2332,14 +2373,52 @@ fn Translator::translate_atomic(
     }
 
     // i64 RMW operations
-    19 | 22 | 23 | 24 | 26 | 29 | 30 | 31 | 33 | 36 | 37 | 38 | 40 | 43 | 44 | 45 | 47 | 50 | 51 | 52 | 54 | 57 | 58 | 59 => {
+    19
+    | 22
+    | 23
+    | 24
+    | 26
+    | 29
+    | 30
+    | 31
+    | 33
+    | 36
+    | 37
+    | 38
+    | 40
+    | 43
+    | 44
+    | 45
+    | 47
+    | 50
+    | 51
+    | 52
+    | 54
+    | 57
+    | 58
+    | 59 => {
       let value = self.pop()
       let addr = self.pop()
-      let bits = if subopcode == 19 || subopcode == 26 || subopcode == 33 || subopcode == 40 || subopcode == 47 || subopcode == 54 {
+      let bits = if subopcode == 19 ||
+        subopcode == 26 ||
+        subopcode == 33 ||
+        subopcode == 40 ||
+        subopcode == 47 ||
+        subopcode == 54 {
         64
-      } else if subopcode == 22 || subopcode == 29 || subopcode == 36 || subopcode == 43 || subopcode == 50 || subopcode == 57 {
+      } else if subopcode == 22 ||
+        subopcode == 29 ||
+        subopcode == 36 ||
+        subopcode == 43 ||
+        subopcode == 50 ||
+        subopcode == 57 {
         8
-      } else if subopcode == 23 || subopcode == 30 || subopcode == 37 || subopcode == 44 || subopcode == 51 || subopcode == 58 {
+      } else if subopcode == 23 ||
+        subopcode == 30 ||
+        subopcode == 37 ||
+        subopcode == 44 ||
+        subopcode == 51 ||
+        subopcode == 58 {
         16
       } else {
         32
@@ -2353,11 +2432,20 @@ fn Translator::translate_atomic(
       } else {
         self.builder.load_ptr_narrow(Type::I64, bits, false, ptr, zero)
       }
-      let mask = if bits == 64 { self.builder.iconst_i64(-1L) }
-      else if bits == 32 { self.builder.iconst_i64(0xFFFF_FFFFL) }
-      else if bits == 16 { self.builder.iconst_i64(0xFFFFL) }
-      else { self.builder.iconst_i64(0xFFL) }
-      let v_masked = if bits == 64 { value } else { self.builder.band(value, mask) }
+      let mask = if bits == 64 {
+        self.builder.iconst_i64(-1L)
+      } else if bits == 32 {
+        self.builder.iconst_i64(0xFFFF_FFFFL)
+      } else if bits == 16 {
+        self.builder.iconst_i64(0xFFFFL)
+      } else {
+        self.builder.iconst_i64(0xFFL)
+      }
+      let v_masked = if bits == 64 {
+        value
+      } else {
+        self.builder.band(value, mask)
+      }
       let computed = match subopcode {
         19 | 22 | 23 | 24 => self.builder.iadd(old, v_masked)
         26 | 29 | 30 | 31 => self.builder.isub(old, v_masked)
@@ -2367,7 +2455,11 @@ fn Translator::translate_atomic(
         54 | 57 | 58 | 59 => v_masked
         _ => old
       }
-      let new = if bits == 64 { computed } else { self.builder.band(computed, mask) }
+      let new = if bits == 64 {
+        computed
+      } else {
+        self.builder.band(computed, mask)
+      }
       if bits == 64 {
         self.builder.store_ptr(Type::I64, ptr, new, zero)
       } else {
@@ -2381,7 +2473,13 @@ fn Translator::translate_atomic(
       let replacement = self.pop()
       let expected = self.pop()
       let addr = self.pop()
-      let bits = if subopcode == 60 { 32 } else if subopcode == 62 { 8 } else { 16 }
+      let bits = if subopcode == 60 {
+        32
+      } else if subopcode == 62 {
+        8
+      } else {
+        16
+      }
       let access_size = bits / 8
       align_check(addr, access_size)
       let ptr = bounds_ptr(addr, access_size)
@@ -2391,11 +2489,23 @@ fn Translator::translate_atomic(
       } else {
         self.builder.load_ptr_narrow(Type::I32, bits, false, ptr, zero)
       }
-      let mask = if bits == 32 { self.builder.iconst_i32(-1) }
-      else if bits == 16 { self.builder.iconst_i32(0xFFFF) }
-      else { self.builder.iconst_i32(0xFF) }
-      let expected_m = if bits == 32 { expected } else { self.builder.band(expected, mask) }
-      let replacement_m = if bits == 32 { replacement } else { self.builder.band(replacement, mask) }
+      let mask = if bits == 32 {
+        self.builder.iconst_i32(-1)
+      } else if bits == 16 {
+        self.builder.iconst_i32(0xFFFF)
+      } else {
+        self.builder.iconst_i32(0xFF)
+      }
+      let expected_m = if bits == 32 {
+        expected
+      } else {
+        self.builder.band(expected, mask)
+      }
+      let replacement_m = if bits == 32 {
+        replacement
+      } else {
+        self.builder.band(replacement, mask)
+      }
       let eq = self.builder.icmp(IntCC::Eq, old, expected_m)
       let store_block = self.builder.create_block()
       let cont_block = self.builder.create_block()
@@ -2416,7 +2526,15 @@ fn Translator::translate_atomic(
       let replacement = self.pop()
       let expected = self.pop()
       let addr = self.pop()
-      let bits = if subopcode == 61 { 64 } else if subopcode == 64 { 8 } else if subopcode == 65 { 16 } else { 32 }
+      let bits = if subopcode == 61 {
+        64
+      } else if subopcode == 64 {
+        8
+      } else if subopcode == 65 {
+        16
+      } else {
+        32
+      }
       let access_size = bits / 8
       align_check(addr, access_size)
       let ptr = bounds_ptr(addr, access_size)
@@ -2426,12 +2544,25 @@ fn Translator::translate_atomic(
       } else {
         self.builder.load_ptr_narrow(Type::I64, bits, false, ptr, zero)
       }
-      let mask = if bits == 64 { self.builder.iconst_i64(-1L) }
-      else if bits == 32 { self.builder.iconst_i64(0xFFFF_FFFFL) }
-      else if bits == 16 { self.builder.iconst_i64(0xFFFFL) }
-      else { self.builder.iconst_i64(0xFFL) }
-      let expected_m = if bits == 64 { expected } else { self.builder.band(expected, mask) }
-      let replacement_m = if bits == 64 { replacement } else { self.builder.band(replacement, mask) }
+      let mask = if bits == 64 {
+        self.builder.iconst_i64(-1L)
+      } else if bits == 32 {
+        self.builder.iconst_i64(0xFFFF_FFFFL)
+      } else if bits == 16 {
+        self.builder.iconst_i64(0xFFFFL)
+      } else {
+        self.builder.iconst_i64(0xFFL)
+      }
+      let expected_m = if bits == 64 {
+        expected
+      } else {
+        self.builder.band(expected, mask)
+      }
+      let replacement_m = if bits == 64 {
+        replacement
+      } else {
+        self.builder.band(replacement, mask)
+      }
       let eq = self.builder.icmp(IntCC::Eq, old, expected_m)
       let store_block = self.builder.create_block()
       let cont_block = self.builder.create_block()
@@ -2446,7 +2577,6 @@ fn Translator::translate_atomic(
       self.builder.switch_to_block(cont_block)
       self.push(old)
     }
-
     _ => {
       self.builder.trap("unsupported atomic")
       self.is_unreachable = true

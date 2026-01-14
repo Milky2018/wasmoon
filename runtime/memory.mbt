@@ -1,29 +1,40 @@
 ///|
-/// WebAssembly linear memory (64KB pages)
+/// WebAssembly linear memory.
 ///
-/// Wasmtime generally reserves virtual address space and commits pages lazily.
-/// To model that behavior without relying on OS-specific mmap APIs, we store
-/// memory as a sparse page map and allocate 64KB pages on demand.
+/// Physical storage is a sparse map of 64KiB chunks, but the *logical* WebAssembly
+/// page size may vary under the custom-page-sizes proposal.
 struct Memory {
   pages : @hashmap.HashMap[Int, Array[Byte]]
-  mut size : Int // current size in pages
-  max : Int? // max size in pages
+  mut size : Int // current size in logical pages
+  max : Int? // max size in logical pages
   is_memory64 : Bool // true for memory64 (i64-indexed)
+  page_size_log2 : Int
+  page_size_bytes : Int64
 } derive(Show)
 
 ///|
+/// Physical chunk size for sparse storage.
 const PAGE_SIZE : Int = 65536
 
 ///|
 const PAGE_SIZE_BYTES : Int64 = 65536L
 
 ///|
-fn Memory::byte_len(self : Memory) -> Int64 {
-  self.size.to_int64() * PAGE_SIZE_BYTES
+pub fn Memory::byte_len(self : Memory) -> Int64 {
+  self.size.to_int64() * self.page_size_bytes
 }
 
 ///|
-fn Memory::check_bounds(self : Memory, addr : Int, len : Int) -> Unit raise RuntimeError {
+pub fn Memory::page_size_bytes(self : Memory) -> Int64 {
+  self.page_size_bytes
+}
+
+///|
+fn Memory::check_bounds(
+  self : Memory,
+  addr : Int,
+  len : Int,
+) -> Unit raise RuntimeError {
   if addr < 0 || len < 0 {
     raise OutOfBoundsMemoryAccess
   }
@@ -44,7 +55,11 @@ fn Memory::load_byte_unchecked(self : Memory, addr : Int) -> Byte {
 }
 
 ///|
-fn Memory::store_byte_unchecked(self : Memory, addr : Int, value : Byte) -> Unit {
+fn Memory::store_byte_unchecked(
+  self : Memory,
+  addr : Int,
+  value : Byte,
+) -> Unit {
   let page_idx = addr / PAGE_SIZE
   let off = addr % PAGE_SIZE
   let page = match self.pages.get(page_idx) {
@@ -63,8 +78,21 @@ pub fn Memory::new(
   min : Int,
   max : Int?,
   is_memory64? : Bool = false,
+  page_size_log2? : Int = 16,
 ) -> Memory {
-  { pages: @hashmap.new(), size: min, max, is_memory64 }
+  let l2 = page_size_log2
+  if l2 < 0 || l2 > 30 {
+    abort("invalid memory page size")
+  }
+  let page_size_bytes : Int64 = 1L << l2
+  {
+    pages: @hashmap.new(),
+    size: min,
+    max,
+    is_memory64,
+    page_size_log2: l2,
+    page_size_bytes,
+  }
 }
 
 ///|
@@ -178,7 +206,11 @@ pub fn Memory::store_f64(
 /// Load 8-bit signed integer, sign-extend to i32
 pub fn Memory::load_i32_8s(self : Memory, addr : Int) -> Int raise RuntimeError {
   let byte = self.load_byte(addr).to_int()
-  if byte >= 128 { byte - 256 } else { byte }
+  if byte >= 128 {
+    byte - 256
+  } else {
+    byte
+  }
 }
 
 ///|
@@ -189,17 +221,27 @@ pub fn Memory::load_i32_8u(self : Memory, addr : Int) -> Int raise RuntimeError 
 
 ///|
 /// Load 16-bit signed integer, sign-extend to i32
-pub fn Memory::load_i32_16s(self : Memory, addr : Int) -> Int raise RuntimeError {
+pub fn Memory::load_i32_16s(
+  self : Memory,
+  addr : Int,
+) -> Int raise RuntimeError {
   self.check_bounds(addr, 2)
   let b0 = self.load_byte_unchecked(addr).to_int()
   let b1 = self.load_byte_unchecked(addr + 1).to_int()
   let value = b0 | (b1 << 8)
-  if value >= 32768 { value - 65536 } else { value }
+  if value >= 32768 {
+    value - 65536
+  } else {
+    value
+  }
 }
 
 ///|
 /// Load 16-bit unsigned integer, zero-extend to i32
-pub fn Memory::load_i32_16u(self : Memory, addr : Int) -> Int raise RuntimeError {
+pub fn Memory::load_i32_16u(
+  self : Memory,
+  addr : Int,
+) -> Int raise RuntimeError {
   self.check_bounds(addr, 2)
   let b0 = self.load_byte_unchecked(addr).to_int()
   let b1 = self.load_byte_unchecked(addr + 1).to_int()
@@ -208,30 +250,50 @@ pub fn Memory::load_i32_16u(self : Memory, addr : Int) -> Int raise RuntimeError
 
 ///|
 /// Load 8-bit signed integer, sign-extend to i64
-pub fn Memory::load_i64_8s(self : Memory, addr : Int) -> Int64 raise RuntimeError {
+pub fn Memory::load_i64_8s(
+  self : Memory,
+  addr : Int,
+) -> Int64 raise RuntimeError {
   let byte = self.load_byte(addr).to_int64()
-  if byte >= 128L { byte - 256L } else { byte }
+  if byte >= 128L {
+    byte - 256L
+  } else {
+    byte
+  }
 }
 
 ///|
 /// Load 8-bit unsigned integer, zero-extend to i64
-pub fn Memory::load_i64_8u(self : Memory, addr : Int) -> Int64 raise RuntimeError {
+pub fn Memory::load_i64_8u(
+  self : Memory,
+  addr : Int,
+) -> Int64 raise RuntimeError {
   self.load_byte(addr).to_int64()
 }
 
 ///|
 /// Load 16-bit signed integer, sign-extend to i64
-pub fn Memory::load_i64_16s(self : Memory, addr : Int) -> Int64 raise RuntimeError {
+pub fn Memory::load_i64_16s(
+  self : Memory,
+  addr : Int,
+) -> Int64 raise RuntimeError {
   self.check_bounds(addr, 2)
   let b0 = self.load_byte_unchecked(addr).to_int64()
   let b1 = self.load_byte_unchecked(addr + 1).to_int64()
   let value = b0 | (b1 << 8)
-  if value >= 32768L { value - 65536L } else { value }
+  if value >= 32768L {
+    value - 65536L
+  } else {
+    value
+  }
 }
 
 ///|
 /// Load 16-bit unsigned integer, zero-extend to i64
-pub fn Memory::load_i64_16u(self : Memory, addr : Int) -> Int64 raise RuntimeError {
+pub fn Memory::load_i64_16u(
+  self : Memory,
+  addr : Int,
+) -> Int64 raise RuntimeError {
   self.check_bounds(addr, 2)
   let b0 = self.load_byte_unchecked(addr).to_int64()
   let b1 = self.load_byte_unchecked(addr + 1).to_int64()
@@ -240,27 +302,41 @@ pub fn Memory::load_i64_16u(self : Memory, addr : Int) -> Int64 raise RuntimeErr
 
 ///|
 /// Load 32-bit signed integer, sign-extend to i64
-pub fn Memory::load_i64_32s(self : Memory, addr : Int) -> Int64 raise RuntimeError {
+pub fn Memory::load_i64_32s(
+  self : Memory,
+  addr : Int,
+) -> Int64 raise RuntimeError {
   let value = self.load_i32(addr)
   value.to_int64()
 }
 
 ///|
 /// Load 32-bit unsigned integer, zero-extend to i64
-pub fn Memory::load_i64_32u(self : Memory, addr : Int) -> Int64 raise RuntimeError {
+pub fn Memory::load_i64_32u(
+  self : Memory,
+  addr : Int,
+) -> Int64 raise RuntimeError {
   let value = self.load_i32(addr)
   value.reinterpret_as_uint().to_uint64().reinterpret_as_int64()
 }
 
 ///|
 /// Store low 8 bits of i32
-pub fn Memory::store_i32_8(self : Memory, addr : Int, value : Int) -> Unit raise RuntimeError {
+pub fn Memory::store_i32_8(
+  self : Memory,
+  addr : Int,
+  value : Int,
+) -> Unit raise RuntimeError {
   self.store_byte(addr, value.land(0xFF).to_byte())
 }
 
 ///|
 /// Store low 16 bits of i32
-pub fn Memory::store_i32_16(self : Memory, addr : Int, value : Int) -> Unit raise RuntimeError {
+pub fn Memory::store_i32_16(
+  self : Memory,
+  addr : Int,
+  value : Int,
+) -> Unit raise RuntimeError {
   self.check_bounds(addr, 2)
   self.store_byte_unchecked(addr, value.land(0xFF).to_byte())
   self.store_byte_unchecked(addr + 1, (value >> 8).land(0xFF).to_byte())
@@ -268,21 +344,36 @@ pub fn Memory::store_i32_16(self : Memory, addr : Int, value : Int) -> Unit rais
 
 ///|
 /// Store low 8 bits of i64
-pub fn Memory::store_i64_8(self : Memory, addr : Int, value : Int64) -> Unit raise RuntimeError {
+pub fn Memory::store_i64_8(
+  self : Memory,
+  addr : Int,
+  value : Int64,
+) -> Unit raise RuntimeError {
   self.store_byte(addr, value.land(0xFFL).to_int().to_byte())
 }
 
 ///|
 /// Store low 16 bits of i64
-pub fn Memory::store_i64_16(self : Memory, addr : Int, value : Int64) -> Unit raise RuntimeError {
+pub fn Memory::store_i64_16(
+  self : Memory,
+  addr : Int,
+  value : Int64,
+) -> Unit raise RuntimeError {
   self.check_bounds(addr, 2)
   self.store_byte_unchecked(addr, value.land(0xFFL).to_int().to_byte())
-  self.store_byte_unchecked(addr + 1, (value >> 8).land(0xFFL).to_int().to_byte())
+  self.store_byte_unchecked(
+    addr + 1,
+    (value >> 8).land(0xFFL).to_int().to_byte(),
+  )
 }
 
 ///|
 /// Store low 32 bits of i64
-pub fn Memory::store_i64_32(self : Memory, addr : Int, value : Int64) -> Unit raise RuntimeError {
+pub fn Memory::store_i64_32(
+  self : Memory,
+  addr : Int,
+  value : Int64,
+) -> Unit raise RuntimeError {
   self.store_i32(addr, value.to_int())
 }
 
@@ -322,7 +413,6 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
   if delta < 0 {
     return -1
   }
-
   let old_u = old_size.reinterpret_as_uint()
   let delta_u = delta.reinterpret_as_uint()
   let new_u = old_u + delta_u
@@ -330,24 +420,32 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
     return -1
   }
   let new_size = new_u.reinterpret_as_int()
-
   if self.max is Some(max) && new_size > max {
     return -1
   }
 
-  // Spec max: memory32 is 65536 pages (= 4GiB). For memory64 we keep a practical bound.
-  let max_pages = if self.is_memory64 { 2147483647 } else { 65536 }
+  // Spec max: memory32 has a 32-bit address space (4GiB bytes).
+  // With custom-page-sizes, the max number of logical pages depends on the page size.
+  let max_pages = if self.is_memory64 {
+    2147483647
+  } else {
+    let max_bytes = 4294967296L
+    (max_bytes / self.page_size_bytes).to_int()
+  }
   if new_size > max_pages {
     return -1
   }
-
   self.size = new_size
   old_size
 }
 
 ///|
 /// Initialize memory with data segment
-pub fn Memory::init_data(self : Memory, dest : Int, data : Bytes) -> Unit raise RuntimeError {
+pub fn Memory::init_data(
+  self : Memory,
+  dest : Int,
+  data : Bytes,
+) -> Unit raise RuntimeError {
   let len = data.length()
   self.check_bounds(dest, len)
   for i in 0..<len {
@@ -358,13 +456,17 @@ pub fn Memory::init_data(self : Memory, dest : Int, data : Bytes) -> Unit raise 
 ///|
 /// Copy memory within the same memory instance
 /// Handles overlapping regions correctly
-pub fn Memory::copy(self : Memory, dest : Int, src : Int, len : Int) -> Unit raise RuntimeError {
+pub fn Memory::copy(
+  self : Memory,
+  dest : Int,
+  src : Int,
+  len : Int,
+) -> Unit raise RuntimeError {
   self.check_bounds(dest, len)
   self.check_bounds(src, len)
   if len == 0 {
     return
   }
-
   if dest <= src {
     for i in 0..<len {
       let b = self.load_byte_unchecked(src + i)
@@ -380,7 +482,12 @@ pub fn Memory::copy(self : Memory, dest : Int, src : Int, len : Int) -> Unit rai
 
 ///|
 /// Fill memory region with a byte value
-pub fn Memory::fill(self : Memory, dest : Int, value : Byte, len : Int) -> Unit raise RuntimeError {
+pub fn Memory::fill(
+  self : Memory,
+  dest : Int,
+  value : Byte,
+  len : Int,
+) -> Unit raise RuntimeError {
   self.check_bounds(dest, len)
   if len == 0 {
     return

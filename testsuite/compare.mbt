@@ -138,12 +138,12 @@ pub fn jit_results_to_values(
         }
       }
       // GC struct/array reference types
-      RefStruct(_) | RefNullStruct(_) => {
+      RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs => {
         let raw = results[slot_idx]
         slot_idx += 1
         decode_struct_ref(raw)
       }
-      RefArray(_) | RefNullArray(_) => {
+      RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs => {
         let raw = results[slot_idx]
         slot_idx += 1
         decode_array_ref(raw)

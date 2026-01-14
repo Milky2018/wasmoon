@@ -101,14 +101,14 @@ pub fn i64_to_value(raw : Int64, ty : @types.ValueType) -> @types.Value {
     I64 => @types.Value::I64(raw)
     F32 => @types.Value::F32(Float::reinterpret_from_int(raw.to_int()))
     F64 => @types.Value::F64(raw.reinterpret_as_double())
-    RefStruct(_) | RefNullStruct(_) =>
+    RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
       if raw == @types.NULL_REF {
         @types.Value::Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
         @types.Value::StructRef(((raw >> 1) - 1L).to_int())
       }
-    RefArray(_) | RefNullArray(_) =>
+    RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
       if raw == @types.NULL_REF {
         @types.Value::Null
       } else {

@@ -539,38 +539,93 @@ fn decode_utf8_validated(bytes : Bytes) -> String raise ParserError {
 
 ///|
 fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError {
-  fn resolve_typed_ref(type_idx : Int, nullable : Bool) -> @types.ValueType {
+  fn resolve_typed_ref(
+    type_idx : Int,
+    nullable : Bool,
+  ) -> @types.ValueType raise ParserError {
     if type_idx < 0 || type_idx >= self.types.length() {
-      if nullable { @types.ValueType::NullRef } else { @types.ValueType::RefNone }
-    } else {
-      match self.types[type_idx].composite {
-        Func(_) =>
-          if nullable {
-            @types.ValueType::RefNullFuncTyped(type_idx)
-          } else {
-            @types.ValueType::RefFuncTyped(type_idx)
-          }
-        Struct(_) =>
-          if nullable { @types.ValueType::RefNullStruct(type_idx) } else { @types.ValueType::RefStruct(type_idx) }
-        Array(_) =>
-          if nullable { @types.ValueType::RefNullArray(type_idx) } else { @types.ValueType::RefArray(type_idx) }
-      }
+      raise ParseError("invalid heap type")
+    }
+    match self.types[type_idx].composite {
+      Func(_) =>
+        if nullable {
+          @types.ValueType::RefNullFuncTyped(type_idx)
+        } else {
+          @types.ValueType::RefFuncTyped(type_idx)
+        }
+      Struct(_) =>
+        if nullable {
+          @types.ValueType::RefNullStruct(type_idx)
+        } else {
+          @types.ValueType::RefStruct(type_idx)
+        }
+      Array(_) =>
+        if nullable {
+          @types.ValueType::RefNullArray(type_idx)
+        } else {
+          @types.ValueType::RefArray(type_idx)
+        }
     }
   }
 
-  fn resolve_abstract_heap(heap_type : Int, nullable : Bool) -> @types.ValueType {
+  fn resolve_abstract_heap(
+    heap_type : Int,
+    nullable : Bool,
+  ) -> @types.ValueType raise ParserError {
     match heap_type {
-      -16 => if nullable { @types.ValueType::FuncRef } else { @types.ValueType::RefFunc }
-      -17 => if nullable { @types.ValueType::ExternRef } else { @types.ValueType::RefExtern }
-      -18 => if nullable { @types.ValueType::AnyRef } else { @types.ValueType::RefAny }
-      -19 => if nullable { @types.ValueType::RefNullEq } else { @types.ValueType::RefEq }
-      -20 => if nullable { @types.ValueType::RefNullI31 } else { @types.ValueType::RefI31 }
+      -16 =>
+        if nullable {
+          @types.ValueType::FuncRef
+        } else {
+          @types.ValueType::RefFunc
+        }
+      -17 =>
+        if nullable {
+          @types.ValueType::ExternRef
+        } else {
+          @types.ValueType::RefExtern
+        }
+      -18 =>
+        if nullable {
+          @types.ValueType::AnyRef
+        } else {
+          @types.ValueType::RefAny
+        }
+      -19 =>
+        if nullable {
+          @types.ValueType::RefNullEq
+        } else {
+          @types.ValueType::RefEq
+        }
+      -20 =>
+        if nullable {
+          @types.ValueType::RefNullI31
+        } else {
+          @types.ValueType::RefI31
+        }
+      -21 =>
+        if nullable {
+          @types.ValueType::StructRef
+        } else {
+          @types.ValueType::RefStructAbs
+        }
+      -22 =>
+        if nullable {
+          @types.ValueType::ArrayRef
+        } else {
+          @types.ValueType::RefArrayAbs
+        }
       -23 => @types.ValueType::ExnRef
-      -15 => if nullable { @types.ValueType::NullRef } else { @types.ValueType::RefNone }
+      -15 =>
+        if nullable {
+          @types.ValueType::NullRef
+        } else {
+          @types.ValueType::RefNone
+        }
       -14 => @types.ValueType::NullExternRef
       -13 => @types.ValueType::NullFuncRef
       -12 => @types.ValueType::NullExnRef
-      _ => if nullable { @types.ValueType::NullRef } else { @types.ValueType::RefNone }
+      _ => raise ParseError("invalid heap type")
     }
   }
 
@@ -588,6 +643,8 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
     0x6E => AnyRef
     0x6D => RefNullEq
     0x6C => RefNullI31
+    0x6B => StructRef
+    0x6A => ArrayRef
     0x69 => ExnRef
     0x71 => NullRef
     0x72 => NullExternRef
@@ -604,6 +661,18 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
       }
     }
 
+    // ref shared heaptype (shared reference types proposal)
+    0x65 => {
+      self.read_heap_type() |> ignore
+      raise ParseError("shared reference types not supported")
+    }
+
+    // ref null shared heaptype (shared reference types proposal)
+    0x62 => {
+      self.read_heap_type() |> ignore
+      raise ParseError("shared reference types not supported")
+    }
+
     // ref null heaptype
     0x63 => {
       let heap_type = self.read_heap_type()
@@ -613,7 +682,6 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
         resolve_typed_ref(heap_type, true)
       }
     }
-
     _ => raise InvalidValueType(byte)
   }
 }
@@ -638,9 +706,137 @@ fn Parser::read_block_type(self : Parser) -> @types.BlockType raise ParserError 
       self.skip(1)
       Empty
     }
-    0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F | 0x64 | 0x63 =>
-      Value(self.read_value_type())
+    0x7F
+    | 0x7E
+    | 0x7D
+    | 0x7C
+    | 0x7B
+    | 0x70
+    | 0x6F
+    | 0x6E
+    | 0x6D
+    | 0x6C
+    | 0x6B
+    | 0x6A
+    | 0x69
+    | 0x71
+    | 0x72
+    | 0x73
+    | 0x74
+    | 0x64
+    | 0x65
+    | 0x63
+    | 0x62 => Value(self.read_value_type())
     _ => TypeIndex(self.read_i32())
+  }
+}
+
+// ============================================================
+// Recursive Group Type Parsing (WasmGC)
+// ============================================================
+
+///|
+fn Parser::read_field_type(self : Parser) -> @types.FieldType raise ParserError {
+  let storage_type : @types.StorageType = match self.peek_byte() {
+    0x78 => {
+      self.skip(1)
+      @types.StorageType::Packed(@types.PackedType::I8)
+    }
+    0x77 => {
+      self.skip(1)
+      @types.StorageType::Packed(@types.PackedType::I16)
+    }
+    _ => @types.StorageType::Val(self.read_value_type())
+  }
+  let mutability = self.read_byte()
+  if mutability != 0x00 && mutability != 0x01 {
+    raise MalformedMutability(mutability)
+  }
+  { storage_type, mutable: mutability == 0x01 }
+}
+
+///|
+fn Parser::read_struct_type(
+  self : Parser,
+) -> @types.StructType raise ParserError {
+  let fields = self.read_vec(fn() { self.read_field_type() })
+  { fields, }
+}
+
+///|
+fn Parser::read_array_type(self : Parser) -> @types.ArrayType raise ParserError {
+  let element = self.read_field_type()
+  { element, }
+}
+
+///|
+fn Parser::read_composite_type(
+  self : Parser,
+) -> @types.CompositeType raise ParserError {
+  let tag = self.read_byte()
+  match tag {
+    0x60 => {
+      let params = self.read_vec(fn() { self.read_value_type() })
+      let results = self.read_vec(fn() { self.read_value_type() })
+      @types.CompositeType::Func({ params, results })
+    }
+    0x5f => @types.CompositeType::Struct(self.read_struct_type())
+    0x5e => @types.CompositeType::Array(self.read_array_type())
+    _ => raise ParseError("unknown composite type tag: \{tag}")
+  }
+}
+
+///|
+fn Parser::read_subtype(self : Parser) -> @types.SubType raise ParserError {
+  // WasmGC binary subtype encoding:
+  // - 0x50: subtype header with flags + optional supertype
+  // - otherwise: implicit final subtype without supertypes
+  let tag = self.peek_byte()
+  if tag == 0x50 {
+    self.skip(1)
+    let flags = self.read_byte()
+    let final_ = (flags & 0x01) != 0
+    let has_supertype = (flags & 0x02) != 0
+    if (flags & 0xFC) != 0 {
+      raise ParseError("malformed subtype flags")
+    }
+    let supertypes : Array[Int] = if has_supertype {
+      [self.read_u32()]
+    } else {
+      []
+    }
+    let composite = self.read_composite_type()
+    { final_, supertypes, composite }
+  } else {
+    // Implicit final subtype
+    let composite = self.read_composite_type()
+    { final_: true, supertypes: [], composite }
+  }
+}
+
+///|
+/// Read a rec group entry in the type section.
+/// The type section is a vec of rec groups; each entry is either:
+/// - 0x4e <vec subtype>  (explicit rec group)
+/// - subtype             (implicit singleton group)
+fn Parser::read_rec_group(
+  self : Parser,
+) -> Array[@types.SubType] raise ParserError {
+  let tag = self.peek_byte()
+  if tag == 0x4e {
+    self.skip(1)
+    let n = self.read_u32()
+    let defs : Array[@types.SubType] = []
+    for _ in 0..<n {
+      let subtype = self.read_subtype()
+      defs.push(subtype)
+      self.types.push(subtype)
+    }
+    defs
+  } else {
+    let subtype = self.read_subtype()
+    self.types.push(subtype)
+    [subtype]
   }
 }
 
@@ -762,10 +958,15 @@ fn Parser::read_memory_type(
   // Bit 0: has max (0x01)
   // Bit 1: shared (0x02) - only valid with has max
   // Bit 2: memory64 (0x04)
-  // Valid combinations: 0x00, 0x01, 0x03, 0x04, 0x05, 0x07
+  // Bit 3: custom-page-sizes (0x08)
+  // Valid combinations (wasm-tools/wasmparser):
+  // - memory32: 0x00, 0x01, 0x03 and +0x08 variants
+  // - memory64: 0x04, 0x05, 0x07 and +0x08 variants
   let flags = self.read_byte()
   let has_max = (flags & LIMITS_HAS_MAX) != 0
   let is_memory64 = (flags & LIMITS_64_NO_MAX) != 0
+  let has_custom_page_size = (flags & 0x08) != 0
+
   // Validate flags
   let valid_memory_flags : FixedArray[Int] = [
     LIMITS_NO_MAX,
@@ -774,10 +975,17 @@ fn Parser::read_memory_type(
     LIMITS_64_NO_MAX,
     LIMITS_64_HAS_MAX,
     LIMITS_64_SHARED,
+    0x08,
+    0x09,
+    0x0B,
+    0x0C,
+    0x0D,
+    0x0F,
   ]
   if not(valid_memory_flags.contains(flags)) {
     raise MalformedLimitsFlags(flags)
   }
+
   // Read limits - for memory64, use u64; for memory32, use u32
   let min = if is_memory64 {
     self.read_u64()
@@ -789,7 +997,17 @@ fn Parser::read_memory_type(
   } else {
     None
   }
-  { limits: { min, max }, is_memory64 }
+  let page_size_log2 = if has_custom_page_size {
+    // custom-page-sizes proposal encodes a page size log2 after max (or min if no max).
+    let l2 = self.read_u32()
+    if l2 < 0 || l2 > 30 {
+      raise ParseError("invalid memory page size")
+    }
+    l2
+  } else {
+    16
+  }
+  { limits: { min, max }, is_memory64, page_size_log2 }
 }
 
 ///|
@@ -851,29 +1069,10 @@ fn Parser::read_elem_segment(
   let has_reftype = flags == 5 || flags == 6 || flags == 7
   let elem_type : @types.ValueType = if has_reftype {
     // flags 5, 6, 7: has explicit reftype
-    let type_byte = self.read_byte()
-    match type_byte {
-      0x70 => @types.ValueType::FuncRef
-      0x6F => @types.ValueType::ExternRef
-      0x64 => {
-        // Non-null reference type: (ref heaptype)
-        let heap_type = self.read_heap_type()
-        match heap_type {
-          0x70 => @types.ValueType::RefFunc
-          0x6F => @types.ValueType::RefExtern
-          _ => @types.ValueType::RefFunc
-        }
-      }
-      0x63 => {
-        // Nullable reference type: (ref null heaptype)
-        let heap_type = self.read_heap_type()
-        match heap_type {
-          0x70 => @types.ValueType::FuncRef
-          0x6F => @types.ValueType::ExternRef
-          _ => @types.ValueType::FuncRef
-        }
-      }
-      _ => raise MalformedReferenceType(type_byte)
+    let vt = self.read_value_type()
+    match vt {
+      I32 | I64 | F32 | F64 | V128 => raise MalformedReferenceType(0)
+      _ => vt
     }
   } else if has_elemkind {
     // flags 1, 2, 3: has elemkind
@@ -1304,20 +1503,33 @@ fn Parser::read_instruction(
     0xD0 => {
       // ref.null: heaptype immediate (signed LEB)
       let heap_type = self.read_heap_type()
-      // Abstract heap types are encoded as negative values.
-      // Type indices are non-negative.
       if heap_type < 0 {
-        // Map common abstract heap types based on their signed values.
-        // -16 = func, -17 = extern
-        // Other abstract heap types are accepted as a generic null reference.
-        match heap_type {
-          -16 => RefNull(@types.ValueType::FuncRef)
-          -17 => RefNull(@types.ValueType::ExternRef)
-          _ => RefNull(@types.ValueType::NullRef)
+        let nullable_ref_ty = match heap_type {
+          -16 => @types.ValueType::FuncRef
+          -17 => @types.ValueType::ExternRef
+          -18 => @types.ValueType::AnyRef
+          -19 => @types.ValueType::RefNullEq
+          -20 => @types.ValueType::RefNullI31
+          -21 => @types.ValueType::StructRef
+          -22 => @types.ValueType::ArrayRef
+          -23 => @types.ValueType::ExnRef
+          -15 => @types.ValueType::NullRef
+          -14 => @types.ValueType::NullExternRef
+          -13 => @types.ValueType::NullFuncRef
+          -12 => @types.ValueType::NullExnRef
+          _ => raise ParseError("invalid heap type")
         }
+        RefNull(nullable_ref_ty)
       } else {
-        // Typed null reference (ref.null <typeidx>)
-        RefNull(@types.ValueType::NullRef)
+        if heap_type >= self.types.length() {
+          raise ParseError("invalid heap type")
+        }
+        let nullable_ref_ty = match self.types[heap_type].composite {
+          Func(_) => @types.ValueType::RefNullFuncTyped(heap_type)
+          Struct(_) => @types.ValueType::RefNullStruct(heap_type)
+          Array(_) => @types.ValueType::RefNullArray(heap_type)
+        }
+        RefNull(nullable_ref_ty)
       }
     }
     0xD1 => RefIsNull
@@ -1326,6 +1538,9 @@ fn Parser::read_instruction(
       let func_idx = self.read_u32()
       RefFunc(func_idx)
     }
+    0xD4 => RefAsNonNull
+    0xD5 => BrOnNull(self.read_u32())
+    0xD6 => BrOnNonNull(self.read_u32())
     // Saturating truncation instructions (0xFC prefix)
     0xFC => {
       let subopcode = self.read_u32()
@@ -2036,15 +2251,14 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
     match section_id {
       1 => {
         // Type section
-        let count = parser.read_u32()
-        for _ in 0..<count {
-          let type_idx = mod.types.length()
-          let func_type = parser.read_func_type()
-          let subtype = @types.SubType::from_func(func_type)
-          mod.types.push(subtype)
-          parser.types.push(subtype)
-          // Each type is its own rec group (binary rec groups not yet supported)
-          mod.type_rec_groups.push(type_idx)
+        // The binary type section is a vec of rec groups (WasmGC).
+        let group_count = parser.read_u32()
+        for group_id in 0..<group_count {
+          let group = parser.read_rec_group()
+          for subtype in group {
+            mod.types.push(subtype)
+            mod.type_rec_groups.push(group_id)
+          }
         }
       }
       2 => {

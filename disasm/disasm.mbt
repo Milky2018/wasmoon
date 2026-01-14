@@ -280,6 +280,8 @@ fn write_value_type(buf : StringBuilder, vt : @types.ValueType) -> Unit {
     NullExnRef => buf.write_string("nullexnref")
     NullExternRef => buf.write_string("nullexternref")
     // GC types
+    StructRef => buf.write_string("structref")
+    ArrayRef => buf.write_string("arrayref")
     RefStruct(idx) => buf.write_string("(ref \{idx})")
     RefNullStruct(idx) => buf.write_string("(ref null \{idx})")
     RefArray(idx) => buf.write_string("(ref \{idx})")
@@ -289,6 +291,8 @@ fn write_value_type(buf : StringBuilder, vt : @types.ValueType) -> Unit {
     RefNullEq => buf.write_string("eqref")
     RefI31 => buf.write_string("(ref i31)")
     RefNullI31 => buf.write_string("i31ref")
+    RefStructAbs => buf.write_string("(ref struct)")
+    RefArrayAbs => buf.write_string("(ref array)")
     RefNone => buf.write_string("(ref none)")
   }
 }
@@ -735,7 +739,6 @@ fn write_instruction_simple(
       buf.write_string("elem.drop ")
       buf.write_string(idx.to_string())
     }
-
     Atomic(subop, memidx, align, offset) => {
       buf.write_string("atomic.")
       buf.write_string(subop.to_string())

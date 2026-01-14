@@ -802,7 +802,9 @@ test "validator: data segment with i64 offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [],
     start: None,
@@ -829,7 +831,9 @@ test "validator: data segment with ref.null offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [],
     start: None,
@@ -858,7 +862,9 @@ test "validator: data segment with empty offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [],
     start: None,
@@ -885,7 +891,9 @@ test "validator: data segment with non-constant instruction should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [],
     start: None,
@@ -907,7 +915,9 @@ test "validator: data segment with nop offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [],
     start: None,
@@ -929,7 +939,9 @@ test "validator: data segment with unknown global should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [],
     start: None,
@@ -951,7 +963,9 @@ test "validator: data segment with mutable global offset should fail" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [
       {
         type_: { value_type: @types.ValueType::I32, mutable: true },
@@ -978,7 +992,9 @@ test "validator: data segment with valid i32 const offset should pass" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [],
     exports: [],
     start: None,
@@ -1000,7 +1016,9 @@ test "validator: data segment with immutable global offset should pass" {
     imports: [],
     funcs: [],
     tables: [],
-    memories: [{ limits: { min: 1, max: None }, is_memory64: false }],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
     globals: [
       {
         type_: { value_type: @types.ValueType::I32, mutable: false },
@@ -1705,6 +1723,7 @@ fn module_with_memory(
   let mem_type : @types.MemoryType = {
     limits: { min: 1L, max: None },
     is_memory64,
+    page_size_log2: 16,
   }
   {
     types: [@types.SubType::from_func(func_type)],

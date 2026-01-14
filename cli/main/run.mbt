@@ -147,7 +147,7 @@ fn convert_jit_results(
           ExnRef(raw.to_int())
         }
       }
-      RefStruct(_) | RefNullStruct(_) => {
+      RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs => {
         let raw = results[slot_idx]
         slot_idx += 1
         if raw == 0L {
@@ -156,7 +156,7 @@ fn convert_jit_results(
           StructRef((raw >> 1).to_int())
         }
       }
-      RefArray(_) | RefNullArray(_) => {
+      RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs => {
         let raw = results[slot_idx]
         slot_idx += 1
         if raw == 0L {
@@ -1102,14 +1102,23 @@ fn init_jit_memories(
   // Allocate and copy each memory
   for i, mem_addr in instance.mem_addrs {
     let mem = store.get_mem(mem_addr) catch { _ => return false }
-    let pages = mem.size_pages()
-    let size = pages.to_int64() * 65536L
+    let size = mem.byte_len()
     let (_, max) = mem.get_limits()
+    fn bytes_to_64k_pages(bytes : Int64) -> Int {
+      ((bytes + 65535L) / 65536L).to_int()
+    }
+
+    let cur_pages_64k = bytes_to_64k_pages(size)
+    let max_pages_64k = max.map(fn(m) {
+      let max_bytes = m.to_int64() * mem.page_size_bytes()
+      bytes_to_64k_pages(max_bytes)
+    })
+
     // Allocate JIT memory - use guarded memory for memory 0 (memory32 only)
     let mem_ptr = if i == 0 && not(mem.is_memory64()) {
       // Use guarded memory allocation with mmap + guard pages.
       // This enables bounds check elimination in JIT code for memory32.
-      jm.alloc_guarded_memory(pages, max)
+      jm.alloc_guarded_memory(cur_pages_64k, max_pages_64k)
     } else {
       // Regular allocation for memory64 and non-zero memories.
       @jit.alloc_memory(size)
@@ -1119,7 +1128,7 @@ fn init_jit_memories(
     }
     // Copy interpreter memory data to JIT memory
     copy_interp_memory_to_jit_indexed(store, mem_addr, mem_ptr)
-    memories.push(@jit.MemoryInfo::new(mem_ptr, size, max))
+    memories.push(@jit.MemoryInfo::new(mem_ptr, size, max_pages_64k))
   }
   // Set up multi-memory in JIT context
   jm.set_memory_pointers(memories)

@@ -909,17 +909,19 @@ fn convert_jit_result(
             @types.Value::StructRef(heap_idx)
         }
       }
-    RefStruct(_) | RefNullStruct(_) =>
+    StructRef | RefStructAbs | RefStruct(_) | RefNullStruct(_) =>
       if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::StructRef((v >> 1).to_int())
+        let gc_ref = (v >> 1).to_int()
+        @types.Value::StructRef(gc_ref - 1)
       }
-    RefArray(_) | RefNullArray(_) =>
+    ArrayRef | RefArrayAbs | RefArray(_) | RefNullArray(_) =>
       if v == NULL_REF {
         @types.Value::Null
       } else {
-        @types.Value::ArrayRef((v >> 1).to_int())
+        let gc_ref = (v >> 1).to_int()
+        @types.Value::ArrayRef(gc_ref - 1)
       }
     RefI31 | RefNullI31 =>
       if v == NULL_REF {
