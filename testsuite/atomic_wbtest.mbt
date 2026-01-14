@@ -43,12 +43,12 @@ test "atomics: i32.atomic.store + i32.atomic.load (interp & jit)" {
      0x41, 0x00,
     // i32.const 42
      0x41, 0x2a,
-    // i32.atomic.store (0xFE 0x0B) memarg(flags=2, offset=0)
-     0xfe, 0x0b, 0x02, 0x00,
+    // i32.atomic.store (0xFE 0x17) memarg(flags=2, offset=0)
+     0xfe, 0x17, 0x02, 0x00,
     // i32.const 0
      0x41, 0x00,
-    // i32.atomic.load (0xFE 0x04) memarg(flags=2, offset=0)
-     0xfe, 0x04, 0x02, 0x00,
+    // i32.atomic.load (0xFE 0x10) memarg(flags=2, offset=0)
+     0xfe, 0x10, 0x02, 0x00,
     // end
      0x0b,
   ]
@@ -98,13 +98,13 @@ test "atomics: i32.atomic.rmw.add returns old value (interp & jit)" {
     // i32.const 7
      0x41, 0x07,
     // i32.atomic.store
-     0xfe, 0x0b, 0x02, 0x00,
+     0xfe, 0x17, 0x02, 0x00,
     // i32.const 0
      0x41, 0x00,
     // i32.const 5
      0x41, 0x05,
     // i32.atomic.rmw.add
-     0xfe, 0x12, 0x02, 0x00, 0x0b,
+     0xfe, 0x1e, 0x02, 0x00, 0x0b,
   ]
   let mod_ = @parser.parse_module(Bytes::from_array(bytes))
   @validator.validate_module(mod_)
@@ -152,7 +152,7 @@ test "atomics: i32.atomic.rmw.cmpxchg updates memory (interp & jit)" {
     // i32.const 9
      0x41, 0x09,
     // i32.atomic.store
-     0xfe, 0x0b, 0x02, 0x00,
+     0xfe, 0x17, 0x02, 0x00,
     // i32.const 0
      0x41, 0x00,
     // i32.const 9
@@ -160,13 +160,13 @@ test "atomics: i32.atomic.rmw.cmpxchg updates memory (interp & jit)" {
     // i32.const 11
      0x41, 0x0b,
     // i32.atomic.rmw.cmpxchg
-     0xfe, 0x3c, 0x02, 0x00,
+     0xfe, 0x48, 0x02, 0x00,
     // drop old value
      0x1a,
     // i32.const 0
      0x41, 0x00,
     // i32.atomic.load
-     0xfe, 0x04, 0x02, 0x00, 0x0b,
+     0xfe, 0x10, 0x02, 0x00, 0x0b,
   ]
   let mod_ = @parser.parse_module(Bytes::from_array(bytes))
   @validator.validate_module(mod_)

@@ -2051,7 +2051,15 @@ fn validate_instr(
         }
       }
 
-      match subop {
+      // Reject the legacy/reserved encoding range [4, 0x10).
+      // In the standard encoding, atomics (except notify/wait/fence) start at 0x10.
+      if subop >= 4 && subop < 0x10 {
+        raise TypeMismatch("unsupported atomic subopcode \{subop}")
+      }
+
+      // Normalize subopcode encoding: in the standard encoding most ops start at 0x10.
+      let op = if subop >= 0x10 { subop - 12 } else { subop }
+      match op {
         0 => {
           check_align(2, "memory.atomic.notify")
           stack.pop(@types.ValueType::I32) // count
@@ -2075,18 +2083,18 @@ fn validate_instr(
         3 => () // atomic.fence
         4 | 6 | 7 => {
           // i32.atomic.load / load8_u / load16_u
-          let natural = if subop == 4 { 2 } else if subop == 6 { 0 } else { 1 }
+          let natural = if op == 4 { 2 } else if op == 6 { 0 } else { 1 }
           check_align(natural, "i32.atomic.load")
           stack.pop(addr_type)
           stack.push(@types.ValueType::I32)
         }
         5 | 8 | 9 | 10 => {
           // i64.atomic.load / load8_u / load16_u / load32_u
-          let natural = if subop == 5 {
+          let natural = if op == 5 {
             3
-          } else if subop == 8 {
+          } else if op == 8 {
             0
-          } else if subop == 9 {
+          } else if op == 9 {
             1
           } else {
             2
@@ -2097,24 +2105,18 @@ fn validate_instr(
         }
         11 | 13 | 14 => {
           // i32.atomic.store / store8 / store16
-          let natural = if subop == 11 {
-            2
-          } else if subop == 13 {
-            0
-          } else {
-            1
-          }
+          let natural = if op == 11 { 2 } else if op == 13 { 0 } else { 1 }
           check_align(natural, "i32.atomic.store")
           stack.pop(@types.ValueType::I32)
           stack.pop(addr_type)
         }
         12 | 15 | 16 | 17 => {
           // i64.atomic.store / store8 / store16 / store32
-          let natural = if subop == 12 {
+          let natural = if op == 12 {
             3
-          } else if subop == 15 {
+          } else if op == 15 {
             0
-          } else if subop == 16 {
+          } else if op == 16 {
             1
           } else {
             2
@@ -2144,19 +2146,19 @@ fn validate_instr(
         | 55
         | 56 => {
           // i32 variants (32/8/16)
-          let natural = if subop == 18 ||
-            subop == 25 ||
-            subop == 32 ||
-            subop == 39 ||
-            subop == 46 ||
-            subop == 53 {
+          let natural = if op == 18 ||
+            op == 25 ||
+            op == 32 ||
+            op == 39 ||
+            op == 46 ||
+            op == 53 {
             2
-          } else if subop == 20 ||
-            subop == 27 ||
-            subop == 34 ||
-            subop == 41 ||
-            subop == 48 ||
-            subop == 55 {
+          } else if op == 20 ||
+            op == 27 ||
+            op == 34 ||
+            op == 41 ||
+            op == 48 ||
+            op == 55 {
             0
           } else {
             1
@@ -2191,26 +2193,26 @@ fn validate_instr(
         | 58
         | 59 => {
           // i64 variants (64/8/16/32)
-          let natural = if subop == 19 ||
-            subop == 26 ||
-            subop == 33 ||
-            subop == 40 ||
-            subop == 47 ||
-            subop == 54 {
+          let natural = if op == 19 ||
+            op == 26 ||
+            op == 33 ||
+            op == 40 ||
+            op == 47 ||
+            op == 54 {
             3
-          } else if subop == 22 ||
-            subop == 29 ||
-            subop == 36 ||
-            subop == 43 ||
-            subop == 50 ||
-            subop == 57 {
+          } else if op == 22 ||
+            op == 29 ||
+            op == 36 ||
+            op == 43 ||
+            op == 50 ||
+            op == 57 {
             0
-          } else if subop == 23 ||
-            subop == 30 ||
-            subop == 37 ||
-            subop == 44 ||
-            subop == 51 ||
-            subop == 58 {
+          } else if op == 23 ||
+            op == 30 ||
+            op == 37 ||
+            op == 44 ||
+            op == 51 ||
+            op == 58 {
             1
           } else {
             2
@@ -2224,13 +2226,7 @@ fn validate_instr(
         // cmpxchg
         60 | 62 | 63 => {
           // i32 cmpxchg + 8/16
-          let natural = if subop == 60 {
-            2
-          } else if subop == 62 {
-            0
-          } else {
-            1
-          }
+          let natural = if op == 60 { 2 } else if op == 62 { 0 } else { 1 }
           check_align(natural, "i32.atomic.rmw.cmpxchg")
           stack.pop(@types.ValueType::I32) // replacement
           stack.pop(@types.ValueType::I32) // expected
@@ -2239,11 +2235,11 @@ fn validate_instr(
         }
         61 | 64 | 65 | 66 => {
           // i64 cmpxchg + 8/16/32
-          let natural = if subop == 61 {
+          let natural = if op == 61 {
             3
-          } else if subop == 64 {
+          } else if op == 64 {
             0
-          } else if subop == 65 {
+          } else if op == 65 {
             1
           } else {
             2

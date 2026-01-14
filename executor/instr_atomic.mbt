@@ -80,7 +80,7 @@ fn ExecContext::exec_atomic(
 
   // NOTE: wasm-tools/wasmparser encodes most atomic subopcodes starting at 0x10.
   // The interpreter's atomic table is indexed starting at 0x04, so shift accordingly.
-  let op = if subopcode >= 4 { subopcode - 12 } else { subopcode }
+  let op = if subopcode >= 0x10 { subopcode - 12 } else { subopcode }
   match op {
     // memory.atomic.notify
     0 => {
