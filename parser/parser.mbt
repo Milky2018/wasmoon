@@ -1714,11 +1714,11 @@ fn Parser::parse_gc_instruction(
       let to_t = self.read_value_type()
       BrOnCastFail(label, from_t, to_t)
     }
-    26 => RefI31
-    27 => I31GetS
-    28 => I31GetU
-    29 => AnyConvertExtern
-    30 => ExternConvertAny
+    26 => AnyConvertExtern
+    27 => ExternConvertAny
+    28 => RefI31
+    29 => I31GetS
+    30 => I31GetU
     _ => raise UnknownOpcode(0xFB00 + subopcode)
   }
 }

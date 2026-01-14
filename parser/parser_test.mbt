@@ -173,3 +173,62 @@ test "binary parse multi-table with mixed 32/64" {
   inspect(m.tables[1].type_.is_table64, content="true")
   inspect(m.tables[1].type_.limits.min, content="2")
 }
+
+///|
+test "binary parse gc: ref.i31 opcode" {
+  // (func (export "run") (result i32)
+  //   i32.const 0
+  //   ref.i31
+  //   drop
+  //   i32.const 7
+  // )
+  let type_section : FixedArray[Int] = [
+    0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f,
+  ]
+  let func_section : FixedArray[Int] = [0x03, 0x02, 0x01, 0x00]
+  let export_section : FixedArray[Int] = [
+    0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
+  ]
+  let code_section : FixedArray[Int] = [
+    0x0a, 0x0b, 0x01, 0x09, 0x00, 0x41, 0x00, 0xfb, 0x1c, 0x1a, 0x41, 0x07, 0x0b,
+  ]
+  guard parse_wasm([type_section, func_section, export_section, code_section])
+    is Some(m) else {
+    return
+  }
+  let body = m.codes[0].body
+  let ok = match body {
+    [I32Const(0), RefI31, Drop, I32Const(7)] => true
+    _ => false
+  }
+  inspect(ok, content="true")
+}
+
+///|
+test "binary parse gc: i31.get_u opcode" {
+  // (func (export "run") (result i32)
+  //   i32.const 5
+  //   ref.i31
+  //   i31.get_u
+  // )
+  let type_section : FixedArray[Int] = [
+    0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f,
+  ]
+  let func_section : FixedArray[Int] = [0x03, 0x02, 0x01, 0x00]
+  let export_section : FixedArray[Int] = [
+    0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
+  ]
+  let code_section : FixedArray[Int] = [
+    0x0a, 0x0a, 0x01, 0x08, 0x00, 0x41, 0x05, 0xfb, 0x1c, 0xfb, 0x1e, 0x0b,
+  ]
+  guard parse_wasm([type_section, func_section, export_section, code_section])
+    is Some(m) else {
+    return
+  }
+  let body = m.codes[0].body
+  let ok = match body {
+    [I32Const(5), RefI31, I31GetU] => true
+    _ => false
+  }
+  inspect(ok, content="true")
+}
