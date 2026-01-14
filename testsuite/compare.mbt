@@ -198,13 +198,17 @@ pub fn value_to_jit_arg_typed(
     // Reference types
     FuncRef(idx) =>
       match ty {
-        FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-          -(idx.to_int64() + 1L)
+        FuncRef
+        | RefFunc
+        | RefFuncTyped(_)
+        | RefNullFuncTyped(_)
+        | NullFuncRef => -(idx.to_int64() + 1L)
         _ => idx.to_int64()
       }
     ExternRef(idx) =>
       match ty {
-        ExternRef | RefExtern | NullExternRef => @types.EXTERNREF_TAG | (idx.to_int64() << 1)
+        ExternRef | RefExtern | NullExternRef =>
+          @types.EXTERNREF_TAG | (idx.to_int64() << 1)
         _ => idx.to_int64()
       }
     ExnRef(idx) => idx.to_int64()
