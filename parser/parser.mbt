@@ -154,12 +154,6 @@ pub fn Parser::new(data : Bytes) -> Parser {
 }
 
 ///|
-/// Generic error with position info
-fn[A] Parser::error(self : Parser, msg : String) -> A raise ParserError {
-  raise ParseError("\{msg} at position \{self.pos}")
-}
-
-///|
 /// Check if at end of input
 fn Parser::is_eof(self : Parser) -> Bool {
   self.pos >= self.data.length()
@@ -860,17 +854,6 @@ fn[T] Parser::read_vec(
         continue (acc, i + 1)
       }
   }
-}
-
-///|
-fn Parser::read_func_type(self : Parser) -> @types.FuncType raise ParserError {
-  let tag = self.read_byte()
-  if tag != 0x60 {
-    self.error("expected function type tag 0x60, got \{tag}")
-  }
-  let params = self.read_vec(fn() { self.read_value_type() })
-  let results = self.read_vec(fn() { self.read_value_type() })
-  { params, results }
 }
 
 // ============================================================

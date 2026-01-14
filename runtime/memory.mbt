@@ -282,7 +282,7 @@ pub fn Memory::load_i64_16s(
   let b1 = self.load_byte_unchecked(addr + 1).to_int64()
   let value = b0 | (b1 << 8)
   if value >= 32768L {
-    value - 65536L
+    value - PAGE_SIZE_BYTES
   } else {
     value
   }
