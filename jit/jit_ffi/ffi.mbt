@@ -79,6 +79,16 @@ pub extern "c" fn c_jit_memory_init(
 ) -> Int = "wasmoon_jit_memory_init"
 
 ///|
+/// Copy data from linear memory at offset into `out`
+#borrow(out)
+pub extern "c" fn c_jit_memory_read(
+  mem_ptr : Int64,
+  offset : Int64,
+  out : FixedArray[Byte],
+  size : Int,
+) -> Int = "wasmoon_jit_memory_read"
+
+///|
 /// Set memory in the context
 pub extern "c" fn c_jit_ctx_set_memory(
   ctx_ptr : Int64,

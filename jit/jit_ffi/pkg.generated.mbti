@@ -384,6 +384,8 @@ pub fn c_jit_memory_fill(Int, Int, Int) -> Unit
 
 pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 
+pub fn c_jit_memory_read(Int64, Int64, FixedArray[Byte], Int) -> Int
+
 pub fn c_jit_read_i64(Int64) -> Int64
 
 pub fn c_jit_set_wasi_arg(Int64, Int, FixedArray[Byte]) -> Unit

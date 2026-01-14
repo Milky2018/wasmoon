@@ -740,6 +740,13 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_memory_init(int64_t mem_ptr, int64_t offset, 
     return 0;
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_jit_memory_read(int64_t mem_ptr, int64_t offset, moonbit_bytes_t out, int size) {
+    if (!mem_ptr || !out || size <= 0) return -1;
+    uint8_t *mem = (uint8_t *)mem_ptr;
+    memcpy(out, mem + offset, (size_t)size);
+    return 0;
+}
+
 // ============ Executable Memory FFI Exports ============
 
 static void finalize_exec_code(void *self) {

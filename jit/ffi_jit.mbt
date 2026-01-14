@@ -437,6 +437,24 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
   @jit_ffi.c_jit_memory_init(mem_ptr, offset, bytes, size) == 0
 }
 
+///|
+/// Read `size` bytes from linear memory at offset
+pub fn memory_read(mem_ptr : Int64, offset : Int64, size : Int) -> Bytes {
+  if mem_ptr == 0L || size <= 0 {
+    return b""
+  }
+  let out = FixedArray::make(size, b'\x00')
+  let rc = @jit_ffi.c_jit_memory_read(mem_ptr, offset, out, size)
+  if rc != 0 {
+    return b""
+  }
+  let arr : Array[Byte] = Array::make(size, b'\x00')
+  for i in 0..<size {
+    arr[i] = out[i]
+  }
+  Bytes::from_array(arr)
+}
+
 // NOTE: No free() method needed - GC handles cleanup automatically!
 
 // ============ Shared JIT Indirect Table ============

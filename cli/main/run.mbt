@@ -428,7 +428,10 @@ fn run_wasm(
     // Call the function
     // Check if JIT can handle all imports
     let can_use_jit = if use_jit {
-      check_jit_import_support(mod_, debug)
+      check_jit_import_support(mod_, debug) &&
+      not(@wast.has_cross_module_imports(mod_)) &&
+      not(@wast.exports_shared_resources(mod_)) &&
+      not(@wast.has_unsupported_instructions(mod_))
     } else {
       false
     }
@@ -876,9 +879,12 @@ fn run_with_jit(
           // Initialize WASI context with args, env, and preopens
           jm.init_wasi(wasi_args, wasi_envs, wasi_preopens)
           // Initialize all memories (multi-memory support)
-          if not(init_jit_memories(instance, store, jm)) {
-            @logger.error("Failed to initialize JIT memories")
-            return exit_failure()
+          let jit_memories = match init_jit_memories(instance, store, jm) {
+            Some(memories) => memories
+            None => {
+              @logger.error("Failed to initialize JIT memories")
+              return exit_failure()
+            }
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
@@ -887,6 +893,13 @@ fn run_with_jit(
           }
           // Initialize tables for call_indirect and table operations
           init_jit_tables(instance, store, jm)
+          let jit_ctx = @wast.JITModuleContext::new(
+            jm,
+            globals_ptr,
+            instance.global_addrs,
+            instance.func_addrs,
+          )
+
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {
@@ -910,6 +923,9 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   @jit.gc_teardown()
+                  // Sync state back to interpreter store even on trap.
+                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  sync_jit_memories_to_store(instance, store, jit_memories)
                   // Capture and display backtrace if DWARF is enabled
                   match dwarf_builder {
                     Some(dwarf) => {
@@ -936,6 +952,9 @@ fn run_with_jit(
               }
               // Tear down GC context after JIT call
               @jit.gc_teardown()
+              // Sync JIT state back to interpreter store for consistency.
+              @wast.sync_jit_globals_to_store(jit_ctx, store)
+              sync_jit_memories_to_store(instance, store, jit_memories)
               // Convert Int64 results to Value using shared helper
               let values = convert_jit_results(results, f.result_types)
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)
@@ -1091,19 +1110,19 @@ fn copy_interp_memory_to_jit_indexed(
 ///|
 /// Initialize all JIT memories from interpreter memories (multi-memory support)
 /// Uses guarded memory allocation for memory 0 to enable bounds check elimination
-/// Returns true on success, false on failure
+/// Returns the allocated MemoryInfo list on success
 fn init_jit_memories(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   jm : @jit.JITModule,
-) -> Bool {
+) -> Array[@jit.MemoryInfo]? {
   if instance.mem_addrs.is_empty() {
-    return true // No memories to initialize
+    return Some([]) // No memories to initialize
   }
   let memories : Array[@jit.MemoryInfo] = []
   // Allocate and copy each memory
   for i, mem_addr in instance.mem_addrs {
-    let mem = store.get_mem(mem_addr) catch { _ => return false }
+    let mem = store.get_mem(mem_addr) catch { _ => return None }
     let size = mem.byte_len()
     let (_, max) = mem.get_limits()
     fn bytes_to_64k_pages(bytes : Int64) -> Int {
@@ -1126,7 +1145,7 @@ fn init_jit_memories(
       @jit.alloc_memory(size)
     }
     if mem_ptr == 0L && size > 0L {
-      return false // Allocation failed
+      return None // Allocation failed
     }
     // Copy interpreter memory data to JIT memory
     copy_interp_memory_to_jit_indexed(store, mem_addr, mem_ptr)
@@ -1138,7 +1157,73 @@ fn init_jit_memories(
   if memories.length() > 0 {
     jm.set_memory(memories[0].ptr, memories[0].size)
   }
+  Some(memories)
+}
+
+///|
+fn is_all_zero(data : Bytes) -> Bool {
+  for i in 0..<data.length() {
+    if data[i] != b'\x00' {
+      return false
+    }
+  }
   true
+}
+
+///|
+fn sync_jit_memories_to_store(
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+  jit_memories : Array[@jit.MemoryInfo],
+) -> Unit {
+  // Sync each memory by replacing the interpreter Memory with a freshly
+  // reconstructed sparse Memory from the JIT's linear memory snapshot.
+  for i, mem_addr in instance.mem_addrs {
+    if i >= jit_memories.length() {
+      break
+    }
+    let old_mem = store.get_mem(mem_addr) catch { _ => continue }
+    let (cur_pages, max_pages) = old_mem.get_limits()
+
+    // Recreate with identical configuration.
+    let page_size_bytes = old_mem.page_size_bytes()
+    let mut l2 = 0
+    let mut v = 1L
+    while v < page_size_bytes {
+      v = v << 1
+      l2 = l2 + 1
+    }
+    let new_mem = @runtime.Memory::new(
+      cur_pages,
+      max_pages,
+      is_memory64=old_mem.is_memory64(),
+      page_size_log2=l2,
+    )
+    let mem_ptr = jit_memories[i].ptr
+    let total_bytes = old_mem.byte_len()
+
+    // Copy in 64KiB physical chunks (same as interpreter sparse storage).
+    let mut off = 0L
+    while off < total_bytes {
+      let remaining = total_bytes - off
+      let chunk_len = if remaining >= 65536L {
+        65536
+      } else {
+        remaining.to_int()
+      }
+      let chunk = @jit.memory_read(mem_ptr, off, chunk_len)
+      if chunk.length() == chunk_len && !is_all_zero(chunk) {
+        // Best-effort: ignore errors for out-of-bounds.
+        try new_mem.init_data(off.to_int(), chunk) |> ignore catch {
+          _ => ()
+        }
+      }
+      off = off + chunk_len.to_int64()
+    }
+
+    // Replace memory in the store so subsequent interpreter operations see it.
+    store.mems[mem_addr] = new_mem
+  }
 }
 
 ///|

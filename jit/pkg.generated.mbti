@@ -204,6 +204,8 @@ pub fn is_null_ref(Int64) -> Bool
 
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
+pub fn memory_read(Int64, Int64, Int) -> Bytes
+
 pub fn setup_data_segments(Array[@types.Data]) -> Unit
 
 pub fn setup_elem_segments(Array[Array[Int64]]) -> Unit
