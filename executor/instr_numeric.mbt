@@ -230,6 +230,34 @@ fn ExecContext::exec_i32_numeric(
 }
 
 ///|
+fn mulhi_u64(x : UInt64, y : UInt64) -> UInt64 {
+  let x_lo = x & 0xFFFFFFFFUL
+  let x_hi = x >> 32
+  let y_lo = y & 0xFFFFFFFFUL
+  let y_hi = y >> 32
+  let lo_lo = x_lo * y_lo
+  let lo_hi = x_lo * y_hi
+  let hi_lo = x_hi * y_lo
+  let hi_hi = x_hi * y_hi
+  let mid = (lo_lo >> 32) + (lo_hi & 0xFFFFFFFFUL) + (hi_lo & 0xFFFFFFFFUL)
+  hi_hi + (lo_hi >> 32) + (hi_lo >> 32) + (mid >> 32)
+}
+
+///|
+fn mulhi_s64(x : Int64, y : Int64) -> Int64 {
+  let xu = x.reinterpret_as_uint64()
+  let yu = y.reinterpret_as_uint64()
+  let mut result = mulhi_u64(xu, yu).reinterpret_as_int64()
+  if x < 0L {
+    result = result - y
+  }
+  if y < 0L {
+    result = result - x
+  }
+  result
+}
+
+///|
 /// Execute i64 numeric instruction
 fn ExecContext::exec_i64_numeric(
   self : ExecContext,
@@ -251,6 +279,22 @@ fn ExecContext::exec_i64_numeric(
       let b = self.stack.pop_i64()
       let a = self.stack.pop_i64()
       self.stack.push(I64(a * b))
+    }
+    I64MulWideU => {
+      let b = self.stack.pop_i64()
+      let a = self.stack.pop_i64()
+      let lo = a * b
+      let hi = mulhi_u64(a.reinterpret_as_uint64(), b.reinterpret_as_uint64()).reinterpret_as_int64()
+      self.stack.push(I64(lo))
+      self.stack.push(I64(hi))
+    }
+    I64MulWideS => {
+      let b = self.stack.pop_i64()
+      let a = self.stack.pop_i64()
+      let lo = a * b
+      let hi = mulhi_s64(a, b)
+      self.stack.push(I64(lo))
+      self.stack.push(I64(hi))
     }
     I64DivS => {
       let b = self.stack.pop_i64()

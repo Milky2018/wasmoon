@@ -846,6 +846,8 @@ fn Parser::parse_plain_instruction(
     "i64.add" => @types.Instruction::I64Add
     "i64.sub" => @types.Instruction::I64Sub
     "i64.mul" => @types.Instruction::I64Mul
+    "i64.mul_wide_s" => @types.Instruction::I64MulWideS
+    "i64.mul_wide_u" => @types.Instruction::I64MulWideU
     "i64.div_s" => @types.Instruction::I64DivS
     "i64.div_u" => @types.Instruction::I64DivU
     "i64.rem_s" => @types.Instruction::I64RemS

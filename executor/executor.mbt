@@ -257,7 +257,8 @@ fn ExecContext::exec_instr(
     Drop => self.stack.pop() |> ignore
 
     // Reference type instructions
-    RefNull(ref_type) =>
+    RefNull(ref_type) => {
+      @logger.debug("exec ref.null: \{ref_type}")
       match ref_type {
         FuncRef
         | ExternRef
@@ -276,12 +277,15 @@ fn ExecContext::exec_instr(
         | RefEq
         | RefNullI31
         | RefI31
+        | StructRef
+        | ArrayRef
         | RefNullStruct(_)
         | RefStruct(_)
         | RefNullArray(_)
         | RefArray(_) => self.stack.push(Null)
         _ => raise @runtime.RuntimeError::TypeMismatch
       }
+    }
     RefIsNull => {
       let value = self.stack.pop()
       match value {
@@ -308,6 +312,9 @@ fn ExecContext::exec_instr(
       let v1 = self.stack.pop()
       let equal = match (v1, v2) {
         (Null, Null) => true
+        (FuncRef(a), FuncRef(b)) => a == b
+        (ExternRef(a), ExternRef(b)) => a == b
+        (ExnRef(a), ExnRef(b)) => a == b
         (I31(a), I31(b)) => a == b
         (StructRef(a), StructRef(b)) => a == b
         (ArrayRef(a), ArrayRef(b)) => a == b
@@ -356,6 +363,8 @@ fn ExecContext::exec_instr(
     I64Add
     | I64Sub
     | I64Mul
+    | I64MulWideS
+    | I64MulWideU
     | I64DivS
     | I64DivU
     | I64RemS

@@ -841,6 +841,8 @@ fn write_instruction_simple(
     I64Add => buf.write_string("i64.add")
     I64Sub => buf.write_string("i64.sub")
     I64Mul => buf.write_string("i64.mul")
+    I64MulWideS => buf.write_string("i64.mul_wide_s")
+    I64MulWideU => buf.write_string("i64.mul_wide_u")
     I64DivS => buf.write_string("i64.div_s")
     I64DivU => buf.write_string("i64.div_u")
     I64RemS => buf.write_string("i64.rem_s")

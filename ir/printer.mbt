@@ -77,6 +77,8 @@ fn format_opcode(
     Iadd => "iadd \{ops}"
     Isub => "isub \{ops}"
     Imul => "imul \{ops}"
+    Umulh => "umulh \{ops}"
+    Smulh => "smulh \{ops}"
     Sdiv => "sdiv \{ops}"
     Udiv => "udiv \{ops}"
     Srem => "srem \{ops}"

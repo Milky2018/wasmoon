@@ -702,6 +702,24 @@ fn lower_imul(
 }
 
 ///|
+fn lower_umulh(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  lower_binary_int(ctx, inst, block, Umulh)
+}
+
+///|
+fn lower_smulh(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  lower_binary_int(ctx, inst, block, Smulh)
+}
+
+///|
 /// Lower integer sub with pattern matching for MSUB, MNEG, and shifted operands
 /// Patterns:
 /// - sub(x, mul(y, z)) -> MSUB: x - y * z

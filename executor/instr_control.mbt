@@ -198,7 +198,13 @@ fn ExecContext::exec_block(
   instrs : Array[@types.Instruction],
 ) -> Unit raise {
   for instr in instrs {
-    self.exec_instr(instr)
+    self.exec_instr(instr) catch {
+      @runtime.TypeMismatch => {
+        @logger.debug("type mismatch at instr: \{instr}")
+        raise @runtime.TypeMismatch
+      }
+      e => raise e
+    }
   }
 }
 
