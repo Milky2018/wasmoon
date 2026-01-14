@@ -292,27 +292,31 @@ pub fn translate_function(
 }
 
 ///|
-/// Convert a local value to i64 bits for exception spilling
-/// i32: zero-extend to i64
-/// i64: as-is
-/// f32: bitcast to i32, zero-extend to i64
-/// f64: bitcast to i64
-/// ref: already i64 in IR
-fn Translator::local_to_i64_bits(self : Translator, loc_val : Value) -> Value {
+/// Convert a local value to i64 words for exception spilling.
+///
+/// Most locals spill as a single i64 word, but v128 spills as two i64 lanes.
+fn Translator::local_to_spill_words(
+  self : Translator,
+  loc_val : Value,
+) -> Array[Value] {
   match loc_val.ty {
-    I32 => self.builder.uextend(I64, loc_val)
-    I64 | FuncRef | ExternRef => loc_val // refs are already i64
+    I32 => [self.builder.uextend(I64, loc_val)]
+    I64 | FuncRef | ExternRef => [loc_val] // refs are already word-sized
     F32 => {
       let bits32 = self.builder.bitcast(I32, loc_val)
-      self.builder.uextend(I64, bits32)
+      [self.builder.uextend(I64, bits32)]
     }
-    F64 => self.builder.bitcast(I64, loc_val)
-    V128 => abort("V128 locals not supported in exception handling spill")
+    F64 => [self.builder.bitcast(I64, loc_val)]
+    V128 =>
+      [
+        self.builder.v128_extract64(loc_val, 0),
+        self.builder.v128_extract64(loc_val, 1),
+      ]
   }
 }
 
 ///|
-/// Convert i64 bits back to the original local type
+/// Convert i64 bits back to the original local type (non-v128).
 fn Translator::i64_bits_to_local(
   self : Translator,
   bits : Value,
@@ -326,20 +330,35 @@ fn Translator::i64_bits_to_local(
       self.builder.bitcast(F32, bits32)
     }
     F64 => self.builder.bitcast(F64, bits)
-    V128 => abort("V128 locals not supported in exception handling restore")
+    V128 => abort("internal error: use v128 spill restore path")
   }
 }
 
 ///|
-/// Spill all locals before instructions that might throw
-/// Called when try_table_depth > 0 and before Call/CallIndirect/CallRef/Throw/ThrowRef
+/// Restore a v128 local from two i64 spill words.
+fn Translator::spill_words_to_v128(
+  self : Translator,
+  lo : Value,
+  hi : Value,
+) -> Value {
+  let zero = self.builder.iconst(Type::I64, 0L)
+  let v0 = self.builder.v128_splat64(zero)
+  let v1 = self.builder.v128_replace64(v0, lo, 0)
+  self.builder.v128_replace64(v1, hi, 1)
+}
+
+///|
+/// Spill all locals before instructions that might throw.
+/// Called when try_table_depth > 0 and before Call/CallIndirect/CallRef/Throw/ThrowRef.
 fn Translator::spill_locals_if_in_try(self : Translator) -> Unit {
   if self.try_table_depth > 0 {
-    let locals_bits : Array[Value] = []
+    let locals_words : Array[Value] = []
     for loc in self.locals {
-      locals_bits.push(self.local_to_i64_bits(loc))
+      for w in self.local_to_spill_words(loc) {
+        locals_words.push(w)
+      }
     }
-    self.builder.spill_locals_for_throw(locals_bits)
+    self.builder.spill_locals_for_throw(locals_words)
   }
 }
 
@@ -586,7 +605,12 @@ pub fn Translator::translate(
         I64 => self.builder.iconst_i64(0L)
         F32 => self.builder.fconst_f32(0.0)
         F64 => self.builder.fconst_f64(0.0)
-        _ => self.builder.iconst_i32(0) // Fallback
+        FuncRef | ExternRef =>
+          self.builder.iconst(loc.ty, @types.FUNCREF_NULL_SENTINEL)
+        V128 => {
+          let z = self.builder.iconst(Type::I64, 0L)
+          self.builder.v128_splat64(z)
+        }
       }
       self.locals[i] = zero_val
     }
@@ -2061,12 +2085,12 @@ fn Translator::translate_call_indirect(
 fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
-    // Pop the function reference (which is a function index stored as I64)
+    // Pop the function reference
     let func_ref = self.pop()
 
     // Null check: if func_ref == FUNCREF_NULL_SENTINEL, trap
     let null_sentinel = self.builder.iconst(
-      Type::I64,
+      func_ref.ty,
       @types.FUNCREF_NULL_SENTINEL,
     )
     let is_null = self.builder.icmp_eq(func_ref, null_sentinel)
@@ -2181,12 +2205,12 @@ fn Translator::translate_return_call_ref(
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
-    // Pop the function reference (which is a function index stored as I64)
+    // Pop the function reference
     let func_ref = self.pop()
 
     // Null check: if func_ref == FUNCREF_NULL_SENTINEL, trap
     let null_sentinel = self.builder.iconst(
-      Type::I64,
+      func_ref.ty,
       @types.FUNCREF_NULL_SENTINEL,
     )
     let is_null = self.builder.icmp_eq(func_ref, null_sentinel)

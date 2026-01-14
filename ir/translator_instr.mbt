@@ -808,16 +808,23 @@ fn Translator::translate_instruction(
     ElemDrop(elem_idx) => self.builder.elem_drop(elem_idx)
 
     // Reference types
-    RefNull(_ref_type) => {
-      // Null reference is represented as NULL_REF
-      // (GC refs are encoded as (gc_ref << 1) where gc_ref is 1-based, so 0 is safe for null)
-      let result = self.builder.iconst(Type::I64, @types.NULL_REF)
+    RefNull(ref_type) => {
+      // Preserve reference kind in IR, so null checks remain type-correct.
+      let result_ty = Type::from_wasm(ref_type)
+      let null_const = match result_ty {
+        FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
+        _ => @types.NULL_REF
+      }
+      let result = self.builder.iconst(result_ty, null_const)
       self.push(result)
     }
     RefIsNull => {
-      // Check if reference is null (compare with NULL_REF)
       let ref_val = self.pop()
-      let null_sentinel = self.builder.iconst(Type::I64, @types.NULL_REF)
+      let null_const = match ref_val.ty {
+        FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
+        _ => @types.NULL_REF
+      }
+      let null_sentinel = self.builder.iconst(ref_val.ty, null_const)
       let result = self.builder.icmp_eq(ref_val, null_sentinel)
       self.push(result)
     }
@@ -831,7 +838,11 @@ fn Translator::translate_instruction(
       // ref.as_non_null: convert nullable ref to non-null ref
       // Pop the reference, check if null, trap if so, otherwise push back
       let ref_val = self.pop()
-      let null_sentinel = self.builder.iconst(Type::I64, @types.NULL_REF)
+      let null_const = match ref_val.ty {
+        FuncRef | ExternRef => @types.FUNCREF_NULL_SENTINEL
+        _ => @types.NULL_REF
+      }
+      let null_sentinel = self.builder.iconst(ref_val.ty, null_const)
       let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
       // Create trap block and continuation block
@@ -843,7 +854,7 @@ fn Translator::translate_instruction(
 
       // Trap block: emit trap for null reference
       self.builder.switch_to_block(trap_block)
-      self.builder.trap("null function reference")
+      self.builder.trap("null reference")
 
       // Continue block: push the non-null ref back on stack
       self.builder.switch_to_block(continue_block)
@@ -1246,13 +1257,25 @@ fn Translator::translate_instruction(
       // === Catch dispatch block ===
       self.builder.switch_to_block(catch_dispatch)
 
-      // Load locals from spilled storage (saved before throw/call)
-      // and convert i64 bits back to original types
+      // Load locals from spilled storage (saved before throw/call).
+      // v128 locals are stored as two i64 words; other locals are one word.
       self.locals.clear()
+      let mut spill_idx = 0
       for i in 0..<num_locals {
-        let spilled_bits = self.builder.get_spilled_local(i)
-        let restored_val = self.i64_bits_to_local(spilled_bits, local_types[i])
-        self.locals.push(restored_val)
+        match local_types[i] {
+          V128 => {
+            let lo = self.builder.get_spilled_local(spill_idx)
+            let hi = self.builder.get_spilled_local(spill_idx + 1)
+            spill_idx += 2
+            self.locals.push(self.spill_words_to_v128(lo, hi))
+          }
+          ty => {
+            let spilled_bits = self.builder.get_spilled_local(spill_idx)
+            spill_idx += 1
+            let restored_val = self.i64_bits_to_local(spilled_bits, ty)
+            self.locals.push(restored_val)
+          }
+        }
       }
 
       // Get exception tag for matching
@@ -2166,7 +2189,7 @@ fn Translator::translate_atomic(
 
   // NOTE: wasm-tools/wasmparser encodes most atomic subopcodes starting at 0x10.
   // The IR lowering table is indexed starting at 0x04, so shift accordingly.
-  let op = if subopcode >= 4 { subopcode - 12 } else { subopcode }
+  let op = if subopcode >= 0x10 { subopcode - 12 } else { subopcode }
   match op {
     // memory.atomic.notify
     0 => {

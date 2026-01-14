@@ -36,13 +36,12 @@ pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
     F64 => Type::F64
     FuncRef => Type::FuncRef
     ExternRef => Type::ExternRef
-    // Typed function references are represented as I64 (function index)
-    RefFuncTyped(_) | RefNullFuncTyped(_) => Type::I64
-    RefFunc => Type::I64
-    RefExtern => Type::I64
+    // Function references use a dedicated IR type so null checks are correct.
+    RefFuncTyped(_) | RefNullFuncTyped(_) | RefFunc | NullFuncRef =>
+      Type::FuncRef
+    // External references use a dedicated IR type as well.
+    RefExtern | NullExternRef => Type::ExternRef
     // GC reference types - all use 64-bit representation (heap index)
-    NullFuncRef => Type::FuncRef
-    NullExternRef => Type::ExternRef
     AnyRef | NullRef | ExnRef | NullExnRef => Type::I64
     // Struct and array references - use I64 (heap index)
     RefStruct(_) | RefNullStruct(_) | RefArray(_) | RefNullArray(_) => Type::I64
