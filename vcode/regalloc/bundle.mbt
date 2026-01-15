@@ -191,10 +191,24 @@ pub fn BundleSet::length(self : BundleSet) -> Int {
 
 ///|
 /// Allocate a new spill slot and create SpillBundle
-fn BundleSet::new_spill_bundle(self : BundleSet) -> SpillBundle {
+fn BundleSet::new_spill_bundle(
+  self : BundleSet,
+  reg_class : @abi.RegClass,
+) -> SpillBundle {
   let id = self.spill_bundles.length()
-  let slot = self.next_spill_slot
-  self.next_spill_slot += 1
+
+  // Spill slots are counted in 8-byte units.
+  // For 128-bit vectors, reserve 16 bytes and ensure 16-byte alignment.
+  let (slot, slots_used) = match reg_class {
+    @abi.Vector => {
+      if self.next_spill_slot % 2 != 0 {
+        self.next_spill_slot += 1
+      }
+      (self.next_spill_slot, 2)
+    }
+    _ => (self.next_spill_slot, 1)
+  }
+  self.next_spill_slot += slots_used
   let spill_bundle = SpillBundle::new(id, slot)
   self.spill_bundles.push(spill_bundle)
   spill_bundle
@@ -209,7 +223,7 @@ fn BundleSet::get_or_create_spill_bundle(
   if bundle.spill_bundle_id >= 0 {
     self.spill_bundles[bundle.spill_bundle_id]
   } else {
-    let spill_bundle = self.new_spill_bundle()
+    let spill_bundle = self.new_spill_bundle(bundle.reg_class)
     bundle.spill_bundle_id = spill_bundle.id
     spill_bundle.add_bundle(bundle.id)
     spill_bundle

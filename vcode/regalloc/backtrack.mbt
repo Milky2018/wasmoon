@@ -554,9 +554,22 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
       continue
     }
 
+    // Vector values live across calls must spill (AAPCS64 only preserves low 64-bit).
+    if bundle.reg_class is @abi.Vector && bundle.crosses_call(self.ranges) {
+      self.force_spill_bundle(bundle)
+      processed.add(entry.bundle_id)
+      continue
+    }
+
     // Try to allocate a register
     if self.try_allocate(bundle) is Some(preg) {
       self.record_allocation(bundle, preg)
+      processed.add(entry.bundle_id)
+      continue
+    }
+
+    // try_allocate may have decided to spill
+    if bundle.allocation is Spill(_) {
       processed.add(entry.bundle_id)
       continue
     }
@@ -885,6 +898,20 @@ pub fn build_bundles_with_merging(
 ///|
 /// Pre-assign function parameters to ABI registers
 /// This must be done before allocation to respect calling convention
+fn BacktrackingAllocator::force_spill_bundle(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+) -> Unit {
+  let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
+  let slot = spill_bundle.slot
+  bundle.allocation = Spill(slot)
+  for range_id in bundle.range_ids {
+    let range = self.ranges.get(range_id)
+    range.allocation = Spill(slot)
+  }
+}
+
+///|
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
   liveness : LivenessResult,
@@ -925,13 +952,21 @@ fn BacktrackingAllocator::preassign_params(
     // Check if param crosses a call - if so, allocate to callee-saved instead
     let interval = liveness.intervals.get(param.id)
     if interval is Some(iv) && iv.crosses_call {
-      // For params that cross calls, allocate to callee-saved registers
-      // This is critical because we can't spill params without generating
-      // a store in the prologue
       let range = self.ranges.get_by_vreg(param.id)
       if range is Some(lr) && lr.bundle_id >= 0 {
         let bundle = self.bundles.bundles[lr.bundle_id]
-        // Find an available callee-saved register
+
+        // For 128-bit SIMD vectors, AAPCS64 only guarantees preserving the low
+        // 64 bits of V8-V15 across calls. To keep semantics correct, force spill.
+        if !is_int && param.class is @abi.Vector {
+          self.force_spill_bundle(bundle)
+          bundle.is_pinned = true
+          continue
+        }
+
+        // For params that cross calls, allocate to callee-saved registers.
+        // This is critical because we can't spill params without generating
+        // a store in the prologue.
         let callee_saved_preg = if is_int {
           if callee_saved_int_idx < self.callee_saved_int.length() {
             let p = self.callee_saved_int[callee_saved_int_idx]
@@ -951,8 +986,7 @@ fn BacktrackingAllocator::preassign_params(
           self.record_allocation(bundle, cs_preg)
           bundle.is_pinned = true // Prevent eviction of param bundles
         }
-        // If no callee-saved available, let normal allocation handle it
-        // (it will be spilled, which is broken for params, but rare)
+        // If no callee-saved available, let normal allocation handle it.
       }
       continue
     }

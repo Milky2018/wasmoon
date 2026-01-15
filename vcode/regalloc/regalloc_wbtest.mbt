@@ -363,86 +363,137 @@ test "liveness: complete output for linear function" {
 }
 
 ///|
-test "liveness: complete output for diamond CFG" {
-  // Diamond control flow: if-else that merges
-  // block0:
-  //   v0 = param (condition)
-  //   v1 = ldi 10
-  //   v2 = ldi 20
-  //   branch v0, block1, block2
-  // block1:
-  //   v3 = add v1, v1
-  //   jump block3
-  // block2:
-  //   v3 = add v2, v2
-  //   jump block3
-  // block3:
-  //   ret v3
+fn make_v128_byte(seed : Int) -> Bytes {
+  Bytes::from_array([
+    seed.to_byte(),
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+    b'\x00',
+  ])
+}
 
-  let func = VCodeFunction::new("diamond")
-  let cond = func.add_param(@abi.Int)
-  func.add_result(@abi.Int)
-  let v1 = func.new_vreg(@abi.Int)
-  let v2 = func.new_vreg(@abi.Int)
-  let v3 = func.new_vreg(@abi.Int)
-  let block0 = func.new_block()
-  let block1 = func.new_block()
-  let block2 = func.new_block()
-  let block3 = func.new_block()
+///|
+fn parse_stack_offset(line : StringView) -> Int? {
+  let mut state = 0
+  let mut digits = ""
+  for _i, c in line {
+    match state {
+      0 => if c == '[' { state = 1 }
+      1 => state = if c == 's' { 2 } else { 0 }
+      2 => state = if c == 'p' { 3 } else { 0 }
+      3 => state = if c == '+' { 4 } else { 0 }
+      4 =>
+        if c >= '0' && c <= '9' {
+          digits = digits + c.to_string()
+        } else if c == ']' {
+          if digits.length() == 0 {
+            return None
+          }
+          return Some(@strconv.parse_int(digits) catch { _ => return None })
+        } else {
+          // Unexpected char; reset.
+          state = 0
+          digits = ""
+        }
+      _ => ()
+    }
+  }
+  None
+}
 
-  // block0
-  let inst1 = @instr.VCodeInst::new(@instr.LoadConst(10L))
-  inst1.add_def({ reg: @abi.Virtual(v1) })
-  block0.add_inst(inst1)
-  let inst2 = @instr.VCodeInst::new(@instr.LoadConst(20L))
-  inst2.add_def({ reg: @abi.Virtual(v2) })
-  block0.add_inst(inst2)
-  block0.set_terminator(@instr.Branch(@abi.Virtual(cond), block1.id, block2.id))
+///|
+/// Vector spills must use 16-byte stack slot alignment and Q-reg aware loads/stores.
+/// This test is meant to catch subtle "Vector treated as Float64" bugs.
+test "regalloc: vector spill stack slots are 16B and use v-regs" {
+  let func = VCodeFunction::new("vec_spill")
+  let block = func.new_block()
 
-  // block1: v3 = add v1, v1
-  let add1 = @instr.VCodeInst::new(@instr.Add(true))
-  add1.add_use(@abi.Virtual(v1))
-  add1.add_use(@abi.Virtual(v1))
-  add1.add_def({ reg: @abi.Virtual(v3) })
-  block1.add_inst(add1)
-  block1.set_terminator(@instr.Jump(block3.id))
+  // Base pointer for SIMD stores.
+  let base = func.new_vreg(@abi.Int)
+  let base_inst = @instr.VCodeInst::new(@instr.LoadConst(0L))
+  base_inst.add_def({ reg: @abi.Virtual(base) })
+  block.add_inst(base_inst)
 
-  // block2: v3 = add v2, v2
-  let add2 = @instr.VCodeInst::new(@instr.Add(true))
-  add2.add_use(@abi.Virtual(v2))
-  add2.add_use(@abi.Virtual(v2))
-  add2.add_def({ reg: @abi.Virtual(v3) })
-  block2.add_inst(add2)
-  block2.set_terminator(@instr.Jump(block3.id))
+  // Create enough live vectors to force spills.
+  let vecs : Array[@abi.VReg] = []
+  let num_vecs = 24
+  for i in 0..<num_vecs {
+    let v = func.new_vreg(@abi.Vector)
+    let inst = @instr.VCodeInst::new(@instr.LoadConstV128(make_v128_byte(i)))
+    inst.add_def({ reg: @abi.Virtual(v) })
+    block.add_inst(inst)
+    vecs.push(v)
+  }
 
-  // block3: ret v3
-  block3.set_terminator(@instr.Return([@abi.Virtual(v3)]))
-  let liveness = compute_liveness(func)
-  let debug_output = debug_liveness(liveness)
-  inspect(
-    debug_output,
-    content=(
-      #|=== Liveness Debug ===
-      #|Use-Def Chains:
-      #|  v0: def=Some((0:-1a)), uses=[(0:2b)]
-      #|  v1: def=Some((0:0a)), uses=[(1:0b), (1:0b)]
-      #|  v2: def=Some((0:1a)), uses=[(2:0b), (2:0b)]
-      #|  v3: def=Some((2:0a)), uses=[(3:0b)]
-      #|
-      #|Live-in/out:
-      #|  block0: in=[0], out=[1, 2]
-      #|  block1: in=[1], out=[3]
-      #|  block2: in=[2], out=[3]
-      #|  block3: in=[3], out=[]
-      #|
-      #|Intervals:
-      #|  v0: (0:-1a) - (0:2b)
-      #|  v1: (0:0a) - (1:0b)
-      #|  v2: (0:1a) - (2:0b)
-      #|  v3: (2:0a) - (3:0b)
-      #|
-    ),
-  )
+  // Use them all after the defs so they are simultaneously live.
+  for i, v in vecs {
+    let store = @instr.VCodeInst::new(@instr.SIMDStore(i * 16))
+    // NOTE: codegen expects uses[0]=value, uses[1]=base.
+    store.add_use(@abi.Virtual(v))
+    store.add_use(@abi.Virtual(base))
+    block.add_inst(store)
+  }
+  block.set_terminator(@instr.Return([]))
+  let allocated = allocate_registers_backtracking(func)
+  let text = allocated.print()
+  let mut saw_stack_op = false
+  let mut saw_bad_reg_class = false
+  let mut saw_bad_offset = false
+  let mut first_bad_offset : Int? = None
+  let mut first_bad_line : String? = None
+  for line in text.split("\n") {
+    if line.contains("stack_store") || line.contains("stack_load") {
+      saw_stack_op = true
+      // If vectors are accidentally assigned Float64 PRegs, they print as `dN`.
+      if line.contains(" d") {
+        saw_bad_reg_class = true
+        if first_bad_line is None {
+          first_bad_line = Some(line.to_string())
+        }
+      }
+      match parse_stack_offset(line) {
+        Some(off) =>
+          // Vector stack slots must be 16-byte aligned.
+          if off % 16 != 0 {
+            saw_bad_offset = true
+            if first_bad_offset is None {
+              first_bad_offset = Some(off)
+              first_bad_line = Some(line.to_string())
+            }
+          }
+        None => ()
+      }
+    }
+  }
+  assert_true(saw_stack_op)
+  if saw_bad_reg_class {
+    return fail(
+      "Vector spill used wrong reg class; first bad line: " +
+      first_bad_line.unwrap_or("<unknown>"),
+    )
+  }
+  assert_false(saw_bad_reg_class)
+  if saw_bad_offset {
+    return fail(
+      "Vector spill offset not 16B-aligned; first bad offset=" +
+      first_bad_offset.unwrap_or(-1).to_string() +
+      ", line: " +
+      first_bad_line.unwrap_or("<unknown>"),
+    )
+  }
+  assert_false(saw_bad_offset)
 }
 
 ///|

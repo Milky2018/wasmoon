@@ -1132,6 +1132,10 @@ pub fn apply_allocation(
   let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
   let mut int_idx = 0
   let mut float_idx = 0
+
+  // For spilled params, we must store the incoming ABI register to the spill slot
+  // in the entry block so subsequent reloads see the correct value.
+  let spilled_param_stores : Array[(@abi.PReg, Int)] = []
   for param in func.params {
     match alloc.assignments.get(param.id) {
       Some(preg) => {
@@ -1195,6 +1199,32 @@ pub fn apply_allocation(
       None => {
         new_func.params.push(param)
         new_func.param_pregs.push(None)
+
+        // If the param is spilled, capture a store from the incoming ABI register
+        // to its spill slot. This makes spilling params safe.
+        if alloc.spill_slots.get(param.id) is Some(slot) {
+          match param.class {
+            @abi.Int =>
+              if int_idx < max_int_params {
+                spilled_param_stores.push(
+                  ({ index: int_idx, class: @abi.Int }, slot),
+                )
+              }
+            @abi.Float32 | @abi.Float64 =>
+              if float_idx < max_float_params {
+                spilled_param_stores.push(
+                  ({ index: float_idx, class: @abi.Float64 }, slot),
+                )
+              }
+            @abi.Vector =>
+              if float_idx < max_float_params {
+                spilled_param_stores.push(
+                  ({ index: float_idx, class: @abi.Vector }, slot),
+                )
+              }
+          }
+        }
+
         // Still need to increment indices for unassigned params
         match param.class {
           @abi.Int => int_idx += 1
@@ -1217,6 +1247,16 @@ pub fn apply_allocation(
   // Process each block
   for block_idx, block in func.blocks {
     let new_block = new_func.new_block()
+
+    // Entry block: materialize spilled params into spill slots.
+    if block_idx == 0 {
+      for entry in spilled_param_stores {
+        let (src_preg, slot) = entry
+        let store_inst = @instr.VCodeInst::new(@instr.StackStore(slot * 8))
+        store_inst.add_use(@abi.Physical(src_preg))
+        new_block.add_inst(store_inst)
+      }
+    }
 
     // Copy block params
     for param in block.params {
