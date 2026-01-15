@@ -426,16 +426,45 @@ fn run_wasm(
       }
     }
     // Call the function
-    // Check if JIT can handle all imports
-    let can_use_jit = if use_jit {
-      check_jit_import_support(mod_, debug) &&
-      not(@wast.has_cross_module_imports(mod_)) &&
-      not(@wast.exports_shared_resources(mod_)) &&
-      not(@wast.has_unsupported_instructions(mod_))
-    } else {
-      false
-    }
-    if can_use_jit {
+    if use_jit {
+      // Check if JIT can handle this module.
+      let import_ok = check_jit_import_support(mod_, debug)
+      let has_cross_imports = @wast.has_cross_module_imports(mod_)
+      let exports_shared = @wast.exports_shared_resources(mod_)
+      let has_unsupported = @wast.has_unsupported_instructions(mod_)
+      let can_use_jit = import_ok &&
+        !has_cross_imports &&
+        !exports_shared &&
+        !has_unsupported
+      if !can_use_jit {
+        let reasons : Array[String] = []
+        if !import_ok {
+          reasons.push("unsupported imports")
+        }
+        if has_cross_imports {
+          reasons.push("cross-module imports")
+        }
+        if exports_shared {
+          reasons.push("exports shared resources")
+        }
+        if has_unsupported {
+          reasons.push("unsupported instructions")
+        }
+        let reason_str = if reasons.is_empty() {
+          "unknown reason"
+        } else {
+          reasons.join(", ")
+        }
+        @logger.error(
+          "JIT mode is not supported for this module (" +
+          reason_str +
+          "). " +
+          "Please re-run with --no-jit.",
+        )
+        exit_failure()
+        return
+      }
+
       // JIT execution path
       // Build WASI args: program name + any remaining args after --
       let jit_args : Array[String] = wasi_args
