@@ -55,7 +55,7 @@ Fields (exact layout TBD; must be C-ABI stable if read by JIT C/FFI):
 
 ### M3 — JIT uses `MemDesc` for bounds+base
 - [x] Update lowering/codegen to consult descriptor for every memory op (at least for correctness).
-- [ ] Add/keep a safe slowpath (helper call) if needed for tricky cases.
+- [x] Add/keep a safe slowpath (helper call) if needed for tricky cases.
 
 ### M4 — Tests + regression
 - [x] Update `testsuite/` to pass memory descriptors into JIT (no legacy `set_memory(ptr, size)`).
@@ -63,7 +63,7 @@ Fields (exact layout TBD; must be C-ABI stable if read by JIT C/FFI):
   - [x] A writes, B reads; B grows, A reads/writes again.
   - [x] Verify interpreter-only, JIT-only, and mixed execution results match.
 - [x] Fix flaky `testsuite` SIGSEGV by making JIT trap handling thread-safe.
-- [ ] Extend smith-diff harness to allow multi-module runs (if not already supported).
+- [x] Extend smith-diff harness to allow multi-module runs (if not already supported).
 
 ### M5 — Remove/relax `exports_shared_resources` gate
 - [x] Once cross-module sharing is correct, remove memory-related gating.

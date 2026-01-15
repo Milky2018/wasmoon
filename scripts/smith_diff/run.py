@@ -122,6 +122,20 @@ def _build_template_wasm(work_dir: Path) -> Path:
     return template_wasm
 
 
+def _build_wat_to_wasm(work_dir: Path, *, name: str, wat: str) -> Path:
+    wat_path = work_dir / f"{name}.wat"
+    wasm_path = work_dir / f"{name}.wasm"
+    wat_path.write_text(wat, encoding="utf-8")
+    out = _run(["wasm-tools", "parse", str(wat_path), "-o", str(wasm_path)], timeout_s=10.0)
+    if out.kind != "ok":
+        raise SystemExit(
+            f"failed to build {name} wasm:\n"
+            f"stdout:\n{out.stdout}\n\n"
+            f"stderr:\n{out.stderr}"
+        )
+    return wasm_path
+
+
 def _load_json(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
@@ -133,14 +147,15 @@ def _write_json(path: Path, obj: dict) -> None:
         f.write("\n")
 
 
-def _smith_config_for_run(config_path: Path, work_dir: Path) -> Path:
+def _smith_config_for_run(config_path: Path, work_dir: Path, *, allow_imports: bool) -> Path:
     cfg = _load_json(config_path)
 
     # For differential execution, imports are almost always noise unless we also
-    # generate matching stub modules. Keep this at zero so we can actually
-    # execute most generated modules.
+    # generate matching stub modules.
     cfg["min-imports"] = 0
-    cfg["max-imports"] = 0
+    if not allow_imports:
+        # Keep this at zero so we can actually execute most generated modules.
+        cfg["max-imports"] = 0
 
     # Keep size bounded for 1000-case runs.
     cfg.setdefault("max-funcs", 50)
@@ -156,6 +171,7 @@ def _generate_module(
     seed_path: Path,
     out_wasm: Path,
     template_wasm: Path,
+    module_type_wasm: Path | None,
     config_path: Path,
     ensure_termination: bool,
 ) -> Outcome:
@@ -163,20 +179,24 @@ def _generate_module(
         "wasm-tools",
         "smith",
         str(seed_path),
-        "--exports",
-        str(template_wasm),
         "-c",
         str(config_path),
         "-o",
         str(out_wasm),
     ]
+
+    if module_type_wasm is not None:
+        argv += ["--module-type", str(module_type_wasm)]
+    else:
+        argv += ["--exports", str(template_wasm)]
+
     if ensure_termination:
         argv.append("--ensure-termination")
 
     return _run(argv, timeout_s=10.0)
 
 
-def _run_wasmtime(wasm: Path, timeout_s: float) -> Outcome:
+def _run_wasmtime(wasm: Path, timeout_s: float, *, preloads: list[str] | None = None) -> Outcome:
     # Enable a broad set of proposals, but explicitly keep stack-switching off.
     # Some wasmtime builds error out when stack-switching is requested.
     wasm_flags = [
@@ -203,14 +223,26 @@ def _run_wasmtime(wasm: Path, timeout_s: float) -> Outcome:
     ]
 
     argv: list[str] = ["wasmtime", "run"]
+    if preloads:
+        for p in preloads:
+            argv += ["--preload", p]
     for flag in wasm_flags:
         argv += ["-W", flag]
     argv += ["--invoke", "run", str(wasm)]
     return _run(argv, timeout_s=timeout_s + 1.0)
 
 
-def _run_wasmoon(wasm: Path, *, jit: bool, timeout_s: float) -> Outcome:
+def _run_wasmoon(
+    wasm: Path,
+    *,
+    jit: bool,
+    timeout_s: float,
+    preloads: list[str] | None = None,
+) -> Outcome:
     argv = [str(REPO_ROOT / "wasmoon"), "run", str(wasm), "--invoke", "run"]
+    if preloads:
+        for p in preloads:
+            argv += ["--preload", p]
     if not jit:
         argv.append("--no-jit")
     return _run(argv, timeout_s=timeout_s)
@@ -270,6 +302,11 @@ def main() -> int:
     run_p.add_argument("--keep-passing", action="store_true")
     run_p.add_argument("--no-shrink", action="store_true")
     run_p.add_argument("--no-ensure-termination", action="store_true")
+    run_p.add_argument(
+        "--multi-module",
+        action="store_true",
+        help="run generated modules with a preloaded provider module",
+    )
 
     check_p = sub.add_parser("check", help="property check for shrink")
     check_p.add_argument("wasm", type=Path)
@@ -290,7 +327,31 @@ def main() -> int:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     template_wasm = _build_template_wasm(work_dir)
-    smith_cfg = _smith_config_for_run(args.config, work_dir)
+
+    preloads: list[str] = []
+    module_type_wasm: Path | None = None
+    if args.multi_module:
+        # Preload a provider module under the name "preload".
+        # Generated modules can import "preload"."memory" to exercise module linking.
+        preload_wasm = _build_wat_to_wasm(
+            work_dir,
+            name="preload_memory",
+            wat='''(module
+  (memory (export "memory") 1 2)
+)\n''',
+        )
+        preloads = [f"preload={preload_wasm}"]
+        module_type_wasm = _build_wat_to_wasm(
+            work_dir,
+            name="module_type_preload_memory",
+            wat='''(module
+  (import "preload" "memory" (memory 1 2))
+  (func (export "run") (result i32)
+    (i32.const 0))
+)\n''',
+        )
+
+    smith_cfg = _smith_config_for_run(args.config, work_dir, allow_imports=args.multi_module)
 
     seeds_dir = work_dir / "seeds"
     seeds_dir.mkdir(parents=True, exist_ok=True)
@@ -324,6 +385,7 @@ def main() -> int:
             seed_path=seed_path,
             out_wasm=wasm_path,
             template_wasm=template_wasm,
+            module_type_wasm=module_type_wasm,
             config_path=smith_cfg,
             ensure_termination=ensure_termination,
         )
@@ -333,9 +395,9 @@ def main() -> int:
                 wasm_path.unlink(missing_ok=True)
             continue
 
-        oracle = _run_wasmtime(wasm_path, timeout_s=args.timeout)
-        interp = _run_wasmoon(wasm_path, jit=False, timeout_s=args.timeout)
-        jit = _run_wasmoon(wasm_path, jit=True, timeout_s=args.timeout)
+        oracle = _run_wasmtime(wasm_path, timeout_s=args.timeout, preloads=preloads)
+        interp = _run_wasmoon(wasm_path, jit=False, timeout_s=args.timeout, preloads=preloads)
+        jit = _run_wasmoon(wasm_path, jit=True, timeout_s=args.timeout, preloads=preloads)
 
         oracle_sig = _signature(oracle)
         interp_sig = _signature(interp)
