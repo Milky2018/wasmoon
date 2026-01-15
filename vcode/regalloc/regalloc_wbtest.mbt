@@ -171,130 +171,97 @@ test "progpoint: comparison" {
 
 ///|
 test "liveness: block parameters should have use points" {
-  // This test verifies that block parameters get use points at block entry
-  // Reproduces the bug found in f32_br_2locals.wast
+  // This test verifies that block parameters get use points at block entry.
+  // Block params are SSA defs; their incoming values are passed via Jump args.
   let func = VCodeFunction::new("test_block_param_use")
 
   // Create:
   // block0:
   //   v0 = ldi 10
-  //   v1 = mov v0
-  //   jump block1
-  // block1(v1):  ; v1 is passed as block parameter
-  //   ret v1
+  //   v1_src = mov v0
+  //   jump block1(v1_src)
+  // block1(v1_param):
+  //   ret v1_param
 
   let v0 = func.new_vreg(@abi.Int)
-  let v1 = func.new_vreg(@abi.Int)
+  let v1_src = func.new_vreg(@abi.Int)
+  let v1_param = func.new_vreg(@abi.Int)
   let block0 = func.new_block()
   let block1 = func.new_block()
 
-  // block0: v0 = ldi 10; v1 = mov v0; jump block1
+  // block0
   let inst0 = @instr.VCodeInst::new(@instr.LoadConst(10L))
   inst0.add_def({ reg: @abi.Virtual(v0) })
   block0.add_inst(inst0)
   let inst1 = @instr.VCodeInst::new(@instr.Move)
   inst1.add_use(@abi.Virtual(v0))
-  inst1.add_def({ reg: @abi.Virtual(v1) })
+  inst1.add_def({ reg: @abi.Virtual(v1_src) })
   block0.add_inst(inst1)
-  block0.set_terminator(@instr.Jump(block1.id))
+  block0.set_terminator(@instr.Jump(block1.id, [@abi.Virtual(v1_src)]))
 
-  // block1(v1): ret v1
-  block1.params.push(v1)
-  block1.set_terminator(@instr.Return([@abi.Virtual(v1)]))
-
-  // Compute liveness
+  // block1(v1_param)
+  block1.params.push(v1_param)
+  block1.set_terminator(@instr.Return([@abi.Virtual(v1_param)]))
   let liveness = compute_liveness(func)
 
-  // v1 should have use points in both blocks
-  let v1_info = liveness.use_def.get(v1.id).unwrap()
-
-  // Should have at least 2 use points: one at block0's move, one at block1 entry
+  // v1_param should have a use point at block entry and at return.
+  let v1_info = liveness.use_def.get(v1_param.id).unwrap()
   inspect(v1_info.use_points.length() >= 2, content="true")
 
-  // v1 should be in block1's live-in set
-  inspect(liveness.live_in[1].contains(v1.id), content="true")
+  // v1_param is defined at block entry, so it is not live-in.
+  inspect(liveness.live_in[1].contains(v1_param.id), content="false")
 
-  // v1's interval should extend into block1
-  let v1_interval = liveness.intervals.get(v1.id).unwrap()
-  inspect(v1_interval.end.block >= 1, content="true")
+  // v1_param must have a block-entry def_point.
+  inspect(v1_info.def_point is Some(_), content="true")
 }
 
 ///|
-test "liveness: mutually exclusive paths with same vreg" {
-  // CRITICAL TEST: Same vreg defined on multiple mutually exclusive paths
-  // This is the core issue in f32_br_2locals.wast
+test "liveness: mutually exclusive paths use block arguments" {
+  // Diamond CFG with SSA join via block params.
+  // The merged value is represented as a block parameter.
   let func = VCodeFunction::new("test_mutually_exclusive")
 
-  // Create a diamond CFG:
   // block0:
   //   v0 = ldi 1
   //   branch v0, block1, block2
   // block1:
-  //   v1 = ldi 10
-  //   jump block3
+  //   v_then = ldi 10
+  //   jump block3(v_then)
   // block2:
-  //   v1 = ldi 20  ; SAME vreg v1 defined here!
-  //   jump block3
-  // block3:
-  //   ret v1
+  //   v_else = ldi 20
+  //   jump block3(v_else)
+  // block3(v_phi):
+  //   ret v_phi
 
   let v0 = func.new_vreg(@abi.Int)
-  let v1 = func.new_vreg(@abi.Int)
+  let v_then = func.new_vreg(@abi.Int)
+  let v_else = func.new_vreg(@abi.Int)
+  let v_phi = func.new_vreg(@abi.Int)
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
   let block3 = func.new_block()
-
-  // block0
   let inst0 = @instr.VCodeInst::new(@instr.LoadConst(1L))
   inst0.add_def({ reg: @abi.Virtual(v0) })
   block0.add_inst(inst0)
   block0.set_terminator(@instr.Branch(@abi.Virtual(v0), block1.id, block2.id))
-
-  // block1
   let inst1 = @instr.VCodeInst::new(@instr.LoadConst(10L))
-  inst1.add_def({ reg: @abi.Virtual(v1) })
+  inst1.add_def({ reg: @abi.Virtual(v_then) })
   block1.add_inst(inst1)
-  block1.set_terminator(@instr.Jump(block3.id))
-
-  // block2
+  block1.set_terminator(@instr.Jump(block3.id, [@abi.Virtual(v_then)]))
   let inst2 = @instr.VCodeInst::new(@instr.LoadConst(20L))
-  inst2.add_def({ reg: @abi.Virtual(v1) })
+  inst2.add_def({ reg: @abi.Virtual(v_else) })
   block2.add_inst(inst2)
-  block2.set_terminator(@instr.Jump(block3.id))
-
-  // block3
-  block3.set_terminator(@instr.Return([@abi.Virtual(v1)]))
-
-  // Compute liveness
+  block2.set_terminator(@instr.Jump(block3.id, [@abi.Virtual(v_else)]))
+  block3.params.push(v_phi)
+  block3.set_terminator(@instr.Return([@abi.Virtual(v_phi)]))
   let liveness = compute_liveness(func)
 
-  // Get v1's use-def info
-  // CRITICAL: v1 has TWO definitions: (1:0a) and (2:0a)
-  // Current code only keeps ONE def_point
-  // This is just capturing the current behavior, whether Some or None
-  liveness.use_def.get(v1.id).unwrap() |> ignore
-
-  // v1 should be in block3's live-in set
-  inspect(liveness.live_in[3].contains(v1.id), content="true")
-
-  // v1's interval
-  let v1_interval = liveness.intervals.get(v1.id).unwrap()
-
-  // The interval should end at block3
-  inspect(v1_interval.end.block == 3, content="true")
-
-  // PROBLEM: The interval start is only at ONE of the two definitions!
-  // This means one path will have an uninitialized register!
-  //
-  // If def_point is block1, then block2 path will use uninitialized v1
-  // If def_point is block2, then block1 path will use uninitialized v1
-  //
-  // This test DEMONSTRATES the bug but doesn't fix it.
-  // The fix would require either:
-  // 1. Splitting v1 into two vregs (v1_then, v1_else)
-  // 2. Creating separate intervals for each definition
-  // 3. Ensuring both paths define v1 in the same physical register
+  // v_phi is defined at block entry, so it is not live-in.
+  inspect(liveness.live_in[3].contains(v_phi.id), content="false")
+  let v_phi_info = liveness.use_def.get(v_phi.id).unwrap()
+  inspect(v_phi_info.def_point is Some(_), content="true")
+  inspect(v_phi_info.use_points.length() >= 1, content="true")
 }
 
 ///|
@@ -518,7 +485,7 @@ test "regalloc: interval extension across blocks" {
   let load_inst = @instr.VCodeInst::new(@instr.LoadConst(10L))
   load_inst.add_def({ reg: @abi.Virtual(v0) })
   block0.add_inst(load_inst)
-  block0.set_terminator(@instr.Jump(block1.id))
+  block0.set_terminator(@instr.Jump(block1.id, []))
 
   // block1
   let add_inst = @instr.VCodeInst::new(@instr.Add(true))

@@ -198,6 +198,31 @@ let regalloc_result = regalloc2::run(
 
 **Recommendation:** Wasmoon's allocator is fairly complete. Consider adding a Fastalloc option for debug builds.
 
+### Review Notes (Actionable)
+
+These notes are based on a recent code audit of `vcode/regalloc/*` and its integration with `vcode/abi/*` and `vcode/emit/*`.
+
+#### Correctness prerequisites
+
+- **SSA requirement**: the allocator assumes each `VReg` is defined exactly once. There is already a `regalloc_wbtest` demonstrating that multiple definitions of the same `VReg` in different control-flow paths can produce an interval whose `def_point` only covers one path, leading to potential use of an uninitialized register. Prefer enforcing SSA at lowering time (renaming on each def) or adding a verifier pass.
+
+- **Vector across calls**: on AArch64 AAPCS64 only guarantees preserving the low 64 bits of V8–V15. Any `Vector` value live across a call should be forced to spill (or the ABI contract must be changed to save/restore full Q registers). Current behavior should be kept explicit and documented.
+
+#### High-value improvements
+
+- **Spill/reload scratch pressure**: `apply_allocation` effectively has only two universally-safe scratch registers (`x16/x17` and the corresponding `v16/v17` encodings). Instructions that require more than two simultaneously-live spilled operands/defs can clobber values. Consider:
+  - Splitting such instructions during lowering, or
+  - Materializing more dedicated temporary vregs with their own allocation constraints, or
+  - Enhancing the reload-coalescing register allocator to cover more cases.
+
+- **Tighten `Vector` compatibility in bundle merging**: the current `reg_class_compatible` allows mixing `Float*` and `Vector` in the same bundle. Although the register file is shared on AArch64, the correct load/store width (D vs Q) and cross-call save semantics differ. If there is no strong win from coalescing float/vector moves, restricting `Vector` to only be compatible with `Vector` reduces risk.
+
+- **More precise splitting**: `split_bundle` is currently coarse (it assigns any range that spans the split point entirely to one side). This is safe but can increase register pressure and spill count. A more precise range-splitting strategy would improve both compile-time predictability and code quality.
+
+#### Cleanup / maintainability
+
+- **Stack layout duplication**: there are two stack-frame implementations (`vcode/regalloc/stacklayout.mbt` and `vcode/emit/stackframe.mbt`). If only the v3 JIT stackframe is actually authoritative, consider consolidating or clearly documenting which one is used by codegen to avoid future fixes landing in the wrong layer.
+
 ---
 
 ## 4. Instruction Selection

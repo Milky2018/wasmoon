@@ -3186,11 +3186,9 @@ fn MachineCode::emit_terminator_with_epilogue(
   next_block : Int?,
 ) -> Unit {
   match term {
-    Jump(target) =>
-      // Skip jump if target is the next block (fall-through)
-      if next_block != Some(target) {
-        self.emit_b(target)
-      }
+    Jump(target, _args) =>
+      // Unconditional branch
+      self.emit_b(target)
     Branch(cond, then_b, else_b) => {
       let rt = reg_num(cond)
       // Branch inversion: if then_b is next block, use CBZ to else_b

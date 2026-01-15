@@ -185,7 +185,7 @@ fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
 /// Extract successor block IDs from terminator
 fn get_terminator_succs(term : @instr.VCodeTerminator) -> Array[Int] {
   match term {
-    Jump(target) => [target]
+    Jump(target, _) => [target]
     Branch(_, then_b, else_b) => [then_b, else_b]
     BranchCmp(_, _, _, _, then_b, else_b) => [then_b, else_b]
     BranchCmpImm(_, _, _, _, then_b, else_b) => [then_b, else_b]
@@ -320,7 +320,7 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
       let block = func.blocks[block_id]
       if block.terminator is Some(term) {
         match term {
-          Jump(target) => dfs(func, target, visited, postorder)
+          Jump(target, _) => dfs(func, target, visited, postorder)
           Branch(_, then_b, else_b) => {
             dfs(func, then_b, visited, postorder)
             dfs(func, else_b, visited, postorder)
@@ -417,8 +417,8 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
   // Process each block
   for block_idx, block in func.blocks {
-    // Block parameters receive values from predecessor block moves (SSA deconstruction).
-    // Add a use point at block entry to keep them live through the block.
+    // Block parameters are SSA definitions at block entry.
+    // Their incoming values are passed via Jump(target, args) on CFG edges.
     for param in block.params {
       let info = if result.use_def.get(param.id) is Some(existing) {
         existing
@@ -427,7 +427,12 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
         result.use_def.set(param.id, new_info)
         new_info
       }
-      // Add use point at block entry (before first instruction)
+      let def_point : ProgPoint = { block: block_idx, inst: -1, pos: After }
+      if info.def_point is Some(_) {
+        abort("block param defined twice")
+      }
+      info.def_point = Some(def_point)
+      // Also add a use point at block entry to keep it live through the block.
       info.use_points.push({ block: block_idx, inst: 0, pos: Before })
     }
 
@@ -465,21 +470,15 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
               new_info
             }
           }
-          // For SSA deconstruction, the same vreg may be defined in multiple
-          // blocks on different paths. Keep the earliest definition in
-          // execution order (using block_order for comparison).
           let new_def : ProgPoint = {
             block: block_idx,
             inst: inst_idx,
             pos: After,
           }
-          if info.def_point is Some(existing_def) &&
-            new_def.compare_with_order(existing_def, result.block_order) < 0 {
-            // Keep the earlier definition (lower order = earlier in execution)
-            info.def_point = Some(new_def)
-          } else if info.def_point is None {
-            info.def_point = Some(new_def)
+          if info.def_point is Some(_) {
+            abort("vreg defined multiple times (SSA violation)")
           }
+          info.def_point = Some(new_def)
         }
       }
     }
@@ -507,6 +506,10 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
       let inst_idx = block.insts.length()
       match term {
+        Jump(_, args) =>
+          for a in args {
+            record_term_use(a, result, block_idx, inst_idx)
+          }
         Branch(cond, _, _) => record_term_use(cond, result, block_idx, inst_idx)
         BranchCmp(lhs, rhs, _, _, _, _) => {
           record_term_use(lhs, result, block_idx, inst_idx)
@@ -540,9 +543,10 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     let use_set : Set[Int] = Set::new()
     let def_set : Set[Int] = Set::new()
 
-    // Block parameters are NOT defs in SSA deconstruction
-    // They represent values passed from predecessors, so they're live-in
-    // (Do not add block params to def_set)
+    // Block parameters are SSA definitions at block entry.
+    for param in block.params {
+      def_set.add(param.id)
+    }
 
     // Process instructions
     for inst in block.insts {
@@ -563,6 +567,12 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     // Terminator uses
     if block.terminator is Some(term) {
       match term {
+        Jump(_, args) =>
+          for a in args {
+            if a is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+              use_set.add(vreg.id)
+            }
+          }
         Branch(cond, _, _) =>
           if cond is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
             use_set.add(vreg.id)
@@ -1526,7 +1536,95 @@ pub fn apply_allocation(
     // Rewrite terminator
     if block.terminator is Some(term) {
       let new_term = match term {
-        Jump(target) => @instr.Jump(target)
+        Jump(target, args) => {
+          // Implement SSA block argument passing at the machine level.
+          // Block params are SSA defs at target entry; here we materialize the
+          // incoming values into the allocated locations for those params.
+
+          fn vreg_location(vreg : @abi.VReg) -> @abi.PReg {
+            match alloc.assignments.get(vreg.id) {
+              Some(p) => p
+              None =>
+                match alloc.spill_slots.get(vreg.id) {
+                  Some(slot) => @abi.PReg::spilled(slot, vreg.class)
+                  None => abort("missing allocation")
+                }
+            }
+          }
+
+          fn reg_location(reg : @abi.Reg) -> @abi.PReg {
+            match reg {
+              @abi.Physical(p) => p
+              @abi.Virtual(v) => vreg_location(v)
+            }
+          }
+
+          let moves_to_regs : Array[RegMove] = []
+          let moves_to_spills : Array[RegMove] = []
+          if target >= 0 && target < func.blocks.length() {
+            let target_block = func.blocks[target]
+            for i, param in target_block.params {
+              if i >= args.length() {
+                break
+              }
+              let from = reg_location(args[i])
+              let to = vreg_location(param)
+
+              // Same location: nothing to do.
+              if from.index == to.index {
+                continue
+              }
+              let mv = { from, to, class: param.class }
+              if to.is_spilled() {
+                moves_to_spills.push(mv)
+              } else {
+                moves_to_regs.push(mv)
+              }
+            }
+          }
+
+          // First resolve register moves (may have cycles).
+          let resolved_moves = resolve_parallel_moves(moves_to_regs)
+          for mv in resolved_moves {
+            if mv.from.is_spilled() {
+              let slot = mv.from.get_spill_slot()
+              let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(mv.to) })
+              new_block.add_inst(reload_inst)
+            } else {
+              let move_inst = @instr.VCodeInst::new(Move)
+              move_inst.add_def({ reg: @abi.Physical(mv.to) })
+              move_inst.add_use(@abi.Physical(mv.from))
+              new_block.add_inst(move_inst)
+            }
+          }
+
+          // Then handle stores to spilled destinations.
+          for mv in moves_to_spills {
+            let to_slot = mv.to.get_spill_slot()
+            if mv.from.is_spilled() {
+              let from_slot = mv.from.get_spill_slot()
+              let scratch_class = match mv.class {
+                @abi.Float32 | @abi.Float64 => @abi.Float64
+                _ => mv.class
+              }
+              let scratch_preg : @abi.PReg = { index: 16, class: scratch_class }
+              let reload_inst = @instr.VCodeInst::new(StackLoad(from_slot * 8))
+              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              new_block.add_inst(reload_inst)
+              let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
+              store_inst.add_use(@abi.Physical(scratch_preg))
+              new_block.add_inst(store_inst)
+            } else {
+              let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
+              store_inst.add_use(@abi.Physical(mv.from))
+              new_block.add_inst(store_inst)
+            }
+          }
+
+          // After materializing block args, the jump itself has no args.
+          @instr.Jump(target, [])
+        }
         Branch(cond, then_b, else_b) => {
           // Handle spilled condition register
           let new_cond = rewrite_reg_with_spill(cond, alloc, new_block)
@@ -1704,7 +1802,13 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
               used_vregs.add(vreg.id)
             }
           }
-        Jump(_) | Trap(_) => ()
+        Jump(_, args) =>
+          for a in args {
+            if a is @abi.Virtual(vreg) {
+              used_vregs.add(vreg.id)
+            }
+          }
+        Trap(_) => ()
       }
     }
   }

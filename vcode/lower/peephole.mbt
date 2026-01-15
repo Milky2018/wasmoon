@@ -90,7 +90,13 @@ fn collect_terminator_uses(
         }
       }
     BrTable(index, _, _) => if get_vreg_id(index) is Some(id) { used.add(id) }
-    Jump(_) | Trap(_) => ()
+    Jump(_, args) =>
+      for a in args {
+        if get_vreg_id(a) is Some(id) {
+          used.add(id)
+        }
+      }
+    Trap(_) => ()
   }
 }
 
@@ -103,7 +109,7 @@ fn collect_block_param_uses(
 ) -> Unit {
   // Get successor block IDs from terminator
   let successors : Array[Int] = match block.terminator {
-    Some(Jump(target)) => [target]
+    Some(Jump(target, _args)) => [target]
     Some(Branch(_, then_b, else_b)) => [then_b, else_b]
     Some(BranchCmp(_, _, _, _, then_b, else_b)) => [then_b, else_b]
     Some(BranchZero(_, _, _, then_b, else_b)) => [then_b, else_b]

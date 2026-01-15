@@ -834,39 +834,31 @@ pub fn build_bundles_with_merging(
   }
 
   // 2. Merge across block arguments (SSA phi-like connections)
-  // For each block with parameters, try to merge with the corresponding
-  // arguments from predecessor branches
+  // For each Jump(target, args), the i-th arg corresponds to the i-th block param.
+  // Coalescing these bundles avoids edge moves and preserves SSA semantics.
   for block in func.blocks {
     if block.params.is_empty() {
       continue
     }
-
-    // Find predecessors and their branch arguments
     for pred_block in func.blocks {
       if pred_block.terminator is Some(term) {
         match term {
-          Jump(target) =>
+          Jump(target, args) =>
             if target == block.id {
-              // This predecessor jumps to our block
-              // Block params should be populated from predecessor's values
-              // In current VCode, this is handled via moves before the jump
-              // So we already handle this via Move instruction merging
-            }
-          Branch(_, then_b, else_b) =>
-            if then_b == block.id || else_b == block.id {
-              // Similar handling
-            }
-          BranchCmp(_, _, _, _, then_b, else_b) =>
-            if then_b == block.id || else_b == block.id {
-              // Similar handling
-            }
-          BranchCmpImm(_, _, _, _, then_b, else_b) =>
-            if then_b == block.id || else_b == block.id {
-              // Similar handling
-            }
-          BranchZero(_, _, _, then_b, else_b) =>
-            if then_b == block.id || else_b == block.id {
-              // Similar handling
+              // Merge each param with its incoming argument vreg.
+              for i, param in block.params {
+                if i >= args.length() {
+                  break
+                }
+                match args[i] {
+                  @abi.Virtual(arg_vreg) =>
+                    if ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
+                      ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
+                      try_merge(uf, param_idx, arg_idx, ranges) |> ignore
+                    }
+                  _ => ()
+                }
+              }
             }
           _ => ()
         }

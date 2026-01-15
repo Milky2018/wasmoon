@@ -86,19 +86,16 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
       #|    x8 = cmp32.eq x2, x8
       #|    branch x8, block1, block6
       #|block1:
-      #|    d1 = mov d0
       #|    jump block5
       #|block2:
-      #|    d1 = mov d0
       #|    jump block5
       #|block3:
-      #|    d1 = mov d0
       #|    jump block5
       #|block4:
-      #|    d1 = mov d1
+      #|    d0 = mov d1
       #|    jump block5
       #|block5(f3:float):
-      #|    ret d1
+      #|    ret d0
       #|block6:
       #|    x8 = ldi 1
       #|    x8 = cmp32.eq x2, x8
@@ -372,10 +369,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v42 = mov v38
       #|    v43 = ldi 0
       #|    f44 = load_ptr.f32 +0 v38
-      #|    v3 = mov v6
-      #|    f4 = mov f7
-      #|    f5 = mov f44
-      #|    jump block1
+      #|    jump block1 (v6, f7, f44)
       #|block3(v9:int, f10:float, f11:float):
       #|    v45 = ldi 0
       #|    v46 = ldi 0
@@ -399,10 +393,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v63 = mov v59
       #|    v64 = ldi 0
       #|    f65 = load_ptr.f32 +0 v59
-      #|    v3 = mov v9
-      #|    f4 = mov f10
-      #|    f5 = mov f65
-      #|    jump block1
+      #|    jump block1 (v9, f10, f65)
       #|block4(v12:int, f13:float, f14:float):
       #|    v66 = ldi 0
       #|    v67 = ldi 0
@@ -426,30 +417,15 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    v84 = mov v80
       #|    v85 = ldi 0
       #|    f86 = load_ptr.f32 +0 v80
-      #|    v3 = mov v12
-      #|    f4 = mov f13
-      #|    f5 = mov f86
-      #|    jump block1
+      #|    jump block1 (v12, f13, f86)
       #|block5:
-      #|    v12 = mov v2
-      #|    f13 = mov f17
-      #|    f14 = mov f16
-      #|    jump block4
+      #|    jump block4 (v2, f17, f16)
       #|block6:
-      #|    v9 = mov v2
-      #|    f10 = mov f17
-      #|    f11 = mov f16
-      #|    jump block3
+      #|    jump block3 (v2, f17, f16)
       #|block7:
-      #|    v6 = mov v2
-      #|    f7 = mov f17
-      #|    f8 = mov f16
-      #|    jump block2
+      #|    jump block2 (v2, f17, f16)
       #|block8:
-      #|    v3 = mov v2
-      #|    f4 = mov f17
-      #|    f5 = mov f16
-      #|    jump block1
+      #|    jump block1 (v2, f17, f16)
       #|block9:
       #|    v20 = ldi 1
       #|    v21 = cmp32.eq v2, v20
@@ -470,65 +446,55 @@ test "end-to-end: f32_br_2locals.wast from source" {
     content=(
       #|vcode test(v0:int, v1:int, v2:int) -> float {
       #|block0:
-      #|    d5 = ldf 0
-      #|    d4 = ldf 10
+      #|    d2 = ldf 0
+      #|    d3 = ldf 10
       #|    x8 = ldi 0
       #|    x8 = cmp32.eq x2, x8
       #|    branch x8, block5, block9
       #|block1(v3:int, f4:float, f5:float):
       #|    ret d0
       #|block2(v6:int, f7:float, f8:float):
-      #|    x10 = load_ptr.i64 +0 x0
-      #|    x10 = load_ptr.i64 +0 x10
-      #|    store_ptr.f32 +0 x10, d2
-      #|    x10 = load_ptr.i64 +0 x0
-      #|    x10 = load_ptr.i64 +0 x10
-      #|    d3 = load_ptr.f32 +0 x10
-      #|    x8 = mov x9
-      #|    d1 = mov d2
-      #|    d0 = mov d3
+      #|    x9 = load_ptr.i64 +0 x0
+      #|    x9 = load_ptr.i64 +0 x9
+      #|    store_ptr.f32 +0 x9, d1
+      #|    x9 = load_ptr.i64 +0 x0
+      #|    x9 = load_ptr.i64 +0 x9
+      #|    d0 = load_ptr.f32 +0 x9
       #|    jump block1
       #|block3(v9:int, f10:float, f11:float):
-      #|    x10 = load_ptr.i64 +0 x0
-      #|    x10 = load_ptr.i64 +0 x10
-      #|    store_ptr.f32 +0 x10, d2
-      #|    x10 = load_ptr.i64 +0 x0
-      #|    x10 = load_ptr.i64 +0 x10
-      #|    d3 = load_ptr.f32 +0 x10
-      #|    x8 = mov x9
-      #|    d1 = mov d2
-      #|    d0 = mov d3
+      #|    x9 = load_ptr.i64 +0 x0
+      #|    x9 = load_ptr.i64 +0 x9
+      #|    store_ptr.f32 +0 x9, d1
+      #|    x9 = load_ptr.i64 +0 x0
+      #|    x9 = load_ptr.i64 +0 x9
+      #|    d0 = load_ptr.f32 +0 x9
       #|    jump block1
       #|block4(v12:int, f13:float, f14:float):
       #|    x9 = load_ptr.i64 +0 x0
       #|    x9 = load_ptr.i64 +0 x9
-      #|    store_ptr.f32 +0 x9, d4
+      #|    store_ptr.f32 +0 x9, d1
       #|    x9 = load_ptr.i64 +0 x0
       #|    x9 = load_ptr.i64 +0 x9
-      #|    d2 = load_ptr.f32 +0 x9
-      #|    x8 = mov x2
-      #|    d1 = mov d4
-      #|    d0 = mov d2
+      #|    d0 = load_ptr.f32 +0 x9
       #|    jump block1
       #|block5:
-      #|    x2 = mov x2
-      #|    d4 = mov d4
-      #|    d5 = mov d5
+      #|    x8 = mov x2
+      #|    d1 = mov d3
       #|    jump block4
       #|block6:
-      #|    x9 = mov x2
-      #|    d2 = mov d4
-      #|    d3 = mov d5
+      #|    x8 = mov x2
+      #|    d1 = mov d3
+      #|    d0 = mov d2
       #|    jump block3
       #|block7:
-      #|    x9 = mov x2
-      #|    d2 = mov d4
-      #|    d3 = mov d5
+      #|    x8 = mov x2
+      #|    d1 = mov d3
+      #|    d0 = mov d2
       #|    jump block2
       #|block8:
       #|    x8 = mov x2
-      #|    d1 = mov d4
-      #|    d0 = mov d5
+      #|    d1 = mov d3
+      #|    d0 = mov d2
       #|    jump block1
       #|block9:
       #|    x8 = ldi 1
@@ -548,78 +514,71 @@ test "end-to-end: f32_br_2locals.wast from source" {
     content=(
       #|block0:
       #|  0000: 100080d2  movz x16, #0, lsl #0
-      #|  0004: 0502271e  fmov s5, w16
+      #|  0004: 0202271e  fmov s2, w16
       #|  0008: 100080d2  movz x16, #0, lsl #0
       #|  000c: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0010: 0402271e  fmov s4, w16
+      #|  0010: 0302271e  fmov s3, w16
       #|  0014: 080080d2  movz x8, #0, lsl #0
       #|  0018: 5f00086b  cmp w2, w8
       #|  001c: e8179f9a  cset x8, eq
-      #|  0020: 280400b5  cbnz x8, block5
-      #|  0024: 2d000014  b block9
+      #|  0020: 080300b5  cbnz x8, block5
+      #|  0024: 26000014  b block9
       #|block1:
       #|  0028: c0035fd6  ret
       #|block2:
-      #|  002c: 0a0040f9  ldr x10, [x0, #0]
-      #|  0030: 4a0140f9  ldr x10, [x10, #0]
-      #|  0034: 420100bd  str s2, [x10, #0]
-      #|  0038: 0a0040f9  ldr x10, [x0, #0]
-      #|  003c: 4a0140f9  ldr x10, [x10, #0]
-      #|  0040: 430140bd  ldr s3, [x10, #0]
-      #|  0044: e80309aa  mov x8, x9
-      #|  0048: 4140201e  fmov s1, s2
-      #|  004c: 6040201e  fmov s0, s3
-      #|  0050: f6ffff17  b block1
+      #|  002c: 090040f9  ldr x9, [x0, #0]
+      #|  0030: 290140f9  ldr x9, [x9, #0]
+      #|  0034: 210100bd  str s1, [x9, #0]
+      #|  0038: 090040f9  ldr x9, [x0, #0]
+      #|  003c: 290140f9  ldr x9, [x9, #0]
+      #|  0040: 200140bd  ldr s0, [x9, #0]
+      #|  0044: f9ffff17  b block1
       #|block3:
-      #|  0054: 0a0040f9  ldr x10, [x0, #0]
-      #|  0058: 4a0140f9  ldr x10, [x10, #0]
-      #|  005c: 420100bd  str s2, [x10, #0]
-      #|  0060: 0a0040f9  ldr x10, [x0, #0]
-      #|  0064: 4a0140f9  ldr x10, [x10, #0]
-      #|  0068: 430140bd  ldr s3, [x10, #0]
-      #|  006c: e80309aa  mov x8, x9
-      #|  0070: 4140201e  fmov s1, s2
-      #|  0074: 6040201e  fmov s0, s3
-      #|  0078: ecffff17  b block1
+      #|  0048: 090040f9  ldr x9, [x0, #0]
+      #|  004c: 290140f9  ldr x9, [x9, #0]
+      #|  0050: 210100bd  str s1, [x9, #0]
+      #|  0054: 090040f9  ldr x9, [x0, #0]
+      #|  0058: 290140f9  ldr x9, [x9, #0]
+      #|  005c: 200140bd  ldr s0, [x9, #0]
+      #|  0060: f2ffff17  b block1
       #|block4:
-      #|  007c: 090040f9  ldr x9, [x0, #0]
-      #|  0080: 290140f9  ldr x9, [x9, #0]
-      #|  0084: 240100bd  str s4, [x9, #0]
-      #|  0088: 090040f9  ldr x9, [x0, #0]
-      #|  008c: 290140f9  ldr x9, [x9, #0]
-      #|  0090: 220140bd  ldr s2, [x9, #0]
-      #|  0094: e80302aa  mov x8, x2
-      #|  0098: 8140201e  fmov s1, s4
-      #|  009c: 4040201e  fmov s0, s2
-      #|  00a0: e2ffff17  b block1
+      #|  0064: 090040f9  ldr x9, [x0, #0]
+      #|  0068: 290140f9  ldr x9, [x9, #0]
+      #|  006c: 210100bd  str s1, [x9, #0]
+      #|  0070: 090040f9  ldr x9, [x0, #0]
+      #|  0074: 290140f9  ldr x9, [x9, #0]
+      #|  0078: 200140bd  ldr s0, [x9, #0]
+      #|  007c: ebffff17  b block1
       #|block5:
-      #|  00a4: f6ffff17  b block4
+      #|  0080: e80302aa  mov x8, x2
+      #|  0084: 6140201e  fmov s1, s3
+      #|  0088: f7ffff17  b block4
       #|block6:
-      #|  00a8: e90302aa  mov x9, x2
-      #|  00ac: 8240201e  fmov s2, s4
-      #|  00b0: a340201e  fmov s3, s5
-      #|  00b4: e8ffff17  b block3
+      #|  008c: e80302aa  mov x8, x2
+      #|  0090: 6140201e  fmov s1, s3
+      #|  0094: 4040201e  fmov s0, s2
+      #|  0098: ecffff17  b block3
       #|block7:
-      #|  00b8: e90302aa  mov x9, x2
-      #|  00bc: 8240201e  fmov s2, s4
-      #|  00c0: a340201e  fmov s3, s5
-      #|  00c4: daffff17  b block2
+      #|  009c: e80302aa  mov x8, x2
+      #|  00a0: 6140201e  fmov s1, s3
+      #|  00a4: 4040201e  fmov s0, s2
+      #|  00a8: e1ffff17  b block2
       #|block8:
-      #|  00c8: e80302aa  mov x8, x2
-      #|  00cc: 8140201e  fmov s1, s4
-      #|  00d0: a040201e  fmov s0, s5
-      #|  00d4: d5ffff17  b block1
+      #|  00ac: e80302aa  mov x8, x2
+      #|  00b0: 6140201e  fmov s1, s3
+      #|  00b4: 4040201e  fmov s0, s2
+      #|  00b8: dcffff17  b block1
       #|block9:
-      #|  00d8: 280080d2  movz x8, #1, lsl #0
-      #|  00dc: 5f00086b  cmp w2, w8
-      #|  00e0: e8179f9a  cset x8, eq
-      #|  00e4: 28feffb5  cbnz x8, block6
+      #|  00bc: 280080d2  movz x8, #1, lsl #0
+      #|  00c0: 5f00086b  cmp w2, w8
+      #|  00c4: e8179f9a  cset x8, eq
+      #|  00c8: 28feffb5  cbnz x8, block6
       #|block10:
-      #|  00e8: 480080d2  movz x8, #2, lsl #0
-      #|  00ec: 5f00086b  cmp w2, w8
-      #|  00f0: e8179f9a  cset x8, eq
-      #|  00f4: 28feffb5  cbnz x8, block7
-      #|  00f8: f4ffff17  b block8
+      #|  00cc: 480080d2  movz x8, #2, lsl #0
+      #|  00d0: 5f00086b  cmp w2, w8
+      #|  00d4: e8179f9a  cset x8, eq
+      #|  00d8: 28feffb5  cbnz x8, block7
+      #|  00dc: f4ffff17  b block8
       #|
     ),
   )

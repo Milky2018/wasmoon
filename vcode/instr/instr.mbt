@@ -1398,7 +1398,9 @@ pub fn Cond::invert(self : Cond) -> Cond {
 ///|
 /// VCode terminator - how a block ends
 pub(all) enum VCodeTerminator {
-  Jump(Int) // Unconditional jump to block
+  // Jump to target block with SSA block arguments.
+  // The length of args must match the target block's params.
+  Jump(Int, Array[@abi.Reg])
   Branch(@abi.Reg, Int, Int) // Conditional: condition, then-block, else-block
   // BranchCmp: compare two registers and branch on condition
   // Emits: CMP Xn, Xm + B.cond (saves one instruction vs Branch)
@@ -1422,7 +1424,20 @@ pub(all) enum VCodeTerminator {
 ///|
 fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
   match self {
-    Jump(target) => "jump block\{target}"
+    Jump(target, args) => {
+      let mut result = "jump block\{target}"
+      if args.length() > 0 {
+        result = result + " ("
+        for i, a in args {
+          if i > 0 {
+            result = result + ", "
+          }
+          result = result + a.to_string()
+        }
+        result = result + ")"
+      }
+      result
+    }
     Branch(cond, then_b, else_b) =>
       "branch \{cond}, block\{then_b}, block\{else_b}"
     BranchCmp(lhs, rhs, cond, _is_64, then_b, else_b) =>

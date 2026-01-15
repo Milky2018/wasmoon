@@ -422,9 +422,14 @@ pub fn VCodeBuilder::fcmp(
 pub fn VCodeBuilder::jump(
   self : VCodeBuilder,
   target : @block.VCodeBlock,
+  args? : Array[@abi.VReg] = [],
 ) -> Unit {
   if self.current_block is Some(block) {
-    block.set_terminator(@instr.VCodeTerminator::Jump(target.id))
+    let regs : Array[@abi.Reg] = []
+    for v in args {
+      regs.push(@abi.Virtual(v))
+    }
+    block.set_terminator(@instr.VCodeTerminator::Jump(target.id, regs))
   }
 }
 

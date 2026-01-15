@@ -242,7 +242,7 @@ pub fn compute_loop_depths(func : VCodeFunction) -> Array[Int] {
     if block.terminator is Some(term) {
       // Get successors without allocating
       match term {
-        Jump(target) => if i > target { depths[target] = depths[target] + 1 }
+        Jump(target, _) => if i > target { depths[target] = depths[target] + 1 }
         Branch(_, then_b, else_b) => {
           if i > then_b {
             depths[then_b] = depths[then_b] + 1

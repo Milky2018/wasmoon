@@ -928,18 +928,15 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|block1:
       #|    store_ptr.f32 +0 v4, f2
       #|    f12 = load_ptr.f32 +0 v4
-      #|    f1 = mov f12
-      #|    jump block4
+      #|    jump block4 (f12)
       #|block2:
       #|    store_ptr.f32 +0 v4, f2
       #|    f13 = load_ptr.f32 +0 v4
-      #|    f1 = mov f13
-      #|    jump block4
+      #|    jump block4 (f13)
       #|block3:
       #|    store_ptr.f32 +0 v4, f2
       #|    f14 = load_ptr.f32 +0 v4
-      #|    f1 = mov f14
-      #|    jump block4
+      #|    jump block4 (f14)
       #|block4(f1:float):
       #|    ret f1
       #|block5:
@@ -968,28 +965,25 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     content=(
       #|vcode test(v0:int) -> float {
       #|block0:
-      #|    d2 = ldf 10
+      #|    d1 = ldf 10
       #|    x8 = ldi 0
       #|    x9 = ldi 0
       #|    x9 = cmp32.eq x0, x9
       #|    branch x9, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x8, d2
+      #|    store_ptr.f32 +0 x8, d1
       #|    d0 = load_ptr.f32 +0 x8
-      #|    d1 = mov d0
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x8, d2
+      #|    store_ptr.f32 +0 x8, d1
       #|    d0 = load_ptr.f32 +0 x8
-      #|    d1 = mov d0
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x8, d2
-      #|    d1 = load_ptr.f32 +0 x8
-      #|    d1 = mov d1
+      #|    store_ptr.f32 +0 x8, d1
+      #|    d0 = load_ptr.f32 +0 x8
       #|    jump block4
       #|block4(f1:float):
-      #|    ret d1
+      #|    ret d0
       #|block5:
       #|    x9 = ldi 1
       #|    x9 = cmp32.eq x0, x9
@@ -1024,23 +1018,23 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
 
   // Check block1's last instruction defines d2
   let block1_last = allocated_func.blocks[1].insts.last().unwrap()
-  inspect(block1_last.opcode, content="mov")
+  inspect(block1_last.opcode, content="load_ptr.f32 +0")
   match block1_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d1")
+    Physical(preg) => inspect(preg.to_string(), content="d0")
     Virtual(_) => fail("block1_last is virtual")
   }
 
   // Check block2's last instruction defines d2
   let block2_last = allocated_func.blocks[2].insts.last().unwrap()
   match block2_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d1")
+    Physical(preg) => inspect(preg.to_string(), content="d0")
     Virtual(_) => fail("block2_last is virtual")
   }
 
   // Check block3's last instruction defines d2
   let block3_last = allocated_func.blocks[3].insts.last().unwrap()
   match block3_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d1")
+    Physical(preg) => inspect(preg.to_string(), content="d0")
     Virtual(_) => fail("block3_last is virtual")
   }
 }
@@ -1161,17 +1155,11 @@ test "br_table with block arguments from WAT" {
       #|    ret v4
       #|block2(v5:int, v6:int):
       #|    v10 = ldi 100
-      #|    v3 = mov v5
-      #|    v4 = ldi 100
-      #|    jump block1
+      #|    jump block1 (v5, v10)
       #|block3:
-      #|    v5 = mov v2
-      #|    v6 = mov v7
-      #|    jump block2
+      #|    jump block2 (v2, v7)
       #|block4:
-      #|    v3 = mov v2
-      #|    v4 = mov v7
-      #|    jump block1
+      #|    jump block1 (v2, v7)
       #|}
       #|
     ),
