@@ -422,7 +422,7 @@ pub fn alloc_memory_desc(
 ) -> Int64 {
   @jit_ffi.c_jit_alloc_memory_desc(
     size_bytes,
-    max_pages.unwrap_or(0),
+    max_pages.unwrap_or(-1),
     if is_memory64 {
       1
     } else {

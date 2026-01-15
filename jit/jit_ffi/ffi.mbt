@@ -115,7 +115,7 @@ pub extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc
 
 ///|
 /// Allocate a `wasmoon_memory_t` descriptor with an owned backing allocation.
-/// max_pages is interpreted by the runtime; 0 means "unknown/unlimited".
+/// max_pages is interpreted by the runtime; -1 means "unknown/unlimited".
 pub extern "c" fn c_jit_alloc_memory_desc(
   size_bytes : Int64,
   max_pages : Int,

@@ -168,12 +168,17 @@ int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_
     }
     if (new_pages > arch_max_pages) return -1;
 
-    // Check against configured max limit
-    int64_t effective_max = (int64_t)max_pages;
-    if (effective_max <= 0) {
-        effective_max = (mem->max_pages > 0) ? (int64_t)mem->max_pages : arch_max_pages;
+    // Check against configured max limit.
+    // max_pages < 0 means "use descriptor's max".
+    uint64_t stored_max = (uint64_t)mem->max_pages;
+    uint64_t effective_max = (max_pages >= 0) ? (uint64_t)max_pages : stored_max;
+
+    // SIZE_MAX in the descriptor means "unlimited".
+    if (effective_max == (uint64_t)SIZE_MAX) {
+        effective_max = (uint64_t)arch_max_pages;
     }
-    if (new_pages > effective_max) return -1;
+
+    if ((uint64_t)new_pages > effective_max) return -1;
 
     // No change needed if delta is 0
     if (delta == 0) return (int32_t)current_pages;
@@ -239,11 +244,14 @@ int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t 
     }
     if (new_pages > arch_max_pages) return -1;
 
-    int64_t effective_max = (int64_t)max_pages;
-    if (effective_max <= 0) {
-        effective_max = (mem->max_pages > 0) ? (int64_t)mem->max_pages : arch_max_pages;
+    uint64_t stored_max = (uint64_t)mem->max_pages;
+    uint64_t effective_max = (max_pages >= 0) ? (uint64_t)max_pages : stored_max;
+
+    if (effective_max == (uint64_t)SIZE_MAX) {
+        effective_max = (uint64_t)arch_max_pages;
     }
-    if (new_pages > effective_max) return -1;
+
+    if ((uint64_t)new_pages > effective_max) return -1;
 
     if (delta == 0) return (int32_t)current_pages;
 
@@ -289,10 +297,12 @@ static size_t get_memory_size(jit_context_t *ctx, int32_t memidx) {
 
 static size_t get_memory_max_pages(jit_context_t *ctx, int32_t memidx) {
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
-    if (!mem || mem->max_pages == 0) {
-        if (!mem) {
-            return 65536;
-        }
+    if (!mem) {
+        return 65536;
+    }
+
+    // SIZE_MAX means "unlimited".
+    if (mem->max_pages == SIZE_MAX) {
         if (mem->is_memory64) {
             return (size_t)2147483647;
         }
@@ -302,6 +312,8 @@ static size_t get_memory_max_pages(jit_context_t *ctx, int32_t memidx) {
         }
         return (size_t)(4294967296ULL / (uint64_t)page_size);
     }
+
+    // Otherwise, the declared maximum can legally be 0.
     return mem->max_pages;
 }
 
@@ -335,7 +347,7 @@ int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t
 
     // Check against max limit (pages)
     int64_t stored_max = (int64_t)get_memory_max_pages(ctx, memidx);
-    int64_t effective_max = (max_pages > 0) ? (int64_t)max_pages : stored_max;
+    int64_t effective_max = (max_pages >= 0) ? (int64_t)max_pages : stored_max;
     if (effective_max > stored_max) effective_max = stored_max;
     if (new_pages > effective_max) return -1;
 

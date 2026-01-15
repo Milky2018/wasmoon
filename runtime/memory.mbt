@@ -420,20 +420,11 @@ pub fn Memory::is_memory64(self : Memory) -> Bool {
 }
 
 ///|
-/// Returns sorted list of allocated (touched) 64KiB pages.
-///
-/// Descriptor-backed memories are contiguous; callers should not rely on this.
-/// This is retained only for legacy tooling.
-pub fn Memory::allocated_pages(self : Memory) -> Array[(Int, Bytes)] {
-  []
-}
-
-///|
 pub fn Memory::grow(self : Memory, delta : Int) -> Int {
   if delta < 0 {
     return -1
   }
-  let max_pages = self.max.unwrap_or(0)
+  let max_pages = self.max.unwrap_or(-1)
   if self.mem_desc_ptr == 0L {
     return -1
   }

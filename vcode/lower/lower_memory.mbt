@@ -106,7 +106,7 @@ fn lower_memory_grow(
   vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
   block.add_inst(vmctx_mov)
   let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
-  let max_pages_value = max_pages.unwrap_or(0)
+  let max_pages_value = max_pages.unwrap_or(-1)
   let max_pages_vreg = materialize_imm(ctx, block, max_pages_value.to_int64())
 
   // For memory64, use a temporary vreg for the i32 result, then sign-extend to i64

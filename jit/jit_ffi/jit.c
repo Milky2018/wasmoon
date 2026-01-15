@@ -698,7 +698,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
         atomic_store_explicit(&mem->current_length, 0, memory_order_relaxed);
     }
 
-    mem->max_pages = (max_pages <= 0) ? 0 : (size_t)max_pages;
+    mem->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     mem->is_memory64 = (is_memory64 != 0);
     mem->page_size_log2 = page_size_log2;
     mem->is_shared = (is_shared != 0);
@@ -742,14 +742,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial
     }
 
     size_t initial_size = (size_t)initial_pages * WASM_PAGE_SIZE;
-    size_t max_size = (max_pages <= 0) ? 0 : (size_t)max_pages * WASM_PAGE_SIZE;
+    size_t max_size = (max_pages < 0) ? 0 : (size_t)max_pages * WASM_PAGE_SIZE;
 
     wasmoon_memory_t *memory = (wasmoon_memory_t *)calloc(1, sizeof(wasmoon_memory_t));
     if (!memory) {
         return 0;
     }
 
-    memory->max_pages = (max_pages <= 0) ? 0 : (size_t)max_pages;
+    memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;
     memory->is_shared = 0;
@@ -790,7 +790,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
     size_t initial_size = (size_t)initial_pages * WASM_PAGE_SIZE;
     // max_pages is currently unused by alloc_guarded_memory (fixed reservation),
     // but keep the parameter for future extensions.
-    size_t max_size = (max_pages <= 0) ? 0 : (size_t)max_pages * WASM_PAGE_SIZE;
+    size_t max_size = (max_pages < 0) ? 0 : (size_t)max_pages * WASM_PAGE_SIZE;
 
     // If we previously owned memory0 (allocated via ctx_alloc_guarded_memory), free it.
     if (ctx->owns_memory0 && ctx->memory0) {
@@ -803,7 +803,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
     if (!memory) {
         return 0;
     }
-    memory->max_pages = (max_pages <= 0) ? 0 : (size_t)max_pages;
+    memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;
     memory->is_shared = 0;

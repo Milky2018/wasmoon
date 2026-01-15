@@ -764,8 +764,20 @@ fn Translator::translate_instruction(
       let delta = self.pop()
       let is_mem64 = memidx < self.memory_is_64.length() &&
         self.memory_is_64[memidx]
-      // Use the runtime descriptor's max (handles imported memories correctly).
-      let result = self.builder.memory_grow(memidx, delta, is_memory64=is_mem64)
+
+      // Use the module/override maximum for memory 0.
+      // For other memories, rely on the runtime descriptor's max.
+      let max_pages = if memidx == 0 { self.memory_max } else { None }
+      let result = match max_pages {
+        Some(max) =>
+          self.builder.memory_grow(
+            memidx,
+            delta,
+            max_pages=max,
+            is_memory64=is_mem64,
+          )
+        None => self.builder.memory_grow(memidx, delta, is_memory64=is_mem64)
+      }
       self.push(result)
     }
     MemorySize(memidx) => {

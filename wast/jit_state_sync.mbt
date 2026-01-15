@@ -18,7 +18,7 @@ pub fn init_jit_memories_from_store(
     return Some([])
   }
   let memories : Array[@jit.MemoryInfo] = []
-  for i, mem_addr in instance.mem_addrs {
+  for mem_addr in instance.mem_addrs {
     let mem = store.get_mem(mem_addr) catch { _ => return None }
     let size = mem.byte_len()
     let (_, max_pages) = mem.get_limits()
