@@ -223,7 +223,7 @@ pub fn JITModule::from_single_function(
       if mem_ptr == 0L && actual_size > 0L {
         return None
       }
-      ctx.set_memory(mem_ptr, actual_size)
+      ctx.set_memory(mem_ptr)
       // Create executable code
       let exec_code = ExecCode::new(code_bytes)
       match exec_code {
@@ -697,14 +697,10 @@ fn sanitize_filename(s : String) -> String {
 }
 
 ///|
-/// Set memory for the JIT context
-pub fn JITModule::set_memory(
-  self : JITModule,
-  mem_ptr : Int64,
-  mem_size : Int64,
-) -> Unit {
+/// Set memory0 for the JIT context
+pub fn JITModule::set_memory(self : JITModule, mem0_ptr : Int64) -> Unit {
   if self.context is Some(ctx) {
-    ctx.set_memory(mem_ptr, mem_size)
+    ctx.set_memory(mem0_ptr)
   }
 }
 

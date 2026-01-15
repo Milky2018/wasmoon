@@ -81,6 +81,7 @@ pub fn Translator::new(
   import_func_type_indices : Array[Int],
   memory_max? : Int? = None,
   memory_is_64? : Array[Bool] = [],
+  memory_page_size_log2? : Array[Int] = [],
   tables? : Array[@types.Table] = [],
   global_types? : Array[@types.GlobalType] = [],
   type_rec_groups? : Array[Int] = [],
@@ -100,7 +101,12 @@ pub fn Translator::new(
   builder.add_param(Type::I64) |> ignore // caller_vmctx
 
   // Create function environment for desugaring Wasm operations
-  let func_env = FuncEnvironment::new(global_types, memory_mins~, memory_is_64~)
+  let func_env = FuncEnvironment::new(
+    global_types,
+    memory_mins~,
+    memory_is_64~,
+    memory_page_size_log2~,
+  )
 
   // Add wasm function parameters (starting from params[2])
   let local_values : Array[Value] = []
@@ -215,11 +221,14 @@ pub fn Translator::from_module(
       }
   }
 
-  // Build memory_is_64 array for memory64 support
+  // Build memory metadata arrays
   let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
+  let memory_page_size_log2 = mod_.memories.map(fn(m) { m.page_size_log2 })
 
   // Calculate memory_mins (minimum guaranteed memory size in bytes)
-  let memory_mins = mod_.memories.map(fn(m) { m.limits.min * 65536L })
+  let memory_mins = mod_.memories.map(fn(m) {
+    m.limits.min * (1L << m.page_size_log2)
+  })
 
   // Determine function name: prefer internal name, then export name, then anonymous
   let func_idx = num_imports + func_local_idx
@@ -263,6 +272,7 @@ pub fn Translator::from_module(
     import_func_type_indices,
     memory_max~,
     memory_is_64~,
+    memory_page_size_log2~,
     tables=mod_.tables,
     global_types~,
     type_rec_groups=mod_.type_rec_groups,

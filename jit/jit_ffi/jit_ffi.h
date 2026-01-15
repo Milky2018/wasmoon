@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdatomic.h>
 
 // ============ JIT Context v3 ============
 // New ABI passes vmctx via X0 (callee_vmctx) and X1 (caller_vmctx)
@@ -12,10 +13,30 @@
 // Float params in V0-V7 (S for f32, D for f64)
 // X19 caches callee_vmctx for fast access within the function
 
+// Shared linear memory definition (wasmtime-style)
+// Layout is intentionally compatible with JIT-generated loads:
+//   +0: base pointer
+//   +8: current length in bytes (atomic for threads/shared)
+typedef struct {
+    uint8_t *base;
+    _Atomic size_t current_length;
+
+    // Metadata (not accessed by JIT code directly)
+    size_t max_pages;        // 0 or -1 semantics handled by runtime
+    int is_memory64;
+    int page_size_log2;
+
+    // Guarded allocation info (memory32, reserved mapping)
+    void *alloc_base;
+    size_t alloc_size;
+    size_t guard_start;      // start of PROT_NONE region in bytes
+    int is_guarded;
+    int is_shared;
+} wasmoon_memory_t;
+
 // VMContext v3 - layout MUST match vcode/abi/abi.mbt constants:
-//   +0:  memory_base (uint8_t*)     - High frequency: linear memory base (memory 0 fast path)
-//   +8:  memory_size (size_t)       - High frequency: memory size in bytes (memory 0 fast path)
-//   +16: func_table (void**)        - High frequency: function pointer array
+//   +0:  memory0 (wasmoon_memory_t*) - High frequency: memory definition pointer (memory 0 fast path)
+//   +8:  func_table (void**)         - High frequency: function pointer array
 //   +24: table0_base (void**)       - High frequency: table 0 base (fast path for call_indirect)
 //   +32: table0_elements (size_t)   - Medium frequency: table 0 element count
 //   +40: globals (void*)            - Medium frequency: global variable array
@@ -30,46 +51,35 @@
 //   +104: memory_count (int)        - Low frequency: number of memories
 typedef struct {
     // High frequency fields (accessed in hot paths)
-    uint8_t *memory_base;     // +0:  WebAssembly linear memory base
-    size_t memory_size;       // +8:  Memory size in bytes
-    void **func_table;        // +16: Array of function pointers
-    void **table0_base;       // +24: Table 0 base (for fast call_indirect)
+    wasmoon_memory_t *memory0; // +0:  WebAssembly memory 0 definition
+    void **func_table;         // +8:  Array of function pointers
+    void **table0_base;        // +16: Table 0 base (for fast call_indirect)
 
     // Medium frequency fields
-    size_t table0_elements;   // +32: Number of elements in table 0
-    void *globals;            // +40: Array of global variable values (WasmValue*)
+    size_t table0_elements;    // +24: Number of elements in table 0
+    void *globals;             // +32: Array of global variable values (WasmValue*)
 
     // Low frequency fields (multi-table support)
-    void ***tables;           // +48: Array of table pointers (for table_idx != 0)
-    int table_count;          // +56: Number of tables
-    int func_count;           // +60: Number of entries in func_table
-    size_t *table_sizes;      // +64: Array of table current sizes for all tables
-    size_t *table_max_sizes;  // +72: Array of table max sizes (-1 = unlimited)
+    void ***tables;            // +40: Array of table pointers (for table_idx != 0)
+    int table_count;           // +48: Number of tables
+    int func_count;            // +52: Number of entries in func_table
+    size_t *table_sizes;       // +56: Array of table current sizes for all tables
+    size_t *table_max_sizes;   // +64: Array of table max sizes (-1 = unlimited)
 
-    // Multi-memory support (parallel to multi-table)
-    uint8_t **memories;       // +80: Array of memory base pointers
-    size_t *memory_sizes;     // +88: Array of memory sizes in bytes
-    size_t *memory_max_sizes; // +96: Array of memory max sizes in pages (-1 = unlimited)
-    int memory_count;         // +104: Number of memories
+    // Multi-memory support
+    wasmoon_memory_t **memories; // +72: Array of memory definition pointers
+    int memory_count;            // +80: Number of memories
 
     // Debug: current wasm function index (best-effort)
-    // Placed in the natural 4-byte padding after memory_count to keep all existing
-    // VMContext offsets stable (next pointer field remains 8-byte aligned at +112).
-    int32_t debug_current_func_idx; // +108: Currently executing wasm func_idx (-1 = unknown)
-
-    // Memory guard pages (for bounds check elimination)
-    // Memory is allocated with mmap, with guard pages after the accessible region
-    // Access to guard pages triggers SIGSEGV -> trap
-    void *memory0_alloc_base;   // Base of mmap allocation (includes guard region)
-    size_t memory0_alloc_size;  // Total mmap allocation size
-    size_t memory0_guard_start; // Offset where guard region starts (= memory_size)
+    int32_t debug_current_func_idx; // +84: Currently executing wasm func_idx (-1 = unknown)
 
     // GC heap for inline allocation (accessed by JIT code)
-    uint8_t *gc_heap_ptr;     // +112: Current allocation pointer (aligned to 8)
-    uint8_t *gc_heap_limit;   // +120: Allocation limit (triggers slow path when exceeded)
-    void *gc_heap;            // +128: GcHeap* pointer for slow path
+    uint8_t *gc_heap_ptr;     // +88: Current allocation pointer (aligned to 8)
+    uint8_t *gc_heap_limit;   // +96: Allocation limit (triggers slow path when exceeded)
+    void *gc_heap;            // +104: GcHeap* pointer for slow path
 
     // Additional fields (not accessed by JIT code directly)
+    int owns_memory0;         // Whether this context owns memory0 (should free it)
     int owns_indirect_table;  // Whether this context owns table0_base (should free it)
     char **args;              // WASI: command line arguments
     int argc;                 // WASI: number of arguments

@@ -173,9 +173,9 @@ static int64_t wasi_fd_write_impl(
     int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nwritten_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int native_fd = get_native_fd(ctx, (int)fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -204,9 +204,9 @@ static int64_t wasi_fd_read_impl(
     int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nread_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int native_fd = get_native_fd(ctx, (int)fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -259,7 +259,7 @@ static int64_t wasi_fd_seek_impl(
     int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, (int)fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -272,7 +272,7 @@ static int64_t wasi_fd_seek_impl(
 #endif
     if (pos < 0) return errno_to_wasi(errno);
 
-    *(int64_t *)(ctx->memory_base + newoffset_ptr) = pos;
+    *(int64_t *)(ctx->memory0->base + newoffset_ptr) = pos;
     return WASI_ESUCCESS;
 }
 
@@ -335,9 +335,9 @@ static int64_t wasi_fd_fdstat_get_impl(
     int64_t fd, int64_t fdstat_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int wasi_fd = (int)fd;
 
     // Determine file type
@@ -377,7 +377,7 @@ static int64_t wasi_fd_prestat_get_impl(
     int64_t fd, int64_t prestat_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     int wasi_fd = (int)fd;
     if (!is_preopen_fd(ctx, wasi_fd)) return WASI_EBADF;
@@ -386,7 +386,7 @@ static int64_t wasi_fd_prestat_get_impl(
     const char *guest_path = ctx->preopen_guest_paths[idx];
     size_t len = strlen(guest_path);
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     mem[prestat_ptr] = 0; // tag = dir
     mem[prestat_ptr + 1] = 0;
     mem[prestat_ptr + 2] = 0;
@@ -401,7 +401,7 @@ static int64_t wasi_fd_prestat_dir_name_impl(
     int64_t fd, int64_t path_ptr, int64_t path_len
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     int wasi_fd = (int)fd;
     if (!is_preopen_fd(ctx, wasi_fd)) return WASI_EBADF;
@@ -411,7 +411,7 @@ static int64_t wasi_fd_prestat_dir_name_impl(
     size_t len = strlen(guest_path);
     size_t to_copy = (size_t)path_len < len ? (size_t)path_len : len;
 
-    memcpy(ctx->memory_base + path_ptr, guest_path, to_copy);
+    memcpy(ctx->memory0->base + path_ptr, guest_path, to_copy);
     return WASI_ESUCCESS;
 }
 
@@ -428,12 +428,12 @@ static int64_t wasi_path_open_impl(
     (void)rights_base;
     (void)rights_inh;
 
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     // Read path from memory
     char *path = malloc((size_t)path_len + 1);
     if (!path) return WASI_EIO;
-    memcpy(path, ctx->memory_base + path_ptr, (size_t)path_len);
+    memcpy(path, ctx->memory0->base + path_ptr, (size_t)path_len);
     path[path_len] = '\0';
 
     // Resolve full path
@@ -462,7 +462,7 @@ static int64_t wasi_path_open_impl(
         return WASI_EIO;
     }
 
-    *(int32_t *)(ctx->memory_base + opened_fd_ptr) = wasi_fd;
+    *(int32_t *)(ctx->memory0->base + opened_fd_ptr) = wasi_fd;
     return WASI_ESUCCESS;
 #else
     free(full_path);
@@ -476,11 +476,11 @@ static int64_t wasi_path_unlink_file_impl(
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     char *path = malloc((size_t)path_len + 1);
     if (!path) return WASI_EIO;
-    memcpy(path, ctx->memory_base + path_ptr, (size_t)path_len);
+    memcpy(path, ctx->memory0->base + path_ptr, (size_t)path_len);
     path[path_len] = '\0';
 
     char *full_path = resolve_path(ctx, (int)dir_fd, path);
@@ -504,11 +504,11 @@ static int64_t wasi_path_remove_directory_impl(
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     char *path = malloc((size_t)path_len + 1);
     if (!path) return WASI_EIO;
-    memcpy(path, ctx->memory_base + path_ptr, (size_t)path_len);
+    memcpy(path, ctx->memory0->base + path_ptr, (size_t)path_len);
     path[path_len] = '\0';
 
     char *full_path = resolve_path(ctx, (int)dir_fd, path);
@@ -532,11 +532,11 @@ static int64_t wasi_path_create_directory_impl(
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     char *path = malloc((size_t)path_len + 1);
     if (!path) return WASI_EIO;
-    memcpy(path, ctx->memory_base + path_ptr, (size_t)path_len);
+    memcpy(path, ctx->memory0->base + path_ptr, (size_t)path_len);
     path[path_len] = '\0';
 
     char *full_path = resolve_path(ctx, (int)dir_fd, path);
@@ -561,7 +561,7 @@ static int64_t wasi_path_rename_impl(
     int64_t new_fd, int64_t new_path_ptr, int64_t new_path_len
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     char *old_path = malloc((size_t)old_path_len + 1);
     char *new_path = malloc((size_t)new_path_len + 1);
@@ -571,9 +571,9 @@ static int64_t wasi_path_rename_impl(
         return WASI_EIO;
     }
 
-    memcpy(old_path, ctx->memory_base + old_path_ptr, (size_t)old_path_len);
+    memcpy(old_path, ctx->memory0->base + old_path_ptr, (size_t)old_path_len);
     old_path[old_path_len] = '\0';
-    memcpy(new_path, ctx->memory_base + new_path_ptr, (size_t)new_path_len);
+    memcpy(new_path, ctx->memory0->base + new_path_ptr, (size_t)new_path_len);
     new_path[new_path_len] = '\0';
 
     char *old_full = resolve_path(ctx, (int)old_fd, old_path);
@@ -606,9 +606,9 @@ static int64_t wasi_fd_filestat_get_impl(
     int64_t fd, int64_t buf_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int wasi_fd = (int)fd;
 
     // Handle stdio
@@ -683,9 +683,9 @@ static int64_t wasi_args_sizes_get_impl(
     int64_t argc_ptr, int64_t argv_buf_size_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int argc = ctx->argc;
     char **args = ctx->args;
 
@@ -705,9 +705,9 @@ static int64_t wasi_args_get_impl(
     int64_t argv_ptr, int64_t argv_buf_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int argc = ctx->argc;
     char **args = ctx->args;
 
@@ -727,9 +727,9 @@ static int64_t wasi_environ_sizes_get_impl(
     int64_t environc_ptr, int64_t environ_buf_size_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int envc = ctx->envc;
     char **envp = ctx->envp;
 
@@ -749,9 +749,9 @@ static int64_t wasi_environ_get_impl(
     int64_t environ_ptr, int64_t environ_buf_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int envc = ctx->envc;
     char **envp = ctx->envp;
 
@@ -772,7 +772,7 @@ static int64_t wasi_clock_time_get_impl(
 ) {
     (void)caller_ctx;
     (void)precision;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     int64_t time_ns = 0;
     // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID
@@ -794,7 +794,7 @@ static int64_t wasi_clock_time_get_impl(
         return WASI_EINVAL;
     }
 
-    *(int64_t *)(ctx->memory_base + time_ptr) = time_ns;
+    *(int64_t *)(ctx->memory0->base + time_ptr) = time_ns;
     return WASI_ESUCCESS;
 }
 
@@ -804,12 +804,12 @@ static int64_t wasi_clock_res_get_impl(
     int64_t clock_id, int64_t resolution_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID
     if (clock_id < 0 || clock_id > 3) return WASI_EINVAL;
 
-    *(int64_t *)(ctx->memory_base + resolution_ptr) = 1000000; // 1ms
+    *(int64_t *)(ctx->memory0->base + resolution_ptr) = 1000000; // 1ms
     return WASI_ESUCCESS;
 }
 
@@ -819,9 +819,9 @@ static int64_t wasi_random_get_impl(
     int64_t buf_ptr, int64_t buf_len
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     for (int64_t i = 0; i < buf_len; i++) {
         mem[buf_ptr + i] = (uint8_t)(rand() & 0xFF);
     }
@@ -866,10 +866,10 @@ static int64_t wasi_poll_oneoff_impl(
     int64_t in_ptr, int64_t out_ptr, int64_t nsubscriptions, int64_t nevents_ptr
 ) {
     (void)caller_ctx;
-    if (!ctx || !ctx->memory_base) return WASI_EBADF;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     // Simplified: just handle clock subscriptions with sleep
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     int64_t min_timeout = -1;
 
     for (int64_t i = 0; i < nsubscriptions; i++) {
@@ -921,7 +921,7 @@ static int32_t wasi_fd_pread_impl(
     int32_t fd, int32_t iovs_ptr, int32_t iovs_len, int64_t offset, int32_t nread_ptr
 ) {
     (void)caller_ctx;
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
     // stdio fds are not seekable, so pread is not supported
@@ -953,7 +953,7 @@ static int32_t wasi_fd_pwrite_impl(
     int32_t fd, int32_t iovs_ptr, int32_t iovs_len, int64_t offset, int32_t nwritten_ptr
 ) {
     (void)caller_ctx;
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
     // stdio fds are not seekable, so pwrite is not supported
@@ -985,7 +985,7 @@ static int32_t wasi_fd_readdir_impl(
     int32_t fd, int32_t buf_ptr, int32_t buf_len, int64_t cookie, int32_t bufused_ptr
 ) {
     (void)caller_ctx;
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
     int native_fd = get_native_fd(ctx, fd);
@@ -1063,7 +1063,7 @@ static int32_t wasi_path_filestat_get_impl(
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len, int32_t buf_ptr
 ) {
     (void)caller_ctx;
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
 #ifndef _WIN32
@@ -1114,7 +1114,7 @@ static int32_t wasi_path_readlink_impl(
     int32_t buf_ptr, int32_t buf_len, int32_t bufused_ptr
 ) {
     (void)caller_ctx;
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
 #ifndef _WIN32
@@ -1145,7 +1145,7 @@ static int32_t wasi_path_symlink_impl(
     int32_t dir_fd, int32_t new_path_ptr, int32_t new_path_len
 ) {
     (void)caller_ctx;
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
 #ifndef _WIN32
@@ -1185,7 +1185,7 @@ static int32_t wasi_path_link_impl(
 ) {
     (void)caller_ctx;
     (void)old_flags;
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
 #ifndef _WIN32
@@ -1278,7 +1278,7 @@ static int32_t wasi_path_filestat_set_times_impl(
     int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
     (void)caller_ctx;
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
 #ifndef _WIN32
@@ -1528,7 +1528,7 @@ static int32_t wasi_sock_accept_impl(
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
 #ifndef _WIN32
@@ -1569,7 +1569,7 @@ static int32_t wasi_sock_recv_impl(
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
 #ifndef _WIN32
@@ -1621,7 +1621,7 @@ static int32_t wasi_sock_send_impl(
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
-    uint8_t *mem = ctx->memory_base;
+    uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
 #ifndef _WIN32

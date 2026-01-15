@@ -106,8 +106,9 @@ pub fn has_cross_module_imports(mod_ : @types.Module) -> Bool {
     // JIT-supported modules are handled by trampolines
     // Other modules are user modules that need state sharing
     if not(@jit.is_jit_supported_module(imp.mod_name)) {
-      // User module import - check if it's a global/memory/table
-      if imp.desc is (Global(_) | Memory(_) | Table(_)) {
+      // User module import - globals and tables still need sharing.
+      // Memories are descriptor-backed and can be shared safely.
+      if imp.desc is (Global(_) | Table(_)) {
         return true
       }
     }
@@ -120,7 +121,8 @@ pub fn has_cross_module_imports(mod_ : @types.Module) -> Bool {
 /// These might be imported by other modules, and JIT can't share the backing storage
 pub fn exports_shared_resources(mod_ : @types.Module) -> Bool {
   for exp in mod_.exports {
-    if exp.desc is (Memory(_) | Table(_)) {
+    // Tables are not yet descriptor-backed/shared with the interpreter.
+    if exp.desc is Table(_) {
       return true
     }
   }

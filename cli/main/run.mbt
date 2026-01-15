@@ -879,13 +879,10 @@ fn run_with_jit(
           // Initialize WASI context with args, env, and preopens
           jm.init_wasi(wasi_args, wasi_envs, wasi_preopens)
           // Initialize all memories (multi-memory support)
-          let _jit_memories = match
-            @wast.init_jit_memories_from_store(instance, store, jm) {
-            Some(memories) => memories
-            None => {
-              @logger.error("Failed to initialize JIT memories")
-              return exit_failure()
-            }
+          guard @wast.init_jit_memories_from_store(instance, store, jm)
+            is Some(_) else {
+            @logger.error("Failed to initialize JIT memories")
+            return exit_failure()
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
@@ -924,9 +921,8 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   @jit.gc_teardown()
-                  // Sync state back to interpreter store even on trap.
+                  // Sync globals back to interpreter store even on trap.
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
-                  @wast.sync_jit_memories_to_store(instance, store, jm)
                   // Capture and display backtrace if DWARF is enabled
                   match dwarf_builder {
                     Some(dwarf) => {
@@ -953,9 +949,8 @@ fn run_with_jit(
               }
               // Tear down GC context after JIT call
               @jit.gc_teardown()
-              // Sync JIT state back to interpreter store for consistency.
+              // Sync JIT globals back to interpreter store for consistency.
               @wast.sync_jit_globals_to_store(jit_ctx, store)
-              @wast.sync_jit_memories_to_store(instance, store, jm)
               // Convert Int64 results to Value using shared helper
               let values = convert_jit_results(results, f.result_types)
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)

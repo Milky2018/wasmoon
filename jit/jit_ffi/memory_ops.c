@@ -20,8 +20,8 @@
 
 // Allocate memory with guard pages using mmap
 // Returns memory base on success, NULL on failure
-static uint8_t *alloc_guarded_memory(jit_context_t *ctx, size_t initial_size, size_t max_size) {
-    if (!ctx) return NULL;
+static uint8_t *alloc_guarded_memory(wasmoon_memory_t *memory, size_t initial_size, size_t max_size) {
+    if (!memory) return NULL;
 
     // Reserve a large, fixed virtual range for memory32 guard pages regardless of
     // the module's declared maximum. This avoids OOB accesses escaping the mapping
@@ -36,45 +36,48 @@ static uint8_t *alloc_guarded_memory(jit_context_t *ctx, size_t initial_size, si
 
 #ifdef _WIN32
     // Windows: use VirtualAlloc with MEM_RESERVE, then MEM_COMMIT for used pages
-    void *mem = VirtualAlloc(NULL, reserve_size, MEM_RESERVE, PAGE_NOACCESS);
-    if (mem == NULL) return NULL;
+    void *mapping = VirtualAlloc(NULL, reserve_size, MEM_RESERVE, PAGE_NOACCESS);
+    if (mapping == NULL) return NULL;
 
     // Commit the initial pages
     if (initial_size > 0) {
-        void *committed = VirtualAlloc(mem, initial_size, MEM_COMMIT, PAGE_READWRITE);
+        void *committed = VirtualAlloc(mapping, initial_size, MEM_COMMIT, PAGE_READWRITE);
         if (committed == NULL) {
-            VirtualFree(mem, 0, MEM_RELEASE);
+            VirtualFree(mapping, 0, MEM_RELEASE);
             return NULL;
         }
     }
 #else
     // POSIX: use mmap with PROT_NONE, then mprotect for used pages
-    void *mem = mmap(NULL, reserve_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (mem == MAP_FAILED) return NULL;
+    void *mapping = mmap(NULL, reserve_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mapping == MAP_FAILED) return NULL;
 
     // Make the initial pages accessible
     if (initial_size > 0) {
-        if (mprotect(mem, initial_size, PROT_READ | PROT_WRITE) != 0) {
-            munmap(mem, reserve_size);
+        if (mprotect(mapping, initial_size, PROT_READ | PROT_WRITE) != 0) {
+            munmap(mapping, reserve_size);
             return NULL;
         }
         // Zero-initialize (mmap with MAP_ANONYMOUS should already be zero, but be safe)
-        memset(mem, 0, initial_size);
+        memset(mapping, 0, initial_size);
     }
 #endif
 
-    // Store allocation info in context
-    ctx->memory0_alloc_base = mem;
-    ctx->memory0_alloc_size = reserve_size;
-    ctx->memory0_guard_start = initial_size;
+    // Store allocation info in memory object
+    memory->alloc_base = mapping;
+    memory->alloc_size = reserve_size;
+    memory->guard_start = initial_size;
+    memory->is_guarded = 1;
+    memory->base = (uint8_t *)mapping;
+    atomic_store_explicit(&memory->current_length, initial_size, memory_order_relaxed);
 
-    return (uint8_t *)mem;
+    return (uint8_t *)mapping;
 }
 
 // Grow guarded memory by changing protection
-static int grow_guarded_memory(jit_context_t *ctx, size_t old_size, size_t new_size) {
-    if (!ctx || !ctx->memory0_alloc_base) return -1;
-    if (new_size > ctx->memory0_alloc_size) return -1;  // Would exceed reservation
+static int grow_guarded_memory(wasmoon_memory_t *memory, size_t old_size, size_t new_size) {
+    if (!memory || !memory->alloc_base) return -1;
+    if (new_size > memory->alloc_size) return -1;  // Would exceed reservation
 
     size_t page_size = (size_t)getpagesize();
     old_size = (old_size + page_size - 1) & ~(page_size - 1);
@@ -82,7 +85,7 @@ static int grow_guarded_memory(jit_context_t *ctx, size_t old_size, size_t new_s
 
     if (new_size <= old_size) return 0;  // Nothing to do
 
-    uint8_t *base = (uint8_t *)ctx->memory0_alloc_base;
+    uint8_t *base = (uint8_t *)memory->alloc_base;
     size_t grow_size = new_size - old_size;
 
 #ifdef _WIN32
@@ -98,47 +101,42 @@ static int grow_guarded_memory(jit_context_t *ctx, size_t old_size, size_t new_s
 
     // Zero-initialize new pages
     memset(base + old_size, 0, grow_size);
-    ctx->memory0_guard_start = new_size;
+    memory->guard_start = new_size;
+    atomic_store_explicit(&memory->current_length, new_size, memory_order_relaxed);
 
     return 0;
 }
 
 // Free guarded memory
-static void free_guarded_memory(jit_context_t *ctx) {
-    if (!ctx || !ctx->memory0_alloc_base) return;
+static void free_guarded_memory(wasmoon_memory_t *memory) {
+    if (!memory || !memory->alloc_base || !memory->is_guarded) return;
 
 #ifdef _WIN32
-    VirtualFree(ctx->memory0_alloc_base, 0, MEM_RELEASE);
+    VirtualFree(memory->alloc_base, 0, MEM_RELEASE);
 #else
-    munmap(ctx->memory0_alloc_base, ctx->memory0_alloc_size);
+    munmap(memory->alloc_base, memory->alloc_size);
 #endif
 
-    ctx->memory0_alloc_base = NULL;
-    ctx->memory0_alloc_size = 0;
-    ctx->memory0_guard_start = 0;
+    memory->alloc_base = NULL;
+    memory->alloc_size = 0;
+    memory->guard_start = 0;
+    memory->base = NULL;
+    atomic_store_explicit(&memory->current_length, 0, memory_order_relaxed);
+    memory->is_guarded = 0;
 }
 
-// Non-static version for external use (called from jit_context.c)
-void free_guarded_memory_if_allocated(jit_context_t *ctx) {
-    free_guarded_memory(ctx);
-    if (ctx) {
-        ctx->memory_base = NULL;
-        ctx->memory_size = 0;
-    }
+// External version of alloc_guarded_memory (used by jit.c)
+uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size) {
+    return alloc_guarded_memory(memory, initial_size, max_size);
 }
 
-// External version of alloc_guarded_memory (called from jit.c)
-uint8_t *alloc_guarded_memory_external(jit_context_t *ctx, size_t initial_size, size_t max_size) {
-    return alloc_guarded_memory(ctx, initial_size, max_size);
-}
-
-// Check if address is in memory guard region
+// Check if address is in the guard region of memory0
 int is_memory_guard_page_access(jit_context_t *ctx, void *addr) {
-    if (!ctx || !ctx->memory0_alloc_base) return 0;
+    if (!ctx || !ctx->memory0 || !ctx->memory0->is_guarded || !ctx->memory0->alloc_base) return 0;
 
-    uintptr_t alloc_base = (uintptr_t)ctx->memory0_alloc_base;
-    uintptr_t alloc_end = alloc_base + ctx->memory0_alloc_size;
-    uintptr_t guard_start = alloc_base + ctx->memory0_guard_start;
+    uintptr_t alloc_base = (uintptr_t)ctx->memory0->alloc_base;
+    uintptr_t alloc_end = alloc_base + ctx->memory0->alloc_size;
+    uintptr_t guard_start = alloc_base + ctx->memory0->guard_start;
     uintptr_t fault_addr = (uintptr_t)addr;
 
     // Check if fault is in the guard region (after accessible memory, within allocation)
@@ -148,88 +146,172 @@ int is_memory_guard_page_access(jit_context_t *ctx, void *addr) {
 // ============ Linear Memory Operations ============
 
 int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_pages) {
-    if (!ctx) return -1;
+    if (!ctx || !ctx->memory0) return -1;
     if (delta < 0) return -1;
 
-    size_t current_size = ctx->memory_size;
-    int32_t current_pages = (int32_t)(current_size / WASM_PAGE_SIZE);
+    wasmoon_memory_t *mem = ctx->memory0;
+    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
+    if (page_size == 0) return -1;
 
-    // Check for overflow
-    int64_t new_pages_64 = (int64_t)current_pages + (int64_t)delta;
-    if (new_pages_64 > 65536) return -1;  // Max 4GB (65536 pages)
+    size_t current_size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
+    int64_t current_pages = (int64_t)(current_size / page_size);
 
-    // Check against max limit
-    int32_t effective_max = (max_pages > 0) ? max_pages : 65536;
-    if (new_pages_64 > effective_max) return -1;
+    int64_t new_pages = current_pages + (int64_t)delta;
 
-    int32_t new_pages = (int32_t)new_pages_64;
-    size_t new_size = (size_t)new_pages * WASM_PAGE_SIZE;
+    // Spec max: memory32 has a 32-bit address space (4GiB bytes).
+    int64_t arch_max_pages;
+    if (mem->is_memory64) {
+        arch_max_pages = 2147483647LL;
+    } else {
+        const int64_t max_bytes = 4294967296LL;
+        arch_max_pages = (page_size == 0) ? 0 : (max_bytes / (int64_t)page_size);
+    }
+    if (new_pages > arch_max_pages) return -1;
+
+    // Check against configured max limit
+    int64_t effective_max = (int64_t)max_pages;
+    if (effective_max <= 0) {
+        effective_max = (mem->max_pages > 0) ? (int64_t)mem->max_pages : arch_max_pages;
+    }
+    if (new_pages > effective_max) return -1;
 
     // No change needed if delta is 0
-    if (delta == 0) return current_pages;
+    if (delta == 0) return (int32_t)current_pages;
 
-    // Reallocate memory
-    uint8_t *new_mem = (uint8_t *)realloc(ctx->memory_base, new_size);
-    if (!new_mem) return -1;
+    size_t new_size = (size_t)new_pages * page_size;
 
-    // Zero-initialize the new pages
-    memset(new_mem + current_size, 0, new_size - current_size);
+    if (mem->is_guarded) {
+        if (grow_guarded_memory(mem, current_size, new_size) != 0) {
+            return -1;
+        }
+        return (int32_t)current_pages;
+    }
 
-    // Update context
-    ctx->memory_base = new_mem;
-    ctx->memory_size = new_size;
+    uint8_t *new_base = (uint8_t *)realloc(mem->base, new_size);
+    if (!new_base) return -1;
 
-    return current_pages;
+    memset(new_base + current_size, 0, new_size - current_size);
+
+    mem->base = new_base;
+    atomic_store_explicit(&mem->current_length, new_size, memory_order_relaxed);
+
+    return (int32_t)current_pages;
 }
 
 int32_t memory_size_ctx_internal(jit_context_t *ctx) {
-    if (!ctx) return 0;
-    return (int32_t)(ctx->memory_size / WASM_PAGE_SIZE);
+    if (!ctx || !ctx->memory0) return 0;
+    wasmoon_memory_t *mem = ctx->memory0;
+    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
+    if (page_size == 0) return 0;
+    size_t size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
+    return (int32_t)(size / page_size);
+}
+
+// ============ Descriptor-Only Operations (no ctx) ============
+
+int64_t memory_len_desc_internal(wasmoon_memory_t *mem) {
+    if (!mem) return 0;
+    return (int64_t)atomic_load_explicit(&mem->current_length, memory_order_relaxed);
+}
+
+uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem) {
+    return mem ? mem->base : NULL;
+}
+
+int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t max_pages) {
+    if (!mem) return -1;
+    if (delta < 0) return -1;
+
+    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
+    if (page_size == 0) return -1;
+
+    size_t current_size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
+    int64_t current_pages = (int64_t)(current_size / page_size);
+
+    int64_t new_pages = current_pages + (int64_t)delta;
+
+    int64_t arch_max_pages;
+    if (mem->is_memory64) {
+        arch_max_pages = 2147483647LL;
+    } else {
+        const int64_t max_bytes = 4294967296LL;
+        arch_max_pages = max_bytes / (int64_t)page_size;
+    }
+    if (new_pages > arch_max_pages) return -1;
+
+    int64_t effective_max = (int64_t)max_pages;
+    if (effective_max <= 0) {
+        effective_max = (mem->max_pages > 0) ? (int64_t)mem->max_pages : arch_max_pages;
+    }
+    if (new_pages > effective_max) return -1;
+
+    if (delta == 0) return (int32_t)current_pages;
+
+    size_t new_size = (size_t)new_pages * page_size;
+
+    if (mem->is_guarded) {
+        if (grow_guarded_memory(mem, current_size, new_size) != 0) {
+            return -1;
+        }
+        return (int32_t)current_pages;
+    }
+
+    uint8_t *new_base = (uint8_t *)realloc(mem->base, new_size);
+    if (!new_base) return -1;
+
+    memset(new_base + current_size, 0, new_size - current_size);
+
+    mem->base = new_base;
+    atomic_store_explicit(&mem->current_length, new_size, memory_order_relaxed);
+
+    return (int32_t)current_pages;
 }
 
 // ============ Multi-Memory Operations (v4 with memidx) ============
 
-// Helper to get memory base for a given memidx
-static uint8_t *get_memory_base(jit_context_t *ctx, int32_t memidx) {
-    if (memidx == 0) {
-        return ctx->memory_base;
-    }
-    if (!ctx->memories || memidx < 0 || memidx >= ctx->memory_count) {
-        return NULL;
-    }
+// Helper to get memory object for a given memidx
+static wasmoon_memory_t *get_memory(jit_context_t *ctx, int32_t memidx) {
+    if (!ctx || memidx < 0) return NULL;
+    if (memidx == 0) return ctx->memory0;
+    if (!ctx->memories || memidx >= ctx->memory_count) return NULL;
     return ctx->memories[memidx];
 }
 
-// Helper to get memory size for a given memidx
+static uint8_t *get_memory_base(jit_context_t *ctx, int32_t memidx) {
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    return mem ? mem->base : NULL;
+}
+
 static size_t get_memory_size(jit_context_t *ctx, int32_t memidx) {
-    if (memidx == 0) {
-        return ctx->memory_size;
-    }
-    if (!ctx->memory_sizes || memidx < 0 || memidx >= ctx->memory_count) {
-        return 0;
-    }
-    return ctx->memory_sizes[memidx];
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    return mem ? atomic_load_explicit(&mem->current_length, memory_order_relaxed) : 0;
 }
 
-// Helper to get memory max pages for a given memidx
 static size_t get_memory_max_pages(jit_context_t *ctx, int32_t memidx) {
-    if (!ctx->memory_max_sizes || memidx < 0 || memidx >= ctx->memory_count) {
-        return 65536;  // Default max of 4GB (65536 pages)
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    if (!mem || mem->max_pages == 0) {
+        if (!mem) {
+            return 65536;
+        }
+        if (mem->is_memory64) {
+            return (size_t)2147483647;
+        }
+        size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
+        if (page_size == 0) {
+            return 65536;
+        }
+        return (size_t)(4294967296ULL / (uint64_t)page_size);
     }
-    return ctx->memory_max_sizes[memidx];
+    return mem->max_pages;
 }
 
-// Helper to set memory base and size for a given memidx
 static void set_memory(jit_context_t *ctx, int32_t memidx, uint8_t *base, size_t size) {
-    if (memidx == 0) {
-        ctx->memory_base = base;
-        ctx->memory_size = size;
-    }
-    if (ctx->memories && memidx >= 0 && memidx < ctx->memory_count) {
-        ctx->memories[memidx] = base;
-        if (ctx->memory_sizes) {
-            ctx->memory_sizes[memidx] = size;
-        }
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    if (!mem) return;
+    mem->base = base;
+    atomic_store_explicit(&mem->current_length, size, memory_order_relaxed);
+    if (mem->is_guarded) {
+        mem->guard_start = size;
     }
 }
 
@@ -239,51 +321,44 @@ int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t
     if (memidx < 0) return -1;
     if (memidx > 0 && (!ctx->memories || memidx >= ctx->memory_count)) return -1;
 
-    uint8_t *mem_base = get_memory_base(ctx, memidx);
-    size_t current_size = get_memory_size(ctx, memidx);
-    int32_t current_pages = (int32_t)(current_size / WASM_PAGE_SIZE);
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    if (!mem) return -1;
 
-    // Check for overflow
-    int64_t new_pages_64 = (int64_t)current_pages + (int64_t)delta;
-    if (new_pages_64 > 65536) return -1;  // Max 4GB (65536 pages)
+    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
+    if (page_size == 0) return -1;
 
-    // Check against max limit
-    int32_t effective_max;
-    if (max_pages > 0) {
-        effective_max = max_pages;
-    } else {
-        size_t stored_max = get_memory_max_pages(ctx, memidx);
-        effective_max = (stored_max > 65536) ? 65536 : (int32_t)stored_max;
-    }
-    if (new_pages_64 > effective_max) return -1;
+    uint8_t *mem_base = mem->base;
+    size_t current_size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
+    int64_t current_pages = (int64_t)(current_size / page_size);
 
-    int32_t new_pages = (int32_t)new_pages_64;
-    size_t new_size = (size_t)new_pages * WASM_PAGE_SIZE;
+    int64_t new_pages = current_pages + (int64_t)delta;
+
+    // Check against max limit (pages)
+    int64_t stored_max = (int64_t)get_memory_max_pages(ctx, memidx);
+    int64_t effective_max = (max_pages > 0) ? (int64_t)max_pages : stored_max;
+    if (effective_max > stored_max) effective_max = stored_max;
+    if (new_pages > effective_max) return -1;
 
     // No change needed if delta is 0
-    if (delta == 0) return current_pages;
+    if (delta == 0) return (int32_t)current_pages;
 
-    // Check if guarded memory is in use (memory 0 only)
-    if (memidx == 0 && ctx->memory0_alloc_base) {
-        // Use mprotect to grow guarded memory
-        if (grow_guarded_memory(ctx, current_size, new_size) != 0) {
+    size_t new_size = (size_t)new_pages * page_size;
+
+    if (mem->is_guarded) {
+        if (grow_guarded_memory(mem, current_size, new_size) != 0) {
             return -1;
         }
-        ctx->memory_size = new_size;
-        return current_pages;
+        return (int32_t)current_pages;
     }
 
-    // Fall back to realloc for non-guarded memory
     uint8_t *new_mem = (uint8_t *)realloc(mem_base, new_size);
     if (!new_mem) return -1;
 
-    // Zero-initialize the new pages
     memset(new_mem + current_size, 0, new_size - current_size);
 
-    // Update context
     set_memory(ctx, memidx, new_mem, new_size);
 
-    return current_pages;
+    return (int32_t)current_pages;
 }
 
 int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
@@ -291,8 +366,13 @@ int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     if (memidx < 0) return 0;
     if (memidx > 0 && (!ctx->memories || memidx >= ctx->memory_count)) return 0;
 
-    size_t size = get_memory_size(ctx, memidx);
-    return (int32_t)(size / WASM_PAGE_SIZE);
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    if (!mem) return 0;
+    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
+    if (page_size == 0) return 0;
+
+    size_t size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
+    return (int32_t)(size / page_size);
 }
 
 void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t dst, int32_t val, int32_t size) {
@@ -377,7 +457,7 @@ void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_
 // ============ Bulk Memory Operations ============
 
 void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int32_t size) {
-    if (!ctx || !ctx->memory_base) {
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
@@ -385,8 +465,10 @@ void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int3
         return;
     }
 
+    size_t mem_size = atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed);
+
     // Check bounds
-    if (dst < 0 || size < 0 || (uint32_t)dst + (uint32_t)size > ctx->memory_size) {
+    if (dst < 0 || size < 0 || (uint32_t)dst + (uint32_t)size > mem_size) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
@@ -395,11 +477,11 @@ void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int3
     }
 
     // Fill memory with byte value (val & 0xFF)
-    memset(ctx->memory_base + dst, val & 0xFF, size);
+    memset(ctx->memory0->base + dst, val & 0xFF, size);
 }
 
 void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int32_t size) {
-    if (!ctx || !ctx->memory_base) {
+    if (!ctx || !ctx->memory0 || !ctx->memory0->base) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
@@ -407,10 +489,12 @@ void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int3
         return;
     }
 
+    size_t mem_size = atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed);
+
     // Check bounds for both source and destination
     if (dst < 0 || src < 0 || size < 0 ||
-        (uint32_t)dst + (uint32_t)size > ctx->memory_size ||
-        (uint32_t)src + (uint32_t)size > ctx->memory_size) {
+        (uint32_t)dst + (uint32_t)size > mem_size ||
+        (uint32_t)src + (uint32_t)size > mem_size) {
         g_trap_code = 1;  // Out of bounds memory access
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
@@ -419,7 +503,7 @@ void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int3
     }
 
     // Use memmove to handle overlapping regions correctly
-    memmove(ctx->memory_base + dst, ctx->memory_base + src, size);
+    memmove(ctx->memory0->base + dst, ctx->memory0->base + src, size);
 }
 
 // ============ Table Operations ============

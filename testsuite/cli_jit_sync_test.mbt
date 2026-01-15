@@ -51,8 +51,7 @@ test "cli jit sync: memory.grow visible after jit" {
   let f = jm.get_func_by_name("grow_and_write").unwrap()
   let _ = jm.call_with_context(f, [])
 
-  // Sync back and check interpreter sees the write in grown page
-  @wast.sync_jit_memories_to_store(instance, store, jm)
+  // Interpreter sees the write in grown page immediately
   let mem = store.get_mem(instance.mem_addrs[0]) catch {
     _ => abort("memory missing")
   }

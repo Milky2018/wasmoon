@@ -43,12 +43,14 @@ test "store_merging_peephole" {
       #|    v4 = ldi 200
       #|    v5 = ldi 0
       #|    v6 = load_ptr.i64 +0 v0
-      #|    v7 = add #200 v6
-      #|    store_ptr8 +200 v6, v2
-      #|    v8 = ldi 201
-      #|    v9 = load_ptr.i64 +0 v0
-      #|    v10 = add #201 v9
-      #|    store_ptr8 +201 v9, v3
+      #|    v7 = load_ptr.i64 +0 v6
+      #|    v8 = add #200 v7
+      #|    store_ptr8 +200 v7, v2
+      #|    v9 = ldi 201
+      #|    v10 = load_ptr.i64 +0 v0
+      #|    v11 = load_ptr.i64 +0 v10
+      #|    v12 = add #201 v11
+      #|    store_ptr8 +201 v11, v3
       #|    ret
       #|}
       #|
