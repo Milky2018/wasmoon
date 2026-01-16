@@ -965,21 +965,21 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     content=(
       #|vcode test(v0:int) -> float {
       #|block0:
-      #|    d1 = ldf 10
+      #|    d0 = ldf 10
       #|    x8 = ldi 0
       #|    x9 = ldi 0
       #|    x9 = cmp32.eq x0, x9
       #|    branch x9, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x8, d1
+      #|    store_ptr.f32 +0 x8, d0
       #|    d0 = load_ptr.f32 +0 x8
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x8, d1
+      #|    store_ptr.f32 +0 x8, d0
       #|    d0 = load_ptr.f32 +0 x8
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x8, d1
+      #|    store_ptr.f32 +0 x8, d0
       #|    d0 = load_ptr.f32 +0 x8
       #|    jump block4
       #|block4(f1:float):

@@ -48,6 +48,7 @@ struct BacktrackingAllocator {
   // Configuration
   int_regs : Array[@abi.PReg]
   float_regs : Array[@abi.PReg]
+  vector_regs : Array[@abi.PReg]
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
 
@@ -65,6 +66,7 @@ pub fn BacktrackingAllocator::new(
   bundles : BundleSet,
   int_regs : Array[@abi.PReg],
   float_regs : Array[@abi.PReg],
+  vector_regs : Array[@abi.PReg],
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
 ) -> BacktrackingAllocator {
@@ -78,6 +80,7 @@ pub fn BacktrackingAllocator::new(
     queue: [],
     int_regs,
     float_regs,
+    vector_regs,
     callee_saved_int,
     callee_saved_float,
     block_order: ranges.block_order,
@@ -141,12 +144,16 @@ fn BacktrackingAllocator::get_available_regs(
   if bundle.crosses_call(self.ranges) {
     match bundle.reg_class {
       @abi.Int => self.callee_saved_int
-      @abi.Float32 | @abi.Float64 | @abi.Vector => self.callee_saved_float
+      @abi.Float32 | @abi.Float64 => self.callee_saved_float
+      // V8-V15 preservation is only guaranteed for the low 64 bits by AAPCS64.
+      // Vector values that cross calls are handled by forced spilling earlier.
+      @abi.Vector => []
     }
   } else {
     match bundle.reg_class {
       @abi.Int => self.int_regs
-      @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_regs
+      @abi.Float32 | @abi.Float64 => self.float_regs
+      @abi.Vector => self.vector_regs
     }
   }
 }
@@ -272,12 +279,15 @@ fn BacktrackingAllocator::is_callee_saved(
           return true
         }
       }
-    @abi.Float32 | @abi.Float64 | @abi.Vector =>
+    @abi.Float32 | @abi.Float64 =>
       for cs in self.callee_saved_float {
         if cs.index == preg.index {
           return true
         }
       }
+    // AAPCS64 only guarantees preserving the low 64 bits of V8-V15.
+    // Treat vectors as never callee-saved.
+    @abi.Vector => ()
   }
   false
 }
@@ -1000,6 +1010,7 @@ pub fn allocate_backtracking(
   liveness : LivenessResult,
   int_regs : Array[@abi.PReg],
   float_regs : Array[@abi.PReg],
+  vector_regs : Array[@abi.PReg],
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
 ) -> RegAllocResult {
@@ -1011,7 +1022,7 @@ pub fn allocate_backtracking(
 
   // Phase 4: Allocate
   let allocator = BacktrackingAllocator::new(
-    func, ranges, bundles, int_regs, float_regs, callee_saved_int, callee_saved_float,
+    func, ranges, bundles, int_regs, float_regs, vector_regs, callee_saved_int, callee_saved_float,
   )
 
   // Pre-assign function parameters to ABI registers (before main allocation)

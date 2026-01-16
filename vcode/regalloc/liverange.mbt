@@ -362,6 +362,82 @@ pub fn build_live_ranges(
 ) -> LiveRangeSet {
   let result = LiveRangeSet::new(liveness.block_order)
   let mut next_id = 0
+  let block_order = liveness.block_order
+  fn point_after(point : ProgPoint, block_len : Int) -> ProgPoint {
+    match point.pos {
+      Before => { block: point.block, inst: point.inst, pos: After }
+      After =>
+        if point.inst < block_len {
+          { block: point.block, inst: point.inst + 1, pos: Before }
+        } else {
+          { block: point.block, inst: block_len, pos: After }
+        }
+    }
+  }
+
+  fn pp_lt(
+    a : ProgPoint,
+    b : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Bool {
+    a.compare_with_order(b, block_order) < 0
+  }
+
+  fn pp_le(
+    a : ProgPoint,
+    b : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Bool {
+    a.compare_with_order(b, block_order) <= 0
+  }
+
+  fn pp_min(
+    a : ProgPoint,
+    b : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> ProgPoint {
+    if pp_le(a, b, block_order) {
+      a
+    } else {
+      b
+    }
+  }
+
+  fn pp_max(
+    a : ProgPoint,
+    b : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> ProgPoint {
+    if pp_lt(a, b, block_order) {
+      b
+    } else {
+      a
+    }
+  }
+
+  fn normalize_ranges(
+    ranges : Array[ProgPointRange],
+    block_order : FixedArray[Int],
+  ) -> Array[ProgPointRange] {
+    if ranges.length() <= 1 {
+      return ranges
+    }
+    ranges.sort_by(fn(a, b) { a.start.compare_with_order(b.start, block_order) })
+    let out : Array[ProgPointRange] = []
+    out.push(ranges[0])
+    for i in 1..<ranges.length() {
+      let r = ranges[i]
+      let last_idx = out.length() - 1
+      let last = out[last_idx]
+      if r.start.compare_with_order(last.end, block_order) < 0 {
+        let end = pp_max(last.end, r.end, block_order)
+        out[last_idx] = ProgPointRange::new(last.start, end)
+      } else {
+        out.push(r)
+      }
+    }
+    out
+  }
 
   // Process each vreg from use-def info
   for entry in liveness.use_def {
@@ -369,29 +445,96 @@ pub fn build_live_ranges(
     let range = LiveRange::new(next_id, info.vreg)
     next_id += 1
 
-    // Build ranges from def point to uses.
-    // Currently uses a single conservative range from earliest to latest point.
-    // This is correct but may cause unnecessary register pressure.
-    // Multi-span ranges would require: (1) CFG-based liveness analysis to find holes,
-    // (2) block order respecting loop nesting for accurate range splitting.
-    // The current approach works correctly for all cases.
-    let interval = liveness.intervals.get(vreg_id)
-    match interval {
-      Some(iv) => {
-        range.add_range(ProgPointRange::new(iv.start, iv.end))
-        range.crosses_call = iv.crosses_call
+    // Add use positions (for constraints / heuristics)
+    if info.def_point is Some(def) {
+      let constraint = find_constraint_at_for_vreg(func, def, vreg_id)
+      range.add_use(UsePosition::new(def, Def, constraint))
+    }
+    for use_point in info.use_points {
+      let constraint = find_constraint_at_for_vreg(func, use_point, vreg_id)
+      range.add_use(UsePosition::new(use_point, Use, constraint))
+    }
 
-        // Add use positions
-        if info.def_point is Some(def) {
-          let constraint = find_constraint_at_for_vreg(func, def, vreg_id)
-          range.add_use(UsePosition::new(def, Def, constraint))
-        }
-        for use_point in info.use_points {
-          let constraint = find_constraint_at_for_vreg(func, use_point, vreg_id)
-          range.add_use(UsePosition::new(use_point, Use, constraint))
+    // Build multi-span ranges (with holes) from per-block liveness plus use/def.
+    // This is a conservative refinement over the previous single [start, end] span:
+    // it never drops blocks where the value is live-in/out, but it avoids spanning
+    // across blocks where the value is not live, reducing register pressure.
+    let uses_in_block : Map[Int, (ProgPoint, ProgPoint)] = {}
+    for p in info.use_points {
+      match uses_in_block.get(p.block) {
+        Some((first, last)) =>
+          uses_in_block.set(
+            p.block,
+            (pp_min(first, p, block_order), pp_max(last, p, block_order)),
+          )
+        None => uses_in_block.set(p.block, (p, p))
+      }
+    }
+    let mut spans : Array[ProgPointRange] = []
+    for block_idx, block in func.blocks {
+      let live_in = liveness.live_in[block_idx].contains(vreg_id)
+      let live_out = liveness.live_out[block_idx].contains(vreg_id)
+      let has_def_in_block = info.def_point is Some(def) &&
+        def.block == block_idx
+      let use_bounds = uses_in_block.get(block_idx)
+      if !live_in && !live_out && !has_def_in_block && use_bounds is None {
+        continue
+      }
+      let block_len = block.insts.length()
+      let entry_point : ProgPoint = { block: block_idx, inst: -1, pos: Before }
+      let exit_point : ProgPoint = {
+        block: block_idx,
+        inst: block_len,
+        pos: After,
+      }
+      let start = if has_def_in_block {
+        info.def_point.unwrap()
+      } else if live_in {
+        entry_point
+      } else if use_bounds is Some((first_use, _)) {
+        // Should not normally happen (use implies live_in or local def),
+        // but be conservative.
+        pp_min(entry_point, first_use, block_order)
+      } else {
+        entry_point
+      }
+      let end = if live_out {
+        exit_point
+      } else if use_bounds is Some((_, last_use)) {
+        point_after(last_use, block_len)
+      } else if has_def_in_block {
+        // Defined in this block and dead here: keep a minimal span to avoid
+        // surprising empty ranges in allocator internals.
+        point_after(info.def_point.unwrap(), block_len)
+      } else {
+        point_after(start, block_len)
+      }
+      let (start, end) = if end.compare_with_order(start, block_order) <= 0 {
+        (start, point_after(start, block_len))
+      } else {
+        (start, end)
+      }
+      spans.push(ProgPointRange::new(start, end))
+    }
+    spans = normalize_ranges(spans, block_order)
+    for span in spans {
+      range.add_range(span)
+    }
+
+    // Recompute crosses_call precisely from the refined spans.
+    // A value crosses a call if it is live *across* the call point:
+    // span.start < call_point < span.end
+    for call_point in liveness.call_points {
+      for span in range.ranges {
+        if pp_lt(span.start, call_point, block_order) &&
+          pp_lt(call_point, span.end, block_order) {
+          range.crosses_call = true
+          break
         }
       }
-      None => ()
+      if range.crosses_call {
+        break
+      }
     }
     result.add_range(range)
   }

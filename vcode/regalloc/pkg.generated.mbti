@@ -10,7 +10,7 @@ import(
 )
 
 // Values
-pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) -> RegAllocResult
+pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) -> RegAllocResult
 
 pub fn allocate_registers_backtracking(VCodeFunction) -> VCodeFunction
 
@@ -65,7 +65,7 @@ pub impl Show for Allocation
 type BacktrackingAllocator
 pub fn BacktrackingAllocator::allocate(Self) -> Unit
 pub fn BacktrackingAllocator::generate_result(Self) -> RegAllocResult
-pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) -> Self
+pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) -> Self
 
 type Bundle
 pub fn Bundle::contains_range(Self, Int) -> Bool

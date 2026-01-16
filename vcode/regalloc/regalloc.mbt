@@ -929,6 +929,12 @@ fn compute_reload_intervals(
       for use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) {
           if alloc.spill_slots.get(vreg.id) is Some(slot) {
+            // Do not reload-coalesce vector values: there is no safe
+            // non-allocatable vector scratch register bank, and AAPCS64 only
+            // guarantees preserving the low 64 bits of V8-V15.
+            if vreg.class is @abi.Vector {
+              continue
+            }
             match slot_uses.get(slot) {
               Some((first, _, cls)) =>
                 slot_uses.set(slot, (first, inst_idx, cls))
@@ -1014,6 +1020,7 @@ fn allocate_reload_registers(
             block_int_used.add(idx) |> ignore
             break
           }
+        @abi.Vector => ()
         _ =>
           for idx in reload_float_regs {
             if used_float_regs.contains(idx) || block_float_used.contains(idx) {
@@ -1892,7 +1899,13 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
 /// Build the register pools for AArch64 allocation
 fn build_aarch64_reg_pools(
   func : VCodeFunction,
-) -> (Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) {
+) -> (
+  Array[@abi.PReg],
+  Array[@abi.PReg],
+  Array[@abi.PReg],
+  Array[@abi.PReg],
+  Array[@abi.PReg],
+) {
   // Check if function needs extra results buffer (uses X23)
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
@@ -1921,16 +1934,42 @@ fn build_aarch64_reg_pools(
     callee_saved_int_regs.push(r)
   }
 
-  // Float regs pool: D0-D7 (caller-saved) + D8-D15 (callee-saved)
+  // Float regs pool:
+  // - Prefer argument regs V0-V7 (good locality; matches existing expectations).
+  // - Then use caller-saved V18-V31 (avoid V16/V17 reserved for scratch/temp).
+  // - Finally use callee-saved V8-V15.
   let float_regs : Array[@abi.PReg] = []
   for r in @abi.aapcs64_arg_fprs() {
+    float_regs.push(r)
+  }
+  for r in @abi.allocatable_scratch_fprs() {
+    if r.index == 16 || r.index == 17 {
+      continue
+    }
     float_regs.push(r)
   }
   for r in @abi.callee_saved_fprs() {
     float_regs.push(r)
   }
   let callee_saved_float_regs = @abi.callee_saved_fprs()
-  (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs)
+
+  // Vector regs pool:
+  // - Only caller-saved V0-V7 and V18-V31.
+  // - Do NOT use V8-V15: AAPCS64 only guarantees preserving the low 64 bits.
+  // - Avoid V16/V17 reserved for scratch/temp.
+  let vector_regs : Array[@abi.PReg] = []
+  for r in @abi.aapcs64_arg_fprs() {
+    vector_regs.push({ index: r.index, class: @abi.Vector })
+  }
+  for r in @abi.allocatable_scratch_fprs() {
+    if r.index == 16 || r.index == 17 {
+      continue
+    }
+    vector_regs.push({ index: r.index, class: @abi.Vector })
+  }
+  (
+    int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
+  )
 }
 
 ///|
@@ -1944,16 +1983,20 @@ pub fn allocate_registers_backtracking(func : VCodeFunction) -> VCodeFunction {
   let func = eliminate_dead_code(func)
 
   // Build register pools
-  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
-    func,
-  )
+  let (
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+  ) = build_aarch64_reg_pools(func)
 
   // Compute liveness (Phase 1)
   let liveness = compute_liveness(func)
 
   // Use backtracking allocator (Phases 2-4)
   let alloc_result = allocate_backtracking(
-    func, liveness, int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs,
+    func, liveness, int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
   )
 
   // Process constraints and generate RegMove edits
@@ -2016,15 +2059,19 @@ fn count_instructions(func : VCodeFunction) -> AllocStats {
 /// Get allocation statistics
 pub fn get_alloc_stats(func : VCodeFunction) -> AllocStats {
   let func = eliminate_dead_code(func)
-  let (int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs) = build_aarch64_reg_pools(
-    func,
-  )
+  let (
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+  ) = build_aarch64_reg_pools(func)
   let liveness = compute_liveness(func)
 
   // Count vregs
   let num_vregs = liveness.intervals.length()
   let alloc_result = allocate_backtracking(
-    func, liveness, int_regs, float_regs, callee_saved_int_regs, callee_saved_float_regs,
+    func, liveness, int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
   )
   process_constraints(func, alloc_result)
   let allocated = apply_allocation(func, alloc_result)
