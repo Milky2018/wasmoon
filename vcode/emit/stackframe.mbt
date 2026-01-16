@@ -67,6 +67,7 @@ pub struct JITStackFrame {
   // Flags
   has_setup_area : Bool // Whether FP/LR are saved
   needs_vmctx : Bool // Whether function uses vmctx (X19)
+  cache_mem0_desc : Bool // Whether to cache memory0 descriptor in X20
 }
 
 ///|
@@ -86,6 +87,7 @@ pub fn JITStackFrame::build(
   has_calls? : Bool = false,
   outgoing_args_size? : Int = 0,
   needs_vmctx? : Bool = true,
+  cache_mem0_desc? : Bool = false,
   force_frame_setup? : Bool = false,
 ) -> JITStackFrame {
   // Build the list of GPRs to save
@@ -145,6 +147,7 @@ pub fn JITStackFrame::build(
     saved_fprs: clobbered_fprs.copy(),
     has_setup_area,
     needs_vmctx,
+    cache_mem0_desc,
   }
 }
 

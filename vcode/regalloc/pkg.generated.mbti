@@ -231,6 +231,7 @@ pub fn VCodeFunction::push_param(Self, @abi.VReg) -> Unit
 pub fn VCodeFunction::set_int_stack_params(Self, Int) -> Unit
 pub fn VCodeFunction::set_num_spill_slots(Self, Int) -> Unit
 pub fn VCodeFunction::update_max_outgoing_args_size(Self, Int) -> Unit
+pub fn VCodeFunction::uses_mem0(Self) -> Bool
 pub impl Show for VCodeFunction
 
 // Type aliases

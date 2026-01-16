@@ -975,6 +975,10 @@ fn allocate_reload_registers(
   // used by the ABI / codegen.
   // - X19 is reserved for vmctx caching in the prologue when needed.
   used_int_regs.add(19) |> ignore
+  // - X20 is reserved for cached memory0 descriptor pointer when needed.
+  if func.uses_mem0() {
+    used_int_regs.add(@abi.REG_MEM0_DESC) |> ignore
+  }
   // - X23 is reserved for extra_results_buffer when needed.
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
@@ -1893,6 +1897,8 @@ fn build_aarch64_reg_pools(
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
   let needs_x23_reserved = needs_extra || calls_multi
+  // Cache memory0 descriptor pointer in X20 when needed.
+  let needs_x20_reserved = func.uses_mem0()
 
   // Build allocatable register pool:
   // 1. Scratch regs (caller-saved, no save needed) - use first
@@ -1905,6 +1911,10 @@ fn build_aarch64_reg_pools(
   for r in @abi.allocatable_callee_saved_regs() {
     // X23 (index 23) is reserved for extra_results_buffer when needed
     if needs_x23_reserved && r.index == 23 {
+      continue
+    }
+    // X20 is reserved for cached memory0 descriptor pointer when needed
+    if needs_x20_reserved && r.index == @abi.REG_MEM0_DESC {
       continue
     }
     int_regs.push(r)

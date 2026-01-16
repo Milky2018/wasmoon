@@ -24,6 +24,8 @@ pub const REG_FP : Int = 29
 
 pub const REG_LR : Int = 30
 
+pub const REG_MEM0_DESC : Int = 20
+
 pub const REG_SRET : Int = 8
 
 pub const REG_VMCTX : Int = 19

@@ -210,6 +210,20 @@ pub fn VCodeFunction::calls_multi_value_function(self : VCodeFunction) -> Bool {
 }
 
 ///|
+/// Returns true if the function uses `LoadMemBase(memidx=0)`.
+/// Used to enable caching of the memory0 descriptor pointer in a reserved register.
+pub fn VCodeFunction::uses_mem0(self : VCodeFunction) -> Bool {
+  for block in self.blocks {
+    for inst in block.insts {
+      if inst.opcode is LoadMemBase(0) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
 pub fn VCodeFunction::new_block(self : VCodeFunction) -> @block.VCodeBlock {
   let id = self.blocks.length()
   let block = @block.VCodeBlock::new(id)
