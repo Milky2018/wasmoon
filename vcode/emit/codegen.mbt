@@ -3241,8 +3241,11 @@ fn MachineCode::emit_terminator_with_epilogue(
 ) -> Unit {
   match term {
     Jump(target, _args) =>
-      // Unconditional branch
-      self.emit_b(target)
+      // Unconditional branch.
+      // If the target is the next block in linear order, omit the branch and fall through.
+      if next_block != Some(target) {
+        self.emit_b(target)
+      }
     Branch(cond, then_b, else_b) => {
       let rt = reg_num(cond)
       // Branch inversion: if then_b is next block, use CBZ to else_b
