@@ -478,6 +478,23 @@ pub fn emit_function(
 
   // Emit function body (blocks now in optimized order)
   let blocks = func.get_blocks()
+  // Optionally tail-merge multiple Return terminators into a shared exit block to
+  // avoid duplicating the epilogue sequence at every return site.
+  let mut return_count = 0
+  let mut max_block_id = -1
+  for block in blocks {
+    if block.id > max_block_id {
+      max_block_id = block.id
+    }
+    if block.terminator is Some(Return(_)) {
+      return_count = return_count + 1
+    }
+  }
+  let shared_exit_block = if return_count > 1 && stack_frame.total_size > 0 {
+    Some(max_block_id + 1)
+  } else {
+    None
+  }
   for i, block in blocks {
     mc.define_label(block.id)
     let mut inst_idx = 0
@@ -556,8 +573,15 @@ pub fn emit_function(
         stack_frame,
         func.get_result_types(),
         next_block,
+        shared_exit_block,
       )
     }
+  }
+  // Emit the shared exit block epilogue (if enabled).
+  if shared_exit_block is Some(exit_block) {
+    mc.define_label(exit_block)
+    mc.emit_epilogue(stack_frame)
+    mc.emit_ret(30)
   }
   mc.resolve_fixups()
   mc
@@ -3213,6 +3237,7 @@ fn MachineCode::emit_terminator_with_epilogue(
   stack_frame : JITStackFrame,
   result_types : Array[@ir.Type],
   next_block : Int?,
+  shared_exit_block : Int?,
 ) -> Unit {
   match term {
     Jump(target, _args) =>
@@ -3432,9 +3457,21 @@ fn MachineCode::emit_terminator_with_epilogue(
         self.emit_str_d_offset(src, @abi.REG_SRET, extra_offset)
         extra_offset = extra_offset + 8
       }
-      // Emit epilogue to restore callee-saved registers before return
-      self.emit_epilogue(stack_frame)
-      self.emit_ret(30)
+      match shared_exit_block {
+        Some(exit_block) =>
+          // Tail merge: all returns share a single exit block that emits the epilogue + ret.
+          // If this is the last physically-emitted block, fall through into the exit block.
+          if next_block is None {
+            ()
+          } else {
+            self.emit_b(exit_block)
+          }
+        None => {
+          // Emit epilogue to restore callee-saved registers before return
+          self.emit_epilogue(stack_frame)
+          self.emit_ret(30)
+        }
+      }
     }
     Trap(_) => self.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000
     BrTable(index, targets, default) => {
