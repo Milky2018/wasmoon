@@ -260,6 +260,20 @@ test "emit add.uxtw disasm" {
 }
 
 ///|
+test "emit load_imm64 -1 uses movn" {
+  let mc = MachineCode::new()
+  mc.emit_load_imm64(11, -1L)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 0b008092  movn x11, #0, lsl #0
+      #|
+    ),
+  )
+}
+
+///|
 test "emit_str_imm" {
   let mc = MachineCode::new()
   mc.emit_ldr_imm(0, 1, 8) // LDR X0, [X1, #8]
