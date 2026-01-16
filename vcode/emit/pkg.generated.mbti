@@ -186,8 +186,11 @@ pub fn MachineCode::emit_ldr_q_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_reg_scaled(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_s_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldr_w_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldr_w_reg_scaled(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldrb_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrb_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldrh_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ldrh_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldrsb_w_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldrsb_x_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldrsh_w_imm(Self, Int, Int, Int) -> Unit
@@ -237,8 +240,11 @@ pub fn MachineCode::emit_str_q_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_reg_scaled(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_s_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_str_w_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_str_w_reg_scaled(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_strb_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_strb_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_strh_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_strh_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_reg(Self, Int, Int, Int) -> Unit

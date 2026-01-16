@@ -495,11 +495,300 @@ pub fn emit_function(
   } else {
     None
   }
+
+  // Compute a conservative liveness mask for physical integer registers at block boundaries.
+  // Used by codegen peepholes that remove instructions, to ensure the removed value is not live-out.
+  let nblocks = blocks.length()
+  let live_out_int : Array[Int64] = Array::make(nblocks, 0L)
+  let live_in_int : Array[Int64] = Array::make(nblocks, 0L)
+  let use_int : Array[Int64] = Array::make(nblocks, 0L)
+  let def_int : Array[Int64] = Array::make(nblocks, 0L)
+  let id_to_idx : Map[Int, Int] = {}
+  for bi, b in blocks {
+    id_to_idx.set(b.id, bi)
+  }
+  // Per-block use/def.
+  for bi, b in blocks {
+    let mut defined : Int64 = 0L
+    let mut use_mask : Int64 = 0L
+    let mut def_mask : Int64 = 0L
+    for inst in b.insts {
+      for u in inst.uses {
+        match u {
+          Physical(p) =>
+            if p.class is Int {
+              let bit = 1L << p.index
+              if (defined & bit) == 0L {
+                use_mask = use_mask | bit
+              }
+            }
+          Virtual(_) => ()
+        }
+      }
+      for d in inst.defs {
+        match d.reg {
+          Physical(p) =>
+            if p.class is Int {
+              let bit = 1L << p.index
+              def_mask = def_mask | bit
+              defined = defined | bit
+            }
+          Virtual(_) => ()
+        }
+      }
+    }
+    if b.terminator is Some(term) {
+      match term {
+        Jump(_, args) =>
+          for a in args {
+            match a {
+              Physical(p) =>
+                if p.class is Int {
+                  let bit = 1L << p.index
+                  if (defined & bit) == 0L {
+                    use_mask = use_mask | bit
+                  }
+                }
+              Virtual(_) => ()
+            }
+          }
+        Branch(cond, _, _) =>
+          match cond {
+            Physical(p) =>
+              if p.class is Int {
+                let bit = 1L << p.index
+                if (defined & bit) == 0L {
+                  use_mask = use_mask | bit
+                }
+              }
+            Virtual(_) => ()
+          }
+        BranchCmp(lhs, rhs, _, _, _, _) =>
+          for r in [lhs, rhs] {
+            match r {
+              Physical(p) =>
+                if p.class is Int {
+                  let bit = 1L << p.index
+                  if (defined & bit) == 0L {
+                    use_mask = use_mask | bit
+                  }
+                }
+              Virtual(_) => ()
+            }
+          }
+        BranchZero(r, _, _, _, _) =>
+          match r {
+            Physical(p) =>
+              if p.class is Int {
+                let bit = 1L << p.index
+                if (defined & bit) == 0L {
+                  use_mask = use_mask | bit
+                }
+              }
+            Virtual(_) => ()
+          }
+        BranchCmpImm(lhs, _, _, _, _, _) =>
+          match lhs {
+            Physical(p) =>
+              if p.class is Int {
+                let bit = 1L << p.index
+                if (defined & bit) == 0L {
+                  use_mask = use_mask | bit
+                }
+              }
+            Virtual(_) => ()
+          }
+        Return(values) =>
+          for v in values {
+            match v {
+              Physical(p) =>
+                if p.class is Int {
+                  let bit = 1L << p.index
+                  if (defined & bit) == 0L {
+                    use_mask = use_mask | bit
+                  }
+                }
+              Virtual(_) => ()
+            }
+          }
+        BrTable(index, _, _) =>
+          match index {
+            Physical(p) =>
+              if p.class is Int {
+                let bit = 1L << p.index
+                if (defined & bit) == 0L {
+                  use_mask = use_mask | bit
+                }
+              }
+            Virtual(_) => ()
+          }
+        Trap(_) => ()
+      }
+    }
+    use_int[bi] = use_mask
+    def_int[bi] = def_mask
+  }
+  // Fixed-point.
+  if nblocks > 0 {
+    let mut changed = true
+    while changed {
+      changed = false
+      let mut bi = nblocks - 1
+      while bi >= 0 {
+        let b = blocks[bi]
+        let succs : Array[Int] = match b.terminator {
+          Some(Jump(target, _)) => [target]
+          Some(Branch(_, then_b, else_b)) => [then_b, else_b]
+          Some(BranchCmp(_, _, _, _, then_b, else_b)) => [then_b, else_b]
+          Some(BranchZero(_, _, _, then_b, else_b)) => [then_b, else_b]
+          Some(BranchCmpImm(_, _, _, _, then_b, else_b)) => [then_b, else_b]
+          Some(BrTable(_, targets, default)) => {
+            let out : Array[Int] = []
+            for t in targets {
+              out.push(t)
+            }
+            out.push(default)
+            out
+          }
+          _ => []
+        }
+        let mut out_mask : Int64 = 0L
+        for sid in succs {
+          if id_to_idx.get(sid) is Some(si) {
+            out_mask = out_mask | live_in_int[si]
+          }
+        }
+        let in_mask = use_int[bi] | (out_mask & (def_int[bi] ^ -1L))
+        if out_mask != live_out_int[bi] || in_mask != live_in_int[bi] {
+          live_out_int[bi] = out_mask
+          live_in_int[bi] = in_mask
+          changed = true
+        }
+        bi = bi - 1
+      }
+    }
+  }
   for i, block in blocks {
     mc.define_label(block.id)
     let mut inst_idx = 0
     while inst_idx < block.insts.length() {
       let inst = block.insts[inst_idx]
+      // Peephole: fuse an address add into the following load/store.
+      // Pattern:
+      //   add addr = base + off
+      //   load/store [addr + 0]
+      //
+      // Emit as a single reg-offset load/store: [base + off].
+      if inst.opcode is Add(true) &&
+        inst.defs.length() == 1 &&
+        inst.uses.length() == 2 &&
+        inst_idx + 1 < block.insts.length() {
+        let next = block.insts[inst_idx + 1]
+        let add_dst = wreg_num(inst.defs[0])
+        let add_rn = reg_num(inst.uses[0])
+        let add_rm = reg_num(inst.uses[1])
+
+        // Only safe to skip the add if its result is not used elsewhere.
+        let mut add_used_later = false
+        let mut killed_in_block = false
+        for j in (inst_idx + 2)..<block.insts.length() {
+          let later = block.insts[j]
+          for use_ in later.uses {
+            if reg_num(use_) == add_dst {
+              add_used_later = true
+              break
+            }
+          }
+          if add_used_later {
+            break
+          }
+          for def in later.defs {
+            if wreg_num(def) == add_dst {
+              killed_in_block = true
+              break
+            }
+          }
+          if killed_in_block {
+            break
+          }
+        }
+        if !add_used_later && !killed_in_block {
+          let bit = 1L << add_dst
+          if (live_out_int[i] & bit) != 0L {
+            add_used_later = true
+          }
+        }
+        if !add_used_later {
+          let mut fused = false
+          match next.opcode {
+            LoadPtr(ty, 0) => {
+              let base_reg = reg_num(next.uses[0])
+              if base_reg == add_dst {
+                let dst = wreg_num(next.defs[0])
+                match ty {
+                  I32 => {
+                    mc.emit_ldr_w_reg_scaled(dst, add_rn, add_rm, 0)
+                    fused = true
+                  }
+                  I64 => {
+                    mc.emit_ldr_reg_scaled(dst, add_rn, add_rm, 0)
+                    fused = true
+                  }
+                  _ => ()
+                }
+              }
+            }
+            StorePtr(ty, 0) => {
+              let base_reg = reg_num(next.uses[0])
+              if base_reg == add_dst {
+                let value = reg_num(next.uses[1])
+                match ty {
+                  I32 => {
+                    mc.emit_str_w_reg_scaled(value, add_rn, add_rm, 0)
+                    fused = true
+                  }
+                  I64 => {
+                    mc.emit_str_reg_scaled(value, add_rn, add_rm, 0)
+                    fused = true
+                  }
+                  _ => ()
+                }
+              }
+            }
+            LoadPtrNarrow(bits, signed, 0) => {
+              let base_reg = reg_num(next.uses[0])
+              if base_reg == add_dst && !signed {
+                let dst = wreg_num(next.defs[0])
+                match bits {
+                  8 => mc.emit_ldrb_reg(dst, add_rn, add_rm)
+                  16 => mc.emit_ldrh_reg(dst, add_rn, add_rm)
+                  32 => mc.emit_ldr_w_reg_scaled(dst, add_rn, add_rm, 0)
+                  _ => ()
+                }
+                fused = bits == 8 || bits == 16 || bits == 32
+              }
+            }
+            StorePtrNarrow(bits, 0) => {
+              let base_reg = reg_num(next.uses[0])
+              if base_reg == add_dst {
+                let value = reg_num(next.uses[1])
+                match bits {
+                  8 => mc.emit_strb_reg(value, add_rn, add_rm)
+                  16 => mc.emit_strh_reg(value, add_rn, add_rm)
+                  32 => mc.emit_str_w_reg_scaled(value, add_rn, add_rm, 0)
+                  _ => ()
+                }
+                fused = bits == 8 || bits == 16 || bits == 32
+              }
+            }
+            _ => ()
+          }
+          if fused {
+            inst_idx = inst_idx + 2
+            continue
+          }
+        }
+      }
       // Peephole: fold u32->u64 zero-extend into following 64-bit add.
       //   extend.u32_64 r = x  ; (mov wR, wX)
       //   add r = add base, r ; => add r, base, wX, uxtw

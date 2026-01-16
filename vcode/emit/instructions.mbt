@@ -90,6 +90,14 @@ enum Instruction {
   LdrImm(Int, Int, Int)
   LdrImmSigned(Int, Int, Int)
   LdrRegScaled(Int, Int, Int, Int)
+  // Register-offset load/store using X register offset (UXTX), optional scaling.
+  // shift is either 0 (no scale) or the natural scale for the access size.
+  LdrWRegScaled(Int, Int, Int, Int)
+  StrWRegScaled(Int, Int, Int, Int)
+  LdrbReg(Int, Int, Int)
+  StrbReg(Int, Int, Int)
+  LdrhReg(Int, Int, Int)
+  StrhReg(Int, Int, Int)
   StrImm(Int, Int, Int)
   StrRegScaled(Int, Int, Int, Int)
   LdrbImm(Int, Int, Int)
@@ -602,6 +610,14 @@ fn Instruction::annotate(self : Instruction) -> String {
     LdrImmSigned(rt, rn, simm9) => "ldur x\{rt}, [x\{rn}, #\{simm9}]"
     LdrRegScaled(rt, rn, rm, shift) =>
       "ldr x\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
+    LdrWRegScaled(rt, rn, rm, shift) =>
+      "ldr w\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
+    StrWRegScaled(rt, rn, rm, shift) =>
+      "str w\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
+    LdrbReg(rt, rn, rm) => "ldrb w\{rt}, [x\{rn}, x\{rm}]"
+    StrbReg(rt, rn, rm) => "strb w\{rt}, [x\{rn}, x\{rm}]"
+    LdrhReg(rt, rn, rm) => "ldrh w\{rt}, [x\{rn}, x\{rm}]"
+    StrhReg(rt, rn, rm) => "strh w\{rt}, [x\{rn}, x\{rm}]"
     StrImm(rt, rn, imm12) => "str x\{rt}, [x\{rn}, #\{imm12}]"
     StrRegScaled(rt, rn, rm, shift) =>
       "str x\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
@@ -1538,6 +1554,98 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         ((rm & 31) << 16) |
         (0b011 << 13) |
         (s_bit << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    LdrWRegScaled(rt, rn, rm, shift) => {
+      let s_bit = if shift == 2 { 1 } else { 0 }
+      let inst = (0b10 << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b01 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        (0b011 << 13) |
+        (s_bit << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    StrWRegScaled(rt, rn, rm, shift) => {
+      let s_bit = if shift == 2 { 1 } else { 0 }
+      let inst = (0b10 << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b00 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        (0b011 << 13) |
+        (s_bit << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    LdrbReg(rt, rn, rm) => {
+      let inst = (0b00 << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b01 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        (0b011 << 13) |
+        (0 << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    StrbReg(rt, rn, rm) => {
+      let inst = (0b00 << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b00 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        (0b011 << 13) |
+        (0 << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    LdrhReg(rt, rn, rm) => {
+      let inst = (0b01 << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b01 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        (0b011 << 13) |
+        (0 << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    StrhReg(rt, rn, rm) => {
+      let inst = (0b01 << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b00 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        (0b011 << 13) |
+        (0 << 12) |
         (0b10 << 10) |
         ((rn & 31) << 5) |
         (rt & 31)
@@ -4281,6 +4389,68 @@ pub fn MachineCode::emit_str_reg_scaled(
   shift : Int,
 ) -> Unit {
   StrRegScaled(rt, rn, rm, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_ldr_w_reg_scaled(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  LdrWRegScaled(rt, rn, rm, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_str_w_reg_scaled(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  StrWRegScaled(rt, rn, rm, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_ldrb_reg(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  LdrbReg(rt, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_strb_reg(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  StrbReg(rt, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_ldrh_reg(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  LdrhReg(rt, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_strh_reg(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  StrhReg(rt, rn, rm).emit(self)
 }
 
 ///|
