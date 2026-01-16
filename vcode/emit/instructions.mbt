@@ -84,6 +84,7 @@ enum Instruction {
   MovReg32(Int, Int)
   Movz(Int, Int, Int)
   Movk(Int, Int, Int)
+  Movn(Int, Int, Int)
   LoadImm64(Int, Int64)
   // Load/Store - GPR
   LdrImm(Int, Int, Int)
@@ -595,6 +596,7 @@ fn Instruction::annotate(self : Instruction) -> String {
     MovReg32(rd, rm) => "mov w\{rd}, w\{rm}"
     Movz(rd, imm16, shift) => "movz x\{rd}, #\{imm16}, lsl #\{shift}"
     Movk(rd, imm16, shift) => "movk x\{rd}, #\{imm16}, lsl #\{shift}"
+    Movn(rd, imm16, shift) => "movn x\{rd}, #\{imm16}, lsl #\{shift}"
     LoadImm64(_, _) => "load_imm64 (multi-instruction)"
     LdrImm(rt, rn, imm12) => "ldr x\{rt}, [x\{rn}, #\{imm12}]"
     LdrImmSigned(rt, rn, simm9) => "ldur x\{rt}, [x\{rn}, #\{simm9}]"
@@ -1486,6 +1488,16 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b2 = ((imm >> 11) & 31) | ((hw & 3) << 5) | 128
       let xf2 = 242
       let b3 = xf2 | ((hw >> 2) & 1)
+      (b0, b1, b2, b3)
+    }
+    Movn(rd, imm16, shift) => {
+      let hw = shift / 16
+      let imm = imm16 & 0xFFFF
+      let b0 = (rd & 31) | ((imm & 7) << 5)
+      let b1 = (imm >> 3) & 255
+      let b2 = ((imm >> 11) & 31) | ((hw & 3) << 5) | 128
+      let x92 = 0x92
+      let b3 = x92 | ((hw >> 2) & 1)
       (b0, b1, b2, b3)
     }
     LoadImm64(_, _) => abort("LoadImm64 does not have single instruction bytes")
@@ -3487,37 +3499,60 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
 pub fn Instruction::emit(self : Instruction, mc : MachineCode) -> Unit {
   match self {
     LoadImm64(rd, imm) => {
-      // Load a 64-bit immediate using MOVZ/MOVK sequence
-      let v0 = (imm & 0xFFFFL).to_int()
-      let v1 = ((imm >> 16) & 0xFFFFL).to_int()
-      let v2 = ((imm >> 32) & 0xFFFFL).to_int()
-      let v3 = ((imm >> 48) & 0xFFFFL).to_int()
-      let mut started = false
-      if v0 != 0 || (v1 == 0 && v2 == 0 && v3 == 0) {
-        Movz(rd, v0, 0).emit(mc)
-        started = true
-      }
-      if v1 != 0 {
-        if started {
-          Movk(rd, v1, 16).emit(mc)
-        } else {
-          Movz(rd, v1, 16).emit(mc)
-          started = true
+      // Load a 64-bit immediate using MOVZ/MOVK or MOVN/MOVK sequence.
+      // Prefer the shorter sequence; on ties prefer MOVZ to keep output stable.
+      let hw0 = (imm & 0xFFFFL).to_int()
+      let hw1 = ((imm >> 16) & 0xFFFFL).to_int()
+      let hw2 = ((imm >> 32) & 0xFFFFL).to_int()
+      let hw3 = ((imm >> 48) & 0xFFFFL).to_int()
+      let halfwords = FixedArray::make(4, 0)
+      halfwords[0] = hw0
+      halfwords[1] = hw1
+      halfwords[2] = hw2
+      halfwords[3] = hw3
+      let mut non_zero = 0
+      let mut non_ffff = 0
+      for i in 0..<4 {
+        if halfwords[i] != 0 {
+          non_zero = non_zero + 1
+        }
+        if halfwords[i] != 0xFFFF {
+          non_ffff = non_ffff + 1
         }
       }
-      if v2 != 0 {
-        if started {
-          Movk(rd, v2, 32).emit(mc)
+      let movz_count = if non_zero == 0 { 1 } else { non_zero }
+      let movn_count = if non_ffff == 0 { 1 } else { non_ffff }
+      if movn_count < movz_count {
+        // MOVN strategy: start from all-ones, patch non-0xFFFF halfwords.
+        if non_ffff == 0 {
+          Movn(rd, 0, 0).emit(mc)
         } else {
-          Movz(rd, v2, 32).emit(mc)
-          started = true
+          let mut init_i = 0
+          while init_i < 4 && halfwords[init_i] == 0xFFFF {
+            init_i = init_i + 1
+          }
+          let init_hw = halfwords[init_i]
+          let init_imm = init_hw ^ 0xFFFF
+          Movn(rd, init_imm, init_i * 16).emit(mc)
+          for i in 0..<4 {
+            if i != init_i && halfwords[i] != 0xFFFF {
+              Movk(rd, halfwords[i], i * 16).emit(mc)
+            }
+          }
         }
-      }
-      if v3 != 0 {
-        if started {
-          Movk(rd, v3, 48).emit(mc)
-        } else {
-          Movz(rd, v3, 48).emit(mc)
+        // MOVZ strategy: start from 0, patch non-zero halfwords.
+      } else if non_zero == 0 {
+        Movz(rd, 0, 0).emit(mc)
+      } else {
+        let mut init_i = 0
+        while init_i < 4 && halfwords[init_i] == 0 {
+          init_i = init_i + 1
+        }
+        Movz(rd, halfwords[init_i], init_i * 16).emit(mc)
+        for i in 0..<4 {
+          if i != init_i && halfwords[i] != 0 {
+            Movk(rd, halfwords[i], i * 16).emit(mc)
+          }
         }
       }
     }
