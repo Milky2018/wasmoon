@@ -426,16 +426,45 @@ fn run_wasm(
       }
     }
     // Call the function
-    // Check if JIT can handle all imports
-    let can_use_jit = if use_jit {
-      check_jit_import_support(mod_, debug) &&
-      not(@wast.has_cross_module_imports(mod_)) &&
-      not(@wast.exports_shared_resources(mod_)) &&
-      not(@wast.has_unsupported_instructions(mod_))
-    } else {
-      false
-    }
-    if can_use_jit {
+    if use_jit {
+      // Check if JIT can handle this module.
+      let import_ok = check_jit_import_support(mod_, debug)
+      let has_cross_imports = @wast.has_cross_module_imports(mod_)
+      let exports_shared = @wast.exports_shared_resources(mod_)
+      let has_unsupported = @wast.has_unsupported_instructions(mod_)
+      let can_use_jit = import_ok &&
+        !has_cross_imports &&
+        !exports_shared &&
+        !has_unsupported
+      if !can_use_jit {
+        let reasons : Array[String] = []
+        if !import_ok {
+          reasons.push("unsupported imports")
+        }
+        if has_cross_imports {
+          reasons.push("cross-module imports")
+        }
+        if exports_shared {
+          reasons.push("exports shared resources")
+        }
+        if has_unsupported {
+          reasons.push("unsupported instructions")
+        }
+        let reason_str = if reasons.is_empty() {
+          "unknown reason"
+        } else {
+          reasons.join(", ")
+        }
+        @logger.error(
+          "JIT mode is not supported for this module (" +
+          reason_str +
+          "). " +
+          "Please re-run with --no-jit.",
+        )
+        exit_failure()
+        return
+      }
+
       // JIT execution path
       // Build WASI args: program name + any remaining args after --
       let jit_args : Array[String] = wasi_args
@@ -879,13 +908,10 @@ fn run_with_jit(
           // Initialize WASI context with args, env, and preopens
           jm.init_wasi(wasi_args, wasi_envs, wasi_preopens)
           // Initialize all memories (multi-memory support)
-          let _jit_memories = match
-            @wast.init_jit_memories_from_store(instance, store, jm) {
-            Some(memories) => memories
-            None => {
-              @logger.error("Failed to initialize JIT memories")
-              return exit_failure()
-            }
+          guard @wast.init_jit_memories_from_store(instance, store, jm)
+            is Some(_) else {
+            @logger.error("Failed to initialize JIT memories")
+            return exit_failure()
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
@@ -924,9 +950,8 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITTrap(msg) => {
                   @jit.gc_teardown()
-                  // Sync state back to interpreter store even on trap.
+                  // Sync globals back to interpreter store even on trap.
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
-                  @wast.sync_jit_memories_to_store(instance, store, jm)
                   // Capture and display backtrace if DWARF is enabled
                   match dwarf_builder {
                     Some(dwarf) => {
@@ -953,9 +978,8 @@ fn run_with_jit(
               }
               // Tear down GC context after JIT call
               @jit.gc_teardown()
-              // Sync JIT state back to interpreter store for consistency.
+              // Sync JIT globals back to interpreter store for consistency.
               @wast.sync_jit_globals_to_store(jit_ctx, store)
-              @wast.sync_jit_memories_to_store(instance, store, jm)
               // Convert Int64 results to Value using shared helper
               let values = convert_jit_results(results, f.result_types)
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)

@@ -34,39 +34,35 @@ pub const SCRATCH_REG_2 : Int = 17
 
 pub const USER_PARAM_BASE_REG : Int = 2
 
-pub const VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET : Int = 108
+pub const VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET : Int = 84
 
-pub const VMCTX_FUNC_TABLE_OFFSET : Int = 16
+pub const VMCTX_FUNC_TABLE_OFFSET : Int = 8
 
-pub const VMCTX_GC_HEAP_LIMIT_OFFSET : Int = 120
+pub const VMCTX_GC_HEAP_LIMIT_OFFSET : Int = 96
 
-pub const VMCTX_GC_HEAP_OFFSET : Int = 128
+pub const VMCTX_GC_HEAP_OFFSET : Int = 104
 
-pub const VMCTX_GC_HEAP_PTR_OFFSET : Int = 112
+pub const VMCTX_GC_HEAP_PTR_OFFSET : Int = 88
 
-pub const VMCTX_GLOBALS_OFFSET : Int = 40
+pub const VMCTX_GLOBALS_OFFSET : Int = 32
 
-pub const VMCTX_MEMORIES_OFFSET : Int = 80
+pub const VMCTX_MEMORIES_OFFSET : Int = 72
 
-pub const VMCTX_MEMORY_BASE_OFFSET : Int = 0
+pub const VMCTX_MEMORY0_OFFSET : Int = 0
 
-pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 80
 
-pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
+pub const VMCTX_TABLE0_BASE_OFFSET : Int = 16
 
-pub const VMCTX_MEMORY_SIZES_OFFSET : Int = 88
+pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 24
 
-pub const VMCTX_MEMORY_SIZE_OFFSET : Int = 8
+pub const VMCTX_TABLES_OFFSET : Int = 40
 
-pub const VMCTX_TABLE0_BASE_OFFSET : Int = 24
+pub const VMCTX_TABLE_COUNT_OFFSET : Int = 48
 
-pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 32
+pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 64
 
-pub const VMCTX_TABLES_OFFSET : Int = 48
-
-pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
-
-pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 56
 
 pub fn aapcs64_arg_fprs() -> Array[PReg]
 

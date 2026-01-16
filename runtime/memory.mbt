@@ -1,11 +1,10 @@
 ///|
 /// WebAssembly linear memory.
 ///
-/// Physical storage is a sparse map of 64KiB chunks, but the *logical* WebAssembly
-/// page size may vary under the custom-page-sizes proposal.
+/// This implementation uses a shared C-side `wasmoon_memory_t` descriptor as the
+/// single source of truth for both interpreter and JIT.
 struct Memory {
-  pages : @hashmap.HashMap[Int, Array[Byte]]
-  mut size : Int // current size in logical pages
+  mem_desc_ptr : Int64
   max : Int? // max size in logical pages
   is_memory64 : Bool // true for memory64 (i64-indexed)
   page_size_log2 : Int
@@ -13,15 +12,17 @@ struct Memory {
 } derive(Show)
 
 ///|
-/// Physical chunk size for sparse storage.
-const PAGE_SIZE : Int = 65536
-
-///|
-const PAGE_SIZE_BYTES : Int64 = 65536L
+pub fn Memory::desc_ptr(self : Memory) -> Int64 {
+  self.mem_desc_ptr
+}
 
 ///|
 pub fn Memory::byte_len(self : Memory) -> Int64 {
-  self.size.to_int64() * self.page_size_bytes
+  if self.mem_desc_ptr == 0L {
+    0L
+  } else {
+    @jit_ffi.c_mem_desc_get_len(self.mem_desc_ptr)
+  }
 }
 
 ///|
@@ -45,12 +46,41 @@ fn Memory::check_bounds(
 }
 
 ///|
+fn Memory::read_fixed(self : Memory, addr : Int, len : Int) -> FixedArray[Byte] {
+  if self.mem_desc_ptr == 0L || len <= 0 {
+    return FixedArray::make(0, b'\x00')
+  }
+  let out = FixedArray::make(len, b'\x00')
+  let _ = @jit_ffi.c_mem_desc_read(self.mem_desc_ptr, addr.to_int64(), out, len)
+  out
+}
+
+///|
+fn Memory::write_fixed(
+  self : Memory,
+  addr : Int,
+  data : FixedArray[Byte],
+  len : Int,
+) -> Unit {
+  if self.mem_desc_ptr == 0L || len <= 0 {
+    return
+  }
+  let _ = @jit_ffi.c_mem_desc_write(
+    self.mem_desc_ptr,
+    addr.to_int64(),
+    data,
+    len,
+  )
+
+}
+
+///|
 fn Memory::load_byte_unchecked(self : Memory, addr : Int) -> Byte {
-  let page_idx = addr / PAGE_SIZE
-  let off = addr % PAGE_SIZE
-  match self.pages.get(page_idx) {
-    Some(p) => p[off]
-    None => b'\x00'
+  let bytes = self.read_fixed(addr, 1)
+  if bytes.length() == 1 {
+    bytes[0]
+  } else {
+    b'\x00'
   }
 }
 
@@ -60,17 +90,8 @@ fn Memory::store_byte_unchecked(
   addr : Int,
   value : Byte,
 ) -> Unit {
-  let page_idx = addr / PAGE_SIZE
-  let off = addr % PAGE_SIZE
-  let page = match self.pages.get(page_idx) {
-    Some(p) => p
-    None => {
-      let p = Array::make(PAGE_SIZE, b'\x00')
-      self.pages.set(page_idx, p)
-      p
-    }
-  }
-  page[off] = value
+  let data = FixedArray::make(1, value)
+  self.write_fixed(addr, data, 1)
 }
 
 ///|
@@ -85,13 +106,34 @@ pub fn Memory::new(
     abort("invalid memory page size")
   }
   let page_size_bytes : Int64 = 1L << l2
+  let size_bytes = min.to_int64() * page_size_bytes
+  let mem_desc_ptr = if !is_memory64 && l2 == 16 {
+    // Guard pages are required for JIT memory0 correctness.
+    @jit.alloc_guarded_memory_desc(min, max)
+  } else {
+    @jit.alloc_memory_desc(
+      size_bytes,
+      max,
+      is_memory64~,
+      page_size_log2=l2,
+      is_shared=false,
+    )
+  }
+  { mem_desc_ptr, max, is_memory64, page_size_log2: l2, page_size_bytes }
+}
+
+///|
+/// Allocate a guarded (reserved) memory for memory32 memory0.
+/// This is required for JIT guard-page-based trapping.
+pub fn Memory::new_guarded_memory0(min : Int, max : Int?) -> Memory {
+  let initial_pages = min
+  let mem_desc_ptr = @jit.alloc_guarded_memory_desc(initial_pages, max)
   {
-    pages: @hashmap.new(),
-    size: min,
+    mem_desc_ptr,
     max,
-    is_memory64,
-    page_size_log2: l2,
-    page_size_bytes,
+    is_memory64: false,
+    page_size_log2: 16,
+    page_size_bytes: 65536L,
   }
 }
 
@@ -114,11 +156,11 @@ pub fn Memory::store_byte(
 ///|
 pub fn Memory::load_i32(self : Memory, addr : Int) -> Int raise RuntimeError {
   self.check_bounds(addr, 4)
-  let b0 = self.load_byte_unchecked(addr).to_int()
-  let b1 = self.load_byte_unchecked(addr + 1).to_int()
-  let b2 = self.load_byte_unchecked(addr + 2).to_int()
-  let b3 = self.load_byte_unchecked(addr + 3).to_int()
-  // Little-endian
+  let b = self.read_fixed(addr, 4)
+  let b0 = b[0].to_int()
+  let b1 = b[1].to_int()
+  let b2 = b[2].to_int()
+  let b3 = b[3].to_int()
   b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
 }
 
@@ -129,32 +171,23 @@ pub fn Memory::store_i32(
   value : Int,
 ) -> Unit raise RuntimeError {
   self.check_bounds(addr, 4)
-  self.store_byte_unchecked(addr, value.land(0xFF).to_byte())
-  self.store_byte_unchecked(addr + 1, (value >> 8).land(0xFF).to_byte())
-  self.store_byte_unchecked(addr + 2, (value >> 16).land(0xFF).to_byte())
-  self.store_byte_unchecked(addr + 3, (value >> 24).land(0xFF).to_byte())
+  let data = FixedArray::make(4, b'\x00')
+  data[0] = value.land(0xFF).to_byte()
+  data[1] = (value >> 8).land(0xFF).to_byte()
+  data[2] = (value >> 16).land(0xFF).to_byte()
+  data[3] = (value >> 24).land(0xFF).to_byte()
+  self.write_fixed(addr, data, 4)
 }
 
 ///|
 pub fn Memory::load_i64(self : Memory, addr : Int) -> Int64 raise RuntimeError {
   self.check_bounds(addr, 8)
-  let b0 = self.load_byte_unchecked(addr).to_int64()
-  let b1 = self.load_byte_unchecked(addr + 1).to_int64()
-  let b2 = self.load_byte_unchecked(addr + 2).to_int64()
-  let b3 = self.load_byte_unchecked(addr + 3).to_int64()
-  let b4 = self.load_byte_unchecked(addr + 4).to_int64()
-  let b5 = self.load_byte_unchecked(addr + 5).to_int64()
-  let b6 = self.load_byte_unchecked(addr + 6).to_int64()
-  let b7 = self.load_byte_unchecked(addr + 7).to_int64()
-  // Little-endian
-  b0 |
-  (b1 << 8) |
-  (b2 << 16) |
-  (b3 << 24) |
-  (b4 << 32) |
-  (b5 << 40) |
-  (b6 << 48) |
-  (b7 << 56)
+  let b = self.read_fixed(addr, 8)
+  let mut result = 0L
+  for i in 0..<8 {
+    result = result | (b[i].to_int64() << (i * 8))
+  }
+  result
 }
 
 ///|
@@ -164,10 +197,11 @@ pub fn Memory::store_i64(
   value : Int64,
 ) -> Unit raise RuntimeError {
   self.check_bounds(addr, 8)
+  let data = FixedArray::make(8, b'\x00')
   for i in 0..<8 {
-    let byte_val = (value >> (i * 8)).land(0xFFL).to_int()
-    self.store_byte_unchecked(addr + i, byte_val.to_byte())
+    data[i] = (value >> (i * 8)).land(0xFFL).to_int().to_byte()
   }
+  self.write_fixed(addr, data, 8)
 }
 
 ///|
@@ -226,8 +260,9 @@ pub fn Memory::load_i32_16s(
   addr : Int,
 ) -> Int raise RuntimeError {
   self.check_bounds(addr, 2)
-  let b0 = self.load_byte_unchecked(addr).to_int()
-  let b1 = self.load_byte_unchecked(addr + 1).to_int()
+  let b = self.read_fixed(addr, 2)
+  let b0 = b[0].to_int()
+  let b1 = b[1].to_int()
   let value = b0 | (b1 << 8)
   if value >= 32768 {
     value - 65536
@@ -243,8 +278,9 @@ pub fn Memory::load_i32_16u(
   addr : Int,
 ) -> Int raise RuntimeError {
   self.check_bounds(addr, 2)
-  let b0 = self.load_byte_unchecked(addr).to_int()
-  let b1 = self.load_byte_unchecked(addr + 1).to_int()
+  let b = self.read_fixed(addr, 2)
+  let b0 = b[0].to_int()
+  let b1 = b[1].to_int()
   b0 | (b1 << 8)
 }
 
@@ -277,15 +313,8 @@ pub fn Memory::load_i64_16s(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  self.check_bounds(addr, 2)
-  let b0 = self.load_byte_unchecked(addr).to_int64()
-  let b1 = self.load_byte_unchecked(addr + 1).to_int64()
-  let value = b0 | (b1 << 8)
-  if value >= 32768L {
-    value - PAGE_SIZE_BYTES
-  } else {
-    value
-  }
+  let v = self.load_i32_16s(addr)
+  v.to_int64()
 }
 
 ///|
@@ -294,10 +323,8 @@ pub fn Memory::load_i64_16u(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  self.check_bounds(addr, 2)
-  let b0 = self.load_byte_unchecked(addr).to_int64()
-  let b1 = self.load_byte_unchecked(addr + 1).to_int64()
-  b0 | (b1 << 8)
+  let v = self.load_i32_16u(addr)
+  v.to_int64()
 }
 
 ///|
@@ -306,8 +333,7 @@ pub fn Memory::load_i64_32s(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  let value = self.load_i32(addr)
-  value.to_int64()
+  self.load_i32(addr).to_int64()
 }
 
 ///|
@@ -338,8 +364,10 @@ pub fn Memory::store_i32_16(
   value : Int,
 ) -> Unit raise RuntimeError {
   self.check_bounds(addr, 2)
-  self.store_byte_unchecked(addr, value.land(0xFF).to_byte())
-  self.store_byte_unchecked(addr + 1, (value >> 8).land(0xFF).to_byte())
+  let data = FixedArray::make(2, b'\x00')
+  data[0] = value.land(0xFF).to_byte()
+  data[1] = (value >> 8).land(0xFF).to_byte()
+  self.write_fixed(addr, data, 2)
 }
 
 ///|
@@ -360,11 +388,10 @@ pub fn Memory::store_i64_16(
   value : Int64,
 ) -> Unit raise RuntimeError {
   self.check_bounds(addr, 2)
-  self.store_byte_unchecked(addr, value.land(0xFFL).to_int().to_byte())
-  self.store_byte_unchecked(
-    addr + 1,
-    (value >> 8).land(0xFFL).to_int().to_byte(),
-  )
+  let data = FixedArray::make(2, b'\x00')
+  data[0] = value.land(0xFFL).to_int().to_byte()
+  data[1] = (value >> 8).land(0xFFL).to_int().to_byte()
+  self.write_fixed(addr, data, 2)
 }
 
 ///|
@@ -379,7 +406,12 @@ pub fn Memory::store_i64_32(
 
 ///|
 pub fn Memory::size_pages(self : Memory) -> Int {
-  self.size
+  let bytes = self.byte_len()
+  if self.page_size_bytes <= 0L {
+    0
+  } else {
+    (bytes / self.page_size_bytes).to_int()
+  }
 }
 
 ///|
@@ -388,55 +420,15 @@ pub fn Memory::is_memory64(self : Memory) -> Bool {
 }
 
 ///|
-/// Returns sorted list of allocated (touched) pages.
-/// Each page is always exactly 64KB.
-pub fn Memory::allocated_pages(self : Memory) -> Array[(Int, Bytes)] {
-  let keys : Array[Int] = []
-  for entry in self.pages.iter() {
-    let (k, _) = entry
-    keys.push(k)
-  }
-  keys.sort()
-  let result : Array[(Int, Bytes)] = []
-  for k in keys {
-    match self.pages.get(k) {
-      Some(p) => result.push((k, Bytes::from_array(p)))
-      None => ()
-    }
-  }
-  result
-}
-
-///|
 pub fn Memory::grow(self : Memory, delta : Int) -> Int {
-  let old_size = self.size
   if delta < 0 {
     return -1
   }
-  let old_u = old_size.reinterpret_as_uint()
-  let delta_u = delta.reinterpret_as_uint()
-  let new_u = old_u + delta_u
-  if new_u < old_u {
+  let max_pages = self.max.unwrap_or(-1)
+  if self.mem_desc_ptr == 0L {
     return -1
   }
-  let new_size = new_u.reinterpret_as_int()
-  if self.max is Some(max) && new_size > max {
-    return -1
-  }
-
-  // Spec max: memory32 has a 32-bit address space (4GiB bytes).
-  // With custom-page-sizes, the max number of logical pages depends on the page size.
-  let max_pages = if self.is_memory64 {
-    2147483647
-  } else {
-    let max_bytes = 4294967296L
-    (max_bytes / self.page_size_bytes).to_int()
-  }
-  if new_size > max_pages {
-    return -1
-  }
-  self.size = new_size
-  old_size
+  @jit_ffi.c_mem_desc_grow(self.mem_desc_ptr, delta, max_pages)
 }
 
 ///|
@@ -448,9 +440,20 @@ pub fn Memory::init_data(
 ) -> Unit raise RuntimeError {
   let len = data.length()
   self.check_bounds(dest, len)
-  for i in 0..<len {
-    self.store_byte_unchecked(dest + i, data[i])
+  if len == 0 {
+    return
   }
+  let fixed = FixedArray::make(len, b'\x00')
+  for i in 0..<len {
+    fixed[i] = data[i]
+  }
+  let _ = @jit_ffi.c_mem_desc_write(
+    self.mem_desc_ptr,
+    dest.to_int64(),
+    fixed,
+    len,
+  )
+
 }
 
 ///|
@@ -467,17 +470,13 @@ pub fn Memory::copy(
   if len == 0 {
     return
   }
-  if dest <= src {
-    for i in 0..<len {
-      let b = self.load_byte_unchecked(src + i)
-      self.store_byte_unchecked(dest + i, b)
-    }
-  } else {
-    for i = len - 1; i >= 0; i = i - 1 {
-      let b = self.load_byte_unchecked(src + i)
-      self.store_byte_unchecked(dest + i, b)
-    }
-  }
+  let _ = @jit_ffi.c_mem_desc_memmove(
+    self.mem_desc_ptr,
+    dest.to_int64(),
+    src.to_int64(),
+    len,
+  )
+
 }
 
 ///|
@@ -492,9 +491,13 @@ pub fn Memory::fill(
   if len == 0 {
     return
   }
-  for i in 0..<len {
-    self.store_byte_unchecked(dest + i, value)
-  }
+  let _ = @jit_ffi.c_mem_desc_memset(
+    self.mem_desc_ptr,
+    dest.to_int64(),
+    value.to_int(),
+    len,
+  )
+
 }
 
 ///|
@@ -503,11 +506,9 @@ pub fn Memory::read_i32(self : Memory, addr : Int) -> Int {
   if addr < 0 || addr.to_int64() + 4L > self.byte_len() {
     return 0
   }
-  let b0 = self.load_byte_unchecked(addr).to_int()
-  let b1 = self.load_byte_unchecked(addr + 1).to_int()
-  let b2 = self.load_byte_unchecked(addr + 2).to_int()
-  let b3 = self.load_byte_unchecked(addr + 3).to_int()
-  b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+  self.load_i32(addr) catch {
+    _ => 0
+  }
 }
 
 ///|
@@ -516,10 +517,9 @@ pub fn Memory::write_i32(self : Memory, addr : Int, value : Int) -> Unit {
   if addr < 0 || addr.to_int64() + 4L > self.byte_len() {
     return
   }
-  self.store_byte_unchecked(addr, value.land(0xFF).to_byte())
-  self.store_byte_unchecked(addr + 1, (value >> 8).land(0xFF).to_byte())
-  self.store_byte_unchecked(addr + 2, (value >> 16).land(0xFF).to_byte())
-  self.store_byte_unchecked(addr + 3, (value >> 24).land(0xFF).to_byte())
+  try self.store_i32(addr, value) |> ignore catch {
+    _ => ()
+  }
 }
 
 ///|
@@ -528,11 +528,9 @@ pub fn Memory::read_i64(self : Memory, addr : Int) -> Int64 {
   if addr < 0 || addr.to_int64() + 8L > self.byte_len() {
     return 0L
   }
-  let mut result = 0L
-  for i in 0..<8 {
-    result = result | (self.load_byte_unchecked(addr + i).to_int64() << (i * 8))
+  self.load_i64(addr) catch {
+    _ => 0L
   }
-  result
 }
 
 ///|
@@ -541,9 +539,8 @@ pub fn Memory::write_i64(self : Memory, addr : Int, value : Int64) -> Unit {
   if addr < 0 || addr.to_int64() + 8L > self.byte_len() {
     return
   }
-  for i in 0..<8 {
-    let byte_val = (value >> (i * 8)).land(0xFFL).to_int()
-    self.store_byte_unchecked(addr + i, byte_val.to_byte())
+  try self.store_i64(addr, value) |> ignore catch {
+    _ => ()
   }
 }
 
@@ -571,15 +568,28 @@ pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
   if addr < 0 || len < 0 || addr.to_int64() + len.to_int64() > self.byte_len() {
     return b""
   }
+  if len == 0 {
+    return b""
+  }
+  let fixed = FixedArray::make(len, b'\x00')
+  let rc = @jit_ffi.c_mem_desc_read(
+    self.mem_desc_ptr,
+    addr.to_int64(),
+    fixed,
+    len,
+  )
+  if rc != 0 {
+    return b""
+  }
   let arr : Array[Byte] = Array::make(len, b'\x00')
   for i in 0..<len {
-    arr[i] = self.load_byte_unchecked(addr + i)
+    arr[i] = fixed[i]
   }
   Bytes::from_array(arr)
 }
 
 ///|
-/// Get memory limits (min, max) for type checking
+/// Get memory limits (min(current), max) for type checking
 pub fn Memory::get_limits(self : Memory) -> (Int, Int?) {
-  (self.size, self.max)
+  (self.size_pages(), self.max)
 }

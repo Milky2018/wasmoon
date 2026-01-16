@@ -409,7 +409,7 @@ test "jump and trap" {
   builder.trap("unreachable")
   let func = builder.get_function()
   match func.get_blocks()[0].terminator {
-    Some(Jump(1)) => ()
+    Some(Jump(1, _)) => ()
     _ => panic()
   }
   match func.get_blocks()[2].terminator {

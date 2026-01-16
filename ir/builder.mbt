@@ -560,6 +560,18 @@ pub fn IRBuilder::bitcast(self : IRBuilder, ty : Type, a : Value) -> Value {
 // which generate LoadPtr/StorePtr with explicit bounds checks
 
 ///|
+/// Load linear memory base pointer from vmctx for a given memory index.
+/// Operand: vmctx (i64 pointer)
+/// Result: i64 base pointer
+pub fn IRBuilder::load_mem_base(
+  self : IRBuilder,
+  vmctx : Value,
+  memidx : Int,
+) -> Value {
+  self.emit_inst(Type::I64, Opcode::LoadMemBase(memidx), [vmctx])
+}
+
+///|
 /// Grow memory by delta pages, returns previous size in pages or -1 on failure
 /// memidx: memory index
 /// max_pages: maximum allowed pages (None = no limit)

@@ -85,31 +85,16 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    ret f4
       #|block2(v6:int, f7:float, f8:float):
       #|    f18 = ldf 3
-      #|    v3 = mov v6
-      #|    f4 = mov f18
-      #|    f5 = mov f8
-      #|    jump block1
+      #|    jump block1 (v6, f18, f8)
       #|block3(v9:int, f10:float, f11:float):
       #|    f19 = ldf 2
-      #|    v3 = mov v9
-      #|    f4 = mov f19
-      #|    f5 = mov f11
-      #|    jump block1
+      #|    jump block1 (v9, f19, f11)
       #|block4:
-      #|    v9 = mov v2
-      #|    f10 = mov f12
-      #|    f11 = mov f13
-      #|    jump block3
+      #|    jump block3 (v2, f12, f13)
       #|block5:
-      #|    v6 = mov v2
-      #|    f7 = mov f12
-      #|    f8 = mov f13
-      #|    jump block2
+      #|    jump block2 (v2, f12, f13)
       #|block6:
-      #|    v3 = mov v2
-      #|    f4 = mov f12
-      #|    f5 = mov f13
-      #|    jump block1
+      #|    jump block1 (v2, f12, f13)
       #|block7:
       #|    v16 = ldi 1
       #|    v17 = cmp32.eq v2, v16
@@ -124,39 +109,32 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
     content=(
       #|vcode test(v0:int, v1:int, v2:int) -> float {
       #|block0:
-      #|    d5 = ldf 0
-      #|    d4 = ldf 0
+      #|    d2 = ldf 0
+      #|    d3 = ldf 0
       #|    x8 = ldi 0
       #|    x8 = cmp32.eq x2, x8
       #|    branch x8, block4, block7
       #|block1(v3:int, f4:float, f5:float):
       #|    ret d0
       #|block2(v6:int, f7:float, f8:float):
-      #|    d3 = ldf 3
-      #|    x8 = mov x9
-      #|    d0 = mov d3
-      #|    d1 = mov d2
+      #|    d0 = ldf 3
       #|    jump block1
       #|block3(v9:int, f10:float, f11:float):
-      #|    d2 = ldf 2
-      #|    x8 = mov x2
-      #|    d0 = mov d2
-      #|    d1 = mov d4
+      #|    d0 = ldf 2
       #|    jump block1
       #|block4:
-      #|    x2 = mov x2
-      #|    d5 = mov d5
-      #|    d4 = mov d4
+      #|    x8 = mov x2
+      #|    d1 = mov d3
       #|    jump block3
       #|block5:
-      #|    x9 = mov x2
-      #|    d3 = mov d5
-      #|    d2 = mov d4
+      #|    x8 = mov x2
+      #|    d0 = mov d2
+      #|    d1 = mov d3
       #|    jump block2
       #|block6:
       #|    x8 = mov x2
-      #|    d0 = mov d5
-      #|    d1 = mov d4
+      #|    d0 = mov d2
+      #|    d1 = mov d3
       #|    jump block1
       #|block7:
       #|    x8 = ldi 1
@@ -271,20 +249,20 @@ test "A critical bug as in data/f32_br_2locals" {
     f,
     @jit.Single(0L),
   )
-  inspect(result0, content="10")
+  assert_eq(result0, 10)
   let @jit.Single((result1 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(1L),
   )
-  inspect(result1, content="10")
+  assert_eq(result1, 10)
   let @jit.Single((result2 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(2L),
   )
-  inspect(result2, content="10")
+  assert_eq(result2, 10)
   let @jit.Single((result3 : Float)) = jm.call_with_context_poly(
     f,
     @jit.Single(3L),
   )
-  inspect(result3, content="0")
+  assert_eq(result3, 0)
 }

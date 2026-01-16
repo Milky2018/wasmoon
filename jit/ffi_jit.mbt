@@ -90,8 +90,8 @@ pub fn check_trap() -> Unit raise JITTrap {
 ///|
 /// Memory information for JIT execution
 pub struct MemoryInfo {
-  ptr : Int64 // Memory base pointer
-  size : Int64 // Current size in bytes
+  ptr : Int64 // Pointer to `wasmoon_memory_t` (memory descriptor)
+  size : Int64 // Initial size in bytes (informational)
   max_pages : Int? // Max pages (None = unlimited)
 }
 
@@ -162,13 +162,9 @@ fn JITContext::set_indirect(
 }
 
 ///|
-/// Set memory in the context
-fn JITContext::set_memory(
-  self : JITContext,
-  mem_ptr : Int64,
-  mem_size : Int64,
-) -> Unit {
-  @jit_ffi.c_jit_ctx_set_memory(self.ptr(), mem_ptr, mem_size)
+/// Set memory0 in the context
+fn JITContext::set_memory(self : JITContext, mem0_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_ctx_set_memory(self.ptr(), mem0_ptr)
 }
 
 ///|
@@ -262,22 +258,12 @@ fn JITContext::set_memory_pointers(
     return
   }
   let count = memories.length()
-  // Convert to FixedArrays for FFI
+  // Convert to FixedArray for FFI
   let ptrs = FixedArray::make(count, 0L)
-  let sizes = FixedArray::make(count, 0L)
-  let max_sizes = FixedArray::make(count, -1) // -1 = unlimited
   for i, mem in memories {
     ptrs[i] = mem.ptr
-    sizes[i] = mem.size
-    max_sizes[i] = mem.max_pages.unwrap_or(-1)
   }
-  @jit_ffi.c_jit_ctx_set_memory_pointers(
-    self.ptr(),
-    ptrs,
-    sizes,
-    max_sizes,
-    count,
-  )
+  @jit_ffi.c_jit_ctx_set_memory_pointers(self.ptr(), ptrs, count)
 }
 
 ///|
@@ -426,11 +412,52 @@ pub fn alloc_memory(size : Int64) -> Int64 {
 }
 
 ///|
-/// Free linear memory that was NOT set to a JITContext.
-/// WARNING: Do NOT call this if memory was set to a context - the context's
-/// finalizer will handle cleanup.
+/// Allocate a `wasmoon_memory_t` descriptor with owned backing memory.
+pub fn alloc_memory_desc(
+  size_bytes : Int64,
+  max_pages : Int?,
+  is_memory64? : Bool = false,
+  page_size_log2? : Int = 16,
+  is_shared? : Bool = false,
+) -> Int64 {
+  @jit_ffi.c_jit_alloc_memory_desc(
+    size_bytes,
+    max_pages.unwrap_or(-1),
+    if is_memory64 {
+      1
+    } else {
+      0
+    },
+    page_size_log2,
+    if is_shared {
+      1
+    } else {
+      0
+    },
+  )
+}
+
+///|
+/// Allocate a guarded (reserved) memory descriptor for memory32 memory0.
+/// This is required for bounds-check elimination; out-of-bounds accesses trap via guard pages.
+pub fn alloc_guarded_memory_desc(
+  initial_pages : Int,
+  max_pages : Int?,
+) -> Int64 {
+  @jit_ffi.c_jit_alloc_guarded_memory_desc(
+    initial_pages.to_int64(),
+    max_pages.unwrap_or(-1).to_int64(),
+  )
+}
+
+///|
 pub fn free_memory(mem_ptr : Int64) -> Unit {
   @jit_ffi.c_jit_free_memory(mem_ptr)
+}
+
+///|
+pub fn free_memory_desc(mem_desc_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_free_memory_desc(mem_desc_ptr)
 }
 
 ///|

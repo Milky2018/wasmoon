@@ -554,9 +554,22 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
       continue
     }
 
+    // Vector values live across calls must spill (AAPCS64 only preserves low 64-bit).
+    if bundle.reg_class is @abi.Vector && bundle.crosses_call(self.ranges) {
+      self.force_spill_bundle(bundle)
+      processed.add(entry.bundle_id)
+      continue
+    }
+
     // Try to allocate a register
     if self.try_allocate(bundle) is Some(preg) {
       self.record_allocation(bundle, preg)
+      processed.add(entry.bundle_id)
+      continue
+    }
+
+    // try_allocate may have decided to spill
+    if bundle.allocation is Spill(_) {
       processed.add(entry.bundle_id)
       continue
     }
@@ -821,39 +834,31 @@ pub fn build_bundles_with_merging(
   }
 
   // 2. Merge across block arguments (SSA phi-like connections)
-  // For each block with parameters, try to merge with the corresponding
-  // arguments from predecessor branches
+  // For each Jump(target, args), the i-th arg corresponds to the i-th block param.
+  // Coalescing these bundles avoids edge moves and preserves SSA semantics.
   for block in func.blocks {
     if block.params.is_empty() {
       continue
     }
-
-    // Find predecessors and their branch arguments
     for pred_block in func.blocks {
       if pred_block.terminator is Some(term) {
         match term {
-          Jump(target) =>
+          Jump(target, args) =>
             if target == block.id {
-              // This predecessor jumps to our block
-              // Block params should be populated from predecessor's values
-              // In current VCode, this is handled via moves before the jump
-              // So we already handle this via Move instruction merging
-            }
-          Branch(_, then_b, else_b) =>
-            if then_b == block.id || else_b == block.id {
-              // Similar handling
-            }
-          BranchCmp(_, _, _, _, then_b, else_b) =>
-            if then_b == block.id || else_b == block.id {
-              // Similar handling
-            }
-          BranchCmpImm(_, _, _, _, then_b, else_b) =>
-            if then_b == block.id || else_b == block.id {
-              // Similar handling
-            }
-          BranchZero(_, _, _, then_b, else_b) =>
-            if then_b == block.id || else_b == block.id {
-              // Similar handling
+              // Merge each param with its incoming argument vreg.
+              for i, param in block.params {
+                if i >= args.length() {
+                  break
+                }
+                match args[i] {
+                  @abi.Virtual(arg_vreg) =>
+                    if ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
+                      ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
+                      try_merge(uf, param_idx, arg_idx, ranges) |> ignore
+                    }
+                  _ => ()
+                }
+              }
             }
           _ => ()
         }
@@ -885,6 +890,20 @@ pub fn build_bundles_with_merging(
 ///|
 /// Pre-assign function parameters to ABI registers
 /// This must be done before allocation to respect calling convention
+fn BacktrackingAllocator::force_spill_bundle(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+) -> Unit {
+  let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
+  let slot = spill_bundle.slot
+  bundle.allocation = Spill(slot)
+  for range_id in bundle.range_ids {
+    let range = self.ranges.get(range_id)
+    range.allocation = Spill(slot)
+  }
+}
+
+///|
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
   liveness : LivenessResult,
@@ -925,13 +944,21 @@ fn BacktrackingAllocator::preassign_params(
     // Check if param crosses a call - if so, allocate to callee-saved instead
     let interval = liveness.intervals.get(param.id)
     if interval is Some(iv) && iv.crosses_call {
-      // For params that cross calls, allocate to callee-saved registers
-      // This is critical because we can't spill params without generating
-      // a store in the prologue
       let range = self.ranges.get_by_vreg(param.id)
       if range is Some(lr) && lr.bundle_id >= 0 {
         let bundle = self.bundles.bundles[lr.bundle_id]
-        // Find an available callee-saved register
+
+        // For 128-bit SIMD vectors, AAPCS64 only guarantees preserving the low
+        // 64 bits of V8-V15 across calls. To keep semantics correct, force spill.
+        if !is_int && param.class is @abi.Vector {
+          self.force_spill_bundle(bundle)
+          bundle.is_pinned = true
+          continue
+        }
+
+        // For params that cross calls, allocate to callee-saved registers.
+        // This is critical because we can't spill params without generating
+        // a store in the prologue.
         let callee_saved_preg = if is_int {
           if callee_saved_int_idx < self.callee_saved_int.length() {
             let p = self.callee_saved_int[callee_saved_int_idx]
@@ -951,8 +978,7 @@ fn BacktrackingAllocator::preassign_params(
           self.record_allocation(bundle, cs_preg)
           bundle.is_pinned = true // Prevent eviction of param bundles
         }
-        // If no callee-saved available, let normal allocation handle it
-        // (it will be spilled, which is broken for params, but rare)
+        // If no callee-saved available, let normal allocation handle it.
       }
       continue
     }

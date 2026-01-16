@@ -69,6 +69,128 @@ test "cross-module: chain imports" {
 }
 
 ///|
+test "cross-module: shared memory export/import (jit + interp)" {
+  let mod_a_src =
+    #|(module
+    #|  (memory (export "mem") 1 3)
+    #|  (func (export "set0") (param i32)
+    #|    (i32.store (i32.const 0) (local.get 0)))
+    #|  (func (export "get0") (result i32)
+    #|    (i32.load (i32.const 0)))
+    #|  (func (export "get1") (result i32)
+    #|    (i32.load (i32.const 65536))))
+  let mod_b_src =
+    #|(module
+    #|  (import "mod_a" "mem" (memory 1 3))
+    #|  (func (export "grow") (result i32)
+    #|    (memory.grow (i32.const 1)))
+    #|  (func (export "read0") (result i32)
+    #|    (i32.load (i32.const 0)))
+    #|  (func (export "read1") (result i32)
+    #|    (i32.load (i32.const 65536)))
+    #|  (func (export "write1") (param i32)
+    #|    (i32.store (i32.const 65536) (local.get 0))))
+  let linker = @runtime.Linker::new()
+  let mod_a = @wat.parse(mod_a_src) catch { _ => abort("parse a failed") }
+  let inst_a = @executor.instantiate_with_linker(linker, "mod_a", mod_a) catch {
+    _ => abort("instantiate a failed")
+  }
+  linker.register("mod_a", inst_a)
+  let store = linker.get_store()
+  let mod_b = @wat.parse(mod_b_src) catch { _ => abort("parse b failed") }
+  let inst_b = @executor.instantiate_with_linker(linker, "mod_b", mod_b) catch {
+    _ => abort("instantiate b failed")
+  }
+
+  // Interpreter writes, interpreter reads through import.
+  @executor.call_exported_func(store, inst_a, "set0", [@types.Value::I32(11)])
+  |> ignore
+  let b0 = @executor.call_exported_func(store, inst_b, "read0", [])
+  inspect(b0, content="[I32(11)]")
+
+  // Compile module B to JIT and point it at the store's shared memory descriptor.
+  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let func_signatures = @wast.build_func_signatures(mod_b)
+  let num_imports = @wast.count_func_imports(mod_b.imports)
+  for i, _ in mod_b.codes {
+    let func_idx = num_imports + i
+    let type_idx = mod_b.funcs[i]
+    let func_type = mod_b.get_func_type(type_idx)
+    let func_name = @wast.get_func_name(mod_b, func_idx)
+    let ir_func = @ir.translate_function(mod_b, i, name=func_name)
+    let vcode_func = @lower.lower_function(ir_func)
+    let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
+    let mc = @emit.emit_function(allocated)
+    let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
+    precompiled.add_function(
+      func_idx,
+      func_name,
+      compiled,
+      func_type.params.length(),
+      func_type.results.length(),
+    )
+  }
+  guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
+    abort("jit load failed")
+  }
+  guard @wast.init_jit_memories_from_store(inst_b, store, jm) is Some(_) else {
+    abort("init jit memories failed")
+  }
+  let f_read0 = jm.get_func_by_name("read0").unwrap()
+  let r0 = jm.call_with_context(f_read0, [])
+  inspect(r0, content="[11]")
+
+  // Grow via JIT and write into the new page; interpreter observes immediately.
+  let f_grow = jm.get_func_by_name("grow").unwrap()
+  let _ = jm.call_with_context(f_grow, [])
+  let f_write1 = jm.get_func_by_name("write1").unwrap()
+  let _ = jm.call_with_context(f_write1, [42L])
+  let a1 = @executor.call_exported_func(store, inst_a, "get1", [])
+  inspect(a1, content="[I32(42)]")
+
+  // JIT-only: compile module A as well and verify JIT↔JIT sharing.
+  let precompiled_a = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let func_signatures_a = @wast.build_func_signatures(mod_a)
+  let num_imports_a = @wast.count_func_imports(mod_a.imports)
+  for i, _ in mod_a.codes {
+    let func_idx = num_imports_a + i
+    let type_idx = mod_a.funcs[i]
+    let func_type = mod_a.get_func_type(type_idx)
+    let func_name = @wast.get_func_name(mod_a, func_idx)
+    let ir_func = @ir.translate_function(mod_a, i, name=func_name)
+    let vcode_func = @lower.lower_function(ir_func)
+    let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
+    let mc = @emit.emit_function(allocated)
+    let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
+    precompiled_a.add_function(
+      func_idx,
+      func_name,
+      compiled,
+      func_type.params.length(),
+      func_type.results.length(),
+    )
+  }
+  guard @jit.JITModule::load(precompiled_a, func_signatures_a) is Some(jm_a) else {
+    abort("jit load (a) failed")
+  }
+  guard @wast.init_jit_memories_from_store(inst_a, store, jm_a) is Some(_) else {
+    abort("init jit memories (a) failed")
+  }
+
+  // JIT(A) writes, JIT(B) reads.
+  let f_set0 = jm_a.get_func_by_name("set0").unwrap()
+  let _ = jm_a.call_with_context(f_set0, [13L])
+  let r0b = jm.call_with_context(f_read0, [])
+  inspect(r0b, content="[13]")
+
+  // JIT(B) writes, JIT(A) reads from grown page.
+  let _ = jm.call_with_context(f_write1, [99L])
+  let f_get1 = jm_a.get_func_by_name("get1").unwrap()
+  let r1a = jm_a.call_with_context(f_get1, [])
+  inspect(r1a, content="[99]")
+}
+
+///|
 /// Cross-module comparison result
 struct CrossModuleResult {
   jit_result : Result[Array[@types.Value], String]
@@ -229,6 +351,7 @@ fn run_cross_module_jit(
 
     // Build memory_is_64 array for memory64 support
     let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
+    let memory_page_size_log2 = mod_.memories.map(fn(m) { m.page_size_log2 })
 
     // Compile each function in this module
     for i, code in mod_.codes {
@@ -268,6 +391,7 @@ fn run_cross_module_jit(
         import_func_type_indices,
         memory_max~,
         memory_is_64~,
+        memory_page_size_log2~,
         tables=mod_.tables,
         type_rec_groups=mod_.type_rec_groups,
         func_base=base,
@@ -302,11 +426,12 @@ fn run_cross_module_jit(
   // Allocate memory (guarded for memory32 memory 0)
   let mem_pages = 1
   let mem_size = mem_pages.to_int64() * 65536L
-  let mem_ptr = jm.alloc_guarded_memory(mem_pages, None)
-  if mem_ptr == 0L && mem_size > 0L {
+  let mem_desc_ptr = jm.alloc_guarded_memory(mem_pages, None)
+  if mem_desc_ptr == 0L && mem_size > 0L {
     raise CrossModuleError("Failed to allocate memory")
   }
-  jm.set_memory(mem_ptr, mem_size)
+  let memories = [@jit.MemoryInfo::new(mem_desc_ptr, mem_size, None)]
+  jm.set_memory_pointers(memories)
 
   // Get target function's result types
   guard func_name_to_idx.get(func_name) is Some(target_idx) else {

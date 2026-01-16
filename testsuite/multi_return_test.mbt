@@ -162,7 +162,7 @@ test "multi return: 3 floats" {
   let (r0, r1, r2) : (Double, Double, Double) = jm.call_with_context_poly(f, ())
   inspect(r0, content="1.5")
   inspect(r1, content="2.5")
-  inspect(r2, content="1.5")
+  inspect(r2, content="3.5")
 }
 
 ///|

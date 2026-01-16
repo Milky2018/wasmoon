@@ -12,45 +12,47 @@
 ///|
 /// VMContext structure offsets (matching jit_ffi.h and vcode/abi)
 /// These define the layout of the VMContext structure passed to JIT functions
-pub const VMCTX_MEMORY_BASE_OFFSET : Int = 0
+pub const VMCTX_MEMORY0_OFFSET : Int = 0
 
 ///|
-pub const VMCTX_MEMORY_SIZE_OFFSET : Int = 8
+pub const VMCTX_FUNC_TABLE_OFFSET : Int = 8
 
 ///|
-pub const VMCTX_FUNC_TABLE_OFFSET : Int = 16
+pub const VMCTX_TABLE0_BASE_OFFSET : Int = 16
 
 ///|
-pub const VMCTX_TABLE0_BASE_OFFSET : Int = 24
+pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 24
 
 ///|
-pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 32
+pub const VMCTX_GLOBALS_OFFSET : Int = 32
 
 ///|
-pub const VMCTX_GLOBALS_OFFSET : Int = 40
+pub const VMCTX_TABLES_OFFSET : Int = 40
 
 ///|
-pub const VMCTX_TABLES_OFFSET : Int = 48
+pub const VMCTX_TABLE_COUNT_OFFSET : Int = 48
 
 ///|
-pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 56
 
 ///|
-pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
+pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 64
 
 // Multi-memory support offsets
 
 ///|
-pub const VMCTX_MEMORIES_OFFSET : Int = 80
+pub const VMCTX_MEMORIES_OFFSET : Int = 72
 
 ///|
-pub const VMCTX_MEMORY_SIZES_OFFSET : Int = 88
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 80
+
+// Offsets within `wasmoon_memory_t` (see jit_ffi.h)
 
 ///|
-pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
+pub const MEMORY_BASE_OFFSET : Int = 0
 
 ///|
-pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
+pub const MEMORY_CURRENT_LENGTH_OFFSET : Int = 8
 
 ///|
 /// WASM page size in bytes (64KB)
@@ -75,6 +77,8 @@ struct FuncEnvironment {
   memory_mins : Array[Int64]
   // Whether each memory uses 64-bit addressing (memory64 proposal)
   memory_is_64 : Array[Bool]
+  // Logical page size log2 for each memory (custom-page-sizes proposal)
+  memory_page_size_log2 : Array[Int]
   // Shared trap block for memory out-of-bounds errors
   // All bounds checks in the same function share this block to reduce CFG size
   mut memory_trap_block : Block?
@@ -87,11 +91,13 @@ pub fn FuncEnvironment::new(
   global_types : Array[@types.GlobalType],
   memory_mins? : Array[Int64] = [],
   memory_is_64? : Array[Bool] = [],
+  memory_page_size_log2? : Array[Int] = [],
 ) -> FuncEnvironment {
   {
     global_types,
     memory_mins,
     memory_is_64,
+    memory_page_size_log2,
     memory_trap_block: None,
     atomic_unaligned_trap_block: None,
   }
@@ -353,68 +359,27 @@ pub fn FuncEnvironment::translate_table_set(
 // ============ Memory Operations ============
 
 ///|
-/// Helper to load memory base for a given memidx
+/// Helper to load memory size in bytes for a given memidx.
 /// For memidx 0: use fast path (direct vmctx field)
 /// For memidx > 0: load from memories array
-fn load_memory_base(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
-  if memidx == 0 {
-    // Fast path for memory 0
-    let base_offset = builder.iconst(
-      Type::I64,
-      VMCTX_MEMORY_BASE_OFFSET.to_int64(),
-    )
-    builder.load_ptr(Type::I64, vmctx, base_offset)
+fn load_memory_size(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
+  let mem_ptr = if memidx == 0 {
+    let mem0_off = builder.iconst(Type::I64, VMCTX_MEMORY0_OFFSET.to_int64())
+    builder.load_ptr(Type::I64, vmctx, mem0_off)
   } else {
-    // General path: load from memories array
-    let memories_offset = builder.iconst(
+    let memories_off = builder.iconst(
       Type::I64,
       VMCTX_MEMORIES_OFFSET.to_int64(),
     )
-    let memories_ptr = builder.load_ptr(Type::I64, vmctx, memories_offset)
-    let idx_offset = builder.iconst(Type::I64, (memidx * 8).to_int64())
-    builder.load_ptr(Type::I64, memories_ptr, idx_offset)
+    let memories_ptr = builder.load_ptr(Type::I64, vmctx, memories_off)
+    let idx_off = builder.iconst(Type::I64, (memidx * 8).to_int64())
+    builder.load_ptr(Type::I64, memories_ptr, idx_off)
   }
-}
-
-///|
-/// Helper to load memory base and size for a given memidx
-/// For memidx 0: use fast path (direct vmctx fields)
-/// For memidx > 0: load from memories/memory_sizes arrays
-fn load_memory_base_and_size(
-  builder : IRBuilder,
-  vmctx : Value,
-  memidx : Int,
-) -> (Value, Value) {
-  if memidx == 0 {
-    // Fast path for memory 0
-    let base_offset = builder.iconst(
-      Type::I64,
-      VMCTX_MEMORY_BASE_OFFSET.to_int64(),
-    )
-    let base = builder.load_ptr(Type::I64, vmctx, base_offset)
-    let size_offset = builder.iconst(
-      Type::I64,
-      VMCTX_MEMORY_SIZE_OFFSET.to_int64(),
-    )
-    let size = builder.load_ptr(Type::I64, vmctx, size_offset)
-    (base, size)
-  } else {
-    // General path: load from memories/memory_sizes arrays
-    let memories_offset = builder.iconst(
-      Type::I64,
-      VMCTX_MEMORIES_OFFSET.to_int64(),
-    )
-    let memories_ptr = builder.load_ptr(Type::I64, vmctx, memories_offset)
-    let idx_offset = builder.iconst(Type::I64, (memidx * 8).to_int64())
-    let base = builder.load_ptr(Type::I64, memories_ptr, idx_offset)
-    let sizes_offset = builder.iconst(
-      Type::I64,
-      VMCTX_MEMORY_SIZES_OFFSET.to_int64(),
-    )
-    let sizes_ptr = builder.load_ptr(Type::I64, vmctx, sizes_offset)
-    let size = builder.load_ptr(Type::I64, sizes_ptr, idx_offset)
-    (base, size)
-  }
+  let size_off = builder.iconst(
+    Type::I64,
+    MEMORY_CURRENT_LENGTH_OFFSET.to_int64(),
+  )
+  builder.load_ptr(Type::I64, mem_ptr, size_off)
 }
 
 ///|
@@ -429,7 +394,16 @@ fn FuncEnvironment::use_guard_pages(
   }
   let is_memory64 = memidx < self.memory_is_64.length() &&
     self.memory_is_64[memidx]
-  not(is_memory64)
+  if is_memory64 {
+    return false
+  }
+  // Guarded allocations currently assume 64KiB wasm pages.
+  let l2 = if memidx < self.memory_page_size_log2.length() {
+    self.memory_page_size_log2[memidx]
+  } else {
+    16
+  }
+  l2 == 16
 }
 
 ///|
@@ -513,10 +487,9 @@ pub fn FuncEnvironment::emit_atomic_alignment_check(
   builder.switch_to_block(continue_block)
 }
 
-// Note: Memory base/size caching was considered but removed due to SSA dominance
-// issues. When memory accesses occur in different branches (e.g., br_table cases),
-// cached Values from one branch don't dominate other branches, causing SSA violations.
-// The shared trap block optimization is still effective and safe.
+// Note: Linear memory base is accessed via a dedicated `LoadMemBase` opcode so
+// the optimizer can safely reduce redundant base reloads within a block while
+// respecting invalidation around calls/grow.
 
 ///|
 /// Get the byte size for a type
@@ -582,7 +555,7 @@ pub fn FuncEnvironment::emit_bounds_check(
 ) -> Value {
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
-    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let memory_base = builder.load_mem_base(vmctx, memidx)
     let addr_i64 = builder.uextend(Type::I64, wasm_addr)
     let offset_val = builder.iconst(Type::I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
@@ -593,9 +566,8 @@ pub fn FuncEnvironment::emit_bounds_check(
   let skip_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
-  let (memory_base, memory_size) = load_memory_base_and_size(
-    builder, vmctx, memidx,
-  )
+  let memory_base = builder.load_mem_base(vmctx, memidx)
+  let memory_size = load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -666,7 +638,7 @@ pub fn FuncEnvironment::translate_memory_load(
   let access_size = type_byte_size(ty)
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
-    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let memory_base = builder.load_mem_base(vmctx, memidx)
     let addr_i64 = builder.uextend(Type::I64, wasm_addr)
     let offset_val = builder.iconst(Type::I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
@@ -679,9 +651,8 @@ pub fn FuncEnvironment::translate_memory_load(
   let skip_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
-  let (memory_base, memory_size) = load_memory_base_and_size(
-    builder, vmctx, memidx,
-  )
+  let memory_base = builder.load_mem_base(vmctx, memidx)
+  let memory_size = load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -761,7 +732,7 @@ pub fn FuncEnvironment::translate_memory_store(
   let access_size = type_byte_size(ty)
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
-    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let memory_base = builder.load_mem_base(vmctx, memidx)
     let addr_i64 = builder.uextend(Type::I64, wasm_addr)
     let offset_val = builder.iconst(Type::I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
@@ -774,9 +745,8 @@ pub fn FuncEnvironment::translate_memory_store(
   let skip_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
-  let (memory_base, memory_size) = load_memory_base_and_size(
-    builder, vmctx, memidx,
-  )
+  let memory_base = builder.load_mem_base(vmctx, memidx)
+  let memory_size = load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -846,7 +816,7 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   let access_size = narrow_bits / 8
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
-    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let memory_base = builder.load_mem_base(vmctx, memidx)
     let addr_i64 = builder.uextend(Type::I64, wasm_addr)
     let offset_val = builder.iconst(Type::I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
@@ -861,9 +831,8 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   let skip_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
-  let (memory_base, memory_size) = load_memory_base_and_size(
-    builder, vmctx, memidx,
-  )
+  let memory_base = builder.load_mem_base(vmctx, memidx)
+  let memory_size = load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -934,7 +903,7 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   let access_size = narrow_bits / 8
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
-    let memory_base = load_memory_base(builder, vmctx, memidx)
+    let memory_base = builder.load_mem_base(vmctx, memidx)
     let addr_i64 = builder.uextend(Type::I64, wasm_addr)
     let offset_val = builder.iconst(Type::I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
@@ -949,9 +918,8 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   let skip_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
-  let (memory_base, memory_size) = load_memory_base_and_size(
-    builder, vmctx, memidx,
-  )
+  let memory_base = builder.load_mem_base(vmctx, memidx)
+  let memory_size = load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&

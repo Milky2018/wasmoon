@@ -394,26 +394,25 @@ pub fn run_jit(
     let _ = jm.alloc_wasm_stack(1048576L)
 
     // Allocate linear memories.
+    // We pass memory *descriptors* (wasmoon_memory_t*) into the JIT context.
     // Memory 0 (memory32) uses guarded allocation to support bounds-check elimination.
     let memories : Array[@jit.MemoryInfo] = []
     for i, mem_ty in mod_.memories {
       let pages = mem_ty.limits.min.to_int()
       let size = pages.to_int64() * 65536L
       let max_pages = mem_ty.limits.max.map(fn(m) { m.to_int() })
-      let mem_ptr = if i == 0 && not(mem_ty.is_memory64) {
+      let mem_desc_ptr = if i == 0 && not(mem_ty.is_memory64) {
         jm.alloc_guarded_memory(pages, max_pages)
       } else {
-        @jit.alloc_memory(size)
+        @jit.alloc_memory_desc(size, max_pages, is_memory64=mem_ty.is_memory64)
       }
-      if mem_ptr == 0L && size > 0L {
+      if mem_desc_ptr == 0L && size > 0L {
         return Err("Failed to allocate memory")
       }
-      memories.push(@jit.MemoryInfo::new(mem_ptr, size, max_pages))
+      memories.push(@jit.MemoryInfo::new(mem_desc_ptr, size, max_pages))
     }
     if not(memories.is_empty()) {
       jm.set_memory_pointers(memories)
-      // Also set fast path for memory 0 (backward compatibility)
-      jm.set_memory(memories[0].ptr, memories[0].size)
     }
 
     // Initialize indirect table for call_indirect support

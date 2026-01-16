@@ -12,87 +12,82 @@
 
 // ============ VMContext Structure Offsets ============
 // These must match the C struct layout in jit_ffi.h
-// VMContext v3 layout:
-//   +0:  memory_base (uint8_t*)   - linear memory base
-//   +8:  memory_size (size_t)     - memory size in bytes
-//   +16: func_table (void**)      - function pointer array
-//   +24: table0_base (void**)     - table 0 base (fast path for call_indirect)
-//   +32: table0_elements (size_t) - table 0 element count
-//   +40: globals (void*)          - global variable array
-//   +48: tables (void***)         - multi-table pointer array
-//   +56: table_count (int)        - number of tables
+// VMContext layout (see jit_ffi.h):
+//   +0:  memory0 (wasmoon_memory_t*)  - memory 0 definition pointer
+//   +8:  func_table (void**)          - function pointer array
+//   +16: table0_base (void**)         - table 0 base (fast path for call_indirect)
+//   +24: table0_elements (size_t)     - table 0 element count
+//   +32: globals (void*)              - global variable array
+//   +40: tables (void***)             - multi-table pointer array
+//   +48: table_count (int)
+//   +56: table_sizes (size_t*)
+//   +64: table_max_sizes (size_t*)
+//   +72: memories (wasmoon_memory_t**)
+//   +80: memory_count (int)
+//   +84: debug_current_func_idx (int32)
+//   +88: gc_heap_ptr (uint8_t*)
+//   +96: gc_heap_limit (uint8_t*)
+//   +104: gc_heap (void*)
 
 ///|
-/// Offset of memory_base in VMContext
-pub const VMCTX_MEMORY_BASE_OFFSET : Int = 0
+/// Offset of memory0 (wasmoon_memory_t*)
+pub const VMCTX_MEMORY0_OFFSET : Int = 0
 
 ///|
-/// Offset of memory_size in VMContext
-pub const VMCTX_MEMORY_SIZE_OFFSET : Int = 8
+/// Offset of func_table
+pub const VMCTX_FUNC_TABLE_OFFSET : Int = 8
 
 ///|
-/// Offset of func_table in VMContext
-pub const VMCTX_FUNC_TABLE_OFFSET : Int = 16
+/// Offset of table0_base
+pub const VMCTX_TABLE0_BASE_OFFSET : Int = 16
 
 ///|
-/// Offset of table0_base in VMContext (fast path for table 0)
-pub const VMCTX_TABLE0_BASE_OFFSET : Int = 24
+/// Offset of table0_elements
+pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 24
 
 ///|
-/// Offset of table0_elements in VMContext
-pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 32
+/// Offset of globals
+pub const VMCTX_GLOBALS_OFFSET : Int = 32
 
 ///|
-/// Offset of globals array in VMContext
-pub const VMCTX_GLOBALS_OFFSET : Int = 40
+/// Offset of tables array
+pub const VMCTX_TABLES_OFFSET : Int = 40
 
 ///|
-/// Offset of tables array in VMContext (multi-table support)
-pub const VMCTX_TABLES_OFFSET : Int = 48
+/// Offset of table_count
+pub const VMCTX_TABLE_COUNT_OFFSET : Int = 48
 
 ///|
-/// Offset of table_count in VMContext
-pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
+/// Offset of table_sizes
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 56
 
 ///|
-/// Offset of table_sizes array in VMContext
-pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
-
-// Multi-memory support offsets (parallel to multi-table)
+/// Offset of table_max_sizes
+pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 64
 
 ///|
-/// Offset of memories array in VMContext (multi-memory support)
-pub const VMCTX_MEMORIES_OFFSET : Int = 80
+/// Offset of memories array
+pub const VMCTX_MEMORIES_OFFSET : Int = 72
 
 ///|
-/// Offset of memory_sizes array in VMContext (multi-memory support)
-pub const VMCTX_MEMORY_SIZES_OFFSET : Int = 88
+/// Offset of memory_count
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 80
 
 ///|
-/// Offset of memory_max_sizes array in VMContext (multi-memory support)
-pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
+/// Offset of debug_current_func_idx
+pub const VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET : Int = 84
 
 ///|
-/// Offset of memory_count in VMContext (multi-memory support)
-pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
+/// Offset of gc_heap_ptr
+pub const VMCTX_GC_HEAP_PTR_OFFSET : Int = 88
 
 ///|
-/// Offset of debug_current_func_idx in VMContext (best-effort current wasm func_idx)
-pub const VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET : Int = 108
-
-// GC heap inline allocation offsets
+/// Offset of gc_heap_limit
+pub const VMCTX_GC_HEAP_LIMIT_OFFSET : Int = 96
 
 ///|
-/// Offset of gc_heap_ptr in VMContext (current allocation pointer)
-pub const VMCTX_GC_HEAP_PTR_OFFSET : Int = 112
-
-///|
-/// Offset of gc_heap_limit in VMContext (allocation limit)
-pub const VMCTX_GC_HEAP_LIMIT_OFFSET : Int = 120
-
-///|
-/// Offset of gc_heap in VMContext (GcHeap* for slow path)
-pub const VMCTX_GC_HEAP_OFFSET : Int = 128
+/// Offset of gc_heap
+pub const VMCTX_GC_HEAP_OFFSET : Int = 104
 
 // ============ Reserved Registers ============
 

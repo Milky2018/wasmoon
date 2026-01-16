@@ -144,6 +144,7 @@ fn format_opcode(
 
     // Memory management (with memidx for multi-memory support)
     // Note: Load/Store opcodes removed - now use LoadPtr/StorePtr
+    LoadMemBase(memidx) => "load_mem_base mem=\{memidx} \{ops}"
     MemoryGrow(memidx, max_pages) =>
       match max_pages {
         Some(max) => "memory_grow mem=\{memidx} \{ops} max=\{max}"

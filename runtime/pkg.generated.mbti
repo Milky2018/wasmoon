@@ -171,9 +171,9 @@ pub impl GcRuntime for MarkSweepHeap
 pub impl Show for MarkSweepHeap
 
 type Memory
-pub fn Memory::allocated_pages(Self) -> Array[(Int, Bytes)]
 pub fn Memory::byte_len(Self) -> Int64
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::desc_ptr(Self) -> Int64
 pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
 pub fn Memory::get_limits(Self) -> (Int, Int?)
 pub fn Memory::grow(Self, Int) -> Int
@@ -195,6 +195,7 @@ pub fn Memory::load_i64_32u(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8s(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::new(Int, Int?, is_memory64? : Bool, page_size_log2? : Int) -> Self
+pub fn Memory::new_guarded_memory0(Int, Int?) -> Self
 pub fn Memory::page_size_bytes(Self) -> Int64
 pub fn Memory::read_byte(Self, Int) -> Byte
 pub fn Memory::read_bytes(Self, Int, Int) -> Bytes

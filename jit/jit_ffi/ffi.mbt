@@ -89,11 +89,10 @@ pub extern "c" fn c_jit_memory_read(
 ) -> Int = "wasmoon_jit_memory_read"
 
 ///|
-/// Set memory in the context
+/// Set memory0 in the context
 pub extern "c" fn c_jit_ctx_set_memory(
   ctx_ptr : Int64,
-  mem_ptr : Int64,
-  mem_size : Int64,
+  mem0_ptr : Int64,
 ) -> Unit = "wasmoon_jit_ctx_set_memory"
 
 ///|
@@ -111,8 +110,86 @@ pub extern "c" fn c_jit_ctx_get_memory_size(
 ) -> Int64 = "wasmoon_jit_ctx_get_memory_size"
 
 ///|
-/// Allocate linear memory for WASM
+/// Allocate linear memory for generic buffers (globals, etc.)
 pub extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_memory"
+
+///|
+/// Allocate a `wasmoon_memory_t` descriptor with an owned backing allocation.
+/// max_pages is interpreted by the runtime; -1 means "unknown/unlimited".
+pub extern "c" fn c_jit_alloc_memory_desc(
+  size_bytes : Int64,
+  max_pages : Int,
+  is_memory64 : Int,
+  page_size_log2 : Int,
+  is_shared : Int,
+) -> Int64 = "wasmoon_jit_alloc_memory_desc"
+
+///|
+/// Free a `wasmoon_memory_t` descriptor and its owned backing.
+pub extern "c" fn c_jit_free_memory_desc(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory_desc"
+
+///|
+/// Get base pointer from a `wasmoon_memory_t` descriptor.
+pub extern "c" fn c_mem_desc_get_base(mem_desc_ptr : Int64) -> Int64 = "wasmoon_mem_desc_get_base"
+
+///|
+/// Get current length in bytes from a `wasmoon_memory_t` descriptor.
+pub extern "c" fn c_mem_desc_get_len(mem_desc_ptr : Int64) -> Int64 = "wasmoon_mem_desc_get_len"
+
+///|
+/// Grow a `wasmoon_memory_t` descriptor by `delta_pages`.
+/// Returns old size in pages on success, or -1 on failure.
+pub extern "c" fn c_mem_desc_grow(
+  mem_desc_ptr : Int64,
+  delta_pages : Int,
+  max_pages : Int,
+) -> Int = "wasmoon_mem_desc_grow"
+
+///|
+/// Copy bytes from memory descriptor at offset into `out`.
+#borrow(out)
+pub extern "c" fn c_mem_desc_read(
+  mem_desc_ptr : Int64,
+  offset : Int64,
+  out : FixedArray[Byte],
+  size : Int,
+) -> Int = "wasmoon_mem_desc_read"
+
+///|
+/// Copy bytes from `data` into memory descriptor at offset.
+#borrow(data)
+pub extern "c" fn c_mem_desc_write(
+  mem_desc_ptr : Int64,
+  offset : Int64,
+  data : FixedArray[Byte],
+  size : Int,
+) -> Int = "wasmoon_mem_desc_write"
+
+///|
+/// memmove within the same memory descriptor.
+pub extern "c" fn c_mem_desc_memmove(
+  mem_desc_ptr : Int64,
+  dst : Int64,
+  src : Int64,
+  size : Int,
+) -> Int = "wasmoon_mem_desc_memmove"
+
+///|
+/// memset within the same memory descriptor.
+pub extern "c" fn c_mem_desc_memset(
+  mem_desc_ptr : Int64,
+  dst : Int64,
+  val : Int,
+  size : Int,
+) -> Int = "wasmoon_mem_desc_memset"
+
+///|
+/// Allocate guarded memory into a standalone descriptor.
+/// Returns: `wasmoon_memory_t*` on success, 0 on failure.
+pub extern "c" fn c_jit_alloc_guarded_memory_desc(
+  initial_pages : Int64,
+  max_pages : Int64,
+) -> Int64 = "wasmoon_jit_alloc_guarded_memory_desc"
 
 ///|
 /// Allocate guarded memory with mmap for bounds check elimination
@@ -192,16 +269,12 @@ pub extern "c" fn c_jit_get_elem_drop_ptr() -> Int64 = "wasmoon_jit_get_elem_dro
 
 ///|
 /// Configure JIT context with multiple memories (for multi-memory support)
-/// memory_ptrs: FixedArray of Int64 (memory base pointers)
-/// memory_sizes: FixedArray of Int64 (memory sizes in bytes)
-/// memory_max_sizes: FixedArray of Int (max sizes in pages, -1 = unlimited)
+/// memory_ptrs: FixedArray of Int64 (wasmoon_memory_t* pointers)
 /// memory_count: Number of memories
-#borrow(memory_ptrs, memory_sizes, memory_max_sizes)
+#borrow(memory_ptrs)
 pub extern "c" fn c_jit_ctx_set_memory_pointers(
   ctx_ptr : Int64,
   memory_ptrs : FixedArray[Int64],
-  memory_sizes : FixedArray[Int64],
-  memory_max_sizes : FixedArray[Int],
   memory_count : Int,
 ) -> Unit = "wasmoon_jit_ctx_set_memory_pointers"
 

@@ -10,7 +10,11 @@ import(
 )
 
 // Values
+pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
+
 pub fn alloc_memory(Int64) -> Int64
+
+pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
 
 pub fn c_jit_read_i64(Int64) -> Int64
 
@@ -43,6 +47,8 @@ pub fn encode_i31(Int) -> Int64
 pub fn encode_null_ref() -> Int64
 
 pub fn free_memory(Int64) -> Unit
+
+pub fn free_memory_desc(Int64) -> Unit
 
 pub fn gc_clear_heap() -> Unit
 
@@ -467,7 +473,7 @@ pub fn JITModule::new() -> Self
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
-pub fn JITModule::set_memory(Self, Int64, Int64) -> Unit
+pub fn JITModule::set_memory(Self, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 
 type JITTable

@@ -184,14 +184,25 @@ static void memory_init_impl(
     }
 
     // Get memory
-    uint8_t *mem;
-    size_t mem_size;
+    uint8_t *mem = NULL;
+    size_t mem_size = 0;
     if (memidx == 0) {
-        mem = ctx->memory_base;
-        mem_size = ctx->memory_size;
+        if (!ctx->memory0 || !ctx->memory0->base) {
+            g_trap_code = 1;
+            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+            return;
+        }
+        mem = ctx->memory0->base;
+        mem_size = atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed);
     } else if (ctx->memories && memidx < ctx->memory_count) {
-        mem = ctx->memories[memidx];
-        mem_size = ctx->memory_sizes[memidx];
+        wasmoon_memory_t *m = ctx->memories[memidx];
+        if (!m || !m->base) {
+            g_trap_code = 1;
+            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+            return;
+        }
+        mem = m->base;
+        mem_size = atomic_load_explicit(&m->current_length, memory_order_relaxed);
     } else {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);

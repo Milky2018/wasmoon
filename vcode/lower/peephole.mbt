@@ -90,7 +90,13 @@ fn collect_terminator_uses(
         }
       }
     BrTable(index, _, _) => if get_vreg_id(index) is Some(id) { used.add(id) }
-    Jump(_) | Trap(_) => ()
+    Jump(_, args) =>
+      for a in args {
+        if get_vreg_id(a) is Some(id) {
+          used.add(id)
+        }
+      }
+    Trap(_) => ()
   }
 }
 
@@ -103,7 +109,7 @@ fn collect_block_param_uses(
 ) -> Unit {
   // Get successor block IDs from terminator
   let successors : Array[Int] = match block.terminator {
-    Some(Jump(target)) => [target]
+    Some(Jump(target, _args)) => [target]
     Some(Branch(_, then_b, else_b)) => [then_b, else_b]
     Some(BranchCmp(_, _, _, _, then_b, else_b)) => [then_b, else_b]
     Some(BranchZero(_, _, _, then_b, else_b)) => [then_b, else_b]
@@ -834,18 +840,24 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
           if get_vreg_id(inst.uses[0]) is Some(base) {
             let key = "\{base}:\{offset}:\{bits}"
             if store_map.get(key) is Some(val_vreg) {
-              // Can forward the stored value
               if get_def_vreg_id(inst.defs[0]) is Some(_) {
-                let mov = @instr.VCodeInst::new(Move)
-                mov.add_def(inst.defs[0])
-                mov.add_use(Virtual({ id: val_vreg, class: Int }))
-                // Handle sign extension if needed
-                if signed && bits < 32 {
-                  // Need sign extension - skip forwarding for now
-                  // (would need additional extend instruction)
-                  continue
+                // Forwarding must preserve the load semantics:
+                // - narrow stores truncate to `bits`
+                // - loads sign/zero-extend from `bits`
+                // Implement by extending the stored value.
+                let kind = match (bits, signed) {
+                  (8, true) => @instr.Signed8To64
+                  (8, false) => @instr.Unsigned8To64
+                  (16, true) => @instr.Signed16To64
+                  (16, false) => @instr.Unsigned16To64
+                  (32, true) => @instr.Signed32To64
+                  (32, false) => @instr.Unsigned32To64
+                  _ => continue
                 }
-                to_replace.push((i, mov))
+                let ext = @instr.VCodeInst::new(Extend(kind))
+                ext.add_def(inst.defs[0])
+                ext.add_use(Virtual({ id: val_vreg, class: Int }))
+                to_replace.push((i, ext))
                 forwarded = forwarded + 1
               }
             }

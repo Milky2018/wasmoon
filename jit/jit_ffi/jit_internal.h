@@ -42,25 +42,25 @@
 // 7 = integer overflow
 // 99 = unknown trap
 
-extern sigjmp_buf g_trap_jmp_buf;
-extern volatile sig_atomic_t g_trap_code;
-extern volatile sig_atomic_t g_trap_active;
-extern volatile sig_atomic_t g_trap_signal;
-extern volatile uintptr_t g_trap_pc;
-extern volatile uintptr_t g_trap_lr;
-extern volatile uintptr_t g_trap_fp;
-extern volatile uintptr_t g_trap_frame_lr;
-extern volatile uintptr_t g_trap_fault_addr;
-extern volatile sig_atomic_t g_trap_brk_imm;
-extern volatile sig_atomic_t g_trap_func_idx;
-extern volatile uintptr_t g_trap_wasm_stack_base;
-extern volatile uintptr_t g_trap_wasm_stack_top;
+extern __thread sigjmp_buf g_trap_jmp_buf;
+extern __thread volatile sig_atomic_t g_trap_code;
+extern __thread volatile sig_atomic_t g_trap_active;
+extern __thread volatile sig_atomic_t g_trap_signal;
+extern __thread volatile uintptr_t g_trap_pc;
+extern __thread volatile uintptr_t g_trap_lr;
+extern __thread volatile uintptr_t g_trap_fp;
+extern __thread volatile uintptr_t g_trap_frame_lr;
+extern __thread volatile uintptr_t g_trap_fault_addr;
+extern __thread volatile sig_atomic_t g_trap_brk_imm;
+extern __thread volatile sig_atomic_t g_trap_func_idx;
+extern __thread volatile uintptr_t g_trap_wasm_stack_base;
+extern __thread volatile uintptr_t g_trap_wasm_stack_top;
 
 // Pre-captured frame chain (captured in signal handler)
 #define MAX_TRAP_FRAMES 32
-extern volatile uintptr_t g_trap_frames_pc[MAX_TRAP_FRAMES];
-extern volatile uintptr_t g_trap_frames_fp[MAX_TRAP_FRAMES];
-extern volatile int g_trap_frame_count;
+extern __thread volatile uintptr_t g_trap_frames_pc[MAX_TRAP_FRAMES];
+extern __thread volatile uintptr_t g_trap_frames_fp[MAX_TRAP_FRAMES];
+extern __thread volatile int g_trap_frame_count;
 
 void install_trap_handler(void);
 
@@ -78,11 +78,13 @@ void free_context_internal(jit_context_t *ctx);
 
 // ============ Memory Operations (memory_ops.c) ============
 
+// Free a `wasmoon_memory_t` descriptor (jit.c)
+void wasmoon_jit_free_memory_desc(int64_t mem_ptr);
+
 #define WASM_PAGE_SIZE 65536
 
 // Guard page memory allocation (for bounds check elimination)
-uint8_t *alloc_guarded_memory_external(jit_context_t *ctx, size_t initial_size, size_t max_size);
-void free_guarded_memory_if_allocated(jit_context_t *ctx);
+uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
 
 // v3 ctx-passing (re-entrant) variants (internal implementations)
@@ -98,6 +100,11 @@ int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
 void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t dst, int32_t val, int32_t size);
 void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
                                    int32_t dst, int32_t src, int32_t size);
+
+// Descriptor-only variants (no ctx)
+int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t max_pages);
+int64_t memory_len_desc_internal(wasmoon_memory_t *mem);
+uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem);
 
 // Table operations
 int32_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t delta, int64_t init_value);

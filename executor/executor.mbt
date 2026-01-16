@@ -999,13 +999,21 @@ pub fn instantiate_module(
 
   // Allocate memories
   let mem_addrs : Array[Int] = []
-  for mem_type in mod.memories {
-    let mem = @runtime.Memory::new(
-      mem_type.limits.min.to_int(),
-      mem_type.limits.max.map(fn(m) { m.to_int() }),
-      is_memory64=mem_type.is_memory64,
-      page_size_log2=mem_type.page_size_log2,
-    )
+  for i, mem_type in mod.memories {
+    let min = mem_type.limits.min.to_int()
+    let max = mem_type.limits.max.map(fn(m) { m.to_int() })
+    let mem = if i == 0 &&
+      !mem_type.is_memory64 &&
+      mem_type.page_size_log2 == 16 {
+      @runtime.Memory::new_guarded_memory0(min, max)
+    } else {
+      @runtime.Memory::new(
+        min,
+        max,
+        is_memory64=mem_type.is_memory64,
+        page_size_log2=mem_type.page_size_log2,
+      )
+    }
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }

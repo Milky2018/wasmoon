@@ -86,7 +86,11 @@ pub fn c_jit_alloc_exec(Int) -> Int64
 
 pub fn c_jit_alloc_exec_managed(FixedArray[Byte], Int) -> ExecCode
 
+pub fn c_jit_alloc_guarded_memory_desc(Int64, Int64) -> Int64
+
 pub fn c_jit_alloc_memory(Int64) -> Int64
+
+pub fn c_jit_alloc_memory_desc(Int64, Int, Int, Int, Int) -> Int64
 
 pub fn c_jit_alloc_shared_indirect_table(Int) -> Int64
 
@@ -130,9 +134,9 @@ pub fn c_jit_ctx_set_globals(Int64, Int64) -> Unit
 
 pub fn c_jit_ctx_set_indirect(Int64, Int, Int, Int) -> Unit
 
-pub fn c_jit_ctx_set_memory(Int64, Int64, Int64) -> Unit
+pub fn c_jit_ctx_set_memory(Int64, Int64) -> Unit
 
-pub fn c_jit_ctx_set_memory_pointers(Int64, FixedArray[Int64], FixedArray[Int64], FixedArray[Int], Int) -> Unit
+pub fn c_jit_ctx_set_memory_pointers(Int64, FixedArray[Int64], Int) -> Unit
 
 pub fn c_jit_ctx_set_table_pointers(Int64, FixedArray[Int64], FixedArray[Int], FixedArray[Int], Int) -> Unit
 
@@ -141,6 +145,8 @@ pub fn c_jit_ctx_use_shared_table(Int64, Int64, Int) -> Unit
 pub fn c_jit_exec_code_ptr(ExecCode) -> Int64
 
 pub fn c_jit_free_memory(Int64) -> Unit
+
+pub fn c_jit_free_memory_desc(Int64) -> Unit
 
 pub fn c_jit_free_shared_indirect_table(Int64) -> Unit
 
@@ -403,6 +409,20 @@ pub fn c_jit_set_wasi_envs(Int64, Int) -> Unit
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
 
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
+
+pub fn c_mem_desc_get_base(Int64) -> Int64
+
+pub fn c_mem_desc_get_len(Int64) -> Int64
+
+pub fn c_mem_desc_grow(Int64, Int, Int) -> Int
+
+pub fn c_mem_desc_memmove(Int64, Int64, Int64, Int) -> Int
+
+pub fn c_mem_desc_memset(Int64, Int64, Int, Int) -> Int
+
+pub fn c_mem_desc_read(Int64, Int64, FixedArray[Byte], Int) -> Int
+
+pub fn c_mem_desc_write(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 // Errors
 

@@ -238,6 +238,7 @@ pub enum Opcode {
 
   // Memory management (desugared via FuncEnvironment at IR translation time)
   // Note: Load/Store opcodes removed - now use LoadPtr/StorePtr with explicit bounds checks
+  LoadMemBase(Int) // Load linear memory base pointer (memidx) - operands: vmctx
   MemoryGrow(Int, Int?) // Grow memory by delta pages (memidx, max_pages). Returns previous size or -1.
   MemorySize(Int) // Get current memory size in pages (memidx)
   MemoryFill(Int) // Fill memory region with a byte value (memidx) - operands: dst, val, size

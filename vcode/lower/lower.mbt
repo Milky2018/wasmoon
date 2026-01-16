@@ -522,6 +522,8 @@ fn lower_inst(
     @ir.Opcode::Select => lower_select(ctx, inst, block)
 
     // Memory management (with memidx for multi-memory support)
+    @ir.Opcode::LoadMemBase(memidx) =>
+      lower_load_mem_base(ctx, inst, block, memidx)
     @ir.Opcode::MemoryGrow(memidx, max_pages) =>
       lower_memory_grow(ctx, inst, block, memidx, max_pages)
     @ir.Opcode::MemorySize(memidx) =>
@@ -1283,28 +1285,15 @@ fn lower_terminator(
   match term {
     @ir.Terminator::Jump(target, args) => {
       let target_id = ctx.get_block_id(target)
-      // Generate moves for block arguments
-      // Find the target block's parameters
-      for tb in ctx.ir_func.blocks {
-        if tb.id == target {
-          for i, param_info in tb.params {
-            if i < args.length() {
-              // Get the source value's vreg
-              let src = ctx.get_vreg_for_use(args[i], block)
-              // Get the destination param's vreg
-              let (param_value, _param_ty) = param_info
-              let dst = ctx.get_vreg(param_value)
-              // Emit a move instruction
-              let mov_inst = @instr.VCodeInst::new(Move)
-              mov_inst.add_def({ reg: Virtual(dst) })
-              mov_inst.add_use(Virtual(src))
-              block.add_inst(mov_inst)
-            }
-          }
-          break
-        }
+
+      // Lower SSA block arguments directly onto the terminator.
+      // The target block's params are created during lower_function; we rely on
+      // bundle merging to coalesce param vregs with their incoming args.
+      let regs : Array[@abi.Reg] = []
+      for a in args {
+        regs.push(Virtual(ctx.get_vreg_for_use(a, block)))
       }
-      block.set_terminator(Jump(target_id))
+      block.set_terminator(Jump(target_id, regs))
     }
     @ir.Terminator::Brz(cond, then_block, else_block) => {
       let then_id = ctx.get_block_id(then_block)
@@ -1425,7 +1414,7 @@ fn lower_terminator(
       let is_64 = index.ty is @ir.Type::I64
       if targets.is_empty() {
         // No targets, just jump to default
-        block.set_terminator(Jump(default_id))
+        block.set_terminator(Jump(default_id, []))
       } else if targets.length() < 4 {
         // Small number of targets: use comparison chain (more efficient)
         let chain_blocks : Array[@block.VCodeBlock] = []

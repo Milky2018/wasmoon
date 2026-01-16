@@ -41,7 +41,7 @@ pub fn VCodeCFG::build(func : @regalloc.VCodeFunction) -> VCodeCFG {
 /// Extract successor block IDs from terminator
 fn get_terminator_succs(term : @instr.VCodeTerminator) -> Array[Int] {
   match term {
-    Jump(target) => [target]
+    Jump(target, _) => [target]
     Branch(_, then_b, else_b) => [then_b, else_b]
     BranchCmp(_, _, _, _, then_b, else_b) => [then_b, else_b]
     BranchCmpImm(_, _, _, _, then_b, else_b) => [then_b, else_b]

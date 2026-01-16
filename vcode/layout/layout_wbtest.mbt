@@ -11,10 +11,10 @@ test "layout: no loops - preserves order" {
   let block2 = func.new_block()
 
   // block0: jump to block1
-  block0.set_terminator(@instr.Jump(block1.id))
+  block0.set_terminator(@instr.Jump(block1.id, []))
 
   // block1: jump to block2
-  block1.set_terminator(@instr.Jump(block2.id))
+  block1.set_terminator(@instr.Jump(block2.id, []))
 
   // block2: return
   block2.set_terminator(@instr.Return([@abi.Virtual(a)]))
@@ -43,7 +43,7 @@ test "layout: simple loop - rotates" {
   let block3 = func.new_block() // exit
 
   // block0: jump to loop header
-  block0.set_terminator(@instr.Jump(block1.id))
+  block0.set_terminator(@instr.Jump(block1.id, []))
 
   // block1 (header): branch on condition
   // if counter != 0, go to body; else go to exit
@@ -52,7 +52,7 @@ test "layout: simple loop - rotates" {
   )
 
   // block2 (body): decrement and jump back to header
-  block2.set_terminator(@instr.Jump(block1.id)) // back edge
+  block2.set_terminator(@instr.Jump(block1.id, [])) // back edge
 
   // block3 (exit): return
   block3.set_terminator(@instr.Return([@abi.Virtual(counter)]))
@@ -83,10 +83,10 @@ test "cfg: find back edges" {
   let block1 = func.new_block()
 
   // block0: jump to block1
-  block0.set_terminator(@instr.Jump(block1.id))
+  block0.set_terminator(@instr.Jump(block1.id, []))
 
   // block1: jump back to block0 (back edge)
-  block1.set_terminator(@instr.Jump(block0.id))
+  block1.set_terminator(@instr.Jump(block0.id, []))
   let cfg = VCodeCFG::build(func)
   let back_edges = cfg.find_back_edges()
 
@@ -104,11 +104,11 @@ test "cfg: find loops" {
   let block1 = func.new_block() // header
   let block2 = func.new_block() // body
   let block3 = func.new_block() // exit
-  block0.set_terminator(@instr.Jump(block1.id))
+  block0.set_terminator(@instr.Jump(block1.id, []))
   block1.set_terminator(
     @instr.BranchZero(@abi.Virtual(a), false, false, block3.id, block2.id),
   )
-  block2.set_terminator(@instr.Jump(block1.id)) // back edge
+  block2.set_terminator(@instr.Jump(block1.id, [])) // back edge
   block3.set_terminator(@instr.Return([]))
   let cfg = VCodeCFG::build(func)
   let loops = cfg.find_loops()
@@ -127,8 +127,8 @@ test "reorder_blocks: applies new order" {
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
-  block0.set_terminator(@instr.Jump(block1.id))
-  block1.set_terminator(@instr.Jump(block2.id))
+  block0.set_terminator(@instr.Jump(block1.id, []))
+  block1.set_terminator(@instr.Jump(block2.id, []))
   block2.set_terminator(@instr.Return([@abi.Virtual(a)]))
 
   // Original order: [0, 1, 2]
@@ -149,7 +149,7 @@ test "reorder_blocks: preserves spill slot count" {
   func.set_num_spill_slots(123)
   let block0 = func.new_block()
   let block1 = func.new_block()
-  block0.set_terminator(@instr.Jump(block1.id))
+  block0.set_terminator(@instr.Jump(block1.id, []))
   block1.set_terminator(@instr.Return([]))
   let reordered = reorder_blocks(func, [1, 0])
   inspect(reordered.get_num_spill_slots(), content="123")
@@ -174,7 +174,7 @@ test "layout: loop with exit chain" {
   let block4 = func.new_block() // exit (before return)
 
   // block0: jump to header
-  block0.set_terminator(@instr.Jump(block2.id))
+  block0.set_terminator(@instr.Jump(block2.id, []))
 
   // block1: return
   block1.set_terminator(@instr.Return([@abi.Virtual(counter)]))
@@ -185,10 +185,10 @@ test "layout: loop with exit chain" {
   )
 
   // block3 (body): jump back to header
-  block3.set_terminator(@instr.Jump(block2.id)) // back edge
+  block3.set_terminator(@instr.Jump(block2.id, [])) // back edge
 
   // block4 (exit): jump to return
-  block4.set_terminator(@instr.Jump(block1.id))
+  block4.set_terminator(@instr.Jump(block1.id, []))
 
   // Compute layout
   let order = layout_blocks(func)
@@ -212,11 +212,11 @@ test "optimize_layout: full pipeline" {
   let block1 = func.new_block() // header
   let block2 = func.new_block() // body
   let block3 = func.new_block() // exit
-  block0.set_terminator(@instr.Jump(block1.id))
+  block0.set_terminator(@instr.Jump(block1.id, []))
   block1.set_terminator(
     @instr.BranchZero(@abi.Virtual(counter), false, false, block3.id, block2.id),
   )
-  block2.set_terminator(@instr.Jump(block1.id))
+  block2.set_terminator(@instr.Jump(block1.id, []))
   block3.set_terminator(@instr.Return([@abi.Virtual(counter)]))
   let optimized = optimize_layout(func)
 

@@ -4,38 +4,40 @@
 
 #include "jit_internal.h"
 
-// ============ Global Trap State ============
+// ============ Trap State (Thread-Local) ============
+// These values are read/written by JIT execution and signal handlers.
+// They must be thread-local because tests (and users) may run JIT concurrently.
 
-sigjmp_buf g_trap_jmp_buf;
-volatile sig_atomic_t g_trap_code = 0;
-volatile sig_atomic_t g_trap_active = 0;
-volatile sig_atomic_t g_trap_signal = 0;
-volatile uintptr_t g_trap_pc = 0;
-volatile uintptr_t g_trap_lr = 0;
-volatile uintptr_t g_trap_fp = 0;
-volatile uintptr_t g_trap_frame_lr = 0;
-volatile uintptr_t g_trap_fault_addr = 0;
-volatile sig_atomic_t g_trap_brk_imm = -1;
-volatile sig_atomic_t g_trap_func_idx = -1;
+__thread sigjmp_buf g_trap_jmp_buf;
+__thread volatile sig_atomic_t g_trap_code = 0;
+__thread volatile sig_atomic_t g_trap_active = 0;
+__thread volatile sig_atomic_t g_trap_signal = 0;
+__thread volatile uintptr_t g_trap_pc = 0;
+__thread volatile uintptr_t g_trap_lr = 0;
+__thread volatile uintptr_t g_trap_fp = 0;
+__thread volatile uintptr_t g_trap_frame_lr = 0;
+__thread volatile uintptr_t g_trap_fault_addr = 0;
+__thread volatile sig_atomic_t g_trap_brk_imm = -1;
+__thread volatile sig_atomic_t g_trap_func_idx = -1;
 
 // WASM stack bounds for frame walking validation
-volatile uintptr_t g_trap_wasm_stack_base = 0;
-volatile uintptr_t g_trap_wasm_stack_top = 0;
+__thread volatile uintptr_t g_trap_wasm_stack_base = 0;
+__thread volatile uintptr_t g_trap_wasm_stack_top = 0;
 
 // Pre-captured frame chain (captured in signal handler while stack is still valid)
 #define MAX_TRAP_FRAMES 32
-volatile uintptr_t g_trap_frames_pc[MAX_TRAP_FRAMES];
-volatile uintptr_t g_trap_frames_fp[MAX_TRAP_FRAMES];
-volatile int g_trap_frame_count = 0;
+__thread volatile uintptr_t g_trap_frames_pc[MAX_TRAP_FRAMES];
+__thread volatile uintptr_t g_trap_frames_fp[MAX_TRAP_FRAMES];
+__thread volatile int g_trap_frame_count = 0;
 
-// Alternate signal stack for handling stack overflow
+// Alternate signal stack for handling stack overflow (per-thread; sigaltstack is per-thread)
 #define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
-static char g_sigstack[SIGSTACK_SIZE];
-static int g_sigstack_installed = 0;
+static __thread char g_sigstack[SIGSTACK_SIZE];
+static __thread int g_sigstack_installed = 0;
 
-// Stack bounds for overflow detection
-static void *g_stack_base = NULL;
-static size_t g_stack_size = 0;
+// Stack bounds for overflow detection (per-thread)
+static __thread void *g_stack_base = NULL;
+static __thread size_t g_stack_size = 0;
 
 // ============ Stack Bounds Detection ============
 
@@ -237,9 +239,22 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
         g_trap_fp = fp;
         // If the function uses the standard prologue, the caller return address
-        // is saved in the frame record at [fp + 8].
+        // is saved in the frame record at [fp + 8]. Only read it when `fp` looks safe.
+        g_trap_frame_lr = 0;
         if (fp) {
-            g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+            uintptr_t low = 0;
+            uintptr_t high = 0;
+            if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+                low = g_trap_wasm_stack_base;
+                high = g_trap_wasm_stack_top;
+            } else if (g_stack_base != NULL && g_stack_size != 0) {
+                uintptr_t base = (uintptr_t)g_stack_base;
+                low = base - (uintptr_t)g_stack_size;
+                high = base;
+            }
+            if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
+                g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+            }
         }
         if (!decode_brk_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
             trap_pc = (uintptr_t)pc;
@@ -261,11 +276,24 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         uint64_t pc = uc->uc_mcontext.pc;
         g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
         // Capture frame pointer for stack walking
-        uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
-        g_trap_fp = fp;
-        if (fp) {
-            g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-        }
+         uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
+         g_trap_fp = fp;
+         g_trap_frame_lr = 0;
+         if (fp) {
+             uintptr_t low = 0;
+             uintptr_t high = 0;
+             if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+                 low = g_trap_wasm_stack_base;
+                 high = g_trap_wasm_stack_top;
+             } else if (g_stack_base != NULL && g_stack_size != 0) {
+                 uintptr_t base = (uintptr_t)g_stack_base;
+                 low = base - (uintptr_t)g_stack_size;
+                 high = base;
+             }
+             if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
+                 g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+             }
+         }
         if (!decode_brk_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
             trap_pc = (uintptr_t)pc;
         }
@@ -288,12 +316,18 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_pc = trap_pc;
         g_trap_brk_imm = brk_imm;
 
-        // Capture frame chain while WASM stack is still accessible
+        // Capture frame chain while WASM stack is still accessible.
+        // If we don't have WASM stack bounds, still record the top frame.
         if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
             capture_frame_chain(trap_pc, g_trap_fp,
                                g_trap_wasm_stack_base, g_trap_wasm_stack_top);
         } else {
             g_trap_frame_count = 0;
+            if (g_trap_frame_count < MAX_TRAP_FRAMES) {
+                g_trap_frames_pc[g_trap_frame_count] = trap_pc;
+                g_trap_frames_fp[g_trap_frame_count] = g_trap_fp;
+                g_trap_frame_count++;
+            }
         }
 
         siglongjmp(g_trap_jmp_buf, 1);
@@ -325,11 +359,24 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
             pc = (uintptr_t)uc->uc_mcontext->__ss.__pc;
             g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
-            uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
-            g_trap_fp = fp;
-            if (fp) {
-                g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-            }
+             uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+             g_trap_fp = fp;
+             g_trap_frame_lr = 0;
+             if (fp) {
+                 uintptr_t low = 0;
+                 uintptr_t high = 0;
+                 if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+                     low = g_trap_wasm_stack_base;
+                     high = g_trap_wasm_stack_top;
+                 } else if (g_stack_base != NULL && g_stack_size != 0) {
+                     uintptr_t base = (uintptr_t)g_stack_base;
+                     low = base - (uintptr_t)g_stack_size;
+                     high = base;
+                 }
+                 if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
+                     g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+                 }
+             }
         }
 #elif defined(__linux__) && defined(__aarch64__)
         if (ucontext) {
@@ -338,19 +385,38 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
             uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
             g_trap_fp = fp;
+            g_trap_frame_lr = 0;
             if (fp) {
-                g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+                uintptr_t low = 0;
+                uintptr_t high = 0;
+                if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+                    low = g_trap_wasm_stack_base;
+                    high = g_trap_wasm_stack_top;
+                } else if (g_stack_base != NULL && g_stack_size != 0) {
+                    uintptr_t base = (uintptr_t)g_stack_base;
+                    low = base - (uintptr_t)g_stack_size;
+                    high = base;
+                }
+                if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
+                    g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+                }
             }
         }
 #endif
         g_trap_pc = pc;
 
-        // Capture frame chain while WASM stack is still accessible
+        // Capture frame chain while WASM stack is still accessible.
+        // If we don't have WASM stack bounds, still record the top frame.
         if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
             capture_frame_chain(pc, g_trap_fp,
                                g_trap_wasm_stack_base, g_trap_wasm_stack_top);
         } else {
             g_trap_frame_count = 0;
+            if (g_trap_frame_count < MAX_TRAP_FRAMES) {
+                g_trap_frames_pc[g_trap_frame_count] = pc;
+                g_trap_frames_fp[g_trap_frame_count] = g_trap_fp;
+                g_trap_frame_count++;
+            }
         }
 
         // Check for memory guard page access (bounds check elimination)
@@ -389,32 +455,34 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 // ============ Handler Installation ============
 
 void install_trap_handler(void) {
-    static int installed = 0;
-    if (installed) return;
-
 #ifndef _WIN32
+    // Signal handlers are process-wide; install them once.
+    // (Multiple installations are harmless, but keep this race-free.)
+    static atomic_int installed_handlers = 0;
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&installed_handlers, &expected, 1)) {
+        // Install SIGTRAP handler (for BRK instructions)
+        // Use SA_SIGINFO to get ucontext for extracting BRK immediate
+        struct sigaction sa_trap;
+        sa_trap.sa_sigaction = trap_signal_handler;
+        sigemptyset(&sa_trap.sa_mask);
+        sa_trap.sa_flags = SA_SIGINFO;
+        sigaction(SIGTRAP, &sa_trap, NULL);
+
+        // Install SIGSEGV handler (for stack overflow)
+        // Use SA_SIGINFO to get fault address, SA_ONSTACK to use alternate stack
+        struct sigaction sa_segv;
+        sa_segv.sa_sigaction = segv_signal_handler;
+        sigemptyset(&sa_segv.sa_mask);
+        sa_segv.sa_flags = SA_SIGINFO | SA_ONSTACK;  // Run on alternate stack!
+        sigaction(SIGSEGV, &sa_segv, NULL);
+
+        // Also handle SIGBUS (on some platforms, stack overflow triggers SIGBUS)
+        sigaction(SIGBUS, &sa_segv, NULL);
+    }
+
+    // These are per-thread: stacks differ per thread and sigaltstack is per-thread.
     init_stack_bounds();
-    install_alt_stack();  // Must install alternate stack first
-
-    // Install SIGTRAP handler (for BRK instructions)
-    // Use SA_SIGINFO to get ucontext for extracting BRK immediate
-    struct sigaction sa_trap;
-    sa_trap.sa_sigaction = trap_signal_handler;
-    sigemptyset(&sa_trap.sa_mask);
-    sa_trap.sa_flags = SA_SIGINFO;
-    sigaction(SIGTRAP, &sa_trap, NULL);
-
-    // Install SIGSEGV handler (for stack overflow)
-    // Use SA_SIGINFO to get fault address, SA_ONSTACK to use alternate stack
-    struct sigaction sa_segv;
-    sa_segv.sa_sigaction = segv_signal_handler;
-    sigemptyset(&sa_segv.sa_mask);
-    sa_segv.sa_flags = SA_SIGINFO | SA_ONSTACK;  // Run on alternate stack!
-    sigaction(SIGSEGV, &sa_segv, NULL);
-
-    // Also handle SIGBUS (on some platforms, stack overflow triggers SIGBUS)
-    sigaction(SIGBUS, &sa_segv, NULL);
+    install_alt_stack();
 #endif
-
-    installed = 1;
 }

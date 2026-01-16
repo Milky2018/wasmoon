@@ -111,11 +111,9 @@ test "cross_block_cse" {
       #|block1:
       #|    v6 = ldi 1
       #|    v7 = add32 #1 v5
-      #|    v4 = mov v7
-      #|    jump block3
+      #|    jump block3 (v7)
       #|block2:
-      #|    v4 = mov v5
-      #|    jump block3
+      #|    jump block3 (v5)
       #|block3(v4:int):
       #|    ret v4
       #|}
@@ -132,13 +130,11 @@ test "cross_block_cse" {
       #|    cbnz x2, block1, block2
       #|block1:
       #|    x8 = add32 #1 x8
-      #|    x9 = mov x8
       #|    jump block3
       #|block2:
-      #|    x9 = mov x8
       #|    jump block3
       #|block3(v4:int):
-      #|    ret x9
+      #|    ret x8
       #|}
       #|
     ),
@@ -152,16 +148,15 @@ test "cross_block_cse" {
     content=(
       #|block0:
       #|  0000: 4800030b  add w8, w2, w3
-      #|  0004: 82000034  cbz w2, block2
+      #|  0004: 62000034  cbz w2, block2
       #|block1:
       #|  0008: 08050011  add w8, w8, #1
-      #|  000c: e90308aa  mov x9, x8
-      #|  0010: 02000014  b block3
+      #|  000c: 02000014  b block3
       #|block2:
-      #|  0014: e90308aa  mov x9, x8
+      #|  0010: 01000014  b block3
       #|block3:
-      #|  0018: e00309aa  mov x0, x9
-      #|  001c: c0035fd6  ret
+      #|  0014: e00308aa  mov x0, x8
+      #|  0018: c0035fd6  ret
       #|
     ),
   )

@@ -9,33 +9,33 @@ import(
 // Values
 pub const GLOBAL_STRIDE : Int = 16
 
+pub const MEMORY_BASE_OFFSET : Int = 0
+
+pub const MEMORY_CURRENT_LENGTH_OFFSET : Int = 8
+
 pub const TABLE_ENTRY_STRIDE : Int = 16
 
-pub const VMCTX_FUNC_TABLE_OFFSET : Int = 16
+pub const VMCTX_FUNC_TABLE_OFFSET : Int = 8
 
-pub const VMCTX_GLOBALS_OFFSET : Int = 40
+pub const VMCTX_GLOBALS_OFFSET : Int = 32
 
-pub const VMCTX_MEMORIES_OFFSET : Int = 80
+pub const VMCTX_MEMORIES_OFFSET : Int = 72
 
-pub const VMCTX_MEMORY_BASE_OFFSET : Int = 0
+pub const VMCTX_MEMORY0_OFFSET : Int = 0
 
-pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 104
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 80
 
-pub const VMCTX_MEMORY_MAX_SIZES_OFFSET : Int = 96
+pub const VMCTX_TABLE0_BASE_OFFSET : Int = 16
 
-pub const VMCTX_MEMORY_SIZES_OFFSET : Int = 88
+pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 24
 
-pub const VMCTX_MEMORY_SIZE_OFFSET : Int = 8
+pub const VMCTX_TABLES_OFFSET : Int = 40
 
-pub const VMCTX_TABLE0_BASE_OFFSET : Int = 24
+pub const VMCTX_TABLE_COUNT_OFFSET : Int = 48
 
-pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 32
+pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 64
 
-pub const VMCTX_TABLES_OFFSET : Int = 48
-
-pub const VMCTX_TABLE_COUNT_OFFSET : Int = 56
-
-pub const VMCTX_TABLE_SIZES_OFFSET : Int = 64
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 56
 
 pub const WASM_PAGE_SIZE : Int = 65536
 
@@ -48,6 +48,8 @@ pub fn eliminate_common_subexpressions_global(Function) -> OptResult
 pub fn eliminate_dead_block_params(Function) -> OptResult
 
 pub fn eliminate_dead_code(Function) -> OptResult
+
+pub fn eliminate_redundant_mem_base_loads(Function) -> OptResult
 
 pub fn eliminate_unreachable_code(Function) -> OptResult
 
@@ -146,7 +148,7 @@ pub impl Show for FloatCC
 type FuncEnvironment
 pub fn FuncEnvironment::emit_atomic_alignment_check(Self, IRBuilder, Int, Value, Int64, Int) -> Unit
 pub fn FuncEnvironment::emit_bounds_check(Self, IRBuilder, Value, Int, Value, Int64, Int) -> Value
-pub fn FuncEnvironment::new(Array[@types.GlobalType], memory_mins? : Array[Int64], memory_is_64? : Array[Bool]) -> Self
+pub fn FuncEnvironment::new(Array[@types.GlobalType], memory_mins? : Array[Int64], memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int]) -> Self
 pub fn FuncEnvironment::translate_global_get(Self, IRBuilder, Value, Int) -> Value
 pub fn FuncEnvironment::translate_global_set(Self, IRBuilder, Value, Int, Value) -> Unit
 pub fn FuncEnvironment::translate_memory_copy(Self, IRBuilder, Int, Int, Value, Value, Value) -> Unit
@@ -274,6 +276,7 @@ pub fn IRBuilder::ireduce(Self, Type, Value) -> Value
 pub fn IRBuilder::ishl(Self, Value, Value) -> Value
 pub fn IRBuilder::isub(Self, Value, Value) -> Value
 pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
+pub fn IRBuilder::load_mem_base(Self, Value, Int) -> Value
 pub fn IRBuilder::load_ptr(Self, Type, Value, Value) -> Value
 pub fn IRBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
 pub fn IRBuilder::memory_copy(Self, Int, Int, Value, Value, Value) -> Unit
@@ -453,6 +456,7 @@ pub enum Opcode {
   Sextend8
   Sextend16
   Sextend32
+  LoadMemBase(Int)
   MemoryGrow(Int, Int?)
   MemorySize(Int)
   MemoryFill(Int)
@@ -801,7 +805,7 @@ pub impl Show for Terminator
 
 type Translator
 pub fn Translator::from_module(@types.Module, Int, name? : String, memory_max_override? : Int?) -> Self
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> Function
 
 pub(all) enum Type {
