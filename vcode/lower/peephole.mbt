@@ -840,18 +840,24 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
           if get_vreg_id(inst.uses[0]) is Some(base) {
             let key = "\{base}:\{offset}:\{bits}"
             if store_map.get(key) is Some(val_vreg) {
-              // Can forward the stored value
               if get_def_vreg_id(inst.defs[0]) is Some(_) {
-                let mov = @instr.VCodeInst::new(Move)
-                mov.add_def(inst.defs[0])
-                mov.add_use(Virtual({ id: val_vreg, class: Int }))
-                // Handle sign extension if needed
-                if signed && bits < 32 {
-                  // Need sign extension - skip forwarding for now
-                  // (would need additional extend instruction)
-                  continue
+                // Forwarding must preserve the load semantics:
+                // - narrow stores truncate to `bits`
+                // - loads sign/zero-extend from `bits`
+                // Implement by extending the stored value.
+                let kind = match (bits, signed) {
+                  (8, true) => @instr.Signed8To64
+                  (8, false) => @instr.Unsigned8To64
+                  (16, true) => @instr.Signed16To64
+                  (16, false) => @instr.Unsigned16To64
+                  (32, true) => @instr.Signed32To64
+                  (32, false) => @instr.Unsigned32To64
+                  _ => continue
                 }
-                to_replace.push((i, mov))
+                let ext = @instr.VCodeInst::new(Extend(kind))
+                ext.add_def(inst.defs[0])
+                ext.add_use(Virtual({ id: val_vreg, class: Int }))
+                to_replace.push((i, ext))
                 forwarded = forwarded + 1
               }
             }

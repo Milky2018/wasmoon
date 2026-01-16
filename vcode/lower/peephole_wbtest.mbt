@@ -91,17 +91,17 @@ test "load_store_forwarding_eliminates_redundant_load" {
   // Run peephole optimization
   optimize_vcode(func)
 
-  // After optimization: store + mov (load is forwarded)
+  // After optimization: store + extend (load is forwarded with correct semantics)
   let insts = func.blocks[0].insts
   let mut has_store = false
-  let mut has_mov = false
+  let mut has_extend = false
   for inst in insts {
     match inst.opcode {
       StorePtrNarrow(8, 0) => has_store = true
-      Move => has_mov = true
+      Extend(@instr.Unsigned8To64) => has_extend = true
       _ => ()
     }
   }
   inspect(has_store, content="true")
-  inspect(has_mov, content="true")
+  inspect(has_extend, content="true")
 }

@@ -1544,6 +1544,20 @@ fn MachineCode::emit_instruction(
         Vector => abort("SIMD JIT not implemented: vector stack param load")
       }
     }
+    LoadMemBase(memidx) => {
+      // Load linear memory base pointer from VMContext
+      // Uses: [vmctx], Defs: [result]
+      let dst = wreg_num(inst.defs[0])
+      let vmctx_reg = reg_num(inst.uses[0])
+      if memidx == 0 {
+        self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
+        self.emit_ldr_imm(dst, dst, 0)
+      } else {
+        self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORIES_OFFSET)
+        self.emit_ldr_imm(dst, dst, memidx * 8)
+        self.emit_ldr_imm(dst, dst, 0)
+      }
+    }
     LoadPtr(ty, offset) => {
       // Raw pointer load (no bounds checking)
       // Uses: [base], Defs: [result]
@@ -3360,71 +3374,48 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
 
-      // Check if we need two-phase for floats (only when mixing f32 and f64)
-      let mut has_f32 = false
-      let mut has_f64 = false
-      for entry in float_sources {
-        let (ty, _, _) = entry
-        match ty {
-          F32 => has_f32 = true
-          _ => has_f64 = true
+      // Float/SIMD returns need proper parallel-move handling.
+      // Even when all returns are f64, sources can overlap destinations
+      // (e.g. returning (d1, d0) requires a swap).
+      // Use a two-phase move via temp V24-V31 to avoid clobbering.
+      let temp_float_base = 24 // V24-V31 as temps
+      let num_in_regs = if float_sources.length() < max_float_ret_regs {
+        float_sources.length()
+      } else {
+        max_float_ret_regs
+      }
+
+      // Phase 1: copy sources to temps.
+      for idx in 0..<num_in_regs {
+        let (ty, src, _) = float_sources[idx]
+        let temp = temp_float_base + idx
+        if src != temp {
+          match ty {
+            F32 => self.emit_fmov_s(temp, src)
+            V128 => OrrVec(temp, src).emit(self)
+            _ => self.emit_fmov_d(temp, src)
+          }
         }
       }
-      let need_two_phase = has_f32 && has_f64 && float_sources.length() >= 2
-      if need_two_phase {
-        // Two-phase: copy to temps first, then to final registers
-        let temp_float_base = 24 // V24-V31 as temps
-        let num_in_regs = if float_sources.length() < max_float_ret_regs {
-          float_sources.length()
-        } else {
-          max_float_ret_regs
-        }
-        for idx in 0..<num_in_regs {
-          let (ty, src, _) = float_sources[idx]
-          let temp = temp_float_base + idx
-          if src != temp {
-            match ty {
-              F32 => self.emit_fmov_s(temp, src)
-              V128 => OrrVec(temp, src).emit(self)
-              _ => self.emit_fmov_d(temp, src)
-            }
+
+      // Phase 2: move temps to ABI return registers V0-V7.
+      for idx in 0..<num_in_regs {
+        let (ty, _, _) = float_sources[idx]
+        let temp = temp_float_base + idx
+        if temp != idx {
+          match ty {
+            F32 => self.emit_fmov_s(idx, temp)
+            V128 => OrrVec(idx, temp).emit(self)
+            _ => self.emit_fmov_d(idx, temp)
           }
         }
-        for idx in 0..<num_in_regs {
-          let (ty, _, _) = float_sources[idx]
-          let temp = temp_float_base + idx
-          if temp != idx {
-            match ty {
-              F32 => self.emit_fmov_s(idx, temp)
-              V128 => OrrVec(idx, temp).emit(self)
-              _ => self.emit_fmov_d(idx, temp)
-            }
-          }
-        }
-        // Extra float results go to SRET buffer (X8)
-        for idx in max_float_ret_regs..<float_sources.length() {
-          let (_, src, _) = float_sources[idx]
-          self.emit_str_d_offset(src, @abi.REG_SRET, extra_offset)
-          extra_offset = extra_offset + 8
-        }
-      } else {
-        // Direct move: no conflict possible
-        for idx, entry in float_sources {
-          let (ty, src, _) = entry
-          if idx < max_float_ret_regs {
-            if src != idx {
-              match ty {
-                F32 => self.emit_fmov_s(idx, src)
-                V128 => OrrVec(idx, src).emit(self)
-                _ => self.emit_fmov_d(idx, src)
-              }
-            }
-          } else {
-            // Extra float results go to SRET buffer (X8)
-            self.emit_str_d_offset(src, @abi.REG_SRET, extra_offset)
-            extra_offset = extra_offset + 8
-          }
-        }
+      }
+
+      // Extra float results go to SRET buffer (X8).
+      for idx in max_float_ret_regs..<float_sources.length() {
+        let (_, src, _) = float_sources[idx]
+        self.emit_str_d_offset(src, @abi.REG_SRET, extra_offset)
+        extra_offset = extra_offset + 8
       }
       // Emit epilogue to restore callee-saved registers before return
       self.emit_epilogue(stack_frame)

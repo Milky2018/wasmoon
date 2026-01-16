@@ -522,6 +522,8 @@ fn lower_inst(
     @ir.Opcode::Select => lower_select(ctx, inst, block)
 
     // Memory management (with memidx for multi-memory support)
+    @ir.Opcode::LoadMemBase(memidx) =>
+      lower_load_mem_base(ctx, inst, block, memidx)
     @ir.Opcode::MemoryGrow(memidx, max_pages) =>
       lower_memory_grow(ctx, inst, block, memidx, max_pages)
     @ir.Opcode::MemorySize(memidx) =>

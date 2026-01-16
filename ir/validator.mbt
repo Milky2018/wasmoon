@@ -244,6 +244,12 @@ fn validate_instruction(
       }
 
     // Memory management (with memidx for multi-memory support)
+    LoadMemBase(_) =>
+      if inst.operands.length() != 1 {
+        result.add_error(
+          "LoadMemBase expects 1 operand (vmctx), got \{inst.operands.length()}",
+        )
+      }
     MemoryGrow(_, _) =>
       if inst.operands.length() != 1 {
         result.add_error(

@@ -41,16 +41,13 @@ test "store_merging_peephole" {
       #|vcode test(v0:int, v1:int, v2:int, v3:int) {
       #|block0:
       #|    v4 = ldi 200
-      #|    v5 = ldi 0
-      #|    v6 = load_ptr.i64 +0 v0
-      #|    v7 = load_ptr.i64 +0 v6
-      #|    v8 = add #200 v7
-      #|    store_ptr8 +200 v7, v2
-      #|    v9 = ldi 201
-      #|    v10 = load_ptr.i64 +0 v0
-      #|    v11 = load_ptr.i64 +0 v10
-      #|    v12 = add #201 v11
-      #|    store_ptr8 +201 v11, v3
+      #|    v5 = load_mem_base mem=0 v0
+      #|    v6 = ldi 0
+      #|    v7 = add #200 v5
+      #|    store_ptr8 +200 v5, v2
+      #|    v8 = ldi 201
+      #|    v9 = add #201 v5
+      #|    store_ptr8 +201 v5, v3
       #|    ret
       #|}
       #|

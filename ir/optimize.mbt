@@ -111,6 +111,8 @@ fn has_side_effects(inst : Inst) -> Bool {
     | ReturnCallRef(_) => true
     // Memory operations that modify global state
     MemoryGrow(_, _) | MemoryFill(_) | MemoryCopy(_, _) => true
+    // Memory base reads global state and must not be CSE'd across calls/grow
+    LoadMemBase(_) => true
     // MemorySize reads global state that can change (invalidated by MemoryGrow)
     // Must not be CSE'd across MemoryGrow calls
     MemorySize(_) => true
@@ -1004,6 +1006,53 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
   result
 }
 
+// ============ LoadMemBase Elimination ============
+
+///|
+/// Eliminate redundant `LoadMemBase` instructions within a basic block.
+///
+/// `LoadMemBase` reads global runtime state (the memory descriptor), so it must
+/// not be CSE'd across calls or `memory.grow`. This pass performs a simple
+/// forward scan with conservative invalidation on any call-like instruction and
+/// `MemoryGrow`.
+pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
+  let result = OptResult::new()
+  for block in func.blocks {
+    // Key: (memidx, vmctx_value_id) packed into an Int64.
+    let seen : @hashmap.HashMap[Int64, Value] = @hashmap.new()
+    for inst in block.instructions {
+      match inst.opcode {
+        LoadMemBase(memidx) =>
+          if inst.first_result() is Some(r) && inst.operands.length() == 1 {
+            let vmctx = inst.operands[0]
+            let key = (memidx.to_int64() << 32) |
+              (vmctx.id.to_int64() & 0xFFFF_FFFFL)
+            match seen.get(key) {
+              Some(existing) => {
+                inst.opcode = Opcode::Copy
+                inst.operands.clear()
+                inst.operands.push(existing)
+                result.mark_changed()
+              }
+              None => seen.set(key, r)
+            }
+          }
+        // Conservatively invalidate on operations that can mutate memory base.
+        MemoryGrow(_, _)
+        | Call(_)
+        | CallIndirect(_, _)
+        | CallRef(_)
+        | ReturnCall(_)
+        | ReturnCallIndirect(_, _)
+        | ReturnCallRef(_)
+        | CallPtr(_, _) => seen.clear()
+        _ => ()
+      }
+    }
+  }
+  result
+}
+
 // ============ Global Value Numbering with Load CSE ============
 
 ///|
@@ -1285,6 +1334,11 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
+    let mb_result = eliminate_redundant_mem_base_loads(func)
+    if mb_result.changed {
+      changed = true
+      result.mark_changed()
+    }
     let cp_result = propagate_copies_global(func)
     if cp_result.changed {
       changed = true
@@ -1334,6 +1388,11 @@ pub fn optimize(func : Function) -> OptResult {
     // Run each optimization pass
     let cf_result = fold_constants(func)
     if cf_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    let mb_result = eliminate_redundant_mem_base_loads(func)
+    if mb_result.changed {
       changed = true
       result.mark_changed()
     }

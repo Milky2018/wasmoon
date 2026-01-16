@@ -149,7 +149,7 @@ pub fn VCodeBuilder::fmul(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
 pub fn VCodeBuilder::fsub(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
 pub fn VCodeBuilder::get_function(Self) -> @regalloc.VCodeFunction
 pub fn VCodeBuilder::iconst(Self, Int64) -> @abi.VReg
-pub fn VCodeBuilder::jump(Self, @block.VCodeBlock) -> Unit
+pub fn VCodeBuilder::jump(Self, @block.VCodeBlock, args? : Array[@abi.VReg]) -> Unit
 pub fn VCodeBuilder::load(Self, @instr.MemType, @abi.VReg, Int) -> @abi.VReg
 pub fn VCodeBuilder::lshr(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::mov(Self, @abi.VReg) -> @abi.VReg

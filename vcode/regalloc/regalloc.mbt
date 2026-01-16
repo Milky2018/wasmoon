@@ -1559,8 +1559,7 @@ pub fn apply_allocation(
             }
           }
 
-          let moves_to_regs : Array[RegMove] = []
-          let moves_to_spills : Array[RegMove] = []
+          let moves : Array[RegMove] = []
           if target >= 0 && target < func.blocks.length() {
             let target_block = func.blocks[target]
             for i, param in target_block.params {
@@ -1571,22 +1570,56 @@ pub fn apply_allocation(
               let to = vreg_location(param)
 
               // Same location: nothing to do.
-              if from.index == to.index {
+              // Compare both index and register bank (int vs float/vector).
+              let same_bank = match (from.class, to.class) {
+                (@abi.Int, @abi.Int) => true
+                (
+                  @abi.Float32
+                  | @abi.Float64
+                  | @abi.Vector,
+                  @abi.Float32
+                  | @abi.Float64
+                  | @abi.Vector,
+                ) => true
+                _ => false
+              }
+              if from.index == to.index && same_bank {
                 continue
               }
-              let mv = { from, to, class: param.class }
-              if to.is_spilled() {
-                moves_to_spills.push(mv)
-              } else {
-                moves_to_regs.push(mv)
-              }
+              moves.push({ from, to, class: param.class })
             }
           }
 
-          // First resolve register moves (may have cycles).
-          let resolved_moves = resolve_parallel_moves(moves_to_regs)
+          // Resolve all moves together (including spill destinations), otherwise
+          // a register move can clobber a source before it is stored to a spill slot.
+          let resolved_moves = resolve_parallel_moves(moves)
           for mv in resolved_moves {
-            if mv.from.is_spilled() {
+            if mv.to.is_spilled() {
+              let to_slot = mv.to.get_spill_slot()
+              if mv.from.is_spilled() {
+                let from_slot = mv.from.get_spill_slot()
+                let scratch_class = match mv.class {
+                  @abi.Float32 | @abi.Float64 => @abi.Float64
+                  _ => mv.class
+                }
+                let scratch_preg : @abi.PReg = {
+                  index: 16,
+                  class: scratch_class,
+                }
+                let reload_inst = @instr.VCodeInst::new(
+                  StackLoad(from_slot * 8),
+                )
+                reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+                new_block.add_inst(reload_inst)
+                let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
+                store_inst.add_use(@abi.Physical(scratch_preg))
+                new_block.add_inst(store_inst)
+              } else {
+                let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
+                store_inst.add_use(@abi.Physical(mv.from))
+                new_block.add_inst(store_inst)
+              }
+            } else if mv.from.is_spilled() {
               let slot = mv.from.get_spill_slot()
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
               reload_inst.add_def({ reg: @abi.Physical(mv.to) })
@@ -1596,29 +1629,6 @@ pub fn apply_allocation(
               move_inst.add_def({ reg: @abi.Physical(mv.to) })
               move_inst.add_use(@abi.Physical(mv.from))
               new_block.add_inst(move_inst)
-            }
-          }
-
-          // Then handle stores to spilled destinations.
-          for mv in moves_to_spills {
-            let to_slot = mv.to.get_spill_slot()
-            if mv.from.is_spilled() {
-              let from_slot = mv.from.get_spill_slot()
-              let scratch_class = match mv.class {
-                @abi.Float32 | @abi.Float64 => @abi.Float64
-                _ => mv.class
-              }
-              let scratch_preg : @abi.PReg = { index: 16, class: scratch_class }
-              let reload_inst = @instr.VCodeInst::new(StackLoad(from_slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
-              new_block.add_inst(reload_inst)
-              let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-              store_inst.add_use(@abi.Physical(scratch_preg))
-              new_block.add_inst(store_inst)
-            } else {
-              let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-              store_inst.add_use(@abi.Physical(mv.from))
-              new_block.add_inst(store_inst)
             }
           }
 

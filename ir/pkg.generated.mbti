@@ -49,6 +49,8 @@ pub fn eliminate_dead_block_params(Function) -> OptResult
 
 pub fn eliminate_dead_code(Function) -> OptResult
 
+pub fn eliminate_redundant_mem_base_loads(Function) -> OptResult
+
 pub fn eliminate_unreachable_code(Function) -> OptResult
 
 pub fn fold_constants(Function) -> OptResult
@@ -274,6 +276,7 @@ pub fn IRBuilder::ireduce(Self, Type, Value) -> Value
 pub fn IRBuilder::ishl(Self, Value, Value) -> Value
 pub fn IRBuilder::isub(Self, Value, Value) -> Value
 pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
+pub fn IRBuilder::load_mem_base(Self, Value, Int) -> Value
 pub fn IRBuilder::load_ptr(Self, Type, Value, Value) -> Value
 pub fn IRBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
 pub fn IRBuilder::memory_copy(Self, Int, Int, Value, Value, Value) -> Unit
@@ -453,6 +456,7 @@ pub enum Opcode {
   Sextend8
   Sextend16
   Sextend32
+  LoadMemBase(Int)
   MemoryGrow(Int, Int?)
   MemorySize(Int)
   MemoryFill(Int)

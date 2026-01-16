@@ -307,6 +307,7 @@ pub(all) enum VCodeOpcode {
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, @abi.RegClass, Int)
+  LoadMemBase(Int)
   LoadPtr(MemType, Int)
   StorePtr(MemType, Int)
   LoadPtrNarrow(Int, Bool, Int)
@@ -405,7 +406,7 @@ pub fn VCodeOpcode::call_type(Self) -> CallType
 pub impl Show for VCodeOpcode
 
 pub(all) enum VCodeTerminator {
-  Jump(Int)
+  Jump(Int, Array[@abi.Reg])
   Branch(@abi.Reg, Int, Int)
   BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
   BranchZero(@abi.Reg, Bool, Bool, Int, Int)

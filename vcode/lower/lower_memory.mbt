@@ -74,6 +74,27 @@ fn lower_get_func_ref(
 // VCode lowering now uses LoadPtr/StorePtr/LoadPtrNarrow/StorePtrNarrow directly
 
 ///|
+/// Lower LoadMemBase - load linear memory base pointer from VMContext.
+/// memidx: memory index for multi-memory support
+fn lower_load_mem_base(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+  block : @block.VCodeBlock,
+  memidx : Int,
+) -> Unit {
+  guard inst.first_result() is Some(result) else { return }
+  if inst.operands.length() != 1 {
+    return
+  }
+  let result_vreg = ctx.get_vreg(result)
+  let vmctx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let load_inst = @instr.VCodeInst::new(LoadMemBase(memidx))
+  load_inst.add_def({ reg: Virtual(result_vreg) })
+  load_inst.add_use(Virtual(vmctx_vreg))
+  block.add_inst(load_inst)
+}
+
+///|
 /// Lower memory.grow instruction
 /// memory.grow takes a delta (number of pages to grow) and returns the previous size or -1
 /// memidx: memory index for multi-memory support

@@ -340,6 +340,11 @@ pub(all) enum VCodeOpcode {
   // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
   // NOTE: GlobalGet, GlobalSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
 
+  // Load linear memory base pointer from VMContext
+  // LoadMemBase(memidx): base = vmctx.memory[memidx].base
+  // Uses: [vmctx], Defs: [result]
+  LoadMemBase(Int)
+
   // Raw pointer operations (for trampolines, no bounds checking)
   // LoadPtr(type, offset): Load from [base + offset]
   // Uses: [base], Defs: [result]
@@ -883,6 +888,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Nop => "nop"
     TrapIfUgt(trap_code) => "trap_if_ugt #\{trap_code}"
     TrapIfUge(trap_code) => "trap_if_uge #\{trap_code}"
+    LoadMemBase(memidx) => "load_mem_base mem=\{memidx}"
     FpuCmp(is_f32) => if is_f32 { "fcmp.s" } else { "fcmp.d" }
     TrapIf(cond, trap_code) => "trap_if.\{cond} #\{trap_code}"
     TrapIfZero(is_64, trap_code) =>
