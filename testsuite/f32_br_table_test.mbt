@@ -109,8 +109,8 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
     content=(
       #|vcode test(v0:int, v1:int, v2:int) -> float {
       #|block0:
-      #|    d2 = ldf 0
-      #|    d3 = ldf 0
+      #|    d0 = ldf 0
+      #|    d1 = ldf 0
       #|    x8 = ldi 0
       #|    x8 = cmp32.eq x2, x8
       #|    branch x8, block4, block7
@@ -123,18 +123,10 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    d0 = ldf 2
       #|    jump block1
       #|block4:
-      #|    x8 = mov x2
-      #|    d1 = mov d3
       #|    jump block3
       #|block5:
-      #|    x8 = mov x2
-      #|    d0 = mov d2
-      #|    d1 = mov d3
       #|    jump block2
       #|block6:
-      #|    x8 = mov x2
-      #|    d0 = mov d2
-      #|    d1 = mov d3
       #|    jump block1
       #|block7:
       #|    x8 = ldi 1
