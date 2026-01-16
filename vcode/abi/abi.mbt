@@ -97,6 +97,11 @@ pub const VMCTX_GC_HEAP_OFFSET : Int = 104
 pub const REG_VMCTX : Int = 19
 
 ///|
+/// Register holding cached memory0 descriptor pointer (X20, callee-saved).
+/// When enabled, prologue loads: x20 = [x19 + VMCTX_MEMORY0_OFFSET].
+pub const REG_MEM0_DESC : Int = 20
+
+///|
 /// Frame Pointer register (X29)
 pub const REG_FP : Int = 29
 

@@ -352,6 +352,11 @@ fn MachineCode::emit_prologue(
   // loaded on-demand from vmctx, on-demand.
   if stack_frame.needs_vmctx {
     self.emit_mov_reg(19, 0)
+    // Optionally cache memory0 descriptor pointer in X20.
+    // This allows `LoadMemBase(mem=0)` to be a single load from [X20 + 0].
+    if stack_frame.cache_mem0_desc {
+      self.emit_ldr_imm(@abi.REG_MEM0_DESC, 19, @abi.VMCTX_MEMORY0_OFFSET)
+    }
   }
 
   // Step 6: Move arguments from ABI registers to allocated registers
@@ -440,19 +445,26 @@ pub fn emit_function(
   // Build stack frame layout using JITStackFrame
   // has_calls is true if function makes any calls
   let has_calls = func_has_calls(func)
+  let uses_mem0 = func.uses_mem0()
 
   // Check if function uses vmctx (x19)
   // A function needs vmctx if:
   // 1. It directly uses x19 in instructions/terminators
   // 2. It makes any calls (wasm ABI requires passing vmctx to callees)
-  let needs_vmctx = has_calls || func_uses_vmctx(func)
+  // 3. It uses memory0 base loads that may leverage cached memory0 descriptor
+  let needs_vmctx = has_calls || func_uses_vmctx(func) || uses_mem0
+  let clobbered_gprs = clobbered
+  if uses_mem0 && !clobbered_gprs.contains(@abi.REG_MEM0_DESC) {
+    clobbered_gprs.push(@abi.REG_MEM0_DESC)
+  }
   let stack_frame = JITStackFrame::build(
-    clobbered,
+    clobbered_gprs,
     clobbered_fprs,
     func.get_num_spill_slots(),
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
+    cache_mem0_desc=uses_mem0,
     force_frame_setup~,
   )
 
@@ -1549,7 +1561,10 @@ fn MachineCode::emit_instruction(
       // Uses: [vmctx], Defs: [result]
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
-      if memidx == 0 {
+      if memidx == 0 && stack_frame.cache_mem0_desc {
+        // Fast path: memory0 descriptor pointer is cached in X20.
+        self.emit_ldr_imm(dst, @abi.REG_MEM0_DESC, 0)
+      } else if memidx == 0 {
         self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
         self.emit_ldr_imm(dst, dst, 0)
       } else {
