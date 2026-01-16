@@ -151,12 +151,11 @@ test "cross_block_cse" {
       #|  0004: 62000034  cbz w2, block2
       #|block1:
       #|  0008: 08050011  add w8, w8, #1
-      #|  000c: 02000014  b block3
+      #|  000c: 01000014  b block3
       #|block2:
-      #|  0010: 01000014  b block3
       #|block3:
-      #|  0014: e00308aa  mov x0, x8
-      #|  0018: c0035fd6  ret
+      #|  0010: e00308aa  mov x0, x8
+      #|  0014: c0035fd6  ret
       #|
     ),
   )
