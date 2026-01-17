@@ -84,6 +84,8 @@ pub fn allocatable_scratch_fprs() -> Array[PReg]
 
 pub fn allocatable_scratch_regs() -> Array[PReg]
 
+pub fn build_aarch64_machine_env(reserve_mem0_desc? : Bool, reserve_x23? : Bool) -> AArch64MachineEnv
+
 pub fn call_clobbered_fprs() -> Array[PReg]
 
 pub fn call_clobbered_gprs() -> Array[PReg]
@@ -95,6 +97,19 @@ pub let spill_slot_base : Int
 // Errors
 
 // Types and methods
+pub struct AArch64MachineEnv {
+  preferred_int : Array[PReg]
+  nonpreferred_int : Array[PReg]
+  preferred_float : Array[PReg]
+  nonpreferred_float : Array[PReg]
+  preferred_vector : Array[PReg]
+  nonpreferred_vector : Array[PReg]
+  callee_saved_int : Array[PReg]
+  callee_saved_float : Array[PReg]
+  scratch_int : Array[Int]
+  scratch_float : Array[Int]
+}
+
 pub(all) enum OperandConstraint {
   Any
   FixedReg(PReg)

@@ -2169,6 +2169,9 @@ fn MachineCode::emit_instruction(
       let temp2 = wreg_num(inst.defs[2]) // temp for TBL1 from second source
       let rn = reg_num(inst.uses[0]) // first source (lanes 0-15)
       let rm = reg_num(inst.uses[1]) // second source (lanes 16-31)
+      // Use V16 as a reserved scratch vector register for aliasing fixes.
+      // This avoids clobbering `rd` when `rd` aliases an input.
+      let scratch = 16
       // Aliasing analysis:
       // - rn == temp1: must save before indices1 build destroys temp1
       // - rn == temp2: safe (TBL1 reads rn before indices2 build touches temp2)
@@ -2178,9 +2181,9 @@ fn MachineCode::emit_instruction(
       // Phase 1: Save temp1 if either input uses it
       let temp1_has_input = rn == temp1 || rm == temp1
       if temp1_has_input {
-        Orr16B(rd, temp1, temp1).emit(self) // Save temp1 to rd
+        Orr16B(scratch, temp1, temp1).emit(self) // Save input before clobbering temp1
       }
-      let actual_rn = if rn == temp1 { rd } else { rn }
+      let actual_rn = if rn == temp1 { scratch } else { rn }
       // Build two index vectors at compile time:
       // indices1: lanes < 16 keep original, lanes >= 16 use 0x80 (out of range)
       // indices2: lanes >= 16 use lane-16, lanes < 16 use 0x80 (out of range)
@@ -2222,10 +2225,10 @@ fn MachineCode::emit_instruction(
       // - rm == temp1: already saved to rd in phase 1
       // - rm == temp2: save now before indices2 build destroys it
       let actual_rm = if rm == temp1 {
-        rd // Already saved before indices1 build
+        scratch // Already saved before indices1 build
       } else if rm == temp2 {
-        Orr16B(rd, rm, rm).emit(self) // Save temp2 to rd
-        rd
+        Orr16B(scratch, rm, rm).emit(self) // Save input before clobbering temp2
+        scratch
       } else {
         rm
       }
@@ -2288,22 +2291,27 @@ fn MachineCode::emit_instruction(
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let c = reg_num(inst.uses[2]) // mask
-      // Handle case where rd aliases with a or b
-      // If rd == a or rd == b, use a different approach:
-      // Instead of BSL, use: rd = (a & c) | (b & ~c)
-      //   = AND v31, a, c   (temp = a & c)
-      //   = BIC rd, b, c    (rd = b & ~c)
-      //   = ORR rd, rd, v31 (rd = rd | temp)
-      if rd == a || rd == b {
-        // Use v31 as temp (it's the stack pointer alias but safe for SIMD)
-        let temp = 31
-        And16B(temp, a, c).emit(self) // temp = a & c
-        Bic16B(rd, b, c).emit(self) // rd = b & ~c
-        Orr16B(rd, rd, temp).emit(self) // rd = (a & c) | (b & ~c)
-      } else {
-        // Fast path: copy mask to rd, then BSL
-        OrrVec(rd, c).emit(self)
+      // Implement without any fixed scratch vector registers:
+      // result = b ^ ((a ^ b) & c)
+      //
+      // Special case: if rd aliases the mask reg c and c is dead after this op,
+      // BSL can compute the result in-place (Vd is both mask input and output).
+      if rd == c {
         Bsl16B(rd, a, b).emit(self)
+      } else if rd == b {
+        // rd = a ^ b
+        Eor16B(rd, a, b).emit(self)
+        // rd = (a ^ b) & ~c
+        Bic16B(rd, rd, c).emit(self)
+        // rd = a ^ ((a ^ b) & ~c) = (a & c) | (b & ~c)
+        Eor16B(rd, rd, a).emit(self)
+      } else {
+        // rd = a ^ b
+        Eor16B(rd, a, b).emit(self)
+        // rd = (a ^ b) & c
+        And16B(rd, rd, c).emit(self)
+        // rd = b ^ ((a ^ b) & c)
+        Eor16B(rd, rd, b).emit(self)
       }
     }
     SIMDAnyTrue => {
@@ -2313,10 +2321,11 @@ fn MachineCode::emit_instruction(
       //            CMP Xd, #0; CSET Wd, NE
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      // Step 1: UMAXV to get max byte into V16
-      Umaxv16B(16, rn).emit(self)
-      // Step 2: FMOV from D16 to X16 (result in low byte, rest is zero)
-      self.emit_fmov_d_to_x(16, 16)
+      let tmp = wreg_num(inst.defs[1])
+      // Step 1: UMAXV to get max byte into tmp
+      Umaxv16B(tmp, rn).emit(self)
+      // Step 2: FMOV from Dtmp to X16 (result in low byte, rest is zero)
+      self.emit_fmov_d_to_x(16, tmp)
       // Step 3: CMP X16, #0
       self.emit_cmp_imm(16, 0)
       // Step 4: CSET Wd, NE (rd = 1 if X16 != 0, else 0)
@@ -2330,30 +2339,22 @@ fn MachineCode::emit_instruction(
       match lane_size {
         B8 =>
           // i8x16.all_true: UMINV Bd, Vn.16B
-          Uminv16B(16, rn).emit(self)
+          Uminv16B(wreg_num(inst.defs[1]), rn).emit(self)
         H16 =>
           // i16x8.all_true: UMINV Hd, Vn.8H
-          Uminv8H(16, rn).emit(self)
+          Uminv8H(wreg_num(inst.defs[1]), rn).emit(self)
         S32 =>
           // i32x4.all_true: UMINV Sd, Vn.4S
-          Uminv4S(16, rn).emit(self)
+          Uminv4S(wreg_num(inst.defs[1]), rn).emit(self)
         D64 => {
-          // i64x2.all_true: take AND of both lanes, check != 0
-          // Extract both 64-bit lanes and AND them
-          // UMOV X16, Vn.D[0]
-          // UMOV X17, Vn.D[1]
-          // AND X16, X16, X17
-          // Then compare != 0
-          // Use FMOV for the extracts (same as UMOV for 64-bit)
-          self.emit_fmov_d_to_x(16, rn) // low 64 bits
-          // For high 64 bits, we need to use DUP + FMOV or similar
-          // Simpler: use INS to copy high to low of scratch, then FMOV
-          OrrVec(17, rn).emit(self) // V17 = copy of Vn
-          // EXT V17.16B, V17.16B, V17.16B, #8 - rotate by 8 bytes
-          self.emit_ext_16b(17, 17, 17, 8)
-          self.emit_fmov_d_to_x(17, 17) // high 64 bits now in X17
-          // AND X16, X16, X17
-          AndShifted(16, 16, 17, @instr.ShiftType::Lsl, 0).emit(self)
+          // i64x2.all_true: (lane0 != 0) && (lane1 != 0)
+          UmovD(16, rn, 0).emit(self)
+          UmovD(17, rn, 1).emit(self)
+          self.emit_cmp_imm(16, 0)
+          // If lane0 != 0 then CMP lane1, else force Z=1 so NE is false.
+          self.emit_ccmp_imm(17, 0, 4, 1, true)
+          self.emit_cset(rd, 1) // NE
+          return
         }
       }
       // Common: compare result != 0 and set rd to 0/1
@@ -2361,8 +2362,9 @@ fn MachineCode::emit_instruction(
         // Already have result in X16, just compare
         self.emit_cmp_imm(16, 0)
       } else {
-        // FMOV from D16 to X16
-        self.emit_fmov_d_to_x(16, 16)
+        let tmp = wreg_num(inst.defs[1])
+        // FMOV from Dtmp to X16
+        self.emit_fmov_d_to_x(16, tmp)
         self.emit_cmp_imm(16, 0)
       }
       // CSET Wd, NE
@@ -2502,37 +2504,56 @@ fn MachineCode::emit_instruction(
         D64 => {
           // i64x2.mul emulation: NEON doesn't have MUL.2D
           // a*b = (a_hi*b_lo + a_lo*b_hi) << 32 + a_lo*b_lo
-          // Using temp registers V16-V20
+          // IMPORTANT: the result register can alias an input register.
+          // Use temporaries for all intermediates and only write `rd` at the end.
+          //
+          // Also IMPORTANT: this expands to multiple machine instructions, so we
+          // must not rely on `rn` / `rm` remaining unmodified after the first
+          // instruction. Regalloc may legally reuse dead input regs for temps.
+          // Copy inputs into reserved scratch V16/V17 first.
+          //
+          // Temps allocated by regalloc: defs[1..5]
+          let t0 = wreg_num(inst.defs[1]) // a_lo (2s)
+          let t1 = wreg_num(inst.defs[2]) // b_lo (2s), then reused as cross2 (2d)
+          let t2 = wreg_num(inst.defs[3]) // low product (2d)
+          let t3 = wreg_num(inst.defs[4]) // scratch for hi halves (2s)
+          let t4 = wreg_num(inst.defs[5]) // cross sum (2d)
+
+          // Save inputs to scratch regs (V16/V17 are non-allocatable).
+          let a = 16
+          let b = 17
+          OrrVec(a, rn).emit(self)
+          OrrVec(b, rm).emit(self)
 
           // 1. Extract low 32-bit halves
-          Xtn2S(16, rn).emit(self) // v16 = [a0_lo, a1_lo]
-          Xtn2S(17, rm).emit(self) // v17 = [b0_lo, b1_lo]
+          Xtn2S(t0, a).emit(self) // t0 = [a0_lo, a1_lo]
+          Xtn2S(t1, b).emit(self) // t1 = [b0_lo, b1_lo]
 
-          // 2. Calculate a_lo * b_lo
-          Umull2D(18, 16, 17).emit(self) // v18 = a_lo * b_lo
+          // 2. low = a_lo * b_lo
+          Umull2D(t2, t0, t1).emit(self)
 
-          // 3. Extract high 32-bit halves from a
-          Rev64_4S(19, rn).emit(self) // swap halves
-          Xtn2S(19, 19).emit(self) // v19 = [a0_hi, a1_hi]
+          // 3. a_hi = high 32-bit halves of a
+          Rev64_4S(t3, a).emit(self)
+          Xtn2S(t3, t3).emit(self) // t3 = [a0_hi, a1_hi]
 
-          // 4. Calculate a_hi * b_lo
-          Umull2D(20, 19, 17).emit(self) // v20 = a_hi * b_lo
+          // 4. cross1 = a_hi * b_lo
+          Umull2D(t4, t3, t1).emit(self)
 
-          // 5. Extract high 32-bit halves from b
-          Rev64_4S(19, rm).emit(self) // swap halves
-          Xtn2S(19, 19).emit(self) // v19 = [b0_hi, b1_hi]
+          // 5. b_hi = high 32-bit halves of b
+          Rev64_4S(t3, b).emit(self)
+          Xtn2S(t3, t3).emit(self) // t3 = [b0_hi, b1_hi]
 
-          // 6. Calculate a_lo * b_hi
-          Umull2D(17, 16, 19).emit(self) // v17 = a_lo * b_hi (reuse v17)
+          // 6. cross2 = a_lo * b_hi (reuse t1 as a 2d dest)
+          Umull2D(t1, t0, t3).emit(self)
 
-          // 7. Add cross products
-          Add2D(17, 17, 20).emit(self) // v17 = cross sum
+          // 7. cross = cross1 + cross2
+          Add2D(t4, t4, t1).emit(self)
 
           // 8. Shift cross products left by 32
-          ShlImm2D(17, 17, 32).emit(self)
+          ShlImm2D(t4, t4, 32).emit(self)
 
           // 9. Add to low*low to get final result
-          Add2D(rd, 18, 17).emit(self)
+          Add2D(rd, t2, t4).emit(self)
         }
       }
     }
@@ -3090,35 +3111,39 @@ fn MachineCode::emit_instruction(
     }
     SIMDTruncSatF64ToI32SZero => {
       // f64x2 -> i32x4 with zeros in high lanes (signed)
-      // FCVTZS V16.2D, Vn.2D; SQXTN Vd.2S, V16.2D
+      // FCVTZS Vtmp.2D, Vn.2D; SQXTN Vd.2S, Vtmp.2D
       let rd = wreg_num(inst.defs[0])
+      let tmp = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
-      Fcvtzs2D(16, rn).emit(self) // Convert to i64x2 with saturation to INT64 range
-      Sqxtn2S(rd, 16).emit(self) // Saturating narrow to i32x2 (zeros in high lanes)
+      Fcvtzs2D(tmp, rn).emit(self) // Convert to i64x2 with saturation to INT64 range
+      Sqxtn2S(rd, tmp).emit(self) // Saturating narrow to i32x2 (zeros in high lanes)
     }
     SIMDTruncSatF64ToI32UZero => {
       // f64x2 -> i32x4 with zeros in high lanes (unsigned)
-      // FCVTZU V16.2D, Vn.2D; UQXTN Vd.2S, V16.2D
+      // FCVTZU Vtmp.2D, Vn.2D; UQXTN Vd.2S, Vtmp.2D
       let rd = wreg_num(inst.defs[0])
+      let tmp = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
-      Fcvtzu2D(16, rn).emit(self) // Convert to u64x2 with saturation to UINT64 range
-      Uqxtn2S(rd, 16).emit(self) // Saturating narrow to u32x2 (zeros in high lanes)
+      Fcvtzu2D(tmp, rn).emit(self) // Convert to u64x2 with saturation to UINT64 range
+      Uqxtn2S(rd, tmp).emit(self) // Saturating narrow to u32x2 (zeros in high lanes)
     }
     SIMDConvertLowI32ToF64S => {
       // Low 2 i32 lanes -> f64x2 (signed)
-      // SXTL V16.2D, Vn.2S; SCVTF Vd.2D, V16.2D
+      // SXTL Vtmp.2D, Vn.2S; SCVTF Vd.2D, Vtmp.2D
       let rd = wreg_num(inst.defs[0])
+      let tmp = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
-      Sxtl2D(16, rn).emit(self) // Sign-extend i32x2 to i64x2
-      Scvtf2D(rd, 16).emit(self) // Convert i64x2 to f64x2
+      Sxtl2D(tmp, rn).emit(self) // Sign-extend i32x2 to i64x2
+      Scvtf2D(rd, tmp).emit(self) // Convert i64x2 to f64x2
     }
     SIMDConvertLowI32ToF64U => {
       // Low 2 i32 lanes -> f64x2 (unsigned)
-      // UXTL V16.2D, Vn.2S; UCVTF Vd.2D, V16.2D
+      // UXTL Vtmp.2D, Vn.2S; UCVTF Vd.2D, Vtmp.2D
       let rd = wreg_num(inst.defs[0])
+      let tmp = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
-      Uxtl2D(16, rn).emit(self) // Zero-extend i32x2 to i64x2
-      Ucvtf2D(rd, 16).emit(self) // Convert i64x2 to f64x2
+      Uxtl2D(tmp, rn).emit(self) // Zero-extend i32x2 to i64x2
+      Ucvtf2D(rd, tmp).emit(self) // Convert i64x2 to f64x2
     }
     SIMDDemoteF64ToF32Zero => {
       // f64x2 -> f32x4 with zeros in high lanes
@@ -3257,66 +3282,42 @@ fn MachineCode::emit_instruction(
     // ============ Relaxed SIMD ============
     SIMDFMla(is_f32) => {
       // FMLA: Vd = Vd + Vn * Vm
-      // defs[0] = result, defs[1] = temp1, defs[2] = temp2
+      // defs[0] = result
       // uses[0] = accumulator, uses[1] = v1, uses[2] = v2
       let rd = wreg_num(inst.defs[0])
-      let temp1 = wreg_num(inst.defs[1])
-      let temp2 = wreg_num(inst.defs[2])
       let acc = reg_num(inst.uses[0])
       let rn = reg_num(inst.uses[1])
       let rm = reg_num(inst.uses[2])
-      // Handle aliasing: if rd == rn or rd == rm, copying acc to rd
-      // would clobber the multiplicand. Copy the aliased operand first.
-      let actual_rn = if rd == rn {
-        OrrVec(temp1, rn).emit(self)
-        temp1
-      } else {
-        rn
-      }
-      let actual_rm = if rd == rm {
-        OrrVec(temp2, rm).emit(self)
-        temp2
-      } else {
-        rm
-      }
-      // Copy accumulator to rd, then FMLA
-      OrrVec(rd, acc).emit(self)
+      // This expands to multiple instructions. Copy multiplicands into reserved
+      // scratch regs so we can freely overwrite `rd` with the accumulator.
+      let a = 16
+      let b = 17
+      OrrVec(a, rn).emit(self)
+      OrrVec(b, rm).emit(self)
+      OrrVec(rd, acc).emit(self) // accumulator
       if is_f32 {
-        Fmla4S(rd, actual_rn, actual_rm).emit(self)
+        Fmla4S(rd, a, b).emit(self)
       } else {
-        Fmla2D(rd, actual_rn, actual_rm).emit(self)
+        Fmla2D(rd, a, b).emit(self)
       }
     }
     SIMDFMls(is_f32) => {
       // FMLS: Vd = Vd - Vn * Vm
-      // defs[0] = result, defs[1] = temp1, defs[2] = temp2
+      // defs[0] = result
       // uses[0] = accumulator, uses[1] = v1, uses[2] = v2
       let rd = wreg_num(inst.defs[0])
-      let temp1 = wreg_num(inst.defs[1])
-      let temp2 = wreg_num(inst.defs[2])
       let acc = reg_num(inst.uses[0])
       let rn = reg_num(inst.uses[1])
       let rm = reg_num(inst.uses[2])
-      // Handle aliasing: if rd == rn or rd == rm, copying acc to rd
-      // would clobber the multiplicand. Copy the aliased operand first.
-      let actual_rn = if rd == rn {
-        OrrVec(temp1, rn).emit(self)
-        temp1
-      } else {
-        rn
-      }
-      let actual_rm = if rd == rm {
-        OrrVec(temp2, rm).emit(self)
-        temp2
-      } else {
-        rm
-      }
-      // Copy accumulator to rd, then FMLS
-      OrrVec(rd, acc).emit(self)
+      let a = 16
+      let b = 17
+      OrrVec(a, rn).emit(self)
+      OrrVec(b, rm).emit(self)
+      OrrVec(rd, acc).emit(self) // accumulator
       if is_f32 {
-        Fmls4S(rd, actual_rn, actual_rm).emit(self)
+        Fmls4S(rd, a, b).emit(self)
       } else {
-        Fmls2D(rd, actual_rn, actual_rm).emit(self)
+        Fmls2D(rd, a, b).emit(self)
       }
     }
     SIMDRelaxedDot8to16 => {
@@ -3324,34 +3325,61 @@ fn MachineCode::emit_instruction(
       // result[i] = a[2*i]*b[2*i] + a[2*i+1]*b[2*i+1]
       // uses[0] = v1 (i8x16), uses[1] = v2 (i8x16)
       let rd = wreg_num(inst.defs[0])
+      let tmp = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
+      // Multi-instruction expansion: copy inputs into reserved scratch regs so
+      // `rd` may alias an input without clobbering it before the second SMULL.
+      let a = 16
+      let b = 17
+      OrrVec(a, rn).emit(self)
+      OrrVec(b, rm).emit(self)
       // Step 1: SMULL for lower 8 bytes - products for bytes 0-7
-      Smull8H(16, rn, rm).emit(self)
+      Smull8H(rd, a, b).emit(self)
       // Step 2: SMULL2 for upper 8 bytes - products for bytes 8-15
-      Smull2_8H(17, rn, rm).emit(self)
+      Smull2_8H(tmp, a, b).emit(self)
       // Step 3: ADDP pairwise add to get final dot products
       // Result: [a0*b0+a1*b1, a2*b2+a3*b3, ..., a14*b14+a15*b15]
-      Addp8H(rd, 16, 17).emit(self)
+      Addp8H(rd, rd, tmp).emit(self)
     }
     SIMDRelaxedDot8to32Add => {
       // i32x4.relaxed_dot_i8x16_i7x16_add_s: dot product + accumulator
       // result[i] = c[i] + sum(a[4*i+k]*b[4*i+k], k=0..3)
       // uses[0] = v1, uses[1] = v2, uses[2] = accumulator
       let rd = wreg_num(inst.defs[0])
+      let tmp = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       let acc = reg_num(inst.uses[2])
+      // Multi-instruction expansion. Protect operands that must remain available
+      // after `rd`/`tmp` are overwritten by using reserved scratch regs V16/V17.
+      let mut a = rn
+      let mut b = rm
+      let mut acc_reg = acc
+      if acc_reg == rd || acc_reg == tmp {
+        OrrVec(16, acc_reg).emit(self)
+        acc_reg = 16
+      }
+      // `rn`/`rm` are used in both SMULL and SMULL2. If `rd` aliases one of them,
+      // the first SMULL would clobber the input before SMULL2.
+      if rd == a {
+        OrrVec(17, a).emit(self)
+        a = 17
+      }
+      if rd == b && b != a {
+        OrrVec(17, b).emit(self)
+        b = 17
+      }
       // Step 1: SMULL for lower 8 bytes
-      Smull8H(16, rn, rm).emit(self)
+      Smull8H(rd, a, b).emit(self)
       // Step 2: SMULL2 for upper 8 bytes
-      Smull2_8H(17, rn, rm).emit(self)
+      Smull2_8H(tmp, a, b).emit(self)
       // Step 3: ADDP pairwise to get i16x8 dot products
-      Addp8H(16, 16, 17).emit(self)
+      Addp8H(rd, rd, tmp).emit(self)
       // Step 4: SADDLP to get i32x4 from i16x8 (another pairwise add with widening)
-      Saddlp4S(16, 16).emit(self)
+      Saddlp4S(rd, rd).emit(self)
       // Step 5: Add accumulator
-      Add4S(rd, 16, acc).emit(self)
+      Add4S(rd, rd, acc_reg).emit(self)
     }
   }
 }
@@ -3649,99 +3677,165 @@ fn MachineCode::emit_terminator_with_epilogue(
       let max_int_ret_regs = @abi.MAX_INT_RET_REGS // 8
       let max_float_ret_regs = @abi.MAX_FLOAT_RET_REGS // 8
 
-      // Handle integer returns - need two-phase if sources conflict with destinations
-      let int_need_two_phase = {
-        let mut need = false
-        for idx, entry in int_sources {
-          let (src, _) = entry
-          if idx < max_int_ret_regs {
-            // Check if src will be overwritten by an earlier return
-            for j in 0..<idx {
-              if j == src {
-                need = true
-                break
-              }
+      // We must implement parallel moves for returns, because sources can overlap
+      // destinations (e.g. returning (x1, x0) requires a swap). Do this using
+      // reserved scratch registers (X16/V16) so leaf functions don't need a
+      // spill area just for swaps.
+      let mut extra_offset = 0
+      fn emit_parallel_moves_x(
+        self : MachineCode,
+        moves : Array[(Int, Int)], // (src, dst)
+      ) -> Unit {
+        let pending = moves.copy()
+        fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+          for mv in pending {
+            let (src, _) = mv
+            if src == dst {
+              return true
             }
           }
-          if need {
-            break
+          false
+        }
+
+        while !pending.is_empty() {
+          // Find an acyclic move: dst not used as a src by any remaining move.
+          let mut idx_opt : Int? = None
+          for i in 0..<pending.length() {
+            let (_, dst) = pending[i]
+            if !dst_is_used_as_src(pending, dst) {
+              idx_opt = Some(i)
+              break
+            }
           }
-        }
-        need
-      }
-      let mut extra_offset = 0
-      if int_need_two_phase {
-        // Two-phase: save sources to temp registers first
-        let temp_int_base = 10 // X10-X17 as temps (we have up to 8)
-        let num_in_regs = if int_sources.length() < max_int_ret_regs {
-          int_sources.length()
-        } else {
-          max_int_ret_regs
-        }
-        for idx in 0..<num_in_regs {
-          let (src, _) = int_sources[idx]
-          self.emit_mov_reg(temp_int_base + idx, src)
-        }
-        // Then move from temps to destinations
-        for idx in 0..<num_in_regs {
-          self.emit_mov_reg(idx, temp_int_base + idx)
-        }
-        // Extra results go to SRET buffer (X8)
-        for idx in max_int_ret_regs..<int_sources.length() {
-          let (src, _) = int_sources[idx]
-          self.emit_str_offset(src, @abi.REG_SRET, extra_offset)
-          extra_offset = extra_offset + 8
-        }
-      } else {
-        // Direct move: no conflict
-        for idx, entry in int_sources {
-          let (src, _) = entry
-          if idx < max_int_ret_regs && src != idx {
-            self.emit_mov_reg(idx, src)
-          } else if idx >= max_int_ret_regs {
-            // Extra results go to SRET buffer (X8)
-            self.emit_str_offset(src, @abi.REG_SRET, extra_offset)
-            extra_offset = extra_offset + 8
+          match idx_opt {
+            Some(i) => {
+              let (src, dst) = pending.remove(i)
+              if src != dst {
+                self.emit_mov_reg(dst, src)
+              }
+            }
+            None => {
+              // Cycle: break it via X16 (IP0).
+              let scratch = 16
+              let (saved_src, hole_dst) = pending.remove(0)
+              self.emit_mov_reg(scratch, saved_src)
+              let mut cur_dst = saved_src
+              while cur_dst != hole_dst {
+                let mut found = -1
+                for i in 0..<pending.length() {
+                  let (_, dst) = pending[i]
+                  if dst == cur_dst {
+                    found = i
+                    break
+                  }
+                }
+                guard found >= 0 else {
+                  abort("return parallel move (x): broken cycle")
+                }
+                let (next_src, _) = pending.remove(found)
+                if next_src != cur_dst {
+                  self.emit_mov_reg(cur_dst, next_src)
+                }
+                cur_dst = next_src
+              }
+              self.emit_mov_reg(hole_dst, scratch)
+            }
           }
         }
       }
 
-      // Float/SIMD returns need proper parallel-move handling.
-      // Even when all returns are f64, sources can overlap destinations
-      // (e.g. returning (d1, d0) requires a swap).
-      // Use a two-phase move via temp V24-V31 to avoid clobbering.
-      let temp_float_base = 24 // V24-V31 as temps
-      let num_in_regs = if float_sources.length() < max_float_ret_regs {
+      fn emit_parallel_moves_v(
+        self : MachineCode,
+        moves : Array[(Int, Int)], // (src, dst) in V-reg indices
+      ) -> Unit {
+        let pending = moves.copy()
+        fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+          for mv in pending {
+            let (src, _) = mv
+            if src == dst {
+              return true
+            }
+          }
+          false
+        }
+
+        while !pending.is_empty() {
+          let mut idx_opt : Int? = None
+          for i in 0..<pending.length() {
+            let (_, dst) = pending[i]
+            if !dst_is_used_as_src(pending, dst) {
+              idx_opt = Some(i)
+              break
+            }
+          }
+          match idx_opt {
+            Some(i) => {
+              let (src, dst) = pending.remove(i)
+              if src != dst {
+                OrrVec(dst, src).emit(self)
+              }
+            }
+            None => {
+              // Cycle: break it via V16.
+              let scratch = 16
+              let (saved_src, hole_dst) = pending.remove(0)
+              OrrVec(scratch, saved_src).emit(self)
+              let mut cur_dst = saved_src
+              while cur_dst != hole_dst {
+                let mut found = -1
+                for i in 0..<pending.length() {
+                  let (_, dst) = pending[i]
+                  if dst == cur_dst {
+                    found = i
+                    break
+                  }
+                }
+                guard found >= 0 else {
+                  abort("return parallel move (v): broken cycle")
+                }
+                let (next_src, _) = pending.remove(found)
+                if next_src != cur_dst {
+                  OrrVec(cur_dst, next_src).emit(self)
+                }
+                cur_dst = next_src
+              }
+              OrrVec(hole_dst, scratch).emit(self)
+            }
+          }
+        }
+      }
+
+      // Integer returns in registers (X0-X7).
+      let int_moves : Array[(Int, Int)] = []
+      for idx, entry in int_sources {
+        let (src, _) = entry
+        if idx < max_int_ret_regs {
+          if src != idx {
+            int_moves.push((src, idx))
+          }
+        } else {
+          // Extra results go to SRET buffer (X8).
+          self.emit_str_offset(src, @abi.REG_SRET, extra_offset)
+          extra_offset = extra_offset + 8
+        }
+      }
+      emit_parallel_moves_x(self, int_moves)
+
+      // Float/SIMD returns in registers (V0-V7). Use vector moves for all types
+      // to avoid D/S aliasing hazards.
+      let float_moves : Array[(Int, Int)] = []
+      let num_float_in_regs = if float_sources.length() < max_float_ret_regs {
         float_sources.length()
       } else {
         max_float_ret_regs
       }
-
-      // Phase 1: copy sources to temps.
-      for idx in 0..<num_in_regs {
-        let (ty, src, _) = float_sources[idx]
-        let temp = temp_float_base + idx
-        if src != temp {
-          match ty {
-            F32 => self.emit_fmov_s(temp, src)
-            V128 => OrrVec(temp, src).emit(self)
-            _ => self.emit_fmov_d(temp, src)
-          }
+      for idx in 0..<num_float_in_regs {
+        let (_, src, _) = float_sources[idx]
+        if src != idx {
+          float_moves.push((src, idx))
         }
       }
-
-      // Phase 2: move temps to ABI return registers V0-V7.
-      for idx in 0..<num_in_regs {
-        let (ty, _, _) = float_sources[idx]
-        let temp = temp_float_base + idx
-        if temp != idx {
-          match ty {
-            F32 => self.emit_fmov_s(idx, temp)
-            V128 => OrrVec(idx, temp).emit(self)
-            _ => self.emit_fmov_d(idx, temp)
-          }
-        }
-      }
+      emit_parallel_moves_v(self, float_moves)
 
       // Extra float results go to SRET buffer (X8).
       for idx in max_float_ret_regs..<float_sources.length() {

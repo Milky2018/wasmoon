@@ -38,6 +38,8 @@ pub fn get_alloc_stats(VCodeFunction) -> AllocStats
 
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
+pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult) -> Unit
+
 // Errors
 
 // Types and methods
@@ -93,6 +95,7 @@ pub struct LiveInterval {
   assigned : @abi.PReg?
   spill_slot : Int?
   mut crosses_call : Bool
+  mut crosses_c_call : Bool
 }
 pub impl Show for LiveInterval
 
@@ -117,7 +120,7 @@ pub struct LivenessResult {
   live_in : Array[@set.Set[Int]]
   live_out : Array[@set.Set[Int]]
   block_order : FixedArray[Int]
-  call_points : Array[ProgPoint]
+  call_points : Array[(ProgPoint, @instr.CallConv)]
 }
 
 pub enum OperandConstraint {

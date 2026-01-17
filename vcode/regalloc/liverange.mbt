@@ -193,10 +193,33 @@ pub fn LiveRange::has_fixed_constraint(self : LiveRange) -> Bool {
 ///|
 /// Get the fixed register constraint if all uses require the same fixed reg
 pub fn LiveRange::get_fixed_reg(self : LiveRange) -> @abi.PReg? {
+  fn is_allocatable_fixed(preg : @abi.PReg) -> Bool {
+    match preg.class {
+      @abi.Int =>
+        // Exclude ABI argument regs (x0-x7) and reserved/scratch regs.
+        preg.index >= 8 &&
+        preg.index != 16 &&
+        preg.index != 17 &&
+        preg.index != 18 &&
+        preg.index != 19 &&
+        preg.index != 29 &&
+        preg.index != 30 &&
+        preg.index != 31
+      // For float/vector bank, keep v16/v17 reserved as scratch.
+      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        preg.index != 16 && preg.index != 17
+    }
+  }
+
   let mut fixed : @abi.PReg? = None
   for use_pos in self.uses {
     match use_pos.constraint {
-      FixedReg(preg) =>
+      FixedReg(preg) => {
+        if !is_allocatable_fixed(preg) {
+          // Treat non-allocatable fixed regs as "use-time constraints" only.
+          // They are satisfied via inserted moves, not by pinning allocation.
+          continue
+        }
         match fixed {
           None => fixed = Some(preg)
           Some(existing) =>
@@ -204,6 +227,7 @@ pub fn LiveRange::get_fixed_reg(self : LiveRange) -> @abi.PReg? {
               return None // Conflicting constraints
             }
         }
+      }
       AnyReg => ()
     }
   }
@@ -524,7 +548,8 @@ pub fn build_live_ranges(
     // Recompute crosses_call precisely from the refined spans.
     // A value crosses a call if it is live *across* the call point:
     // span.start < call_point < span.end
-    for call_point in liveness.call_points {
+    for entry in liveness.call_points {
+      let (call_point, _) = entry
       for span in range.ranges {
         if pp_lt(span.start, call_point, block_order) &&
           pp_lt(call_point, span.end, block_order) {

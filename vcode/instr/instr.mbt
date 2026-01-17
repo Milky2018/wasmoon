@@ -807,12 +807,12 @@ pub(all) enum VCodeOpcode {
 
   // Relaxed dot product i8x16 -> i16x8 (signed/unsigned hybrid)
   // SIMDRelaxedDot8to16: sequence to compute dot product
-  // Uses: [v1, v2], Defs: [result]
+  // Uses: [v1, v2], Defs: [result, tmp]
   SIMDRelaxedDot8to16
 
   // Relaxed dot product i8x16 -> i32x4 with accumulator
   // SIMDRelaxedDot8to32Add: sequence to compute dot product with add
-  // Uses: [v1, v2, accumulator], Defs: [result]
+  // Uses: [v1, v2, accumulator], Defs: [result, tmp]
   SIMDRelaxedDot8to32Add
 }
 

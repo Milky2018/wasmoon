@@ -473,51 +473,49 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  0028: 080080d2  movz x8, #0, lsl #0
       #|  002c: 5f00086b  cmp w2, w8
       #|  0030: e8179f9a  cset x8, eq
-      #|  0034: c80200b5  cbnz x8, block5
-      #|  0038: 19000014  b block9
+      #|  0034: 880200b5  cbnz x8, block5
+      #|  0038: 17000014  b block9
       #|block1:
-      #|  003c: 1840201e  fmov s24, s0
-      #|  0040: 0043201e  fmov s0, s24
-      #|  0044: f353c1a8  ldp x19, x20, [sp], #16
-      #|  0048: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  004c: c0035fd6  ret
+      #|  003c: f353c1a8  ldp x19, x20, [sp], #16
+      #|  0040: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0044: c0035fd6  ret
       #|block2:
+      #|  0048: 880240f9  ldr x8, [x20, #0]
+      #|  004c: 010100bd  str s1, [x8, #0]
       #|  0050: 880240f9  ldr x8, [x20, #0]
-      #|  0054: 010100bd  str s1, [x8, #0]
-      #|  0058: 880240f9  ldr x8, [x20, #0]
-      #|  005c: 000140bd  ldr s0, [x8, #0]
-      #|  0060: f7ffff17  b block1
+      #|  0054: 000140bd  ldr s0, [x8, #0]
+      #|  0058: f9ffff17  b block1
       #|block3:
+      #|  005c: 880240f9  ldr x8, [x20, #0]
+      #|  0060: 010100bd  str s1, [x8, #0]
       #|  0064: 880240f9  ldr x8, [x20, #0]
-      #|  0068: 010100bd  str s1, [x8, #0]
-      #|  006c: 880240f9  ldr x8, [x20, #0]
-      #|  0070: 000140bd  ldr s0, [x8, #0]
-      #|  0074: f2ffff17  b block1
+      #|  0068: 000140bd  ldr s0, [x8, #0]
+      #|  006c: f4ffff17  b block1
       #|block4:
+      #|  0070: 880240f9  ldr x8, [x20, #0]
+      #|  0074: 010100bd  str s1, [x8, #0]
       #|  0078: 880240f9  ldr x8, [x20, #0]
-      #|  007c: 010100bd  str s1, [x8, #0]
-      #|  0080: 880240f9  ldr x8, [x20, #0]
-      #|  0084: 000140bd  ldr s0, [x8, #0]
-      #|  0088: edffff17  b block1
+      #|  007c: 000140bd  ldr s0, [x8, #0]
+      #|  0080: efffff17  b block1
       #|block5:
-      #|  008c: fbffff17  b block4
+      #|  0084: fbffff17  b block4
       #|block6:
-      #|  0090: f5ffff17  b block3
+      #|  0088: f5ffff17  b block3
       #|block7:
-      #|  0094: efffff17  b block2
+      #|  008c: efffff17  b block2
       #|block8:
-      #|  0098: e9ffff17  b block1
+      #|  0090: ebffff17  b block1
       #|block9:
-      #|  009c: 280080d2  movz x8, #1, lsl #0
-      #|  00a0: 5f00086b  cmp w2, w8
-      #|  00a4: e8179f9a  cset x8, eq
-      #|  00a8: 48ffffb5  cbnz x8, block6
+      #|  0094: 280080d2  movz x8, #1, lsl #0
+      #|  0098: 5f00086b  cmp w2, w8
+      #|  009c: e8179f9a  cset x8, eq
+      #|  00a0: 48ffffb5  cbnz x8, block6
       #|block10:
-      #|  00ac: 480080d2  movz x8, #2, lsl #0
-      #|  00b0: 5f00086b  cmp w2, w8
-      #|  00b4: e8179f9a  cset x8, eq
-      #|  00b8: e8feffb5  cbnz x8, block7
-      #|  00bc: f7ffff17  b block8
+      #|  00a4: 480080d2  movz x8, #2, lsl #0
+      #|  00a8: 5f00086b  cmp w2, w8
+      #|  00ac: e8179f9a  cset x8, eq
+      #|  00b0: e8feffb5  cbnz x8, block7
+      #|  00b4: f7ffff17  b block8
       #|
     ),
   )
