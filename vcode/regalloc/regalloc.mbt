@@ -81,6 +81,8 @@ pub struct LiveInterval {
   spill_slot : Int?
   // Whether this interval crosses a function call (cannot use caller-saved registers)
   mut crosses_call : Bool
+  // Whether this interval crosses a C call (stricter ABI assumptions)
+  mut crosses_c_call : Bool
 }
 
 ///|
@@ -94,6 +96,7 @@ fn LiveInterval::new(vreg : @abi.VReg, start : ProgPoint) -> LiveInterval {
     assigned: None,
     spill_slot: None,
     crosses_call: false,
+    crosses_c_call: false,
   }
 }
 
@@ -291,7 +294,7 @@ pub struct LivenessResult {
   // Block order: block_order[block_id] = linear position (O(1) lookup)
   block_order : FixedArray[Int]
   // Call points (block_idx, inst_idx) - instructions that clobber caller-saved registers
-  call_points : Array[ProgPoint]
+  call_points : Array[(ProgPoint, @instr.CallConv)]
 }
 
 ///|
@@ -442,7 +445,13 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       // Design: use call_type() to determine if an instruction
       // behaves like a call (clobbers caller-saved registers)
       if inst.opcode.call_type() is @instr.Regular {
-        result.call_points.push({ block: block_idx, inst: inst_idx, pos: After })
+        let conv = match inst.opcode {
+          @instr.CallPtr(_, _, call_conv) => call_conv
+          _ => @instr.Wasm
+        }
+        result.call_points.push(
+          ({ block: block_idx, inst: inst_idx, pos: After }, conv),
+        )
       }
 
       // Record uses (before the instruction)
@@ -721,7 +730,8 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
 
     // Check if this interval crosses any call point
     // If so, it cannot be assigned to a caller-saved register
-    for call_point in result.call_points {
+    for entry in result.call_points {
+      let (call_point, call_conv) = entry
       // An interval crosses a call if:
       // - The call is strictly after the interval's start AND before the interval's end
       //   (Values defined by the call itself start at the same progpoint and do not
@@ -731,6 +741,9 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
       // start < call_point < end (interval is live across the call)
       if start_cmp < 0 && end_cmp > 0 {
         interval.crosses_call = true
+        if call_conv is @instr.C {
+          interval.crosses_c_call = true
+        }
         break
       }
     }
@@ -777,7 +790,7 @@ fn InstEdits::new() -> InstEdits {
 // For example: X2->X3, X3->X2 cannot be executed in sequence without a temp.
 // This implements a standard parallel move algorithm:
 // 1. Find moves whose dest is not a src of any other move, emit those first
-// 2. For cycles, use a temp register (X16) to break the cycle
+// 2. For cycles, use reserved scratch registers to break the cycle.
 
 ///|
 /// Resolve parallel moves and emit them in the correct order.
@@ -857,22 +870,22 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
         // Safe to emit this move
         result.push(pending.remove(idx))
       None => {
-        // All remaining moves form cycles - break with temp register
-        // Use X16 as scratch for int, V16 for float (outside allocatable range)
+        // All remaining moves form cycles. Break the cycle by saving one
+        // destination register to a reserved scratch register, then continue.
         let mv = pending.remove(0)
-        let temp_preg : @abi.PReg = { index: 16, class: mv.from.class }
+        guard !mv.to.is_spilled() else {
+          abort("cycle breaker requires register destination")
+        }
+        // Select a scratch register in the right bank that doesn't alias mv.to.
+        let scratch_idx = if mv.to.index == 16 { 17 } else { 16 }
+        let temp_preg : @abi.PReg = { index: scratch_idx, class: mv.to.class }
 
-        // mv: A -> B, where B is used by another move (B -> C)
-        // Solution: A -> temp, then continue. Later emit temp -> B
-        // But we need to also update the other move that uses B as src
+        // Save the destination's original value: temp <- dst
+        result.push({ from: mv.to, to: temp_preg, class: mv.class })
 
-        // 1. Emit: src -> temp
-        result.push({ from: mv.from, to: temp_preg, class: mv.class })
-
-        // 2. Replace all uses of mv.from as source with temp
+        // Redirect all uses of the saved destination as a source to read from temp.
         for i in 0..<pending.length() {
-          if not(pending[i].from.is_spilled()) &&
-            aliases(pending[i].from, mv.from) {
+          if !pending[i].from.is_spilled() && aliases(pending[i].from, mv.to) {
             pending[i] = {
               from: temp_preg,
               to: pending[i].to,
@@ -881,8 +894,8 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
           }
         }
 
-        // 3. Add the original move with temp as source
-        pending.push({ from: temp_preg, to: mv.to, class: mv.class })
+        // Re-add the original move; it should now be schedulable.
+        pending.push(mv)
       }
     }
   }
@@ -1487,7 +1500,41 @@ pub fn apply_allocation(
         // Track which spill slots have been reloaded in this batch for coalescing
         let reloaded_slots : Map[Int, @abi.PReg] = {}
         for mv in resolved_moves {
-          if mv.from.is_spilled() {
+          if mv.to.is_spilled() {
+            // Store to spill slot.
+            let to_slot = mv.to.get_spill_slot()
+            if mv.from.is_spilled() {
+              // Spill-to-spill move: reload via scratch, then store.
+              let from_slot = mv.from.get_spill_slot()
+              if reloaded_slots.get(from_slot) is Some(source_preg) {
+                let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
+                store_inst.add_use(@abi.Physical(source_preg))
+                new_block.add_inst(store_inst)
+              } else {
+                let scratch_class = match mv.class {
+                  @abi.Float32 | @abi.Float64 => @abi.Float64
+                  _ => mv.class
+                }
+                let scratch_preg : @abi.PReg = {
+                  index: 16,
+                  class: scratch_class,
+                }
+                let reload_inst = @instr.VCodeInst::new(
+                  StackLoad(from_slot * 8),
+                )
+                reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+                new_block.add_inst(reload_inst)
+                let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
+                store_inst.add_use(@abi.Physical(scratch_preg))
+                new_block.add_inst(store_inst)
+              }
+            } else {
+              let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
+              store_inst.add_use(@abi.Physical(mv.from))
+              new_block.add_inst(store_inst)
+            }
+          } else if mv.from.is_spilled() {
+            // Reload from spill slot into a register.
             let slot = mv.from.get_spill_slot()
             if reloaded_slots.get(slot) is Some(source_preg) {
               // This slot was already reloaded - use mov instead of another load
@@ -1913,59 +1960,33 @@ fn build_aarch64_reg_pools(
   // Cache memory0 descriptor pointer in X20 when needed.
   let needs_x20_reserved = func.uses_mem0()
 
-  // Build allocatable register pool:
-  // 1. Scratch regs (caller-saved, no save needed) - use first
-  // 2. Callee-saved regs (must save/restore) - use when scratch exhausted
+  // Build MachineEnv (Cranelift-inspired) and derive pools.
+  let env = @abi.build_aarch64_machine_env(
+    reserve_mem0_desc=needs_x20_reserved,
+    reserve_x23=needs_x23_reserved,
+  )
   let int_regs : Array[@abi.PReg] = []
-  let callee_saved_int_regs : Array[@abi.PReg] = []
-  for r in @abi.allocatable_scratch_regs() {
+  for r in env.preferred_int {
     int_regs.push(r)
   }
-  for r in @abi.allocatable_callee_saved_regs() {
-    // X23 (index 23) is reserved for extra_results_buffer when needed
-    if needs_x23_reserved && r.index == 23 {
-      continue
-    }
-    // X20 is reserved for cached memory0 descriptor pointer when needed
-    if needs_x20_reserved && r.index == @abi.REG_MEM0_DESC {
-      continue
-    }
+  let callee_saved_int_regs = env.callee_saved_int
+  for r in env.nonpreferred_int {
     int_regs.push(r)
-    callee_saved_int_regs.push(r)
   }
-
-  // Float regs pool:
-  // - Prefer argument regs V0-V7 (good locality; matches existing expectations).
-  // - Then use caller-saved V18-V31 (avoid V16/V17 reserved for scratch/temp).
-  // - Finally use callee-saved V8-V15.
   let float_regs : Array[@abi.PReg] = []
-  for r in @abi.aapcs64_arg_fprs() {
+  for r in env.preferred_float {
     float_regs.push(r)
   }
-  for r in @abi.allocatable_scratch_fprs() {
-    if r.index == 16 || r.index == 17 {
-      continue
-    }
+  let callee_saved_float_regs = env.callee_saved_float
+  for r in env.nonpreferred_float {
     float_regs.push(r)
   }
-  for r in @abi.callee_saved_fprs() {
-    float_regs.push(r)
-  }
-  let callee_saved_float_regs = @abi.callee_saved_fprs()
-
-  // Vector regs pool:
-  // - Only caller-saved V0-V7 and V18-V31.
-  // - Do NOT use V8-V15: AAPCS64 only guarantees preserving the low 64 bits.
-  // - Avoid V16/V17 reserved for scratch/temp.
   let vector_regs : Array[@abi.PReg] = []
-  for r in @abi.aapcs64_arg_fprs() {
-    vector_regs.push({ index: r.index, class: @abi.Vector })
+  for r in env.preferred_vector {
+    vector_regs.push(r)
   }
-  for r in @abi.allocatable_scratch_fprs() {
-    if r.index == 16 || r.index == 17 {
-      continue
-    }
-    vector_regs.push({ index: r.index, class: @abi.Vector })
+  for r in env.nonpreferred_vector {
+    vector_regs.push(r)
   }
   (
     int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
@@ -1998,6 +2019,10 @@ pub fn allocate_registers_backtracking(func : VCodeFunction) -> VCodeFunction {
   let alloc_result = allocate_backtracking(
     func, liveness, int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
   )
+
+  // Optional safety net (Cranelift-like checker).
+  // Keeps invariants honest as allocator logic evolves.
+  verify_allocation_aarch64(func, liveness, alloc_result)
 
   // Process constraints and generate RegMove edits
   process_constraints(func, alloc_result)
