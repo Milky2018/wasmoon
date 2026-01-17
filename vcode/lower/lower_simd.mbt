@@ -649,11 +649,6 @@ fn lower_v128_fma(
     }
     let vcode_inst = @instr.VCodeInst::new(opcode)
     vcode_inst.add_def({ reg: Virtual(dst) })
-    // The emitter may need temps when rd aliases one of the multiplicands.
-    let temp1 = ctx.vcode_func.new_vreg(@abi.Vector)
-    let temp2 = ctx.vcode_func.new_vreg(@abi.Vector)
-    vcode_inst.add_def({ reg: Virtual(temp1) })
-    vcode_inst.add_def({ reg: Virtual(temp2) })
     vcode_inst.add_use(Virtual(c)) // accumulator
     vcode_inst.add_use(Virtual(a)) // multiplicand 1
     vcode_inst.add_use(Virtual(b)) // multiplicand 2

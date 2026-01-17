@@ -2507,6 +2507,11 @@ fn MachineCode::emit_instruction(
           // IMPORTANT: the result register can alias an input register.
           // Use temporaries for all intermediates and only write `rd` at the end.
           //
+          // Also IMPORTANT: this expands to multiple machine instructions, so we
+          // must not rely on `rn` / `rm` remaining unmodified after the first
+          // instruction. Regalloc may legally reuse dead input regs for temps.
+          // Copy inputs into reserved scratch V16/V17 first.
+          //
           // Temps allocated by regalloc: defs[1..5]
           let t0 = wreg_num(inst.defs[1]) // a_lo (2s)
           let t1 = wreg_num(inst.defs[2]) // b_lo (2s), then reused as cross2 (2d)
@@ -2514,22 +2519,28 @@ fn MachineCode::emit_instruction(
           let t3 = wreg_num(inst.defs[4]) // scratch for hi halves (2s)
           let t4 = wreg_num(inst.defs[5]) // cross sum (2d)
 
+          // Save inputs to scratch regs (V16/V17 are non-allocatable).
+          let a = 16
+          let b = 17
+          OrrVec(a, rn).emit(self)
+          OrrVec(b, rm).emit(self)
+
           // 1. Extract low 32-bit halves
-          Xtn2S(t0, rn).emit(self) // t0 = [a0_lo, a1_lo]
-          Xtn2S(t1, rm).emit(self) // t1 = [b0_lo, b1_lo]
+          Xtn2S(t0, a).emit(self) // t0 = [a0_lo, a1_lo]
+          Xtn2S(t1, b).emit(self) // t1 = [b0_lo, b1_lo]
 
           // 2. low = a_lo * b_lo
           Umull2D(t2, t0, t1).emit(self)
 
           // 3. a_hi = high 32-bit halves of a
-          Rev64_4S(t3, rn).emit(self)
+          Rev64_4S(t3, a).emit(self)
           Xtn2S(t3, t3).emit(self) // t3 = [a0_hi, a1_hi]
 
           // 4. cross1 = a_hi * b_lo
           Umull2D(t4, t3, t1).emit(self)
 
           // 5. b_hi = high 32-bit halves of b
-          Rev64_4S(t3, rm).emit(self)
+          Rev64_4S(t3, b).emit(self)
           Xtn2S(t3, t3).emit(self) // t3 = [b0_hi, b1_hi]
 
           // 6. cross2 = a_lo * b_hi (reuse t1 as a 2d dest)
@@ -3271,66 +3282,42 @@ fn MachineCode::emit_instruction(
     // ============ Relaxed SIMD ============
     SIMDFMla(is_f32) => {
       // FMLA: Vd = Vd + Vn * Vm
-      // defs[0] = result, defs[1] = temp1, defs[2] = temp2
+      // defs[0] = result
       // uses[0] = accumulator, uses[1] = v1, uses[2] = v2
       let rd = wreg_num(inst.defs[0])
-      let temp1 = wreg_num(inst.defs[1])
-      let temp2 = wreg_num(inst.defs[2])
       let acc = reg_num(inst.uses[0])
       let rn = reg_num(inst.uses[1])
       let rm = reg_num(inst.uses[2])
-      // Handle aliasing: if rd == rn or rd == rm, copying acc to rd
-      // would clobber the multiplicand. Copy the aliased operand first.
-      let actual_rn = if rd == rn {
-        OrrVec(temp1, rn).emit(self)
-        temp1
-      } else {
-        rn
-      }
-      let actual_rm = if rd == rm {
-        OrrVec(temp2, rm).emit(self)
-        temp2
-      } else {
-        rm
-      }
-      // Copy accumulator to rd, then FMLA
-      OrrVec(rd, acc).emit(self)
+      // This expands to multiple instructions. Copy multiplicands into reserved
+      // scratch regs so we can freely overwrite `rd` with the accumulator.
+      let a = 16
+      let b = 17
+      OrrVec(a, rn).emit(self)
+      OrrVec(b, rm).emit(self)
+      OrrVec(rd, acc).emit(self) // accumulator
       if is_f32 {
-        Fmla4S(rd, actual_rn, actual_rm).emit(self)
+        Fmla4S(rd, a, b).emit(self)
       } else {
-        Fmla2D(rd, actual_rn, actual_rm).emit(self)
+        Fmla2D(rd, a, b).emit(self)
       }
     }
     SIMDFMls(is_f32) => {
       // FMLS: Vd = Vd - Vn * Vm
-      // defs[0] = result, defs[1] = temp1, defs[2] = temp2
+      // defs[0] = result
       // uses[0] = accumulator, uses[1] = v1, uses[2] = v2
       let rd = wreg_num(inst.defs[0])
-      let temp1 = wreg_num(inst.defs[1])
-      let temp2 = wreg_num(inst.defs[2])
       let acc = reg_num(inst.uses[0])
       let rn = reg_num(inst.uses[1])
       let rm = reg_num(inst.uses[2])
-      // Handle aliasing: if rd == rn or rd == rm, copying acc to rd
-      // would clobber the multiplicand. Copy the aliased operand first.
-      let actual_rn = if rd == rn {
-        OrrVec(temp1, rn).emit(self)
-        temp1
-      } else {
-        rn
-      }
-      let actual_rm = if rd == rm {
-        OrrVec(temp2, rm).emit(self)
-        temp2
-      } else {
-        rm
-      }
-      // Copy accumulator to rd, then FMLS
-      OrrVec(rd, acc).emit(self)
+      let a = 16
+      let b = 17
+      OrrVec(a, rn).emit(self)
+      OrrVec(b, rm).emit(self)
+      OrrVec(rd, acc).emit(self) // accumulator
       if is_f32 {
-        Fmls4S(rd, actual_rn, actual_rm).emit(self)
+        Fmls4S(rd, a, b).emit(self)
       } else {
-        Fmls2D(rd, actual_rn, actual_rm).emit(self)
+        Fmls2D(rd, a, b).emit(self)
       }
     }
     SIMDRelaxedDot8to16 => {
@@ -3341,10 +3328,16 @@ fn MachineCode::emit_instruction(
       let tmp = wreg_num(inst.defs[1])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
+      // Multi-instruction expansion: copy inputs into reserved scratch regs so
+      // `rd` may alias an input without clobbering it before the second SMULL.
+      let a = 16
+      let b = 17
+      OrrVec(a, rn).emit(self)
+      OrrVec(b, rm).emit(self)
       // Step 1: SMULL for lower 8 bytes - products for bytes 0-7
-      Smull8H(rd, rn, rm).emit(self)
+      Smull8H(rd, a, b).emit(self)
       // Step 2: SMULL2 for upper 8 bytes - products for bytes 8-15
-      Smull2_8H(tmp, rn, rm).emit(self)
+      Smull2_8H(tmp, a, b).emit(self)
       // Step 3: ADDP pairwise add to get final dot products
       // Result: [a0*b0+a1*b1, a2*b2+a3*b3, ..., a14*b14+a15*b15]
       Addp8H(rd, rd, tmp).emit(self)
@@ -3358,16 +3351,35 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       let acc = reg_num(inst.uses[2])
+      // Multi-instruction expansion. Protect operands that must remain available
+      // after `rd`/`tmp` are overwritten by using reserved scratch regs V16/V17.
+      let mut a = rn
+      let mut b = rm
+      let mut acc_reg = acc
+      if acc_reg == rd || acc_reg == tmp {
+        OrrVec(16, acc_reg).emit(self)
+        acc_reg = 16
+      }
+      // `rn`/`rm` are used in both SMULL and SMULL2. If `rd` aliases one of them,
+      // the first SMULL would clobber the input before SMULL2.
+      if rd == a {
+        OrrVec(17, a).emit(self)
+        a = 17
+      }
+      if rd == b && b != a {
+        OrrVec(17, b).emit(self)
+        b = 17
+      }
       // Step 1: SMULL for lower 8 bytes
-      Smull8H(rd, rn, rm).emit(self)
+      Smull8H(rd, a, b).emit(self)
       // Step 2: SMULL2 for upper 8 bytes
-      Smull2_8H(tmp, rn, rm).emit(self)
+      Smull2_8H(tmp, a, b).emit(self)
       // Step 3: ADDP pairwise to get i16x8 dot products
       Addp8H(rd, rd, tmp).emit(self)
       // Step 4: SADDLP to get i32x4 from i16x8 (another pairwise add with widening)
       Saddlp4S(rd, rd).emit(self)
       // Step 5: Add accumulator
-      Add4S(rd, rd, acc).emit(self)
+      Add4S(rd, rd, acc_reg).emit(self)
     }
   }
 }

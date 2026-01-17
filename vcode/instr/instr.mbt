@@ -797,12 +797,12 @@ pub(all) enum VCodeOpcode {
 
   // Floating-point fused multiply-add: d = a + (b * c)
   // SIMDFMla(is_f32): FMLA Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
-  // Uses: [accumulator, v1, v2], Defs: [result, temp1, temp2]
+  // Uses: [accumulator, v1, v2], Defs: [result]
   SIMDFMla(Bool)
 
   // Floating-point fused multiply-subtract: d = a - (b * c)
   // SIMDFMls(is_f32): FMLS Vd.4S/2D, Vn.4S/2D, Vm.4S/2D
-  // Uses: [accumulator, v1, v2], Defs: [result, temp1, temp2]
+  // Uses: [accumulator, v1, v2], Defs: [result]
   SIMDFMls(Bool)
 
   // Relaxed dot product i8x16 -> i16x8 (signed/unsigned hybrid)
