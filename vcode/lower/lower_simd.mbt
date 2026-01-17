@@ -246,14 +246,18 @@ fn lower_v128_binary(
         let t1 = ctx.vcode_func.new_vreg(@abi.Vector)
         let t2 = ctx.vcode_func.new_vreg(@abi.Vector)
         let t3 = ctx.vcode_func.new_vreg(@abi.Vector)
+        let t4 = ctx.vcode_func.new_vreg(@abi.Vector)
         vcode_inst.add_def({ reg: Virtual(t0) })
         vcode_inst.add_def({ reg: Virtual(t1) })
         vcode_inst.add_def({ reg: Virtual(t2) })
         vcode_inst.add_def({ reg: Virtual(t3) })
+        vcode_inst.add_def({ reg: Virtual(t4) })
       }
       SIMDRelaxedDot8to16 => {
-        let t0 = ctx.vcode_func.new_vreg(@abi.Vector)
-        vcode_inst.add_def({ reg: Virtual(t0) })
+        // Expanded into multiple AArch64 instructions in the emitter.
+        // Provide a temp vector so regalloc accounts for it.
+        let tmp = ctx.vcode_func.new_vreg(@abi.Vector)
+        vcode_inst.add_def({ reg: Virtual(tmp) })
       }
       _ => ()
     }
@@ -645,7 +649,7 @@ fn lower_v128_fma(
     }
     let vcode_inst = @instr.VCodeInst::new(opcode)
     vcode_inst.add_def({ reg: Virtual(dst) })
-    // Allocate 2 temp vectors for handling aliasing (rd == rn or rd == rm)
+    // The emitter may need temps when rd aliases one of the multiplicands.
     let temp1 = ctx.vcode_func.new_vreg(@abi.Vector)
     let temp2 = ctx.vcode_func.new_vreg(@abi.Vector)
     vcode_inst.add_def({ reg: Virtual(temp1) })

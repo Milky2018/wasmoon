@@ -2504,41 +2504,45 @@ fn MachineCode::emit_instruction(
         D64 => {
           // i64x2.mul emulation: NEON doesn't have MUL.2D
           // a*b = (a_hi*b_lo + a_lo*b_hi) << 32 + a_lo*b_lo
-          // Temps allocated by regalloc: defs[1..4]
-          let t0 = wreg_num(inst.defs[1]) // a_lo (then reused)
-          let t1 = wreg_num(inst.defs[2]) // b_lo (then reused)
-          let t2 = wreg_num(inst.defs[3]) // high halves scratch
-          let t3 = wreg_num(inst.defs[4]) // cross sum
+          // IMPORTANT: the result register can alias an input register.
+          // Use temporaries for all intermediates and only write `rd` at the end.
+          //
+          // Temps allocated by regalloc: defs[1..5]
+          let t0 = wreg_num(inst.defs[1]) // a_lo (2s)
+          let t1 = wreg_num(inst.defs[2]) // b_lo (2s), then reused as cross2 (2d)
+          let t2 = wreg_num(inst.defs[3]) // low product (2d)
+          let t3 = wreg_num(inst.defs[4]) // scratch for hi halves (2s)
+          let t4 = wreg_num(inst.defs[5]) // cross sum (2d)
 
           // 1. Extract low 32-bit halves
           Xtn2S(t0, rn).emit(self) // t0 = [a0_lo, a1_lo]
           Xtn2S(t1, rm).emit(self) // t1 = [b0_lo, b1_lo]
 
-          // 2. Calculate a_lo * b_lo into rd
-          Umull2D(rd, t0, t1).emit(self)
+          // 2. low = a_lo * b_lo
+          Umull2D(t2, t0, t1).emit(self)
 
-          // 3. Extract high 32-bit halves from a into t2
-          Rev64_4S(t2, rn).emit(self)
-          Xtn2S(t2, t2).emit(self) // t2 = [a0_hi, a1_hi]
+          // 3. a_hi = high 32-bit halves of a
+          Rev64_4S(t3, rn).emit(self)
+          Xtn2S(t3, t3).emit(self) // t3 = [a0_hi, a1_hi]
 
-          // 4. Calculate a_hi * b_lo into t3
-          Umull2D(t3, t2, t1).emit(self)
+          // 4. cross1 = a_hi * b_lo
+          Umull2D(t4, t3, t1).emit(self)
 
-          // 5. Extract high 32-bit halves from b into t2 (reuse)
-          Rev64_4S(t2, rm).emit(self)
-          Xtn2S(t2, t2).emit(self) // t2 = [b0_hi, b1_hi]
+          // 5. b_hi = high 32-bit halves of b
+          Rev64_4S(t3, rm).emit(self)
+          Xtn2S(t3, t3).emit(self) // t3 = [b0_hi, b1_hi]
 
-          // 6. Calculate a_lo * b_hi into t1 (reuse)
-          Umull2D(t1, t0, t2).emit(self)
+          // 6. cross2 = a_lo * b_hi (reuse t1 as a 2d dest)
+          Umull2D(t1, t0, t3).emit(self)
 
-          // 7. Add cross products (t3 += t1)
-          Add2D(t3, t3, t1).emit(self)
+          // 7. cross = cross1 + cross2
+          Add2D(t4, t4, t1).emit(self)
 
           // 8. Shift cross products left by 32
-          ShlImm2D(t3, t3, 32).emit(self)
+          ShlImm2D(t4, t4, 32).emit(self)
 
           // 9. Add to low*low to get final result
-          Add2D(rd, rd, t3).emit(self)
+          Add2D(rd, t2, t4).emit(self)
         }
       }
     }

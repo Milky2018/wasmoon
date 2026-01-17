@@ -916,7 +916,6 @@ fn BacktrackingAllocator::force_spill_bundle(
 ///|
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
-  liveness : LivenessResult,
 ) -> Unit {
   let max_int_params = @abi.MAX_REG_PARAMS // 8
   let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
@@ -951,13 +950,16 @@ fn BacktrackingAllocator::preassign_params(
     // Skip stack params
     guard preg_opt is Some(preg) else { continue }
 
-    // Check if param crosses a call - if so, allocate to callee-saved instead
-    let interval = liveness.intervals.get(param.id)
-    if interval is Some(iv) && iv.crosses_call {
-      let range = self.ranges.get_by_vreg(param.id)
-      if range is Some(lr) && lr.bundle_id >= 0 {
-        let bundle = self.bundles.bundles[lr.bundle_id]
-
+    // Find the LiveRange for this param and get its bundle
+    let range = self.ranges.get_by_vreg(param.id)
+    if range is Some(lr) && lr.bundle_id >= 0 {
+      let bundle = self.bundles.bundles[lr.bundle_id]
+      // If the param's bundle crosses a call (even if the param itself doesn't),
+      // the bundle must not be pinned to a caller-saved arg register.
+      //
+      // This can happen when block params / copies coalesce with function params
+      // and the later ranges in the same bundle are live across a call.
+      if bundle.crosses_call(self.ranges) {
         // For 128-bit SIMD vectors, AAPCS64 only guarantees preserving the low
         // 64 bits of V8-V15 across calls. To keep semantics correct, force spill.
         if !is_int && param.class is @abi.Vector {
@@ -966,9 +968,8 @@ fn BacktrackingAllocator::preassign_params(
           continue
         }
 
-        // For params that cross calls, allocate to callee-saved registers.
-        // This is critical because we can't spill params without generating
-        // a store in the prologue.
+        // Allocate to callee-saved registers so any range in the bundle can
+        // survive calls safely.
         let callee_saved_preg = if is_int {
           if callee_saved_int_idx < self.callee_saved_int.length() {
             let p = self.callee_saved_int[callee_saved_int_idx]
@@ -988,16 +989,10 @@ fn BacktrackingAllocator::preassign_params(
           self.record_allocation(bundle, cs_preg)
           bundle.is_pinned = true // Prevent eviction of param bundles
         }
-        // If no callee-saved available, let normal allocation handle it.
+        continue
       }
-      continue
-    }
 
-    // Find the LiveRange for this param and get its bundle
-    let range = self.ranges.get_by_vreg(param.id)
-    if range is Some(lr) && lr.bundle_id >= 0 {
-      let bundle = self.bundles.bundles[lr.bundle_id]
-      // Use record_allocation to properly track occupancy
+      // Normal case: pin param bundle to its incoming ABI register.
       self.record_allocation(bundle, preg)
     }
   }
@@ -1026,7 +1021,7 @@ pub fn allocate_backtracking(
   )
 
   // Pre-assign function parameters to ABI registers (before main allocation)
-  allocator.preassign_params(liveness)
+  allocator.preassign_params()
   allocator.allocate()
 
   // Generate result
