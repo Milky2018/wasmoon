@@ -331,11 +331,10 @@ pub(all) enum VCodeOpcode {
   StackLoad(Int)
   StackStore(Int)
   // Stack parameter load (for params that overflow registers)
-  // LoadStackParam(param_idx, class, int_overflow_count):
-  //   param_idx >= 0: int overflow param at index param_idx
-  //   param_idx < 0: float overflow param at index (-param_idx - 1), after int_overflow_count int params
-  // Stack layout: [int_overflow..., float_overflow...]
-  LoadStackParam(Int, @abi.RegClass, Int)
+  // LoadStackParam(offset, class):
+  //   offset: byte offset from entry SP (start of overflow area)
+  // Stack layout: [int_overflow..., float_overflow...] with V128 aligned to 16.
+  LoadStackParam(Int, @abi.RegClass)
   // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
   // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
   // NOTE: GlobalGet, GlobalSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
@@ -935,8 +934,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
-    LoadStackParam(param_idx, class, _) =>
-      "load_stack_param \{param_idx} (\{class})"
+    LoadStackParam(offset, class) => "load_stack_param +\{offset} (\{class})"
     // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
     // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"

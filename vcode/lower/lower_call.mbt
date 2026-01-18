@@ -1,6 +1,48 @@
 // ============ Wasm Call Lowering (Standard) ============
 
 ///|
+/// Emit StoreToStack for overflow arguments according to the Wasm v3 ABI.
+/// This also updates `max_outgoing_args_size` so the prologue reserves enough
+/// space and SP doesn't move at call sites.
+fn emit_wasm_overflow_arg_stores(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  int_args : Array[(@abi.VReg, @abi.RegClass)],
+  float_args : Array[(@abi.VReg, @abi.RegClass)],
+) -> Unit {
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6 (X2-X7)
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
+  let int_overflow = if int_args.length() > max_int_reg_args {
+    int_args.length() - max_int_reg_args
+  } else {
+    0
+  }
+  let float_overflow_classes : Array[@abi.RegClass] = []
+  for i in max_float_reg_args..<float_args.length() {
+    let (_, class) = float_args[i]
+    float_overflow_classes.push(class)
+  }
+  let (int_offsets, float_offsets, total_bytes) = @abi.wasm_layout_overflow_stack(
+    int_overflow, float_overflow_classes,
+  )
+  if total_bytes > 0 {
+    ctx.vcode_func.update_max_outgoing_args_size(total_bytes)
+  }
+  for i in 0..<int_overflow {
+    let (vreg, _) = int_args[max_int_reg_args + i]
+    let store = @instr.VCodeInst::new(StoreToStack(int_offsets[i]))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+  for i in 0..<float_offsets.length() {
+    let (vreg, _) = float_args[max_float_reg_args + i]
+    let store = @instr.VCodeInst::new(StoreToStack(float_offsets[i]))
+    store.add_use(Virtual(vreg))
+    block.add_inst(store)
+  }
+}
+
+///|
 /// Lower a Wasm function call using Standard approach.
 /// All argument placement is done in lowering via FixedReg constraints.
 /// The emit phase just emits BLR X17.
@@ -33,45 +75,8 @@ fn lower_wasm_call(
     }
   }
 
-  // Calculate overflow args
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6 (X2-X7)
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
-  let int_overflow = if int_args.length() > max_int_reg_args {
-    int_args.length() - max_int_reg_args
-  } else {
-    0
-  }
-  let float_overflow = if float_args.length() > max_float_reg_args {
-    float_args.length() - max_float_reg_args
-  } else {
-    0
-  }
-  let total_overflow = int_overflow + float_overflow
-
-  // Generate StoreToStack for overflow arguments
-  // These use the pre-allocated outgoing args area (offset from SP)
-  for i in max_int_reg_args..<int_args.length() {
-    let (vreg, _) = int_args[i]
-    let stack_idx = i - max_int_reg_args
-    let offset = stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
-  for i in max_float_reg_args..<float_args.length() {
-    let (vreg, _) = float_args[i]
-    let stack_idx = i - max_float_reg_args
-    let offset = int_overflow * 8 + stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
-
-  // Track outgoing args size for frame layout
-  if total_overflow > 0 {
-    let overflow_bytes = total_overflow * 8
-    ctx.vcode_func.update_max_outgoing_args_size(overflow_bytes)
-  }
+  // Store overflow args to stack (pre-allocated outgoing args area at SP).
+  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
 
   // Create CallPtr instruction with Wasm calling convention
   let num_args = args.length()
@@ -107,6 +112,7 @@ fn lower_wasm_call(
   })
 
   // Register int args: X2-X7
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -122,6 +128,7 @@ fn lower_wasm_call(
   }
 
   // Register float args: V0-V7
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -221,31 +228,7 @@ fn lower_return_call(
   }
 
   // Calculate overflow args count (user args, not including vmctx)
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6 (X2-X7)
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
-  let int_overflow = if int_args.length() > max_int_reg_args {
-    int_args.length() - max_int_reg_args
-  } else {
-    0
-  }
-
-  // Generate StoreToStack instructions for overflow arguments
-  for i in max_int_reg_args..<int_args.length() {
-    let (vreg, _) = int_args[i]
-    let stack_idx = i - max_int_reg_args
-    let offset = stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
-  for i in max_float_reg_args..<float_args.length() {
-    let (vreg, _) = float_args[i]
-    let stack_idx = i - max_float_reg_args
-    let offset = int_overflow * 8 + stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
+  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
 
   // Create ReturnCallIndirect instruction with fixed register constraints
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
@@ -267,6 +250,7 @@ fn lower_return_call(
   })
 
   // Register int args: X2-X7
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -282,6 +266,7 @@ fn lower_return_call(
   }
 
   // Register float args: V0-V7
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -414,33 +399,7 @@ fn lower_return_call_indirect(
       @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
-
-  // Calculate overflow
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
-  let int_overflow = if int_args.length() > max_int_reg_args {
-    int_args.length() - max_int_reg_args
-  } else {
-    0
-  }
-
-  // Generate StoreToStack for overflow arguments
-  for i in max_int_reg_args..<int_args.length() {
-    let (vreg, _) = int_args[i]
-    let stack_idx = i - max_int_reg_args
-    let offset = stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
-  for i in max_float_reg_args..<float_args.length() {
-    let (vreg, _) = float_args[i]
-    let stack_idx = i - max_float_reg_args
-    let offset = int_overflow * 8 + stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
+  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
 
   // Create ReturnCallIndirect with fixed constraints
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
@@ -462,6 +421,7 @@ fn lower_return_call_indirect(
   })
 
   // Register int args: X2-X7
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -477,6 +437,7 @@ fn lower_return_call_indirect(
   }
 
   // Register float args: V0-V7
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -542,33 +503,7 @@ fn lower_return_call_ref(
       @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
-
-  // Calculate overflow
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
-  let int_overflow = if int_args.length() > max_int_reg_args {
-    int_args.length() - max_int_reg_args
-  } else {
-    0
-  }
-
-  // Generate StoreToStack for overflow arguments
-  for i in max_int_reg_args..<int_args.length() {
-    let (vreg, _) = int_args[i]
-    let stack_idx = i - max_int_reg_args
-    let offset = stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
-  for i in max_float_reg_args..<float_args.length() {
-    let (vreg, _) = float_args[i]
-    let stack_idx = i - max_float_reg_args
-    let offset = int_overflow * 8 + stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
+  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
 
   // Create ReturnCallIndirect with fixed constraints
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
@@ -590,6 +525,7 @@ fn lower_return_call_ref(
   })
 
   // Register int args: X2-X7
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -605,6 +541,7 @@ fn lower_return_call_ref(
   }
 
   // Register float args: V0-V7
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -856,47 +793,7 @@ fn lower_call_ptr(
       @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
-
-  // Calculate overflow args count
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6 (X2-X7)
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
-  let int_overflow = if int_args.length() > max_int_reg_args {
-    int_args.length() - max_int_reg_args
-  } else {
-    0
-  }
-  let float_overflow = if float_args.length() > max_float_reg_args {
-    float_args.length() - max_float_reg_args
-  } else {
-    0
-  }
-  let stack_arg_space = (int_overflow + float_overflow) * 8
-  // Align to 16 bytes
-  let aligned_stack_space = (stack_arg_space + 15) / 16 * 16
-
-  // Update max_outgoing_args_size (Standard: pre-allocate in prologue)
-  // This ensures SP doesn't move during call sequences, avoiding spill slot issues
-  ctx.vcode_func.update_max_outgoing_args_size(aligned_stack_space)
-
-  // Step 1: Store overflow int args to stack (space is pre-allocated in prologue)
-  for i in max_int_reg_args..<int_args.length() {
-    let (vreg, _) = int_args[i]
-    let stack_idx = i - max_int_reg_args
-    let offset = stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
-
-  // Step 2: Store overflow float args to stack (after int overflow args)
-  for i in max_float_reg_args..<float_args.length() {
-    let (vreg, _) = float_args[i]
-    let stack_idx = i - max_float_reg_args
-    let offset = int_overflow * 8 + stack_idx * 8
-    let store = @instr.VCodeInst::new(StoreToStack(offset))
-    store.add_use(Virtual(vreg))
-    block.add_inst(store)
-  }
+  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
 
   // Step 3: Create CallPtr instruction with FixedReg constraints (Wasm calling convention)
   let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
@@ -920,6 +817,7 @@ fn lower_call_ptr(
   })
 
   // Register int args: X2-X7
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -935,6 +833,7 @@ fn lower_call_ptr(
   }
 
   // Register float args: V0-V7
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {

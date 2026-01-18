@@ -116,13 +116,10 @@ fn LoweringContext::get_vreg_for_use(
   block : @block.VCodeBlock,
 ) -> @abi.VReg {
   // First check if it's a stack parameter
-  if self.stack_param_map.get(value.id) is Some((param_idx, class)) {
+  if self.stack_param_map.get(value.id) is Some((offset, class)) {
     // Generate LoadStackParam instruction
-    // Pass int_stack_params so emit can calculate correct offset for float overflow params
     let result = self.vcode_func.new_vreg(class)
-    let inst = @instr.VCodeInst::new(
-      LoadStackParam(param_idx, class, self.vcode_func.int_stack_params),
-    )
+    let inst = @instr.VCodeInst::new(LoadStackParam(offset, class))
     inst.add_def({ reg: Virtual(result) })
     block.add_inst(inst)
     result
@@ -342,8 +339,9 @@ pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
   let max_float_reg_params = @abi.MAX_FLOAT_REG_PARAMS // V0-V7
   let mut int_reg_count = 0
   let mut float_reg_count = 0
-  let mut int_stack_count = 0
-  let mut float_stack_count = 0
+  let int_stack_values : Array[@ir.Value] = []
+  let float_stack_values : Array[(@ir.Value, @abi.RegClass)] = []
+  let float_stack_classes : Array[@abi.RegClass] = []
   for param in ir_func.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
@@ -355,9 +353,8 @@ pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
           ctx.value_map.set(value.id, vreg)
           int_reg_count = int_reg_count + 1
         } else {
-          // Stack parameter: int overflow comes first in stack layout
-          ctx.stack_param_map.set(value.id, (int_stack_count, class))
-          int_stack_count = int_stack_count + 1
+          // Stack parameter: laid out in overflow area (entry SP).
+          int_stack_values.push(value)
         }
       Float32 | Float64 | Vector =>
         // Vector uses same V0-V7 registers as floats on AArch64
@@ -367,17 +364,23 @@ pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
           ctx.value_map.set(value.id, vreg)
           float_reg_count = float_reg_count + 1
         } else {
-          // Stack parameter: float overflow comes after int overflow
-          // We encode this as negative index to distinguish from int
-          // Actual offset = int_overflow_count * 8 + float_idx * 8
-          // We'll compute this in emit using special encoding
-          ctx.stack_param_map.set(value.id, (-(float_stack_count + 1), class)) // negative = float stack param
-          float_stack_count = float_stack_count + 1
+          float_stack_values.push((value, class))
+          float_stack_classes.push(class)
         }
     }
   }
-  // Store int overflow count for emit to calculate correct offsets
-  ctx.vcode_func.set_int_stack_params(int_stack_count)
+  let (int_offsets, float_offsets, _) = @abi.wasm_layout_overflow_stack(
+    int_stack_values.length(),
+    float_stack_classes,
+  )
+  for i in 0..<int_stack_values.length() {
+    ctx.stack_param_map.set(int_stack_values[i].id, (int_offsets[i], Int))
+  }
+  for i in 0..<float_stack_values.length() {
+    let (value, class) = float_stack_values[i]
+    ctx.stack_param_map.set(value.id, (float_offsets[i], class))
+  }
+  ctx.vcode_func.set_int_stack_params(int_stack_values.length())
 
   // Phase 3: Lower result types
   for ty in ir_func.results {

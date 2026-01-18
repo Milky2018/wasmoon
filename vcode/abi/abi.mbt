@@ -167,6 +167,62 @@ pub const SCRATCH_REG_1 : Int = 16
 /// Secondary scratch register (X17/IP1)
 pub const SCRATCH_REG_2 : Int = 17
 
+// ============ ABI Helpers ============
+
+///|
+/// Align value up to the next multiple of `align` (which must be a power of two).
+pub fn align_up(value : Int, align : Int) -> Int {
+  if align <= 1 {
+    value
+  } else {
+    (value + (align - 1)) / align * align
+  }
+}
+
+///|
+/// Stack slot size (bytes) for the Wasm v3 calling convention overflow area.
+/// We keep 8-byte slots for scalars for simplicity; V128 occupies 16 bytes.
+pub fn wasm_stack_slot_size(class : RegClass) -> Int {
+  match class {
+    Vector => 16
+    _ => 8
+  }
+}
+
+///|
+/// Stack slot alignment (bytes) for the Wasm v3 calling convention overflow area.
+pub fn wasm_stack_slot_align(class : RegClass) -> Int {
+  match class {
+    Vector => 16
+    _ => 8
+  }
+}
+
+///|
+/// Compute overflow argument stack layout for the Wasm v3 calling convention.
+/// Layout: [int_overflow...][float_overflow...] with V128 aligned to 16.
+///
+/// Returned offsets are relative to the start of the overflow area.
+/// The total size is 16-byte aligned for stack frame allocation.
+pub fn wasm_layout_overflow_stack(
+  int_overflow_count : Int,
+  float_overflow_classes : Array[RegClass],
+) -> (Array[Int], Array[Int], Int) {
+  let int_offsets : Array[Int] = []
+  for i in 0..<int_overflow_count {
+    int_offsets.push(i * 8)
+  }
+  let float_offsets : Array[Int] = []
+  let mut cur = int_overflow_count * 8
+  for class in float_overflow_classes {
+    cur = align_up(cur, wasm_stack_slot_align(class))
+    float_offsets.push(cur)
+    cur = cur + wasm_stack_slot_size(class)
+  }
+  let total = align_up(cur, 16)
+  (int_offsets, float_offsets, total)
+}
+
 // ============ Register Usage in AAPCS64 ============
 
 ///|

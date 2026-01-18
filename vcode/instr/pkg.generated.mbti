@@ -306,7 +306,7 @@ pub(all) enum VCodeOpcode {
   TypeCheckIndirect(Int)
   StackLoad(Int)
   StackStore(Int)
-  LoadStackParam(Int, @abi.RegClass, Int)
+  LoadStackParam(Int, @abi.RegClass)
   LoadMemBase(Int)
   LoadPtr(MemType, Int)
   StorePtr(MemType, Int)
