@@ -206,9 +206,9 @@ pub fn EGraphBuilder::add_value(
 /// Run optimization on the e-graph
 /// With eager optimization, this only needs to rebuild to restore invariants
 pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
-  // Full (bounded) equality saturation over the block-local e-graph.
-  // Keeps iteration count low to avoid compile-time blowups.
-  self.egraph.saturate_indexed(self.ruleset, 5) |> ignore
+  // One-pass, directed simplification (Cranelift-style aegraph).
+  // Additional improvement opportunities are handled by later passes.
+  self.egraph.saturate_indexed(self.ruleset, 1) |> ignore
 }
 
 ///|

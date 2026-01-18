@@ -242,7 +242,7 @@ fn rule_ushr_shl_mask() -> RewriteRule {
                     let mask = -1L << k.to_int()
                     let mask_const = eg.add_const(mask)
                     let new_node = eg.add_and(inner.children[0], mask_const)
-                    let new_id = eg.merge(class_id, new_node)
+                    let new_id = eg.subsume(class_id, new_node)
                     changed = new_id != class_id || changed
                   }
                 }
@@ -273,7 +273,7 @@ fn rule_shl_ushr_mask() -> RewriteRule {
                     let mask = ((-1L).reinterpret_as_uint64() >> k.to_int()).reinterpret_as_int64()
                     let mask_const = eg.add_const(mask)
                     let new_node = eg.add_and(inner.children[0], mask_const)
-                    let new_id = eg.merge(class_id, new_node)
+                    let new_id = eg.subsume(class_id, new_node)
                     changed = new_id != class_id || changed
                   }
                 }

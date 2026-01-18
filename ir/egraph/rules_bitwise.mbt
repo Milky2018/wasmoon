@@ -275,7 +275,7 @@ fn rule_demorgan_or() -> RewriteRule {
               let not_x = eg.add_bnot(inner.children[0])
               let not_y = eg.add_bnot(inner.children[1])
               let result = eg.add_and(not_x, not_y)
-              let new_id = eg.merge(class_id, result)
+              let new_id = eg.subsume(class_id, result)
               changed = new_id != class_id || changed
             }
           }
@@ -299,7 +299,7 @@ fn rule_demorgan_and() -> RewriteRule {
               let not_x = eg.add_bnot(inner.children[0])
               let not_y = eg.add_bnot(inner.children[1])
               let result = eg.add_or(not_x, not_y)
-              let new_id = eg.merge(class_id, result)
+              let new_id = eg.subsume(class_id, result)
               changed = new_id != class_id || changed
             }
           }

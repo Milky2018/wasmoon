@@ -95,6 +95,9 @@ fn build_indexed_ruleset() -> IndexedRuleSet {
   rs.add_rule(rule_shift_reduce_amount(), [TShl, TUshr, TSshr, TRotl, TRotr])
   // Strength reduction
   rs.add_rule(rule_mul_pow2(), [TMul])
+  // Constant reassociation should run before lowering mul to shift/add forms.
+  rs.add_rule(rule_reassoc_mul_const(), [TMul])
+  rs.add_rule(rule_mul_shl_const(), [TMul])
   rs.add_rule(rule_double(), [TAdd])
   rs.add_rule(rule_udiv_pow2(), [TUdiv])
   rs.add_rule(rule_urem_pow2(), [TUrem])
@@ -131,7 +134,6 @@ fn build_indexed_ruleset() -> IndexedRuleSet {
   rs.add_rule(rule_const_fold(), [])
   // Reassociation
   rs.add_rule(rule_reassoc_add_const(), [TAdd])
-  rs.add_rule(rule_reassoc_mul_const(), [TMul])
   rs.add_rule(rule_reassoc_sub_const(), [TSub])
   rs.add_rule(rule_reassoc_or_const(), [TOr])
   rs.add_rule(rule_reassoc_and_const(), [TAnd])
