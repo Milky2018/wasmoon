@@ -793,6 +793,11 @@ pub struct OptResult {
 pub fn OptResult::mark_changed(Self) -> Unit
 pub fn OptResult::new() -> Self
 
+type RepKey
+pub impl Eq for RepKey
+pub impl Hash for RepKey
+pub impl Show for RepKey
+
 pub enum Terminator {
   Jump(Int, Array[Value])
   Brz(Value, Int, Int)

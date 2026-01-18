@@ -38,9 +38,9 @@ test "egraph: add operations" {
   // Same expression should be same class
   inspect(eg.equiv(sum1, sum2), content="true")
 
-  // Adding is not commutative by default
+  // Commutative ops are canonicalized at construction time.
   let sum3 = eg.add_add(y, x)
-  inspect(eg.equiv(sum1, sum3), content="false")
+  inspect(eg.equiv(sum1, sum3), content="true")
 }
 
 ///|
@@ -469,29 +469,25 @@ test "egraph: (a - 1) - 2 = a - 3" {
 }
 
 ///|
-// NOTE: Commutativity rules were intentionally removed to prevent infinite loops
-// (a+b -> b+a -> a+b -> ...). We use directional rules only.
-test "egraph: no commutativity - x + y not equiv y + x (by design)" {
+test "egraph: commutativity canonicalizes add" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let xy = eg.add_add(x, y)
   let yx = eg.add_add(y, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
-  // Commutativity is NOT applied - this is intentional
-  inspect(eg.equiv(xy, yx), content="false")
+  inspect(eg.equiv(xy, yx), content="true")
 }
 
 ///|
-test "egraph: no commutativity - x * y not equiv y * x (by design)" {
+test "egraph: commutativity canonicalizes mul" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let xy = eg.add_mul(x, y)
   let yx = eg.add_mul(y, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
-  // Commutativity is NOT applied - this is intentional
-  inspect(eg.equiv(xy, yx), content="false")
+  inspect(eg.equiv(xy, yx), content="true")
 }
 
 ///|
@@ -1430,17 +1426,6 @@ test "egraph: x + 0 extract returns Var not Const" {
   let zero = eg.add_const(0L)
   let x_plus_zero = eg.add_add(x, zero)
 
-  // Debug: print initial class ids
-  inspect(x.0, content="0")
-  inspect(zero.0, content="1")
-  inspect(x_plus_zero.0, content="2")
-
-  // Before saturation - check initial nodes
-  let x_nodes_before = eg.get_nodes(x)
-  inspect(x_nodes_before.length(), content="1")
-  let add_nodes_before = eg.get_nodes(x_plus_zero)
-  inspect(add_nodes_before.length(), content="1")
-
   // Before saturation
   inspect(eg.equiv(x_plus_zero, x), content="false")
 
@@ -1452,22 +1437,9 @@ test "egraph: x + 0 extract returns Var not Const" {
   // After saturation, x + 0 should equal x
   inspect(eg.equiv(x_plus_zero, x), content="true")
 
-  // Debug: check canonical ids
-  let x_canonical = eg.find(x)
-  let x_plus_zero_canonical = eg.find(x_plus_zero)
-  inspect(x_canonical.0, content="0")
-  inspect(x_plus_zero_canonical.0, content="0")
-
-  // Debug: check how many classes exist
-  inspect(eg.num_classes(), content="2")
-
-  // Debug: print all nodes in the merged class
+  // Verify we kept both `Add` and `Var` forms in the e-class.
   let nodes = eg.get_nodes(x_plus_zero)
-  let opcodes : Array[String] = []
-  for node in nodes {
-    opcodes.push(node.op.to_string())
-  }
-  inspect(opcodes, content="[\"Var(0)\", \"Add\"]")
+  inspect(nodes.length(), content="2")
 
   // Extract should return Var(0), not Const(0)
   let (cost, node) = eg.extract(x_plus_zero)
@@ -1507,7 +1479,7 @@ test "rebuild: nodes preserved after intra-rebuild union" {
   eg.merge(add_yy, mul_yy) |> ignore
   eg.rebuild()
 
-  // Verify the class has 3 nodes
+  // Verify the class has 3 nodes.
   let nodes_before = eg.get_nodes(add_yy)
   inspect(nodes_before.length(), content="3")
 

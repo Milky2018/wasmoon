@@ -45,8 +45,6 @@ pub fn EGraph::add_bswap(Self, EClassId) -> EClassId
 pub fn EGraph::add_clz(Self, EClassId) -> EClassId
 pub fn EGraph::add_const(Self, Int64) -> EClassId
 pub fn EGraph::add_ctz(Self, EClassId) -> EClassId
-pub fn EGraph::add_eager(Self, ENode, IndexedRuleSet) -> EClassId
-pub fn EGraph::add_eager_typed(Self, ENode, Int, IndexedRuleSet) -> EClassId
 pub fn EGraph::add_eq(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_fabs(Self, EClassId) -> EClassId
 pub fn EGraph::add_fadd(Self, EClassId, EClassId) -> EClassId
@@ -104,13 +102,14 @@ pub fn EGraph::get_fconst(Self, EClassId) -> UInt64?
 pub fn EGraph::get_nodes(Self, EClassId) -> Array[ENode]
 pub fn EGraph::is_marked_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::is_rematerializable(Self, EClassId) -> Bool
-pub fn EGraph::mark_rematerializable(Self, EClassId) -> Unit
+pub fn EGraph::mark_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::new() -> Self
 pub fn EGraph::num_classes(Self) -> Int
 pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
 pub fn EGraph::remat_cost_bonus(Self, EClassId) -> Int
+pub fn EGraph::rewrite_to_fixpoint(Self, IndexedRuleSet) -> Unit
 pub fn EGraph::saturate(Self, Array[RewriteRule], Int) -> Int
 pub fn EGraph::saturate_indexed(Self, IndexedRuleSet, Int) -> Int
 pub fn EGraph::set_type(Self, EClassId, Int) -> Unit

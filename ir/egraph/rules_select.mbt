@@ -225,7 +225,7 @@ fn rule_add_select_const() -> RewriteRule {
                       op: Select,
                       children: [sel.children[0], x_plus_z, y_plus_z],
                     })
-                    let new_id = eg.merge(class_id, new_select)
+                    let new_id = eg.subsume(class_id, new_select)
                     changed = new_id != class_id || changed
                   }
                 }
@@ -244,7 +244,7 @@ fn rule_add_select_const() -> RewriteRule {
                       op: Select,
                       children: [sel.children[0], x_plus_z, y_plus_z],
                     })
-                    let new_id = eg.merge(class_id, new_select)
+                    let new_id = eg.subsume(class_id, new_select)
                     changed = new_id != class_id || changed
                   }
                 }

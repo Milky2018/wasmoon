@@ -9,13 +9,22 @@ struct EGraphBuilder {
   egraph : @egraph.EGraph
   // Map from IR Value id to EClassId
   value_map : Map[Int, @egraph.EClassId]
-  // Reverse map from canonical EClassId to original Value (for operand rewriting)
-  class_to_value : Map[Int, Value]
+  // Reverse map from (canonical EClassId, Type) to an in-scope IR Value (for operand rewriting)
+  class_to_value : Map[RepKey, Value]
   // Map from IR Value id to its defining instruction
   def_map : Map[Int, Inst]
   // Ruleset for eager optimization
   ruleset : @egraph.IndexedRuleSet
 }
+
+///|
+/// Key used for mapping an e-class to an in-scope IR value of a specific type.
+/// Note: an e-class may contain values of multiple IR types (e.g., shared constants),
+/// so the Type must be part of the key to avoid producing ill-typed IR.
+struct RepKey {
+  class_id : Int
+  ty : Type
+} derive(Eq, Hash, Show)
 
 ///|
 pub fn EGraphBuilder::new() -> EGraphBuilder {
@@ -183,22 +192,13 @@ pub fn EGraphBuilder::add_value(
               for operand in inst.operands {
                 children.push(self.add_value(operand))
               }
-              // Add the node with eager optimization and type info
-              self.egraph.add_eager_typed(
-                { op: eop, children },
-                bits,
-                self.ruleset,
-              )
+              // Add the node with type info; rewriting happens in a later saturation step.
+              self.egraph.add_typed({ op: eop, children }, bits)
             }
           }
       }
   }
   self.value_map.set(value.id, class_id)
-  // Update reverse map: canonical class_id -> first value that maps to it
-  let canonical = self.egraph.find(class_id)
-  if not(self.class_to_value.contains(canonical.0)) {
-    self.class_to_value.set(canonical.0, value)
-  }
   class_id
 }
 
@@ -206,7 +206,9 @@ pub fn EGraphBuilder::add_value(
 /// Run optimization on the e-graph
 /// With eager optimization, this only needs to rebuild to restore invariants
 pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
-  self.egraph.rebuild()
+  // One-pass, directed simplification (Cranelift-style aegraph).
+  // Additional improvement opportunities are handled by later passes.
+  self.egraph.saturate_indexed(self.ruleset, 1) |> ignore
 }
 
 ///|
@@ -305,8 +307,9 @@ pub fn EGraphBuilder::get_simplified_operand(
     Some(class_id) => {
       // Get the canonical class after optimization
       let canonical = self.egraph.find(class_id)
-      // Check if this class maps to a different (simpler) value
-      match self.class_to_value.get(canonical.0) {
+      // Check if this class maps to a different (simpler) value with same IR type
+      let key : RepKey = { class_id: canonical.0, ty: value.ty }
+      match self.class_to_value.get(key) {
         None => None
         Some(simplified_value) =>
           // Only return if it's different from the original
@@ -316,6 +319,47 @@ pub fn EGraphBuilder::get_simplified_operand(
             None
           }
       }
+    }
+  }
+}
+
+///|
+/// Recompute per-block representatives for operand rewriting.
+/// This ensures the representative:
+/// - has the correct IR type for the use site
+/// - is defined early enough in the block (dominates subsequent uses in the block)
+fn EGraphBuilder::recompute_representatives_for_block(
+  self : EGraphBuilder,
+  block : Block,
+) -> Unit {
+  self.class_to_value.clear()
+  fn try_add_rep(self : EGraphBuilder, value : Value) -> Unit {
+    match self.value_map.get(value.id) {
+      None => ()
+      Some(class_id) => {
+        let canonical = self.egraph.find(class_id)
+        let key : RepKey = { class_id: canonical.0, ty: value.ty }
+        if not(self.class_to_value.contains(key)) {
+          self.class_to_value.set(key, value)
+        }
+      }
+    }
+  }
+
+  // Block params dominate all instructions in the block.
+  for pair in block.params {
+    let (v, _) = pair
+    try_add_rep(self, v)
+  }
+
+  // Instruction order within the block defines dominance.
+  for inst in block.instructions {
+    for op in inst.operands {
+      try_add_rep(self, op)
+    }
+    match inst.first_result() {
+      Some(v) => try_add_rep(self, v)
+      None => ()
     }
   }
 }
@@ -347,6 +391,7 @@ pub fn optimize_function(func : Function) -> Bool {
 
     // Run saturation
     builder.optimize()
+    builder.recompute_representatives_for_block(block)
 
     // Apply optimizations: constant folding and operand rewriting
     for inst in block.instructions {
