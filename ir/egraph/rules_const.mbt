@@ -249,7 +249,7 @@ fn rule_const_fold() -> RewriteRule {
               }
               if result is Some(r) {
                 let result_node = eg.add_const(r)
-                let new_id = eg.merge(class_id, result_node)
+                let new_id = eg.subsume(class_id, result_node)
                 changed = new_id != class_id || changed
               }
             }
@@ -270,7 +270,7 @@ fn rule_const_fold() -> RewriteRule {
             }
             if result is Some(r) {
               let result_node = eg.add_const(r)
-              let new_id = eg.merge(class_id, result_node)
+              let new_id = eg.subsume(class_id, result_node)
               changed = new_id != class_id || changed
             }
           }
