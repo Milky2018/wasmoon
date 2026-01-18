@@ -1824,7 +1824,7 @@ fn MachineCode::emit_instruction(
         Vector => self.emit_str_q_imm(rt, 31, spill_base_offset + offset) // STR Qt, [SP, #offset]
       }
     }
-    LoadStackParam(param_idx, class, int_overflow_count) => {
+    LoadStackParam(offset, class) => {
       // Load stack parameter from stack (Standard layout)
       //
       // Stack layout from callee's perspective:
@@ -1838,21 +1838,9 @@ fn MachineCode::emit_instruction(
       // │  Outgoing args            │
       // └═══════════════════════════┘ ← current_SP
       //
-      // param_idx >= 0: int overflow at index param_idx
-      // param_idx < 0: float overflow at index (-param_idx - 1)
-      //
-      // The offset calculation:
-      // - frame_size (= total_size) gets us from current_SP to entry_SP
-      // - param_idx * 8 for the specific argument
-      // Note: total_size already includes setup_area_size, so we don't add it again
-      let stack_offset = if param_idx >= 0 {
-        // Int stack param: directly at param_idx * 8
-        frame_size + param_idx * 8
-      } else {
-        // Float stack param: after all int overflow params
-        let float_idx = -param_idx - 1
-        frame_size + int_overflow_count * 8 + float_idx * 8
-      }
+      // `offset` is the byte offset from entry_SP to the argument.
+      // entry_SP = current_SP + frame_size.
+      let stack_offset = frame_size + offset
       let rd = wreg_num(inst.defs[0])
       match class {
         Int => self.emit_ldr_imm(rd, 31, stack_offset) // LDR Xd, [SP, #offset]
@@ -1866,7 +1854,7 @@ fn MachineCode::emit_instruction(
           self.emit_ldr_imm(16, 31, stack_offset) // LDR X16, [SP, #offset]
           self.emit_fmov_x_to_d(rd, 16) // FMOV Dd, X16
         }
-        Vector => abort("SIMD JIT not implemented: vector stack param load")
+        Vector => self.emit_ldr_q_imm(rd, 31, stack_offset) // LDR Qd, [SP, #offset]
       }
     }
     LoadMemBase(memidx) => {

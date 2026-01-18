@@ -76,6 +76,8 @@ pub fn aapcs64_ret_fprs() -> Array[PReg]
 
 pub fn aapcs64_ret_gprs() -> Array[PReg]
 
+pub fn align_up(Int, Int) -> Int
+
 pub fn allocatable_callee_saved_fprs() -> Array[PReg]
 
 pub fn allocatable_callee_saved_regs() -> Array[PReg]
@@ -93,6 +95,12 @@ pub fn call_clobbered_gprs() -> Array[PReg]
 pub fn callee_saved_fprs() -> Array[PReg]
 
 pub let spill_slot_base : Int
+
+pub fn wasm_layout_overflow_stack(Int, Array[RegClass]) -> (Array[Int], Array[Int], Int)
+
+pub fn wasm_stack_slot_align(RegClass) -> Int
+
+pub fn wasm_stack_slot_size(RegClass) -> Int
 
 // Errors
 

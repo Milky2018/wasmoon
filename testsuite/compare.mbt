@@ -51,6 +51,16 @@ fn decode_i31_ref(raw : Int64) -> @types.Value {
 }
 
 ///|
+fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
+  let mut result = 0L
+  for i in 0..<8 {
+    let b = bytes[offset + i].to_int64() & 0xFFL
+    result = result | (b << (i * 8))
+  }
+  result
+}
+
+///|
 /// Compare JIT and interpreter execution results
 /// Returns (jit_result, interp_result, match)
 
@@ -449,7 +459,22 @@ pub fn run_jit(
       } else {
         @types.ValueType::I64
       }
-      jit_args.push(value_to_jit_arg_typed(arg, ty))
+      if ty is @types.ValueType::V128 {
+        match arg {
+          V128(bytes) => {
+            guard bytes.length() == 16 else {
+              return Err("Invalid V128 argument length: \{bytes.length()}")
+            }
+            let low = bytes_to_int64_le(bytes, 0)
+            let high = bytes_to_int64_le(bytes, 8)
+            jit_args.push(low)
+            jit_args.push(high)
+          }
+          _ => return Err("Expected V128 argument, got \{arg}")
+        }
+      } else {
+        jit_args.push(value_to_jit_arg_typed(arg, ty))
+      }
     }
     let raw_results = jm.call_with_context(f, jit_args)
 
