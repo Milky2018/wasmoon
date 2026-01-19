@@ -28,6 +28,9 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-latest
             tag_suffix: linux-amd64
+          - platform: darwin/arm64
+            runner: macos-14
+            tag_suffix: darwin-arm64
 
     runs-on: ${{ matrix.runner }}
 
@@ -93,7 +96,7 @@ jobs:
             "${{ steps.pkg.outputs.tarball }}:application/vnd.wasmoon.binary.layer.v1.tar+gzip"
 
   push-index:
-    name: Tag amd64 artifact
+    name: Push multi-platform index
     needs: [build-and-push]
     runs-on: ubuntu-latest
 
@@ -116,11 +119,17 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | oras login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
-      - name: Tag default (amd64)
+      - name: Create and push index
         shell: bash
+        env:
+          ORAS_EXPERIMENTAL: "true"
         run: |
           set -euxo pipefail
           repo_name="$(echo "${{ env.OCI_REPO }}" | tr '[:upper:]' '[:lower:]')"
           repo="${{ env.REGISTRY }}/${repo_name}"
           tag="${{ steps.tag.outputs.tag }}"
-          oras tag "$repo:$tag-linux-amd64" "$tag"
+          oras manifest index create \
+            --artifact-type "${{ env.ARTIFACT_TYPE }}" \
+            "$repo:$tag" \
+            "$tag-linux-amd64" \
+            "$tag-darwin-arm64"
