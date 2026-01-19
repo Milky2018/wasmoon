@@ -15,8 +15,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  # GHCR requires lowercase repository names.
-  OCI_REPO: ${{ toLower(github.repository) }}
+  OCI_REPO: ${{ github.repository }}
   ARTIFACT_TYPE: application/vnd.wasmoon.binary.v1
 
 jobs:
@@ -85,8 +84,8 @@ jobs:
           ORAS_EXPERIMENTAL: "true"
         run: |
           set -euxo pipefail
-          ref="${{ env.REGISTRY }}/${{ env.OCI_REPO }}:${{ steps.tag.outputs.tag }}-${{ matrix.tag_suffix }}"
-          oras push \
+          repo="$(echo "${{ env.OCI_REPO }}" | tr '[:upper:]' '[:lower:]')"
+          ref="${{ env.REGISTRY }}/${repo}:${{ steps.tag.outputs.tag }}-${{ matrix.tag_suffix }}"          oras push \
             --artifact-type "${{ env.ARTIFACT_TYPE }}" \
             --artifact-platform "${{ matrix.platform }}" \
             "$ref" \
@@ -120,6 +119,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          repo="${{ env.REGISTRY }}/${{ env.OCI_REPO }}"
+          repo_name="$(echo "${{ env.OCI_REPO }}" | tr '[:upper:]' '[:lower:]')"
+          repo="${{ env.REGISTRY }}/${repo_name}"
           tag="${{ steps.tag.outputs.tag }}"
           oras tag "$repo:$tag-linux-amd64" "$tag"
