@@ -2,6 +2,8 @@
 // Exception handling for JIT runtime
 // Implements WebAssembly exception handling using setjmp/longjmp
 
+#include <setjmp.h>
+
 #include "jit_internal.h"
 
 // ============ Exception Handler Management ============
