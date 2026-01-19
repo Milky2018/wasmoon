@@ -85,7 +85,8 @@ jobs:
         run: |
           set -euxo pipefail
           repo="$(echo "${{ env.OCI_REPO }}" | tr '[:upper:]' '[:lower:]')"
-          ref="${{ env.REGISTRY }}/${repo}:${{ steps.tag.outputs.tag }}-${{ matrix.tag_suffix }}"          oras push \
+          ref="${{ env.REGISTRY }}/${repo}:${{ steps.tag.outputs.tag }}-${{ matrix.tag_suffix }}"
+          oras push \
             --artifact-type "${{ env.ARTIFACT_TYPE }}" \
             --artifact-platform "${{ matrix.platform }}" \
             "$ref" \
