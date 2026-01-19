@@ -912,9 +912,511 @@ fn apply_block_transformations(
 }
 
 ///|
+/// Build CFG successors for a block
+fn get_successors(term : @instr.VCodeTerminator?) -> Array[Int] {
+  match term {
+    Some(@instr.VCodeTerminator::Jump(target, _)) => [target]
+    Some(@instr.VCodeTerminator::Branch(_, then_b, else_b)) => [then_b, else_b]
+    Some(@instr.VCodeTerminator::BranchCmp(_, _, _, _, then_b, else_b)) =>
+      [then_b, else_b]
+    Some(@instr.VCodeTerminator::BranchZero(_, _, _, then_b, else_b)) =>
+      [then_b, else_b]
+    Some(@instr.VCodeTerminator::BranchCmpImm(_, _, _, _, then_b, else_b)) =>
+      [then_b, else_b]
+    Some(@instr.VCodeTerminator::BrTable(_, targets, default)) => {
+      let out : Array[Int] = []
+      for t in targets {
+        out.push(t)
+      }
+      out.push(default)
+      out
+    }
+    _ => []
+  }
+}
+
+///|
+/// Collect vreg uses from a terminator
+fn collect_terminator_uses_simple(
+  term : @instr.VCodeTerminator,
+  used : @hashset.HashSet[Int],
+) -> Unit {
+  collect_terminator_uses(term, used)
+}
+
+///|
+/// Compute dominators for all blocks (simple iterative algorithm).
+fn compute_dominators(
+  func : @regalloc.VCodeFunction,
+) -> Array[@hashset.HashSet[Int]] {
+  let n = func.blocks.length()
+
+  // IMPORTANT: avoid `Array::make(n, [])` because it aliases the same array.
+  let preds : Array[Array[Int]] = []
+  for _ in 0..<n {
+    preds.push([])
+  }
+  for b in func.blocks {
+    let succs = get_successors(b.terminator)
+    for s in succs {
+      if s >= 0 && s < n {
+        preds[s].push(b.id)
+      }
+    }
+  }
+  let all : @hashset.HashSet[Int] = @hashset.new()
+  for i in 0..<n {
+    all.add(i)
+  }
+
+  // IMPORTANT: avoid `Array::make(n, set)` because it aliases the same set.
+  let dom : Array[@hashset.HashSet[Int]] = []
+  for i in 0..<n {
+    if i == 0 {
+      let s : @hashset.HashSet[Int] = @hashset.new()
+      s.add(0)
+      dom.push(s)
+    } else {
+      dom.push(all.copy())
+    }
+  }
+  let mut changed = true
+  while changed {
+    changed = false
+    for b in 1..<n {
+      let mut new_dom : @hashset.HashSet[Int] = @hashset.new()
+      // If block has no preds (unreachable), keep only itself.
+      if preds[b].length() == 0 {
+        new_dom.add(b)
+      } else {
+        // Start with dom of first predecessor, then intersect.
+        new_dom = dom[preds[b][0]].copy()
+        for pi in 1..<preds[b].length() {
+          let p = preds[b][pi]
+          let to_remove : Array[Int] = []
+          for x in new_dom {
+            if !dom[p].contains(x) {
+              to_remove.push(x)
+            }
+          }
+          for x in to_remove {
+            new_dom.remove(x)
+          }
+        }
+        new_dom.add(b)
+      }
+      // Compare by size + membership.
+      if new_dom.length() != dom[b].length() {
+        dom[b] = new_dom
+        changed = true
+      } else {
+        let mut same = true
+        for x in new_dom {
+          if !dom[b].contains(x) {
+            same = false
+            break
+          }
+        }
+        if !same {
+          dom[b] = new_dom
+          changed = true
+        }
+      }
+    }
+  }
+  dom
+}
+
+///|
+/// Loop-invariant code motion for simple invariants.
+///
+/// Detect natural loops via backedges (h dominates b for edge b->h). If the
+/// loop header has a unique predecessor outside the loop, treat it as a
+/// preheader and hoist:
+/// - `LoadConst` (with heuristics to avoid reg pressure)
+/// - a small set of loop-invariant `Load`/`LoadPtr` from immutable vmctx-derived data
+fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
+  let n = func.blocks.length()
+  if n == 0 {
+    return
+  }
+
+  // Build preds.
+  let preds : Array[Array[Int]] = []
+  for _ in 0..<n {
+    preds.push([])
+  }
+  for b in func.blocks {
+    let succs = get_successors(b.terminator)
+    for s in succs {
+      if s >= 0 && s < n {
+        preds[s].push(b.id)
+      }
+    }
+  }
+  let dom = compute_dominators(func)
+
+  // Identify backedges and hoist per-loop.
+  for b in func.blocks {
+    let succs = get_successors(b.terminator)
+    for h in succs {
+      if h >= 0 && h < n && dom[b.id].contains(h) {
+        // Natural loop nodes.
+        let loop_nodes : @hashset.HashSet[Int] = @hashset.new()
+        loop_nodes.add(h)
+        loop_nodes.add(b.id)
+        let work : Array[Int] = [b.id]
+        while work.length() > 0 {
+          let cur = work.pop().unwrap()
+          for p in preds[cur] {
+            if !loop_nodes.contains(p) {
+              loop_nodes.add(p)
+              if p != h {
+                work.push(p)
+              }
+            }
+          }
+        }
+
+        // Find unique outside predecessor of header = preheader.
+        let outside_preds : Array[Int] = []
+        for p in preds[h] {
+          if !loop_nodes.contains(p) {
+            outside_preds.push(p)
+          }
+        }
+        if outside_preds.length() != 1 {
+          continue
+        }
+        let preheader_id = outside_preds[0]
+
+        // Compute all vreg ids used outside loop.
+        let used_outside : @hashset.HashSet[Int] = @hashset.new()
+        for i in 0..<n {
+          if loop_nodes.contains(i) {
+            continue
+          }
+          let blk = func.blocks[i]
+          for inst in blk.insts {
+            collect_uses(inst, used_outside)
+          }
+          if blk.terminator is Some(term) {
+            collect_terminator_uses_simple(term, used_outside)
+          }
+        }
+        fn is_expensive_const(value : Int64) -> Bool {
+          // Heuristic: values outside 16-bit range usually need multiple
+          // instructions (movz+movk) to materialize.
+          value < 0L || value > 0xFFFFL
+        }
+
+        // Count vreg uses inside the loop, to avoid hoisting cheap constants that
+        // would increase live ranges/reg pressure.
+        let use_count_in_loop : Map[Int, Int] = {}
+        for i in 0..<n {
+          if !loop_nodes.contains(i) {
+            continue
+          }
+          let blk = func.blocks[i]
+          for inst in blk.insts {
+            for u in inst.uses {
+              if get_vreg_id(u) is Some(uid) {
+                let c = use_count_in_loop.get(uid).unwrap_or(0)
+                use_count_in_loop.set(uid, c + 1)
+              }
+            }
+          }
+          if blk.terminator is Some(term) {
+            let used : @hashset.HashSet[Int] = @hashset.new()
+            collect_terminator_uses_simple(term, used)
+            for uid in used {
+              let c = use_count_in_loop.get(uid).unwrap_or(0)
+              use_count_in_loop.set(uid, c + 1)
+            }
+          }
+        }
+
+        // Build set of vregs defined inside the loop.
+        let defs_in_loop : @hashset.HashSet[Int] = @hashset.new()
+        for i in 0..<n {
+          if !loop_nodes.contains(i) {
+            continue
+          }
+          let blk = func.blocks[i]
+          for inst in blk.insts {
+            for def in inst.defs {
+              if get_def_vreg_id(def) is Some(did) {
+                defs_in_loop.add(did)
+              }
+            }
+          }
+        }
+        fn is_vmctx_reg(r : @abi.Reg) -> Bool {
+          r is Physical(p) && p.index == @abi.REG_VMCTX
+        }
+
+        // Def map for virtual registers (only the simple case we care about).
+        let def_inst : Map[Int, @instr.VCodeInst] = {}
+        for blk in func.blocks {
+          for inst in blk.insts {
+            if inst.defs.length() == 1 &&
+              get_def_vreg_id(inst.defs[0]) is Some(did) {
+              def_inst.set(did, inst)
+            }
+          }
+        }
+
+        // Is this vreg an immutable pointer derived from vmctx.func_table?
+        fn is_immutable_ptr(vreg_id : Int) -> Bool {
+          match def_inst.get(vreg_id) {
+            Some(inst) =>
+              if inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) &&
+                inst.uses.length() == 1 {
+                is_vmctx_reg(inst.uses[0])
+              } else {
+                false
+              }
+            None => false
+          }
+        }
+
+        // Checks whether a load is safe to hoist.
+        fn is_hoistable_load(op : @instr.VCodeOpcode, base : @abi.Reg) -> Bool {
+          match op {
+            Load(I64, off) | LoadPtr(I64, off) =>
+              if is_vmctx_reg(base) {
+                // Only allow vmctx.func_table load at the moment.
+                off == @abi.VMCTX_FUNC_TABLE_OFFSET
+              } else if base is Virtual(v) {
+                // Allow loads from the func_table pointer.
+                is_immutable_ptr(v.id)
+              } else {
+                false
+              }
+            _ => false
+          }
+        }
+
+        // Hoist invariants from loop blocks to preheader.
+        let hoisted : Array[@instr.VCodeInst] = []
+        let hoisted_defs : @hashset.HashSet[Int] = @hashset.new()
+        for i in 0..<n {
+          if !loop_nodes.contains(i) {
+            continue
+          }
+          let blk = func.blocks[i]
+          let new_insts : Array[@instr.VCodeInst] = []
+          for inst in blk.insts {
+            // Helper: can we treat this inst as loop-invariant now?
+            fn base_is_invariant(base : @abi.Reg) -> Bool {
+              if is_vmctx_reg(base) {
+                return true
+              }
+              match base {
+                Virtual(v) =>
+                  !defs_in_loop.contains(v.id) || hoisted_defs.contains(v.id)
+                _ => false
+              }
+            }
+
+            // 1) Constants
+            match inst.opcode {
+              LoadConst(value) =>
+                if inst.defs.length() == 1 &&
+                  get_def_vreg_id(inst.defs[0]) is Some(def_id) {
+                  let use_cnt = use_count_in_loop.get(def_id).unwrap_or(0)
+                  if !used_outside.contains(def_id) &&
+                    (is_expensive_const(value) || use_cnt >= 3) {
+                    hoisted.push(inst)
+                    hoisted_defs.add(def_id)
+                    continue
+                  }
+                }
+              _ => ()
+            }
+
+            // 2) Hoistable loads from immutable regions
+            if inst.defs.length() == 1 && inst.uses.length() == 1 {
+              if get_def_vreg_id(inst.defs[0]) is Some(def_id) {
+                if !used_outside.contains(def_id) &&
+                  base_is_invariant(inst.uses[0]) &&
+                  is_hoistable_load(inst.opcode, inst.uses[0]) {
+                  hoisted.push(inst)
+                  hoisted_defs.add(def_id)
+                  continue
+                }
+              }
+            }
+            new_insts.push(inst)
+          }
+          blk.insts.clear()
+          for inst in new_insts {
+            blk.insts.push(inst)
+          }
+        }
+        if hoisted.length() > 0 {
+          let pre = func.blocks[preheader_id]
+          for inst in hoisted {
+            pre.insts.push(inst)
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Block-local CSE for immutable vmctx/func_table loads.
+///
+/// Today this is intentionally conservative:
+/// - vmctx base must be `x19`
+/// - only track the `vmctx.func_table` pointer (`VMCTX_FUNC_TABLE_OFFSET`)
+/// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from that func_table pointer
+fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
+  // Collect all vregs that are func_table pointers.
+  let func_table_ptrs : @hashset.HashSet[Int] = @hashset.new()
+  for blk in func.blocks {
+    for inst in blk.insts {
+      match inst.opcode {
+        Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
+        | LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) =>
+          if inst.defs.length() == 1 && inst.uses.length() == 1 {
+            if inst.uses[0] is Physical(p) && p.index == @abi.REG_VMCTX {
+              if get_def_vreg_id(inst.defs[0]) is Some(did) {
+                func_table_ptrs.add(did)
+              }
+            }
+          }
+        _ => ()
+      }
+    }
+  }
+  fn is_vmctx(r : @abi.Reg) -> Bool {
+    r is Physical(p) && p.index == @abi.REG_VMCTX
+  }
+
+  fn canonical_id(id : Int, copies : Map[Int, Int]) -> Int {
+    let mut cur = id
+    while copies.get(cur) is Some(next) {
+      if next == cur {
+        break
+      }
+      cur = next
+    }
+    cur
+  }
+
+  for blk in func.blocks {
+    let copies : Map[Int, Int] = {}
+    // key: "kind|base|off" -> vreg id
+    // kind = 0 for Load, 1 for LoadPtr
+    let seen : Map[String, Int] = {}
+    let new_insts : Array[@instr.VCodeInst] = []
+    for inst in blk.insts {
+      // Track simple virtual copies for canonicalization.
+      if inst.opcode is Move &&
+        inst.defs.length() == 1 &&
+        inst.uses.length() == 1 {
+        if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+          if get_vreg_id(inst.uses[0]) is Some(src) {
+            copies.set(dst, canonical_id(src, copies))
+          }
+        }
+      }
+      let mut replaced = false
+      match inst.opcode {
+        Load(I64, off) =>
+          if inst.defs.length() == 1 && inst.uses.length() == 1 {
+            let base = inst.uses[0]
+            if base is Virtual(v) {
+              let base_id = canonical_id(v.id, copies)
+              if func_table_ptrs.contains(base_id) {
+                let key = "0|" + base_id.to_string() + "|" + off.to_string()
+                if seen.get(key) is Some(prev_id) {
+                  let mv = @instr.VCodeInst::new(Move)
+                  mv.add_def(inst.defs[0])
+                  mv.add_use(Virtual({ id: prev_id, class: Int }))
+                  new_insts.push(mv)
+                  if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+                    copies.set(dst, canonical_id(prev_id, copies))
+                  }
+                  replaced = true
+                } else {
+                  seen.set(key, get_def_vreg_id(inst.defs[0]).unwrap())
+                }
+              }
+            }
+          }
+        LoadPtr(I64, off) =>
+          if inst.defs.length() == 1 && inst.uses.length() == 1 {
+            let base = inst.uses[0]
+            if base is Virtual(v) {
+              let base_id = canonical_id(v.id, copies)
+              if func_table_ptrs.contains(base_id) {
+                let key = "1|" + base_id.to_string() + "|" + off.to_string()
+                if seen.get(key) is Some(prev_id) {
+                  let mv = @instr.VCodeInst::new(Move)
+                  mv.add_def(inst.defs[0])
+                  mv.add_use(Virtual({ id: prev_id, class: Int }))
+                  new_insts.push(mv)
+                  if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+                    copies.set(dst, canonical_id(prev_id, copies))
+                  }
+                  replaced = true
+                } else {
+                  seen.set(key, get_def_vreg_id(inst.defs[0]).unwrap())
+                }
+              }
+            }
+          }
+        _ => ()
+      }
+
+      // Also CSE duplicate func_table base loads from vmctx: `load.i64 +8 x19`.
+      if !replaced {
+        match inst.opcode {
+          Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
+          | LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) =>
+            if inst.defs.length() == 1 &&
+              inst.uses.length() == 1 &&
+              is_vmctx(inst.uses[0]) {
+              let key = "ftbase"
+              if seen.get(key) is Some(prev_id) {
+                let mv = @instr.VCodeInst::new(Move)
+                mv.add_def(inst.defs[0])
+                mv.add_use(Virtual({ id: prev_id, class: Int }))
+                new_insts.push(mv)
+                if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+                  copies.set(dst, canonical_id(prev_id, copies))
+                }
+                replaced = true
+              } else {
+                seen.set(key, get_def_vreg_id(inst.defs[0]).unwrap())
+              }
+            }
+          _ => ()
+        }
+      }
+      if !replaced {
+        new_insts.push(inst)
+      }
+    }
+    blk.insts.clear()
+    for inst in new_insts {
+      blk.insts.push(inst)
+    }
+  }
+}
+
+///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
+  // Pass 0: loop-invariant code motion
+  licm_hoist_invariants(func)
+  // Pass 0.5: block-local CSE for immutable loads
+  cse_immutable_loads(func)
+
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {
     let state = PeepholeState::new()

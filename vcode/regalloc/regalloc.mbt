@@ -1959,10 +1959,13 @@ fn build_aarch64_reg_pools(
   let needs_x23_reserved = needs_extra || calls_multi
   // Cache memory0 descriptor pointer in X20 when needed.
   let needs_x20_reserved = func.uses_mem0()
+  // Cache func_table pointer in X21 when needed.
+  let needs_x21_reserved = func.uses_func_table()
 
   // Build MachineEnv (Cranelift-inspired) and derive pools.
   let env = @abi.build_aarch64_machine_env(
     reserve_mem0_desc=needs_x20_reserved,
+    reserve_func_table=needs_x21_reserved,
     reserve_x23=needs_x23_reserved,
   )
   let int_regs : Array[@abi.PReg] = []

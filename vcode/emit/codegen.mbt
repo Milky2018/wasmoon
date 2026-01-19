@@ -357,6 +357,11 @@ fn MachineCode::emit_prologue(
     if stack_frame.cache_mem0_desc {
       self.emit_ldr_imm(@abi.REG_MEM0_DESC, 19, @abi.VMCTX_MEMORY0_OFFSET)
     }
+    // Optionally cache func_table pointer in X21.
+    // This allows repeated loads of [X19 + VMCTX_FUNC_TABLE_OFFSET] to be MOVs.
+    if stack_frame.cache_func_table {
+      self.emit_ldr_imm(@abi.REG_FUNC_TABLE, 19, @abi.VMCTX_FUNC_TABLE_OFFSET)
+    }
   }
 
   // Step 6: Move arguments from ABI registers to allocated registers
@@ -446,6 +451,7 @@ pub fn emit_function(
   // has_calls is true if function makes any calls
   let has_calls = func_has_calls(func)
   let uses_mem0 = func.uses_mem0()
+  let uses_func_table = func.uses_func_table()
 
   // Check if function uses vmctx (x19)
   // A function needs vmctx if:
@@ -457,6 +463,9 @@ pub fn emit_function(
   if uses_mem0 && !clobbered_gprs.contains(@abi.REG_MEM0_DESC) {
     clobbered_gprs.push(@abi.REG_MEM0_DESC)
   }
+  if uses_func_table && !clobbered_gprs.contains(@abi.REG_FUNC_TABLE) {
+    clobbered_gprs.push(@abi.REG_FUNC_TABLE)
+  }
   let stack_frame = JITStackFrame::build(
     clobbered_gprs,
     clobbered_fprs,
@@ -465,6 +474,7 @@ pub fn emit_function(
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
     cache_mem0_desc=uses_mem0,
+    cache_func_table=uses_func_table,
     force_frame_setup~,
   )
 
@@ -673,6 +683,7 @@ pub fn emit_function(
     let mut inst_idx = 0
     while inst_idx < block.insts.length() {
       let inst = block.insts[inst_idx]
+
       // Peephole: fuse an address add into the following load/store.
       // Pattern:
       //   add addr = base + off
@@ -1218,6 +1229,16 @@ fn MachineCode::emit_instruction(
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
+      // Fast path: cached func_table pointer.
+      if stack_frame.cache_func_table &&
+        ty is I64 &&
+        rn == @abi.REG_VMCTX &&
+        offset == @abi.VMCTX_FUNC_TABLE_OFFSET {
+        if rt != @abi.REG_FUNC_TABLE {
+          self.emit_mov_reg(rt, @abi.REG_FUNC_TABLE)
+        }
+        return
+      }
       // F32 loads directly into S register (raw f32 bits preserved)
       self.emit_load(ty, rt, rn, offset)
     }
@@ -1984,30 +2005,8 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64(result_reg, func_ptr)
     }
     CallPtr(_, _, _call_conv) =>
-      // Standard call: all arguments are already in place
-      //
-      // The lower phase generates:
-      // - AdjustSP to allocate stack space for overflow args
-      // - StoreToStack for each overflow arg
-      // - CallPtr with FixedReg constraints for register args
-      // - AdjustSP to deallocate stack space
-      //
-      // The regalloc phase processes constraints and inserts moves:
-      // For Wasm calling convention:
-      // - func_ptr is constrained to X17
-      // - callee_vmctx is constrained to X0
-      // - caller_vmctx is constrained to X1
-      // - int user args are constrained to X2-X7
-      // - float user args are constrained to V0-V7
-      // - results are constrained to X0/V0 etc.
-      // For C calling convention:
-      // - func_ptr is constrained to X17
-      // - int args are constrained to X0-X7 (no vmctx)
-      // - float args are constrained to V0-V7
-      // - results are constrained to X0/V0 etc.
-      //
-      // By the time we get here, everything is in the right place!
-      // Just emit the branch-and-link instruction.
+      // Standard call: all arguments are already in place.
+      // func_ptr is constrained to X17 by lowering.
       self.emit_blr(17)
     AdjustSP(delta) =>
       // Adjust stack pointer by delta bytes

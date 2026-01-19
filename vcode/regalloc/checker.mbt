@@ -66,8 +66,10 @@ pub fn verify_allocation_aarch64(
   let needs_extra = func.needs_extra_results_ptr()
   let needs_x23_reserved = needs_extra || calls_multi
   let needs_x20_reserved = func.uses_mem0()
+  let needs_x21_reserved = func.uses_func_table()
   let env = @abi.build_aarch64_machine_env(
     reserve_mem0_desc=needs_x20_reserved,
+    reserve_func_table=needs_x21_reserved,
     reserve_x23=needs_x23_reserved,
   )
   let allowed_int = union_sets(

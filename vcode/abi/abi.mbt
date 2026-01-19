@@ -102,6 +102,11 @@ pub const REG_VMCTX : Int = 19
 pub const REG_MEM0_DESC : Int = 20
 
 ///|
+/// Register holding cached func_table pointer (X21, callee-saved).
+/// When enabled, prologue loads: x21 = [x19 + VMCTX_FUNC_TABLE_OFFSET].
+pub const REG_FUNC_TABLE : Int = 21
+
+///|
 /// Frame Pointer register (X29)
 pub const REG_FP : Int = 29
 

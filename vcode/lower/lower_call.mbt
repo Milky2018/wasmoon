@@ -90,26 +90,26 @@ fn lower_wasm_call(
   })
 
   // vmctx constrained to X0 (callee_vmctx) and X1 (caller_vmctx)
-  // Note: We need to copy vmctx (X19) into vregs so regalloc will insert moves
-  // Using Physical directly doesn't trigger move insertion
-  let callee_vmctx = ctx.vcode_func.new_vreg(Int)
-  let caller_vmctx = ctx.vcode_func.new_vreg(Int)
+  // Instead of creating two vregs (which often forces extra shuffling),
+  // materialize the ABI moves directly: X0 = X19 and X1 = X19.
+  let callee_vmctx_preg : @abi.PReg = {
+    index: @abi.REG_CALLEE_VMCTX,
+    class: @abi.Int,
+  }
+  let caller_vmctx_preg : @abi.PReg = {
+    index: @abi.REG_CALLER_VMCTX,
+    class: @abi.Int,
+  }
   let copy_callee = @instr.VCodeInst::new(Move)
-  copy_callee.add_def({ reg: Virtual(callee_vmctx) })
+  copy_callee.add_def({ reg: Physical(callee_vmctx_preg) })
   copy_callee.add_use(Physical(vmctx_preg))
   block.add_inst(copy_callee)
   let copy_caller = @instr.VCodeInst::new(Move)
-  copy_caller.add_def({ reg: Virtual(caller_vmctx) })
+  copy_caller.add_def({ reg: Physical(caller_vmctx_preg) })
   copy_caller.add_use(Physical(vmctx_preg))
   block.add_inst(copy_caller)
-  call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
-    index: 0,
-    class: @abi.Int,
-  })
-  call_inst.add_use_fixed(Virtual(caller_vmctx), @abi.PReg::{
-    index: 1,
-    class: @abi.Int,
-  })
+  call_inst.add_use_fixed(Physical(callee_vmctx_preg), callee_vmctx_preg)
+  call_inst.add_use_fixed(Physical(caller_vmctx_preg), caller_vmctx_preg)
 
   // Register int args: X2-X7
   let max_int_reg_args = @abi.MAX_USER_REG_PARAMS

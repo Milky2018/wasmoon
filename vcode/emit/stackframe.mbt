@@ -68,6 +68,7 @@ pub struct JITStackFrame {
   has_setup_area : Bool // Whether FP/LR are saved
   needs_vmctx : Bool // Whether function uses vmctx (X19)
   cache_mem0_desc : Bool // Whether to cache memory0 descriptor in X20
+  cache_func_table : Bool // Whether to cache func_table pointer in X21
 }
 
 ///|
@@ -88,6 +89,7 @@ pub fn JITStackFrame::build(
   outgoing_args_size? : Int = 0,
   needs_vmctx? : Bool = true,
   cache_mem0_desc? : Bool = false,
+  cache_func_table? : Bool = false,
   force_frame_setup? : Bool = false,
 ) -> JITStackFrame {
   // Build the list of GPRs to save
@@ -148,6 +150,7 @@ pub fn JITStackFrame::build(
     has_setup_area,
     needs_vmctx,
     cache_mem0_desc,
+    cache_func_table,
   }
 }
 

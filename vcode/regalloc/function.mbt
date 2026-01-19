@@ -224,6 +224,25 @@ pub fn VCodeFunction::uses_mem0(self : VCodeFunction) -> Bool {
 }
 
 ///|
+/// Returns true if the function loads the module `func_table` from vmctx.
+/// Used to reserve a dedicated register for caching the func_table pointer.
+pub fn VCodeFunction::uses_func_table(self : VCodeFunction) -> Bool {
+  for block in self.blocks {
+    for inst in block.insts {
+      if inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) {
+        // The base should be vmctx (X19).
+        if inst.uses.length() > 0 &&
+          inst.uses[0] is Physical(preg) &&
+          preg.index == @abi.REG_VMCTX {
+          return true
+        }
+      }
+    }
+  }
+  false
+}
+
+///|
 pub fn VCodeFunction::new_block(self : VCodeFunction) -> @block.VCodeBlock {
   let id = self.blocks.length()
   let block = @block.VCodeBlock::new(id)
