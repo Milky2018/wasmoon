@@ -1,0 +1,132 @@
+name: Release OCI Artifact
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.1.1-wip)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  OCI_REPO: ${{ github.repository }}
+  ARTIFACT_TYPE: application/vnd.wasmoon.binary.v1
+
+jobs:
+  build-and-push:
+    name: Build + push (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            tag_suffix: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm64
+            tag_suffix: linux-arm64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up MoonBit
+        shell: bash
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          moon version --all
+          moon update
+
+      - name: Build wasmoon
+        shell: bash
+        run: |
+          moon build --target native
+          ./install.sh
+
+      - name: Package tarball
+        id: pkg
+        shell: bash
+        run: |
+          set -euxo pipefail
+          out_dir="dist"
+          mkdir -p "$out_dir"
+          tarball="$out_dir/wasmoon-${{ steps.tag.outputs.tag }}-${{ matrix.tag_suffix }}.tar.gz"
+          tar -czf "$tarball" wasmoon wasmoon-tools LICENSE || tar -czf "$tarball" wasmoon wasmoon-tools
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR
+        shell: bash
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Push per-platform OCI artifact
+        shell: bash
+        env:
+          ORAS_EXPERIMENTAL: "true"
+        run: |
+          set -euxo pipefail
+          ref="${{ env.REGISTRY }}/${{ env.OCI_REPO }}:${{ steps.tag.outputs.tag }}-${{ matrix.tag_suffix }}"
+          oras push \
+            --artifact-type "${{ env.ARTIFACT_TYPE }}" \
+            --artifact-platform "${{ matrix.platform }}" \
+            "$ref" \
+            "${{ steps.pkg.outputs.tarball }}:application/vnd.wasmoon.binary.layer.v1.tar+gzip"
+
+  push-index:
+    name: Push multi-platform index
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR
+        shell: bash
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Create and push index
+        shell: bash
+        env:
+          ORAS_EXPERIMENTAL: "true"
+        run: |
+          set -euxo pipefail
+          repo="${{ env.REGISTRY }}/${{ env.OCI_REPO }}"
+          tag="${{ steps.tag.outputs.tag }}"
+          oras manifest index create \
+            --artifact-type "${{ env.ARTIFACT_TYPE }}" \
+            "$repo:$tag" \
+            "$tag-linux-amd64" \
+            "$tag-linux-arm64"
