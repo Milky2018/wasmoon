@@ -15,7 +15,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  OCI_REPO: ${{ github.repository }}
+  # GHCR requires lowercase repository names.
+  OCI_REPO: ${{ toLower(github.repository) }}
   ARTIFACT_TYPE: application/vnd.wasmoon.binary.v1
 
 jobs:
