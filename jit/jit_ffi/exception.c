@@ -2,6 +2,12 @@
 // Exception handling for JIT runtime
 // Implements WebAssembly exception handling using setjmp/longjmp
 
+// Ensure POSIX setjmp APIs are declared on glibc.
+// This is required for `sigsetjmp` to be visible in some feature-macro configurations.
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <setjmp.h>
 
 #include "jit_internal.h"
