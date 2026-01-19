@@ -12,6 +12,11 @@ This file records what's been investigated so far for the JIT failure seen with:
 - `./wasmoon run --no-jit examples/aead_aegis128l.wat`
   - Succeeds (interpreter) but is very slow (~9 minutes); prints a time-like integer (value can vary).
 
+## Latest Findings (2026-01-19)
+
+- Fixed JIT exceptions crash in `testsuite/exceptions_test.mbt` (multi-value payload) caused by exporting `sigsetjmp` via a wrapper.
+  - `sigsetjmp` must be called directly from the JIT/emitted frame; longjmp into a returned wrapper frame is undefined behavior and can SIGSEGV.
+
 ## Latest Findings (2025-01-10)
 
 ### Root Cause Identified: Register Allocator Bug
