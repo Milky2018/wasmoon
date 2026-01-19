@@ -276,18 +276,19 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_spilled_local_ptr(void)
 
 // Get sigsetjmp function pointer for JIT to call directly.
 //
-// On glibc, `sigsetjmp` may be hidden behind feature-test macros and/or a macro
-// alias, which makes taking its address brittle. Export a stable wrapper.
+// IMPORTANT: do NOT wrap sigsetjmp in another C function.
+// The JIT calls setjmp inside the *current* wasm frame and later longjmps back
+// into that exact frame. If setjmp is performed in a wrapper that returns, the
+// saved environment becomes invalid (undefined behavior) and longjmp may crash.
 //
-// sigsetjmp(jmp_buf, savemask) returns 0 on first call, handler_id on longjmp.
-#ifndef sigsetjmp
-extern int sigsetjmp(sigjmp_buf env, int savemask);
-#endif
-
-static int wasmoon_jit_sigsetjmp(sigjmp_buf env, int savemask) {
-    return sigsetjmp(env, savemask);
-}
-
+// On glibc, `sigsetjmp` may be a macro, so taking its address can be brittle.
+// We return the address of the underlying implementation when available.
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sigsetjmp_ptr(void) {
-    return (int64_t)wasmoon_jit_sigsetjmp;
+#if defined(__GLIBC__)
+    // glibc exposes the underlying implementation as __sigsetjmp.
+    extern int __sigsetjmp(sigjmp_buf env, int savemask);
+    return (int64_t)__sigsetjmp;
+#else
+    return (int64_t)sigsetjmp;
+#endif
 }
