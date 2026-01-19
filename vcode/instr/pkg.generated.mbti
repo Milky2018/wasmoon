@@ -167,6 +167,7 @@ pub(all) enum JITLibcall {
   TableCopy
   TableInit
   ElemDrop
+  DebugAssertI32Eq
 }
 pub impl Eq for JITLibcall
 pub impl Show for JITLibcall
@@ -233,9 +234,9 @@ pub(all) enum VCodeOpcode {
   Mul(Bool)
   SDiv(Bool)
   UDiv(Bool)
-  And
-  Or
-  Xor
+  And(Bool)
+  Or(Bool)
+  Xor(Bool)
   Shl(Bool)
   AShr(Bool)
   LShr(Bool)
@@ -274,7 +275,7 @@ pub(all) enum VCodeOpcode {
   FPromote
   FDemote
   Bitcast
-  Select
+  Select(Bool)
   SelectCmp(CmpKind, Bool)
   Clz(Bool)
   Popcnt(Bool)
@@ -306,11 +307,11 @@ pub(all) enum VCodeOpcode {
   TypeCheckIndirect(Int)
   StackLoad(Int)
   StackStore(Int)
-  LoadStackParam(Int, @abi.RegClass)
+  LoadStackParam(Int, @abi.RegClass, Bool)
   LoadMemBase(Int)
   LoadPtr(MemType, Int)
   StorePtr(MemType, Int)
-  LoadPtrNarrow(Int, Bool, Int)
+  LoadPtrNarrow(Int, Bool, Bool, Int)
   StorePtrNarrow(Int, Int)
   LoadGCFuncPtr(GCLibcall)
   LoadJITFuncPtr(JITLibcall)

@@ -1,7 +1,7 @@
 # Status / Debug Log
 
 This file records what's been investigated so far for the JIT failure seen with:
-`./wasmoon run examples/aead_aegis128l.wasm`
+`./wasmoon run examples/aead_aegis128l.wat`
 
 ## Repro
 
@@ -12,144 +12,39 @@ This file records what's been investigated so far for the JIT failure seen with:
 - `./wasmoon run --no-jit examples/aead_aegis128l.wat`
   - Succeeds (interpreter) but is very slow (~9 minutes); prints a time-like integer (value can vary).
 
-## Latest Findings (2025-01-10)
+## Latest Findings (2026-01-19)
 
-### Root Cause Identified: Register Allocator Bug
+### Current Status
 
-The bug is in the register allocator's handling of fixed-register constraints for call arguments.
+- The issue is still **unfixed**: JIT runs `examples/aead_aegis128l.wat` but fails the libsodium test-vector check at tv `628`, then traps via `func_62` (`unreachable`).
+- Interpreter-only (`--no-jit`) completes successfully (slow) and prints `3325878120000` on my machine.
 
-**Symptom:**
-- IR shows `call 55(v60, v61, v10)` with 3 arguments
-- VCode correctly collects all 3 arguments (v36, v37, v9)
-- VCode sets fixed-register constraints: v36->x2, v37->x3, v9->x4
-- Machine code only sets x2 and x3, but NOT x4
+### What We Added (for diagnosis + smith-diff workflows)
 
-**Root Cause:**
-1. vreg 9 (the 3rd argument) is assigned to physical register x4
-2. Before the call instruction, another instruction reuses x4 for a different value
-3. At the call, the constraint processing code checks if v9 is already assigned to x4
-4. It finds `assignments.get(9) = Some(x4)` and assumes no move is needed
-5. But x4 no longer contains v9's value - it was clobbered!
+- Added a JIT-side assert tracing hook that triggers when the program is about to abort via `call 62(..., <const line>)`.
+  - It prints the failing equality operands and the tv line number.
+  - Example output from `./wasmoon run examples/aead_aegis128l.wat`:
+    - `[wasmoon][jit][assert] line=628 lhs=0 rhs=124`
+  - This means `found_message_len` becomes `0` under JIT while the expected `message_len` is `124`.
 
-**Evidence:**
-```
-[DEBUG] vreg.id=9, required_preg.index=4
-[DEBUG]   assignments.get(vreg.id)=Some(x4)
-[DEBUG]   spill_slots.get(vreg.id)=None
-```
+### Git State
 
-The register allocator thinks v9 is in x4, but x4 has been overwritten.
+- WIP branch: `wip/aead-aegis128l-jit-smithdiff`
+- WIP commit: `2863091` (`jit: add tracing and width fixes for smith-diff`)
+  - Includes various AArch64 i32/i64 width correctness fixes (select/bitwise/narrow loads, stack-param loads), plus the assert tracer.
 
-### Detailed Code Analysis
+### smith-diff (scripts/smith_diff/run.py)
 
-**Bug Location:** `vcode/regalloc/regalloc.mbt:1059-1068` in `process_constraints()`
+- Ran: `python3 scripts/smith_diff/run.py run --count 200 --seed-size 512 --timeout 2`
+  - Result: 7 failures, but **all failures are currently “JIT unsupported module”** (wasmoon refuses to JIT those wasm-smith modules due to unsupported instructions).
+  - This means the next step is to run smith-diff with a stricter wasm-smith config (disable GC/threads/relaxed-simd/etc) so the generated cases stay within the JIT-supported instruction subset.
 
-**Problematic Code Pattern:**
-```moonbit
-match alloc.assignments.get(vreg.id) {
-  Some(assigned_preg) =>
-    if assigned_preg.index != required_preg.index {
-      // Generate move from assigned to required
-      edits.before.push({...})
-    }
-    // BUG: If assigned_preg.index == required_preg.index, no move is generated
-    // Assumption: value is already in the required register
-    // Reality: register may have been clobbered by another allocation!
-  None => ...
-}
-```
+### Notes
 
-**Why This Bug Occurs:**
+- Some older content below mentions a `regalloc` fixed-register constraint root cause. That was a prior hypothesis/analysis in this log and may not reflect the current investigation path.
 
-1. **`assignments` is a static map**: It records the vreg -> preg allocation made during the allocation phase, not the dynamic state of registers during execution.
+## Additional Notes
 
-2. **Register reuse between non-overlapping intervals**: The backtracking allocator correctly identifies that v9's interval and another vreg's interval don't overlap, so it reuses x4. This is visible in debug output:
-   ```
-   [DEBUG record_allocation] allocating v4 to x4, span [0:-1, 0:1]
-   [DEBUG record_allocation] allocating v10 to x4, span [0:2, 0:7]
-   ```
-
-3. **Constraint processing doesn't track dynamic state**: When processing the call's fixed constraint (v9 -> x4), it only checks the static assignment, not whether x4 currently holds v9's value.
-
-**Why Simple Tests Don't Reproduce:**
-
-The bug requires a specific pattern:
-- v9's live interval ends before the call
-- Another vreg is allocated to x4 after v9's interval ends
-- The call has a fixed constraint requiring v9 in x4
-
-This pattern is rare in simple tests but occurs in complex code like aead_aegis128l.
-
-### Possible Fixes
-
-1. **Track register contents dynamically during constraint processing**
-   - Maintain a map of preg -> current vreg at each program point
-   - Before assuming no move is needed, verify the register actually holds the expected value
-
-2. **Always emit moves for fixed constraints (conservative)**
-   - In `process_constraints()`, always generate a move for fixed constraints
-   - Peephole optimization can later remove redundant `mov x4, x4` instructions
-   - Simple but may generate unnecessary moves
-
-3. **Pin registers for fixed constraints during allocation**
-   - When a vreg has a fixed constraint, prevent that physical register from being reused
-   - Requires changes to `is_reg_free()` in backtrack.mbt
-
-4. **Extend live intervals to include fixed constraint uses**
-   - Ensure v9's interval extends all the way to the call instruction
-   - This would prevent x4 from being reused before the call
-
-### Recommended Fix
-
-Option 2 (always emit moves) is the safest and simplest:
-
-```moonbit
-// In process_constraints(), for fixed constraints:
-match alloc.assignments.get(vreg.id) {
-  Some(assigned_preg) => {
-    // ALWAYS generate move for fixed constraints
-    // Let peephole remove redundant mov rx, rx
-    if assigned_preg.index != required_preg.index {
-      edits.before.push({ from: assigned_preg, to: required_preg, class: vreg.class })
-    } else {
-      // NEW: Still emit move even if same register,
-      // because register may have been clobbered
-      // OR: Check if register was actually clobbered since allocation
-    }
-  }
-  ...
-}
-```
-
-A more precise fix would track which registers have been clobbered, but this requires significant changes to the allocator state tracking.
-
-## Previous Investigation
-
-### Initial Triage
-
-- `./wasmoon run --dump-on-trap examples/aead_aegis128l.wat`
-  - Produces `target/jit-trap-62-func_62.log`
-  - `func_62` is the assert-fail helper (formats message then `trap "unreachable"`), not the root cause.
-- In `examples/aead_aegis128l.wat` the failing site is in `_start`:
-  - `call 62` with `(i32.const 1048694)` and `(i32.const 628)` (tv index).
-  - Confirms failure is the libsodium test-vector loop hitting tv 628.
-
-### Ground Truth Check (External Runtime)
-
-- `wasmtime run examples/aead_aegis128l.wat` succeeds and prints `3637510000`.
-  - Confirms the `.wat` program itself is valid; the mismatch is in Wasmoon (likely JIT).
-
-### What The Module Exercises
-
-- The libsodium AEAD entrypoints are called via `call_indirect`:
-  - `call_indirect (type 10)` uses a 10-param signature (6 reg args + 4 stack args in Wasmoon v3 ABI).
-  - `call_indirect (type 11)` uses a 9-param signature (6 reg args + 3 stack args).
-- The module also uses bulk memory ops (`memory.copy`, `memory.fill`) heavily.
-
-### Optimizer Correctness Fix (Independent)
-
-While investigating whether `--O` was affecting behavior, found a correctness bug in IR constant folding:
-
-- In `ir/optimize.mbt`, some integer folds were effectively using 64-bit semantics for i32 operations
-- Fixed by making `fold_constants` type-aware for: `Ishl`, `Sshr`, `Ushr`, `Sdiv`, `Udiv`, `Srem`, `Urem`
-- This cleanup did **not** resolve the libsodium JIT mismatch (still reproduces at tv 628 with default JIT).
+- `func_62` is the module’s assert/abort helper: it prints the assertion message then executes `unreachable`. The actual logic bug happens earlier.
+- The failing module uses `call_indirect` heavily (notably type 10 and type 11 signatures) and bulk memory ops.
+- `scripts/smith_diff/run.py` is set up to diff `wasmoon` vs `wasmtime`, but the default wasm-smith config currently generates modules that our JIT rejects as “unsupported instructions”. The next step is to restrict the wasm-smith config to only features supported by the JIT, then re-run smith-diff.

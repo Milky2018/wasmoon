@@ -178,6 +178,8 @@ pub fn c_jit_get_clock_time_get_ptr() -> Int64
 
 pub fn c_jit_get_data_drop_ptr() -> Int64
 
+pub fn c_jit_get_debug_assert_i32_eq_ptr() -> Int64
+
 pub fn c_jit_get_elem_drop_ptr() -> Int64
 
 pub fn c_jit_get_environ_get_ptr() -> Int64
