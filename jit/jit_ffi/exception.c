@@ -274,8 +274,20 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_spilled_local_ptr(void)
     return (int64_t)wasmoon_jit_exception_get_spilled_local;
 }
 
-// Get sigsetjmp function pointer for JIT to call directly
-// sigsetjmp(jmp_buf, savemask) returns 0 on first call, handler_id on longjmp
+// Get sigsetjmp function pointer for JIT to call directly.
+//
+// On glibc, `sigsetjmp` may be hidden behind feature-test macros and/or a macro
+// alias, which makes taking its address brittle. Export a stable wrapper.
+//
+// sigsetjmp(jmp_buf, savemask) returns 0 on first call, handler_id on longjmp.
+#ifndef sigsetjmp
+extern int sigsetjmp(sigjmp_buf env, int savemask);
+#endif
+
+static int wasmoon_jit_sigsetjmp(sigjmp_buf env, int savemask) {
+    return sigsetjmp(env, savemask);
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sigsetjmp_ptr(void) {
-    return (int64_t)sigsetjmp;
+    return (int64_t)wasmoon_jit_sigsetjmp;
 }
