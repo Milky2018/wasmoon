@@ -1795,7 +1795,7 @@ fn rewrite_reg_with_spill(
 fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
-    LoadPtr(_, _) | LoadPtrNarrow(_, _, _) => true
+    LoadPtr(_, _) | LoadPtrNarrow(_, _, _, _) => true
     // Memory stores have side effects
     Store(_, _) | StackStore(_) | StorePtr(_, _) => true
     // Type check can trap

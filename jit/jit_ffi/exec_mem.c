@@ -44,9 +44,21 @@ int64_t alloc_exec_internal(int size) {
 #ifdef _WIN32
     void *ptr = VirtualAlloc(NULL, alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 #else
+    // macOS/Apple Silicon requires MAP_JIT for JIT code pages. Without it,
+    // mprotect(PROT_EXEC) on anonymous memory can be killed by the OS.
+    //
+    // We allocate RWX with MAP_JIT and use pthread_jit_write_protect_np() to
+    // enforce W^X at runtime.
+#if defined(__APPLE__) && defined(__aarch64__)
+    void *ptr = mmap(NULL, alloc_size,
+                     PROT_READ | PROT_WRITE | PROT_EXEC,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT,
+                     -1, 0);
+#else
     // Allocate with WRITE permission first, will change to EXEC after copying
     void *ptr = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
     if (ptr == MAP_FAILED) {
         return 0;
     }
@@ -69,8 +81,17 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
         return -1;
     }
 
+#if defined(__APPLE__) && defined(__aarch64__)
+    // Write to MAP_JIT pages with write-protect disabled.
+    pthread_jit_write_protect_np(0);
+#endif
+
     // Copy code
     memcpy(ptr, src, (size_t)size);
+
+#if defined(__APPLE__) && defined(__aarch64__)
+    pthread_jit_write_protect_np(1);
+#endif
 
     // Find the code block to get the size for mprotect
     size_t alloc_size = 0;
@@ -84,7 +105,7 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
         return -1;
     }
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !(defined(__APPLE__) && defined(__aarch64__))
     // Change permissions from WRITE to EXEC
     if (mprotect(ptr, alloc_size, PROT_READ | PROT_EXEC) != 0) {
         return -1;

@@ -840,7 +840,8 @@ fn lower_band(
   // Default: regular and
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(And)
+  let is_64 = result.ty is @ir.Type::I64
+  let vcode_inst = @instr.VCodeInst::new(And(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
   vcode_inst.add_use(Virtual(rhs))
@@ -888,7 +889,8 @@ fn lower_bor(
   // Default: regular or
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Or)
+  let is_64 = result.ty is @ir.Type::I64
+  let vcode_inst = @instr.VCodeInst::new(Or(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
   vcode_inst.add_use(Virtual(rhs))
@@ -936,7 +938,8 @@ fn lower_bxor(
   // Default: regular xor
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Xor)
+  let is_64 = result.ty is @ir.Type::I64
+  let vcode_inst = @instr.VCodeInst::new(Xor(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
   vcode_inst.add_use(Virtual(rhs))

@@ -268,6 +268,11 @@ pub extern "c" fn c_jit_get_table_init_ptr() -> Int64 = "wasmoon_jit_get_table_i
 pub extern "c" fn c_jit_get_elem_drop_ptr() -> Int64 = "wasmoon_jit_get_elem_drop_ptr"
 
 ///|
+/// Get debug assert hook function pointer for JIT.
+/// Signature: debug_assert_i32_eq(lhs: i64, rhs: i64, line: i64) -> void
+pub extern "c" fn c_jit_get_debug_assert_i32_eq_ptr() -> Int64 = "wasmoon_jit_get_debug_assert_i32_eq_ptr"
+
+///|
 /// Configure JIT context with multiple memories (for multi-memory support)
 /// memory_ptrs: FixedArray of Int64 (wasmoon_memory_t* pointers)
 /// memory_count: Number of memories

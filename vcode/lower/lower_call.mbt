@@ -43,6 +43,33 @@ fn emit_wasm_overflow_arg_stores(
 }
 
 ///|
+/// Canonicalize i32 values before passing them as arguments.
+///
+/// We represent both i32 and i64 as `RegClass::Int` in VCode. AArch64 does not
+/// guarantee the high 32 bits of an X register for 32-bit values, so if an i32
+/// value is later used in 64-bit address arithmetic without an explicit uextend,
+/// garbage high bits can cause miscompiles.
+///
+/// Canonicalize i32 with `extend.u32_64` (MOV Wd, Wn), which zeros the high bits.
+fn canonicalize_i32_arg(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  vreg : @abi.VReg,
+  ty : @ir.Type,
+) -> @abi.VReg {
+  if ty is @ir.Type::I32 && vreg.class is @abi.Int {
+    let clean = ctx.vcode_func.new_vreg(@abi.Int)
+    let ext = @instr.VCodeInst::new(Extend(Unsigned32To64))
+    ext.add_def({ reg: Virtual(clean) })
+    ext.add_use(Virtual(vreg))
+    block.add_inst(ext)
+    clean
+  } else {
+    vreg
+  }
+}
+
+///|
 /// Lower a Wasm function call using Standard approach.
 /// All argument placement is done in lowering via FixedReg constraints.
 /// The emit phase just emits BLR X17.
@@ -57,7 +84,7 @@ fn lower_wasm_call(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
   func_ptr : @abi.VReg,
-  args : Array[@abi.VReg],
+  args : Array[(@abi.VReg, @ir.Type)],
   results : Array[@abi.VReg],
 ) -> Unit {
   // vmctx is always in X19
@@ -66,7 +93,9 @@ fn lower_wasm_call(
   // Classify user arguments by type
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
   let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
-  for arg in args {
+  for entry in args {
+    let (arg0, ty) = entry
+    let arg = canonicalize_i32_arg(ctx, block, arg0, ty)
     match arg.class {
       @abi.Int => int_args.push((arg, @abi.Int))
       @abi.Float32 => float_args.push((arg, @abi.Float32))
@@ -347,7 +376,7 @@ fn lower_return_call_indirect(
   let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask_vreg) })
   block.add_inst(load_mask)
-  let and_inst = @instr.VCodeInst::new(And)
+  let and_inst = @instr.VCodeInst::new(And(true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(raw_func_ptr_vreg))
   and_inst.add_use(Virtual(mask_vreg))
@@ -471,7 +500,7 @@ fn lower_return_call_ref(
   load_mask.add_def({ reg: Virtual(mask_vreg) })
   block.add_inst(load_mask)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let and_inst = @instr.VCodeInst::new(And)
+  let and_inst = @instr.VCodeInst::new(And(true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(func_ref_vreg))
   and_inst.add_use(Virtual(mask_vreg))
@@ -602,9 +631,10 @@ fn lower_call_indirect(
   }
 
   // Arguments are all operands except the first one
-  let arg_vregs : Array[@abi.VReg] = []
+  let arg_vregs : Array[(@abi.VReg, @ir.Type)] = []
   for i in 1..<inst.operands.length() {
-    arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
+    let v = inst.operands[i]
+    arg_vregs.push((ctx.get_vreg_for_use(v, block), v.ty))
   }
 
   // Get all result vregs
@@ -653,7 +683,7 @@ fn lower_call_indirect(
   let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask_vreg) })
   block.add_inst(load_mask)
-  let and_inst = @instr.VCodeInst::new(And)
+  let and_inst = @instr.VCodeInst::new(And(true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(raw_func_ptr_vreg))
   and_inst.add_use(Virtual(mask_vreg))
@@ -708,9 +738,10 @@ fn lower_call_ref(
   let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Arguments are all operands except the first one
-  let arg_vregs : Array[@abi.VReg] = []
+  let arg_vregs : Array[(@abi.VReg, @ir.Type)] = []
   for i in 1..<inst.operands.length() {
-    arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
+    let v = inst.operands[i]
+    arg_vregs.push((ctx.get_vreg_for_use(v, block), v.ty))
   }
 
   // Get all result vregs
@@ -726,7 +757,7 @@ fn lower_call_ref(
   load_mask.add_def({ reg: Virtual(mask_vreg) })
   block.add_inst(load_mask)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let and_inst = @instr.VCodeInst::new(And)
+  let and_inst = @instr.VCodeInst::new(And(true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(func_ref_vreg))
   and_inst.add_use(Virtual(mask_vreg))
@@ -746,9 +777,23 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   for preg in @abi.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
-  // Add clobbers for all caller-saved FPRs (D0-D7)
+  // Add clobbers for all caller-saved V registers.
+  //
+  // Note: AArch64 Vn registers are a single physical bank used for:
+  // - f32 (Sn)  -> Float32 class
+  // - f64 (Dn)  -> Float64 class
+  // - v128 (Qn) -> Vector class
+  //
+  // The regalloc classes are distinct, so we must mark clobbers for each class
+  // or values may incorrectly survive across calls (e.g. SIMD-heavy code).
   for preg in @abi.call_clobbered_fprs() {
     call_inst.add_def({ reg: Physical(preg) })
+    call_inst.add_def({
+      reg: Physical({ index: preg.index, class: @abi.Float32 }),
+    })
+    call_inst.add_def({
+      reg: Physical({ index: preg.index, class: @abi.Vector }),
+    })
   }
 }
 
@@ -785,7 +830,13 @@ fn lower_call_ptr(
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
   let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
   for i in 3..<inst.operands.length() {
-    let vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+    let v = inst.operands[i]
+    let vreg = canonicalize_i32_arg(
+      ctx,
+      block,
+      ctx.get_vreg_for_use(v, block),
+      v.ty,
+    )
     match vreg.class {
       @abi.Int => int_args.push((vreg, @abi.Int))
       @abi.Float32 => float_args.push((vreg, @abi.Float32))

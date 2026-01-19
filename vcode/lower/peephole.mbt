@@ -528,7 +528,7 @@ fn is_inplace_safe(opcode : @instr.VCodeOpcode) -> Bool {
     Add(_) | Sub(_) | Mul(_) => true
     AddImm(_, _) | SubImm(_, _) => true
     // Logical operations
-    And | Or | Xor | Shl(_) => true
+    And(_) | Or(_) | Xor(_) | Shl(_) => true
     // Moves are not safe (we're eliminating them, not transforming them)
     Move => false
     // Load/store have side effects
@@ -572,7 +572,7 @@ fn get_mem_op_info(inst : @instr.VCodeInst) -> MemOpInfo? {
       } else {
         None
       }
-    LoadPtrNarrow(bits, _, offset) =>
+    LoadPtrNarrow(bits, _, _, offset) =>
       if inst.uses.length() >= 1 && inst.defs.length() >= 1 {
         let base_id = get_vreg_id(inst.uses[0])
         let def_id = get_def_vreg_id(inst.defs[0])
@@ -801,7 +801,7 @@ fn create_merged_load_store(
   // Create merged load: combined = load16u [src_base+off]
   let combined_vreg = func.new_vreg(Int)
   let load_inst = @instr.VCodeInst::new(
-    LoadPtrNarrow(16, false, load_info.offset),
+    LoadPtrNarrow(16, false, false, load_info.offset),
   )
   load_inst.add_def({ reg: Virtual(combined_vreg) })
   load_inst.add_use(Virtual({ id: load_info.base_vreg_id, class: Int }))
@@ -835,7 +835,7 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
             store_map.set(key, val)
           }
         }
-      LoadPtrNarrow(bits, signed, offset) =>
+      LoadPtrNarrow(bits, signed, is_64, offset) =>
         if inst.uses.length() >= 1 && inst.defs.length() >= 1 {
           if get_vreg_id(inst.uses[0]) is Some(base) {
             let key = "\{base}:\{offset}:\{bits}"
@@ -845,13 +845,17 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
                 // - narrow stores truncate to `bits`
                 // - loads sign/zero-extend from `bits`
                 // Implement by extending the stored value.
-                let kind = match (bits, signed) {
-                  (8, true) => @instr.Signed8To64
-                  (8, false) => @instr.Unsigned8To64
-                  (16, true) => @instr.Signed16To64
-                  (16, false) => @instr.Unsigned16To64
-                  (32, true) => @instr.Signed32To64
-                  (32, false) => @instr.Unsigned32To64
+                let kind = match (bits, signed, is_64) {
+                  (8, true, false) => @instr.Signed8To32
+                  (8, true, true) => @instr.Signed8To64
+                  (8, false, false) => @instr.Unsigned8To32
+                  (8, false, true) => @instr.Unsigned8To64
+                  (16, true, false) => @instr.Signed16To32
+                  (16, true, true) => @instr.Signed16To64
+                  (16, false, false) => @instr.Unsigned16To32
+                  (16, false, true) => @instr.Unsigned16To64
+                  (32, true, true) => @instr.Signed32To64
+                  (32, false, true) => @instr.Unsigned32To64
                   _ => continue
                 }
                 let ext = @instr.VCodeInst::new(Extend(kind))

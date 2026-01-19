@@ -40,4 +40,4 @@
         (br $loop)))
     (if (i32.ne (local.get $i) (local.get $max)) (then unreachable))
     (if (i32.ne (i32.load8_u (i32.add (i32.const 200) (local.get $i))) (i32.const 0)) (then unreachable))
-    (drop (call $fd_write (i32.const 1) (i32.const 400) (i32.const 1) (i32.const 408))))))
+    (drop (call $fd_write (i32.const 1) (i32.const 400) (i32.const 1) (i32.const 408)))))

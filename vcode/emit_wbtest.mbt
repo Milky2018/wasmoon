@@ -741,7 +741,7 @@ test "emit: select uses 32-bit condition compare" {
   let load_false = @instr.VCodeInst::new(LoadConst(2L))
   load_false.add_def({ reg: @abi.Physical({ index: 2, class: Int }) })
   block.add_inst(load_false)
-  let select_inst = @instr.VCodeInst::new(Select)
+  let select_inst = @instr.VCodeInst::new(Select(false))
   select_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
   select_inst.add_use(@abi.Physical({ index: 0, class: Int }))
   select_inst.add_use(@abi.Physical({ index: 1, class: Int }))

@@ -679,7 +679,8 @@ pub fn emit_function(
       //   load/store [addr + 0]
       //
       // Emit as a single reg-offset load/store: [base + off].
-      if inst.opcode is Add(true) &&
+      if false &&
+        inst.opcode is Add(true) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 2 &&
         inst_idx + 1 < block.insts.length() {
@@ -688,37 +689,102 @@ pub fn emit_function(
         let add_rn = reg_num(inst.uses[0])
         let add_rm = reg_num(inst.uses[1])
 
-        // Only safe to skip the add if its result is not used elsewhere.
-        let mut add_used_later = false
-        let mut killed_in_block = false
-        for j in (inst_idx + 2)..<block.insts.length() {
+        // Only safe to skip the add if its result is used exactly once:
+        // as the base operand of the immediately following load/store, and
+        // it is not live-out of the block.
+        let mut add_use_count = 0
+        for j in (inst_idx + 1)..<block.insts.length() {
           let later = block.insts[j]
           for use_ in later.uses {
-            if reg_num(use_) == add_dst {
-              add_used_later = true
-              break
+            match use_ {
+              Physical(p) =>
+                if p.class is Int && p.index == add_dst {
+                  add_use_count = add_use_count + 1
+                  if add_use_count > 1 {
+                    break
+                  }
+                }
+              Virtual(_) => ()
             }
           }
-          if add_used_later {
-            break
-          }
-          for def in later.defs {
-            if wreg_num(def) == add_dst {
-              killed_in_block = true
-              break
-            }
-          }
-          if killed_in_block {
+          if add_use_count > 1 {
             break
           }
         }
-        if !add_used_later && !killed_in_block {
+        if block.terminator is Some(term) && add_use_count <= 1 {
+          match term {
+            Jump(_, args) =>
+              for a in args {
+                match a {
+                  Physical(p) =>
+                    if p.class is Int && p.index == add_dst {
+                      add_use_count = add_use_count + 1
+                    }
+                  Virtual(_) => ()
+                }
+              }
+            Branch(cond, _, _) =>
+              match cond {
+                Physical(p) =>
+                  if p.class is Int && p.index == add_dst {
+                    add_use_count = add_use_count + 1
+                  }
+                Virtual(_) => ()
+              }
+            BranchCmp(lhs, rhs, _, _, _, _) =>
+              for r in [lhs, rhs] {
+                match r {
+                  Physical(p) =>
+                    if p.class is Int && p.index == add_dst {
+                      add_use_count = add_use_count + 1
+                    }
+                  Virtual(_) => ()
+                }
+              }
+            BranchZero(r, _, _, _, _) =>
+              match r {
+                Physical(p) =>
+                  if p.class is Int && p.index == add_dst {
+                    add_use_count = add_use_count + 1
+                  }
+                Virtual(_) => ()
+              }
+            BranchCmpImm(lhs, _, _, _, _, _) =>
+              match lhs {
+                Physical(p) =>
+                  if p.class is Int && p.index == add_dst {
+                    add_use_count = add_use_count + 1
+                  }
+                Virtual(_) => ()
+              }
+            Return(values) =>
+              for v in values {
+                match v {
+                  Physical(p) =>
+                    if p.class is Int && p.index == add_dst {
+                      add_use_count = add_use_count + 1
+                    }
+                  Virtual(_) => ()
+                }
+              }
+            BrTable(index, _, _) =>
+              match index {
+                Physical(p) =>
+                  if p.class is Int && p.index == add_dst {
+                    add_use_count = add_use_count + 1
+                  }
+                Virtual(_) => ()
+              }
+            Trap(_) => ()
+          }
+        }
+        if add_use_count == 1 {
           let bit = 1L << add_dst
           if (live_out_int[i] & bit) != 0L {
-            add_used_later = true
+            add_use_count = 2
           }
         }
-        if !add_used_later {
+        if add_use_count == 1 {
           let mut fused = false
           match next.opcode {
             LoadPtr(ty, 0) => {
@@ -755,7 +821,7 @@ pub fn emit_function(
                 }
               }
             }
-            LoadPtrNarrow(bits, signed, 0) => {
+            LoadPtrNarrow(bits, signed, _, 0) => {
               let base_reg = reg_num(next.uses[0])
               if base_reg == add_dst && !signed {
                 let dst = wreg_num(next.defs[0])
@@ -795,7 +861,8 @@ pub fn emit_function(
       // IMPORTANT: Only apply if the extend result is not used by any other
       // instruction. Otherwise we'd skip the extend and later uses would
       // read garbage.
-      if inst.opcode is Extend(Unsigned32To64) &&
+      if false &&
+        inst.opcode is Extend(Unsigned32To64) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
         inst_idx + 1 < block.insts.length() {
@@ -809,27 +876,115 @@ pub fn emit_function(
           let add_op0 = reg_num(next.uses[0])
           let add_op1 = reg_num(next.uses[1])
           if add_dst == ext_dst {
-            // Check that ext_dst is used exactly once (only in the Add)
-            // If both operands are ext_dst (ext + ext), don't apply peephole
-            let ext_use_count = (if add_op0 == ext_dst { 1 } else { 0 }) +
-              (if add_op1 == ext_dst { 1 } else { 0 })
-            // Also check that ext_dst is not used in remaining instructions
-            let mut has_other_use = ext_use_count != 1
-            if !has_other_use {
+            // Only safe to skip the extend if its result is used exactly once:
+            // as an operand of the immediately following Add, and it is not
+            // used by the terminator or live-out of the block.
+            let mut ext_use_count = 0
+            if add_op0 == ext_dst {
+              ext_use_count = ext_use_count + 1
+            }
+            if add_op1 == ext_dst {
+              ext_use_count = ext_use_count + 1
+            }
+            // If both operands are ext_dst (ext + ext), don't apply peephole.
+            if ext_use_count == 1 {
+              // Ensure ext_dst is not used by any later instruction.
               for j in (inst_idx + 2)..<block.insts.length() {
                 let later_inst = block.insts[j]
                 for use_ in later_inst.uses {
-                  if reg_num(use_) == ext_dst {
-                    has_other_use = true
-                    break
+                  match use_ {
+                    Physical(p) =>
+                      if p.class is Int && p.index == ext_dst {
+                        ext_use_count = 2
+                        break
+                      }
+                    Virtual(_) => ()
                   }
                 }
-                if has_other_use {
+                if ext_use_count != 1 {
                   break
                 }
               }
             }
-            if !has_other_use {
+            // Ensure ext_dst is not used by the terminator.
+            if block.terminator is Some(term) && ext_use_count == 1 {
+              match term {
+                Jump(_, args) =>
+                  for a in args {
+                    match a {
+                      Physical(p) =>
+                        if p.class is Int && p.index == ext_dst {
+                          ext_use_count = 2
+                          break
+                        }
+                      Virtual(_) => ()
+                    }
+                  }
+                Branch(cond, _, _) =>
+                  match cond {
+                    Physical(p) =>
+                      if p.class is Int && p.index == ext_dst {
+                        ext_use_count = 2
+                      }
+                    Virtual(_) => ()
+                  }
+                BranchCmp(lhs, rhs, _, _, _, _) =>
+                  for r in [lhs, rhs] {
+                    match r {
+                      Physical(p) =>
+                        if p.class is Int && p.index == ext_dst {
+                          ext_use_count = 2
+                          break
+                        }
+                      Virtual(_) => ()
+                    }
+                  }
+                BranchCmpImm(lhs, _, _, _, _, _) =>
+                  match lhs {
+                    Physical(p) =>
+                      if p.class is Int && p.index == ext_dst {
+                        ext_use_count = 2
+                      }
+                    Virtual(_) => ()
+                  }
+                BranchZero(r, _, _, _, _) =>
+                  match r {
+                    Physical(p) =>
+                      if p.class is Int && p.index == ext_dst {
+                        ext_use_count = 2
+                      }
+                    Virtual(_) => ()
+                  }
+                Return(values) =>
+                  for v in values {
+                    match v {
+                      Physical(p) =>
+                        if p.class is Int && p.index == ext_dst {
+                          ext_use_count = 2
+                          break
+                        }
+                      Virtual(_) => ()
+                    }
+                  }
+                BrTable(index, _, _) =>
+                  match index {
+                    Physical(p) =>
+                      if p.class is Int && p.index == ext_dst {
+                        ext_use_count = 2
+                      }
+                    Virtual(_) => ()
+                  }
+                Trap(_) => ()
+              }
+            }
+            // Ensure ext_dst is not live-out of the block.
+            if ext_use_count == 1 {
+              let bit = 1L << ext_dst
+              if (live_out_int[i] & bit) != 0L {
+                ext_use_count = 2
+              }
+            }
+            if ext_use_count == 1 {
               let base = if add_op0 == ext_dst {
                 Some(add_op1)
               } else {
@@ -966,23 +1121,35 @@ fn MachineCode::emit_instruction(
         self.emit_udiv32(rd, rn, rm)
       }
     }
-    And => {
+    And(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_and_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_and_reg(rd, rn, rm)
+      } else {
+        self.emit_and_reg32(rd, rn, rm)
+      }
     }
-    Or => {
+    Or(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_orr_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_orr_reg(rd, rn, rm)
+      } else {
+        self.emit_orr_reg32(rd, rn, rm)
+      }
     }
-    Xor => {
+    Xor(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_eor_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_eor_reg(rd, rn, rm)
+      } else {
+        self.emit_eor_reg32(rd, rn, rm)
+      }
     }
     Shl(is_64) => {
       let rd = wreg_num(inst.defs[0])
@@ -1340,9 +1507,9 @@ fn MachineCode::emit_instruction(
       let cond = fcmp_kind_to_cond(kind)
       self.emit_cset(rd, cond)
     }
-    Select => {
-      // Select: dst = cond != 0 ? true_val : false_val
-      // Uses: [cond, true_val, false_val]
+    Select(is_64) => {
+      // Conditional select
+      // Uses: [cond, true_val, false_val], Defs: [result]
       let rd = wreg_num(inst.defs[0])
       let cond_reg = reg_num(inst.uses[0])
       let true_val = reg_num(inst.uses[1])
@@ -1363,7 +1530,11 @@ fn MachineCode::emit_instruction(
           self.emit_fcsel_d(rd, true_val, false_val, NE.to_int())
         Int =>
           // Use CSEL for integer registers
-          self.emit_csel(rd, true_val, false_val, NE.to_int())
+          if is_64 {
+            self.emit_csel(rd, true_val, false_val, NE.to_int())
+          } else {
+            self.emit_csel32(rd, true_val, false_val, NE.to_int())
+          }
         Vector => {
           // Vector select: dst = cond != 0 ? true_val : false_val
           // Uses X16 as GPR temp, V16 as vector temp
@@ -1407,7 +1578,12 @@ fn MachineCode::emit_instruction(
       match reg_class {
         Float32 => self.emit_fcsel_s(rd, true_val, false_val, cond)
         Float64 => self.emit_fcsel_d(rd, true_val, false_val, cond)
-        Int => self.emit_csel(rd, true_val, false_val, cond)
+        Int =>
+          if is_64 {
+            self.emit_csel(rd, true_val, false_val, cond)
+          } else {
+            self.emit_csel32(rd, true_val, false_val, cond)
+          }
         Vector => {
           // Vector select with fused compare
           // Step 1: CSET X16, cond
@@ -1824,7 +2000,7 @@ fn MachineCode::emit_instruction(
         Vector => self.emit_str_q_imm(rt, 31, spill_base_offset + offset) // STR Qt, [SP, #offset]
       }
     }
-    LoadStackParam(offset, class) => {
+    LoadStackParam(offset, class, is_64) => {
       // Load stack parameter from stack (Standard layout)
       //
       // Stack layout from callee's perspective:
@@ -1843,7 +2019,12 @@ fn MachineCode::emit_instruction(
       let stack_offset = frame_size + offset
       let rd = wreg_num(inst.defs[0])
       match class {
-        Int => self.emit_ldr_imm(rd, 31, stack_offset) // LDR Xd, [SP, #offset]
+        Int =>
+          if is_64 {
+            self.emit_ldr_imm(rd, 31, stack_offset) // LDR Xd, [SP, #offset]
+          } else {
+            self.emit_ldr_w_imm(rd, 31, stack_offset) // LDR Wd, [SP, #offset]
+          }
         Float32 => {
           // Load 32-bit value to scratch, then move to S register
           self.emit_ldr_w_imm(16, 31, stack_offset) // LDR W16, [SP, #offset]
@@ -1888,18 +2069,43 @@ fn MachineCode::emit_instruction(
       let value_reg = reg_num(inst.uses[1])
       self.emit_store(ty, value_reg, base_reg, offset)
     }
-    LoadPtrNarrow(bits, signed, offset) => {
+    LoadPtrNarrow(bits, signed, is_64, offset) => {
       // Raw pointer narrow load (no bounds checking)
       // Uses: [base], Defs: [result]
-      let result_reg = wreg_num(inst.defs[0])
       let base_reg = reg_num(inst.uses[0])
-      match (bits, signed) {
-        (8, true) => self.emit_ldrsb_x_imm(result_reg, base_reg, offset)
-        (8, false) => self.emit_ldrb_imm(result_reg, base_reg, offset)
-        (16, true) => self.emit_ldrsh_x_imm(result_reg, base_reg, offset)
-        (16, false) => self.emit_ldrh_imm(result_reg, base_reg, offset)
-        (32, true) => self.emit_ldrsw_imm(result_reg, base_reg, offset)
-        (32, false) => self.emit_ldr_w_imm(result_reg, base_reg, offset)
+      match (bits, signed, is_64) {
+        (8, true, false) => {
+          let rd = wreg_num(inst.defs[0])
+          self.emit_ldrsb_w_imm(rd, base_reg, offset)
+        }
+        (8, true, true) => {
+          let rd = wreg_num(inst.defs[0])
+          self.emit_ldrsb_x_imm(rd, base_reg, offset)
+        }
+        (8, false, _) => {
+          let rd = wreg_num(inst.defs[0])
+          self.emit_ldrb_imm(rd, base_reg, offset)
+        }
+        (16, true, false) => {
+          let rd = wreg_num(inst.defs[0])
+          self.emit_ldrsh_w_imm(rd, base_reg, offset)
+        }
+        (16, true, true) => {
+          let rd = wreg_num(inst.defs[0])
+          self.emit_ldrsh_x_imm(rd, base_reg, offset)
+        }
+        (16, false, _) => {
+          let rd = wreg_num(inst.defs[0])
+          self.emit_ldrh_imm(rd, base_reg, offset)
+        }
+        (32, true, true) => {
+          let rd = wreg_num(inst.defs[0])
+          self.emit_ldrsw_imm(rd, base_reg, offset)
+        }
+        (32, _, false) | (32, false, true) => {
+          let rd = wreg_num(inst.defs[0])
+          self.emit_ldr_w_imm(rd, base_reg, offset)
+        }
         _ => () // Unsupported bit width
       }
     }
@@ -1961,6 +2167,7 @@ fn MachineCode::emit_instruction(
         TableCopy => @jit_ffi.c_jit_get_table_copy_ptr()
         TableInit => @jit_ffi.c_jit_get_table_init_ptr()
         ElemDrop => @jit_ffi.c_jit_get_elem_drop_ptr()
+        DebugAssertI32Eq => @jit_ffi.c_jit_get_debug_assert_i32_eq_ptr()
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }
@@ -3150,12 +3357,12 @@ fn MachineCode::emit_instruction(
     SIMDLoad(offset) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      LdrQ(rd, rn, offset).emit(self)
+      self.emit_ldr_q_imm(rd, rn, offset)
     }
     SIMDStore(offset) => {
       let rt = reg_num(inst.uses[0])
       let rn = reg_num(inst.uses[1])
-      StrQ(rt, rn, offset).emit(self)
+      self.emit_str_q_imm(rt, rn, offset)
     }
     SIMDLoadSplat(lane_size, offset) => {
       // Load and replicate to all lanes
@@ -3171,13 +3378,22 @@ fn MachineCode::emit_instruction(
           D64 => Ld1rD(rd, rn).emit(self)
         }
       } else {
-        // Use x16 as temp for address calculation
-        AddImm(16, rn, offset).emit(self)
+        // Use x16/x17 as temp for address calculation (offset may not fit ADD-immediate).
+        let addr = if rn != 16 { 16 } else { 17 }
+        let tmp = if addr == 16 { 17 } else { 16 }
+        if offset <= 4095 {
+          self.emit_add_imm(addr, rn, offset)
+        } else if (offset & 0xFFF) == 0 && offset >> 12 <= 4095 {
+          self.emit_add_imm_shifted12(addr, rn, offset >> 12)
+        } else {
+          self.emit_load_imm64(tmp, offset.to_int64())
+          self.emit_add_reg(addr, rn, tmp)
+        }
         match lane_size {
-          B8 => Ld1rB(rd, 16).emit(self)
-          H16 => Ld1rH(rd, 16).emit(self)
-          S32 => Ld1rS(rd, 16).emit(self)
-          D64 => Ld1rD(rd, 16).emit(self)
+          B8 => Ld1rB(rd, addr).emit(self)
+          H16 => Ld1rH(rd, addr).emit(self)
+          S32 => Ld1rS(rd, addr).emit(self)
+          D64 => Ld1rD(rd, addr).emit(self)
         }
       }
     }
@@ -3188,7 +3404,7 @@ fn MachineCode::emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       // Load 64 bits into low half using LDR D
-      LdrDImm(rd, rn, offset).emit(self)
+      self.emit_ldr_d_imm(rd, rn, offset)
       // Then extend using SXTL/UXTL
       match (src_bits, signed) {
         (8, true) => Sxtl8H(rd, rd).emit(self) // i8x8 -> i16x8 (signed)
@@ -3207,9 +3423,9 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       // Scalar float load zeros upper bits
       if is_64 {
-        LdrDImm(rd, rn, offset).emit(self)
+        self.emit_ldr_d_imm(rd, rn, offset)
       } else {
-        LdrSImm(rd, rn, offset).emit(self)
+        self.emit_ldr_s_imm(rd, rn, offset)
       }
     }
     SIMDLoadLane(lane_size, lane, offset) => {
@@ -3232,13 +3448,22 @@ fn MachineCode::emit_instruction(
           D64 => Ld1D(rd, rn, lane).emit(self)
         }
       } else {
-        // Use x16 as temp for address calculation
-        AddImm(16, rn, offset).emit(self)
+        // Use x16/x17 as temp for address calculation (offset may not fit ADD-immediate).
+        let addr = if rn != 16 { 16 } else { 17 }
+        let tmp = if addr == 16 { 17 } else { 16 }
+        if offset <= 4095 {
+          self.emit_add_imm(addr, rn, offset)
+        } else if (offset & 0xFFF) == 0 && offset >> 12 <= 4095 {
+          self.emit_add_imm_shifted12(addr, rn, offset >> 12)
+        } else {
+          self.emit_load_imm64(tmp, offset.to_int64())
+          self.emit_add_reg(addr, rn, tmp)
+        }
         match lane_size {
-          B8 => Ld1B(rd, 16, lane).emit(self)
-          H16 => Ld1H(rd, 16, lane).emit(self)
-          S32 => Ld1S(rd, 16, lane).emit(self)
-          D64 => Ld1D(rd, 16, lane).emit(self)
+          B8 => Ld1B(rd, addr, lane).emit(self)
+          H16 => Ld1H(rd, addr, lane).emit(self)
+          S32 => Ld1S(rd, addr, lane).emit(self)
+          D64 => Ld1D(rd, addr, lane).emit(self)
         }
       }
     }
@@ -3257,13 +3482,22 @@ fn MachineCode::emit_instruction(
           D64 => St1D(vec, rn, lane).emit(self)
         }
       } else {
-        // Use x16 as temp for address calculation
-        AddImm(16, rn, offset).emit(self)
+        // Use x16/x17 as temp for address calculation (offset may not fit ADD-immediate).
+        let addr = if rn != 16 { 16 } else { 17 }
+        let tmp = if addr == 16 { 17 } else { 16 }
+        if offset <= 4095 {
+          self.emit_add_imm(addr, rn, offset)
+        } else if (offset & 0xFFF) == 0 && offset >> 12 <= 4095 {
+          self.emit_add_imm_shifted12(addr, rn, offset >> 12)
+        } else {
+          self.emit_load_imm64(tmp, offset.to_int64())
+          self.emit_add_reg(addr, rn, tmp)
+        }
         match lane_size {
-          B8 => St1B(vec, 16, lane).emit(self)
-          H16 => St1H(vec, 16, lane).emit(self)
-          S32 => St1S(vec, 16, lane).emit(self)
-          D64 => St1D(vec, 16, lane).emit(self)
+          B8 => St1B(vec, addr, lane).emit(self)
+          H16 => St1H(vec, addr, lane).emit(self)
+          S32 => St1S(vec, addr, lane).emit(self)
+          D64 => St1D(vec, addr, lane).emit(self)
         }
       }
     }

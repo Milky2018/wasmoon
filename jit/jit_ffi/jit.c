@@ -298,6 +298,21 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
     return (int64_t)wasmoon_jit_memory_copy;
 }
 
+// ============ Debug Assert Hook (temporary diagnostic) ============
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_debug_assert_i32_eq(int64_t lhs, int64_t rhs, int64_t line) {
+    // Print lower 32-bit values (Wasm i32 semantics)
+    uint32_t lhs32 = (uint32_t)lhs;
+    uint32_t rhs32 = (uint32_t)rhs;
+    fprintf(stderr, "[wasmoon][jit][assert] line=%lld lhs=%u rhs=%u\n",
+            (long long)line, (unsigned)lhs32, (unsigned)rhs32);
+    fflush(stderr);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_debug_assert_i32_eq_ptr(void) {
+    return (int64_t)wasmoon_jit_debug_assert_i32_eq;
+}
+
 // ============ Multi-Memory Array Setup ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(

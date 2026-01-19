@@ -76,7 +76,7 @@ test "load_store_forwarding_eliminates_redundant_load" {
 
   // result = load8u [base+0]
   let result = func.new_vreg(Int)
-  let load = @instr.VCodeInst::new(LoadPtrNarrow(8, false, 0))
+  let load = @instr.VCodeInst::new(LoadPtrNarrow(8, false, false, 0))
   load.add_def({ reg: Virtual(result) })
   load.add_use(Virtual(base))
   block.add_inst(load)
@@ -98,7 +98,7 @@ test "load_store_forwarding_eliminates_redundant_load" {
   for inst in insts {
     match inst.opcode {
       StorePtrNarrow(8, 0) => has_store = true
-      Extend(@instr.Unsigned8To64) => has_extend = true
+      Extend(@instr.Unsigned8To32) => has_extend = true
       _ => ()
     }
   }

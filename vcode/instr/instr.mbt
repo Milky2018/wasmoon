@@ -55,6 +55,7 @@ pub(all) enum JITLibcall {
   TableCopy
   TableInit
   ElemDrop
+  DebugAssertI32Eq
 } derive(Eq, Show)
 
 ///|
@@ -179,9 +180,9 @@ pub(all) enum VCodeOpcode {
   SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
   // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
-  And
-  Or
-  Xor
+  And(Bool)
+  Or(Bool)
+  Xor(Bool)
   Shl(Bool) // LSL with size
   AShr(Bool) // Arithmetic shift right with size
   LShr(Bool) // Logical shift right with size
@@ -228,11 +229,12 @@ pub(all) enum VCodeOpcode {
   FDemote // f64 -> f32
   Bitcast // Reinterpret bits between int/float of same size
   // Conditional select
-  // Select: Xd = cond ? Xn : Xm
+  // Select(is_64): select true_val/false_val based on cond (cond != 0)
   // Uses: [cond, true_val, false_val], Defs: [result]
-  Select
+  // Note: is_64 only matters for integer selects; float/vector selects ignore it.
+  Select(Bool)
   // SelectCmp: Fused compare and select
-  // SelectCmp(kind, is_64): CMP lhs, rhs; CSEL Xd, true_val, false_val, cond
+  // SelectCmp(kind, is_64): CMP lhs, rhs; CSEL Xd/Wd, true_val, false_val, cond
   // Uses: [cmp_lhs, cmp_rhs, true_val, false_val], Defs: [result]
   // Saves one instruction compared to separate CMP + CSET + Select
   SelectCmp(CmpKind, Bool)
@@ -331,10 +333,11 @@ pub(all) enum VCodeOpcode {
   StackLoad(Int)
   StackStore(Int)
   // Stack parameter load (for params that overflow registers)
-  // LoadStackParam(offset, class):
+  // LoadStackParam(offset, class, is_64):
   //   offset: byte offset from entry SP (start of overflow area)
+  //   is_64: for Int params, indicates i64/ref vs i32 (controls zero-extension)
   // Stack layout: [int_overflow..., float_overflow...] with V128 aligned to 16.
-  LoadStackParam(Int, @abi.RegClass)
+  LoadStackParam(Int, @abi.RegClass, Bool)
   // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
   // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
   // NOTE: GlobalGet, GlobalSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
@@ -351,9 +354,10 @@ pub(all) enum VCodeOpcode {
   // StorePtr(type, offset): Store to [base + offset]
   // Uses: [base, value], Defs: []
   StorePtr(MemType, Int)
-  // LoadPtrNarrow(bits, signed, offset): Load narrow value from [base + offset]
+  // LoadPtrNarrow(bits, signed, is_64, offset): Load narrow value from [base + offset]
   // Uses: [base], Defs: [result]
-  LoadPtrNarrow(Int, Bool, Int) // (bits, signed, offset)
+  // is_64 selects whether the result is treated as 64-bit (i64) or 32-bit (i32).
+  LoadPtrNarrow(Int, Bool, Bool, Int) // (bits, signed, is_64, offset)
   // StorePtrNarrow(bits, offset): Store narrow value to [base + offset]
   // Uses: [base, value], Defs: []
   StorePtrNarrow(Int, Int) // (bits, offset)
@@ -825,9 +829,9 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Mul(is_64) => if is_64 { "mul" } else { "mul32" }
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
-    And => "and"
-    Or => "or"
-    Xor => "xor"
+    And(is_64) => if is_64 { "and" } else { "and32" }
+    Or(is_64) => if is_64 { "or" } else { "or32" }
+    Xor(is_64) => if is_64 { "xor" } else { "xor32" }
     Shl(is_64) => if is_64 { "shl" } else { "shl32" }
     AShr(is_64) => if is_64 { "ashr" } else { "ashr32" }
     LShr(is_64) => if is_64 { "lshr" } else { "lshr32" }
@@ -874,7 +878,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FPromote => "fpromote"
     FDemote => "fdemote"
     Bitcast => "bitcast"
-    Select => "select"
+    Select(is_64) => if is_64 { "select" } else { "select32" }
     SelectCmp(kind, is_64) =>
       if is_64 {
         "select_cmp.\{kind}"
@@ -934,14 +938,18 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
-    LoadStackParam(offset, class) => "load_stack_param +\{offset} (\{class})"
+    LoadStackParam(offset, class, is_64) => {
+      let width_str = if class is Int && !is_64 { "32" } else { "64" }
+      "load_stack_param +\{offset} (\{class}.\{width_str})"
+    }
     // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
     // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
-    LoadPtrNarrow(bits, signed, offset) => {
+    LoadPtrNarrow(bits, signed, is_64, offset) => {
       let sign_str = if signed { "s" } else { "u" }
-      "load_ptr\{bits}_\{sign_str} +\{offset}"
+      let width_str = if is_64 { "64" } else { "32" }
+      "load_ptr\{bits}_\{sign_str}.\{width_str} +\{offset}"
     }
     StorePtrNarrow(bits, offset) => "store_ptr\{bits} +\{offset}"
     LoadGCFuncPtr(libcall) => "load_gc_func_ptr.\{libcall}"

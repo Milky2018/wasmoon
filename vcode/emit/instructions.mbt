@@ -49,10 +49,13 @@ enum Instruction {
   Mul32(Int, Int, Int) // 32-bit multiply
   // Bitwise - Register
   AndReg(Int, Int, Int)
+  AndReg32(Int, Int, Int)
   AndShifted(Int, Int, Int, @instr.ShiftType, Int)
   OrrReg(Int, Int, Int)
+  OrrReg32(Int, Int, Int)
   OrrShifted(Int, Int, Int, @instr.ShiftType, Int)
   EorReg(Int, Int, Int)
+  EorReg32(Int, Int, Int)
   EorShifted(Int, Int, Int, @instr.ShiftType, Int)
   Mvn(Int, Int)
   Mvn32(Int, Int) // 32-bit bitwise NOT
@@ -203,6 +206,7 @@ enum Instruction {
   CCmpImm(Int, Int, Int, Int, Bool) // rn, imm5, nzcv, cond, is_64
   Cset(Int, Int)
   Csel(Int, Int, Int, Int)
+  Csel32(Int, Int, Int, Int)
   FcselD(Int, Int, Int, Int)
   FcselS(Int, Int, Int, Int)
   // Branch
@@ -557,6 +561,7 @@ fn Instruction::annotate(self : Instruction) -> String {
     SubImm32(rd, rn, imm) => "sub w\{rd}, w\{rn}, #\{imm}"
     Mul32(rd, rn, rm) => "mul w\{rd}, w\{rn}, w\{rm}"
     AndReg(rd, rn, rm) => "and x\{rd}, x\{rn}, x\{rm}"
+    AndReg32(rd, rn, rm) => "and w\{rd}, w\{rn}, w\{rm}"
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -566,6 +571,7 @@ fn Instruction::annotate(self : Instruction) -> String {
       "and x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
     }
     OrrReg(rd, rn, rm) => "orr x\{rd}, x\{rn}, x\{rm}"
+    OrrReg32(rd, rn, rm) => "orr w\{rd}, w\{rn}, w\{rm}"
     OrrShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -575,6 +581,7 @@ fn Instruction::annotate(self : Instruction) -> String {
       "orr x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
     }
     EorReg(rd, rn, rm) => "eor x\{rd}, x\{rn}, x\{rm}"
+    EorReg32(rd, rn, rm) => "eor w\{rd}, w\{rn}, w\{rm}"
     EorShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -774,6 +781,10 @@ fn Instruction::annotate(self : Instruction) -> String {
     Csel(rd, rn, rm, cond) => {
       let cond_name = cond_name_str(cond)
       "csel x\{rd}, x\{rn}, x\{rm}, \{cond_name}"
+    }
+    Csel32(rd, rn, rm, cond) => {
+      let cond_name = cond_name_str(cond)
+      "csel w\{rd}, w\{rn}, w\{rm}, \{cond_name}"
     }
     FcselD(rd, rn, rm, cond) => {
       let cond_name = cond_name_str(cond)
@@ -1295,6 +1306,13 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 138
       (b0, b1, b2, b3)
     }
+    AndReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 10
+      (b0, b1, b2, b3)
+    }
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {
         Lsl => 0
@@ -1315,6 +1333,13 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 170
       (b0, b1, b2, b3)
     }
+    OrrReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 42
+      (b0, b1, b2, b3)
+    }
     OrrShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {
         Lsl => 0
@@ -1333,6 +1358,13 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = (rn >> 3) & 3
       let b2 = rm & 31
       let b3 = 202
+      (b0, b1, b2, b3)
+    }
+    EorReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 74
       (b0, b1, b2, b3)
     }
     EorShifted(rd, rn, rm, shift, amount) => {
@@ -2382,6 +2414,13 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = ((rn >> 3) & 3) | ((cond & 15) << 4)
       let b2 = (rm & 31) | 128
       let b3 = 154
+      (b0, b1, b2, b3)
+    }
+    Csel32(rd, rn, rm, cond) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((cond & 15) << 4)
+      let b2 = (rm & 31) | 128
+      let b3 = 26
       (b0, b1, b2, b3)
     }
     FcselD(rd, rn, rm, cond) => {
@@ -3970,6 +4009,16 @@ pub fn MachineCode::emit_and_reg(
 }
 
 ///|
+pub fn MachineCode::emit_and_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  AndReg32(rd, rn, rm).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_orr_reg(
   self : MachineCode,
   rd : Int,
@@ -3980,6 +4029,16 @@ pub fn MachineCode::emit_orr_reg(
 }
 
 ///|
+pub fn MachineCode::emit_orr_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  OrrReg32(rd, rn, rm).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_eor_reg(
   self : MachineCode,
   rd : Int,
@@ -3987,6 +4046,16 @@ pub fn MachineCode::emit_eor_reg(
   rm : Int,
 ) -> Unit {
   EorReg(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_eor_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  EorReg32(rd, rn, rm).emit(self)
 }
 
 ///|
@@ -4346,7 +4415,31 @@ pub fn MachineCode::emit_ldr_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrImm(rt, rn, imm12).emit(self)
+  // LDR X, [Xn|SP, #imm] encodes an unsigned 12-bit immediate scaled by 8.
+  // If the offset is out of range or not 8-byte aligned, materialize the
+  // address in a scratch register instead of silently truncating.
+  if imm12 >= 0 && imm12 <= 4095 * 8 && (imm12 & 7) == 0 {
+    LdrImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  // First try ADD immediate forms (support SP as base).
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+    // Generic: scratch0 = rn + imm12 (handles negatives too).
+  } else if rn == 31 {
+    // ADD (shifted register) doesn't accept SP, so copy SP to a GPR first.
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4366,7 +4459,28 @@ pub fn MachineCode::emit_str_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  StrImm(rt, rn, imm12).emit(self)
+  // STR X, [Xn|SP, #imm] encodes an unsigned 12-bit immediate scaled by 8.
+  // If the offset is out of range or not 8-byte aligned, materialize the
+  // address in a scratch register instead of silently truncating.
+  if imm12 >= 0 && imm12 <= 4095 * 8 && (imm12 & 7) == 0 {
+    StrImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  StrImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4460,7 +4574,22 @@ pub fn MachineCode::emit_ldrb_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrbImm(rt, rn, imm12).emit(self)
+  // LDRB uses an unscaled unsigned imm12 (0..4095).
+  if imm12 >= 0 && imm12 <= 4095 {
+    LdrbImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrbImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4470,7 +4599,26 @@ pub fn MachineCode::emit_ldrh_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrhImm(rt, rn, imm12).emit(self)
+  // LDRH encodes an unsigned imm12 scaled by 2.
+  if imm12 >= 0 && imm12 <= 4095 * 2 && (imm12 & 1) == 0 {
+    LdrhImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrhImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4480,7 +4628,26 @@ pub fn MachineCode::emit_ldr_w_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrWImm(rt, rn, imm12).emit(self)
+  // LDR W encodes an unsigned imm12 scaled by 4.
+  if imm12 >= 0 && imm12 <= 4095 * 4 && (imm12 & 3) == 0 {
+    LdrWImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrWImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4490,7 +4657,22 @@ pub fn MachineCode::emit_strb_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  StrbImm(rt, rn, imm12).emit(self)
+  // STRB uses an unscaled unsigned imm12 (0..4095).
+  if imm12 >= 0 && imm12 <= 4095 {
+    StrbImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  StrbImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4500,7 +4682,26 @@ pub fn MachineCode::emit_strh_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  StrhImm(rt, rn, imm12).emit(self)
+  // STRH encodes an unsigned imm12 scaled by 2.
+  if imm12 >= 0 && imm12 <= 4095 * 2 && (imm12 & 1) == 0 {
+    StrhImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  StrhImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4510,7 +4711,26 @@ pub fn MachineCode::emit_str_w_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  StrWImm(rt, rn, imm12).emit(self)
+  // STR W encodes an unsigned imm12 scaled by 4.
+  if imm12 >= 0 && imm12 <= 4095 * 4 && (imm12 & 3) == 0 {
+    StrWImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  StrWImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4542,7 +4762,22 @@ pub fn MachineCode::emit_ldrsb_x_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrsbXImm(rt, rn, imm12).emit(self)
+  // LDRSB uses an unscaled unsigned imm12 (0..4095).
+  if imm12 >= 0 && imm12 <= 4095 {
+    LdrsbXImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrsbXImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4552,7 +4787,22 @@ pub fn MachineCode::emit_ldrsb_w_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrsbWImm(rt, rn, imm12).emit(self)
+  // LDRSB uses an unscaled unsigned imm12 (0..4095).
+  if imm12 >= 0 && imm12 <= 4095 {
+    LdrsbWImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrsbWImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4562,7 +4812,26 @@ pub fn MachineCode::emit_ldrsh_x_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrshXImm(rt, rn, imm12).emit(self)
+  // LDRSH encodes an unsigned imm12 scaled by 2.
+  if imm12 >= 0 && imm12 <= 4095 * 2 && (imm12 & 1) == 0 {
+    LdrshXImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrshXImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4572,7 +4841,26 @@ pub fn MachineCode::emit_ldrsh_w_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrshWImm(rt, rn, imm12).emit(self)
+  // LDRSH encodes an unsigned imm12 scaled by 2.
+  if imm12 >= 0 && imm12 <= 4095 * 2 && (imm12 & 1) == 0 {
+    LdrshWImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrshWImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4582,7 +4870,26 @@ pub fn MachineCode::emit_ldrsw_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrswImm(rt, rn, imm12).emit(self)
+  // LDRSW encodes an unsigned imm12 scaled by 4.
+  if imm12 >= 0 && imm12 <= 4095 * 4 && (imm12 & 3) == 0 {
+    LdrswImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 && rt != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrswImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -4770,6 +5077,17 @@ pub fn MachineCode::emit_csel(
   cond : Int,
 ) -> Unit {
   Csel(rd, rn, rm, cond).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_csel32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  cond : Int,
+) -> Unit {
+  Csel32(rd, rn, rm, cond).emit(self)
 }
 
 ///|
@@ -5159,7 +5477,26 @@ pub fn MachineCode::emit_ldr_s_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrSImm(rt, rn, imm12).emit(self)
+  // LDR S encodes an unsigned imm12 scaled by 4.
+  if imm12 >= 0 && imm12 <= 4095 * 4 && (imm12 & 3) == 0 {
+    LdrSImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrSImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -5169,7 +5506,26 @@ pub fn MachineCode::emit_str_s_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  StrSImm(rt, rn, imm12).emit(self)
+  // STR S encodes an unsigned imm12 scaled by 4.
+  if imm12 >= 0 && imm12 <= 4095 * 4 && (imm12 & 3) == 0 {
+    StrSImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  StrSImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -5179,7 +5535,26 @@ pub fn MachineCode::emit_ldr_d_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  LdrDImm(rt, rn, imm12).emit(self)
+  // LDR D encodes an unsigned imm12 scaled by 8.
+  if imm12 >= 0 && imm12 <= 4095 * 8 && (imm12 & 7) == 0 {
+    LdrDImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrDImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -5189,7 +5564,26 @@ pub fn MachineCode::emit_str_d_imm(
   rn : Int,
   imm12 : Int,
 ) -> Unit {
-  StrDImm(rt, rn, imm12).emit(self)
+  // STR D encodes an unsigned imm12 scaled by 8.
+  if imm12 >= 0 && imm12 <= 4095 * 8 && (imm12 & 7) == 0 {
+    StrDImm(rt, rn, imm12).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm12 >= 0 && imm12 <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm12)
+  } else if imm12 >= 0 && (imm12 & 0xFFF) == 0 && imm12 >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm12 >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm12.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  StrDImm(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -5200,7 +5594,26 @@ pub fn MachineCode::emit_ldr_q_imm(
   rn : Int,
   imm : Int,
 ) -> Unit {
-  LdrQ(rt, rn, imm).emit(self)
+  // LDR Q encodes an unsigned imm12 scaled by 16.
+  if imm >= 0 && imm <= 4095 * 16 && (imm & 15) == 0 {
+    LdrQ(rt, rn, imm).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm >= 0 && imm <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm)
+  } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  LdrQ(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -5211,7 +5624,26 @@ pub fn MachineCode::emit_str_q_imm(
   rn : Int,
   imm : Int,
 ) -> Unit {
-  StrQ(rt, rn, imm).emit(self)
+  // STR Q encodes an unsigned imm12 scaled by 16.
+  if imm >= 0 && imm <= 4095 * 16 && (imm & 15) == 0 {
+    StrQ(rt, rn, imm).emit(self)
+    return
+  }
+  let scratch0 = if rn != 16 { 16 } else { 17 }
+  let scratch1 = if scratch0 == 16 { 17 } else { 16 }
+  if imm >= 0 && imm <= 4095 {
+    self.emit_add_imm(scratch0, rn, imm)
+  } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
+    self.emit_add_imm_shifted12(scratch0, rn, imm >> 12)
+  } else if rn == 31 {
+    self.emit_add_imm(scratch1, 31, 0)
+    self.emit_load_imm64(scratch0, imm.to_int64())
+    self.emit_add_reg(scratch0, scratch1, scratch0)
+  } else {
+    self.emit_load_imm64(scratch0, imm.to_int64())
+    self.emit_add_reg(scratch0, rn, scratch0)
+  }
+  StrQ(rt, scratch0, 0).emit(self)
 }
 
 ///|
@@ -5221,7 +5653,7 @@ fn MachineCode::emit_str_offset(
   rn : Int,
   offset : Int,
 ) -> Unit {
-  StrImm(rt, rn, offset).emit(self)
+  self.emit_str_imm(rt, rn, offset)
 }
 
 ///|
@@ -5231,7 +5663,7 @@ fn MachineCode::emit_str_d_offset(
   rn : Int,
   offset : Int,
 ) -> Unit {
-  StrDImm(rt, rn, offset).emit(self)
+  self.emit_str_d_imm(rt, rn, offset)
 }
 
 ///|

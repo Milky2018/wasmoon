@@ -128,17 +128,18 @@ test "entry trampoline: i32 param, i32 result" {
       #|  0010: f40301aa  mov x20, x1
       #|block0:
       #|  0014: 880240b9  ldr w8, [x20, #0]
-      #|  0018: f10302aa  mov x17, x2
-      #|  001c: e10300aa  mov x1, x0
-      #|  0020: e20308aa  mov x2, x8
-      #|  0024: 20023fd6  blr x17
-      #|  0028: e80300aa  mov x8, x0
-      #|  002c: 880a00b9  str w8, [x20, #8]
-      #|  0030: 080080d2  movz x8, #0, lsl #0
-      #|  0034: e00308aa  mov x0, x8
-      #|  0038: f353c1a8  ldp x19, x20, [sp], #16
-      #|  003c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0040: c0035fd6  ret
+      #|  0018: e803082a  mov w8, w8
+      #|  001c: f10302aa  mov x17, x2
+      #|  0020: e10300aa  mov x1, x0
+      #|  0024: e20308aa  mov x2, x8
+      #|  0028: 20023fd6  blr x17
+      #|  002c: e80300aa  mov x8, x0
+      #|  0030: 880a00b9  str w8, [x20, #8]
+      #|  0034: 080080d2  movz x8, #0, lsl #0
+      #|  0038: e00308aa  mov x0, x8
+      #|  003c: f353c1a8  ldp x19, x20, [sp], #16
+      #|  0040: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0044: c0035fd6  ret
       #|
     ),
   )
@@ -220,21 +221,22 @@ test "entry trampoline: multiple params" {
       #|  000c: f30300aa  mov x19, x0
       #|  0010: f40301aa  mov x20, x1
       #|block0:
-      #|  0014: 890240b9  ldr w9, [x20, #0]
-      #|  0018: 880640f9  ldr x8, [x20, #8]
+      #|  0014: 880240b9  ldr w8, [x20, #0]
+      #|  0018: 890640f9  ldr x9, [x20, #8]
       #|  001c: 801240bd  ldr s0, [x20, #16]
-      #|  0020: f10302aa  mov x17, x2
-      #|  0024: e10300aa  mov x1, x0
-      #|  0028: e20309aa  mov x2, x9
-      #|  002c: e30308aa  mov x3, x8
-      #|  0030: 20023fd6  blr x17
-      #|  0034: e80300aa  mov x8, x0
-      #|  0038: 880e00f9  str x8, [x20, #24]
-      #|  003c: 080080d2  movz x8, #0, lsl #0
-      #|  0040: e00308aa  mov x0, x8
-      #|  0044: f353c1a8  ldp x19, x20, [sp], #16
-      #|  0048: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  004c: c0035fd6  ret
+      #|  0020: e803082a  mov w8, w8
+      #|  0024: f10302aa  mov x17, x2
+      #|  0028: e10300aa  mov x1, x0
+      #|  002c: e20308aa  mov x2, x8
+      #|  0030: e30309aa  mov x3, x9
+      #|  0034: 20023fd6  blr x17
+      #|  0038: e80300aa  mov x8, x0
+      #|  003c: 880e00f9  str x8, [x20, #24]
+      #|  0040: 080080d2  movz x8, #0, lsl #0
+      #|  0044: e00308aa  mov x0, x8
+      #|  0048: f353c1a8  ldp x19, x20, [sp], #16
+      #|  004c: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0050: c0035fd6  ret
       #|
     ),
   )

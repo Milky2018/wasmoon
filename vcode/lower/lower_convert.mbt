@@ -334,7 +334,11 @@ fn lower_select(
     } else {
       // Fall back to regular Select
       let cond = ctx.get_vreg_for_use(cond_ir, block)
-      let vcode_inst = @instr.VCodeInst::new(Select)
+      let is_64 = match result.ty {
+        @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+        _ => false
+      }
+      let vcode_inst = @instr.VCodeInst::new(Select(is_64))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(cond))
       vcode_inst.add_use(Virtual(true_val))

@@ -16,8 +16,8 @@ struct LoweringContext {
   value_map : Map[Int, @abi.VReg]
   // Map from IR Block id to VCode block id
   block_map : Map[Int, Int]
-  // Map from IR Value id to stack param index (for params >= 8)
-  stack_param_map : Map[Int, (Int, @abi.RegClass)]
+  // Map from IR Value id to stack param info (for params that overflow registers)
+  stack_param_map : Map[Int, (Int, @abi.RegClass, Bool)]
   // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
   fused_icmps : @hashset.HashSet[Int]
 }
@@ -116,10 +116,10 @@ fn LoweringContext::get_vreg_for_use(
   block : @block.VCodeBlock,
 ) -> @abi.VReg {
   // First check if it's a stack parameter
-  if self.stack_param_map.get(value.id) is Some((offset, class)) {
+  if self.stack_param_map.get(value.id) is Some((offset, class, is_64)) {
     // Generate LoadStackParam instruction
     let result = self.vcode_func.new_vreg(class)
-    let inst = @instr.VCodeInst::new(LoadStackParam(offset, class))
+    let inst = @instr.VCodeInst::new(LoadStackParam(offset, class, is_64))
     inst.add_def({ reg: Virtual(result) })
     block.add_inst(inst)
     result
@@ -339,7 +339,7 @@ pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
   let max_float_reg_params = @abi.MAX_FLOAT_REG_PARAMS // V0-V7
   let mut int_reg_count = 0
   let mut float_reg_count = 0
-  let int_stack_values : Array[@ir.Value] = []
+  let int_stack_values : Array[(@ir.Value, @ir.Type)] = []
   let float_stack_values : Array[(@ir.Value, @abi.RegClass)] = []
   let float_stack_classes : Array[@abi.RegClass] = []
   for param in ir_func.params {
@@ -354,7 +354,7 @@ pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
           int_reg_count = int_reg_count + 1
         } else {
           // Stack parameter: laid out in overflow area (entry SP).
-          int_stack_values.push(value)
+          int_stack_values.push((value, ty))
         }
       Float32 | Float64 | Vector =>
         // Vector uses same V0-V7 registers as floats on AArch64
@@ -374,11 +374,16 @@ pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
     float_stack_classes,
   )
   for i in 0..<int_stack_values.length() {
-    ctx.stack_param_map.set(int_stack_values[i].id, (int_offsets[i], Int))
+    let (value, ty) = int_stack_values[i]
+    let is_64 = match ty {
+      @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+      _ => false
+    }
+    ctx.stack_param_map.set(value.id, (int_offsets[i], Int, is_64))
   }
   for i in 0..<float_stack_values.length() {
     let (value, class) = float_stack_values[i]
-    ctx.stack_param_map.set(value.id, (float_offsets[i], class))
+    ctx.stack_param_map.set(value.id, (float_offsets[i], class, true))
   }
   ctx.vcode_func.set_int_stack_params(int_stack_values.length())
 
@@ -1280,6 +1285,59 @@ fn lower_fcmp(
 
 ///|
 /// Lower a terminator
+fn find_const_i64(ctx : LoweringContext, v : @ir.Value) -> Int64? {
+  // Search through all blocks and instructions to find the definition.
+  for block in ctx.ir_func.blocks {
+    for inst in block.instructions {
+      if inst.first_result() is Some(r) && r.id == v.id {
+        match inst.opcode {
+          @ir.Opcode::Iconst(c) => return Some(c)
+          _ => return None
+        }
+      }
+    }
+  }
+  None
+}
+
+///|
+fn find_ir_block(ctx : LoweringContext, block_id : Int) -> @ir.Block? {
+  for b in ctx.ir_func.blocks {
+    if b.id == block_id {
+      return Some(b)
+    }
+  }
+  None
+}
+
+///|
+/// If this is an assert/abort block, return the line number.
+/// Pattern: call 62(file_ptr, line) ; trap "unreachable".
+fn get_assert_line(ctx : LoweringContext, block_id : Int) -> Int64? {
+  guard find_ir_block(ctx, block_id) is Some(b) else { return None }
+  for inst in b.instructions {
+    match inst.opcode {
+      @ir.Opcode::Call(func_idx) =>
+        if func_idx == 62 && inst.operands.length() >= 2 {
+          return find_const_i64(ctx, inst.operands[1])
+        }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+fn add_c_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
+  for preg in @abi.call_clobbered_gprs() {
+    call_inst.add_def({ reg: Physical(preg) })
+  }
+  for preg in @abi.call_clobbered_fprs() {
+    call_inst.add_def({ reg: Physical(preg) })
+  }
+}
+
+///|
 fn lower_terminator(
   ctx : LoweringContext,
   term : @ir.Terminator,
@@ -1366,9 +1424,55 @@ fn lower_terminator(
           @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
           _ => false
         }
+        let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
+        let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
+
+        // If the else branch is an assert block (call 62 with a constant line),
+        // insert a diagnostic call to help pinpoint JIT mismatches.
+        let traced_else_id = if cc is @ir.IntCC::Eq &&
+          get_assert_line(ctx, else_block) is Some(line) {
+          let trace_block = ctx.vcode_func.new_block()
+
+          // Load debug helper function pointer
+          let dbg_ptr = ctx.vcode_func.new_vreg(Int)
+          let load_dbg = @instr.VCodeInst::new(LoadJITFuncPtr(DebugAssertI32Eq))
+          load_dbg.add_def({ reg: Virtual(dbg_ptr) })
+          trace_block.add_inst(load_dbg)
+
+          // Materialize line number
+          let line_vreg = ctx.vcode_func.new_vreg(Int)
+          let load_line = @instr.VCodeInst::new(LoadConst(line))
+          load_line.add_def({ reg: Virtual(line_vreg) })
+          trace_block.add_inst(load_line)
+
+          // Call debug helper (C calling convention)
+          let call_dbg = @instr.VCodeInst::new(CallPtr(3, 0, C))
+          call_dbg.add_use_fixed(Virtual(dbg_ptr), @abi.PReg::{
+            index: 17,
+            class: Int,
+          })
+          call_dbg.add_use_fixed(Virtual(lhs_vreg), @abi.PReg::{
+            index: 0,
+            class: Int,
+          })
+          call_dbg.add_use_fixed(Virtual(rhs_vreg), @abi.PReg::{
+            index: 1,
+            class: Int,
+          })
+          call_dbg.add_use_fixed(Virtual(line_vreg), @abi.PReg::{
+            index: 2,
+            class: Int,
+          })
+          add_c_call_clobbers(call_dbg)
+          trace_block.add_inst(call_dbg)
+          trace_block.set_terminator(Jump(else_id, []))
+          trace_block.id
+        } else {
+          else_id
+        }
+
         // Try to use BranchCmpImm if RHS is a valid immediate
         if match_add_imm_value(ctx, rhs) is Some(imm) {
-          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
           block.set_terminator(
             BranchCmpImm(
               Virtual(lhs_vreg),
@@ -1376,12 +1480,10 @@ fn lower_terminator(
               vcode_cond,
               is_64,
               then_id,
-              else_id,
+              traced_else_id,
             ),
           )
         } else {
-          let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
-          let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
           block.set_terminator(
             BranchCmp(
               Virtual(lhs_vreg),
@@ -1389,11 +1491,12 @@ fn lower_terminator(
               vcode_cond,
               is_64,
               then_id,
-              else_id,
+              traced_else_id,
             ),
           )
         }
       } else {
+
         // Use BranchZero: branch to then_block if reg is nonzero
         // Condition result is always i32, so is_64=false
         let cond_vreg = ctx.get_vreg_for_use(cond, block)
@@ -1498,9 +1601,9 @@ fn lower_call(
   func_idx : Int,
 ) -> Unit {
   // Collect argument vregs
-  let arg_vregs : Array[@abi.VReg] = []
+  let arg_vregs : Array[(@abi.VReg, @ir.Type)] = []
   for operand in inst.operands {
-    arg_vregs.push(ctx.get_vreg_for_use(operand, block))
+    arg_vregs.push((ctx.get_vreg_for_use(operand, block), operand.ty))
   }
 
   // Get all result vregs
@@ -1656,7 +1759,7 @@ fn lower_load_ptr_narrow(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : @block.VCodeBlock,
-  _result_ty : @ir.Type,
+  result_ty : @ir.Type,
   bits : Int,
   signed : Bool,
 ) -> Unit {
@@ -1696,10 +1799,14 @@ fn lower_load_ptr_narrow(
     (base_value, explicit_offset.to_int())
   }
   let base = ctx.get_vreg_for_use(actual_base_value, block)
+  let is_64 = match result_ty {
+    @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+    _ => false
+  }
 
   // Create LoadPtrNarrow instruction
   let load_inst = @instr.VCodeInst::new(
-    LoadPtrNarrow(bits, signed, total_offset),
+    LoadPtrNarrow(bits, signed, is_64, total_offset),
   )
   load_inst.add_def({ reg: Virtual(result_vreg) })
   load_inst.add_use(Virtual(base))

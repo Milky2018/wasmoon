@@ -30,7 +30,7 @@ fn lower_i31_new(
   block.add_inst(shift_inst)
 
   // Step 3: OR with 1 to set low bit
-  let or_inst = @instr.VCodeInst::new(Or)
+  let or_inst = @instr.VCodeInst::new(Or(true))
   or_inst.add_def({ reg: Virtual(dst) })
   or_inst.add_use(Virtual(shifted_vreg))
   or_inst.add_use(Virtual(one_vreg))
@@ -134,7 +134,7 @@ fn lower_i31_get_u(
   let load_mask = @instr.VCodeInst::new(LoadConst(0x7FFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask) })
   block.add_inst(load_mask)
-  let and_inst = @instr.VCodeInst::new(And)
+  let and_inst = @instr.VCodeInst::new(And(false))
   and_inst.add_def({ reg: Virtual(dst) })
   and_inst.add_use(Virtual(tmp))
   and_inst.add_use(Virtual(mask))
