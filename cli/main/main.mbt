@@ -93,6 +93,7 @@ fn main {
             help="Stages to show: wasm, ir, opt-ir, vcode, regalloc, mc (default all)",
           ),
           "html": @clap.Arg::flag(help="Output HTML report"),
+          "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
         },
       ),
       "settings": @clap.SubCommand::new(
@@ -266,12 +267,14 @@ fn main {
                   None => []
                 }
                 let html_output = sub.flags.get("html") is Some(true)
+                let debug = sub.flags.get("debug") is Some(true)
                 run_explore(
                   positional[0],
                   func_idx,
                   opt_level,
                   stages,
                   html_output,
+                  debug,
                 )
               } else {
                 println("Error: missing file argument")

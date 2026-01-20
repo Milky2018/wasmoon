@@ -851,7 +851,6 @@ fn run_with_jit(
   opt_level : Int,
   enable_dwarf : Bool,
 ) -> Array[@types.Value] {
-  ignore(debug)
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
@@ -1001,7 +1000,7 @@ fn run_with_jit(
 /// actual_memory_max: Override for memory max limit (used for imported memories)
 fn compile_module_to_jit(
   mod_ : @types.Module,
-  _debug : Bool,
+  debug : Bool,
   dump_on_trap : Bool,
   actual_memory_max? : Int? = None,
   opt_level : Int,
@@ -1069,9 +1068,10 @@ fn compile_module_to_jit(
       vcode_after_dump = Some(allocated.print())
     }
     // Stage 5: Emit machine code
+    let debug_func_idx = if debug { Some(func_idx) } else { None }
     let mc = @emit.emit_function(
       allocated,
-      debug_func_idx=Some(func_idx),
+      debug_func_idx~,
       force_frame_setup=enable_dwarf,
     )
     let mut mc_dump : String? = None

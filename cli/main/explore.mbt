@@ -19,6 +19,7 @@ fn run_explore(
   opt_level : Int,
   stages : Array[String],
   html_output : Bool,
+  debug : Bool,
 ) -> Unit {
   // Parse stages - empty means show all
   let show_all = stages.is_empty()
@@ -155,10 +156,8 @@ fn run_explore(
     }
 
     // Stage 6: Machine Code
-    let mc = @emit.emit_function(
-      allocated,
-      debug_func_idx=Some(actual_func_idx),
-    )
+    let debug_func_idx = if debug { Some(actual_func_idx) } else { None }
+    let mc = @emit.emit_function(allocated, debug_func_idx~)
     let mc_text = mc.dump_disasm()
     if !html_output && show_mc {
       println("")
