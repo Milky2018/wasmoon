@@ -22,7 +22,7 @@ pub fn is_valid_add_imm(Int64) -> Bool
 
 pub fn is_valid_logical_imm(Int64) -> Bool
 
-pub fn lower_function(@ir.Function, abi_settings? : @abi.ABISettings) -> @regalloc.VCodeFunction
+pub fn lower_function(@ir.Function, abi_settings? : @abi.ABISettings, num_imports? : Int) -> @regalloc.VCodeFunction
 
 pub fn lower_function_optimized(@ir.Function) -> @regalloc.VCodeFunction
 
@@ -48,7 +48,7 @@ pub enum AArch64RewriteResult {
 }
 
 type LoweringContext
-pub fn LoweringContext::new(@ir.Function, @abi.ABISettings) -> Self
+pub fn LoweringContext::new(@ir.Function, @abi.ABISettings, Int) -> Self
 
 type MatchResult
 

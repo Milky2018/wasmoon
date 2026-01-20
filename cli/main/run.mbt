@@ -1056,7 +1056,10 @@ fn compile_module_to_jit(
       ir_dump = Some(ir_func.print())
     }
     // Stage 3: Lower to VCode
-    let vcode_func = @lower.lower_function(ir_func)
+    let vcode_func = @lower.lower_function(
+      ir_func,
+      num_imports=mod_.imports.length(),
+    )
     let mut vcode_before_dump : String? = None
     if debug_db is Some(_) {
       vcode_before_dump = Some(vcode_func.print())

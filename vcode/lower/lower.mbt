@@ -13,6 +13,7 @@ struct LoweringContext {
   ir_func : @ir.Function
   vcode_func : @regalloc.VCodeFunction
   abi_settings : @abi.ABISettings
+  num_imports : Int
   // Map from IR Value id to @abi.VReg
   value_map : Map[Int, @abi.VReg]
   // Map from IR Block id to VCode block id
@@ -31,12 +32,14 @@ struct LoweringContext {
 pub fn LoweringContext::new(
   ir_func : @ir.Function,
   abi_settings : @abi.ABISettings,
+  num_imports : Int,
 ) -> LoweringContext {
   let use_counts = compute_use_counts(ir_func)
   {
     ir_func,
     vcode_func: @regalloc.VCodeFunction::new(ir_func.name),
     abi_settings,
+    num_imports,
     value_map: {},
     block_map: {},
     stack_param_map: {},
@@ -376,10 +379,11 @@ fn intcc_to_cond(cc : @ir.IntCC) -> @instr.Cond {
 pub fn lower_function(
   ir_func : @ir.Function,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  num_imports? : Int = -1,
 ) -> @regalloc.VCodeFunction {
   // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
   @ir.optimize_function(ir_func) |> ignore
-  let ctx = LoweringContext::new(ir_func, abi_settings)
+  let ctx = LoweringContext::new(ir_func, abi_settings, num_imports)
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
   let fused = compute_fused_icmps(ir_func, ctx.use_counts)
@@ -1568,9 +1572,20 @@ fn lower_call(
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
-
-  // Use direct call lowering
-  lower_wasm_call_direct(ctx, block, func_idx, arg_vregs, result_vregs)
+  if ctx.num_imports < 0 || func_idx < ctx.num_imports {
+    // Imports: load function pointer from vmctx func_table and call indirectly.
+    let func_table = emit_load_func_table(ctx, block)
+    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let offset = func_idx * 8
+    let load_inst = @instr.VCodeInst::new(Load(I64, offset))
+    load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+    load_inst.add_use(Virtual(func_table))
+    block.add_inst(load_inst)
+    lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
+  } else {
+    // Internal functions: direct call.
+    lower_wasm_call_direct(ctx, block, func_idx, arg_vregs, result_vregs)
+  }
 }
 
 // NOTE: lower_global_get, lower_global_set are removed

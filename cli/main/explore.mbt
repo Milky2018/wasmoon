@@ -138,7 +138,10 @@ fn run_explore(
     }
 
     // Stage 4: VCode (Low-level IR)
-    let vcode_func = @lower.lower_function(ir_func)
+    let vcode_func = @lower.lower_function(
+      ir_func,
+      num_imports=mod_.imports.length(),
+    )
     let vcode_text = vcode_func.to_string()
     if !html_output && show_vcode {
       println("")
