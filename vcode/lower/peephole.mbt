@@ -1459,6 +1459,7 @@ fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
     | LoadConstF32(_)
     | LoadConstF64(_)
     | LoadConstV128(_)
+    | LoadFuncAddr(_)
     | Nop => true
     _ => false
   }
@@ -1479,7 +1480,6 @@ fn dce_trivially_dead(func : @regalloc.VCodeFunction) -> Unit {
         collect_terminator_uses(term, used)
       }
     }
-
     for block in func.blocks {
       let new_insts : Array[@instr.VCodeInst] = []
       for inst in block.insts {
@@ -1546,11 +1546,7 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
       }
     }
   }
-
-  fn resolve_copy(
-    reg : @abi.VReg,
-    copies : Map[Int, @abi.VReg],
-  ) -> @abi.VReg {
+  fn resolve_copy(reg : @abi.VReg, copies : Map[Int, @abi.VReg]) -> @abi.VReg {
     let mut cur = reg
     while copies.get(cur.id) is Some(next) {
       if next.id == cur.id {
@@ -1563,11 +1559,8 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
 
   let copies : Map[Int, @abi.VReg] = {}
   let to_remove : @hashset.HashSet[Int] = @hashset.new()
-
   for i, inst in block.insts {
-    if inst.opcode is Move &&
-      inst.defs.length() == 1 &&
-      inst.uses.length() == 1 {
+    if inst.opcode is Move && inst.defs.length() == 1 && inst.uses.length() == 1 {
       if inst.defs[0].reg is Virtual(dst_vreg) &&
         inst.uses[0] is Virtual(src_vreg) {
         if same_reg_class(dst_vreg.class, src_vreg.class) &&
@@ -1579,7 +1572,6 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
       }
     }
   }
-
   let rewrite_reg = fn(reg : @abi.Reg) -> @abi.Reg {
     match reg {
       Virtual(v) =>
@@ -1591,7 +1583,6 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
       _ => reg
     }
   }
-
   let new_insts : Array[@instr.VCodeInst] = []
   for i, inst in block.insts {
     if to_remove.contains(i) {
@@ -1606,7 +1597,6 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
   for inst in new_insts {
     block.insts.push(inst)
   }
-
   if block.terminator is Some(term) {
     let new_term = match term {
       @instr.VCodeTerminator::Jump(target, args) => {
@@ -1627,7 +1617,13 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
           then_id,
           else_id,
         )
-      @instr.VCodeTerminator::BranchZero(cond, is_nonzero, is_64, then_id, else_id) =>
+      @instr.VCodeTerminator::BranchZero(
+        cond,
+        is_nonzero,
+        is_64,
+        then_id,
+        else_id
+      ) =>
         @instr.VCodeTerminator::BranchZero(
           rewrite_reg(cond),
           is_nonzero,
@@ -1635,7 +1631,14 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
           then_id,
           else_id,
         )
-      @instr.VCodeTerminator::BranchCmpImm(lhs, imm, cond, is_64, then_id, else_id) =>
+      @instr.VCodeTerminator::BranchCmpImm(
+        lhs,
+        imm,
+        cond,
+        is_64,
+        then_id,
+        else_id
+      ) =>
         @instr.VCodeTerminator::BranchCmpImm(
           rewrite_reg(lhs),
           imm,
@@ -1652,11 +1655,7 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
         @instr.VCodeTerminator::Return(new_args)
       }
       @instr.VCodeTerminator::BrTable(index, targets, default_id) =>
-        @instr.VCodeTerminator::BrTable(
-          rewrite_reg(index),
-          targets,
-          default_id,
-        )
+        @instr.VCodeTerminator::BrTable(rewrite_reg(index), targets, default_id)
       @instr.VCodeTerminator::Trap(msg) => @instr.VCodeTerminator::Trap(msg)
     }
     block.set_terminator(new_term)
@@ -1684,11 +1683,7 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
   if copies.is_empty() {
     return
   }
-
-  fn resolve_copy(
-    reg : @abi.VReg,
-    copies : Map[Int, @abi.VReg],
-  ) -> @abi.VReg {
+  fn resolve_copy(reg : @abi.VReg, copies : Map[Int, @abi.VReg]) -> @abi.VReg {
     let mut cur = reg
     while copies.get(cur.id) is Some(next) {
       if next.id == cur.id {
@@ -1710,7 +1705,6 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
       _ => reg
     }
   }
-
   for block in func.blocks {
     let new_insts : Array[@instr.VCodeInst] = []
     for inst in block.insts {
@@ -1729,7 +1723,6 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
     for inst in new_insts {
       block.insts.push(inst)
     }
-
     if block.terminator is Some(term) {
       let new_term = match term {
         @instr.VCodeTerminator::Jump(target, args) => {
@@ -1741,7 +1734,14 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
         }
         @instr.VCodeTerminator::Branch(cond, then_id, else_id) =>
           @instr.VCodeTerminator::Branch(rewrite_reg(cond), then_id, else_id)
-        @instr.VCodeTerminator::BranchCmp(lhs, rhs, cond, is_64, then_id, else_id) =>
+        @instr.VCodeTerminator::BranchCmp(
+          lhs,
+          rhs,
+          cond,
+          is_64,
+          then_id,
+          else_id
+        ) =>
           @instr.VCodeTerminator::BranchCmp(
             rewrite_reg(lhs),
             rewrite_reg(rhs),
@@ -1755,7 +1755,7 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
           is_nonzero,
           is_64,
           then_id,
-          else_id,
+          else_id
         ) =>
           @instr.VCodeTerminator::BranchZero(
             rewrite_reg(cond),
@@ -1770,7 +1770,7 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
           cond,
           is_64,
           then_id,
-          else_id,
+          else_id
         ) =>
           @instr.VCodeTerminator::BranchCmpImm(
             rewrite_reg(lhs),
@@ -1855,7 +1855,6 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
       }
     }
   }
-
   for blk in func.blocks {
     match blk.terminator {
       Some(@instr.VCodeTerminator::Branch(cond, then_id, else_id)) =>
@@ -1878,28 +1877,22 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
               let lhs = last.uses[0]
               let rhs = last.uses[1]
               let cond = cmp_kind_to_cond(kind)
-              let new_term =
-                if rhs is Virtual(rhs_vreg) &&
-                  const_defs.get(rhs_vreg.id) is Some(val) &&
-                  is_valid_add_imm(val) {
-                  @instr.VCodeTerminator::BranchCmpImm(
-                    lhs,
-                    val.to_int(),
-                    cond,
-                    is_64,
-                    then_id,
-                    else_id,
-                  )
-                } else {
-                  @instr.VCodeTerminator::BranchCmp(
-                    lhs,
-                    rhs,
-                    cond,
-                    is_64,
-                    then_id,
-                    else_id,
-                  )
-                }
+              let new_term = if rhs is Virtual(rhs_vreg) &&
+                const_defs.get(rhs_vreg.id) is Some(val) &&
+                is_valid_add_imm(val) {
+                @instr.VCodeTerminator::BranchCmpImm(
+                  lhs,
+                  val.to_int(),
+                  cond,
+                  is_64,
+                  then_id,
+                  else_id,
+                )
+              } else {
+                @instr.VCodeTerminator::BranchCmp(
+                  lhs, rhs, cond, is_64, then_id, else_id,
+                )
+              }
               let new_insts : Array[@instr.VCodeInst] = []
               for i in 0..<last_idx {
                 new_insts.push(blk.insts[i])

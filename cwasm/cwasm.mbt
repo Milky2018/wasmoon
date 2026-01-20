@@ -139,6 +139,8 @@ pub(all) struct CompiledEntry {
   num_params : Int
   // Number of results (0 or 1 for WASM 1.0)
   num_results : Int
+  // Direct function address fixups
+  func_addr_fixups : Array[@emit.FuncAddrFixup]
 }
 
 ///|
@@ -150,8 +152,18 @@ pub fn CompiledEntry::new(
   entry_offset : Int,
   num_params : Int,
   num_results : Int,
+  func_addr_fixups? : Array[@emit.FuncAddrFixup] = [],
 ) -> CompiledEntry {
-  { func_idx, name, code, frame_size, entry_offset, num_params, num_results }
+  {
+    func_idx,
+    name,
+    code,
+    frame_size,
+    entry_offset,
+    num_params,
+    num_results,
+    func_addr_fixups,
+  }
 }
 
 ///|
@@ -429,6 +441,7 @@ pub fn PrecompiledModule::add_function(
     compiled.entry_offset,
     num_params,
     num_results,
+    func_addr_fixups=compiled.get_func_addr_fixups(),
   )
   self.functions.push(entry)
 }
@@ -1058,6 +1071,9 @@ pub fn CompiledEntry::to_compiled_function(
   let mc = @emit.MachineCode::new()
   for b in self.code {
     mc.emit_byte(b)
+  }
+  for fixup in self.func_addr_fixups {
+    mc.add_func_addr_fixup(fixup.offset, fixup.func_idx, fixup.reg)
   }
   @vcode.CompiledFunction::new(self.name, mc, self.frame_size)
 }

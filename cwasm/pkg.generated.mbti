@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/cwasm"
 import(
   "Milky2018/wasmoon/types"
   "Milky2018/wasmoon/vcode"
+  "Milky2018/wasmoon/vcode/emit"
 )
 
 // Values
@@ -26,8 +27,9 @@ pub(all) struct CompiledEntry {
   entry_offset : Int
   num_params : Int
   num_results : Int
+  func_addr_fixups : Array[@emit.FuncAddrFixup]
 }
-pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int) -> Self
+pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@emit.FuncAddrFixup]) -> Self
 pub fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
 pub impl Show for CompiledEntry
 

@@ -315,6 +315,7 @@ pub(all) enum VCodeOpcode {
   LoadGCFuncPtr(GCLibcall)
   LoadJITFuncPtr(JITLibcall)
   LoadExceptionFuncPtr(ExceptionLibcall)
+  LoadFuncAddr(Int)
   CallPtr(Int, Int, CallConv)
   AdjustSP(Int)
   StoreToStack(Int)

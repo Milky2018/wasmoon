@@ -2043,6 +2043,13 @@ fn MachineCode::emit_instruction(
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }
+    LoadFuncAddr(func_idx) => {
+      // Load function address (patched at JIT load time)
+      let result_reg = wreg_num(inst.defs[0])
+      let fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(result_reg, 0L)
+      self.add_func_addr_fixup(fixup_offset, func_idx, result_reg)
+    }
     CallPtr(_, _, _call_conv) => {
       // Standard call: all arguments are already in place.
       // Use a fixed-reg constraint if present; otherwise use assigned reg.

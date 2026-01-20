@@ -373,6 +373,11 @@ pub(all) enum VCodeOpcode {
   // Uses: [], Defs: [result (function pointer)]
   LoadExceptionFuncPtr(ExceptionLibcall)
 
+  // Load direct function address (resolved at JIT module load time)
+  // LoadFuncAddr(func_idx): Load function pointer for func_idx
+  // Uses: [], Defs: [result (function pointer)]
+  LoadFuncAddr(Int)
+
   // CallPtr: call through a function pointer
   // Uses depend on calling convention:
   //   Wasm: [func_ptr, vmctx, arg0, arg1, ...]
@@ -947,6 +952,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     LoadGCFuncPtr(libcall) => "load_gc_func_ptr.\{libcall}"
     LoadJITFuncPtr(libcall) => "load_jit_func_ptr.\{libcall}"
     LoadExceptionFuncPtr(libcall) => "load_exception_func_ptr.\{libcall}"
+    LoadFuncAddr(func_idx) => "load_func_addr.\{func_idx}"
     CallPtr(num_args, num_results, call_conv) =>
       "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
     AdjustSP(delta) =>

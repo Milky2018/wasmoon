@@ -107,7 +107,7 @@ fn compute_fused_icmps(
     }
     if block.terminator is Some(term) {
       match term {
-        @ir.Terminator::Brz(cond, _, _) | @ir.Terminator::Brnz(cond, _, _) => {
+        @ir.Terminator::Brz(cond, _, _) | @ir.Terminator::Brnz(cond, _, _) =>
           // Check if the condition is an Icmp result with exactly one use
           if use_counts.get(cond.id).unwrap_or(0) == 1 {
             // Find the defining instruction of the condition
@@ -122,7 +122,6 @@ fn compute_fused_icmps(
               }
             }
           }
-        }
         _ => ()
       }
     }
@@ -1570,15 +1569,10 @@ fn lower_call(
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
 
-  // Load func_table from vmctx on-demand
-  let func_table = emit_load_func_table(ctx, block)
-
-  // Load function pointer from table: func_ptr = [func_table + func_idx * 8]
+  // Load function address (patched at JIT module load time)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let offset = func_idx * 8
-  let load_inst = @instr.VCodeInst::new(Load(I64, offset))
+  let load_inst = @instr.VCodeInst::new(LoadFuncAddr(func_idx))
   load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-  load_inst.add_use(Virtual(func_table))
   block.add_inst(load_inst)
 
   // Use Standard call lowering

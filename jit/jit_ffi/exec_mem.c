@@ -69,14 +69,15 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
         return -1;
     }
 
-    // Copy code
-    memcpy(ptr, src, (size_t)size);
-
-    // Find the code block to get the size for mprotect
+    // Find the code block containing this address
     size_t alloc_size = 0;
+    void *block_base = NULL;
     for (int i = 0; i < num_code_blocks; i++) {
-        if (code_blocks[i].code == ptr) {
+        uint8_t *base = (uint8_t *)code_blocks[i].code;
+        uint8_t *end = base + code_blocks[i].size;
+        if ((uint8_t *)ptr >= base && (uint8_t *)ptr < end) {
             alloc_size = code_blocks[i].size;
+            block_base = base;
             break;
         }
     }
@@ -85,8 +86,18 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
     }
 
 #ifndef _WIN32
+    // Ensure writable before patching (needed for runtime fixups)
+    if (mprotect(block_base, alloc_size, PROT_READ | PROT_WRITE) != 0) {
+        return -1;
+    }
+#endif
+
+    // Copy code
+    memcpy(ptr, src, (size_t)size);
+
+#ifndef _WIN32
     // Change permissions from WRITE to EXEC
-    if (mprotect(ptr, alloc_size, PROT_READ | PROT_EXEC) != 0) {
+    if (mprotect(block_base, alloc_size, PROT_READ | PROT_EXEC) != 0) {
         return -1;
     }
 #endif

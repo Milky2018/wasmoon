@@ -188,13 +188,10 @@ fn lower_return_call(
   block : @block.VCodeBlock,
   func_idx : Int,
 ) -> Unit {
-  // Load func_table and get function pointer
-  let func_table = emit_load_func_table(ctx, block)
+  // Load function address (patched at JIT module load time)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let offset = func_idx * 8
-  let load_inst = @instr.VCodeInst::new(Load(I64, offset))
+  let load_inst = @instr.VCodeInst::new(LoadFuncAddr(func_idx))
   load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-  load_inst.add_use(Virtual(func_table))
   block.add_inst(load_inst)
 
   // Get pinned vmctx.

@@ -62,6 +62,7 @@ pub struct CompiledFunction {
   mut valid : Bool
 }
 pub fn CompiledFunction::get_code(Self) -> Array[Int]
+pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[@emit.FuncAddrFixup]
 pub fn CompiledFunction::invalidate(Self) -> Unit
 pub fn CompiledFunction::is_valid(Self) -> Bool
 pub fn CompiledFunction::new(String, @emit.MachineCode, Int) -> Self
