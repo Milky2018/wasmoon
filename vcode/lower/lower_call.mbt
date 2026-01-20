@@ -123,13 +123,9 @@ fn lower_wasm_call_common(
     index: @abi.REG_CALLEE_VMCTX,
     class: @abi.Int,
   }
-  // IMPORTANT: keep vmctx as a *virtual* value and let regalloc satisfy the fixed
-  // constraint at the callsite. Emitting `def Physical(x0)` here makes x0 look
-  // "free" to the allocator and can clobber other live values when x0 becomes
-  // allocatable (e.g. after expanding scratch regs to include X0-X7).
   let callee_vmctx = ctx.vcode_func.new_vreg(@abi.Int)
   let copy_vmctx = @instr.VCodeInst::new(Move)
-  copy_vmctx.add_def({ reg: Virtual(callee_vmctx) })
+  copy_vmctx.add_def_fixed({ reg: Virtual(callee_vmctx) }, vmctx_arg_preg)
   copy_vmctx.add_use(Physical(vmctx_preg))
   block.add_inst(copy_vmctx)
   call_inst.add_use_fixed(Virtual(callee_vmctx), vmctx_arg_preg)
@@ -273,7 +269,10 @@ fn lower_return_call(
   // Copy vmctx into a vreg so regalloc will insert the move to X0.
   let callee_vmctx = ctx.vcode_func.new_vreg(Int)
   let copy_vmctx = @instr.VCodeInst::new(Move)
-  copy_vmctx.add_def({ reg: Virtual(callee_vmctx) })
+  copy_vmctx.add_def_fixed({ reg: Virtual(callee_vmctx) }, @abi.PReg::{
+    index: @abi.REG_CALLEE_VMCTX,
+    class: @abi.Int,
+  })
   copy_vmctx.add_use(Physical(vmctx_preg))
   block.add_inst(copy_vmctx)
 

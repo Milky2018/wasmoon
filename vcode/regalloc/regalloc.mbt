@@ -1421,23 +1421,22 @@ pub fn apply_allocation(
       let spill_scratch_map : Map[Int, @abi.PReg] = {} // vreg.id -> scratch preg
       for i, def in inst.defs {
         match def.reg {
-          @abi.Virtual(vreg) =>
-            match alloc.assignments.get(vreg.id) {
-              Some(preg) => new_inst.add_def({ reg: @abi.Physical(preg) })
-              None => {
-                // Check if this def has a fixed constraint
-                let fixed_preg_opt = if i < inst.def_constraints.length() {
-                  match inst.def_constraints[i] {
-                    @abi.FixedReg(preg) => Some(preg)
-                    _ => None
-                  }
-                } else {
-                  None
-                }
-                match fixed_preg_opt {
-                  Some(fixed_preg) =>
-                    // Use the fixed register - constraint processing handles the spill
-                    new_inst.add_def({ reg: @abi.Physical(fixed_preg) })
+          @abi.Virtual(vreg) => {
+            let fixed_preg_opt = if i < inst.def_constraints.length() {
+              match inst.def_constraints[i] {
+                @abi.FixedReg(preg) => Some(preg)
+                _ => None
+              }
+            } else {
+              None
+            }
+            match fixed_preg_opt {
+              Some(fixed_preg) =>
+                // Use the fixed register - constraint processing handles any move/spill.
+                new_inst.add_def({ reg: @abi.Physical(fixed_preg) })
+              None =>
+                match alloc.assignments.get(vreg.id) {
+                  Some(preg) => new_inst.add_def({ reg: @abi.Physical(preg) })
                   None => {
                     // Spilled without constraint: use X16, X17 as scratch registers
                     let scratch_class = match vreg.class {
@@ -1454,8 +1453,8 @@ pub fn apply_allocation(
                     new_inst.add_def({ reg: @abi.Physical(scratch_preg) })
                   }
                 }
-              }
             }
+          }
           @abi.Physical(_) => new_inst.add_def(def)
         }
       }
