@@ -532,8 +532,8 @@ test "AAPCS64 calling convention registers" {
   let callee_saved_regs = @abi.allocatable_callee_saved_regs()
   inspect(
     callee_saved_regs,
-    content="[x20, x21, x22, x23, x24, x25, x26, x27, x28]",
-  ) // x19, x23-x28
+    content="[x19, x20, x22, x23, x24, x25, x26, x27, x28]",
+  ) // x19-x28 excluding pinned x21
   let arg_fprs = @abi.aapcs64_arg_fprs()
   inspect(arg_fprs, content="[d0, d1, d2, d3, d4, d5, d6, d7]") // d0-d7
   let ret_fprs = @abi.aapcs64_ret_fprs()

@@ -233,17 +233,16 @@ test "jit_stack_frame_gpr_save_offset" {
     outgoing_args_size=0,
   )
 
-  // saved_gprs = [19, 20, 25] (X19 always saved)
+  // saved_gprs includes pinned vmctx (X21) when needed
   inspect(frame.saved_gprs.length(), content="3")
-  // X19 is at index 0, pair 0, offset 0
-  let offset_19 = frame.get_gpr_save_offset(19)
-  inspect(offset_19 >= 0, content="true")
-  // X20 is at index 1, pair 0, offset 8
+  // saved_gprs is sorted, so X20 comes before X21
   let offset_20 = frame.get_gpr_save_offset(20)
   inspect(offset_20 >= 0, content="true")
-  inspect(offset_20 > offset_19, content="true")
-  // X25 is at index 2, pair 1, offset 16
+  let offset_21 = frame.get_gpr_save_offset(21)
+  inspect(offset_21 >= 0, content="true")
+  inspect(offset_21 > offset_20, content="true")
+  // X25 is later
   let offset_25 = frame.get_gpr_save_offset(25)
   inspect(offset_25 >= 0, content="true")
-  inspect(offset_25 > offset_20, content="true")
+  inspect(offset_25 > offset_21, content="true")
 }

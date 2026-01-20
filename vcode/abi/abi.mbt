@@ -1,12 +1,11 @@
 // ABI Constants and Definitions
 // Centralized definition of JIT calling convention
 //
-// Wasmoon JIT ABI v3 (Standard):
-// - X0: callee_vmctx (callee's VMContext)
-// - X1: caller_vmctx (caller's VMContext)
-// - X2-X7: User integer parameters (up to 6 in registers)
-// - V0-V7: Float parameters (S for f32, D for f64)
-// - X19: Cached callee_vmctx (callee-saved, set in prologue)
+// Wasmoon JIT ABI (transitioning to Cranelift AppleAarch64):
+// - X0: vmctx (VMContext)
+// - X1-X7: user integer parameters (up to 7 in registers)
+// - V0-V7: float parameters (S for f32, D for f64)
+// - X21: pinned vmctx register (cached in prologue)
 // - X29: Frame Pointer (FP)
 // - X30: Link Register (LR)
 
@@ -92,9 +91,9 @@ pub const VMCTX_GC_HEAP_OFFSET : Int = 104
 // ============ Reserved Registers ============
 
 ///|
-/// Register holding cached callee_vmctx (X19, callee-saved)
-/// In prologue: mov x19, x0
-pub const REG_VMCTX : Int = 19
+/// Register holding cached VMContext (Cranelift pinned-reg: X21).
+/// In prologue (pinned mode): mov x21, x0
+pub const REG_VMCTX : Int = 21
 
 ///|
 /// Register holding cached memory0 descriptor pointer (X20, callee-saved).
@@ -102,9 +101,9 @@ pub const REG_VMCTX : Int = 19
 pub const REG_MEM0_DESC : Int = 20
 
 ///|
-/// Register holding cached func_table pointer (X21, callee-saved).
-/// When enabled, prologue loads: x21 = [x19 + VMCTX_FUNC_TABLE_OFFSET].
-pub const REG_FUNC_TABLE : Int = 21
+/// Register holding cached func_table pointer (X19, callee-saved).
+/// When enabled, prologue loads: x19 = [vmctx + VMCTX_FUNC_TABLE_OFFSET].
+pub const REG_FUNC_TABLE : Int = 19
 
 ///|
 /// Frame Pointer register (X29)
@@ -117,20 +116,16 @@ pub const REG_LR : Int = 30
 // ============ Parameter Passing ============
 
 ///|
-/// Register for callee_vmctx (first parameter, X0)
+/// Register for VMContext (first parameter, X0)
 pub const REG_CALLEE_VMCTX : Int = 0
 
 ///|
-/// Register for caller_vmctx (second parameter, X1)
-pub const REG_CALLER_VMCTX : Int = 1
+/// First register for user integer parameters (X1)
+pub const USER_PARAM_BASE_REG : Int = 1
 
 ///|
-/// First register for user integer parameters (X2)
-pub const USER_PARAM_BASE_REG : Int = 2
-
-///|
-/// Maximum number of user integer parameters in registers (X2-X7 = 6)
-pub const MAX_USER_REG_PARAMS : Int = 6
+/// Maximum number of user integer parameters in registers (X1-X7 = 7)
+pub const MAX_USER_REG_PARAMS : Int = 7
 
 ///|
 /// First register for float parameters (V0/D0/S0)
@@ -299,21 +294,41 @@ pub fn allocatable_scratch_regs() -> Array[PReg] {
 }
 
 ///|
-/// Callee-saved registers available for allocation (must be saved/restored)
-/// X19 is reserved for vmctx caching
-/// X20-X28 are available for allocation
-pub fn allocatable_callee_saved_regs() -> Array[PReg] {
-  [
-    { index: 20, class: Int },
-    { index: 21, class: Int },
-    { index: 22, class: Int },
-    { index: 23, class: Int },
-    { index: 24, class: Int },
-    { index: 25, class: Int },
-    { index: 26, class: Int },
-    { index: 27, class: Int },
-    { index: 28, class: Int },
-  ]
+/// Callee-saved registers available for allocation (must be saved/restored).
+///
+/// When `enable_pinned_reg` is true (Cranelift-style pinned VMContext), X21 is
+/// reserved and excluded from allocation.
+///
+/// When `enable_pinned_reg` is false, X21 becomes allocatable (unpinned mode).
+pub fn allocatable_callee_saved_regs(
+  enable_pinned_reg? : Bool = true,
+) -> Array[PReg] {
+  if enable_pinned_reg {
+    [
+      { index: 19, class: Int },
+      { index: 20, class: Int },
+      { index: 22, class: Int },
+      { index: 23, class: Int },
+      { index: 24, class: Int },
+      { index: 25, class: Int },
+      { index: 26, class: Int },
+      { index: 27, class: Int },
+      { index: 28, class: Int },
+    ]
+  } else {
+    [
+      { index: 19, class: Int },
+      { index: 20, class: Int },
+      { index: 21, class: Int },
+      { index: 22, class: Int },
+      { index: 23, class: Int },
+      { index: 24, class: Int },
+      { index: 25, class: Int },
+      { index: 26, class: Int },
+      { index: 27, class: Int },
+      { index: 28, class: Int },
+    ]
+  }
 }
 
 ///|
@@ -376,8 +391,15 @@ pub fn call_clobbered_gprs() -> Array[PReg] {
 }
 
 ///|
-/// Floating-point registers clobbered by function calls
-/// V0-V7 and V16-V31 are caller-saved
+
+///|
+/// Floating-point registers clobbered by function calls.
+///
+/// Note: Cranelift conservatively treats all v0-v31 as clobbered at callsites
+/// because it cannot model partial preservation of v8-v15.
+///
+/// Wasmoon’s backend models v8-v15 as callee-saved (f64/low-64bits), so we keep
+/// call clobbers to the AAPCS64 caller-saved subset here.
 pub fn call_clobbered_fprs() -> Array[PReg] {
   [
     { index: 0, class: Float64 },

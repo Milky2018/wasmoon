@@ -200,10 +200,10 @@ test "translate simple add function" {
   inspect(
     output,
     content=(
-      #|function add(v0:i64, v1:i64, v2:i32, v3:i32) -> i32 {
+      #|function add(v0:i64, v1:i32, v2:i32) -> i32 {
       #|block0:
-      #|    v4:i32 = iadd v2, v3
-      #|    return v4
+      #|    v3:i32 = iadd v1, v2
+      #|    return v3
       #|}
       #|
     ),
@@ -238,12 +238,12 @@ test "translate multiply and add" {
   inspect(
     output,
     content=(
-      #|function mul_add(v0:i64, v1:i64, v2:i32, v3:i32) -> i32 {
+      #|function mul_add(v0:i64, v1:i32, v2:i32) -> i32 {
       #|block0:
-      #|    v4:i32 = imul v2, v3
-      #|    v5:i32 = iconst 1
-      #|    v6:i32 = iadd v4, v5
-      #|    return v6
+      #|    v3:i32 = imul v1, v2
+      #|    v4:i32 = iconst 1
+      #|    v5:i32 = iadd v3, v4
+      #|    return v5
       #|}
       #|
     ),
@@ -284,13 +284,13 @@ test "translate with local variable" {
   inspect(
     output,
     content=(
-      #|function with_local(v0:i64, v1:i64, v2:i32, v3:i32) -> i32 {
+      #|function with_local(v0:i64, v1:i32, v2:i32) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 0
-      #|    v5:i32 = iadd v2, v3
-      #|    v6:i32 = iconst 2
-      #|    v7:i32 = imul v5, v6
-      #|    return v7
+      #|    v3:i32 = iconst 0
+      #|    v4:i32 = iadd v1, v2
+      #|    v5:i32 = iconst 2
+      #|    v6:i32 = imul v4, v5
+      #|    return v6
       #|}
       #|
     ),
@@ -320,11 +320,11 @@ test "translate comparison" {
   inspect(
     output,
     content=(
-      #|function max(v0:i64, v1:i64, v2:i32, v3:i32) -> i32 {
+      #|function max(v0:i64, v1:i32, v2:i32) -> i32 {
       #|block0:
-      #|    v4:i32 = icmp.sgt v2, v3
-      #|    v5:i32 = select v4, v2, v3
-      #|    return v5
+      #|    v3:i32 = icmp.sgt v1, v2
+      #|    v4:i32 = select v3, v1, v2
+      #|    return v4
       #|}
       #|
     ),

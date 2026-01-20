@@ -45,7 +45,7 @@ struct Translator {
   import_remap : Array[Int]
   // Module composite types (struct/array/func types) for GC support
   module_types : Array[@types.SubType]
-  // VMContext value (callee_vmctx parameter) for accessing runtime state
+  // VMContext value (vmctx parameter) for accessing runtime state
   vmctx : Value
   // Function environment for desugaring Wasm operations to IR primitives
   func_env : FuncEnvironment
@@ -93,12 +93,10 @@ pub fn Translator::new(
 ) -> Translator {
   type_rec_groups |> ignore // Reserved for future canonical type indices
   let builder = IRBuilder::new(name)
-  // Note: add vmctx as explicit params
-  // - params[0] = callee_vmctx (X0)
-  // - params[1] = caller_vmctx (X1)
-  // These are referenced for desugaring global/table/memory operations
-  let vmctx = builder.add_param(Type::I64) // callee_vmctx
-  builder.add_param(Type::I64) |> ignore // caller_vmctx
+  // Note: add vmctx as explicit param (Cranelift-style special param)
+  // - params[0] = vmctx (X0)
+  // This is referenced for desugaring global/table/memory operations
+  let vmctx = builder.add_param(Type::I64)
 
   // Create function environment for desugaring Wasm operations
   let func_env = FuncEnvironment::new(
@@ -108,7 +106,7 @@ pub fn Translator::new(
     memory_page_size_log2~,
   )
 
-  // Add wasm function parameters (starting from params[2])
+  // Add wasm function parameters (starting from params[1])
   let local_values : Array[Value] = []
   for param in func_type.params {
     let p = builder.add_param(Type::from_wasm(param))

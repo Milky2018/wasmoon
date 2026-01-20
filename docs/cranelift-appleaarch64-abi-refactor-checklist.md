@@ -12,26 +12,27 @@ Reference sources (authoritative):
 - [ ] Keep `moon test` green at each commit.
 
 ## Phase 1: Introduce Cranelift-like settings surface
-- [ ] Add a JIT/Codegen settings struct mirroring Cranelift flags.
-- [ ] Implement `enable_pinned_reg()` flag (default TBD; keep behavior identical when enabled).
-- [ ] Ensure settings reach: regalloc machine env, prologue/epilogue emission, call lowering.
+- [x] Add a JIT/Codegen settings struct mirroring Cranelift flags.
+- [x] Implement `enable_pinned_reg()` flag (default pinned on for now).
+- [x] Ensure settings reach: regalloc machine env, prologue emission, call lowering.
 
 ## Phase 2: MachineEnv + regalloc parity
-- [ ] Create a MachineEnv representation equivalent to Cranelift’s (allocatable regs, preferred/nonpreferred sets).
-- [ ] Make pinned register conditional: when enabled, reserve vmctx pinned reg like Cranelift.
-- [ ] Ensure scratch/temp register policy matches Cranelift (e.g. retval temp reg selection).
-- [ ] Align call clobber sets to Cranelift’s `get_regs_clobbered_by_call()`.
+- [x] Translate Cranelift `create_reg_env()` into wasmoon’s `AArch64MachineEnv` (preferred/nonpreferred by class).
+- [x] Make pinned register conditional exactly like Cranelift (pinned reg is X21).
+- [x] Stop treating X19 as a permanently-reserved vmctx register.
+- [ ] Align call clobber sets to Cranelift `default_aapcs_clobbers()` (clobber v0-v31).
+- [ ] Note/resolve remaining deviations (e.g. reserved V16/V17 scratch and not-yet-regalloc2-equivalent modeling).
 
 ## Phase 3: VMContext as a special param (Cranelift-style)
-- [ ] Replace wasmoon “callee_vmctx + caller_vmctx” ABI with a Cranelift-style `VMContext` special param.
-- [ ] Update IR/lowering conventions for params.
-- [ ] Update trampolines and any runtime glue that assumes 2 vmctx pointers.
-- [ ] Update docs: `docs/jit-abi.md` to reflect Cranelift-faithful ABI.
+- [x] Replace wasmoon “callee_vmctx + caller_vmctx” ABI with a Cranelift-style `VMContext` special param.
+- [x] Update IR/lowering conventions for params.
+- [x] Update trampolines and any runtime glue that assumes 2 vmctx pointers.
+- [x] Update docs: `docs/jit-abi.md` to reflect Cranelift-faithful ABI.
 
 ## Phase 4: Call lowering/emission parity
-- [ ] Remove hard-coded assumptions about call target register (no “always x17”).
-- [ ] Make indirect calls (`CallPtr`, tail calls) match Cranelift lowering/emission conventions.
-- [ ] Ensure temporary regs used by emission do not conflict with call target values.
+- [x] Remove hard-coded assumptions about call target register (no “always x17”).
+- [x] Make indirect calls (`CallPtr`, tail calls) match Cranelift lowering/emission conventions.
+- [x] Ensure temporary regs used by emission do not conflict with call target values.
 
 ## Phase 5: Frame layout + prologue/epilogue parity (AppleAarch64)
 - [ ] Translate Cranelift’s `compute_frame_layout()` rules.

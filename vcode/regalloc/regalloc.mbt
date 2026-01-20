@@ -1459,7 +1459,23 @@ pub fn apply_allocation(
         match use_reg {
           @abi.Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
-              Some(preg) => new_inst.add_use(@abi.Physical(preg))
+              Some(preg) => {
+                // Preserve FixedReg constraints in the rewritten instruction.
+                // Constraint processing already inserts the needed move(s).
+                let fixed_preg_opt = if i < inst.use_constraints.length() {
+                  match inst.use_constraints[i] {
+                    @abi.FixedReg(fixed_preg) => Some(fixed_preg)
+                    _ => None
+                  }
+                } else {
+                  None
+                }
+                match fixed_preg_opt {
+                  Some(fixed_preg) =>
+                    new_inst.add_use(@abi.Physical(fixed_preg))
+                  None => new_inst.add_use(@abi.Physical(preg))
+                }
+              }
               None =>
                 // Spilled: use the scratch register we reloaded into
                 match spill_regs.get(vreg.id) {
@@ -1946,6 +1962,7 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
 /// Build the register pools for AArch64 allocation
 fn build_aarch64_reg_pools(
   func : VCodeFunction,
+  settings : @abi.ABISettings,
 ) -> (
   Array[@abi.PReg],
   Array[@abi.PReg],
@@ -1964,6 +1981,7 @@ fn build_aarch64_reg_pools(
 
   // Build MachineEnv (Cranelift-inspired) and derive pools.
   let env = @abi.build_aarch64_machine_env(
+    settings~,
     reserve_mem0_desc=needs_x20_reserved,
     reserve_func_table=needs_x21_reserved,
     reserve_x23=needs_x23_reserved,
@@ -2002,7 +2020,10 @@ fn build_aarch64_reg_pools(
 /// - Bundle merging for copy coalescing
 /// - Priority-based allocation with eviction
 /// - Bundle splitting instead of immediate spilling
-pub fn allocate_registers_backtracking(func : VCodeFunction) -> VCodeFunction {
+pub fn allocate_registers_backtracking(
+  func : VCodeFunction,
+  settings? : @abi.ABISettings = @abi.ABISettings::default(),
+) -> VCodeFunction {
   // Step 0: Eliminate dead code first
   let func = eliminate_dead_code(func)
 
@@ -2013,7 +2034,7 @@ pub fn allocate_registers_backtracking(func : VCodeFunction) -> VCodeFunction {
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_aarch64_reg_pools(func)
+  ) = build_aarch64_reg_pools(func, settings)
 
   // Compute liveness (Phase 1)
   let liveness = compute_liveness(func)
@@ -2025,7 +2046,7 @@ pub fn allocate_registers_backtracking(func : VCodeFunction) -> VCodeFunction {
 
   // Optional safety net (Cranelift-like checker).
   // Keeps invariants honest as allocator logic evolves.
-  verify_allocation_aarch64(func, liveness, alloc_result)
+  verify_allocation_aarch64(func, liveness, alloc_result, settings~)
 
   // Process constraints and generate RegMove edits
   process_constraints(func, alloc_result)
@@ -2085,7 +2106,10 @@ fn count_instructions(func : VCodeFunction) -> AllocStats {
 
 ///|
 /// Get allocation statistics
-pub fn get_alloc_stats(func : VCodeFunction) -> AllocStats {
+pub fn get_alloc_stats(
+  func : VCodeFunction,
+  settings? : @abi.ABISettings = @abi.ABISettings::default(),
+) -> AllocStats {
   let func = eliminate_dead_code(func)
   let (
     int_regs,
@@ -2093,7 +2117,7 @@ pub fn get_alloc_stats(func : VCodeFunction) -> AllocStats {
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_aarch64_reg_pools(func)
+  ) = build_aarch64_reg_pools(func, settings)
   let liveness = compute_liveness(func)
 
   // Count vregs

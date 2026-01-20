@@ -212,23 +212,24 @@ pub fn JITStackFrame::get_fpr_save_offset(
 
 ///|
 /// Build the list of GPRs to save for ABI v3
-/// Saves X19 (vmctx) only if needed, and clobbered callee-saved registers
+/// Saves pinned vmctx register only if needed, and clobbered callee-saved registers
 fn build_gpr_save_list_v3(
   clobbered : Array[Int],
   needs_vmctx : Bool,
 ) -> Array[Int] {
   let result : Array[Int] = []
 
-  // X19 only saved if function uses vmctx
+  // Pinned vmctx register only saved if function uses vmctx
   if needs_vmctx {
-    result.push(19)
+    result.push(@abi.REG_VMCTX)
   }
 
   // Add clobbered callee-saved registers
   for reg in clobbered {
-    // Only include callee-saved registers (X20-X28)
-    // X19 handled above, X29/X30 handled separately in setup area
-    if reg >= 20 && reg <= 28 && !result.contains(reg) {
+    // Include callee-saved registers (X19-X28).
+    // Pinned vmctx register is handled above.
+    // X29/X30 handled separately in setup area.
+    if reg >= 19 && reg <= 28 && reg != @abi.REG_VMCTX && !result.contains(reg) {
       result.push(reg)
     }
   }

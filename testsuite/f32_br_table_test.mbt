@@ -47,25 +47,25 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   inspect(
     ir_func.print(),
     content=(
-      #|function test(v0:i64, v1:i64, v2:i32) -> f32 {
+      #|function test(v0:i64, v1:i32) -> f32 {
       #|block0:
+      #|    v2:f32 = fconst 0
       #|    v3:f32 = fconst 0
-      #|    v4:f32 = fconst 0
-      #|    br_table v2, [block4, block5], block6
-      #|block1(v5:i32, v6:f32, v7:f32):
-      #|    return v6
-      #|block2(v8:i32, v9:f32, v10:f32):
-      #|    v15:f32 = fconst 3
-      #|    jump block1(v8, v15, v10)
-      #|block3(v11:i32, v12:f32, v13:f32):
-      #|    v14:f32 = fconst 2
-      #|    jump block1(v11, v14, v13)
+      #|    br_table v1, [block4, block5], block6
+      #|block1(v4:i32, v5:f32, v6:f32):
+      #|    return v5
+      #|block2(v7:i32, v8:f32, v9:f32):
+      #|    v14:f32 = fconst 3
+      #|    jump block1(v7, v14, v9)
+      #|block3(v10:i32, v11:f32, v12:f32):
+      #|    v13:f32 = fconst 2
+      #|    jump block1(v10, v13, v12)
       #|block4:
-      #|    jump block3(v2, v3, v4)
+      #|    jump block3(v1, v2, v3)
       #|block5:
-      #|    jump block2(v2, v3, v4)
+      #|    jump block2(v1, v2, v3)
       #|block6:
-      #|    jump block1(v2, v3, v4)
+      #|    jump block1(v1, v2, v3)
       #|}
       #|
     ),
@@ -74,31 +74,31 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   inspect(
     vcode,
     content=(
-      #|vcode test(v0:int, v1:int, v2:int) -> float {
+      #|vcode test(v0:int, v1:int) -> float {
       #|block0:
+      #|    f11 = ldf 0
       #|    f12 = ldf 0
-      #|    f13 = ldf 0
-      #|    v15 = ldi 0
-      #|    v14 = cmp32.eq v2, v15
-      #|    branch v14, block4, block7
-      #|block1(v3:int, f4:float, f5:float):
-      #|    ret f4
-      #|block2(v6:int, f7:float, f8:float):
-      #|    f18 = ldf 3
-      #|    jump block1 (v6, f18, f8)
-      #|block3(v9:int, f10:float, f11:float):
-      #|    f19 = ldf 2
-      #|    jump block1 (v9, f19, f11)
+      #|    v14 = ldi 0
+      #|    v13 = cmp32.eq v1, v14
+      #|    branch v13, block4, block7
+      #|block1(v2:int, f3:float, f4:float):
+      #|    ret f3
+      #|block2(v5:int, f6:float, f7:float):
+      #|    f17 = ldf 3
+      #|    jump block1 (v5, f17, f7)
+      #|block3(v8:int, f9:float, f10:float):
+      #|    f18 = ldf 2
+      #|    jump block1 (v8, f18, f10)
       #|block4:
-      #|    jump block3 (v2, f12, f13)
+      #|    jump block3 (v1, f11, f12)
       #|block5:
-      #|    jump block2 (v2, f12, f13)
+      #|    jump block2 (v1, f11, f12)
       #|block6:
-      #|    jump block1 (v2, f12, f13)
+      #|    jump block1 (v1, f11, f12)
       #|block7:
-      #|    v16 = ldi 1
-      #|    v17 = cmp32.eq v2, v16
-      #|    branch v17, block5, block6
+      #|    v15 = ldi 1
+      #|    v16 = cmp32.eq v1, v15
+      #|    branch v16, block5, block6
       #|}
       #|
     ),
@@ -107,19 +107,19 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   inspect(
     allocated_func.print(),
     content=(
-      #|vcode test(v0:int, v1:int, v2:int) -> float {
+      #|vcode test(v0:int, v1:int) -> float {
       #|block0:
       #|    d0 = ldf 0
       #|    d1 = ldf 0
       #|    x8 = ldi 0
-      #|    x8 = cmp32.eq x2, x8
+      #|    x8 = cmp32.eq x1, x8
       #|    branch x8, block4, block7
-      #|block1(v3:int, f4:float, f5:float):
+      #|block1(v2:int, f3:float, f4:float):
       #|    ret d0
-      #|block2(v6:int, f7:float, f8:float):
+      #|block2(v5:int, f6:float, f7:float):
       #|    d0 = ldf 3
       #|    jump block1
-      #|block3(v9:int, f10:float, f11:float):
+      #|block3(v8:int, f9:float, f10:float):
       #|    d0 = ldf 2
       #|    jump block1
       #|block4:
@@ -130,7 +130,7 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    jump block1
       #|block7:
       #|    x8 = ldi 1
-      #|    x8 = cmp32.eq x2, x8
+      #|    x8 = cmp32.eq x1, x8
       #|    branch x8, block5, block6
       #|}
       #|

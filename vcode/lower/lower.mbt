@@ -12,6 +12,7 @@
 struct LoweringContext {
   ir_func : @ir.Function
   vcode_func : @regalloc.VCodeFunction
+  abi_settings : @abi.ABISettings
   // Map from IR Value id to @abi.VReg
   value_map : Map[Int, @abi.VReg]
   // Map from IR Block id to VCode block id
@@ -23,10 +24,14 @@ struct LoweringContext {
 }
 
 ///|
-pub fn LoweringContext::new(ir_func : @ir.Function) -> LoweringContext {
+pub fn LoweringContext::new(
+  ir_func : @ir.Function,
+  abi_settings : @abi.ABISettings,
+) -> LoweringContext {
   {
     ir_func,
     vcode_func: @regalloc.VCodeFunction::new(ir_func.name),
+    abi_settings,
     value_map: {},
     block_map: {},
     stack_param_map: {},
@@ -311,10 +316,13 @@ fn intcc_to_cond(cc : @ir.IntCC) -> @instr.Cond {
 
 ///|
 /// Lower an entire IR function to VCode
-pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
+pub fn lower_function(
+  ir_func : @ir.Function,
+  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+) -> @regalloc.VCodeFunction {
   // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
   @ir.optimize_function(ir_func) |> ignore
-  let ctx = LoweringContext::new(ir_func)
+  let ctx = LoweringContext::new(ir_func, abi_settings)
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
   let fused = compute_fused_icmps(ir_func)
@@ -329,11 +337,9 @@ pub fn lower_function(ir_func : @ir.Function) -> @regalloc.VCodeFunction {
   }
 
   // Phase 2: Lower function parameters
-  // v3 ABI with separate int/float register pools:
-  // - params[0] = callee_vmctx (X0) - always int register
-  // - params[1] = caller_vmctx (X1) - always int register
-  // - user int params: X2-X7 (up to 6)
-  // - user float params: V0-V7 (up to 8)
+  // ABI: params[0] is vmctx (X0), then normal AAPCS64-style assignment:
+  // - int params: X0-X7 (vmctx consumes X0)
+  // - float params: V0-V7
   // - overflow: int overflow first, then float overflow
   let max_int_reg_params = @abi.MAX_REG_PARAMS // X0-X7 (includes vmctx which ARE in ir_func.params)
   let max_float_reg_params = @abi.MAX_FLOAT_REG_PARAMS // V0-V7

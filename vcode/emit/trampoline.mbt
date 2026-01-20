@@ -107,12 +107,7 @@ fn generate_trampoline_ir(
   }
 
   // Emit CallPtr instruction
-  // v3 ABI: callee_vmctx = caller_vmctx = vmctx (same module)
-  let results = builder.call_ptr(
-    func_ptr, vmctx, // callee_vmctx
-     vmctx, // caller_vmctx
-     wasm_args, wasm_result_types,
-  )
+  let results = builder.call_ptr(func_ptr, vmctx, wasm_args, wasm_result_types)
 
   // Store results back to values_vec
   // V128 is stored as two I64 values (low then high) to avoid alignment issues

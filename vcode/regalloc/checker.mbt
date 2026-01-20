@@ -56,6 +56,7 @@ pub fn verify_allocation_aarch64(
   func : VCodeFunction,
   liveness : LivenessResult,
   alloc : RegAllocResult,
+  settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> Unit {
   // Rebuild live ranges to verify with holes.
   let ranges = build_live_ranges(func, liveness)
@@ -68,6 +69,7 @@ pub fn verify_allocation_aarch64(
   let needs_x20_reserved = func.uses_mem0()
   let needs_x21_reserved = func.uses_func_table()
   let env = @abi.build_aarch64_machine_env(
+    settings~,
     reserve_mem0_desc=needs_x20_reserved,
     reserve_func_table=needs_x21_reserved,
     reserve_x23=needs_x23_reserved,

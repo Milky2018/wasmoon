@@ -11,7 +11,7 @@ pub(all) enum CallType {
 /// Calling convention for function calls
 /// Calling convention specification
 pub(all) enum CallConv {
-  Wasm // Wasm calling convention: X0=callee_vmctx, X1=caller_vmctx, X2-X7=user_args
+  Wasm // Wasm calling convention: X0=vmctx, X1-X7=user_args
   C // Standard C calling convention: X0-X7=args, no vmctx
 } derive(Eq, Show)
 
@@ -375,7 +375,7 @@ pub(all) enum VCodeOpcode {
 
   // CallPtr: call through a function pointer
   // Uses depend on calling convention:
-  //   Wasm: [func_ptr, callee_vmctx, caller_vmctx, arg0, arg1, ...]
+  //   Wasm: [func_ptr, vmctx, arg0, arg1, ...]
   //   C:    [func_ptr, arg0, arg1, ...]
   // Defs: [result0, result1, ...] (multiple results supported)
   // Parameters: num_args, num_results, calling convention

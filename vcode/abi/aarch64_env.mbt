@@ -34,6 +34,7 @@ pub struct AArch64MachineEnv {
 ///|
 /// Construct the AArch64 machine environment, optionally reserving some regs.
 pub fn build_aarch64_machine_env(
+  settings? : ABISettings = ABISettings::default(),
   reserve_mem0_desc? : Bool = false,
   reserve_func_table? : Bool = false,
   reserve_x23? : Bool = false,
@@ -42,15 +43,39 @@ pub fn build_aarch64_machine_env(
   let nonpreferred_int : Array[PReg] = []
   let callee_saved_int : Array[PReg] = []
 
-  // Caller-saved allocatable GPRs: X8-X15.
-  // Note: keep X0-X7 non-allocatable for now to avoid clobbering incoming
-  // parameters before they are moved out of ABI registers.
+  // Preferred GPRs for allocation.
+  //
+  // Cranelift’s `create_reg_env()` prefers x0-x15, but wasmoon’s allocator
+  // currently relies on keeping x0-x7 out of the general pool (they are heavily
+  // used for call arg constraints). We will lift this restriction after we reach
+  // full regalloc parity.
   for r in allocatable_scratch_regs() {
     preferred_int.push(r)
   }
 
-  // Callee-saved allocatable GPRs: X20-X28 (may skip reserved)
-  for r in allocatable_callee_saved_regs() {
+  // Nonpreferred callee-saved GPRs: x19-x28, excluding pinned reg when enabled.
+  for
+    r in allocatable_callee_saved_regs(
+      enable_pinned_reg=settings.enable_pinned_reg,
+    ) {
+    if reserve_x23 && r.index == 23 {
+      continue
+    }
+    if reserve_mem0_desc && r.index == REG_MEM0_DESC {
+      continue
+    }
+    if reserve_func_table && r.index == REG_FUNC_TABLE {
+      continue
+    }
+    nonpreferred_int.push(r)
+    callee_saved_int.push(r)
+  }
+
+  // Callee-saved allocatable GPRs: X19-X28 (depends on pinned-reg setting)
+  for
+    r in allocatable_callee_saved_regs(
+      enable_pinned_reg=settings.enable_pinned_reg,
+    ) {
     if reserve_x23 && r.index == 23 {
       continue
     }

@@ -190,8 +190,8 @@ fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
 /// └═══════════════════════════┘ ← SP after prologue
 ///
 /// ABI v3 Parameter Passing:
-/// - X0 = callee_vmctx (cached to X19)
-/// - X1 = caller_vmctx (unused in current impl)
+/// - X0 = vmctx (cached to pinned vmctx reg)
+/// - X1.. = user args
 /// - X2-X7 = user integer params (up to 6)
 /// - V0-V7 = user float params (S for f32, D for f64)
 /// Emit stack pointer adjustment for arbitrary sizes (Standard)
@@ -259,6 +259,7 @@ fn MachineCode::emit_prologue(
   params : Array[@abi.VReg],
   param_pregs : Array[@abi.PReg?],
   debug_func_idx : Int?,
+  abi_settings : @abi.ABISettings,
 ) -> Unit {
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
@@ -351,16 +352,26 @@ fn MachineCode::emit_prologue(
   // All other values (memory_base, memory_size, func_table, table0_base) are
   // loaded on-demand from vmctx, on-demand.
   if stack_frame.needs_vmctx {
-    self.emit_mov_reg(19, 0)
+    if !abi_settings.enable_pinned_reg {
+      abort("unpinned VMContext ABI not implemented yet")
+    }
+    self.emit_mov_reg(@abi.REG_VMCTX, 0)
     // Optionally cache memory0 descriptor pointer in X20.
     // This allows `LoadMemBase(mem=0)` to be a single load from [X20 + 0].
     if stack_frame.cache_mem0_desc {
-      self.emit_ldr_imm(@abi.REG_MEM0_DESC, 19, @abi.VMCTX_MEMORY0_OFFSET)
+      self.emit_ldr_imm(
+        @abi.REG_MEM0_DESC,
+        @abi.REG_VMCTX,
+        @abi.VMCTX_MEMORY0_OFFSET,
+      )
     }
-    // Optionally cache func_table pointer in X21.
-    // This allows repeated loads of [X19 + VMCTX_FUNC_TABLE_OFFSET] to be MOVs.
+    // Optionally cache func_table pointer.
     if stack_frame.cache_func_table {
-      self.emit_ldr_imm(@abi.REG_FUNC_TABLE, 19, @abi.VMCTX_FUNC_TABLE_OFFSET)
+      self.emit_ldr_imm(
+        @abi.REG_FUNC_TABLE,
+        @abi.REG_VMCTX,
+        @abi.VMCTX_FUNC_TABLE_OFFSET,
+      )
     }
   }
 
@@ -430,6 +441,7 @@ pub fn emit_function(
   func : @regalloc.VCodeFunction,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
+  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
@@ -484,6 +496,7 @@ pub fn emit_function(
     func.get_params(),
     func.get_param_pregs(),
     debug_func_idx,
+    abi_settings,
   )
 
   // Emit function body (blocks now in optimized order)
@@ -1774,7 +1787,7 @@ fn MachineCode::emit_instruction(
       // Tail call optimization
       // Parameters are already set up by lowering phase via:
       // - StoreToStack for overflow arguments
-      // - add_use_fixed constraints for register arguments (X17=func_ptr, X0/X1=vmctx, X2-X7/V0-V7=args)
+      // - add_use_fixed constraints for register arguments (X0=vmctx, X1-X7/V0-V7=args)
       // Emit only needs to:
       // 1. Restore callee-saved registers (epilogue)
       // 2. BR to function pointer (doesn't save return address, callee returns to our caller)
@@ -1784,9 +1797,13 @@ fn MachineCode::emit_instruction(
       self.emit_epilogue(stack_frame)
 
       // BR (not BLR) - jump to function without saving return address
-      // func_ptr is guaranteed to be in X17 by add_use_fixed constraint in lowering
-      // This is the KEY tail call semantic: callee returns directly to our caller
-      self.emit_br(17)
+      // The call target is the first use operand.
+      // This is the KEY tail call semantic: callee returns directly to our caller.
+      let target = match inst.use_constraints[0] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[0])
+      }
+      self.emit_br(target)
 
       // Note: No code after BR - control never returns here
     }
@@ -2004,10 +2021,15 @@ fn MachineCode::emit_instruction(
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }
-    CallPtr(_, _, _call_conv) =>
+    CallPtr(_, _, _call_conv) => {
       // Standard call: all arguments are already in place.
-      // func_ptr is constrained to X17 by lowering.
-      self.emit_blr(17)
+      // Use a fixed-reg constraint if present; otherwise use assigned reg.
+      let target = match inst.use_constraints[0] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[0])
+      }
+      self.emit_blr(target)
+    }
     AdjustSP(delta) =>
       // Adjust stack pointer by delta bytes
       // Used in Standard call lowering for outgoing args

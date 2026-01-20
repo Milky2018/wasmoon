@@ -34,11 +34,11 @@ test "i32 mul" {
   inspect(
     ir_func.print(),
     content=(
-      #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
+      #|function test(v0:i64, v1:i32) -> i32 {
       #|block0:
-      #|    v3:i32 = iconst 3
-      #|    v4:i32 = imul v2, v3
-      #|    return v4
+      #|    v2:i32 = iconst 3
+      #|    v3:i32 = imul v1, v2
+      #|    return v3
       #|}
       #|
     ),
@@ -47,11 +47,11 @@ test "i32 mul" {
   inspect(
     vcode,
     content=(
-      #|vcode test(v0:int, v1:int, v2:int) -> int {
+      #|vcode test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = ldi 3
-      #|    v4 = mul32 v2, v3
-      #|    ret v4
+      #|    v2 = ldi 3
+      #|    v3 = mul32 v1, v2
+      #|    ret v3
       #|}
       #|
     ),
@@ -60,10 +60,10 @@ test "i32 mul" {
   inspect(
     allocated_func.print(),
     content=(
-      #|vcode test(v0:int, v1:int, v2:int) -> int {
+      #|vcode test(v0:int, v1:int) -> int {
       #|block0:
       #|    x8 = ldi 3
-      #|    x8 = mul32 x2, x8
+      #|    x8 = mul32 x1, x8
       #|    ret x8
       #|}
       #|
@@ -75,7 +75,7 @@ test "i32 mul" {
     content=(
       #|block0:
       #|  0000: 680080d2  movz x8, #3, lsl #0
-      #|  0004: 487c081b  mul w8, w2, w8
+      #|  0004: 287c081b  mul w8, w1, w8
       #|  0008: e00308aa  mov x0, x8
       #|  000c: c0035fd6  ret
       #|
