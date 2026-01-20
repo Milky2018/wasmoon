@@ -12,7 +12,7 @@ import(
 // Values
 pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) -> RegAllocResult
 
-pub fn allocate_registers_backtracking(VCodeFunction) -> VCodeFunction
+pub fn allocate_registers_backtracking(VCodeFunction, settings? : @abi.ABISettings) -> VCodeFunction
 
 pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
 
@@ -34,11 +34,11 @@ pub fn debug_liveness(LivenessResult) -> String
 
 pub fn eliminate_dead_code(VCodeFunction) -> VCodeFunction
 
-pub fn get_alloc_stats(VCodeFunction) -> AllocStats
+pub fn get_alloc_stats(VCodeFunction, settings? : @abi.ABISettings) -> AllocStats
 
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
-pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult) -> Unit
+pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult, settings? : @abi.ABISettings) -> Unit
 
 // Errors
 
@@ -71,7 +71,9 @@ pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[
 
 type Bundle
 pub fn Bundle::contains_range(Self, Int) -> Bool
+pub fn Bundle::crosses_c_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::crosses_call(Self, LiveRangeSet) -> Bool
+pub fn Bundle::crosses_wasm_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::get_fixed_reg(Self, LiveRangeSet) -> @abi.PReg?
 pub fn Bundle::has_fixed_constraint(Self, LiveRangeSet) -> Bool
 pub fn Bundle::new(Int, @abi.RegClass) -> Self
@@ -234,6 +236,7 @@ pub fn VCodeFunction::push_param(Self, @abi.VReg) -> Unit
 pub fn VCodeFunction::set_int_stack_params(Self, Int) -> Unit
 pub fn VCodeFunction::set_num_spill_slots(Self, Int) -> Unit
 pub fn VCodeFunction::update_max_outgoing_args_size(Self, Int) -> Unit
+pub fn VCodeFunction::uses_func_table(Self) -> Bool
 pub fn VCodeFunction::uses_mem0(Self) -> Bool
 pub impl Show for VCodeFunction
 

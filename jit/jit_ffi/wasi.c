@@ -165,14 +165,13 @@ static uint8_t mode_to_filetype(mode_t mode) {
 #endif
 
 // ============ WASI Trampolines ============
-// JIT ABI v3: X0 = callee_vmctx, X1 = caller_vmctx, X2.. = WASM arguments.
+// JIT ABI: X0 = vmctx, X1.. = WASM arguments.
 
 // fd_write: (fd, iovs, iovs_len, nwritten) -> errno
 static int64_t wasi_fd_write_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nwritten_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -200,10 +199,9 @@ static int64_t wasi_fd_write_impl(
 
 // fd_read: (fd, iovs, iovs_len, nread) -> errno
 static int64_t wasi_fd_read_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nread_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -232,9 +230,8 @@ static int64_t wasi_fd_read_impl(
 
 // fd_close: (fd) -> errno
 static int64_t wasi_fd_close_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx, int64_t fd
+    jit_context_t *ctx, int64_t fd
 ) {
-    (void)caller_ctx;
     if (!ctx) return WASI_EBADF;
 
     int wasi_fd = (int)fd;
@@ -255,10 +252,9 @@ static int64_t wasi_fd_close_impl(
 
 // fd_seek: (fd, offset, whence, newoffset) -> errno
 static int64_t wasi_fd_seek_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, (int)fd);
@@ -278,17 +274,16 @@ static int64_t wasi_fd_seek_impl(
 
 // fd_tell: (fd, offset) -> errno
 static int64_t wasi_fd_tell_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t offset_ptr
 ) {
-    return wasi_fd_seek_impl(ctx, caller_ctx, fd, 0, 1 /* SEEK_CUR */, offset_ptr);
+    return wasi_fd_seek_impl(ctx, fd, 0, 1 /* SEEK_CUR */, offset_ptr);
 }
 
 // fd_sync: (fd) -> errno
 static int64_t wasi_fd_sync_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx, int64_t fd
+    jit_context_t *ctx, int64_t fd
 ) {
-    (void)caller_ctx;
     if (!ctx) return WASI_EBADF;
 
     // stdio fds - no-op, return success
@@ -307,9 +302,8 @@ static int64_t wasi_fd_sync_impl(
 
 // fd_datasync: (fd) -> errno
 static int64_t wasi_fd_datasync_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx, int64_t fd
+    jit_context_t *ctx, int64_t fd
 ) {
-    (void)caller_ctx;
     if (!ctx) return WASI_EBADF;
 
     // stdio fds - no-op, return success
@@ -331,10 +325,9 @@ static int64_t wasi_fd_datasync_impl(
 
 // fd_fdstat_get: (fd, fdstat) -> errno
 static int64_t wasi_fd_fdstat_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t fdstat_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -373,10 +366,9 @@ static int64_t wasi_fd_fdstat_get_impl(
 
 // fd_prestat_get: (fd, prestat) -> errno
 static int64_t wasi_fd_prestat_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t prestat_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     int wasi_fd = (int)fd;
@@ -397,10 +389,9 @@ static int64_t wasi_fd_prestat_get_impl(
 
 // fd_prestat_dir_name: (fd, path, path_len) -> errno
 static int64_t wasi_fd_prestat_dir_name_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t path_ptr, int64_t path_len
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     int wasi_fd = (int)fd;
@@ -417,13 +408,12 @@ static int64_t wasi_fd_prestat_dir_name_impl(
 
 // path_open: (fd, dirflags, path, path_len, oflags, rights_base, rights_inh, fdflags, opened_fd) -> errno
 static int64_t wasi_path_open_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t dir_fd, int64_t dirflags,
     int64_t path_ptr, int64_t path_len,
     int64_t oflags, int64_t rights_base, int64_t rights_inh,
     int64_t fdflags, int64_t opened_fd_ptr
 ) {
-    (void)caller_ctx;
     (void)dirflags;
     (void)rights_base;
     (void)rights_inh;
@@ -472,10 +462,9 @@ static int64_t wasi_path_open_impl(
 
 // path_unlink_file: (fd, path, path_len) -> errno
 static int64_t wasi_path_unlink_file_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     char *path = malloc((size_t)path_len + 1);
@@ -500,10 +489,9 @@ static int64_t wasi_path_unlink_file_impl(
 
 // path_remove_directory: (fd, path, path_len) -> errno
 static int64_t wasi_path_remove_directory_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     char *path = malloc((size_t)path_len + 1);
@@ -528,10 +516,9 @@ static int64_t wasi_path_remove_directory_impl(
 
 // path_create_directory: (fd, path, path_len) -> errno
 static int64_t wasi_path_create_directory_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     char *path = malloc((size_t)path_len + 1);
@@ -556,11 +543,10 @@ static int64_t wasi_path_create_directory_impl(
 
 // path_rename: (old_fd, old_path, old_path_len, new_fd, new_path, new_path_len) -> errno
 static int64_t wasi_path_rename_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t old_fd, int64_t old_path_ptr, int64_t old_path_len,
     int64_t new_fd, int64_t new_path_ptr, int64_t new_path_len
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     char *old_path = malloc((size_t)old_path_len + 1);
@@ -602,10 +588,9 @@ static int64_t wasi_path_rename_impl(
 
 // fd_filestat_get: (fd, buf) -> errno
 static int64_t wasi_fd_filestat_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t buf_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -657,10 +642,9 @@ static int64_t wasi_fd_filestat_get_impl(
 
 // fd_filestat_set_size: (fd, size) -> errno
 static int64_t wasi_fd_filestat_set_size_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t fd, int64_t size
 ) {
-    (void)caller_ctx;
     if (!ctx) return WASI_EBADF;
 
     // stdio fds don't support truncation
@@ -679,10 +663,9 @@ static int64_t wasi_fd_filestat_set_size_impl(
 
 // args_sizes_get: (argc, argv_buf_size) -> errno
 static int64_t wasi_args_sizes_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t argc_ptr, int64_t argv_buf_size_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -701,10 +684,9 @@ static int64_t wasi_args_sizes_get_impl(
 
 // args_get: (argv, argv_buf) -> errno
 static int64_t wasi_args_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t argv_ptr, int64_t argv_buf_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -723,10 +705,9 @@ static int64_t wasi_args_get_impl(
 
 // environ_sizes_get: (environc, environ_buf_size) -> errno
 static int64_t wasi_environ_sizes_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t environc_ptr, int64_t environ_buf_size_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -745,10 +726,9 @@ static int64_t wasi_environ_sizes_get_impl(
 
 // environ_get: (environ, environ_buf) -> errno
 static int64_t wasi_environ_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t environ_ptr, int64_t environ_buf_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -767,10 +747,9 @@ static int64_t wasi_environ_get_impl(
 
 // clock_time_get: (clock_id, precision, time) -> errno
 static int64_t wasi_clock_time_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t clock_id, int64_t precision, int64_t time_ptr
 ) {
-    (void)caller_ctx;
     (void)precision;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
@@ -800,10 +779,9 @@ static int64_t wasi_clock_time_get_impl(
 
 // clock_res_get: (clock_id, resolution) -> errno
 static int64_t wasi_clock_res_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t clock_id, int64_t resolution_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID
@@ -815,10 +793,9 @@ static int64_t wasi_clock_res_get_impl(
 
 // random_get: (buf, buf_len) -> errno
 static int64_t wasi_random_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t buf_ptr, int64_t buf_len
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
@@ -830,30 +807,27 @@ static int64_t wasi_random_get_impl(
 
 // proc_exit: (exit_code) -> noreturn
 static int64_t wasi_proc_exit_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx, int64_t exit_code
+    jit_context_t *ctx, int64_t exit_code
 ) {
     (void)ctx;
-    (void)caller_ctx;
     exit((int)exit_code);
     return 0;
 }
 
 // proc_raise: (signal) -> errno
 static int64_t wasi_proc_raise_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx, int64_t sig
+    jit_context_t *ctx, int64_t sig
 ) {
     (void)ctx;
-    (void)caller_ctx;
     if (raise((int)sig) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 }
 
 // sched_yield: () -> errno
 static int64_t wasi_sched_yield_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx
+    jit_context_t *ctx
 ) {
     (void)ctx;
-    (void)caller_ctx;
 #ifndef _WIN32
     sched_yield();
 #endif
@@ -862,10 +836,9 @@ static int64_t wasi_sched_yield_impl(
 
 // poll_oneoff: (in, out, nsubscriptions, nevents) -> errno
 static int64_t wasi_poll_oneoff_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int64_t in_ptr, int64_t out_ptr, int64_t nsubscriptions, int64_t nevents_ptr
 ) {
-    (void)caller_ctx;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     // Simplified: just handle clock subscriptions with sleep
@@ -917,10 +890,9 @@ static int64_t wasi_poll_oneoff_impl(
 
 // fd_pread: Read from fd at offset without changing position
 static int32_t wasi_fd_pread_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t iovs_ptr, int32_t iovs_len, int64_t offset, int32_t nread_ptr
 ) {
-    (void)caller_ctx;
     uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
@@ -949,10 +921,9 @@ static int32_t wasi_fd_pread_impl(
 
 // fd_pwrite: Write to fd at offset without changing position
 static int32_t wasi_fd_pwrite_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t iovs_ptr, int32_t iovs_len, int64_t offset, int32_t nwritten_ptr
 ) {
-    (void)caller_ctx;
     uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
@@ -981,10 +952,9 @@ static int32_t wasi_fd_pwrite_impl(
 
 // fd_readdir: Read directory entries
 static int32_t wasi_fd_readdir_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t buf_ptr, int32_t buf_len, int64_t cookie, int32_t bufused_ptr
 ) {
-    (void)caller_ctx;
     uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
@@ -1059,10 +1029,9 @@ static int32_t wasi_fd_readdir_impl(
 
 // path_filestat_get: Get file stats by path
 static int32_t wasi_path_filestat_get_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len, int32_t buf_ptr
 ) {
-    (void)caller_ctx;
     uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
@@ -1109,11 +1078,10 @@ static int32_t wasi_path_filestat_get_impl(
 
 // path_readlink: Read symbolic link
 static int32_t wasi_path_readlink_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t dir_fd, int32_t path_ptr, int32_t path_len,
     int32_t buf_ptr, int32_t buf_len, int32_t bufused_ptr
 ) {
-    (void)caller_ctx;
     uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
@@ -1140,11 +1108,10 @@ static int32_t wasi_path_readlink_impl(
 
 // path_symlink: Create symbolic link
 static int32_t wasi_path_symlink_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t old_path_ptr, int32_t old_path_len,
     int32_t dir_fd, int32_t new_path_ptr, int32_t new_path_len
 ) {
-    (void)caller_ctx;
     uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
@@ -1178,12 +1145,11 @@ static int32_t wasi_path_symlink_impl(
 
 // path_link: Create hard link
 static int32_t wasi_path_link_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t old_fd, int32_t old_flags,
     int32_t old_path_ptr, int32_t old_path_len,
     int32_t new_fd, int32_t new_path_ptr, int32_t new_path_len
 ) {
-    (void)caller_ctx;
     (void)old_flags;
     uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
@@ -1224,10 +1190,9 @@ static int32_t wasi_path_link_impl(
 
 // fd_filestat_set_times: Set file timestamps
 static int32_t wasi_fd_filestat_set_times_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
-    (void)caller_ctx;
 
     // stdio fds don't support setting timestamps
     if (fd >= 0 && fd < 3) return WASI_EINVAL;
@@ -1273,11 +1238,10 @@ static int32_t wasi_fd_filestat_set_times_impl(
 
 // path_filestat_set_times: Set file timestamps by path
 static int32_t wasi_path_filestat_set_times_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len,
     int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
-    (void)caller_ctx;
     uint8_t *mem = ctx->memory0->base;
     if (!mem) return WASI_EINVAL;
 
@@ -1331,10 +1295,9 @@ static int32_t wasi_path_filestat_set_times_impl(
 
 // fd_advise: No-op (advice is optional)
 static int32_t wasi_fd_advise_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int64_t offset, int64_t len, int32_t advice
 ) {
-    (void)caller_ctx;
     (void)offset;
     (void)len;
     (void)advice;
@@ -1346,10 +1309,9 @@ static int32_t wasi_fd_advise_impl(
 
 // fd_fdstat_set_rights: No-op (rights system simplified)
 static int32_t wasi_fd_fdstat_set_rights_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int64_t rights_base, int64_t rights_inheriting
 ) {
-    (void)caller_ctx;
     (void)rights_base;
     (void)rights_inheriting;
     int native_fd = get_native_fd(ctx, fd);
@@ -1360,10 +1322,9 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
 
 // fd_allocate: Allocate space for a file
 static int32_t wasi_fd_allocate_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int64_t offset, int64_t len
 ) {
-    (void)caller_ctx;
 
     // stdio fds don't support allocation
     if (fd >= 0 && fd < 3) return WASI_EINVAL;
@@ -1392,10 +1353,9 @@ static int32_t wasi_fd_allocate_impl(
 
 // fd_renumber: Renumber a file descriptor
 static int32_t wasi_fd_renumber_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t to_fd
 ) {
-    (void)caller_ctx;
 
     // Cannot renumber stdio fds
     if ((fd >= 0 && fd < 3) || (to_fd >= 0 && to_fd < 3)) {
@@ -1425,10 +1385,9 @@ static int32_t wasi_fd_renumber_impl(
 
 // fd_fdstat_set_flags: Set file descriptor flags
 static int32_t wasi_fd_fdstat_set_flags_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t flags
 ) {
-    (void)caller_ctx;
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -1516,10 +1475,9 @@ static inline int is_stdio_fd(int32_t fd) {
 // flags: Desired flags for the accepted socket (currently unused)
 // result_fd_ptr: Where to store the new socket fd
 static int32_t wasi_sock_accept_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t flags, int32_t result_fd_ptr
 ) {
-    (void)caller_ctx;
     (void)flags; // WASI doesn't use flags for accept yet
 
     // stdio fds are not sockets - return EBADF to match interpreter
@@ -1557,11 +1515,10 @@ static int32_t wasi_sock_accept_impl(
 // ro_datalen_ptr: Where to store bytes received
 // ro_flags_ptr: Where to store output flags
 static int32_t wasi_sock_recv_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t ri_data, int32_t ri_data_len, int32_t ri_flags,
     int32_t ro_datalen_ptr, int32_t ro_flags_ptr
 ) {
-    (void)caller_ctx;
 
     // stdio fds are not sockets - return EBADF to match interpreter
     if (is_stdio_fd(fd)) return WASI_EBADF;
@@ -1608,11 +1565,10 @@ static int32_t wasi_sock_recv_impl(
 // si_flags: Message flags (currently unused in WASI)
 // so_datalen_ptr: Where to store bytes sent
 static int32_t wasi_sock_send_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t si_data, int32_t si_data_len, int32_t si_flags,
     int32_t so_datalen_ptr
 ) {
-    (void)caller_ctx;
     (void)si_flags; // WASI doesn't define send flags yet
 
     // stdio fds are not sockets - return EBADF to match interpreter
@@ -1650,10 +1606,9 @@ static int32_t wasi_sock_send_impl(
 // fd: Socket to shut down
 // how: 0=RD, 1=WR, 2=RDWR
 static int32_t wasi_sock_shutdown_impl(
-    jit_context_t *ctx, jit_context_t *caller_ctx,
+    jit_context_t *ctx,
     int32_t fd, int32_t how
 ) {
-    (void)caller_ctx;
 
     // stdio fds are not sockets - return EBADF to match interpreter
     if (is_stdio_fd(fd)) return WASI_EBADF;

@@ -39,10 +39,10 @@ test "egraph: sub_self_to_zero" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
+      #|function test(v0:i64, v1:i32) -> i32 {
       #|block0:
-      #|    v3:i32 = iconst 0
-      #|    return v3
+      #|    v2:i32 = iconst 0
+      #|    return v2
       #|}
       #|
     ),
@@ -61,10 +61,10 @@ test "egraph: xor_self_to_zero" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64, v2:i32) -> i32 {
+      #|function test(v0:i64, v1:i32) -> i32 {
       #|block0:
-      #|    v3:i32 = iconst 0
-      #|    return v3
+      #|    v2:i32 = iconst 0
+      #|    return v2
       #|}
       #|
     ),
@@ -83,10 +83,10 @@ test "egraph: const_fold_add" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 30
-      #|    return v4
+      #|    v3:i32 = iconst 30
+      #|    return v3
       #|}
       #|
     ),
@@ -105,10 +105,10 @@ test "egraph: const_fold_sub" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 70
-      #|    return v4
+      #|    v3:i32 = iconst 70
+      #|    return v3
       #|}
       #|
     ),
@@ -127,10 +127,10 @@ test "egraph: const_fold_mul" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 30
-      #|    return v4
+      #|    v3:i32 = iconst 30
+      #|    return v3
       #|}
       #|
     ),
@@ -149,10 +149,10 @@ test "egraph: const_fold_and" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v3:i32 = iconst 15
-      #|    return v3
+      #|    v2:i32 = iconst 15
+      #|    return v2
       #|}
       #|
     ),
@@ -171,10 +171,10 @@ test "egraph: const_fold_or" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 255
-      #|    return v4
+      #|    v3:i32 = iconst 255
+      #|    return v3
       #|}
       #|
     ),
@@ -193,10 +193,10 @@ test "egraph: const_fold_xor" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 15
-      #|    return v4
+      #|    v3:i32 = iconst 15
+      #|    return v3
       #|}
       #|
     ),
@@ -215,10 +215,10 @@ test "egraph: const_fold_shl" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 16
-      #|    return v4
+      #|    v3:i32 = iconst 16
+      #|    return v3
       #|}
       #|
     ),
@@ -237,10 +237,10 @@ test "egraph: const_fold_chain" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v6:i32 = iconst 60
-      #|    return v6
+      #|    v5:i32 = iconst 60
+      #|    return v5
       #|}
       #|
     ),
@@ -259,10 +259,10 @@ test "egraph: const_fold_cmp_lt_true" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 1
-      #|    return v4
+      #|    v3:i32 = iconst 1
+      #|    return v3
       #|}
       #|
     ),
@@ -281,10 +281,10 @@ test "egraph: const_fold_cmp_lt_false" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 0
-      #|    return v4
+      #|    v3:i32 = iconst 0
+      #|    return v3
       #|}
       #|
     ),
@@ -303,10 +303,10 @@ test "egraph: const_fold_eq_true" {
   inspect(
     compile_and_optimize(source),
     content=(
-      #|function test(v0:i64, v1:i64) -> i32 {
+      #|function test(v0:i64) -> i32 {
       #|block0:
-      #|    v4:i32 = iconst 1
-      #|    return v4
+      #|    v3:i32 = iconst 1
+      #|    return v3
       #|}
       #|
     ),

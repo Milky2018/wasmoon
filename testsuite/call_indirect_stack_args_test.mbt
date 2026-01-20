@@ -1,8 +1,8 @@
 ///|
 /// Regression tests for `call_indirect` with integer stack (overflow) arguments.
 ///
-/// Wasm v3 ABI for JIT:
-/// - User integer args use X2-X7 (6 regs). Remaining int args spill to stack.
+/// JIT ABI:
+/// - User integer args use X1-X7 (7 regs). Remaining int args spill to stack.
 ///
 /// These tests validate:
 /// - Correct outgoing stack arg stores by the caller

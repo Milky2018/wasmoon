@@ -652,6 +652,7 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
   load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
   block.add_inst(load_ptr)
   let call_inst = @instr.VCodeInst::new(CallPtr(3, 1, C))
+  call_inst.add_use(@abi.Physical({ index: 17, class: Int }))
   block.add_inst(call_inst)
   block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
   let mc = @emit.emit_function(func)
@@ -673,14 +674,12 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f30f1ff8  str x19, [sp, #-16]!
-      #|  000c: f30300aa  mov x19, x0
+      #|  0008: f50300aa  mov x21, x0
       #|block0:
-      #|  0010: 110080d2  movz x17, #0, lsl #0
-      #|  0014: 20023fd6  blr x17
-      #|  0018: f30741f8  ldr x19, [sp], #16
-      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0020: c0035fd6  ret
+      #|  000c: 110080d2  movz x17, #0, lsl #0
+      #|  0010: 20023fd6  blr x17
+      #|  0014: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0018: c0035fd6  ret
       #|
     ),
   )
@@ -695,6 +694,7 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
   load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
   block.add_inst(load_ptr)
   let call_inst = @instr.VCodeInst::new(CallPtr(1, 1, C))
+  call_inst.add_use(@abi.Physical({ index: 17, class: Int }))
   block.add_inst(call_inst)
   block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
   let mc = @emit.emit_function(func)
@@ -714,14 +714,12 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f30f1ff8  str x19, [sp, #-16]!
-      #|  000c: f30300aa  mov x19, x0
+      #|  0008: f50300aa  mov x21, x0
       #|block0:
-      #|  0010: 110080d2  movz x17, #0, lsl #0
-      #|  0014: 20023fd6  blr x17
-      #|  0018: f30741f8  ldr x19, [sp], #16
-      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0020: c0035fd6  ret
+      #|  000c: 110080d2  movz x17, #0, lsl #0
+      #|  0010: 20023fd6  blr x17
+      #|  0014: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0018: c0035fd6  ret
       #|
     ),
   )
@@ -762,46 +760,7 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
   load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
   block.add_inst(load_ptr)
   let call_inst = @instr.VCodeInst::new(CallPtr(4, 0, C))
-  block.add_inst(call_inst)
-  block.set_terminator(Return([]))
-  let mc = @emit.emit_function(func)
-  let disasm = mc.dump_disasm()
-
-  // Count "blr x17" - should be exactly 1
-  let mut blr_count = 0
-  let lines = disasm.split("\n")
-  for line in lines {
-    if line.contains("blr x17") {
-      blr_count = blr_count + 1
-    }
-  }
-  assert_eq(blr_count, 1)
-  inspect(
-    disasm,
-    content=(
-      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f30f1ff8  str x19, [sp, #-16]!
-      #|  000c: f30300aa  mov x19, x0
-      #|block0:
-      #|  0010: 110080d2  movz x17, #0, lsl #0
-      #|  0014: 20023fd6  blr x17
-      #|  0018: f30741f8  ldr x19, [sp], #16
-      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0020: c0035fd6  ret
-      #|
-    ),
-  )
-}
-
-///|
-test "emit: call_ptr(C) instruction disasm (4 args, 0 result) 2" {
-  let func = @regalloc.VCodeFunction::new("test_call_ptr_c_4_0_2")
-  let block = func.new_block()
-  let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
-  load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
-  block.add_inst(load_ptr)
-  let call_inst = @instr.VCodeInst::new(CallPtr(4, 0, C))
+  call_inst.add_use(@abi.Physical({ index: 17, class: Int }))
   block.add_inst(call_inst)
   block.set_terminator(Return([]))
   let mc = @emit.emit_function(func)
@@ -821,14 +780,12 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result) 2" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f30f1ff8  str x19, [sp, #-16]!
-      #|  000c: f30300aa  mov x19, x0
+      #|  0008: f50300aa  mov x21, x0
       #|block0:
-      #|  0010: 110080d2  movz x17, #0, lsl #0
-      #|  0014: 20023fd6  blr x17
-      #|  0018: f30741f8  ldr x19, [sp], #16
-      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0020: c0035fd6  ret
+      #|  000c: 110080d2  movz x17, #0, lsl #0
+      #|  0010: 20023fd6  blr x17
+      #|  0014: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0018: c0035fd6  ret
       #|
     ),
   )

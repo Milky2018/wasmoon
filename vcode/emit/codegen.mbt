@@ -25,17 +25,19 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 ///|
 fn collect_used_callee_saved(
   func : @regalloc.VCodeFunction,
+  enable_pinned_reg : Bool,
   _needs_sret : Bool,
 ) -> Array[Int] {
-  // v3 ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
+  // ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
   let used : @hashset.HashSet[Int] = @hashset.new()
   let mut has_calls = false
 
-  // Check param_pregs: parameters that cross calls are moved to callee-saved registers
-  // These are defined in the prologue via `mov xN, x(3+i)`
+  // Check param_pregs: parameters that cross calls are moved to callee-saved registers.
   for preg in func.get_param_pregs() {
     if preg is Some(p) && is_callee_saved_alloc(p.index) {
-      used.add(p.index)
+      if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+        used.add(p.index)
+      }
     }
   }
   for block in func.get_blocks() {
@@ -50,7 +52,9 @@ fn collect_used_callee_saved(
         if def.reg is Physical(preg) &&
           preg.class is Int &&
           is_callee_saved_alloc(preg.index) {
-          used.add(preg.index)
+          if !enable_pinned_reg || preg.index != @abi.REG_VMCTX {
+            used.add(preg.index)
+          }
         }
       }
     }
@@ -119,6 +123,19 @@ fn func_has_calls(func : @regalloc.VCodeFunction) -> Bool {
 }
 
 ///|
+/// Check if a function reads any incoming stack parameters
+fn func_has_incoming_stack_args(func : @regalloc.VCodeFunction) -> Bool {
+  for block in func.get_blocks() {
+    for inst in block.insts {
+      if inst.opcode is @instr.LoadStackParam(_, _) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
 /// Check if a function uses vmctx (x19)
 /// A function needs vmctx if:
 /// - It uses X19 as a physical register in any instruction
@@ -170,7 +187,7 @@ fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
 }
 
 ///|
-/// Emit prologue for ABI v3
+/// Emit prologue (Standard)
 ///
 /// Stack Frame Layout (from high to low address):
 /// ┌───────────────────────────┐
@@ -189,10 +206,9 @@ fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
 /// │  Outgoing Arguments       │ (for calls with stack args)
 /// └═══════════════════════════┘ ← SP after prologue
 ///
-/// ABI v3 Parameter Passing:
-/// - X0 = callee_vmctx (cached to X19)
-/// - X1 = caller_vmctx (unused in current impl)
-/// - X2-X7 = user integer params (up to 6)
+/// ABI Parameter Passing:
+/// - X0 = vmctx (cached to pinned vmctx reg)
+/// - X1.. = user args
 /// - V0-V7 = user float params (S for f32, D for f64)
 /// Emit stack pointer adjustment for arbitrary sizes (Standard)
 ///
@@ -259,6 +275,7 @@ fn MachineCode::emit_prologue(
   params : Array[@abi.VReg],
   param_pregs : Array[@abi.PReg?],
   debug_func_idx : Int?,
+  abi_settings : @abi.ABISettings,
 ) -> Unit {
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
@@ -351,11 +368,26 @@ fn MachineCode::emit_prologue(
   // All other values (memory_base, memory_size, func_table, table0_base) are
   // loaded on-demand from vmctx, on-demand.
   if stack_frame.needs_vmctx {
-    self.emit_mov_reg(19, 0)
+    if !abi_settings.enable_pinned_reg {
+      abort("unpinned VMContext ABI not implemented yet")
+    }
+    self.emit_mov_reg(@abi.REG_VMCTX, 0)
     // Optionally cache memory0 descriptor pointer in X20.
     // This allows `LoadMemBase(mem=0)` to be a single load from [X20 + 0].
     if stack_frame.cache_mem0_desc {
-      self.emit_ldr_imm(@abi.REG_MEM0_DESC, 19, @abi.VMCTX_MEMORY0_OFFSET)
+      self.emit_ldr_imm(
+        @abi.REG_MEM0_DESC,
+        @abi.REG_VMCTX,
+        @abi.VMCTX_MEMORY0_OFFSET,
+      )
+    }
+    // Optionally cache func_table pointer.
+    if stack_frame.cache_func_table {
+      self.emit_ldr_imm(
+        @abi.REG_FUNC_TABLE,
+        @abi.REG_VMCTX,
+        @abi.VMCTX_FUNC_TABLE_OFFSET,
+      )
     }
   }
 
@@ -425,12 +457,13 @@ pub fn emit_function(
   func : @regalloc.VCodeFunction,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
+  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
   let mc = MachineCode::new()
-  // v3 ABI: Check if we need SRET (more than 8 int or 8 float returns)
+  // ABI: Check if we need SRET (more than 8 int or 8 float returns)
   let needs_sret = func.needs_extra_results_ptr()
   // Check if we call functions that return more than register capacity
   // In that case, we need to allocate a local buffer and use X8 (SRET) to point to it
@@ -438,14 +471,20 @@ pub fn emit_function(
   // We need SRET if either we return multi-value OR we call multi-value functions
   let uses_sret = needs_sret || calls_multi_value
   // Collect callee-saved GPRs that this function clobbers
-  let clobbered = collect_used_callee_saved(func, uses_sret)
+  let clobbered = collect_used_callee_saved(
+    func,
+    abi_settings.enable_pinned_reg,
+    uses_sret,
+  )
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
   let clobbered_fprs = collect_used_callee_saved_fprs(func)
 
   // Build stack frame layout using JITStackFrame
   // has_calls is true if function makes any calls
   let has_calls = func_has_calls(func)
+  let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
+  let uses_func_table = func.uses_func_table()
 
   // Check if function uses vmctx (x19)
   // A function needs vmctx if:
@@ -457,6 +496,9 @@ pub fn emit_function(
   if uses_mem0 && !clobbered_gprs.contains(@abi.REG_MEM0_DESC) {
     clobbered_gprs.push(@abi.REG_MEM0_DESC)
   }
+  if uses_func_table && !clobbered_gprs.contains(@abi.REG_FUNC_TABLE) {
+    clobbered_gprs.push(@abi.REG_FUNC_TABLE)
+  }
   let stack_frame = JITStackFrame::build(
     clobbered_gprs,
     clobbered_fprs,
@@ -465,7 +507,9 @@ pub fn emit_function(
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
     cache_mem0_desc=uses_mem0,
+    cache_func_table=uses_func_table,
     force_frame_setup~,
+    has_incoming_stack_args~,
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
@@ -474,6 +518,7 @@ pub fn emit_function(
     func.get_params(),
     func.get_param_pregs(),
     debug_func_idx,
+    abi_settings,
   )
 
   // Emit function body (blocks now in optimized order)
@@ -673,6 +718,7 @@ pub fn emit_function(
     let mut inst_idx = 0
     while inst_idx < block.insts.length() {
       let inst = block.insts[inst_idx]
+
       // Peephole: fuse an address add into the following load/store.
       // Pattern:
       //   add addr = base + off
@@ -1218,6 +1264,16 @@ fn MachineCode::emit_instruction(
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
+      // Fast path: cached func_table pointer.
+      if stack_frame.cache_func_table &&
+        ty is I64 &&
+        rn == @abi.REG_VMCTX &&
+        offset == @abi.VMCTX_FUNC_TABLE_OFFSET {
+        if rt != @abi.REG_FUNC_TABLE {
+          self.emit_mov_reg(rt, @abi.REG_FUNC_TABLE)
+        }
+        return
+      }
       // F32 loads directly into S register (raw f32 bits preserved)
       self.emit_load(ty, rt, rn, offset)
     }
@@ -1753,7 +1809,7 @@ fn MachineCode::emit_instruction(
       // Tail call optimization
       // Parameters are already set up by lowering phase via:
       // - StoreToStack for overflow arguments
-      // - add_use_fixed constraints for register arguments (X17=func_ptr, X0/X1=vmctx, X2-X7/V0-V7=args)
+      // - add_use_fixed constraints for register arguments (X0=vmctx, X1-X7/V0-V7=args)
       // Emit only needs to:
       // 1. Restore callee-saved registers (epilogue)
       // 2. BR to function pointer (doesn't save return address, callee returns to our caller)
@@ -1763,9 +1819,13 @@ fn MachineCode::emit_instruction(
       self.emit_epilogue(stack_frame)
 
       // BR (not BLR) - jump to function without saving return address
-      // func_ptr is guaranteed to be in X17 by add_use_fixed constraint in lowering
-      // This is the KEY tail call semantic: callee returns directly to our caller
-      self.emit_br(17)
+      // The call target is the first use operand.
+      // This is the KEY tail call semantic: callee returns directly to our caller.
+      let target = match inst.use_constraints[0] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[0])
+      }
+      self.emit_br(target)
 
       // Note: No code after BR - control never returns here
     }
@@ -1983,32 +2043,15 @@ fn MachineCode::emit_instruction(
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }
-    CallPtr(_, _, _call_conv) =>
-      // Standard call: all arguments are already in place
-      //
-      // The lower phase generates:
-      // - AdjustSP to allocate stack space for overflow args
-      // - StoreToStack for each overflow arg
-      // - CallPtr with FixedReg constraints for register args
-      // - AdjustSP to deallocate stack space
-      //
-      // The regalloc phase processes constraints and inserts moves:
-      // For Wasm calling convention:
-      // - func_ptr is constrained to X17
-      // - callee_vmctx is constrained to X0
-      // - caller_vmctx is constrained to X1
-      // - int user args are constrained to X2-X7
-      // - float user args are constrained to V0-V7
-      // - results are constrained to X0/V0 etc.
-      // For C calling convention:
-      // - func_ptr is constrained to X17
-      // - int args are constrained to X0-X7 (no vmctx)
-      // - float args are constrained to V0-V7
-      // - results are constrained to X0/V0 etc.
-      //
-      // By the time we get here, everything is in the right place!
-      // Just emit the branch-and-link instruction.
-      self.emit_blr(17)
+    CallPtr(_, _, _call_conv) => {
+      // Standard call: all arguments are already in place.
+      // Use a fixed-reg constraint if present; otherwise use assigned reg.
+      let target = match inst.use_constraints[0] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[0])
+      }
+      self.emit_blr(target)
+    }
     AdjustSP(delta) =>
       // Adjust stack pointer by delta bytes
       // Used in Standard call lowering for outgoing args
@@ -3459,7 +3502,7 @@ fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> Int {
 }
 
 ///|
-/// Emit epilogue for ABI v3 (Standard)
+/// Emit epilogue (Standard)
 ///
 /// Reverses the prologue operations in reverse order (Standard style):
 /// 1. Deallocate remaining stack space (spill + outgoing)
@@ -3534,7 +3577,7 @@ fn MachineCode::emit_epilogue(
 }
 
 ///|
-/// Emit terminator with epilogue for Return (v3 ABI using JITStackFrame)
+/// Emit terminator with epilogue for Return (JITStackFrame)
 /// next_block: the ID of the physically next block, used for fall-through optimization
 fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
@@ -3639,7 +3682,7 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
     }
     Return(values) => {
-      // v3 ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7
+      // ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7
       // If more returns are needed, SRET pointer is passed in X8
       // Two-phase approach is ONLY needed when there's potential for D/S clobbering:
       // - D_n and S_n share the same V_n register
@@ -3661,7 +3704,7 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
 
-      // v3 ABI: Use X0-X7 for integer returns (up to 8)
+      // ABI: Use X0-X7 for integer returns (up to 8)
       let max_int_ret_regs = @abi.MAX_INT_RET_REGS // 8
       let max_float_ret_regs = @abi.MAX_FLOAT_RET_REGS // 8
 

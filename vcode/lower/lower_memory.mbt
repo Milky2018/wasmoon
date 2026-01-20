@@ -87,10 +87,14 @@ fn lower_load_mem_base(
     return
   }
   let result_vreg = ctx.get_vreg(result)
-  let vmctx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let load_inst = @instr.VCodeInst::new(LoadMemBase(memidx))
   load_inst.add_def({ reg: Virtual(result_vreg) })
-  load_inst.add_use(Virtual(vmctx_vreg))
+  if ctx.abi_settings.enable_pinned_reg {
+    load_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  } else {
+    let vmctx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+    load_inst.add_use(Virtual(vmctx_vreg))
+  }
   block.add_inst(load_inst)
 }
 

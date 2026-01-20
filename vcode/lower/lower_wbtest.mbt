@@ -966,32 +966,32 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|vcode test(v0:int) -> float {
       #|block0:
       #|    d0 = ldf 10
-      #|    x8 = ldi 0
-      #|    x9 = ldi 0
-      #|    x9 = cmp32.eq x0, x9
-      #|    branch x9, block1, block5
+      #|    x1 = ldi 0
+      #|    x2 = ldi 0
+      #|    x2 = cmp32.eq x0, x2
+      #|    branch x2, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x8, d0
-      #|    d0 = load_ptr.f32 +0 x8
+      #|    store_ptr.f32 +0 x1, d0
+      #|    d0 = load_ptr.f32 +0 x1
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x8, d0
-      #|    d0 = load_ptr.f32 +0 x8
+      #|    store_ptr.f32 +0 x1, d0
+      #|    d0 = load_ptr.f32 +0 x1
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x8, d0
-      #|    d0 = load_ptr.f32 +0 x8
+      #|    store_ptr.f32 +0 x1, d0
+      #|    d0 = load_ptr.f32 +0 x1
       #|    jump block4
       #|block4(f1:float):
       #|    ret d0
       #|block5:
-      #|    x9 = ldi 1
-      #|    x9 = cmp32.eq x0, x9
-      #|    branch x9, block2, block6
+      #|    x2 = ldi 1
+      #|    x2 = cmp32.eq x0, x2
+      #|    branch x2, block2, block6
       #|block6:
-      #|    x9 = ldi 2
-      #|    x9 = cmp32.eq x0, x9
-      #|    branch x9, block3, block4
+      #|    x2 = ldi 2
+      #|    x0 = cmp32.eq x0, x2
+      #|    branch x0, block3, block4
       #|}
       #|
     ),
@@ -1091,8 +1091,8 @@ test "minimal: dead float constant should not affect live values" {
       #|block0:
       #|    d1 = ldf 2
       #|    d0 = ldf 10
-      #|    x8 = ldi 0
-      #|    store_ptr.f32 +0 x8, d0
+      #|    x0 = ldi 0
+      #|    store_ptr.f32 +0 x0, d0
       #|    ret d1
       #|}
       #|
@@ -1145,21 +1145,21 @@ test "br_table with block arguments from WAT" {
   inspect(
     vcode_func.print(),
     content=(
-      #|vcode test(v0:int, v1:int, v2:int) -> int {
+      #|vcode test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v7 = ldi 0
-      #|    v9 = ldi 0
-      #|    v8 = cmp32.eq v2, v9
-      #|    branch v8, block3, block4
-      #|block1(v3:int, v4:int):
-      #|    ret v4
-      #|block2(v5:int, v6:int):
-      #|    v10 = ldi 100
-      #|    jump block1 (v5, v10)
+      #|    v6 = ldi 0
+      #|    v8 = ldi 0
+      #|    v7 = cmp32.eq v1, v8
+      #|    branch v7, block3, block4
+      #|block1(v2:int, v3:int):
+      #|    ret v3
+      #|block2(v4:int, v5:int):
+      #|    v9 = ldi 100
+      #|    jump block1 (v4, v9)
       #|block3:
-      #|    jump block2 (v2, v7)
+      #|    jump block2 (v1, v6)
       #|block4:
-      #|    jump block1 (v2, v7)
+      #|    jump block1 (v1, v6)
       #|}
       #|
     ),

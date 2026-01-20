@@ -1,12 +1,11 @@
 // ABI Constants and Definitions
 // Centralized definition of JIT calling convention
 //
-// Wasmoon JIT ABI v3 (Standard):
-// - X0: callee_vmctx (callee's VMContext)
-// - X1: caller_vmctx (caller's VMContext)
-// - X2-X7: User integer parameters (up to 6 in registers)
-// - V0-V7: Float parameters (S for f32, D for f64)
-// - X19: Cached callee_vmctx (callee-saved, set in prologue)
+// Wasmoon JIT ABI (transitioning to Cranelift AppleAarch64):
+// - X0: vmctx (VMContext)
+// - X1-X7: user integer parameters (up to 7 in registers)
+// - V0-V7: float parameters (S for f32, D for f64)
+// - X21: pinned vmctx register (cached in prologue)
 // - X29: Frame Pointer (FP)
 // - X30: Link Register (LR)
 
@@ -92,14 +91,19 @@ pub const VMCTX_GC_HEAP_OFFSET : Int = 104
 // ============ Reserved Registers ============
 
 ///|
-/// Register holding cached callee_vmctx (X19, callee-saved)
-/// In prologue: mov x19, x0
-pub const REG_VMCTX : Int = 19
+/// Register holding cached VMContext (Cranelift pinned-reg: X21).
+/// In prologue (pinned mode): mov x21, x0
+pub const REG_VMCTX : Int = 21
 
 ///|
 /// Register holding cached memory0 descriptor pointer (X20, callee-saved).
 /// When enabled, prologue loads: x20 = [x19 + VMCTX_MEMORY0_OFFSET].
 pub const REG_MEM0_DESC : Int = 20
+
+///|
+/// Register holding cached func_table pointer (X19, callee-saved).
+/// When enabled, prologue loads: x19 = [vmctx + VMCTX_FUNC_TABLE_OFFSET].
+pub const REG_FUNC_TABLE : Int = 19
 
 ///|
 /// Frame Pointer register (X29)
@@ -112,20 +116,16 @@ pub const REG_LR : Int = 30
 // ============ Parameter Passing ============
 
 ///|
-/// Register for callee_vmctx (first parameter, X0)
+/// Register for VMContext (first parameter, X0)
 pub const REG_CALLEE_VMCTX : Int = 0
 
 ///|
-/// Register for caller_vmctx (second parameter, X1)
-pub const REG_CALLER_VMCTX : Int = 1
+/// First register for user integer parameters (X1)
+pub const USER_PARAM_BASE_REG : Int = 1
 
 ///|
-/// First register for user integer parameters (X2)
-pub const USER_PARAM_BASE_REG : Int = 2
-
-///|
-/// Maximum number of user integer parameters in registers (X2-X7 = 6)
-pub const MAX_USER_REG_PARAMS : Int = 6
+/// Maximum number of user integer parameters in registers (X1-X7 = 7)
+pub const MAX_USER_REG_PARAMS : Int = 7
 
 ///|
 /// First register for float parameters (V0/D0/S0)
@@ -278,10 +278,18 @@ pub fn aapcs64_callee_saved() -> Array[PReg] {
 
 ///|
 /// Scratch registers available for allocation (caller-saved, no save/restore needed)
-/// X8-X15 are available for allocation.
-/// X16-X17 (IP0/IP1) are reserved for linker/code emission scratch.
+/// X0-X15 are available for allocation.
+/// X16-X17 (IP0/IP1) are reserved for linker/code emission scratch and indirect calls.
 pub fn allocatable_scratch_regs() -> Array[PReg] {
   [
+    { index: 0, class: Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
     { index: 8, class: Int },
     { index: 9, class: Int },
     { index: 10, class: Int },
@@ -294,21 +302,41 @@ pub fn allocatable_scratch_regs() -> Array[PReg] {
 }
 
 ///|
-/// Callee-saved registers available for allocation (must be saved/restored)
-/// X19 is reserved for vmctx caching
-/// X20-X28 are available for allocation
-pub fn allocatable_callee_saved_regs() -> Array[PReg] {
-  [
-    { index: 20, class: Int },
-    { index: 21, class: Int },
-    { index: 22, class: Int },
-    { index: 23, class: Int },
-    { index: 24, class: Int },
-    { index: 25, class: Int },
-    { index: 26, class: Int },
-    { index: 27, class: Int },
-    { index: 28, class: Int },
-  ]
+/// Callee-saved registers available for allocation (must be saved/restored).
+///
+/// When `enable_pinned_reg` is true (Cranelift-style pinned VMContext), X21 is
+/// reserved and excluded from allocation.
+///
+/// When `enable_pinned_reg` is false, X21 becomes allocatable (unpinned mode).
+pub fn allocatable_callee_saved_regs(
+  enable_pinned_reg? : Bool = true,
+) -> Array[PReg] {
+  if enable_pinned_reg {
+    [
+      { index: 19, class: Int },
+      { index: 20, class: Int },
+      { index: 22, class: Int },
+      { index: 23, class: Int },
+      { index: 24, class: Int },
+      { index: 25, class: Int },
+      { index: 26, class: Int },
+      { index: 27, class: Int },
+      { index: 28, class: Int },
+    ]
+  } else {
+    [
+      { index: 19, class: Int },
+      { index: 20, class: Int },
+      { index: 21, class: Int },
+      { index: 22, class: Int },
+      { index: 23, class: Int },
+      { index: 24, class: Int },
+      { index: 25, class: Int },
+      { index: 26, class: Int },
+      { index: 27, class: Int },
+      { index: 28, class: Int },
+    ]
+  }
 }
 
 ///|
@@ -371,9 +399,60 @@ pub fn call_clobbered_gprs() -> Array[PReg] {
 }
 
 ///|
-/// Floating-point registers clobbered by function calls
-/// V0-V7 and V16-V31 are caller-saved
+
+///|
+/// Floating-point registers clobbered by function calls.
+///
+/// Cranelift conservatively treats all V0-V31 as clobbered at callsites because
+/// it cannot model partial preservation of V8-V15.
+///
+/// For AppleAarch64 parity, we follow the same conservative approximation.
 pub fn call_clobbered_fprs() -> Array[PReg] {
+  [
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+    { index: 4, class: Float64 },
+    { index: 5, class: Float64 },
+    { index: 6, class: Float64 },
+    { index: 7, class: Float64 },
+    { index: 8, class: Float64 },
+    { index: 9, class: Float64 },
+    { index: 10, class: Float64 },
+    { index: 11, class: Float64 },
+    { index: 12, class: Float64 },
+    { index: 13, class: Float64 },
+    { index: 14, class: Float64 },
+    { index: 15, class: Float64 },
+    { index: 16, class: Float64 },
+    { index: 17, class: Float64 },
+    { index: 18, class: Float64 },
+    { index: 19, class: Float64 },
+    { index: 20, class: Float64 },
+    { index: 21, class: Float64 },
+    { index: 22, class: Float64 },
+    { index: 23, class: Float64 },
+    { index: 24, class: Float64 },
+    { index: 25, class: Float64 },
+    { index: 26, class: Float64 },
+    { index: 27, class: Float64 },
+    { index: 28, class: Float64 },
+    { index: 29, class: Float64 },
+    { index: 30, class: Float64 },
+    { index: 31, class: Float64 },
+  ]
+}
+
+///|
+/// Floating-point registers clobbered by *same-ABI* calls.
+///
+/// When both caller and callee use the same AArch64 ABI, V8-V15 are callee-saved
+/// (low 64 bits). We treat them as preserved across Wasm-to-Wasm calls.
+///
+/// This mirrors Cranelift’s practice of excluding V8-V15 clobbers when the callee
+/// has the same ABI as the caller.
+pub fn call_clobbered_fprs_same_abi() -> Array[PReg] {
   [
     { index: 0, class: Float64 },
     { index: 1, class: Float64 },

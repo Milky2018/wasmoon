@@ -125,6 +125,28 @@ pub fn Bundle::crosses_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
 }
 
 ///|
+/// Check if any range in this bundle crosses a Wasm call
+pub fn Bundle::crosses_wasm_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
+  for range_id in self.range_ids {
+    if ranges.get(range_id).crosses_wasm_call {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check if any range in this bundle crosses a C call
+pub fn Bundle::crosses_c_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
+  for range_id in self.range_ids {
+    if ranges.get(range_id).crosses_c_call {
+      return true
+    }
+  }
+  false
+}
+
+///|
 pub fn Bundle::to_string(self : Bundle, _ranges : LiveRangeSet) -> String {
   let mut result = "Bundle\{self.id} (\{self.reg_class}): ["
   for i, range_id in self.range_ids {

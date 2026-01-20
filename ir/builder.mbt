@@ -1068,20 +1068,17 @@ pub fn IRBuilder::store_ptr_narrow(
 /// Call via function pointer with multiple return values
 /// For trampolines calling WASM functions
 ///
-/// Design: callee_vmctx and caller_vmctx are explicit
-/// arguments, allowing the register allocator to properly handle values that
-/// need to survive across the call (like values_vec in trampolines).
+/// Design: VMContext is an explicit special parameter (Cranelift-style).
 ///
-/// Operand layout: [func_ptr, callee_vmctx, caller_vmctx, user_args...]
+/// Operand layout: [func_ptr, vmctx, user_args...]
 pub fn IRBuilder::call_ptr(
   self : IRBuilder,
   func_ptr : Value,
-  callee_vmctx : Value,
-  caller_vmctx : Value,
+  vmctx : Value,
   args : Array[Value],
   result_types : Array[Type],
 ) -> Array[Value] {
-  let all_args : Array[Value] = [func_ptr, callee_vmctx, caller_vmctx]
+  let all_args : Array[Value] = [func_ptr, vmctx]
   for arg in args {
     all_args.push(arg)
   }

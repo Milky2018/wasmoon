@@ -147,8 +147,8 @@ A more precise fix would track which registers have been clobbered, but this req
 ### What The Module Exercises
 
 - The libsodium AEAD entrypoints are called via `call_indirect`:
-  - `call_indirect (type 10)` uses a 10-param signature (6 reg args + 4 stack args in Wasmoon v3 ABI).
-  - `call_indirect (type 11)` uses a 9-param signature (6 reg args + 3 stack args).
+  - `call_indirect (type 10)` uses a 10-param signature (7 reg args + 3 stack args in current JIT ABI).
+  - `call_indirect (type 11)` uses a 9-param signature (7 reg args + 2 stack args).
 - The module also uses bulk memory ops (`memory.copy`, `memory.fill`) heavily.
 
 ### Optimizer Correctness Fix (Independent)

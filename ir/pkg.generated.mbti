@@ -210,7 +210,7 @@ pub fn IRBuilder::call(Self, Int, Type?, Array[Value]) -> Value?
 pub fn IRBuilder::call_indirect(Self, Int, Int, Type?, Value, Array[Value]) -> Value?
 pub fn IRBuilder::call_indirect_multi(Self, Int, Int, Array[Type], Value, Array[Value]) -> Array[Value]
 pub fn IRBuilder::call_multi(Self, Int, Array[Type], Array[Value]) -> Array[Value]
-pub fn IRBuilder::call_ptr(Self, Value, Value, Value, Array[Value], Array[Type]) -> Array[Value]
+pub fn IRBuilder::call_ptr(Self, Value, Value, Array[Value], Array[Type]) -> Array[Value]
 pub fn IRBuilder::call_ref_multi(Self, Int, Array[Type], Value, Array[Value]) -> Array[Value]
 pub fn IRBuilder::clz(Self, Value) -> Value
 pub fn IRBuilder::copy(Self, Value) -> Value

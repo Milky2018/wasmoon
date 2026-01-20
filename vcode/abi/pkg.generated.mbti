@@ -12,15 +12,15 @@ pub const MAX_INT_RET_REGS : Int = 8
 
 pub const MAX_REG_PARAMS : Int = 8
 
-pub const MAX_USER_REG_PARAMS : Int = 6
+pub const MAX_USER_REG_PARAMS : Int = 7
 
 pub const PARAM_BASE_REG : Int = 0
 
 pub const REG_CALLEE_VMCTX : Int = 0
 
-pub const REG_CALLER_VMCTX : Int = 1
-
 pub const REG_FP : Int = 29
+
+pub const REG_FUNC_TABLE : Int = 19
 
 pub const REG_LR : Int = 30
 
@@ -28,13 +28,13 @@ pub const REG_MEM0_DESC : Int = 20
 
 pub const REG_SRET : Int = 8
 
-pub const REG_VMCTX : Int = 19
+pub const REG_VMCTX : Int = 21
 
 pub const SCRATCH_REG_1 : Int = 16
 
 pub const SCRATCH_REG_2 : Int = 17
 
-pub const USER_PARAM_BASE_REG : Int = 2
+pub const USER_PARAM_BASE_REG : Int = 1
 
 pub const VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET : Int = 84
 
@@ -80,15 +80,17 @@ pub fn align_up(Int, Int) -> Int
 
 pub fn allocatable_callee_saved_fprs() -> Array[PReg]
 
-pub fn allocatable_callee_saved_regs() -> Array[PReg]
+pub fn allocatable_callee_saved_regs(enable_pinned_reg? : Bool) -> Array[PReg]
 
 pub fn allocatable_scratch_fprs() -> Array[PReg]
 
 pub fn allocatable_scratch_regs() -> Array[PReg]
 
-pub fn build_aarch64_machine_env(reserve_mem0_desc? : Bool, reserve_x23? : Bool) -> AArch64MachineEnv
+pub fn build_aarch64_machine_env(settings? : ABISettings, reserve_mem0_desc? : Bool, reserve_func_table? : Bool, reserve_x23? : Bool) -> AArch64MachineEnv
 
 pub fn call_clobbered_fprs() -> Array[PReg]
+
+pub fn call_clobbered_fprs_same_abi() -> Array[PReg]
 
 pub fn call_clobbered_gprs() -> Array[PReg]
 
@@ -116,6 +118,17 @@ pub struct AArch64MachineEnv {
   callee_saved_float : Array[PReg]
   scratch_int : Array[Int]
   scratch_float : Array[Int]
+}
+
+pub struct ABISettings {
+  enable_pinned_reg : Bool
+  call_conv : CallConv
+}
+pub fn ABISettings::default() -> Self
+
+pub enum CallConv {
+  AppleAarch64
+  SystemV
 }
 
 pub(all) enum OperandConstraint {

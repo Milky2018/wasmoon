@@ -1,55 +1,63 @@
-# Wasmoon JIT ABI (AArch64)
+This document describes the calling convention and ABI used by wasmoon’s JIT compiler on AArch64.
 
-This document describes the calling convention and ABI used by wasmoon's JIT compiler on AArch64.
+The current direction is to be faithful to Cranelift’s AppleAarch64 ABI, including a Cranelift-style “special VMContext parameter” and the `enable_pinned_reg()` behavior.
 
 ## Calling Convention
 
 Wasmoon uses a custom calling convention optimized for WebAssembly execution.
 
-### Register Usage
+### Register Usage (GPR)
 
 | Register | Usage | Saved |
 |----------|-------|-------|
-| X0 | callee_vmctx (callee's VMContext) | Caller |
-| X1 | caller_vmctx (caller's VMContext) | Caller |
-| X2-X7 | Integer parameters (up to 6) | Caller |
+| X0 | `vmctx` (VMContext special param) | Caller |
+| X1-X7 | Integer user parameters (up to 7) | Caller |
 | X8 | SRET pointer (when needed) | Caller |
 | X9-X15 | Scratch (allocatable) | Caller |
-| X16-X17 | IP0/IP1 (linker scratch) | Caller |
+| X16 | IP0 / codegen scratch | Caller |
+| X17 | IP1 / call target scratch (indirect calls) | Caller |
 | X18 | Platform reserved | - |
-| X19 | Cached callee_vmctx | Callee |
-| X20-X28 | Callee-saved (allocatable) | Callee |
+| X19 | Cached `func_table` (when used) | Callee |
+| X20, X22-X28 | Callee-saved (allocatable) | Callee |
+| X21 | Pinned VMContext register (`enable_pinned_reg`) | Callee |
 | X29 | Frame Pointer (FP) | Callee |
 | X30 | Link Register (LR) | Callee |
 | SP | Stack Pointer | - |
+
+Notes:
+- When `enable_pinned_reg` is enabled, the prologue copies `vmctx` from `X0` into the pinned register `X21`, and subsequent VMContext-based addressing uses `X21`.
+- Call lowering materializes `X0 = X21` before Wasm calls, to pass the `vmctx` special parameter.
 
 ### Floating-Point Registers
 
 | Register | Usage | Saved |
 |----------|-------|-------|
-| V0-V7 | Float parameters/returns | Caller |
+| V0-V7 | Float/SIMD parameters and returns | Caller |
 | V8-V15 | Callee-saved (low 64 bits) | Callee |
 | V16-V31 | Scratch (allocatable) | Caller |
 
 ### Parameter Passing
 
-1. **VMContext**: First two parameters are always VMContext pointers
-   - X0: callee's VMContext (the function being called)
-   - X1: caller's VMContext (for cross-module calls)
+1. **VMContext**:
+   - `X0`: `vmctx` (the callee’s VMContext / instance context)
 
-2. **Integer parameters**: X2-X7 (up to 6 values)
+2. **Integer user parameters**:
+   - `X1-X7` (up to 7 values)
 
-3. **Float parameters**: V0-V7 (up to 8 values)
-   - S0-S7 for f32
-   - D0-D7 for f64
+3. **Float/SIMD parameters**:
+   - `V0-V7` (up to 8 values)
+   - `S0-S7` for `f32`
+   - `D0-D7` for `f64`
+   - `Q0-Q7` for `v128`
 
-4. **Stack parameters**: When registers are exhausted, remaining parameters go on stack
+4. **Stack parameters**:
+   - When registers are exhausted, remaining parameters go to the stack (16-byte aligned).
 
 ### Return Values
 
-- Integer returns: X0-X7 (up to 8 values)
-- Float returns: V0-V7 (up to 8 values)
-- SRET: When return values exceed capacity, X8 points to return buffer
+- Integer returns: `X0-X7` (up to 8 values)
+- Float returns: `V0-V7` (up to 8 values)
+- SRET: when return values exceed register capacity, `X8` points to the return buffer
 
 ## VMContext Structure
 
@@ -85,13 +93,13 @@ VMCTX_TABLE_SIZES_OFFSET     = 64
 
 ## Function Prologue/Epilogue
 
-### Prologue
+### Prologue (pinned VMContext)
 
 ```asm
 stp x29, x30, [sp, #-16]!   // Save FP and LR
 mov x29, sp                  // Set up frame pointer
-mov x19, x0                  // Cache callee_vmctx
-// Save callee-saved registers as needed
+mov x21, x0                  // Pin vmctx in x21 (enable_pinned_reg)
+// Save callee-saved registers as needed (e.g. x19 if func_table is cached)
 ```
 
 ### Epilogue
@@ -104,14 +112,14 @@ ret                          // Return
 
 ## Memory Access
 
-All memory accesses go through the VMContext:
+All memory accesses go through the VMContext (pinned in `x21` when enabled):
 
 ```asm
 // Load memory base from VMContext
-ldr x16, [x19, #0]          // x16 = vmctx->memory_base
+ldr x16, [x21, #0]          // x16 = vmctx->memory_base
 
 // Bounds check
-ldr x17, [x19, #8]          // x17 = vmctx->memory_size
+ldr x17, [x21, #8]          // x17 = vmctx->memory_size
 // ... perform bounds check ...
 
 // Access memory
@@ -122,21 +130,19 @@ ldr w0, [x16, x_offset]     // Load from memory
 
 ```asm
 // Load table base and size
-ldr x16, [x19, #24]         // table0_base
-ldr x17, [x19, #32]         // table0_elements
+ldr x16, [x21, #24]         // table0_base
+ldr x17, [x21, #32]         // table0_elements
 
 // Bounds check
 cmp x_index, x17
 b.hs trap_oob
 
 // Load function pointer
-ldr x16, [x16, x_index, lsl #3]
+ldr x17, [x16, x_index, lsl #3]
 
-// Type check (if needed)
-// ...
-
-// Call
-blr x16
+// Call (vmctx special param is passed in x0)
+mov x0, x21
+blr x17
 ```
 
 ## Traps

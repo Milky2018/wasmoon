@@ -694,13 +694,13 @@ test "regalloc: mixed int, f32, f64 registers" {
     content=(
       #|vcode mixed_types() -> double {
       #|block0:
-      #|    x8 = ldi 10
+      #|    x0 = ldi 10
       #|    d1 = ldf 3.140000104904175
       #|    d0 = ldf 2.718
-      #|    x8 = add x8, x8
+      #|    x0 = add x0, x0
       #|    d0 = fadd.d d1, d0
       #|    d0 = fadd.d d0, d0
-      #|    store.i32 +0 x8, x8
+      #|    store.i32 +0 x0, x0
       #|    ret d0
       #|}
       #|
@@ -795,8 +795,8 @@ test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
       #|    d2 = ldf 6
       #|    d1 = ldf 7
       #|    d0 = ldf 8
-      #|    x8 = ldi 4096
-      #|    d0 = call_ptr[Wasm](8) -> 1 results x8
+      #|    x0 = ldi 4096
+      #|    d0 = call_ptr[Wasm](8) -> 1 results x0
       #|    ret d0
       #|}
       #|
@@ -887,8 +887,8 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
       #|block0:
       #|    d8 = ldf 42
       #|    d0 = ldf 3.14
-      #|    x8 = ldi 8192
-      #|    d0 = call_ptr[Wasm](1) -> 1 results x8
+      #|    x0 = ldi 8192
+      #|    d0 = call_ptr[Wasm](1) -> 1 results x0
       #|    ret d8, d0
       #|}
       #|
@@ -1193,14 +1193,14 @@ test "reload coalescing: call with spilled arg used twice" {
     output.to_string(),
     content=(
       #|block0:
-      #|  x9 = ldi 0
-      #|  x8 = ldi 1
+      #|  x2 = ldi 0
+      #|  x1 = ldi 1
       #|  x16 = ldi 2
       #|  stack_store [sp+24] x16
       #|  x23 = ldi 3
       #|  x24 = ldi 4
       #|  x25 = ldi 5
-      #|  x20 = ldi 6
+      #|  x19 = ldi 6
       #|  x27 = ldi 7
       #|  x28 = ldi 8
       #|  x17 = ldi 9
@@ -1209,26 +1209,26 @@ test "reload coalescing: call with spilled arg used twice" {
       #|  stack_store [sp+8] x16
       #|  x17 = ldi 11
       #|  stack_store [sp+16] x17
-      #|  x21 = ldi 12
+      #|  x20 = ldi 12
       #|  x26 = ldi 13
       #|  x22 = ldi 14
       #|  call_ptr[Wasm](4) -> 0 results x0
       #|  x16 = stack_load [sp+24]
-      #|  x8 = add x16, x23
-      #|  x8 = add x8, x24
-      #|  x8 = add x8, x25
-      #|  x8 = add x8, x20
-      #|  x8 = add x8, x27
-      #|  x8 = add x8, x28
+      #|  x0 = add x16, x23
+      #|  x0 = add x0, x24
+      #|  x0 = add x0, x25
+      #|  x0 = add x0, x19
+      #|  x0 = add x0, x27
+      #|  x0 = add x0, x28
       #|  x16 = stack_load [sp+0]
-      #|  x8 = add x8, x16
+      #|  x0 = add x0, x16
       #|  x16 = stack_load [sp+8]
-      #|  x8 = add x8, x16
+      #|  x0 = add x0, x16
       #|  x16 = stack_load [sp+16]
-      #|  x8 = add x8, x16
-      #|  x8 = add x8, x21
-      #|  x8 = add x8, x26
-      #|  x8 = add x8, x22
+      #|  x0 = add x0, x16
+      #|  x0 = add x0, x20
+      #|  x0 = add x0, x26
+      #|  x0 = add x0, x22
       #|
     ),
   )

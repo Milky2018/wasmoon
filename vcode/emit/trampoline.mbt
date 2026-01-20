@@ -8,7 +8,7 @@
 //
 // The trampoline:
 // 1. Accepts a simple interface from C (vmctx, values_vec, func_ptr)
-// 2. Loads arguments from values_vec into correct registers per v3 ABI
+// 2. Loads arguments from values_vec into correct registers per JIT ABI
 // 3. Calls the target WASM function
 // 4. Stores results back to values_vec
 // 5. Returns trap code (0 = success)
@@ -107,12 +107,7 @@ fn generate_trampoline_ir(
   }
 
   // Emit CallPtr instruction
-  // v3 ABI: callee_vmctx = caller_vmctx = vmctx (same module)
-  let results = builder.call_ptr(
-    func_ptr, vmctx, // callee_vmctx
-     vmctx, // caller_vmctx
-     wasm_args, wasm_result_types,
-  )
+  let results = builder.call_ptr(func_ptr, vmctx, wasm_args, wasm_result_types)
 
   // Store results back to values_vec
   // V128 is stored as two I64 values (low then high) to avoid alignment issues

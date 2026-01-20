@@ -1,7 +1,7 @@
 // ============ Wasm Call Lowering (Standard) ============
 
 ///|
-/// Emit StoreToStack for overflow arguments according to the Wasm v3 ABI.
+/// Emit StoreToStack for overflow arguments according to the Wasm ABI.
 /// This also updates `max_outgoing_args_size` so the prologue reserves enough
 /// space and SP doesn't move at call sites.
 fn emit_wasm_overflow_arg_stores(
@@ -10,7 +10,7 @@ fn emit_wasm_overflow_arg_stores(
   int_args : Array[(@abi.VReg, @abi.RegClass)],
   float_args : Array[(@abi.VReg, @abi.RegClass)],
 ) -> Unit {
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 6 (X2-X7)
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 7 (X1-X7)
   let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
   let int_overflow = if int_args.length() > max_int_reg_args {
     int_args.length() - max_int_reg_args
@@ -45,11 +45,11 @@ fn emit_wasm_overflow_arg_stores(
 ///|
 /// Lower a Wasm function call using Standard approach.
 /// All argument placement is done in lowering via FixedReg constraints.
-/// The emit phase just emits BLR X17.
+/// The emit phase just emits BLR to the call target register.
 ///
-/// Wasm v3 ABI:
-/// - X0 = callee_vmctx, X1 = caller_vmctx
-/// - X2-X7 = integer user args (up to 6)
+/// Wasm ABI (Cranelift-style):
+/// - X0 = vmctx
+/// - X1-X7 = integer user args (up to 7)
 /// - V0-V7 = float user args (up to 8)
 /// - Overflow args go to stack
 /// - X0/V0 = first result, etc.
@@ -60,7 +60,10 @@ fn lower_wasm_call(
   args : Array[@abi.VReg],
   results : Array[@abi.VReg],
 ) -> Unit {
-  // vmctx is always in X19
+  if !ctx.abi_settings.enable_pinned_reg {
+    abort("unpinned VMContext ABI not implemented yet")
+  }
+  // vmctx is pinned in `REG_VMCTX` (X21 when pinned).
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
 
   // Classify user arguments by type
@@ -83,35 +86,29 @@ fn lower_wasm_call(
   let num_results = results.length()
   let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
 
-  // func_ptr constrained to X17
+  // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
-    index: 17,
+    index: @abi.SCRATCH_REG_2,
     class: @abi.Int,
   })
 
-  // vmctx constrained to X0 (callee_vmctx) and X1 (caller_vmctx)
-  // Note: We need to copy vmctx (X19) into vregs so regalloc will insert moves
-  // Using Physical directly doesn't trigger move insertion
-  let callee_vmctx = ctx.vcode_func.new_vreg(Int)
-  let caller_vmctx = ctx.vcode_func.new_vreg(Int)
-  let copy_callee = @instr.VCodeInst::new(Move)
-  copy_callee.add_def({ reg: Virtual(callee_vmctx) })
-  copy_callee.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_callee)
-  let copy_caller = @instr.VCodeInst::new(Move)
-  copy_caller.add_def({ reg: Virtual(caller_vmctx) })
-  copy_caller.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_caller)
-  call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
-    index: 0,
+  // vmctx constrained to X0.
+  let vmctx_arg_preg : @abi.PReg = {
+    index: @abi.REG_CALLEE_VMCTX,
     class: @abi.Int,
-  })
-  call_inst.add_use_fixed(Virtual(caller_vmctx), @abi.PReg::{
-    index: 1,
-    class: @abi.Int,
-  })
+  }
+  // IMPORTANT: keep vmctx as a *virtual* value and let regalloc satisfy the fixed
+  // constraint at the callsite. Emitting `def Physical(x0)` here makes x0 look
+  // "free" to the allocator and can clobber other live values when x0 becomes
+  // allocatable (e.g. after expanding scratch regs to include X0-X7).
+  let callee_vmctx = ctx.vcode_func.new_vreg(@abi.Int)
+  let copy_vmctx = @instr.VCodeInst::new(Move)
+  copy_vmctx.add_def({ reg: Virtual(callee_vmctx) })
+  copy_vmctx.add_use(Physical(vmctx_preg))
+  block.add_inst(copy_vmctx)
+  call_inst.add_use_fixed(Virtual(callee_vmctx), vmctx_arg_preg)
 
-  // Register int args: X2-X7
+  // Register int args: X1-X7
   let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -120,7 +117,7 @@ fn lower_wasm_call(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = 2 + i // X2, X3, X4, X5, X6, X7
+    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
       index: preg_idx,
       class: @abi.Int,
@@ -200,19 +197,14 @@ fn lower_return_call(
   load_inst.add_use(Virtual(func_table))
   block.add_inst(load_inst)
 
-  // Get vmctx (X19 is always vmctx)
+  // Get pinned vmctx.
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
-  // Copy vmctx into vregs so regalloc will insert moves for fixed-reg constraints
+  // Copy vmctx into a vreg so regalloc will insert the move to X0.
   let callee_vmctx = ctx.vcode_func.new_vreg(Int)
-  let caller_vmctx = ctx.vcode_func.new_vreg(Int)
-  let copy_callee = @instr.VCodeInst::new(Move)
-  copy_callee.add_def({ reg: Virtual(callee_vmctx) })
-  copy_callee.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_callee)
-  let copy_caller = @instr.VCodeInst::new(Move)
-  copy_caller.add_def({ reg: Virtual(caller_vmctx) })
-  copy_caller.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_caller)
+  let copy_vmctx = @instr.VCodeInst::new(Move)
+  copy_vmctx.add_def({ reg: Virtual(callee_vmctx) })
+  copy_vmctx.add_use(Physical(vmctx_preg))
+  block.add_inst(copy_vmctx)
 
   // Classify user arguments by type
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -233,23 +225,19 @@ fn lower_return_call(
   // Create ReturnCallIndirect instruction with fixed register constraints
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
 
-  // func_ptr constrained to X17
+  // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
-    index: 17,
+    index: @abi.SCRATCH_REG_2,
     class: @abi.Int,
   })
 
-  // vmctx constrained to X0 and X1 (callee_vmctx = caller_vmctx = X19)
+  // vmctx constrained to X0
   call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
     index: 0,
     class: @abi.Int,
   })
-  call_inst.add_use_fixed(Virtual(caller_vmctx), @abi.PReg::{
-    index: 1,
-    class: @abi.Int,
-  })
 
-  // Register int args: X2-X7
+  // Register int args: X1-X7
   let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -258,7 +246,7 @@ fn lower_return_call(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = 2 + i // X2, X3, X4, X5, X6, X7
+    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
       index: preg_idx,
       class: @abi.Int,
@@ -306,7 +294,7 @@ fn lower_return_call_indirect(
       Load(I64, @abi.VMCTX_TABLES_OFFSET),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
-    load_array_inst.add_use(Physical({ index: 19, class: Int }))
+    load_array_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
     block.add_inst(load_array_inst)
     let table_offset = table_idx * 8
     let ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -373,19 +361,14 @@ fn lower_return_call_indirect(
     None,
   )
 
-  // Get vmctx
+  // Get pinned vmctx.
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
-  // Copy vmctx into vregs so regalloc will insert moves for fixed-reg constraints
+  // Copy vmctx into a vreg so regalloc will insert moves for fixed-reg constraints.
   let callee_vmctx = ctx.vcode_func.new_vreg(Int)
-  let caller_vmctx = ctx.vcode_func.new_vreg(Int)
-  let copy_callee = @instr.VCodeInst::new(Move)
-  copy_callee.add_def({ reg: Virtual(callee_vmctx) })
-  copy_callee.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_callee)
-  let copy_caller = @instr.VCodeInst::new(Move)
-  copy_caller.add_def({ reg: Virtual(caller_vmctx) })
-  copy_caller.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_caller)
+  let copy_vmctx = @instr.VCodeInst::new(Move)
+  copy_vmctx.add_def({ reg: Virtual(callee_vmctx) })
+  copy_vmctx.add_use(Physical(vmctx_preg))
+  block.add_inst(copy_vmctx)
 
   // Classify user arguments (skip first operand which is elem_idx)
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -404,23 +387,19 @@ fn lower_return_call_indirect(
   // Create ReturnCallIndirect with fixed constraints
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
 
-  // func_ptr -> X17
+  // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
-    index: 17,
+    index: @abi.SCRATCH_REG_2,
     class: @abi.Int,
   })
 
-  // vmctx -> X0, X1
+  // vmctx -> X0
   call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
     index: 0,
     class: @abi.Int,
   })
-  call_inst.add_use_fixed(Virtual(caller_vmctx), @abi.PReg::{
-    index: 1,
-    class: @abi.Int,
-  })
 
-  // Register int args: X2-X7
+  // Register int args: X1-X7
   let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -429,7 +408,7 @@ fn lower_return_call_indirect(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = 2 + i
+    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
       index: preg_idx,
       class: @abi.Int,
@@ -481,15 +460,10 @@ fn lower_return_call_ref(
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
   // Copy vmctx into vregs so regalloc will insert moves for fixed-reg constraints
   let callee_vmctx = ctx.vcode_func.new_vreg(Int)
-  let caller_vmctx = ctx.vcode_func.new_vreg(Int)
   let copy_callee = @instr.VCodeInst::new(Move)
   copy_callee.add_def({ reg: Virtual(callee_vmctx) })
   copy_callee.add_use(Physical(vmctx_preg))
   block.add_inst(copy_callee)
-  let copy_caller = @instr.VCodeInst::new(Move)
-  copy_caller.add_def({ reg: Virtual(caller_vmctx) })
-  copy_caller.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_caller)
 
   // Classify user arguments (skip first operand which is func_ref)
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -508,23 +482,19 @@ fn lower_return_call_ref(
   // Create ReturnCallIndirect with fixed constraints
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
 
-  // func_ptr -> X17
+  // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
-    index: 17,
+    index: @abi.SCRATCH_REG_2,
     class: @abi.Int,
   })
 
-  // vmctx -> X0, X1
+  // vmctx -> X0
   call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
     index: 0,
     class: @abi.Int,
   })
-  call_inst.add_use_fixed(Virtual(caller_vmctx), @abi.PReg::{
-    index: 1,
-    class: @abi.Int,
-  })
 
-  // Register int args: X2-X7
+  // Register int args: X1-X7
   let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -533,7 +503,7 @@ fn lower_return_call_ref(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = 2 + i
+    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
       index: preg_idx,
       class: @abi.Int,
@@ -588,7 +558,7 @@ fn lower_call_indirect(
       Load(I64, @abi.VMCTX_TABLES_OFFSET),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
-    load_array_inst.add_use(Physical({ index: 19, class: Int }))
+    load_array_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
     block.add_inst(load_array_inst)
     // 2. Calculate offset = table_idx * 8 (pointer size)
     let table_offset = table_idx * 8
@@ -746,8 +716,15 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   for preg in @abi.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
-  // Add clobbers for all caller-saved FPRs (D0-D7)
-  for preg in @abi.call_clobbered_fprs() {
+  // Add clobbers for caller-saved FPRs.
+  //
+  // Cranelift-style conservative clobbers (V0-V31) apply to C calls.
+  // For Wasm-to-Wasm calls (same ABI), we treat V8-V15 as callee-saved.
+  let fpr_clobbers = match call_inst.opcode {
+    CallPtr(_, _, @instr.C) => @abi.call_clobbered_fprs()
+    _ => @abi.call_clobbered_fprs_same_abi()
+  }
+  for preg in fpr_clobbers {
     call_inst.add_def({ reg: Physical(preg) })
   }
 }
@@ -758,14 +735,13 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
 ///
 /// Operand layout:
 ///   operand 0 = function pointer
-///   operand 1 = callee_vmctx (X0)
-///   operand 2 = caller_vmctx (X1)
-///   operands 3..n = user arguments
+///   operand 1 = vmctx (X0)
+///   operands 2..n = user arguments
 ///
 /// Standard ABI refactoring:
 /// - Stack args are handled in lower phase via StoreToStack instructions
 /// - Register args use FixedReg constraints to tell regalloc which physical registers to use
-/// - X17 is used for func_ptr (constraint ensures no conflicts)
+/// - Call target is constrained to SCRATCH_REG_2 (IP1)
 fn lower_call_ptr(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -776,15 +752,14 @@ fn lower_call_ptr(
   // Collect function pointer
   let func_ptr = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // Collect vmctx arguments
+  // Collect vmctx argument
   let callee_vmctx = ctx.get_vreg_for_use(inst.operands[1], block)
-  let caller_vmctx = ctx.get_vreg_for_use(inst.operands[2], block)
 
-  // Classify user arguments by type (starting from operand index 3)
+  // Classify user arguments by type (starting from operand index 2)
   // int_args and float_args contain (vreg, class) tuples
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
   let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
-  for i in 3..<inst.operands.length() {
+  for i in 2..<inst.operands.length() {
     let vreg = ctx.get_vreg_for_use(inst.operands[i], block)
     match vreg.class {
       @abi.Int => int_args.push((vreg, @abi.Int))
@@ -798,9 +773,9 @@ fn lower_call_ptr(
   // Step 3: Create CallPtr instruction with FixedReg constraints (Wasm calling convention)
   let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
 
-  // func_ptr constrained to X17
+  // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
-    index: 17,
+    index: @abi.SCRATCH_REG_2,
     class: @abi.Int,
   })
 
@@ -810,13 +785,7 @@ fn lower_call_ptr(
     class: @abi.Int,
   })
 
-  // caller_vmctx constrained to X1
-  call_inst.add_use_fixed(Virtual(caller_vmctx), @abi.PReg::{
-    index: 1,
-    class: @abi.Int,
-  })
-
-  // Register int args: X2-X7
+  // Register int args: X1-X7
   let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -825,7 +794,7 @@ fn lower_call_ptr(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = 2 + i // X2, X3, X4, X5, X6, X7
+    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
       index: preg_idx,
       class: @abi.Int,
@@ -901,9 +870,9 @@ fn lower_c_libcall(
   let num_results = if result is Some(_) { 1 } else { 0 }
   let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, C))
 
-  // func_ptr constrained to X17
+  // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
-    index: 17,
+    index: @abi.SCRATCH_REG_2,
     class: @abi.Int,
   })
 
