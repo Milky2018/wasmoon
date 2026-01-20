@@ -410,6 +410,8 @@ pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
 
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
+pub fn c_jit_write_u32(Int64, Int) -> Unit
+
 pub fn c_mem_desc_get_base(Int64) -> Int64
 
 pub fn c_mem_desc_get_len(Int64) -> Int64

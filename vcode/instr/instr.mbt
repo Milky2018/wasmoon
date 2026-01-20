@@ -386,6 +386,14 @@ pub(all) enum VCodeOpcode {
   // Parameters: num_args, num_results, calling convention
   CallPtr(Int, Int, CallConv)
 
+  // CallDirect: direct call to a known function index
+  // Uses depend on calling convention:
+  //   Wasm: [vmctx, arg0, arg1, ...]
+  //   C:    [arg0, arg1, ...]
+  // Defs: [result0, result1, ...]
+  // Parameters: func_idx, num_args, num_results, calling convention
+  CallDirect(Int, Int, Int, CallConv)
+
   // Stack pointer adjustment for outgoing call arguments (Standard)
   // AdjustSP(delta): Adjust SP by delta bytes
   //   delta > 0: deallocate (add to SP)
@@ -955,6 +963,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     LoadFuncAddr(func_idx) => "load_func_addr.\{func_idx}"
     CallPtr(num_args, num_results, call_conv) =>
       "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
+    CallDirect(func_idx, num_args, num_results, call_conv) =>
+      "call_direct[\{call_conv}].\{func_idx}(\{num_args}) -> \{num_results} results"
     AdjustSP(delta) =>
       if delta >= 0 {
         "add sp, sp, #\{delta}"
@@ -1498,7 +1508,7 @@ pub impl Show for VCodeTerminator with output(self, logger) {
 pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
   match self {
     // Direct and indirect function calls (Standard via CallPtr)
-    CallPtr(_, _, _) => Regular
+    CallPtr(_, _, _) | CallDirect(_, _, _, _) => Regular
     // Tail calls that don't return to caller
     ReturnCallIndirect(_, _) => TailCall
     // Everything else is not a call

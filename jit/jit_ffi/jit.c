@@ -976,6 +976,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_write_i64(int64_t addr, int64_t value) {
     }
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_write_u32(int64_t addr, uint32_t value) {
+    if (addr != 0) {
+        copy_code_internal(addr, (const uint8_t *)&value, (int)sizeof(value));
+    }
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_read_i64(int64_t addr) {
     if (addr != 0) {
         return *((int64_t *)addr);

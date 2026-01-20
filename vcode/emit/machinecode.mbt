@@ -19,6 +19,8 @@ pub struct MachineCode {
   fixups : Array[Fixup]
   // Pending fixups for direct function addresses (offset -> func_idx)
   func_addr_fixups : Array[FuncAddrFixup]
+  // Pending fixups for direct function calls (offset -> func_idx)
+  call_fixups : Array[CallFixup]
   // Disassembly annotations (offset -> instruction text)
   disasm : Array[(Int, String)]
 }
@@ -46,6 +48,15 @@ pub(all) struct FuncAddrFixup {
 }
 
 ///|
+/// Fixup for direct function call branches
+pub(all) struct CallFixup {
+  // Offset in the code buffer where the call instruction starts
+  offset : Int
+  // Target function index
+  func_idx : Int
+}
+
+///|
 /// Kind of fixup
 pub(all) enum FixupKind {
   Branch26 // 26-bit PC-relative branch (B, BL)
@@ -60,6 +71,7 @@ pub fn MachineCode::new() -> MachineCode {
     labels: {},
     fixups: [],
     func_addr_fixups: [],
+    call_fixups: [],
     disasm: [],
   }
 }
@@ -84,6 +96,16 @@ pub fn MachineCode::emit_inst(
   self.emit_byte(b1)
   self.emit_byte(b2)
   self.emit_byte(b3)
+}
+
+///|
+/// Emit a direct BL with a runtime fixup to a function index.
+pub fn MachineCode::emit_bl_func(self : MachineCode, func_idx : Int) -> Unit {
+  let offset = self.current_pos()
+  self.annotate("bl func_\{func_idx}")
+  // BL with imm=0; patched later using CallFixup.
+  self.emit_inst(0, 0, 0, 148)
+  self.add_call_fixup(offset, func_idx)
 }
 
 ///|
@@ -197,6 +219,16 @@ pub fn MachineCode::add_func_addr_fixup(
 }
 
 ///|
+/// Add a fixup for a direct function call
+pub fn MachineCode::add_call_fixup(
+  self : MachineCode,
+  offset : Int,
+  func_idx : Int,
+) -> Unit {
+  self.call_fixups.push({ offset, func_idx })
+}
+
+///|
 /// Resolve all pending fixups
 pub fn MachineCode::resolve_fixups(self : MachineCode) -> Unit {
   for fixup in self.fixups {
@@ -244,6 +276,12 @@ pub fn MachineCode::get_func_addr_fixups(
   self : MachineCode,
 ) -> Array[FuncAddrFixup] {
   self.func_addr_fixups
+}
+
+///|
+/// Get direct function call fixups
+pub fn MachineCode::get_call_fixups(self : MachineCode) -> Array[CallFixup] {
+  self.call_fixups
 }
 
 ///|

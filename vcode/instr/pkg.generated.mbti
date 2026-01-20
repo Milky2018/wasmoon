@@ -317,6 +317,7 @@ pub(all) enum VCodeOpcode {
   LoadExceptionFuncPtr(ExceptionLibcall)
   LoadFuncAddr(Int)
   CallPtr(Int, Int, CallConv)
+  CallDirect(Int, Int, Int, CallConv)
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP

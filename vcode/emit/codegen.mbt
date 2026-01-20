@@ -2050,6 +2050,9 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64_fixed(result_reg, 0L)
       self.add_func_addr_fixup(fixup_offset, func_idx, result_reg)
     }
+    CallDirect(func_idx, _num_args, _num_results, _call_conv) =>
+      // Direct call via BL (patched at JIT load time)
+      self.emit_bl_func(func_idx)
     CallPtr(_, _, _call_conv) => {
       // Standard call: all arguments are already in place.
       // Use a fixed-reg constraint if present; otherwise use assigned reg.

@@ -1569,14 +1569,8 @@ fn lower_call(
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
 
-  // Load function address (patched at JIT module load time)
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_inst = @instr.VCodeInst::new(LoadFuncAddr(func_idx))
-  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-  block.add_inst(load_inst)
-
-  // Use Standard call lowering
-  lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
+  // Use direct call lowering
+  lower_wasm_call_direct(ctx, block, func_idx, arg_vregs, result_vregs)
 }
 
 // NOTE: lower_global_get, lower_global_set are removed

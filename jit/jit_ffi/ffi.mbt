@@ -781,6 +781,10 @@ pub extern "c" fn c_jit_call_multi_return(
 pub extern "c" fn c_jit_write_i64(addr : Int64, value : Int64) -> Unit = "wasmoon_jit_write_i64"
 
 ///|
+/// Write a u32 value to a memory address
+pub extern "c" fn c_jit_write_u32(addr : Int64, value : Int) -> Unit = "wasmoon_jit_write_u32"
+
+///|
 /// Read an int64 value from a memory address
 pub extern "c" fn c_jit_read_i64(addr : Int64) -> Int64 = "wasmoon_jit_read_i64"
 

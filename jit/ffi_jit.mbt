@@ -3,7 +3,7 @@
 /// Uses @jit_ffi package for C function declarations
 
 ///|
-pub using @jit_ffi {c_jit_write_i64, c_jit_read_i64}
+pub using @jit_ffi {c_jit_write_i64, c_jit_write_u32, c_jit_read_i64}
 
 // ============ Trap Handling ============
 

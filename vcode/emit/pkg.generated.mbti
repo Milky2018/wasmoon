@@ -25,6 +25,11 @@ pub fn emit_function(@regalloc.VCodeFunction, debug_func_idx? : Int?, force_fram
 // Errors
 
 // Types and methods
+pub(all) struct CallFixup {
+  offset : Int
+  func_idx : Int
+}
+
 pub(all) enum CondCode {
   EQ
   NE
@@ -91,8 +96,10 @@ pub struct MachineCode {
   labels : Map[Int, Int]
   fixups : Array[Fixup]
   func_addr_fixups : Array[FuncAddrFixup]
+  call_fixups : Array[CallFixup]
   disasm : Array[(Int, String)]
 }
+pub fn MachineCode::add_call_fixup(Self, Int, Int) -> Unit
 pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
 pub fn MachineCode::add_func_addr_fixup(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::align(Self, Int) -> Unit
@@ -118,6 +125,7 @@ pub fn MachineCode::emit_asr_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_b(Self, Int) -> Unit
 pub fn MachineCode::emit_b_cond(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_bl(Self, Int) -> Unit
+pub fn MachineCode::emit_bl_func(Self, Int) -> Unit
 pub fn MachineCode::emit_blr(Self, Int) -> Unit
 pub fn MachineCode::emit_br(Self, Int) -> Unit
 pub fn MachineCode::emit_byte(Self, Int) -> Unit
@@ -275,6 +283,7 @@ pub fn MachineCode::emit_uxtb_x(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_uxth_w(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_uxth_x(Self, Int, Int) -> Unit
 pub fn MachineCode::get_bytes(Self) -> Array[Int]
+pub fn MachineCode::get_call_fixups(Self) -> Array[CallFixup]
 pub fn MachineCode::get_func_addr_fixups(Self) -> Array[FuncAddrFixup]
 pub fn MachineCode::hex_dump(Self) -> String
 pub fn MachineCode::new() -> Self

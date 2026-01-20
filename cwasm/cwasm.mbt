@@ -141,6 +141,8 @@ pub(all) struct CompiledEntry {
   num_results : Int
   // Direct function address fixups
   func_addr_fixups : Array[@emit.FuncAddrFixup]
+  // Direct function call fixups
+  call_fixups : Array[@emit.CallFixup]
 }
 
 ///|
@@ -153,6 +155,7 @@ pub fn CompiledEntry::new(
   num_params : Int,
   num_results : Int,
   func_addr_fixups? : Array[@emit.FuncAddrFixup] = [],
+  call_fixups? : Array[@emit.CallFixup] = [],
 ) -> CompiledEntry {
   {
     func_idx,
@@ -163,6 +166,7 @@ pub fn CompiledEntry::new(
     num_params,
     num_results,
     func_addr_fixups,
+    call_fixups,
   }
 }
 
@@ -442,6 +446,7 @@ pub fn PrecompiledModule::add_function(
     num_params,
     num_results,
     func_addr_fixups=compiled.get_func_addr_fixups(),
+    call_fixups=compiled.get_call_fixups(),
   )
   self.functions.push(entry)
 }
@@ -1074,6 +1079,9 @@ pub fn CompiledEntry::to_compiled_function(
   }
   for fixup in self.func_addr_fixups {
     mc.add_func_addr_fixup(fixup.offset, fixup.func_idx, fixup.reg)
+  }
+  for fixup in self.call_fixups {
+    mc.add_call_fixup(fixup.offset, fixup.func_idx)
   }
   @vcode.CompiledFunction::new(self.name, mc, self.frame_size)
 }

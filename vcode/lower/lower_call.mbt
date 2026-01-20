@@ -43,20 +43,11 @@ fn emit_wasm_overflow_arg_stores(
 }
 
 ///|
-/// Lower a Wasm function call using Standard approach.
-/// All argument placement is done in lowering via FixedReg constraints.
-/// The emit phase just emits BLR to the call target register.
-///
-/// Wasm ABI (Cranelift-style):
-/// - X0 = vmctx
-/// - X1-X7 = integer user args (up to 7)
-/// - V0-V7 = float user args (up to 8)
-/// - Overflow args go to stack
-/// - X0/V0 = first result, etc.
-fn lower_wasm_call(
+/// Lower a Wasm call with a prebuilt call instruction.
+fn lower_wasm_call_common(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
-  func_ptr : @abi.VReg,
+  call_inst : @instr.VCodeInst,
   args : Array[@abi.VReg],
   results : Array[@abi.VReg],
 ) -> Unit {
@@ -80,17 +71,6 @@ fn lower_wasm_call(
 
   // Store overflow args to stack (pre-allocated outgoing args area at SP).
   emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
-
-  // Create CallPtr instruction with Wasm calling convention
-  let num_args = args.length()
-  let num_results = results.length()
-  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
-
-  // Call target is constrained to SCRATCH_REG_2 (IP1).
-  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
-    index: @abi.SCRATCH_REG_2,
-    class: @abi.Int,
-  })
 
   // vmctx constrained to X0.
   let vmctx_arg_preg : @abi.PReg = {
@@ -172,6 +152,52 @@ fn lower_wasm_call(
   // Add clobbers for all caller-saved registers
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
+}
+
+///|
+/// Lower a Wasm function call using Standard approach.
+/// All argument placement is done in lowering via FixedReg constraints.
+/// The emit phase just emits BLR to the call target register.
+///
+/// Wasm ABI (Cranelift-style):
+/// - X0 = vmctx
+/// - X1-X7 = integer user args (up to 7)
+/// - V0-V7 = float user args (up to 8)
+/// - Overflow args go to stack
+/// - X0/V0 = first result, etc.
+fn lower_wasm_call(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  func_ptr : @abi.VReg,
+  args : Array[@abi.VReg],
+  results : Array[@abi.VReg],
+) -> Unit {
+  let num_args = args.length()
+  let num_results = results.length()
+  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
+  // Call target is constrained to SCRATCH_REG_2 (IP1).
+  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
+    index: @abi.SCRATCH_REG_2,
+    class: @abi.Int,
+  })
+  lower_wasm_call_common(ctx, block, call_inst, args, results)
+}
+
+///|
+/// Lower a direct Wasm function call.
+fn lower_wasm_call_direct(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  func_idx : Int,
+  args : Array[@abi.VReg],
+  results : Array[@abi.VReg],
+) -> Unit {
+  let num_args = args.length()
+  let num_results = results.length()
+  let call_inst = @instr.VCodeInst::new(
+    CallDirect(func_idx, num_args, num_results, Wasm),
+  )
+  lower_wasm_call_common(ctx, block, call_inst, args, results)
 }
 
 // ============ Tail Call Lowering (Standard) ============

@@ -20,6 +20,8 @@ pub fn c_jit_read_i64(Int64) -> Int64
 
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
+pub fn c_jit_write_u32(Int64, Int) -> Unit
+
 pub fn check_trap() -> Unit raise JITTrap
 
 pub fn clear_segments() -> Unit

@@ -61,6 +61,7 @@ pub struct CompiledFunction {
   frame_size : Int
   mut valid : Bool
 }
+pub fn CompiledFunction::get_call_fixups(Self) -> Array[@emit.CallFixup]
 pub fn CompiledFunction::get_code(Self) -> Array[Int]
 pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[@emit.FuncAddrFixup]
 pub fn CompiledFunction::invalidate(Self) -> Unit
