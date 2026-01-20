@@ -73,8 +73,6 @@ test "lower constants" {
     content=(
       #|vcode const_test() -> int {
       #|block0:
-      #|    v0 = ldi 10
-      #|    v1 = ldi 20
       #|    v2 = ldi 30
       #|    ret v2
       #|}
@@ -198,11 +196,8 @@ test "lower memory operations" {
     content=(
       #|vcode load_store(v0:int) -> int {
       #|block0:
-      #|    v1 = ldi 0
       #|    v2 = load_ptr.i32 +0 v0
-      #|    v3 = ldi 1
       #|    v4 = add32 #1 v2
-      #|    v5 = ldi 4
       #|    store_ptr.i32 +4 v0, v4
       #|    ret v4
       #|}
@@ -580,7 +575,6 @@ test "lower sub(0, mul(x, y)) to mneg" {
     content=(
       #|vcode mneg_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 0
       #|    v3 = mul v0, v1
       #|    v4 = mneg v0, v1
       #|    ret v4
@@ -918,9 +912,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|vcode test(v0:int) -> float {
       #|block0:
       #|    f2 = ldf 10
-      #|    f3 = ldf 0
       #|    v4 = ldi 0
-      #|    v5 = ldi 0
       #|    v7 = ldi 0
       #|    v6 = cmp32.eq v0, v7
       #|    branch v6, block1, block5
@@ -1067,11 +1059,9 @@ test "minimal: dead float constant should not affect live values" {
     content=(
       #|vcode dead_fconst_test() -> float {
       #|block0:
-      #|    f0 = ldf 1
       #|    f1 = ldf 2
       #|    f2 = ldf 10
       #|    v3 = ldi 0
-      #|    v4 = ldi 0
       #|    store_ptr.f32 +0 v3, f2
       #|    ret f1
       #|}

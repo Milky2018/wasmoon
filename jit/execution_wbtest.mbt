@@ -312,7 +312,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
     content=(
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
-      #|    f14 = ldf 0
       #|    f15 = ldf 0
       #|    f16 = ldf 10
       #|    v18 = ldi 0
@@ -321,51 +320,21 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block1(v2:int, f3:float, f4:float):
       #|    ret f4
       #|block2(v5:int, f6:float, f7:float):
-      #|    v23 = ldi 0
       #|    v24 = load_mem_base mem=0 x21
-      #|    v25 = ldi 0
-      #|    v26 = ldi 0
-      #|    v27 = ldi 0
-      #|    v29 = ldi 0
       #|    store_ptr.f32 +0 v24, f6
-      #|    v30 = ldi 0
       #|    v31 = load_mem_base mem=0 x21
-      #|    v32 = ldi 0
-      #|    v33 = ldi 0
-      #|    v34 = ldi 0
-      #|    v36 = ldi 0
       #|    f37 = load_ptr.f32 +0 v31
       #|    jump block1 (v5, f6, f37)
       #|block3(v8:int, f9:float, f10:float):
-      #|    v38 = ldi 0
       #|    v39 = load_mem_base mem=0 x21
-      #|    v40 = ldi 0
-      #|    v41 = ldi 0
-      #|    v42 = ldi 0
-      #|    v44 = ldi 0
       #|    store_ptr.f32 +0 v39, f9
-      #|    v45 = ldi 0
       #|    v46 = load_mem_base mem=0 x21
-      #|    v47 = ldi 0
-      #|    v48 = ldi 0
-      #|    v49 = ldi 0
-      #|    v51 = ldi 0
       #|    f52 = load_ptr.f32 +0 v46
       #|    jump block1 (v8, f9, f52)
       #|block4(v11:int, f12:float, f13:float):
-      #|    v53 = ldi 0
       #|    v54 = load_mem_base mem=0 x21
-      #|    v55 = ldi 0
-      #|    v56 = ldi 0
-      #|    v57 = ldi 0
-      #|    v59 = ldi 0
       #|    store_ptr.f32 +0 v54, f12
-      #|    v60 = ldi 0
       #|    v61 = load_mem_base mem=0 x21
-      #|    v62 = ldi 0
-      #|    v63 = ldi 0
-      #|    v64 = ldi 0
-      #|    v66 = ldi 0
       #|    f67 = load_ptr.f32 +0 v61
       #|    jump block1 (v11, f12, f67)
       #|block5:

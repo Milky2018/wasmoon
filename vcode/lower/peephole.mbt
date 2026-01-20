@@ -1434,6 +1434,71 @@ fn same_reg_class(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 }
 
 ///|
+/// Check whether an opcode is trivially dead when its defs are unused.
+fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
+  match op {
+    Move
+    | LoadConst(_)
+    | LoadConstF32(_)
+    | LoadConstF64(_)
+    | LoadConstV128(_)
+    | Nop => true
+    _ => false
+  }
+}
+
+///|
+/// Remove trivially-dead value defs (constants/moves) across the function.
+fn dce_trivially_dead(func : @regalloc.VCodeFunction) -> Unit {
+  let mut changed = true
+  while changed {
+    changed = false
+    let used : @hashset.HashSet[Int] = @hashset.new()
+    for block in func.blocks {
+      for inst in block.insts {
+        collect_uses(inst, used)
+      }
+      if block.terminator is Some(term) {
+        collect_terminator_uses(term, used)
+      }
+    }
+
+    for block in func.blocks {
+      let new_insts : Array[@instr.VCodeInst] = []
+      for inst in block.insts {
+        let mut remove = false
+        if is_trivially_dead_opcode(inst.opcode) {
+          if inst.defs.length() == 0 {
+            remove = true
+          } else {
+            let mut has_physical_def = false
+            let mut any_used = false
+            for def in inst.defs {
+              match def.reg {
+                Physical(_) => has_physical_def = true
+                Virtual(v) => if used.contains(v.id) { any_used = true }
+              }
+            }
+            if !has_physical_def && !any_used {
+              remove = true
+            }
+          }
+        }
+        if remove {
+          changed = true
+          continue
+        }
+        new_insts.push(inst)
+      }
+      block.insts.clear()
+      for inst in new_insts {
+        block.insts.push(inst)
+      }
+    }
+  }
+}
+
+///|
 /// Propagate single-use virtual moves within a block.
 /// This reduces redundant copies created by earlier passes.
 fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
@@ -1738,6 +1803,8 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   }
   // Pass 1.6: Global copy propagation for virtual moves
   propagate_moves_global(func)
+  // Pass 1.7: Drop trivially-dead value defs
+  dce_trivially_dead(func)
 
   // Pass 2: In-place update optimization
   for block in func.blocks {

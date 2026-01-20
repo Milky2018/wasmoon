@@ -265,7 +265,6 @@ test "optimized vs non-optimized comparison" {
     content=(
       #|vcode comparison(v0:int) -> int {
       #|block0:
-      #|    v1 = ldi 0
       #|    ret v0
       #|}
       #|
