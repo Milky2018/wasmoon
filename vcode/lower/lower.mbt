@@ -156,6 +156,56 @@ fn collect_call_result_vregs(
 }
 
 ///|
+/// Return a rematerializable constant for a call argument if it's a single-use const.
+fn try_collect_call_arg_const(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> CallConstArg? {
+  if ctx.use_counts.get(value.id).unwrap_or(0) != 1 {
+    return None
+  }
+  if find_defining_inst(ctx, value) is Some(inst) {
+    match inst.opcode {
+      @ir.Opcode::Iconst(v) => Some(CallConstArg::Int(v))
+      @ir.Opcode::Fconst(v) =>
+        match value.ty {
+          @ir.Type::F32 =>
+            Some(CallConstArg::F32(v.reinterpret_as_int64().to_int()))
+          @ir.Type::F64 => Some(CallConstArg::F64(v.reinterpret_as_int64()))
+          _ => None
+        }
+      _ => None
+    }
+  } else {
+    None
+  }
+}
+
+///|
+/// Collect call arguments and rematerializable constants.
+fn collect_call_args_with_consts(
+  ctx : LoweringContext,
+  operands : Array[@ir.Value],
+  block : @block.VCodeBlock,
+  start_idx : Int,
+) -> (Array[@abi.VReg], Map[Int, CallConstArg]) {
+  let arg_vregs : Array[@abi.VReg] = []
+  let const_args : Map[Int, CallConstArg] = {}
+  for i in start_idx..<operands.length() {
+    let operand = operands[i]
+    if try_collect_call_arg_const(ctx, operand) is Some(value) {
+      let class = ir_type_to_reg_class(operand.ty)
+      let vreg = ctx.new_vreg(class)
+      arg_vregs.push(vreg)
+      const_args.set(vreg.id, value)
+    } else {
+      arg_vregs.push(ctx.get_vreg_for_use(operand, block))
+    }
+  }
+  (arg_vregs, const_args)
+}
+
+///|
 /// Get or create a @abi.VReg for an IR Value
 fn LoweringContext::get_vreg(
   self : LoweringContext,
@@ -1564,10 +1614,17 @@ fn lower_call(
   block : @block.VCodeBlock,
   func_idx : Int,
 ) -> Unit {
-  // Collect argument vregs
-  let arg_vregs : Array[@abi.VReg] = []
-  for operand in inst.operands {
-    arg_vregs.push(ctx.get_vreg_for_use(operand, block))
+  // Collect argument vregs, rematerializing single-use constants only for
+  // direct calls. Indirect calls (imports or default path) keep original vregs.
+  let use_const_args = ctx.num_imports >= 0 && func_idx >= ctx.num_imports
+  let (arg_vregs, const_args) = if use_const_args {
+    collect_call_args_with_consts(ctx, inst.operands, block, 0)
+  } else {
+    let args : Array[@abi.VReg] = []
+    for operand in inst.operands {
+      args.push(ctx.get_vreg_for_use(operand, block))
+    }
+    (args, {})
   }
 
   // Collect result vregs (skip when results are unused)
@@ -1581,10 +1638,14 @@ fn lower_call(
     load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
     load_inst.add_use(Virtual(func_table))
     block.add_inst(load_inst)
-    lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
+    lower_wasm_call(
+      ctx, block, func_ptr_vreg, arg_vregs, result_vregs, const_args,
+    )
   } else {
     // Internal functions: direct call.
-    lower_wasm_call_direct(ctx, block, func_idx, arg_vregs, result_vregs)
+    lower_wasm_call_direct(
+      ctx, block, func_idx, arg_vregs, result_vregs, const_args,
+    )
   }
 }
 

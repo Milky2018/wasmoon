@@ -1,6 +1,35 @@
 // ============ Wasm Call Lowering (Standard) ============
 
 ///|
+/// Call argument constant that can be rematerialized at the callsite.
+priv enum CallConstArg {
+  Int(Int64)
+  F32(Int)
+  F64(Int64)
+}
+
+///|
+/// Emit a constant load for a call argument, optionally constrained to a register.
+fn emit_call_const(
+  block : @block.VCodeBlock,
+  vreg : @abi.VReg,
+  value : CallConstArg,
+  preg? : @abi.PReg? = None,
+) -> Unit {
+  let opcode = match value {
+    Int(v) => @instr.LoadConst(v)
+    F32(bits) => @instr.LoadConstF32(bits)
+    F64(bits) => @instr.LoadConstF64(bits)
+  }
+  let inst = @instr.VCodeInst::new(opcode)
+  match preg {
+    Some(p) => inst.add_def_fixed({ reg: Virtual(vreg) }, p)
+    None => inst.add_def({ reg: Virtual(vreg) })
+  }
+  block.add_inst(inst)
+}
+
+///|
 /// Emit StoreToStack for overflow arguments according to the Wasm ABI.
 /// This also updates `max_outgoing_args_size` so the prologue reserves enough
 /// space and SP doesn't move at call sites.
@@ -50,6 +79,7 @@ fn lower_wasm_call_common(
   call_inst : @instr.VCodeInst,
   args : Array[@abi.VReg],
   results : Array[@abi.VReg],
+  const_args : Map[Int, CallConstArg],
 ) -> Unit {
   if !ctx.abi_settings.enable_pinned_reg {
     abort("unpinned VMContext ABI not implemented yet")
@@ -66,6 +96,22 @@ fn lower_wasm_call_common(
       @abi.Float32 => float_args.push((arg, @abi.Float32))
       @abi.Float64 => float_args.push((arg, @abi.Float64))
       @abi.Vector => float_args.push((arg, @abi.Vector)) // SIMD uses Vn registers
+    }
+  }
+
+  // Materialize constant overflow args before storing to stack.
+  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
+  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
+  for i in max_int_reg_args..<int_args.length() {
+    let (vreg, _) = int_args[i]
+    if const_args.get(vreg.id) is Some(value) {
+      emit_call_const(block, vreg, value)
+    }
+  }
+  for i in max_float_reg_args..<float_args.length() {
+    let (vreg, _) = float_args[i]
+    if const_args.get(vreg.id) is Some(value) {
+      emit_call_const(block, vreg, value)
     }
   }
 
@@ -89,7 +135,6 @@ fn lower_wasm_call_common(
   call_inst.add_use_fixed(Virtual(callee_vmctx), vmctx_arg_preg)
 
   // Register int args: X1-X7
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -98,14 +143,14 @@ fn lower_wasm_call_common(
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
     let preg_idx = @abi.USER_PARAM_BASE_REG + i
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: preg_idx,
-      class: @abi.Int,
-    })
+    let preg = @abi.PReg::{ index: preg_idx, class: @abi.Int }
+    if const_args.get(vreg.id) is Some(value) {
+      emit_call_const(block, vreg, value, preg=Some(preg))
+    }
+    call_inst.add_use_fixed(Virtual(vreg), preg)
   }
 
   // Register float args: V0-V7
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -113,15 +158,16 @@ fn lower_wasm_call_common(
   }
   for i in 0..<float_reg_count {
     let (vreg, arg_class) = float_args[i]
+    let preg = @abi.PReg::{ index: i, class: arg_class }
+    if const_args.get(vreg.id) is Some(value) {
+      emit_call_const(block, vreg, value, preg=Some(preg))
+    }
     // For float registers V0-V7:
     // - f32 uses Float32 class (S registers)
     // - f64 uses Float64 class (D registers)
     // - V128 uses Vector class (Q registers)
     // All map to the same underlying Vn registers, but class affects move size
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: i,
-      class: arg_class,
-    })
+    call_inst.add_use_fixed(Virtual(vreg), preg)
   }
 
   // Define results with fixed register constraints
@@ -171,6 +217,7 @@ fn lower_wasm_call(
   func_ptr : @abi.VReg,
   args : Array[@abi.VReg],
   results : Array[@abi.VReg],
+  const_args : Map[Int, CallConstArg],
 ) -> Unit {
   let num_args = args.length()
   let num_results = results.length()
@@ -180,7 +227,7 @@ fn lower_wasm_call(
     index: @abi.SCRATCH_REG_2,
     class: @abi.Int,
   })
-  lower_wasm_call_common(ctx, block, call_inst, args, results)
+  lower_wasm_call_common(ctx, block, call_inst, args, results, const_args)
 }
 
 ///|
@@ -191,13 +238,14 @@ fn lower_wasm_call_direct(
   func_idx : Int,
   args : Array[@abi.VReg],
   results : Array[@abi.VReg],
+  const_args : Map[Int, CallConstArg],
 ) -> Unit {
   let num_args = args.length()
   let num_results = results.length()
   let call_inst = @instr.VCodeInst::new(
     CallDirect(func_idx, num_args, num_results, Wasm),
   )
-  lower_wasm_call_common(ctx, block, call_inst, args, results)
+  lower_wasm_call_common(ctx, block, call_inst, args, results, const_args)
 }
 
 // ============ Tail Call Lowering (Standard) ============
@@ -599,6 +647,7 @@ fn lower_call_indirect(
   for i in 1..<inst.operands.length() {
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
+  let const_args : Map[Int, CallConstArg] = {}
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
@@ -675,7 +724,9 @@ fn lower_call_indirect(
   )
 
   // Step 6: Use Standard call lowering
-  lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
+  lower_wasm_call(
+    ctx, block, func_ptr_vreg, arg_vregs, result_vregs, const_args,
+  )
 }
 
 ///|
@@ -702,6 +753,7 @@ fn lower_call_ref(
   for i in 1..<inst.operands.length() {
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
+  let const_args : Map[Int, CallConstArg] = {}
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
@@ -720,7 +772,9 @@ fn lower_call_ref(
   block.add_inst(and_inst)
 
   // Step 2: Use Standard call lowering
-  lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
+  lower_wasm_call(
+    ctx, block, func_ptr_vreg, arg_vregs, result_vregs, const_args,
+  )
 }
 
 ///|
