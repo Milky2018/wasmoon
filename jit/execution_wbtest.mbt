@@ -322,20 +322,17 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block2(v5:int, f6:float, f7:float):
       #|    v24 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 v24, f6
-      #|    v31 = load_mem_base mem=0 x21
-      #|    f37 = load_ptr.f32 +0 v31
+      #|    f37 = load_ptr.f32 +0 v24
       #|    jump block1 (v5, f6, f37)
       #|block3(v8:int, f9:float, f10:float):
       #|    v39 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 v39, f9
-      #|    v46 = load_mem_base mem=0 x21
-      #|    f52 = load_ptr.f32 +0 v46
+      #|    f52 = load_ptr.f32 +0 v39
       #|    jump block1 (v8, f9, f52)
       #|block4(v11:int, f12:float, f13:float):
       #|    v54 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 v54, f12
-      #|    v61 = load_mem_base mem=0 x21
-      #|    f67 = load_ptr.f32 +0 v61
+      #|    f67 = load_ptr.f32 +0 v54
       #|    jump block1 (v11, f12, f67)
       #|block5:
       #|    jump block4 (v1, f16, f15)
@@ -375,19 +372,16 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block2(v5:int, f6:float, f7:float):
       #|    x0 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 x0, d1
-      #|    x0 = load_mem_base mem=0 x21
       #|    d0 = load_ptr.f32 +0 x0
       #|    jump block1
       #|block3(v8:int, f9:float, f10:float):
       #|    x0 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 x0, d1
-      #|    x0 = load_mem_base mem=0 x21
       #|    d0 = load_ptr.f32 +0 x0
       #|    jump block1
       #|block4(v11:int, f12:float, f13:float):
       #|    x0 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 x0, d1
-      #|    x0 = load_mem_base mem=0 x21
       #|    d0 = load_ptr.f32 +0 x0
       #|    jump block1
       #|block5:
@@ -428,8 +422,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  0028: 000080d2  movz x0, #0, lsl #0
       #|  002c: 3f00006b  cmp w1, w0
       #|  0030: e0179f9a  cset x0, eq
-      #|  0034: 800200b5  cbnz x0, block5
-      #|  0038: 17000014  b block9
+      #|  0034: 200200b5  cbnz x0, block5
+      #|  0038: 14000014  b block9
       #|block1:
       #|  003c: f40741f8  ldr x20, [sp], #16
       #|  0040: fd7bc1a8  ldp x29, x30, [sp], #16
@@ -437,40 +431,37 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block2:
       #|  0048: 800240f9  ldr x0, [x20, #0]
       #|  004c: 010000bd  str s1, [x0, #0]
-      #|  0050: 800240f9  ldr x0, [x20, #0]
-      #|  0054: 000040bd  ldr s0, [x0, #0]
-      #|  0058: f9ffff17  b block1
+      #|  0050: 000040bd  ldr s0, [x0, #0]
+      #|  0054: faffff17  b block1
       #|block3:
-      #|  005c: 800240f9  ldr x0, [x20, #0]
-      #|  0060: 010000bd  str s1, [x0, #0]
-      #|  0064: 800240f9  ldr x0, [x20, #0]
-      #|  0068: 000040bd  ldr s0, [x0, #0]
-      #|  006c: f4ffff17  b block1
+      #|  0058: 800240f9  ldr x0, [x20, #0]
+      #|  005c: 010000bd  str s1, [x0, #0]
+      #|  0060: 000040bd  ldr s0, [x0, #0]
+      #|  0064: f6ffff17  b block1
       #|block4:
-      #|  0070: 800240f9  ldr x0, [x20, #0]
-      #|  0074: 010000bd  str s1, [x0, #0]
-      #|  0078: 800240f9  ldr x0, [x20, #0]
-      #|  007c: 000040bd  ldr s0, [x0, #0]
-      #|  0080: efffff17  b block1
+      #|  0068: 800240f9  ldr x0, [x20, #0]
+      #|  006c: 010000bd  str s1, [x0, #0]
+      #|  0070: 000040bd  ldr s0, [x0, #0]
+      #|  0074: f2ffff17  b block1
       #|block5:
-      #|  0084: fbffff17  b block4
+      #|  0078: fcffff17  b block4
       #|block6:
-      #|  0088: f5ffff17  b block3
+      #|  007c: f7ffff17  b block3
       #|block7:
-      #|  008c: efffff17  b block2
+      #|  0080: f2ffff17  b block2
       #|block8:
-      #|  0090: ebffff17  b block1
+      #|  0084: eeffff17  b block1
       #|block9:
-      #|  0094: 200080d2  movz x0, #1, lsl #0
-      #|  0098: 3f00006b  cmp w1, w0
-      #|  009c: e0179f9a  cset x0, eq
-      #|  00a0: 40ffffb5  cbnz x0, block6
+      #|  0088: 200080d2  movz x0, #1, lsl #0
+      #|  008c: 3f00006b  cmp w1, w0
+      #|  0090: e0179f9a  cset x0, eq
+      #|  0094: 40ffffb5  cbnz x0, block6
       #|block10:
-      #|  00a4: 400080d2  movz x0, #2, lsl #0
-      #|  00a8: 3f00006b  cmp w1, w0
-      #|  00ac: e0179f9a  cset x0, eq
-      #|  00b0: e0feffb5  cbnz x0, block7
-      #|  00b4: f7ffff17  b block8
+      #|  0098: 400080d2  movz x0, #2, lsl #0
+      #|  009c: 3f00006b  cmp w1, w0
+      #|  00a0: e0179f9a  cset x0, eq
+      #|  00a4: e0feffb5  cbnz x0, block7
+      #|  00a8: f7ffff17  b block8
       #|
     ),
   )

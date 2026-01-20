@@ -1784,6 +1784,47 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
 }
 
 ///|
+/// Block-local CSE for LoadMemBase (mem=0..), reset on calls.
+fn cse_mem_base_loads(func : @regalloc.VCodeFunction) -> Unit {
+  for blk in func.blocks {
+    let last_base : Map[Int, Int] = {}
+    let new_insts : Array[@instr.VCodeInst] = []
+    for inst in blk.insts {
+      match inst.opcode {
+        CallPtr(_, _, _) | ReturnCallIndirect(_, _) => {
+          last_base.clear()
+          new_insts.push(inst)
+        }
+        LoadMemBase(mem_idx) =>
+          if inst.defs.length() == 1 {
+            if last_base.get(mem_idx) is Some(prev_id) {
+              let mv = @instr.VCodeInst::new(Move)
+              mv.add_def(inst.defs[0])
+              mv.add_use(Virtual({ id: prev_id, class: Int }))
+              new_insts.push(mv)
+              if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+                last_base.set(mem_idx, dst)
+              }
+            } else {
+              new_insts.push(inst)
+              if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+                last_base.set(mem_idx, dst)
+              }
+            }
+          } else {
+            new_insts.push(inst)
+          }
+        _ => new_insts.push(inst)
+      }
+    }
+    blk.insts.clear()
+    for inst in new_insts {
+      blk.insts.push(inst)
+    }
+  }
+}
+
+///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
@@ -1791,6 +1832,8 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   licm_hoist_invariants(func)
   // Pass 0.5: block-local CSE for immutable loads
   cse_immutable_loads(func)
+  // Pass 0.6: block-local CSE for LoadMemBase
+  cse_mem_base_loads(func)
 
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {
