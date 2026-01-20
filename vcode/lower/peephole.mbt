@@ -1434,6 +1434,23 @@ fn same_reg_class(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 }
 
 ///|
+/// Convert a compare kind to a branch condition.
+fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
+  match kind {
+    Eq => @instr.Cond::Eq
+    Ne => @instr.Cond::Ne
+    Slt => @instr.Cond::Lt
+    Sle => @instr.Cond::Le
+    Sgt => @instr.Cond::Gt
+    Sge => @instr.Cond::Ge
+    Ult => @instr.Cond::Lo
+    Ule => @instr.Cond::Ls
+    Ugt => @instr.Cond::Hi
+    Uge => @instr.Cond::Hs
+  }
+}
+
+///|
 /// Check whether an opcode is trivially dead when its defs are unused.
 fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
   match op {
@@ -1825,6 +1842,82 @@ fn cse_mem_base_loads(func : @regalloc.VCodeFunction) -> Unit {
 }
 
 ///|
+/// Fuse `cmp` + `branch` into `br_cmp`/`br_cmp_imm` when the cmp result
+/// is only used by the branch terminator.
+fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
+  let const_defs : Map[Int, Int64] = {}
+  for blk in func.blocks {
+    for inst in blk.insts {
+      if inst.opcode is LoadConst(val) && inst.defs.length() == 1 {
+        if get_def_vreg_id(inst.defs[0]) is Some(did) {
+          const_defs.set(did, val)
+        }
+      }
+    }
+  }
+
+  for blk in func.blocks {
+    match blk.terminator {
+      Some(@instr.VCodeTerminator::Branch(cond, then_id, else_id)) =>
+        if cond is Virtual(cond_vreg) && blk.insts.length() > 0 {
+          let mut cond_uses = 0
+          for inst in blk.insts {
+            for use_ in inst.uses {
+              if get_vreg_id(use_) is Some(uid) && uid == cond_vreg.id {
+                cond_uses = cond_uses + 1
+              }
+            }
+          }
+          if cond_uses == 0 {
+            let last_idx = blk.insts.length() - 1
+            let last = blk.insts[last_idx]
+            if last.opcode is Cmp(kind, is_64) &&
+              last.defs.length() == 1 &&
+              last.uses.length() == 2 &&
+              get_def_vreg_id(last.defs[0]) == Some(cond_vreg.id) {
+              let lhs = last.uses[0]
+              let rhs = last.uses[1]
+              let cond = cmp_kind_to_cond(kind)
+              let new_term =
+                if rhs is Virtual(rhs_vreg) &&
+                  const_defs.get(rhs_vreg.id) is Some(val) &&
+                  is_valid_add_imm(val) {
+                  @instr.VCodeTerminator::BranchCmpImm(
+                    lhs,
+                    val.to_int(),
+                    cond,
+                    is_64,
+                    then_id,
+                    else_id,
+                  )
+                } else {
+                  @instr.VCodeTerminator::BranchCmp(
+                    lhs,
+                    rhs,
+                    cond,
+                    is_64,
+                    then_id,
+                    else_id,
+                  )
+                }
+              let new_insts : Array[@instr.VCodeInst] = []
+              for i in 0..<last_idx {
+                new_insts.push(blk.insts[i])
+              }
+              blk.insts.clear()
+              for inst in new_insts {
+                blk.insts.push(inst)
+              }
+              blk.set_terminator(new_term)
+            }
+          }
+        }
+      _ => ()
+    }
+  }
+}
+
+///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
@@ -1846,6 +1939,8 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   }
   // Pass 1.6: Global copy propagation for virtual moves
   propagate_moves_global(func)
+  // Pass 1.65: Fuse cmp+branch into compare branches
+  fuse_cmp_branch(func)
   // Pass 1.7: Drop trivially-dead value defs
   dce_trivially_dead(func)
 
