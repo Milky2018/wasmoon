@@ -577,11 +577,8 @@ fn lower_call_indirect(
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
 
-  // Get all result vregs
-  let result_vregs : Array[@abi.VReg] = []
-  for result in inst.all_results() {
-    result_vregs.push(ctx.get_vreg(result))
-  }
+  // Collect result vregs (skip when results are unused)
+  let result_vregs = collect_call_result_vregs(ctx, inst)
 
   // Create temporaries for calculation
   let offset_vreg = ctx.vcode_func.new_vreg(Int)
@@ -683,11 +680,8 @@ fn lower_call_ref(
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
 
-  // Get all result vregs
-  let result_vregs : Array[@abi.VReg] = []
-  for result in inst.all_results() {
-    result_vregs.push(ctx.get_vreg(result))
-  }
+  // Collect result vregs (skip when results are unused)
+  let result_vregs = collect_call_result_vregs(ctx, inst)
 
   // Step 1: Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
   // func_ptr = func_ref & 0xDFFFFFFFFFFFFFFF (clear bit 61)
@@ -747,7 +741,7 @@ fn lower_call_ptr(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
   num_args : Int,
-  num_results : Int,
+  _num_results : Int,
 ) -> Unit {
   // Collect function pointer
   let func_ptr = ctx.get_vreg_for_use(inst.operands[0], block)
@@ -770,8 +764,13 @@ fn lower_call_ptr(
   }
   emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
 
+  // Collect result vregs (skip when results are unused)
+  let result_vregs = collect_call_result_vregs(ctx, inst)
+
   // Step 3: Create CallPtr instruction with FixedReg constraints (Wasm calling convention)
-  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
+  let call_inst = @instr.VCodeInst::new(
+    CallPtr(num_args, result_vregs.length(), Wasm),
+  )
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
@@ -814,11 +813,9 @@ fn lower_call_ptr(
   }
 
   // Step 4: Define results with constraints
-  let all_results = inst.all_results()
   let mut int_result_idx = 0
   let mut float_result_idx = 0
-  for result in all_results {
-    let dst = ctx.get_vreg(result)
+  for dst in result_vregs {
     match dst.class {
       @abi.Int => {
         // Integer results go to X0, X1, ...

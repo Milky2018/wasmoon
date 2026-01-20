@@ -21,6 +21,8 @@ struct LoweringContext {
   stack_param_map : Map[Int, (Int, @abi.RegClass)]
   // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
   fused_icmps : @hashset.HashSet[Int]
+  // Use counts for IR values (used to skip unused call results)
+  use_counts : Map[Int, Int]
 }
 
 ///|
@@ -28,6 +30,7 @@ pub fn LoweringContext::new(
   ir_func : @ir.Function,
   abi_settings : @abi.ABISettings,
 ) -> LoweringContext {
+  let use_counts = compute_use_counts(ir_func)
   {
     ir_func,
     vcode_func: @regalloc.VCodeFunction::new(ir_func.name),
@@ -36,14 +39,13 @@ pub fn LoweringContext::new(
     block_map: {},
     stack_param_map: {},
     fused_icmps: @hashset.new(),
+    use_counts,
   }
 }
 
 ///|
-/// Compute which Icmp results are exclusively used by Select/branch and can be fused.
-/// This allows lower_icmp to skip emitting redundant Cmp instructions.
-fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
-  // Step 1: Count uses of each value
+/// Compute use counts for each IR value.
+fn compute_use_counts(ir_func : @ir.Function) -> Map[Int, Int] {
   let use_counts : Map[Int, Int] = {}
   for block in ir_func.blocks {
     for inst in block.instructions {
@@ -67,8 +69,17 @@ fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
       }
     }
   }
+  use_counts
+}
 
-  // Step 2: Find Icmp results that have exactly one use in a Select or branch
+///|
+/// Compute which Icmp results are exclusively used by Select/branch and can be fused.
+/// This allows lower_icmp to skip emitting redundant Cmp instructions.
+fn compute_fused_icmps(
+  ir_func : @ir.Function,
+  use_counts : Map[Int, Int],
+) -> @hashset.HashSet[Int] {
+  // Find Icmp results that have exactly one use in a Select or branch
   let fused : @hashset.HashSet[Int] = @hashset.new()
   for block in ir_func.blocks {
     for inst in block.instructions {
@@ -114,6 +125,29 @@ fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
     }
   }
   fused
+}
+
+///|
+/// Collect call result vregs, skipping all results if none are used.
+fn collect_call_result_vregs(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+) -> Array[@abi.VReg] {
+  let mut any_used = false
+  for result in inst.all_results() {
+    if ctx.use_counts.get(result.id).unwrap_or(0) > 0 {
+      any_used = true
+      break
+    }
+  }
+  let result_vregs : Array[@abi.VReg] = []
+  if !any_used {
+    return result_vregs
+  }
+  for result in inst.all_results() {
+    result_vregs.push(ctx.get_vreg(result))
+  }
+  result_vregs
 }
 
 ///|
@@ -346,7 +380,7 @@ pub fn lower_function(
   let ctx = LoweringContext::new(ir_func, abi_settings)
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
-  let fused = compute_fused_icmps(ir_func)
+  let fused = compute_fused_icmps(ir_func, ctx.use_counts)
   for id in fused {
     ctx.fused_icmps.add(id)
   }
@@ -1530,11 +1564,8 @@ fn lower_call(
     arg_vregs.push(ctx.get_vreg_for_use(operand, block))
   }
 
-  // Get all result vregs
-  let result_vregs : Array[@abi.VReg] = []
-  for result in inst.all_results() {
-    result_vregs.push(ctx.get_vreg(result))
-  }
+  // Collect result vregs (skip when results are unused)
+  let result_vregs = collect_call_result_vregs(ctx, inst)
 
   // Load func_table from vmctx on-demand
   let func_table = emit_load_func_table(ctx, block)
