@@ -1,4 +1,4 @@
-// JIT Stack Frame Layout (ABI v3 - Standard style)
+// JIT Stack Frame Layout (Standard style)
 // Encapsulates stack frame layout computation for JIT-compiled functions
 //
 // Standard Stack Frame Layout (from high to low address):
@@ -80,7 +80,8 @@ pub struct JITStackFrame {
 /// - num_spill_slots: Number of spill slots needed
 /// - has_calls: Whether function contains calls (requires FP/LR save)
 /// - outgoing_args_size: Stack space needed for outgoing call arguments
-/// - needs_vmctx: Whether function uses vmctx (X19)
+/// - needs_vmctx: Whether function uses vmctx (pinned reg)
+/// - has_incoming_stack_args: Whether function reads any stack parameters
 pub fn JITStackFrame::build(
   clobbered_gprs : Array[Int],
   clobbered_fprs : Array[Int],
@@ -91,9 +92,10 @@ pub fn JITStackFrame::build(
   cache_mem0_desc? : Bool = false,
   cache_func_table? : Bool = false,
   force_frame_setup? : Bool = false,
+  has_incoming_stack_args? : Bool = false,
 ) -> JITStackFrame {
   // Build the list of GPRs to save
-  // In v3 ABI, we save X19 (vmctx) only if needed, and any clobbered callee-saved regs
+  // ABI: saved GPR set + clobbered callee-saved regs
   let saved_gprs = build_gpr_save_list_v3(clobbered_gprs, needs_vmctx)
 
   // Determine if we need setup area (FP/LR)
@@ -104,6 +106,7 @@ pub fn JITStackFrame::build(
   // - force_frame_setup is true (for DWARF/backtrace support)
   let has_setup_area = force_frame_setup ||
     has_calls ||
+    has_incoming_stack_args ||
     saved_gprs.length() > 0 ||
     clobbered_fprs.length() > 0 ||
     num_spill_slots > 0
@@ -211,23 +214,19 @@ pub fn JITStackFrame::get_fpr_save_offset(
 // ============ Helper Functions ============
 
 ///|
-/// Build the list of GPRs to save for ABI v3
-/// Saves pinned vmctx register only if needed, and clobbered callee-saved registers
+/// Build the list of callee-saved GPRs to save.
+///
+/// Cranelift behavior: when `enable_pinned_reg` is enabled, the pinned VMContext
+/// register is globally-reserved and is not saved/restored in prologues.
 fn build_gpr_save_list_v3(
   clobbered : Array[Int],
   needs_vmctx : Bool,
 ) -> Array[Int] {
+  needs_vmctx |> ignore
   let result : Array[Int] = []
 
-  // Pinned vmctx register only saved if function uses vmctx
-  if needs_vmctx {
-    result.push(@abi.REG_VMCTX)
-  }
-
-  // Add clobbered callee-saved registers
+  // Add clobbered callee-saved registers (X19-X28), excluding the pinned VMCTX.
   for reg in clobbered {
-    // Include callee-saved registers (X19-X28).
-    // Pinned vmctx register is handled above.
     // X29/X30 handled separately in setup area.
     if reg >= 19 && reg <= 28 && reg != @abi.REG_VMCTX && !result.contains(reg) {
       result.push(reg)

@@ -107,9 +107,15 @@ pub fn verify_allocation_aarch64(
   for r in @abi.call_clobbered_gprs() {
     call_clobbered_int.add(r.index) |> ignore
   }
-  let call_clobbered_float : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  // For C calls, be conservative like Cranelift: clobber all V0-V31.
+  let call_clobbered_float_c : @hashset.HashSet[Int] = @hashset.HashSet::new()
   for r in @abi.call_clobbered_fprs() {
-    call_clobbered_float.add(r.index) |> ignore
+    call_clobbered_float_c.add(r.index) |> ignore
+  }
+  // For Wasm-to-Wasm calls (same ABI), allow V8-V15 as callee-saved (low 64 bits).
+  let call_clobbered_float_wasm : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  for r in @abi.call_clobbered_fprs_same_abi() {
+    call_clobbered_float_wasm.add(r.index) |> ignore
   }
   fn has_any_fixed_constraint_to(lr : LiveRange, preg : @abi.PReg) -> Bool {
     // Treat any FixedReg at any point as justification for using a register
@@ -209,11 +215,20 @@ pub fn verify_allocation_aarch64(
               "regalloc verifier: value live across call assigned to caller-saved x\{preg.index}",
             )
           }
-          if (preg.class is @abi.Float32 || preg.class is @abi.Float64) &&
-            call_clobbered_float.contains(preg.index) {
-            abort(
-              "regalloc verifier: value live across call assigned to caller-saved v\{preg.index}",
-            )
+          if preg.class is @abi.Float32 || preg.class is @abi.Float64 {
+            // If this value crosses any C call, treat all V regs as clobbered.
+            if lr.crosses_c_call && call_clobbered_float_c.contains(preg.index) {
+              abort(
+                "regalloc verifier: value live across C call assigned to caller-saved v\{preg.index}",
+              )
+            }
+            // If this value crosses any Wasm call, treat the standard caller-saved subset as clobbered.
+            if lr.crosses_wasm_call &&
+              call_clobbered_float_wasm.contains(preg.index) {
+              abort(
+                "regalloc verifier: value live across Wasm call assigned to caller-saved v\{preg.index}",
+              )
+            }
           }
         }
         let key = alias_key(preg)

@@ -111,9 +111,9 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|block0:
       #|    d0 = ldf 0
       #|    d1 = ldf 0
-      #|    x8 = ldi 0
-      #|    x8 = cmp32.eq x1, x8
-      #|    branch x8, block4, block7
+      #|    x0 = ldi 0
+      #|    x0 = cmp32.eq x1, x0
+      #|    branch x0, block4, block7
       #|block1(v2:int, f3:float, f4:float):
       #|    ret d0
       #|block2(v5:int, f6:float, f7:float):
@@ -129,9 +129,9 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|block6:
       #|    jump block1
       #|block7:
-      #|    x8 = ldi 1
-      #|    x8 = cmp32.eq x1, x8
-      #|    branch x8, block5, block6
+      #|    x0 = ldi 1
+      #|    x0 = cmp32.eq x1, x0
+      #|    branch x0, block5, block6
       #|}
       #|
     ),

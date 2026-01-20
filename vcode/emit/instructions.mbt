@@ -5380,9 +5380,10 @@ pub fn MachineCode::emit_addv_b(self : MachineCode, rd : Int, rn : Int) -> Unit 
 // ============ VCode to Machine Code ============
 
 ///|
-/// Check if a register is a callee-saved allocatable GPR (X19-X28)
-/// All callee-saved registers are now available for allocation since
-/// we use Standard on-demand loading from vmctx (X19).
+/// Check if a register is a callee-saved integer register (X19-X28).
+///
+/// Note: when `enable_pinned_reg` is enabled, the pinned VMContext register
+/// (X21) is treated as globally-reserved and should be filtered out by callers.
 fn is_callee_saved_alloc(reg : Int) -> Bool {
   reg >= 19 && reg <= 28
 }

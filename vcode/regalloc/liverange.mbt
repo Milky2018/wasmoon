@@ -151,7 +151,9 @@ struct LiveRange {
   mut bundle_id : Int // Owning Bundle ID (-1 if none)
   mut allocation : Allocation // Allocation result
   // Cached properties
-  mut crosses_call : Bool // Spans across a function call
+  mut crosses_call : Bool // Spans across any function call
+  mut crosses_wasm_call : Bool // Spans across a Wasm call
+  mut crosses_c_call : Bool // Spans across a C call
 }
 
 ///|
@@ -164,6 +166,8 @@ pub fn LiveRange::new(id : Int, vreg : @abi.VReg) -> LiveRange {
     bundle_id: -1,
     allocation: Unallocated,
     crosses_call: false,
+    crosses_wasm_call: false,
+    crosses_c_call: false,
   }
 }
 
@@ -549,16 +553,17 @@ pub fn build_live_ranges(
     // A value crosses a call if it is live *across* the call point:
     // span.start < call_point < span.end
     for entry in liveness.call_points {
-      let (call_point, _) = entry
+      let (call_point, call_conv) = entry
       for span in range.ranges {
         if pp_lt(span.start, call_point, block_order) &&
           pp_lt(call_point, span.end, block_order) {
           range.crosses_call = true
+          match call_conv {
+            @instr.Wasm => range.crosses_wasm_call = true
+            @instr.C => range.crosses_c_call = true
+          }
           break
         }
-      }
-      if range.crosses_call {
-        break
       }
     }
     result.add_range(range)

@@ -528,7 +528,10 @@ test "AAPCS64 calling convention registers" {
     content="[x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, x30]",
   ) // x19-x28, fp, lr
   let scratch_regs = @abi.allocatable_scratch_regs()
-  inspect(scratch_regs, content="[x8, x9, x10, x11, x12, x13, x14, x15]") // x8-x15
+  inspect(
+    scratch_regs,
+    content="[x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15]",
+  ) // x8-x15
   let callee_saved_regs = @abi.allocatable_callee_saved_regs()
   inspect(
     callee_saved_regs,

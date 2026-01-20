@@ -31,15 +31,20 @@ fn lower_throw(
   // Materialize tag index
   let tag_idx_vreg = materialize_imm(ctx, block, tag_idx.to_int64())
 
-  // Allocate stack space for exception values (if any)
+  // Allocate space for exception values (if any).
+  //
+  // Important: do NOT dynamically adjust SP here.
+  // Our JIT assumes a fixed SP within the function body (after prologue), so
+  // spills/stack slots use constant offsets from SP.
+  //
+  // Instead, reuse the pre-allocated outgoing-args area at SP and ensure it is
+  // large enough for the values array.
   let num_operands = inst.operands.length()
   let (values_ptr_vreg, count_vreg) = if num_operands > 0 {
-    // Allocate stack space for values (8 bytes each, aligned to 16)
     let stack_space = (num_operands * 8 + 15) / 16 * 16
-    let alloc = @instr.VCodeInst::new(AdjustSP(-stack_space))
-    block.add_inst(alloc)
+    ctx.vcode_func.update_max_outgoing_args_size(stack_space)
 
-    // Store each value to stack
+    // Store each value to the outgoing args area at SP.
     for i in 0..<num_operands {
       let val_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let offset = i * 8

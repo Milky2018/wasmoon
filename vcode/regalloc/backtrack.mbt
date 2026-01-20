@@ -564,8 +564,17 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
       continue
     }
 
-    // Vector values live across calls must spill (AAPCS64 only preserves low 64-bit).
+    // Vector values live across calls must spill.
     if bundle.reg_class is @abi.Vector && bundle.crosses_call(self.ranges) {
+      self.force_spill_bundle(bundle)
+      processed.add(entry.bundle_id)
+      continue
+    }
+
+    // Cranelift-style conservative call clobbers for C calls: treat all V0-V31 as clobbered.
+    // To be safe, spill any float values that cross a C call.
+    if (bundle.reg_class is @abi.Float32 || bundle.reg_class is @abi.Float64) &&
+      bundle.crosses_c_call(self.ranges) {
       self.force_spill_bundle(bundle)
       processed.add(entry.bundle_id)
       continue
@@ -968,8 +977,16 @@ fn BacktrackingAllocator::preassign_params(
           continue
         }
 
-        // Allocate to callee-saved registers so any range in the bundle can
-        // survive calls safely.
+        // Cranelift-style conservative clobbers for C calls: treat all V0-V31 as clobbered.
+        // Any float value that crosses a C call must spill.
+        if !is_int && bundle.crosses_c_call(self.ranges) {
+          self.force_spill_bundle(bundle)
+          bundle.is_pinned = true
+          continue
+        }
+
+        // Otherwise, allocate to callee-saved registers so the bundle can
+        // survive Wasm-to-Wasm calls safely.
         let callee_saved_preg = if is_int {
           if callee_saved_int_idx < self.callee_saved_int.length() {
             let p = self.callee_saved_int[callee_saved_int_idx]

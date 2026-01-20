@@ -674,14 +674,12 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f50f1ff8  str x21, [sp, #-16]!
-      #|  000c: f50300aa  mov x21, x0
+      #|  0008: f50300aa  mov x21, x0
       #|block0:
-      #|  0010: 110080d2  movz x17, #0, lsl #0
-      #|  0014: 20023fd6  blr x17
-      #|  0018: f50741f8  ldr x21, [sp], #16
-      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0020: c0035fd6  ret
+      #|  000c: 110080d2  movz x17, #0, lsl #0
+      #|  0010: 20023fd6  blr x17
+      #|  0014: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0018: c0035fd6  ret
       #|
     ),
   )
@@ -716,14 +714,12 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f50f1ff8  str x21, [sp, #-16]!
-      #|  000c: f50300aa  mov x21, x0
+      #|  0008: f50300aa  mov x21, x0
       #|block0:
-      #|  0010: 110080d2  movz x17, #0, lsl #0
-      #|  0014: 20023fd6  blr x17
-      #|  0018: f50741f8  ldr x21, [sp], #16
-      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0020: c0035fd6  ret
+      #|  000c: 110080d2  movz x17, #0, lsl #0
+      #|  0010: 20023fd6  blr x17
+      #|  0014: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0018: c0035fd6  ret
       #|
     ),
   )
@@ -784,14 +780,12 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f50f1ff8  str x21, [sp, #-16]!
-      #|  000c: f50300aa  mov x21, x0
+      #|  0008: f50300aa  mov x21, x0
       #|block0:
-      #|  0010: 110080d2  movz x17, #0, lsl #0
-      #|  0014: 20023fd6  blr x17
-      #|  0018: f50741f8  ldr x21, [sp], #16
-      #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0020: c0035fd6  ret
+      #|  000c: 110080d2  movz x17, #0, lsl #0
+      #|  0010: 20023fd6  blr x17
+      #|  0014: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0018: c0035fd6  ret
       #|
     ),
   )

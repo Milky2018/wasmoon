@@ -945,6 +945,21 @@ fn collect_terminator_uses_simple(
 }
 
 ///|
+/// Deep-copy a `HashSet[Int]` by re-inserting elements.
+///
+/// Note: do NOT use `@hashset.HashSet::copy()` here: the core HashSet copy is
+/// shallow and shares mutable `Entry` nodes (probe sequence length is mutated on
+/// insert/remove). Mutating the "copy" would corrupt the source set and can
+/// lead to non-termination.
+fn clone_hashset_int(set : @hashset.HashSet[Int]) -> @hashset.HashSet[Int] {
+  let out : @hashset.HashSet[Int] = @hashset.new()
+  for x in set {
+    out.add(x)
+  }
+  out
+}
+
+///|
 /// Compute dominators for all blocks (simple iterative algorithm).
 fn compute_dominators(
   func : @regalloc.VCodeFunction,
@@ -977,7 +992,7 @@ fn compute_dominators(
       s.add(0)
       dom.push(s)
     } else {
-      dom.push(all.copy())
+      dom.push(clone_hashset_int(all))
     }
   }
   let mut changed = true
@@ -990,7 +1005,7 @@ fn compute_dominators(
         new_dom.add(b)
       } else {
         // Start with dom of first predecessor, then intersect.
-        new_dom = dom[preds[b][0]].copy()
+        new_dom = clone_hashset_int(dom[preds[b][0]])
         for pi in 1..<preds[b].length() {
           let p = preds[b][pi]
           let to_remove : Array[Int] = []

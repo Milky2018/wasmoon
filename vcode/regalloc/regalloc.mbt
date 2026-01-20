@@ -528,6 +528,8 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
           record_term_use(lhs, result, block_idx, inst_idx)
         BranchZero(reg, _, _, _, _) =>
           record_term_use(reg, result, block_idx, inst_idx)
+        BrTable(index, _, _) =>
+          record_term_use(index, result, block_idx, inst_idx)
         Return(values) =>
           for value in values {
             record_term_use(value, result, block_idx, inst_idx)
@@ -600,6 +602,10 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
           }
         BranchZero(reg, _, _, _, _) =>
           if reg is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
+            use_set.add(vreg.id)
+          }
+        BrTable(index, _, _) =>
+          if index is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
             use_set.add(vreg.id)
           }
         Return(values) =>

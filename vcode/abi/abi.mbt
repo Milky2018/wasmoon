@@ -278,10 +278,18 @@ pub fn aapcs64_callee_saved() -> Array[PReg] {
 
 ///|
 /// Scratch registers available for allocation (caller-saved, no save/restore needed)
-/// X8-X15 are available for allocation.
-/// X16-X17 (IP0/IP1) are reserved for linker/code emission scratch.
+/// X0-X15 are available for allocation.
+/// X16-X17 (IP0/IP1) are reserved for linker/code emission scratch and indirect calls.
 pub fn allocatable_scratch_regs() -> Array[PReg] {
   [
+    { index: 0, class: Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
     { index: 8, class: Int },
     { index: 9, class: Int },
     { index: 10, class: Int },
@@ -395,12 +403,56 @@ pub fn call_clobbered_gprs() -> Array[PReg] {
 ///|
 /// Floating-point registers clobbered by function calls.
 ///
-/// Note: Cranelift conservatively treats all v0-v31 as clobbered at callsites
-/// because it cannot model partial preservation of v8-v15.
+/// Cranelift conservatively treats all V0-V31 as clobbered at callsites because
+/// it cannot model partial preservation of V8-V15.
 ///
-/// Wasmoon’s backend models v8-v15 as callee-saved (f64/low-64bits), so we keep
-/// call clobbers to the AAPCS64 caller-saved subset here.
+/// For AppleAarch64 parity, we follow the same conservative approximation.
 pub fn call_clobbered_fprs() -> Array[PReg] {
+  [
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+    { index: 4, class: Float64 },
+    { index: 5, class: Float64 },
+    { index: 6, class: Float64 },
+    { index: 7, class: Float64 },
+    { index: 8, class: Float64 },
+    { index: 9, class: Float64 },
+    { index: 10, class: Float64 },
+    { index: 11, class: Float64 },
+    { index: 12, class: Float64 },
+    { index: 13, class: Float64 },
+    { index: 14, class: Float64 },
+    { index: 15, class: Float64 },
+    { index: 16, class: Float64 },
+    { index: 17, class: Float64 },
+    { index: 18, class: Float64 },
+    { index: 19, class: Float64 },
+    { index: 20, class: Float64 },
+    { index: 21, class: Float64 },
+    { index: 22, class: Float64 },
+    { index: 23, class: Float64 },
+    { index: 24, class: Float64 },
+    { index: 25, class: Float64 },
+    { index: 26, class: Float64 },
+    { index: 27, class: Float64 },
+    { index: 28, class: Float64 },
+    { index: 29, class: Float64 },
+    { index: 30, class: Float64 },
+    { index: 31, class: Float64 },
+  ]
+}
+
+///|
+/// Floating-point registers clobbered by *same-ABI* calls.
+///
+/// When both caller and callee use the same AArch64 ABI, V8-V15 are callee-saved
+/// (low 64 bits). We treat them as preserved across Wasm-to-Wasm calls.
+///
+/// This mirrors Cranelift’s practice of excluding V8-V15 clobbers when the callee
+/// has the same ABI as the caller.
+pub fn call_clobbered_fprs_same_abi() -> Array[PReg] {
   [
     { index: 0, class: Float64 },
     { index: 1, class: Float64 },

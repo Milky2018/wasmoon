@@ -108,7 +108,7 @@ pub fn MemoryInfo::new(
 // ============ JIT Context Wrapper ============
 
 ///|
-/// JIT execution context (v3 ABI) - GC managed
+/// JIT execution context (JIT ABI) - GC managed
 /// Uses Standard on-demand loading from vmctx:
 /// +0: memory_base, +8: memory_size, +16: func_table, +24: table0_base
 /// Only X19 caches vmctx; all other values are loaded on-demand.
@@ -121,7 +121,7 @@ priv struct JITContext {
 }
 
 ///|
-/// Create a new JIT context (v3) - GC managed
+/// Create a new JIT context - GC managed
 fn JITContext::new(total_funcs : Int) -> JITContext? {
   let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
   // Check if allocation succeeded by verifying the pointer is valid
@@ -916,7 +916,7 @@ pub fn ExecCode::ptr(self : ExecCode) -> Int64 {
 // ============ Multi-value Return Support ============
 
 ///|
-/// Call a JIT function with multiple return values (v3 ABI)
+/// Call a JIT function with multiple return values
 /// Uses JIT-generated trampolines on-demand.
 /// X19 = ctx_ptr (vmctx), all other values loaded on-demand from vmctx.
 /// Returns 0 on success, trap code on error

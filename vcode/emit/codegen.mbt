@@ -25,17 +25,19 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 ///|
 fn collect_used_callee_saved(
   func : @regalloc.VCodeFunction,
+  enable_pinned_reg : Bool,
   _needs_sret : Bool,
 ) -> Array[Int] {
-  // v3 ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
+  // ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
   let used : @hashset.HashSet[Int] = @hashset.new()
   let mut has_calls = false
 
-  // Check param_pregs: parameters that cross calls are moved to callee-saved registers
-  // These are defined in the prologue via `mov xN, x(3+i)`
+  // Check param_pregs: parameters that cross calls are moved to callee-saved registers.
   for preg in func.get_param_pregs() {
     if preg is Some(p) && is_callee_saved_alloc(p.index) {
-      used.add(p.index)
+      if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+        used.add(p.index)
+      }
     }
   }
   for block in func.get_blocks() {
@@ -50,7 +52,9 @@ fn collect_used_callee_saved(
         if def.reg is Physical(preg) &&
           preg.class is Int &&
           is_callee_saved_alloc(preg.index) {
-          used.add(preg.index)
+          if !enable_pinned_reg || preg.index != @abi.REG_VMCTX {
+            used.add(preg.index)
+          }
         }
       }
     }
@@ -119,6 +123,19 @@ fn func_has_calls(func : @regalloc.VCodeFunction) -> Bool {
 }
 
 ///|
+/// Check if a function reads any incoming stack parameters
+fn func_has_incoming_stack_args(func : @regalloc.VCodeFunction) -> Bool {
+  for block in func.get_blocks() {
+    for inst in block.insts {
+      if inst.opcode is @instr.LoadStackParam(_, _) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
 /// Check if a function uses vmctx (x19)
 /// A function needs vmctx if:
 /// - It uses X19 as a physical register in any instruction
@@ -170,7 +187,7 @@ fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
 }
 
 ///|
-/// Emit prologue for ABI v3
+/// Emit prologue (Standard)
 ///
 /// Stack Frame Layout (from high to low address):
 /// ┌───────────────────────────┐
@@ -189,10 +206,9 @@ fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
 /// │  Outgoing Arguments       │ (for calls with stack args)
 /// └═══════════════════════════┘ ← SP after prologue
 ///
-/// ABI v3 Parameter Passing:
+/// ABI Parameter Passing:
 /// - X0 = vmctx (cached to pinned vmctx reg)
 /// - X1.. = user args
-/// - X2-X7 = user integer params (up to 6)
 /// - V0-V7 = user float params (S for f32, D for f64)
 /// Emit stack pointer adjustment for arbitrary sizes (Standard)
 ///
@@ -447,7 +463,7 @@ pub fn emit_function(
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
   let mc = MachineCode::new()
-  // v3 ABI: Check if we need SRET (more than 8 int or 8 float returns)
+  // ABI: Check if we need SRET (more than 8 int or 8 float returns)
   let needs_sret = func.needs_extra_results_ptr()
   // Check if we call functions that return more than register capacity
   // In that case, we need to allocate a local buffer and use X8 (SRET) to point to it
@@ -455,13 +471,18 @@ pub fn emit_function(
   // We need SRET if either we return multi-value OR we call multi-value functions
   let uses_sret = needs_sret || calls_multi_value
   // Collect callee-saved GPRs that this function clobbers
-  let clobbered = collect_used_callee_saved(func, uses_sret)
+  let clobbered = collect_used_callee_saved(
+    func,
+    abi_settings.enable_pinned_reg,
+    uses_sret,
+  )
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
   let clobbered_fprs = collect_used_callee_saved_fprs(func)
 
   // Build stack frame layout using JITStackFrame
   // has_calls is true if function makes any calls
   let has_calls = func_has_calls(func)
+  let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
   let uses_func_table = func.uses_func_table()
 
@@ -488,6 +509,7 @@ pub fn emit_function(
     cache_mem0_desc=uses_mem0,
     cache_func_table=uses_func_table,
     force_frame_setup~,
+    has_incoming_stack_args~,
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
@@ -3480,7 +3502,7 @@ fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> Int {
 }
 
 ///|
-/// Emit epilogue for ABI v3 (Standard)
+/// Emit epilogue (Standard)
 ///
 /// Reverses the prologue operations in reverse order (Standard style):
 /// 1. Deallocate remaining stack space (spill + outgoing)
@@ -3555,7 +3577,7 @@ fn MachineCode::emit_epilogue(
 }
 
 ///|
-/// Emit terminator with epilogue for Return (v3 ABI using JITStackFrame)
+/// Emit terminator with epilogue for Return (JITStackFrame)
 /// next_block: the ID of the physically next block, used for fall-through optimization
 fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
@@ -3660,7 +3682,7 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
     }
     Return(values) => {
-      // v3 ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7
+      // ABI: Up to 8 integer returns in X0-X7, up to 8 float returns in V0-V7
       // If more returns are needed, SRET pointer is passed in X8
       // Two-phase approach is ONLY needed when there's potential for D/S clobbering:
       // - D_n and S_n share the same V_n register
@@ -3682,7 +3704,7 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
 
-      // v3 ABI: Use X0-X7 for integer returns (up to 8)
+      // ABI: Use X0-X7 for integer returns (up to 8)
       let max_int_ret_regs = @abi.MAX_INT_RET_REGS // 8
       let max_float_ret_regs = @abi.MAX_FLOAT_RET_REGS // 8
 

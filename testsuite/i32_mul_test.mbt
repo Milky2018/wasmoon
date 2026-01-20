@@ -62,9 +62,9 @@ test "i32 mul" {
     content=(
       #|vcode test(v0:int, v1:int) -> int {
       #|block0:
-      #|    x8 = ldi 3
-      #|    x8 = mul32 x1, x8
-      #|    ret x8
+      #|    x0 = ldi 3
+      #|    x0 = mul32 x1, x0
+      #|    ret x0
       #|}
       #|
     ),
@@ -74,10 +74,9 @@ test "i32 mul" {
     mc.dump_disasm(),
     content=(
       #|block0:
-      #|  0000: 680080d2  movz x8, #3, lsl #0
-      #|  0004: 287c081b  mul w8, w1, w8
-      #|  0008: e00308aa  mov x0, x8
-      #|  000c: c0035fd6  ret
+      #|  0000: 600080d2  movz x0, #3, lsl #0
+      #|  0004: 207c001b  mul w0, w1, w0
+      #|  0008: c0035fd6  ret
       #|
     ),
   )

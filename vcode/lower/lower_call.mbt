@@ -93,16 +93,20 @@ fn lower_wasm_call(
   })
 
   // vmctx constrained to X0.
-  // Materialize the ABI move directly: X0 = vmctx_pinned.
   let vmctx_arg_preg : @abi.PReg = {
     index: @abi.REG_CALLEE_VMCTX,
     class: @abi.Int,
   }
+  // IMPORTANT: keep vmctx as a *virtual* value and let regalloc satisfy the fixed
+  // constraint at the callsite. Emitting `def Physical(x0)` here makes x0 look
+  // "free" to the allocator and can clobber other live values when x0 becomes
+  // allocatable (e.g. after expanding scratch regs to include X0-X7).
+  let callee_vmctx = ctx.vcode_func.new_vreg(@abi.Int)
   let copy_vmctx = @instr.VCodeInst::new(Move)
-  copy_vmctx.add_def({ reg: Physical(vmctx_arg_preg) })
+  copy_vmctx.add_def({ reg: Virtual(callee_vmctx) })
   copy_vmctx.add_use(Physical(vmctx_preg))
   block.add_inst(copy_vmctx)
-  call_inst.add_use_fixed(Physical(vmctx_arg_preg), vmctx_arg_preg)
+  call_inst.add_use_fixed(Virtual(callee_vmctx), vmctx_arg_preg)
 
   // Register int args: X1-X7
   let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
@@ -712,8 +716,15 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   for preg in @abi.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
-  // Add clobbers for all caller-saved FPRs (D0-D7)
-  for preg in @abi.call_clobbered_fprs() {
+  // Add clobbers for caller-saved FPRs.
+  //
+  // Cranelift-style conservative clobbers (V0-V31) apply to C calls.
+  // For Wasm-to-Wasm calls (same ABI), we treat V8-V15 as callee-saved.
+  let fpr_clobbers = match call_inst.opcode {
+    CallPtr(_, _, @instr.C) => @abi.call_clobbered_fprs()
+    _ => @abi.call_clobbered_fprs_same_abi()
+  }
+  for preg in fpr_clobbers {
     call_inst.add_def({ reg: Physical(preg) })
   }
 }

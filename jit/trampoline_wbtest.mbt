@@ -92,19 +92,17 @@ test "entry trampoline: no params, i32 result" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f357bfa9  stp x19, x21, [sp, #-16]!
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f50300aa  mov x21, x0
       #|  0010: f30301aa  mov x19, x1
       #|block0:
       #|  0014: f10302aa  mov x17, x2
       #|  0018: 20023fd6  blr x17
-      #|  001c: e80300aa  mov x8, x0
-      #|  0020: 680200b9  str w8, [x19, #0]
-      #|  0024: 080080d2  movz x8, #0, lsl #0
-      #|  0028: e00308aa  mov x0, x8
-      #|  002c: f357c1a8  ldp x19, x21, [sp], #16
-      #|  0030: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0034: c0035fd6  ret
+      #|  001c: 600200b9  str w0, [x19, #0]
+      #|  0020: 000080d2  movz x0, #0, lsl #0
+      #|  0024: f30741f8  ldr x19, [sp], #16
+      #|  0028: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  002c: c0035fd6  ret
       #|
     ),
   )
@@ -122,21 +120,18 @@ test "entry trampoline: i32 param, i32 result" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f357bfa9  stp x19, x21, [sp, #-16]!
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f50300aa  mov x21, x0
       #|  0010: f30301aa  mov x19, x1
       #|block0:
-      #|  0014: 680240b9  ldr w8, [x19, #0]
+      #|  0014: 610240b9  ldr w1, [x19, #0]
       #|  0018: f10302aa  mov x17, x2
-      #|  001c: e10308aa  mov x1, x8
-      #|  0020: 20023fd6  blr x17
-      #|  0024: e80300aa  mov x8, x0
-      #|  0028: 680a00b9  str w8, [x19, #8]
-      #|  002c: 080080d2  movz x8, #0, lsl #0
-      #|  0030: e00308aa  mov x0, x8
-      #|  0034: f357c1a8  ldp x19, x21, [sp], #16
-      #|  0038: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  003c: c0035fd6  ret
+      #|  001c: 20023fd6  blr x17
+      #|  0020: 600a00b9  str w0, [x19, #8]
+      #|  0024: 000080d2  movz x0, #0, lsl #0
+      #|  0028: f30741f8  ldr x19, [sp], #16
+      #|  002c: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0030: c0035fd6  ret
       #|
     ),
   )
@@ -154,16 +149,13 @@ test "entry trampoline: no params, no result" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f50f1ff8  str x21, [sp, #-16]!
-      #|  000c: f50300aa  mov x21, x0
+      #|  0008: f50300aa  mov x21, x0
       #|block0:
-      #|  0010: f10302aa  mov x17, x2
-      #|  0014: 20023fd6  blr x17
-      #|  0018: 080080d2  movz x8, #0, lsl #0
-      #|  001c: e00308aa  mov x0, x8
-      #|  0020: f50741f8  ldr x21, [sp], #16
-      #|  0024: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0028: c0035fd6  ret
+      #|  000c: f10302aa  mov x17, x2
+      #|  0010: 20023fd6  blr x17
+      #|  0014: 000080d2  movz x0, #0, lsl #0
+      #|  0018: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  001c: c0035fd6  ret
       #|
     ),
   )
@@ -180,7 +172,7 @@ test "entry trampoline: f64 param, f64 result" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f357bfa9  stp x19, x21, [sp, #-16]!
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f50300aa  mov x21, x0
       #|  0010: f30301aa  mov x19, x1
       #|block0:
@@ -188,11 +180,10 @@ test "entry trampoline: f64 param, f64 result" {
       #|  0018: f10302aa  mov x17, x2
       #|  001c: 20023fd6  blr x17
       #|  0020: 600600fd  str d0, [x19, #8]
-      #|  0024: 080080d2  movz x8, #0, lsl #0
-      #|  0028: e00308aa  mov x0, x8
-      #|  002c: f357c1a8  ldp x19, x21, [sp], #16
-      #|  0030: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0034: c0035fd6  ret
+      #|  0024: 000080d2  movz x0, #0, lsl #0
+      #|  0028: f30741f8  ldr x19, [sp], #16
+      #|  002c: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0030: c0035fd6  ret
       #|
     ),
   )
@@ -212,24 +203,22 @@ test "entry trampoline: multiple params" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f357bfa9  stp x19, x21, [sp, #-16]!
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f50300aa  mov x21, x0
       #|  0010: f30301aa  mov x19, x1
       #|block0:
-      #|  0014: 690240b9  ldr w9, [x19, #0]
-      #|  0018: 680640f9  ldr x8, [x19, #8]
+      #|  0014: 630240b9  ldr w3, [x19, #0]
+      #|  0018: 610640f9  ldr x1, [x19, #8]
       #|  001c: 601240bd  ldr s0, [x19, #16]
       #|  0020: f10302aa  mov x17, x2
-      #|  0024: e10309aa  mov x1, x9
-      #|  0028: e20308aa  mov x2, x8
+      #|  0024: e20301aa  mov x2, x1
+      #|  0028: e10303aa  mov x1, x3
       #|  002c: 20023fd6  blr x17
-      #|  0030: e80300aa  mov x8, x0
-      #|  0034: 680e00f9  str x8, [x19, #24]
-      #|  0038: 080080d2  movz x8, #0, lsl #0
-      #|  003c: e00308aa  mov x0, x8
-      #|  0040: f357c1a8  ldp x19, x21, [sp], #16
-      #|  0044: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0048: c0035fd6  ret
+      #|  0030: 600e00f9  str x0, [x19, #24]
+      #|  0034: 000080d2  movz x0, #0, lsl #0
+      #|  0038: f30741f8  ldr x19, [sp], #16
+      #|  003c: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0040: c0035fd6  ret
       #|
     ),
   )
@@ -250,7 +239,7 @@ test "entry trampoline: 8 f64 params" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f357bfa9  stp x19, x21, [sp, #-16]!
+      #|  0008: f30f1ff8  str x19, [sp, #-16]!
       #|  000c: f50300aa  mov x21, x0
       #|  0010: f30301aa  mov x19, x1
       #|block0:
@@ -265,11 +254,10 @@ test "entry trampoline: 8 f64 params" {
       #|  0034: f10302aa  mov x17, x2
       #|  0038: 20023fd6  blr x17
       #|  003c: 602200fd  str d0, [x19, #64]
-      #|  0040: 080080d2  movz x8, #0, lsl #0
-      #|  0044: e00308aa  mov x0, x8
-      #|  0048: f357c1a8  ldp x19, x21, [sp], #16
-      #|  004c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0050: c0035fd6  ret
+      #|  0040: 000080d2  movz x0, #0, lsl #0
+      #|  0044: f30741f8  ldr x19, [sp], #16
+      #|  0048: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  004c: c0035fd6  ret
       #|
     ),
   )
@@ -290,78 +278,68 @@ test "entry trampoline: 20 i64 params (debug)" {
     content=(
       #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
       #|  0004: fd030091  add x29, sp, #0
-      #|  0008: fb73bfa9  stp x27, x28, [sp, #-16]!
-      #|  000c: f96bbfa9  stp x25, x26, [sp, #-16]!
-      #|  0010: f763bfa9  stp x23, x24, [sp, #-16]!
-      #|  0014: f55bbfa9  stp x21, x22, [sp, #-16]!
-      #|  0018: f353bfa9  stp x19, x20, [sp, #-16]!
-      #|  001c: ff4302d1  sub sp, sp, #144
-      #|  0020: ff0300f9  str x31, [x31, #0]
-      #|  0024: f50300aa  mov x21, x0
-      #|  0028: f30301aa  mov x19, x1
+      #|  0008: fa0f1ff8  str x26, [sp, #-16]!
+      #|  000c: f867bfa9  stp x24, x25, [sp, #-16]!
+      #|  0010: f65fbfa9  stp x22, x23, [sp, #-16]!
+      #|  0014: f353bfa9  stp x19, x20, [sp, #-16]!
+      #|  0018: ffc301d1  sub sp, sp, #112
+      #|  001c: ff0300f9  str x31, [x31, #0]
+      #|  0020: f50300aa  mov x21, x0
+      #|  0024: f30301aa  mov x19, x1
       #|block0:
-      #|  002c: 6e0240f9  ldr x14, [x19, #0]
-      #|  0030: 6d0640f9  ldr x13, [x19, #8]
-      #|  0034: 6c0a40f9  ldr x12, [x19, #16]
-      #|  0038: 6b0e40f9  ldr x11, [x19, #24]
-      #|  003c: 6a1240f9  ldr x10, [x19, #32]
-      #|  0040: 691640f9  ldr x9, [x19, #40]
-      #|  0044: 681a40f9  ldr x8, [x19, #48]
-      #|  0048: 701e40f9  ldr x16, [x19, #56]
-      #|  004c: f04700f9  str x16, [x31, #136]
-      #|  0050: 6f2240f9  ldr x15, [x19, #64]
-      #|  0054: 742640f9  ldr x20, [x19, #72]
-      #|  0058: 762a40f9  ldr x22, [x19, #80]
-      #|  005c: 772e40f9  ldr x23, [x19, #88]
-      #|  0060: 783240f9  ldr x24, [x19, #96]
-      #|  0064: 793640f9  ldr x25, [x19, #104]
-      #|  0068: 7a3a40f9  ldr x26, [x19, #112]
-      #|  006c: 7b3e40f9  ldr x27, [x19, #120]
-      #|  0070: 7c4240f9  ldr x28, [x19, #128]
-      #|  0074: 714640f9  ldr x17, [x19, #136]
-      #|  0078: f13b00f9  str x17, [x31, #112]
-      #|  007c: 704a40f9  ldr x16, [x19, #144]
-      #|  0080: f03f00f9  str x16, [x31, #120]
-      #|  0084: 714e40f9  ldr x17, [x19, #152]
-      #|  0088: f14300f9  str x17, [x31, #128]
-      #|  008c: f04740f9  ldr x16, [x31, #136]
-      #|  0090: f00300f9  str x16, [x31, #0]
-      #|  0094: ef0700f9  str x15, [x31, #8]
-      #|  0098: f40b00f9  str x20, [x31, #16]
-      #|  009c: f60f00f9  str x22, [x31, #24]
-      #|  00a0: f71300f9  str x23, [x31, #32]
-      #|  00a4: f81700f9  str x24, [x31, #40]
-      #|  00a8: f91b00f9  str x25, [x31, #48]
-      #|  00ac: fa1f00f9  str x26, [x31, #56]
-      #|  00b0: fb2300f9  str x27, [x31, #64]
-      #|  00b4: fc2700f9  str x28, [x31, #72]
-      #|  00b8: f03b40f9  ldr x16, [x31, #112]
-      #|  00bc: f02b00f9  str x16, [x31, #80]
-      #|  00c0: f03f40f9  ldr x16, [x31, #120]
-      #|  00c4: f02f00f9  str x16, [x31, #88]
-      #|  00c8: f04340f9  ldr x16, [x31, #128]
-      #|  00cc: f03300f9  str x16, [x31, #96]
-      #|  00d0: f10302aa  mov x17, x2
-      #|  00d4: e1030eaa  mov x1, x14
-      #|  00d8: e2030daa  mov x2, x13
-      #|  00dc: e3030caa  mov x3, x12
-      #|  00e0: e4030baa  mov x4, x11
-      #|  00e4: e5030aaa  mov x5, x10
-      #|  00e8: e60309aa  mov x6, x9
-      #|  00ec: e70308aa  mov x7, x8
-      #|  00f0: 20023fd6  blr x17
-      #|  00f4: e80300aa  mov x8, x0
-      #|  00f8: 685200f9  str x8, [x19, #160]
-      #|  00fc: 080080d2  movz x8, #0, lsl #0
-      #|  0100: e00308aa  mov x0, x8
-      #|  0104: ff430291  add sp, sp, #144
-      #|  0108: f353c1a8  ldp x19, x20, [sp], #16
-      #|  010c: f55bc1a8  ldp x21, x22, [sp], #16
-      #|  0110: f763c1a8  ldp x23, x24, [sp], #16
-      #|  0114: f96bc1a8  ldp x25, x26, [sp], #16
-      #|  0118: fb73c1a8  ldp x27, x28, [sp], #16
-      #|  011c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0120: c0035fd6  ret
+      #|  0028: 680240f9  ldr x8, [x19, #0]
+      #|  002c: 670640f9  ldr x7, [x19, #8]
+      #|  0030: 660a40f9  ldr x6, [x19, #16]
+      #|  0034: 650e40f9  ldr x5, [x19, #24]
+      #|  0038: 641240f9  ldr x4, [x19, #32]
+      #|  003c: 631640f9  ldr x3, [x19, #40]
+      #|  0040: 611a40f9  ldr x1, [x19, #48]
+      #|  0044: 7a1e40f9  ldr x26, [x19, #56]
+      #|  0048: 692240f9  ldr x9, [x19, #64]
+      #|  004c: 6a2640f9  ldr x10, [x19, #72]
+      #|  0050: 6b2a40f9  ldr x11, [x19, #80]
+      #|  0054: 6c2e40f9  ldr x12, [x19, #88]
+      #|  0058: 6d3240f9  ldr x13, [x19, #96]
+      #|  005c: 6e3640f9  ldr x14, [x19, #104]
+      #|  0060: 6f3a40f9  ldr x15, [x19, #112]
+      #|  0064: 743e40f9  ldr x20, [x19, #120]
+      #|  0068: 764240f9  ldr x22, [x19, #128]
+      #|  006c: 774640f9  ldr x23, [x19, #136]
+      #|  0070: 784a40f9  ldr x24, [x19, #144]
+      #|  0074: 794e40f9  ldr x25, [x19, #152]
+      #|  0078: fa0300f9  str x26, [x31, #0]
+      #|  007c: e90700f9  str x9, [x31, #8]
+      #|  0080: ea0b00f9  str x10, [x31, #16]
+      #|  0084: eb0f00f9  str x11, [x31, #24]
+      #|  0088: ec1300f9  str x12, [x31, #32]
+      #|  008c: ed1700f9  str x13, [x31, #40]
+      #|  0090: ee1b00f9  str x14, [x31, #48]
+      #|  0094: ef1f00f9  str x15, [x31, #56]
+      #|  0098: f42300f9  str x20, [x31, #64]
+      #|  009c: f62700f9  str x22, [x31, #72]
+      #|  00a0: f72b00f9  str x23, [x31, #80]
+      #|  00a4: f82f00f9  str x24, [x31, #88]
+      #|  00a8: f93300f9  str x25, [x31, #96]
+      #|  00ac: f10302aa  mov x17, x2
+      #|  00b0: e20307aa  mov x2, x7
+      #|  00b4: e70301aa  mov x7, x1
+      #|  00b8: e10308aa  mov x1, x8
+      #|  00bc: f00303aa  mov x16, x3
+      #|  00c0: e30306aa  mov x3, x6
+      #|  00c4: e60310aa  mov x6, x16
+      #|  00c8: f00304aa  mov x16, x4
+      #|  00cc: e40305aa  mov x4, x5
+      #|  00d0: e50310aa  mov x5, x16
+      #|  00d4: 20023fd6  blr x17
+      #|  00d8: 605200f9  str x0, [x19, #160]
+      #|  00dc: 000080d2  movz x0, #0, lsl #0
+      #|  00e0: ffc30191  add sp, sp, #112
+      #|  00e4: f353c1a8  ldp x19, x20, [sp], #16
+      #|  00e8: f65fc1a8  ldp x22, x23, [sp], #16
+      #|  00ec: f867c1a8  ldp x24, x25, [sp], #16
+      #|  00f0: fa0741f8  ldr x26, [sp], #16
+      #|  00f4: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  00f8: c0035fd6  ret
       #|
     ),
   )

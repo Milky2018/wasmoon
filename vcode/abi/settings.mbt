@@ -7,6 +7,7 @@
 /// Reference:
 /// - wasmtime/cranelift `settings::Flags::enable_pinned_reg()`
 /// - wasmtime/cranelift `isa::CallConv::AppleAarch64`
+#warnings("-unused_constructor")
 pub enum CallConv {
   ///
   /// Apple’s AArch64 ABI variant.

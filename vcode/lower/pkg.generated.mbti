@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/vcode/lower"
 
 import(
   "Milky2018/wasmoon/ir"
+  "Milky2018/wasmoon/vcode/abi"
   "Milky2018/wasmoon/vcode/block"
   "Milky2018/wasmoon/vcode/instr"
   "Milky2018/wasmoon/vcode/regalloc"
@@ -21,7 +22,7 @@ pub fn is_valid_add_imm(Int64) -> Bool
 
 pub fn is_valid_logical_imm(Int64) -> Bool
 
-pub fn lower_function(@ir.Function) -> @regalloc.VCodeFunction
+pub fn lower_function(@ir.Function, abi_settings? : @abi.ABISettings) -> @regalloc.VCodeFunction
 
 pub fn lower_function_optimized(@ir.Function) -> @regalloc.VCodeFunction
 
@@ -47,7 +48,7 @@ pub enum AArch64RewriteResult {
 }
 
 type LoweringContext
-pub fn LoweringContext::new(@ir.Function) -> Self
+pub fn LoweringContext::new(@ir.Function, @abi.ABISettings) -> Self
 
 type MatchResult
 

@@ -1,4 +1,4 @@
-// Tests for JITStackFrame (ABI v3)
+// Tests for JITStackFrame
 
 ///|
 test "jit_stack_frame_basic" {
@@ -12,16 +12,16 @@ test "jit_stack_frame_basic" {
   )
 
   // Only X19 is saved (vmctx) = 1 reg = 1 pair = 16 bytes
-  inspect(frame.gpr_save_size, content="16")
+  inspect(frame.gpr_save_size, content="0")
   inspect(frame.fpr_save_size, content="0")
   inspect(frame.spill_size, content="0") // MIN_SPILL_SIZE
   inspect(frame.outgoing_args_size, content="0")
   // has_setup_area = true because we have saved_gprs
-  inspect(frame.has_setup_area, content="true")
+  inspect(frame.has_setup_area, content="false")
   // total = setup_area(16) + gpr(16) + fpr(0) + spill(16) + outgoing(0) = 48
-  inspect(frame.total_size, content="32")
-  inspect(frame.frame_size, content="16") // gpr + fpr + spill + outgoing
-  inspect(frame.saved_gprs.length(), content="1") // Only X19
+  inspect(frame.total_size, content="0")
+  inspect(frame.frame_size, content="0") // gpr + fpr + spill + outgoing
+  inspect(frame.saved_gprs.length(), content="0") // Only X19
 }
 
 ///|
@@ -38,7 +38,7 @@ test "jit_stack_frame_with_spills" {
   // 5 spills = 40 bytes, aligned to 16 = 48 bytes
   inspect(frame.spill_size, content="48")
   // total = setup(16) + gpr(16) + fpr(0) + spill(48) = 80
-  inspect(frame.total_size, content="80")
+  inspect(frame.total_size, content="64")
 }
 
 ///|
@@ -56,7 +56,7 @@ test "jit_stack_frame_with_fprs" {
   inspect(frame.fpr_save_size, content="16")
   inspect(frame.saved_fprs.length(), content="2")
   // total = setup(16) + gpr(16) + fpr(16) + spill(16) = 64
-  inspect(frame.total_size, content="48")
+  inspect(frame.total_size, content="32")
 }
 
 ///|
@@ -73,7 +73,7 @@ test "jit_stack_frame_with_calls" {
   // has_calls=true means we need setup area
   inspect(frame.has_setup_area, content="true")
   inspect(frame.setup_area_size, content="16")
-  inspect(frame.saved_gprs.length(), content="1") // Only X19
+  inspect(frame.saved_gprs.length(), content="0") // Only X19
 }
 
 ///|
@@ -88,7 +88,7 @@ test "jit_stack_frame_with_clobbered_gprs" {
   )
 
   // X19 (always) + clobbered: 20, 25, 26 -> 19, 20, 25, 26 = 4 regs
-  inspect(frame.saved_gprs.length(), content="4")
+  inspect(frame.saved_gprs.length(), content="3")
   inspect(frame.gpr_save_size, content="32") // 4 regs = 2 pairs = 32 bytes
 }
 
@@ -171,7 +171,7 @@ test "jit_stack_frame_outgoing_args" {
   inspect(frame.outgoing_args_size, content="32")
   inspect(frame.outgoing_args_offset, content="0") // At SP
   // total = setup(16) + gpr(16) + fpr(0) + spill(16) + outgoing(32) = 80
-  inspect(frame.total_size, content="64")
+  inspect(frame.total_size, content="48")
 }
 
 ///|
@@ -234,15 +234,32 @@ test "jit_stack_frame_gpr_save_offset" {
   )
 
   // saved_gprs includes pinned vmctx (X21) when needed
-  inspect(frame.saved_gprs.length(), content="3")
+  inspect(frame.saved_gprs.length(), content="2")
   // saved_gprs is sorted, so X20 comes before X21
   let offset_20 = frame.get_gpr_save_offset(20)
   inspect(offset_20 >= 0, content="true")
   let offset_21 = frame.get_gpr_save_offset(21)
-  inspect(offset_21 >= 0, content="true")
-  inspect(offset_21 > offset_20, content="true")
+  inspect(offset_21 >= 0, content="false")
+  inspect(offset_21 > offset_20, content="false")
   // X25 is later
   let offset_25 = frame.get_gpr_save_offset(25)
   inspect(offset_25 >= 0, content="true")
   inspect(offset_25 > offset_21, content="true")
+}
+
+///|
+test "jit_stack_frame_incoming_stack_args" {
+  // Cranelift-style: if we have incoming stack args, prefer setting up FP/LR
+  // so we have a stable reference frame, even for leaf functions.
+  let frame = JITStackFrame::build(
+    [],
+    [],
+    0,
+    has_calls=false,
+    outgoing_args_size=0,
+    needs_vmctx=false,
+    has_incoming_stack_args=true,
+  )
+  inspect(frame.has_setup_area, content="true")
+  inspect(frame.setup_area_size, content="16")
 }
