@@ -1,1 +1,1 @@
-{"id":"wasmoon-a05","title":"Fuse cmp+branch to drop compare constants","status":"open","priority":2,"issue_type":"task","created_at":"2026-01-20T18:15:13.44239+08:00","updated_at":"2026-01-20T18:15:13.44239+08:00"}
+{"id":"wasmoon-a05","title":"Fuse cmp+branch to drop compare constants","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-20T18:15:13.44239+08:00","updated_at":"2026-01-20T18:21:28.5596+08:00","closed_at":"2026-01-20T18:21:28.5596+08:00","close_reason":"Closed"}
