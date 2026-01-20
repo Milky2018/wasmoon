@@ -40,7 +40,7 @@ pub fn LoweringContext::new(
 }
 
 ///|
-/// Compute which Icmp results are exclusively used by Select and can be fused.
+/// Compute which Icmp results are exclusively used by Select/branch and can be fused.
 /// This allows lower_icmp to skip emitting redundant Cmp instructions.
 fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
   // Step 1: Count uses of each value
@@ -68,7 +68,7 @@ fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
     }
   }
 
-  // Step 2: Find Icmp results that have exactly one use in a Select
+  // Step 2: Find Icmp results that have exactly one use in a Select or branch
   let fused : @hashset.HashSet[Int] = @hashset.new()
   for block in ir_func.blocks {
     for inst in block.instructions {
@@ -89,6 +89,27 @@ fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
             }
           }
         }
+      }
+    }
+    if block.terminator is Some(term) {
+      match term {
+        @ir.Terminator::Brz(cond, _, _) | @ir.Terminator::Brnz(cond, _, _) => {
+          // Check if the condition is an Icmp result with exactly one use
+          if use_counts.get(cond.id).unwrap_or(0) == 1 {
+            // Find the defining instruction of the condition
+            for b in ir_func.blocks {
+              for i in b.instructions {
+                if i.first_result() is Some(r) && r.id == cond.id {
+                  // Check if it's an Icmp
+                  if i.opcode is @ir.Opcode::Icmp(_) {
+                    fused.add(cond.id)
+                  }
+                }
+              }
+            }
+          }
+        }
+        _ => ()
       }
     }
   }
