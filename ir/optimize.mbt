@@ -1574,10 +1574,17 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
         used.set(op.id, true)
       }
     }
-    // Also count uses in terminator conditions
+    // Also count uses in terminators (excluding jump args; handled by dataflow)
     if block.terminator is Some(term) {
-      for v in get_terminator_uses(term) {
-        used.set(v.id, true)
+      match term {
+        Jump(_, _) => ()
+        Brz(cond, _, _) | Brnz(cond, _, _) => used.set(cond.id, true)
+        BrTable(index, _, _) => used.set(index.id, true)
+        Return(args) =>
+          for v in args {
+            used.set(v.id, true)
+          }
+        Trap(_) => ()
       }
     }
   }
