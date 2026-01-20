@@ -1424,6 +1424,161 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
 }
 
 ///|
+/// Propagate single-use virtual moves within a block.
+/// This reduces redundant copies created by earlier passes.
+fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
+  let use_counts : Map[Int, Int] = {}
+  for inst in block.insts {
+    for use_ in inst.uses {
+      if get_vreg_id(use_) is Some(vid) {
+        let count = use_counts.get(vid).unwrap_or(0)
+        use_counts.set(vid, count + 1)
+      }
+    }
+  }
+  if block.terminator is Some(term) {
+    let term_uses = match term {
+      @instr.VCodeTerminator::Jump(_, args)
+      | @instr.VCodeTerminator::Return(args) => args
+      @instr.VCodeTerminator::Branch(cond, _, _)
+      | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
+      | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
+      @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+      @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+      @instr.VCodeTerminator::Trap(_) => []
+    }
+    for use_ in term_uses {
+      if get_vreg_id(use_) is Some(vid) {
+        let count = use_counts.get(vid).unwrap_or(0)
+        use_counts.set(vid, count + 1)
+      }
+    }
+  }
+
+  fn resolve_copy(
+    reg : @abi.VReg,
+    copies : Map[Int, @abi.VReg],
+  ) -> @abi.VReg {
+    let mut cur = reg
+    while copies.get(cur.id) is Some(next) {
+      if next.id == cur.id {
+        break
+      }
+      cur = next
+    }
+    cur
+  }
+
+  let copies : Map[Int, @abi.VReg] = {}
+  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  fn same_reg_class(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
+    match (a, b) {
+      (Int, Int) | (Float32, Float32) | (Float64, Float64) | (Vector, Vector) =>
+        true
+      _ => false
+    }
+  }
+
+  for i, inst in block.insts {
+    if inst.opcode is Move &&
+      inst.defs.length() == 1 &&
+      inst.uses.length() == 1 {
+      if inst.defs[0].reg is Virtual(dst_vreg) &&
+        inst.uses[0] is Virtual(src_vreg) {
+        if same_reg_class(dst_vreg.class, src_vreg.class) &&
+          use_counts.get(dst_vreg.id).unwrap_or(0) == 1 {
+          let resolved = resolve_copy(src_vreg, copies)
+          copies.set(dst_vreg.id, resolved)
+          to_remove.add(i)
+        }
+      }
+    }
+  }
+
+  let rewrite_reg = fn(reg : @abi.Reg) -> @abi.Reg {
+    match reg {
+      Virtual(v) =>
+        if copies.get(v.id) is Some(target) {
+          Virtual(resolve_copy(target, copies))
+        } else {
+          reg
+        }
+      _ => reg
+    }
+  }
+
+  let new_insts : Array[@instr.VCodeInst] = []
+  for i, inst in block.insts {
+    if to_remove.contains(i) {
+      continue
+    }
+    for u in 0..<inst.uses.length() {
+      inst.uses[u] = rewrite_reg(inst.uses[u])
+    }
+    new_insts.push(inst)
+  }
+  block.insts.clear()
+  for inst in new_insts {
+    block.insts.push(inst)
+  }
+
+  if block.terminator is Some(term) {
+    let new_term = match term {
+      @instr.VCodeTerminator::Jump(target, args) => {
+        let new_args : Array[@abi.Reg] = []
+        for arg in args {
+          new_args.push(rewrite_reg(arg))
+        }
+        @instr.VCodeTerminator::Jump(target, new_args)
+      }
+      @instr.VCodeTerminator::Branch(cond, then_id, else_id) =>
+        @instr.VCodeTerminator::Branch(rewrite_reg(cond), then_id, else_id)
+      @instr.VCodeTerminator::BranchCmp(lhs, rhs, cond, is_64, then_id, else_id) =>
+        @instr.VCodeTerminator::BranchCmp(
+          rewrite_reg(lhs),
+          rewrite_reg(rhs),
+          cond,
+          is_64,
+          then_id,
+          else_id,
+        )
+      @instr.VCodeTerminator::BranchZero(cond, is_nonzero, is_64, then_id, else_id) =>
+        @instr.VCodeTerminator::BranchZero(
+          rewrite_reg(cond),
+          is_nonzero,
+          is_64,
+          then_id,
+          else_id,
+        )
+      @instr.VCodeTerminator::BranchCmpImm(lhs, imm, cond, is_64, then_id, else_id) =>
+        @instr.VCodeTerminator::BranchCmpImm(
+          rewrite_reg(lhs),
+          imm,
+          cond,
+          is_64,
+          then_id,
+          else_id,
+        )
+      @instr.VCodeTerminator::Return(args) => {
+        let new_args : Array[@abi.Reg] = []
+        for arg in args {
+          new_args.push(rewrite_reg(arg))
+        }
+        @instr.VCodeTerminator::Return(new_args)
+      }
+      @instr.VCodeTerminator::BrTable(index, targets, default_id) =>
+        @instr.VCodeTerminator::BrTable(
+          rewrite_reg(index),
+          targets,
+          default_id,
+        )
+      @instr.VCodeTerminator::Trap(msg) => @instr.VCodeTerminator::Trap(msg)
+    }
+    block.set_terminator(new_term)
+  }
+}
+
+///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
@@ -1436,6 +1591,10 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   for block in func.blocks {
     let state = PeepholeState::new()
     optimize_block(block, func, state) |> ignore
+  }
+  // Pass 1.5: Copy propagation for single-use moves
+  for block in func.blocks {
+    propagate_single_use_moves(block)
   }
 
   // Pass 2: In-place update optimization

@@ -19,6 +19,8 @@ struct LoweringContext {
   block_map : Map[Int, Int]
   // Map from IR Value id to stack param index (for params >= 8)
   stack_param_map : Map[Int, (Int, @abi.RegClass)]
+  // Cache of func_table base per VCode block (block-local CSE)
+  func_table_cache : Map[Int, @abi.VReg]
   // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
   fused_icmps : @hashset.HashSet[Int]
   // Use counts for IR values (used to skip unused call results)
@@ -38,6 +40,7 @@ pub fn LoweringContext::new(
     value_map: {},
     block_map: {},
     stack_param_map: {},
+    func_table_cache: {},
     fused_icmps: @hashset.new(),
     use_counts,
   }
