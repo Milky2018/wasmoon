@@ -72,6 +72,8 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->fd_table = NULL;
     ctx->fd_table_size = 0;
     ctx->fd_next = 0;
+    ctx->fd_host_paths = NULL;
+    ctx->fd_is_dir = NULL;
     ctx->preopen_paths = NULL;
     ctx->preopen_guest_paths = NULL;
     ctx->preopen_count = 0;

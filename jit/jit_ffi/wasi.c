@@ -90,6 +90,53 @@ static const char* get_preopen_path(jit_context_t *ctx, int wasi_fd) {
     return ctx->preopen_paths[idx];
 }
 
+static const char* get_open_dir_path(jit_context_t *ctx, int wasi_fd) {
+    if (!ctx->fd_host_paths || !ctx->fd_is_dir) return NULL;
+    if (wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) return NULL;
+    if (!ctx->fd_is_dir[wasi_fd]) return NULL;
+    return ctx->fd_host_paths[wasi_fd];
+}
+
+static int ensure_fd_metadata_arrays(jit_context_t *ctx) {
+    if (ctx->fd_host_paths && ctx->fd_is_dir) return 1;
+    if (!ctx->fd_table || ctx->fd_table_size <= 0) return 0;
+    ctx->fd_host_paths = malloc(ctx->fd_table_size * sizeof(char*));
+    ctx->fd_is_dir = malloc(ctx->fd_table_size * sizeof(uint8_t));
+    if (!ctx->fd_host_paths || !ctx->fd_is_dir) {
+        free(ctx->fd_host_paths);
+        free(ctx->fd_is_dir);
+        ctx->fd_host_paths = NULL;
+        ctx->fd_is_dir = NULL;
+        return 0;
+    }
+    for (int i = 0; i < ctx->fd_table_size; i++) {
+        ctx->fd_host_paths[i] = NULL;
+        ctx->fd_is_dir[i] = 0;
+    }
+    return 1;
+}
+
+static void clear_fd_metadata(jit_context_t *ctx, int wasi_fd) {
+    if (!ctx->fd_host_paths || !ctx->fd_is_dir) return;
+    if (wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) return;
+    if (ctx->fd_host_paths[wasi_fd]) {
+        free(ctx->fd_host_paths[wasi_fd]);
+        ctx->fd_host_paths[wasi_fd] = NULL;
+    }
+    ctx->fd_is_dir[wasi_fd] = 0;
+}
+
+static void set_fd_metadata(jit_context_t *ctx, int wasi_fd, char *host_path, int is_dir) {
+    if (!host_path) return;
+    if (!ctx->fd_host_paths || !ctx->fd_is_dir || wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) {
+        free(host_path);
+        return;
+    }
+    clear_fd_metadata(ctx, wasi_fd);
+    ctx->fd_host_paths[wasi_fd] = host_path;
+    ctx->fd_is_dir[wasi_fd] = is_dir ? 1 : 0;
+}
+
 // Normalize guest path and reject attempts to escape preopen root.
 static char* sanitize_guest_path(const char *path) {
     if (!path) return NULL;
@@ -170,7 +217,10 @@ static int check_mem_range(jit_context_t *ctx, int64_t ptr, size_t len) {
 // Resolve path relative to a directory fd
 static char* resolve_path(jit_context_t *ctx, int dir_fd, const char *path) {
     const char *base = get_preopen_path(ctx, dir_fd);
-    if (!base) return NULL;
+    if (!base) {
+        base = get_open_dir_path(ctx, dir_fd);
+        if (!base) return NULL;
+    }
 
     char *rel = sanitize_guest_path(path);
     if (!rel) return NULL;
@@ -205,13 +255,22 @@ static int alloc_wasi_fd(jit_context_t *ctx, int native_fd) {
         for (int i = 0; i < ctx->fd_table_size; i++) {
             ctx->fd_table[i] = -1;
         }
+        if (!ensure_fd_metadata_arrays(ctx)) {
+            free(ctx->fd_table);
+            ctx->fd_table = NULL;
+            ctx->fd_table_size = 0;
+            return -1;
+        }
         ctx->fd_next = 3 + ctx->preopen_count;
+    } else if (!ctx->fd_host_paths || !ctx->fd_is_dir) {
+        if (!ensure_fd_metadata_arrays(ctx)) return -1;
     }
 
     // Find next available slot
     for (int i = ctx->fd_next; i < ctx->fd_table_size; i++) {
         if (ctx->fd_table[i] < 0) {
             ctx->fd_table[i] = native_fd;
+            clear_fd_metadata(ctx, i);
             ctx->fd_next = i + 1;
             return i;
         }
@@ -219,15 +278,33 @@ static int alloc_wasi_fd(jit_context_t *ctx, int native_fd) {
 
     // Expand table
     int new_size = ctx->fd_table_size * 2;
-    int *new_table = realloc(ctx->fd_table, new_size * sizeof(int));
-    if (!new_table) return -1;
+    int *new_table = malloc(new_size * sizeof(int));
+    char **new_paths = malloc(new_size * sizeof(char*));
+    uint8_t *new_is_dir = malloc(new_size * sizeof(uint8_t));
+    if (!new_table || !new_paths || !new_is_dir) {
+        free(new_table);
+        free(new_paths);
+        free(new_is_dir);
+        return -1;
+    }
+
+    memcpy(new_table, ctx->fd_table, ctx->fd_table_size * sizeof(int));
+    memcpy(new_paths, ctx->fd_host_paths, ctx->fd_table_size * sizeof(char*));
+    memcpy(new_is_dir, ctx->fd_is_dir, ctx->fd_table_size * sizeof(uint8_t));
     for (int i = ctx->fd_table_size; i < new_size; i++) {
         new_table[i] = -1;
+        new_paths[i] = NULL;
+        new_is_dir[i] = 0;
     }
-    int fd = ctx->fd_table_size;
-    new_table[fd] = native_fd;
+    free(ctx->fd_table);
+    free(ctx->fd_host_paths);
+    free(ctx->fd_is_dir);
     ctx->fd_table = new_table;
+    ctx->fd_host_paths = new_paths;
+    ctx->fd_is_dir = new_is_dir;
     ctx->fd_table_size = new_size;
+    int fd = ctx->fd_table_size / 2;
+    ctx->fd_table[fd] = native_fd;
     ctx->fd_next = fd + 1;
     return fd;
 }
@@ -474,6 +551,7 @@ static int64_t wasi_fd_close_impl(
     close(native_fd);
 #endif
     ctx->fd_table[wasi_fd] = -1;
+    clear_fd_metadata(ctx, wasi_fd);
     return WASI_ESUCCESS;
 }
 
@@ -681,15 +759,19 @@ static int64_t wasi_path_open_impl(
     else flags |= O_RDWR;
 
     int native_fd = open(full_path, flags, 0644);
-    free(full_path);
-    if (native_fd < 0) return errno_to_wasi(errno);
+    if (native_fd < 0) {
+        free(full_path);
+        return errno_to_wasi(errno);
+    }
 
     int wasi_fd = alloc_wasi_fd(ctx, native_fd);
     if (wasi_fd < 0) {
         close(native_fd);
+        free(full_path);
         return WASI_EIO;
     }
 
+    set_fd_metadata(ctx, wasi_fd, full_path, (oflags & 0x02) != 0);
     *(int32_t *)(ctx->memory0->base + opened_fd_ptr) = wasi_fd;
     return WASI_ESUCCESS;
 #else
@@ -2085,6 +2167,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds(int64_t ctx_ptr, int preopen_c
         ctx->fd_table[1] = 1;
         ctx->fd_table[2] = 2;
     }
+    if (ctx->fd_table && ensure_fd_metadata_arrays(ctx)) {
+        // keep arrays initialized
+    }
     ctx->fd_next = 3 + preopen_count;
 
     if (preopen_count > 0) {
@@ -2116,6 +2201,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds_quiet(int64_t ctx_ptr, int pre
         ctx->fd_table[1] = 1;
         ctx->fd_table[2] = 2;
 #endif
+    }
+    if (ctx->fd_table && ensure_fd_metadata_arrays(ctx)) {
+        // keep arrays initialized
     }
     ctx->fd_next = 3 + preopen_count;
 
@@ -2229,6 +2317,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const 
             int native_fd = open(host_path, O_RDONLY | O_DIRECTORY);
             if (native_fd >= 0) {
                 ctx->fd_table[wasi_fd] = native_fd;
+                set_fd_metadata(ctx, wasi_fd, strdup(host_path), 1);
             }
         }
     }
@@ -2352,6 +2441,19 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr) {
                 close(ctx->fd_table[i]);
 #endif
             }
+        }
+        if (ctx->fd_host_paths) {
+            for (int i = 0; i < ctx->fd_table_size; i++) {
+                if (ctx->fd_host_paths[i]) {
+                    free(ctx->fd_host_paths[i]);
+                }
+            }
+            free(ctx->fd_host_paths);
+            ctx->fd_host_paths = NULL;
+        }
+        if (ctx->fd_is_dir) {
+            free(ctx->fd_is_dir);
+            ctx->fd_is_dir = NULL;
         }
         free(ctx->fd_table);
         ctx->fd_table = NULL;

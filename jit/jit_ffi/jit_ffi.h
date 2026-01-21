@@ -137,6 +137,10 @@ typedef struct {
     uint8_t *wasi_stderr_buf;     // Captured stderr data
     size_t wasi_stderr_len;       // Captured stderr length
     size_t wasi_stderr_cap;       // Captured stderr capacity
+
+    // WASI open fd metadata (host path + directory flag)
+    char **fd_host_paths;         // Host paths for open fds (owned strings)
+    uint8_t *fd_is_dir;           // 1 if fd is a directory
 } jit_context_t;
 
 // ============ Executable Memory Functions ============
