@@ -425,26 +425,46 @@ test "wasi jit: fd_readdir works on path_open directory" {
 test "wasi jit: path ops accept opened dir fd" {
   let source =
     #|(module
-    #|  (import "wasi_snapshot_preview1" "path_create_directory"
-    #|    (func $path_create_directory (param i32 i32 i32) (result i32)))
-    #|  (import "wasi_snapshot_preview1" "path_remove_directory"
-    #|    (func $path_remove_directory (param i32 i32 i32) (result i32)))
     #|  (import "wasi_snapshot_preview1" "path_open"
     #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
     #|  (memory (export "memory") 1)
-    #|  (data (i32.const 0) "wasmoon_jit_dirfd")
-    #|  (data (i32.const 32) "child")
-    #|  (data (i32.const 64) "wasmoon_jit_dirfd/child")
     #|  (func (export "test") (result i32)
-    #|    (drop (call $path_remove_directory (i32.const 3) (i32.const 64) (i32.const 23)))
-    #|    (drop (call $path_remove_directory (i32.const 3) (i32.const 0) (i32.const 17)))
-    #|    (drop (call $path_create_directory (i32.const 3) (i32.const 0) (i32.const 17)))
     #|    (drop (call $path_open
-    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 17)
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 0)
     #|      (i32.const 2) (i64.const 0) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
-    #|    (call $path_create_directory
-    #|      (i32.load (i32.const 100)) (i32.const 32) (i32.const 5))))
+    #|    (call $path_open
+    #|      (i32.load (i32.const 100)) (i32.const 0) (i32.const 0) (i32.const 0)
+    #|      (i32.const 2) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 120))))
+  inspect(
+    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+}
+
+///|
+test "wasi jit: path_link honors old_flags" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_symlink"
+    #|    (func $path_symlink (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_link"
+    #|    (func $path_link (param i32 i32 i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "missing_target")
+    #|  (data (i32.const 32) "wasmoon_link_symlink")
+    #|  (data (i32.const 64) "wasmoon_link_hard")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 17)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 32) (i32.const 20)))
+    #|    (drop (call $path_symlink
+    #|      (i32.const 0) (i32.const 14) (i32.const 3) (i32.const 32) (i32.const 20)))
+    #|    (call $path_link
+    #|      (i32.const 3) (i32.const 0) (i32.const 32) (i32.const 20)
+    #|      (i32.const 3) (i32.const 64) (i32.const 17))))
   inspect(
     compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
     content="matched",

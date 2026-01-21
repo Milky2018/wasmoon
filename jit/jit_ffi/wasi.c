@@ -1517,13 +1517,13 @@ static int32_t wasi_path_filestat_get_impl(
     if (!check_mem_range(ctx, buf_ptr, 64)) return WASI_EFAULT;
 
 #ifndef _WIN32
-    // Copy path from memory and null-terminate
-    char path_tmp[4096];
-    if (path_len >= (int32_t)sizeof(path_tmp)) return WASI_EINVAL;
+    char *path_tmp = malloc((size_t)path_len + 1);
+    if (!path_tmp) return WASI_EIO;
     memcpy(path_tmp, mem + path_ptr, path_len);
     path_tmp[path_len] = '\0';
 
     char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    free(path_tmp);
     if (!full_path) return WASI_EBADF;
 
     struct stat st;
@@ -1571,13 +1571,13 @@ static int32_t wasi_path_readlink_impl(
     if (!check_mem_range(ctx, bufused_ptr, 4)) return WASI_EFAULT;
 
 #ifndef _WIN32
-    // Copy path from memory and null-terminate
-    char path_tmp[4096];
-    if (path_len >= (int32_t)sizeof(path_tmp)) return WASI_EINVAL;
+    char *path_tmp = malloc((size_t)path_len + 1);
+    if (!path_tmp) return WASI_EIO;
     memcpy(path_tmp, mem + path_ptr, path_len);
     path_tmp[path_len] = '\0';
 
     char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    free(path_tmp);
     if (!full_path) return WASI_EBADF;
 
     ssize_t n = readlink(full_path, (char *)(mem + buf_ptr), buf_len);
@@ -1604,23 +1604,28 @@ static int32_t wasi_path_symlink_impl(
     if (!check_mem_range(ctx, new_path_ptr, (size_t)new_path_len)) return WASI_EFAULT;
 
 #ifndef _WIN32
-    // Get the target (old_path) - this is the content of the symlink
-    char old_path[4096];
-    if (old_path_len >= (int32_t)sizeof(old_path)) return WASI_EINVAL;
+    char *old_path = malloc((size_t)old_path_len + 1);
+    if (!old_path) return WASI_EIO;
     memcpy(old_path, mem + old_path_ptr, old_path_len);
     old_path[old_path_len] = '\0';
 
-    // Copy new path from memory and null-terminate
-    char new_path_tmp[4096];
-    if (new_path_len >= (int32_t)sizeof(new_path_tmp)) return WASI_EINVAL;
+    char *new_path_tmp = malloc((size_t)new_path_len + 1);
+    if (!new_path_tmp) {
+        free(old_path);
+        return WASI_EIO;
+    }
     memcpy(new_path_tmp, mem + new_path_ptr, new_path_len);
     new_path_tmp[new_path_len] = '\0';
 
-    // Resolve the new path (where to create the symlink)
     char *full_new_path = resolve_path(ctx, dir_fd, new_path_tmp);
-    if (!full_new_path) return WASI_EBADF;
+    free(new_path_tmp);
+    if (!full_new_path) {
+        free(old_path);
+        return WASI_EBADF;
+    }
 
     int result = symlink(old_path, full_new_path);
+    free(old_path);
     free(full_new_path);
     if (result != 0) {
         return errno_to_wasi(errno);
@@ -1638,7 +1643,6 @@ static int32_t wasi_path_link_impl(
     int32_t old_path_ptr, int32_t old_path_len,
     int32_t new_fd, int32_t new_path_ptr, int32_t new_path_len
 ) {
-    (void)old_flags;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     uint8_t *mem = ctx->memory0->base;
     if (old_path_len < 0 || new_path_len < 0) return WASI_EFAULT;
@@ -1646,28 +1650,35 @@ static int32_t wasi_path_link_impl(
     if (!check_mem_range(ctx, new_path_ptr, (size_t)new_path_len)) return WASI_EFAULT;
 
 #ifndef _WIN32
-    // Copy old path from memory and null-terminate
-    char old_path_tmp[4096];
-    if (old_path_len >= (int32_t)sizeof(old_path_tmp)) return WASI_EINVAL;
+    char *old_path_tmp = malloc((size_t)old_path_len + 1);
+    if (!old_path_tmp) return WASI_EIO;
     memcpy(old_path_tmp, mem + old_path_ptr, old_path_len);
     old_path_tmp[old_path_len] = '\0';
 
-    // Copy new path from memory and null-terminate
-    char new_path_tmp[4096];
-    if (new_path_len >= (int32_t)sizeof(new_path_tmp)) return WASI_EINVAL;
+    char *new_path_tmp = malloc((size_t)new_path_len + 1);
+    if (!new_path_tmp) {
+        free(old_path_tmp);
+        return WASI_EIO;
+    }
     memcpy(new_path_tmp, mem + new_path_ptr, new_path_len);
     new_path_tmp[new_path_len] = '\0';
 
     char *full_old_path = resolve_path(ctx, old_fd, old_path_tmp);
-    if (!full_old_path) return WASI_EBADF;
+    free(old_path_tmp);
+    if (!full_old_path) {
+        free(new_path_tmp);
+        return WASI_EBADF;
+    }
 
     char *full_new_path = resolve_path(ctx, new_fd, new_path_tmp);
+    free(new_path_tmp);
     if (!full_new_path) {
         free(full_old_path);
         return WASI_EBADF;
     }
 
-    int result = link(full_old_path, full_new_path);
+    int flags = (old_flags & 0x01) ? AT_SYMLINK_FOLLOW : 0;
+    int result = linkat(AT_FDCWD, full_old_path, AT_FDCWD, full_new_path, flags);
     free(full_old_path);
     free(full_new_path);
     if (result != 0) {
@@ -1739,13 +1750,13 @@ static int32_t wasi_path_filestat_set_times_impl(
     if (!check_mem_range(ctx, path_ptr, (size_t)path_len)) return WASI_EFAULT;
 
 #ifndef _WIN32
-    // Copy path from memory and null-terminate
-    char path_tmp[4096];
-    if (path_len >= (int32_t)sizeof(path_tmp)) return WASI_EINVAL;
+    char *path_tmp = malloc((size_t)path_len + 1);
+    if (!path_tmp) return WASI_EIO;
     memcpy(path_tmp, mem + path_ptr, path_len);
     path_tmp[path_len] = '\0';
 
     char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    free(path_tmp);
     if (!full_path) return WASI_EBADF;
 
     struct timespec times[2];
