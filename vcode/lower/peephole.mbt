@@ -1946,14 +1946,22 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
             }
           }
           if cond_uses == 0 {
-            let last_idx = blk.insts.length() - 1
-            let last = blk.insts[last_idx]
-            if last.opcode is Cmp(kind, is_64) &&
-              last.defs.length() == 1 &&
-              last.uses.length() == 2 &&
-              get_def_vreg_id(last.defs[0]) == Some(cond_vreg.id) {
-              let lhs = last.uses[0]
-              let rhs = last.uses[1]
+            let mut cmp_idx : Int? = None
+            let mut cmp_inst : @instr.VCodeInst? = None
+            for i, inst in blk.insts {
+              if inst.defs.length() == 1 &&
+                get_def_vreg_id(inst.defs[0]) == Some(cond_vreg.id) {
+                cmp_idx = Some(i)
+                cmp_inst = Some(inst)
+                break
+              }
+            }
+            if cmp_idx is Some(idx) && cmp_inst is Some(cmp) &&
+              cmp.opcode is Cmp(kind, is_64) &&
+              cmp.defs.length() == 1 &&
+              cmp.uses.length() == 2 {
+              let lhs = cmp.uses[0]
+              let rhs = cmp.uses[1]
               let cond = cmp_kind_to_cond(kind)
               let new_term = if rhs is Virtual(rhs_vreg) &&
                 const_defs.get(rhs_vreg.id) is Some(val) &&
@@ -1972,8 +1980,10 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
                 )
               }
               let new_insts : Array[@instr.VCodeInst] = []
-              for i in 0..<last_idx {
-                new_insts.push(blk.insts[i])
+              for i, inst in blk.insts {
+                if i != idx {
+                  new_insts.push(inst)
+                }
               }
               blk.insts.clear()
               for inst in new_insts {
