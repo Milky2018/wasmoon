@@ -2003,6 +2003,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr) {
 
     // Close all open fds (except stdio)
     if (ctx->fd_table) {
+#ifndef _WIN32
+        int fd1 = ctx->fd_table[1];
+        int fd2 = ctx->fd_table[2];
+        if (fd1 > 2) close(fd1);
+        if (fd2 > 2 && fd2 != fd1) close(fd2);
+#endif
         for (int i = 3; i < ctx->fd_table_size; i++) {
             if (ctx->fd_table[i] >= 0 && !is_preopen_fd(ctx, i)) {
 #ifndef _WIN32
