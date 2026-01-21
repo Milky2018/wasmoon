@@ -68,6 +68,15 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->wasm_stack_guard = NULL;
     ctx->guard_page_size = 0;
 
+    // WASI fd/preopen state (init_wasi_* may not be called for some contexts)
+    ctx->fd_table = NULL;
+    ctx->fd_table_size = 0;
+    ctx->fd_next = 0;
+    ctx->preopen_paths = NULL;
+    ctx->preopen_guest_paths = NULL;
+    ctx->preopen_count = 0;
+    ctx->preopen_base_fd = 0;
+
     // WASI stdio buffers (disabled by default)
     ctx->wasi_stdin_use_buffer = 0;
     ctx->wasi_stdin_buf = NULL;
