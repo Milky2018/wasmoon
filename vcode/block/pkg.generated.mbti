@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode/block"
 
-import(
-  "Milky2018/wasmoon/vcode/abi"
-  "Milky2018/wasmoon/vcode/instr"
-)
+import {
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/instr",
+}
 
 // Values
 

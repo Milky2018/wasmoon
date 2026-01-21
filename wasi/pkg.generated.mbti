@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/wasi"
 
-import(
-  "Milky2018/wasmoon/runtime"
-  "moonbitlang/core/hashmap"
-)
+import {
+  "Milky2018/wasmoon/runtime",
+  "moonbitlang/core/hashmap",
+}
 
 // Values
 pub const AT_REMOVEDIR : Int = 0x200

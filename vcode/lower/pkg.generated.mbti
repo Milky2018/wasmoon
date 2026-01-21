@@ -1,13 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode/lower"
 
-import(
-  "Milky2018/wasmoon/ir"
-  "Milky2018/wasmoon/vcode/abi"
-  "Milky2018/wasmoon/vcode/block"
-  "Milky2018/wasmoon/vcode/instr"
-  "Milky2018/wasmoon/vcode/regalloc"
-)
+import {
+  "Milky2018/wasmoon/ir",
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/block",
+  "Milky2018/wasmoon/vcode/instr",
+  "Milky2018/wasmoon/vcode/regalloc",
+}
 
 // Values
 pub fn apply_aarch64_rule(String, MatchResult, @ir.Inst, LoweringContext) -> AArch64RewriteResult

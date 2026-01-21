@@ -1,13 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode"
 
-import(
-  "Milky2018/wasmoon/vcode/abi"
-  "Milky2018/wasmoon/vcode/block"
-  "Milky2018/wasmoon/vcode/emit"
-  "Milky2018/wasmoon/vcode/instr"
-  "Milky2018/wasmoon/vcode/regalloc"
-)
+import {
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/block",
+  "Milky2018/wasmoon/vcode/emit",
+  "Milky2018/wasmoon/vcode/instr",
+  "Milky2018/wasmoon/vcode/regalloc",
+}
 
 // Values
 pub fn dump_regalloc(String, @regalloc.LivenessResult, @regalloc.RegAllocResult) -> Unit

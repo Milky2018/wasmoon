@@ -1,12 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/testsuite"
 
-import(
-  "Milky2018/wasmoon/jit"
-  "Milky2018/wasmoon/runtime"
-  "Milky2018/wasmoon/types"
-  "moonbitlang/core/json"
-)
+import {
+  "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/types",
+  "moonbitlang/core/json",
+}
 
 // Values
 pub fn compare_jit_interp(String, String, Array[@types.Value]) -> CompareResult

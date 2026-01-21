@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/cwasm"
 
-import(
-  "Milky2018/wasmoon/types"
-  "Milky2018/wasmoon/vcode"
-  "Milky2018/wasmoon/vcode/emit"
-)
+import {
+  "Milky2018/wasmoon/types",
+  "Milky2018/wasmoon/vcode",
+  "Milky2018/wasmoon/vcode/emit",
+}
 
 // Values
 pub fn deserialize(Array[Int]) -> PrecompiledModule raise DeserializeError

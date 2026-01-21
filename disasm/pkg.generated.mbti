@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/disasm"
 
-import(
-  "Milky2018/wasmoon/types"
-)
+import {
+  "Milky2018/wasmoon/types",
+}
 
 // Values
 pub fn disassemble(@types.Module) -> String
