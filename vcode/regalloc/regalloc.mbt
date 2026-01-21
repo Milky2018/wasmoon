@@ -2019,6 +2019,69 @@ pub fn apply_allocation(
       new_block.set_terminator(new_term)
     }
   }
+  eliminate_trivial_moves(new_func)
+}
+
+///|
+/// Remove redundant Move instructions where source and destination alias.
+fn eliminate_trivial_moves(func : VCodeFunction) -> VCodeFunction {
+  fn same_location(a : @abi.PReg, b : @abi.PReg) -> Bool {
+    let same_bank = match (a.class, b.class) {
+      (@abi.Int, @abi.Int) => true
+      (
+        @abi.Float32
+        | @abi.Float64
+        | @abi.Vector,
+        @abi.Float32
+        | @abi.Float64
+        | @abi.Vector,
+      ) => true
+      _ => false
+    }
+    a.index == b.index && same_bank
+  }
+
+  let new_func = func.clone_base()
+  new_func.set_num_spill_slots(func.num_spill_slots)
+  for param in func.params {
+    new_func.params.push(param)
+  }
+  for preg in func.param_pregs {
+    new_func.param_pregs.push(preg)
+  }
+  for result in func.results {
+    new_func.results.push(result)
+  }
+  for ty in func.result_types {
+    new_func.result_types.push(ty)
+  }
+
+  for block in func.blocks {
+    let new_block = new_func.new_block()
+    for param in block.params {
+      new_block.params.push(param)
+    }
+    for inst in block.insts {
+      let mut skip = false
+      if inst.opcode is @instr.Move &&
+        inst.defs.length() == 1 &&
+        inst.uses.length() == 1 {
+        match (inst.defs[0].reg, inst.uses[0]) {
+          (@abi.Physical(dst), @abi.Physical(src)) =>
+            if same_location(src, dst) {
+              skip = true
+            }
+          _ => ()
+        }
+      }
+      if !skip {
+        new_block.add_inst(inst)
+      }
+    }
+    if block.terminator is Some(term) {
+      new_block.set_terminator(term)
+    }
+  }
   new_func
 }
 
