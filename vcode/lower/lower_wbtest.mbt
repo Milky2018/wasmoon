@@ -1137,7 +1137,6 @@ test "br_table with block arguments from WAT" {
       #|    jump block1 (v1, v6)
       #|}
       #|
-
     ),
   )
 }

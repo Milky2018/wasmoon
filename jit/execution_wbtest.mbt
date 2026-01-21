@@ -340,7 +340,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    br_cmp_imm.eq v1, #2, block7, block8
       #|}
       #|
-
     ),
   )
   let allocated_func = @regalloc.allocate_registers_backtracking(vcode_func)
@@ -385,7 +384,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    br_cmp_imm.eq x1, #2, block7, block8
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)

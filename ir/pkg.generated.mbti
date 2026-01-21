@@ -45,6 +45,8 @@ pub fn eliminate_common_subexpressions(Function) -> OptResult
 
 pub fn eliminate_common_subexpressions_global(Function) -> OptResult
 
+pub fn eliminate_constant_block_params(Function) -> OptResult
+
 pub fn eliminate_dead_block_params(Function) -> OptResult
 
 pub fn eliminate_dead_code(Function) -> OptResult
@@ -792,6 +794,7 @@ pub struct OptResult {
 }
 pub fn OptResult::mark_changed(Self) -> Unit
 pub fn OptResult::new() -> Self
+pub impl Eq for OptResult
 
 type RepKey
 pub impl Eq for RepKey

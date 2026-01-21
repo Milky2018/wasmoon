@@ -97,7 +97,6 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    br_cmp_imm.eq v1, #1, block5, block6
       #|}
       #|
-
     ),
   )
   let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
@@ -127,7 +126,6 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    br_cmp_imm.eq x1, #1, block5, block6
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)

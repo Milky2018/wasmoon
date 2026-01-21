@@ -1759,7 +1759,10 @@ pub fn apply_allocation(
               a.index == b.index
             }
 
-            fn inst_uses_preg(inst : @instr.VCodeInst, preg : @abi.PReg) -> Bool {
+            fn inst_uses_preg(
+              inst : @instr.VCodeInst,
+              preg : @abi.PReg,
+            ) -> Bool {
               for def in inst.defs {
                 if def.reg is @abi.Physical(p) && same_preg(p, preg) {
                   return true
@@ -1829,7 +1832,6 @@ pub fn apply_allocation(
                   !same_preg(mv_i.to, mv_j.from) {
                   continue
                 }
-
                 fn try_rewrite_move(
                   move_idx : Int,
                   moves : Array[RegMove],
@@ -1851,7 +1853,8 @@ pub fn apply_allocation(
                   if rewritten.contains(vreg_id) {
                     return false
                   }
-                  guard jump_arg_candidates.get(vreg_id) is Some((def_idx, def_pos)) else {
+                  guard jump_arg_candidates.get(vreg_id)
+                    is Some((def_idx, def_pos)) else {
                     return false
                   }
                   guard alloc.assignments.get(vreg_id) is Some(assigned_preg) else {
@@ -1869,7 +1872,8 @@ pub fn apply_allocation(
                   if new_inst.defs.length() != 1 {
                     return false
                   }
-                  guard pick_scratch_reg(new_block, def_new_idx) is Some(scratch_preg) else {
+                  guard pick_scratch_reg(new_block, def_new_idx)
+                    is Some(scratch_preg) else {
                     return false
                   }
                   new_inst.defs[def_pos] = { reg: @abi.Physical(scratch_preg) }
@@ -1883,26 +1887,13 @@ pub fn apply_allocation(
                 }
 
                 if try_rewrite_move(
-                  i,
-                  moves,
-                  move_src_vregs,
-                  jump_arg_candidates,
-                  jump_arg_counts,
-                  alloc,
-                  orig_inst_to_new_idx,
-                  new_block,
-                  rewritten,
-                ) || try_rewrite_move(
-                  j,
-                  moves,
-                  move_src_vregs,
-                  jump_arg_candidates,
-                  jump_arg_counts,
-                  alloc,
-                  orig_inst_to_new_idx,
-                  new_block,
-                  rewritten,
-                ) {
+                    i, moves, move_src_vregs, jump_arg_candidates, jump_arg_counts,
+                    alloc, orig_inst_to_new_idx, new_block, rewritten,
+                  ) ||
+                  try_rewrite_move(
+                    j, moves, move_src_vregs, jump_arg_candidates, jump_arg_counts,
+                    alloc, orig_inst_to_new_idx, new_block, rewritten,
+                  ) {
                   broke_cycle = true
                   break
                 }
@@ -2055,7 +2046,6 @@ fn eliminate_trivial_moves(func : VCodeFunction) -> VCodeFunction {
   for ty in func.result_types {
     new_func.result_types.push(ty)
   }
-
   for block in func.blocks {
     let new_block = new_func.new_block()
     for param in block.params {

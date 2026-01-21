@@ -1513,6 +1513,7 @@ fn PhiAbstractValue::join(
 }
 
 ///|
+
 ///|
 fn build_value_map(func : Function) -> @hashmap.HashMap[Int, Value] {
   let values : @hashmap.HashMap[Int, Value] = @hashmap.new()
@@ -1573,12 +1574,10 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
     return result
   }
   let entry_id = rpo[0]
-
   let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
-
   let state : @hashmap.HashMap[Int, PhiAbstractValue] = @hashmap.new()
   let mut has_params = false
   for block in func.blocks {
@@ -1594,7 +1593,6 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
   if !has_params {
     return result
   }
-
   let mut changed = true
   let mut iterations = 0
   let max_iterations = 512
@@ -1617,7 +1615,11 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
           }
           let param_count = target_block.params.length()
           let arg_count = args.length()
-          let count = if param_count < arg_count { param_count } else { arg_count }
+          let count = if param_count < arg_count {
+            param_count
+          } else {
+            arg_count
+          }
           for i in 0..<count {
             let (formal, _) = target_block.params[i]
             if state.get(formal.id) is None {
@@ -1628,7 +1630,9 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
               Some(absval) => absval
               None => PhiAbstractValue::One(actual.id)
             }
-            let old_absval = state.get(formal.id).unwrap_or(PhiAbstractValue::None)
+            let old_absval = state
+              .get(formal.id)
+              .unwrap_or(PhiAbstractValue::None)
             let new_absval = old_absval.join(actual_absval)
             if new_absval != old_absval {
               state.set(formal.id, new_absval)
@@ -1640,7 +1644,6 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
       }
     }
   }
-
   let params_to_keep : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
   let replace_map : @hashmap.HashMap[Int, Int] = @hashmap.new()
   let mut will_change = false
@@ -1661,7 +1664,6 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
   if !will_change {
     return result
   }
-
   for block in func.blocks {
     let keep = params_to_keep.get(block.id).unwrap_or([])
     if keep.length() != block.params.length() {
@@ -1673,7 +1675,6 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
       result.mark_changed()
     }
   }
-
   for block in func.blocks {
     match block.terminator {
       Some(Jump(target, args)) => {
@@ -1692,7 +1693,6 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
       _ => ()
     }
   }
-
   let value_map = build_value_map(func)
   for block in func.blocks {
     for inst in block.instructions {
@@ -1733,24 +1733,27 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
         Brz(cond, then_target, else_target) => {
           let resolved = resolve_replacement(cond, replace_map, value_map)
           if resolved.id != cond.id {
-            block.terminator =
-              Some(Terminator::Brz(resolved, then_target, else_target))
+            block.terminator = Some(
+              Terminator::Brz(resolved, then_target, else_target),
+            )
             result.mark_changed()
           }
         }
         Brnz(cond, then_target, else_target) => {
           let resolved = resolve_replacement(cond, replace_map, value_map)
           if resolved.id != cond.id {
-            block.terminator =
-              Some(Terminator::Brnz(resolved, then_target, else_target))
+            block.terminator = Some(
+              Terminator::Brnz(resolved, then_target, else_target),
+            )
             result.mark_changed()
           }
         }
         BrTable(index, targets, default_target) => {
           let resolved = resolve_replacement(index, replace_map, value_map)
           if resolved.id != index.id {
-            block.terminator =
-              Some(Terminator::BrTable(resolved, targets, default_target))
+            block.terminator = Some(
+              Terminator::BrTable(resolved, targets, default_target),
+            )
             result.mark_changed()
           }
         }
@@ -1773,7 +1776,6 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
       }
     }
   }
-
   result
 }
 

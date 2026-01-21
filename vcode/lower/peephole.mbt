@@ -1642,7 +1642,7 @@ fn propagate_single_use_moves(
         if same_reg_class(dst_vreg.class, src_vreg.class) &&
           use_counts.get(dst_vreg.id).unwrap_or(0) == 1 &&
           global_use_counts.get(dst_vreg.id).unwrap_or(0) ==
-            use_counts.get(dst_vreg.id).unwrap_or(0) {
+          use_counts.get(dst_vreg.id).unwrap_or(0) {
           let resolved = resolve_copy(src_vreg, copies)
           copies.set(dst_vreg.id, resolved)
           to_remove.add(i)
@@ -1956,7 +1956,8 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
                 break
               }
             }
-            if cmp_idx is Some(idx) && cmp_inst is Some(cmp) &&
+            if cmp_idx is Some(idx) &&
+              cmp_inst is Some(cmp) &&
               cmp.opcode is Cmp(kind, is_64) &&
               cmp.defs.length() == 1 &&
               cmp.uses.length() == 2 {

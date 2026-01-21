@@ -52,7 +52,11 @@ fn init_jit_globals(
         match store_addr_to_module_func_idx(store_addr, instance) {
           Some(func_idx) => {
             let func_ptr = jit_module.get_func_ptr(func_idx)
-            if func_ptr == 0L { @types.NULL_REF } else { @jit.tag_funcref_ptr(func_ptr) }
+            if func_ptr == 0L {
+              @types.NULL_REF
+            } else {
+              @jit.tag_funcref_ptr(func_ptr)
+            }
           }
           None => @types.NULL_REF
         }
