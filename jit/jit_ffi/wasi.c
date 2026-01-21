@@ -78,21 +78,99 @@ static const char* get_preopen_path(jit_context_t *ctx, int wasi_fd) {
     return ctx->preopen_paths[idx];
 }
 
+// Normalize guest path and reject attempts to escape preopen root.
+static char* sanitize_guest_path(const char *path) {
+    if (!path) return NULL;
+    if (path[0] == '\0') return strdup("");
+    if (path[0] == '/') return NULL;
+
+    size_t len = strlen(path);
+    char *scratch = strdup(path);
+    if (!scratch) return NULL;
+    char **stack = malloc((len + 1) * sizeof(char *));
+    if (!stack) {
+        free(scratch);
+        return NULL;
+    }
+
+    size_t sp = 0;
+    char *p = scratch;
+    while (1) {
+        char *seg = p;
+        while (*p != '/' && *p != '\0') p++;
+        char term = *p;
+        *p = '\0';
+
+        if (seg[0] != '\0' && strcmp(seg, ".") != 0) {
+            if (strcmp(seg, "..") == 0) {
+                if (sp == 0) {
+                    free(stack);
+                    free(scratch);
+                    return NULL;
+                }
+                sp--;
+            } else {
+                stack[sp++] = seg;
+            }
+        }
+        if (term == '\0') break;
+        p++;
+    }
+
+    size_t out_len = 0;
+    for (size_t i = 0; i < sp; i++) {
+        out_len += strlen(stack[i]);
+        if (i > 0) out_len += 1;
+    }
+    char *out = malloc(out_len + 1);
+    if (!out) {
+        free(stack);
+        free(scratch);
+        return NULL;
+    }
+
+    char *cursor = out;
+    for (size_t i = 0; i < sp; i++) {
+        if (i > 0) {
+            *cursor++ = '/';
+        }
+        size_t seg_len = strlen(stack[i]);
+        memcpy(cursor, stack[i], seg_len);
+        cursor += seg_len;
+    }
+    *cursor = '\0';
+
+    free(stack);
+    free(scratch);
+    return out;
+}
+
 // Resolve path relative to a directory fd
 static char* resolve_path(jit_context_t *ctx, int dir_fd, const char *path) {
     const char *base = get_preopen_path(ctx, dir_fd);
     if (!base) return NULL;
 
+    char *rel = sanitize_guest_path(path);
+    if (!rel) return NULL;
+    if (rel[0] == '\0') {
+        free(rel);
+        return strdup(base);
+    }
+
     size_t base_len = strlen(base);
-    size_t path_len = strlen(path);
-    char *result = malloc(base_len + path_len + 2);
-    if (!result) return NULL;
+    size_t rel_len = strlen(rel);
+    char *result = malloc(base_len + rel_len + 2);
+    if (!result) {
+        free(rel);
+        return NULL;
+    }
 
     strcpy(result, base);
-    if (base_len > 0 && base[base_len-1] != '/') {
+    if (base_len > 0 && base[base_len - 1] != '/') {
         strcat(result, "/");
     }
-    strcat(result, path);
+    strcat(result, rel);
+    free(rel);
     return result;
 }
 
