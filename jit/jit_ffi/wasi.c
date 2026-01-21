@@ -19,6 +19,12 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <sched.h>
+#ifdef __linux__
+#include <sys/random.h>
+#endif
+#else
+#include <windows.h>
+#include <bcrypt.h>
 #endif
 
 #include "moonbit.h"
@@ -240,6 +246,39 @@ static int errno_to_wasi(int err) {
         default: return WASI_EIO;
     }
 }
+
+#ifndef _WIN32
+static int fill_random_bytes(uint8_t *buf, size_t len) {
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    arc4random_buf(buf, len);
+    return 1;
+#elif defined(__linux__)
+    ssize_t n = getrandom(buf, len, 0);
+    if (n == (ssize_t)len) return 1;
+#endif
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) return 0;
+    size_t off = 0;
+    while (off < len) {
+        ssize_t n = read(fd, buf + off, len - off);
+        if (n <= 0) {
+            close(fd);
+            return 0;
+        }
+        off += (size_t)n;
+    }
+    close(fd);
+    return 1;
+}
+#else
+static int fill_random_bytes(uint8_t *buf, size_t len) {
+    if (len == 0) return 1;
+    NTSTATUS status = BCryptGenRandom(
+        NULL, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG
+    );
+    return status == 0;
+}
+#endif
 
 #ifndef _WIN32
 // Convert stat mode to WASI filetype
@@ -952,9 +991,8 @@ static int64_t wasi_random_get_impl(
     }
 
     uint8_t *mem = ctx->memory0->base;
-    for (int64_t i = 0; i < buf_len; i++) {
-        mem[buf_ptr + i] = (uint8_t)(rand() & 0xFF);
-    }
+    if (buf_len == 0) return WASI_ESUCCESS;
+    if (!fill_random_bytes(mem + buf_ptr, (size_t)buf_len)) return WASI_EIO;
     return WASI_ESUCCESS;
 }
 
