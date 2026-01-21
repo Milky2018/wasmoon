@@ -489,6 +489,24 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
       }
     }
   }
+  if block.terminator is Some(term) {
+    let term_uses = match term {
+      @instr.VCodeTerminator::Jump(_, args)
+      | @instr.VCodeTerminator::Return(args) => args
+      @instr.VCodeTerminator::Branch(cond, _, _)
+      | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
+      | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
+      @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+      @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+      @instr.VCodeTerminator::Trap(_) => []
+    }
+    for use_ in term_uses {
+      if get_vreg_id(use_) is Some(use_id) {
+        let count = use_count.get(use_id).unwrap_or(0)
+        use_count.set(use_id, count + 1)
+      }
+    }
+  }
 
   // Look for patterns: vA = op ... vB ...; vB = mov vA
   // where vA is only used by the mov AND vB is not used between def and mov
@@ -880,7 +898,8 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
   let to_replace : Array[(Int, @instr.VCodeInst)] = []
   for i, inst in block.insts {
     match inst.opcode {
-      StorePtrNarrow(bits, offset) =>
+      StorePtrNarrow(bits, offset) => {
+        store_map.clear()
         if inst.uses.length() >= 2 {
           if get_vreg_id(inst.uses[0]) is Some(base) &&
             get_vreg_id(inst.uses[1]) is Some(val) {
@@ -888,6 +907,7 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
             store_map.set(key, val)
           }
         }
+      }
       LoadPtrNarrow(bits, signed, offset) =>
         if inst.uses.length() >= 1 && inst.defs.length() >= 1 {
           if get_vreg_id(inst.uses[0]) is Some(base) {
