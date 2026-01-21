@@ -123,12 +123,7 @@ fn lower_wasm_call_common(
     index: @abi.REG_CALLEE_VMCTX,
     class: @abi.Int,
   }
-  let callee_vmctx = ctx.vcode_func.new_vreg(@abi.Int)
-  let copy_vmctx = @instr.VCodeInst::new(Move)
-  copy_vmctx.add_def_fixed({ reg: Virtual(callee_vmctx) }, vmctx_arg_preg)
-  copy_vmctx.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_vmctx)
-  call_inst.add_use_fixed(Virtual(callee_vmctx), vmctx_arg_preg)
+  call_inst.add_use_fixed(Physical(vmctx_preg), vmctx_arg_preg)
 
   // Register int args: X1-X7
   let int_reg_count = if int_args.length() < max_int_reg_args {
@@ -266,15 +261,6 @@ fn lower_return_call(
 
   // Get pinned vmctx.
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
-  // Copy vmctx into a vreg so regalloc will insert the move to X0.
-  let callee_vmctx = ctx.vcode_func.new_vreg(Int)
-  let copy_vmctx = @instr.VCodeInst::new(Move)
-  copy_vmctx.add_def_fixed({ reg: Virtual(callee_vmctx) }, @abi.PReg::{
-    index: @abi.REG_CALLEE_VMCTX,
-    class: @abi.Int,
-  })
-  copy_vmctx.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_vmctx)
 
   // Classify user arguments by type
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -302,7 +288,7 @@ fn lower_return_call(
   })
 
   // vmctx constrained to X0
-  call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
     index: 0,
     class: @abi.Int,
   })
@@ -433,12 +419,6 @@ fn lower_return_call_indirect(
 
   // Get pinned vmctx.
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
-  // Copy vmctx into a vreg so regalloc will insert moves for fixed-reg constraints.
-  let callee_vmctx = ctx.vcode_func.new_vreg(Int)
-  let copy_vmctx = @instr.VCodeInst::new(Move)
-  copy_vmctx.add_def({ reg: Virtual(callee_vmctx) })
-  copy_vmctx.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_vmctx)
 
   // Classify user arguments (skip first operand which is elem_idx)
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -464,7 +444,7 @@ fn lower_return_call_indirect(
   })
 
   // vmctx -> X0
-  call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
     index: 0,
     class: @abi.Int,
   })
@@ -528,12 +508,6 @@ fn lower_return_call_ref(
 
   // Get vmctx
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
-  // Copy vmctx into vregs so regalloc will insert moves for fixed-reg constraints
-  let callee_vmctx = ctx.vcode_func.new_vreg(Int)
-  let copy_callee = @instr.VCodeInst::new(Move)
-  copy_callee.add_def({ reg: Virtual(callee_vmctx) })
-  copy_callee.add_use(Physical(vmctx_preg))
-  block.add_inst(copy_callee)
 
   // Classify user arguments (skip first operand which is func_ref)
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -559,7 +533,7 @@ fn lower_return_call_ref(
   })
 
   // vmctx -> X0
-  call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
+  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
     index: 0,
     class: @abi.Int,
   })

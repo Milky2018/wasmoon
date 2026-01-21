@@ -1102,6 +1102,14 @@ pub fn process_constraints(
                   })
                 }
             }
+          } else if use_reg is @abi.Physical(preg) {
+            if preg.index != required_preg.index {
+              edits.before.push({
+                from: preg,
+                to: required_preg,
+                class: preg.class,
+              })
+            }
           }
         }
       }
@@ -1509,7 +1517,20 @@ pub fn apply_allocation(
                   }
                 }
             }
-          @abi.Physical(_) => new_inst.add_use(use_reg)
+          @abi.Physical(preg) => {
+            let fixed_preg_opt = if i < inst.use_constraints.length() {
+              match inst.use_constraints[i] {
+                @abi.FixedReg(fixed_preg) => Some(fixed_preg)
+                _ => None
+              }
+            } else {
+              None
+            }
+            match fixed_preg_opt {
+              Some(fixed_preg) => new_inst.add_use(@abi.Physical(fixed_preg))
+              None => new_inst.add_use(@abi.Physical(preg))
+            }
+          }
         }
       }
 
