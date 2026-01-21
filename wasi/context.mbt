@@ -330,11 +330,7 @@ fn sanitize_guest_path(path : String) -> String? {
   let mut i = 0
   while i <= path.length() {
     if i == path.length() || path.code_unit_at(i) == '/' {
-      let seg = if i == start {
-        ""
-      } else {
-        try! path[start:i].to_string()
-      }
+      let seg = if i == start { "" } else { try! path[start:i].to_string() }
       if seg == "" || seg == "." {
         ()
       } else if seg == ".." {

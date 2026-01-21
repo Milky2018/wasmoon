@@ -221,8 +221,6 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_frame_lr = 0;
         g_trap_brk_imm = -1;
         g_trap_func_idx = -1;
-        g_trap_wasm_stack_base = 0;
-        g_trap_wasm_stack_top = 0;
         if (ctx) {
             g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
             // Save WASM stack bounds for frame walking validation
@@ -345,8 +343,6 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_fault_addr = (uintptr_t)fault_addr;
         g_trap_brk_imm = -1;
         g_trap_func_idx = -1;
-        g_trap_wasm_stack_base = 0;
-        g_trap_wasm_stack_top = 0;
         if (ctx) {
             g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
             // Save WASM stack bounds for frame walking validation

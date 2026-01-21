@@ -14,6 +14,7 @@ pub suberror JITTrap {
   JITExit(Int)
 } derive(Show)
 
+///|
 let wasi_exit_trap_code : Int = 100
 
 ///|
