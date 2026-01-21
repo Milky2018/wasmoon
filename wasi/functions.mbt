@@ -344,6 +344,9 @@ pub fn fd_prestat_dir_name(
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
     if preopen_fd.to_int() == fd {
+      if path_len < guest_path.length() {
+        return Errno::NameTooLong.to_i32()
+      }
       let to_copy = @cmp.minimum(path_len, guest_path.length())
       for i in 0..<to_copy {
         mem.write_byte(path_ptr + i, guest_path.code_unit_at(i).to_byte())

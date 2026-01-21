@@ -39,6 +39,7 @@
 #define WASI_ENOTDIR      54
 #define WASI_ENOTEMPTY    55
 #define WASI_ESPIPE       70
+#define WASI_ENAMETOOLONG 37
 
 // ============ WASI File Types ============
 #define WASI_FILETYPE_UNKNOWN          0
@@ -478,6 +479,7 @@ static int64_t wasi_fd_prestat_dir_name_impl(
     int idx = wasi_fd - ctx->preopen_base_fd;
     const char *guest_path = ctx->preopen_guest_paths[idx];
     size_t len = strlen(guest_path);
+    if ((size_t)path_len < len) return WASI_ENAMETOOLONG;
     size_t to_copy = (size_t)path_len < len ? (size_t)path_len : len;
 
     memcpy(ctx->memory0->base + path_ptr, guest_path, to_copy);
