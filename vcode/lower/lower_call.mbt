@@ -136,7 +136,7 @@ fn lower_wasm_call_common(
     let preg_idx = @abi.USER_PARAM_BASE_REG + i
     let preg = @abi.PReg::{ index: preg_idx, class: @abi.Int }
     if const_args.get(vreg.id) is Some(value) {
-      emit_call_const(block, vreg, value, preg=Some(preg))
+      emit_call_const(block, vreg, value)
     }
     call_inst.add_use_fixed(Virtual(vreg), preg)
   }
@@ -151,7 +151,7 @@ fn lower_wasm_call_common(
     let (vreg, arg_class) = float_args[i]
     let preg = @abi.PReg::{ index: i, class: arg_class }
     if const_args.get(vreg.id) is Some(value) {
-      emit_call_const(block, vreg, value, preg=Some(preg))
+      emit_call_const(block, vreg, value)
     }
     // For float registers V0-V7:
     // - f32 uses Float32 class (S registers)
