@@ -116,6 +116,45 @@ static int ensure_fd_metadata_arrays(jit_context_t *ctx) {
     return 1;
 }
 
+static int ensure_fd_capacity(jit_context_t *ctx, int target_fd) {
+    if (!ctx->fd_table || ctx->fd_table_size <= 0) return 0;
+    if (target_fd < ctx->fd_table_size) return 1;
+    if (!ensure_fd_metadata_arrays(ctx)) return 0;
+
+    int new_size = ctx->fd_table_size;
+    while (new_size <= target_fd) {
+        new_size *= 2;
+    }
+
+    int *new_table = malloc(new_size * sizeof(int));
+    char **new_paths = malloc(new_size * sizeof(char*));
+    uint8_t *new_is_dir = malloc(new_size * sizeof(uint8_t));
+    if (!new_table || !new_paths || !new_is_dir) {
+        free(new_table);
+        free(new_paths);
+        free(new_is_dir);
+        return 0;
+    }
+
+    memcpy(new_table, ctx->fd_table, ctx->fd_table_size * sizeof(int));
+    memcpy(new_paths, ctx->fd_host_paths, ctx->fd_table_size * sizeof(char*));
+    memcpy(new_is_dir, ctx->fd_is_dir, ctx->fd_table_size * sizeof(uint8_t));
+    for (int i = ctx->fd_table_size; i < new_size; i++) {
+        new_table[i] = -1;
+        new_paths[i] = NULL;
+        new_is_dir[i] = 0;
+    }
+
+    free(ctx->fd_table);
+    free(ctx->fd_host_paths);
+    free(ctx->fd_is_dir);
+    ctx->fd_table = new_table;
+    ctx->fd_host_paths = new_paths;
+    ctx->fd_is_dir = new_is_dir;
+    ctx->fd_table_size = new_size;
+    return 1;
+}
+
 static void clear_fd_metadata(jit_context_t *ctx, int wasi_fd) {
     if (!ctx->fd_host_paths || !ctx->fd_is_dir) return;
     if (wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) return;
@@ -1860,26 +1899,35 @@ static int32_t wasi_fd_renumber_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t to_fd
 ) {
-
     // Cannot renumber stdio fds
     if ((fd >= 0 && fd < 3) || (to_fd >= 0 && to_fd < 3)) {
         return WASI_EINVAL;
     }
 
+    if (!ctx || !ctx->fd_table) return WASI_EBADF;
+
+    if (!ensure_fd_capacity(ctx, to_fd)) return WASI_EIO;
+    if (fd == to_fd) return WASI_ESUCCESS;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
     int native_to_fd = get_native_fd(ctx, to_fd);
-    if (native_to_fd < 0) return WASI_EBADF;
+    if (native_to_fd >= 0) {
+#ifndef _WIN32
+        close(native_to_fd);
+#endif
+    }
 
 #ifndef _WIN32
-    // dup2 atomically closes to_fd if open, then duplicates fd to to_fd
-    if (dup2(native_fd, native_to_fd) < 0) return errno_to_wasi(errno);
-    // Close the original fd
-    close(native_fd);
-    // Update fd table: to_fd now points to what fd pointed to, fd is closed
-    if (ctx->fd_table && fd < ctx->fd_table_size) {
-        ctx->fd_table[fd] = -1;
+    ctx->fd_table[to_fd] = native_fd;
+    ctx->fd_table[fd] = -1;
+    if (ctx->fd_host_paths && ctx->fd_is_dir) {
+        clear_fd_metadata(ctx, to_fd);
+        ctx->fd_host_paths[to_fd] = ctx->fd_host_paths[fd];
+        ctx->fd_is_dir[to_fd] = ctx->fd_is_dir[fd];
+        ctx->fd_host_paths[fd] = NULL;
+        ctx->fd_is_dir[fd] = 0;
     }
     return WASI_ESUCCESS;
 #else

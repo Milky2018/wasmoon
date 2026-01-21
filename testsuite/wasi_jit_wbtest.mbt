@@ -769,6 +769,28 @@ test "wasi jit: fd_renumber stdin returns EINVAL (28)" {
 }
 
 ///|
+test "wasi jit: fd_renumber allows unused target" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_renumber"
+    #|    (func $fd_renumber (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_renumber_file")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 21)
+    #|      (i32.const 9) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 100)))
+    #|    (call $fd_renumber (i32.load (i32.const 100)) (i32.const 10))))
+  inspect(
+    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+}
+
+///|
 test "wasi jit: fd_sync stdin returns 0" {
   let source =
     #|(module
