@@ -81,22 +81,23 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    br_cmp_imm.eq v1, #0, block4, block7
       #|block1(v2:int, f3:float, f4:float):
       #|    ret f3
-      #|block2(v5:int, f6:float, f7:float):
+      #|block2:
       #|    f17 = ldf 3
-      #|    jump block1 (v5, f17, f7)
-      #|block3(v8:int, f9:float, f10:float):
+      #|    jump block1 (v1, f17, f12)
+      #|block3:
       #|    f18 = ldf 2
-      #|    jump block1 (v8, f18, f10)
+      #|    jump block1 (v1, f18, f12)
       #|block4:
-      #|    jump block3 (v1, f11, f12)
+      #|    jump block3
       #|block5:
-      #|    jump block2 (v1, f11, f12)
+      #|    jump block2
       #|block6:
       #|    jump block1 (v1, f11, f12)
       #|block7:
       #|    br_cmp_imm.eq v1, #1, block5, block6
       #|}
       #|
+
     ),
   )
   let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
@@ -110,10 +111,10 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    br_cmp_imm.eq x1, #0, block4, block7
       #|block1(v2:int, f3:float, f4:float):
       #|    ret d0
-      #|block2(v5:int, f6:float, f7:float):
+      #|block2:
       #|    d0 = ldf 3
       #|    jump block1
-      #|block3(v8:int, f9:float, f10:float):
+      #|block3:
       #|    d0 = ldf 2
       #|    jump block1
       #|block4:
@@ -126,6 +127,7 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    br_cmp_imm.eq x1, #1, block5, block6
       #|}
       #|
+
     ),
   )
   let mc = @emit.emit_function(allocated_func)
