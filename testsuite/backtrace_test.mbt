@@ -103,6 +103,11 @@ fn run_jit_with_backtrace(
 
   // Call and handle trap
   let results = jm.call_with_context(f, i64_args) catch {
+    @jit.JITExit(code) => {
+      let frames = dwarf.capture_backtrace()
+      let trap_details = @jit.get_last_trap_details()
+      return Err({ trap_msg: "WASI exit: \{code}", backtrace: frames, trap_details })
+    }
     @jit.JITTrap(msg) => {
       let frames = dwarf.capture_backtrace()
       let trap_details = @jit.get_last_trap_details()

@@ -85,6 +85,8 @@ typedef struct {
     int argc;                 // WASI: number of arguments
     char **envp;              // WASI: environment variables
     int envc;                 // WASI: number of env vars
+    int wasi_exited;          // WASI: proc_exit called
+    int wasi_exit_code;       // WASI: exit code
 
     // Exception handling state
     void *exception_handler;  // Current exception handler (exception_handler_t*)

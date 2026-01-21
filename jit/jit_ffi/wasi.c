@@ -28,7 +28,7 @@
 #endif
 
 #include "moonbit.h"
-#include "jit_ffi.h"
+#include "jit_internal.h"
 
 // ============ WASI Error Codes ============
 #define WASI_ESUCCESS     0
@@ -47,6 +47,7 @@
 #define WASI_ESPIPE       70
 #define WASI_ENAMETOOLONG 37
 #define WASI_EFAULT       21
+#define WASI_TRAP_EXIT    100
 
 // ============ WASI File Types ============
 #define WASI_FILETYPE_UNKNOWN          0
@@ -1000,8 +1001,13 @@ static int64_t wasi_random_get_impl(
 static int64_t wasi_proc_exit_impl(
     jit_context_t *ctx, int64_t exit_code
 ) {
-    (void)ctx;
-    exit((int)exit_code);
+    if (!ctx) return 0;
+    ctx->wasi_exited = 1;
+    ctx->wasi_exit_code = (int)exit_code;
+    if (g_trap_active) {
+        g_trap_code = WASI_TRAP_EXIT;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
     return 0;
 }
 
@@ -2096,6 +2102,19 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_env(int64_t ctx_ptr, int idx, const
         free(ctx->envp[idx]);
     }
     ctx->envp[idx] = strdup(env);
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_wasi_exit_code(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || !ctx->wasi_exited) return -1;
+    return ctx->wasi_exit_code;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_exit(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    ctx->wasi_exited = 0;
+    ctx->wasi_exit_code = 0;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr) {

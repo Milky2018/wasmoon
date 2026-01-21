@@ -234,6 +234,7 @@ pub(all) suberror CHeapError {
 
 pub suberror JITTrap {
   JITTrap(String)
+  JITExit(Int)
 }
 pub impl Show for JITTrap
 

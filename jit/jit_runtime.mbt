@@ -607,6 +607,7 @@ pub fn JITModule::call_with_context(
         func.result_types,
       ) catch {
         JITTrap(msg) => raise JITTrap(self.enrich_trap_message(msg))
+        JITExit(code) => raise JITExit(code)
       }
       results
     }

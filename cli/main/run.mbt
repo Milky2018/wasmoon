@@ -947,6 +947,12 @@ fn run_with_jit(
                 None => ()
               }
               let results = jm.call_with_context(f, i64_args) catch {
+                @jit.JITExit(code) => {
+                  @jit.gc_teardown()
+                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  native_exit(code)
+                  panic()
+                }
                 @jit.JITTrap(msg) => {
                   @jit.gc_teardown()
                   // Sync globals back to interpreter store even on trap.

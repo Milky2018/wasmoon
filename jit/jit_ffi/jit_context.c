@@ -48,6 +48,8 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->argc = 0;
     ctx->envp = NULL;
     ctx->envc = 0;
+    ctx->wasi_exited = 0;
+    ctx->wasi_exit_code = 0;
 
     // Exception handling state
     ctx->exception_handler = NULL;
