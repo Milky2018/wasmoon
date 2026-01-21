@@ -75,6 +75,7 @@ int free_exec_internal(int64_t ptr);
 // Context allocation/free (internal implementations)
 jit_context_t *alloc_context_internal(int func_count);
 void free_context_internal(jit_context_t *ctx);
+void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr);
 
 // ============ Memory Operations (memory_ops.c) ============
 

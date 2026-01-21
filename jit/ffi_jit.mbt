@@ -353,6 +353,10 @@ fn JITContext::init_wasi(
   let ctx_ptr = self.ptr()
   // Initialize fd table
   @jit_ffi.c_jit_init_wasi_fds(ctx_ptr, preopens.length())
+  // Reset stdio capture/buffers
+  self.set_wasi_stdout_capture(false)
+  self.set_wasi_stderr_capture(false)
+  self.clear_wasi_stdin_buffer()
   // Set args
   @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
   for i, arg in args {
@@ -385,6 +389,10 @@ fn JITContext::init_wasi_quiet(
   let ctx_ptr = self.ptr()
   // Initialize fd table with quiet mode (stdout/stderr to /dev/null)
   @jit_ffi.c_jit_init_wasi_fds_quiet(ctx_ptr, preopens.length())
+  // Reset stdio capture/buffers
+  self.set_wasi_stdout_capture(false)
+  self.set_wasi_stderr_capture(false)
+  self.clear_wasi_stdin_buffer()
   // Set args
   @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
   for i, arg in args {
@@ -404,6 +412,50 @@ fn JITContext::init_wasi_quiet(
     let guest_cstr = string_to_cstring(guest)
     @jit_ffi.c_jit_add_preopen(ctx_ptr, i, host_cstr, guest_cstr)
   }
+}
+
+///|
+/// Enable or disable WASI stdout capture
+fn JITContext::set_wasi_stdout_capture(
+  self : JITContext,
+  enabled : Bool,
+) -> Unit {
+  let value = if enabled { 1 } else { 0 }
+  @jit_ffi.c_jit_set_wasi_stdout_capture(self.ptr(), value)
+}
+
+///|
+/// Enable or disable WASI stderr capture
+fn JITContext::set_wasi_stderr_capture(
+  self : JITContext,
+  enabled : Bool,
+) -> Unit {
+  let value = if enabled { 1 } else { 0 }
+  @jit_ffi.c_jit_set_wasi_stderr_capture(self.ptr(), value)
+}
+
+///|
+/// Set WASI stdin buffer (custom stdin)
+fn JITContext::set_wasi_stdin_buffer(self : JITContext, data : Bytes) -> Unit {
+  @jit_ffi.c_jit_set_wasi_stdin_buffer(self.ptr(), data, data.length())
+}
+
+///|
+/// Clear WASI stdin buffer (use native stdin)
+fn JITContext::clear_wasi_stdin_buffer(self : JITContext) -> Unit {
+  @jit_ffi.c_jit_clear_wasi_stdin_buffer(self.ptr())
+}
+
+///|
+/// Take captured stdout bytes (and clear buffer)
+fn JITContext::take_wasi_stdout(self : JITContext) -> Bytes {
+  @jit_ffi.c_jit_take_wasi_stdout(self.ptr())
+}
+
+///|
+/// Take captured stderr bytes (and clear buffer)
+fn JITContext::take_wasi_stderr(self : JITContext) -> Bytes {
+  @jit_ffi.c_jit_take_wasi_stderr(self.ptr())
 }
 
 ///|

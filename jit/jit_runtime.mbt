@@ -85,6 +85,8 @@ struct JITModule {
   address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
   mut debug_db : JITDebugDB?
+  mut wasi_stdout_callback : ((Bytes) -> Unit)?
+  mut wasi_stderr_callback : ((Bytes) -> Unit)?
 }
 
 ///|
@@ -95,6 +97,8 @@ pub fn JITModule::new() -> JITModule {
     address_ranges: [],
     context: None,
     debug_db: None,
+    wasi_stdout_callback: None,
+    wasi_stderr_callback: None,
   }
 }
 
@@ -599,6 +603,7 @@ pub fn JITModule::call_with_context(
         }
       }
       let results : Array[Int64] = Array::make(num_result_slots, 0L)
+      let mut call_error : JITTrap? = None
       ctx.call_multi_return(
         func.exec_code.ptr(),
         args,
@@ -606,12 +611,34 @@ pub fn JITModule::call_with_context(
         results,
         func.result_types,
       ) catch {
-        JITTrap(msg) => raise JITTrap(self.enrich_trap_message(msg))
-        JITExit(code) => raise JITExit(code)
+        e => call_error = Some(e)
+      }
+      self.flush_wasi_output(ctx)
+      match call_error {
+        Some(JITTrap(msg)) => raise JITTrap(self.enrich_trap_message(msg))
+        Some(JITExit(code)) => raise JITExit(code)
+        None => ()
       }
       results
     }
     None => [] // No context, cannot call
+  }
+}
+
+///|
+/// Flush captured WASI stdout/stderr into callbacks (if configured)
+fn JITModule::flush_wasi_output(self : JITModule, ctx : JITContext) -> Unit {
+  if self.wasi_stdout_callback is Some(cb) {
+    let out = ctx.take_wasi_stdout()
+    if out.length() > 0 {
+      cb(out)
+    }
+  }
+  if self.wasi_stderr_callback is Some(cb) {
+    let out = ctx.take_wasi_stderr()
+    if out.length() > 0 {
+      cb(out)
+    }
   }
 }
 
@@ -929,7 +956,43 @@ pub fn JITModule::init_wasi(
   preopens : Array[(String, String)],
 ) -> Unit {
   if self.context is Some(ctx) {
+    self.wasi_stdout_callback = None
+    self.wasi_stderr_callback = None
     ctx.init_wasi(args, env, preopens)
+  }
+}
+
+///|
+/// Initialize WASI context with custom stdio handling
+pub fn JITModule::init_wasi_with_stdio(
+  self : JITModule,
+  args : Array[String],
+  env : Array[String],
+  preopens : Array[(String, String)],
+  stdout : ((Bytes) -> Unit)?,
+  stderr : ((Bytes) -> Unit)?,
+  stdin_data : Bytes?,
+) -> Unit {
+  self.init_wasi(args, env, preopens)
+  if self.context is Some(ctx) {
+    match stdout {
+      Some(cb) => {
+        self.wasi_stdout_callback = Some(cb)
+        ctx.set_wasi_stdout_capture(true)
+      }
+      None => ctx.set_wasi_stdout_capture(false)
+    }
+    match stderr {
+      Some(cb) => {
+        self.wasi_stderr_callback = Some(cb)
+        ctx.set_wasi_stderr_capture(true)
+      }
+      None => ctx.set_wasi_stderr_capture(false)
+    }
+    match stdin_data {
+      Some(data) => ctx.set_wasi_stdin_buffer(data)
+      None => ctx.clear_wasi_stdin_buffer()
+    }
   }
 }
 
@@ -942,6 +1005,8 @@ pub fn JITModule::init_wasi_quiet(
   preopens : Array[(String, String)],
 ) -> Unit {
   if self.context is Some(ctx) {
+    self.wasi_stdout_callback = None
+    self.wasi_stderr_callback = None
     ctx.init_wasi_quiet(args, env, preopens)
   }
 }

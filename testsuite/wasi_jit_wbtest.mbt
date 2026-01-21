@@ -38,6 +38,16 @@ pub fn WasiCompareResult::to_string(self : WasiCompareResult) -> String {
 ///|
 /// Run a WASI module with both JIT and interpreter, compare return values and output
 fn compare_wasi(source : String, func_name : String) -> WasiCompareResult {
+  compare_wasi_with_options(source, func_name)
+}
+
+///|
+fn compare_wasi_with_options(
+  source : String,
+  func_name : String,
+  preopens? : Array[(String, String)] = [],
+  stdin_data? : Bytes,
+) -> WasiCompareResult {
   // Parse the WAT source
   let mod_ = @wat.parse(source) catch {
     e => {
@@ -73,18 +83,23 @@ fn compare_wasi(source : String, func_name : String) -> WasiCompareResult {
   let result_types = func_type.results
 
   // Run interpreter with WASI (stdout suppressed)
-  let interp_result = run_wasi_interp_quiet(mod_, func_name)
+  let (interp_result, interp_stdout) = run_wasi_interp_quiet(
+    mod_, func_name, preopens, stdin_data,
+  )
 
   // Run JIT with WASI (stdout suppressed)
-  let jit_result = run_wasi_jit_quiet(mod_, func_name, idx, result_types)
+  let (jit_result, jit_stdout) = run_wasi_jit_quiet(
+    mod_, func_name, idx, result_types, preopens, stdin_data,
+  )
 
   // Compare results (return values must match)
-  let match_ = match (jit_result, interp_result) {
+  let results_match = match (jit_result, interp_result) {
     (Ok(jit_vals), Ok(interp_vals)) => values_array_equal(jit_vals, interp_vals)
     (Err(_), Err(_)) => true
     _ => false
   }
-  { jit_result, interp_result, jit_stdout: b"", interp_stdout: b"", match_ }
+  let match_ = results_match && jit_stdout == interp_stdout
+  { jit_result, interp_result, jit_stdout, interp_stdout, match_ }
 }
 
 ///|
@@ -101,21 +116,49 @@ fn find_wasi_func_index(mod_ : @types.Module, name : String) -> Int? {
 fn run_wasi_interp_quiet(
   mod_ : @types.Module,
   func_name : String,
-) -> Result[Array[@types.Value], String] {
+  preopens : Array[(String, String)],
+  stdin_data : Bytes?,
+) -> (Result[Array[@types.Value], String], Bytes) {
   try {
+    let stdout_buf : Array[Byte] = []
+    let _stderr_buf : Array[Byte] = []
+    let mut stdin_used = false
     let linker = @runtime.Linker::new()
     let store = linker.get_store()
     // Register WASI with suppressed stdout/stderr
-    let wasi_ctx = @wasi.WasiContextBuilder::new()
-      .stdout(fn(_) {  })
-      .stderr(fn(_) {  })
-      .build()
+    let wasi_builder = @wasi.WasiContextBuilder::new()
+      .stdout(fn(bytes) {
+        for b in bytes {
+          stdout_buf.push(b)
+        }
+      })
+      .stderr(fn(bytes) {
+        for b in bytes {
+          _stderr_buf.push(b)
+        }
+      })
+    for entry in preopens {
+      let (host, guest) = entry
+      wasi_builder.preopen_dir(host, guest) |> ignore
+    }
+    if stdin_data is Some(data) {
+      wasi_builder.stdin(fn() {
+        if stdin_used {
+          b""
+        } else {
+          stdin_used = true
+          data
+        }
+      })
+      |> ignore
+    }
+    let wasi_ctx = wasi_builder.build()
     @wasi.register_wasi(linker, wasi_ctx)
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     let result = @executor.call_exported_func(store, instance, func_name, [])
-    Ok(result)
+    (Ok(result), Bytes::from_array(stdout_buf))
   } catch {
-    e => Err("Interpreter error: \{e}")
+    e => (Err("Interpreter error: \{e}"), Bytes::from_array([]))
   }
 }
 
@@ -125,9 +168,13 @@ fn run_wasi_jit_quiet(
   func_name : String,
   func_idx : Int,
   result_types : Array[@types.ValueType],
-) -> Result[Array[@types.Value], String] {
+  preopens : Array[(String, String)],
+  stdin_data : Bytes?,
+) -> (Result[Array[@types.Value], String], Bytes) {
   ignore(func_idx)
   try {
+    let stdout_buf : Array[Byte] = []
+    let _stderr_buf : Array[Byte] = []
     let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
     let num_imports = @wast.count_func_imports(mod_.imports)
 
@@ -190,12 +237,31 @@ fn run_wasi_jit_quiet(
     }
     let func_signatures = @wast.build_func_signatures(mod_)
     guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
-      return Err("Failed to create JIT module")
+      return (Err("Failed to create JIT module"), Bytes::from_array([]))
     }
     let _ = jm.alloc_wasm_stack(1048576L)
 
-    // Initialize WASI for JIT with quiet mode (stdout/stderr to /dev/null)
-    jm.init_wasi_quiet([], [], [])
+    // Initialize WASI for JIT with captured stdout/stderr
+    let stdin_buf = match stdin_data {
+      Some(data) => Some(data)
+      None => Some(b"")
+    }
+    jm.init_wasi_with_stdio(
+      [],
+      [],
+      preopens,
+      Some(fn(bytes : Bytes) {
+        for b in bytes {
+          stdout_buf.push(b)
+        }
+      }),
+      Some(fn(bytes : Bytes) {
+        for b in bytes {
+          _stderr_buf.push(b)
+        }
+      }),
+      stdin_buf,
+    )
 
     // Allocate memory (guarded for memory32 memory 0)
     let mem_pages = if mod_.memories.length() > 0 {
@@ -221,7 +287,7 @@ fn run_wasi_jit_quiet(
       0L
     }
     if mem_desc_ptr == 0L && mem_size > 0L {
-      return Err("Failed to allocate memory")
+      return (Err("Failed to allocate memory"), Bytes::from_array([]))
     }
     let memories = [@jit.MemoryInfo::new(mem_desc_ptr, mem_size, max_pages)]
     jm.set_memory_pointers(memories)
@@ -234,13 +300,13 @@ fn run_wasi_jit_quiet(
       }
     }
     guard jm.get_func_by_name(func_name) is Some(f) else {
-      return Err("Failed to get JIT function")
+      return (Err("Failed to get JIT function"), Bytes::from_array([]))
     }
     let raw_results = jm.call_with_context(f, [])
     let values = jit_results_to_values(raw_results, result_types)
-    Ok(values)
+    (Ok(values), Bytes::from_array(stdout_buf))
   } catch {
-    e => Err("JIT error: \{e}")
+    e => (Err("JIT error: \{e}"), Bytes::from_array([]))
   }
 }
 
@@ -280,6 +346,65 @@ test "wasi jit: fd_write stdout returns 0" {
     #|  (func (export "test") (result i32)
     #|    (call $fd_write (i32.const 1) (i32.const 0) (i32.const 1) (i32.const 200))))
   inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: path_open invalid rights returns EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 0)
+    #|      (i32.const 0) (i64.const -1) (i64.const 0) (i32.const 0)
+    #|      (i32.const 8))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: fd_readdir works on path_open directory" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_create_directory"
+    #|    (func $path_create_directory (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_readdir"
+    #|    (func $fd_readdir (param i32 i32 i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_readdir")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_create_directory (i32.const 3) (i32.const 0) (i32.const 19)))
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 19)
+    #|      (i32.const 2) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 100)))
+    #|    (call $fd_readdir
+    #|      (i32.load (i32.const 100))
+    #|      (i32.const 200) (i32.const 256) (i64.const 0) (i32.const 300))))
+  inspect(
+    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+}
+
+///|
+test "wasi jit: fd_read uses stdin callback" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_read"
+    #|    (func $fd_read (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "\10\00\00\00\04\00\00\00")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $fd_read (i32.const 0) (i32.const 0) (i32.const 1) (i32.const 8)))
+    #|    (i32.load (i32.const 8))))
+  inspect(
+    compare_wasi_with_options(source, "test", stdin_data=b"abc"),
+    content="matched",
+  )
 }
 
 ///|

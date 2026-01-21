@@ -438,6 +438,9 @@ pub(all) struct WasiContext {
   stdout_callback : (Bytes) -> Unit
   stderr_callback : (Bytes) -> Unit
   stdin_callback : () -> Bytes
+  stdout_is_native : Bool
+  stderr_is_native : Bool
+  stdin_is_native : Bool
 }
 pub fn WasiContext::alloc_fd(Self, OpenFile) -> Int
 pub fn WasiContext::close_fd(Self, Int) -> Bool
@@ -456,6 +459,9 @@ pub(all) struct WasiContextBuilder {
   mut stdout_callback : ((Bytes) -> Unit)?
   mut stderr_callback : ((Bytes) -> Unit)?
   mut stdin_callback : (() -> Bytes)?
+  mut stdout_is_native : Bool
+  mut stderr_is_native : Bool
+  mut stdin_is_native : Bool
 }
 pub fn WasiContextBuilder::args(Self, Array[String]) -> Self
 pub fn WasiContextBuilder::build(Self) -> WasiContext

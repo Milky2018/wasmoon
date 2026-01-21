@@ -644,6 +644,41 @@ pub extern "c" fn c_jit_add_preopen(
 ) -> Unit = "wasmoon_jit_add_preopen"
 
 ///|
+/// Enable or disable stdout capture for WASI
+pub extern "c" fn c_jit_set_wasi_stdout_capture(
+  ctx_ptr : Int64,
+  enabled : Int,
+) -> Unit = "wasmoon_jit_set_wasi_stdout_capture"
+
+///|
+/// Enable or disable stderr capture for WASI
+pub extern "c" fn c_jit_set_wasi_stderr_capture(
+  ctx_ptr : Int64,
+  enabled : Int,
+) -> Unit = "wasmoon_jit_set_wasi_stderr_capture"
+
+///|
+/// Set stdin buffer for WASI (custom stdin)
+#borrow(data)
+pub extern "c" fn c_jit_set_wasi_stdin_buffer(
+  ctx_ptr : Int64,
+  data : Bytes,
+  len : Int,
+) -> Unit = "wasmoon_jit_set_wasi_stdin_buffer"
+
+///|
+/// Clear stdin buffer for WASI (use native stdin)
+pub extern "c" fn c_jit_clear_wasi_stdin_buffer(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_wasi_stdin_buffer"
+
+///|
+/// Take captured stdout bytes
+pub extern "c" fn c_jit_take_wasi_stdout(ctx_ptr : Int64) -> Bytes = "wasmoon_jit_take_wasi_stdout"
+
+///|
+/// Take captured stderr bytes
+pub extern "c" fn c_jit_take_wasi_stderr(ctx_ptr : Int64) -> Bytes = "wasmoon_jit_take_wasi_stderr"
+
+///|
 /// Free WASI resources
 pub extern "c" fn c_jit_free_wasi_fds(ctx_ptr : Int64) -> Unit = "wasmoon_jit_free_wasi_fds"
 

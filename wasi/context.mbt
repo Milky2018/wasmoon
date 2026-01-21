@@ -46,6 +46,12 @@ pub(all) struct WasiContext {
   stderr_callback : (Bytes) -> Unit
   /// Input callback for stdin (returns available bytes)
   stdin_callback : () -> Bytes
+  /// Whether stdout should use native file descriptor
+  stdout_is_native : Bool
+  /// Whether stderr should use native file descriptor
+  stderr_is_native : Bool
+  /// Whether stdin should use native file descriptor
+  stdin_is_native : Bool
 }
 
 ///|
@@ -61,6 +67,9 @@ pub fn WasiContext::new() -> WasiContext {
     stdout_callback: write_native_stdout,
     stderr_callback: write_native_stderr,
     stdin_callback: fn() { b"" },
+    stdout_is_native: true,
+    stderr_is_native: true,
+    stdin_is_native: false,
   }
 }
 
@@ -73,6 +82,9 @@ pub(all) struct WasiContextBuilder {
   mut stdout_callback : ((Bytes) -> Unit)?
   mut stderr_callback : ((Bytes) -> Unit)?
   mut stdin_callback : (() -> Bytes)?
+  mut stdout_is_native : Bool
+  mut stderr_is_native : Bool
+  mut stdin_is_native : Bool
 }
 
 ///|
@@ -84,6 +96,9 @@ pub fn WasiContextBuilder::new() -> WasiContextBuilder {
     stdout_callback: None,
     stderr_callback: None,
     stdin_callback: None,
+    stdout_is_native: true,
+    stderr_is_native: true,
+    stdin_is_native: false,
   }
 }
 
@@ -126,6 +141,7 @@ pub fn WasiContextBuilder::stdout(
   callback : (Bytes) -> Unit,
 ) -> WasiContextBuilder {
   self.stdout_callback = Some(callback)
+  self.stdout_is_native = false
   self
 }
 
@@ -136,6 +152,7 @@ pub fn WasiContextBuilder::stderr(
   callback : (Bytes) -> Unit,
 ) -> WasiContextBuilder {
   self.stderr_callback = Some(callback)
+  self.stderr_is_native = false
   self
 }
 
@@ -146,6 +163,7 @@ pub fn WasiContextBuilder::stdin(
   callback : () -> Bytes,
 ) -> WasiContextBuilder {
   self.stdin_callback = Some(callback)
+  self.stdin_is_native = false
   self
 }
 
@@ -155,6 +173,7 @@ pub fn WasiContextBuilder::inherit_stdin(
   self : WasiContextBuilder,
 ) -> WasiContextBuilder {
   self.stdin_callback = Some(read_native_stdin)
+  self.stdin_is_native = true
   self
 }
 
@@ -164,6 +183,7 @@ pub fn WasiContextBuilder::inherit_stdout(
   self : WasiContextBuilder,
 ) -> WasiContextBuilder {
   self.stdout_callback = Some(write_native_stdout)
+  self.stdout_is_native = true
   self
 }
 
@@ -173,6 +193,7 @@ pub fn WasiContextBuilder::inherit_stderr(
   self : WasiContextBuilder,
 ) -> WasiContextBuilder {
   self.stderr_callback = Some(write_native_stderr)
+  self.stderr_is_native = true
   self
 }
 
@@ -250,6 +271,9 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
     stdout_callback: self.stdout_callback.unwrap_or(write_native_stdout),
     stderr_callback: self.stderr_callback.unwrap_or(write_native_stderr),
     stdin_callback: self.stdin_callback.unwrap_or(fn() { b"" }),
+    stdout_is_native: self.stdout_is_native,
+    stderr_is_native: self.stderr_is_native,
+    stdin_is_native: self.stdin_is_native,
   }
 }
 

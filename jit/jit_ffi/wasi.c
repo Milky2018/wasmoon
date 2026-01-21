@@ -59,6 +59,9 @@
 #define WASI_FILETYPE_SOCKET_STREAM    6
 #define WASI_FILETYPE_SYMBOLIC_LINK    7
 
+// WASI rights: valid bits are 0-28
+#define WASI_RIGHTS_ALL_VALID ((uint64_t)((1ULL << 29) - 1))
+
 // ============ Helper Functions ============
 
 // Get native fd from WASI fd
@@ -248,6 +251,10 @@ static int errno_to_wasi(int err) {
     }
 }
 
+static int is_valid_rights(int64_t rights) {
+    return (((uint64_t)rights) & ~WASI_RIGHTS_ALL_VALID) == 0;
+}
+
 #ifndef _WIN32
 static int fill_random_bytes(uint8_t *buf, size_t len) {
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
@@ -294,6 +301,30 @@ static uint8_t mode_to_filetype(mode_t mode) {
 }
 #endif
 
+static int append_output_buffer(
+    uint8_t **buf,
+    size_t *len,
+    size_t *cap,
+    const uint8_t *data,
+    size_t data_len
+) {
+    if (data_len == 0) return 1;
+    size_t needed = *len + data_len;
+    if (needed > *cap) {
+        size_t new_cap = *cap == 0 ? 256 : *cap;
+        while (new_cap < needed) {
+            new_cap *= 2;
+        }
+        uint8_t *new_buf = realloc(*buf, new_cap);
+        if (!new_buf) return 0;
+        *buf = new_buf;
+        *cap = new_cap;
+    }
+    memcpy(*buf + *len, data, data_len);
+    *len += data_len;
+    return 1;
+}
+
 // ============ WASI Trampolines ============
 // JIT ABI: X0 = vmctx, X1.. = WASM arguments.
 
@@ -305,8 +336,14 @@ static int64_t wasi_fd_write_impl(
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
-    int native_fd = get_native_fd(ctx, (int)fd);
-    if (native_fd < 0) return WASI_EBADF;
+    int wasi_fd = (int)fd;
+    int use_stdout_capture = (wasi_fd == 1 && ctx->wasi_stdout_capture);
+    int use_stderr_capture = (wasi_fd == 2 && ctx->wasi_stderr_capture);
+    int native_fd = -1;
+    if (!use_stdout_capture && !use_stderr_capture) {
+        native_fd = get_native_fd(ctx, wasi_fd);
+        if (native_fd < 0) return WASI_EBADF;
+    }
     if (iovs_len < 0 || iovs_len > (INT64_MAX / 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, iovs, (size_t)iovs_len * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nwritten_ptr, 4)) return WASI_EFAULT;
@@ -318,13 +355,37 @@ static int64_t wasi_fd_write_impl(
         if (buf_len < 0) return WASI_EFAULT;
         if (buf_len > 0) {
             if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;
+            if (use_stdout_capture) {
+                if (!append_output_buffer(
+                        &ctx->wasi_stdout_buf,
+                        &ctx->wasi_stdout_len,
+                        &ctx->wasi_stdout_cap,
+                        mem + buf_ptr,
+                        (size_t)buf_len
+                    )) {
+                    return WASI_ENOMEM;
+                }
+                total += buf_len;
+            } else if (use_stderr_capture) {
+                if (!append_output_buffer(
+                        &ctx->wasi_stderr_buf,
+                        &ctx->wasi_stderr_len,
+                        &ctx->wasi_stderr_cap,
+                        mem + buf_ptr,
+                        (size_t)buf_len
+                    )) {
+                    return WASI_ENOMEM;
+                }
+                total += buf_len;
+            } else {
 #ifdef _WIN32
-            int n = _write(native_fd, mem + buf_ptr, buf_len);
+                int n = _write(native_fd, mem + buf_ptr, buf_len);
 #else
-            ssize_t n = write(native_fd, mem + buf_ptr, buf_len);
+                ssize_t n = write(native_fd, mem + buf_ptr, buf_len);
 #endif
-            if (n < 0) return errno_to_wasi(errno);
-            total += (int32_t)n;
+                if (n < 0) return errno_to_wasi(errno);
+                total += (int32_t)n;
+            }
         }
     }
 
@@ -340,13 +401,38 @@ static int64_t wasi_fd_read_impl(
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
     uint8_t *mem = ctx->memory0->base;
-    int native_fd = get_native_fd(ctx, (int)fd);
-    if (native_fd < 0) return WASI_EBADF;
+    int wasi_fd = (int)fd;
     if (iovs_len < 0 || iovs_len > (INT64_MAX / 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, iovs, (size_t)iovs_len * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nread_ptr, 4)) return WASI_EFAULT;
 
     int32_t total = 0;
+    if (wasi_fd == 0 && ctx->wasi_stdin_use_buffer) {
+        size_t available = 0;
+        if (ctx->wasi_stdin_len > ctx->wasi_stdin_offset) {
+            available = ctx->wasi_stdin_len - ctx->wasi_stdin_offset;
+        }
+        for (int64_t i = 0; i < iovs_len && available > 0; i++) {
+            int32_t buf_ptr = *(int32_t *)(mem + iovs + i * 8);
+            int32_t buf_len = *(int32_t *)(mem + iovs + i * 8 + 4);
+            if (buf_len < 0) return WASI_EFAULT;
+            if (buf_len > 0) {
+                if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;
+                size_t to_copy = available < (size_t)buf_len ? available : (size_t)buf_len;
+                if (to_copy > 0 && ctx->wasi_stdin_buf) {
+                    memcpy(mem + buf_ptr, ctx->wasi_stdin_buf + ctx->wasi_stdin_offset, to_copy);
+                }
+                ctx->wasi_stdin_offset += to_copy;
+                available -= to_copy;
+                total += (int32_t)to_copy;
+            }
+        }
+        *(int32_t *)(mem + nread_ptr) = total;
+        return WASI_ESUCCESS;
+    }
+
+    int native_fd = get_native_fd(ctx, wasi_fd);
+    if (native_fd < 0) return WASI_EBADF;
     for (int64_t i = 0; i < iovs_len; i++) {
         int32_t buf_ptr = *(int32_t *)(mem + iovs + i * 8);
         int32_t buf_len = *(int32_t *)(mem + iovs + i * 8 + 4);
@@ -536,6 +622,8 @@ static int64_t wasi_fd_prestat_dir_name_impl(
     int64_t fd, int64_t path_ptr, int64_t path_len
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (path_len < 0) return WASI_EFAULT;
+    if (!check_mem_range(ctx, path_ptr, (size_t)path_len)) return WASI_EFAULT;
 
     int wasi_fd = (int)fd;
     if (!is_preopen_fd(ctx, wasi_fd)) return WASI_EBADF;
@@ -559,10 +647,11 @@ static int64_t wasi_path_open_impl(
     int64_t fdflags, int64_t opened_fd_ptr
 ) {
     (void)dirflags;
-    (void)rights_base;
-    (void)rights_inh;
 
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (!is_valid_rights(rights_base) || !is_valid_rights(rights_inh)) {
+        return WASI_EINVAL;
+    }
     if (path_len < 0 || !check_mem_range(ctx, path_ptr, (size_t)path_len)) {
         return WASI_EFAULT;
     }
@@ -1259,21 +1348,25 @@ static int32_t wasi_fd_readdir_impl(
     if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;
     if (!check_mem_range(ctx, bufused_ptr, 4)) return WASI_EFAULT;
 
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
-
 #ifndef _WIN32
-    // For preopened directories, use opendir on the path
-    if (!is_preopen_fd(ctx, fd)) {
-        // Not a directory fd
-        return WASI_ENOTDIR;
+    DIR *dir = NULL;
+    int dir_fd = -1;
+    if (is_preopen_fd(ctx, fd)) {
+        const char *path = get_preopen_path(ctx, fd);
+        if (!path) return WASI_EBADF;
+        dir = opendir(path);
+        if (!dir) return errno_to_wasi(errno);
+    } else {
+        int native_fd = get_native_fd(ctx, fd);
+        if (native_fd < 0) return WASI_EBADF;
+        dir_fd = dup(native_fd);
+        if (dir_fd < 0) return errno_to_wasi(errno);
+        dir = fdopendir(dir_fd);
+        if (!dir) {
+            close(dir_fd);
+            return errno_to_wasi(errno);
+        }
     }
-
-    const char *path = get_preopen_path(ctx, fd);
-    if (!path) return WASI_EBADF;
-
-    DIR *dir = opendir(path);
-    if (!dir) return errno_to_wasi(errno);
 
     // Skip to cookie position
     int64_t pos = 0;
@@ -2030,6 +2123,97 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds_quiet(int64_t ctx_ptr, int pre
     }
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdout_capture(int64_t ctx_ptr, int enabled) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    if (enabled) {
+        ctx->wasi_stdout_capture = 1;
+        ctx->wasi_stdout_len = 0;
+    } else {
+        ctx->wasi_stdout_capture = 0;
+        if (ctx->wasi_stdout_buf) {
+            free(ctx->wasi_stdout_buf);
+        }
+        ctx->wasi_stdout_buf = NULL;
+        ctx->wasi_stdout_len = 0;
+        ctx->wasi_stdout_cap = 0;
+    }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stderr_capture(int64_t ctx_ptr, int enabled) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    if (enabled) {
+        ctx->wasi_stderr_capture = 1;
+        ctx->wasi_stderr_len = 0;
+    } else {
+        ctx->wasi_stderr_capture = 0;
+        if (ctx->wasi_stderr_buf) {
+            free(ctx->wasi_stderr_buf);
+        }
+        ctx->wasi_stderr_buf = NULL;
+        ctx->wasi_stderr_len = 0;
+        ctx->wasi_stderr_cap = 0;
+    }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_buffer(
+    int64_t ctx_ptr,
+    moonbit_bytes_t data,
+    int len
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    if (ctx->wasi_stdin_buf) {
+        free(ctx->wasi_stdin_buf);
+        ctx->wasi_stdin_buf = NULL;
+    }
+    ctx->wasi_stdin_len = 0;
+    ctx->wasi_stdin_offset = 0;
+    ctx->wasi_stdin_use_buffer = 1;
+    if (len > 0) {
+        ctx->wasi_stdin_buf = malloc((size_t)len);
+        if (ctx->wasi_stdin_buf) {
+            memcpy(ctx->wasi_stdin_buf, data, (size_t)len);
+            ctx->wasi_stdin_len = (size_t)len;
+        }
+    }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_stdin_buffer(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    ctx->wasi_stdin_use_buffer = 0;
+    if (ctx->wasi_stdin_buf) {
+        free(ctx->wasi_stdin_buf);
+        ctx->wasi_stdin_buf = NULL;
+    }
+    ctx->wasi_stdin_len = 0;
+    ctx->wasi_stdin_offset = 0;
+}
+
+MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_jit_take_wasi_stdout(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || !ctx->wasi_stdout_capture || ctx->wasi_stdout_len == 0) {
+        return moonbit_make_bytes(0, 0);
+    }
+    moonbit_bytes_t bytes = moonbit_make_bytes((int32_t)ctx->wasi_stdout_len, 0);
+    memcpy(bytes, ctx->wasi_stdout_buf, ctx->wasi_stdout_len);
+    ctx->wasi_stdout_len = 0;
+    return bytes;
+}
+
+MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_jit_take_wasi_stderr(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || !ctx->wasi_stderr_capture || ctx->wasi_stderr_len == 0) {
+        return moonbit_make_bytes(0, 0);
+    }
+    moonbit_bytes_t bytes = moonbit_make_bytes((int32_t)ctx->wasi_stderr_len, 0);
+    memcpy(bytes, ctx->wasi_stderr_buf, ctx->wasi_stderr_len);
+    ctx->wasi_stderr_len = 0;
+    return bytes;
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const char *host_path, const char *guest_path) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || !ctx->preopen_paths || idx < 0 || idx >= ctx->preopen_count) return;
@@ -2170,4 +2354,29 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr) {
         ctx->preopen_paths = NULL;
         ctx->preopen_guest_paths = NULL;
     }
+
+    // Free stdio buffers
+    ctx->wasi_stdin_use_buffer = 0;
+    if (ctx->wasi_stdin_buf) {
+        free(ctx->wasi_stdin_buf);
+        ctx->wasi_stdin_buf = NULL;
+    }
+    ctx->wasi_stdin_len = 0;
+    ctx->wasi_stdin_offset = 0;
+
+    ctx->wasi_stdout_capture = 0;
+    if (ctx->wasi_stdout_buf) {
+        free(ctx->wasi_stdout_buf);
+        ctx->wasi_stdout_buf = NULL;
+    }
+    ctx->wasi_stdout_len = 0;
+    ctx->wasi_stdout_cap = 0;
+
+    ctx->wasi_stderr_capture = 0;
+    if (ctx->wasi_stderr_buf) {
+        free(ctx->wasi_stderr_buf);
+        ctx->wasi_stderr_buf = NULL;
+    }
+    ctx->wasi_stderr_len = 0;
+    ctx->wasi_stderr_cap = 0;
 }
