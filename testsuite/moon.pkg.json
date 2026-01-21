@@ -15,6 +15,9 @@
     "Milky2018/wasmoon/vcode/lower",
     "Milky2018/wasmoon/vcode/regalloc"
   ],
+  "test-import": [
+    "moonbitlang/x/fs"
+  ],
   "wbtest-import": [
     "Milky2018/wasmoon/wasi"
   ]

@@ -1352,11 +1352,14 @@ pub fn apply_allocation(
       }
     }
     let jump_arg_candidates : Map[Int, (Int, Int)] = {}
+    let jump_arg_counts : Map[Int, Int] = {}
     if block.terminator is Some(@instr.VCodeTerminator::Jump(_, args)) {
       for arg in args {
         if arg is @abi.Virtual(vreg) &&
           vreg_used_in_term.contains(vreg.id) &&
           !vreg_used_in_insts.contains(vreg.id) {
+          let count = jump_arg_counts.get(vreg.id).unwrap_or(0)
+          jump_arg_counts.set(vreg.id, count + 1)
           if vreg_def_info.get(vreg.id) is Some((def_idx, def_pos)) {
             let def_inst = block.insts[def_idx]
             let has_fixed = def_pos < def_inst.def_constraints.length() &&
@@ -1832,6 +1835,7 @@ pub fn apply_allocation(
                   moves : Array[RegMove],
                   move_src_vregs : Array[Int?],
                   jump_arg_candidates : Map[Int, (Int, Int)],
+                  jump_arg_counts : Map[Int, Int],
                   alloc : RegAllocResult,
                   orig_inst_to_new_idx : Map[Int, Int],
                   new_block : @block.VCodeBlock,
@@ -1839,6 +1843,9 @@ pub fn apply_allocation(
                 ) -> Bool {
                   guard move_idx < move_src_vregs.length() else { return false }
                   guard move_src_vregs[move_idx] is Some(vreg_id) else {
+                    return false
+                  }
+                  if jump_arg_counts.get(vreg_id).unwrap_or(0) != 1 {
                     return false
                   }
                   if rewritten.contains(vreg_id) {
@@ -1880,6 +1887,7 @@ pub fn apply_allocation(
                   moves,
                   move_src_vregs,
                   jump_arg_candidates,
+                  jump_arg_counts,
                   alloc,
                   orig_inst_to_new_idx,
                   new_block,
@@ -1889,6 +1897,7 @@ pub fn apply_allocation(
                   moves,
                   move_src_vregs,
                   jump_arg_candidates,
+                  jump_arg_counts,
                   alloc,
                   orig_inst_to_new_idx,
                   new_block,
