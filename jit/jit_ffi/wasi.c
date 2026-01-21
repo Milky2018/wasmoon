@@ -337,6 +337,7 @@ static int64_t wasi_fd_write_impl(
 
     uint8_t *mem = ctx->memory0->base;
     int wasi_fd = (int)fd;
+    if (wasi_fd == 0) return WASI_EBADF;
     int use_stdout_capture = (wasi_fd == 1 && ctx->wasi_stdout_capture);
     int use_stderr_capture = (wasi_fd == 2 && ctx->wasi_stderr_capture);
     int native_fd = -1;
@@ -402,6 +403,7 @@ static int64_t wasi_fd_read_impl(
 
     uint8_t *mem = ctx->memory0->base;
     int wasi_fd = (int)fd;
+    if (wasi_fd == 1 || wasi_fd == 2) return WASI_EBADF;
     if (iovs_len < 0 || iovs_len > (INT64_MAX / 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, iovs, (size_t)iovs_len * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nread_ptr, 4)) return WASI_EFAULT;
@@ -461,7 +463,7 @@ static int64_t wasi_fd_close_impl(
     if (!ctx) return WASI_EBADF;
 
     int wasi_fd = (int)fd;
-    if (wasi_fd < 3) return WASI_ESUCCESS; // Can't close stdio
+    if (wasi_fd < 3) return WASI_EBADF;
     if (is_preopen_fd(ctx, wasi_fd)) return WASI_EBADF; // Can't close preopens
 
     int native_fd = get_native_fd(ctx, wasi_fd);
@@ -1343,6 +1345,7 @@ static int32_t wasi_fd_readdir_impl(
     int32_t fd, int32_t buf_ptr, int32_t buf_len, int64_t cookie, int32_t bufused_ptr
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (fd >= 0 && fd < 3) return WASI_EBADF;
     uint8_t *mem = ctx->memory0->base;
     if (buf_len < 0) return WASI_EFAULT;
     if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;

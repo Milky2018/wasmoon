@@ -349,6 +349,37 @@ test "wasi jit: fd_write stdout returns 0" {
 }
 
 ///|
+test "wasi jit: stdio misuse returns EBADF" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_write"
+    #|    (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_read"
+    #|    (func $fd_read (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_readdir"
+    #|    (func $fd_readdir (param i32 i32 i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "A")
+    #|  (func (export "write_fd0") (result i32)
+    #|    (i32.store (i32.const 16) (i32.const 0))
+    #|    (i32.store (i32.const 20) (i32.const 1))
+    #|    (call $fd_write (i32.const 0) (i32.const 16) (i32.const 1) (i32.const 24)))
+    #|  (func (export "read_fd1") (result i32)
+    #|    (call $fd_read (i32.const 1) (i32.const 0) (i32.const 0) (i32.const 28)))
+    #|  (func (export "close_fd0") (result i32)
+    #|    (call $fd_close (i32.const 0)))
+    #|  (func (export "readdir_fd0") (result i32)
+    #|    (call $fd_readdir (i32.const 0) (i32.const 0) (i32.const 0)
+    #|      (i64.const 0) (i32.const 32))))
+  inspect(compare_wasi(source, "write_fd0"), content="matched")
+  inspect(compare_wasi(source, "read_fd1"), content="matched")
+  inspect(compare_wasi(source, "close_fd0"), content="matched")
+  inspect(compare_wasi(source, "readdir_fd0"), content="matched")
+}
+
+///|
 test "wasi jit: path_open invalid rights returns EINVAL" {
   let source =
     #|(module
