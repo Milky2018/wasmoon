@@ -2,6 +2,10 @@
   "import": [
     "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/runtime",
-    "Milky2018/wasmoon/logger"
+    "Milky2018/wasmoon/logger",
+    "moonbitlang/core/buffer",
+    "moonbitlang/core/double",
+    "moonbitlang/core/float",
+    "moonbitlang/core/math"
   ]
 }

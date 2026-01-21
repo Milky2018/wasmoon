@@ -855,29 +855,29 @@ pub fn build_bundles_with_merging(
   // 2. Merge across block arguments (SSA phi-like connections)
   // For each Jump(target, args), the i-th arg corresponds to the i-th block param.
   // Coalescing these bundles avoids edge moves and preserves SSA semantics.
-  for block in func.blocks {
-    if block.params.is_empty() {
-      continue
-    }
-    for pred_block in func.blocks {
-      if pred_block.terminator is Some(term) {
-        match term {
-          Jump(target, args) =>
-            if target == block.id {
-              // Merge each param with its incoming argument vreg.
-              for i, param in block.params {
-                if i >= args.length() {
-                  break
-                }
-                match args[i] {
-                  @abi.Virtual(arg_vreg) =>
-                    if ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
-                      ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
-                      try_merge(uf, param_idx, arg_idx, ranges) |> ignore
-                    }
-                  _ => ()
-                }
-              }
+  let block_idx : Map[Int, Int] = {}
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  for pred_block in func.blocks {
+    if pred_block.terminator is Some(Jump(target, args)) {
+      let target_block = match block_idx.get(target) {
+        Some(idx) => func.blocks[idx]
+        None => continue
+      }
+      if target_block.params.is_empty() {
+        continue
+      }
+      // Merge each param with its incoming argument vreg.
+      for i, param in target_block.params {
+        if i >= args.length() {
+          break
+        }
+        match args[i] {
+          @abi.Virtual(arg_vreg) =>
+            if ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
+              ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
+              try_merge(uf, param_idx, arg_idx, ranges) |> ignore
             }
           _ => ()
         }

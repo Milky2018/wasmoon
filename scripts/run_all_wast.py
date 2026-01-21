@@ -91,7 +91,7 @@ def run_tests_for_mode(wast_files: list[Path], test_dir: Path, use_jit: bool) ->
     }
 
 
-def print_summary(results: dict) -> None:
+def print_summary(results: dict, dump_failures: bool) -> None:
     """Print summary for a mode."""
     mode = results["mode"]
     print(f"\n{mode} Mode Summary:")
@@ -102,12 +102,21 @@ def print_summary(results: dict) -> None:
     print(f"  Total tests passed:  {results['total_passed']}")
     print(f"  Total tests failed:  {results['total_failed']}")
 
-    if results['has_errors']:
+    if results['has_errors'] and not dump_failures:
         print(f"\n  [ERROR] ({len(results['has_errors'])}):")
         for name in results['has_errors'][:10]:
             print(f"    - {name}")
         if len(results['has_errors']) > 10:
             print(f"    ... and {len(results['has_errors']) - 10} more")
+    if dump_failures:
+        if results['has_failures']:
+            print(f"\n  [FAIL] ({len(results['has_failures'])}):")
+            for name, _passed, _failed in results['has_failures']:
+                print(f"    - {name}")
+        if results['has_errors']:
+            print(f"\n  [ERROR] ({len(results['has_errors'])}):")
+            for name in results['has_errors']:
+                print(f"    - {name}")
 
 
 def main() -> None:
@@ -132,6 +141,11 @@ def main() -> None:
         "--only-interp",
         action="store_true",
         help="Only run interpreter mode tests (no JIT)",
+    )
+    parser.add_argument(
+        "--dump-failures",
+        action="store_true",
+        help="Print full lists of failed/error files",
     )
     args = parser.parse_args()
 
@@ -175,9 +189,9 @@ def main() -> None:
     print("=" * 60)
 
     if interp_results:
-        print_summary(interp_results)
+        print_summary(interp_results, args.dump_failures)
     if jit_results:
-        print_summary(jit_results)
+        print_summary(jit_results, args.dump_failures)
 
     # Compare results (only if both modes were run)
     if interp_results and jit_results:

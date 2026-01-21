@@ -73,8 +73,6 @@ test "lower constants" {
     content=(
       #|vcode const_test() -> int {
       #|block0:
-      #|    v0 = ldi 10
-      #|    v1 = ldi 20
       #|    v2 = ldi 30
       #|    ret v2
       #|}
@@ -164,7 +162,6 @@ test "lower conditional branch" {
     content=(
       #|vcode max(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = cmp32.sgt v0, v1
       #|    br_cmp.gt v0, v1, block1, block2
       #|block1:
       #|    ret v0
@@ -199,11 +196,8 @@ test "lower memory operations" {
     content=(
       #|vcode load_store(v0:int) -> int {
       #|block0:
-      #|    v1 = ldi 0
       #|    v2 = load_ptr.i32 +0 v0
-      #|    v3 = ldi 1
       #|    v4 = add32 #1 v2
-      #|    v5 = ldi 4
       #|    store_ptr.i32 +4 v0, v4
       #|    ret v4
       #|}
@@ -581,7 +575,6 @@ test "lower sub(0, mul(x, y)) to mneg" {
     content=(
       #|vcode mneg_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 0
       #|    v3 = mul v0, v1
       #|    v4 = mneg v0, v1
       #|    ret v4
@@ -919,12 +912,8 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|vcode test(v0:int) -> float {
       #|block0:
       #|    f2 = ldf 10
-      #|    f3 = ldf 0
       #|    v4 = ldi 0
-      #|    v5 = ldi 0
-      #|    v7 = ldi 0
-      #|    v6 = cmp32.eq v0, v7
-      #|    branch v6, block1, block5
+      #|    br_cmp_imm.eq v0, #0, block1, block5
       #|block1:
       #|    store_ptr.f32 +0 v4, f2
       #|    f12 = load_ptr.f32 +0 v4
@@ -940,13 +929,9 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|block4(f1:float):
       #|    ret f1
       #|block5:
-      #|    v8 = ldi 1
-      #|    v9 = cmp32.eq v0, v8
-      #|    branch v9, block2, block6
+      #|    br_cmp_imm.eq v0, #1, block2, block6
       #|block6:
-      #|    v10 = ldi 2
-      #|    v11 = cmp32.eq v0, v10
-      #|    branch v11, block3, block4
+      #|    br_cmp_imm.eq v0, #2, block3, block4
       #|}
       #|
     ),
@@ -967,9 +952,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|block0:
       #|    d0 = ldf 10
       #|    x1 = ldi 0
-      #|    x2 = ldi 0
-      #|    x2 = cmp32.eq x0, x2
-      #|    branch x2, block1, block5
+      #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
       #|    store_ptr.f32 +0 x1, d0
       #|    d0 = load_ptr.f32 +0 x1
@@ -985,13 +968,9 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|block4(f1:float):
       #|    ret d0
       #|block5:
-      #|    x2 = ldi 1
-      #|    x2 = cmp32.eq x0, x2
-      #|    branch x2, block2, block6
+      #|    br_cmp_imm.eq x0, #1, block2, block6
       #|block6:
-      #|    x2 = ldi 2
-      #|    x0 = cmp32.eq x0, x2
-      #|    branch x0, block3, block4
+      #|    br_cmp_imm.eq x0, #2, block3, block4
       #|}
       #|
     ),
@@ -1068,11 +1047,9 @@ test "minimal: dead float constant should not affect live values" {
     content=(
       #|vcode dead_fconst_test() -> float {
       #|block0:
-      #|    f0 = ldf 1
       #|    f1 = ldf 2
       #|    f2 = ldf 10
       #|    v3 = ldi 0
-      #|    v4 = ldi 0
       #|    store_ptr.f32 +0 v3, f2
       #|    ret f1
       #|}
@@ -1148,9 +1125,7 @@ test "br_table with block arguments from WAT" {
       #|vcode test(v0:int, v1:int) -> int {
       #|block0:
       #|    v6 = ldi 0
-      #|    v8 = ldi 0
-      #|    v7 = cmp32.eq v1, v8
-      #|    branch v7, block3, block4
+      #|    br_cmp_imm.eq v1, #0, block3, block4
       #|block1(v2:int, v3:int):
       #|    ret v3
       #|block2(v4:int, v5:int):

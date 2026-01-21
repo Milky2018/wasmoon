@@ -464,10 +464,14 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     g_current_jit_context = ctx;  // Set for guard page detection
+    g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
+    g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         g_current_jit_context = NULL;
+        g_trap_wasm_stack_base = 0;
+        g_trap_wasm_stack_top = 0;
         return (int)g_trap_code;
     }
 
@@ -476,6 +480,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
 
     g_trap_active = 0;
     g_current_jit_context = NULL;
+    g_trap_wasm_stack_base = 0;
+    g_trap_wasm_stack_top = 0;
 
     if (g_trap_code != 0) {
         return (int)g_trap_code;
@@ -540,10 +546,14 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
     g_trap_func_idx = -1;
     g_trap_active = 1;
     g_current_jit_context = ctx;  // Set for guard page detection
+    g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
+    g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
         g_current_jit_context = NULL;
+        g_trap_wasm_stack_base = 0;
+        g_trap_wasm_stack_top = 0;
         return (int)g_trap_code;
     }
 
@@ -558,6 +568,8 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
 
     g_trap_active = 0;
     g_current_jit_context = NULL;
+    g_trap_wasm_stack_base = 0;
+    g_trap_wasm_stack_top = 0;
 
     if (g_trap_code != 0) {
         return (int)g_trap_code;
@@ -971,8 +983,16 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exec_code_ptr(void *exec_code) {
 // ============ Memory Read/Write Helpers ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_write_i64(int64_t addr, int64_t value) {
-    if (addr != 0) {
-        *((int64_t *)addr) = value;
+    if (addr == 0) return;
+    if (copy_code_internal(addr, (const uint8_t *)&value, (int)sizeof(value)) != 0) {
+        memcpy((void *)addr, &value, sizeof(value));
+    }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_write_u32(int64_t addr, uint32_t value) {
+    if (addr == 0) return;
+    if (copy_code_internal(addr, (const uint8_t *)&value, (int)sizeof(value)) != 0) {
+        memcpy((void *)addr, &value, sizeof(value));
     }
 }
 

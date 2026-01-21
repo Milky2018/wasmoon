@@ -60,6 +60,22 @@ pub fn CompiledFunction::get_code(self : CompiledFunction) -> Array[Int] {
 }
 
 ///|
+/// Get direct function address fixups
+pub fn CompiledFunction::get_func_addr_fixups(
+  self : CompiledFunction,
+) -> Array[@emit.FuncAddrFixup] {
+  self.code.get_func_addr_fixups()
+}
+
+///|
+/// Get direct function call fixups
+pub fn CompiledFunction::get_call_fixups(
+  self : CompiledFunction,
+) -> Array[@emit.CallFixup] {
+  self.code.get_call_fixups()
+}
+
+///|
 fn CompiledFunction::to_string(self : CompiledFunction) -> String {
   let status = if self.valid { "valid" } else { "invalid" }
   "CompiledFunction(\{self.name}, \{self.code_size} bytes, frame=\{self.frame_size}, \{status})"

@@ -109,7 +109,6 @@ test "cross_block_cse" {
       #|    v4 = add32 v1, v2
       #|    cbnz v1, block1, block2
       #|block1:
-      #|    v5 = ldi 1
       #|    v6 = add32 #1 v4
       #|    jump block3 (v6)
       #|block2:

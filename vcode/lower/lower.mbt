@@ -13,37 +13,45 @@ struct LoweringContext {
   ir_func : @ir.Function
   vcode_func : @regalloc.VCodeFunction
   abi_settings : @abi.ABISettings
+  num_imports : Int
   // Map from IR Value id to @abi.VReg
   value_map : Map[Int, @abi.VReg]
   // Map from IR Block id to VCode block id
   block_map : Map[Int, Int]
   // Map from IR Value id to stack param index (for params >= 8)
   stack_param_map : Map[Int, (Int, @abi.RegClass)]
+  // Cache of func_table base per VCode block (block-local CSE)
+  func_table_cache : Map[Int, @abi.VReg]
   // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
   fused_icmps : @hashset.HashSet[Int]
+  // Use counts for IR values (used to skip unused call results)
+  use_counts : Map[Int, Int]
 }
 
 ///|
 pub fn LoweringContext::new(
   ir_func : @ir.Function,
   abi_settings : @abi.ABISettings,
+  num_imports : Int,
 ) -> LoweringContext {
+  let use_counts = compute_use_counts(ir_func)
   {
     ir_func,
     vcode_func: @regalloc.VCodeFunction::new(ir_func.name),
     abi_settings,
+    num_imports,
     value_map: {},
     block_map: {},
     stack_param_map: {},
+    func_table_cache: {},
     fused_icmps: @hashset.new(),
+    use_counts,
   }
 }
 
 ///|
-/// Compute which Icmp results are exclusively used by Select and can be fused.
-/// This allows lower_icmp to skip emitting redundant Cmp instructions.
-fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
-  // Step 1: Count uses of each value
+/// Compute use counts for each IR value.
+fn compute_use_counts(ir_func : @ir.Function) -> Map[Int, Int] {
   let use_counts : Map[Int, Int] = {}
   for block in ir_func.blocks {
     for inst in block.instructions {
@@ -67,8 +75,17 @@ fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
       }
     }
   }
+  use_counts
+}
 
-  // Step 2: Find Icmp results that have exactly one use in a Select
+///|
+/// Compute which Icmp results are exclusively used by Select/branch and can be fused.
+/// This allows lower_icmp to skip emitting redundant Cmp instructions.
+fn compute_fused_icmps(
+  ir_func : @ir.Function,
+  use_counts : Map[Int, Int],
+) -> @hashset.HashSet[Int] {
+  // Find Icmp results that have exactly one use in a Select or branch
   let fused : @hashset.HashSet[Int] = @hashset.new()
   for block in ir_func.blocks {
     for inst in block.instructions {
@@ -91,8 +108,101 @@ fn compute_fused_icmps(ir_func : @ir.Function) -> @hashset.HashSet[Int] {
         }
       }
     }
+    if block.terminator is Some(term) {
+      match term {
+        @ir.Terminator::Brz(cond, _, _) | @ir.Terminator::Brnz(cond, _, _) =>
+          // Check if the condition is an Icmp result with exactly one use
+          if use_counts.get(cond.id).unwrap_or(0) == 1 {
+            // Find the defining instruction of the condition
+            for b in ir_func.blocks {
+              for i in b.instructions {
+                if i.first_result() is Some(r) && r.id == cond.id {
+                  // Check if it's an Icmp
+                  if i.opcode is @ir.Opcode::Icmp(_) {
+                    fused.add(cond.id)
+                  }
+                }
+              }
+            }
+          }
+        _ => ()
+      }
+    }
   }
   fused
+}
+
+///|
+/// Collect call result vregs, skipping all results if none are used.
+fn collect_call_result_vregs(
+  ctx : LoweringContext,
+  inst : @ir.Inst,
+) -> Array[@abi.VReg] {
+  let mut any_used = false
+  for result in inst.all_results() {
+    if ctx.use_counts.get(result.id).unwrap_or(0) > 0 {
+      any_used = true
+      break
+    }
+  }
+  let result_vregs : Array[@abi.VReg] = []
+  if !any_used {
+    return result_vregs
+  }
+  for result in inst.all_results() {
+    result_vregs.push(ctx.get_vreg(result))
+  }
+  result_vregs
+}
+
+///|
+/// Return a rematerializable constant for a call argument if it's a single-use const.
+fn try_collect_call_arg_const(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> CallConstArg? {
+  if ctx.use_counts.get(value.id).unwrap_or(0) != 1 {
+    return None
+  }
+  if find_defining_inst(ctx, value) is Some(inst) {
+    match inst.opcode {
+      @ir.Opcode::Iconst(v) => Some(CallConstArg::Int(v))
+      @ir.Opcode::Fconst(v) =>
+        match value.ty {
+          @ir.Type::F32 =>
+            Some(CallConstArg::F32(v.reinterpret_as_int64().to_int()))
+          @ir.Type::F64 => Some(CallConstArg::F64(v.reinterpret_as_int64()))
+          _ => None
+        }
+      _ => None
+    }
+  } else {
+    None
+  }
+}
+
+///|
+/// Collect call arguments and rematerializable constants.
+fn collect_call_args_with_consts(
+  ctx : LoweringContext,
+  operands : Array[@ir.Value],
+  block : @block.VCodeBlock,
+  start_idx : Int,
+) -> (Array[@abi.VReg], Map[Int, CallConstArg]) {
+  let arg_vregs : Array[@abi.VReg] = []
+  let const_args : Map[Int, CallConstArg] = {}
+  for i in start_idx..<operands.length() {
+    let operand = operands[i]
+    if try_collect_call_arg_const(ctx, operand) is Some(value) {
+      let class = ir_type_to_reg_class(operand.ty)
+      let vreg = ctx.new_vreg(class)
+      arg_vregs.push(vreg)
+      const_args.set(vreg.id, value)
+    } else {
+      arg_vregs.push(ctx.get_vreg_for_use(operand, block))
+    }
+  }
+  (arg_vregs, const_args)
 }
 
 ///|
@@ -319,13 +429,14 @@ fn intcc_to_cond(cc : @ir.IntCC) -> @instr.Cond {
 pub fn lower_function(
   ir_func : @ir.Function,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  num_imports? : Int = -1,
 ) -> @regalloc.VCodeFunction {
   // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
   @ir.optimize_function(ir_func) |> ignore
-  let ctx = LoweringContext::new(ir_func, abi_settings)
+  let ctx = LoweringContext::new(ir_func, abi_settings, num_imports)
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
-  let fused = compute_fused_icmps(ir_func)
+  let fused = compute_fused_icmps(ir_func, ctx.use_counts)
   for id in fused {
     ctx.fused_icmps.add(id)
   }
@@ -1503,31 +1614,39 @@ fn lower_call(
   block : @block.VCodeBlock,
   func_idx : Int,
 ) -> Unit {
-  // Collect argument vregs
-  let arg_vregs : Array[@abi.VReg] = []
-  for operand in inst.operands {
-    arg_vregs.push(ctx.get_vreg_for_use(operand, block))
+  // Collect argument vregs, rematerializing single-use constants only for
+  // direct calls. Indirect calls (imports or default path) keep original vregs.
+  let use_const_args = ctx.num_imports >= 0 && func_idx >= ctx.num_imports
+  let (arg_vregs, const_args) = if use_const_args {
+    collect_call_args_with_consts(ctx, inst.operands, block, 0)
+  } else {
+    let args : Array[@abi.VReg] = []
+    for operand in inst.operands {
+      args.push(ctx.get_vreg_for_use(operand, block))
+    }
+    (args, {})
   }
 
-  // Get all result vregs
-  let result_vregs : Array[@abi.VReg] = []
-  for result in inst.all_results() {
-    result_vregs.push(ctx.get_vreg(result))
+  // Collect result vregs (skip when results are unused)
+  let result_vregs = collect_call_result_vregs(ctx, inst)
+  if ctx.num_imports < 0 || func_idx < ctx.num_imports {
+    // Imports: load function pointer from vmctx func_table and call indirectly.
+    let func_table = emit_load_func_table(ctx, block)
+    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let offset = func_idx * 8
+    let load_inst = @instr.VCodeInst::new(Load(I64, offset))
+    load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+    load_inst.add_use(Virtual(func_table))
+    block.add_inst(load_inst)
+    lower_wasm_call(
+      ctx, block, func_ptr_vreg, arg_vregs, result_vregs, const_args,
+    )
+  } else {
+    // Internal functions: direct call.
+    lower_wasm_call_direct(
+      ctx, block, func_idx, arg_vregs, result_vregs, const_args,
+    )
   }
-
-  // Load func_table from vmctx on-demand
-  let func_table = emit_load_func_table(ctx, block)
-
-  // Load function pointer from table: func_ptr = [func_table + func_idx * 8]
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let offset = func_idx * 8
-  let load_inst = @instr.VCodeInst::new(Load(I64, offset))
-  load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-  load_inst.add_use(Virtual(func_table))
-  block.add_inst(load_inst)
-
-  // Use Standard call lowering
-  lower_wasm_call(ctx, block, func_ptr_vreg, arg_vregs, result_vregs)
 }
 
 // NOTE: lower_global_get, lower_global_set are removed

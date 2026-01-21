@@ -1,13 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/jit"
 
-import(
-  "Milky2018/wasmoon/cwasm"
-  "Milky2018/wasmoon/jit/jit_ffi"
-  "Milky2018/wasmoon/types"
-  "Milky2018/wasmoon/vcode"
-  "moonbitlang/core/hashset"
-)
+import {
+  "Milky2018/wasmoon/cwasm",
+  "Milky2018/wasmoon/jit/jit_ffi",
+  "Milky2018/wasmoon/types",
+  "Milky2018/wasmoon/vcode",
+  "moonbitlang/core/hashset",
+}
 
 // Values
 pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
@@ -19,6 +19,8 @@ pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int
 pub fn c_jit_read_i64(Int64) -> Int64
 
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
+
+pub fn c_jit_write_u32(Int64, Int) -> Unit
 
 pub fn check_trap() -> Unit raise JITTrap
 
@@ -232,6 +234,7 @@ pub(all) suberror CHeapError {
 
 pub suberror JITTrap {
   JITTrap(String)
+  JITExit(Int)
 }
 pub impl Show for JITTrap
 

@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode/layout"
 
-import(
-  "Milky2018/wasmoon/vcode/regalloc"
-)
+import {
+  "Milky2018/wasmoon/vcode/regalloc",
+}
 
 // Values
 pub fn layout_blocks(@regalloc.VCodeFunction) -> Array[Int]

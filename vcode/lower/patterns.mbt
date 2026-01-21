@@ -608,7 +608,7 @@ pub fn lower_inst_with_patterns(
 pub fn lower_function_optimized(
   ir_func : @ir.Function,
 ) -> @regalloc.VCodeFunction {
-  let ctx = LoweringContext::new(ir_func, @abi.ABISettings::default())
+  let ctx = LoweringContext::new(ir_func, @abi.ABISettings::default(), -1)
   let rules = get_optimization_rules()
 
   // Phase 1: Create VCode blocks and set up block mapping

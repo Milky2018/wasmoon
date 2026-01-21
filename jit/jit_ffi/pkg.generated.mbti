@@ -110,6 +110,8 @@ pub fn c_jit_clear_segments() -> Unit
 
 pub fn c_jit_clear_trap() -> Unit
 
+pub fn c_jit_clear_wasi_exit(Int64) -> Unit
+
 pub fn c_jit_context_ptr(JITContext) -> Int64
 
 pub fn c_jit_copy_code(Int64, FixedArray[Byte], Int) -> Int
@@ -378,6 +380,8 @@ pub fn c_jit_get_trap_pc() -> Int64
 
 pub fn c_jit_get_trap_signal() -> Int
 
+pub fn c_jit_get_wasi_exit_code(Int64) -> Int
+
 pub fn c_jit_get_wasm_stack_top(Int64) -> Int64
 
 pub fn c_jit_init_data_segments(Int) -> Unit
@@ -409,6 +413,8 @@ pub fn c_jit_set_wasi_envs(Int64, Int) -> Unit
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
 
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
+
+pub fn c_jit_write_u32(Int64, Int) -> Unit
 
 pub fn c_mem_desc_get_base(Int64) -> Int64
 

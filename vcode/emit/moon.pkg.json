@@ -7,6 +7,7 @@
     "Milky2018/wasmoon/vcode/layout",
     "Milky2018/wasmoon/vcode/lower",
     "Milky2018/wasmoon/vcode/regalloc",
-    "Milky2018/wasmoon/vcode/instr"
+    "Milky2018/wasmoon/vcode/instr",
+    "moonbitlang/core/hashset"
   ]
 }

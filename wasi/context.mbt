@@ -317,33 +317,64 @@ pub fn WasiContext::get_preopen_host_path(
 }
 
 ///|
+/// Normalize a guest path and reject escapes from the preopen root.
+fn sanitize_guest_path(path : String) -> String? {
+  if path.length() == 0 {
+    return Some("")
+  }
+  if path.has_prefix("/") {
+    return None
+  }
+  let parts : Array[String] = []
+  let mut start = 0
+  let mut i = 0
+  while i <= path.length() {
+    if i == path.length() || path.code_unit_at(i) == '/' {
+      let seg = if i == start { "" } else { try! path[start:i].to_string() }
+      if seg == "" || seg == "." {
+        ()
+      } else if seg == ".." {
+        if parts.is_empty() {
+          return None
+        }
+        parts.pop() |> ignore
+      } else {
+        parts.push(seg)
+      }
+      start = i + 1
+    }
+    i = i + 1
+  }
+  Some(parts.join("/"))
+}
+
+///|
 /// Resolve a path relative to a directory fd
 pub fn WasiContext::resolve_path(
   self : WasiContext,
   dir_fd : Int,
   path : String,
 ) -> String? {
+  let normalized = match sanitize_guest_path(path) {
+    Some(p) => p
+    None => return None
+  }
   // If dir_fd is a preopen directory, resolve relative to it
   if self.get_preopen_host_path(dir_fd) is Some(host_path) {
-    if path.length() == 0 {
+    if normalized.length() == 0 {
       Some(host_path)
-    } else if path.has_prefix("/") {
-      // Absolute path - should be restricted, but for simplicity we just use host_path as root
-      Some(host_path + path)
     } else {
-      Some(host_path + "/" + path)
+      Some(host_path + "/" + normalized)
     }
   } else {
     // Check if it's a regular open directory
     match self.get_file(dir_fd) {
       Some(file) =>
         if file.file_type is Directory {
-          if path.length() == 0 {
+          if normalized.length() == 0 {
             Some(file.host_path)
-          } else if path.has_prefix("/") {
-            Some(file.host_path + path)
           } else {
-            Some(file.host_path + "/" + path)
+            Some(file.host_path + "/" + normalized)
           }
         } else {
           None

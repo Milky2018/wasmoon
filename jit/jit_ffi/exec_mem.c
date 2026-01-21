@@ -3,6 +3,7 @@
 // Handles mmap/VirtualAlloc for code allocation and cache flushing
 
 #include "jit_internal.h"
+#include <errno.h>
 
 // ============ Code Block Tracking ============
 
@@ -44,9 +45,18 @@ int64_t alloc_exec_internal(int size) {
 #ifdef _WIN32
     void *ptr = VirtualAlloc(NULL, alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 #else
-    // Allocate with WRITE permission first, will change to EXEC after copying
+#ifdef __APPLE__
+    int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+#ifdef MAP_JIT
+    flags |= MAP_JIT;
+#endif
+    // Allocate as RWX; use pthread_jit_write_protect_np to toggle W^X on Apple.
+    void *ptr = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE | PROT_EXEC, flags, -1, 0);
+#else
+    // Allocate with WRITE permission first, will change to EXEC after copying.
     void *ptr = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
     if (ptr == MAP_FAILED) {
         return 0;
     }
@@ -69,14 +79,15 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
         return -1;
     }
 
-    // Copy code
-    memcpy(ptr, src, (size_t)size);
-
-    // Find the code block to get the size for mprotect
+    // Find the code block containing this address
     size_t alloc_size = 0;
+    void *block_base = NULL;
     for (int i = 0; i < num_code_blocks; i++) {
-        if (code_blocks[i].code == ptr) {
+        uint8_t *base = (uint8_t *)code_blocks[i].code;
+        uint8_t *end = base + code_blocks[i].size;
+        if ((uint8_t *)ptr >= base && (uint8_t *)ptr < end) {
             alloc_size = code_blocks[i].size;
+            block_base = base;
             break;
         }
     }
@@ -85,10 +96,30 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
     }
 
 #ifndef _WIN32
-    // Change permissions from WRITE to EXEC
-    if (mprotect(ptr, alloc_size, PROT_READ | PROT_EXEC) != 0) {
+#ifdef __APPLE__
+    // Toggle write protection for JIT pages on Apple platforms.
+    pthread_jit_write_protect_np(0);
+#else
+    // Ensure writable before patching (needed for runtime fixups).
+    if (mprotect(block_base, alloc_size, PROT_READ | PROT_WRITE) != 0) {
         return -1;
     }
+#endif
+#endif
+
+    // Copy code.
+    memcpy(ptr, src, (size_t)size);
+
+#ifndef _WIN32
+#ifdef __APPLE__
+    // Re-enable write protection for JIT pages.
+    pthread_jit_write_protect_np(1);
+#else
+    // Change permissions from WRITE to EXEC.
+    if (mprotect(block_base, alloc_size, PROT_READ | PROT_EXEC) != 0) {
+        return -1;
+    }
+#endif
 #endif
 
     // Flush instruction cache

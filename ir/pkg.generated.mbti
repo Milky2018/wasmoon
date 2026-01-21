@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/ir"
 
-import(
-  "Milky2018/wasmoon/ir/egraph"
-  "Milky2018/wasmoon/types"
-)
+import {
+  "Milky2018/wasmoon/ir/egraph",
+  "Milky2018/wasmoon/types",
+}
 
 // Values
 pub const GLOBAL_STRIDE : Int = 16
@@ -44,6 +44,8 @@ pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
 pub fn eliminate_common_subexpressions(Function) -> OptResult
 
 pub fn eliminate_common_subexpressions_global(Function) -> OptResult
+
+pub fn eliminate_constant_block_params(Function) -> OptResult
 
 pub fn eliminate_dead_block_params(Function) -> OptResult
 
@@ -792,6 +794,7 @@ pub struct OptResult {
 }
 pub fn OptResult::mark_changed(Self) -> Unit
 pub fn OptResult::new() -> Self
+pub impl Eq for OptResult
 
 type RepKey
 pub impl Eq for RepKey

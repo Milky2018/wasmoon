@@ -9,11 +9,15 @@ fn emit_load_func_table(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
 ) -> @abi.VReg {
+  if ctx.func_table_cache.get(block.id) is Some(vreg) {
+    return vreg
+  }
   let func_table_vreg = ctx.vcode_func.new_vreg(Int)
   let load_inst = @instr.VCodeInst::new(Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET))
   load_inst.add_def({ reg: Virtual(func_table_vreg) })
   load_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int })) // X19 = vmctx
   block.add_inst(load_inst)
+  ctx.func_table_cache.set(block.id, func_table_vreg)
   func_table_vreg
 }
 

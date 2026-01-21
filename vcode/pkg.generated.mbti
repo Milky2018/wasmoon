@@ -1,13 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode"
 
-import(
-  "Milky2018/wasmoon/vcode/abi"
-  "Milky2018/wasmoon/vcode/block"
-  "Milky2018/wasmoon/vcode/emit"
-  "Milky2018/wasmoon/vcode/instr"
-  "Milky2018/wasmoon/vcode/regalloc"
-)
+import {
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/block",
+  "Milky2018/wasmoon/vcode/emit",
+  "Milky2018/wasmoon/vcode/instr",
+  "Milky2018/wasmoon/vcode/regalloc",
+}
 
 // Values
 pub fn dump_regalloc(String, @regalloc.LivenessResult, @regalloc.RegAllocResult) -> Unit
@@ -61,7 +61,9 @@ pub struct CompiledFunction {
   frame_size : Int
   mut valid : Bool
 }
+pub fn CompiledFunction::get_call_fixups(Self) -> Array[@emit.CallFixup]
 pub fn CompiledFunction::get_code(Self) -> Array[Int]
+pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[@emit.FuncAddrFixup]
 pub fn CompiledFunction::invalidate(Self) -> Unit
 pub fn CompiledFunction::is_valid(Self) -> Bool
 pub fn CompiledFunction::new(String, @emit.MachineCode, Int) -> Self

@@ -663,6 +663,36 @@ test "dead code elimination" {
 }
 
 ///|
+test "constant block param elimination" {
+  let builder = IRBuilder::new("phi_const")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let block1 = builder.create_block()
+  builder.switch_to_block(entry)
+  let c0 = builder.iconst_i32(7)
+  builder.jump(block1, [c0])
+  let p0 = builder.add_block_param(block1, Type::I32)
+  builder.switch_to_block(block1)
+  builder.return_([p0])
+  let func = builder.get_function()
+  let result = eliminate_constant_block_params(func)
+  assert_true(result.changed)
+  inspect(
+    func.print(),
+    content=(
+      #|function phi_const() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 7
+      #|    jump block1
+      #|block1:
+      #|    return v0
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "copy propagation" {
   let builder = IRBuilder::new("copy_prop")
   let p0 = builder.add_param(Type::I32)

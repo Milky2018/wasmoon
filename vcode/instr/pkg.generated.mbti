@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode/instr"
 
-import(
-  "Milky2018/wasmoon/vcode/abi"
-)
+import {
+  "Milky2018/wasmoon/vcode/abi",
+}
 
 // Values
 
@@ -315,7 +315,9 @@ pub(all) enum VCodeOpcode {
   LoadGCFuncPtr(GCLibcall)
   LoadJITFuncPtr(JITLibcall)
   LoadExceptionFuncPtr(ExceptionLibcall)
+  LoadFuncAddr(Int)
   CallPtr(Int, Int, CallConv)
+  CallDirect(Int, Int, Int, CallConv)
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP

@@ -1,13 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode/regalloc"
 
-import(
-  "Milky2018/wasmoon/ir"
-  "Milky2018/wasmoon/vcode/abi"
-  "Milky2018/wasmoon/vcode/block"
-  "Milky2018/wasmoon/vcode/instr"
-  "moonbitlang/core/set"
-)
+import {
+  "Milky2018/wasmoon/ir",
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/block",
+  "Milky2018/wasmoon/vcode/instr",
+  "moonbitlang/core/set",
+}
 
 // Values
 pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg]) -> RegAllocResult

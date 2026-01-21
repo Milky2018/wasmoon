@@ -673,6 +673,14 @@ pub extern "c" fn c_jit_set_wasi_env(
   env : FixedArray[Byte],
 ) -> Unit = "wasmoon_jit_set_wasi_env"
 
+///|
+/// Get WASI exit code from context (-1 if none)
+pub extern "c" fn c_jit_get_wasi_exit_code(ctx_ptr : Int64) -> Int = "wasmoon_jit_get_wasi_exit_code"
+
+///|
+/// Clear WASI exit state in context
+pub extern "c" fn c_jit_clear_wasi_exit(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_wasi_exit"
+
 // ============ Spectest Trampolines ============
 
 ///|
@@ -779,6 +787,10 @@ pub extern "c" fn c_jit_call_multi_return(
 ///|
 /// Write an int64 value to a memory address
 pub extern "c" fn c_jit_write_i64(addr : Int64, value : Int64) -> Unit = "wasmoon_jit_write_i64"
+
+///|
+/// Write a u32 value to a memory address
+pub extern "c" fn c_jit_write_u32(addr : Int64, value : Int) -> Unit = "wasmoon_jit_write_u32"
 
 ///|
 /// Read an int64 value from a memory address

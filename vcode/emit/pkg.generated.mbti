@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode/emit"
 
-import(
-  "Milky2018/wasmoon/vcode/abi"
-  "Milky2018/wasmoon/vcode/instr"
-  "Milky2018/wasmoon/vcode/regalloc"
-)
+import {
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/instr",
+  "Milky2018/wasmoon/vcode/regalloc",
+}
 
 // Values
 pub const TYPE_F32 : Int = 2
@@ -25,6 +25,11 @@ pub fn emit_function(@regalloc.VCodeFunction, debug_func_idx? : Int?, force_fram
 // Errors
 
 // Types and methods
+pub(all) struct CallFixup {
+  offset : Int
+  func_idx : Int
+}
+
 pub(all) enum CondCode {
   EQ
   NE
@@ -49,6 +54,12 @@ type Fixup
 pub(all) enum FixupKind {
   Branch26
   Branch19
+}
+
+pub(all) struct FuncAddrFixup {
+  offset : Int
+  func_idx : Int
+  reg : Int
 }
 
 type Instruction
@@ -84,9 +95,13 @@ pub struct MachineCode {
   mut pos : Int
   labels : Map[Int, Int]
   fixups : Array[Fixup]
+  func_addr_fixups : Array[FuncAddrFixup]
+  call_fixups : Array[CallFixup]
   disasm : Array[(Int, String)]
 }
+pub fn MachineCode::add_call_fixup(Self, Int, Int) -> Unit
 pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
+pub fn MachineCode::add_func_addr_fixup(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::align(Self, Int) -> Unit
 pub fn MachineCode::align_block(Self) -> Unit
 pub fn MachineCode::align_function(Self) -> Unit
@@ -110,6 +125,7 @@ pub fn MachineCode::emit_asr_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_b(Self, Int) -> Unit
 pub fn MachineCode::emit_b_cond(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_bl(Self, Int) -> Unit
+pub fn MachineCode::emit_bl_func(Self, Int) -> Unit
 pub fn MachineCode::emit_blr(Self, Int) -> Unit
 pub fn MachineCode::emit_br(Self, Int) -> Unit
 pub fn MachineCode::emit_byte(Self, Int) -> Unit
@@ -267,6 +283,8 @@ pub fn MachineCode::emit_uxtb_x(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_uxth_w(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_uxth_x(Self, Int, Int) -> Unit
 pub fn MachineCode::get_bytes(Self) -> Array[Int]
+pub fn MachineCode::get_call_fixups(Self) -> Array[CallFixup]
+pub fn MachineCode::get_func_addr_fixups(Self) -> Array[FuncAddrFixup]
 pub fn MachineCode::hex_dump(Self) -> String
 pub fn MachineCode::new() -> Self
 pub fn MachineCode::resolve_fixups(Self) -> Unit

@@ -99,6 +99,115 @@ pub fn JITModule::new() -> JITModule {
 }
 
 ///|
+fn pack_u64_le(bytes : Array[Int], start : Int) -> Int64 {
+  let mut value : Int64 = 0L
+  for i in 0..<8 {
+    let b = bytes[start + i].to_int64() & 0xFFL
+    value = value | (b << (i * 8))
+  }
+  value
+}
+
+///|
+fn emit_load_imm64_fixed_bytes(reg : Int, imm : Int64) -> Array[Int] {
+  let mc = @emit.MachineCode::new()
+  mc.emit_load_imm64_fixed(reg, imm)
+  mc.get_bytes()
+}
+
+///|
+fn patch_load_imm64_fixed(
+  exec_ptr : Int64,
+  fixup : @emit.FuncAddrFixup,
+  func_ptr : Int64,
+) -> Unit {
+  let bytes = emit_load_imm64_fixed_bytes(fixup.reg, func_ptr)
+  if bytes.length() != 16 {
+    abort("unexpected load_imm64_fixed size")
+  }
+  let base = exec_ptr + fixup.offset.to_int64()
+  c_jit_write_i64(base, pack_u64_le(bytes, 0))
+  c_jit_write_i64(base + 8L, pack_u64_le(bytes, 8))
+}
+
+///|
+fn apply_func_addr_fixups(
+  ctx : JITContext,
+  jit_module : JITModule,
+  precompiled : @cwasm.PrecompiledModule,
+) -> Unit {
+  let func_table_ptr = ctx.get_func_table_ptr()
+  if func_table_ptr == 0L {
+    return
+  }
+  for entry in precompiled.functions {
+    if entry.func_addr_fixups.length() == 0 {
+      continue
+    }
+    match jit_module.functions.get(entry.func_idx) {
+      Some(func) => {
+        let exec_ptr = func.exec_code.ptr()
+        for fixup in entry.func_addr_fixups {
+          let target_ptr = c_jit_read_i64(
+            func_table_ptr + fixup.func_idx.to_int64() * 8L,
+          )
+          patch_load_imm64_fixed(exec_ptr, fixup, target_ptr)
+        }
+      }
+      None => ()
+    }
+  }
+}
+
+///|
+fn patch_direct_call(
+  exec_ptr : Int64,
+  fixup : @emit.CallFixup,
+  target_ptr : Int64,
+) -> Unit {
+  let pc = exec_ptr + fixup.offset.to_int64()
+  let diff = target_ptr - pc
+  if diff % 4L != 0L {
+    abort("direct call target misaligned")
+  }
+  let imm26 = diff / 4L
+  if imm26 < -0x2000000L || imm26 > 0x1FFFFFFL {
+    abort("direct call target out of range")
+  }
+  let encoded = (0x94000000L | (imm26 & 0x3FFFFFFL)).to_int()
+  c_jit_write_u32(pc, encoded)
+}
+
+///|
+fn apply_call_fixups(
+  ctx : JITContext,
+  jit_module : JITModule,
+  precompiled : @cwasm.PrecompiledModule,
+) -> Unit {
+  let func_table_ptr = ctx.get_func_table_ptr()
+  if func_table_ptr == 0L {
+    return
+  }
+  for entry in precompiled.functions {
+    if entry.call_fixups.length() == 0 {
+      continue
+    }
+    match jit_module.functions.get(entry.func_idx) {
+      Some(func) => {
+        let exec_ptr = func.exec_code.ptr()
+        for fixup in entry.call_fixups {
+          let target_ptr = c_jit_read_i64(
+            func_table_ptr + fixup.func_idx.to_int64() * 8L,
+          )
+          patch_direct_call(exec_ptr, fixup, target_ptr)
+        }
+      }
+      None => ()
+    }
+  }
+}
+
+///|
 /// Load a precompiled module
 /// func_signatures: Array of (param_types, result_types) for each func_idx
 pub fn JITModule::load(
@@ -180,6 +289,10 @@ pub fn JITModule::load_with_imports(
       // Store context in module
       jit_module.context = Some(ctx)
       jit_module.debug_db = debug_db
+
+      // Patch direct-call function address loads now that pointers are known.
+      apply_func_addr_fixups(ctx, jit_module, precompiled)
+      apply_call_fixups(ctx, jit_module, precompiled)
 
       // Build sorted address_ranges for binary search in find_func_by_pc
       for func_idx, f in jit_module.functions {
@@ -494,6 +607,7 @@ pub fn JITModule::call_with_context(
         func.result_types,
       ) catch {
         JITTrap(msg) => raise JITTrap(self.enrich_trap_message(msg))
+        JITExit(code) => raise JITExit(code)
       }
       results
     }

@@ -742,6 +742,13 @@ pub fn invoke_action(
               // - Syncing from interpreter (which has nulls) would overwrite the JIT values
               // TODO: Implement bidirectional sync when mixing interpreter/JIT execution
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
+                @jit.JITExit(code) => {
+                  // Tear down GC context on exit
+                  @jit.gc_teardown()
+                  // Sync globals even on exit
+                  sync_jit_globals_to_store(jit, ctx.store)
+                  raise RuntimeError("WASI exit: \{code}")
+                }
                 @jit.JITTrap(msg) => {
                   // Tear down GC context on trap
                   @jit.gc_teardown()

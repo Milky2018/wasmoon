@@ -851,7 +851,6 @@ fn run_with_jit(
   opt_level : Int,
   enable_dwarf : Bool,
 ) -> Array[@types.Value] {
-  ignore(debug)
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
@@ -948,6 +947,12 @@ fn run_with_jit(
                 None => ()
               }
               let results = jm.call_with_context(f, i64_args) catch {
+                @jit.JITExit(code) => {
+                  @jit.gc_teardown()
+                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  native_exit(code)
+                  panic()
+                }
                 @jit.JITTrap(msg) => {
                   @jit.gc_teardown()
                   // Sync globals back to interpreter store even on trap.
@@ -1001,7 +1006,7 @@ fn run_with_jit(
 /// actual_memory_max: Override for memory max limit (used for imported memories)
 fn compile_module_to_jit(
   mod_ : @types.Module,
-  _debug : Bool,
+  debug : Bool,
   dump_on_trap : Bool,
   actual_memory_max? : Int? = None,
   opt_level : Int,
@@ -1057,7 +1062,10 @@ fn compile_module_to_jit(
       ir_dump = Some(ir_func.print())
     }
     // Stage 3: Lower to VCode
-    let vcode_func = @lower.lower_function(ir_func)
+    let vcode_func = @lower.lower_function(
+      ir_func,
+      num_imports=mod_.imports.length(),
+    )
     let mut vcode_before_dump : String? = None
     if debug_db is Some(_) {
       vcode_before_dump = Some(vcode_func.print())
@@ -1069,9 +1077,10 @@ fn compile_module_to_jit(
       vcode_after_dump = Some(allocated.print())
     }
     // Stage 5: Emit machine code
+    let debug_func_idx = if debug { Some(func_idx) } else { None }
     let mc = @emit.emit_function(
       allocated,
-      debug_func_idx=Some(func_idx),
+      debug_func_idx~,
       force_frame_setup=enable_dwarf,
     )
     let mut mc_dump : String? = None

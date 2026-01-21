@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/validator"
 
-import(
-  "Milky2018/wasmoon/types"
-)
+import {
+  "Milky2018/wasmoon/types",
+}
 
 // Values
 pub fn format_validation_error(ValidationError) -> String

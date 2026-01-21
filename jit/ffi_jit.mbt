@@ -3,7 +3,7 @@
 /// Uses @jit_ffi package for C function declarations
 
 ///|
-pub using @jit_ffi {c_jit_write_i64, c_jit_read_i64}
+pub using @jit_ffi {c_jit_write_i64, c_jit_write_u32, c_jit_read_i64}
 
 // ============ Trap Handling ============
 
@@ -11,7 +11,11 @@ pub using @jit_ffi {c_jit_write_i64, c_jit_read_i64}
 /// Error for JIT trap
 pub suberror JITTrap {
   JITTrap(String)
+  JITExit(Int)
 } derive(Show)
+
+///|
+let wasi_exit_trap_code : Int = 100
 
 ///|
 /// Low-level trap detail captured by the JIT signal handlers (best-effort).
@@ -1017,6 +1021,12 @@ fn JITContext::call_multi_return(
     )
   }
   if trap_code != 0 {
+    if trap_code == wasi_exit_trap_code {
+      let raw_code = @jit_ffi.c_jit_get_wasi_exit_code(self.ptr())
+      @jit_ffi.c_jit_clear_wasi_exit(self.ptr())
+      let exit_code = if raw_code < 0 { 0 } else { raw_code }
+      raise JITExit(exit_code)
+    }
     let msg = match trap_code {
       1 => "out of bounds memory access"
       2 => "call stack exhausted"

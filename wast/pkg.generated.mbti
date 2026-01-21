@@ -1,14 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/wast"
 
-import(
-  "Milky2018/wasmoon/jit"
-  "Milky2018/wasmoon/runtime"
-  "Milky2018/wasmoon/types"
-  "Milky2018/wasmoon/wasi"
-  "Milky2018/wasmoon/wat"
-  "moonbitlang/core/hashset"
-)
+import {
+  "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/types",
+  "Milky2018/wasmoon/wasi",
+  "Milky2018/wasmoon/wat",
+  "moonbitlang/core/hashset",
+}
 
 // Values
 pub const EXTERNREF_TAG : Int64 = 0x4000000000000000
