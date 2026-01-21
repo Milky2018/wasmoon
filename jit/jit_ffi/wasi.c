@@ -1036,48 +1036,131 @@ static int64_t wasi_poll_oneoff_impl(
     if (!check_mem_range(ctx, out_ptr, (size_t)nsubscriptions * 32)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nevents_ptr, 4)) return WASI_EFAULT;
 
-    // Simplified: just handle clock subscriptions with sleep
     uint8_t *mem = ctx->memory0->base;
+    if (nsubscriptions == 0) {
+        *(int32_t *)(mem + nevents_ptr) = 0;
+        return WASI_ESUCCESS;
+    }
+
     int64_t min_timeout = -1;
+    int num_fds = 0;
 
     for (int64_t i = 0; i < nsubscriptions; i++) {
         int64_t sub = in_ptr + i * 48;
         uint8_t tag = mem[sub + 8];
-        if (tag == 0) { // Clock
+        if (tag == 0) {
             int64_t timeout = *(int64_t *)(mem + sub + 24);
-            if (min_timeout < 0 || timeout < min_timeout) {
-                min_timeout = timeout;
+            uint16_t flags = *(uint16_t *)(mem + sub + 40);
+            int64_t timeout_ns;
+            if (flags & 1) {
+#ifndef _WIN32
+                struct timespec ts;
+                clock_gettime(CLOCK_MONOTONIC, &ts);
+                int64_t now = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+                timeout_ns = timeout > now ? timeout - now : 0;
+#else
+                timeout_ns = 0;
+#endif
+            } else {
+                timeout_ns = timeout;
+            }
+            if (min_timeout < 0 || timeout_ns < min_timeout) {
+                min_timeout = timeout_ns;
+            }
+        } else if (tag == 1 || tag == 2) {
+            int32_t fd = *(int32_t *)(mem + sub + 12);
+            int native_fd = get_native_fd(ctx, fd);
+            if (native_fd >= 0) {
+                num_fds++;
             }
         }
     }
 
-    if (min_timeout > 0) {
+    int timeout_ms = -1;
+    if (min_timeout == 0) {
+        timeout_ms = 0;
+    } else if (min_timeout > 0) {
+        int64_t ms = min_timeout / 1000000LL;
+        timeout_ms = (ms == 0) ? 1 : (int)ms;
+    }
+
+    int32_t events_written = 0;
+
 #ifndef _WIN32
+    struct pollfd *pfds = NULL;
+    int *sub_indices = NULL;
+    if (num_fds > 0) {
+        pfds = calloc((size_t)num_fds, sizeof(struct pollfd));
+        sub_indices = calloc((size_t)num_fds, sizeof(int));
+        if (!pfds || !sub_indices) {
+            free(pfds);
+            free(sub_indices);
+            return WASI_ENOMEM;
+        }
+        int idx = 0;
+        for (int64_t i = 0; i < nsubscriptions; i++) {
+            int64_t sub = in_ptr + i * 48;
+            uint8_t tag = mem[sub + 8];
+            if (tag == 1 || tag == 2) {
+                int32_t fd = *(int32_t *)(mem + sub + 12);
+                int native_fd = get_native_fd(ctx, fd);
+                if (native_fd >= 0) {
+                    pfds[idx].fd = native_fd;
+                    pfds[idx].events = (tag == 1) ? POLLIN : POLLOUT;
+                    sub_indices[idx] = (int)i;
+                    idx++;
+                }
+            }
+        }
+
+        int poll_result = poll(pfds, (nfds_t)num_fds, timeout_ms);
+        if (poll_result > 0) {
+            for (int i = 0; i < num_fds; i++) {
+                if (pfds[i].revents != 0 && events_written < nsubscriptions) {
+                    int64_t sub = in_ptr + (int64_t)sub_indices[i] * 48;
+                    int64_t userdata = *(int64_t *)(mem + sub);
+                    uint8_t tag = mem[sub + 8];
+                    int64_t evt = out_ptr + (int64_t)events_written * 32;
+
+                    *(int64_t *)(mem + evt) = userdata;
+                    *(uint16_t *)(mem + evt + 8) = 0;
+                    mem[evt + 10] = tag;
+                    memset(mem + evt + 11, 0, 5);
+                    *(int64_t *)(mem + evt + 16) = 0;
+                    *(uint16_t *)(mem + evt + 24) = 0;
+                    memset(mem + evt + 26, 0, 6);
+                    events_written++;
+                }
+            }
+        }
+        free(pfds);
+        free(sub_indices);
+    } else if (min_timeout >= 0) {
         struct timespec ts = {
             .tv_sec = min_timeout / 1000000000LL,
             .tv_nsec = min_timeout % 1000000000LL
         };
         nanosleep(&ts, NULL);
-#endif
     }
+#else
+    (void)timeout_ms;
+#endif
 
-    // Write events for clock subscriptions
-    int32_t events = 0;
-    for (int64_t i = 0; i < nsubscriptions; i++) {
+    for (int64_t i = 0; i < nsubscriptions && events_written < nsubscriptions; i++) {
         int64_t sub = in_ptr + i * 48;
         uint8_t tag = mem[sub + 8];
         if (tag == 0) {
             int64_t userdata = *(int64_t *)(mem + sub);
-            int64_t evt = out_ptr + events * 32;
+            int64_t evt = out_ptr + (int64_t)events_written * 32;
             *(int64_t *)(mem + evt) = userdata;
-            *(uint16_t *)(mem + evt + 8) = 0; // error = success
-            mem[evt + 10] = 0; // type = clock
+            *(uint16_t *)(mem + evt + 8) = 0;
+            mem[evt + 10] = 0;
             memset(mem + evt + 11, 0, 21);
-            events++;
+            events_written++;
         }
     }
 
-    *(int32_t *)(mem + nevents_ptr) = events;
+    *(int32_t *)(mem + nevents_ptr) = events_written;
     return WASI_ESUCCESS;
 }
 
