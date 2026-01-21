@@ -422,6 +422,109 @@ test "wasi jit: fd_readdir works on path_open directory" {
 }
 
 ///|
+test "wasi jit: preopen fd rejects non-dir ops" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_sync"
+    #|    (func $fd_sync (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_datasync"
+    #|    (func $fd_datasync (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_seek"
+    #|    (func $fd_seek (param i32 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_pread"
+    #|    (func $fd_pread (param i32 i32 i32 i64 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_pwrite"
+    #|    (func $fd_pwrite (param i32 i32 i32 i64 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_filestat_set_size"
+    #|    (func $fd_filestat_set_size (param i32 i64) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_filestat_set_times"
+    #|    (func $fd_filestat_set_times (param i32 i64 i64 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_advise"
+    #|    (func $fd_advise (param i32 i64 i64 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_allocate"
+    #|    (func $fd_allocate (param i32 i64 i64) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_flags"
+    #|    (func $fd_fdstat_set_flags (param i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $fd_fdstat_set_rights (param i32 i64 i64) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 128) "DATA")
+    #|  (func (export "sync_preopen") (result i32)
+    #|    (call $fd_sync (i32.const 3)))
+    #|  (func (export "datasync_preopen") (result i32)
+    #|    (call $fd_datasync (i32.const 3)))
+    #|  (func (export "seek_preopen") (result i32)
+    #|    (call $fd_seek (i32.const 3) (i64.const 0) (i32.const 0) (i32.const 32)))
+    #|  (func (export "pread_preopen") (result i32)
+    #|    (i32.store (i32.const 0) (i32.const 128))
+    #|    (i32.store (i32.const 4) (i32.const 4))
+    #|    (call $fd_pread (i32.const 3) (i32.const 0) (i32.const 1)
+    #|      (i64.const 0) (i32.const 8)))
+    #|  (func (export "pwrite_preopen") (result i32)
+    #|    (i32.store (i32.const 16) (i32.const 128))
+    #|    (i32.store (i32.const 20) (i32.const 4))
+    #|    (call $fd_pwrite (i32.const 3) (i32.const 16) (i32.const 1)
+    #|      (i64.const 0) (i32.const 24)))
+    #|  (func (export "set_size_preopen") (result i32)
+    #|    (call $fd_filestat_set_size (i32.const 3) (i64.const 0)))
+    #|  (func (export "set_times_preopen") (result i32)
+    #|    (call $fd_filestat_set_times (i32.const 3) (i64.const 0)
+    #|      (i64.const 0) (i32.const 0)))
+    #|  (func (export "advise_preopen") (result i32)
+    #|    (call $fd_advise (i32.const 3) (i64.const 0) (i64.const 0) (i32.const 0)))
+    #|  (func (export "allocate_preopen") (result i32)
+    #|    (call $fd_allocate (i32.const 3) (i64.const 0) (i64.const 0)))
+    #|  (func (export "set_flags_preopen") (result i32)
+    #|    (call $fd_fdstat_set_flags (i32.const 3) (i32.const 0)))
+    #|  (func (export "set_rights_preopen") (result i32)
+    #|    (call $fd_fdstat_set_rights (i32.const 3) (i64.const 0) (i64.const 0))))
+  inspect(
+    compare_wasi_with_options(source, "sync_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "datasync_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "seek_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "pread_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "pwrite_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "set_size_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "set_times_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "advise_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "allocate_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "set_flags_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "set_rights_preopen", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+}
+
+///|
 test "wasi jit: fd_read uses stdin callback" {
   let source =
     #|(module

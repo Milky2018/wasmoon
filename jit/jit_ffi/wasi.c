@@ -464,7 +464,6 @@ static int64_t wasi_fd_close_impl(
 
     int wasi_fd = (int)fd;
     if (wasi_fd < 3) return WASI_EBADF;
-    if (is_preopen_fd(ctx, wasi_fd)) return WASI_EBADF; // Can't close preopens
 
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -495,7 +494,7 @@ static int64_t wasi_fd_seek_impl(
 #else
     off_t pos = lseek(native_fd, offset, (int)whence);
 #endif
-    if (pos < 0) return errno_to_wasi(errno);
+    if (pos < 0) return WASI_EIO;
 
     *(int64_t *)(ctx->memory0->base + newoffset_ptr) = pos;
     return WASI_ESUCCESS;
@@ -524,7 +523,7 @@ static int64_t wasi_fd_sync_impl(
 #ifdef _WIN32
     return WASI_ESUCCESS; // No sync on Windows
 #else
-    if (fsync(native_fd) < 0) return errno_to_wasi(errno);
+    if (fsync(native_fd) < 0) return WASI_EIO;
     return WASI_ESUCCESS;
 #endif
 }
@@ -544,10 +543,10 @@ static int64_t wasi_fd_datasync_impl(
 #ifdef _WIN32
     return WASI_ESUCCESS;
 #elif defined(__APPLE__)
-    if (fsync(native_fd) < 0) return errno_to_wasi(errno);
+    if (fsync(native_fd) < 0) return WASI_EIO;
     return WASI_ESUCCESS;
 #else
-    if (fdatasync(native_fd) < 0) return errno_to_wasi(errno);
+    if (fdatasync(native_fd) < 0) return WASI_EIO;
     return WASI_ESUCCESS;
 #endif
 }
@@ -909,7 +908,7 @@ static int64_t wasi_fd_filestat_set_size_impl(
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
-    if (ftruncate(native_fd, size) < 0) return errno_to_wasi(errno);
+    if (ftruncate(native_fd, size) < 0) return WASI_EIO;
     return WASI_ESUCCESS;
 #else
     return WASI_ENOSYS;
@@ -1290,7 +1289,7 @@ static int32_t wasi_fd_pread_impl(
             return WASI_EFAULT;
         }
         ssize_t n = pread(native_fd, mem + buf_ptr, buf_len, offset + total);
-        if (n < 0) return errno_to_wasi(errno);
+        if (n < 0) return WASI_EIO;
         total += n;
         if (n < buf_len) break;
     }
@@ -1328,7 +1327,7 @@ static int32_t wasi_fd_pwrite_impl(
             return WASI_EFAULT;
         }
         ssize_t n = pwrite(native_fd, mem + buf_ptr, buf_len, offset + total);
-        if (n < 0) return errno_to_wasi(errno);
+        if (n < 0) return WASI_EIO;
         total += n;
         if (n < buf_len) break;
     }
@@ -1638,7 +1637,7 @@ static int32_t wasi_fd_filestat_set_times_impl(
     }
 
     if (futimens(native_fd, times) != 0) {
-        return errno_to_wasi(errno);
+        return WASI_EIO;
     }
     return WASI_ESUCCESS;
 #else
@@ -1747,15 +1746,15 @@ static int32_t wasi_fd_allocate_impl(
 #ifdef __linux__
     // Linux has posix_fallocate
     int result = posix_fallocate(native_fd, offset, len);
-    if (result != 0) return errno_to_wasi(result);
+    if (result != 0) return WASI_EIO;
     return WASI_ESUCCESS;
 #elif defined(__APPLE__)
     // macOS: use ftruncate as fallback if extending file
     struct stat st;
-    if (fstat(native_fd, &st) != 0) return errno_to_wasi(errno);
+    if (fstat(native_fd, &st) != 0) return WASI_EIO;
     int64_t new_size = offset + len;
     if (new_size > st.st_size) {
-        if (ftruncate(native_fd, new_size) != 0) return errno_to_wasi(errno);
+        if (ftruncate(native_fd, new_size) != 0) return WASI_EIO;
     }
     return WASI_ESUCCESS;
 #else
@@ -1820,7 +1819,7 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
     if (flags & 0x10) native_flags |= O_SYNC;
 #endif
 
-    if (fcntl(native_fd, F_SETFL, native_flags) < 0) return errno_to_wasi(errno);
+    if (fcntl(native_fd, F_SETFL, native_flags) < 0) return WASI_EIO;
     return WASI_ESUCCESS;
 #else
     return WASI_ENOSYS;
@@ -2223,6 +2222,17 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const 
 
     ctx->preopen_paths[idx] = strdup(host_path);
     ctx->preopen_guest_paths[idx] = strdup(guest_path);
+#ifndef _WIN32
+    if (ctx->fd_table) {
+        int wasi_fd = ctx->preopen_base_fd + idx;
+        if (wasi_fd >= 0 && wasi_fd < ctx->fd_table_size) {
+            int native_fd = open(host_path, O_RDONLY | O_DIRECTORY);
+            if (native_fd >= 0) {
+                ctx->fd_table[wasi_fd] = native_fd;
+            }
+        }
+    }
+#endif
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_args(int64_t ctx_ptr, int argc) {
@@ -2337,7 +2347,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr) {
         if (fd2 > 2 && fd2 != fd1) close(fd2);
 #endif
         for (int i = 3; i < ctx->fd_table_size; i++) {
-            if (ctx->fd_table[i] >= 0 && !is_preopen_fd(ctx, i)) {
+            if (ctx->fd_table[i] >= 0) {
 #ifndef _WIN32
                 close(ctx->fd_table[i]);
 #endif
