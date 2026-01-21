@@ -5,7 +5,7 @@
 /// Result of an optimization pass
 pub struct OptResult {
   mut changed : Bool // Whether the IR was modified
-}
+} derive(Eq)
 
 ///|
 pub fn OptResult::new() -> OptResult {
@@ -1360,6 +1360,11 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
+    let cbpe_result = eliminate_constant_block_params(func)
+    if cbpe_result.changed {
+      changed = true
+      result.mark_changed()
+    }
     // Dead block parameter elimination (crucial for unused locals)
     let dbpe_result = eliminate_dead_block_params(func)
     if dbpe_result.changed {
@@ -1414,6 +1419,11 @@ pub fn optimize(func : Function) -> OptResult {
     }
     let dce_result = eliminate_dead_code(func)
     if dce_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    let cbpe_result = eliminate_constant_block_params(func)
+    if cbpe_result.changed {
       changed = true
       result.mark_changed()
     }
@@ -1475,6 +1485,295 @@ fn optimize_o3(func : Function) -> OptResult {
   if cleanup_result.changed {
     result.mark_changed()
   }
+  result
+}
+
+// ============ Constant Block Parameter Elimination ============
+
+///|
+/// Abstract value for block parameters during constant-phi analysis
+priv enum PhiAbstractValue {
+  None
+  One(Int)
+  Many
+} derive(Eq)
+
+///|
+fn PhiAbstractValue::join(
+  self : PhiAbstractValue,
+  other : PhiAbstractValue,
+) -> PhiAbstractValue {
+  match (self, other) {
+    (None, v) => v
+    (v, None) => v
+    (Many, _) => Many
+    (_, Many) => Many
+    (One(v1), One(v2)) => if v1 == v2 { One(v1) } else { Many }
+  }
+}
+
+///|
+///|
+fn build_value_map(func : Function) -> @hashmap.HashMap[Int, Value] {
+  let values : @hashmap.HashMap[Int, Value] = @hashmap.new()
+  for param in func.params {
+    let (v, _) = param
+    values.set(v.id, v)
+  }
+  for block in func.blocks {
+    for param in block.params {
+      let (v, _) = param
+      values.set(v.id, v)
+    }
+    for inst in block.instructions {
+      for result in inst.results {
+        values.set(result.id, result)
+      }
+    }
+  }
+  values
+}
+
+///|
+fn resolve_replacement(
+  v : Value,
+  replace_map : @hashmap.HashMap[Int, Int],
+  value_map : @hashmap.HashMap[Int, Value],
+) -> Value {
+  let mut current_id = v.id
+  let mut steps = 0
+  while steps < 1024 {
+    match replace_map.get(current_id) {
+      Some(next_id) => {
+        if next_id == current_id {
+          break
+        }
+        current_id = next_id
+        steps = steps + 1
+      }
+      None => break
+    }
+  }
+  if current_id == v.id {
+    v
+  } else {
+    value_map.get(current_id).unwrap_or(v)
+  }
+}
+
+///|
+/// Constant Block Parameter Elimination
+/// Removes block parameters that always take the same value across all incoming edges.
+/// This mirrors Cranelift's constant-phi removal, but operates on IR block params.
+pub fn eliminate_constant_block_params(func : Function) -> OptResult {
+  let result = OptResult::new()
+  let cfg = CFG::build(func)
+  let rpo = cfg.reverse_postorder()
+  if rpo.length() == 0 {
+    return result
+  }
+  let entry_id = rpo[0]
+
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+
+  let state : @hashmap.HashMap[Int, PhiAbstractValue] = @hashmap.new()
+  let mut has_params = false
+  for block in func.blocks {
+    if block.id == entry_id {
+      continue
+    }
+    for param in block.params {
+      let (v, _) = param
+      state.set(v.id, PhiAbstractValue::None)
+      has_params = true
+    }
+  }
+  if !has_params {
+    return result
+  }
+
+  let mut changed = true
+  let mut iterations = 0
+  let max_iterations = 512
+  while changed && iterations < max_iterations {
+    changed = false
+    iterations = iterations + 1
+    for block_id in rpo {
+      let block = match block_idx.get(block_id) {
+        Some(idx) => func.blocks[idx]
+        None => continue
+      }
+      match block.terminator {
+        Some(Jump(target, args)) => {
+          if args.length() == 0 {
+            continue
+          }
+          let target_block = match block_idx.get(target) {
+            Some(idx) => func.blocks[idx]
+            None => continue
+          }
+          let param_count = target_block.params.length()
+          let arg_count = args.length()
+          let count = if param_count < arg_count { param_count } else { arg_count }
+          for i in 0..<count {
+            let (formal, _) = target_block.params[i]
+            if state.get(formal.id) is None {
+              continue
+            }
+            let actual = args[i]
+            let actual_absval = match state.get(actual.id) {
+              Some(absval) => absval
+              None => PhiAbstractValue::One(actual.id)
+            }
+            let old_absval = state.get(formal.id).unwrap_or(PhiAbstractValue::None)
+            let new_absval = old_absval.join(actual_absval)
+            if new_absval != old_absval {
+              state.set(formal.id, new_absval)
+              changed = true
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+
+  let params_to_keep : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
+  let replace_map : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let mut will_change = false
+  for block in func.blocks {
+    let keep : Array[Int] = []
+    for i, param in block.params {
+      let (v, _) = param
+      match state.get(v.id) {
+        Some(PhiAbstractValue::One(replacement_id)) => {
+          replace_map.set(v.id, replacement_id)
+          will_change = true
+        }
+        _ => keep.push(i)
+      }
+    }
+    params_to_keep.set(block.id, keep)
+  }
+  if !will_change {
+    return result
+  }
+
+  for block in func.blocks {
+    let keep = params_to_keep.get(block.id).unwrap_or([])
+    if keep.length() != block.params.length() {
+      let old_params = block.params.copy()
+      block.params.clear()
+      for idx in keep {
+        block.params.push(old_params[idx])
+      }
+      result.mark_changed()
+    }
+  }
+
+  for block in func.blocks {
+    match block.terminator {
+      Some(Jump(target, args)) => {
+        let keep = params_to_keep.get(target).unwrap_or([])
+        if keep.length() != args.length() {
+          let new_args : Array[Value] = []
+          for idx in keep {
+            if idx < args.length() {
+              new_args.push(args[idx])
+            }
+          }
+          block.terminator = Some(Terminator::Jump(target, new_args))
+          result.mark_changed()
+        }
+      }
+      _ => ()
+    }
+  }
+
+  let value_map = build_value_map(func)
+  for block in func.blocks {
+    for inst in block.instructions {
+      let mut needs_update = false
+      let new_operands : Array[Value] = []
+      for op in inst.operands {
+        let resolved = resolve_replacement(op, replace_map, value_map)
+        if resolved.id != op.id {
+          needs_update = true
+        }
+        new_operands.push(resolved)
+      }
+      if needs_update {
+        inst.operands.clear()
+        for op in new_operands {
+          inst.operands.push(op)
+        }
+        result.mark_changed()
+      }
+    }
+    if block.terminator is Some(term) {
+      match term {
+        Jump(target, args) => {
+          let mut needs_update = false
+          let new_args : Array[Value] = []
+          for arg in args {
+            let resolved = resolve_replacement(arg, replace_map, value_map)
+            if resolved.id != arg.id {
+              needs_update = true
+            }
+            new_args.push(resolved)
+          }
+          if needs_update {
+            block.terminator = Some(Terminator::Jump(target, new_args))
+            result.mark_changed()
+          }
+        }
+        Brz(cond, then_target, else_target) => {
+          let resolved = resolve_replacement(cond, replace_map, value_map)
+          if resolved.id != cond.id {
+            block.terminator =
+              Some(Terminator::Brz(resolved, then_target, else_target))
+            result.mark_changed()
+          }
+        }
+        Brnz(cond, then_target, else_target) => {
+          let resolved = resolve_replacement(cond, replace_map, value_map)
+          if resolved.id != cond.id {
+            block.terminator =
+              Some(Terminator::Brnz(resolved, then_target, else_target))
+            result.mark_changed()
+          }
+        }
+        BrTable(index, targets, default_target) => {
+          let resolved = resolve_replacement(index, replace_map, value_map)
+          if resolved.id != index.id {
+            block.terminator =
+              Some(Terminator::BrTable(resolved, targets, default_target))
+            result.mark_changed()
+          }
+        }
+        Return(values) => {
+          let mut needs_update = false
+          let new_values : Array[Value] = []
+          for value in values {
+            let resolved = resolve_replacement(value, replace_map, value_map)
+            if resolved.id != value.id {
+              needs_update = true
+            }
+            new_values.push(resolved)
+          }
+          if needs_update {
+            block.terminator = Some(Terminator::Return(new_values))
+            result.mark_changed()
+          }
+        }
+        Trap(_) => ()
+      }
+    }
+  }
+
   result
 }
 
