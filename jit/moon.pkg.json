@@ -5,6 +5,7 @@
     "Milky2018/wasmoon/vcode/emit",
     "Milky2018/wasmoon/cwasm",
     "Milky2018/wasmoon/types",
+    "moonbitlang/core/hashset",
     "moonbitlang/x/fs"
   ],
   "wbtest-import": [

@@ -3,6 +3,11 @@
     "Milky2018/wasmoon/ir",
     "Milky2018/wasmoon/vcode/abi",
     "Milky2018/wasmoon/vcode/block",
-    "Milky2018/wasmoon/vcode/instr"
+    "Milky2018/wasmoon/vcode/instr",
+    "moonbitlang/core/hashset",
+    "moonbitlang/core/math"
+  ],
+  "wbtest-import": [
+    "moonbitlang/core/strconv"
   ]
 }

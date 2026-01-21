@@ -7,6 +7,10 @@
     "Milky2018/wasmoon/parser",
     "Milky2018/wasmoon/validator",
     "Milky2018/wasmoon/jit",
-    "Milky2018/wasmoon/wasi"
+    "Milky2018/wasmoon/wasi",
+    "moonbitlang/core/buffer",
+    "moonbitlang/core/double",
+    "moonbitlang/core/float",
+    "moonbitlang/core/hashset"
   ]
 }

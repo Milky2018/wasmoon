@@ -1,7 +1,9 @@
 {
   "import": [
     "Milky2018/wasmoon/types",
-    "Milky2018/wasmoon/runtime"
+    "Milky2018/wasmoon/runtime",
+    "moonbitlang/core/cmp",
+    "moonbitlang/core/hashmap"
   ],
   "targets": {
     "ffi_native.mbt": ["native"]
