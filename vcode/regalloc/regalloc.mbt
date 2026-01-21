@@ -1318,6 +1318,58 @@ pub fn apply_allocation(
     // Key: spill_slot, Value: preg holding the reloaded value
     let active_reloads : Map[Int, @abi.PReg] = {}
 
+    // Precompute per-block defs/uses for swap-aware jump-arg handling.
+    let vreg_def_info : Map[Int, (Int, Int)] = {}
+    let vreg_used_in_insts : Set[Int] = Set::new()
+    let vreg_used_in_term : Set[Int] = Set::new()
+    for inst_idx, inst in block.insts {
+      for use_reg in inst.uses {
+        if use_reg is @abi.Virtual(vreg) {
+          vreg_used_in_insts.add(vreg.id)
+        }
+      }
+      for def_pos, def in inst.defs {
+        if def.reg is @abi.Virtual(vreg) {
+          vreg_def_info.set(vreg.id, (inst_idx, def_pos))
+        }
+      }
+    }
+    if block.terminator is Some(term) {
+      let term_uses = match term {
+        @instr.VCodeTerminator::Jump(_, args)
+        | @instr.VCodeTerminator::Return(args) => args
+        @instr.VCodeTerminator::Branch(cond, _, _)
+        | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
+        | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
+        @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+        @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+        @instr.VCodeTerminator::Trap(_) => []
+      }
+      for use_reg in term_uses {
+        if use_reg is @abi.Virtual(vreg) {
+          vreg_used_in_term.add(vreg.id)
+        }
+      }
+    }
+    let jump_arg_candidates : Map[Int, (Int, Int)] = {}
+    if block.terminator is Some(@instr.VCodeTerminator::Jump(_, args)) {
+      for arg in args {
+        if arg is @abi.Virtual(vreg) &&
+          vreg_used_in_term.contains(vreg.id) &&
+          !vreg_used_in_insts.contains(vreg.id) {
+          if vreg_def_info.get(vreg.id) is Some((def_idx, def_pos)) {
+            let def_inst = block.insts[def_idx]
+            let has_fixed = def_pos < def_inst.def_constraints.length() &&
+              def_inst.def_constraints[def_pos] is @abi.FixedReg(_)
+            if !has_fixed {
+              jump_arg_candidates.set(vreg.id, (def_idx, def_pos))
+            }
+          }
+        }
+      }
+    }
+    let orig_inst_to_new_idx : Map[Int, Int] = {}
+
     // Process instructions
     for inst_idx, inst in block.insts {
       // First, insert reload instructions for any spilled uses
@@ -1601,6 +1653,7 @@ pub fn apply_allocation(
         }
       }
       new_block.add_inst(new_inst)
+      orig_inst_to_new_idx.set(inst_idx, new_block.insts.length() - 1)
 
       // Process constraint edits: insert moves after the instruction
       // Use parallel move resolver for consistency (though after moves rarely conflict)
@@ -1660,6 +1713,7 @@ pub fn apply_allocation(
           }
 
           let moves : Array[RegMove] = []
+          let move_src_vregs : Array[Int?] = []
           if target >= 0 && target < func.blocks.length() {
             let target_block = func.blocks[target]
             for i, param in target_block.params {
@@ -1687,6 +1741,163 @@ pub fn apply_allocation(
                 continue
               }
               moves.push({ from, to, class: param.class })
+              let src_vreg_id = match args[i] {
+                @abi.Virtual(vreg) => Some(vreg.id)
+                _ => None
+              }
+              move_src_vregs.push(src_vreg_id)
+            }
+          }
+
+          // Swap-aware jump-arg coalescing: avoid 2-cycle swaps by redirecting
+          // a locally-defined jump arg into a scratch register when possible.
+          if !moves.is_empty() && !jump_arg_candidates.is_empty() {
+            fn same_preg(a : @abi.PReg, b : @abi.PReg) -> Bool {
+              a.index == b.index
+            }
+
+            fn inst_uses_preg(inst : @instr.VCodeInst, preg : @abi.PReg) -> Bool {
+              for def in inst.defs {
+                if def.reg is @abi.Physical(p) && same_preg(p, preg) {
+                  return true
+                }
+              }
+              for use_reg in inst.uses {
+                if use_reg is @abi.Physical(p) && same_preg(p, preg) {
+                  return true
+                }
+              }
+              false
+            }
+
+            fn scratch_available(
+              new_block : @block.VCodeBlock,
+              def_new_idx : Int,
+              preg : @abi.PReg,
+            ) -> Bool {
+              for i in (def_new_idx + 1)..<new_block.insts.length() {
+                if inst_uses_preg(new_block.insts[i], preg) {
+                  return false
+                }
+              }
+              true
+            }
+
+            fn pick_scratch_reg(
+              new_block : @block.VCodeBlock,
+              def_new_idx : Int,
+            ) -> @abi.PReg? {
+              let scratch_regs = [@abi.SCRATCH_REG_1, @abi.SCRATCH_REG_2]
+              for reg_idx in scratch_regs {
+                let preg : @abi.PReg = { index: reg_idx, class: @abi.Int }
+                if scratch_available(new_block, def_new_idx, preg) {
+                  return Some(preg)
+                }
+              }
+              None
+            }
+
+            let rewritten : Set[Int] = Set::new()
+            let mut broke_cycle = false
+            for i in 0..<moves.length() {
+              if broke_cycle {
+                break
+              }
+              let mv_i = moves[i]
+              if mv_i.from.is_spilled() || mv_i.to.is_spilled() {
+                continue
+              }
+              if mv_i.class is @abi.Int {
+                ()
+              } else {
+                continue
+              }
+              for j in (i + 1)..<moves.length() {
+                let mv_j = moves[j]
+                if mv_j.from.is_spilled() || mv_j.to.is_spilled() {
+                  continue
+                }
+                if mv_j.class is @abi.Int {
+                  ()
+                } else {
+                  continue
+                }
+                if !same_preg(mv_i.from, mv_j.to) ||
+                  !same_preg(mv_i.to, mv_j.from) {
+                  continue
+                }
+
+                fn try_rewrite_move(
+                  move_idx : Int,
+                  moves : Array[RegMove],
+                  move_src_vregs : Array[Int?],
+                  jump_arg_candidates : Map[Int, (Int, Int)],
+                  alloc : RegAllocResult,
+                  orig_inst_to_new_idx : Map[Int, Int],
+                  new_block : @block.VCodeBlock,
+                  rewritten : Set[Int],
+                ) -> Bool {
+                  guard move_idx < move_src_vregs.length() else { return false }
+                  guard move_src_vregs[move_idx] is Some(vreg_id) else {
+                    return false
+                  }
+                  if rewritten.contains(vreg_id) {
+                    return false
+                  }
+                  guard jump_arg_candidates.get(vreg_id) is Some((def_idx, def_pos)) else {
+                    return false
+                  }
+                  guard alloc.assignments.get(vreg_id) is Some(assigned_preg) else {
+                    return false
+                  }
+                  if assigned_preg.class is @abi.Int {
+                    ()
+                  } else {
+                    return false
+                  }
+                  guard orig_inst_to_new_idx.get(def_idx) is Some(def_new_idx) else {
+                    return false
+                  }
+                  let new_inst = new_block.insts[def_new_idx]
+                  if new_inst.defs.length() != 1 {
+                    return false
+                  }
+                  guard pick_scratch_reg(new_block, def_new_idx) is Some(scratch_preg) else {
+                    return false
+                  }
+                  new_inst.defs[def_pos] = { reg: @abi.Physical(scratch_preg) }
+                  moves[move_idx] = {
+                    from: scratch_preg,
+                    to: moves[move_idx].to,
+                    class: moves[move_idx].class,
+                  }
+                  rewritten.add(vreg_id)
+                  true
+                }
+
+                if try_rewrite_move(
+                  i,
+                  moves,
+                  move_src_vregs,
+                  jump_arg_candidates,
+                  alloc,
+                  orig_inst_to_new_idx,
+                  new_block,
+                  rewritten,
+                ) || try_rewrite_move(
+                  j,
+                  moves,
+                  move_src_vregs,
+                  jump_arg_candidates,
+                  alloc,
+                  orig_inst_to_new_idx,
+                  new_block,
+                  rewritten,
+                ) {
+                  broke_cycle = true
+                  break
+                }
+              }
             }
           }
 
