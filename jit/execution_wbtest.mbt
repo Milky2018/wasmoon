@@ -311,27 +311,27 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    br_cmp_imm.eq v1, #0, block5, block9
       #|block1(v2:int, f3:float, f4:float):
       #|    ret f4
-      #|block2:
+      #|block2(v5:int, f6:float, f7:float):
       #|    v24 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v24, f16
+      #|    store_ptr.f32 +0 v24, f6
       #|    f37 = load_ptr.f32 +0 v24
-      #|    jump block1 (v1, f16, f37)
-      #|block3:
+      #|    jump block1 (v5, f6, f37)
+      #|block3(v8:int, f9:float, f10:float):
       #|    v39 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v39, f16
+      #|    store_ptr.f32 +0 v39, f9
       #|    f52 = load_ptr.f32 +0 v39
-      #|    jump block1 (v1, f16, f52)
-      #|block4:
+      #|    jump block1 (v8, f9, f52)
+      #|block4(v11:int, f12:float, f13:float):
       #|    v54 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v54, f16
+      #|    store_ptr.f32 +0 v54, f12
       #|    f67 = load_ptr.f32 +0 v54
-      #|    jump block1 (v1, f16, f67)
+      #|    jump block1 (v11, f12, f67)
       #|block5:
-      #|    jump block4
+      #|    jump block4 (v1, f16, f15)
       #|block6:
-      #|    jump block3
+      #|    jump block3 (v1, f16, f15)
       #|block7:
-      #|    jump block2
+      #|    jump block2 (v1, f16, f15)
       #|block8:
       #|    jump block1 (v1, f16, f15)
       #|block9:
@@ -356,17 +356,17 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    br_cmp_imm.eq x1, #0, block5, block9
       #|block1(v2:int, f3:float, f4:float):
       #|    ret d0
-      #|block2:
+      #|block2(v5:int, f6:float, f7:float):
       #|    x0 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 x0, d1
       #|    d0 = load_ptr.f32 +0 x0
       #|    jump block1
-      #|block3:
+      #|block3(v8:int, f9:float, f10:float):
       #|    x0 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 x0, d1
       #|    d0 = load_ptr.f32 +0 x0
       #|    jump block1
-      #|block4:
+      #|block4(v11:int, f12:float, f13:float):
       #|    x0 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 x0, d1
       #|    d0 = load_ptr.f32 +0 x0
