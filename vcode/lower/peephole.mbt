@@ -60,6 +60,41 @@ fn collect_uses(inst : @instr.VCodeInst, used : @hashset.HashSet[Int]) -> Unit {
 }
 
 ///|
+/// Count uses of virtual regs across the whole function.
+fn collect_use_counts(func : @regalloc.VCodeFunction) -> Map[Int, Int] {
+  let counts : Map[Int, Int] = {}
+  let add_use = fn(reg : @abi.Reg) -> Unit {
+    if get_vreg_id(reg) is Some(id) {
+      let count = counts.get(id).unwrap_or(0)
+      counts.set(id, count + 1)
+    }
+  }
+  for block in func.blocks {
+    for inst in block.insts {
+      for use_ in inst.uses {
+        add_use(use_)
+      }
+    }
+    if block.terminator is Some(term) {
+      let term_uses = match term {
+        @instr.VCodeTerminator::Jump(_, args)
+        | @instr.VCodeTerminator::Return(args) => args
+        @instr.VCodeTerminator::Branch(cond, _, _)
+        | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
+        | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
+        @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+        @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+        @instr.VCodeTerminator::Trap(_) => []
+      }
+      for use_ in term_uses {
+        add_use(use_)
+      }
+    }
+  }
+  counts
+}
+
+///|
 /// Collect uses from terminator
 fn collect_terminator_uses(
   term : @instr.VCodeTerminator,
@@ -436,6 +471,24 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
       }
     }
   }
+  if block.terminator is Some(term) {
+    let term_uses = match term {
+      @instr.VCodeTerminator::Jump(_, args)
+      | @instr.VCodeTerminator::Return(args) => args
+      @instr.VCodeTerminator::Branch(cond, _, _)
+      | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
+      | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
+      @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+      @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+      @instr.VCodeTerminator::Trap(_) => []
+    }
+    for use_ in term_uses {
+      if get_vreg_id(use_) is Some(use_id) {
+        let count = use_count.get(use_id).unwrap_or(0)
+        use_count.set(use_id, count + 1)
+      }
+    }
+  }
 
   // Look for patterns: vA = op ... vB ...; vB = mov vA
   // where vA is only used by the mov AND vB is not used between def and mov
@@ -475,7 +528,7 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
                   break
                 }
               }
-              if not(dst_used_between) {
+              if !dst_used_between {
                 // Safe to apply optimization
                 to_eliminate.add(i)
                 replace_def.set(def_idx, dst_id)
@@ -1518,7 +1571,10 @@ fn dce_trivially_dead(func : @regalloc.VCodeFunction) -> Unit {
 ///|
 /// Propagate single-use virtual moves within a block.
 /// This reduces redundant copies created by earlier passes.
-fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
+fn propagate_single_use_moves(
+  block : @block.VCodeBlock,
+  global_use_counts : Map[Int, Int],
+) -> Unit {
   let use_counts : Map[Int, Int] = {}
   for inst in block.insts {
     for use_ in inst.uses {
@@ -1564,7 +1620,9 @@ fn propagate_single_use_moves(block : @block.VCodeBlock) -> Unit {
       if inst.defs[0].reg is Virtual(dst_vreg) &&
         inst.uses[0] is Virtual(src_vreg) {
         if same_reg_class(dst_vreg.class, src_vreg.class) &&
-          use_counts.get(dst_vreg.id).unwrap_or(0) == 1 {
+          use_counts.get(dst_vreg.id).unwrap_or(0) == 1 &&
+          global_use_counts.get(dst_vreg.id).unwrap_or(0) ==
+            use_counts.get(dst_vreg.id).unwrap_or(0) {
           let resolved = resolve_copy(src_vreg, copies)
           copies.set(dst_vreg.id, resolved)
           to_remove.add(i)
@@ -1927,8 +1985,9 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
     optimize_block(block, func, state) |> ignore
   }
   // Pass 1.5: Copy propagation for single-use moves
+  let global_use_counts = collect_use_counts(func)
   for block in func.blocks {
-    propagate_single_use_moves(block)
+    propagate_single_use_moves(block, global_use_counts)
   }
   // Pass 1.6: Global copy propagation for virtual moves
   propagate_moves_global(func)
