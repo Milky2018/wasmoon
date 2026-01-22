@@ -70,6 +70,14 @@ fn main {
         help="Disassemble WASM file to text format",
         args={ "file": @clap.Arg::positional(help="Path to WASM file") },
       ),
+      "component": @clap.SubCommand::new(
+        help="Parse a WebAssembly component and print a summary",
+        args={
+          "file": @clap.Arg::positional(help="Path to component file"),
+          "dump": @clap.Arg::flag(help="Print the parsed component structure"),
+          "validate": @clap.Arg::flag(help="Validate the component after parsing"),
+        },
+      ),
       "wat": @clap.SubCommand::new(help="Parse WAT file and display as text", args={
         "file": @clap.Arg::positional(help="Path to WAT file"),
       }),
@@ -225,6 +233,16 @@ fn main {
               let positional = sub.positional_args
               if positional.length() > 0 {
                 run_disasm(positional[0])
+              } else {
+                println("Error: missing file argument")
+              }
+            }
+            "component" => {
+              let positional = sub.positional_args
+              if positional.length() > 0 {
+                let dump = sub.flags.get("dump") is Some(true)
+                let validate = sub.flags.get("validate") is Some(true)
+                run_component_command(positional[0], dump, validate)
               } else {
                 println("Error: missing file argument")
               }
