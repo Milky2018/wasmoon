@@ -68,6 +68,33 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->wasm_stack_guard = NULL;
     ctx->guard_page_size = 0;
 
+    // WASI fd/preopen state (init_wasi_* may not be called for some contexts)
+    ctx->fd_table = NULL;
+    ctx->fd_table_size = 0;
+    ctx->fd_next = 0;
+    ctx->fd_host_paths = NULL;
+    ctx->fd_is_dir = NULL;
+    ctx->preopen_paths = NULL;
+    ctx->preopen_guest_paths = NULL;
+    ctx->preopen_count = 0;
+    ctx->preopen_base_fd = 0;
+
+    // WASI stdio buffers (disabled by default)
+    ctx->wasi_stdin_use_buffer = 0;
+    ctx->wasi_stdin_buf = NULL;
+    ctx->wasi_stdin_len = 0;
+    ctx->wasi_stdin_offset = 0;
+    ctx->wasi_stdin_callback = NULL;
+    ctx->wasi_stdin_callback_data = NULL;
+    ctx->wasi_stdout_capture = 0;
+    ctx->wasi_stdout_buf = NULL;
+    ctx->wasi_stdout_len = 0;
+    ctx->wasi_stdout_cap = 0;
+    ctx->wasi_stderr_capture = 0;
+    ctx->wasi_stderr_buf = NULL;
+    ctx->wasi_stderr_len = 0;
+    ctx->wasi_stderr_cap = 0;
+
     return ctx;
 }
 
@@ -114,6 +141,9 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx->wasm_stack_base) {
         munmap(ctx->wasm_stack_base, ctx->wasm_stack_size);
     }
+
+    // Free WASI resources (fds, args/env, stdio buffers)
+    wasmoon_jit_free_wasi_fds((int64_t)ctx);
 
     free(ctx);
 }

@@ -468,9 +468,10 @@ fn run_wasm(
       // JIT execution path
       // Build WASI args: program name + any remaining args after --
       let jit_args : Array[String] = wasi_args
+      let jit_stdin_data = if inherit_stdin { None } else { Some(b"") }
       let jit_results = run_with_jit(
         mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
-        jit_preopens, opt_level, enable_dwarf,
+        jit_preopens, jit_stdin_data, opt_level, enable_dwarf,
       )
       if jit_results.length() > 0 {
         // Print all results separated by spaces
@@ -848,6 +849,7 @@ fn run_with_jit(
   wasi_args : Array[String],
   wasi_envs : Array[String],
   wasi_preopens : Array[(String, String)],
+  wasi_stdin_data : Bytes?,
   opt_level : Int,
   enable_dwarf : Bool,
 ) -> Array[@types.Value] {
@@ -905,7 +907,14 @@ fn run_with_jit(
             None
           }
           // Initialize WASI context with args, env, and preopens
-          jm.init_wasi(wasi_args, wasi_envs, wasi_preopens)
+          jm.init_wasi_with_stdio(
+            wasi_args,
+            wasi_envs,
+            wasi_preopens,
+            None,
+            None,
+            wasi_stdin_data,
+          )
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)
             is Some(_) else {

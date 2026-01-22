@@ -18,12 +18,18 @@ def run_test(wast_file: Path, use_jit: bool) -> tuple[int | None, int | None, st
             cmd,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
         output = result.stdout + result.stderr
 
         # Check for crash (non-zero exit code without proper output)
         if result.returncode != 0 and "Passed:" not in output:
+            last_line = ""
+            for line in output.split("\n"):
+                if line.strip():
+                    last_line = line.strip()
+            if last_line:
+                return None, None, f"Crash (exit {result.returncode}): {last_line}"
             return None, None, f"Crash (exit {result.returncode})"
 
         if "Error" in output and "Passed:" not in output:

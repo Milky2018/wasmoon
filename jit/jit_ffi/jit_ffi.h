@@ -121,6 +121,30 @@ typedef struct {
     char **preopen_guest_paths;   // Guest paths for preopened dirs
     int preopen_count;            // Number of preopened dirs
     int preopen_base_fd;          // First preopen fd (typically 3)
+
+    // WASI stdio buffers for custom callbacks
+    int wasi_stdin_use_buffer;    // Whether stdin reads from buffer
+    uint8_t *wasi_stdin_buf;      // Buffered stdin data
+    size_t wasi_stdin_len;        // Total stdin buffer length
+    size_t wasi_stdin_offset;     // Current read offset
+
+    int wasi_stdout_capture;      // Capture stdout writes
+    uint8_t *wasi_stdout_buf;     // Captured stdout data
+    size_t wasi_stdout_len;       // Captured stdout length
+    size_t wasi_stdout_cap;       // Captured stdout capacity
+
+    int wasi_stderr_capture;      // Capture stderr writes
+    uint8_t *wasi_stderr_buf;     // Captured stderr data
+    size_t wasi_stderr_len;       // Captured stderr length
+    size_t wasi_stderr_cap;       // Captured stderr capacity
+
+    // WASI open fd metadata (host path + directory flag)
+    char **fd_host_paths;         // Host paths for open fds (owned strings)
+    uint8_t *fd_is_dir;           // 1 if fd is a directory
+
+    // WASI stdin callback (MoonBit closure)
+    void *wasi_stdin_callback;        // Function pointer for stdin callback
+    void *wasi_stdin_callback_data;   // Closure data for stdin callback
 } jit_context_t;
 
 // ============ Executable Memory Functions ============
