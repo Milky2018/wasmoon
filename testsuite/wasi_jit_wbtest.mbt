@@ -89,7 +89,7 @@ fn compare_wasi_with_options(
     func_name,
     preopens,
     stdin_data,
-    stdin_callback=stdin_callback,
+    stdin_callback~,
   )
 
   // Run JIT with WASI (stdout suppressed)
@@ -100,7 +100,7 @@ fn compare_wasi_with_options(
     result_types,
     preopens,
     stdin_data,
-    stdin_callback=stdin_callback,
+    stdin_callback~,
   )
 
   // Compare results (return values must match)
@@ -118,7 +118,7 @@ fn compare_wasi_with_callback(
   source : String,
   func_name : String,
   preopens? : Array[(String, String)] = [],
-  stdin_factory : () -> (() -> Bytes),
+  stdin_factory : () -> () -> Bytes,
 ) -> WasiCompareResult {
   // Parse the WAT source
   let mod_ = @wat.parse(source) catch {
@@ -153,7 +153,6 @@ fn compare_wasi_with_callback(
   let func_type_idx = mod_.funcs[local_idx]
   let func_type = mod_.get_func_type(func_type_idx)
   let result_types = func_type.results
-
   let (interp_result, interp_stdout) = run_wasi_interp_quiet(
     mod_,
     func_name,
@@ -161,7 +160,6 @@ fn compare_wasi_with_callback(
     None,
     stdin_callback=Some(stdin_factory()),
   )
-
   let (jit_result, jit_stdout) = run_wasi_jit_quiet(
     mod_,
     func_name,
@@ -171,7 +169,6 @@ fn compare_wasi_with_callback(
     None,
     stdin_callback=Some(stdin_factory()),
   )
-
   let results_match = match (jit_result, interp_result) {
     (Ok(jit_vals), Ok(interp_vals)) => values_array_equal(jit_vals, interp_vals)
     (Err(_), Err(_)) => true
@@ -221,9 +218,7 @@ fn run_wasi_interp_quiet(
       wasi_builder.preopen_dir(host, guest) |> ignore
     }
     match stdin_callback {
-      Some(cb) => {
-        wasi_builder.stdin(cb) |> ignore
-      }
+      Some(cb) => wasi_builder.stdin(cb) |> ignore
       None =>
         match stdin_data {
           Some(data) => {
@@ -351,7 +346,7 @@ fn run_wasi_jit_quiet(
         }
       }),
       stdin_buf,
-      stdin_callback=stdin_callback,
+      stdin_callback~,
     )
 
     // Allocate memory (guarded for memory32 memory 0)
@@ -677,7 +672,9 @@ test "wasi jit: preopen fd rejects non-dir ops" {
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "datasync_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "datasync_preopen", preopens=[
+      ("/tmp", "/"),
+    ]),
     content="matched",
   )
   inspect(
@@ -693,11 +690,15 @@ test "wasi jit: preopen fd rejects non-dir ops" {
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "set_size_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "set_size_preopen", preopens=[
+      ("/tmp", "/"),
+    ]),
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "set_times_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "set_times_preopen", preopens=[
+      ("/tmp", "/"),
+    ]),
     content="matched",
   )
   inspect(
@@ -705,15 +706,21 @@ test "wasi jit: preopen fd rejects non-dir ops" {
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "allocate_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "allocate_preopen", preopens=[
+      ("/tmp", "/"),
+    ]),
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "set_flags_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "set_flags_preopen", preopens=[
+      ("/tmp", "/"),
+    ]),
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "set_rights_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "set_rights_preopen", preopens=[
+      ("/tmp", "/"),
+    ]),
     content="matched",
   )
 }

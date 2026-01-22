@@ -483,7 +483,9 @@ fn JITContext::set_wasi_stdin_callback(
   self : JITContext,
   callback : () -> Bytes,
 ) -> Unit {
-  let call_closure : FuncRef[(() -> Bytes) -> Bytes] = fn(f : () -> Bytes) { f() }
+  let call_closure : FuncRef[(() -> Bytes) -> Bytes] = fn(f : () -> Bytes) {
+    f()
+  }
   @jit_ffi.c_jit_set_wasi_stdin_callback(self.ptr(), call_closure, callback)
 }
 

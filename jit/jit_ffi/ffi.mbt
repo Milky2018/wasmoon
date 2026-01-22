@@ -677,8 +677,7 @@ pub extern "c" fn c_jit_set_wasi_stdin_callback(
 
 ///|
 /// Clear stdin callback for WASI
-pub extern "c" fn c_jit_clear_wasi_stdin_callback(ctx_ptr : Int64) -> Unit =
-  "wasmoon_jit_clear_wasi_stdin_callback"
+pub extern "c" fn c_jit_clear_wasi_stdin_callback(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_wasi_stdin_callback"
 
 ///|
 /// Clear stdin buffer for WASI
