@@ -15,6 +15,7 @@ pub(all) struct Component {
   aliases : Array[Alias]
   canons : Array[Canon]
   start : Start?
+  components : Array[Component]
 } derive(Show, Eq)
 
 ///|
@@ -27,6 +28,7 @@ pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
   let aliases : Array[Alias] = []
   let canons : Array[Canon] = []
   let mut start : Start? = None
+  let components : Array[Component] = []
   for s in binary.sections {
     if s.id == 7 {
       for t in parse_type_section(s.payload) {
@@ -54,9 +56,21 @@ pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
       }
     } else if s.id == 9 {
       start = Some(parse_start_section(s.payload))
+    } else if s.id == 4 {
+      components.push(parse_component(s.payload))
     } else {
       ()
     }
   }
-  { binary, types, imports, exports, instances, aliases, canons, start }
+  {
+    binary,
+    types,
+    imports,
+    exports,
+    instances,
+    aliases,
+    canons,
+    start,
+    components,
+  }
 }
