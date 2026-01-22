@@ -114,6 +114,8 @@ pub fn c_jit_clear_wasi_exit(Int64) -> Unit
 
 pub fn c_jit_clear_wasi_stdin_buffer(Int64) -> Unit
 
+pub fn c_jit_clear_wasi_stdin_callback(Int64) -> Unit
+
 pub fn c_jit_context_ptr(JITContext) -> Int64
 
 pub fn c_jit_copy_code(Int64, FixedArray[Byte], Int) -> Int
@@ -415,6 +417,8 @@ pub fn c_jit_set_wasi_envs(Int64, Int) -> Unit
 pub fn c_jit_set_wasi_stderr_capture(Int64, Int) -> Unit
 
 pub fn c_jit_set_wasi_stdin_buffer(Int64, Bytes, Int) -> Unit
+
+pub fn c_jit_set_wasi_stdin_callback(Int64, FuncRef[(() -> Bytes) -> Bytes], () -> Bytes) -> Unit
 
 pub fn c_jit_set_wasi_stdout_capture(Int64, Int) -> Unit
 
