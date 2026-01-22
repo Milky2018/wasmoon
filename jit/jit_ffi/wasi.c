@@ -666,13 +666,15 @@ static int64_t wasi_fd_seek_impl(
     if (native_fd < 0) return WASI_EBADF;
     uint32_t newoffset_ptr_u = (uint32_t)newoffset_ptr;
     if (!check_mem_range(ctx, newoffset_ptr_u, 8)) return WASI_EFAULT;
+    uint32_t whence_u = (uint32_t)whence;
+    if (whence_u > 2) return WASI_EINVAL;
 
 #ifdef _WIN32
-    int64_t pos = _lseeki64(native_fd, offset, (int)whence);
+    int64_t pos = _lseeki64(native_fd, offset, (int)whence_u);
 #else
-    off_t pos = lseek(native_fd, offset, (int)whence);
+    off_t pos = lseek(native_fd, offset, (int)whence_u);
 #endif
-    if (pos < 0) return WASI_EIO;
+    if (pos < 0) return errno_to_wasi(errno);
 
     *(int64_t *)(ctx->memory0->base + newoffset_ptr_u) = pos;
     return WASI_ESUCCESS;
