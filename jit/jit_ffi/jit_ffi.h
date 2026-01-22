@@ -141,6 +141,10 @@ typedef struct {
     // WASI open fd metadata (host path + directory flag)
     char **fd_host_paths;         // Host paths for open fds (owned strings)
     uint8_t *fd_is_dir;           // 1 if fd is a directory
+
+    // WASI stdin callback (MoonBit closure)
+    void *wasi_stdin_callback;        // Function pointer for stdin callback
+    void *wasi_stdin_callback_data;   // Closure data for stdin callback
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

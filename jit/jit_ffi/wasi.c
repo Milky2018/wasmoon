@@ -155,6 +155,28 @@ static int ensure_fd_capacity(jit_context_t *ctx, int target_fd) {
     return 1;
 }
 
+typedef moonbit_bytes_t (*wasi_stdin_callback_fn)(void *closure);
+
+static void clear_wasi_stdin_buffer(jit_context_t *ctx) {
+    if (!ctx) return;
+    ctx->wasi_stdin_use_buffer = 0;
+    if (ctx->wasi_stdin_buf) {
+        free(ctx->wasi_stdin_buf);
+        ctx->wasi_stdin_buf = NULL;
+    }
+    ctx->wasi_stdin_len = 0;
+    ctx->wasi_stdin_offset = 0;
+}
+
+static void clear_wasi_stdin_callback(jit_context_t *ctx) {
+    if (!ctx) return;
+    if (ctx->wasi_stdin_callback_data) {
+        moonbit_decref(ctx->wasi_stdin_callback_data);
+        ctx->wasi_stdin_callback_data = NULL;
+    }
+    ctx->wasi_stdin_callback = NULL;
+}
+
 static void clear_fd_metadata(jit_context_t *ctx, int wasi_fd) {
     if (!ctx->fd_host_paths || !ctx->fd_is_dir) return;
     if (wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) return;
@@ -525,28 +547,67 @@ static int64_t wasi_fd_read_impl(
     if (!check_mem_range(ctx, nread_ptr, 4)) return WASI_EFAULT;
 
     int32_t total = 0;
-    if (wasi_fd == 0 && ctx->wasi_stdin_use_buffer) {
-        size_t available = 0;
-        if (ctx->wasi_stdin_len > ctx->wasi_stdin_offset) {
-            available = ctx->wasi_stdin_len - ctx->wasi_stdin_offset;
-        }
-        for (int64_t i = 0; i < iovs_len && available > 0; i++) {
-            int32_t buf_ptr = *(int32_t *)(mem + iovs + i * 8);
-            int32_t buf_len = *(int32_t *)(mem + iovs + i * 8 + 4);
-            if (buf_len < 0) return WASI_EFAULT;
-            if (buf_len > 0) {
-                if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;
-                size_t to_copy = available < (size_t)buf_len ? available : (size_t)buf_len;
-                if (to_copy > 0 && ctx->wasi_stdin_buf) {
-                    memcpy(mem + buf_ptr, ctx->wasi_stdin_buf + ctx->wasi_stdin_offset, to_copy);
-                }
-                ctx->wasi_stdin_offset += to_copy;
-                available -= to_copy;
-                total += (int32_t)to_copy;
+    if (wasi_fd == 0) {
+        if (ctx->wasi_stdin_use_buffer) {
+            size_t available = 0;
+            if (ctx->wasi_stdin_len > ctx->wasi_stdin_offset) {
+                available = ctx->wasi_stdin_len - ctx->wasi_stdin_offset;
             }
+            for (int64_t i = 0; i < iovs_len && available > 0; i++) {
+                int32_t buf_ptr = *(int32_t *)(mem + iovs + i * 8);
+                int32_t buf_len = *(int32_t *)(mem + iovs + i * 8 + 4);
+                if (buf_len < 0) return WASI_EFAULT;
+                if (buf_len > 0) {
+                    if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;
+                    size_t to_copy = available < (size_t)buf_len ? available : (size_t)buf_len;
+                    if (to_copy > 0 && ctx->wasi_stdin_buf) {
+                        memcpy(
+                            mem + buf_ptr,
+                            ctx->wasi_stdin_buf + ctx->wasi_stdin_offset,
+                            to_copy
+                        );
+                    }
+                    ctx->wasi_stdin_offset += to_copy;
+                    available -= to_copy;
+                    total += (int32_t)to_copy;
+                }
+            }
+            *(int32_t *)(mem + nread_ptr) = total;
+            return WASI_ESUCCESS;
         }
-        *(int32_t *)(mem + nread_ptr) = total;
-        return WASI_ESUCCESS;
+        if (ctx->wasi_stdin_callback) {
+            wasi_stdin_callback_fn cb = (wasi_stdin_callback_fn)ctx->wasi_stdin_callback;
+            moonbit_bytes_t input = cb(ctx->wasi_stdin_callback_data);
+            size_t input_len = 0;
+            if (input) {
+                input_len = (size_t)Moonbit_array_length(input);
+            }
+            size_t input_offset = 0;
+            for (int64_t i = 0; i < iovs_len && input_offset < input_len; i++) {
+                int32_t buf_ptr = *(int32_t *)(mem + iovs + i * 8);
+                int32_t buf_len = *(int32_t *)(mem + iovs + i * 8 + 4);
+                if (buf_len < 0) {
+                    if (input) moonbit_decref(input);
+                    return WASI_EFAULT;
+                }
+                if (buf_len > 0) {
+                    if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) {
+                        if (input) moonbit_decref(input);
+                        return WASI_EFAULT;
+                    }
+                    size_t remaining = input_len - input_offset;
+                    size_t to_copy = remaining < (size_t)buf_len ? remaining : (size_t)buf_len;
+                    if (to_copy > 0 && input) {
+                        memcpy(mem + buf_ptr, input + input_offset, to_copy);
+                    }
+                    input_offset += to_copy;
+                    total += (int32_t)to_copy;
+                }
+            }
+            *(int32_t *)(mem + nread_ptr) = total;
+            if (input) moonbit_decref(input);
+            return WASI_ESUCCESS;
+        }
     }
 
     int native_fd = get_native_fd(ctx, wasi_fd);
@@ -2313,12 +2374,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_buffer(
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx) return;
-    if (ctx->wasi_stdin_buf) {
-        free(ctx->wasi_stdin_buf);
-        ctx->wasi_stdin_buf = NULL;
-    }
-    ctx->wasi_stdin_len = 0;
-    ctx->wasi_stdin_offset = 0;
+    clear_wasi_stdin_callback(ctx);
+    clear_wasi_stdin_buffer(ctx);
     ctx->wasi_stdin_use_buffer = 1;
     if (len > 0) {
         ctx->wasi_stdin_buf = malloc((size_t)len);
@@ -2329,16 +2386,29 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_buffer(
     }
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_callback(
+    int64_t ctx_ptr,
+    wasi_stdin_callback_fn callback,
+    void *closure
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    clear_wasi_stdin_buffer(ctx);
+    clear_wasi_stdin_callback(ctx);
+    ctx->wasi_stdin_callback = (void *)callback;
+    ctx->wasi_stdin_callback_data = closure;
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_stdin_buffer(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx) return;
-    ctx->wasi_stdin_use_buffer = 0;
-    if (ctx->wasi_stdin_buf) {
-        free(ctx->wasi_stdin_buf);
-        ctx->wasi_stdin_buf = NULL;
-    }
-    ctx->wasi_stdin_len = 0;
-    ctx->wasi_stdin_offset = 0;
+    clear_wasi_stdin_buffer(ctx);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_stdin_callback(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    clear_wasi_stdin_callback(ctx);
 }
 
 MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_jit_take_wasi_stdout(int64_t ctx_ptr) {
@@ -2530,13 +2600,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr) {
     }
 
     // Free stdio buffers
-    ctx->wasi_stdin_use_buffer = 0;
-    if (ctx->wasi_stdin_buf) {
-        free(ctx->wasi_stdin_buf);
-        ctx->wasi_stdin_buf = NULL;
-    }
-    ctx->wasi_stdin_len = 0;
-    ctx->wasi_stdin_offset = 0;
+    clear_wasi_stdin_callback(ctx);
+    clear_wasi_stdin_buffer(ctx);
 
     ctx->wasi_stdout_capture = 0;
     if (ctx->wasi_stdout_buf) {

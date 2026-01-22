@@ -84,6 +84,8 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->wasi_stdin_buf = NULL;
     ctx->wasi_stdin_len = 0;
     ctx->wasi_stdin_offset = 0;
+    ctx->wasi_stdin_callback = NULL;
+    ctx->wasi_stdin_callback_data = NULL;
     ctx->wasi_stdout_capture = 0;
     ctx->wasi_stdout_buf = NULL;
     ctx->wasi_stdout_len = 0;

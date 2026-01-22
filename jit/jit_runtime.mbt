@@ -972,6 +972,7 @@ pub fn JITModule::init_wasi_with_stdio(
   stdout : ((Bytes) -> Unit)?,
   stderr : ((Bytes) -> Unit)?,
   stdin_data : Bytes?,
+  stdin_callback? : (() -> Bytes)? = None,
 ) -> Unit {
   self.init_wasi(args, env, preopens)
   if self.context is Some(ctx) {
@@ -989,9 +990,15 @@ pub fn JITModule::init_wasi_with_stdio(
       }
       None => ctx.set_wasi_stderr_capture(false)
     }
-    match stdin_data {
-      Some(data) => ctx.set_wasi_stdin_buffer(data)
-      None => ctx.clear_wasi_stdin_buffer()
+    match stdin_callback {
+      Some(cb) => ctx.set_wasi_stdin_callback(cb)
+      None => {
+        ctx.clear_wasi_stdin_callback()
+        match stdin_data {
+          Some(data) => ctx.set_wasi_stdin_buffer(data)
+          None => ctx.clear_wasi_stdin_buffer()
+        }
+      }
     }
   }
 }

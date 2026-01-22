@@ -356,6 +356,7 @@ fn JITContext::init_wasi(
   // Reset stdio capture/buffers
   self.set_wasi_stdout_capture(false)
   self.set_wasi_stderr_capture(false)
+  self.clear_wasi_stdin_callback()
   self.clear_wasi_stdin_buffer()
   // Set args
   @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
@@ -392,6 +393,7 @@ fn JITContext::init_wasi_quiet(
   // Reset stdio capture/buffers
   self.set_wasi_stdout_capture(false)
   self.set_wasi_stderr_capture(false)
+  self.clear_wasi_stdin_callback()
   self.clear_wasi_stdin_buffer()
   // Set args
   @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
@@ -441,7 +443,23 @@ fn JITContext::set_wasi_stdin_buffer(self : JITContext, data : Bytes) -> Unit {
 }
 
 ///|
-/// Clear WASI stdin buffer (use native stdin)
+/// Set WASI stdin callback (custom stdin)
+fn JITContext::set_wasi_stdin_callback(
+  self : JITContext,
+  callback : () -> Bytes,
+) -> Unit {
+  let call_closure : FuncRef[(() -> Bytes) -> Bytes] = fn(f : () -> Bytes) { f() }
+  @jit_ffi.c_jit_set_wasi_stdin_callback(self.ptr(), call_closure, callback)
+}
+
+///|
+/// Clear WASI stdin callback
+fn JITContext::clear_wasi_stdin_callback(self : JITContext) -> Unit {
+  @jit_ffi.c_jit_clear_wasi_stdin_callback(self.ptr())
+}
+
+///|
+/// Clear WASI stdin buffer
 fn JITContext::clear_wasi_stdin_buffer(self : JITContext) -> Unit {
   @jit_ffi.c_jit_clear_wasi_stdin_buffer(self.ptr())
 }

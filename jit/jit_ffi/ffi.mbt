@@ -667,7 +667,21 @@ pub extern "c" fn c_jit_set_wasi_stdin_buffer(
 ) -> Unit = "wasmoon_jit_set_wasi_stdin_buffer"
 
 ///|
-/// Clear stdin buffer for WASI (use native stdin)
+/// Set stdin callback for WASI (custom stdin)
+#owned(closure)
+pub extern "c" fn c_jit_set_wasi_stdin_callback(
+  ctx_ptr : Int64,
+  call_closure : FuncRef[(() -> Bytes) -> Bytes],
+  closure : () -> Bytes,
+) -> Unit = "wasmoon_jit_set_wasi_stdin_callback"
+
+///|
+/// Clear stdin callback for WASI
+pub extern "c" fn c_jit_clear_wasi_stdin_callback(ctx_ptr : Int64) -> Unit =
+  "wasmoon_jit_clear_wasi_stdin_callback"
+
+///|
+/// Clear stdin buffer for WASI
 pub extern "c" fn c_jit_clear_wasi_stdin_buffer(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_wasi_stdin_buffer"
 
 ///|

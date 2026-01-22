@@ -47,6 +47,7 @@ fn compare_wasi_with_options(
   func_name : String,
   preopens? : Array[(String, String)] = [],
   stdin_data? : Bytes,
+  stdin_callback? : (() -> Bytes)? = None,
 ) -> WasiCompareResult {
   // Parse the WAT source
   let mod_ = @wat.parse(source) catch {
@@ -84,15 +85,93 @@ fn compare_wasi_with_options(
 
   // Run interpreter with WASI (stdout suppressed)
   let (interp_result, interp_stdout) = run_wasi_interp_quiet(
-    mod_, func_name, preopens, stdin_data,
+    mod_,
+    func_name,
+    preopens,
+    stdin_data,
+    stdin_callback=stdin_callback,
   )
 
   // Run JIT with WASI (stdout suppressed)
   let (jit_result, jit_stdout) = run_wasi_jit_quiet(
-    mod_, func_name, idx, result_types, preopens, stdin_data,
+    mod_,
+    func_name,
+    idx,
+    result_types,
+    preopens,
+    stdin_data,
+    stdin_callback=stdin_callback,
   )
 
   // Compare results (return values must match)
+  let results_match = match (jit_result, interp_result) {
+    (Ok(jit_vals), Ok(interp_vals)) => values_array_equal(jit_vals, interp_vals)
+    (Err(_), Err(_)) => true
+    _ => false
+  }
+  let match_ = results_match && jit_stdout == interp_stdout
+  { jit_result, interp_result, jit_stdout, interp_stdout, match_ }
+}
+
+///|
+fn compare_wasi_with_callback(
+  source : String,
+  func_name : String,
+  preopens? : Array[(String, String)] = [],
+  stdin_factory : () -> (() -> Bytes),
+) -> WasiCompareResult {
+  // Parse the WAT source
+  let mod_ = @wat.parse(source) catch {
+    e => {
+      let err = "Failed to parse WAT: \{e}"
+      return {
+        jit_result: Err(err),
+        interp_result: Err(err),
+        jit_stdout: b"",
+        interp_stdout: b"",
+        match_: true,
+      }
+    }
+  }
+
+  // Find the function index by name
+  let func_idx = find_wasi_func_index(mod_, func_name)
+  guard func_idx is Some(idx) else {
+    let err = "Function '\{func_name}' not found"
+    return {
+      jit_result: Err(err),
+      interp_result: Err(err),
+      jit_stdout: b"",
+      interp_stdout: b"",
+      match_: true,
+    }
+  }
+
+  // Get function type
+  let num_imports = @wast.count_func_imports(mod_.imports)
+  let local_idx = idx - num_imports
+  let func_type_idx = mod_.funcs[local_idx]
+  let func_type = mod_.get_func_type(func_type_idx)
+  let result_types = func_type.results
+
+  let (interp_result, interp_stdout) = run_wasi_interp_quiet(
+    mod_,
+    func_name,
+    preopens,
+    None,
+    stdin_callback=Some(stdin_factory()),
+  )
+
+  let (jit_result, jit_stdout) = run_wasi_jit_quiet(
+    mod_,
+    func_name,
+    idx,
+    result_types,
+    preopens,
+    None,
+    stdin_callback=Some(stdin_factory()),
+  )
+
   let results_match = match (jit_result, interp_result) {
     (Ok(jit_vals), Ok(interp_vals)) => values_array_equal(jit_vals, interp_vals)
     (Err(_), Err(_)) => true
@@ -118,11 +197,11 @@ fn run_wasi_interp_quiet(
   func_name : String,
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
+  stdin_callback? : (() -> Bytes)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   try {
     let stdout_buf : Array[Byte] = []
     let _stderr_buf : Array[Byte] = []
-    let mut stdin_used = false
     let linker = @runtime.Linker::new()
     let store = linker.get_store()
     // Register WASI with suppressed stdout/stderr
@@ -141,16 +220,26 @@ fn run_wasi_interp_quiet(
       let (host, guest) = entry
       wasi_builder.preopen_dir(host, guest) |> ignore
     }
-    if stdin_data is Some(data) {
-      wasi_builder.stdin(fn() {
-        if stdin_used {
-          b""
-        } else {
-          stdin_used = true
-          data
+    match stdin_callback {
+      Some(cb) => {
+        wasi_builder.stdin(cb) |> ignore
+      }
+      None =>
+        match stdin_data {
+          Some(data) => {
+            let mut stdin_used = false
+            wasi_builder.stdin(fn() {
+              if stdin_used {
+                b""
+              } else {
+                stdin_used = true
+                data
+              }
+            })
+            |> ignore
+          }
+          None => ()
         }
-      })
-      |> ignore
     }
     let wasi_ctx = wasi_builder.build()
     @wasi.register_wasi(linker, wasi_ctx)
@@ -170,6 +259,7 @@ fn run_wasi_jit_quiet(
   result_types : Array[@types.ValueType],
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
+  stdin_callback? : (() -> Bytes)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   ignore(func_idx)
   try {
@@ -261,6 +351,7 @@ fn run_wasi_jit_quiet(
         }
       }),
       stdin_buf,
+      stdin_callback=stdin_callback,
     )
 
     // Allocate memory (guarded for memory32 memory 0)
@@ -377,6 +468,43 @@ test "wasi jit: stdio misuse returns EBADF" {
   inspect(compare_wasi(source, "read_fd1"), content="matched")
   inspect(compare_wasi(source, "close_fd0"), content="matched")
   inspect(compare_wasi(source, "readdir_fd0"), content="matched")
+}
+
+///|
+test "wasi jit: stdin callback supplies multiple reads" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_read"
+    #|    (func $fd_read (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (i32.store (i32.const 0) (i32.const 100))
+    #|    (i32.store (i32.const 4) (i32.const 2))
+    #|    (drop (call $fd_read (i32.const 0) (i32.const 0) (i32.const 1)
+    #|      (i32.const 20)))
+    #|    (i32.store (i32.const 8) (i32.const 102))
+    #|    (i32.store (i32.const 12) (i32.const 2))
+    #|    (drop (call $fd_read (i32.const 0) (i32.const 8) (i32.const 1)
+    #|      (i32.const 24)))
+    #|    (i32.load (i32.const 100))))
+  let stdin_factory = fn() {
+    let mut stdin_calls = 0
+    fn() {
+      if stdin_calls == 0 {
+        stdin_calls = 1
+        b"AB"
+      } else if stdin_calls == 1 {
+        stdin_calls = 2
+        b"CD"
+      } else {
+        b""
+      }
+    }
+  }
+  inspect(
+    compare_wasi_with_callback(source, "test", stdin_factory),
+    content="matched",
+  )
 }
 
 ///|
