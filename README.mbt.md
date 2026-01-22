@@ -49,6 +49,9 @@ wasmoon run examples/add.wat --invoke add --arg 5 --arg 3 --no-jit
 # Run WAST test scripts
 wasmoon test spec/i32.wast
 
+# Run component-model .wast tests (validation-only; requires wasm-tools)
+python3 scripts/run_component_wast.py --dir component-spec --rec
+
 # Explore compilation stages (IR, VCode, machine code)
 wasmoon explore examples/add.wat --stage ir vcode mc
 ```
