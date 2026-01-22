@@ -1588,10 +1588,14 @@ pub fn poll_oneoff_impl(
     }
   }
   // Do the poll
+  let mut clock_ready = false
   if fds.length() > 0 {
     let poll_result = native_poll(fds, events, timeout_ms)
     match poll_result {
-      Some(result) =>
+      Some(result) => {
+        if result.ready_count == 0 {
+          clock_ready = true
+        }
         // Write fd events
         for i, sub_idx in sub_indices {
           let revent = result.revents[i]
@@ -1618,29 +1622,32 @@ pub fn poll_oneoff_impl(
             events_written = events_written + 1
           }
         }
+      }
       None => ()
     }
   } else if min_timeout_ns >= 0L {
     // Just sleep
     native_nanosleep(min_timeout_ns) |> ignore
+    clock_ready = true
   }
-  // Write clock events (if timeout elapsed)
-  for i in 0..<nsubscriptions {
-    let sub_ptr = in_ptr + i * 48
-    let tag = mem.read_byte(sub_ptr + 8).to_int()
-    if tag == 0 {
-      // Clock subscription - always report as ready after poll/sleep
-      let userdata = mem.read_i64(sub_ptr)
-      let event_ptr = out_ptr + events_written * 32
-      mem.write_i64(event_ptr, userdata)
-      mem.write_byte(event_ptr + 8, b'\x00') // error = success
-      mem.write_byte(event_ptr + 9, b'\x00')
-      mem.write_byte(event_ptr + 10, b'\x00') // type = clock
-      // padding
-      for j in 11..<32 {
-        mem.write_byte(event_ptr + j, b'\x00')
+  // Write clock events when the timeout expires.
+  if clock_ready {
+    for i in 0..<nsubscriptions {
+      let sub_ptr = in_ptr + i * 48
+      let tag = mem.read_byte(sub_ptr + 8).to_int()
+      if tag == 0 {
+        let userdata = mem.read_i64(sub_ptr)
+        let event_ptr = out_ptr + events_written * 32
+        mem.write_i64(event_ptr, userdata)
+        mem.write_byte(event_ptr + 8, b'\x00') // error = success
+        mem.write_byte(event_ptr + 9, b'\x00')
+        mem.write_byte(event_ptr + 10, b'\x00') // type = clock
+        // padding
+        for j in 11..<32 {
+          mem.write_byte(event_ptr + j, b'\x00')
+        }
+        events_written = events_written + 1
       }
-      events_written = events_written + 1
     }
   }
   mem.write_i32(nevents_ptr, events_written)

@@ -1402,6 +1402,7 @@ static int64_t wasi_poll_oneoff_impl(
     }
 
     uint32_t events_written = 0;
+    int clock_ready = 0;
 
 #ifndef _WIN32
     struct pollfd *pfds = NULL;
@@ -1453,6 +1454,9 @@ static int64_t wasi_poll_oneoff_impl(
                 }
             }
         }
+        if (poll_result == 0) {
+            clock_ready = 1;
+        }
         free(pfds);
         free(sub_indices);
     } else if (min_timeout >= 0) {
@@ -1461,22 +1465,28 @@ static int64_t wasi_poll_oneoff_impl(
             .tv_nsec = min_timeout % 1000000000LL
         };
         nanosleep(&ts, NULL);
+        clock_ready = 1;
     }
 #else
     (void)timeout_ms;
+    if (min_timeout >= 0 && num_fds == 0) {
+        clock_ready = 1;
+    }
 #endif
 
-    for (uint32_t i = 0; i < nsubscriptions_u && events_written < nsubscriptions_u; i++) {
-        size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
-        uint8_t tag = mem[sub + 8];
-        if (tag == 0) {
-            int64_t userdata = *(int64_t *)(mem + sub);
-            size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
-            *(int64_t *)(mem + evt) = userdata;
-            *(uint16_t *)(mem + evt + 8) = 0;
-            mem[evt + 10] = 0;
-            memset(mem + evt + 11, 0, 21);
-            events_written++;
+    if (clock_ready) {
+        for (uint32_t i = 0; i < nsubscriptions_u && events_written < nsubscriptions_u; i++) {
+            size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
+            uint8_t tag = mem[sub + 8];
+            if (tag == 0) {
+                int64_t userdata = *(int64_t *)(mem + sub);
+                size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
+                *(int64_t *)(mem + evt) = userdata;
+                *(uint16_t *)(mem + evt + 8) = 0;
+                mem[evt + 10] = 0;
+                memset(mem + evt + 11, 0, 21);
+                events_written++;
+            }
         }
     }
 
