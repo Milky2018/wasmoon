@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/component"
 
+import {
+  "Milky2018/wasmoon/runtime",
+}
+
 // Values
 pub fn parse_alias_section(Bytes) -> Array[Alias] raise ComponentParseError
 
@@ -39,6 +43,14 @@ pub suberror ComponentParseError {
   UnsupportedTypeOpcode(Int)
 }
 pub impl Show for ComponentParseError
+
+pub(all) suberror ComponentRuntimeError {
+  UnsupportedComponent(String)
+  CoreModuleParseError(String)
+  CoreModuleInstantiateError(String)
+}
+pub impl Eq for ComponentRuntimeError
+pub impl Show for ComponentRuntimeError
 
 // Types and methods
 pub(all) struct Alias {
@@ -109,6 +121,17 @@ pub struct ComponentBinary {
 }
 pub impl Eq for ComponentBinary
 pub impl Show for ComponentBinary
+
+type ComponentInstance
+pub fn ComponentInstance::get_core_module(Self, Int) -> @runtime.ModuleInstance?
+pub impl Show for ComponentInstance
+
+type ComponentLinker
+pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
+pub fn ComponentLinker::get_store(Self) -> @runtime.Store
+pub fn ComponentLinker::instantiate(Self, String, Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentLinker::new() -> Self
+pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
 
 pub(all) struct Export {
   name : ExportName
