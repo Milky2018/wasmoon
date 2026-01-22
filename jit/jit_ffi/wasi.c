@@ -662,9 +662,11 @@ static int64_t wasi_fd_seek_impl(
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
 
-    int native_fd = get_native_fd(ctx, (int)fd);
+    int wasi_fd = (int)fd;
+    if (wasi_fd < 0) return WASI_EBADF;
+    if (wasi_fd < 3) return WASI_ESPIPE; // stdio not seekable
+    int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
-    if (native_fd < 3) return WASI_ESPIPE; // stdio not seekable
     if (!check_mem_range(ctx, newoffset_ptr, 8)) return WASI_EFAULT;
 
 #ifdef _WIN32
