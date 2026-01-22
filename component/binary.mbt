@@ -57,6 +57,8 @@ pub suberror ComponentParseError {
   NotAComponent
   UnsupportedComponentPreamble(Int, Int)
   InvalidTypeSection
+  InvalidInstanceSection
+  InvalidAliasSection
   InvalidUtf8
   UnsupportedTypeOpcode(Int)
 }
@@ -71,6 +73,8 @@ fn ComponentParseError::to_string(self : ComponentParseError) -> String {
     UnsupportedComponentPreamble(version, layer) =>
       "unsupported component preamble: version=\{version} layer=\{layer}"
     InvalidTypeSection => "invalid type section"
+    InvalidInstanceSection => "invalid instance section"
+    InvalidAliasSection => "invalid alias section"
     InvalidUtf8 => "invalid utf-8"
     UnsupportedTypeOpcode(op) => "unsupported component type opcode: \{op}"
   }
@@ -129,6 +133,79 @@ fn Reader::read_bytes(
 }
 
 ///|
+fn decode_utf8_validated(bytes : Bytes) -> String raise ComponentParseError {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < bytes.length() {
+    let b = bytes[i].to_int()
+    if b < 0x80 {
+      buf.write_char(b.unsafe_to_char())
+      i = i + 1
+    } else if b < 0xC0 {
+      raise InvalidUtf8
+    } else if b < 0xE0 {
+      if i + 1 >= bytes.length() {
+        raise InvalidUtf8
+      }
+      let b2 = bytes[i + 1].to_int()
+      if (b2 & 0xC0) != 0x80 {
+        raise InvalidUtf8
+      }
+      let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
+      if cp < 0x80 {
+        raise InvalidUtf8
+      }
+      buf.write_char(cp.unsafe_to_char())
+      i = i + 2
+    } else if b < 0xF0 {
+      if i + 2 >= bytes.length() {
+        raise InvalidUtf8
+      }
+      let b2 = bytes[i + 1].to_int()
+      let b3 = bytes[i + 2].to_int()
+      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 {
+        raise InvalidUtf8
+      }
+      let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
+      if cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF) {
+        raise InvalidUtf8
+      }
+      buf.write_char(cp.unsafe_to_char())
+      i = i + 3
+    } else if b < 0xF8 {
+      if i + 3 >= bytes.length() {
+        raise InvalidUtf8
+      }
+      let b2 = bytes[i + 1].to_int()
+      let b3 = bytes[i + 2].to_int()
+      let b4 = bytes[i + 3].to_int()
+      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 || (b4 & 0xC0) != 0x80 {
+        raise InvalidUtf8
+      }
+      let cp = ((b & 0x07) << 18) |
+        ((b2 & 0x3F) << 12) |
+        ((b3 & 0x3F) << 6) |
+        (b4 & 0x3F)
+      if cp < 0x10000 || cp > 0x10FFFF {
+        raise InvalidUtf8
+      }
+      buf.write_char(cp.unsafe_to_char())
+      i = i + 4
+    } else {
+      raise InvalidUtf8
+    }
+  }
+  buf.to_string()
+}
+
+///|
+fn Reader::read_name(self : Reader) -> String raise ComponentParseError {
+  let len = self.read_leb_u32()
+  let bytes = self.read_bytes(len)
+  decode_utf8_validated(bytes)
+}
+
+///|
 fn Reader::read_u16_le(self : Reader) -> Int raise ComponentParseError {
   let b0 = self.read_u8()
   let b1 = self.read_u8()
@@ -177,8 +254,9 @@ pub fn parse_component_binary(
   if layer != 1 {
     raise NotAComponent
   }
-  // Pre-standard versions start at 0x0d and increment; accept >= 0x0d.
-  if version < 0x0d {
+  // Pre-standard versions start at 0x0d and increment; the final standard
+  // version is expected to be 0x01.
+  if version != 0x01 && version < 0x0d {
     raise UnsupportedComponentPreamble(version, layer)
   }
   // Section framing: id (u8), size (leb u32), payload (bytes).
