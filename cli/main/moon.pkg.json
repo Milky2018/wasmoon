@@ -24,6 +24,7 @@
     "Milky2018/wasmoon/logger",
     "moonbitlang/core/buffer",
     "moonbitlang/core/hashset",
+    "moonbitlang/core/json",
     "moonbitlang/core/strconv"
   ]
 }

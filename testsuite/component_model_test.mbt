@@ -51,12 +51,12 @@ test "component_validate_import_typeidx_oob" {
   // Component with a single func import referencing typeidx=0 but no types defined.
   let bytes = Bytes::from_array([
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x01', b'\x00',
-    // import section (id=10): size=5
-     b'\x0a', b'\x05',
+    // import section (id=10): size=6
+     b'\x0a', b'\x06',
     // vec length = 1
      b'\x01',
-    // importname = plain, name = empty
-     b'\x00', b'\x00',
+    // importname = plain, name = "a"
+     b'\x00', b'\x01', b'\x61',
     // externdesc = functype, typeidx = 0
      b'\x01', b'\x00',
   ])
@@ -72,12 +72,12 @@ test "component_validate_export_sortidx_oob" {
   // Component with a single export of Type 0 but no types in scope.
   let bytes = Bytes::from_array([
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x01', b'\x00',
-    // export section (id=11): size=6
-     b'\x0b', b'\x06',
+    // export section (id=11): size=7
+     b'\x0b', b'\x07',
     // vec length = 1
      b'\x01',
-    // exportname = plain, name = empty
-     b'\x00', b'\x00',
+    // exportname = plain, name = "a"
+     b'\x00', b'\x01', b'\x61',
     // sortidx: Type, idx=0
      b'\x03', b'\x00',
     // opt externdesc = none

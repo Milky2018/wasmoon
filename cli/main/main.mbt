@@ -80,6 +80,12 @@ fn main {
           ),
         },
       ),
+      "component-test": @clap.SubCommand::new(
+        help="Run component-model test script (JSON)",
+        args={
+          "file": @clap.Arg::positional(help="Path to component test script"),
+        },
+      ),
       "wat": @clap.SubCommand::new(help="Parse WAT file and display as text", args={
         "file": @clap.Arg::positional(help="Path to WAT file"),
       }),
@@ -245,6 +251,14 @@ fn main {
                 let dump = sub.flags.get("dump") is Some(true)
                 let validate = sub.flags.get("validate") is Some(true)
                 run_component_command(positional[0], dump, validate)
+              } else {
+                println("Error: missing file argument")
+              }
+            }
+            "component-test" => {
+              let positional = sub.positional_args
+              if positional.length() > 0 {
+                run_component_script(positional[0])
               } else {
                 println("Error: missing file argument")
               }

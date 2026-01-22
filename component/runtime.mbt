@@ -649,6 +649,10 @@ fn read_string_from_memory(
   ptr : Int,
   len : Int,
 ) -> String raise ComponentRuntimeError {
+  let mem_len = mem.byte_len()
+  if ptr < 0 || len < 0 || ptr.to_int64() + len.to_int64() > mem_len {
+    raise CanonCallError("string pointer/length out of bounds of memory")
+  }
   let bytes : Array[Byte] = []
   for i in 0..<len {
     let b = mem.load_byte(ptr + i) catch {
@@ -840,11 +844,30 @@ fn core_results_to_component(
                 match results {
                   [@types.Value::I64(p), @types.Value::I64(l)] =>
                     (p.to_int(), l.to_int())
+                  [@types.Value::I64(p)] => {
+                    let base = p.to_int()
+                    let ptr64 = mem.load_i64(base) catch {
+                      e => raise CanonCallError(e.to_string())
+                    }
+                    let len64 = mem.load_i64(base + 8) catch {
+                      e => raise CanonCallError(e.to_string())
+                    }
+                    (ptr64.to_int(), len64.to_int())
+                  }
                   _ => raise HostCallError("result type mismatch")
                 }
               } else {
                 match results {
                   [@types.Value::I32(p), @types.Value::I32(l)] => (p, l)
+                  [@types.Value::I32(p)] => {
+                    let ptr32 = mem.load_i32(p) catch {
+                      e => raise CanonCallError(e.to_string())
+                    }
+                    let len32 = mem.load_i32(p + 4) catch {
+                      e => raise CanonCallError(e.to_string())
+                    }
+                    (ptr32, len32)
+                  }
                   _ => raise HostCallError("result type mismatch")
                 }
               }

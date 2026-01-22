@@ -24,6 +24,7 @@ pub(all) suberror ComponentValidationError {
   CanonExpectedFuncType(Int)
   CanonAsyncTypeMismatch(Int)
   UnsupportedCoreSort(Int)
+  InvalidKebabName(String)
   SectionParseError(Int, String)
   CoreModuleError(String)
 } derive(Show, Eq)
@@ -51,6 +52,73 @@ fn Counts::new() -> Counts {
     core_module: 0,
     core_instance: 0,
     core_type: 0,
+  }
+}
+
+///|
+fn is_ascii_letter(b : Byte) -> Bool {
+  let n = b.to_int()
+  (n >= 0x41 && n <= 0x5A) || (n >= 0x61 && n <= 0x7A)
+}
+
+///|
+fn is_ascii_digit(b : Byte) -> Bool {
+  let n = b.to_int()
+  n >= 0x30 && n <= 0x39
+}
+
+///|
+fn is_kebab_case(name : Bytes) -> Bool {
+  if name.length() == 0 {
+    return false
+  }
+  let mut prev_dash = false
+  for i in 0..<name.length() {
+    let b = name[i]
+    if i == 0 {
+      if !is_ascii_letter(b) {
+        return false
+      }
+      continue
+    }
+    if b.to_int() == 0x2D {
+      if prev_dash {
+        return false
+      }
+      prev_dash = true
+    } else if is_ascii_letter(b) || is_ascii_digit(b) {
+      prev_dash = false
+    } else {
+      return false
+    }
+  }
+  !prev_dash
+}
+
+///|
+fn validate_name_bytes(name : Bytes) -> Unit raise ComponentValidationError {
+  if !is_kebab_case(name) {
+    raise InvalidKebabName(name.to_string())
+  }
+}
+
+///|
+fn validate_import_name(
+  name : @component.ImportName,
+) -> Unit raise ComponentValidationError {
+  match name {
+    Plain(bytes) => validate_name_bytes(bytes)
+    WithVersion(bytes, _vs) => validate_name_bytes(bytes)
+  }
+}
+
+///|
+fn validate_export_name(
+  name : @component.ExportName,
+) -> Unit raise ComponentValidationError {
+  match name {
+    Plain(bytes) => validate_name_bytes(bytes)
+    WithVersion(bytes, _vs) => validate_name_bytes(bytes)
   }
 }
 
@@ -391,6 +459,7 @@ pub fn validate_component(
           e => raise SectionParseError(10, "\{e}")
         }
         for i in imports {
+          validate_import_name(i.name)
           // Import type references must be in-bounds at the point they appear.
           validate_externdesc(i.desc, type_table.length())
           if i.desc is Type(_) {
@@ -404,6 +473,7 @@ pub fn validate_component(
           e => raise SectionParseError(11, "\{e}")
         }
         for e in exports {
+          validate_export_name(e.name)
           check_sortidx(e.sortidx, counts, type_table.length())
           match e.desc {
             Some(d) => validate_externdesc(d, type_table.length())
