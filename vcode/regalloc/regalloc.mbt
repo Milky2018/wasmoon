@@ -998,8 +998,10 @@ fn allocate_reload_registers(
 
   // Reserve special registers that are not part of the allocator pool but are
   // used by the ABI / codegen.
-  // - X19 is reserved for vmctx caching in the prologue when needed.
+  // - X19 is reserved for vmctx-related loads in the prologue when needed.
   used_int_regs.add(19) |> ignore
+  // - X21 is the pinned VMContext register (enable_pinned_reg).
+  used_int_regs.add(@abi.REG_VMCTX) |> ignore
   // - X20 is reserved for cached memory0 descriptor pointer when needed.
   if func.uses_mem0() {
     used_int_regs.add(@abi.REG_MEM0_DESC) |> ignore
@@ -1015,7 +1017,7 @@ fn allocate_reload_registers(
   // Candidate callee-saved registers for reload coalescing.
   // Only use registers that are NOT allocated to any vreg to avoid clobbering
   // live values (including parameters that may stay live across a block).
-  let reload_int_regs = [20, 21, 22, 23, 24, 25, 26, 27, 28]
+  let reload_int_regs = [20, 22, 23, 24, 25, 26, 27, 28]
   let reload_float_regs = [8, 9, 10, 11, 12, 13, 14, 15]
 
   // Per-block allocation to avoid conflicts within a block
