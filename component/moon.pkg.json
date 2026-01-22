@@ -2,6 +2,7 @@
   "import": [
     "Milky2018/wasmoon/executor",
     "Milky2018/wasmoon/parser",
-    "Milky2018/wasmoon/runtime"
+    "Milky2018/wasmoon/runtime",
+    "Milky2018/wasmoon/types"
   ]
 }

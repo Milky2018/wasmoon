@@ -88,7 +88,7 @@ pub fn parse_instance_section(
       if i >= n {
         acc
       } else {
-        acc.push({ expr: parse_instanceexpr(reader) })
+        acc.push(Instance::{ expr: parse_instanceexpr(reader) })
         continue (acc, i + 1)
       }
   }
