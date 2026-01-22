@@ -471,6 +471,22 @@ test "wasi jit: stdio misuse returns EBADF" {
 }
 
 ///|
+test "wasi jit: poll_oneoff stdin returns" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "poll_oneoff"
+    #|    (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (i64.store (i32.const 0) (i64.const 0x9ABC))
+    #|    (i32.store8 (i32.const 8) (i32.const 1))
+    #|    (i32.store (i32.const 16) (i32.const 0))
+    #|    (call $poll_oneoff (i32.const 0) (i32.const 64) (i32.const 1)
+    #|      (i32.const 80))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
 test "wasi jit: stdin callback supplies multiple reads" {
   let source =
     #|(module

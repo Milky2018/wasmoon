@@ -1349,6 +1349,11 @@ static int64_t wasi_poll_oneoff_impl(
             }
         } else if (tag == 1 || tag == 2) {
             int32_t fd = *(int32_t *)(mem + sub + 12);
+            // Match interpreter: stdio fds are virtual (callbacks/buffers),
+            // so poll_oneoff should not block on them.
+            if (fd >= 0 && fd <= 2) {
+                continue;
+            }
             int native_fd = get_native_fd(ctx, fd);
             if (native_fd >= 0) {
                 num_fds++;
@@ -1383,6 +1388,9 @@ static int64_t wasi_poll_oneoff_impl(
             uint8_t tag = mem[sub + 8];
             if (tag == 1 || tag == 2) {
                 int32_t fd = *(int32_t *)(mem + sub + 12);
+                if (fd >= 0 && fd <= 2) {
+                    continue;
+                }
                 int native_fd = get_native_fd(ctx, fd);
                 if (native_fd >= 0) {
                     pfds[idx].fd = native_fd;
