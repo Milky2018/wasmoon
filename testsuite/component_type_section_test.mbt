@@ -1,12 +1,4 @@
 ///|
-fn find_section_payload(comp : @component.ComponentBinary, id : Int) -> Bytes? {
-  for s in comp.sections {
-    if s.id == id {
-      return Some(s.payload)
-    }
-  }
-  None
-}
 
 ///|
 test "component: parse type section (functype, empty params/results)" {
@@ -25,7 +17,7 @@ test "component: parse type section (functype, empty params/results)" {
   let comp = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return fail("parse component failed: \{e}")
   }
-  let payload = match find_section_payload(comp, 7) {
+  let payload = match find_component_section_payload(comp, 7) {
     Some(p) => p
     None => return fail("missing type section")
   }
