@@ -55,10 +55,7 @@ fn Counts::new() -> Counts {
 }
 
 ///|
-fn check_typeidx(
-  idx : Int,
-  bound : Int,
-) -> Unit raise ComponentValidationError {
+fn check_typeidx(idx : Int, bound : Int) -> Unit raise ComponentValidationError {
   if idx < 0 || idx >= bound {
     raise InvalidTypeIndex(idx)
   }
@@ -72,18 +69,9 @@ fn check_sortidx(
 ) -> Unit raise ComponentValidationError {
   let idx = sortidx.idx
   match sortidx.sort {
-    Type =>
-      if idx < 0 || idx >= type_bound {
-        raise InvalidTypeIndex(idx)
-      }
-    Func =>
-      if idx < 0 || idx >= counts.func {
-        raise InvalidFuncIndex(idx)
-      }
-    Value =>
-      if idx < 0 || idx >= counts.value {
-        raise InvalidValueIndex(idx)
-      }
+    Type => if idx < 0 || idx >= type_bound { raise InvalidTypeIndex(idx) }
+    Func => if idx < 0 || idx >= counts.func { raise InvalidFuncIndex(idx) }
+    Value => if idx < 0 || idx >= counts.value { raise InvalidValueIndex(idx) }
     Component =>
       if idx < 0 || idx >= counts.component {
         raise InvalidComponentIndex(idx)
@@ -116,10 +104,7 @@ fn check_sortidx(
 }
 
 ///|
-fn count_import(
-  desc : @component.ExternDesc,
-  counts : Counts,
-) -> Unit {
+fn count_import(desc : @component.ExternDesc, counts : Counts) -> Unit {
   match desc {
     CoreModuleType(_tyidx) => counts.core_module += 1
     FuncType(_tyidx) => counts.func += 1
@@ -305,8 +290,8 @@ fn valtype_needs_memory(ty : @component.ValType) -> Bool {
   match ty {
     Prim(p) =>
       match p {
-        @component.PrimValType::String |
-        @component.PrimValType::ErrorContext => true
+        @component.PrimValType::String | @component.PrimValType::ErrorContext =>
+          true
         _ => false
       }
     TypeIdx(_) => false
@@ -459,7 +444,8 @@ pub fn validate_component(
                 raise InvalidInstanceIndex(instance_idx)
               }
             CoreExport(core_instance_idx, _name) =>
-              if core_instance_idx < 0 || core_instance_idx >= counts.core_instance {
+              if core_instance_idx < 0 ||
+                core_instance_idx >= counts.core_instance {
                 raise InvalidCoreInstanceIndex(core_instance_idx)
               }
             Outer(_ct, _idx) => ()

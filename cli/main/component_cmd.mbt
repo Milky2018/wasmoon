@@ -1,5 +1,9 @@
 ///|
-fn run_component_command(file_path : String, dump : Bool, validate : Bool) -> Unit {
+fn run_component_command(
+  file_path : String,
+  dump : Bool,
+  validate : Bool,
+) -> Unit {
   let bytes = @fs.read_file_to_bytes(file_path) catch {
     IOError(_e) => {
       println("file \{file_path} not found")

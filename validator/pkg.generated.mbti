@@ -2,17 +2,41 @@
 package "Milky2018/wasmoon/validator"
 
 import {
+  "Milky2018/wasmoon/component",
   "Milky2018/wasmoon/types",
 }
 
 // Values
 pub fn format_validation_error(ValidationError) -> String
 
+pub fn validate_component(@component.Component) -> Unit raise ComponentValidationError
+
 pub fn validate_module(@types.Module) -> Unit raise ValidationError
 
 pub fn validate_module_with_context(@types.Module) -> Unit raise ValidationError
 
 // Errors
+pub(all) suberror ComponentValidationError {
+  InvalidTypeIndex(Int)
+  InvalidFuncIndex(Int)
+  InvalidValueIndex(Int)
+  InvalidComponentIndex(Int)
+  InvalidInstanceIndex(Int)
+  InvalidCoreFuncIndex(Int)
+  InvalidCoreModuleIndex(Int)
+  InvalidCoreInstanceIndex(Int)
+  InvalidCoreTypeIndex(Int)
+  DuplicateCanonOption(String)
+  MissingCanonOption(String)
+  CanonExpectedFuncType(Int)
+  CanonAsyncTypeMismatch(Int)
+  UnsupportedCoreSort(Int)
+  SectionParseError(Int, String)
+  CoreModuleError(String)
+}
+pub impl Eq for ComponentValidationError
+pub impl Show for ComponentValidationError
+
 pub(all) suberror ValidationError {
   TypeMismatch(String)
   StackUnderflow(String)

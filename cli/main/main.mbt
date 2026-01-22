@@ -75,7 +75,9 @@ fn main {
         args={
           "file": @clap.Arg::positional(help="Path to component file"),
           "dump": @clap.Arg::flag(help="Print the parsed component structure"),
-          "validate": @clap.Arg::flag(help="Validate the component after parsing"),
+          "validate": @clap.Arg::flag(
+            help="Validate the component after parsing",
+          ),
         },
       ),
       "wat": @clap.SubCommand::new(help="Parse WAT file and display as text", args={
