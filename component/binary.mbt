@@ -59,6 +59,9 @@ pub suberror ComponentParseError {
   InvalidTypeSection
   InvalidInstanceSection
   InvalidAliasSection
+  InvalidCanonSection
+  InvalidStartSection
+  UnsupportedCanonOpcode(Int)
   InvalidUtf8
   UnsupportedTypeOpcode(Int)
 }
@@ -75,6 +78,9 @@ fn ComponentParseError::to_string(self : ComponentParseError) -> String {
     InvalidTypeSection => "invalid type section"
     InvalidInstanceSection => "invalid instance section"
     InvalidAliasSection => "invalid alias section"
+    InvalidCanonSection => "invalid canon section"
+    InvalidStartSection => "invalid start section"
+    UnsupportedCanonOpcode(op) => "unsupported canon opcode: \{op}"
     InvalidUtf8 => "invalid utf-8"
     UnsupportedTypeOpcode(op) => "unsupported component type opcode: \{op}"
   }
@@ -231,6 +237,39 @@ fn Reader::read_leb_u32(self : Reader) -> Int raise ComponentParseError {
       }
     }
   }
+}
+
+///|
+fn Reader::read_sleb_i32(self : Reader) -> Int raise ComponentParseError {
+  loop (0, 0) {
+    (result, shift) => {
+      if shift >= 35 {
+        raise Leb128TooLarge
+      }
+      let b = self.read_u8()
+      let low = b & 0x7F
+      let new_result = result | (low << shift)
+      if (b & 0x80) == 0 {
+        let value = if shift < 32 && (b & 0x40) != 0 {
+          new_result | (-1 << (shift + 7))
+        } else {
+          new_result
+        }
+        value
+      } else {
+        continue (new_result, shift + 7)
+      }
+    }
+  }
+}
+
+///|
+fn Reader::read_typeidx(self : Reader) -> Int raise ComponentParseError {
+  let idx = self.read_sleb_i32()
+  if idx < 0 {
+    raise InvalidTypeSection
+  }
+  idx
 }
 
 ///|

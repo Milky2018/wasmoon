@@ -1,14 +1,4 @@
 ///|
-fn find_section_payload(comp : @component.ComponentBinary, id : Int) -> Bytes? {
-  for s in comp.sections {
-    if s.id == id {
-      return Some(s.payload)
-    }
-  }
-  None
-}
-
-///|
 test "component: parse instance + alias sections (minimal instantiate + outer alias)" {
   let bytes : Array[Byte] = [
     // magic
@@ -33,11 +23,11 @@ test "component: parse instance + alias sections (minimal instantiate + outer al
   let comp = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return fail("parse component failed: \{e}")
   }
-  let inst_payload = match find_section_payload(comp, 5) {
+  let inst_payload = match find_component_section_payload(comp, 5) {
     Some(p) => p
     None => return fail("missing instance section")
   }
-  let alias_payload = match find_section_payload(comp, 6) {
+  let alias_payload = match find_component_section_payload(comp, 6) {
     Some(p) => p
     None => return fail("missing alias section")
   }

@@ -58,38 +58,6 @@ fn Reader::peek_u8(self : Reader) -> Int raise ComponentParseError {
 }
 
 ///|
-fn Reader::read_sleb_i32(self : Reader) -> Int raise ComponentParseError {
-  loop (0, 0) {
-    (result, shift) => {
-      if shift >= 35 {
-        raise Leb128TooLarge
-      }
-      let b = self.read_u8()
-      let low = b & 0x7F
-      let new_result = result | (low << shift)
-      if (b & 0x80) == 0 {
-        // Sign-extend if needed.
-        let value = if shift < 32 && (b & 0x40) != 0 {
-          new_result | (-1 << (shift + 7))
-        } else {
-          new_result
-        }
-        value
-      } else {
-        continue (new_result, shift + 7)
-      }
-    }
-  }
-}
-
-///|
-fn Reader::read_typeidx(self : Reader) -> Int raise ComponentParseError {
-  let idx = self.read_sleb_i32()
-  if idx < 0 {
-    raise InvalidTypeSection
-  }
-  idx
-}
 
 ///|
 
