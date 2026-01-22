@@ -8,6 +8,9 @@
 ///|
 pub(all) struct Component {
   binary : ComponentBinary
+  core_modules : Array[Bytes]
+  core_instances : Array[Bytes]
+  core_types : Array[Bytes]
   types : Array[TypeDef]
   imports : Array[Import]
   exports : Array[Export]
@@ -21,6 +24,9 @@ pub(all) struct Component {
 ///|
 pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
   let binary = parse_component_binary(bytes)
+  let core_modules : Array[Bytes] = []
+  let core_instances : Array[Bytes] = []
+  let core_types : Array[Bytes] = []
   let types : Array[TypeDef] = []
   let imports : Array[Import] = []
   let exports : Array[Export] = []
@@ -30,7 +36,13 @@ pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
   let mut start : Start? = None
   let components : Array[Component] = []
   for s in binary.sections {
-    if s.id == 7 {
+    if s.id == 1 {
+      core_modules.push(s.payload)
+    } else if s.id == 2 {
+      core_instances.push(s.payload)
+    } else if s.id == 3 {
+      core_types.push(s.payload)
+    } else if s.id == 7 {
       for t in parse_type_section(s.payload) {
         types.push(t)
       }
@@ -64,6 +76,9 @@ pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
   }
   {
     binary,
+    core_modules,
+    core_instances,
+    core_types,
     types,
     imports,
     exports,
