@@ -5,7 +5,11 @@ test "component: sniff_binary_kind recognizes core module vs component" {
     @component.sniff_binary_kind(Bytes::from_array(core)),
     content="Some(CoreModule)",
   )
-  let component : Array[Byte] = [0x00, 0x61, 0x73, 0x6d, 0x0a, 0x00, 0x00, 0x00]
+  let component : Array[Byte] = [
+    0x00, 0x61, 0x73, 0x6d,
+    // version=u16(0x0d), layer=u16(0x01)
+     0x0d, 0x00, 0x01, 0x00,
+  ]
   inspect(
     @component.sniff_binary_kind(Bytes::from_array(component)),
     content="Some(Component)",

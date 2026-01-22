@@ -10,12 +10,13 @@ fn parse_component(
 
 ///|
 test "component: parse_component_binary parses header and section framing" {
-  let bytes : Array[Byte] = [0x00, 0x61, 0x73, 0x6d, 0x0a, 0x00, 0x00, 0x00]
+  let bytes : Array[Byte] = [0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00]
   let parsed = match parse_component(bytes) {
     Ok(v) => v
     Err(e) => return fail("parse failed: \{e}")
   }
-  inspect(parsed.version, content="10")
+  inspect(parsed.version, content="13")
+  inspect(parsed.layer, content="1")
   inspect(parsed.sections.length(), content="0")
 }
 

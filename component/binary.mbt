@@ -8,7 +8,7 @@
 pub(all) enum BinaryKind {
   CoreModule
   Component
-  UnknownVersion(Int)
+  UnknownPreamble(Int, Int)
 } derive(Show, Eq)
 
 ///|
@@ -22,17 +22,17 @@ pub fn sniff_binary_kind(bytes : Bytes) -> BinaryKind? {
     bytes[3].to_int() != 0x6d {
     return None
   }
-  let version = bytes[4].to_int() |
-    (bytes[5].to_int() << 8) |
-    (bytes[6].to_int() << 16) |
-    (bytes[7].to_int() << 24)
-  if version == 0x01 {
+  // Component Model splits the legacy 32-bit "version" field into:
+  // - version: u16
+  // - layer: u16 (0 = core module, 1 = component)
+  let version = bytes[4].to_int() | (bytes[5].to_int() << 8)
+  let layer = bytes[6].to_int() | (bytes[7].to_int() << 8)
+  if layer == 0 && version == 0x01 {
     Some(CoreModule)
-  } else if version == 0x0a {
-    // Component Model (current toolchains generally emit version 0x0a).
+  } else if layer == 1 {
     Some(Component)
   } else {
-    Some(UnknownVersion(version))
+    Some(UnknownPreamble(version, layer))
   }
 }
 
@@ -45,6 +45,7 @@ pub struct Section {
 ///|
 pub struct ComponentBinary {
   version : Int
+  layer : Int
   sections : Array[Section]
 } derive(Show, Eq)
 
@@ -54,6 +55,10 @@ pub suberror ComponentParseError {
   UnexpectedEndOfInput
   Leb128TooLarge
   NotAComponent
+  UnsupportedComponentPreamble(Int, Int)
+  InvalidTypeSection
+  InvalidUtf8
+  UnsupportedTypeOpcode(Int)
 }
 
 ///|
@@ -63,6 +68,11 @@ fn ComponentParseError::to_string(self : ComponentParseError) -> String {
     UnexpectedEndOfInput => "unexpected end of input"
     Leb128TooLarge => "leb128 value too large"
     NotAComponent => "input is not a component binary"
+    UnsupportedComponentPreamble(version, layer) =>
+      "unsupported component preamble: version=\{version} layer=\{layer}"
+    InvalidTypeSection => "invalid type section"
+    InvalidUtf8 => "invalid utf-8"
+    UnsupportedTypeOpcode(op) => "unsupported component type opcode: \{op}"
   }
 }
 
@@ -119,12 +129,10 @@ fn Reader::read_bytes(
 }
 
 ///|
-fn Reader::read_u32_le(self : Reader) -> Int raise ComponentParseError {
+fn Reader::read_u16_le(self : Reader) -> Int raise ComponentParseError {
   let b0 = self.read_u8()
   let b1 = self.read_u8()
-  let b2 = self.read_u8()
-  let b3 = self.read_u8()
-  b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+  b0 | (b1 << 8)
 }
 
 ///|
@@ -164,9 +172,14 @@ pub fn parse_component_binary(
   let reader = Reader::new(bytes)
   // Skip magic.
   reader.read_bytes(4) |> ignore
-  let version = reader.read_u32_le()
-  if version != 0x0a {
+  let version = reader.read_u16_le()
+  let layer = reader.read_u16_le()
+  if layer != 1 {
     raise NotAComponent
+  }
+  // Pre-standard versions start at 0x0d and increment; accept >= 0x0d.
+  if version < 0x0d {
+    raise UnsupportedComponentPreamble(version, layer)
   }
   // Section framing: id (u8), size (leb u32), payload (bytes).
   let sections : Array[Section] = []
@@ -176,5 +189,5 @@ pub fn parse_component_binary(
     let payload = reader.read_bytes(size)
     sections.push({ id, payload })
   }
-  { version, sections }
+  { version, layer, sections }
 }
