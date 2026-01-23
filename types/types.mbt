@@ -98,6 +98,22 @@ pub fn ValueType::is_nullable(self : ValueType) -> Bool {
   }
 }
 
+///|
+/// Encode a value type into a small set of JIT ABI "slot kinds".
+///
+/// Used for JIT trampoline/signature hashing; reference types are represented
+/// as 64-bit integer slots in the current JIT ABI.
+pub fn ValueType::jit_abi_code(self : ValueType) -> Int {
+  match self {
+    I32 => 0
+    I64 => 1
+    F32 => 2
+    F64 => 3
+    V128 => 4
+    _ => 1
+  }
+}
+
 // ============================================================
 // GC Types (WebAssembly GC Proposal)
 // ============================================================

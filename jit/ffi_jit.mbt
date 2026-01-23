@@ -1056,13 +1056,13 @@ fn JITContext::call_multi_return(
   // Note: param_type_codes uses the original parameter count, not expanded slot count
   let param_type_codes = FixedArray::make(num_params.max(1), 0)
   for i in 0..<num_params {
-    param_type_codes[i] = value_type_to_code(param_types[i])
+    param_type_codes[i] = param_types[i].jit_abi_code()
   }
 
   // Convert result_types to int codes for trampoline generation
   let result_type_codes = FixedArray::make(result_types.length().max(1), 0)
   for i in 0..<result_types.length() {
-    result_type_codes[i] = value_type_to_code(result_types[i])
+    result_type_codes[i] = result_types[i].jit_abi_code()
   }
 
   // Compute signature hash for trampoline cache lookup
@@ -1157,43 +1157,6 @@ fn JITContext::call_multi_return(
 ///|
 /// Convert ValueType to type code for trampoline generation
 /// 0=I32, 1=I64, 2=F32, 3=F64, 4=V128
-fn value_type_to_code(ty : @types.ValueType) -> Int {
-  match ty {
-    I32 => 0
-    I64 => 1
-    F32 => 2
-    F64 => 3
-    V128 => 4
-    // Reference types are 64-bit integer values (indices/pointers)
-    FuncRef
-    | ExternRef
-    | RefFunc
-    | RefExtern
-    | RefFuncTyped(_)
-    | RefNullFuncTyped(_)
-    | AnyRef
-    | ExnRef
-    | NullRef
-    | NullFuncRef
-    | NullExnRef
-    | NullExternRef
-    // GC reference types - also 64-bit
-    | RefStruct(_)
-    | RefNullStruct(_)
-    | RefArray(_)
-    | RefNullArray(_)
-    | RefAny
-    | RefEq
-    | RefNullEq
-    | RefI31
-    | RefNullI31
-    | RefStructAbs
-    | RefArrayAbs
-    | StructRef
-    | ArrayRef
-    | RefNone => 1
-  }
-}
 
 ///|
 /// Compute a hash for function signature (param_types, result_types)

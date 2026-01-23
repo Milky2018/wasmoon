@@ -837,6 +837,7 @@ pub(all) enum ValueType {
   NullExternRef
 }
 pub fn ValueType::is_nullable(Self) -> Bool
+pub fn ValueType::jit_abi_code(Self) -> Int
 pub impl Eq for ValueType
 pub impl Show for ValueType
 
