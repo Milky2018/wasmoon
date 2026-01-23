@@ -35,6 +35,11 @@ python3 scripts/run_all_wast.py --rec  # Run all WAST tests (run ./install.sh fi
 - Never batch use `--update`. Treat snapshot errors seriously
 - Don't use `println` in tests. Use `inspect(expr)` and update snapshots, then read the file
 - Use `compare_jit_interp(wat_string)` in `testsuite/` for JIT regression tests
+- Component model reference tests (requires `wasm-tools` on `PATH`):
+  - `moon build && ./install.sh`
+  - `python3 scripts/run_component_wast.py --dir component-spec/values --rec`
+  - `python3 scripts/run_component_wast.py --dir component-spec/names --rec`
+  - Optional full run (currently partial support): `python3 scripts/run_component_wast.py --dir component-spec --rec`
 
 ## Debugging
 

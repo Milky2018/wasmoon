@@ -45,3 +45,13 @@ jobs:
         timeout-minutes: 5
         run: |
           python3 scripts/run_all_wast.py --dir spec --rec
+
+      - name: install wasm-tools (for component-spec harness)
+        run: |
+          brew install wasm-tools
+
+      - name: run component-spec harness (supported subset)
+        timeout-minutes: 5
+        run: |
+          python3 scripts/run_component_wast.py --dir component-spec/values --rec
+          python3 scripts/run_component_wast.py --dir component-spec/names --rec
