@@ -438,6 +438,20 @@ fn functype_needs_memory(ft : @component.FuncType) -> Bool {
 }
 
 ///|
+/// For `canon lift`, `realloc` is only required when we need to allocate guest
+/// memory to marshal component->core arguments (e.g. string/error-context params).
+/// Returning strings/error-context can be handled by reading from memory without
+/// allocation (the core function returns ptr/len or a pointer to a record).
+fn functype_needs_realloc_for_lift(ft : @component.FuncType) -> Bool {
+  for p in ft.params {
+    if valtype_needs_memory(p.ty) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn validate_canon(
   c : @component.Canon,
   type_table : Array[@component.TypeDef?],
@@ -457,9 +471,9 @@ fn validate_canon(
             if !canon_has_memory(opts) {
               raise MissingCanonOption("memory")
             }
-            if !canon_has_realloc(opts) {
-              raise MissingCanonOption("realloc")
-            }
+          }
+          if functype_needs_realloc_for_lift(ft) && !canon_has_realloc(opts) {
+            raise MissingCanonOption("realloc")
           }
         }
         None => ()
