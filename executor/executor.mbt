@@ -1997,6 +1997,36 @@ pub fn call_exported_func(
 }
 
 ///|
+/// Call a function by module function index
+pub fn call_func_by_index(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int,
+  args : Array[@types.Value],
+) -> Array[@types.Value] raise @runtime.RuntimeError {
+  let ctx = ExecContext::new(store, instance)
+  // Catch any leaked ControlSignal and convert to RuntimeError
+  ctx.call_func(func_idx, args) catch {
+    BranchWith(_, _) | Return => raise @runtime.Unreachable
+    @runtime.StackUnderflow => raise @runtime.StackUnderflow
+    @runtime.StackOverflow => raise @runtime.StackOverflow
+    @runtime.TypeMismatch => raise @runtime.TypeMismatch
+    @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
+    @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+    @runtime.UndefinedElement => raise @runtime.UndefinedElement
+    @runtime.UninitializedElement => raise @runtime.UninitializedElement
+    @runtime.IndirectCallTypeMismatch => raise @runtime.IndirectCallTypeMismatch
+    @runtime.DivisionByZero => raise @runtime.DivisionByZero
+    @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
+    @runtime.InvalidConversion => raise @runtime.InvalidConversion
+    @runtime.Unreachable => raise @runtime.Unreachable
+    @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
+    @runtime.UnknownImport(_) as e => raise e
+    _ => raise @runtime.Unreachable
+  }
+}
+
+///|
 /// Get the value of an exported global variable
 pub fn get_exported_global(
   store : @runtime.Store,

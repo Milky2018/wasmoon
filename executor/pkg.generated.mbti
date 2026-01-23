@@ -9,6 +9,8 @@ import {
 // Values
 pub fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
+pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
 pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
 
 pub fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance)

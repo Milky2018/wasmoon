@@ -9,3 +9,6 @@ _build
 
 # wasm-smith differential runs
 scripts/smith_diff/out/
+
+# Moon tooling profiling/trace output (Chrome trace event format)
+trace.json

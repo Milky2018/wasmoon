@@ -8,7 +8,14 @@ import {
 // Values
 pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
 
+pub fn run_component_script(String) -> Unit
+
 // Errors
+pub suberror ComponentTestError {
+  ParseError(String)
+  ScriptError(String)
+}
+pub impl Show for ComponentTestError
 
 // Types and methods
 type CompiledFunc

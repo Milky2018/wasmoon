@@ -19,6 +19,8 @@
     "moonbitlang/core/strconv"
   ],
   "test-import": [
+    "Milky2018/wasmoon/component",
+    "Milky2018/wasmoon/wit",
     "moonbitlang/core/double",
     "moonbitlang/core/float",
     "moonbitlang/x/fs"

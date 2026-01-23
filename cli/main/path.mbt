@@ -13,6 +13,10 @@ fn load_module_from_path(path : String) -> @types.Module raise CliError {
     let bytes = @fs.read_file_to_bytes(path) catch {
       IOError(_e) => raise FileNotFound(path)
     }
+    match @component.sniff_binary_kind(bytes) {
+      Some(Component) => raise ComponentModelNotSupported
+      _ => ()
+    }
     @parser.parse_module(bytes) catch {
       e => raise ParseModuleError(e.to_string())
     }

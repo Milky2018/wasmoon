@@ -1,0 +1,476 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/component"
+
+import {
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/types",
+}
+
+// Values
+pub fn parse_alias_section(Bytes) -> Array[Alias] raise ComponentParseError
+
+pub fn parse_canon_section(Bytes) -> Array[Canon] raise ComponentParseError
+
+pub fn parse_component(Bytes) -> Component raise ComponentParseError
+
+pub fn parse_component_binary(Bytes) -> ComponentBinary raise ComponentParseError
+
+pub fn parse_core_instance_section(Bytes) -> Array[CoreInstanceDecl] raise ComponentParseError
+
+pub fn parse_export_section(Bytes) -> Array[Export] raise ComponentParseError
+
+pub fn parse_import_section(Bytes) -> Array[Import] raise ComponentParseError
+
+pub fn parse_instance_section(Bytes) -> Array[Instance] raise ComponentParseError
+
+pub fn parse_start_section(Bytes) -> Start raise ComponentParseError
+
+pub fn parse_type_section(Bytes) -> Array[TypeDef] raise ComponentParseError
+
+pub fn sniff_binary_kind(Bytes) -> BinaryKind?
+
+// Errors
+pub suberror ComponentParseError {
+  InvalidMagic
+  UnexpectedEndOfInput
+  Leb128TooLarge
+  NotAComponent
+  UnsupportedComponentPreamble(Int, Int)
+  InvalidTypeSection
+  InvalidInstanceSection
+  InvalidAliasSection
+  InvalidCanonSection
+  InvalidStartSection
+  UnsupportedCanonOpcode(Int)
+  InvalidUtf8
+  UnsupportedTypeOpcode(Int)
+}
+pub impl Show for ComponentParseError
+
+pub(all) suberror ComponentRuntimeError {
+  UnsupportedComponent(String)
+  ComponentParseError(String)
+  CoreModuleParseError(String)
+  CoreModuleInstantiateError(String)
+  InvalidUtf8
+  UnknownImport(String)
+  ImportTypeMismatch(String)
+  UnknownExport(String)
+  InvalidTypeIndex(Int)
+  InvalidFuncIndex(Int)
+  InvalidValueIndex(Int)
+  InvalidComponentIndex(Int)
+  InvalidInstanceIndex(Int)
+  InvalidCoreModuleIndex(Int)
+  InvalidCoreInstanceIndex(Int)
+  InvalidCoreFuncIndex(Int)
+  InvalidCoreTableIndex(Int)
+  InvalidCoreMemoryIndex(Int)
+  InvalidCoreGlobalIndex(Int)
+  InvalidCoreTagIndex(Int)
+  InvalidCoreTypeIndex(Int)
+  InvalidTypeDef(Int)
+  InvalidCanonFuncType(Int)
+  MissingCanonMemory
+  MissingCanonRealloc
+  UnsupportedStringEncoding
+  CanonCallError(String)
+  HostCallError(String)
+  InvalidStartResultCount(Int)
+  OuterAliasOutOfRange(Int)
+  AliasTargetMismatch(String)
+}
+pub impl Eq for ComponentRuntimeError
+pub impl Show for ComponentRuntimeError
+
+// Types and methods
+pub(all) struct Alias {
+  sort : Sort
+  target : AliasTarget
+}
+pub impl Eq for Alias
+pub impl Show for Alias
+
+pub(all) enum AliasTarget {
+  Export(Int, String)
+  CoreExport(Int, String)
+  Outer(Int, Int)
+}
+pub impl Eq for AliasTarget
+pub impl Show for AliasTarget
+
+pub(all) enum BinaryKind {
+  CoreModule
+  Component
+  UnknownPreamble(Int, Int)
+}
+pub impl Eq for BinaryKind
+pub impl Show for BinaryKind
+
+pub(all) enum Canon {
+  Lift(Int, Array[CanonOpt], Int)
+  Lower(Int, Array[CanonOpt])
+  ResourceNew(Int)
+  ResourceDrop(Int)
+  ResourceRep(Int)
+}
+pub impl Eq for Canon
+pub impl Show for Canon
+
+pub(all) enum CanonOpt {
+  StringEncoding(StringEncoding)
+  Memory(Int)
+  Realloc(Int)
+  PostReturn(Int)
+  Async
+  Callback(Int)
+}
+pub impl Eq for CanonOpt
+pub impl Show for CanonOpt
+
+type CanonResources
+pub impl Show for CanonResources
+
+pub(all) struct Component {
+  binary : ComponentBinary
+  core_modules : Array[Bytes]
+  core_instances : Array[Bytes]
+  core_types : Array[Bytes]
+  types : Array[TypeDef]
+  imports : Array[Import]
+  exports : Array[Export]
+  instances : Array[Instance]
+  aliases : Array[Alias]
+  canons : Array[Canon]
+  start : Start?
+  components : Array[Component]
+}
+pub impl Eq for Component
+pub impl Show for Component
+
+pub struct ComponentBinary {
+  version : Int
+  layer : Int
+  sections : Array[Section]
+}
+pub impl Eq for ComponentBinary
+pub impl Show for ComponentBinary
+
+pub(all) struct ComponentClosure {
+  component : Component
+  outer_stack : Array[ComponentInstance]
+}
+pub impl Show for ComponentClosure
+
+pub(all) enum ComponentDecl {
+  Type(TypeDef)
+  Import(String, ExternDesc)
+  Export(String, ExternDesc)
+}
+pub impl Eq for ComponentDecl
+pub impl Show for ComponentDecl
+
+pub(all) enum ComponentExtern {
+  Func(ComponentFunc)
+  Value(ComponentValue)
+  Type(TypeDef?)
+  Component(ComponentClosure)
+  Instance(ComponentInstance)
+  CoreModule(@types.Module)
+  CoreInstance(CoreInstance)
+  CoreFunc(CoreFuncRef)
+  CoreTable(Int)
+  CoreMemory(Int)
+  CoreGlobal(Int)
+  CoreTag(Int)
+  CoreType(Bytes)
+}
+pub impl Show for ComponentExtern
+
+pub(all) enum ComponentFunc {
+  Lifted(CoreFuncRef, FuncType, CanonResources)
+  Host(FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError)
+}
+pub impl Show for ComponentFunc
+
+pub(all) struct ComponentInstance {
+  name : String
+  types : Array[TypeDef?]
+  funcs : Array[ComponentFunc]
+  values : Array[ComponentValue]
+  components : Array[ComponentClosure]
+  instances : Array[ComponentInstance]
+  core_modules : Array[@types.Module]
+  core_instances : Array[CoreInstance]
+  core_funcs : Array[CoreFuncRef]
+  core_types : Array[Bytes]
+  core_tables : Array[Int]
+  core_mems : Array[Int]
+  core_globals : Array[Int]
+  core_tags : Array[Int]
+  exports : Map[String, ComponentExtern]
+  store : @runtime.Store
+}
+pub fn ComponentInstance::call_exported_func(Self, String, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentInstance::get_core_instance(Self, Int) -> CoreInstance?
+pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
+
+type ComponentLinker
+pub fn ComponentLinker::add_component(Self, String, Component) -> Unit
+pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit
+pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit
+pub fn ComponentLinker::add_func(Self, String, FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit
+pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit
+pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit
+pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit
+pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
+pub fn ComponentLinker::get_store(Self) -> @runtime.Store
+pub fn ComponentLinker::instantiate(Self, String, Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentLinker::new() -> Self
+pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
+
+pub(all) enum ComponentValue {
+  Bool(Bool)
+  S8(Int)
+  U8(Int)
+  S16(Int)
+  U16(Int)
+  S32(Int)
+  U32(Int)
+  S64(Int64)
+  U64(Int64)
+  F32(Float)
+  F64(Double)
+  Char(Char)
+  String(String)
+  ErrorContext(String)
+}
+pub impl Eq for ComponentValue
+pub impl Show for ComponentValue
+
+pub(all) struct CoreFuncRef {
+  instance : @runtime.ModuleInstance
+  func_idx : Int
+}
+pub impl Show for CoreFuncRef
+
+pub(all) struct CoreInlineExport {
+  name : String
+  sortidx : SortIdx
+}
+pub impl Eq for CoreInlineExport
+pub impl Show for CoreInlineExport
+
+pub(all) struct CoreInstance {
+  funcs : Map[String, CoreFuncRef]
+  tables : Map[String, Int]
+  memories : Map[String, Int]
+  globals : Map[String, Int]
+  tags : Map[String, Int]
+}
+pub impl Show for CoreInstance
+
+pub(all) struct CoreInstanceDecl {
+  expr : CoreInstanceExpr
+}
+pub impl Eq for CoreInstanceDecl
+pub impl Show for CoreInstanceDecl
+
+pub(all) enum CoreInstanceExpr {
+  Instantiate(Int, Array[CoreInstantiateArg])
+  InlineExports(Array[CoreInlineExport])
+}
+pub impl Eq for CoreInstanceExpr
+pub impl Show for CoreInstanceExpr
+
+pub(all) struct CoreInstantiateArg {
+  name : String
+  sortidx : SortIdx
+}
+pub impl Eq for CoreInstantiateArg
+pub impl Show for CoreInstantiateArg
+
+pub(all) struct Export {
+  name : ExportName
+  sortidx : SortIdx
+  desc : ExternDesc?
+}
+pub impl Eq for Export
+pub impl Show for Export
+
+pub(all) enum ExportName {
+  Plain(Bytes)
+  WithVersion(Bytes, Bytes)
+}
+pub impl Eq for ExportName
+pub impl Show for ExportName
+
+pub(all) enum ExternDesc {
+  CoreModuleType(Int)
+  FuncType(Int)
+  Value(ValueBound)
+  Type(TypeBound)
+  ComponentType(Int)
+  InstanceType(Int)
+}
+pub impl Eq for ExternDesc
+pub impl Show for ExternDesc
+
+pub(all) struct FuncType {
+  is_async : Bool
+  params : Array[Param]
+  result : ValType?
+}
+pub impl Eq for FuncType
+pub impl Show for FuncType
+
+pub(all) struct Import {
+  name : ImportName
+  desc : ExternDesc
+}
+pub impl Eq for Import
+pub impl Show for Import
+
+pub(all) enum ImportName {
+  Plain(Bytes)
+  WithVersion(Bytes, Bytes)
+}
+pub impl Eq for ImportName
+pub impl Show for ImportName
+
+pub(all) struct InlineExport {
+  name : String
+  sortidx : SortIdx
+}
+pub impl Eq for InlineExport
+pub impl Show for InlineExport
+
+pub(all) struct Instance {
+  expr : InstanceExpr
+}
+pub impl Eq for Instance
+pub impl Show for Instance
+
+pub(all) enum InstanceDecl {
+  Type(TypeDef)
+  Export(String, ExternDesc)
+}
+pub impl Eq for InstanceDecl
+pub impl Show for InstanceDecl
+
+pub(all) enum InstanceExpr {
+  Instantiate(Int, Array[InstantiateArg])
+  InlineExports(Array[InlineExport])
+}
+pub impl Eq for InstanceExpr
+pub impl Show for InstanceExpr
+
+pub(all) struct InstantiateArg {
+  name : String
+  sortidx : SortIdx
+}
+pub impl Eq for InstantiateArg
+pub impl Show for InstantiateArg
+
+pub(all) struct Param {
+  label : String
+  ty : ValType
+}
+pub impl Eq for Param
+pub impl Show for Param
+
+pub(all) enum PrimValType {
+  Bool
+  S8
+  U8
+  S16
+  U16
+  S32
+  U32
+  S64
+  U64
+  F32
+  F64
+  Char
+  String
+  ErrorContext
+}
+pub impl Eq for PrimValType
+pub impl Show for PrimValType
+
+pub struct Section {
+  id : Int
+  payload : Bytes
+}
+pub impl Eq for Section
+pub impl Show for Section
+
+pub(all) enum Sort {
+  Core(Int)
+  Func
+  Value
+  Type
+  Component
+  Instance
+}
+pub impl Eq for Sort
+pub impl Show for Sort
+
+pub(all) struct SortIdx {
+  sort : Sort
+  idx : Int
+}
+pub impl Eq for SortIdx
+pub impl Show for SortIdx
+
+pub(all) struct Start {
+  func_idx : Int
+  args : Array[Int]
+  results : Int
+}
+pub impl Eq for Start
+pub impl Show for Start
+
+pub(all) enum StringEncoding {
+  Utf8
+  Utf16
+  Latin1Utf16
+}
+pub impl Eq for StringEncoding
+pub impl Show for StringEncoding
+
+pub(all) enum TypeBound {
+  Eq(Int)
+  SubResource
+}
+pub impl Eq for TypeBound
+pub impl Show for TypeBound
+
+pub(all) enum TypeDef {
+  DefValType(PrimValType)
+  FuncType(FuncType)
+  ComponentType(Array[ComponentDecl])
+  InstanceTypeEmpty
+  InstanceType(Array[InstanceDecl])
+}
+pub impl Eq for TypeDef
+pub impl Show for TypeDef
+
+pub(all) enum ValType {
+  TypeIdx(Int)
+  Prim(PrimValType)
+}
+pub impl Eq for ValType
+pub impl Show for ValType
+
+pub(all) enum ValueBound {
+  Eq(Int)
+  Type(ValType)
+}
+pub impl Eq for ValueBound
+pub impl Show for ValueBound
+
+// Type aliases
+
+// Traits
+
