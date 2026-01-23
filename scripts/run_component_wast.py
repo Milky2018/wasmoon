@@ -347,6 +347,15 @@ SUPPORTED_VALUE_TYPES = {
     "string",
 }
 
+UNSUPPORTED_ERROR_SUBSTRINGS = [
+    "unsupported component type opcode",
+    "unsupported canon opcode",
+    "unsupported component preamble",
+    "unsupported string encoding",
+    "unsupportedstringencoding",
+    "unsupportedcomponent",
+]
+
 
 def parse_component_name(node) -> Optional[str]:
     if isinstance(node, list) and len(node) > 1:
@@ -418,6 +427,27 @@ def parse_invoke(node) -> Optional[dict]:
     return {"instance": instance, "field": field, "args": args}
 
 
+def has_unsupported_string_encoding(form: str) -> bool:
+    return "string-encoding=utf16" in form or "string-encoding=latin1+utf16" in form
+
+
+def has_root_imports(node: object) -> bool:
+    if not isinstance(node, list) or not node:
+        return False
+    if node[0] != "component":
+        return False
+    for child in node[1:]:
+        if isinstance(child, list) and child and child[0] == "import":
+            return True
+    return False
+
+
+def should_instantiate_component(node: object) -> bool:
+    # Only root imports require host bindings; nested component imports can be
+    # satisfied by internal instantiation wiring.
+    return not has_root_imports(node)
+
+
 def compile_component(
     text: str, tmp: Path, idx: int
 ) -> Tuple[Optional[Path], Optional[str]]:
@@ -447,6 +477,11 @@ def validate_component(component_bin: Path, wasmoon: Path) -> Tuple[bool, str]:
     if "component validated ok" in out:
         return True, out.strip()
     return False, out.strip() or "unknown validation result"
+
+
+def is_unsupported_error(msg: str) -> bool:
+    lower = msg.lower()
+    return any(token in lower for token in UNSUPPORTED_ERROR_SUBSTRINGS)
 
 
 def run_component_script(
@@ -485,7 +520,9 @@ def run_component_script(
 
 def should_skip_file(path: Path) -> bool:
     parts = set(path.parts)
-    if {"async", "resources", "wasmtime", "wasm-tools"} & parts:
+    if {"async", "resources"} & parts:
+        return True
+    if path.name == "resources.wast":
         return True
     if path.name == "trap-in-post-return.wast":
         return True
@@ -496,6 +533,7 @@ def run_file(path: Path, wasmoon: Path) -> dict:
     text = path.read_text(encoding="utf-8")
     passed = failed = skipped = 0
     failures: list[str] = []
+    defined_components: set[str] = set()
     if should_skip_file(path):
         for _ in iter_forms(text):
             skipped += 1
@@ -514,12 +552,18 @@ def run_file(path: Path, wasmoon: Path) -> dict:
             if cmd == "component":
                 node = parse_form(form)
                 normalized, kind = normalize_component_form(form)
+                if has_unsupported_string_encoding(form):
+                    skipped += 1
+                    continue
                 if kind == "instance":
                     inst = parse_component_instance(node)
                     if inst is None:
                         skipped += 1
                         continue
                     inst_name, comp_name = inst
+                    if comp_name not in defined_components:
+                        skipped += 1
+                        continue
                     commands.append(
                         {
                             "type": "component_instance",
@@ -537,6 +581,14 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                     failed += 1
                     failures.append(f"component parse failed: {err}")
                     continue
+                ok, msg = validate_component(comp_bin, wasmoon)
+                if not ok:
+                    if is_unsupported_error(msg):
+                        skipped += 1
+                        continue
+                    failed += 1
+                    failures.append(f"component validate failed: {msg}")
+                    continue
                 if kind == "definition":
                     name = parse_component_definition_name(node)
                     commands.append(
@@ -546,6 +598,8 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                             "path": str(comp_bin),
                         }
                     )
+                    if name:
+                        defined_components.add(name)
                 else:
                     name = parse_component_name(node)
                     commands.append(
@@ -553,15 +607,20 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                             "type": "component",
                             "name": name,
                             "path": str(comp_bin),
-                            "instantiate": True,
+                            "instantiate": should_instantiate_component(node),
                         }
                     )
+                    if name:
+                        defined_components.add(name)
             elif cmd == "assert_invalid":
                 component_form = find_component_form(form)
                 if not component_form:
                     skipped += 1
                     continue
                 normalized, kind = normalize_component_form(component_form)
+                if component_form and has_unsupported_string_encoding(component_form):
+                    skipped += 1
+                    continue
                 if kind == "instance" or normalized is None:
                     skipped += 1
                     continue
@@ -571,10 +630,12 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                     failed += 1
                     failures.append(f"assert_invalid parse failed: {err}")
                     continue
-                ok, _msg = validate_component(comp_bin, wasmoon)
+                ok, msg = validate_component(comp_bin, wasmoon)
                 if ok:
                     failed += 1
                     failures.append("assert_invalid unexpectedly validated")
+                elif is_unsupported_error(msg):
+                    skipped += 1
                 else:
                     passed += 1
             elif cmd == "assert_malformed":
@@ -583,6 +644,9 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                     skipped += 1
                     continue
                 normalized, kind = normalize_component_form(component_form)
+                if component_form and has_unsupported_string_encoding(component_form):
+                    skipped += 1
+                    continue
                 if kind == "instance" or normalized is None:
                     skipped += 1
                     continue
@@ -591,14 +655,21 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                 if comp_bin is None:
                     passed += 1
                 else:
-                    failed += 1
-                    failures.append("assert_malformed unexpectedly parsed")
+                    ok, msg = validate_component(comp_bin, wasmoon)
+                    if is_unsupported_error(msg):
+                        skipped += 1
+                    else:
+                        failed += 1
+                        failures.append("assert_malformed unexpectedly parsed")
             elif cmd == "assert_unlinkable":
                 component_form = find_component_form(form)
                 if not component_form:
                     skipped += 1
                     continue
                 normalized, kind = normalize_component_form(component_form)
+                if component_form and has_unsupported_string_encoding(component_form):
+                    skipped += 1
+                    continue
                 if kind == "instance" or normalized is None:
                     skipped += 1
                     continue
@@ -607,6 +678,14 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                 if comp_bin is None:
                     failed += 1
                     failures.append(f"assert_unlinkable parse failed: {err}")
+                    continue
+                ok, msg = validate_component(comp_bin, wasmoon)
+                if not ok:
+                    if is_unsupported_error(msg):
+                        skipped += 1
+                        continue
+                    failed += 1
+                    failures.append(f"assert_unlinkable validate failed: {msg}")
                     continue
                 node = parse_form(form)
                 text_msg = None

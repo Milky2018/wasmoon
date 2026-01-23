@@ -26,11 +26,18 @@ pub(all) suberror ComponentValidationError {
   InvalidCoreModuleIndex(Int)
   InvalidCoreInstanceIndex(Int)
   InvalidCoreTypeIndex(Int)
+  InvalidCoreTableIndex(Int)
+  InvalidCoreMemoryIndex(Int)
+  InvalidCoreGlobalIndex(Int)
+  InvalidCoreTagIndex(Int)
   DuplicateCanonOption(String)
   MissingCanonOption(String)
   CanonExpectedFuncType(Int)
   CanonAsyncTypeMismatch(Int)
   UnsupportedCoreSort(Int)
+  UnsupportedComponentImport
+  UnsupportedComponentExport
+  ExportedImportedFunc(Int)
   InvalidKebabName(String)
   SectionParseError(Int, String)
   CoreModuleError(String)

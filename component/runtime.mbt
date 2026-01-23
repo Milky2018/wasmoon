@@ -12,6 +12,7 @@ pub(all) suberror ComponentRuntimeError {
   CoreModuleInstantiateError(String)
   InvalidUtf8
   UnknownImport(String)
+  ImportTypeMismatch(String)
   UnknownExport(String)
   InvalidTypeIndex(Int)
   InvalidFuncIndex(Int)
@@ -25,6 +26,7 @@ pub(all) suberror ComponentRuntimeError {
   InvalidCoreMemoryIndex(Int)
   InvalidCoreGlobalIndex(Int)
   InvalidCoreTagIndex(Int)
+  InvalidCoreTypeIndex(Int)
   InvalidTypeDef(Int)
   InvalidCanonFuncType(Int)
   MissingCanonMemory
@@ -101,11 +103,24 @@ pub impl Show for CoreInstance with output(_self, logger) {
 }
 
 ///|
+/// A component value is a closure: the component binary plus the captured outer
+/// environment needed to resolve `alias outer ...` when instantiated later.
+pub(all) struct ComponentClosure {
+  component : Component
+  outer_stack : Array[ComponentInstance]
+}
+
+///|
+pub impl Show for ComponentClosure with output(_self, logger) {
+  logger.write_string("ComponentClosure")
+}
+
+///|
 pub(all) enum ComponentExtern {
   Func(ComponentFunc)
   Value(ComponentValue)
   Type(TypeDef?)
-  Component(Component)
+  Component(ComponentClosure)
   Instance(ComponentInstance)
   CoreModule(@types.Module)
   CoreInstance(CoreInstance)
@@ -142,11 +157,12 @@ pub(all) struct ComponentInstance {
   types : Array[TypeDef?]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
-  components : Array[Component]
+  components : Array[ComponentClosure]
   instances : Array[ComponentInstance]
   core_modules : Array[@types.Module]
   core_instances : Array[CoreInstance]
   core_funcs : Array[CoreFuncRef]
+  core_types : Array[Bytes]
   core_tables : Array[Int]
   core_mems : Array[Int]
   core_globals : Array[Int]
@@ -266,7 +282,10 @@ pub fn ComponentLinker::add_component(
   name : String,
   component : Component,
 ) -> Unit {
-  self.add_import(name, ComponentExtern::Component(component))
+  self.add_import(
+    name,
+    ComponentExtern::Component({ component, outer_stack: [] }),
+  )
 }
 
 ///|
@@ -310,11 +329,12 @@ priv struct BuildState {
   types : Array[TypeDef?]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
-  components : Array[Component]
+  components : Array[ComponentClosure]
   instances : Array[ComponentInstance]
   core_modules : Array[@types.Module]
   core_instances : Array[CoreInstance]
   core_funcs : Array[CoreFuncRef]
+  core_types : Array[Bytes]
   core_tables : Array[Int]
   core_mems : Array[Int]
   core_globals : Array[Int]
@@ -333,6 +353,7 @@ fn BuildState::new() -> BuildState {
     core_modules: [],
     core_instances: [],
     core_funcs: [],
+    core_types: [],
     core_tables: [],
     core_mems: [],
     core_globals: [],
@@ -455,47 +476,129 @@ fn resolve_import(
   overrides : Map[String, ComponentExtern],
   name : ImportName,
   desc : ExternDesc,
+  types : Array[TypeDef?],
+  store : @runtime.Store,
 ) -> ComponentExtern raise ComponentRuntimeError {
   let key = decode_import_name(name)
-  let ext = match overrides.get(key) {
-    Some(v) => v
+  let ext_opt = match overrides.get(key) {
+    Some(v) => Some(v)
+    None => linker.imports.get(key)
+  }
+  let expected = match desc {
+    CoreModuleType(_) => "module"
+    FuncType(_) => "function"
+    Value(_) => "value"
+    Type(_) => "type"
+    ComponentType(_) => "component"
+    InstanceType(_) => "instance"
+  }
+  match ext_opt {
+    Some(ext) =>
+      match (desc, ext) {
+        (CoreModuleType(_), ComponentExtern::CoreModule(_))
+        | (FuncType(_), ComponentExtern::Func(_))
+        | (Value(_), ComponentExtern::Value(_))
+        | (Type(_), ComponentExtern::Type(_))
+        | (ComponentType(_), ComponentExtern::Component(_))
+        | (InstanceType(_), ComponentExtern::Instance(_)) =>
+          match (desc, ext) {
+            (InstanceType(tyidx), ComponentExtern::Instance(inst)) => {
+              validate_instance_import_type(key, tyidx, inst, types)
+              ext
+            }
+            _ => ext
+          }
+        _ => {
+          let actual = match ext {
+            ComponentExtern::Func(_) => "func"
+            ComponentExtern::Value(_) => "value"
+            ComponentExtern::Type(_) => "type"
+            ComponentExtern::Component(_) => "component"
+            ComponentExtern::Instance(_) => "instance"
+            ComponentExtern::CoreModule(_) => "module"
+            ComponentExtern::CoreInstance(_) => "instance"
+            ComponentExtern::CoreFunc(_) => "func"
+            ComponentExtern::CoreTable(_) => "table"
+            ComponentExtern::CoreMemory(_) => "memory"
+            ComponentExtern::CoreGlobal(_) => "global"
+            ComponentExtern::CoreTag(_) => "tag"
+            ComponentExtern::CoreType(_) => "type"
+          }
+          raise ImportTypeMismatch("expected \{expected} found \{actual}")
+        }
+      }
     None =>
-      match linker.imports.get(key) {
-        Some(v) => v
-        None => raise UnknownImport(key)
+      match desc {
+        InstanceType(tyidx) =>
+          if tyidx >= 0 && tyidx < types.length() {
+            match types[tyidx] {
+              Some(TypeDef::InstanceTypeEmpty) => {
+                let empty : ComponentInstance = {
+                  name: "\{key}::empty",
+                  types: [],
+                  funcs: [],
+                  values: [],
+                  components: [],
+                  instances: [],
+                  core_modules: [],
+                  core_instances: [],
+                  core_funcs: [],
+                  core_types: [],
+                  core_tables: [],
+                  core_mems: [],
+                  core_globals: [],
+                  core_tags: [],
+                  exports: {},
+                  store,
+                }
+                ComponentExtern::Instance(empty)
+              }
+              _ => raise UnknownImport(key)
+            }
+          } else {
+            raise UnknownImport(key)
+          }
+        _ => raise UnknownImport(key)
       }
   }
-  match desc {
-    CoreModuleType(_) =>
-      match ext {
-        ComponentExtern::CoreModule(_) => ext
-        _ => raise UnknownImport(key)
+}
+
+///|
+fn validate_instance_import_type(
+  import_key : String,
+  tyidx : Int,
+  inst : ComponentInstance,
+  types : Array[TypeDef?],
+) -> Unit raise ComponentRuntimeError {
+  if tyidx < 0 || tyidx >= types.length() {
+    raise UnknownImport(import_key)
+  }
+  match types[tyidx] {
+    Some(TypeDef::InstanceTypeEmpty) => ()
+    Some(TypeDef::InstanceType(decls)) =>
+      for d in decls {
+        match d {
+          InstanceDecl::Type(_) => ()
+          InstanceDecl::Export(name, desc) =>
+            match inst.get_export(name) {
+              None => raise UnknownImport(import_key)
+              Some(ext) =>
+                match (desc, ext) {
+                  (ExternDesc::CoreModuleType(_), ComponentExtern::CoreModule(_)
+                  )
+                  | (ExternDesc::FuncType(_), ComponentExtern::Func(_))
+                  | (ExternDesc::Value(_), ComponentExtern::Value(_))
+                  | (ExternDesc::Type(_), ComponentExtern::Type(_))
+                  | (ExternDesc::ComponentType(_), ComponentExtern::Component(_)
+                  )
+                  | (ExternDesc::InstanceType(_), ComponentExtern::Instance(_)) =>
+                    ()
+                  _ => raise ImportTypeMismatch("instance export type mismatch")
+                }
+            }
+        }
       }
-    FuncType(_) =>
-      match ext {
-        ComponentExtern::Func(_) => ext
-        _ => raise UnknownImport(key)
-      }
-    Value(_) =>
-      match ext {
-        ComponentExtern::Value(_) => ext
-        _ => raise UnknownImport(key)
-      }
-    Type(_) =>
-      match ext {
-        ComponentExtern::Type(_) => ext
-        _ => raise UnknownImport(key)
-      }
-    ComponentType(_) =>
-      match ext {
-        ComponentExtern::Component(_) => ext
-        _ => raise UnknownImport(key)
-      }
-    InstanceType(_) =>
-      match ext {
-        ComponentExtern::Instance(_) => ext
-        _ => raise UnknownImport(key)
-      }
+    _ => ()
   }
 }
 
@@ -716,6 +819,41 @@ fn require_memory(
 }
 
 ///|
+fn trunc_u8(n : Int) -> Int {
+  (n.reinterpret_as_uint() & 0xFFU).reinterpret_as_int()
+}
+
+///|
+fn trunc_s8(n : Int) -> Int {
+  let masked = n.reinterpret_as_uint() & 0xFFU
+  if masked >= 0x80U {
+    masked.reinterpret_as_int() - 0x100
+  } else {
+    masked.reinterpret_as_int()
+  }
+}
+
+///|
+fn trunc_u16(n : Int) -> Int {
+  (n.reinterpret_as_uint() & 0xFFFFU).reinterpret_as_int()
+}
+
+///|
+fn trunc_s16(n : Int) -> Int {
+  let masked = n.reinterpret_as_uint() & 0xFFFFU
+  if masked >= 0x8000U {
+    masked.reinterpret_as_int() - 0x10000
+  } else {
+    masked.reinterpret_as_int()
+  }
+}
+
+///|
+fn trunc_u32(n : Int) -> Int {
+  n.reinterpret_as_uint().reinterpret_as_int()
+}
+
+///|
 fn component_args_to_core(
   args : Array[ComponentValue],
   func_type : FuncType,
@@ -801,12 +939,12 @@ fn core_results_to_component(
                 [@types.Value::I32(n)] =>
                   match p {
                     Char => [ComponentValue::Char(n.unsafe_to_char())]
-                    S8 => [ComponentValue::S8(n)]
-                    U8 => [ComponentValue::U8(n)]
-                    S16 => [ComponentValue::S16(n)]
-                    U16 => [ComponentValue::U16(n)]
+                    S8 => [ComponentValue::S8(trunc_s8(n))]
+                    U8 => [ComponentValue::U8(trunc_u8(n))]
+                    S16 => [ComponentValue::S16(trunc_s16(n))]
+                    U16 => [ComponentValue::U16(trunc_u16(n))]
                     S32 => [ComponentValue::S32(n)]
-                    U32 => [ComponentValue::U32(n)]
+                    U32 => [ComponentValue::U32(trunc_u32(n))]
                     _ => raise HostCallError("result type mismatch")
                   }
                 _ => raise HostCallError("result type mismatch")
@@ -912,12 +1050,12 @@ fn core_args_to_component(
                 values.push(
                   match prim {
                     Char => ComponentValue::Char(n.unsafe_to_char())
-                    S8 => ComponentValue::S8(n)
-                    U8 => ComponentValue::U8(n)
-                    S16 => ComponentValue::S16(n)
-                    U16 => ComponentValue::U16(n)
+                    S8 => ComponentValue::S8(trunc_s8(n))
+                    U8 => ComponentValue::U8(trunc_u8(n))
+                    S16 => ComponentValue::S16(trunc_s16(n))
+                    U16 => ComponentValue::U16(trunc_u16(n))
                     S32 => ComponentValue::S32(n)
-                    U32 => ComponentValue::U32(n)
+                    U32 => ComponentValue::U32(trunc_u32(n))
                     _ => ComponentValue::S32(n)
                   },
                 )
@@ -1067,9 +1205,14 @@ fn call_component_func(
         args, func_type, types, resources, store,
       )
       let core_results = call_core_func(store, core_func, core_args)
-      core_results_to_component(
+      let component_results = core_results_to_component(
         core_results, func_type, types, resources, store,
       )
+      match resources.post_return {
+        Some(pr) => call_core_func(store, pr, core_results) |> ignore
+        None => ()
+      }
+      component_results
     }
   }
 }
@@ -1168,7 +1311,12 @@ fn resolve_sortidx(
           } else {
             ComponentExtern::CoreTag(state.core_tags[idx])
           }
-        0x05 => raise AliasTargetMismatch("core type")
+        0x05 | 0x10 =>
+          if idx < 0 || idx >= state.core_types.length() {
+            raise InvalidCoreTypeIndex(idx)
+          } else {
+            ComponentExtern::CoreType(state.core_types[idx])
+          }
         0x11 =>
           if idx < 0 || idx >= state.core_modules.length() {
             raise InvalidCoreModuleIndex(idx)
@@ -1180,6 +1328,98 @@ fn resolve_sortidx(
             raise InvalidCoreInstanceIndex(idx)
           } else {
             ComponentExtern::CoreInstance(state.core_instances[idx])
+          }
+        _ => raise AliasTargetMismatch("unsupported core sort")
+      }
+  }
+}
+
+///|
+fn resolve_sortidx_in_instance(
+  sortidx : SortIdx,
+  inst : ComponentInstance,
+) -> ComponentExtern raise ComponentRuntimeError {
+  let idx = sortidx.idx
+  match sortidx.sort {
+    Sort::Func =>
+      if idx < 0 || idx >= inst.funcs.length() {
+        raise InvalidFuncIndex(idx)
+      } else {
+        ComponentExtern::Func(inst.funcs[idx])
+      }
+    Sort::Value =>
+      if idx < 0 || idx >= inst.values.length() {
+        raise InvalidValueIndex(idx)
+      } else {
+        ComponentExtern::Value(inst.values[idx])
+      }
+    Sort::Type =>
+      if idx < 0 || idx >= inst.types.length() {
+        raise InvalidTypeIndex(idx)
+      } else {
+        ComponentExtern::Type(inst.types[idx])
+      }
+    Sort::Component =>
+      if idx < 0 || idx >= inst.components.length() {
+        raise InvalidComponentIndex(idx)
+      } else {
+        ComponentExtern::Component(inst.components[idx])
+      }
+    Sort::Instance =>
+      if idx < 0 || idx >= inst.instances.length() {
+        raise InvalidInstanceIndex(idx)
+      } else {
+        ComponentExtern::Instance(inst.instances[idx])
+      }
+    Sort::Core(core_sort) =>
+      match core_sort {
+        0x00 =>
+          if idx < 0 || idx >= inst.core_funcs.length() {
+            raise InvalidCoreFuncIndex(idx)
+          } else {
+            ComponentExtern::CoreFunc(inst.core_funcs[idx])
+          }
+        0x01 =>
+          if idx < 0 || idx >= inst.core_tables.length() {
+            raise InvalidCoreTableIndex(idx)
+          } else {
+            ComponentExtern::CoreTable(inst.core_tables[idx])
+          }
+        0x02 =>
+          if idx < 0 || idx >= inst.core_mems.length() {
+            raise InvalidCoreMemoryIndex(idx)
+          } else {
+            ComponentExtern::CoreMemory(inst.core_mems[idx])
+          }
+        0x03 =>
+          if idx < 0 || idx >= inst.core_globals.length() {
+            raise InvalidCoreGlobalIndex(idx)
+          } else {
+            ComponentExtern::CoreGlobal(inst.core_globals[idx])
+          }
+        0x04 =>
+          if idx < 0 || idx >= inst.core_tags.length() {
+            raise InvalidCoreTagIndex(idx)
+          } else {
+            ComponentExtern::CoreTag(inst.core_tags[idx])
+          }
+        0x05 | 0x10 =>
+          if idx < 0 || idx >= inst.core_types.length() {
+            raise InvalidCoreTypeIndex(idx)
+          } else {
+            ComponentExtern::CoreType(inst.core_types[idx])
+          }
+        0x11 =>
+          if idx < 0 || idx >= inst.core_modules.length() {
+            raise InvalidCoreModuleIndex(idx)
+          } else {
+            ComponentExtern::CoreModule(inst.core_modules[idx])
+          }
+        0x12 =>
+          if idx < 0 || idx >= inst.core_instances.length() {
+            raise InvalidCoreInstanceIndex(idx)
+          } else {
+            ComponentExtern::CoreInstance(inst.core_instances[idx])
           }
         _ => raise AliasTargetMismatch("unsupported core sort")
       }
@@ -1228,6 +1468,12 @@ fn append_alias(
       } else {
         raise AliasTargetMismatch("core tag")
       }
+    (Sort::Core(core_sort), ComponentExtern::CoreType(t)) =>
+      if core_sort == 0x05 || core_sort == 0x10 {
+        state.core_types.push(t)
+      } else {
+        raise AliasTargetMismatch("core type")
+      }
     (Sort::Core(core_sort), ComponentExtern::CoreModule(m)) =>
       if core_sort == 0x11 {
         state.core_modules.push(m)
@@ -1246,7 +1492,7 @@ fn append_alias(
 
 ///|
 fn resolve_outer_alias(
-  outer_stack : Array[BuildState],
+  outer_stack : Array[ComponentInstance],
   depth : Int,
   sort : Sort,
   idx : Int,
@@ -1255,20 +1501,46 @@ fn resolve_outer_alias(
     raise OuterAliasOutOfRange(depth)
   }
   let outer = outer_stack[outer_stack.length() - 1 - depth]
-  resolve_sortidx({ sort, idx }, outer)
+  resolve_sortidx_in_instance({ sort, idx }, outer)
 }
 
 ///|
 fn extend_outer_stack(
-  outer_stack : Array[BuildState],
-  state : BuildState,
-) -> Array[BuildState] {
-  let stack : Array[BuildState] = []
+  outer_stack : Array[ComponentInstance],
+  env : ComponentInstance,
+) -> Array[ComponentInstance] {
+  let stack : Array[ComponentInstance] = []
   for s in outer_stack {
     stack.push(s)
   }
-  stack.push(state)
+  stack.push(env)
   stack
+}
+
+///|
+fn env_instance_from_state(
+  name : String,
+  state : BuildState,
+  store : @runtime.Store,
+) -> ComponentInstance {
+  {
+    name,
+    types: state.types,
+    funcs: state.funcs,
+    values: state.values,
+    components: state.components,
+    instances: state.instances,
+    core_modules: state.core_modules,
+    core_instances: state.core_instances,
+    core_funcs: state.core_funcs,
+    core_types: state.core_types,
+    core_tables: state.core_tables,
+    core_mems: state.core_mems,
+    core_globals: state.core_globals,
+    core_tags: state.core_tags,
+    exports: state.exports,
+    store,
+  }
 }
 
 ///|
@@ -1320,14 +1592,51 @@ fn core_imports_from_args(
 ) -> @runtime.Imports raise ComponentRuntimeError {
   let imports = @runtime.Imports::new()
   for arg in args {
-    let (mod_name, field) = split_core_import_name(arg.name)
     match resolve_sortidx(arg.sortidx, state) {
-      ComponentExtern::CoreFunc(f) =>
+      ComponentExtern::CoreInstance(inst) => {
+        // `with "mod" (instance ...)` supplies a whole namespace for core imports.
+        let mod_name = arg.name
+        for kv in inst.funcs.iter() {
+          let (field, f) = kv
+          imports.add_func(mod_name, field, f.instance.func_addrs[f.func_idx])
+        }
+        for kv in inst.tables.iter() {
+          let (field, t) = kv
+          imports.add_table(mod_name, field, t)
+        }
+        for kv in inst.memories.iter() {
+          let (field, m) = kv
+          imports.add_memory(mod_name, field, m)
+        }
+        for kv in inst.globals.iter() {
+          let (field, g) = kv
+          imports.add_global(mod_name, field, g)
+        }
+        for kv in inst.tags.iter() {
+          let (field, t) = kv
+          imports.add_tag(mod_name, field, t)
+        }
+      }
+      ComponentExtern::CoreFunc(f) => {
+        let (mod_name, field) = split_core_import_name(arg.name)
         imports.add_func(mod_name, field, f.instance.func_addrs[f.func_idx])
-      ComponentExtern::CoreTable(t) => imports.add_table(mod_name, field, t)
-      ComponentExtern::CoreMemory(m) => imports.add_memory(mod_name, field, m)
-      ComponentExtern::CoreGlobal(g) => imports.add_global(mod_name, field, g)
-      ComponentExtern::CoreTag(t) => imports.add_tag(mod_name, field, t)
+      }
+      ComponentExtern::CoreTable(t) => {
+        let (mod_name, field) = split_core_import_name(arg.name)
+        imports.add_table(mod_name, field, t)
+      }
+      ComponentExtern::CoreMemory(m) => {
+        let (mod_name, field) = split_core_import_name(arg.name)
+        imports.add_memory(mod_name, field, m)
+      }
+      ComponentExtern::CoreGlobal(g) => {
+        let (mod_name, field) = split_core_import_name(arg.name)
+        imports.add_global(mod_name, field, g)
+      }
+      ComponentExtern::CoreTag(t) => {
+        let (mod_name, field) = split_core_import_name(arg.name)
+        imports.add_tag(mod_name, field, t)
+      }
       _ => raise AliasTargetMismatch("core instantiate arg")
     }
   }
@@ -1340,7 +1649,7 @@ fn instantiate_component(
   name : String,
   component : Component,
   overrides : Map[String, ComponentExtern],
-  outer_stack : Array[BuildState],
+  outer_stack : Array[ComponentInstance],
 ) -> ComponentInstance raise ComponentRuntimeError {
   let state = BuildState::new()
   let store = linker.get_store()
@@ -1380,12 +1689,16 @@ fn instantiate_component(
           }
         }
       }
-      3 => ()
+      3 => state.core_types.push(section.payload)
       4 => {
         let nested = parse_component(section.payload) catch {
           e => raise ComponentParseError(e.to_string())
         }
-        state.components.push(nested)
+        let env = env_instance_from_state("\{name}::env", state, store)
+        state.components.push({
+          component: nested,
+          outer_stack: extend_outer_stack(outer_stack, env),
+        })
       }
       5 => {
         let instances = parse_instance_section(section.payload) catch {
@@ -1397,6 +1710,7 @@ fn instantiate_component(
               if component_idx < 0 || component_idx >= state.components.length() {
                 raise InvalidComponentIndex(component_idx)
               }
+              let closure = state.components[component_idx]
               let overrides_for_child : Map[String, ComponentExtern] = {}
               for arg in args {
                 let ext = resolve_sortidx(arg.sortidx, state)
@@ -1405,9 +1719,9 @@ fn instantiate_component(
               let nested = instantiate_component(
                 linker,
                 "\{name}::component\{component_idx}",
-                state.components[component_idx],
+                closure.component,
                 overrides_for_child,
-                extend_outer_stack(outer_stack, state),
+                closure.outer_stack,
               )
               state.instances.push(nested)
             }
@@ -1427,6 +1741,7 @@ fn instantiate_component(
                 core_modules: state.core_modules,
                 core_instances: state.core_instances,
                 core_funcs: state.core_funcs,
+                core_types: state.core_types,
                 core_tables: state.core_tables,
                 core_mems: state.core_mems,
                 core_globals: state.core_globals,
@@ -1490,7 +1805,15 @@ fn instantiate_component(
               }
             }
             AliasTarget::Outer(ct, idx) =>
-              resolve_outer_alias(outer_stack, ct, alias_decl.sort, idx)
+              resolve_outer_alias(
+                extend_outer_stack(
+                  outer_stack,
+                  env_instance_from_state("\{name}::env", state, store),
+                ),
+                ct,
+                alias_decl.sort,
+                idx,
+              )
           }
           append_alias(alias_decl.sort, ext, state)
         }
@@ -1646,7 +1969,14 @@ fn instantiate_component(
           e => raise CoreModuleInstantiateError(e.to_string())
         }
         for imp in imports {
-          let ext = resolve_import(linker, overrides, imp.name, imp.desc)
+          let ext = resolve_import(
+            linker,
+            overrides,
+            imp.name,
+            imp.desc,
+            state.types,
+            store,
+          )
           match imp.desc {
             ExternDesc::CoreModuleType(_) =>
               match ext {
@@ -1689,6 +2019,7 @@ fn instantiate_component(
           let name = decode_export_name(exp.name)
           let ext = resolve_sortidx(exp.sortidx, state)
           state.exports.set(name, ext)
+          append_alias(exp.sortidx.sort, ext, state)
         }
       }
       _ => ()
@@ -1704,6 +2035,7 @@ fn instantiate_component(
     core_modules: state.core_modules,
     core_instances: state.core_instances,
     core_funcs: state.core_funcs,
+    core_types: state.core_types,
     core_tables: state.core_tables,
     core_mems: state.core_mems,
     core_globals: state.core_globals,

@@ -19,11 +19,18 @@ pub(all) suberror ComponentValidationError {
   InvalidCoreModuleIndex(Int)
   InvalidCoreInstanceIndex(Int)
   InvalidCoreTypeIndex(Int)
+  InvalidCoreTableIndex(Int)
+  InvalidCoreMemoryIndex(Int)
+  InvalidCoreGlobalIndex(Int)
+  InvalidCoreTagIndex(Int)
   DuplicateCanonOption(String)
   MissingCanonOption(String)
   CanonExpectedFuncType(Int)
   CanonAsyncTypeMismatch(Int)
   UnsupportedCoreSort(Int)
+  UnsupportedComponentImport
+  UnsupportedComponentExport
+  ExportedImportedFunc(Int)
   InvalidKebabName(String)
   SectionParseError(Int, String)
   CoreModuleError(String)
@@ -39,6 +46,10 @@ priv struct Counts {
   mut core_module : Int
   mut core_instance : Int
   mut core_type : Int
+  mut core_table : Int
+  mut core_memory : Int
+  mut core_global : Int
+  mut core_tag : Int
 }
 
 ///|
@@ -52,6 +63,10 @@ fn Counts::new() -> Counts {
     core_module: 0,
     core_instance: 0,
     core_type: 0,
+    core_table: 0,
+    core_memory: 0,
+    core_global: 0,
+    core_tag: 0,
   }
 }
 
@@ -154,7 +169,23 @@ fn check_sortidx(
           if idx < 0 || idx >= counts.core_func {
             raise InvalidCoreFuncIndex(idx)
           }
-        0x05 =>
+        0x01 =>
+          if idx < 0 || idx >= counts.core_table {
+            raise InvalidCoreTableIndex(idx)
+          }
+        0x02 =>
+          if idx < 0 || idx >= counts.core_memory {
+            raise InvalidCoreMemoryIndex(idx)
+          }
+        0x03 =>
+          if idx < 0 || idx >= counts.core_global {
+            raise InvalidCoreGlobalIndex(idx)
+          }
+        0x04 =>
+          if idx < 0 || idx >= counts.core_tag {
+            raise InvalidCoreTagIndex(idx)
+          }
+        0x05 | 0x10 =>
           if idx < 0 || idx >= counts.core_type {
             raise InvalidCoreTypeIndex(idx)
           }
@@ -197,7 +228,11 @@ fn count_alias(
     Core(core_sort) =>
       match core_sort {
         0x00 => counts.core_func += 1
-        0x05 => counts.core_type += 1
+        0x01 => counts.core_table += 1
+        0x02 => counts.core_memory += 1
+        0x03 => counts.core_global += 1
+        0x04 => counts.core_tag += 1
+        0x05 | 0x10 => counts.core_type += 1
         0x11 => counts.core_module += 1
         0x12 => counts.core_instance += 1
         _ => raise UnsupportedCoreSort(core_sort)
@@ -231,11 +266,33 @@ fn validate_valtype(
 fn validate_typedef(
   td : @component.TypeDef,
   type_bound : Int,
+  core_type_bound : Int,
 ) -> Unit raise ComponentValidationError {
   match td {
     DefValType(_) => ()
     ComponentTypeEmpty => ()
     InstanceTypeEmpty => ()
+    InstanceType(decls) => {
+      // Instance type declarations define their own internal type index space
+      // which is referenced by later exports within the same instance type.
+      let mut local_type_bound = 0
+      for d in decls {
+        match d {
+          @component.InstanceDecl::Type(t) => {
+            validate_typedef(t, local_type_bound, core_type_bound)
+            local_type_bound += 1
+          }
+          @component.InstanceDecl::Export(_name, desc) => {
+            validate_externdesc(desc, local_type_bound, core_type_bound)
+            // Like the component export section, exporting a type introduces
+            // a fresh type index in this instance type's local type space.
+            if desc is Type(_) {
+              local_type_bound += 1
+            }
+          }
+        }
+      }
+    }
     FuncType(ft) => {
       for p in ft.params {
         validate_valtype(p.ty, type_bound)
@@ -252,9 +309,10 @@ fn validate_typedef(
 fn validate_externdesc(
   desc : @component.ExternDesc,
   type_bound : Int,
+  core_type_bound : Int,
 ) -> Unit raise ComponentValidationError {
   match desc {
-    CoreModuleType(tyidx) => check_typeidx(tyidx, type_bound)
+    CoreModuleType(tyidx) => check_typeidx(tyidx, core_type_bound)
     FuncType(tyidx) => check_typeidx(tyidx, type_bound)
     ComponentType(tyidx) => check_typeidx(tyidx, type_bound)
     InstanceType(tyidx) => check_typeidx(tyidx, type_bound)
@@ -390,20 +448,22 @@ fn validate_canon(
       validate_canon_opts(opts)
       check_typeidx(tyidx, type_bound)
       let td = type_table[tyidx]
-      let ft = match td {
-        Some(@component.TypeDef::FuncType(ft)) => ft
+      match td {
+        Some(@component.TypeDef::FuncType(ft)) => {
+          if canon_has_async(opts) && !ft.is_async {
+            raise CanonAsyncTypeMismatch(tyidx)
+          }
+          if functype_needs_memory(ft) {
+            if !canon_has_memory(opts) {
+              raise MissingCanonOption("memory")
+            }
+            if !canon_has_realloc(opts) {
+              raise MissingCanonOption("realloc")
+            }
+          }
+        }
+        None => ()
         _ => raise CanonExpectedFuncType(tyidx)
-      }
-      if canon_has_async(opts) && !ft.is_async {
-        raise CanonAsyncTypeMismatch(tyidx)
-      }
-      if functype_needs_memory(ft) {
-        if !canon_has_memory(opts) {
-          raise MissingCanonOption("memory")
-        }
-        if !canon_has_realloc(opts) {
-          raise MissingCanonOption("realloc")
-        }
       }
     }
     Lower(_func, opts) => validate_canon_opts(opts)
@@ -415,11 +475,13 @@ fn validate_canon(
 
 ///|
 /// Validate a parsed component (partial).
-pub fn validate_component(
+fn validate_component_inner(
   component : @component.Component,
+  is_root : Bool,
 ) -> Unit raise ComponentValidationError {
   let counts = Counts::new()
   let type_table : Array[@component.TypeDef?] = []
+  let mut imported_funcs = 0
   for s in component.binary.sections {
     match s.id {
       // Core module/instance/type sections each declare a single core item.
@@ -433,14 +495,35 @@ pub fn validate_component(
         }
         counts.core_module += 1
       }
-      2 => counts.core_instance += 1
+      2 => {
+        let core_instances = @component.parse_core_instance_section(s.payload) catch {
+          e => raise SectionParseError(2, "\{e}")
+        }
+        for inst in core_instances {
+          match inst.expr {
+            @component.CoreInstanceExpr::Instantiate(module_idx, args) => {
+              if module_idx < 0 || module_idx >= counts.core_module {
+                raise InvalidCoreModuleIndex(module_idx)
+              }
+              for a in args {
+                check_sortidx(a.sortidx, counts, type_table.length())
+              }
+            }
+            @component.CoreInstanceExpr::InlineExports(exports) =>
+              for ex in exports {
+                check_sortidx(ex.sortidx, counts, type_table.length())
+              }
+          }
+          counts.core_instance += 1
+        }
+      }
       3 => counts.core_type += 1
       4 => {
         // Nested component payloads are also component binaries.
         let nested = @component.parse_component(s.payload) catch {
           e => raise SectionParseError(4, "parse nested component: \{e}")
         }
-        validate_component(nested)
+        validate_component_inner(nested, false)
         counts.component += 1
       }
       7 => {
@@ -450,7 +533,7 @@ pub fn validate_component(
         }
         for d in defs {
           // This is still a subset: we only allow referencing earlier types.
-          validate_typedef(d, type_table.length())
+          validate_typedef(d, type_table.length(), counts.core_type)
           type_table.push(Some(d))
         }
       }
@@ -461,7 +544,13 @@ pub fn validate_component(
         for i in imports {
           validate_import_name(i.name)
           // Import type references must be in-bounds at the point they appear.
-          validate_externdesc(i.desc, type_table.length())
+          validate_externdesc(i.desc, type_table.length(), counts.core_type)
+          if is_root && i.desc is ComponentType(_) {
+            raise UnsupportedComponentImport
+          }
+          if i.desc is FuncType(_) {
+            imported_funcs += 1
+          }
           if i.desc is Type(_) {
             type_table.push(None)
           }
@@ -474,10 +563,22 @@ pub fn validate_component(
         }
         for e in exports {
           validate_export_name(e.name)
+          if is_root && e.sortidx.sort is Component {
+            raise UnsupportedComponentExport
+          }
+          if is_root && e.sortidx.sort is Func && e.sortidx.idx < imported_funcs {
+            raise ExportedImportedFunc(e.sortidx.idx)
+          }
           check_sortidx(e.sortidx, counts, type_table.length())
           match e.desc {
-            Some(d) => validate_externdesc(d, type_table.length())
+            Some(d) =>
+              validate_externdesc(d, type_table.length(), counts.core_type)
             None => ()
+          }
+          if e.sortidx.sort is Type {
+            type_table.push(None)
+          } else {
+            count_alias(e.sortidx.sort, counts)
           }
         }
       }
@@ -547,4 +648,11 @@ pub fn validate_component(
       _ => ()
     }
   }
+}
+
+///|
+pub fn validate_component(
+  component : @component.Component,
+) -> Unit raise ComponentValidationError {
+  validate_component_inner(component, true)
 }

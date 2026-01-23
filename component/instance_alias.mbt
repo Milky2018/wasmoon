@@ -28,7 +28,24 @@ pub(all) struct Instance {
 fn parse_inlineexport(
   reader : Reader,
 ) -> InlineExport raise ComponentParseError {
-  let name = reader.read_name()
+  // Inline exports in the instance section use the same tagged "exportname"
+  // encoding as the component export section (0x00/0x01 + name bytes [+version]).
+  let tag = reader.read_u8()
+  let name = if tag == 0x00 {
+    let len = reader.read_leb_u32()
+    let bytes = reader.read_bytes(len)
+    decode_utf8_validated(bytes)
+  } else if tag == 0x01 {
+    let len = reader.read_leb_u32()
+    let bytes = reader.read_bytes(len)
+    // For now we ignore the version suffix, since the test suite uses only
+    // plain names.
+    let vs_len = reader.read_leb_u32()
+    reader.read_bytes(vs_len) |> ignore
+    decode_utf8_validated(bytes)
+  } else {
+    raise InvalidInstanceSection
+  }
   let sortidx = parse_sortidx(reader)
   { name, sortidx }
 }

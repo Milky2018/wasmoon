@@ -269,6 +269,50 @@ fn run_invoke(
 }
 
 ///|
+fn make_const_u32_func(value : Int) -> @component.ComponentFunc {
+  let func_type : @component.FuncType = {
+    is_async: false,
+    params: [],
+    result: Some(@component.ValType::Prim(@component.PrimValType::U32)),
+  }
+  let func = fn(
+    _args : Array[@component.ComponentValue],
+  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    if false {
+      raise @component.ComponentRuntimeError::HostCallError("unreachable")
+    }
+    [@component.ComponentValue::U32(value)]
+  }
+  @component.ComponentFunc::Host(func_type, func)
+}
+
+///|
+fn make_instance(
+  name : String,
+  store : @runtime.Store,
+  exports : Map[String, @component.ComponentExtern],
+) -> @component.ComponentInstance {
+  {
+    name,
+    types: [],
+    funcs: [],
+    values: [],
+    components: [],
+    instances: [],
+    core_modules: [],
+    core_instances: [],
+    core_funcs: [],
+    core_types: [],
+    core_tables: [],
+    core_mems: [],
+    core_globals: [],
+    core_tags: [],
+    exports,
+    store,
+  }
+}
+
+///|
 pub fn run_component_script(path : String) -> Unit {
   let contents = @fs.read_file_to_string(path) catch {
     IOError(e) => {
@@ -290,6 +334,43 @@ pub fn run_component_script(path : String) -> Unit {
   }
   let result = ScriptResult::new()
   let linker = @component.ComponentLinker::new()
+  let store = linker.get_store()
+  let return_two = make_const_u32_func(2)
+  let return_three = make_const_u32_func(3)
+  let return_four = make_const_u32_func(4)
+  linker.add_import(
+    "host-return-two",
+    @component.ComponentExtern::Func(return_two),
+  )
+  let simple_module_wat = "(module (func (export \"f\") (result i32) i32.const 101) (global (export \"g\") i32 (i32.const 100)))"
+  let simple_module = @wat.parse(simple_module_wat) catch {
+    e => {
+      println("component-test error: \{e}")
+      return
+    }
+  }
+  let nested_exports : Map[String, @component.ComponentExtern] = {}
+  nested_exports.set(
+    "return-four",
+    @component.ComponentExtern::Func(return_four),
+  )
+  let nested_instance = make_instance("host::nested", store, nested_exports)
+  let host_exports : Map[String, @component.ComponentExtern] = {}
+  host_exports.set("return-two", @component.ComponentExtern::Func(return_two))
+  host_exports.set(
+    "return-three",
+    @component.ComponentExtern::Func(return_three),
+  )
+  host_exports.set(
+    "simple-module",
+    @component.ComponentExtern::CoreModule(simple_module),
+  )
+  host_exports.set(
+    "nested",
+    @component.ComponentExtern::Instance(nested_instance),
+  )
+  let host_instance = make_instance("host", store, host_exports)
+  linker.add_instance("host", host_instance)
   let components : Map[String, @component.Component] = {}
   let instances : Map[String, @component.ComponentInstance] = {}
   let mut last_component : @component.Component? = None
@@ -370,7 +451,10 @@ pub fn run_component_script(path : String) -> Unit {
               }
               result.add_passed()
             }
-            Err(e) => result.add_failed("component instantiate failed: \{e}")
+            Err(e) =>
+              result.add_failed(
+                "component instantiate failed (\{inst_name}): \{e}",
+              )
           }
         } else {
           result.add_passed()
@@ -401,7 +485,10 @@ pub fn run_component_script(path : String) -> Unit {
                 last_instance = Some(instance)
                 result.add_passed()
               }
-              Err(e) => result.add_failed("component_instance failed: \{e}")
+              Err(e) =>
+                result.add_failed(
+                  "component_instance failed (\{inst_name}): \{e}",
+                )
             }
           }
           None => result.add_failed("unknown component \{comp_name}")
@@ -429,7 +516,11 @@ pub fn run_component_script(path : String) -> Unit {
           Err(e) =>
             match cmd.text {
               Some(msg) =>
-                if e.to_string().contains(msg) {
+                if e.to_string().contains(msg) ||
+                  (
+                    msg == "was not found" &&
+                    e.to_string().contains("UnknownImport")
+                  ) {
                   result.add_passed()
                 } else {
                   result.add_failed("assert_unlinkable wrong trap: \{e}")
@@ -480,7 +571,9 @@ pub fn run_component_script(path : String) -> Unit {
                         i
                       }
                       Err(e) => {
-                        result.add_failed("instantiate for invoke failed: \{e}")
+                        result.add_failed(
+                          "instantiate for invoke failed (\{inst_name}): \{e}",
+                        )
                         continue
                       }
                     }

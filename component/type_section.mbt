@@ -42,11 +42,19 @@ pub(all) struct FuncType {
 } derive(Show, Eq)
 
 ///|
+/// A subset of instance type declarations (enough for wasmtime/component-spec).
+pub(all) enum InstanceDecl {
+  Type(TypeDef)
+  Export(String, ExternDesc)
+} derive(Show, Eq)
+
+///|
 pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
   ComponentTypeEmpty
   InstanceTypeEmpty
+  InstanceType(Array[InstanceDecl])
 } derive(Show, Eq)
 
 ///|
@@ -149,6 +157,94 @@ fn parse_functype(
 }
 
 ///|
+fn parse_exportname_string(reader : Reader) -> String raise ComponentParseError {
+  let tag = reader.read_u8()
+  if tag == 0x00 {
+    let len = reader.read_leb_u32()
+    let bytes = reader.read_bytes(len)
+    decode_utf8_validated(bytes)
+  } else if tag == 0x01 {
+    let len = reader.read_leb_u32()
+    let bytes = reader.read_bytes(len)
+    let vs_len = reader.read_leb_u32()
+    reader.read_bytes(vs_len) |> ignore
+    decode_utf8_validated(bytes)
+  } else {
+    raise InvalidTypeSection
+  }
+}
+
+///|
+fn parse_typebound_for_instancedecl(
+  reader : Reader,
+) -> TypeBound raise ComponentParseError {
+  let tag = reader.read_u8()
+  if tag == 0x00 {
+    TypeBound::Eq(reader.read_typeidx())
+  } else if tag == 0x01 {
+    TypeBound::SubResource
+  } else {
+    raise InvalidTypeSection
+  }
+}
+
+///|
+fn parse_valuebound_for_instancedecl(
+  reader : Reader,
+) -> ValueBound raise ComponentParseError {
+  let tag = reader.read_u8()
+  if tag == 0x00 {
+    ValueBound::Eq(reader.read_leb_u32())
+  } else if tag == 0x01 {
+    ValueBound::Type(parse_valtype(reader))
+  } else {
+    raise InvalidTypeSection
+  }
+}
+
+///|
+fn parse_externdesc_for_instancedecl(
+  reader : Reader,
+) -> ExternDesc raise ComponentParseError {
+  let tag = reader.read_u8()
+  if tag == 0x00 {
+    let must_be_core_module = reader.read_u8()
+    if must_be_core_module != 0x11 {
+      raise InvalidTypeSection
+    }
+    ExternDesc::CoreModuleType(reader.read_leb_u32())
+  } else if tag == 0x01 {
+    ExternDesc::FuncType(reader.read_typeidx())
+  } else if tag == 0x02 {
+    ExternDesc::Value(parse_valuebound_for_instancedecl(reader))
+  } else if tag == 0x03 {
+    ExternDesc::Type(parse_typebound_for_instancedecl(reader))
+  } else if tag == 0x04 {
+    ExternDesc::ComponentType(reader.read_typeidx())
+  } else if tag == 0x05 {
+    ExternDesc::InstanceType(reader.read_typeidx())
+  } else {
+    raise InvalidTypeSection
+  }
+}
+
+///|
+fn parse_instancedecl(
+  reader : Reader,
+) -> InstanceDecl raise ComponentParseError {
+  let tag = reader.read_u8()
+  if tag == 0x01 {
+    InstanceDecl::Type(parse_typedef(reader))
+  } else if tag == 0x04 {
+    let name = parse_exportname_string(reader)
+    let desc = parse_externdesc_for_instancedecl(reader)
+    InstanceDecl::Export(name, desc)
+  } else {
+    raise UnsupportedTypeOpcode(tag)
+  }
+}
+
+///|
 fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
   let op = reader.read_u8()
   match op {
@@ -164,10 +260,20 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
     0x42 => {
       // instancetype ::= 0x42 id*:vec(<instancedecl>)
       let n = reader.read_leb_u32()
-      if n != 0 {
-        raise UnsupportedTypeOpcode(op)
+      if n == 0 {
+        InstanceTypeEmpty
+      } else {
+        let decls = loop ([], 0) {
+          (acc, i) =>
+            if i >= n {
+              acc
+            } else {
+              acc.push(parse_instancedecl(reader))
+              continue (acc, i + 1)
+            }
+        }
+        InstanceType(decls)
       }
-      InstanceTypeEmpty
     }
     _ =>
       match parse_prim_valtype(op) {

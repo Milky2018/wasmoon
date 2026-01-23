@@ -29,7 +29,12 @@ fn parse_core_inlineexport(
   reader : Reader,
 ) -> CoreInlineExport raise ComponentParseError {
   let name = reader.read_name()
-  let sortidx = parse_sortidx(reader)
+  // Core instance exports reference the core index spaces directly via a
+  // single-byte "kind" followed by an index, unlike the generic SortIdx
+  // encoding used in other sections.
+  let kind = reader.read_u8()
+  let idx = reader.read_leb_u32()
+  let sortidx : SortIdx = { sort: Sort::Core(kind), idx }
   { name, sortidx }
 }
 
@@ -38,7 +43,10 @@ fn parse_core_instantiatearg(
   reader : Reader,
 ) -> CoreInstantiateArg raise ComponentParseError {
   let name = reader.read_name()
-  let sortidx = parse_sortidx(reader)
+  // Same encoding as parse_core_inlineexport: (kind:u8, idx:u32).
+  let kind = reader.read_u8()
+  let idx = reader.read_leb_u32()
+  let sortidx : SortIdx = { sort: Sort::Core(kind), idx }
   { name, sortidx }
 }
 

@@ -54,6 +54,7 @@ pub(all) suberror ComponentRuntimeError {
   CoreModuleInstantiateError(String)
   InvalidUtf8
   UnknownImport(String)
+  ImportTypeMismatch(String)
   UnknownExport(String)
   InvalidTypeIndex(Int)
   InvalidFuncIndex(Int)
@@ -67,6 +68,7 @@ pub(all) suberror ComponentRuntimeError {
   InvalidCoreMemoryIndex(Int)
   InvalidCoreGlobalIndex(Int)
   InvalidCoreTagIndex(Int)
+  InvalidCoreTypeIndex(Int)
   InvalidTypeDef(Int)
   InvalidCanonFuncType(Int)
   MissingCanonMemory
@@ -154,11 +156,17 @@ pub struct ComponentBinary {
 pub impl Eq for ComponentBinary
 pub impl Show for ComponentBinary
 
+pub(all) struct ComponentClosure {
+  component : Component
+  outer_stack : Array[ComponentInstance]
+}
+pub impl Show for ComponentClosure
+
 pub(all) enum ComponentExtern {
   Func(ComponentFunc)
   Value(ComponentValue)
   Type(TypeDef?)
-  Component(Component)
+  Component(ComponentClosure)
   Instance(ComponentInstance)
   CoreModule(@types.Module)
   CoreInstance(CoreInstance)
@@ -182,11 +190,12 @@ pub(all) struct ComponentInstance {
   types : Array[TypeDef?]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
-  components : Array[Component]
+  components : Array[ComponentClosure]
   instances : Array[ComponentInstance]
   core_modules : Array[@types.Module]
   core_instances : Array[CoreInstance]
   core_funcs : Array[CoreFuncRef]
+  core_types : Array[Bytes]
   core_tables : Array[Int]
   core_mems : Array[Int]
   core_globals : Array[Int]
@@ -334,6 +343,13 @@ pub(all) struct Instance {
 pub impl Eq for Instance
 pub impl Show for Instance
 
+pub(all) enum InstanceDecl {
+  Type(TypeDef)
+  Export(String, ExternDesc)
+}
+pub impl Eq for InstanceDecl
+pub impl Show for InstanceDecl
+
 pub(all) enum InstanceExpr {
   Instantiate(Int, Array[InstantiateArg])
   InlineExports(Array[InlineExport])
@@ -427,6 +443,7 @@ pub(all) enum TypeDef {
   FuncType(FuncType)
   ComponentTypeEmpty
   InstanceTypeEmpty
+  InstanceType(Array[InstanceDecl])
 }
 pub impl Eq for TypeDef
 pub impl Show for TypeDef
