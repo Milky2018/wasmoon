@@ -87,11 +87,15 @@ wasmoon explore examples/add.wat --stage ir vcode mc
 # Emit a JSON AST (stable, for scripting/debugging)
 ./wasmoon-tools wit path/to/foo.wit --json
 
+# Encode a WIT package as a component (type-only) binary / text
+./wasmoon-tools wit path/to/foo.wit --wasm -o foo.wasm
+./wasmoon-tools wit path/to/foo.wit --wat > foo.wat
+
 # Alias for compatibility with wasm-tools' subcommand shape
 ./wasmoon-tools component wit path/to/foo.wit --json
 ```
 
-WIT support is still evolving, but `wasmoon-tools wit` now implements directory + `deps/` resolution and the most common parts of the WIT MVP syntax needed by WASI packages.
+WIT support is still evolving. `wasmoon-tools wit` implements directory + `deps/` resolution, and can emit a minimal component representation for simple WIT packages (currently functions with built-in scalar types).
 
 ## Library Usage
 

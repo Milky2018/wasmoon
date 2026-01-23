@@ -162,6 +162,14 @@ pub(all) struct ComponentClosure {
 }
 pub impl Show for ComponentClosure
 
+pub(all) enum ComponentDecl {
+  Type(TypeDef)
+  Import(String, ExternDesc)
+  Export(String, ExternDesc)
+}
+pub impl Eq for ComponentDecl
+pub impl Show for ComponentDecl
+
 pub(all) enum ComponentExtern {
   Func(ComponentFunc)
   Value(ComponentValue)
@@ -441,7 +449,7 @@ pub impl Show for TypeBound
 pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
-  ComponentTypeEmpty
+  ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
 }

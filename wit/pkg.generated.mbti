@@ -4,7 +4,11 @@ package "Milky2018/wasmoon/wit"
 // Values
 pub fn desugar_toplevel_use(Package) -> Package raise WitError
 
+pub fn encode_wit_component_wasm(ResolveResult) -> Bytes raise WitError
+
 pub fn format_package(Package) -> String
+
+pub fn format_wit_component_wat(ResolveResult) -> String raise WitError
 
 pub fn merge_package_files(Array[Package]) -> Package raise WitError
 

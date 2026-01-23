@@ -49,10 +49,18 @@ pub(all) enum InstanceDecl {
 } derive(Show, Eq)
 
 ///|
+/// A subset of component type declarations (enough for WIT-encoded components).
+pub(all) enum ComponentDecl {
+  Type(TypeDef)
+  Import(String, ExternDesc)
+  Export(String, ExternDesc)
+} derive(Show, Eq)
+
+///|
 pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
-  ComponentTypeEmpty
+  ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
 } derive(Show, Eq)
@@ -245,6 +253,26 @@ fn parse_instancedecl(
 }
 
 ///|
+fn parse_componentdecl(
+  reader : Reader,
+) -> ComponentDecl raise ComponentParseError {
+  let tag = reader.read_u8()
+  if tag == 0x01 {
+    ComponentDecl::Type(parse_typedef(reader))
+  } else if tag == 0x02 {
+    let name = parse_exportname_string(reader)
+    let desc = parse_externdesc_for_instancedecl(reader)
+    ComponentDecl::Import(name, desc)
+  } else if tag == 0x04 {
+    let name = parse_exportname_string(reader)
+    let desc = parse_externdesc_for_instancedecl(reader)
+    ComponentDecl::Export(name, desc)
+  } else {
+    raise UnsupportedTypeOpcode(tag)
+  }
+}
+
+///|
 fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
   let op = reader.read_u8()
   match op {
@@ -252,10 +280,16 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
     0x41 => {
       // componenttype ::= 0x41 cd*:vec(<componentdecl>)
       let n = reader.read_leb_u32()
-      if n != 0 {
-        raise UnsupportedTypeOpcode(op)
+      let decls = loop ([], 0) {
+        (acc, i) =>
+          if i >= n {
+            acc
+          } else {
+            acc.push(parse_componentdecl(reader))
+            continue (acc, i + 1)
+          }
       }
-      ComponentTypeEmpty
+      ComponentType(decls)
     }
     0x42 => {
       // instancetype ::= 0x42 id*:vec(<instancedecl>)

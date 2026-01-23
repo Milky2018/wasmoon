@@ -270,7 +270,7 @@ fn validate_typedef(
 ) -> Unit raise ComponentValidationError {
   match td {
     DefValType(_) => ()
-    ComponentTypeEmpty => ()
+    ComponentType(_) => ()
     InstanceTypeEmpty => ()
     InstanceType(decls) => {
       // Instance type declarations define their own internal type index space

@@ -28,6 +28,14 @@ fn main {
             short='j',
             help="Emit JSON AST instead of WIT",
           ),
+          "wasm": @clap.Arg::flag(
+            short='w',
+            help="Emit a WebAssembly Component binary instead of WIT text",
+          ),
+          "wat": @clap.Arg::flag(
+            short='t',
+            help="Emit a WebAssembly Component text format instead of WIT text",
+          ),
         },
       ),
       "wasm2wat": @clap.SubCommand::new(
@@ -97,7 +105,11 @@ fn main {
                 None => None
               }
               let as_json = sub.flags.get("json") is Some(true)
-              cmd_wit(input_opt, output_opt, out_dir_opt, as_json)
+              let as_wasm = sub.flags.get("wasm") is Some(true)
+              let as_wat = sub.flags.get("wat") is Some(true)
+              cmd_wit(
+                input_opt, output_opt, out_dir_opt, as_json, as_wasm, as_wat,
+              )
             }
             "wasm2wat" =>
               if positional.length() > 0 {
@@ -185,6 +197,13 @@ fn write_text_file(path : String, content : String) -> Unit {
 }
 
 ///|
+fn write_bytes_file(path : String, data : Bytes) -> Unit {
+  @fs.write_bytes_to_file(path, data) catch {
+    e => exit_error("writing file '\{path}': \{e}")
+  }
+}
+
+///|
 fn write_binary_file(path : String, data : Array[Int]) -> Unit {
   let byte_arr : Array[Byte] = []
   for b in data {
@@ -234,6 +253,8 @@ fn cmd_wit(
   output_opt : String?,
   out_dir_opt : String?,
   as_json : Bool,
+  as_wasm : Bool,
+  as_wat : Bool,
 ) -> Unit {
   let input = match input_opt {
     Some(p) => p
@@ -261,6 +282,55 @@ fn cmd_wit(
       exit_error(e.to_string())
       panic()
     }
+  }
+  let mut format_count = 0
+  if as_json {
+    format_count = format_count + 1
+  }
+  if as_wasm {
+    format_count = format_count + 1
+  }
+  if as_wat {
+    format_count = format_count + 1
+  }
+  if format_count > 1 {
+    exit_error("at most one of --json/--wasm/--wat can be specified")
+    panic()
+  }
+  if as_wasm || as_wat {
+    if out_dir_opt is Some(_) {
+      exit_error("cannot use --out-dir with --wasm/--wat")
+      panic()
+    }
+    if as_wasm {
+      let out_path = match output_opt {
+        Some(p) => p
+        None => {
+          exit_error("--wasm requires -o/--output")
+          panic()
+        }
+      }
+      let bytes = @wit.encode_wit_component_wasm(res) catch {
+        e => {
+          exit_error(e.to_string())
+          panic()
+        }
+      }
+      write_bytes_file(out_path, bytes)
+      return
+    }
+    // --wat (text)
+    let text = @wit.format_wit_component_wat(res) catch {
+      e => {
+        exit_error(e.to_string())
+        panic()
+      }
+    }
+    match output_opt {
+      Some(path) => write_text_file(path, text)
+      None => println(text)
+    }
+    return
   }
   if out_dir_opt is Some(out_dir) {
     if output_opt is Some(_) {
