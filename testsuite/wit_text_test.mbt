@@ -25,11 +25,11 @@ test "wit: json output is stable" {
   let src = "package a:b@1.2.3;\n\n" +
     "interface i {\n" +
     "  type t = list<u8>;\n" +
-    "  f: func(x: t) -> (y: u32);\n" +
+    "  f: func(x: t) -> u32;\n" +
     "}\n"
   let pkg = @wit.parse_package(src) catch { _ => panic() }
   inspect(
     @wit.package_to_json(pkg),
-    content="{\"name\":\"a:b\",\"version\":\"1.2.3\",\"items\":[{\"kind\":\"interface\",\"name\":\"i\",\"items\":[{\"kind\":\"type\",\"name\":\"t\"},{\"kind\":\"func\",\"name\":\"f\"}]}]}",
+    content="{\"name\":\"a:b\",\"version\":\"1.2.3\",\"nested\":[],\"items\":[{\"kind\":\"interface\",\"name\":\"i\",\"items\":[{\"kind\":\"type\",\"name\":\"t\"},{\"kind\":\"func\",\"name\":\"f\"}]}]}",
   )
 }

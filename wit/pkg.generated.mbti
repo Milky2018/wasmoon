@@ -2,11 +2,17 @@
 package "Milky2018/wasmoon/wit"
 
 // Values
+pub fn desugar_toplevel_use(Package) -> Package raise WitError
+
 pub fn format_package(Package) -> String
+
+pub fn merge_package_files(Array[Package]) -> Package raise WitError
 
 pub fn package_to_json(Package) -> String
 
 pub fn parse_package(String) -> Package raise WitError
+
+pub fn resolve_package(Package, Array[Package]) -> ResolveResult raise WitError
 
 // Errors
 pub(all) suberror WitError {
@@ -15,10 +21,30 @@ pub(all) suberror WitError {
 pub impl Show for WitError
 
 // Types and methods
+pub(all) struct EnumDecl {
+  name : String
+  cases : Array[String]
+}
+
+pub(all) struct FlagsDecl {
+  name : String
+  flags : Array[String]
+}
+
 pub(all) struct FuncDecl {
   name : String
+  is_async : Bool
   params : Array[(String, TypeExpr)]
   results : Array[(String?, TypeExpr)]
+}
+
+pub(all) struct IncludeItem {
+  path : UsePath
+  renames : Array[(String, String)]?
+}
+
+pub(all) struct InlineInterface {
+  items : Array[InterfaceItem]
 }
 
 pub(all) struct Interface {
@@ -30,17 +56,33 @@ pub(all) enum InterfaceItem {
   Func(FuncDecl)
   TypeAlias(TypeAlias)
   Record(RecordDecl)
+  Use(UseItem)
+  Resource(ResourceDecl)
+  Variant(VariantDecl)
+  Flags(FlagsDecl)
+  Enum(EnumDecl)
 }
 
 pub(all) struct Package {
   name : String?
   version : String?
   items : Array[TopItem]
+  nested : Array[Package]
 }
 
 pub(all) struct RecordDecl {
   name : String
   fields : Array[(String, TypeExpr)]
+}
+
+pub(all) struct ResolveResult {
+  root : Package
+  deps : Array[Package]
+}
+
+pub(all) struct ResourceDecl {
+  name : String
+  methods : Array[FuncDecl]
 }
 
 pub(all) enum TokenKind {
@@ -50,11 +92,27 @@ pub(all) enum TokenKind {
   KwPackage
   KwInterface
   KwWorld
+  KwUse
+  KwAs
+  KwWith
+  KwInclude
   KwType
   KwFunc
   KwImport
   KwExport
   KwRecord
+  KwResource
+  KwEnum
+  KwFlags
+  KwVariant
+  KwTuple
+  KwList
+  KwOption
+  KwResult
+  KwBorrow
+  KwFuture
+  KwStream
+  KwAsync
   LBrace
   RBrace
   LParen
@@ -67,6 +125,8 @@ pub(all) enum TokenKind {
   Dot
   Slash
   At
+  Dash
+  Plus
   Eq
   Arrow
 }
@@ -74,6 +134,12 @@ pub(all) enum TokenKind {
 pub(all) enum TopItem {
   Interface(Interface)
   World(World)
+  ToplevelUse(ToplevelUse)
+}
+
+pub(all) struct ToplevelUse {
+  path : UsePath
+  as_name : String?
 }
 
 pub(all) struct TypeAlias {
@@ -87,14 +153,45 @@ pub(all) enum TypeExpr {
   Record(Array[(String, TypeExpr)])
 }
 
+pub(all) struct UseItem {
+  path : UsePath
+  names : Array[(String, String?)]
+}
+
+pub(all) struct UsePath {
+  raw : String
+}
+
+pub(all) struct VariantCase {
+  name : String
+  payload : TypeExpr?
+}
+
+pub(all) struct VariantDecl {
+  name : String
+  cases : Array[VariantCase]
+}
+
 pub(all) struct World {
   name : String
   items : Array[WorldItem]
 }
 
 pub(all) enum WorldItem {
-  Import(String)
-  Export(String)
+  Import(UsePath)
+  Export(UsePath)
+  ImportFunc(FuncDecl)
+  ExportFunc(FuncDecl)
+  ImportInlineInterface(String, InlineInterface)
+  ExportInlineInterface(String, InlineInterface)
+  Include(IncludeItem)
+  Use(UseItem)
+  TypeAlias(TypeAlias)
+  Record(RecordDecl)
+  Resource(ResourceDecl)
+  Variant(VariantDecl)
+  Flags(FlagsDecl)
+  Enum(EnumDecl)
 }
 
 // Type aliases

@@ -76,8 +76,13 @@ wasmoon explore examples/add.wat --stage ir vcode mc
 # Parse WIT (text) and print a normalized representation
 ./wasmoon-tools wit path/to/foo.wit
 
-# Parse a directory as a WIT package (all *.wit files, sorted by filename)
+# Parse a directory as a WIT package (all *.wit files, sorted by filename),
+# resolve it with `deps/`, and print a canonicalized output (toplevel-use removed,
+# include flattened, and transitive interface imports injected).
 ./wasmoon-tools wit path/to/pkgdir
+
+# Emit the resolved WIT graph to a directory (root + deps/*.wit)
+./wasmoon-tools wit path/to/pkgdir --out-dir out
 
 # Emit a JSON AST (stable, for scripting/debugging)
 ./wasmoon-tools wit path/to/foo.wit --json
@@ -86,7 +91,7 @@ wasmoon explore examples/add.wat --stage ir vcode mc
 ./wasmoon-tools component wit path/to/foo.wit --json
 ```
 
-Current WIT support is an MVP subset (enough for basic parsing/printing/JSON); more of the WIT grammar and binary extraction/emission will be added incrementally.
+WIT support is still evolving, but `wasmoon-tools wit` now implements directory + `deps/` resolution and the most common parts of the WIT MVP syntax needed by WASI packages.
 
 ## Library Usage
 
