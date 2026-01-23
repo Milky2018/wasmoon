@@ -23,6 +23,7 @@ pub(all) suberror ComponentValidationError {
   InvalidCoreMemoryIndex(Int)
   InvalidCoreGlobalIndex(Int)
   InvalidCoreTagIndex(Int)
+  DuplicateName(String)
   DuplicateCanonOption(String)
   MissingCanonOption(String)
   CanonExpectedFuncType(Int)
@@ -71,50 +72,509 @@ fn Counts::new() -> Counts {
 }
 
 ///|
-fn is_ascii_letter(b : Byte) -> Bool {
-  let n = b.to_int()
-  (n >= 0x41 && n <= 0x5A) || (n >= 0x61 && n <= 0x7A)
-}
+fn validate_name_bytes(name : Bytes) -> Unit raise ComponentValidationError {
+  // NOTE: `Bytes::to_string()` prints a debug representation like `b"..."`.
+  // For validation we operate on raw ASCII bytes instead.
 
-///|
-fn is_ascii_digit(b : Byte) -> Bool {
-  let n = b.to_int()
-  n >= 0x30 && n <= 0x39
-}
-
-///|
-fn is_kebab_case(name : Bytes) -> Bool {
-  if name.length() == 0 {
-    return false
+  fn is_ascii_digit(cu : Int) -> Bool {
+    cu >= 0x30 && cu <= 0x39
   }
-  let mut prev_dash = false
-  for i in 0..<name.length() {
-    let b = name[i]
-    if i == 0 {
-      if !is_ascii_letter(b) {
-        return false
-      }
-      continue
-    }
-    if b.to_int() == 0x2D {
-      if prev_dash {
-        return false
-      }
-      prev_dash = true
-    } else if is_ascii_letter(b) || is_ascii_digit(b) {
-      prev_dash = false
-    } else {
+
+  fn is_ascii_lower(cu : Int) -> Bool {
+    cu >= 0x61 && cu <= 0x7A
+  }
+
+  fn is_ascii_upper(cu : Int) -> Bool {
+    cu >= 0x41 && cu <= 0x5A
+  }
+
+  fn is_ascii_letter(cu : Int) -> Bool {
+    is_ascii_lower(cu) || is_ascii_upper(cu)
+  }
+
+  fn kebab_range(
+    bytes : Bytes,
+    start : Int,
+    end : Int,
+    lower_only : Bool,
+  ) -> Bool {
+    if end <= start {
       return false
     }
+    let mut prev_dash = false
+    for i in start..<end {
+      let cu = bytes[i].to_int()
+      if cu >= 0x80 {
+        return false
+      }
+      if i == start {
+        if lower_only {
+          if !is_ascii_lower(cu) {
+            return false
+          }
+        } else if !is_ascii_letter(cu) {
+          return false
+        }
+        continue
+      }
+      if cu == 0x2D { // '-'
+        if prev_dash {
+          return false
+        }
+        prev_dash = true
+      } else if (lower_only && (is_ascii_lower(cu) || is_ascii_digit(cu))) ||
+        (!lower_only && (is_ascii_letter(cu) || is_ascii_digit(cu))) {
+        prev_dash = false
+      } else {
+        return false
+      }
+    }
+    !prev_dash
   }
-  !prev_dash
+
+  fn find_byte(bytes : Bytes, needle : Int, start : Int, end : Int) -> Int? {
+    for i in start..<end {
+      if bytes[i].to_int() == needle {
+        return Some(i)
+      }
+    }
+    None
+  }
+
+  fn semver_range(bytes : Bytes, start : Int, end : Int) -> Bool {
+    if end <= start {
+      return false
+    }
+    fn scan_digits(bytes : Bytes, i : Int, end : Int) -> Int? {
+      let mut j = i
+      while j < end && is_ascii_digit(bytes[j].to_int()) {
+        j += 1
+      }
+      if j == i {
+        None
+      } else {
+        Some(j)
+      }
+    }
+
+    let mut i = start
+    let major_end = match scan_digits(bytes, i, end) {
+      Some(j) => j
+      None => return false
+    }
+    i = major_end
+    if i >= end || bytes[i].to_int() != 0x2E { // '.'
+      return false
+    }
+    i += 1
+    let minor_end = match scan_digits(bytes, i, end) {
+      Some(j) => j
+      None => return false
+    }
+    i = minor_end
+    if i >= end || bytes[i].to_int() != 0x2E {
+      return false
+    }
+    i += 1
+    let patch_end = match scan_digits(bytes, i, end) {
+      Some(j) => j
+      None => return false
+    }
+    i = patch_end
+    fn ident_seg(bytes : Bytes, i : Int, end : Int) -> Int? {
+      let mut j = i
+      while j < end {
+        let cu = bytes[j].to_int()
+        if cu >= 0x80 {
+          break
+        }
+        if is_ascii_letter(cu) || is_ascii_digit(cu) || cu == 0x2D {
+          j += 1
+        } else {
+          break
+        }
+      }
+      if j == i {
+        None
+      } else {
+        Some(j)
+      }
+    }
+
+    // prerelease
+    if i < end && bytes[i].to_int() == 0x2D { // '-'
+      i += 1
+      if i >= end {
+        return false
+      }
+      while true {
+        let next = match ident_seg(bytes, i, end) {
+          Some(j) => j
+          None => return false
+        }
+        i = next
+        if i < end && bytes[i].to_int() == 0x2E { // '.'
+          i += 1
+          if i >= end {
+            return false
+          }
+          continue
+        }
+        break
+      }
+    }
+
+    // build metadata
+    if i < end && bytes[i].to_int() == 0x2B { // '+'
+      i += 1
+      if i >= end {
+        return false
+      }
+      while true {
+        let next = match ident_seg(bytes, i, end) {
+          Some(j) => j
+          None => return false
+        }
+        i = next
+        if i < end && bytes[i].to_int() == 0x2E { // '.'
+          i += 1
+          if i >= end {
+            return false
+          }
+          continue
+        }
+        break
+      }
+    }
+    i == end
+  }
+
+  fn validate_plain(bytes : Bytes) -> Bool {
+    kebab_range(bytes, 0, bytes.length(), false)
+  }
+
+  fn validate_pkg_interface(bytes : Bytes) -> Bool {
+    // namespace:package/interface[@semver]
+    let len = bytes.length()
+    let base_end = match find_byte(bytes, 0x40, 0, len) { // '@'
+      Some(i) => i
+      None => len
+    }
+    let colon = match find_byte(bytes, 0x3A, 0, base_end) { // ':'
+      Some(i) => i
+      None => return false
+    }
+    if find_byte(bytes, 0x3A, colon + 1, base_end) is Some(_) {
+      return false
+    }
+    let slash = match find_byte(bytes, 0x2F, colon + 1, base_end) { // '/'
+      Some(i) => i
+      None => return false
+    }
+    if find_byte(bytes, 0x2F, slash + 1, base_end) is Some(_) {
+      return false
+    }
+    if !kebab_range(bytes, 0, colon, true) ||
+      !kebab_range(bytes, colon + 1, slash, true) ||
+      !kebab_range(bytes, slash + 1, base_end, true) {
+      return false
+    }
+    if base_end != len {
+      let vs_start = base_end + 1
+      if vs_start >= len {
+        return false
+      }
+      semver_range(bytes, vs_start, len)
+    } else {
+      true
+    }
+  }
+
+  fn match_prefix(bytes : Bytes, prefix : String) -> Int? {
+    let n = prefix.length()
+    if bytes.length() < n {
+      return None
+    }
+    for i in 0..<n {
+      if bytes[i].to_int() != prefix.code_unit_at(i).to_int() {
+        return None
+      }
+    }
+    Some(n)
+  }
+
+  fn validate_dep_string(bytes : Bytes) -> Bool {
+    let start = match match_prefix(bytes, "unlocked-dep=<") {
+      Some(n) => n
+      None =>
+        match match_prefix(bytes, "locked-dep=<") {
+          Some(n) => n
+          None => return false
+        }
+    }
+    let len = bytes.length()
+    fn find_subseq(
+      bytes : Bytes,
+      needle : String,
+      start : Int,
+      end : Int,
+    ) -> Int? {
+      let n = needle.length()
+      if n == 0 || start + n > end {
+        return None
+      }
+      for i in start..<(end - n + 1) {
+        let mut ok = true
+        for j in 0..<n {
+          if bytes[i + j].to_int() != needle.code_unit_at(j).to_int() {
+            ok = false
+            break
+          }
+        }
+        if ok {
+          return Some(i)
+        }
+      }
+      None
+    }
+
+    // `>=` constraints in unlocked-dep include `>` bytes, so we cannot just
+    // take the first `>` after the prefix. Instead:
+    // - if there's an integrity suffix, the dep-spec ends at the `>` right
+    //   before the comma.
+    // - otherwise, it must end at the final `>` byte.
+    let integrity_prefix = ",integrity=<"
+    let end = match find_subseq(bytes, integrity_prefix, start, len) {
+      Some(idx) => {
+        if idx == 0 || bytes[idx - 1].to_int() != 0x3E { // '>'
+          return false
+        }
+        // Validate integrity suffix.
+        let p_len = integrity_prefix.length()
+        if idx + p_len + 1 >= len {
+          return false
+        }
+        if bytes[len - 1].to_int() != 0x3E { // '>'
+          return false
+        }
+        idx - 1
+      }
+      None => {
+        if len == 0 || bytes[len - 1].to_int() != 0x3E {
+          return false
+        }
+        len - 1
+      }
+    }
+    // Parse inside `namespace:package` with optional `@...`.
+    let inside_start = start
+    let inside_end = end
+    let at = find_byte(bytes, 0x40, inside_start, inside_end) // '@'
+    let np_end = match at {
+      Some(i) => i
+      None => inside_end
+    }
+    let colon = match find_byte(bytes, 0x3A, inside_start, np_end) {
+      Some(i) => i
+      None => return false
+    }
+    if find_byte(bytes, 0x3A, colon + 1, np_end) is Some(_) {
+      return false
+    }
+    if !kebab_range(bytes, inside_start, colon, true) ||
+      !kebab_range(bytes, colon + 1, np_end, true) {
+      return false
+    }
+    match at {
+      None => true
+      Some(at_pos) => {
+        let vs_start = at_pos + 1
+        if vs_start >= inside_end {
+          return false
+        }
+        // `*` or `{...}` ranges or plain semver.
+        if vs_start + 1 == inside_end && bytes[vs_start].to_int() == 0x2A { // '*'
+          true
+        } else if bytes[vs_start].to_int() == 0x7B && // '{'
+          bytes[inside_end - 1].to_int() == 0x7D { // '}'
+          let mut i = vs_start + 1
+          let mut saw = false
+          while i < inside_end - 1 {
+            while i < inside_end - 1 && bytes[i].to_int() == 0x20 {
+              i += 1
+            }
+            if i >= inside_end - 1 {
+              break
+            }
+            saw = true
+            let op_ge = i + 1 < inside_end - 1 &&
+              bytes[i].to_int() == 0x3E && // '>'
+              bytes[i + 1].to_int() == 0x3D // '='
+            let op_lt = bytes[i].to_int() == 0x3C // '<'
+            if op_ge {
+              i += 2
+            } else if op_lt {
+              i += 1
+            } else {
+              return false
+            }
+            let ver_start = i
+            while i < inside_end - 1 && bytes[i].to_int() != 0x20 {
+              i += 1
+            }
+            if !semver_range(bytes, ver_start, i) {
+              return false
+            }
+          }
+          saw
+        } else {
+          semver_range(bytes, vs_start, inside_end)
+        }
+      }
+    }
+  }
+
+  let ok = validate_plain(name) ||
+    validate_pkg_interface(name) ||
+    validate_dep_string(name)
+  if !ok {
+    raise InvalidKebabName(name.to_string())
+  }
 }
 
 ///|
-fn validate_name_bytes(name : Bytes) -> Unit raise ComponentValidationError {
-  if !is_kebab_case(name) {
-    raise InvalidKebabName(name.to_string())
+fn validate_name_string_ascii(
+  name : String,
+) -> Unit raise ComponentValidationError {
+  let bytes : Array[Byte] = []
+  for i in 0..<name.length() {
+    bytes.push(name.code_unit_at(i).to_byte())
   }
+  validate_name_bytes(Bytes::from_array(bytes))
+}
+
+///|
+fn validate_versionsuffix_bytes(vs : Bytes) -> Bool {
+  fn is_ascii_digit(cu : Int) -> Bool {
+    cu >= 0x30 && cu <= 0x39
+  }
+
+  fn is_ascii_lower(cu : Int) -> Bool {
+    cu >= 0x61 && cu <= 0x7A
+  }
+
+  fn is_ascii_upper(cu : Int) -> Bool {
+    cu >= 0x41 && cu <= 0x5A
+  }
+
+  fn is_ascii_letter(cu : Int) -> Bool {
+    is_ascii_lower(cu) || is_ascii_upper(cu)
+  }
+
+  fn scan_digits(bytes : Bytes, i : Int, end : Int) -> Int? {
+    let mut j = i
+    while j < end && is_ascii_digit(bytes[j].to_int()) {
+      j += 1
+    }
+    if j == i {
+      None
+    } else {
+      Some(j)
+    }
+  }
+
+  fn ident_seg(bytes : Bytes, i : Int, end : Int) -> Int? {
+    let mut j = i
+    while j < end {
+      let cu = bytes[j].to_int()
+      if cu >= 0x80 {
+        break
+      }
+      if is_ascii_letter(cu) || is_ascii_digit(cu) || cu == 0x2D {
+        j += 1
+      } else {
+        break
+      }
+    }
+    if j == i {
+      None
+    } else {
+      Some(j)
+    }
+  }
+
+  let start = 0
+  let end = vs.length()
+  if end <= start {
+    return false
+  }
+  let mut i = start
+  let major_end = match scan_digits(vs, i, end) {
+    Some(j) => j
+    None => return false
+  }
+  i = major_end
+  if i >= end || vs[i].to_int() != 0x2E {
+    return false
+  }
+  i += 1
+  let minor_end = match scan_digits(vs, i, end) {
+    Some(j) => j
+    None => return false
+  }
+  i = minor_end
+  if i >= end || vs[i].to_int() != 0x2E {
+    return false
+  }
+  i += 1
+  let patch_end = match scan_digits(vs, i, end) {
+    Some(j) => j
+    None => return false
+  }
+  i = patch_end
+  if i < end && vs[i].to_int() == 0x2D {
+    i += 1
+    if i >= end {
+      return false
+    }
+    while true {
+      let next = match ident_seg(vs, i, end) {
+        Some(j) => j
+        None => return false
+      }
+      i = next
+      if i < end && vs[i].to_int() == 0x2E {
+        i += 1
+        if i >= end {
+          return false
+        }
+        continue
+      }
+      break
+    }
+  }
+  if i < end && vs[i].to_int() == 0x2B {
+    i += 1
+    if i >= end {
+      return false
+    }
+    while true {
+      let next = match ident_seg(vs, i, end) {
+        Some(j) => j
+        None => return false
+      }
+      i = next
+      if i < end && vs[i].to_int() == 0x2E {
+        i += 1
+        if i >= end {
+          return false
+        }
+        continue
+      }
+      break
+    }
+  }
+  i == end
 }
 
 ///|
@@ -123,7 +583,12 @@ fn validate_import_name(
 ) -> Unit raise ComponentValidationError {
   match name {
     Plain(bytes) => validate_name_bytes(bytes)
-    WithVersion(bytes, _vs) => validate_name_bytes(bytes)
+    WithVersion(bytes, vs) => {
+      validate_name_bytes(bytes)
+      if !validate_versionsuffix_bytes(vs) {
+        raise InvalidKebabName(vs.to_string())
+      }
+    }
   }
 }
 
@@ -133,7 +598,12 @@ fn validate_export_name(
 ) -> Unit raise ComponentValidationError {
   match name {
     Plain(bytes) => validate_name_bytes(bytes)
-    WithVersion(bytes, _vs) => validate_name_bytes(bytes)
+    WithVersion(bytes, vs) => {
+      validate_name_bytes(bytes)
+      if !validate_versionsuffix_bytes(vs) {
+        raise InvalidKebabName(vs.to_string())
+      }
+    }
   }
 }
 
@@ -270,19 +740,53 @@ fn validate_typedef(
 ) -> Unit raise ComponentValidationError {
   match td {
     DefValType(_) => ()
-    ComponentType(_) => ()
+    ComponentType(decls) => {
+      // Component type declarations define a local type index space, similar to
+      // instance types. Keep this minimal: bounds checks + name validity +
+      // duplicate name rejection.
+      let mut local_type_bound = 0
+      let seen : Map[String, Unit] = {}
+      for d in decls {
+        match d {
+          @component.ComponentDecl::Type(t) => {
+            validate_typedef(t, local_type_bound, core_type_bound)
+            local_type_bound += 1
+          }
+          @component.ComponentDecl::Import(name, desc)
+          | @component.ComponentDecl::Export(name, desc) => {
+            validate_name_string_ascii(name)
+            if seen.contains(name) {
+              raise DuplicateName(name)
+            }
+            seen.set(name, ())
+            validate_externdesc(desc, local_type_bound, core_type_bound)
+            // Like the component import/export sections, importing/exporting a
+            // type introduces a new local type index.
+            if desc is Type(_) {
+              local_type_bound += 1
+            }
+          }
+        }
+      }
+    }
     InstanceTypeEmpty => ()
     InstanceType(decls) => {
       // Instance type declarations define their own internal type index space
       // which is referenced by later exports within the same instance type.
       let mut local_type_bound = 0
+      let seen : Map[String, Unit] = {}
       for d in decls {
         match d {
           @component.InstanceDecl::Type(t) => {
             validate_typedef(t, local_type_bound, core_type_bound)
             local_type_bound += 1
           }
-          @component.InstanceDecl::Export(_name, desc) => {
+          @component.InstanceDecl::Export(name, desc) => {
+            validate_name_string_ascii(name)
+            if seen.contains(name) {
+              raise DuplicateName(name)
+            }
+            seen.set(name, ())
             validate_externdesc(desc, local_type_bound, core_type_bound)
             // Like the component export section, exporting a type introduces
             // a fresh type index in this instance type's local type space.

@@ -30,6 +30,7 @@ pub(all) suberror ComponentValidationError {
   InvalidCoreMemoryIndex(Int)
   InvalidCoreGlobalIndex(Int)
   InvalidCoreTagIndex(Int)
+  DuplicateName(String)
   DuplicateCanonOption(String)
   MissingCanonOption(String)
   CanonExpectedFuncType(Int)
