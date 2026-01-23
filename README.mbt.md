@@ -23,6 +23,11 @@ cd wasmoon
 moon build && ./install.sh
 ```
 
+`./install.sh` installs two binaries in the repository root:
+
+- `./wasmoon`: the runtime CLI
+- `./wasmoon-tools`: utility tooling (validate/convert/WIT inspection)
+
 ### As Library
 
 ```bash
@@ -55,6 +60,33 @@ python3 scripts/run_component_wast.py --dir component-spec --rec
 # Explore compilation stages (IR, VCode, machine code)
 wasmoon explore examples/add.wat --stage ir vcode mc
 ```
+
+## wasmoon-tools Usage
+
+`wasmoon-tools` is a small companion CLI for common inspection/conversion tasks:
+
+```bash
+# Validate a core Wasm module (WASM/WAT)
+./wasmoon-tools validate examples/add.wat
+
+# Convert between WASM and WAT
+./wasmoon-tools wasm2wat examples/add.wasm -o examples/add.wat
+./wasmoon-tools wat2wasm examples/add.wat -o examples/add.wasm
+
+# Parse WIT (text) and print a normalized representation
+./wasmoon-tools wit path/to/foo.wit
+
+# Parse a directory as a WIT package (all *.wit files, sorted by filename)
+./wasmoon-tools wit path/to/pkgdir
+
+# Emit a JSON AST (stable, for scripting/debugging)
+./wasmoon-tools wit path/to/foo.wit --json
+
+# Alias for compatibility with wasm-tools' subcommand shape
+./wasmoon-tools component wit path/to/foo.wit --json
+```
+
+Current WIT support is an MVP subset (enough for basic parsing/printing/JSON); more of the WIT grammar and binary extraction/emission will be added incrementally.
 
 ## Library Usage
 
