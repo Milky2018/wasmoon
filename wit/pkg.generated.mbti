@@ -1,0 +1,103 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wit"
+
+// Values
+pub fn format_package(Package) -> String
+
+pub fn package_to_json(Package) -> String
+
+pub fn parse_package(String) -> Package raise WitError
+
+// Errors
+pub(all) suberror WitError {
+  Error(String)
+}
+pub impl Show for WitError
+
+// Types and methods
+pub(all) struct FuncDecl {
+  name : String
+  params : Array[(String, TypeExpr)]
+  results : Array[(String?, TypeExpr)]
+}
+
+pub(all) struct Interface {
+  name : String
+  items : Array[InterfaceItem]
+}
+
+pub(all) enum InterfaceItem {
+  Func(FuncDecl)
+  TypeAlias(TypeAlias)
+  Record(RecordDecl)
+}
+
+pub(all) struct Package {
+  name : String?
+  version : String?
+  items : Array[TopItem]
+}
+
+pub(all) struct RecordDecl {
+  name : String
+  fields : Array[(String, TypeExpr)]
+}
+
+pub(all) enum TokenKind {
+  Ident(String)
+  IntLit(Int)
+  StrLit(String)
+  KwPackage
+  KwInterface
+  KwWorld
+  KwType
+  KwFunc
+  KwImport
+  KwExport
+  KwRecord
+  LBrace
+  RBrace
+  LParen
+  RParen
+  LAngle
+  RAngle
+  Colon
+  Semi
+  Comma
+  Dot
+  Slash
+  At
+  Eq
+  Arrow
+}
+
+pub(all) enum TopItem {
+  Interface(Interface)
+  World(World)
+}
+
+pub(all) struct TypeAlias {
+  name : String
+  ty : TypeExpr
+}
+
+pub(all) enum TypeExpr {
+  Id(String)
+  Apply(String, Array[TypeExpr])
+  Record(Array[(String, TypeExpr)])
+}
+
+pub(all) struct World {
+  name : String
+  items : Array[WorldItem]
+}
+
+pub(all) enum WorldItem {
+  Import(String)
+  Export(String)
+}
+
+// Type aliases
+
+// Traits
+

@@ -1,5 +1,6 @@
 ///|
 fn main {
+  let args = @sys.get_cli_args()
   let parser = @clap.Parser::new(
     prog="wasmoon-tools",
     description="WebAssembly Utility Tools",
@@ -7,6 +8,24 @@ fn main {
       "validate": @clap.SubCommand::new(help="Validate a WebAssembly module", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
       }),
+      "wit": @clap.SubCommand::new(
+        help="Parse WIT packages and print as normalized text/JSON",
+        args={
+          "input": @clap.Arg::positional(
+            nargs=@clap.Nargs::AtMost(1),
+            help="Input .wit file or a directory containing .wit files",
+          ),
+          "output": @clap.Arg::named(
+            short='o',
+            nargs=@clap.Nargs::AtMost(1),
+            help="Output file (default: stdout)",
+          ),
+          "json": @clap.Arg::flag(
+            short='j',
+            help="Emit JSON AST instead of WIT",
+          ),
+        },
+      ),
       "wasm2wat": @clap.SubCommand::new(
         help="Convert WASM binary to WAT text format",
         args={
@@ -33,16 +52,12 @@ fn main {
     },
   )
   let help_msg = parser.gen_help_message(["wasmoon-tools"], {})
-  let args = @sys.get_cli_args()
   if args.length() < 2 {
     println(help_msg)
     return
   }
   let value = @clap.SimpleValue::new("wasmoon-tools")
-  let cli_args : Array[String] = []
-  for i in 1..<args.length() {
-    cli_args.push(args[i])
-  }
+  let cli_args : Array[String] = normalize_cli_args(args)
   let subcmd_help = parser.parse(value, cli_args[:]) catch {
     e => {
       println(e)
@@ -63,6 +78,19 @@ fn main {
               } else {
                 exit_error("missing file argument")
               }
+            "wit" => {
+              let input_opt : String? = if positional.length() > 0 {
+                Some(positional[0])
+              } else {
+                None
+              }
+              let output_opt : String? = match sub.args.get("output") {
+                Some(arr) => if arr.length() > 0 { Some(arr[0]) } else { None }
+                None => None
+              }
+              let as_json = sub.flags.get("json") is Some(true)
+              cmd_wit(input_opt, output_opt, as_json)
+            }
             "wasm2wat" =>
               if positional.length() > 0 {
                 let output_opt : String? = match sub.args.get("output") {
@@ -99,6 +127,24 @@ fn main {
         }
         None => println(help_msg)
       }
+  }
+}
+
+///|
+/// Support `wasmoon-tools component wit ...` as an alias for `wasmoon-tools wit ...`.
+fn normalize_cli_args(args : Array[String]) -> Array[String] {
+  if args.length() >= 3 && args[1] == "component" && args[2] == "wit" {
+    let out : Array[String] = ["wit"]
+    for i in 3..<args.length() {
+      out.push(args[i])
+    }
+    out
+  } else {
+    let out : Array[String] = []
+    for i in 1..<args.length() {
+      out.push(args[i])
+    }
+    out
   }
 }
 
@@ -170,6 +216,113 @@ fn parse_module(path : String) -> @types.Module {
         exit_error("parsing WASM: \{e}")
         panic() // unreachable
       }
+    }
+  }
+}
+
+///|
+fn cmd_wit(input_opt : String?, output_opt : String?, as_json : Bool) -> Unit {
+  let input = match input_opt {
+    Some(p) => p
+    None => {
+      exit_error("missing input (.wit file or directory)")
+      panic()
+    }
+  }
+  let pkg = if is_dir(input) {
+    read_wit_dir(input)
+  } else {
+    let src = read_text_file(input)
+    @wit.parse_package(src) catch {
+      e => {
+        exit_error(e.to_string())
+        panic()
+      }
+    }
+  }
+  let out = if as_json {
+    @wit.package_to_json(pkg)
+  } else {
+    @wit.format_package(pkg)
+  }
+  match output_opt {
+    Some(path) => write_text_file(path, out)
+    None => println(out)
+  }
+}
+
+///|
+fn is_dir(path : String) -> Bool {
+  @fs.is_dir(path) catch {
+    _ => false
+  }
+}
+
+///|
+fn read_wit_dir(path : String) -> @wit.Package {
+  let entries = @fs.read_dir(path) catch {
+    e => {
+      exit_error(e.to_string())
+      panic()
+    }
+  }
+  let wit_files : Array[String] = []
+  for e in entries {
+    if e.has_suffix(".wit") {
+      wit_files.push(e)
+    }
+  }
+  wit_files.sort()
+  if wit_files.length() == 0 {
+    exit_error("no .wit files found in directory '\{path}'")
+    panic()
+  }
+  let mut merged : @wit.Package? = None
+  for f in wit_files {
+    let full = if path.has_suffix("/") { path + f } else { path + "/" + f }
+    let src = read_text_file(full)
+    let pkg = @wit.parse_package(src) catch {
+      e => {
+        exit_error(e.to_string())
+        panic()
+      }
+    }
+    merged = Some(merge_wit_packages(merged, pkg))
+  }
+  merged.unwrap_or({ name: None, version: None, items: [] })
+}
+
+///|
+fn merge_wit_packages(acc : @wit.Package?, pkg : @wit.Package) -> @wit.Package {
+  match acc {
+    None => pkg
+    Some(a) => {
+      let name = match (a.name, pkg.name) {
+        (Some(x), Some(y)) =>
+          if x == y {
+            Some(x)
+          } else {
+            exit_error("conflicting package names")
+            panic()
+          }
+        (Some(x), None) => Some(x)
+        (None, Some(y)) => Some(y)
+        (None, None) => None
+      }
+      let version = match (a.version, pkg.version) {
+        (Some(x), Some(y)) =>
+          if x == y {
+            Some(x)
+          } else {
+            exit_error("conflicting package versions")
+            panic()
+          }
+        (Some(x), None) => Some(x)
+        (None, Some(y)) => Some(y)
+        (None, None) => None
+      }
+      let items = a.items + pkg.items
+      { name, version, items }
     }
   }
 }
