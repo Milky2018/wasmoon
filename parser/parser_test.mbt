@@ -232,3 +232,87 @@ test "binary parse gc: i31.get_u opcode" {
   }
   inspect(ok, content="true")
 }
+
+///|
+test "binary parse value type: nullexternref (0x72) + ref.null noextern" {
+  // (func (export "run") (result nullexternref)
+  //   ref.null noextern
+  // )
+  let type_section : FixedArray[Int] = [
+    0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x72,
+  ]
+  let func_section : FixedArray[Int] = [0x03, 0x02, 0x01, 0x00]
+  let export_section : FixedArray[Int] = [
+    0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
+  ]
+  let code_section : FixedArray[Int] = [
+    0x0a, 0x06, 0x01, 0x04, 0x00, 0xD0, 0x72, 0x0B,
+  ]
+  let m_opt = parse_wasm([
+    type_section, func_section, export_section, code_section,
+  ])
+  inspect(m_opt is Some(_), content="true")
+  guard m_opt is Some(m) else { return }
+  let ok_type = match m.types[0].composite {
+    Func(ft) => ft.results == [@types.ValueType::NullExternRef]
+    _ => false
+  }
+  inspect(ok_type, content="true")
+  let ok_body = match m.codes[0].body {
+    [RefNull(@types.ValueType::NullExternRef)] => true
+    _ => false
+  }
+  inspect(ok_body, content="true")
+}
+
+///|
+test "binary parse ref.null uses heaptype immediate (typed ref.null 0)" {
+  // (type (func))
+  // (func (export "run")
+  //   ref.null 0
+  //   drop
+  // )
+  let type_section : FixedArray[Int] = [0x01, 0x04, 0x01, 0x60, 0x00, 0x00]
+  let func_section : FixedArray[Int] = [0x03, 0x02, 0x01, 0x00]
+  let export_section : FixedArray[Int] = [
+    0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
+  ]
+  let code_section : FixedArray[Int] = [
+    0x0a, 0x07, 0x01, 0x05, 0x00, 0xD0, 0x00, 0x1A, 0x0B,
+  ]
+  let m_opt = parse_wasm([
+    type_section, func_section, export_section, code_section,
+  ])
+  inspect(m_opt is Some(_), content="true")
+  guard m_opt is Some(m) else { return }
+  let ok_body = match m.codes[0].body {
+    [RefNull(@types.ValueType::RefNullFuncTyped(0)), Drop] => true
+    _ => false
+  }
+  inspect(ok_body, content="true")
+}
+
+///|
+test "binary parse atomics: 0xFE prefix atomic.fence" {
+  // (func (export "run")
+  //   atomic.fence
+  // )
+  let type_section : FixedArray[Int] = [0x01, 0x04, 0x01, 0x60, 0x00, 0x00]
+  let func_section : FixedArray[Int] = [0x03, 0x02, 0x01, 0x00]
+  let export_section : FixedArray[Int] = [
+    0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
+  ]
+  let code_section : FixedArray[Int] = [
+    0x0a, 0x07, 0x01, 0x05, 0x00, 0xFE, 0x03, 0x00, 0x0B,
+  ]
+  let m_opt = parse_wasm([
+    type_section, func_section, export_section, code_section,
+  ])
+  inspect(m_opt is Some(_), content="true")
+  guard m_opt is Some(m) else { return }
+  let ok_body = match m.codes[0].body {
+    [Atomic(3, 0, 0, 0L)] => true
+    _ => false
+  }
+  inspect(ok_body, content="true")
+}
