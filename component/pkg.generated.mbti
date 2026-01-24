@@ -163,7 +163,10 @@ pub(all) struct ComponentClosure {
 pub impl Show for ComponentClosure
 
 pub(all) enum ComponentDecl {
+  CoreType(Bytes)
   Type(TypeDef)
+  AliasOuter(Int, Int, Int)
+  AliasInstanceExport(Int, Int, String)
   Import(String, ExternDesc)
   Export(String, ExternDesc)
 }
@@ -352,7 +355,10 @@ pub impl Eq for Instance
 pub impl Show for Instance
 
 pub(all) enum InstanceDecl {
+  CoreType(Bytes)
   Type(TypeDef)
+  AliasOuter(Int, Int, Int)
+  AliasInstanceExport(Int, Int, String)
   Export(String, ExternDesc)
 }
 pub impl Eq for InstanceDecl
@@ -449,6 +455,7 @@ pub impl Show for TypeBound
 pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
+  ResourceType(Int, Int, Int?)
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])

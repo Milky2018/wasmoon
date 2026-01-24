@@ -3,6 +3,7 @@ fn run_component_command(
   file_path : String,
   dump : Bool,
   validate : Bool,
+  wit_names : Bool,
 ) -> Unit {
   let bytes = @fs.read_file_to_bytes(file_path) catch {
     IOError(_e) => {
@@ -17,7 +18,10 @@ fn run_component_command(
     }
   }
   if validate {
-    @validator.validate_component(parsed) catch {
+    @validator.validate_component_with_config(
+      parsed,
+      @validator.ComponentValidationConfig::new(wit_names),
+    ) catch {
       e => {
         println("validate component error: \{e}")
         return

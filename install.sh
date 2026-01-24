@@ -6,12 +6,16 @@ set -e
 
 moon build --target native --release
 
-# Install main wasmoon binary
-cp target/native/release/build/cli/main/main.exe ./wasmoon
-chmod +x ./wasmoon
+# Install binaries atomically (avoid overwriting an inode that may still be
+# mapped by an existing process).
+tmp_wasmoon="$(mktemp ./wasmoon.tmp.XXXXXX)"
+cp target/native/release/build/cli/main/main.exe "$tmp_wasmoon"
+chmod +x "$tmp_wasmoon"
+mv -f "$tmp_wasmoon" ./wasmoon
 
-# Install wasmoon-tools binary
-cp target/native/release/build/cli/tools/tools.exe ./wasmoon-tools
-chmod +x ./wasmoon-tools
+tmp_tools="$(mktemp ./wasmoon-tools.tmp.XXXXXX)"
+cp target/native/release/build/cli/tools/tools.exe "$tmp_tools"
+chmod +x "$tmp_tools"
+mv -f "$tmp_tools" ./wasmoon-tools
 
 echo "Done! You can now run ./wasmoon and ./wasmoon-tools"

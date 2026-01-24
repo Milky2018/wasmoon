@@ -139,6 +139,14 @@ def parse_form(form: str):
     return node
 
 
+def extract_expected_message(node, idx: int = 2) -> Optional[str]:
+    if isinstance(node, list) and len(node) > idx:
+        msg = node[idx]
+        if isinstance(msg, StringToken):
+            return msg.value
+    return None
+
+
 def read_symbol(text: str, i: int) -> Tuple[Optional[str], int]:
     i = skip_ws_and_comments(text, i)
     if i >= len(text):
@@ -465,9 +473,14 @@ def compile_component(
     return out, None
 
 
-def validate_component(component_bin: Path, wasmoon: Path) -> Tuple[bool, str]:
+def validate_component(
+    component_bin: Path, wasmoon: Path, *, wit_names: bool
+) -> Tuple[bool, str]:
+    cmd = [str(wasmoon), "component", "--validate", str(component_bin)]
+    if not wit_names:
+        cmd.insert(2, "--no-wit-names")
     result = subprocess.run(
-        [str(wasmoon), "component", "--validate", str(component_bin)],
+        cmd,
         capture_output=True,
         text=True,
     )
@@ -477,6 +490,12 @@ def validate_component(component_bin: Path, wasmoon: Path) -> Tuple[bool, str]:
     if "component validated ok" in out:
         return True, out.strip()
     return False, out.strip() or "unknown validation result"
+
+
+def wit_names_for_path(wast_file: Path) -> bool:
+    # wasm-tools' suite validates the WIT component encoding, which imposes
+    # kebab-case/package-name name rules. wasmtime's suite uses arbitrary names.
+    return "wasmtime" not in wast_file.parts
 
 
 def is_unsupported_error(msg: str) -> bool:
@@ -534,6 +553,8 @@ def run_file(path: Path, wasmoon: Path) -> dict:
     passed = failed = skipped = 0
     failures: list[str] = []
     defined_components: set[str] = set()
+    anon_def_count = 0
+    wit_names = wit_names_for_path(path)
     if should_skip_file(path):
         for _ in iter_forms(text):
             skipped += 1
@@ -581,7 +602,7 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                     failed += 1
                     failures.append(f"component parse failed: {err}")
                     continue
-                ok, msg = validate_component(comp_bin, wasmoon)
+                ok, msg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
                 if not ok:
                     if is_unsupported_error(msg):
                         skipped += 1
@@ -591,6 +612,9 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                     continue
                 if kind == "definition":
                     name = parse_component_definition_name(node)
+                    if not name:
+                        anon_def_count += 1
+                        name = f"$anon_def_{anon_def_count}"
                     commands.append(
                         {
                             "type": "component_definition",
@@ -613,6 +637,8 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                     if name:
                         defined_components.add(name)
             elif cmd == "assert_invalid":
+                node = parse_form(form)
+                expected_msg = extract_expected_message(node)
                 component_form = find_component_form(form)
                 if not component_form:
                     skipped += 1
@@ -628,17 +654,27 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                 comp_idx += 1
                 if comp_bin is None:
                     failed += 1
-                    failures.append(f"assert_invalid parse failed: {err}")
+                    if expected_msg:
+                        failures.append(f"assert_invalid parse failed: {expected_msg}: {err}")
+                    else:
+                        failures.append(f"assert_invalid parse failed: {err}")
                     continue
-                ok, msg = validate_component(comp_bin, wasmoon)
+                ok, msg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
                 if ok:
                     failed += 1
-                    failures.append("assert_invalid unexpectedly validated")
+                    if expected_msg:
+                        failures.append(
+                            f"assert_invalid unexpectedly validated: {expected_msg}"
+                        )
+                    else:
+                        failures.append("assert_invalid unexpectedly validated")
                 elif is_unsupported_error(msg):
                     skipped += 1
                 else:
                     passed += 1
             elif cmd == "assert_malformed":
+                node = parse_form(form)
+                expected_msg = extract_expected_message(node)
                 component_form = find_component_form(form)
                 if not component_form:
                     skipped += 1
@@ -655,13 +691,20 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                 if comp_bin is None:
                     passed += 1
                 else:
-                    ok, msg = validate_component(comp_bin, wasmoon)
+                    ok, msg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
                     if is_unsupported_error(msg):
                         skipped += 1
                     else:
                         failed += 1
-                        failures.append("assert_malformed unexpectedly parsed")
+                        if expected_msg:
+                            failures.append(
+                                f"assert_malformed unexpectedly parsed: {expected_msg}"
+                            )
+                        else:
+                            failures.append("assert_malformed unexpectedly parsed")
             elif cmd == "assert_unlinkable":
+                node = parse_form(form)
+                expected_msg = extract_expected_message(node)
                 component_form = find_component_form(form)
                 if not component_form:
                     skipped += 1
@@ -679,7 +722,7 @@ def run_file(path: Path, wasmoon: Path) -> dict:
                     failed += 1
                     failures.append(f"assert_unlinkable parse failed: {err}")
                     continue
-                ok, msg = validate_component(comp_bin, wasmoon)
+                ok, msg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
                 if not ok:
                     if is_unsupported_error(msg):
                         skipped += 1

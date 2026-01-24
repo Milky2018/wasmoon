@@ -78,6 +78,9 @@ fn main {
           "validate": @clap.Arg::flag(
             help="Validate the component after parsing",
           ),
+          "no-wit-names": @clap.Arg::flag(
+            help="Disable wasm-tools/WIT name validation (kebab-case/package-name checks)",
+          ),
         },
       ),
       "component-test": @clap.SubCommand::new(
@@ -250,7 +253,11 @@ fn main {
               if positional.length() > 0 {
                 let dump = sub.flags.get("dump") is Some(true)
                 let validate = sub.flags.get("validate") is Some(true)
-                run_component_command(positional[0], dump, validate)
+                let wit_names = match sub.flags.get("no-wit-names") {
+                  Some(true) => false
+                  _ => true
+                }
+                run_component_command(positional[0], dump, validate, wit_names)
               } else {
                 println("Error: missing file argument")
               }

@@ -93,37 +93,35 @@ test "component_validate_export_sortidx_oob" {
 ///|
 test "component_validate_canon_string_requires_memory" {
   // Component defines a functype taking a string, then tries to canon.lift it
-  // without providing memory/realloc options.
+  // without providing memory/realloc options. We manufacture a core funcidx by:
+  // (1) importing a component func, (2) canon.lower it (creates core funcidx 0),
+  // (3) canon.lift it with a string signature but no memory options.
   let bytes = Bytes::from_array([
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x01', b'\x00',
-    // type section (id=7): size=7
-     b'\x07', b'\x07',
+    // type section (id=7): size=15
+     b'\x07', b'\x0f',
+    // vec length = 2
+     b'\x02',
+    // type 0: functype (sync = 0x40) (param "a" string) -> ()
+     b'\x40', b'\x01', b'\x01', b'\x61', b'\x73', b'\x01', b'\x00',
+    // type 1: functype (sync = 0x40) (param "a" u32) -> ()
+     b'\x40', b'\x01', b'\x01', b'\x61', b'\x79', b'\x01', b'\x00',
+    // import section (id=10): size=6
+     b'\x0a', b'\x06',
     // vec length = 1
      b'\x01',
-    // functype (sync = 0x40)
-     b'\x40',
-    // params: 1
-     b'\x01',
-    // label: empty
-     b'\x00',
-    // valtype: string (primvaltype 0x73)
-     b'\x73',
-    // result: none (0x01 0x00)
-     b'\x01', b'\x00',
-    // canon section (id=8): size=6
-     b'\x08', b'\x06',
-    // vec length = 1
-     b'\x01',
-    // canon.lift
-     b'\x00',
-    // must_be_func
-     b'\x00',
-    // core funcidx = 0
-     b'\x00',
-    // opts: empty
-     b'\x00',
-    // typeidx = 0
-     b'\x00',
+    // importname = plain, name = "a"
+     b'\x00', b'\x01', b'\x61',
+    // externdesc = functype(typeidx=1)
+     b'\x01', b'\x01',
+    // canon section (id=8): size=10
+     b'\x08', b'\x0a',
+    // vec length = 2
+     b'\x02',
+    // canon.lower (funcidx=0, opts=[])
+     b'\x01', b'\x00', b'\x00', b'\x00',
+    // canon.lift (core funcidx=0, opts=[], typeidx=0)
+     b'\x00', b'\x00', b'\x00', b'\x00', b'\x00',
   ])
   let component = @component.parse_component(bytes)
   inspect(

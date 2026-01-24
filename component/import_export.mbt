@@ -203,16 +203,30 @@ pub fn parse_import_section(
 ) -> Array[Import] raise ComponentParseError {
   let reader = Reader::new(payload)
   let n = reader.read_leb_u32()
-  let imports = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        let name = parse_importname(reader)
-        let desc = parse_externdesc(reader)
-        acc.push({ name, desc })
-        continue (acc, i + 1)
+  let imports : Array[Import] = []
+  for _i in 0..<n {
+    let start_pos = reader.pos
+    // New encoding: tagged import names (0x00 plain, 0x01 with-version).
+    // Backwards compat: wasm-tools accepts an older encoding where 0x01 was
+    // used as a "plain name" tag with no version suffix.
+    let (name, desc) = try {
+      let name = parse_importname(reader)
+      let desc = parse_externdesc(reader)
+      (name, desc)
+    } catch {
+      e => {
+        reader.pos = start_pos
+        let tag = reader.read_u8()
+        if tag == 0x01 {
+          let name = ImportName::Plain(parse_name_annot(reader))
+          let desc = parse_externdesc(reader)
+          (name, desc)
+        } else {
+          raise e
+        }
       }
+    }
+    imports.push({ name, desc })
   }
   if !reader.is_eof() {
     raise InvalidTypeSection

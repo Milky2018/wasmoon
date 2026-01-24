@@ -41,6 +41,17 @@ jobs:
           moon build --target native
           ./install.sh
 
+      - name: install wasm-tools
+        run: |
+          brew install wasm-tools
+          wasm-tools --version
+
+      - name: run component-spec subset
+        timeout-minutes: 5
+        run: |
+          python3 scripts/run_component_wast.py --dir component-spec/values --rec
+          python3 scripts/run_component_wast.py --dir component-spec/names --rec
+
       - name: run wast spec tests
         timeout-minutes: 5
         run: |
