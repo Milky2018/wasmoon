@@ -1566,10 +1566,7 @@ fn validate_single_core_type(
   let exports = if op == 0x50 {
     Some(
       parse_core_type_module_exports(
-        r,
-        max_outer_depth,
-        current_core_type_bound,
-        outer_core_type_bounds,
+        r, max_outer_depth, current_core_type_bound, outer_core_type_bounds,
       ),
     )
   } else if op == 0x60 {
@@ -2122,9 +2119,7 @@ fn validate_typedef(
           @component.ComponentDecl::CoreType(bytes) => {
             local_core_type_exports.push(
               validate_single_core_type(
-                bytes,
-                local_core_type_bound,
-                outer_core_type_bounds,
+                bytes, local_core_type_bound, outer_core_type_bounds,
               ),
             )
             local_core_type_bound += 1
