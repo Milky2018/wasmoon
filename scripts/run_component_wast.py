@@ -558,10 +558,16 @@ def run_file(path: Path, wasmoon: Path) -> dict:
     if should_skip_file(path):
         for _ in iter_forms(text):
             skipped += 1
+        if skipped:
+            failed += skipped
+            failures.append(
+                f"file contains currently-unsupported tests; "
+                f"{skipped} command(s) treated as failure"
+            )
         return {
             "passed": passed,
             "failed": failed,
-            "skipped": skipped,
+            "skipped": 0,
             "failures": failures,
         }
     commands: list[dict] = []
@@ -832,6 +838,14 @@ def run_file(path: Path, wasmoon: Path) -> dict:
             if not saw_result:
                 failed += 1
                 failures.append(f"component-test failed: {raw or 'no output'}")
+
+    if skipped:
+        failed += skipped
+        failures.append(
+            f"{skipped} command(s) skipped by runner (treated as failure; "
+            f"wasmoon/harness support is incomplete)"
+        )
+        skipped = 0
     return {
         "passed": passed,
         "failed": failed,
