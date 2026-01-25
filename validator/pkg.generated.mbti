@@ -11,6 +11,8 @@ pub fn format_validation_error(ValidationError) -> String
 
 pub fn validate_component(@component.Component) -> Unit raise ComponentValidationError
 
+pub fn validate_component_with_config(@component.Component, ComponentValidationConfig) -> Unit raise ComponentValidationError
+
 pub fn validate_module(@types.Module) -> Unit raise ValidationError
 
 pub fn validate_module_with_context(@types.Module) -> Unit raise ValidationError
@@ -18,6 +20,10 @@ pub fn validate_module_with_context(@types.Module) -> Unit raise ValidationError
 // Errors
 pub(all) suberror ComponentValidationError {
   InvalidTypeIndex(Int)
+  TypeIndexNotFuncType(Int)
+  TypeIndexNotComponentType(Int)
+  TypeIndexNotInstanceType(Int)
+  TypeIndexNotDefinedType(Int)
   InvalidFuncIndex(Int)
   InvalidValueIndex(Int)
   InvalidComponentIndex(Int)
@@ -26,6 +32,7 @@ pub(all) suberror ComponentValidationError {
   InvalidCoreModuleIndex(Int)
   InvalidCoreInstanceIndex(Int)
   InvalidCoreTypeIndex(Int)
+  CoreTypeIndexNotModuleType(Int)
   InvalidCoreTableIndex(Int)
   InvalidCoreMemoryIndex(Int)
   InvalidCoreGlobalIndex(Int)
@@ -34,11 +41,25 @@ pub(all) suberror ComponentValidationError {
   MissingCanonOption(String)
   CanonExpectedFuncType(Int)
   CanonAsyncTypeMismatch(Int)
+  CanonMemoryNot32Bit(Int)
+  CanonCoreFuncTypeMismatch(String)
+  CanonOptionNotAllowed(String)
   UnsupportedCoreSort(Int)
   UnsupportedComponentImport
   UnsupportedComponentExport
   ExportedImportedFunc(Int)
   InvalidKebabName(String)
+  DuplicateImportName(String)
+  DuplicateExportName(String)
+  FuncParamNameConflict(String, String)
+  DuplicateInstantiationArg(String)
+  MissingInstanceExport(Int, String)
+  MissingCoreInstanceExport(Int, String)
+  MissingComponentImport(String)
+  ComponentImportTypeMismatch(String)
+  MissingExpectedExport(String)
+  AscribedExportTypeIncompatible
+  AliasTargetMismatch(String)
   SectionParseError(Int, String)
   CoreModuleError(String)
 }
@@ -78,6 +99,12 @@ pub(all) suberror ValidationError {
 pub impl Show for ValidationError
 
 // Types and methods
+pub struct ComponentValidationConfig {
+  wit_names : Bool
+}
+pub fn ComponentValidationConfig::default() -> Self
+pub fn ComponentValidationConfig::new(Bool) -> Self
+
 pub(all) struct ValidationErrorContext {
   error_msg : String
   func_idx : Int?

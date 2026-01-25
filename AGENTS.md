@@ -27,6 +27,8 @@ moon build && ./install.sh    # Build and install wasmoon binary
 ./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
 ./wasmoon explore <file.wat> --stage ir vcode mc  # View compilation stages
 python3 scripts/run_all_wast.py --rec  # Run all WAST tests (run ./install.sh first)
+python3 scripts/run_component_wast.py --dir component-spec/values --rec  # Component model (subset)
+python3 scripts/run_component_wast.py --dir component-spec/names --rec   # Component model (subset)
 ```
 
 ## Testing
@@ -35,6 +37,7 @@ python3 scripts/run_all_wast.py --rec  # Run all WAST tests (run ./install.sh fi
 - Never batch use `--update`. Treat snapshot errors seriously
 - Don't use `println` in tests. Use `inspect(expr)` and update snapshots, then read the file
 - Use `compare_jit_interp(wat_string)` in `testsuite/` for JIT regression tests
+- Component-model runner requires `wasm-tools` on `PATH` (used to compile `.wast` `(component ...)` forms)
 
 ## Debugging
 

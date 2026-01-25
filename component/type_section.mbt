@@ -44,14 +44,28 @@ pub(all) struct FuncType {
 ///|
 /// A subset of instance type declarations (enough for wasmtime/component-spec).
 pub(all) enum InstanceDecl {
+  // Embedded core typedef (module type / func type / etc).
+  CoreType(Bytes)
   Type(TypeDef)
+  // (alias outer ...) inside an instance type declaration.
+  // `kind` is the component model external kind discriminator (e.g. Type=0x03).
+  AliasOuter(Int, Int, Int)
+  // (alias export ...) inside an instance type declaration.
+  // `kind` is the component model external kind discriminator.
+  AliasInstanceExport(Int, Int, String)
   Export(String, ExternDesc)
 } derive(Show, Eq)
 
 ///|
 /// A subset of component type declarations (enough for WIT-encoded components).
 pub(all) enum ComponentDecl {
+  // Embedded core typedef (module type / func type / etc).
+  CoreType(Bytes)
   Type(TypeDef)
+  // (alias outer ...) inside a component type declaration.
+  AliasOuter(Int, Int, Int)
+  // (alias export ...) inside a component type declaration.
+  AliasInstanceExport(Int, Int, String)
   Import(String, ExternDesc)
   Export(String, ExternDesc)
 } derive(Show, Eq)
@@ -60,6 +74,10 @@ pub(all) enum ComponentDecl {
 pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
+  // Nominal resource type. `id` is filled at instantiation time.
+  // `rep` is the core wasm value type (e.g. i32=0x7f).
+  // `dtor` is an optional destructor core func index.
+  ResourceType(Int, Int, Int?)
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
@@ -237,12 +255,147 @@ fn parse_externdesc_for_instancedecl(
 }
 
 ///|
+fn parse_alias_kind(reader : Reader) -> Int raise ComponentParseError {
+  // Alias kinds use the same encoding as Sort in the import/export sections:
+  // 0x00 <core_sort> for core items, or a single-byte tag for component items.
+  let tag = reader.read_u8()
+  if tag == 0x00 {
+    let core_sort = reader.read_u8()
+    // Encode core sorts in a separate range to avoid collisions with 0x01..0x05.
+    0x100 + core_sort
+  } else {
+    tag
+  }
+}
+
+///|
+fn skip_limits(reader : Reader) -> Unit raise ComponentParseError {
+  let flags = reader.read_u8()
+  reader.read_leb_u32() |> ignore
+  if (flags & 0x01) != 0 {
+    reader.read_leb_u32() |> ignore
+  }
+}
+
+///|
+fn skip_core_functype_inline(reader : Reader) -> Unit raise ComponentParseError {
+  let form = reader.read_u8()
+  if form != 0x60 {
+    raise InvalidTypeSection
+  }
+  skip_core_functype_body(reader)
+}
+
+///|
+fn skip_core_functype_body(reader : Reader) -> Unit raise ComponentParseError {
+  let nparams = reader.read_leb_u32()
+  for _i in 0..<nparams {
+    reader.read_u8() |> ignore
+  }
+  let nresults = reader.read_leb_u32()
+  for _i in 0..<nresults {
+    reader.read_u8() |> ignore
+  }
+}
+
+///|
+fn skip_core_extern_type(
+  reader : Reader,
+  kind : Int,
+) -> Unit raise ComponentParseError {
+  match kind {
+    0x00 => reader.read_leb_u32() |> ignore // func type index
+    0x01 => {
+      reader.read_u8() |> ignore // elem/ref type
+      skip_limits(reader)
+    }
+    0x02 => skip_limits(reader)
+    0x03 => {
+      reader.read_u8() |> ignore // valtype
+      reader.read_u8() |> ignore // mut
+    }
+    0x04 => reader.read_leb_u32() |> ignore // tag type index
+    _ => raise InvalidTypeSection
+  }
+}
+
+///|
+fn skip_core_moduletype(reader : Reader) -> Unit raise ComponentParseError {
+  let ndecls = reader.read_leb_u32()
+  for _i in 0..<ndecls {
+    let tag = reader.read_u8()
+    match tag {
+      0x00 => {
+        reader.read_label() |> ignore // module
+        reader.read_label() |> ignore // name
+        let kind = reader.read_u8()
+        skip_core_extern_type(reader, kind)
+      }
+      0x01 => skip_core_functype_inline(reader)
+      0x02 => {
+        // alias decl: sort + target + indices
+        reader.read_u8() |> ignore
+        let target = reader.read_u8()
+        if target == 0x01 {
+          reader.read_leb_u32() |> ignore
+          reader.read_leb_u32() |> ignore
+        } else {
+          raise InvalidTypeSection
+        }
+      }
+      0x03 => {
+        reader.read_label() |> ignore // name
+        let kind = reader.read_u8()
+        skip_core_extern_type(reader, kind)
+      }
+      _ => raise InvalidTypeSection
+    }
+  }
+}
+
+///|
+fn skip_core_typedef(reader : Reader) -> Unit raise ComponentParseError {
+  let op = reader.read_u8()
+  if op == 0x50 {
+    skip_core_moduletype(reader)
+  } else if op == 0x60 {
+    skip_core_functype_body(reader)
+  } else {
+    raise InvalidTypeSection
+  }
+}
+
+///|
 fn parse_instancedecl(
   reader : Reader,
 ) -> InstanceDecl raise ComponentParseError {
   let tag = reader.read_u8()
-  if tag == 0x01 {
+  if tag == 0x00 {
+    let start = reader.pos
+    skip_core_typedef(reader)
+    let end = reader.pos
+    InstanceDecl::CoreType(bytes_sub(reader.data, start, end))
+  } else if tag == 0x01 {
     InstanceDecl::Type(parse_typedef(reader))
+  } else if tag == 0x02 {
+    // aliasdecl ::= 0x02 kind:<externkind> target:<aliastarget> ...
+    let kind = parse_alias_kind(reader)
+    let target = reader.read_u8()
+    if target == 0x00 {
+      // InstanceExport { instance_index, name }
+      let instance_idx = reader.read_leb_u32()
+      // Alias targets use the plain `name` string encoding (length + bytes),
+      // not the export-name string encoding used by import/export decls.
+      let name = reader.read_label()
+      InstanceDecl::AliasInstanceExport(kind, instance_idx, name)
+    } else if target == 0x02 {
+      // Outer { count, index }
+      let count = reader.read_leb_u32()
+      let idx = reader.read_leb_u32()
+      InstanceDecl::AliasOuter(kind, count, idx)
+    } else {
+      raise InvalidTypeSection
+    }
   } else if tag == 0x04 {
     let name = parse_exportname_string(reader)
     let desc = parse_externdesc_for_instancedecl(reader)
@@ -257,9 +410,31 @@ fn parse_componentdecl(
   reader : Reader,
 ) -> ComponentDecl raise ComponentParseError {
   let tag = reader.read_u8()
-  if tag == 0x01 {
+  if tag == 0x00 {
+    let start = reader.pos
+    skip_core_typedef(reader)
+    let end = reader.pos
+    ComponentDecl::CoreType(bytes_sub(reader.data, start, end))
+  } else if tag == 0x01 {
     ComponentDecl::Type(parse_typedef(reader))
   } else if tag == 0x02 {
+    // aliasdecl ::= 0x02 kind:<externkind> target:<aliastarget> ...
+    let kind = parse_alias_kind(reader)
+    let target = reader.read_u8()
+    if target == 0x00 {
+      // InstanceExport { instance_index, name }
+      let instance_idx = reader.read_leb_u32()
+      let name = reader.read_label()
+      ComponentDecl::AliasInstanceExport(kind, instance_idx, name)
+    } else if target == 0x02 {
+      // Outer { count, index }
+      let count = reader.read_leb_u32()
+      let idx = reader.read_leb_u32()
+      ComponentDecl::AliasOuter(kind, count, idx)
+    } else {
+      raise InvalidTypeSection
+    }
+  } else if tag == 0x03 {
     let name = parse_exportname_string(reader)
     let desc = parse_externdesc_for_instancedecl(reader)
     ComponentDecl::Import(name, desc)
@@ -277,6 +452,19 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
   let op = reader.read_u8()
   match op {
     0x40 | 0x43 => FuncType(parse_functype(reader, op))
+    0x3f => {
+      // resourcetype ::= 0x3f rep:<corevaltype> dtor:<opt u32>
+      let rep = reader.read_u8()
+      let has_dtor = reader.read_u8()
+      let dtor = if has_dtor == 0x00 {
+        None
+      } else if has_dtor == 0x01 {
+        Some(reader.read_leb_u32())
+      } else {
+        raise InvalidTypeSection
+      }
+      ResourceType(-1, rep, dtor)
+    }
     0x41 => {
       // componenttype ::= 0x41 cd*:vec(<componentdecl>)
       let n = reader.read_leb_u32()
