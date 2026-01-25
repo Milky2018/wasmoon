@@ -102,7 +102,7 @@ priv enum CoreExternType {
   Table(@types.TableType)
   Memory(@types.MemoryType)
   Global(@types.GlobalType)
-} derive(Eq, Show)
+}
 
 ///|
 /// Core module type import signature extracted from the component core-type section.
@@ -110,7 +110,7 @@ priv struct CoreModuleTypeImport {
   mod_name : String
   name : String
   ty : CoreExternType
-} derive(Eq, Show)
+}
 
 ///|
 priv struct InstanceSig {
@@ -1554,19 +1554,34 @@ fn parse_core_type_section_module_sigs(
 ///|
 fn validate_single_core_type(
   payload : Bytes,
-) -> Unit raise ComponentValidationError {
+  current_core_type_bound : Int,
+  outer_core_type_bounds : Array[Int],
+) -> Map[String, Int]? raise ComponentValidationError {
   let r = CoreTypeReader::new(payload)
   let op = r.read_u8()
-  if op == 0x50 {
-    parse_core_type_module_exports(r, -1, 0, []) |> ignore
+  // For module-type aliases, `depth` counts outward from the module:
+  // depth 0/1 target the current component core-type index space; depth >= 2
+  // targets outer component environments.
+  let max_outer_depth = outer_core_type_bounds.length() + 1
+  let exports = if op == 0x50 {
+    Some(
+      parse_core_type_module_exports(
+        r,
+        max_outer_depth,
+        current_core_type_bound,
+        outer_core_type_bounds,
+      ),
+    )
   } else if op == 0x60 {
     r.skip_func_type_body()
+    None
   } else {
     raise SectionParseError(3, "unsupported core type opcode: \{op}")
   }
   if !r.is_eof() {
     raise SectionParseError(3, "trailing bytes in core type payload")
   }
+  exports
 }
 
 ///|
@@ -2087,7 +2102,10 @@ fn validate_typedef(
     )
   }
   let type_table = type_outers[0]
-  let core_type_exports = core_type_outers[0]
+  let outer_core_type_bounds : Array[Int] = []
+  for i in 0..<core_type_outers.length() {
+    outer_core_type_bounds.push(core_type_outers[i].length())
+  }
   match td {
     DefValType(_) => ()
     ResourceType(_, _, _) => ()
@@ -2102,24 +2120,13 @@ fn validate_typedef(
       for d in decls {
         match d {
           @component.ComponentDecl::CoreType(bytes) => {
-            // Track whether this core type is a module type.
-            let r = CoreTypeReader::new(bytes)
-            let op = r.read_u8()
-            if op == 0x50 {
-              local_core_type_exports.push(
-                Some(
-                  parse_core_type_module_exports(r, -1, local_core_type_bound, []),
-                ),
-              )
-            } else if op == 0x60 {
-              r.skip_func_type_body()
-              local_core_type_exports.push(None)
-            } else {
-              raise SectionParseError(3, "unsupported core type opcode: \{op}")
-            }
-            if !r.is_eof() {
-              raise SectionParseError(3, "trailing bytes in core type payload")
-            }
+            local_core_type_exports.push(
+              validate_single_core_type(
+                bytes,
+                local_core_type_bound,
+                outer_core_type_bounds,
+              ),
+            )
             local_core_type_bound += 1
           }
           @component.ComponentDecl::AliasOuter(kind, count, idx) =>

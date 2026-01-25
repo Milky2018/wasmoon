@@ -49,8 +49,7 @@ jobs:
       - name: run component-spec subset
         timeout-minutes: 5
         run: |
-          python3 scripts/run_component_wast.py --dir component-spec/values --rec
-          python3 scripts/run_component_wast.py --dir component-spec/names --rec
+          python3 scripts/run_component_wast.py --dir component-spec --rec
 
       - name: run wast spec tests
         timeout-minutes: 5

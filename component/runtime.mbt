@@ -1338,13 +1338,13 @@ priv enum CoreExternType {
   Table(@types.TableType)
   Memory(@types.MemoryType)
   Global(@types.GlobalType)
-} derive(Eq, Show)
+}
 
 ///|
 priv struct CoreModuleTypeSpec {
   imports : Map[String, CoreExternType] // key: "<module>::<name>"
   exports : Map[String, CoreExternType] // key: "<name>"
-} derive(Show)
+}
 
 ///|
 fn bytes_sub(bytes : Bytes, start : Int, end : Int) -> Bytes {
