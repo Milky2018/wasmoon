@@ -232,3 +232,35 @@ test "binary parse gc: i31.get_u opcode" {
   }
   inspect(ok, content="true")
 }
+
+///|
+test "binary parse gc: rec group allows forward type refs" {
+  // (module
+  //   (rec
+  //     (type (func (param (ref 1)) (result i32)))
+  //     (type (struct (field (mut (ref null 0)))))
+  //   )
+  // )
+  let type_section : FixedArray[Int] = [
+    0x01, 0x0e, 0x01, 0x4e, 0x02, 0x60, 0x01, 0x64, 0x01, 0x01, 0x7f, 0x5f, 0x01,
+    0x63, 0x00, 0x01,
+  ]
+  let m_opt = parse_wasm([type_section])
+  inspect(m_opt is Some(_), content="true")
+  guard m_opt is Some(m) else { return }
+  let ok0 = match m.types[0].composite {
+    Func(ft) =>
+      ft.params == [@types.ValueType::RefStruct(1)] && ft.results == [I32]
+    _ => false
+  }
+  inspect(ok0, content="true")
+  let ok1 = match m.types[1].composite {
+    Struct(st) =>
+      st.fields.length() == 1 &&
+      st.fields[0].storage_type ==
+      @types.StorageType::Val(@types.ValueType::RefNullFuncTyped(0)) &&
+      st.fields[0].mutable == true
+    _ => false
+  }
+  inspect(ok1, content="true")
+}
